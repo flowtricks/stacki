@@ -20,6 +20,7 @@ import SaveConflictNotice from '../SaveConflictNotice';
 import { nodeAtPath } from '../../editor/editorTree';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import type { InlineNode } from '../../features/props/RichContent';
+import type { TextPiece } from '../../features/props/textConnect';
 import type { Rename } from '../../features/props/propNodeEditors';
 import type { PropValues } from '../../features/props/propRules';
 import type { LoopApplyResult } from '../../features/props/LoopSettings';
@@ -556,6 +557,11 @@ export function settingsTextHandlers(app: ShellView) {
     onSetInline: (kids: readonly InlineNode[]) => {
       if (selectedId) {
         app.setNodeInline(selectedId, kids);
+      }
+    },
+    onSetTextPieces: (pieces: readonly TextPiece[]) => {
+      if (selectedId) {
+        app.setNodeTextPieces(selectedId, pieces);
       }
     },
   };

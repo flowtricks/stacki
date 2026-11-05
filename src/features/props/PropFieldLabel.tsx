@@ -4,7 +4,7 @@
 import React from 'react';
 import { dataPickerPosition } from './dataPickerPosition';
 import { ResetMenu } from '../../ui/ResetLabel';
-import { partsFromValue, valueFromParts } from '../../editor/bindings';
+import { valueFromParts } from '../../editor/bindings';
 import { BindHandle, FieldDataPicker } from './propBindings';
 import PropTip from './PropTip';
 import {
@@ -60,6 +60,13 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
 
 // The line under a field that names what it is missing (PropField.tsx).
 export function PropFieldNote({ state }: { readonly state: PropState }) {
+  if (state.customProblem !== undefined) {
+    return (
+      <div className="prop-field-note problem" role="alert">
+        {state.customProblem}
+      </div>
+    );
+  }
   if (!state.missingRequired) {
     return undefined;
   }
@@ -143,7 +150,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
       {bindable && (
         <BindHandle
           active={!!insertAt}
-          onOpen={(host) => {
+          onOpen={(host, focus) => {
             if (insertAt) {
               setInsertAt(undefined);
               return;
@@ -152,7 +159,7 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
             if (!bounds) {
               return;
             }
-            setInsertAt(dataPickerPosition(bounds));
+            setInsertAt({ ...dataPickerPosition(bounds), focus });
           }}
         />
       )}
@@ -173,26 +180,23 @@ export function PropFieldPicker({ state }: { readonly state: PropState }) {
         onBindNew={(path) => {
           setInsertAt(undefined);
           setCustom(true);
-          onChange({ type: 'expr', value: path }, true);
+          const numeric = !!(type === 'number' || type === 'boolean' || (type === 'enum' && field.numeric));
+          onChange(valueFromParts([{ expr: path }], { numeric }), true);
         }}
         onPick={(path) => {
           setInsertAt(undefined);
-          // Into the value field's caret when there is one — so a chip can land
-          // beside text already typed. Otherwise this is the field's first
-          // binding, and choosing one is what turns the control into a value.
-          if (bindApiRef.current?.insert) {
+          // Into the value field's caret while it is being typed — so a chip
+          // lands beside the words around it (fieldFocus.ts).
+          if (insertAt.focus.kind === 'focused' && bindApiRef.current?.insert) {
             bindApiRef.current.insert(path);
             return;
           }
+          // The dot pressed outside the field connects the whole of it, as the
+          // Content field's does: the chip is the value, and choosing one is
+          // what turns a control into a value.
           setCustom(true);
-          // Text already typed is kept and the chip goes after it — inserting
-          // data into "Read more about " should not throw the sentence away. A
-          // control's value can't be joined to anything (`true` and a binding is
-          // not a value), so those are replaced.
           const numeric = !!(type === 'number' || type === 'boolean' || (type === 'enum' && field.numeric));
-          const keep = numeric || type === 'enum' ? undefined : partsFromValue(value);
-          const next = keep?.length ? [...keep, { expr: path }] : [{ expr: path }];
-          onChange(valueFromParts(next, { numeric }), true);
+          onChange(valueFromParts([{ expr: path }], { numeric }), true);
         }}
         onClose={() => setInsertAt(undefined)}
       />

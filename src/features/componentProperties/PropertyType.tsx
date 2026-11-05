@@ -7,15 +7,12 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
-import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import Dropdown from '../../ui/Dropdown';
 import type { DropdownOption } from '../../ui/Dropdown';
 import {
   BracesIcon,
   CalendarIcon,
   CheckIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
   CodeIcon,
   ComponentPropertiesIcon,
   DropletIcon,
@@ -31,6 +28,7 @@ import {
 } from '../../ui/Icons';
 import { CODE_TYPE_CHOICES, KIND_CHOICES, carriedDefault, propertyKind, withKind, type PropertyKind } from './propertyKinds';
 import { withTag } from './settingTags';
+import { CodeTypeField } from '../props/propBindings';
 
 /** What a kind pick changes on the property. */
 export type KindChange = Pick<ComponentProperty, 'type' | 'description' | 'defaultValue'>;
@@ -75,7 +73,6 @@ export function PropertyType({ property, frontmatter, onChange }: PropertyTypePr
     }
     onChange({ ...next, defaultValue });
   };
-  const action = codeOpen ? 'Hide the code type' : 'Show the code type';
   return (
     <div className="property-type" role="group" aria-label="Kind">
       <div className="property-type-heading">
@@ -91,20 +88,14 @@ export function PropertyType({ property, frontmatter, onChange }: PropertyTypePr
         searchPlaceholder="Search kinds…"
       />
       {note && <p className="property-help">{note}</p>}
-      <button type="button" className="property-code-toggle" aria-expanded={codeOpen} aria-label={action} title={action} onClick={() => setCodeOpen(!codeOpen)}>
-        {codeOpen ? <ChevronDownIcon size={10} /> : <ChevronRightIcon size={10} />}
-        Code type
-      </button>
-      {codeOpen && (
-        <input
-          aria-label="Code type"
-          className="property-code"
-          value={property.type}
-          maxLength={PROPERTY_LIMITS.textCharsMax}
-          spellCheck={false}
-          onChange={(event) => onChange({ type: event.target.value, description: property.description, defaultValue: property.defaultValue })}
-        />
-      )}
+      {/* The same Code type the Settings panel's Property settings has (PropertySections.tsx). */}
+      <CodeTypeField
+        type={property.type}
+        placeholder=""
+        open={codeOpen}
+        onToggle={() => setCodeOpen(!codeOpen)}
+        onChange={(type) => onChange({ type, description: property.description, defaultValue: property.defaultValue })}
+      />
     </div>
   );
 }

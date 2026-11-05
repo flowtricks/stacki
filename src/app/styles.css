@@ -3793,7 +3793,8 @@ body > .embed-editor_provenance {
   line-height: 1.35;
   color: var(--text-faint);
 }
-.prop-field-note.required {
+.prop-field-note.required,
+.prop-field-note.problem {
   color: var(--red);
 }
 /* Reset to default: beside the name of a set field while it is hovered. The

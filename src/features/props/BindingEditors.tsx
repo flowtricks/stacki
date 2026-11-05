@@ -18,6 +18,7 @@ import { definedFields } from '../../../shared/core/boundary';
 import { dataTree, findDeclaration, findImportOf, scopeChips, scopeCompletions } from '../../editor/dataSuggest';
 import { resolvePick } from '../../editor/bindings';
 import { checkStatement } from './jsCheck';
+import { FIELD_UNFOCUSED, fieldFocusOf, fieldOfHandle, type FieldFocus } from './fieldFocus';
 import DataPicker from './DataPicker';
 import NewPropForm from './NewPropForm';
 // The "New … property" row is drawn here, so its styles load with it.
@@ -130,7 +131,7 @@ export function ConditionField({ test, scope, chipsOf, bindContext, onSetText }:
   const apiRef = useRef<ExprInputAPI | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
 
-  const open = (chip: TemplateHole | undefined) => {
+  const open = (chip: TemplateHole | undefined, focus: FieldFocus) => {
     const rect = wrapRef.current?.getBoundingClientRect();
     if (!rect) {
       return;
@@ -138,6 +139,7 @@ export function ConditionField({ test, scope, chipsOf, bindContext, onSetText }:
     setPick({
       chip: chip || undefined,
       pos: dataPickerPosition(rect),
+      focus,
     });
   };
 
@@ -154,12 +156,12 @@ export function ConditionField({ test, scope, chipsOf, bindContext, onSetText }:
           // of the panel shows data in — and pressing one opens the list to swap
           // it, rather than retyping a name inside a boolean.
           chipsOf={chipsOf}
-          onChipClick={(chip) => open(chip)}
+          onChipClick={(chip) => open(chip, FIELD_UNFOCUSED)}
           onCommit={(committed) => committed.trim() && committed !== test && onSetText(committed.trim())}
         />
         {/* And the way a new one gets in: the same purple dot every bindable field
-            has, inserting at the caret. */}
-        <BindHandle active={!!pick} onOpen={() => (pick ? setPick(undefined) : open(undefined))} />
+            has — at the caret while the test is being typed, as the whole test otherwise. */}
+        <BindHandle active={!!pick} onOpen={(_host, focus) => (pick ? setPick(undefined) : open(undefined, focus))} />
       </div>
       {pick ? (
         <FieldDataPicker
@@ -174,6 +176,10 @@ export function ConditionField({ test, scope, chipsOf, bindContext, onSetText }:
           onPick={(path) => {
             const chip = pick.chip;
             setPick(undefined);
+            if (chip === undefined && pick.focus.kind === 'unfocused') {
+              onSetText(path);
+              return;
+            }
             const next = chip ? apiRef.current?.replaceRange(chip.from, chip.to, path) : apiRef.current?.insert(path);
             if (next !== undefined) {
               onSetText(next);
@@ -193,7 +199,7 @@ export function ExpressionBindingField({ value, placeholder, bindContext, onChan
   const scope = scopeCompletions(bindContext || {});
   const scopeNames = new Set(scope.map((item) => item.label.split('.')[0] ?? ''));
   const chipsOf = (text: string) => scopeChips(text, scopeNames);
-  const open = (chip: TemplateHole | undefined): void => {
+  const open = (chip: TemplateHole | undefined, focus: FieldFocus): void => {
     const rectangle = wrapRef.current?.getBoundingClientRect();
     if (!rectangle) {
       return;
@@ -201,6 +207,7 @@ export function ExpressionBindingField({ value, placeholder, bindContext, onChan
     setPick({
       chip,
       pos: dataPickerPosition(rectangle),
+      focus,
     });
   };
   return (
@@ -215,10 +222,10 @@ export function ExpressionBindingField({ value, placeholder, bindContext, onChan
           completions={scope}
           apiRef={apiRef}
           chipsOf={chipsOf}
-          onChipClick={open}
+          onChipClick={(chip) => open(chip, FIELD_UNFOCUSED)}
           onChange={onChange}
         />
-        <BindHandle active={!!pick} onOpen={() => (pick ? setPick(undefined) : open(undefined))} />
+        <BindHandle active={!!pick} onOpen={(_host, focus) => (pick ? setPick(undefined) : open(undefined, focus))} />
       </div>
       {pick ? (
         <FieldDataPicker
@@ -230,8 +237,11 @@ export function ExpressionBindingField({ value, placeholder, bindContext, onChan
             setPick(undefined);
             if (chip) {
               apiRef.current?.replaceRange(chip.from, chip.to, path);
-            } else {
+            } else if (pick.focus.kind === 'focused') {
               apiRef.current?.insert(path);
+            } else {
+              // The dot pressed outside the field connects the whole of it.
+              onChange(path);
             }
           }}
           onClose={() => setPick(undefined)}
@@ -242,6 +252,11 @@ export function ExpressionBindingField({ value, placeholder, bindContext, onChan
 }
 
 export function BindHandle({ active, onOpen }: BindHandleProps) {
+  // Read on pointerdown, before the press moves focus anywhere: whether the
+  // caret was in this field decides whether a pick replaces the field or lands
+  // at the caret (fieldFocus.ts). A click with no pointerdown before it — the
+  // keyboard — finds the field as it is then.
+  const focusRef = useRef<FieldFocus | undefined>(undefined);
   if (!useCodeAccess()) {
     return undefined;
   }
@@ -251,7 +266,17 @@ export function BindHandle({ active, onOpen }: BindHandleProps) {
       className={`bind-handle${active ? ' on' : ''}`}
       title="Insert data — a component prop, a CMS field"
       aria-label="Insert data"
-      onClick={(event) => onOpen(event.currentTarget.closest('.props-field') ?? undefined)}
+      onPointerDown={(event) => {
+        focusRef.current = fieldFocusOf(fieldOfHandle(event.currentTarget), event.currentTarget.ownerDocument.activeElement ?? undefined);
+      }}
+      // The field keeps focus and its caret while the dot is pressed, as a chip's
+      // own press does; the picker takes focus once it opens.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={(event) => {
+        const focus = focusRef.current ?? fieldFocusOf(fieldOfHandle(event.currentTarget), event.currentTarget.ownerDocument.activeElement ?? undefined);
+        focusRef.current = undefined;
+        onOpen(event.currentTarget.closest('.props-field') ?? undefined, focus);
+      }}
     >
       <span className="bind-dot" />
       <PlusIcon size={10} className="bind-plus" />
@@ -332,9 +357,11 @@ export function useValueCodeEditor(onClose: () => void) {
     if (!rect) {
       return;
     }
+    // Opened from a chip in the code, which the pick repoints: there is no dot here.
     setPick({
       chip: chip || undefined,
       pos: dataPickerPosition(rect),
+      focus: FIELD_UNFOCUSED,
     });
   };
   return { ref, apiRef, pick, setPick, open };

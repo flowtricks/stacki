@@ -5,7 +5,7 @@
 import type { Attr, ValueNode } from '../../../shared/page/pageNode';
 import type { FieldDefinition } from './propRules';
 import type { SetProp } from './propAttributes';
-import type { FieldPosition } from './propBindings';
+import type { FieldPickerAt } from './propBindings';
 import type { RichInsertAPI } from './RichContent';
 import type { AssetDimensions } from '../../ui/AssetThumb';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
@@ -207,7 +207,7 @@ export function useElementFocus(props: ElementPropsPanelProps) {
   const { focusClass, focusContent } = props;
   // The data picker over the Content field, and the way into the editor's
   // caret once something is chosen.
-  const [contentPicker, setContentPicker] = useState<FieldPosition | undefined>(undefined);
+  const [contentPicker, setContentPicker] = useState<FieldPickerAt | undefined>(undefined);
   // A ref prop: RichContent fills it with its caret API while it is mounted.
   const contentInsertRef = useRef<RichInsertAPI | undefined>(undefined);
 

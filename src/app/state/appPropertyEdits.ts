@@ -28,6 +28,8 @@ import { previewAddedClass, previewClassProps } from '../../editor/previewClassP
 import { cleanError } from '../../lib/cleanError';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import type { InlineNode } from '../../features/props/RichContent';
+import type { TextPiece } from '../../features/props/textConnect';
+import { textPiecesGesture } from '../model/textPieces';
 import type { Rename } from '../../features/props/propNodeEditors';
 import type { PropValues } from '../../features/props/propRules';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
@@ -674,5 +676,20 @@ export function useContentEdits(coreState: ReturnType<typeof useCoreState>, hist
     },
     [commitEdit, pageStateRef],
   );
-  return { setNodeContent, setNodeInline };
+  // A text connected to data or back to words (TextConnectField.tsx): the node
+  // restated as its pieces, the nodes beside it left as they are (textPieces.ts).
+  const setNodeTextPieces = useCallback(
+    (nodeId: string, pieces: readonly TextPiece[]) => {
+      const state = pageStateRef.current.pageState;
+      if (!state?.editable) {
+        return;
+      }
+      const gesture = textPiecesGesture(state.model, nodeId, pieces);
+      if (gesture !== undefined) {
+        commitEdit(gesture);
+      }
+    },
+    [commitEdit, pageStateRef],
+  );
+  return { setNodeContent, setNodeInline, setNodeTextPieces };
 }

@@ -11,6 +11,12 @@
 // so the form shows exactly what the Settings panel will. An Image asks for
 // its default with the asset card and picker every image field uses; the
 // default decides the type (an imported file, or a URL; imagePropDefault.ts).
+//
+// Required, Readonly, the Code type, a List's item fields and its default
+// items are the Properties panel's own sections (PropertySections.tsx), so a
+// prop offers the same options wherever it is made. A List's default items are
+// the instance's list field, `{}` toggle and all: code the list cannot show is
+// written as typed (PropDeclaration.defaultExpression).
 
 import { useState } from 'react';
 import { CloseIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
@@ -18,18 +24,11 @@ import AutoTextarea from '../../ui/AutoTextarea';
 import AssetField from '../../ui/AssetField';
 import { assert } from '../../../shared/core/assert';
 import ListField from './ListField';
-import { arrayItems, arrayText, type Item } from './arrayValue';
-import {
-  fieldNameProblem,
-  ITEM_FIELD_KINDS,
-  ITEM_FIELD_TITLES,
-  LIST_LIMITS,
-  listSettingsProblem,
-  type ItemFieldDeclaration,
-  type ItemFieldKind,
-} from '../../editor/listPropType';
+import { CodeTypeField, ItemFieldsEditor, ListDefaultField, PropertyFlagsFields, type PropertyFlags } from './PropertySections';
+import { arrayItems, arrayText } from './arrayValue';
+import { LIST_STARTER_FIELDS, listSettingsProblem, type ItemFieldDeclaration } from '../../editor/listPropType';
 import { imageDefaultOf } from '../../editor/imagePropDefault';
-import { blankItemOf, itemValuesOf, renamedItemField } from './listItemShape';
+import { itemValuesOf } from './listItemShape';
 import {
   attributeDefaultsProblem,
   DECLARATION_LIMITS,
@@ -37,6 +36,7 @@ import {
   numberSettingsProblem,
   optionsProblem,
   switchSettingsProblem,
+  typeText,
   type AttributeDefault,
   type NewPropKind,
   type PropDeclaration,
@@ -107,10 +107,26 @@ export default function NewPropForm(props: NewPropFormProps) {
         </div>
       )}
       <KindSettings form={form} />
-      <div className="loop-property-default">
-        <div className="loop-bind-title">{kind === 'list' ? 'Default items' : `Default ${KIND_TITLES[kind]}`}</div>
-        <DefaultEditor form={form} host={props.host} />
+      {/* The same Required, Readonly and Code type the Properties panel edits (PropertySections.tsx). */}
+      <PropertyFlagsFields required={form.flags.required} readonly={form.flags.readonly} onChange={form.setFlags} />
+      <div className="new-prop-code-type">
+        <CodeTypeField
+          type={form.codeType}
+          placeholder={form.kindType}
+          open={form.codeOpen}
+          onToggle={() => form.setCodeOpen(!form.codeOpen)}
+          onChange={form.setCodeType}
+        />
       </div>
+      {kind === 'list' ? (
+        // The field an instance edits the list in, with its `{}` toggle to the code.
+        <ListDefaultField fields={form.listFields} code={form.listItems} projectPath={props.host.projectPath} onChange={form.setListItems} />
+      ) : (
+        <div className="loop-property-default">
+          <div className="loop-bind-title">{`Default ${KIND_TITLES[kind]}`}</div>
+          <DefaultEditor form={form} host={props.host} />
+        </div>
+      )}
       {problem !== undefined && form.nameProblem === undefined && <div className="loop-bind-problem">{problem}</div>}
       <div className="loop-bind-actions">
         <button type="button" className="loop-bind-button" onClick={props.onCancel}>
@@ -137,15 +153,21 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
   const [switchLabels, setSwitchLabels] = useState<SwitchSettings>(SWITCH_LABELS);
   const [attributes, setAttributes] = useState<readonly AttributeDefault[]>([]);
   // A list field of a child component starts from its items' fields and the items it holds now.
-  const [listFields, setListFields] = useState<readonly ItemFieldDeclaration[]>(() => (seed.itemFields?.length ? seed.itemFields : STARTER_FIELDS));
+  const [listFields, setListFields] = useState<readonly ItemFieldDeclaration[]>(() => (seed.itemFields?.length ? seed.itemFields : LIST_STARTER_FIELDS));
   const [listItems, setListItems] = useState(() => (seed.fit === 'list' && arrayItems(seed.value) !== undefined ? seed.value.trim() : '[]'));
   // An image field that already shows a file or a URL starts from it.
   const [image, setImage] = useState(() => (seed.fit === 'image' && imageDefaultOf(seed.value).ok ? seed.value.trim() : ''));
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const [created, setCreated] = useState(false);
+  const [flags, setFlags] = useState<PropertyFlags>({ required: false, readonly: false });
+  const [codeType, setCodeType] = useState('');
+  const [codeOpen, setCodeOpen] = useState(false);
   const key = name.trim();
   const nameProblem = propNameProblem(key, host);
-  const list = { fields: listFields, items: itemValuesOf(arrayItems(listItems) ?? []) };
+  // The default items as items when the list can show them; as code, written as typed, when not.
+  const listAsItems = arrayItems(listItems);
+  const list = { fields: listFields, items: itemValuesOf(listAsItems ?? []) };
+  const listExpression = kind === 'list' && listAsItems === undefined ? listItems : '';
   const declaration: PropDeclaration = {
     key,
     tooltip,
@@ -158,7 +180,11 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
     tag: seed.tag ?? '',
     list,
     image,
+    typing: { required: flags.required, readonly: flags.readonly, codeType },
+    defaultExpression: listExpression,
   };
+  // Without the component's frontmatter here, a list's item type is shown inline.
+  const kindTyped = typeText(declaration);
   const problem = nameProblem ?? settingsProblem(declaration) ?? refusal;
   const setKind = (next: NewPropKind): void => {
     setKindState(next);
@@ -189,6 +215,14 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
     kinds,
     kind,
     setKind,
+    flags,
+    setFlags: edit(setFlags),
+    codeType,
+    setCodeType: edit(setCodeType),
+    codeOpen,
+    setCodeOpen,
+    // What the kind writes, shown in an empty Code type box.
+    kindType: kindTyped.ok ? kindTyped.value : '',
     name,
     setName: edit(setName),
     nameProblem: key === '' ? undefined : nameProblem,
@@ -216,13 +250,6 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
   };
 }
 type FormState = ReturnType<typeof useNewPropForm>;
-
-// A list's items start as a title and a line of text, as a list of values,
-// features or steps most often is.
-const STARTER_FIELDS: readonly ItemFieldDeclaration[] = [
-  { name: 'title', kind: 'text' },
-  { name: 'text', kind: 'text' },
-];
 
 // What the field holds now, as a default of `kind`: a switch starts off, a
 // number only from a number.
@@ -297,7 +324,16 @@ function KindSettings({ form }: { readonly form: FormState }) {
         </div>
       );
     case 'list':
-      return <ItemFieldsEditor form={form} />;
+      return (
+        <ItemFieldsEditor
+          fields={form.listFields}
+          itemsText={form.listItems}
+          onChange={(shape) => {
+            form.setListFields(shape.fields);
+            form.setListItems(shape.itemsText);
+          }}
+        />
+      );
     case 'string':
     case 'attributes':
     case 'image':
@@ -354,16 +390,8 @@ function DefaultEditor({ form, host }: { readonly form: FormState; readonly host
     case 'attributes':
       return <AttributeDefaultsEditor defaults={form.attributes} onChange={form.setAttributes} />;
     case 'list':
-      return (
-        <ListField
-          value={form.listItems}
-          itemShape={form.listFields}
-          projectPath={host.projectPath}
-          itemsMax={LIST_LIMITS.itemsMax}
-          valueCharsMax={LIST_ITEMS_CHARS_MAX}
-          onChange={(text) => form.setListItems(text)}
-        />
-      );
+      // A list's default is the instance's list field (ListDefaultField), drawn by the form itself.
+      return undefined;
     case 'image':
       // The path is written relative to the component, as its import reads it.
       return host.projectPath === undefined ? (
@@ -389,112 +417,6 @@ function DefaultEditor({ form, host }: { readonly form: FormState; readonly host
       return exhaustive;
     }
   }
-}
-
-// Every item's text, at most: each field of each item at its own bound.
-const LIST_ITEMS_CHARS_MAX = LIST_LIMITS.itemsMax * LIST_LIMITS.fieldsMax * (LIST_LIMITS.valueCharsMax + LIST_LIMITS.fieldNameCharsMax);
-
-/**
- * The fields each item of a list has: a name and a kind per row, + to add one.
- * Renaming a field keeps what the default items hold in it; changing its kind
- * or removing it clears that field in them, since a text cannot be a switch.
- */
-function ItemFieldsEditor({ form }: { readonly form: FormState }) {
-  const fields = form.listFields;
-  const items = (): readonly Item[] => arrayItems(form.listItems) ?? [];
-  const rename = (index: number, name: string): void => {
-    const previous = fields[index];
-    assert(previous !== undefined, 'ItemFieldsEditor: the renamed field exists');
-    form.setListFields(fields.map((field, at) => (at === index ? { ...field, name } : field)));
-    form.setListItems(arrayText(renamedItemField(items(), previous.name, name)));
-  };
-  const retype = (index: number, kind: ItemFieldKind): void => {
-    const previous = fields[index];
-    assert(previous !== undefined, 'ItemFieldsEditor: the retyped field exists');
-    const next = { ...previous, kind };
-    form.setListFields(fields.map((field, at) => (at === index ? next : field)));
-    form.setListItems(arrayText(items().map((item) => withField(item, next))));
-  };
-  const remove = (index: number): void => {
-    const removed = fields[index];
-    assert(removed !== undefined, 'ItemFieldsEditor: the removed field exists');
-    form.setListFields(fields.filter((_, at) => at !== index));
-    form.setListItems(
-      arrayText(items().map((item) => (item.fields === undefined ? item : { fields: item.fields.filter((field) => field.key !== removed.name) }))),
-    );
-  };
-  const nameProblem = fields.map((field) => fieldNameProblem(field.name)).find((problem) => problem !== undefined);
-  return (
-    <div className="new-prop-settings">
-      <div className="loop-bind-title">Item fields</div>
-      {fields.map((field, index) => (
-        <div className="new-prop-list-field" key={index}>
-          <input
-            className="new-prop-input"
-            aria-label="Field name"
-            placeholder="name"
-            spellCheck={false}
-            value={field.name}
-            onChange={(event) => rename(index, event.target.value.replace(/[^\w$]/g, ''))}
-          />
-          <select className="new-prop-input" aria-label="Field type" value={field.kind} onChange={(event) => retype(index, kindOf(event.target.value))}>
-            {ITEM_FIELD_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {ITEM_FIELD_TITLES[kind]}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="loop-settings-remove"
-            aria-label="Remove field"
-            title="Remove"
-            disabled={fields.length <= 1}
-            onClick={() => remove(index)}
-          >
-            <TrashIcon size={12} />
-          </button>
-        </div>
-      ))}
-      {nameProblem !== undefined && <div className="new-prop-note">{nameProblem}</div>}
-      <button
-        type="button"
-        className="loop-bind-button new-prop-add"
-        disabled={fields.length >= LIST_LIMITS.fieldsMax}
-        onClick={() => form.setListFields([...fields, { name: freeFieldName(fields), kind: 'text' }])}
-      >
-        <PlusIcon size={11} /> Add field
-      </button>
-    </div>
-  );
-}
-
-// The item with `field` set back to blank in its new kind.
-function withField(item: Item, field: ItemFieldDeclaration): Item {
-  if (item.fields === undefined) {
-    return item;
-  }
-  const blank = blankItemOf([field], '"').fields?.[0];
-  assert(blank !== undefined, 'withField: a blank item has the field');
-  return { fields: item.fields.map((own) => (own.key === field.name ? blank : own)) };
-}
-
-function kindOf(value: string): ItemFieldKind {
-  const kind = ITEM_FIELD_KINDS.find((candidate) => candidate === value);
-  assert(kind !== undefined, 'ItemFieldsEditor: the type menu offers only field kinds');
-  return kind;
-}
-
-// `field`, then `field2`: a name no other field has.
-function freeFieldName(fields: readonly ItemFieldDeclaration[]): string {
-  for (let suffix = 1; suffix <= LIST_LIMITS.fieldsMax + 1; suffix++) {
-    const name = suffix === 1 ? 'field' : `field${suffix}`;
-    if (!fields.some((field) => field.name === name)) {
-      return name;
-    }
-  }
-  assert(false, 'freeFieldName: a free name is found within the field bound');
-  return 'field';
 }
 
 /** Min, Max and Decimals for a number prop; an empty box is None (Auto for decimals). */

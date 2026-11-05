@@ -26,7 +26,22 @@ export {
   ValueCodeEditor,
 } from './BindingEditors';
 
-export { type FieldPosition, type SourceContext, type ValueChange, type InsertAPI } from './bindingTypes';
+// The sections of a prop's settings both the Settings panel and the Properties
+// panel draw (PropertySections.tsx), offered here beside the binding fields the
+// Properties panel already edits defaults with.
+export {
+  CodeTypeField,
+  ItemFieldsEditor,
+  ListDefaultField,
+  PropertyFlagsFields,
+  defaultAttr,
+  defaultCodeOf,
+  listDefaultField,
+  type ListShape,
+  type PropertyFlags,
+} from './PropertySections';
+
+export { type FieldPosition, type FieldPickerAt, type SourceContext, type ValueChange, type InsertAPI } from './bindingTypes';
 
 function chipExpr(chip: Chip | undefined) {
   if (!chip) {

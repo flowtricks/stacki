@@ -14,6 +14,7 @@ import type { ComponentProperty } from '../../../shared/properties/propertyEditi
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 import { SETTING_PROP_TYPES } from '../../editor/optionsBinding';
 import { tagValue, withTag } from './settingTags';
+import { LIST_STARTER_FIELDS, listTypeText } from '../../editor/listPropType';
 
 export const KIND_SECTIONS = ['Basic', 'Media & links', 'Structure', 'Element', 'Collection list', 'Advanced'] as const;
 export type KindSection = (typeof KIND_SECTIONS)[number];
@@ -65,7 +66,7 @@ export const KIND_CHOICES: readonly KindChoice[] = [
   { kind: 'image', label: 'Image', section: 'Media & links', hint: IMAGE_TYPE },
   { kind: 'color', label: 'Color', section: 'Media & links', hint: 'string, @format color' },
   { kind: 'date', label: 'Date', section: 'Media & links', hint: 'Date' },
-  { kind: 'list', label: 'List', section: 'Structure', hint: 'readonly string[]' },
+  { kind: 'list', label: 'List', section: 'Structure', hint: 'Items with fields' },
   { kind: 'group', label: 'Group', section: 'Structure', hint: 'Fields in an object' },
   { kind: 'record', label: 'Key–value list', section: 'Structure', hint: 'Record<string, string>' },
   { kind: 'attributes', label: 'Attributes', section: 'Element', hint: 'From an element’s Attributes' },
@@ -153,7 +154,8 @@ export function kindType(kind: Exclude<PropertyKind, 'attributes' | 'code'>, fro
     case 'date':
       return 'Date';
     case 'list':
-      return 'readonly string[]';
+      // The type the Settings panel's new List writes: items of fields, a title and a text to start.
+      return listTypeText(frontmatter, LIST_STARTER_FIELDS);
     case 'group':
       return '{ label: string }';
     case 'record':

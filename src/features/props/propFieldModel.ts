@@ -9,7 +9,7 @@ import type { Attr } from '../../../shared/page/pageNode';
 import type { PageText } from '../../../shared/properties/pageText';
 import type { FieldDefinition, PropValues } from './propRules';
 import type { RichContext } from './RichContent';
-import type { SourceContext, ValueChange, FieldPosition, InsertAPI } from './propBindings';
+import type { SourceContext, ValueChange, FieldPosition, FieldPickerAt, InsertAPI } from './propBindings';
 import type { AssetDimensions } from '../../ui/AssetThumb';
 import type { PickedAsset } from '../../ui/AssetField';
 import { assert } from '../../../shared/core/assert';
@@ -205,11 +205,21 @@ export function usePropFieldModel(props: PropFieldProps) {
   const isSet = value !== undefined;
   const [menuPosition, setMenuPosition] = useState<FieldPosition | undefined>(undefined);
   const lastGoodRef = useRef('');
-  const [custom, setCustom] = useState(false);
-  const [insertAt, setInsertAt] = useState<FieldPosition | undefined>(undefined);
+  const [custom, setCustomState] = useState(false);
+  // Why the field stayed on its code after "use the control" was asked for:
+  // code the control cannot show is kept as written rather than dropped.
+  const [customProblem, setCustomProblem] = useState<string | undefined>(undefined);
+  const setCustom = (next: boolean): void => {
+    setCustomState(next);
+    setCustomProblem(undefined);
+  };
+  const [insertAt, setInsertAt] = useState<FieldPickerAt | undefined>(undefined);
   // A ref prop: BindField fills it with its caret API while it is mounted.
   const bindApiRef = useRef<InsertAPI | undefined>(undefined);
-  useEffect(() => setCustom(false), [nodeKey, name]);
+  useEffect(() => {
+    setCustomState(false);
+    setCustomProblem(undefined);
+  }, [nodeKey, name]);
   // An action is set in code only; there is nothing a binding could give it.
   const bindable = type !== 'attrs' && name !== 'slot' && field.codeKind !== 'function';
   const valueText = attrText(value) ?? '';
@@ -247,6 +257,8 @@ export function usePropFieldModel(props: PropFieldProps) {
     lastGoodRef,
     custom,
     setCustom,
+    customProblem,
+    setCustomProblem,
     insertAt,
     setInsertAt,
     bindApiRef,
@@ -333,16 +345,26 @@ export function isColorField(field: FieldDefinition): boolean {
   return typeof field.default === 'string' && isColorText(field.default);
 }
 export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
-  const { setMenuPosition, onChange, setCustom, value, field, isSet, showExpr } = state;
+  const { setMenuPosition, onChange, setCustom, setCustomProblem, value, field, isSet, showExpr } = state;
   const reset = () => {
     setMenuPosition(undefined);
     onChange(undefined, true);
   };
   const fromCustom = () => {
-    setCustom(false);
-    if (value?.type === 'expr') {
-      onChange(valueFromExpr(field, value.value), true);
+    setMenuPosition(undefined);
+    if (value?.type !== 'expr') {
+      setCustom(false);
+      return;
     }
+    const back = valueFromExpr(field, value.value);
+    if (back === undefined && value.value.trim() !== '') {
+      // The control cannot hold this code: going back to it used to drop the
+      // value. It stays as code, and the field says why.
+      setCustomProblem(`The ${controlWord(field)} cannot show this code, so it stays as code. Change it to a value the ${controlWord(field)} can hold first.`);
+      return;
+    }
+    setCustom(false);
+    onChange(back, true);
   };
   const onLabelClick = (event: React.MouseEvent<HTMLSpanElement>) => {
     // A field switched to a value has something to offer even before anything

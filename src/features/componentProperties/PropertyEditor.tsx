@@ -16,6 +16,9 @@ import type { ComponentProperty, PropertyChange, PropertyOptionRename } from '..
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { listPropsOf, type ListProp } from '../../editor/listProps';
 import { SETTING_PROP_TYPES } from '../../editor/optionsBinding';
+import { fieldNameProblem, listFieldsOfType, listTypeText, type ItemFieldDeclaration } from '../../editor/listPropType';
+import { ItemFieldsEditor, ListDefaultField, PropertyFlagsFields } from '../props/propBindings';
+import { propertyKind } from './propertyKinds';
 
 interface PropertyEditorProps {
   readonly property: ComponentProperty;
@@ -144,6 +147,7 @@ interface PropertyEditorFieldsProps extends PropertyControls {
 }
 function PropertyEditorFields({ property, originalName, frontmatter, access, onSave, update, error, submit, changeOptions }: PropertyEditorFieldsProps) {
   const inherited = property.editing?.kind === 'override';
+  const listFields = usePropertyListFields(property, frontmatter);
   return (
     <fieldset disabled={access === 'saving'}>
       <PropertyIdentity property={property} originalName={originalName} inherited={inherited} update={update} />
@@ -165,8 +169,26 @@ function PropertyEditorFields({ property, originalName, frontmatter, access, onS
       />
       <PropertyOptions type={property.type} disabled={access === 'saving'} onChange={changeOptions} />
       <PropertyKindSettings key={`${property.type} settings`} property={property} onChange={(description) => update('description', description)} />
-      <PropertyFlags property={property} update={update} />
-      <PropertyDefault key={property.type} property={property} frontmatter={frontmatter} onChange={(value) => update('defaultValue', value)} />
+      {listFields !== undefined && <PropertyItemFields property={property} frontmatter={frontmatter} fields={listFields} update={update} />}
+      {/* The same Required and Readonly the Settings panel's Property settings has (PropertySections.tsx). */}
+      <PropertyFlagsFields
+        required={property.required}
+        readonly={property.readonly}
+        onChange={(flags) => {
+          if (flags.required !== property.required) {
+            update('required', flags.required);
+          }
+          if (flags.readonly !== property.readonly) {
+            update('readonly', flags.readonly);
+          }
+        }}
+      />
+      {listFields === undefined ? (
+        <PropertyDefault key={property.type} property={property} frontmatter={frontmatter} onChange={(value) => update('defaultValue', value)} />
+      ) : (
+        // A list's default items are edited in the field an instance edits the list in, with its `{}` toggle.
+        <ListDefaultField fields={listFields.fields} code={property.defaultValue} projectPath={undefined} onChange={(code) => update('defaultValue', code)} />
+      )}
       <PropertyDefaultNote property={property} />
       <PropertyTooltip property={property} onChange={(description) => update('description', description)} />
       {error && <ErrorToast message={error} />}
@@ -236,18 +258,55 @@ function PropertyIdentity({
     </>
   );
 }
-function PropertyFlags({ property, update }: PropertyControls) {
+/** A List's item fields as the editor shows them, and the type they were last read from or written as. */
+interface ListFieldsDraft {
+  readonly type: string;
+  readonly fields: readonly ItemFieldDeclaration[];
+}
+
+// A List's item fields, read from its type (listFieldsOfType). While a name is
+// being typed the fields can be invalid, and the type is only written once they
+// are; the draft keeps what is on screen meanwhile. A type changed elsewhere —
+// the Code type, the Kind — is read again.
+function usePropertyListFields(
+  property: ComponentProperty,
+  frontmatter: string,
+): (ListFieldsDraft & { readonly set: (draft: ListFieldsDraft) => void }) | undefined {
+  const [draft, setDraft] = useState<ListFieldsDraft | undefined>(undefined);
+  if (propertyKind(property) !== 'list') {
+    return undefined;
+  }
+  if (draft !== undefined && draft.type === property.type) {
+    return { ...draft, set: setDraft };
+  }
+  const fields = listFieldsOfType(property.type, frontmatter);
+  return fields === undefined ? undefined : { type: property.type, fields, set: setDraft };
+}
+
+// The fields each item of a List has, edited with the Settings panel's own
+// editor; the type is written as that form writes it (listTypeText).
+function PropertyItemFields({
+  property,
+  frontmatter,
+  fields,
+  update,
+}: PropertyControls & { readonly frontmatter: string; readonly fields: NonNullable<ReturnType<typeof usePropertyListFields>> }) {
   return (
-    <div className="property-flags">
-      <label>
-        <input type="checkbox" checked={property.required} onChange={(event) => update('required', event.target.checked)} />
-        Required
-      </label>
-      <label>
-        <input type="checkbox" checked={property.readonly} onChange={(event) => update('readonly', event.target.checked)} />
-        Readonly
-      </label>
-    </div>
+    <ItemFieldsEditor
+      fields={fields.fields}
+      itemsText={property.defaultValue.trim() === '' ? '[]' : property.defaultValue}
+      onChange={(shape) => {
+        const valid = shape.fields.every((field) => fieldNameProblem(field.name) === undefined);
+        const type = valid ? listTypeText(frontmatter, shape.fields) : property.type;
+        fields.set({ type, fields: shape.fields });
+        if (type !== property.type) {
+          update('type', type);
+        }
+        if (shape.itemsText !== property.defaultValue) {
+          update('defaultValue', shape.itemsText);
+        }
+      }}
+    />
   );
 }
 

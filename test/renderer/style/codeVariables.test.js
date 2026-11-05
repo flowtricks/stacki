@@ -304,6 +304,13 @@ test('the clip-path editor’s code has the dot and the chooser, and binding wri
   assert.ok(frame?.classList.contains('code-editor_frame'), 'the code sits in the variables frame');
   const dot = frame.querySelector(':scope > .embed-editor_varconnect-dot');
   assert.ok(dot, 'the code has the bind dot');
+  // The dot's corner is the visible box's corner only if they share the anchor:
+  // the frame wears VariableConnect's positioned class, and the box it holds is
+  // the editor itself, with nothing between them (see the CSS test below).
+  assert.ok(frame.classList.contains('embed-editor_varconnect'), 'the frame is anchored as the Custom value field is');
+  assert.equal(code.parentElement, dot.parentElement, 'the dot and the editor sit in the same positioned frame');
+  assert.ok(code.classList.contains('code-editor'), 'the frame’s editor child is the padded `.code-editor` the frame resets');
+  assert.ok(code.querySelector(':scope > .cm-editor'), 'and the visible box is its direct child');
   const view = viewIn(clipModule.EditorView, host);
   await caretAt(view, view.state.doc.length);
   await typeInto(view, ' var(--');
@@ -318,6 +325,34 @@ test('the clip-path editor’s code has the dot and the chooser, and binding wri
   assert.equal(writes.at(-1), 'var(--accent)', 'and the whole clip-path is written as it');
   await act(async () => root.unmount());
   host.remove();
+});
+
+// The declarations of the one rule whose selector list is exactly `selector`.
+function ruleBody(css, selector) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matches = [...css.matchAll(new RegExp(`(?:^|\\}|\\*\\/)\\s*${escaped}\\s*\\{([^}]*)\\}`, 'g'))];
+  assert.equal(matches.length, 1, `exactly one \`${selector}\` rule`);
+  return matches[0][1];
+}
+
+// The DOM here (jsdom) has no layout, so the dot's place is held by the rules that set it: the
+// frame and the Custom value wrapper share one positioned class and one dot
+// rule, and nothing pads the editor box away from the frame's corner. The
+// app-wide `.code-editor` fallback pads by 10px, which is what left the
+// clip-path dot floating up and to the left of the field.
+test('the code editor’s dot sits on the visible box’s corner, as on Custom value', () => {
+  const embedCss = fs.readFileSync(repoPath('src/features/style/embedEditor.css'), 'utf8');
+  const editorCss = fs.readFileSync(repoPath('src/features/style/components/CssCodeEditor.css'), 'utf8');
+  const clipCss = fs.readFileSync(repoPath('src/features/style/clipPath/ClipPath.css'), 'utf8');
+  const appCss = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
+  assert.match(ruleBody(embedCss, '.embed-editor_varconnect'), /position:\s*relative;/, 'the shared wrapper is the dot’s anchor');
+  assert.match(ruleBody(embedCss, '.embed-editor_varconnect-dot'), /position:\s*absolute;/, 'the dot is placed from that anchor');
+  assert.match(ruleBody(appCss, '.code-editor'), /padding:\s*10px;/, 'the fallback padding this guards against still exists');
+  assert.match(ruleBody(editorCss, '.code-editor_frame > .code-editor'), /padding:\s*0;/, 'the frame drops it, so the box starts at its corner');
+  const frame = ruleBody(editorCss, '.embed-editor_varconnect.code-editor_frame');
+  assert.doesNotMatch(frame, /padding|margin|position/, 'the frame adds no space and keeps the shared anchor');
+  assert.doesNotMatch(ruleBody(clipCss, '.clip-path_code'), /padding|margin/, 'the clip-path code adds none either');
+  assert.doesNotMatch(ruleBody(editorCss, '.code-editor .cm-editor'), /margin/, 'nor does the visible box');
 });
 
 // The files under a folder, recursively, bounded so a runaway tree fails loudly.

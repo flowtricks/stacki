@@ -13,8 +13,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import AutoTextarea from '../../ui/AutoTextarea';
 import ExprInput from '../../ui/ExprInput';
 import { scopeChips, scopeCompletions } from '../../editor/dataSuggest';
-import { VariableTextSizeIcon, CommentIcon, CodeIcon, BranchIcon, CornerIcon } from '../../ui/Icons';
+import { CommentIcon, CodeIcon, BranchIcon, CornerIcon } from '../../ui/Icons';
 import { type PropsPanelProps, type NodePanelProps, type SourceDimensionsOptions } from './propsPanelTypes';
+import TextConnectField, { type TextConnectFieldProps } from './TextConnectField';
 
 // Edits the props of the selected node. Fields come from the component's
 // prop schema (interface Props / Astro.props destructure), plus any props
@@ -310,23 +311,17 @@ export function RawPanel(props: NodePanelProps<'raw'>) {
     </div>
   );
 }
-export function TextPanel(props: NodePanelProps<'text'>) {
-  const { node, onSetText } = props;
+// Words, or the `{label}` they were connected to (TextConnectField.tsx): the
+// one field, so a text keeps its panel when it is connected and when it is not.
+export function TextPanel(props: Omit<PropsPanelProps, 'node'> & { readonly node: TextConnectFieldProps['node'] }) {
+  const { node, onSetText, onSetTextPieces, bindContext, loopContext } = props;
 
   return (
     <div className="panel-section grow" style={{ flex: '1 1 50%', overflow: 'hidden' }}>
       <div className="panel-header">
         <h2>Text</h2>
       </div>
-      <div className="props-field" style={{ marginTop: 8 }}>
-        <label onClick={noLabelActivation}>
-          <span className="prop-label">
-            <VariableTextSizeIcon size={12} className="prop-label-icon" />
-            Content
-          </span>
-        </label>
-        <AutoTextarea minRows={3} value={node.value} onChange={(event) => onSetText(event.target.value)} />
-      </div>
+      <TextConnectField node={node} bindContext={bindContext || loopContext} onSetText={(value) => onSetText(value)} onSetTextPieces={onSetTextPieces} />
     </div>
   );
 }

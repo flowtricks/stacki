@@ -23,6 +23,7 @@ import { parser } from '@lezer/javascript';
 import type { SyntaxNode } from '@lezer/common';
 import { assert } from '../../shared/core/assert';
 import { LOOP_SYNTAX_LIMITS } from './loopSyntax';
+import { isLinkName, isMediaName } from './fieldNames';
 
 /** What one field of an item holds, as the form offers it. */
 export const ITEM_FIELD_KINDS = ['text', 'number', 'switch', 'image', 'link'] as const;
@@ -138,6 +139,12 @@ function itemProblem(fields: readonly ItemFieldDeclaration[], item: ListItemValu
   }
   return undefined;
 }
+
+/** The fields a new list's items start with, wherever the list is made: a title and a line of text, as a list of values, features or steps most often is. */
+export const LIST_STARTER_FIELDS: readonly ItemFieldDeclaration[] = [
+  { name: 'title', kind: 'text' },
+  { name: 'text', kind: 'text' },
+];
 
 /** One item's type, inline: `{ title: string; text: string }`. */
 export function itemTypeText(fields: readonly ItemFieldDeclaration[]): string {
@@ -274,4 +281,97 @@ function sameMembers(found: ReadonlyMap<string, string> | undefined, wanted: Rea
     return false;
   }
   return [...wanted].every(([name, type]) => found.get(name) === type);
+}
+
+/**
+ * The item fields a list type declares, read back the way listTypeText writes
+ * them: `readonly { title: string; on: boolean }[]`, `Array<{ … }>`, or
+ * `readonly Value[]` naming a type `frontmatter` declares. A string field's
+ * kind comes from its name (an image, a link, else text), as the instance
+ * panel tells them apart. Undefined for a type that is not a list of plain
+ * fields: the Properties panel then edits it as code only.
+ */
+export function listFieldsOfType(type: string, frontmatter: string): readonly ItemFieldDeclaration[] | undefined {
+  if (type.length > LOOP_SYNTAX_LIMITS.sourceCharsMax || frontmatter.length > LOOP_SYNTAX_LIMITS.sourceCharsMax) {
+    return undefined;
+  }
+  const item = arrayItemType(type.trim());
+  if (item === undefined) {
+    return undefined;
+  }
+  const found = item.startsWith('{') ? inlineMembers(item) : namedMembers(item, frontmatter);
+  if (found === undefined || found.size === 0 || found.size > LIST_LIMITS.fieldsMax) {
+    return undefined;
+  }
+  const fields: ItemFieldDeclaration[] = [];
+  for (const [name, memberType] of found) {
+    const kind = memberKind(name, memberType.replace(/\s+/g, ''));
+    if (kind === undefined || fieldNameProblem(name) !== undefined) {
+      return undefined;
+    }
+    fields.push({ name, kind });
+  }
+  assert(fields.length === found.size, 'listFieldsOfType: every member is a field');
+  return fields;
+}
+
+// `readonly X[]`, `X[]`, `Array<X>` or `ReadonlyArray<X>`: X.
+function arrayItemType(type: string): string | undefined {
+  const bare = type.replace(/^readonly\s+/, '').trim();
+  const generic = /^(?:Readonly)?Array<([\s\S]*)>$/.exec(bare);
+  if (generic?.[1] !== undefined) {
+    return generic[1].trim();
+  }
+  const suffix = /^([\s\S]*)\[\]$/.exec(bare);
+  const inner = suffix?.[1]?.trim();
+  if (inner === undefined || inner === '') {
+    return undefined;
+  }
+  // `(A | B)[]` and `X[][]` hold more than plain items.
+  return inner.endsWith(']') || inner.startsWith('(') ? undefined : inner;
+}
+
+// The members of an object type written inline.
+function inlineMembers(item: string): ReadonlyMap<string, string> | undefined {
+  const source = `type Item = ${item};`;
+  const tree = typescript.parse(source);
+  const declaration = tree.topNode.firstChild ?? undefined;
+  const named = declaration === undefined ? undefined : objectTypeOf(declaration, source);
+  return named === undefined ? undefined : members(named.body, source);
+}
+
+// The members of the type `name` the frontmatter declares.
+function namedMembers(name: string, frontmatter: string): ReadonlyMap<string, string> | undefined {
+  if (!/^[A-Za-z_$][\w$]*$/.test(name)) {
+    return undefined;
+  }
+  const tree = typescript.parse(frontmatter);
+  for (
+    let statement = tree.topNode.firstChild, count = 0;
+    statement !== null && count < LOOP_SYNTAX_LIMITS.declarationsMax;
+    statement = statement.nextSibling, count++
+  ) {
+    const declaration = statement.name === 'ExportDeclaration' ? (statement.firstChild?.nextSibling ?? undefined) : statement;
+    const named = declaration === undefined ? undefined : objectTypeOf(declaration, frontmatter);
+    if (named !== undefined && named.name === name) {
+      return members(named.body, frontmatter);
+    }
+  }
+  return undefined;
+}
+
+function memberKind(name: string, type: string): ItemFieldKind | undefined {
+  switch (type) {
+    case 'number':
+      return 'number';
+    case 'boolean':
+      return 'switch';
+    case 'string':
+      if (isMediaName(name)) {
+        return 'image';
+      }
+      return isLinkName(name) ? 'link' : 'text';
+    default:
+      return undefined;
+  }
 }

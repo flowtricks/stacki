@@ -151,7 +151,8 @@ test('kinds: each kind reads from and writes its native type', () => {
   assert.equal(withKind({ type: 'string', description: '' }, 'choice', '').type, UNION_TYPE);
   assert.equal(kindType('image', ''), 'import("astro").ImageMetadata | string');
   assert.equal(kindType('image', "import type { ImageMetadata } from 'astro';"), 'ImageMetadata | string');
-  assert.equal(kindType('list', ''), 'readonly string[]');
+  // A List is items of fields, typed as the Settings panel's new List types one.
+  assert.equal(kindType('list', ''), 'readonly { title: string; text: string }[]');
   assert.equal(kindType('record', ''), 'Record<string, string>');
   assert.equal(carriedDefault('"3"', 'number', 'number'), '3');
   assert.equal(carriedDefault('"three"', 'number', 'number'), '');
@@ -342,7 +343,7 @@ test('the Kind picker writes the native type, and the format tag for Link', asyn
   const cases = [
     ['Link', 'caption?: string;', /\/\*\* @format uri \*\/\n {2}caption\?: string;/],
     ['Image', 'caption?: string;', /caption\?: import\("astro"\)\.ImageMetadata \| string;/],
-    ['List', 'caption?: string;', /caption\?: readonly string\[\];/],
+    ['List', 'caption?: string;', /caption\?: readonly \{ title: string; text: string \}\[\];/],
     ['Key–value', 'caption?: string;', /caption\?: Record<string, string>;/],
     ['Choice', 'caption?: string;', /caption\?: "Option 1" \| "Option 2";/],
     ['Date', 'caption?: string;', /caption\?: Date;/],

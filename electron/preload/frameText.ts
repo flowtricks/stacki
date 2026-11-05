@@ -70,7 +70,9 @@ export function installCanvasText(
   document.addEventListener('avb:morphed', session.reconcile);
 }
 
-function findTextHit(catalog: CanvasTextCatalog, event: MouseEvent) {
+// Exported for the regression suite, which hit-tests a rendered instance the
+// way a double click does without standing up a whole frame.
+export function findTextHit(catalog: CanvasTextCatalog, event: Pick<MouseEvent, 'target' | 'clientX' | 'clientY'>): TextHit | undefined {
   if (!(event.target instanceof Element)) {
     return undefined;
   }

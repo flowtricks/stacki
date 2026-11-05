@@ -351,3 +351,47 @@ test('typed text drops the template whitespace around a component slot', () => {
   };
   assert.equal(canvasDraftValue({ id: 'n1', value: 'Find hope!' }, draft), 'Find hope');
 });
+
+test('double-clicking slot text beside a component-drawn arrow edits the page, not the component', () => {
+  // The pigeon Button renders `<a class="button"><slot /><span>→</span></a>`, and the
+  // page writes `<Button href="#">Start your free flight</Button>`. The arrow is the
+  // component's own element; the words are the page's. The rendered DOM below is the
+  // marked preview after the frame strips its comments: the anchor carries the
+  // component root and the instance's page path, the arrow only its component path.
+  const page = '<div><Button href="#">Start your free flight</Button></div>';
+  const html =
+    '<div data-avb-p="0"><a href="#" class="button" data-avb-p="src/components/Button.astro|0 0.0">\n' +
+    '  Start your free flight\n  <span data-avb-p="src/components/Button.astro|0.1">→</span>\n</a></div>';
+  matching(html, page, (match, targets) => {
+    assert.equal(targets.length, 1, 'only the slotted words are page text');
+    const { target } = targets[0];
+    assert.equal(target.from, 'slot');
+    assert.equal(target.parent, '0.0', 'the target is the page instance');
+    const anchor = document.querySelector('a');
+    const arrow = document.querySelector('span');
+    const result = match(target, anchor);
+    assert.ok(result, 'a double click on the words finds them');
+    assert.equal(
+      result.nodes
+        .map((node) => node.data)
+        .join('')
+        .trim(),
+      'Start your free flight',
+    );
+    assert.equal(result.element, anchor);
+    assert.equal(match(target, arrow), undefined, 'the arrow is the component’s own part');
+    // The frame modules read the page's location as they load.
+    global.location = window.location;
+    const { findTextHit } = loadRenderer('electron/preload/frameText.ts');
+    const catalog = { type: 'avb:text-catalog', session: 's', file: 'src/pages/index.astro', checksum: 'a'.repeat(64), targets: [target] };
+    // JSDOM lays nothing out and has no range boxes: every box is empty at the origin, so a
+    // point there is on the words.
+    window.Range.prototype.getBoundingClientRect = () => new window.DOMRect(0, 0, 0, 0);
+    assert.equal(findTextHit(catalog, { target: anchor, clientX: 0, clientY: 0 })?.target.key, target.key);
+    assert.equal(findTextHit(catalog, { target: arrow, clientX: 0, clientY: 0 }), undefined, 'the arrow falls through to opening the component');
+    // The commit rewrites the page's <Button> children: the plan's range is the slot text in the
+    // page source, so the component's file (which holds the arrow) is never written.
+    assert.equal(page.slice(targets[0].start, targets[0].end), 'Start your free flight');
+    assert.equal(applyCanvasText(page, targets[0], 'Fly today'), '<div><Button href="#">Fly today</Button></div>');
+  });
+});

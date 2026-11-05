@@ -20,6 +20,8 @@ import { noLabelActivation, CommentField } from './SourcePanels';
 import { type ElementState } from './elementState';
 import { canvasDraftProp, canvasDraftValue, useCanvasTextDraft } from '../../ui/canvasTextDraft';
 import { canvasDraftInline } from './canvasDraftInline';
+import { assert } from '../../../shared/core/assert';
+import type { FieldFocus } from './fieldFocus';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
   const draft = useCanvasTextDraft(state);
@@ -35,7 +37,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
                   dropping the same chip in at the caret. Without it, putting a
                   field into a sentence means knowing to type
                   `{post.data.title}`. */}
-            <BindHandle active={!!contentPicker} onOpen={(host) => elementOpenContentPicker(state, host ?? undefined)} />
+            <BindHandle active={!!contentPicker} onOpen={(host, focus) => elementOpenContentPicker(state, host ?? undefined, focus)} />
           </label>
           <RichContent
             key={node.id}
@@ -49,14 +51,14 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
               pos={contentPicker}
               bindContext={bindContext || loopContext}
               seed={{ fit: 'content', label: 'Text', value: plainContent(node.children) }}
-              // A prop made for the content is the whole of it, its words now the prop's default.
+              // A new prop lands where a picked one would: its words are the prop's default.
               onBindNew={(path) => {
                 setContentPicker(undefined);
-                onSetInline([{ kind: 'expr', value: path }]);
+                elementPlaceContentChip(state, contentPicker.focus, path);
               }}
               onPick={(path) => {
                 setContentPicker(undefined);
-                contentInsertRef.current?.insert(path);
+                elementPlaceContentChip(state, contentPicker.focus, path);
               }}
               onClose={() => setContentPicker(undefined)}
             />
@@ -395,7 +397,7 @@ export function ElementSettings({ state }: { readonly state: ElementState }) {
   );
 }
 
-export function elementOpenContentPicker(state: ElementState, host: Element | undefined): void {
+export function elementOpenContentPicker(state: ElementState, host: Element | undefined, focus: FieldFocus): void {
   if (state.contentPicker) {
     state.setContentPicker(undefined);
     return;
@@ -404,7 +406,30 @@ export function elementOpenContentPicker(state: ElementState, host: Element | un
   if (!rectangle) {
     return;
   }
-  state.setContentPicker(dataPickerPosition(rectangle));
+  state.setContentPicker({ ...dataPickerPosition(rectangle), focus });
+}
+
+// A picked chip in the Content field: at the caret while the words are being
+// typed, the words around it kept; the whole of the content when the dot was
+// pressed from outside the field (fieldFocus.ts). A node's expression is
+// written with its braces — `{title}` — where an attribute's is not.
+export function elementPlaceContentChip(state: Pick<ElementState, 'contentInsertRef' | 'onSetInline'>, focus: FieldFocus, path: string): void {
+  assert(path.length > 0, 'A picked chip names a value');
+  switch (focus.kind) {
+    case 'focused': {
+      const insert = state.contentInsertRef.current;
+      assert(insert !== undefined, 'The Content field is mounted while its picker is open');
+      insert.insert(path);
+      return;
+    }
+    case 'unfocused':
+      state.onSetInline([{ kind: 'expr', value: `{${path}}` }]);
+      return;
+    default: {
+      const exhaustive: never = focus;
+      return exhaustive;
+    }
+  }
 }
 
 // The element's content as words, when it is only words; '' otherwise.

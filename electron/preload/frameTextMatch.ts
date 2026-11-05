@@ -1,6 +1,7 @@
 // A source text region is authoritative. A fallback may ignore animation wrappers,
 // but never an authored child element, duplicate text, or changed rendered words.
 import type { CanvasTextTarget } from '../../shared/properties/canvasText';
+import { assert } from '../../shared/core/assert';
 import { elementsWithPath, pathsOf, runsOf } from './frameRegions';
 
 export interface TextMatch {
@@ -51,6 +52,13 @@ export function matchCanvasText(target: CanvasTextTarget, clicked: Element): Tex
     if (scope === parent || matches.length > 1) {
       return undefined;
     }
+    // A component's own element that does not hold the words is a part the
+    // component drew itself (a button's arrow, a slider's card): the click
+    // landed on it, not on the slot, so it never reaches out to the slot's
+    // text beside it. That click opens the component instead.
+    if (textBoundaryOf(scope, target) === 'component') {
+      return undefined;
+    }
     scope = scope.parentElement ?? undefined;
   }
   return undefined;
@@ -70,27 +78,52 @@ function segmentMatch(parent: Element, target: CanvasTextTarget, segment: number
   return { nodes: [node], element: parent };
 }
 
+// How an element inside the searched scope bears on the words looked for:
+// `authored` — a child the caller wrote, or one that never holds slot text
+// (a script, an unknown element of the page's own) — ends a run and is not
+// entered; `component` — an element the component itself drew — ends a run
+// but is entered, since it may wrap the slot; `transparent` — an untagged
+// wrapper such as an animation's split spans — joins the runs either side.
+type TextBoundary = 'authored' | 'component' | 'transparent';
+
 function textGroups(parent: Element, target: CanvasTextTarget): Text[][] {
   const groups: Text[][] = [[]];
-  const queue = Array.from(parent.childNodes).reverse();
+  // A component element's children are followed by a marker that starts a
+  // new run once they are read, so its own words (a button's arrow) never
+  // join the slot's words that sit beside it.
+  const queue: (Node | 'break')[] = Array.from(parent.childNodes).reverse();
   let count = 0;
   while (queue.length > 0 && count++ < 1_000) {
     const node = queue.pop();
-    if (node instanceof Text) {
+    if (node === 'break') {
+      groups.push([]);
+    } else if (node instanceof Text) {
       groups[groups.length - 1]?.push(node);
     } else if (node instanceof Element) {
-      const boundary = isTextBoundary(node, target);
-      if (boundary) {
-        groups.push([]);
-      } else {
-        queue.push(...Array.from(node.childNodes).reverse());
+      const boundary = textBoundaryOf(node, target);
+      switch (boundary) {
+        case 'authored':
+          groups.push([]);
+          break;
+        case 'component':
+          groups.push([]);
+          queue.push('break', ...Array.from(node.childNodes).reverse());
+          break;
+        case 'transparent':
+          queue.push(...Array.from(node.childNodes).reverse());
+          break;
+        default: {
+          const exhaustive: never = boundary;
+          return exhaustive;
+        }
       }
     }
   }
+  assert(count <= 1_001, 'The text run walk stays within its node bound');
   return queue.length ? [] : groups.filter((nodes) => nodes.length > 0);
 }
 
-function isTextBoundary(element: Element, target: CanvasTextTarget): boolean {
+function textBoundaryOf(element: Element, target: CanvasTextTarget): TextBoundary {
   const paths = pathsOf(element);
   const namespace = target.parent.slice(0, target.parent.lastIndexOf('|') + 1);
   // Component-owned wrappers are not authored children of the slot. Their own
@@ -105,12 +138,23 @@ function isTextBoundary(element: Element, target: CanvasTextTarget): boolean {
     return path.slice(0, path.lastIndexOf('|') + 1) === namespace;
   });
   if (authored) {
-    return true;
+    return 'authored';
   }
-  if (target.kind === 'component') {
-    return ['SCRIPT', 'STYLE', 'TEXTAREA', 'SELECT', 'SVG'].includes(element.tagName);
+  if (target.kind === 'element') {
+    return ['SPAN', 'DIV'].includes(element.tagName) ? 'transparent' : 'authored';
   }
-  return !['SPAN', 'DIV'].includes(element.tagName);
+  if (['SCRIPT', 'STYLE', 'TEXTAREA', 'SELECT', 'SVG'].includes(element.tagName)) {
+    return 'authored';
+  }
+  // The instance's own elements (tagged with its path) hold the slot; other
+  // tagged elements were drawn by the component; untagged ones are runtime
+  // wrappers the component's script added around the words.
+  // An element inside the text's own region (an expression's markup) belongs
+  // to the words, not beside them.
+  if (paths.includes(target.parent) || paths.includes(target.path)) {
+    return 'transparent';
+  }
+  return paths.length > 0 ? 'component' : 'transparent';
 }
 
 function sameText(nodes: readonly Text[], expected: string): boolean {

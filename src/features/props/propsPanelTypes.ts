@@ -12,6 +12,7 @@ import type { SetProp, SetProps } from './propAttributes';
 import type { SetText, TagOption, TagFieldProps } from './propNodeEditors';
 import type { SourceContext } from './propBindings';
 import type { RichContext, InlineNode } from './RichContent';
+import type { TextPiece } from './textConnect';
 import type { AssetDimensions } from '../../ui/AssetThumb';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
 import React from 'react';
@@ -51,6 +52,8 @@ export interface PropsPanelProps {
   readonly onSetText: SetText;
   readonly onSetContent: (text: string) => void;
   readonly onSetInline: (nodes: readonly InlineNode[]) => void;
+  /** Restates the selected text or expression node as these pieces (TextConnectField.tsx); absent where the host cannot. */
+  readonly onSetTextPieces?: ((pieces: readonly TextPiece[]) => void) | undefined;
   readonly onOpenCode?: () => void;
   readonly onSetFrontmatter?: (source: string) => void;
   readonly frontmatterSource?: string;

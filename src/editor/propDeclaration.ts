@@ -73,6 +73,21 @@ export interface PropDeclaration {
   readonly list: ListSettings;
   /** An image prop's default: an asset path relative to the component, a rooted path or a URL. Read only for an image. */
   readonly image: string;
+  /** How the member is typed. Absent: optional, writable, and typed as its kind writes it. */
+  readonly typing?: PropTyping | undefined;
+  /** A default written as code in the default's code view. Absent or empty: the default the kind's own fields give. */
+  readonly defaultExpression?: string | undefined;
+}
+
+/**
+ * The TypeScript a prop's member is written with, as the Properties panel
+ * edits it: `readonly`, no `?` when required, and a code type written in place
+ * of the type the kind gives (empty for the kind's own).
+ */
+export interface PropTyping {
+  readonly required: boolean;
+  readonly readonly: boolean;
+  readonly codeType: string;
 }
 
 /** An import the declared prop needs: a type to name it by, or the file its default is. */
@@ -225,8 +240,14 @@ export function withRestTooltip(frontmatter: string, tooltip: string): Result<st
  * has to sit inside the number settings, at their precision.
  */
 export function defaultCode(
-  declaration: Pick<PropDeclaration, 'kind' | 'defaultText' | 'options' | 'number' | 'list' | 'image'>,
+  declaration: Pick<PropDeclaration, 'kind' | 'defaultText' | 'options' | 'number' | 'list' | 'image' | 'defaultExpression'>,
 ): Result<string | undefined, string> {
+  // Code typed in the default's code view is the default, exactly as typed.
+  const expression = declaration.defaultExpression?.trim() ?? '';
+  assert(expression.length <= PROPERTY_LIMITS.textCharsMax, 'defaultCode: a default expression is bounded');
+  if (expression !== '') {
+    return ok(expression);
+  }
   // A list and an image always have a default, whatever was typed as text.
   if (declaration.kind === 'list') {
     const problem = listSettingsProblem(declaration.list);
@@ -419,7 +440,9 @@ export function declaredProp(
   if (refused !== undefined) {
     return err(refused);
   }
-  const type = typeText(declaration, frontmatter);
+  // A code type stated in the form is the type; the kind's own otherwise.
+  const codeType = declaration.typing?.codeType.trim() ?? '';
+  const type = codeType === '' ? typeText(declaration, frontmatter) : ok(codeType);
   if (!type.ok) {
     return type;
   }
@@ -490,6 +513,14 @@ function declarationProblem(frontmatter: string, declaration: PropDeclaration): 
   if (/\btype\s+Props\s*=/.test(frontmatter)) {
     return 'This component declares its props as a type. Add the property in the code.';
   }
+  const codeType = declaration.typing?.codeType ?? '';
+  if (codeType.length > PROPERTY_LIMITS.textCharsMax) {
+    return 'The code type is too long.';
+  }
+  if (/[;\n]/.test(codeType)) {
+    // One member's type: a semicolon or a line break would end the member and start another.
+    return 'Write the code type on one line, without a semicolon.';
+  }
   const rest = readRestBinding(frontmatter);
   const kindProblem = kindSettingsProblem(declaration, rest);
   if (kindProblem !== undefined) {
@@ -552,7 +583,9 @@ function entryText(declaration: PropDeclaration, local: string, fallback: string
 function memberText(declaration: PropDeclaration, type: string): string {
   const lines = [tooltipText(declaration.tooltip), ...settingTags(declaration)].filter((line) => line !== '');
   const comment = lines.length === 0 ? '' : `  /** ${lines.join('\n   * ')} */\n`;
-  return `${comment}  ${declaration.key}?: ${type};\n`;
+  const modifier = declaration.typing?.readonly === true ? 'readonly ' : '';
+  const optional = declaration.typing?.required === true ? '' : '?';
+  return `${comment}  ${modifier}${declaration.key}${optional}: ${type};\n`;
 }
 
 // A prop's settings as JSDoc tags; a setting left at its default is not written.

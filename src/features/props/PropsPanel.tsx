@@ -21,6 +21,7 @@ import {
   TextPanel,
 } from './SourcePanels';
 import { useElementProps, type ElementState } from './elementState';
+import { isTextConnection } from './TextConnectField';
 import { ElementContent, ElementLooseText, ElementSchemaFields, ElementExtraFields, ElementSettingsHeader, ElementSettings } from './ElementFields';
 
 export { type PropsPanelProps } from './propsPanelTypes';
@@ -41,7 +42,13 @@ function renderPropsPanel(props: PropsPanelProps, stashRef: React.MutableRefObje
     case 'frontmatter':
       return <FrontmatterPanel {...props} node={node} />;
     case 'expr':
-      return <ExprPanel {...props} node={node} />;
+      // `{label}` in the markup is a text connected to data, and keeps the Text
+      // panel it had as words, where it can be disconnected; other code is code.
+      return props.onSetTextPieces !== undefined && isTextConnection(node.value, props.bindContext || props.loopContext) ? (
+        <TextPanel {...props} node={{ kind: 'expr', id: node.id, value: node.value }} />
+      ) : (
+        <ExprPanel {...props} node={node} />
+      );
     case 'raw-line':
       return <RawLinePanel {...props} node={node} />;
     case 'map':
@@ -55,7 +62,8 @@ function renderPropsPanel(props: PropsPanelProps, stashRef: React.MutableRefObje
     case 'raw':
       return <RawPanel {...props} node={node} />;
     case 'text':
-      return <TextPanel {...props} node={node} />;
+      // The node's own kind, restated: a value node's type spans every value kind.
+      return <TextPanel {...props} node={{ kind: 'text', id: node.id, value: node.value }} />;
     case 'element':
     case 'component':
     case 'chunk-group':

@@ -12,11 +12,16 @@ import type { ChipsOf } from '../../ui/ExprInput';
 import type { PickerNode } from './DataPicker';
 import type { NewPropSeed } from './newPropModel';
 import type { PropDeclaration } from '../../editor/propDeclaration';
+import type { FieldFocus } from './fieldFocus';
 
 export interface FieldPosition {
   readonly left: number;
   readonly top: number;
   readonly width?: number;
+}
+/** Where a field's dot opened its picker, and whether the caret was in the field then. */
+export interface FieldPickerAt extends FieldPosition {
+  readonly focus: FieldFocus;
 }
 export interface SourceContext {
   readonly frontmatter?: string | undefined;
@@ -34,6 +39,8 @@ export type Chip = Element | TemplateHole;
 export interface ChipPick {
   readonly chip: TemplateHole | undefined;
   readonly pos: FieldPosition;
+  /** Whether the caret was in the field when its dot opened the picker; unfocused for a chip's own press. */
+  readonly focus: FieldFocus;
 }
 export interface BindingContextProps {
   readonly bindContext?: RichContext | undefined;
@@ -63,7 +70,8 @@ export interface ExpressionBindingFieldProps extends BindingContextProps {
 }
 export interface BindHandleProps {
   readonly active: boolean;
-  readonly onOpen: (host: Element | undefined) => void;
+  /** `host` is the field the dot belongs to; `focus` says whether the caret was in it when the dot was pressed (fieldFocus.ts). */
+  readonly onOpen: (host: Element | undefined, focus: FieldFocus) => void;
 }
 export interface FieldDataPickerProps extends BindingContextProps {
   readonly pos: FieldPosition;

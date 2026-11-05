@@ -1047,3 +1047,53 @@
   color: var(--text-dim);
   font-size: 11px;
 }
+
+/* The sections both places a prop is edited share (PropertySections.tsx): the
+   Required and Readonly flags, and the Code type disclosure, the exact type
+   expression shown on demand. */
+.property-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.property-flags label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+}
+.property-flags input {
+  width: auto;
+}
+.property-code-toggle {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 2px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.property-code-toggle:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.new-prop-code-type {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.new-prop-code-type .property-code {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+}

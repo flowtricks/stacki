@@ -11,6 +11,7 @@ import { dataTree } from '../../editor/dataSuggest';
 import type { DataContext } from '../../editor/dataSuggest';
 import { resolvePick } from '../../editor/bindings';
 import { deleteChipAtCaret } from './chipKeys';
+import { insertAtRange } from './fieldFocus';
 import { LITERAL_ATTRIBUTE, nodesToHtml, isChippable } from './richContentModel';
 import type { InlineNode } from './richContentModel';
 import { richApplyLink, richContentNodes, richExec, richReadStates, richWrapTag, type FormatState, type RichTarget } from './richFormat';
@@ -204,22 +205,13 @@ function useRichInsertion(insertRef: RichContentProps['insertRef'], state: RichS
           return;
         }
         element.focus();
-        const selection = window.getSelection();
-        const saved = caretRef.current;
-        const range = document.createRange();
-        if (saved && element.contains(saved.commonAncestorContainer)) {
-          range.setStart(saved.startContainer, saved.startOffset);
-          range.setEnd(saved.endContainer, saved.endOffset);
-        } else {
-          range.selectNodeContents(element);
-          range.collapse(false);
-        }
-        if (!selection) {
-          return;
-        }
-        selection.removeAllRanges();
-        selection.addRange(range);
-        document.execCommand('insertHTML', false, `<span class="expr-chip" contenteditable="false" data-expr="{${path}}">${path}</span>`);
+        const chip = element.ownerDocument.createElement('span');
+        chip.className = 'expr-chip';
+        chip.setAttribute('contenteditable', 'false');
+        chip.setAttribute('data-expr', `{${path}}`);
+        chip.textContent = path;
+        // Over the selection the caret last had in the field, or at its end.
+        insertAtRange(element, caretRef.current, chip);
         emit();
       },
     };

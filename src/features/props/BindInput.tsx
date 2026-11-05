@@ -3,6 +3,7 @@ import type { Part } from '../../editor/bindings';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { deleteChipAtCaret } from './chipKeys';
+import { insertAtRange } from './fieldFocus';
 
 // A prop's value as a field you can type in, with the data in it shown as
 // chips: `Posted ` · [post.data.pubDate] · ` in London`. The chip is atomic —
@@ -24,6 +25,17 @@ const esc = (text: string | undefined) => String(text).replace(/&/g, '&amp;').re
 // picker needs the second one to know which value is the current one.
 const chipHtml = (path: string, full?: string) =>
   `<span class="expr-chip" contenteditable="false" data-expr="${esc(path)}"${full && full !== path ? ` data-full="${esc(full)}"` : ''}>${esc(path)}</span>`;
+
+// The same chip as a node, for putting into the field at a range.
+function chipNode(document: Document, path: string): HTMLElement {
+  const chip = document.createElement('span');
+  chip.className = 'expr-chip';
+  chip.setAttribute('contenteditable', 'false');
+  chip.setAttribute('data-expr', path);
+  chip.textContent = path;
+  assert(chip.getAttribute('data-expr') === path, 'BindInput: a chip writes the path it was given');
+  return chip;
+}
 
 const partsToHtml = (parts: readonly Part[] | undefined): string => {
   assert((parts?.length ?? 0) <= LIMITS.treeNodesMax, 'BindInput: part limit exceeded');
@@ -208,22 +220,8 @@ function bindHandle(state: BindState): BindInputHandle {
         return;
       }
       host.focus();
-      const selection = window.getSelection();
-      const saved = rangeRef.current;
-      const range = document.createRange();
-      if (saved && host.contains(saved.commonAncestorContainer)) {
-        range.setStart(saved.startContainer, saved.startOffset);
-        range.setEnd(saved.endContainer, saved.endOffset);
-      } else {
-        range.selectNodeContents(host);
-        range.collapse(false);
-      }
-      if (!selection) {
-        return;
-      }
-      selection.removeAllRanges();
-      selection.addRange(range);
-      document.execCommand('insertHTML', false, chipHtml(path));
+      // Over the selection the caret last had in the field, or at its end.
+      insertAtRange(host, rangeRef.current, chipNode(host.ownerDocument, path));
       saveRange();
       emit();
     },

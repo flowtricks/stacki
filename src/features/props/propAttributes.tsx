@@ -5,7 +5,7 @@ import type { ReactNode, RefObject } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
 import type { PropValues } from './propRules';
 import type { RichContext } from './RichContent';
-import type { SourceContext, FieldPosition, InsertAPI } from './propBindings';
+import type { SourceContext, FieldPosition, FieldPickerAt, InsertAPI } from './propBindings';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { scopeChips, scopeCompletions } from '../../editor/dataSuggest';
@@ -297,7 +297,7 @@ function useAttrEditor(props: AttrEditorProps) {
   const ref = useRef<HTMLDivElement>(null);
   // Where the purple dot's picker sits, and the field's own insert-at-the-caret
   // handle — the same pair every schema-driven field uses (see PropField).
-  const [insertAt, setInsertAt] = useState<FieldPosition | undefined>(undefined);
+  const [insertAt, setInsertAt] = useState<FieldPickerAt | undefined>(undefined);
   // Where the bigger value editor sits, when `=` has asked for one.
   const [bigAt, setBigAt] = useState<FieldPosition | undefined>(undefined);
   // What this value can name, for the completions and the chips — the same list
@@ -514,7 +514,7 @@ function AttributeBinding({ state }: { readonly state: AttributeState }) {
                 again. A dot that flickers under the pointer. */}
         <BindHandle
           active={!!insertAt}
-          onOpen={(host) => {
+          onOpen={(host, focus) => {
             if (insertAt) {
               setInsertAt(undefined);
               return;
@@ -523,7 +523,7 @@ function AttributeBinding({ state }: { readonly state: AttributeState }) {
             if (!rect) {
               return;
             }
-            setInsertAt(dataPickerPosition(rect));
+            setInsertAt({ ...dataPickerPosition(rect), focus });
           }}
         />
       </div>
@@ -583,10 +583,10 @@ function AttributePopups({ state }: { readonly state: AttributeState }) {
           }}
           onPick={(path) => {
             setInsertAt(undefined);
-            // Into the caret when the field has one, so a chip lands beside
-            // what is already typed; otherwise this is the value's first
-            // binding and it becomes the whole of it.
-            if (bindApiRef.current?.insert) {
+            // At the caret while the value is being typed, so a chip lands
+            // beside what is already there; the dot pressed outside the field
+            // connects the whole value (fieldFocus.ts).
+            if (insertAt.focus.kind === 'focused' && bindApiRef.current?.insert) {
               bindApiRef.current.insert(path);
               return;
             }

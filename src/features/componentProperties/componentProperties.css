@@ -51,7 +51,6 @@
   padding: 12px;
 }
 .property-editor {
-  border: 1px solid var(--border-strong);
   border-radius: 7px;
   padding: 12px;
   display: flex;
@@ -60,8 +59,7 @@
   background: var(--bg-panel-2);
 }
 .property-editor header {
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
 }
 .property-editor header button {
   font-size: 18px;
@@ -81,9 +79,11 @@
   gap: 6px;
   color: var(--text-dim);
 }
-.property-editor input,
+/* Fields are fills, as everywhere else in the app: never an outline. */
+.property-editor input:not([type='checkbox']),
 .property-editor textarea {
-  border-color: var(--border-strong);
+  border-color: transparent;
+  background: var(--bg-input);
 }
 .property-editor textarea {
   resize: vertical;
@@ -117,17 +117,9 @@
   line-height: 1.5;
   font-size: 11px;
 }
-.property-flags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-}
 .property-editor .property-flags label {
   flex-direction: row;
   align-items: center;
-}
-.property-flags input {
-  width: auto;
 }
 .property-options.props-field {
   margin: 0;
@@ -211,23 +203,6 @@
   align-items: center;
   padding: 0 4px;
   color: var(--text-dim);
-}
-
-/* The Kind picker's escape hatch: the exact type expression, shown on demand. */
-.property-code-toggle {
-  display: inline-flex;
-  align-self: flex-start;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 6px 2px 2px;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 11px;
-}
-.property-code-toggle:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
 }
 
 /* A kind's settings (a Number's range, a Switch's labels) side by side. */

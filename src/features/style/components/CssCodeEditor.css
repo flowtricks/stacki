@@ -50,3 +50,13 @@
   flex-direction: column;
   flex-grow: 1;
 }
+
+/* The frame is the field: its top-left corner is where the dot is drawn
+   (embed-editor_varconnect-dot's top and left), so the visible editor box must
+   start there. The app-wide `.code-editor` fallback adds 10px of padding, which
+   put the rounded box 10px inside the frame and left the dot floating off its
+   corner, up and to the left. The embedded editors own their spacing, so it is
+   dropped here for every one of them rather than per editor. */
+.code-editor_frame > .code-editor {
+  padding: 0;
+}
