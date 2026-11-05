@@ -15,6 +15,18 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.7 loops that hold text, data picker marks
+
+- A Text element dropped into a loop was written as `( Text )`, which Astro reads as a
+  JavaScript name: the loop read back as code, its Settings lost the source picker, the
+  Navigator showed nothing inside it and nothing could be dropped in. A loop body that is not
+  made of tags (text, an expression, a `{/* */}` comment, a nested condition or loop) is now
+  written inside `<>…</>`, and a loop's `<>` or `<Fragment>` is shown as the loop's own
+  contents, written back as it was.
+- The data picker marks where values come from: the component on its props heading, Astro on
+  Content Collections, and the CMS mark on each collection.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.7.
+
 ## 1.0.6 a selection is revealed even when the smooth scroll stalls
 
 The 1.0.5 release stopped at the Linux build, and this time it was the app: selecting an
