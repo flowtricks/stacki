@@ -676,6 +676,7 @@
     "src/ui/popupDismiss.ts",
     "src/ui/popupLifecycle.ts",
     "src/ui/popupOwnership.ts",
+    "src/ui/PanelBoundary.tsx",
     "src/ui/popupScrollLock.ts",
     "src/ui/delayedTooltip.ts",
     "src/ui/popupScope.ts",

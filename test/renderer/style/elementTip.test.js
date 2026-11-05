@@ -103,6 +103,26 @@ const texts = (parts) => parts.map((part) => part.text);
   const bare = { ...snapshot, id: undefined, classes: [], classList: [], attributes: {} };
   check('a bare element is its tag alone', same(elementTipParts(bare), [{ kind: 'tag', text: 'h2' }]));
   check('no element, no parts', same(elementTipParts(undefined), []));
+  // A one-letter tag is a whole chip. A length check that wanted two characters
+  // threw while rendering a selected <p> or <a> and took the whole window down.
+  for (const tag of ['p', 'a', 'b', 'i', 'q', 's', 'u']) {
+    const one = { ...bare, tag, attributes: {} };
+    let parts;
+    let thrown;
+    try {
+      parts = elementTipParts(one);
+    } catch (error) {
+      thrown = error;
+    }
+    check(`a <${tag}> is one chip, without throwing`, thrown === undefined && same(parts, [{ kind: 'tag', text: tag }]), String(thrown));
+    check(`and its line is the tag`, same(elementParts(one), [tag]));
+  }
+  const unnamed = { ...bare, tag: undefined, classes: ['', 'hero'], classList: ['hero'], attributes: { '': '' } };
+  check(
+    'a nameless class or attribute is left out, not shown or thrown on',
+    same(texts(elementTipParts(unnamed)), ['.hero']),
+    JSON.stringify(elementTipParts(unnamed)),
+  );
 
   // 2. The mounted line.
   const React = require('react');
@@ -158,6 +178,10 @@ const texts = (parts) => parts.map((part) => part.text);
     line.dispatchEvent(new window.MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }));
   });
   check('leaving the line hides the tip', tip() === null);
+  await act(async () => {
+    root.render(React.createElement(bundle.ElementTokenPicker, { snapshot: { ...bare, tag: 'p', attributes: {} } }));
+  });
+  check('a selected <p> renders its line', document.querySelector('.embed-editor_element-id')?.textContent === 'p');
   await act(async () => root.unmount());
 
   if (failures.length) {

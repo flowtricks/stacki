@@ -14,6 +14,7 @@ import WelcomeScreen from '../../features/welcome/WelcomeScreen';
 import PagesPanel from '../../features/pages/PagesPanel';
 import PalettePanel from '../../features/palette/PalettePanel';
 import StructurePanel from '../../features/structure/StructurePanel';
+import PanelBoundary from '../../ui/PanelBoundary';
 import GitChip from '../../features/git/GitChip';
 import HistoryPanel from '../../features/history/HistoryPanel';
 import { ConfirmHost, confirmDialog } from '../../ui/ConfirmDialog';
@@ -461,39 +462,41 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
     pickPseudo(app, id, pseudo);
   };
   return (
-    <StructurePanel
-      key={page?.path}
-      pageState={app.pageState}
-      currentPage={page?.kind === 'route' ? { kind: 'route', route: page.route } : page}
-      layouts={app.scan.layouts}
-      currentLayoutName={app.currentLayoutName}
-      selectedId={app.selectedId}
-      emptyNodeIds={app.emptyNodeIds ?? new Set<string>()}
-      hiddenNodeIds={app.stateIds.hidden}
-      inertNodeIds={app.stateIds.inert}
-      pseudoNodeIds={{ before: app.stateIds.before, after: app.stateIds.after }}
-      selectedPseudo={app.pseudoPick?.nodeId === app.selectedId ? app.pseudoPick?.pseudo : undefined}
-      onSelectPseudo={selectPseudo}
-      liveClassesById={app.liveClassesById ?? new Map<string, readonly string[]>()}
-      revealTick={app.revealTick}
-      onSelect={selectNavigatorNode}
-      onHoverNode={(id) => {
-        app.hoverPseudo.set(undefined);
-        app.setHoverNodeId(id);
-      }}
-      onHoverPseudo={(id, pseudo) => {
-        app.hoverPseudo.set(pseudo);
-        app.setHoverNodeId(id);
-      }}
-      {...desktopElementActions(app)}
-      onOpenCode={app.openCodeWindowById}
-      onChangeLayout={app.onChangeLayout}
-      onDropComponent={app.onDropComponent}
-      onMoveNode={app.moveNode}
-      onCodeChange={app.onCodeChange}
-      onOpenCodePanel={() => app.setLeftTab('code')}
-      devLog={app.devLog}
-    />
+    <PanelBoundary name="The Navigator" resetKey={page?.path}>
+      <StructurePanel
+        key={page?.path}
+        pageState={app.pageState}
+        currentPage={page?.kind === 'route' ? { kind: 'route', route: page.route } : page}
+        layouts={app.scan.layouts}
+        currentLayoutName={app.currentLayoutName}
+        selectedId={app.selectedId}
+        emptyNodeIds={app.emptyNodeIds ?? new Set<string>()}
+        hiddenNodeIds={app.stateIds.hidden}
+        inertNodeIds={app.stateIds.inert}
+        pseudoNodeIds={{ before: app.stateIds.before, after: app.stateIds.after }}
+        selectedPseudo={app.pseudoPick?.nodeId === app.selectedId ? app.pseudoPick?.pseudo : undefined}
+        onSelectPseudo={selectPseudo}
+        liveClassesById={app.liveClassesById ?? new Map<string, readonly string[]>()}
+        revealTick={app.revealTick}
+        onSelect={selectNavigatorNode}
+        onHoverNode={(id) => {
+          app.hoverPseudo.set(undefined);
+          app.setHoverNodeId(id);
+        }}
+        onHoverPseudo={(id, pseudo) => {
+          app.hoverPseudo.set(pseudo);
+          app.setHoverNodeId(id);
+        }}
+        {...desktopElementActions(app)}
+        onOpenCode={app.openCodeWindowById}
+        onChangeLayout={app.onChangeLayout}
+        onDropComponent={app.onDropComponent}
+        onMoveNode={app.moveNode}
+        onCodeChange={app.onCodeChange}
+        onOpenCodePanel={() => app.setLeftTab('code')}
+        devLog={app.devLog}
+      />
+    </PanelBoundary>
   );
 }
 

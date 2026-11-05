@@ -33,6 +33,7 @@ import { holdsInlineText, commentAbove, trailOf } from '../model/pageGestures';
 import type { ShellView } from '../App';
 import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEdit';
 import { assert } from '../../../shared/core/assert';
+import PanelBoundary from '../../ui/PanelBoundary';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 
 export function CanvasPane({ app }: { readonly app: ShellView }) {
@@ -339,9 +340,15 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
   return (
     <ResizablePanel kind="right">
       <RightTabs app={app} />
-      {app.rightTab === 'style' && <StyleTab app={app} />}
+      {app.rightTab === 'style' && (
+        <PanelBoundary name="The Style panel" resetKey={app.selectedId}>
+          <StyleTab app={app} />
+        </PanelBoundary>
+      )}
       <div style={{ display: app.rightTab === 'settings' ? 'contents' : 'none' }}>
-        <PropsPanel {...settingsValues(app)} {...settingsHandlers(app)} />
+        <PanelBoundary name="The Settings panel" resetKey={app.selectedId}>
+          <PropsPanel {...settingsValues(app)} {...settingsHandlers(app)} />
+        </PanelBoundary>
       </div>
     </ResizablePanel>
   );

@@ -46,7 +46,12 @@ export default function ElementTokenPicker({ snapshot }: { snapshot: ElementSnap
 
 /** The element's selector as its parts, in order: `h2`, `.hero_title`, `[data-x="1"]`. */
 export function elementParts(snapshot: ElementSnapshot | undefined): readonly string[] {
-  const parts = snapshotTokens(snapshot).map((token) => {
+  // A token without a name has nothing to show and is left out. The snapshot
+  // comes from the canvas, so this is a value to handle, never an assertion: a
+  // throw here unmounts the whole window (a one-letter tag such as `p` or `a`
+  // once tripped a length check and took the app down).
+  const named = snapshotTokens(snapshot).filter((token) => (token.label ?? '') !== '');
+  const parts = named.map((token) => {
     const name = token.label ?? '';
     if (token.kind === 'tag') {
       return name;
@@ -57,10 +62,7 @@ export function elementParts(snapshot: ElementSnapshot | undefined): readonly st
     const value = snapshot?.attributes[name] ?? '';
     return value ? `[${name}="${value}"]` : `[${name}]`;
   });
-  assert(
-    parts.every((part) => part.length > 0),
-    'elementParts: every part names something',
-  );
+  assert(parts.length === named.length, 'elementParts: one part per named token');
   return parts;
 }
 
@@ -82,19 +84,21 @@ export function elementTipParts(snapshot: ElementSnapshot | undefined): readonly
   }
   const named = snapshotTokens(snapshot)
     .filter((token) => token.kind !== 'attribute')
+    .filter((token) => (token.label ?? '') !== '')
     .map((token): TipPart => (token.kind === 'tag' ? { kind: 'tag', text: token.label ?? '' } : { kind: 'class', text: `.${token.label ?? ''}` }));
   const id: TipPart[] = snapshot.id === undefined || snapshot.id === '' ? [] : [{ kind: 'id', text: `#${snapshot.id}` }];
   const attributes = Object.keys(snapshot.attributes)
-    .filter((name) => name !== 'class' && name !== 'id' && !isAstroGeneratedAttribute(name))
+    .filter((name) => name !== '' && name !== 'class' && name !== 'id' && !isAstroGeneratedAttribute(name))
     .sort()
     .map((name): TipPart => {
       const value = snapshot.attributes[name] ?? '';
       return { kind: 'attribute', text: value ? `[${name}="${value}"]` : `[${name}]` };
     });
   const parts = [...named, ...id, ...attributes];
+  // Every chip has text: a one-letter tag (`p`, `a`, `b`) is one character.
   assert(
-    parts.every((part) => part.text.length > 1),
-    'elementTipParts: every chip names something',
+    parts.every((part) => part.text.length > 0),
+    'elementTipParts: every chip has text',
   );
   return parts;
 }

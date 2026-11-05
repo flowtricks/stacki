@@ -9488,3 +9488,34 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   min-height: 18px;
   margin-top: 6px;
 }
+
+/* A panel whose render failed (src/ui/PanelBoundary.tsx): what broke and a way
+   back, in place of the panel, while the rest of the app keeps working. */
+.panel-boundary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(255, 69, 58, 0.12);
+  color: var(--text);
+  font-size: 12.5px;
+}
+.panel-boundary-title {
+  font-weight: 600;
+  color: var(--red);
+}
+.panel-boundary-message {
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.panel-boundary-retry {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  cursor: pointer;
+}

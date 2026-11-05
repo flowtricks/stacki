@@ -11,6 +11,7 @@ import { canvasPageOf } from '../editor/pageState';
 import { readPropsDestructure } from '../editor/loopProps';
 import { readRestBinding } from '../editor/propDeclaration';
 import { imagePropsOf, type NewPropHost } from '../features/props/newPropModel';
+import PanelBoundary from '../ui/PanelBoundary';
 
 export default function App() {
   const scope = useAppScope();
@@ -24,7 +25,9 @@ export default function App() {
   };
   return (
     <>
-      <AppContent app={app} />
+      <PanelBoundary name="Stacki" resetKey={app.project?.path}>
+        <AppContent app={app} />
+      </PanelBoundary>
       <Settings projectPath={app.project?.path} previewURL={app.devStatus === 'on' ? app.devUrl : undefined} />
     </>
   );
