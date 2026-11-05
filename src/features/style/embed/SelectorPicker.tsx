@@ -4,7 +4,8 @@ import Popup from '../../../ui/Popup';
 
 import { loadSelectorFilters, saveSelectorFilters, type SelectorFilters } from '../model/toolPreferences';
 import { parentClassPrefix } from '../model/classPrefix';
-import { getHost } from '../model/host';
+import { findNode, getHost } from '../model/host';
+import { typedSelectorText } from '../model/typedSelector';
 import { assert } from '../../../../shared/core/assert';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react';
@@ -706,7 +707,9 @@ export function selectorKeyDown(event: ReactKeyboardEvent<HTMLInputElement>, add
   } else if (event.key === 'Enter') {
     event.preventDefault();
     const highlighted = showList && highlight >= 0 ? filtered[highlight] : undefined;
-    apply(highlighted ? highlighted.selector : add.draft);
+    // A suggestion row is the exact selector it shows; typed text is read the
+    // way people mean it, a bare name as a class (typedSelector.ts).
+    apply(highlighted ? highlighted.selector : typedSelectorText(add.draft, selectedElementTag()));
   } else if (event.key === 'Tab') {
     // Fill the highlighted (or first) suggestion into the input to keep editing.
     const pick = highlight >= 0 ? filtered[highlight] : filtered[0];
@@ -862,4 +865,15 @@ function SelectorSuggestions({
       ))}
     </Popup>
   );
+}
+
+// The selected element's tag, so typing its own name (a custom element's
+// included) still means the tag rather than a class.
+function selectedElementTag(): string | undefined {
+  const host = getHost();
+  if (host.selectedId === undefined) {
+    return undefined;
+  }
+  const node = findNode(host.nodes, host.selectedId);
+  return node?.kind === 'element' ? node.name : undefined;
 }

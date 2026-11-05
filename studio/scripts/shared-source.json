@@ -566,6 +566,7 @@
     "src/features/style/model/host.ts",
     "src/features/style/model/selectorCaret.ts",
     "src/features/style/model/insertBinding.ts",
+    "src/features/style/model/typedSelector.ts",
     "src/features/style/model/typedVariable.ts",
     "src/features/style/model/liveColor.ts",
     "src/features/style/model/nativeStubs.ts",

@@ -8,7 +8,8 @@
 // ← and → move the caret across chips while nothing is typed; Backspace and
 // Delete take off the chip before or after it; Delete on a selected chip takes
 // off the class or attribute it names, but only when that name is written
-// literally on the element. Typed text finds classes fuzzily.
+// literally on the element. Typed text finds classes fuzzily. A name typed
+// without a dot is a class, unless it is a tag, so it lands on the element.
 //
 // Method, in three layers:
 //   1. The pure helpers, case by case: gap arithmetic over chip boxes
@@ -55,6 +56,7 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
         export { withClass, PLACEMENT_END } from './src/editor/classAttr'
         export { classRemoval, attributeRemoval } from './src/editor/selectorRemoval'
         export { fuzzyMatch, rankFuzzy, fuzzySegments } from './src/lib/fuzzyRank'
+        export { typedSelectorText } from './src/features/style/model/typedSelector'
       `,
       resolveDir: ROOT,
       loader: 'tsx',
@@ -105,6 +107,31 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   check('a click between rows belongs to the nearer row', caretAtPoint(rows, { x: 45, y: 27 }) === 4);
   check('a click below every row is the end', caretAtPoint(rows, { x: 0, y: 90 }) === 5);
   check('with no chips, every click is gap 0', caretAtPoint([], { x: 10, y: 10 }) === 0);
+
+  // 1a'. A dotless name is a class unless it names a tag.
+  const { typedSelectorText } = bundle;
+  check('a bare name is a class', typedSelectorText('developer_wrap', 'section') === '.developer_wrap');
+  check('a hyphenated bare name is a class', typedSelectorText('button-wrapper', 'div') === '.button-wrapper');
+  check('surrounding space is dropped', typedSelectorText('  hero_wrap ', undefined) === '.hero_wrap');
+  check('a bare name keeps its state', typedSelectorText('hero_wrap:hover', 'div') === '.hero_wrap:hover');
+  check('a bare name keeps its combo class', typedSelectorText('hero_wrap.is-dark', 'div') === '.hero_wrap.is-dark');
+  check('a bare name keeps its descendant', typedSelectorText('hero_wrap .title', 'div') === '.hero_wrap .title');
+  check('an HTML tag stays a tag', typedSelectorText('section', 'div') === 'section');
+  check('a tag is matched in any case', typedSelectorText('SECTION', 'div') === 'SECTION');
+  check('a tag with a state stays a tag', typedSelectorText('a:hover', 'div') === 'a:hover');
+  check('a tag before a descendant stays a tag', typedSelectorText('section .title', 'div') === 'section .title');
+  check('an SVG tag stays a tag', typedSelectorText('svg', 'div') === 'svg');
+  check('a document tag stays a tag', typedSelectorText('body', 'div') === 'body');
+  check("the element's own custom tag stays a tag", typedSelectorText('my-card', 'my-card') === 'my-card');
+  check('another custom-looking name is a class', typedSelectorText('my-card', 'div') === '.my-card');
+  check('a dotted class is kept', typedSelectorText('.hero', 'div') === '.hero');
+  check('an id is kept', typedSelectorText('#hero', 'div') === '#hero');
+  check('an attribute is kept', typedSelectorText('[data-x]', 'div') === '[data-x]');
+  check('a pseudo-class alone is kept', typedSelectorText(':root', 'div') === ':root');
+  check('a universal selector is kept', typedSelectorText('*', 'div') === '*');
+  check('a name starting with a digit is not an identifier, and is kept', typedSelectorText('2col', 'div') === '2col');
+  check('nesting is kept', typedSelectorText('.hero { .title }', 'div') === '.hero { .title }');
+  check('empty stays empty', typedSelectorText('   ', 'div') === '');
 
   // 1b. Steps and clamps.
   check('← from gap 2 is gap 1', caretStep(2, 5, -1) === 1);
@@ -298,6 +325,13 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
     JSON.stringify(added),
   );
   check('and the caret moves past it', slotOrder() === 5, String(slotOrder()));
+  await act(async () => {
+    setter.call(input(), 'developer_wrap');
+    input().dispatchEvent(new window.Event('input', { bubbles: true }));
+  });
+  await key(input(), 'Enter');
+  check('a name typed without a dot is added as a class', added.at(-1)?.selector === '.developer_wrap', JSON.stringify(added));
+  await key(input(), 'ArrowLeft');
   await key(input(), 'ArrowLeft');
   await key(input(), 'Backspace');
   check('Backspace with nothing typed takes off the class chip before the caret', same(removedClasses, ['hero_title']), JSON.stringify(removedClasses));
