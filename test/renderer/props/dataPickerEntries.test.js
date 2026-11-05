@@ -171,7 +171,8 @@ test('the picker renders the pager, the chosen entry, and the source headings', 
   const closed = render(undefined);
   assert.doesNotMatch(closed, /dp-item-count/, 'no entry is opened');
   assert.doesNotMatch(closed, /title="statsEntries\[0\]\.data/, 'no entry fields are listed');
-  assert.match(closed, /title="Content collection"/, 'the collection row carries the Astro mark');
+  assert.match(closed, /title="Content collection"/, 'the collection row carries the CMS mark');
+  assert.match(closed, /class="dp-section"><svg[^>]*dp-section-icon/, 'the Content Collections heading carries the Astro mark');
 
   // Bound to an entry not read yet: the reading row stands in for it.
   const unread = render('statsEntries[1].data.Header');

@@ -3020,6 +3020,9 @@ body > .embed-editor_provenance {
 /* Every group of rows is headed by where its data lives (dataPickerModel.ts).
    A fill sets the heading apart from the rows, not a rule (house style). */
 .dp-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 6px 8px;
   margin: 2px 0;
   border-radius: 4px;
@@ -3029,6 +3032,10 @@ body > .embed-editor_provenance {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--text-faint);
+}
+/* The source's mark before a section heading: a component, or Astro. */
+.dp-section-icon {
+  flex: none;
 }
 .dp-loading {
   padding: 4px 6px;

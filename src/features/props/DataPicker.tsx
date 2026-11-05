@@ -9,6 +9,8 @@ import {
   ChevronLeftIcon,
   AstroIcon,
   CheckIcon,
+  CmsIcon,
+  ElementComponentIcon,
   CodeIcon,
   ElementImageIcon,
   FieldNumberIcon,
@@ -380,11 +382,11 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
           <ChevronRightIcon size={10} />
         </span>
         {depth === 0 && node.section === 'props' && <PropKindIcon kind={node.kind} />}
-        {/* A content collection says it is one, with Astro's mark: it is Astro's
-            own content layer, not a remote CMS. */}
+        {/* A collection is a CMS collection to the person reading the list: the
+            CMS mark, as in the left rail. Its section heading carries Astro's. */}
         {depth === 0 && node.section === 'collections' && (
           <span className="dp-kind-icon" title="Content collection">
-            <AstroIcon size={11} />
+            <CmsIcon size={12} />
           </span>
         )}
         <span className="dp-key">{showPath ? node.path : node.key}</span>
@@ -484,12 +486,29 @@ function DataRoots({
     section = node.section || section;
     return (
       <React.Fragment key={`s:${node.path}`}>
-        {head && <div className="dp-section">{head}</div>}
+        {head && (
+          <div className="dp-section">
+            <SectionIcon section={node.section} />
+            {head}
+          </div>
+        )}
         {<DataRow node={node} depth={0} showPath={false} root={undefined} state={state} onPick={onPick} onStepItem={onStepItem} />}
       </React.Fragment>
     );
   });
 }
+// Where a section's data comes from, as a mark beside its heading: the
+// component whose props these are, or Astro for its content collections.
+function SectionIcon({ section }: { readonly section: string | undefined }) {
+  if (section === 'props') {
+    return <ElementComponentIcon size={11} className="dp-section-icon" />;
+  }
+  if (section === 'collections') {
+    return <AstroIcon size={11} className="dp-section-icon" />;
+  }
+  return undefined;
+}
+
 function EntryNavigation({ entries }: { readonly entries: Entries }) {
   return (
     <div className="dp-entry">
