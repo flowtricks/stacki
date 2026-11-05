@@ -15,6 +15,18 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.9 one-letter tags no longer crash the app
+
+- 1.0.8's element tooltip asserted that every chip was longer than one character, so selecting
+  a `<p>`, `<a>` or any other one-letter tag threw while the Style panel rendered and blanked
+  the whole window. A one-letter tag is now a chip like any other, and a nameless token is left
+  out instead of asserted on.
+- A render error now stays in the panel it happened in: the Style, Settings and Navigator panels,
+  the app root and Studio's Style panel show what broke with a Try again button, and retry on
+  their own when the selection or page changes.
+- 1.0.8 is superseded; its `create-stacki` was never published. Desktop, the Studio source
+  bundle and `create-stacki` are aligned at 1.0.9.
+
 ## 1.0.8 typed classes land on the element, element tooltip
 
 - A name typed without a dot in the Style panel's selector box (`hero_wrap`) was read as a tag
