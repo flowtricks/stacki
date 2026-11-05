@@ -15,6 +15,17 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.6 a selection is revealed even when the smooth scroll stalls
+
+The 1.0.5 release stopped at the Linux build, and this time it was the app: selecting an
+element far down the page started a smooth scroll that stopped 9px down on that runner, and the
+selection stayed below the fold until it was selected again. The canvas now watches the scroll
+it starts and, when the page stops short of the element, jumps the rest of the way; a person
+who scrolls meanwhile is left alone. The reveal test halts the first smooth scroll itself, so
+the stall is reproduced on every platform. Version 1.0.5 has its tag but no Desktop release;
+Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.6 with the 1.0.4
+changes below.
+
 ## 1.0.5 release correction
 
 The 1.0.4 release stopped on every platform at the prop model's parity test: its snapshot
@@ -24,7 +35,7 @@ holds only files the repository carries, and the test asserts that none from the
 Linux, the reveal test also read a smooth scroll 9px into its way; it now waits until the
 element is on screen and the page has stopped, or the page has held still, within a bound.
 The app was not at fault. Version 1.0.4 has its tag but no Desktop release; Desktop, the
-Studio source bundle and `create-stacki` are aligned at 1.0.5 with the 1.0.4 changes below.
+Studio source bundle and `create-stacki` were to align at 1.0.5; they align at 1.0.6.
 
 ## 1.0.4 component props, variable chooser, welcome screen
 
@@ -49,7 +60,7 @@ Studio source bundle and `create-stacki` are aligned at 1.0.5 with the 1.0.4 cha
 - The data picker heads project collections "Content Collections" with the Astro logo, closed
   until opened, and pages through a list's entries.
 - Welcome screen: a slow WebGL background; readable text contrast across the app.
-- Desktop, the Studio source bundle and `create-stacki` were to align at 1.0.4; they align at 1.0.5.
+- Desktop, the Studio source bundle and `create-stacki` were to align at 1.0.4; they align at 1.0.6.
 
 ## 1.0.3 Linux release correction
 

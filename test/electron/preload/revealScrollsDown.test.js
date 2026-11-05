@@ -19,7 +19,9 @@
 //   - a video bleeding off the right of a body with `overflow-x: hidden`,
 // both already in vertical view, leave the window and every ancestor at
 // scrollLeft 0 and the page where it was; a section below the fold scrolls the
-// page down until it is on screen; revealing it again does not move the page.
+// page down until it is on screen, even when the smooth scroll is halted
+// partway (the page halts the first one, as Linux did); revealing it again
+// does not move the page.
 
 const fs = require('fs');
 const http = require('http');
@@ -53,6 +55,18 @@ const FRAME_PAGE = `<!doctype html><meta charset=utf-8>
   <!--avb-s:1--><div class="video bleed" id="bleeding"></div><!--avb-e:1-->
   <div class="tall"></div>
   <!--avb-s:2--><section class="below" id="below"></section><!--avb-e:2-->
+  <script>
+    // The stall the Linux runner showed, made to happen everywhere: the first
+    // smooth scroll the page sees is halted where it is, a few pixels down.
+    // The reveal must still arrive at the section.
+    let halted = false;
+    addEventListener('scroll', () => {
+      if (!halted && scrollY > 0) {
+        halted = true;
+        scrollTo({ top: scrollY, behavior: 'instant' });
+      }
+    });
+  </script>
 </body>`;
 
 const HOST_PAGE = `<!doctype html><meta charset=utf-8>

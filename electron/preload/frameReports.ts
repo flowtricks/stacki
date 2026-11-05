@@ -367,6 +367,47 @@ export const scrollPathIntoView = (nodePath: string, occ: number): void => {
   }
   // No `left`: the horizontal scroll stays wherever it is (see above).
   window.scrollTo({ top, behavior: 'smooth' });
+  finishReveal(top);
+};
+
+// A smooth scroll can stall short of where it was sent: on Linux the first
+// reveal of a page stopped 9px down and stayed there, the selection still far
+// below the fold, until the next reveal. So the frame watches the scroll it
+// started, and when the page stops moving before it arrives, it jumps the
+// rest of the way. A person who scrolls in the meantime has taken over, and
+// is left alone. Bounded: REVEAL_CHECKS_MAX checks, REVEAL_CHECK_MS apart.
+const REVEAL_CHECK_MS = 100;
+const REVEAL_CHECKS_MAX = 10;
+let revealWatch: ReturnType<typeof setTimeout> | undefined;
+const finishReveal = (target: number): void => {
+  assert(target >= 0, 'finishReveal: a scroll target is never negative');
+  clearTimeout(revealWatch);
+  let last = window.scrollY;
+  let checks = 0;
+  const check = (): void => {
+    checks += 1;
+    assert(checks <= REVEAL_CHECKS_MAX, 'finishReveal: the watch is bounded');
+    const now = window.scrollY;
+    const arrived = Math.abs(now - target) <= 1;
+    if (arrived) {
+      revealWatch = undefined;
+      return;
+    }
+    // Moving away from the target means a person scrolled: theirs now.
+    const awayFromTarget = Math.abs(now - target) > Math.abs(last - target) + 1;
+    if (awayFromTarget) {
+      revealWatch = undefined;
+      return;
+    }
+    if (now === last || checks === REVEAL_CHECKS_MAX) {
+      revealWatch = undefined;
+      window.scrollTo({ top: target, behavior: 'instant' });
+      return;
+    }
+    last = now;
+    revealWatch = setTimeout(check, REVEAL_CHECK_MS);
+  };
+  revealWatch = setTimeout(check, REVEAL_CHECK_MS);
 };
 
 // `stacki-opened` on the instance being edited — the one that was actually
