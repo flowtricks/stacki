@@ -3607,6 +3607,44 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_element-id.is-empty {
   color: var(--color-text-tertiary);
 }
+/* Resting on the element line shows its parts as chips (ElementTokenPicker),
+   wrapped to the panel's width, each in the colour the panel gives its kind:
+   the tag and id grey, classes the class blue, attributes the purple of a
+   connected value. The tip is a raised grey, well clear of the black field and
+   the panel it opens over, with room around the chips. */
+.embed-editor_element-tip {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-surface-raised);
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+}
+.embed-editor_element-tip-chip {
+  max-width: 100%;
+  padding: 2px var(--space-3);
+  border-radius: var(--radius-xs);
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-tight);
+  overflow-wrap: anywhere;
+}
+.embed-editor_element-tip-chip:is(.is-tag, .is-id) {
+  background: var(--color-bg-surface-high);
+  color: var(--color-text-primary);
+}
+.embed-editor_element-tip-chip.is-class {
+  background: var(--color-class-tag-bg);
+  color: #fff;
+}
+.embed-editor_element-tip-chip.is-attribute {
+  background: #453b63;
+  color: #c4afff;
+}
 
 /* The source trigger reads as a little tag — green for a component embed, blue
    for a page-level embed — with its icon and chevron in the same tone. */
