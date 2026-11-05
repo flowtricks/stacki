@@ -16,7 +16,8 @@
 // transactions, and keys as keydown on the editor's content. Last, a source
 // scan holds the shape that keeps a new editor from missing them: CodeMirror
 // is mounted for CSS only in CssCodeEditor.tsx, every <CodeEditor> says what
-// its text is, and every <textarea> in the panel sits in a VariableConnect.
+// its text is, every <textarea> in the panel sits in a VariableConnect, and so
+// does every <input> in the clip-path tool.
 
 const { test, before } = require('node:test');
 const assert = require('node:assert/strict');
@@ -394,7 +395,19 @@ test('no CSS value editor in the Style panel is made without its variables', () 
     if (/<textarea\b/.test(source)) {
       assert.match(source, /VariableConnect|connectField/, `${name} edits a value in a <textarea> outside VariableConnect`);
     }
+    // The clip-path tool's value fields (Size, Offset X, Offset Y) were plain inputs
+    // with no dot; each <input> there now sits lexically inside a <VariableConnect>.
+    if (name.startsWith(path.join('src', 'features', 'style', 'clipPath'))) {
+      for (const input of source.matchAll(/<input\b/g)) {
+        const before = source.slice(0, input.index);
+        const opened = before.lastIndexOf('<VariableConnect');
+        assert.ok(opened >= 0, `${name}: an <input> in the clip-path tool sits in VariableConnect`);
+        assert.equal(before.indexOf('</VariableConnect>', opened), -1, `${name}: an <input> in the clip-path tool sits in VariableConnect`);
+      }
+    }
   }
+  const clipInputs = fs.readFileSync(repoPath('src/features/style/clipPath/ClipPathView.tsx'), 'utf8').match(/<input\b/g) ?? [];
+  assert.ok(clipInputs.length > 0, 'the scan sees the clip-path variable fields');
   const clipView = fs.readFileSync(repoPath('src/features/style/clipPath/ClipPathView.tsx'), 'utf8');
   assert.match(clipView, /variables=\{\{ kind: 'value', prop: 'clip-path' \}\}/, 'the clip-path code binds the whole clip-path');
   const queryForms = fs.readFileSync(repoPath('src/features/style/embed/QueryForms.tsx'), 'utf8');

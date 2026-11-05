@@ -3,12 +3,13 @@
 // history, deleting and duplicating points, choosing a preset or breakpoint,
 // and edits typed in the code view (ClipPath.tsx).
 
+import { assert } from '../../../../shared/core/assert';
 import { type Point, type ClipShape, type KeyboardModifiers, type HandleTarget, type PolygonSelectionDrag, type ShapeTransformDrag } from './clipPathTypes';
 import {
   DEFAULT_SHAPE_SCALE_VARIABLE_NAME,
   DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME,
   DEFAULT_SHAPE_OFFSET_TOP_VARIABLE_NAME,
-  DEFAULT_SHAPE_SCALE_OPTIONS,
+  DEFAULT_SHAPE_SVG,
   HISTORY_LIMIT,
   SVG_POINT_EPSILON,
   NONE_SHAPE,
@@ -29,7 +30,6 @@ import {
   shapeFromContainModel,
   moveContainModel,
   resizeContainModel,
-  cacheFromShapeFitVariants,
   transformShapeCanvasPoints,
   shapeResizeCornerPoint,
   oppositeShapeResizeCorner,
@@ -516,6 +516,7 @@ export function presetChoiceActions(editor: EditorAfterPointDuplicateActions) {
   const { setShapeScaleUseVariable, setShapeScaleVariableName } = editor;
   const { setShapeOffsetLeftVariableName, setShapeOffsetTopVariableName } = editor;
   const { pastedShapeSvgCacheRef, shapeFitModeRef, setShapeFitMode, setActivePreset } = editor;
+  const { cacheFromPastedShapeSvgSource } = editor;
   const { shapeRef, setCodeValue, setShape, syncPolygonPointColorsForShape, commit } = editor;
   const { setIsPresetOpen, presetButtonRef } = editor;
   const choosePreset = (name: string) => {
@@ -547,11 +548,15 @@ export function presetChoiceActions(editor: EditorAfterPointDuplicateActions) {
       setShapeScaleVariableName(DEFAULT_SHAPE_SCALE_VARIABLE_NAME);
       setShapeOffsetLeftVariableName(DEFAULT_SHAPE_OFFSET_LEFT_VARIABLE_NAME);
       setShapeOffsetTopVariableName(DEFAULT_SHAPE_OFFSET_TOP_VARIABLE_NAME);
-      const cache = cacheFromShapeFitVariants(preset, DEFAULT_SHAPE_SCALE_OPTIONS);
-      if (cache) {
-        pastedShapeSvgCacheRef.current = cache;
-        nextPreset = cache.contain;
-      }
+      // The default shape is an SVG, converted the way pasting it would be under
+      // Scale and the variables just reset, so choosing Shape and pasting the same
+      // SVG write the same clip-path; the SVG stays the cache's source, so Fit
+      // switches between its exact conversions.
+      const cache = cacheFromPastedShapeSvgSource(DEFAULT_SHAPE_SVG);
+      assert(cache !== undefined, 'choosePreset: the default shape SVG converts');
+      assert(shapesClose(cache.stretch, preset), 'choosePreset: the stored Shape preset is the default SVG stretched');
+      pastedShapeSvgCacheRef.current = cache;
+      nextPreset = cache.contain;
       shapeFitModeRef.current = 'contain';
       setShapeFitMode('contain');
     }

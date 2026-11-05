@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { copyNode, pasteNode } from './clipboard';
+import { menuPasteClaimed } from '../../../vendor/stacki/src/ui/menuPasteClaim';
 import type { SharedDocument } from '../collaboration/useDocument';
 import type { TreeAction } from '../source/source';
 import type { Component } from '../project/projectClient';
@@ -27,6 +28,11 @@ export function useEditorKeys(
         return;
       }
       if (!selected || selected === 'frontmatter') {
+        return;
+      }
+      // An open tool that reads the clipboard (the clip-path editor) takes ⌘V: the
+      // key is left alone so the browser's paste event reaches it (menuPasteClaim.ts).
+      if (primary && value === 'v' && menuPasteClaimed()) {
         return;
       }
       if (primary && ['c', 'd', 'v'].includes(value)) {

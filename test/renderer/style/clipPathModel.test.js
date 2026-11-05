@@ -17,7 +17,10 @@
 // back the text it was read from, not its parse spelled out to four sides, so
 // the two raw inset cases were re-recorded — their formatted, normalized,
 // reparsed and unsized preview CSS, and the code highlights and token ranges
-// of that shorter text. Nothing else changed.
+// of that shorter text. A third: an SVG with nothing drawn in it is no
+// shape, so the two empty-SVG cases were re-recorded as undefined; they used to
+// fall through to the default shape, as if pasting `<svg></svg>` drew it.
+// Nothing else changed.
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

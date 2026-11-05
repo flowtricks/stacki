@@ -8,11 +8,13 @@ import React from 'react';
 import type { ScanComponent, ScanResult } from '../../../shared/properties/projectScan';
 import { readPage } from '../../ipc/bridge';
 import { type AppliedEdit, type PageOrigin, type EditGesture } from '../../editor/pageEdits';
-import { describeRejection } from '../../../shared/engine/intent';
+import { describeRejection, type RejectionReason } from '../../../shared/engine/intent';
+import { assert } from '../../../shared/core/assert';
 import { type InsertPlace, frontmatterGesture, insertGesture, sequence, tagRenameGesture, wrapGesture } from '../../editor/editGestures';
-import type { PageEdited } from '../../../shared/ipc/pageSave';
+import type { PageEditError, PageEdited } from '../../../shared/ipc/pageSave';
 import { loopVarsAt, strippedBindings } from '../../editor/loopBindings';
 import { cleanError } from '../../lib/cleanError';
+import { menuPasteClaimed } from '../../ui/menuPasteClaim';
 import { type AppHistory, type LeftTab, type NodeClipboard, type ProjectIdentity, type RightTab, type ToastKind } from '../appTypes';
 import { toEditorPageState, carriedParse, type EditorPageState, type OpenFile, type PageStateSnapshot } from '../../editor/pageState';
 import { nodeId, type EditorModel, type EditorNode } from '../../editor/pageView';
@@ -220,11 +222,76 @@ export function handleSelectionKey(event: KeyboardEvent, keys: AppKeys): void {
     event.preventDefault();
     keys.duplicateNode(selectionId);
   } else if (mod && event.key.toLowerCase() === 'v') {
+    // An open tool that reads the clipboard (the clip-path editor) takes ⌘V: the
+    // key is left alone so the browser's paste reaches it (menuPasteClaim.ts).
+    if (menuPasteClaimed()) {
+      return;
+    }
     if (!keys.nodeClipboardRef.current) {
       return;
     }
     event.preventDefault();
     void keys.pasteNode().catch(keys.reportFailure);
+  }
+}
+
+// Why an undo or redo step did not land, and how loudly to say it. A step
+// that was declined (its element moved, the file changed outside Stacki, the
+// actor was busy) broke nothing: the file is as it was and the step waits, so
+// it is a warning. Only a write that failed, or may have, is an error.
+export interface UndoRefusal {
+  readonly message: string;
+  readonly kind: Extract<ToastKind, 'warning' | 'error'>;
+}
+
+// The refusal for a revert main did not apply (revertedSteps).
+export function undoRefusal(error: PageEditError): UndoRefusal {
+  const refusal: UndoRefusal =
+    error.code === 'rejected'
+      ? { message: describeRejection(error.reason), kind: rejectionToastKind(error.reason) }
+      : { message: error.message, kind: writeFailureToastKind(error.code) };
+  assert(refusal.message.length > 0, 'An undo refusal says why');
+  return refusal;
+}
+
+// A rejection refuses the step's content against the bytes on disk now; it
+// writes nothing. Only an editor error is a fault worth the red notice.
+function rejectionToastKind(reason: RejectionReason): UndoRefusal['kind'] {
+  switch (reason) {
+    case 'anchor-moved':
+    case 'anchor-ambiguous':
+    case 'region-externally-modified':
+    case 'source-invalid':
+    case 'resource-limit':
+    case 'write-race':
+    case 'merge-conflict':
+      return 'warning';
+    case 'unsupported-operation':
+    case 'write-failed':
+      return 'error';
+    default: {
+      const exhaustive: never = reason;
+      return exhaustive;
+    }
+  }
+}
+
+// A write failure: a race or a full queue means the write never started, so
+// the step only waits; a missing file, a filesystem error or an unverified
+// write is a genuine failure.
+function writeFailureToastKind(code: Exclude<PageEditError['code'], 'rejected'>): UndoRefusal['kind'] {
+  switch (code) {
+    case 'write-race':
+    case 'backpressured':
+      return 'warning';
+    case 'missing':
+    case 'filesystem':
+    case 'uncertain':
+      return 'error';
+    default: {
+      const exhaustive: never = code;
+      return exhaustive;
+    }
   }
 }
 
@@ -238,7 +305,7 @@ export async function revertedSteps(
   readonly done: readonly AppliedEdit[];
   readonly written: PageEdited | undefined;
   readonly origin: PageOrigin | undefined;
-  readonly refusal: string | undefined;
+  readonly refusal: UndoRefusal | undefined;
 }> {
   const done: AppliedEdit[] = [];
   let origin = startOrigin;
@@ -254,9 +321,7 @@ export async function revertedSteps(
       edit: { tag: 'revert', hunks },
     });
     if (!answer.ok) {
-      const error = answer.error;
-      const why = error.code === 'rejected' ? describeRejection(error.reason) : error.message;
-      return { done, written, origin, refusal: why };
+      return { done, written, origin, refusal: undoRefusal(answer.error) };
     }
     done.push({ checksum: answer.value.checksum, inverse: answer.value.inverse });
     written = answer.value;
@@ -490,9 +555,16 @@ export function menuCopy(menu: MenuEdits): void {
   }
 }
 
-// The menu's Paste: into the focused field, or else the copied node.
+// The menu's Paste: into the focused field, or to an open tool that claims it,
+// or else the copied node. A claiming tool gets the browser's own paste, which
+// fires a `paste` event even with no field focused: ⌘V is this menu item, not
+// the stock Paste role, so without it the event never fires at all.
 export function menuPaste(menu: MenuEdits): void {
   if (inEditable()) {
+    runNativeEdit('paste');
+    return;
+  }
+  if (menuPasteClaimed()) {
     runNativeEdit('paste');
     return;
   }

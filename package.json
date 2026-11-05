@@ -21,6 +21,7 @@
     "check:policy": "node scripts/policy/scan.mts",
     "check:changed": "node scripts/agent/checkChanged.mts",
     "check:local": "node scripts/policy/checkLocal.mts",
+    "check:linux": "npm run build:scripts && node dist/scripts/release/linuxPreflight.js",
     "hooks:install": "node scripts/policy/installGitHooks.mts",
     "roundtrip:report": "npm run build:runtime && node dist/scripts/reports/roundtripReport.js",
     "fixtures:large": "npm run build:runtime && node dist/scripts/reports/largeFixtures.js --write",

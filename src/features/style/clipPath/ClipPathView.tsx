@@ -9,11 +9,13 @@ import ClassPicker from '../components/ClassPicker';
 import { type ShapeFitMode, type ShapeScaleOptionOverrides } from './clipPathTypes';
 import {
   BREAKPOINT_LABELS,
+  CLIP_PATH_CODE_ID,
   SHAPE_SCALE_VARIABLE_PLACEHOLDER,
   SHAPE_OFFSET_LEFT_VARIABLE_PLACEHOLDER,
   SHAPE_OFFSET_TOP_VARIABLE_PLACEHOLDER,
 } from './clipPathConstants';
-import { formatShapeVariableName } from './clipPathMeasure';
+import { formatShapeVariableField } from './clipPathMeasure';
+import VariableConnect from '../VariableConnect';
 import { PRESETS, PRESET_NAMES } from './clipPathFormat';
 import { presetOptionId } from './clipPathShortcuts';
 import { BreakpointIcon, PresetIcon } from './ClipPathIcons';
@@ -34,7 +36,7 @@ export function ClipPathView({ editor }: EditorProps) {
       <ShapeScaleVariableControl editor={editor} />
 
       <CodeEditor
-        id="clip-path_css-output"
+        id={CLIP_PATH_CODE_ID}
         className="clip-path_code"
         value={codeValue}
         language="css"
@@ -307,40 +309,51 @@ export function ShapeVariableLabel({ id, text, tip }: { id: string; text: string
   );
 }
 
-// A shape-variable name field; the name is tidied into a custom property on blur.
+// A shape-variable field: a custom property the shape() reads, bound the way any
+// other Style panel value is, from the purple dot, by typing `--`, or by typing its
+// name. A bound field holds `var(--name)` and shows it as a chip; a typed name is
+// tidied into that reference on blur. `prop` filters the chooser to the variables
+// that fit: a length for the size (as `width` takes), and a plain number for an
+// offset (as `opacity`, the panel's other 0 to 1 number, takes).
 export function ShapeVariableInput({
   id,
   labelId,
+  label,
+  prop,
   value,
   placeholder,
   apply,
 }: {
   id: string;
   labelId: string;
+  label: string;
+  prop: string;
   value: string;
   placeholder: string;
-  apply: (name: string) => void;
+  apply: (fieldText: string) => void;
 }) {
   return (
     <div className="clip-path_control-field clip-path_variable-field">
-      <input
-        id={id}
-        className="u-input clip-path_variable-input"
-        value={value}
-        onChange={(event) => apply(event.target.value)}
-        onBlur={(event) => {
-          const formatted = formatShapeVariableName(event.target.value);
-          if (event.target.value !== formatted) {
-            apply(formatted);
-          }
-        }}
-        placeholder={placeholder}
-        spellCheck={false}
-        autoComplete="off"
-        autoCorrect="off"
-        autoCapitalize="off"
-        aria-labelledby={labelId}
-      />
+      <VariableConnect ariaLabel={`Connect ${label} to a variable`} prop={prop} onPick={(binding) => apply(formatShapeVariableField(binding))}>
+        <input
+          id={id}
+          className="u-input clip-path_variable-input"
+          value={value}
+          onChange={(event) => apply(event.target.value)}
+          onBlur={(event) => {
+            const formatted = formatShapeVariableField(event.target.value);
+            if (event.target.value !== formatted) {
+              apply(formatted);
+            }
+          }}
+          placeholder={placeholder}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          aria-labelledby={labelId}
+        />
+      </VariableConnect>
     </div>
   );
 }
@@ -365,6 +378,8 @@ export function ShapeScaleVariableControl({ editor }: EditorProps) {
         <ShapeVariableInput
           id="clip-path_shape-variable-input"
           labelId="clip-path_shape-variable-label"
+          label="Size"
+          prop="width"
           value={shapeScaleVariableName}
           placeholder={SHAPE_SCALE_VARIABLE_PLACEHOLDER}
           apply={(name) => apply({ variableName: name })}
@@ -379,6 +394,8 @@ export function ShapeScaleVariableControl({ editor }: EditorProps) {
         <ShapeVariableInput
           id="clip-path_shape-offset-left-input"
           labelId="clip-path_shape-offset-left-label"
+          label="Offset X"
+          prop="opacity"
           value={shapeOffsetLeftVariableName}
           placeholder={SHAPE_OFFSET_LEFT_VARIABLE_PLACEHOLDER}
           apply={(name) => apply({ offsetLeftVariableName: name })}
@@ -393,6 +410,8 @@ export function ShapeScaleVariableControl({ editor }: EditorProps) {
         <ShapeVariableInput
           id="clip-path_shape-offset-top-input"
           labelId="clip-path_shape-offset-top-label"
+          label="Offset Y"
+          prop="opacity"
           value={shapeOffsetTopVariableName}
           placeholder={SHAPE_OFFSET_TOP_VARIABLE_PLACEHOLDER}
           apply={(name) => apply({ offsetTopVariableName: name })}

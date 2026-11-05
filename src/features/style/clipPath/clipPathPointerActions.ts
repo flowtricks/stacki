@@ -4,8 +4,9 @@
 // view in sync, and keyboard shortcuts (ClipPath.tsx).
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { claimMenuPaste } from '../../../ui/menuPasteClaim';
 import { type Point, type PolygonShape, type InsetSideMode, type InsetRadiusMode, type HandleTarget, type DragTarget } from './clipPathTypes';
-import { HANDLE_SIZE_PX, SELECTION_DRAG_THRESHOLD_PX, NONE_PRESET } from './clipPathConstants';
+import { CLIP_PATH_CODE_ID, HANDLE_SIZE_PX, SELECTION_DRAG_THRESHOLD_PX, NONE_PRESET } from './clipPathConstants';
 import { rectFromPoints, boundsClose, pointsNearlyEqual, snapDragPointForTarget, offsetDuplicatePoint } from './clipPathMeasure';
 import { shapesClose } from './clipPathHandles';
 import { formatCodeValue } from './clipPathFormat';
@@ -472,6 +473,9 @@ export function useShortcutListeners(editor: EditorAfterCodeSyncEffects) {
   }, []);
 
   const onWindowPaste = (event: ClipboardEvent) => {
+    if (!pasteTargetTakesSvg(event.target ?? undefined)) {
+      return;
+    }
     const text = event.clipboardData?.getData('text/plain') || '';
     const html = event.clipboardData?.getData('text/html') || '';
     const next = parseSvgClipPathPolygon(text) || parseSvgClipPathPolygon(html);
@@ -497,16 +501,40 @@ export function useShortcutListeners(editor: EditorAfterCodeSyncEffects) {
     applyPastedSvgClipPath(next);
   };
 
-  // Pasting an SVG (or a clip-path) replaces the shape. Registered once, in the capture
-  // phase; the ref reaches the current render's handler.
+  // Pasting an SVG replaces the shape. Registered once, in the capture phase, so
+  // the code editor's own paste never sees an SVG the shape takes; the ref reaches
+  // the current render's handler. While the editor is open it claims ⌘V, or the
+  // app would paste the copied element instead and no `paste` event would fire
+  // with focus on the canvas (menuPasteClaim.ts).
   const windowPasteRef = useRef(onWindowPaste);
   windowPasteRef.current = onWindowPaste;
   useEffect(() => {
     const listener = (event: ClipboardEvent) => windowPasteRef.current(event);
     window.addEventListener('paste', listener, true);
-    return () => window.removeEventListener('paste', listener, true);
+    const releaseMenuPaste = claimMenuPaste();
+    return () => {
+      releaseMenuPaste();
+      window.removeEventListener('paste', listener, true);
+    };
   }, []);
   return { shortcutKeyRef, onWindowPaste, windowPasteRef };
+}
+
+// Where a pasted SVG becomes the shape: anywhere outside a text field, and in the
+// editor's own code field, whose shortcut help has always said "Paste an SVG to make
+// it editable". Any other field (the Size and Offset names, the class picker, the
+// rest of the Style panel) gets the pasted text as typed text.
+export function pasteTargetTakesSvg(target: EventTarget | undefined): boolean {
+  if (!(target instanceof Element)) {
+    return true;
+  }
+  if (target.closest(`#${CLIP_PATH_CODE_ID}`)) {
+    return true;
+  }
+  if (target.closest('input, textarea, select, [contenteditable]')) {
+    return false;
+  }
+  return !(target instanceof HTMLElement && target.isContentEditable);
 }
 
 export type EditorAfterShortcutListeners = EditorAfterCodeSyncEffects & ReturnType<typeof useShortcutListeners>;

@@ -4,7 +4,8 @@
 // (ClipPath.tsx). Each stage takes the editor built so far and returns it with
 // its own fields added; ClipPath.tsx composes them in order.
 
-import { useMemo, useRef, useState } from 'react';
+import { type MutableRefObject, useMemo, useRef, useState } from 'react';
+import { assert } from '../../../../shared/core/assert';
 import { type CodeEditorTokenHighlight } from '../components/CssCodeEditor';
 import type { BreakpointId, StyleHandle } from './webflowDesigner';
 import {
@@ -35,7 +36,7 @@ import {
   NONE_PRESET,
   NONE_SHAPE,
 } from './clipPathConstants';
-import { normalizeSnapGuides } from './clipPathMeasure';
+import { normalizeSnapGuides, sanitizeShapeScaleVariableName, shapeVariableFieldText } from './clipPathMeasure';
 import {
   insetModifierModeFromKeys,
   shapesClose,
@@ -545,18 +546,24 @@ export function shapeScaleSyncActions(editor: EditorAfterShapeSyncActions) {
     shapeScaleUseVariableRef.current = nextUseVariable;
     setShapeScaleUseVariable(nextUseVariable);
 
-    if (variableName) {
-      shapeScaleVariableNameRef.current = variableName;
-      setShapeScaleVariableName(variableName);
-    }
-    if (offsetNames?.offsetLeftVar) {
-      shapeOffsetLeftVariableNameRef.current = offsetNames.offsetLeftVar;
-      setShapeOffsetLeftVariableName(offsetNames.offsetLeftVar);
-    }
-    if (offsetNames?.offsetTopVar) {
-      shapeOffsetTopVariableNameRef.current = offsetNames.offsetTopVar;
-      setShapeOffsetTopVariableName(offsetNames.offsetTopVar);
-    }
+    // A loaded variable shows as a reference, so it draws as a chip the way the
+    // panel shows any other bound value. A field that already names it keeps its
+    // text: the shape being loaded may be the one the field's own typing just wrote.
+    const syncField = (ref: MutableRefObject<string>, name: string | undefined, set: (text: string) => void) => {
+      if (!name) {
+        return;
+      }
+      if (sanitizeShapeScaleVariableName(ref.current) === name) {
+        return;
+      }
+      const fieldText = shapeVariableFieldText(name);
+      assert(sanitizeShapeScaleVariableName(fieldText) === name, 'syncShapeScaleOptionsForLoadedShape: the field names the loaded variable');
+      ref.current = fieldText;
+      set(fieldText);
+    };
+    syncField(shapeScaleVariableNameRef, variableName, setShapeScaleVariableName);
+    syncField(shapeOffsetLeftVariableNameRef, offsetNames?.offsetLeftVar, setShapeOffsetLeftVariableName);
+    syncField(shapeOffsetTopVariableNameRef, offsetNames?.offsetTopVar, setShapeOffsetTopVariableName);
   };
 
   const syncShapeFitModeForLoadedShape = (next: ClipShape, fallbackMode?: ShapeFitMode) => {

@@ -15,7 +15,15 @@ import {
   type ShapeFitMode,
   type ShapeScaleOptions,
 } from './clipPathTypes';
-import { DEFAULT_SHAPE_SCALE_OPTIONS, SVG_PARSE_CELL_LIMIT, SVG_POINT_EPSILON, NONE_SHAPE } from './clipPathConstants';
+import { assert } from '../../../../shared/core/assert';
+import {
+  DEFAULT_SHAPE_SCALE_OPTIONS,
+  SVG_PARSE_CELL_LIMIT,
+  SVG_PASTE_ELEMENTS_MAX,
+  SVG_PASTE_TEXT_LENGTH_MAX,
+  SVG_POINT_EPSILON,
+  NONE_SHAPE,
+} from './clipPathConstants';
 import { distanceSquared } from './clipPathMeasure';
 import { formatShapeValueFromCssSubpaths, parseClipPathInput } from './shapeFunctionModel';
 import {
@@ -567,7 +575,17 @@ export function normalizeSvgContourToPercent(points: Point[], viewBox: SvgViewBo
   return normalized.every((point) => Number.isFinite(point.x) && Number.isFinite(point.y)) && normalized.length >= 3 ? normalized : undefined;
 }
 
+// Pasted SVG is untrusted text from the clipboard. It is read into an inert
+// document (DOMParser never runs scripts or loads resources), and is bounded on
+// both sides of the parse: the text before it, so the markup scan and the parse
+// stay cheap, and the element count after it, so the walk over the elements is
+// short. A document that carries script or embedded HTML is refused outright:
+// nothing in a clip path needs it, and refusing it means no later reader has to
+// think about it.
 export function parseSvgDocument(value: string) {
+  if (value.length > SVG_PASTE_TEXT_LENGTH_MAX) {
+    return undefined;
+  }
   const markup = extractSvgMarkup(value);
   if (!markup || typeof DOMParser === 'undefined') {
     return undefined;
@@ -577,9 +595,27 @@ export function parseSvgDocument(value: string) {
   if (document.querySelector('parsererror')) {
     return undefined;
   }
+  const elements = document.getElementsByTagName('*');
+  if (elements.length > SVG_PASTE_ELEMENTS_MAX) {
+    return undefined;
+  }
+  if (Array.from(elements).some(isActiveSvgContent)) {
+    return undefined;
+  }
 
   const svg = svgTagName(document.documentElement) === 'svg' ? document.documentElement : document.querySelector('svg');
+  assert(svg === null || svgTagName(svg) === 'svg', 'parseSvgDocument: the root found is an <svg>');
   return svg ? { document, svg } : undefined;
+}
+
+// Script, embedded HTML, and event-handler attributes: content that acts rather
+// than draws, which a pasted shape never needs.
+function isActiveSvgContent(element: Element): boolean {
+  const tagName = svgTagName(element);
+  if (tagName === 'script' || tagName === 'foreignobject' || tagName === 'iframe') {
+    return true;
+  }
+  return element.getAttributeNames().some((name) => name.toLowerCase().startsWith('on'));
 }
 
 export function parseSvgClipPathOutline(value: string): SvgClipPathOutline | undefined {
@@ -678,6 +714,12 @@ export function parseSvgClipPathShape(
       renderedElements.push(element);
       subpaths.push(...elementSubpaths);
     }
+  }
+  // An SVG with nothing drawn is not a shape. Without this the empty list fell
+  // through to the formatter's fallback, and pasting `<svg></svg>` wrote the
+  // default shape as if it had been drawn.
+  if (subpaths.length === 0) {
+    return undefined;
   }
 
   const viewBox = parseSvgViewBox(svg, [svgShapeSubpathPoints(subpaths)]);

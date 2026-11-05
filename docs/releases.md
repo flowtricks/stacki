@@ -11,6 +11,27 @@ Run the fast checks and complete regression suite locally before pushing. Also r
 `npm run verify` and `npm run test:browser` against a disposable fixture workspace before tagging:
 the Desktop regression gate does not run that separate Studio browser scenario.
 
+After the regression suite passes and before tagging, run `npm run check:linux` (about 30 seconds).
+It checks, on a Mac, the ways the Linux release job has failed:
+
+- relative imports and package or workflow paths match their files' case exactly (macOS ignores
+  case, Linux does not), and no two tracked paths differ only in case;
+- files run directly are executable in git, and every `#!` line works under Linux's `env`;
+- no test names a git-ignored file that a clean checkout lacks (the 1.0.4 failure);
+- both lockfiles hold every platform's dependencies (`npm ci` refused them in 0.1.52);
+- electron-builder's Linux settings, icon and targets are valid, and the deb's maintainer script
+  renders from the builder template and parses as shell;
+- every suite that opens an Electron window passes with animation frames delayed 200 ms and CSS
+  motion at quarter speed (`scripts/release/linuxSlowMotion.ts`). That is the hidden window on the
+  slower runner: it reproduced the 1.0.11 sourceMenu failure to the pixel, and most Linux release
+  failures have been probes that measured before a popup, scroll or hover finished moving. A
+  warning lists probes that measure after a fixed sleep without waiting for the motion.
+
+It runs the probes from the existing build, so run it after the regression suite. `--static`
+skips the probes, `--repeat=3` runs them three times, and `--only=<name>` narrows them. What it
+cannot reproduce stays with the Linux job: xvfb's GPU and capture paths (`thumbs`), inotify watcher
+timing in Studio, the packaged deb and AppImage installs, and native module builds.
+
 Use an isolated checkout when other tasks are editing the working directory. Match the root,
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.

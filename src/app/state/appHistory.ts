@@ -257,8 +257,9 @@ export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreSta
       if (outcome.tag !== 'applied' || !editDrafts.empty(path) || state.save.tag !== 'clean') {
         // Edits that have not reached disk (refused, or failing) come first:
         // an inverse names the bytes its write left, and the page is not there.
+        // Declined, not failed: the step waits until the page is saved.
         back(entry);
-        showToast(`Couldn’t ${direction}: this page has edits that are not saved yet.`, 'error');
+        showToast(`Couldn’t ${direction}: this page has edits that are not saved yet.`, 'warning');
         return;
       }
       // Both halves of a partly reverted step keep the files: their calls are
@@ -272,7 +273,7 @@ export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreSta
         const startOrigin = state.editable ? state.origin : undefined;
         const reverted = await revertedSteps(path, outcome.applied, startOrigin);
         if (reverted.refusal !== undefined) {
-          showToast(`Couldn’t ${direction}: ${reverted.refusal}`, 'error');
+          showToast(`Couldn’t ${direction}: ${reverted.refusal.message}`, reverted.refusal.kind);
         }
         const { done, written, origin } = reverted;
         const left = outcome.applied.slice(0, outcome.applied.length - done.length);

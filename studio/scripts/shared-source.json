@@ -688,6 +688,7 @@
     "src/ui/errorNotices.ts",
     "src/ui/iconPaths.ts",
     "src/ui/liveValue.ts",
+    "src/ui/menuPasteClaim.ts",
     "src/ui/popup.css",
     "src/ui/popupDismiss.ts",
     "src/ui/popupLifecycle.ts",

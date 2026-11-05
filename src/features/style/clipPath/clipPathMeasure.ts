@@ -57,9 +57,44 @@ export function formatCqw(value: number) {
   return `${formatCssNumber(value)}cqw`;
 }
 
+const SHAPE_VARIABLE_NAME = /^--[A-Za-z0-9_-]+$/;
+
+// A shape-variable field's text as the custom-property name the shape() reads. The
+// field holds either a typed name (`--size`) or, once bound from the purple dot or
+// a `--` suggestion, a reference (`var(--size)`): both name the same property, so a
+// reference is unwrapped before the name is tidied.
+// Anything that is not yet a whole name (`--` mid-typing, `size` before blur adds
+// its dashes) is no name, so the shape() keeps its raw value rather than writing
+// `var(--, 100cqw)` or `var(size, 100cqw)`, which no browser reads.
 export function sanitizeShapeScaleVariableName(value: string) {
-  const trimmed = value.trim();
-  return trimmed.replace(/[^a-zA-Z0-9_-]/g, '');
+  const reference = shapeVariableReferenceName(value);
+  const name = (reference ?? value.trim()).replace(/[^a-zA-Z0-9_-]/g, '');
+  return SHAPE_VARIABLE_NAME.test(name) ? name : '';
+}
+
+// The name inside a field that is exactly one `var(--name)` reference (a fallback
+// after the name is allowed and dropped), or undefined for any other text.
+const SHAPE_VARIABLE_REFERENCE = /^var\(\s*(--[A-Za-z0-9_-]+)\s*(?:,[^()]*)?\)$/;
+export function shapeVariableReferenceName(value: string): string | undefined {
+  const match = SHAPE_VARIABLE_REFERENCE.exec(value.trim());
+  return match?.[1];
+}
+
+// A custom-property name as the text its field shows: a reference, so the field
+// draws it as a variable chip. No name shows as an empty field (its placeholder).
+export function shapeVariableFieldText(name: string): string {
+  const formatted = formatShapeVariableName(name);
+  return formatted ? `var(${formatted})` : '';
+}
+
+// A shape-variable field's text tidied on blur: a reference stays as it is, and a
+// typed name becomes a reference to the property it names.
+export function formatShapeVariableField(value: string): string {
+  const reference = shapeVariableReferenceName(value);
+  if (reference !== undefined) {
+    return `var(${reference})`;
+  }
+  return shapeVariableFieldText(value);
 }
 
 // Coerce free-text into a valid CSS custom-property name (e.g. "Element Size" -> "--element-size").
