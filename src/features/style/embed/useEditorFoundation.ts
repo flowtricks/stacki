@@ -23,7 +23,7 @@ import {
   type EmbedDocument,
   type EmbedScan,
 } from '../model/webflow';
-import type { BreakpointId, ElementSnapshot, NativeModel } from '../model/styleTypes';
+import type { ElementSnapshot, NativeModel } from '../model/styleTypes';
 import { type ScanState, type Phase } from './EditorBasics';
 import {
   streamDocs,
@@ -271,7 +271,6 @@ export function useNativeState(selectionState: ReturnType<typeof useSelectionSta
   // The page pick, stashed while in a component.
   const pageSourceRef = useRef<string | undefined>(undefined);
   const wantCompSourceRef = useRef(false); // pending switch until the component embed loads
-  const [currentBreakpoint, setCurrentBreakpoint] = useState<BreakpointId>('main');
   const nativeModelRef = useRef<NativeModel | undefined>(undefined);
   // The element identity `nativeModel` was last read for. Native styles load via a
   // separate async effect that lags the embed model on an element switch, so this lets
@@ -289,14 +288,12 @@ export function useNativeState(selectionState: ReturnType<typeof useSelectionSta
   const activeSelectorRef = useRef('');
   return {
     activeSelectorRef,
-    currentBreakpoint,
     nativeIdentityRef,
     nativeModel,
     nativeModelRef,
     pageSourceRef,
     pendingKeys,
     previousInComponentRef,
-    setCurrentBreakpoint,
     setNativeModel,
     setPendingKeys,
     setSourceSelection,

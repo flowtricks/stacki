@@ -3837,22 +3837,18 @@ textarea.embed-editor_value-input.is-expanded {
   cursor: text;
 }
 .embed-editor_selector-chips {
-  /* The suggestion list hangs under the whole chip row, wherever the caret is. */
+  /* The suggestion list hangs under the whole chip row. */
   position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
 }
-/* The add field sits in the caret's gap (its CSS order, SelectorPicker.tsx). At the
-   end it takes a row of its own at the bottom, as it always has; between two chips
-   it is only as wide as what is typed (the width is set inline from the draft). */
+/* The add field follows the last chip on a row of its own at the bottom; it never
+   stands between two chips (SelectorPicker.tsx). */
 .embed-editor_selector-caret-slot {
   flex: 1 0 100%;
   min-width: 0;
-}
-.embed-editor_selector-caret-slot:has(.embed-editor_selector-field.is-between) {
-  flex: 0 0 auto;
 }
 
 /* The well before its chips have been counted. An empty black box reads as "this
@@ -3983,10 +3979,6 @@ textarea.embed-editor_value-input.is-expanded {
   border-radius: 0;
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
-}
-.embed-editor_selector-well .embed-editor_selector-field.is-between .embed-editor_selector-add {
-  min-width: 2ch;
-  padding: 0;
 }
 .embed-editor_selector-well .embed-editor_selector-add:focus,
 .embed-editor_selector-well .embed-editor_selector-add:hover {

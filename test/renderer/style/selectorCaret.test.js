@@ -2,18 +2,21 @@
 //
 //   node test/renderer/style/selectorCaret.test.js
 //
-// Goal: the Style panel's selector field behaves like a tag input. A click in a
-// gap between chips (or before the first, or after the last) puts the typing
-// caret there; a class typed there is written there among the element's classes;
-// ← and → move the caret across chips while nothing is typed; Backspace and
-// Delete take off the chip before or after it; Delete on a selected chip takes
-// off the class or attribute it names, but only when that name is written
-// literally on the element. Typed text finds classes fuzzily. A name typed
-// without a dot is a class, unless it is a tag, so it lands on the element.
+// Goal: the Style panel's selector field behaves like a tag input whose caret
+// stays after the last chip. A click anywhere in the field's empty space —
+// a gap between two chips included — opens the add field at its normal place,
+// on its own row after the chips, never between them; a class typed there goes
+// last among the element's classes; ← and → do not move a caret among chips;
+// Backspace with nothing typed takes off the last chip; Delete on a selected
+// chip takes off the class or attribute it names, but only when that name is
+// written literally on the element. Typed text finds classes fuzzily. A name
+// typed without a dot is a class, unless it is a tag, so it lands on the element.
+// (The Settings panel's class field does put its caret between chips, from the
+// same gap arithmetic: test/renderer/props/classInputCaret.test.js.)
 //
 // Method, in three layers:
 //   1. The pure helpers, case by case: gap arithmetic over chip boxes
-//      (selectorCaret.ts), class placement in each class shape (classAttr.ts),
+//      (chipCaret.ts, selectorCaret.ts), class placement in each class shape (classAttr.ts),
 //      safe removal and every refusal (selectorRemoval.ts), and the fuzzy ranker
 //      (fuzzyRank.ts) with its tier order and its misses.
 //   2. The suggestion list's pure ranking (rankedSuggestions).
@@ -52,6 +55,7 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
       contents: `
         export { SelectorPicker, rankedSuggestions } from './src/features/style/embed/SelectorPicker'
         export * from './src/features/style/model/selectorCaret'
+        export * from './src/lib/chipCaret'
         export { setHost } from './src/features/style/model/host'
         export { withClass, PLACEMENT_END } from './src/editor/classAttr'
         export { classRemoval, attributeRemoval } from './src/editor/selectorRemoval'
@@ -94,7 +98,7 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   global.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
 
   const bundle = require(bundlePath);
-  const { caretAtPoint, caretStep, clampCaret, placementAt, chipAtCaret, chipPart, attributeChipName } = bundle;
+  const { caretAtPoint, caretStep, clampCaret, chipAtCaret, chipPart, attributeChipName } = bundle;
 
   // 1a. Gaps from a click. Two rows: chips 0–2 on the first (y 0–20), 3–4 on the second (y 30–50).
   const box = (left, right, top) => ({ left, right, top, bottom: top + 20 });
@@ -157,14 +161,6 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   check('a prefix attribute match is not', attributeChipName('[data-x^="a"]') === undefined);
   check('a tag chip is part of a selector', same(chipPart('h1', undefined), { kind: 'other' }));
   check('a compound is part of a selector', same(chipPart('h1.hero_title', undefined), { kind: 'other' }));
-
-  // 1e. Placement among chips: h1, .a, .b, [data-x]
-  const parts = [{ kind: 'other' }, { kind: 'class', name: 'a' }, { kind: 'class', name: 'b' }, { kind: 'attribute', name: 'data-x' }];
-  check('before the first chip (a tag), the class goes before the first class', same(placementAt(parts, 0), { kind: 'before', className: 'a' }));
-  check('between two classes, it goes before the second', same(placementAt(parts, 2), { kind: 'before', className: 'b' }));
-  check('after the last class, it goes after it', same(placementAt(parts, 3), { kind: 'after', className: 'b' }));
-  check('at the end it goes at the end', same(placementAt(parts, 4), { kind: 'end' }));
-  check('with no class chips at all it goes at the end', same(placementAt([{ kind: 'other' }], 0), { kind: 'end' }));
 
   // 1f. Writing the class in that order, in each class shape.
   const { withClass } = bundle;
@@ -297,62 +293,75 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
     element.getBoundingClientRect = () => ({ left: index * 50, right: index * 50 + 40, top: 0, bottom: 20, width: 40, height: 20 });
   });
   const well = document.querySelector('.embed-editor_selector-well');
-  const slotOrder = () => Number(document.querySelector('.embed-editor_selector-caret-slot')?.style.order);
+  const slot = () => document.querySelector('.embed-editor_selector-caret-slot');
+  // The add field is at the end when its slot follows every chip in the DOM and
+  // nothing reorders it: no CSS order on the slot or on any chip.
+  const fieldAtEnd = () => {
+    const element = slot();
+    if (element === null) {
+      return false;
+    }
+    if (element.style.order !== '') {
+      return false;
+    }
+    if (chipElements().some((chipElement) => chipElement.style.order !== '')) {
+      return false;
+    }
+    return element.parentElement?.lastElementChild === element;
+  };
   await act(async () => {
     well.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, clientX: 95, clientY: 10 }));
   });
   const input = () => document.querySelector('.embed-editor_selector-add');
   check('a click between .hero_title and .text-style-h1 opens the field', input() !== null);
-  check('with its caret in that gap (order 2·2 − 1)', slotOrder() === 3, String(slotOrder()));
-  check('the field there is the narrow, between-chips kind', document.querySelector('.embed-editor_selector-field')?.classList.contains('is-between') === true);
+  check('with the field after the last chip, not in that gap', fieldAtEnd(), slot()?.outerHTML);
+  check('and not the narrow, between-chips kind', document.querySelector('.embed-editor_selector-field')?.classList.contains('is-between') === false);
+  check('with its normal placeholder', input()?.getAttribute('placeholder') === 'Add a selector (e.g. .card:hover)');
+  check('and the input focused', document.activeElement === input());
+  await act(async () => {
+    well.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, clientX: 2, clientY: 10 }));
+  });
+  check('a click before the first chip also leaves the field at the end', fieldAtEnd(), slot()?.outerHTML);
   const key = async (target, name) =>
     act(async () => {
       target.dispatchEvent(new window.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
     });
   await key(input(), 'ArrowLeft');
-  check('← with nothing typed moves the caret one chip left', slotOrder() === 1, String(slotOrder()));
-  await key(input(), 'ArrowRight');
-  check('→ moves it back', slotOrder() === 3, String(slotOrder()));
+  check('← with nothing typed does not walk a caret in among the chips', fieldAtEnd(), slot()?.outerHTML);
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
   await act(async () => {
     setter.call(input(), '.new');
     input().dispatchEvent(new window.Event('input', { bubbles: true }));
   });
   await key(input(), 'Enter');
-  check(
-    'a class typed in the gap is added there',
-    same(added.at(-1), { selector: '.new', placement: { kind: 'before', className: 'text-style-h1' } }),
-    JSON.stringify(added),
-  );
-  check('and the caret moves past it', slotOrder() === 5, String(slotOrder()));
+  check('a class typed after a gap click goes last', same(added.at(-1), { selector: '.new', placement: { kind: 'end' } }), JSON.stringify(added));
+  check('and the field stays at the end', fieldAtEnd(), slot()?.outerHTML);
   await act(async () => {
     setter.call(input(), 'developer_wrap');
     input().dispatchEvent(new window.Event('input', { bubbles: true }));
   });
   await key(input(), 'Enter');
   check('a name typed without a dot is added as a class', added.at(-1)?.selector === '.developer_wrap', JSON.stringify(added));
-  await key(input(), 'ArrowLeft');
-  await key(input(), 'ArrowLeft');
   await key(input(), 'Backspace');
-  check('Backspace with nothing typed takes off the class chip before the caret', same(removedClasses, ['hero_title']), JSON.stringify(removedClasses));
-  // The host took .hero_title off: the chips follow, and the caret is now before .text-style-h1.
-  const remaining = CHIPS.filter((entry) => entry.text !== '.hero_title');
+  check('Backspace with nothing typed takes off the last chip', same(removedAttributes, ['data-foo']), JSON.stringify(removedAttributes));
+  // The host took [data-foo] off: the chips follow, and Backspace reaches the class before it.
+  const remaining = CHIPS.filter((entry) => entry.text !== '[data-foo]');
   await act(async () => {
     root.render(React.createElement(SelectorPickerHarness, { React, SelectorPicker: bundle.SelectorPicker, selectors: remaining, onAdd: () => {} }));
   });
-  check('after Backspace the caret stepped back over the removed chip', slotOrder() === 1, String(slotOrder()));
+  await key(input(), 'Backspace');
+  check('Backspace again takes off the class that is now last', same(removedClasses, ['text-style-h1']), JSON.stringify(removedClasses));
   await key(input(), 'Delete');
-  check('Delete takes off the chip after it', same(removedClasses, ['hero_title', 'text-style-h1']), JSON.stringify(removedClasses));
-  await key(chipElements()[2], 'Delete');
-  check('Delete on an attribute chip takes the attribute off', same(removedAttributes, ['data-foo']), JSON.stringify(removedAttributes));
+  check('Delete in the field takes nothing: nothing is after the caret', same(removedClasses, ['text-style-h1']), JSON.stringify(removedClasses));
+  await key(chipElements()[1], 'Delete');
+  check('Delete on a class chip takes the class off', same(removedClasses, ['text-style-h1', 'hero_title']), JSON.stringify(removedClasses));
   const before = removedClasses.length + removedAttributes.length;
   await key(chipElements()[0], 'Delete');
   check('Delete on a tag chip removes nothing', removedClasses.length + removedAttributes.length === before);
   await act(async () => {
     well.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, clientX: 500, clientY: 60 }));
   });
-  check('a click below the chips puts the caret at the end', slotOrder() === 5, String(slotOrder()));
-  check('where the field takes its own row again', document.querySelector('.embed-editor_selector-field')?.classList.contains('is-between') === false);
+  check('a click below the chips puts the field at the end', fieldAtEnd(), slot()?.outerHTML);
   await act(async () => root.unmount());
 
   if (failures.length) {

@@ -1,10 +1,12 @@
 import ReactCodeMirror from '@uiw/react-codemirror';
 import { useMemo } from 'react';
-import { css } from '@codemirror/lang-css';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { search } from '@codemirror/search';
 import { Decoration, EditorView } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
+import { cssEditorIndentExtensions } from './cssEditorIndent';
+import { type CodeVariableScope } from '../model/codeVariableScope';
+import { useCodeVariables } from './CodeVariables';
 import './CssCodeEditor.css';
 
 type CodeEditorLanguage = 'css';
@@ -20,6 +22,13 @@ type CodeEditorProps = {
   language?: CodeEditorLanguage;
   readOnly?: boolean;
   ariaLabel: string;
+  /**
+   * What the text is, for the variables typed into it: one property's value
+   * (the whole of it can be bound, from the purple dot) or a declaration list
+   * (`--` offers variables in each declaration's value). Required, so no CSS
+   * editor is added without them (CodeVariables.tsx).
+   */
+  variables: CodeVariableScope;
   className?: string;
   minHeight?: string;
   tokenHighlights?: CodeEditorTokenHighlight[];
@@ -90,7 +99,7 @@ const codeEditorTheme = EditorView.theme(
 const codeEditorExtensions = {
   // ⌘F opens at the top: this editor is short, and a panel at the bottom covers
   // the end of the file — which is where a search that has run leaves you.
-  css: [css(), search({ top: true }), EditorView.lineWrapping, syntaxHighlighting(codeEditorHighlightStyle), codeEditorTheme],
+  css: [...cssEditorIndentExtensions(), search({ top: true }), EditorView.lineWrapping, syntaxHighlighting(codeEditorHighlightStyle), codeEditorTheme],
 };
 
 const codeEditorBasicSetup = {
@@ -100,6 +109,8 @@ const codeEditorBasicSetup = {
   highlightActiveLineGutter: false,
   highlightSelectionMatches: false,
   syntaxHighlighting: false,
+  // cssEditorIndentExtensions adds it with the indent unit it works to.
+  indentOnInput: false,
   searchKeymap: true,
   foldKeymap: false,
   completionKeymap: false,
@@ -149,37 +160,45 @@ export function CodeEditor({
   language = 'css',
   readOnly = false,
   ariaLabel,
+  variables,
   className,
   minHeight: heightMin = '124px',
   tokenHighlights = [],
   onChange,
   onSelectionChange,
 }: CodeEditorProps) {
+  const codeVariables = useCodeVariables(variables, { readOnly });
+  const variableExtension = codeVariables.extension;
   const extensions = useMemo(() => {
     const highlights = tokenHighlights
       .filter((highlight) => highlight.from >= 0 && highlight.to > highlight.from && highlight.to <= value.length)
       .sort((left, right) => left.from - right.from || left.to - right.to);
     const selectionExtensions = onSelectionChange ? selectionListeners(onSelectionChange) : [];
     if (!highlights.length) {
-      return [...codeEditorExtensions[language], ...selectionExtensions];
+      return [...codeEditorExtensions[language], variableExtension, ...selectionExtensions];
     }
-    return [...codeEditorExtensions[language], highlightDecorations(highlights), ...selectionExtensions];
-  }, [language, onSelectionChange, tokenHighlights, value.length]);
+    return [...codeEditorExtensions[language], variableExtension, highlightDecorations(highlights), ...selectionExtensions];
+  }, [language, onSelectionChange, tokenHighlights, value.length, variableExtension]);
 
+  // The frame holds the bind dot in the editor's top-left corner, shown on
+  // hover as it is over every value field (embed-editor_varconnect's rules).
   return (
-    <ReactCodeMirror
-      {...(id === undefined ? {} : { id })}
-      className={['code-editor', readOnly ? 'is-readonly' : '', className || ''].filter(Boolean).join(' ')}
-      value={value}
-      extensions={extensions}
-      basicSetup={codeEditorBasicSetup}
-      theme="none"
-      minHeight={heightMin}
-      readOnly={readOnly}
-      editable={!readOnly}
-      indentWithTab={!readOnly}
-      {...(onChange === undefined ? {} : { onChange })}
-      aria-label={ariaLabel}
-    />
+    <div ref={codeVariables.frameRef} className="embed-editor_varconnect code-editor_frame">
+      <ReactCodeMirror
+        {...(id === undefined ? {} : { id })}
+        className={['code-editor', readOnly ? 'is-readonly' : '', className || ''].filter(Boolean).join(' ')}
+        value={value}
+        extensions={extensions}
+        basicSetup={codeEditorBasicSetup}
+        theme="none"
+        minHeight={heightMin}
+        readOnly={readOnly}
+        editable={!readOnly}
+        indentWithTab={!readOnly}
+        {...(onChange === undefined ? {} : { onChange })}
+        aria-label={ariaLabel}
+      />
+      {codeVariables.overlay}
+    </div>
   );
 }

@@ -8,6 +8,21 @@ import { type SelectOption, type Props } from './selectTypes';
 // A ReactNode given as null by a caller means "none", the same as leaving it out.
 export const present = (node: ReactNode): boolean => (node ?? undefined) !== undefined;
 
+// The option's label, on one line, or on two with its overline above it. Both
+// lines truncate with an ellipsis rather than wrap, so a long selector never
+// grows the row or the trigger by a third line.
+export function OptionLabel({ label, overline }: { readonly label: string; readonly overline: string | undefined }) {
+  if (overline === undefined || overline.length === 0) {
+    return <span className="u-select-label">{label}</span>;
+  }
+  return (
+    <span className="u-select-label has-overline">
+      <span className="u-select-overline">{overline}</span>
+      <span className="u-select-label-line">{label}</span>
+    </span>
+  );
+}
+
 export const CHEVRON = (
   <svg className="u-select-chevron" viewBox="0 0 16 16" aria-hidden="true">
     <path d="M4.2 6.2 8 10l3.8-3.8" />
@@ -30,6 +45,7 @@ export function SelectTrigger<T extends string>({
   onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
 }) {
   const triggerLabel = selectedOption ? (selectedOption.triggerLabel ?? selectedOption.label) : '';
+  const triggerOverline = selectedOption?.overline;
   const triggerIcon = selectedOption?.triggerIcon ?? selectedOption?.icon;
   const shared = {
     ref: buttonRef,
@@ -67,7 +83,7 @@ export function SelectTrigger<T extends string>({
     <button {...shared} className="u-select-button" data-tone={selectedOption?.tone}>
       <span className="u-select-value">
         {icon}
-        <span className="u-select-label">{triggerLabel}</span>
+        <OptionLabel label={triggerLabel} overline={triggerOverline} />
       </span>
       {CHEVRON}
     </button>
@@ -97,6 +113,9 @@ export const optionId = (baseId: string, index: number) => `${baseId}-opt-${inde
 export function SelectList<T extends string>(list: SelectListProps<T>) {
   const { props, displayed } = list;
   const { ariaLabel, labelId, searchable = false } = props;
+  // Read from the whole option list, not the filtered rows, so typing a search
+  // never opens or closes the dot column under the pointer.
+  const dotColumn = dotColumnFor(props.options);
   return (
     <Popup
       mode="popover"
@@ -140,6 +159,7 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
             id={optionId(list.baseId, index)}
             selected={option.value === props.value}
             active={index === list.activeIndex}
+            dotColumn={dotColumn}
             onActivate={() => list.onActivate(index)}
             onChoose={() => list.onChoose(index)}
             onCancel={list.onCancel}
@@ -150,11 +170,21 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
   );
 }
 
+// Whether a list's rows hold a column for the status dot. A list where any row
+// can carry one holds it on every row, so the dots stand in one column; a list
+// with no dots at all holds none, so its rows carry no blank gutter.
+export type DotColumn = 'held' | 'none';
+
+export function dotColumnFor<T extends string>(options: readonly SelectOption<T>[]): DotColumn {
+  return options.some((option) => option.marked === true) ? 'held' : 'none';
+}
+
 export function SelectRow<T extends string>({
   option,
   id,
   selected,
   active,
+  dotColumn,
   onActivate,
   onChoose,
   onCancel,
@@ -163,6 +193,7 @@ export function SelectRow<T extends string>({
   id: string;
   selected: boolean;
   active: boolean;
+  dotColumn: DotColumn;
   onActivate: () => void;
   onChoose: () => void;
   onCancel: () => void;
@@ -179,7 +210,15 @@ export function SelectRow<T extends string>({
   return (
     <div
       id={id}
-      className={['u-select-option', active ? 'is-active' : '', selected ? 'is-selected' : '', option.indent ? 'is-indented' : ''].filter(Boolean).join(' ')}
+      className={[
+        'u-select-option',
+        active ? 'is-active' : '',
+        selected ? 'is-selected' : '',
+        option.indent ? 'is-indented' : '',
+        option.action ? 'has-action' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       role="option"
       aria-selected={selected}
       data-active={active || undefined}
@@ -193,12 +232,19 @@ export function SelectRow<T extends string>({
       onClick={onChoose}
     >
       {icon}
-      <span className="u-select-label">{option.label}</span>
-      {option.marked ? <span className="u-select-dot" aria-hidden="true" /> : undefined}
-      {option.action ? <RowAction action={option.action} onCancel={onCancel} /> : undefined}
-      {/* The check ends the row, so icons align down the left edge (a rule across the app). */}
-      <span className="u-select-check" aria-hidden="true">
+      <OptionLabel label={option.label} overline={option.overline} />
+      {/* Fixed trailing slots, held open whether or not they are filled, so every
+          row's dot stands in one column and every row's check or pencil in the
+          one after it. The end slot ends the row, so icons align down the left
+          edge (a rule across the app). */}
+      {dotColumn === 'held' ? (
+        <span className="u-select-dot-slot" aria-hidden="true">
+          {option.marked ? <span className="u-select-dot" /> : undefined}
+        </span>
+      ) : undefined}
+      <span className="u-select-check">
         {selected ? CHECK : undefined}
+        {option.action ? <RowAction action={option.action} onCancel={onCancel} /> : undefined}
       </span>
     </div>
   );

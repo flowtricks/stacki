@@ -712,8 +712,9 @@ function bigEditorTriggers({
 // the token field's alternative, which was the same thing while the token field
 // only ever appeared for a value that HAD one — but a field editing code shows for
 // every value, and without this a plain number had no way to connect. A chip is
-// its own way in, so it stays the one case with no dot.
-function ConnectDot({
+// its own way in, so it stays the one case with no dot. The code editors draw
+// the same dot over a whole value (components/CodeVariables.tsx).
+export function ConnectDot({
   dotRef,
   disabled,
   ariaLabel,

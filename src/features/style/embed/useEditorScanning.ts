@@ -9,19 +9,9 @@ import { forgetComputedColors } from '../model/computedColor';
 import { computeRuleModel } from '../model/cascade';
 import { type MatchTarget } from '../model/selectors';
 import { getHost, onHostChange } from '../model/host';
-import {
-  buildSnapshot,
-  getCurrentBreakpoint,
-  onDocsReloaded,
-  rebuildRules,
-  primeDomMatches,
-  scanHasElement,
-  serializeElementId,
-  scanPage,
-  webflowApi,
-} from '../model/webflow';
+import { buildSnapshot, onDocsReloaded, rebuildRules, primeDomMatches, scanHasElement, serializeElementId, scanPage, webflowApi } from '../model/webflow';
 import type { ElementSnapshot } from '../model/styleTypes';
-import { isBreakpointId, EMPTY_RULE_MODEL, computePlaceholders } from './EditorBasics';
+import { EMPTY_RULE_MODEL, computePlaceholders } from './EditorBasics';
 import {
   placeholdersFor,
   readDesignerState,
@@ -433,12 +423,10 @@ export function useRefresh(
 export function useSelectionSubscriptions(
   editorRefs: ReturnType<typeof useEditorRefs>,
   scanState: ReturnType<typeof useScanState>,
-  nativeState: ReturnType<typeof useNativeState>,
   refreshHook: ReturnType<typeof useRefresh>,
 ) {
   const { selectedRef, seqRef } = editorRefs;
   const { setPhase, setStatus } = scanState;
-  const { setCurrentBreakpoint } = nativeState;
   const { refresh } = refreshHook;
 
   // The project's stylesheets are listed asynchronously (style:listFiles and the
@@ -470,15 +458,15 @@ export function useSelectionSubscriptions(
       return;
     }
     void api.getSelectedElement().then((element) => refresh(element));
-    void getCurrentBreakpoint().then(setCurrentBreakpoint);
+    // The canvas device is not followed here. It once picked a breakpoint that
+    // the context list then offered whether or not any stylesheet held it; the
+    // list now names only queries that are written somewhere.
     const unsubscribe = api.subscribe?.('selectedelement', (element) => void refresh(element));
-    const unsubBreakpoint = api.subscribe?.('mediaquery', (bp) => setCurrentBreakpoint(isBreakpointId(bp) ? bp : 'main'));
     return () => {
       seqRef.current += 1;
       unsubscribe?.();
-      unsubBreakpoint?.();
     };
-  }, [refresh, seqRef, setCurrentBreakpoint, setPhase, setStatus]);
+  }, [refresh, seqRef, setPhase, setStatus]);
 }
 
 // Re-read after undo/redo and class changes, and poll while an element is shown.

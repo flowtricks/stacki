@@ -14,7 +14,8 @@ import { selectorKey, selectorsMatch } from '../model/resolved';
 import { SpinnerIcon } from './EditorBasics';
 import { loneTypedClass } from './editorModel';
 import { fuzzySegments, rankFuzzy } from '../../../lib/fuzzyRank';
-import { caretAtPoint, caretStep, chipAtCaret, chipPart, clampCaret, placementAt, type CaretKey, type ChipBox, type ChipPart } from '../model/selectorCaret';
+import { chipAtCaret, chipPart } from '../model/selectorCaret';
+import { PLACEMENT_END } from '../../../editor/classAttr';
 import {
   type SelectorSuggestion,
   useProjectClasses,
@@ -63,7 +64,10 @@ export function SelectorPicker({
     <>
       <div className="embed-editor_selectors">
         {/* One grey well wraps the selector tags; clicking empty space reveals the add
-          input at its bottom (the input has no chrome of its own). */}
+          input at its bottom (the input has no chrome of its own). A click in a gap
+          between two chips is empty space too: the field has no caret between chips,
+          because a selector is not a list the person orders (the Settings panel's
+          class field is, ClassInput.tsx). */}
         <div className="embed-editor_selector-well" onMouseDown={field.onWellMouseDown}>
           {/* Nothing to show yet and the scan still running: the well would read as
             "this element has no selectors", which is a different (and wrong) answer
@@ -81,8 +85,6 @@ export function SelectorPicker({
               entries={view.shownSelectors}
               activeSelector={activeSelector}
               busy={busy}
-              chipsRef={field.chipsRef}
-              caretGap={showInput ? field.caretGap : undefined}
               onSelect={onSelect}
               onDeselect={onDeselect}
               onRemove={removeChip}
@@ -93,7 +95,6 @@ export function SelectorPicker({
                   inputRef={field.inputRef}
                   listRef={field.listRef}
                   busy={busy}
-                  caret={{ gap: field.caretGap, count: view.shownSelectors.length }}
                   onFocus={field.onFocus}
                   onBlur={field.onBlur}
                   apply={field.apply}
@@ -142,29 +143,6 @@ function onSelectorFocusRequest(listener: () => void): () => void {
   };
 }
 
-// Where the typing caret sits among the chips. `end` follows the chip count as
-// chips arrive or leave; a gap is a place the person put it (a click between two
-// chips, or ← and → with nothing typed).
-export type CaretState = { readonly kind: 'end' } | { readonly kind: 'gap'; readonly index: number };
-
-const CARET_END: CaretState = { kind: 'end' };
-
-/** The caret's gap index among `count` chips. */
-export function caretGapOf(caret: CaretState, count: number): number {
-  return caret.kind === 'end' ? count : clampCaret(caret.index, count);
-}
-
-/** A caret at `gap`; the last gap is the end, so it keeps following new chips. */
-export function caretAtGap(gap: number, count: number): CaretState {
-  const clamped = clampCaret(gap, count);
-  return clamped === count ? CARET_END : { kind: 'gap', index: clamped };
-}
-
-// The parts the shown chips stand for, for placing a typed class and for Delete.
-export function chipParts(entries: readonly ClassifiedSelector[]): readonly ChipPart[] {
-  return entries.map((entry) => chipPart(entry.selector.text, loneTypedClass(entry.selector.text)));
-}
-
 // Takes the class or attribute a chip stands for off the element (selectorRemoval.ts
 // decides whether that is safe; the host shows a refusal). A tag, a substring
 // match like `[class*="text-"]` or a compound is part of a selector, not a thing
@@ -196,8 +174,7 @@ export function removeChipFromElement(
 }
 
 // The add-selector field's state: the draft, the suggestion list and its highlight,
-// whether the input is revealed, the caret's gap among the chips, and the selector
-// to restore when the field is left without adding one.
+// whether the input is revealed, and the selector to restore when the field is left without adding one.
 export function useAddSelectorField({
   selectors,
   suggestions,
@@ -211,9 +188,6 @@ export function useAddSelectorField({
   readonly shown: readonly ClassifiedSelector[];
 }) {
   const [draft, setDraft] = useState('');
-  const [caret, setCaret] = useState<CaretState>(CARET_END);
-  const chipsRef = useRef<HTMLDivElement>(null);
-  const caretGap = caretGapOf(caret, shown.length);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
   const [inputOpen, setInputOpen] = useState(false);
@@ -264,9 +238,6 @@ export function useAddSelectorField({
     if (!wellMouseDown(event, { busy, inputRef }, restoreRef)) {
       return;
     }
-    // The click's gap among the chips is where typing goes.
-    const boxes = chipBoxes(chipsRef.current ?? undefined);
-    setCaret(caretAtGap(caretAtPoint(boxes, { x: event.clientX, y: event.clientY }), shown.length));
     if (showInput) {
       inputRef.current?.focus();
     } else {
@@ -280,11 +251,8 @@ export function useAddSelectorField({
       return;
     }
     restoreRef.current = undefined; // a new selector is now the active one — nothing to restore
-    onAdd(trimmed, placementAt(chipParts(shown), caretGap));
-    // A class typed between two chips lands there, so the caret moves past it.
-    if (caret.kind === 'gap') {
-      setCaret({ kind: 'gap', index: caretGap + 1 });
-    }
+    // The caret is always after the last chip, so a typed class goes last.
+    onAdd(trimmed, PLACEMENT_END);
     setDraft('');
     setOpen(false);
     setHighlight(-1);
@@ -299,60 +267,31 @@ export function useAddSelectorField({
     setDraft('');
     setHighlight(-1);
     setInputOpen(false);
-    setCaret(CARET_END);
     if (restoreRef.current) {
       onSelect(restoreRef.current);
       restoreRef.current = undefined;
     }
   };
-  // ← → move the caret across chips, and Backspace / Delete take off the chip
-  // before / after it, while nothing is typed. Returns whether the key was used.
+  // Backspace with nothing typed takes off the last chip, the one before the
+  // caret. ← and → are left to the input: there is no caret between chips.
+  // Returns whether the key was used.
   const onCaretKey = (key: string): boolean => {
     if (draft !== '') {
       return false;
     }
-    if (key === 'ArrowLeft' || key === 'ArrowRight') {
-      const next = caretStep(caretGap, shown.length, key === 'ArrowLeft' ? -1 : 1);
-      if (next === caretGap) {
-        return false;
-      }
-      setCaret(caretAtGap(next, shown.length));
-      return true;
+    if (key !== 'Backspace') {
+      return false;
     }
-    if (key === 'Backspace' || key === 'Delete') {
-      return removeAtCaret(key);
-    }
-    return false;
-  };
-  const removeAtCaret = (key: CaretKey): boolean => {
-    const index = chipAtCaret(caretGap, shown.length, key);
+    const index = chipAtCaret(shown.length, shown.length, key);
     const entry = index === undefined ? undefined : shown[index];
     if (entry === undefined) {
       return false;
     }
-    // Once the chip before the caret is gone, the caret steps back over its gap.
-    // A refused removal leaves the caret where it was.
-    const stepBack = () => {
-      if (key === 'Backspace') {
-        setCaret((previous) => (previous.kind === 'gap' ? { kind: 'gap', index: Math.max(previous.index - 1, 0) } : previous));
-      }
-    };
-    return removeChipFromElement(entry, { activeSelector, onDeselect }, stepBack);
+    assert(index === shown.length - 1, 'onCaretKey: Backspace takes the last chip');
+    return removeChipFromElement(entry, { activeSelector, onDeselect });
   };
   const add = { draft, setDraft, open, setOpen, highlight, setHighlight, filtered, showList };
-  return { add, showInput, listRef, inputRef, chipsRef, caretGap, onWellMouseDown, apply, onFocus, onBlur, onCaretKey };
-}
-
-// The chips' boxes, in chip order, for placing a click among them.
-function chipBoxes(container: HTMLDivElement | undefined): readonly ChipBox[] {
-  if (container === undefined) {
-    return [];
-  }
-  const chips = container.querySelectorAll('.embed-editor_selector-chip');
-  return Array.from(chips, (chip) => {
-    const rect = chip.getBoundingClientRect();
-    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
-  });
+  return { add, showInput, listRef, inputRef, onWellMouseDown, apply, onFocus, onBlur, onCaretKey };
 }
 
 // Clicking empty space in the well reveals + focuses the add input; clicks on a chip
@@ -501,16 +440,12 @@ function withHits(suggestion: SelectorSuggestion, indexes: readonly number[]): R
   return { ...suggestion, hits: indexes.map((index) => index + offset) };
 }
 
-// The chips, with the add field (children) standing in the caret's gap. The field
-// is placed by CSS `order`, not moved in the DOM: moving a focused input blurs it,
-// and its blur abandons the draft. Chip i is at order 2i, the field just before
-// the chip after the caret (2·gap − 1).
+// The chips, with the add field (children) after the last one, on a row of its
+// own. It never stands between two chips: see SelectorPicker.
 export function SelectorChips({
   entries,
   activeSelector,
   busy,
-  chipsRef,
-  caretGap,
   onSelect,
   onDeselect,
   onRemove,
@@ -519,9 +454,6 @@ export function SelectorChips({
   entries: readonly ClassifiedSelector[];
   activeSelector: string;
   busy: boolean;
-  chipsRef?: React.RefObject<HTMLDivElement>;
-  /** The caret's gap while the add field is open, else undefined. */
-  caretGap?: number | undefined;
   onSelect: (selector: string) => void;
   onDeselect: () => void;
   /** Delete or Backspace on a chip: take what it stands for off the element. */
@@ -529,13 +461,8 @@ export function SelectorChips({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="embed-editor_selector-chips" ref={chipsRef}>
-      {children === undefined ? undefined : (
-        <div className="embed-editor_selector-caret-slot" style={{ order: 2 * (caretGap ?? entries.length) - 1 }}>
-          {children}
-        </div>
-      )}
-      {entries.map((entry, index) => {
+    <div className="embed-editor_selector-chips">
+      {entries.map((entry) => {
         const selectorText = entry.selector;
         const active = selectorsMatch(selectorText.text, activeSelector);
         const dimmed = selectorText.inContext === false;
@@ -561,13 +488,13 @@ export function SelectorChips({
               event.stopPropagation();
               onRemove?.(entry);
             }}
-            style={{ order: 2 * index }}
             title={chipTitle(label, entry, { active, dimmed })}
           >
             {label}
           </button>
         );
       })}
+      {children === undefined ? undefined : <div className="embed-editor_selector-caret-slot">{children}</div>}
     </div>
   );
 }
@@ -618,7 +545,6 @@ export function SelectorAddField({
   inputRef,
   listRef,
   busy,
-  caret,
   onFocus,
   onBlur,
   apply,
@@ -628,24 +554,19 @@ export function SelectorAddField({
   inputRef: React.RefObject<HTMLInputElement>;
   listRef: React.RefObject<HTMLDivElement>;
   busy: boolean;
-  caret?: { readonly gap: number; readonly count: number };
   onFocus: () => void;
   onBlur: () => void;
   apply: (text: string) => void;
   onCaretKey?: (key: string) => boolean;
 }) {
   const { draft, setHighlight, showList } = add;
-  // Between chips the field is only as wide as what is typed, so the chips
-  // either side stay where they were; at the end it takes its own row.
-  const between = caret !== undefined && caret.gap < caret.count;
   return (
-    <div className={`embed-editor_selector-field ${between ? 'is-between' : ''}`}>
+    <div className="embed-editor_selector-field">
       <input
         ref={inputRef}
         className="u-input embed-editor_selector-add"
         value={draft}
-        style={between ? { width: `${Math.max(draft.length, 1) + 1}ch` } : undefined}
-        placeholder={between ? '' : 'Add a selector (e.g. .card:hover)'}
+        placeholder="Add a selector (e.g. .card:hover)"
         spellCheck={false}
         disabled={busy}
         role="combobox"

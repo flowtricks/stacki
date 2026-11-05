@@ -24,7 +24,7 @@ import { type EditorModel } from '../../editor/pageView';
 import { onFilesChanged } from '../../ipc/appBridge';
 import { tellCanvas } from '../../editor/canvasQuery';
 import { onWindowReturn } from '../../lib/windowReturn';
-import { reviewedSource, saveDelay } from '../model/nodeFactory';
+import { reviewedSource, nextSave } from '../model/nodeFactory';
 import { effective } from '../model/pageGestures';
 import { revertedSteps, reloadChangedPage } from '../model/appKeys';
 import { useCoreState } from './appLifecycle';
@@ -410,24 +410,30 @@ export function useScheduleSave(
   // per character. The timeout-0 for immediate saves lets React commit the
   // state update first so flushSave sees the new model.
   //
-  // 'live' is the third case: a style-panel scrub or mid-typing write, which
-  // arrives already debounced (100 ms at the field) and is watched on the
-  // canvas as it happens. Making it wait out the typing pause too put nearly
-  // half a second between the drag and the result. It still coalesces, just
-  // over the gap between two ticks rather than the gap between two words.
+  // 'live' is the third case: a style-panel scrub or drag, or a mid-typing
+  // write, watched on the canvas as it happens. A drag arrives once per
+  // animation frame, so 'live' is a throttle, not a debounce: it never pushes
+  // back a save already due (nextSave). As a debounce, each frame reset the
+  // timer and a steady drag saved nothing until the pointer rested.
   const scheduleSave = useCallback(
     (immediate: boolean | 'live' = false) => {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(
-        () => {
-          autosave().catch((error: unknown) => {
-            if (pageStateRef.current.pageState?.save.tag !== 'failed') {
-              showToast(`Save failed: ${cleanError(error)}`, 'error');
-            }
-          });
-        },
-        saveDelay({ urgency: immediate }),
-      );
+      const nowMs = Date.now();
+      const plan = nextSave({ urgency: immediate, pending: saveTimer.current, nowMs });
+      if (plan.tag === 'keep') {
+        return;
+      }
+      clearTimeout(saveTimer.current?.handle);
+      const handle = setTimeout(() => {
+        // Nothing is pending once this runs: the next request starts a timer
+        // of its own rather than keeping one that has already fired.
+        saveTimer.current = undefined;
+        autosave().catch((error: unknown) => {
+          if (pageStateRef.current.pageState?.save.tag !== 'failed') {
+            showToast(`Save failed: ${cleanError(error)}`, 'error');
+          }
+        });
+      }, plan.delayMs);
+      saveTimer.current = { handle, dueMs: nowMs + plan.delayMs };
     },
     [autosave, showToast, saveTimer, pageStateRef],
   );

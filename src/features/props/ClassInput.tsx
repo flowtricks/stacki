@@ -6,6 +6,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { CheckIcon } from '../../ui/Icons';
+import { caretAtPoint, caretStep, type ChipBox } from '../../lib/chipCaret';
 
 // Classes in a scale are named for it: gap-2 sits beside gap-1 and gap-4,
 // margin-top-6 beside margin-top-2. Everything up to the last dash or
@@ -18,9 +19,12 @@ function familyPrefix(cls: string) {
 }
 
 // Token editor for class-list props: each class renders as a tag, a text
-// caret can sit between any two tags (click a tag to place the caret after
-// it, Backspace removes the tag before the caret), and typing filters a
-// suggestion list of every class used across the project.
+// caret can sit between any two tags (click a gap to put it there, click a tag
+// to place it after that tag, ← → step it, Backspace removes the tag before
+// it), and typing filters a suggestion list of every class used across the
+// project. A class typed at the caret is written there, because the order of
+// the classes is the order in the class attribute. The Style panel's selector
+// field deliberately has no such caret (SelectorPicker.tsx).
 interface ClassInputProps {
   readonly value?: string | undefined;
   readonly suggestions?: readonly string[];
@@ -34,16 +38,22 @@ interface Family {
 }
 export default function ClassInput(props: ClassInputProps) {
   const state = useClassInput(props);
-  const { wrapRef, focused, setCaret, tokens, inputRef } = state;
+  const { wrapRef, focused, setCaret, inputRef } = state;
   return (
     <>
       <div
         ref={wrapRef}
         className={`class-input ${focused ? 'focused' : ''}`}
         onMouseDown={(event) => {
-          if (event.target === wrapRef.current) {
-            event.preventDefault();
-            setCaret(tokens.length);
+          // Tags and the input handle their own clicks; this is the field's own
+          // space: its padding, the gaps between tags, and past the last one.
+          const wrap = wrapRef.current;
+          if (wrap === null) {
+            return;
+          }
+          if (event.target === wrap) {
+            event.preventDefault(); // keep focus on the input rather than blurring it
+            setCaret(caretAtPoint(classTagBoxes(wrap), { x: event.clientX, y: event.clientY }));
             inputRef.current?.focus();
           }
         }}
@@ -54,6 +64,16 @@ export default function ClassInput(props: ClassInputProps) {
       <ClassFamilyMenu state={state} />
     </>
   );
+}
+
+// The tags' boxes, in token order, for placing a click among them.
+function classTagBoxes(wrap: HTMLDivElement): readonly ChipBox[] {
+  const tags = wrap.querySelectorAll('.class-tag');
+  assert(tags.length <= LIMITS.attrCharsMax, 'classTagBoxes: a bounded tag count');
+  return Array.from(tags, (tag) => {
+    const rect = tag.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom };
+  });
 }
 
 function useClassInput({ value, suggestions = [], onChange }: ClassInputProps) {
@@ -303,10 +323,10 @@ function classInputKey(event: React.KeyboardEvent<HTMLInputElement>, state: Clas
     removeAt(at);
   } else if (event.key === 'ArrowLeft' && !draft) {
     event.preventDefault();
-    setCaret(Math.max(0, at - 1));
+    setCaret(caretStep(at, tokens.length, -1));
   } else if (event.key === 'ArrowRight' && !draft) {
     event.preventDefault();
-    setCaret(Math.min(tokens.length, at + 1));
+    setCaret(caretStep(at, tokens.length, 1));
   } else if (event.key === 'ArrowDown' && matches.length) {
     event.preventDefault();
     setHighlight((current) => Math.min(current + 1, matches.length - 1));
@@ -358,18 +378,24 @@ function classFamilyKey(event: React.KeyboardEvent<HTMLInputElement>, state: Cla
   return false;
 }
 function ClassCaret({ state }: { readonly state: ClassState }) {
-  const { draft, tokens, inputRef, setDraft, setHighlight, setFocused, addToken } = state;
+  const { draft, tokens, at, inputRef, setDraft, setHighlight, setFocused, addToken } = state;
   // While empty the input is just a caret-width sliver, with negative
   // margins swallowing the flex gap on either side so tags don't spread
   // apart around the cursor.
   const emptyAmongTags = !draft && tokens.length > 0;
+  assert(at >= 0, 'ClassCaret: the caret is not before the first gap');
+  assert(at <= tokens.length, 'ClassCaret: the caret is not past the last gap');
+  // The input stands in the caret's gap by CSS order, not by its place in the
+  // DOM (ClassTokens): moving a focused input in the DOM drops its focus, and
+  // its blur commits a half-typed class at the old place.
+  const order = 2 * at - 1;
   return (
     <input
       key="caret"
       ref={inputRef}
       className={`class-input-field ${emptyAmongTags ? 'empty' : ''}`}
       value={draft}
-      style={draft ? { width: `${draft.length + 1}ch` } : undefined}
+      style={draft ? { order, width: `${draft.length + 1}ch` } : { order }}
       spellCheck={false}
       onChange={(event) => {
         setDraft(event.target.value);
@@ -388,16 +414,16 @@ function ClassCaret({ state }: { readonly state: ClassState }) {
 }
 function ClassTokens({ state }: { readonly state: ClassState }) {
   const { tokens, at, family, suggestions, setCaret, inputRef, closeFamily, famOriginal, famPreview, setFamHighlight, setFamily } = state;
-  const inputElement = <ClassCaret key="caret" state={state} />;
+  // Tag i is at CSS order 2i and the input at 2·at − 1, just before the tag
+  // after the caret, while the input stays last in the DOM (ClassCaret).
+  assert(at <= tokens.length, 'ClassTokens: the caret is within the tags');
   const items: React.ReactNode[] = [];
   tokens.forEach((token, i) => {
-    if (i === at) {
-      items.push(inputElement);
-    }
     items.push(
       <span
         key={`${token}-${i}`}
         className={`class-tag${family?.index === i ? ' open' : ''}`}
+        style={{ order: 2 * i }}
         title={classFamilyOf(token, suggestions, tokens).length > 1 ? 'Click to switch to a related class' : 'Click to place the caret after this class'}
         onMouseDown={(event) => {
           // preventDefault keeps the inline input from blurring.
@@ -427,9 +453,7 @@ function ClassTokens({ state }: { readonly state: ClassState }) {
       </span>,
     );
   });
-  if (at >= tokens.length) {
-    items.push(inputElement);
-  }
+  items.push(<ClassCaret key="caret" state={state} />);
 
   return items;
 }

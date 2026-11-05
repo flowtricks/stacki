@@ -484,6 +484,46 @@ export function saveDelay({ urgency }: { readonly urgency: boolean | 'live' }): 
   return 300;
 }
 
+/** A save waiting on its timer: the handle that cancels it and the time it is due. */
+export interface PendingSave {
+  readonly handle: ReturnType<typeof setTimeout>;
+  readonly dueMs: number;
+}
+
+// What a new save request does to the save already pending: keep it, or
+// replace it with one that waits `delayMs`.
+//
+// Typing is a debounce on purpose: each keystroke pushes the save back, so a
+// word saves once. A live request (a style-panel drag or scrub) must not do
+// that. It arrives once per animation frame, far closer together than its own
+// delay, so a debounce never fired while the hand kept moving and the canvas
+// stood still until the pointer rested. A live request therefore keeps any
+// save already due no later than it would be, which turns the stream into one
+// save per delay; the save that runs reads the model as it is then, so it
+// carries the latest frame. An immediate request is due at once and always
+// replaces.
+export function nextSave({
+  urgency,
+  pending,
+  nowMs,
+}: {
+  readonly urgency: boolean | 'live';
+  readonly pending: PendingSave | undefined;
+  readonly nowMs: number;
+}): { readonly tag: 'keep' } | { readonly tag: 'replace'; readonly delayMs: number } {
+  assert(Number.isFinite(nowMs), 'nextSave: the clock reads a finite time');
+  const delayMs = saveDelay({ urgency });
+  assert(delayMs >= 0, 'nextSave: a save never waits a negative time');
+  if (urgency === 'live') {
+    if (pending !== undefined) {
+      if (pending.dueMs <= nowMs + delayMs) {
+        return { tag: 'keep' };
+      }
+    }
+  }
+  return { tag: 'replace', delayMs };
+}
+
 // A route is stored the way it identifies a page — slashless, so /de/hotel
 // and /de/hotel/ are the same entry however a link was typed. A URL is a
 // different thing: Astro's dev server serves exactly one of those spellings,

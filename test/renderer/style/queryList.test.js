@@ -130,7 +130,7 @@ const SHEET = `.card {
     const keys = ['', '@media (prefers-contrast: more)', '@container (width > 40em)', '@media (width > 90em)'];
     const styled = new Set(keys.slice(1));
     const own = new Set(['@container (width > 40em)', '@media (width > 90em)']);
-    const labels = buildStyleContexts(keys, undefined, undefined, styled, own).map((context) => context.label);
+    const labels = buildStyleContexts(keys, undefined, styled, own).map((context) => context.label);
     const labelIndex = (re) => labels.findIndex((label) => re.test(label));
     check('Base leads the list', labels[0] === 'Base', labels.join(' | '));
     check(
@@ -140,7 +140,7 @@ const SHEET = `.card {
     );
     check('and among its own, the order the file has them is kept', labelIndex(/width > 40em/) < labelIndex(/width > 90em/), labels.join(' | '));
     // With nothing owned, the list is what it always was.
-    const plain = buildStyleContexts(keys, undefined, undefined, styled, new Set()).map((context) => context.label);
+    const plain = buildStyleContexts(keys, undefined, styled, new Set()).map((context) => context.label);
     check(
       'with no component queries at all, order is left alone',
       plain.join('|') === ['Base', '@media (prefers-contrast: more)', '@container (width > 40em)', '@media (width > 90em)'].join('|'),

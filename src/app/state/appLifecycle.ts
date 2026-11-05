@@ -489,7 +489,8 @@ export function useFlushing(savers: ReturnType<typeof useSavers>, coreState: Ret
   // page's edits are not there, so the caller must stop rather than discard or
   // ignore them — they are only ever given up by "Reload from disk".
   const flushSave = useCallback(async () => {
-    clearTimeout(saveTimer.current);
+    clearTimeout(saveTimer.current?.handle);
+    saveTimer.current = undefined; // Flushed now: nothing is pending for a live request to keep.
     const [page] = await autosave();
     if (page === 'conflicted') {
       const name = pageStateRef.current.currentPage?.name ?? 'This page';

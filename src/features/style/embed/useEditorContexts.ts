@@ -2,7 +2,7 @@
 // the native target, a component's own source, the resolved properties, the
 // selector chips and changing context (EmbedEditor.tsx).
 
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   resolveStyle,
   indexContexts,
@@ -15,9 +15,11 @@ import {
 } from '../model/resolved';
 import { breakpointForAtContext, breakpointTier, buildStyleContexts, nativeContribsFor, nativeHasValues, selectedNativeIndexFor } from '../model/nativeStyles';
 import { listAtRuleBlocks } from '../model/css';
+import { contextWrappers } from '../model/queryWrapper';
 import { nativeStylingAvailable, rebuildRules } from '../model/webflow';
 import { indexQueriesByClass, orderContexts, relativeContexts, relativesOf } from '../model/contextOrder';
-import { getHost } from '../model/host';
+import { getHost, onHostChange } from '../model/host';
+import { contextAfterDevice, deviceTargetOf } from '../model/deviceContext';
 import { EMPTY_RULE_MODEL } from './EditorBasics';
 import { chipsFor, styledSelectorsFor, usePseudoTarget } from './editorModel';
 import { isGlobalSelector } from './LayoutRows';
@@ -84,16 +86,16 @@ export function useStyleContexts(
   contextKeys: ReturnType<typeof useContextKeys>,
   embedContexts: ReturnType<typeof useEmbedContexts>,
 ) {
-  const { context, stickyContextRef } = selectionState;
-  const { currentBreakpoint, nativeModel } = nativeState;
+  const { context, setContext, stickyContextRef } = selectionState;
+  const { nativeModel } = nativeState;
   const { allContextKeys } = contextKeys;
   const { sourceContexts, styledEmbedContexts } = embedContexts;
 
-  // The unified context list: Base + the default Webflow breakpoints (always) +
-  // breakpoints/queries the element uses. Drives the dropdown and which breakpoint
-  // native reads/writes target.
+  // The unified context list: Base + the breakpoints/queries that are written
+  // somewhere (never a preset nobody authored). Drives the dropdown and which
+  // breakpoint native reads/writes target.
   const styleContexts = useMemo<StyleContext[]>(() => {
-    const list = buildStyleContexts(allContextKeys, nativeModel, currentBreakpoint, styledEmbedContexts, sourceContexts);
+    const list = buildStyleContexts(allContextKeys, nativeModel, styledEmbedContexts, sourceContexts);
     // Keep the manually-selected query available on any element — even one with no
     // styles there yet — so switching elements stays on it and you can add a style.
     // Only needed for custom @media/@container (breakpoints are always built).
@@ -102,7 +104,7 @@ export function useStyleContexts(
       list.push(sticky);
     }
     return list;
-  }, [allContextKeys, nativeModel, currentBreakpoint, styledEmbedContexts, sourceContexts, context, stickyContextRef]);
+  }, [allContextKeys, nativeModel, styledEmbedContexts, sourceContexts, context, stickyContextRef]);
   const currentContext = useMemo<StyleContext>(
     () => styleContexts.find((entry) => entry.key === context) ?? styleContexts[0] ?? { key: '', label: 'Base', breakpoint: 'main', embedAtContext: '' },
     [styleContexts, context],
@@ -114,7 +116,40 @@ export function useStyleContexts(
       stickyContextRef.current = currentContext;
     }
   }, [currentContext, context, stickyContextRef]);
+  useDesktopReturnsToBase(currentContext, setContext);
   return { currentContext, styleContexts };
+}
+
+// Switching the canvas to desktop takes an `@media` context back to Base
+// (model/deviceContext.ts says why and which contexts stay). It reacts to the
+// host's device CHANGING to desktop: pressing Desktop while already on it is no
+// switch, and so changes nothing.
+function useDesktopReturnsToBase(currentContext: StyleContext, setContext: (context: ContextKey) => void): void {
+  // Read through a ref so the subscription is made once, not on every context change.
+  const currentContextRef = useRef(currentContext);
+  currentContextRef.current = currentContext;
+  useEffect(() => {
+    let deviceLast = getHost().device;
+    return onHostChange(() => {
+      const device = getHost().device;
+      if (device === deviceLast) {
+        return;
+      }
+      deviceLast = device;
+      const next = contextAfterDevice(currentContextRef.current, deviceTargetOf(device));
+      switch (next.kind) {
+        case 'base':
+          setContext('');
+          return;
+        case 'keep':
+          return;
+        default: {
+          const exhaustive: never = next;
+          return exhaustive;
+        }
+      }
+    });
+  }, [setContext]);
 }
 
 // Which native class style the pick maps to, and the embeds that could style it.
@@ -325,14 +360,17 @@ export function useSelectorChips(
       ...new Set(styleContexts.map((styleContext) => styleContext.embedAtContext).filter((atContext): atContext is string => atContext !== undefined)),
     ];
     const embedByKey = new Map(indexContexts(projectedModel, embedKeys).map((info) => [info.key, info]));
+    const wrappers = contextWrappers(projectedModel, embedKeys);
     return styleContexts.map((sc) => {
       const embed = sc.embedAtContext !== undefined ? embedByKey.get(sc.embedAtContext) : undefined;
       const nativeHas = sc.breakpoint ? nativeHasValues(nativeModel, sc.breakpoint) : false;
+      const wrapper = sc.embedAtContext !== undefined ? wrappers.get(sc.embedAtContext) : undefined;
       return {
         key: sc.key,
         hasStyles: (embed?.hasStyles ?? false) || nativeHas,
         styledCombos: embed?.styledCombos ?? [],
         bestTokens: embed?.bestTokens,
+        ...(wrapper === undefined ? {} : { wrapper }),
       };
     });
   }, [model, styleContexts, nativeModel]);

@@ -6,6 +6,7 @@ import type { ClassPlacement } from '../../../editor/classAttr';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { CodeEditor } from '../components/CssCodeEditor';
+import { ruleEditorText } from '../model/cssRuleText';
 import SegmentedControl from '../components/SegmentedControl';
 import { type MatchedRule, type RuleModel } from '../model/cascade';
 import { cssTokens } from '../model/cssCode';
@@ -395,7 +396,9 @@ export function EditableCssRule({
   readonly busy: boolean;
   readonly onSave: (rule: ParsedRule, css: string) => void;
 }) {
-  const sourceCss = rule.node.toString();
+  // Flush left with two-space levels, whatever the <style> block's own indentation
+  // (replaceRuleCss puts the block's indentation back on save).
+  const sourceCss = ruleEditorText(rule.node);
   const [draft, setDraft] = useState(sourceCss);
   const attemptedDraftRef = useRef<string | undefined>(undefined);
   const previousSourceRef = useRef(sourceCss);
@@ -432,6 +435,9 @@ export function EditableCssRule({
       value={draft}
       language="css"
       ariaLabel={`Editable CSS for ${rule.selectorText}; changes save automatically`}
+      // A whole rule: `--` offers variables in each declaration's value. There is
+      // no one property to bind the whole text to, so it has no bind dot.
+      variables={{ kind: 'declarations' }}
       minHeight="100px"
       onChange={setDraft}
       className="embed-editor_css-code-editor"

@@ -1045,6 +1045,34 @@ body.is-scrubbing * {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Two lines: a smaller, muted first line (a nested query's wrapping selector) over
+   the label at a step down from the one-line size, so both fit the trigger's
+   height. Each line truncates on its own, so a long selector never wraps into a
+   third line. Both lines start at the same left edge: the trigger is a <button>,
+   whose text is centred by default, and a stretched line shorter than its column
+   would otherwise sit in its middle. */
+.u-select-label.has-overline {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  text-align: start;
+  line-height: var(--line-height-tight);
+}
+.u-select-overline,
+.u-select-label-line {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.u-select-overline {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
+.u-select-label-line {
+  font-size: var(--font-size-sm);
+}
 .u-select-icon {
   flex: 0 0 auto;
   display: inline-flex;
@@ -1150,16 +1178,18 @@ body.is-scrubbing * {
 .u-select-option.is-active.is-selected {
   background: var(--color-bg-hover);
 }
-/* The label takes the row's free space, so whatever follows it (dot, action,
-   check) is pinned to the right end. */
+/* The label takes the row's free space, so the trailing slots (dot, then
+   check or action) are pinned to the right end. */
 .u-select-option > .u-select-label {
   flex: 1 1 auto;
 }
-/* Trailing checkmark column: the check ends the row so icons align down the left
-   edge (a rule across the app). The column is held open on every row so trailing
-   dots line up whether or not the row is selected; the check shows only on the
-   selected row. */
+/* Trailing end slot: the check ends the row so icons align down the left edge
+   (a rule across the app). The slot is held open on every row so the dots before
+   it line up whether or not the row is selected. It also holds a row's action,
+   centred on the same column as the check, so a pencil and a check stand one
+   above the other. */
 .u-select-check {
+  position: relative;
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
@@ -1167,6 +1197,15 @@ body.is-scrubbing * {
   align-items: center;
   justify-content: center;
   color: var(--color-text-primary);
+}
+/* The dot column: held open on every row of a list where any row has a dot, so
+   a dot stands in the same place on every row. */
+.u-select-dot-slot {
+  flex: 0 0 auto;
+  width: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 /* Nested under a group subheader: indented by a checkmark column plus a gap, the
    offset the leading check gave these rows before it moved to the end. */
@@ -1207,9 +1246,8 @@ body.is-scrubbing * {
   white-space: nowrap;
 }
 
-/* Trailing status dot — pinned right; orange normally, white on the selected row. */
+/* Trailing status dot, in its slot: orange normally, white on the selected row. */
 .u-select-dot {
-  margin-left: auto;
   flex-shrink: 0;
   width: 7px;
   height: 7px;
@@ -1222,11 +1260,14 @@ body.is-scrubbing * {
 
 /* A control that acts ON the row (edit, say) rather than picking it. Kept out of
    sight until the row is under the pointer, so a list of options reads as a list
-   of options; the gutter it occupies is held open either way so the labels don't
-   shift as the highlight moves down. */
+   of options. It sits in the end slot over the check's column, wider than the
+   slot so its hover fill has room, and takes no width of its own: nothing in the
+   row moves as the highlight passes. */
 .u-select-action {
-  flex: 0 0 auto;
-  margin-left: auto;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1240,13 +1281,13 @@ body.is-scrubbing * {
   cursor: pointer;
   opacity: 0;
 }
-/* The dot is pinned right by its own auto margin; with an action beside it the
-   action takes that job and the dot sits just inside it. */
-.u-select-dot + .u-select-action {
-  margin-left: var(--space-2);
-}
 .u-select-option.is-active .u-select-action {
   opacity: 1;
+}
+/* The selected row's action replaces its check while shown: one column, one
+   glyph at a time. */
+.u-select-option.is-active.has-action .u-select-check > svg {
+  visibility: hidden;
 }
 .u-select-action:hover {
   background: var(--color-bg-active);

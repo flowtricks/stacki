@@ -151,7 +151,7 @@ function useEditorSelection(editorFoundation: ReturnType<typeof useEditorFoundat
   const scanWithoutSelectionHook = useScanWithoutSelection(editorRefs, scanState, contentRebuild);
   const scanSelectionHook = useScanSelection(editorRefs, scanState, contentRebuild, applyResolveHook, backgroundRefreshHook);
   const refreshHook = useRefresh(editorRefs, elementReset, scanWithoutSelectionHook, scanSelectionHook);
-  useSelectionSubscriptions(editorRefs, scanState, nativeState, refreshHook);
+  useSelectionSubscriptions(editorRefs, scanState, refreshHook);
   useChangeSubscriptions(scanState, backgroundRefreshHook, designerSync);
   const refreshDerivedHook = useRefreshDerived(editorRefs, scanState);
   return { refreshDerivedHook, refreshHook };

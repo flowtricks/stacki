@@ -4,6 +4,7 @@
 // (getProperties/setProperty), keyed by (breakpoint, pseudo). Tag styles have no
 // Designer API, so they never appear here — those edits fall back to an embed.
 
+import { assert } from '../../../../shared/core/assert';
 import { STATES, type NativeContribution, type StateKey, type StyleContext } from './resolved';
 import type { BreakpointId, NativeModel } from './styleTypes';
 
@@ -156,14 +157,17 @@ export function nativeHasValues(model: NativeModel | undefined, breakpoint: Brea
 /**
  * Build the panel's ordered context list: Base + embed `@media`/`@container`
  * contexts (tagging any that equal a Webflow breakpoint) + native-only Webflow
- * breakpoints that carry values (plus the Designer's current breakpoint so you
- * can always add there). Ordering: Base, then the Webflow scale, then other
- * embed queries.
+ * breakpoints that carry values. Ordering: Base, then the Webflow scale, then
+ * other embed queries.
+ *
+ * The canvas device does not add an entry. It used to: a phone-width canvas put
+ * "Mobile (L)" in the list, and a tablet one "Tablet", though no stylesheet held
+ * either query, so the list named breakpoints the project never had. A query is
+ * listed because it is written somewhere, never because the canvas is that wide.
  */
 export function buildStyleContexts(
   embedContextKeys: string[],
   model: NativeModel | undefined,
-  currentBreakpoint: BreakpointId | undefined,
   /** Embed at-contexts where the selected element actually has styles. Custom
    *  queries and up-breakpoints only appear in the list when they're in here. */
   styledEmbedContexts: ReadonlySet<string> = new Set(),
@@ -176,9 +180,6 @@ export function buildStyleContexts(
   const usedBp = new Set<BreakpointId>();
 
   const nativeBps = nativeBreakpointsWithValues(model);
-  if (currentBreakpoint && currentBreakpoint !== 'main') {
-    nativeBps.add(currentBreakpoint);
-  }
 
   embedContextKeys.forEach((key) => {
     if (key === '') {
@@ -234,10 +235,15 @@ export function buildStyleContexts(
     });
   }
 
-  return list
+  // One row per context: an authored query that equals a breakpoint's is that
+  // breakpoint's row, never a second one beside it.
+  assert(new Set(list.map((context) => context.key)).size === list.length, 'buildStyleContexts: every context is listed once');
+  const ordered = list
     .map((context, index) => ({ context, index }))
     .sort((left, right) => rank(left.context, ownContexts) - rank(right.context, ownContexts) || left.index - right.index)
     .map((entry) => entry.context);
+  assert(ordered.length === list.length, 'buildStyleContexts: ordering keeps every context');
+  return ordered;
 }
 
 function rank(context: StyleContext, ownContexts: ReadonlySet<string>): number {

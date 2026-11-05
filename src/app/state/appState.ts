@@ -42,6 +42,7 @@ import {
 import { type EditorModel } from '../../editor/pageView';
 import { type AppCollection } from '../../ipc/appBridge';
 import { createLiveValue } from '../../ui/liveValue';
+import type { PendingSave } from '../model/nodeFactory';
 
 // The open project, its scan, and the page and selection being edited.
 export function useProjectState() {
@@ -393,7 +394,7 @@ export function useSessionRefs(projectState: ReturnType<typeof useProjectState>)
   // Components win a name collision: they're the more likely intent.
   const insertables = useMemo(() => [...scan.components, ...scan.layouts], [scan.components, scan.layouts]);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const saveTimer = useRef<PendingSave | undefined>(undefined);
   const devLogRef = useRef('');
   const pageStateRef = useRef<PageStateSnapshot>({ currentPage: undefined, pageState: undefined });
   pageStateRef.current = { currentPage, pageState };

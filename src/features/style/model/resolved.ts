@@ -172,6 +172,10 @@ export type ContextInfo = {
   styledCombos: string[][];
   /** The strongest such combo — what to auto-select when switching here. */
   bestTokens: string[] | undefined;
+  /** The selector this context's query is nested inside, when every rule styling
+   *  the element here shares one (model/queryWrapper.ts) — the dropdown's first
+   *  line. Absent for Base, top-level queries and mixed placements. */
+  wrapper?: string;
 };
 
 /**

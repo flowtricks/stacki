@@ -181,11 +181,16 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
     // query is its last link; the ones before it are rows of their own.
     const query = (styleContext.embedAtContext || '').split(' › ').pop() || '';
     const uses = queryUses.get(queryKey(query)) ?? 0;
+    const info = contextInfos.find((entry) => entry.key === styleContext.key);
     return {
       value: styleContext.key,
       label: styleContext.label,
+      // A query nested inside a rule names that rule on a line above it, as the
+      // selector chip below does (`.layout {@}`), so the two agree on where the
+      // styles sit. Base and a top-level query stay one line.
+      ...(info?.wrapper === undefined ? {} : { overline: info.wrapper }),
       icon: breakpointIcon(styleContext.breakpoint ?? undefined),
-      marked: contextInfos.find((info) => info.key === styleContext.key)?.hasStyles ?? false,
+      marked: info?.hasStyles ?? false,
       ...(uses > 0
         ? {
             action: {

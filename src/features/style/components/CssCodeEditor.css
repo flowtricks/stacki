@@ -41,3 +41,12 @@
 .code-editor.is-readonly .cm-cursor {
   display: none;
 }
+
+/* The frame around an editor: the anchor for its variable dot and chooser.
+   It passes the editor's own sizing through, so an editor that grows in a
+   column (the clip-path code) still grows. */
+.embed-editor_varconnect.code-editor_frame {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}

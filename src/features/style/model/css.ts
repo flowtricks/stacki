@@ -9,6 +9,7 @@
 import postcss, { type Root, type Rule, type AtRule, type ChildNode } from 'postcss';
 import type { ParsedDeclaration, ParsedRule, StyleRegion } from './styleTypes';
 import { parseSelectorList, selectorListMembers } from './selectors';
+import { ruleLayout, sourceTextFromEditor } from './cssRuleText';
 import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
 import {
@@ -386,12 +387,32 @@ export function createRuleInAtRule(atRule: AtRule, selector: string, prop: strin
   }
   // Merge into an existing rule for this selector inside the block, else append a new one.
   const existing = findChildRuleBySelector(atRule, selector);
-  const rule = existing ?? postcss.rule({ selector });
-  setDeclOnRule(rule, cleanProp, { value: cleanValue, important: declared.important });
-  if (!existing) {
-    atRule.append(rule);
+  if (existing) {
+    setDeclOnRule(existing, cleanProp, { value: cleanValue, important: declared.important });
+    return true;
   }
+  // A new rule is attached and lined up before it gets its declaration, so the
+  // declaration indents one step past the rule's own line. Left detached, PostCSS
+  // guessed both from the first declaration in the stylesheet times the nesting
+  // depth, and inside an indented, nested query that ran the body far right.
+  const rule = postcss.rule({ selector });
+  atRule.append(rule);
+  placeChild(atRule, rule);
+  setDeclOnRule(rule, cleanProp, { value: cleanValue, important: declared.important });
+  placeNewRuleBody(rule);
   return true;
+}
+
+// Line up every child of a rule this module just created one indent step past
+// the rule's own line. Only a new rule's body is touched, so the author's own
+// rules keep their formatting.
+function placeNewRuleBody(rule: Rule): void {
+  assert(rule.parent !== undefined, 'placeNewRuleBody: the rule is attached');
+  const children = rule.nodes ?? [];
+  assert(children.length <= LIMITS.treeNodesMax, "placeNewRuleBody: the rule's body is bounded");
+  for (const child of children) {
+    placeChild(rule, child);
+  }
 }
 
 /**
@@ -458,10 +479,12 @@ function ensureQueryChain(root: Root, segments: readonly string[]): Root | AtRul
     let found = childAtRule(container, name, params);
     if (!found) {
       found = postcss.atRule({ name, params });
-      if (container === root) {
-        appendTopLevel(root, found);
+      if (container.type === 'root') {
+        appendTopLevel(container, found);
       } else {
+        // Lined up one step inside its parent query, as a new nested rule is.
         container.append(found);
+        placeChild(container, found);
       }
     }
     container = found;
@@ -485,11 +508,15 @@ export function createRuleAtRoot(region: StyleRegion, selector: string, prop: st
   // Merge into an existing top-level rule for this selector, else append a new one — so
   // adding a selector that the embed already has extends that rule instead of duplicating it.
   const existing = findChildRuleBySelector(region.root, selector);
-  const rule = existing ?? postcss.rule({ selector });
-  setDeclOnRule(rule, cleanProp, { value: cleanValue, important: declared.important });
-  if (!existing) {
-    appendTopLevel(region.root, rule);
+  if (existing) {
+    setDeclOnRule(existing, cleanProp, { value: cleanValue, important: declared.important });
+    return true;
   }
+  // Attached first, as in createRuleInAtRule, so the body indents from the rule's line.
+  const rule = postcss.rule({ selector });
+  appendTopLevel(region.root, rule);
+  setDeclOnRule(rule, cleanProp, { value: cleanValue, important: declared.important });
+  placeNewRuleBody(rule);
   return true;
 }
 
@@ -666,13 +693,25 @@ export function reorderDeclarations(rule: ParsedRule, orderedDeclIds: string[]) 
   nodes.forEach((node) => rule.node.append(node));
 }
 
-/** Replace a rule's entire body by re-parsing edited CSS text for that rule. */
-export function replaceRuleCss(rule: ParsedRule, ruleCss: string): { ok: true } | { ok: false; error: string } {
+/**
+ * Replace a rule's entire body by re-parsing the CSS Code editor's text for that rule.
+ * The editor shows the rule flush left with two-space levels (ruleEditorText); the
+ * block's indentation and the file's own indent unit go back before parsing, and the
+ * rule keeps the whitespace that led up to it, so the file keeps its layout.
+ */
+export function replaceRuleCss(rule: ParsedRule, editorCss: string): { ok: true } | { ok: false; error: string } {
+  const before = rule.node.raws.before;
+  const sourceCss = sourceTextFromEditor(editorCss, ruleLayout(rule.node));
   try {
-    const parsed = postcss.parse(ruleCss);
+    const parsed = postcss.parse(sourceCss);
     const nodes = parsed.nodes.filter((node): node is Rule => node.type === 'rule');
     if (!nodes.length) {
       return { ok: false, error: 'No CSS rule found in the edited text.' };
+    }
+    const first = parsed.first;
+    assert(first !== undefined, 'replaceRuleCss: a parse with a rule has a first node');
+    if (before !== undefined) {
+      first.assign({ raws: { ...first.raws, before } });
     }
     rule.node.replaceWith(...parsed.nodes);
     return { ok: true };

@@ -41,10 +41,6 @@ export interface PropWrite {
 // and puts back what the live writes overwrote.
 export type LiveSetProp = (prop: string | readonly string[], value: string | undefined, important: boolean) => void;
 
-export function isBreakpointId(value: unknown): value is BreakpointId {
-  return value === 'xxl' || value === 'xl' || value === 'large' || value === 'main' || value === 'medium' || value === 'small' || value === 'tiny';
-}
-
 // Placeholder resolved-style so the panel frame (chips, selectors, sections) can
 // render immediately while embeds are still scanning — every section shows unset
 // and fills in the moment the real resolved model arrives.

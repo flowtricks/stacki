@@ -7,6 +7,10 @@ export type SelectOption<T extends string> = {
   value: T;
   /** Plain-text label — also used for type-ahead matching. */
   label: string;
+  /** A smaller, muted first line above the label, in the list and the closed
+   *  trigger alike (e.g. the selector a nested query is written inside). Absent
+   *  means the option is one line. Not used for type-ahead: the label names it. */
+  overline?: string;
   /** Optional leading icon (e.g. a preset glyph). */
   icon?: ReactNode;
   /** Show a trailing status dot (white on the selected row, accent otherwise). */

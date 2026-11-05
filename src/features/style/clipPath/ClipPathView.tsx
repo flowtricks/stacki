@@ -39,6 +39,8 @@ export function ClipPathView({ editor }: EditorProps) {
         value={codeValue}
         language="css"
         ariaLabel="Editable clip-path CSS"
+        // The code is the whole clip-path value: binding it makes that value `var(--x)`.
+        variables={{ kind: 'value', prop: 'clip-path' }}
         tokenHighlights={selectedCodeTokenHighlights}
         onChange={onCodeChange}
         onSelectionChange={onCodeSelectionChange}
