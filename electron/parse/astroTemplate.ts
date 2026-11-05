@@ -198,8 +198,31 @@ function tryParseConciseMap(inner: string, base: number | undefined = undefined)
     // page was written. Keep the original layout to re-emit while the head
     // still says the same thing; see serializeNode's 'map' case.
     headSource: dedentHead(headRaw),
-    children: parsed.nodes,
+    ...unwrappedLoopBody(body, parsed.nodes),
   };
+}
+
+// A loop body that is not one element is written inside `<>` or `<Fragment>`:
+// text, an expression or several children side by side are not one JSX
+// expression otherwise. The wrapper is how the body is written, not something
+// the person placed, so it is unwrapped here and remembered in `fragment`,
+// and the serializer writes it back. Read as a node, it stood between the loop
+// and its contents in the Navigator, and what was dropped into the loop
+// landed in a Fragment instead. A wrapper with attributes (`<Fragment set:html>`)
+// does something, and stays a node.
+function unwrappedLoopBody(body: string, nodes: ParserNode[]): { children: ParserNode[]; fragment?: '<>' | 'Fragment' } {
+  const significant = nodes.filter((node) => node.kind !== 'comment');
+  const only = significant.length === 1 && nodes.length === 1 ? significant[0] : undefined;
+  if (only === undefined || only.kind !== 'component' || only.name !== 'Fragment') {
+    return { children: nodes };
+  }
+  if (Object.keys(only.props ?? {}).length > 0) {
+    return { children: nodes };
+  }
+  const fragment = body.trimStart().startsWith('<>') ? '<>' : 'Fragment';
+  const children = only.children ?? [];
+  assert(children !== nodes, 'unwrappedLoopBody: the children are the wrapper’s own');
+  return { children, fragment };
 }
 
 // The same loop with no parentheses around its body — `.map((x) => <Tag/>)`,
@@ -222,7 +245,8 @@ function tryParseBareMap(inner: string, base: number | undefined = undefined): M
   if (inner.slice(mapClose + 1).trim()) {
     return undefined;
   }
-  const parsed = parseTemplate(inner.slice(headRaw.length, mapClose), base === undefined ? undefined : base + headRaw.length);
+  const bareBody = inner.slice(headRaw.length, mapClose);
+  const parsed = parseTemplate(bareBody, base === undefined ? undefined : base + headRaw.length);
   if (!parsed.clean) {
     return undefined;
   }
@@ -231,7 +255,7 @@ function tryParseBareMap(inner: string, base: number | undefined = undefined): M
     kind: 'map',
     head: normalizeHead(headRaw + '('), // the Loop editor reads one shape
     bare: true,
-    children: parsed.nodes,
+    ...unwrappedLoopBody(bareBody, parsed.nodes),
   };
 }
 
@@ -266,7 +290,7 @@ function tryParseBlockMap(inner: string, base: number | undefined = undefined): 
     kind: 'map',
     head: normalizeHead(headRaw + '('),
     body: split.body,
-    children: parsed.nodes,
+    ...unwrappedLoopBody(split.markup, parsed.nodes),
   };
 }
 

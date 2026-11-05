@@ -385,9 +385,7 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
       lines.push(indent + '    ' + line);
     }
     lines.push(indent + '    return (');
-    for (const child of node.children || []) {
-      serializeNode(child, indent + '      ', lines, depth + 1);
-    }
+    serializeLoopBody(node, indent + '      ', lines, depth);
     lines.push(indent + '    );');
     lines.push(indent + '  })');
     lines.push(indent + '}');
@@ -438,11 +436,62 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
 // empty: `(item) => ()` does not parse, and the page with it stops building,
 // so a loop with nothing in it yet (one just inserted) renders `null`.
 function serializeLoopBody(node: MapNode, indent: string, lines: string[], depth: number): void {
-  for (const child of node.children || []) {
-    serializeNode(child, indent, lines, depth + 1);
-  }
-  if ((node.children || []).length === 0) {
+  const children = node.children || [];
+  if (children.length === 0) {
     lines.push(indent + 'null');
+    return;
+  }
+  const wrapper = loopBodyWrapper(node);
+  if (wrapper === undefined) {
+    for (const child of children) {
+      serializeNode(child, indent, lines, depth + 1);
+    }
+    return;
+  }
+  lines.push(indent + (wrapper === '<>' ? '<>' : '<Fragment>'));
+  for (const child of children) {
+    serializeNode(child, indent + '  ', lines, depth + 1);
+  }
+  lines.push(indent + (wrapper === '<>' ? '</>' : '</Fragment>'));
+}
+
+// The wrapper a loop's body needs, if any. After `=>` the body is markup only
+// while it is made of tags: Astro reads one element, or elements side by side
+// with HTML comments among them (see mapSiblings), as the loop's template.
+// Text written there is a JavaScript name instead: a Text element dropped into
+// a new loop came out as `( Text )`, the identifier of the browser's Text
+// class, and the loop read back as code with nothing in it. An expression, a
+// `{/* */}` comment or a nested condition or loop is `{…}`, not a tag, and
+// needs the wrapper too. A wrapper the file already had is kept in its spelling.
+export function loopBodyWrapper(node: Pick<MapNode, 'children' | 'fragment'>): '<>' | 'Fragment' | undefined {
+  if (node.fragment !== undefined) {
+    return node.fragment;
+  }
+  assert(node.children.length > 0, 'loopBodyWrapper: an empty loop writes null, not a wrapper');
+  return node.children.every(isLoopTag) ? undefined : '<>';
+}
+
+// Markup Astro accepts as a loop body without a wrapper: a tag.
+function isLoopTag(child: ParserNode): boolean {
+  switch (child.kind) {
+    case 'element':
+    case 'component':
+    case 'raw':
+      return true;
+    case 'comment':
+      return child.jsx !== true;
+    case 'text':
+    case 'expr':
+    case 'raw-line':
+    case 'map':
+    case 'cond':
+    case 'branch':
+    case 'chunk-group':
+      return false;
+    default: {
+      const exhaustive: never = child;
+      return exhaustive;
+    }
   }
 }
 

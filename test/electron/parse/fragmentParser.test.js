@@ -51,7 +51,7 @@ test('conditional shorthand fragments expose children with exact source spans an
   assert.equal(serializePage(parsed(changed)), changed);
 });
 
-test('concise, bare and block maps keep shorthand fragment bodies editable', () => {
+test('concise, bare and block maps unwrap shorthand fragment bodies and write them back', () => {
   for (const expression of [
     '{items.map((item) => (<><p>{item.title}</p><hr /></>))}',
     '{items.map((item) => <><p>{item.title}</p><hr /></>)}',
@@ -60,7 +60,10 @@ test('concise, bare and block maps keep shorthand fragment bodies editable', () 
     const source = expression + '\n';
     const model = parsed(source);
     assert.equal(model.nodes[0].kind, 'map');
-    const group = fragment(model.nodes[0].children[0]);
+    // The `<>` is how the body is written, not a node of its own: the loop's
+    // children are its contents, and the wrapper is remembered to write back.
+    const group = model.nodes[0];
+    assert.equal(group.fragment, '<>');
     assert.deepEqual(
       group.children.map((node) => node.name),
       ['p', 'hr'],
@@ -118,7 +121,8 @@ test('fragment root markers carry caller paths ' + 'through block, inline, neste
     ['{render && (<><div>Root</div></>)}\n', '0.0.0.0'],
     ['<><span>Root</span></>\n', '0.0'],
     ['<>\n  <>\n    <div>Root</div>\n  </>\n</>\n', '0.0.0'],
-    ['{items.map((item) => (<><div>{item}</div></>))}\n', '0.0.0'],
+    // A loop's `<>` is unwrapped into the loop, so its root is one level up.
+    ['{items.map((item) => (<><div>{item}</div></>))}\n', '0.0'],
   ];
   for (const [source, path] of cases) {
     const marked = serializePageMarked(parsed(source));

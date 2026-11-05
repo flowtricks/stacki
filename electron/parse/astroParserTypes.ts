@@ -44,6 +44,8 @@ type NodeFields =
       body?: readonly string[];
       bodyParts?: readonly string[];
       bare?: boolean;
+      /** The body's `<>` / `<Fragment>` wrapper, unwrapped into children (shared MapNode.fragment). */
+      fragment?: '<>' | 'Fragment';
     }
   | { kind: 'cond'; op: '?' | '&&'; test: string; children: ParserNode[] }
   | { kind: 'branch'; name: 'then' | 'else'; children: ParserNode[] }

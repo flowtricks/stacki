@@ -15,6 +15,7 @@ import type {
   PairedNode,
   RawNode,
   MapNode,
+  LoopFragment,
   CondNode,
   BranchNode,
   MarkdownNodeMetadata,
@@ -322,6 +323,11 @@ function parseRaw(record: Record<string, unknown>, where: string): RawNode {
   return out as unknown as RawNode;
 }
 
+// The spellings MapNode.fragment may hold. Here rather than beside the type:
+// pageNodeTypes.ts is types only, and a value there pulled it into the
+// renderer's contract graph, which is bounded (viteModules).
+export const LOOP_FRAGMENTS = ['<>', 'Fragment'] as const satisfies readonly LoopFragment[];
+
 function parseMap(record: Record<string, unknown>, where: string, depth: number, context: ParseContext): MapNode {
   // Paired with parsePageNode, which dispatched on the kind and bounded the depth.
   assert(record['kind'] === 'map', 'parseMap: dispatched on its kind');
@@ -355,6 +361,13 @@ function parseMap(record: Record<string, unknown>, where: string, depth: number,
   }
   if (record['bodyParts'] !== undefined) {
     out['bodyParts'] = parseMapBodyParts(record['bodyParts'], out['children']);
+  }
+  if (record['fragment'] !== undefined) {
+    const fragment = LOOP_FRAGMENTS.find((spelling) => spelling === record['fragment']);
+    if (fragment === undefined) {
+      fail(where, `fragment: unknown wrapper ${JSON.stringify(record['fragment'])}`);
+    }
+    out['fragment'] = fragment;
   }
   return out as unknown as MapNode;
 }
