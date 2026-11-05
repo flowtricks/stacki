@@ -36,6 +36,21 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.12 clip-path SVG paste is back, a new default shape, quieter undo
+
+- Pasting an SVG into the clip-path tool works again. ⌘V never reached the tool: Desktop's Paste
+  menu item pasted the copied element when no field had focus, and Studio cancelled ⌘V with an
+  element selected. The open tool now claims ⌘V; straight lines become `polygon()` and curves
+  `shape()`, with holes and fill rules kept.
+- Choosing Shape starts from a new default shape, converted exactly as pasting it would be.
+  Size, Offset X and Offset Y bind to variables like every other value field.
+- An undo or redo that is declined (the element moved, unsaved edits, a syntax error to fix
+  first) shows an orange warning instead of a red error.
+- `npm run check:linux` runs before tagging and catches the causes of recent Linux build
+  failures locally. v1.0.11's first Linux build failed on a menu measured mid-animation; the
+  test now waits for the motion to settle.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.12.
+
 ## 1.0.11 style panel fixes: nested queries, live drags, !important, prop binding
 
 - Spacing drags update the canvas while the pointer moves: a live save was a debounce that every

@@ -172,12 +172,12 @@ test('a probe that measures after a fixed sleep is flagged; one that waits for t
 });
 
 test('tracked tests that name git-ignored files are reported', () => {
-  const ignored = ['test/fixtures/large/bytes-100.astro'];
+  const ignored = ['test/fixtures/never-committed/sample.astro'];
   assert.deepEqual(ignoredReferences(ignored, 'test/a.test.js', "read('fixtures/editor-core/a.astro')"), []);
-  const fromRoot = ignoredReferences(ignored, 'test/snapshot.json', '{\n "test/fixtures/large/bytes-100.astro": 1 }');
+  const fromRoot = ignoredReferences(ignored, 'test/snapshot.json', '{\n "test/fixtures/never-committed/sample.astro": 1 }');
   assert.equal(fromRoot[0]?.line, 2);
   assert.match(fromRoot[0]?.message ?? '', /\.gitignore excludes/);
-  assert.equal(ignoredReferences(ignored, 'test/b.test.js', "join(ROOT, 'fixtures/large/bytes-100.astro')").length, 1);
+  assert.equal(ignoredReferences(ignored, 'test/b.test.js', "join(ROOT, 'fixtures/never-committed/sample.astro')").length, 1);
   assert.throws(() => ignoredReferences(['dist/x.js'], 'test/c.test.js', ''), /outside test\//);
 });
 
