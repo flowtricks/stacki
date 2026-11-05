@@ -12,9 +12,10 @@ import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
 import ProvenanceList from './ProvenanceList';
 import { useHighlight } from './model/computedStyle';
-import { displayOf } from './model/styleDisplay';
+import { displayOf, displayText, withImportant } from './model/styleDisplay';
+import ImportantMark from './components/ImportantMark';
 import { DecorNoneIcon } from './TypographyIcons';
-import { type Props, joinImportant, LiveInput, StackedField, type Seg, SegBar, MoreIcon } from './TypographyKit';
+import { type Props, LiveInput, StackedField, type Seg, SegBar, MoreIcon } from './TypographyKit';
 
 // ─────────────────────────── Columns advanced options ───────────────────────────
 
@@ -126,7 +127,7 @@ export function LengthRow({
   placeholder: string;
 } & Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
   const display = displayOf(read(prop));
-  const external = display.present ? joinImportant(display) : '';
+  const external = display.present ? withImportant(display) : '';
   return (
     <div className="embed-editor_size-row">
       <PopLabel label={label} prop={prop} read={read} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
@@ -157,7 +158,9 @@ export function RuleStyleRow({
 }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
   const display = displayOf(read('column-rule-style'));
   const current = useHighlight(
-    display.present ? display.value.trim().toLowerCase() : '',
+    // The flag rides in the text, so a flagged value opens the bar's custom
+    // field, which shows it (TypographyKit.tsx SegBar).
+    displayText(display).trim().toLowerCase(),
     'column-rule-style',
     RULE_STYLE_SEGS.map((segment) => segment.value),
     'none',
@@ -197,7 +200,7 @@ export function RuleColorRow({
   onSelectSelector,
 }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
   const display = displayOf(read('column-rule-color'));
-  const external = display.present ? joinImportant(display) : '';
+  const external = displayText(display);
   // A live drag writes to the canvas, not to the model this row reads — so the
   // colour it emitted is what the swatch and the field show until the model
   // catches up. Without this the page moved under the pointer while the number
@@ -205,15 +208,16 @@ export function RuleColorRow({
   const [shown, noteLive] = useLiveColor(external);
   const swatch = (
     <ColorSwatch
-      value={shown.replace(/\s*!important\s*$/i, '').trim()}
+      value={shown}
       busy={busy}
       ariaLabel="Divider color"
       onChange={(color, live) => {
-        noteLive(live ? color : undefined);
+        // The swatch picks a colour, not the flag: a flagged colour stays so.
+        noteLive(live ? withImportant({ value: color, important: display.important }) : undefined);
         if (live) {
-          liveSetProp('column-rule-color', color, false);
+          liveSetProp('column-rule-color', color, display.important);
         } else {
-          setProp('column-rule-color', color, false);
+          setProp('column-rule-color', color, display.important);
         }
       }}
     />
@@ -261,16 +265,19 @@ export function SpanRow({
   return (
     <div className="embed-editor_size-row">
       <PopLabel label="Span" prop="column-span" read={read} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
-      <SegmentedControl
-        options={[
-          { value: 'none', label: "Don't" },
-          { value: 'all', label: 'Do' },
-        ]}
-        value={value}
-        onChange={(next) => setProp('column-span', next, false)}
-        ariaLabel="Column span"
-        disabled={busy}
-      />
+      {/* No custom field: a flagged value is marked, and picks keep the flag. */}
+      <ImportantMark important={display.important}>
+        <SegmentedControl
+          options={[
+            { value: 'none', label: "Don't" },
+            { value: 'all', label: 'Do' },
+          ]}
+          value={value}
+          onChange={(next) => setProp('column-span', next, display.important)}
+          ariaLabel="Column span"
+          disabled={busy}
+        />
+      </ImportantMark>
     </div>
   );
 }

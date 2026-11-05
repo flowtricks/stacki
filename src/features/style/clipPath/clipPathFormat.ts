@@ -28,7 +28,7 @@ import {
   DEFAULT_SHAPE_VALUE,
 } from './clipPathConstants';
 import { formatPercent, formatCssScaleNumber } from './clipPathMeasure';
-import { makeInsetRadii, hasRoundedCorners, formatRadii, formatInsetSides, formatRawEditableClipPath } from './clipPathHandles';
+import { makeInsetRadii, hasRoundedCorners, formatRadii, formatInsetSides } from './clipPathHandles';
 import { formatShapeValueFromCssSubpaths, resolveShapeScaleVarNames, type ShapeOffsetBounds, formatShapeOffsetPoint } from './shapeFunctionModel';
 
 export const PRESETS: Record<string, ClipShape> = {
@@ -267,7 +267,12 @@ export function formatClipPath(shape: ClipShape) {
     return 'none';
   }
   if (shape.kind === 'raw') {
-    return shape.editable ? formatRawEditableClipPath(shape.editable) : shape.value;
+    // The authored text, byte for byte. A raw shape's value is what was read or
+    // typed, and every edit of its geometry rewrites it (withRawEditable), so it
+    // is always current. Re-serializing the parsed form instead spelled
+    // `inset(0.5rem round 2rem)` out to four sides, and that longer text was
+    // what the next write sent back to the user's rule.
+    return shape.value;
   }
   if (shape.kind === 'polygon') {
     return formatPolygon(shape.points);

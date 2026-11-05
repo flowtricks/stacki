@@ -1070,6 +1070,48 @@ body.is-scrubbing * {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
+/* A first line with a source chip lays the chip and the overline text side by
+   side: the chip keeps its width, the text takes what is left and truncates. */
+.u-select-overline:has(.u-select-tag) {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.u-select-overline-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The source chip: a muted fill, never a border, so it reads as a label and not
+   as a second control. The consumer tones it by data-tone. */
+.u-select-tag {
+  flex: 0 1 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  max-width: 60%;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-hover);
+  color: var(--color-text-secondary);
+  line-height: var(--line-height-tight);
+}
+.u-select-tag-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+.u-select-tag-icon svg {
+  width: 10px;
+  height: 10px;
+}
+.u-select-tag-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .u-select-label-line {
   font-size: var(--font-size-sm);
 }

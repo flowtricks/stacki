@@ -3,6 +3,10 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { usePointerDrag } from '../../ui/usePointerDrag';
 import { deviceForWidth, deviceWidth, type PreviewDevice } from './PreviewToolbar';
 import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
+/** A width asked of the canvas from outside it (the style panel picking a media
+ *  query). `serial` counts the asks, so the same width asked again still applies. */
+export type CanvasWidthRequest = { readonly widthPx: number; readonly serial: number };
+
 export function usePreviewDimensions() {
   const [customWidth, setCustomWidth] = useState<number | undefined>(undefined);
   const [customHeight, setCustomHeight] = useState<number | undefined>(undefined);
@@ -32,6 +36,10 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
     setCustomWidth(next);
     onDevice('custom');
   };
+  // Read by an effect that applies a width asked from outside, which must not
+  // re-run each render because this closure is new.
+  const setWidthRef = useRef(setWidth);
+  setWidthRef.current = setWidth;
   const startResize = useResizeHandler({
     wrapRef,
     frameRef,
@@ -46,6 +54,7 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
     wrapRef,
     frameRef,
     wrapWidth: available.width,
+    setWidthRef,
     viewport,
     setWidth,
     customHeight,

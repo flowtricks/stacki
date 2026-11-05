@@ -2,20 +2,24 @@
 // the native target, a component's own source, the resolved properties, the
 // selector chips and changing context (EmbedEditor.tsx).
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import {
-  resolveStyle,
-  indexContexts,
-  selectorsMatch,
-  type ContextInfo,
-  type ContextKey,
-  type MatchedSelector,
-  type SourceKey,
-  type StyleContext,
-} from '../model/resolved';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { resolveStyle, selectorsMatch, type ContextInfo, type ContextKey, type MatchedSelector, type SourceKey, type StyleContext } from '../model/resolved';
 import { breakpointForAtContext, breakpointTier, buildStyleContexts, nativeContribsFor, nativeHasValues, selectedNativeIndexFor } from '../model/nativeStyles';
 import { listAtRuleBlocks } from '../model/css';
-import { contextWrappers } from '../model/queryWrapper';
+import {
+  contextKeysWithStyles,
+  indexPlacedContexts,
+  modelForContext,
+  nestedQueryOfKey,
+  placedContextKey,
+  ruleContextKey,
+  ruleSourcedContextKey,
+  sourcedContextKey,
+  splitSourcedKey,
+} from '../model/queryWrapper';
+import { reachOfWrapper, type WrapperReach } from '../model/queryReach';
+import { canvasWidthForQuery } from '../model/queryWidth';
+import type { MatchTarget } from '../model/selectors';
 import { nativeStylingAvailable, rebuildRules } from '../model/webflow';
 import { indexQueriesByClass, orderContexts, relativeContexts, relativesOf } from '../model/contextOrder';
 import { getHost, onHostChange } from '../model/host';
@@ -23,7 +27,7 @@ import { contextAfterDevice, deviceTargetOf } from '../model/deviceContext';
 import { EMPTY_RULE_MODEL } from './EditorBasics';
 import { chipsFor, styledSelectorsFor, usePseudoTarget } from './editorModel';
 import { isGlobalSelector } from './LayoutRows';
-import { useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
+import { useEditorRefs, useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { useElementTokens } from './useEditorRuleEdits';
 import { useTokenDefault, useActiveSelector, useSelectorPick, useSourceDocument, useContextKeys } from './useEditorElement';
 
@@ -49,7 +53,7 @@ export function useEmbedContexts(
     if (sourceDocument) {
       for (const region of sourceDocument.regions) {
         for (const block of listAtRuleBlocks(region)) {
-          set.add(block.atContext.join(' › '));
+          set.add(sourcedContextKey(placedContextKey(block.atContext.join(' › '), block.placement), sourceDocument.source.key));
         }
       }
     }
@@ -57,10 +61,13 @@ export function useEmbedContexts(
   }, [sourceDocument]);
   const styledEmbedContexts = useMemo(() => {
     const set = new Set<string>();
+    // Keyed by where each rule's query is written (model/queryWrapper.ts), so a
+    // nested block the element has styles in names that block, not the query.
     if (model) {
-      for (const info of indexContexts(model, allContextKeys)) {
-        if (info.hasStyles) {
-          set.add(info.key);
+      const known = new Set(allContextKeys);
+      for (const key of contextKeysWithStyles(model)) {
+        if (known.has(key)) {
+          set.add(key);
         }
       }
     }
@@ -85,28 +92,39 @@ export function useStyleContexts(
   nativeState: ReturnType<typeof useNativeState>,
   contextKeys: ReturnType<typeof useContextKeys>,
   embedContexts: ReturnType<typeof useEmbedContexts>,
+  wrapperReachHook: ReturnType<typeof useWrapperReach>,
 ) {
   const { context, setContext, stickyContextRef } = selectionState;
   const { nativeModel } = nativeState;
   const { allContextKeys } = contextKeys;
   const { sourceContexts, styledEmbedContexts } = embedContexts;
+  const { reachOf } = wrapperReachHook;
 
   // The unified context list: Base + the breakpoints/queries that are written
   // somewhere (never a preset nobody authored). Drives the dropdown and which
   // breakpoint native reads/writes target.
   const styleContexts = useMemo<StyleContext[]>(() => {
-    const list = buildStyleContexts(allContextKeys, nativeModel, styledEmbedContexts, sourceContexts);
+    // A query nested inside a rule is listed only where it can reach the element
+    // (model/queryReach.ts): undecided ones stay, misses go.
+    const list = buildStyleContexts(allContextKeys, nativeModel, styledEmbedContexts, sourceContexts).filter((entry) => reachOf(entry.key).kind !== 'misses');
     // Keep the manually-selected query available on any element — even one with no
     // styles there yet — so switching elements stays on it and you can add a style.
-    // Only needed for custom @media/@container (breakpoints are always built).
+    // Only needed for custom @media/@container (breakpoints are always built). A
+    // nested query that cannot reach this element is not kept: the effect below
+    // returns the panel to Base instead.
     const sticky = stickyContextRef.current;
-    if (context && sticky && sticky.key === context && !list.some((entry) => entry.key === context)) {
+    if (context && sticky && sticky.key === context && !list.some((entry) => entry.key === context) && reachOf(context).kind !== 'misses') {
       list.push(sticky);
     }
     return list;
-  }, [allContextKeys, nativeModel, styledEmbedContexts, sourceContexts, context, stickyContextRef]);
+  }, [allContextKeys, nativeModel, styledEmbedContexts, sourceContexts, context, stickyContextRef, reachOf]);
   const currentContext = useMemo<StyleContext>(
-    () => styleContexts.find((entry) => entry.key === context) ?? styleContexts[0] ?? { key: '', label: 'Base', breakpoint: 'main', embedAtContext: '' },
+    () =>
+      styleContexts.find((entry) => entry.key === context) ??
+      // A typed query, once written, is listed under its stylesheet: the typed key
+      // names no stylesheet, so it is the written row's place that matches.
+      styleContexts.find((entry) => splitSourcedKey(context).source === undefined && entry.key !== '' && splitSourcedKey(entry.key).placed === context) ??
+      styleContexts[0] ?? { key: '', label: 'Base', breakpoint: 'main', embedAtContext: '' },
     [styleContexts, context],
   );
   // Remember the selected context object so it survives an element switch (the list
@@ -114,10 +132,87 @@ export function useStyleContexts(
   useEffect(() => {
     if (currentContext.key === context) {
       stickyContextRef.current = currentContext;
+    } else if (currentContext.key !== '' && splitSourcedKey(currentContext.key).placed === context) {
+      // The typed query was written: follow it to its row, which names the stylesheet.
+      setContext(currentContext.key);
     }
-  }, [currentContext, context, stickyContextRef]);
+  }, [currentContext, context, stickyContextRef, setContext]);
   useDesktopReturnsToBase(currentContext, setContext);
+  // The selection moved somewhere the chosen nested query cannot reach: writing
+  // there would do nothing, so the panel goes back to Base.
+  const contextReach = reachOf(context).kind;
+  useEffect(() => {
+    if (contextReach === 'misses') {
+      setContext('');
+    }
+  }, [contextReach, setContext]);
   return { currentContext, styleContexts };
+}
+
+/**
+ * Whether each nested query's wrapper reaches the selected element: the element
+ * is the wrapper or sits inside it (model/queryReach.ts). Worked out against the
+ * match target each time the element's model is rebuilt, which is also when the
+ * target changes. Until an answer for the current target lands, every wrapper is
+ * undecided, and undecided rows are shown.
+ */
+export function useWrapperReach(
+  editorRefs: ReturnType<typeof useEditorRefs>,
+  elementTokens: ReturnType<typeof useElementTokens>,
+  contextKeys: ReturnType<typeof useContextKeys>,
+) {
+  const { selectedRef, targetRef } = editorRefs;
+  const { model } = elementTokens;
+  const { allContextKeys } = contextKeys;
+  const wrappers = useMemo(() => {
+    const set = new Set<string>();
+    for (const key of allContextKeys) {
+      const nested = nestedQueryOfKey(key);
+      if (nested !== undefined) {
+        set.add(nested.wrapper);
+      }
+    }
+    return [...set].sort();
+  }, [allContextKeys]);
+  const wrappersKey = wrappers.join('\u0000');
+  const [answers, setAnswers] = useState<{ readonly target: MatchTarget | undefined; readonly reach: ReadonlyMap<string, WrapperReach> }>({
+    target: undefined,
+    reach: new Map(),
+  });
+  useEffect(() => {
+    // No element selected: a typed selector may be styled anywhere, so nothing is hidden.
+    const target = selectedRef.current ? targetRef.current : undefined;
+    let cancelled = false;
+    void (async () => {
+      const reach = new Map<string, WrapperReach>();
+      for (const wrapper of wrappers) {
+        reach.set(wrapper, await reachOfWrapper(wrapper, target));
+      }
+      if (!cancelled) {
+        setAnswers({ target, reach });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // `model` is the trigger: a new target is set just before its model lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- wrappersKey stands for wrappers
+  }, [model, wrappersKey, selectedRef, targetRef]);
+  const reachOf = useCallback(
+    (key: ContextKey): WrapperReach => {
+      const nested = nestedQueryOfKey(key);
+      if (nested === undefined) {
+        return { kind: 'reaches' };
+      }
+      const target = selectedRef.current ? targetRef.current : undefined;
+      if (answers.target !== target) {
+        return { kind: 'unknown' };
+      }
+      return answers.reach.get(nested.wrapper) ?? { kind: 'unknown' };
+    },
+    [answers, selectedRef, targetRef],
+  );
+  return { reachOf };
 }
 
 // Switching the canvas to desktop takes an `@media` context back to Base
@@ -282,7 +377,7 @@ export function useResolved(
   const pseudoLayer = usePseudoTarget();
   const resolved = useMemo(
     () =>
-      resolveStyle(model ?? EMPTY_RULE_MODEL, currentContext.embedAtContext ?? ' native-only', activeSelector, {
+      resolveStyle(modelForContext(model ?? EMPTY_RULE_MODEL, currentContext), currentContext.embedAtContext ?? ' native-only', activeSelector, {
         source: effectiveSource,
         contribs: nativeContribs,
         selectedIndex: selectedNativeIndex,
@@ -339,7 +434,7 @@ export function useSelectorChips(
   const selectorChips = useMemo<MatchedSelector[]>(
     () =>
       chipsFor({
-        model,
+        model: model === undefined ? undefined : modelForContext(model, currentContext),
         nativeModel,
         currentContext,
         activeSelector,
@@ -355,22 +450,18 @@ export function useSelectorChips(
   // Per-context dropdown info: embed hasStyles/combos (for the dot + auto-highlight)
   // plus whether the breakpoint carries native values.
   const contextInfos = useMemo<ContextInfo[]>(() => {
-    const projectedModel = model ?? EMPTY_RULE_MODEL;
-    const embedKeys = [
-      ...new Set(styleContexts.map((styleContext) => styleContext.embedAtContext).filter((atContext): atContext is string => atContext !== undefined)),
-    ];
-    const embedByKey = new Map(indexContexts(projectedModel, embedKeys).map((info) => [info.key, info]));
-    const wrappers = contextWrappers(projectedModel, embedKeys);
-    return styleContexts.map((sc) => {
-      const embed = sc.embedAtContext !== undefined ? embedByKey.get(sc.embedAtContext) : undefined;
+    // Each row read through its own placement (model/queryWrapper.ts): a nested
+    // row's dot is about that block, and its wrapper is where the block is.
+    const embedInfos = indexPlacedContexts(model ?? EMPTY_RULE_MODEL, styleContexts);
+    return styleContexts.map((sc, index) => {
+      const embed = embedInfos[index];
       const nativeHas = sc.breakpoint ? nativeHasValues(nativeModel, sc.breakpoint) : false;
-      const wrapper = sc.embedAtContext !== undefined ? wrappers.get(sc.embedAtContext) : undefined;
       return {
         key: sc.key,
         hasStyles: (embed?.hasStyles ?? false) || nativeHas,
         styledCombos: embed?.styledCombos ?? [],
         bestTokens: embed?.bestTokens,
-        ...(wrapper === undefined ? {} : { wrapper }),
+        ...(embed?.wrapper === undefined ? {} : { wrapper: embed.wrapper }),
       };
     });
   }, [model, styleContexts, nativeModel]);
@@ -382,9 +473,11 @@ export function useSelectorChips(
   // so ordering asks the canvas nothing.
   const queryIndex = useMemo(
     () =>
-      indexQueriesByClass(rebuildRules([...documentByKey.values()]), (atContext) => {
-        const breakpoint = breakpointForAtContext(atContext);
-        return breakpoint === undefined ? atContext : `bp:${breakpoint}`;
+      indexQueriesByClass(rebuildRules([...documentByKey.values()]), (atContext, rule) => {
+        // A nested block's row is its placed key; only a top-level query can be a breakpoint's row.
+        const placed = ruleContextKey(rule);
+        const breakpoint = placed === atContext ? breakpointForAtContext(atContext) : undefined;
+        return breakpoint === undefined ? ruleSourcedContextKey(rule) : `bp:${breakpoint}`;
       }),
     [documentByKey],
   );
@@ -396,6 +489,12 @@ export function useSelectorChips(
   }, [contextInfos, queryIndex, styleContexts]);
   return { contextInfos, orderedContexts, selectorChips };
 }
+
+// The canvas page's root font size, for a `rem` query width. The canvas query
+// protocol does not report the root element's computed font size, so this is
+// the browser default; a page that changes it gets a canvas a little off the
+// query's edge, still on the side the arithmetic put it.
+const ROOT_FONT_SIZE_PX = 16;
 
 // Switch context, keeping or re-picking a selector styled there.
 export function useContextChange(
@@ -420,13 +519,25 @@ export function useContextChange(
       pendingDefaultRef.current = false;
       setContext(next);
       const nextContext = styleContexts.find((entry) => entry.key === next);
+      // A picked media query moves the canvas inside it, so the styles written
+      // there show (model/queryWidth.ts). The canvas becomes a `custom` width,
+      // never `desktop`, so this can't trip the Desktop-returns-to-Base rule
+      // (model/deviceContext.ts) and undo the pick it was made for.
+      if (nextContext?.embedAtContext) {
+        const width = canvasWidthForQuery(nextContext.embedAtContext, ROOT_FONT_SIZE_PX);
+        if (width.kind === 'width') {
+          getHost().setCanvasWidth?.(width.widthPx);
+        }
+      }
       if (!nextContext || !model) {
         return;
       }
       // Only selectors with styles IN this context (drop the dimmed other-context ones).
       // Never jump to a global selector (`:focus-visible`, `*`): editing one edits
       // most of the site, and it isn't about this element.
-      const styled = styledSelectorsFor(model, nativeModel, nextContext).filter((entry) => entry.inContext !== false && !isGlobalSelector(entry.text));
+      const styled = styledSelectorsFor(modelForContext(model, nextContext), nativeModel, nextContext).filter(
+        (entry) => entry.inContext !== false && !isGlobalSelector(entry.text),
+      );
       if (!styled.length) {
         return;
       }

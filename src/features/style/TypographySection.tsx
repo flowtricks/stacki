@@ -1,5 +1,5 @@
 import { useComputedValue, useHighlight } from './model/computedStyle';
-import { displayOf } from './model/styleDisplay';
+import { displayOf, displayText } from './model/styleDisplay';
 import {
   AlignLeftIcon,
   AlignCenterIcon,
@@ -38,7 +38,9 @@ function AlignRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, o
   // Nothing set here → what the page computes for this element (text-align inherits,
   // so that's usually a parent's), falling back to `left` (start, LTR).
   const current = useHighlight(
-    display.present ? display.value.trim().toLowerCase() : '',
+    // The flag rides in the text, so a flagged value opens the bar's custom
+    // field, which shows it (TypographyKit.tsx SegBar).
+    displayText(display).trim().toLowerCase(),
     'text-align',
     [...ALIGN_SEGS.map((segment) => segment.value), 'start', 'end'],
     'left',
@@ -176,7 +178,9 @@ function SegCell({
 } & Props) {
   const display = displayOf(read(prop));
   const current = useHighlight(
-    display.present ? display.value.trim().toLowerCase() : '',
+    // The flag rides in the text, so a flagged value opens the bar's custom
+    // field, which shows it (TypographyKit.tsx SegBar).
+    displayText(display).trim().toLowerCase(),
     prop,
     segs.map((segment) => segment.value),
     fallback,

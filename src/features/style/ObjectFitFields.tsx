@@ -264,7 +264,8 @@ export function ObjectFitSelect({
   const [forceCustom, setForceCustom] = useState(false);
   const fitValue = fit.value.trim().toLowerCase();
   const knownFit = FIT_OPTIONS.some((option) => option.value === fitValue);
-  const fitCustom = forceCustom || (fit.present && fitValue !== '' && !knownFit);
+  // A flagged value opens the custom field, whose text shows `!important`.
+  const fitCustom = forceCustom || (fit.present && fitValue !== '' && !knownFit) || fit.important;
   // Chosen from the menu, as opposed to a value the list can't show — the field
   // is the same either way, but only the first wants the caret.
   const askedForCustom = useRef(false);

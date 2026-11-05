@@ -18,7 +18,7 @@ import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
 import type { Contributor, ResolvedProp } from './model/resolved';
 import { commitInPlace } from './model/commitInPlace';
-import { displayOf, parseImportant, type Display } from './model/styleDisplay';
+import { displayOf, displayText, keepImportant, parseImportant, withImportant, type Display } from './model/styleDisplay';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -161,7 +161,7 @@ export function BgField({
   swatchLabel?: string;
 } & Props) {
   const display = displayOf(read(prop));
-  const external = display.present ? (display.important ? `${display.value} !important` : display.value) : '';
+  const external = displayText(display);
   const field = useBgFieldEditing({ prop, external, busy, setProp, clearProp, liveSetProp });
   const input = <BgFieldInput prop={prop} label={label} placeholder={placeholder} field={field} />;
   const swatch = swatchLabel ? (
@@ -293,17 +293,25 @@ export function useBgFieldEditing({
     cancelLive,
     commit,
   });
-  const pick = (binding: string) => setProp(prop, binding, false);
+  // A variable pick and the swatch change the colour, not the flag: they have no
+  // text to delete `!important` from, so they keep the one the field shows.
+  const shownImportant = { important: parseImportant(external).important };
+  const pick = (binding: string) => {
+    const kept = keepImportant(binding, shownImportant);
+    setProp(prop, kept.value, kept.important);
+  };
   // Show a swatch drag in the field as it happens; the model only hears about it when
   // the drag ends, and only then is `shown` handed back to it.
   const swatchChange = (color: string, options: WriteOptions) => {
-    noteLive(options.live ? color : undefined);
+    const kept = keepImportant(color, shownImportant);
+    const text = withImportant(kept);
+    noteLive(options.live ? text : undefined);
     if (options.live) {
-      liveSetProp(prop, color, false);
+      liveSetProp(prop, kept.value, kept.important);
       return;
     }
-    setDraft(color);
-    setProp(prop, color, false);
+    setDraft(text);
+    setProp(prop, kept.value, kept.important);
   };
   return { busy, shown, cleared, scrub, inputHandlers, pick, swatchChange };
 }

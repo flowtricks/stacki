@@ -26,6 +26,7 @@ import {
 export { type DeclarationValue, extractStyleRegions, parseRegion, splitEmbed, renderEmbed, directDecls, appendDecl } from './cssRegions';
 
 export { atRuleQueryText, queryKey, splitQuery, countAtRuleQuery, renameAtRuleQuery } from './cssQueries';
+import { splitQuery } from './cssQueries';
 
 type WalkContext = {
   embedKey: string;
@@ -65,6 +66,26 @@ function resolveNestedSelectors(rawSelector: string, parents: string[]): string[
     }
   }
   return out;
+}
+
+/**
+ * The selector a chain of nested rules resolves to, outermost raw selector first:
+ * `['.layout', '&:hover', '.card']` → `.layout:hover .card`. A list at any level
+ * expands to every combination, joined with `, `, and runs of whitespace collapse to
+ * one space, so two spellings of one chain give one text. Empty for no rules.
+ */
+export function resolveSelectorChain(rawSelectors: readonly string[]): string {
+  assert(rawSelectors.length <= LIMITS.treeDepthMax, 'resolveSelectorChain: a chain is no deeper than a parsed tree');
+  let parents: string[] | undefined;
+  for (const raw of rawSelectors) {
+    parents = parents === undefined ? splitTopLevelCommas(raw) : resolveNestedSelectors(raw, parents);
+  }
+  const resolved = (parents ?? []).map((selector) => selector.trim().replace(/\s+/g, ' ')).filter((selector) => selector.length > 0);
+  assert(
+    resolved.every((selector) => !/\s{2}/.test(selector)),
+    'resolveSelectorChain: whitespace is collapsed',
+  );
+  return resolved.join(', ');
 }
 
 /** Render a chain of SELECTOR ancestors as nested source for display, e.g.
@@ -279,6 +300,14 @@ function findOrMakeStep(container: Root | Rule | AtRule, step: NestStep): { read
   return found ? { node: found, created: false } : { node: postcss.atRule({ name: step.name, params: step.params }), created: true };
 }
 
+/**
+ * Where a query block is written: at the top level of the stylesheet, or nested
+ * inside rules. `wrapper` is the selector those rules resolve to (every enclosing
+ * rule, across any queries between them: resolveSelectorChain), the selector an
+ * element must match, or sit inside, for the block to reach it.
+ */
+export type BlockPlacement = { readonly kind: 'top-level' } | { readonly kind: 'nested'; readonly wrapper: string };
+
 /** A conditional at-rule block (@media/@container/@supports) available to scaffold into. */
 export type AtRuleBlock = {
   /** The at-rule chain to (and including) this block, e.g. `['@container (width < 52em)']`. */
@@ -287,6 +316,8 @@ export type AtRuleBlock = {
   node: AtRule;
   /** Selectors of the rules already directly inside this block. */
   selectors: string[];
+  /** Whether the block is nested inside rules, and which. */
+  placement: BlockPlacement;
 };
 
 /**
@@ -300,7 +331,8 @@ export function listAtRuleBlocks(region: StyleRegion): AtRuleBlock[] {
   }
   const blocks: AtRuleBlock[] = [];
 
-  const walk = (container: Root | Rule | AtRule, atContext: string[], depth: number) => {
+  // `enclosing` is the raw selectors of the rules around `container`, outermost first.
+  const walk = (container: Root | Rule | AtRule, atContext: string[], enclosing: readonly string[], depth: number) => {
     // A stylesheet is untrusted input: blocks nested deeper than a page tree can be are
     // not offered, rather than walked without bound.
     if (depth > LIMITS.treeDepthMax) {
@@ -310,7 +342,7 @@ export function listAtRuleBlocks(region: StyleRegion): AtRuleBlock[] {
       if (child.type === 'rule') {
         // Descend into nested rules — a @media/@container nested inside a rule is a
         // real query the element can be styled in, so it belongs in the picker.
-        walk(child, atContext, depth + 1);
+        walk(child, atContext, [...enclosing, child.selector.trim()], depth + 1);
         return;
       }
       if (child.type !== 'atrule') {
@@ -326,15 +358,17 @@ export function listAtRuleBlocks(region: StyleRegion): AtRuleBlock[] {
             selectors.push((node as Rule).selector.trim());
           }
         });
-        blocks.push({ atContext: blockContext, node: at, selectors });
-        walk(at, blockContext, depth + 1);
+        const wrapper = resolveSelectorChain(enclosing);
+        const placement: BlockPlacement = wrapper.length === 0 ? { kind: 'top-level' } : { kind: 'nested', wrapper };
+        blocks.push({ atContext: blockContext, node: at, selectors, placement });
+        walk(at, blockContext, enclosing, depth + 1);
       } else if (name === 'layer' && at.nodes) {
-        walk(at, atContext, depth + 1);
+        walk(at, atContext, enclosing, depth + 1);
       }
     });
   };
 
-  walk(region.root, [], 0);
+  walk(region.root, [], [], 0);
   return blocks;
 }
 
@@ -454,6 +488,64 @@ export function createRuleInQuery(region: StyleRegion, atContextKey: string, sel
     return false; // not a query, or no query segment
   }
   return createRuleInAtRule(container, selector, prop, declared);
+}
+
+/**
+ * Write `prop` for `selector` into a query nested inside `wrapper`
+ * (`.button { @media (width < 50rem) { … } }`), the block a nested style
+ * context names. Inside that block every selector is already relative to the
+ * wrapper, so:
+ *
+ * - the wrapper itself is styled by a bare declaration in the query, the form
+ *   css.ts reads back as the wrapper's own rule there (a `.button { }` written
+ *   inside would mean `.button .button`, and style nothing);
+ * - a selector written under the wrapper (`.button .icon`) loses that prefix;
+ * - anything else is written as a nested rule, a descendant of the wrapper.
+ *
+ * The block is found by its query chain and its placement; when the region has
+ * none, the wrapper and the chain are built at the top level. Returns false on
+ * an empty property or value, or a region with no parsed tree.
+ */
+export function createRuleInPlacedQuery(
+  region: StyleRegion,
+  where: { readonly atContextKey: string; readonly wrapper: string; readonly selector: string },
+  prop: string,
+  declared: DeclarationValue,
+): boolean {
+  if (!region.root || !prop.trim() || !declared.value.trim()) {
+    return false;
+  }
+  const wrapper = collapseSpaces(where.wrapper);
+  const selector = collapseSpaces(where.selector);
+  assert(wrapper.length > 0, 'createRuleInPlacedQuery: a nested query has a wrapper');
+  const block = listAtRuleBlocks(region).find(
+    (entry) => entry.atContext.join(' › ') === where.atContextKey && entry.placement.kind === 'nested' && entry.placement.wrapper === wrapper,
+  );
+  const inner = selector === wrapper ? undefined : selector.startsWith(`${wrapper} `) ? selector.slice(wrapper.length + 1) : selector;
+  if (block !== undefined) {
+    if (inner === undefined) {
+      setDeclDirect(block.node, prop.trim(), { value: declared.value.trim(), important: declared.important });
+      return true;
+    }
+    return createRuleInAtRule(block.node, inner, prop, declared);
+  }
+  const steps: NestStep[] = [{ kind: 'selector', selector: wrapper }];
+  for (const segment of querySegments(where.atContextKey)) {
+    const query = splitQuery(segment);
+    if (query === undefined) {
+      return false;
+    }
+    steps.push({ kind: 'atrule', name: query.name.toLowerCase(), params: query.params });
+  }
+  if (inner !== undefined) {
+    steps.push({ kind: 'selector', selector: inner });
+  }
+  assert(steps.length >= 2, 'createRuleInPlacedQuery: a wrapper and at least one query');
+  return createNestedRule(region, steps, prop, declared);
+}
+
+function collapseSpaces(text: string): string {
+  return text.trim().replace(/\s+/g, ' ');
 }
 
 // The ` › `-joined segments of a query context key.

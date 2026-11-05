@@ -16,11 +16,18 @@
 // 3. A query nested inside a rule reads as two lines, the wrapping selector over
 //    the query, in the list and the closed trigger alike; Base and a top-level
 //    query stay one line.
+// 4. Each query context is a PLACE: a query at the top level and the same query
+//    nested inside `.developer_layout` are two rows, and the same query in two
+//    stylesheets is two rows, each naming its stylesheet with a source chip. The
+//    wrapper comes from where the block is written, never from whether the
+//    selected element has styles there. A nested row is listed only where it can
+//    reach the element: the element is the wrapper or sits inside it.
 //
-// Method: buildStyleContexts on plain keys (no DOM); the shared Select mounted in
-// jsdom and its rows read back; queryPlacementOf and contextWrappers on rules
-// parsed by the same postcss the module walks (bundled together, so the node
-// classes are the module's own).
+// Method: buildStyleContexts on plain and placed keys (no DOM); the shared Select
+// mounted in jsdom and its rows read back; the placement model and the reach
+// check run on rules parsed by the same postcss the module walks (bundled
+// together, so the node classes are the module's own), the reach check against
+// a hand-built page tree like the pigeon test project's.
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -74,12 +81,18 @@ const settle = (milliseconds = 0) => new Promise((resolve) => setTimeout(resolve
   const buildDirectory = repoPath('node_modules/.stacki-test/context-menu');
   fs.mkdirSync(buildDirectory, { recursive: true });
 
-  // ── 3a. The wrapping selector, from the parsed rules ──────────────────────
+  // ── 3a and 4. Where each query is written, from the parsed rules ─────────
   {
     const bundle = path.join(buildDirectory, 'query-wrapper.js');
     await esbuild.build({
       stdin: {
-        contents: `export * from './src/features/style/model/queryWrapper.ts'; export { parse } from 'postcss';`,
+        contents: [
+          `export * from './src/features/style/model/queryWrapper.ts';`,
+          `export * from './src/features/style/model/queryReach.ts';`,
+          `export { listAtRuleBlocks, parseRegion, createRuleInPlacedQuery } from './src/features/style/model/css.ts';`,
+          `export { buildStyleContexts } from './src/features/style/model/nativeStyles.ts';`,
+          `export { parse } from 'postcss';`,
+        ].join('\n'),
         resolveDir: repoPath('.'),
         loader: 'ts',
       },
@@ -89,7 +102,8 @@ const settle = (milliseconds = 0) => new Promise((resolve) => setTimeout(resolve
       platform: 'node',
       logLevel: 'silent',
     });
-    const { parse, queryPlacementOf, contextWrappers } = require(bundle);
+    const queryModel = require(bundle);
+    const { parse, queryPlacementOf } = queryModel;
     const CSS = `
       @media (width < 42rem) { .top { color: red } }
       .developer_layout {
@@ -99,6 +113,8 @@ const settle = (milliseconds = 0) => new Promise((resolve) => setTimeout(resolve
       .other { @media (width < 60rem) { color: green } }
       .third { @media (width < 60rem) { color: teal } }
       @container (width > 40em) { .inner { @media print { color: black } } }
+      .outer { @media (width > 10rem) { .mid { @media (width < 90rem) { color: navy } } } }
+      .faq { &:hover { @media (hover: hover) { color: plum } } }
     `;
     const root = parse(CSS);
     // Rules shaped like the parser's: the innermost rule (or the query itself for
@@ -117,25 +133,216 @@ const settle = (milliseconds = 0) => new Promise((resolve) => setTimeout(resolve
           atContext.unshift(`@${parent.name} ${parent.params}`);
         }
       }
-      rules.push({ node, atContext, declarations: [{}] });
+      rules.push({ node, atContext, declarations: [{}], embedKey: 'file:/p/a.css' });
     });
     const byText = (pattern) => rules.find((rule) => pattern.test(rule.node.toString()));
     assert.deepEqual(queryPlacementOf(byText(/\.top/)), { kind: 'top-level' }, 'a top-level query has no wrapper');
     assert.deepEqual(queryPlacementOf(byText(/gap: 1rem/)), { kind: 'nested', wrapper: '.developer_layout' }, 'bare declarations in a nested query');
     assert.deepEqual(queryPlacementOf(byText(/color: blue/)), { kind: 'nested', wrapper: '.developer_layout .card' }, 'two rules deep, outermost first');
-    assert.deepEqual(queryPlacementOf(byText(/color: black/)), { kind: 'nested', wrapper: '.inner' }, 'stops at the next query up');
+    assert.deepEqual(queryPlacementOf(byText(/color: black/)), { kind: 'nested', wrapper: '.inner' }, 'a rule between two queries wraps the inner one');
+    assert.deepEqual(
+      queryPlacementOf(byText(/color: navy/)),
+      { kind: 'nested', wrapper: '.outer .mid' },
+      'every rule above the query wraps it, across queries',
+    );
+    assert.deepEqual(queryPlacementOf(byText(/color: plum/)), { kind: 'nested', wrapper: '.faq:hover' }, '`&` resolves through nesting');
     const unconditional = { node: parse('.plain { color: red }').first, atContext: [], declarations: [{}] };
     assert.deepEqual(queryPlacementOf(unconditional), { kind: 'none' }, 'a rule in no query has no placement');
 
-    const model = (list) => ({ base: [], conditional: list.map((rule) => ({ rule })), matchedRuleCount: list.length });
-    const nestedOnly = contextWrappers(model([byText(/gap: 1rem/)]), ['@media (width < 42rem)']);
-    assert.equal(nestedOnly.get('@media (width < 42rem)'), '.developer_layout', 'one nested placement: its wrapper');
-    const mixed = contextWrappers(model([byText(/gap: 1rem/), byText(/\.top/)]), ['@media (width < 42rem)']);
-    assert.equal(mixed.has('@media (width < 42rem)'), false, 'nested and top-level together: one line');
-    const twoWrappers = contextWrappers(model([byText(/color: green/), byText(/color: teal/)]), ['@media (width < 60rem)']);
-    assert.equal(twoWrappers.has('@media (width < 60rem)'), false, 'two different wrappers: one line');
-    const unasked = contextWrappers(model([byText(/gap: 1rem/)]), []);
-    assert.equal(unasked.size, 0, 'a context not asked about is not answered');
+    // Keys: a top-level query keeps its chain; a nested one names its wrapper; a
+    // stylesheet's row names the stylesheet; each reads back into its parts.
+    const nestedKey = queryModel.placedContextKey('@media (width < 42rem)', { kind: 'nested', wrapper: '.developer_layout' });
+    assert.equal(queryModel.placedContextKey('@media (width < 42rem)', { kind: 'top-level' }), '@media (width < 42rem)', 'a top-level key is its chain');
+    assert.notEqual(nestedKey, '@media (width < 42rem)', 'the nested place has a key of its own');
+    assert.deepEqual(queryModel.nestedQueryOfKey(nestedKey), { wrapper: '.developer_layout', atContext: '@media (width < 42rem)' }, 'a nested key reads back');
+    const sourced = queryModel.sourcedContextKey(nestedKey, 'astro:/p/src/pages/index.astro');
+    assert.deepEqual(queryModel.splitSourcedKey(sourced), { placed: nestedKey, source: 'astro:/p/src/pages/index.astro' }, 'a sourced key reads back');
+    assert.deepEqual(queryModel.nestedQueryOfKey(sourced), { wrapper: '.developer_layout', atContext: '@media (width < 42rem)' }, 'and stays nested');
+    for (const plain of ['', 'bp:small', '@media (width < 42rem)', '@container card (width > 1px)']) {
+      assert.equal(queryModel.nestedQueryOfKey(plain), undefined, `${JSON.stringify(plain)} is not nested`);
+    }
+    assert.equal(
+      queryModel.renameQueryInContextKey(sourced, '@media (width < 42rem)', '@media (width < 40rem)'),
+      queryModel.sourcedContextKey(
+        queryModel.placedContextKey('@media (width < 40rem)', { kind: 'nested', wrapper: '.developer_layout' }),
+        'astro:/p/src/pages/index.astro',
+      ),
+      'a rename keeps the wrapper and the stylesheet',
+    );
+    assert.deepEqual(
+      queryModel.placementOfPath([
+        { kind: 'selector', selector: '.hero' },
+        { kind: 'atrule', name: 'media', params: 'print' },
+      ]),
+      {
+        kind: 'nested',
+        wrapper: '.hero',
+      },
+      'a typed path inside a rule is nested',
+    );
+    assert.deepEqual(
+      queryModel.placementOfPath([
+        { kind: 'atrule', name: 'media', params: 'print' },
+        { kind: 'selector', selector: '.hero' },
+      ]),
+      { kind: 'top-level' },
+      'a typed query around a rule is top-level',
+    );
+    assert.throws(() => queryModel.placedContextKey('width < 4px', { kind: 'top-level' }), /an at-context names a query/, 'a key is only made for a query');
+
+    // The same query at the top level and nested: two rows, the nested one two-line.
+    const topKey = queryModel.sourcedContextKey('@media (width < 42rem)', 'file:/p/a.css');
+    const nestedRow = queryModel.sourcedContextKey(nestedKey, 'file:/p/a.css');
+    const both = queryModel.buildStyleContexts(['', topKey, nestedRow], undefined, new Set([topKey, nestedRow]), new Set());
+    assert.equal(both.length, 3, 'Base, the top-level query and the nested one');
+    assert.deepEqual(
+      both.map((context) => context.wrapper),
+      [undefined, undefined, '.developer_layout'],
+      'only the nested row has a wrapper',
+    );
+    assert.deepEqual(
+      both.slice(1).map((context) => context.embedAtContext),
+      ['@media (width < 42rem)', '@media (width < 42rem)'],
+      'both write into the same query text',
+    );
+    // The same query in two stylesheets: two rows, each naming its stylesheet.
+    const otherFile = queryModel.sourcedContextKey('@media (width < 42rem)', 'astro:/p/src/components/Button.astro');
+    const twoSources = queryModel.buildStyleContexts(['', topKey, otherFile], undefined, new Set([topKey, otherFile]), new Set());
+    assert.deepEqual(
+      twoSources.slice(1).map((context) => context.source),
+      ['file:/p/a.css', 'astro:/p/src/components/Button.astro'],
+      'one row per stylesheet',
+    );
+    // Under two wrappers: two nested rows.
+    const underOther = queryModel.sourcedContextKey(
+      queryModel.placedContextKey('@media (width < 60rem)', { kind: 'nested', wrapper: '.other' }),
+      'file:/p/a.css',
+    );
+    const underThird = queryModel.sourcedContextKey(
+      queryModel.placedContextKey('@media (width < 60rem)', { kind: 'nested', wrapper: '.third' }),
+      'file:/p/a.css',
+    );
+    const twoWrappers = queryModel.buildStyleContexts(['', underOther, underThird], undefined, new Set([underOther, underThird]), new Set());
+    assert.deepEqual(
+      twoWrappers.slice(1).map((context) => context.wrapper),
+      ['.other', '.third'],
+      'one nested row per wrapper',
+    );
+
+    // Each context sees only the rules written at its place.
+    const model = (list) => ({ base: [], conditional: list.map((rule) => ({ rule, matchedSelectors: [] })), matchedRuleCount: list.length });
+    const mixed = model([byText(/gap: 1rem/), byText(/\.top/)]);
+    const nestedContext = both[2];
+    const topContext = both[1];
+    assert.deepEqual(
+      queryModel.modelForContext(mixed, nestedContext).conditional.map((entry) => entry.rule),
+      [byText(/gap: 1rem/)],
+      'the nested context sees its block',
+    );
+    assert.deepEqual(
+      queryModel.modelForContext(mixed, topContext).conditional.map((entry) => entry.rule),
+      [byText(/\.top/)],
+      'the top-level context sees its own',
+    );
+    assert.deepEqual([...queryModel.contextKeysWithStyles(mixed)].sort(), [nestedRow, topKey].sort(), 'styles are keyed by place and stylesheet');
+    const infos = queryModel.indexPlacedContexts(mixed, both);
+    assert.deepEqual(
+      infos.map((info) => info.wrapper),
+      [undefined, undefined, '.developer_layout'],
+      'the wrapper line comes from the place',
+    );
+
+    // A nested block found by its place and written into, never the first block
+    // spelling the query. The element IS the wrapper → a bare declaration.
+    const regionOf = (css) => queryModel.parseRegion({ start: 0, end: css.length, css, root: undefined, openTag: '<style>' });
+    const twoBlocks = regionOf(
+      '@media (width < 42rem) {\n  .top {\n    color: red;\n  }\n}\n.developer_layout {\n  @media (width < 42rem) {\n    gap: 1rem;\n  }\n}\n',
+    );
+    const where = { atContextKey: '@media (width < 42rem)', wrapper: '.developer_layout' };
+    assert.ok(queryModel.createRuleInPlacedQuery(twoBlocks, { ...where, selector: '.developer_layout' }, 'row-gap', { value: '2rem', important: false }));
+    assert.ok(queryModel.createRuleInPlacedQuery(twoBlocks, { ...where, selector: '.developer_title' }, 'color', { value: 'teal', important: false }));
+    assert.ok(queryModel.createRuleInPlacedQuery(twoBlocks, { ...where, selector: '.developer_layout .card' }, 'color', { value: 'navy', important: false }));
+    assert.equal(
+      twoBlocks.root.toString(),
+      '@media (width < 42rem) {\n  .top {\n    color: red;\n  }\n}\n.developer_layout {\n  @media (width < 42rem) {\n    gap: 1rem;\n    row-gap: 2rem;\n    .developer_title {\n      color: teal;\n    }\n    .card {\n      color: navy;\n    }\n  }\n}\n',
+      'the wrapper gets a bare declaration, a descendant a nested rule, and the top-level block is untouched',
+    );
+    const none = regionOf('.a {\n  color: red;\n}\n');
+    assert.ok(
+      queryModel.createRuleInPlacedQuery(none, { atContextKey: '@media (width < 42rem)', wrapper: '.developer_layout', selector: '.developer_layout' }, 'gap', {
+        value: '1rem',
+        important: false,
+      }),
+    );
+    assert.match(
+      none.root.toString(),
+      /\.developer_layout \{\s*@media \(width < 42rem\) \{\s*gap: 1rem;?\s*\}\s*\}/,
+      'a missing block is built inside its wrapper',
+    );
+
+    // ── Reach: the pigeon page's tree ──
+    // developer_layout > developer_content > developer_title; hero_title elsewhere.
+    const tree = {
+      root: { tag: 'body', classes: [], parent: undefined },
+      layout: { tag: 'div', classes: ['developer_layout'], parent: 'root' },
+      content: { tag: 'div', classes: ['developer_content'], parent: 'layout' },
+      title: { tag: 'h2', classes: ['developer_title', 'text-style-h1'], parent: 'content' },
+      wrapper: { tag: 'div', classes: ['button-wrapper'], parent: 'content' },
+      hero: { tag: 'h1', classes: ['hero_title'], parent: 'root' },
+    };
+    const view = (truncated) => ({
+      truncated,
+      parentKey: (key) => tree[key]?.parent,
+      childKeys: (key) => Object.keys(tree).filter((child) => tree[child].parent === key),
+      snapshot: async (key) =>
+        tree[key] === undefined
+          ? undefined
+          : {
+              tag: tree[key].tag,
+              webflowType: '',
+              id: undefined,
+              classes: tree[key].classes,
+              classList: tree[key].classes,
+              attributes: { class: tree[key].classes.join(' ') },
+            },
+    });
+    const target = (rootKey, options = {}) => ({
+      rootKey,
+      view: view(options.truncated ?? false),
+      ...(options.domMatched ? { domMatched: options.domMatched } : {}),
+    });
+    const reach = async (wrapper, at) => (await queryModel.reachOfWrapper(wrapper, at)).kind;
+    assert.equal(await reach('.developer_layout', target('title')), 'reaches', 'a descendant with no styles in the query is reached');
+    assert.equal(await reach('.developer_layout', target('layout')), 'reaches', 'the wrapper itself is reached');
+    assert.equal(await reach('.developer_layout', target('wrapper')), 'reaches', 'button-wrapper, deeper inside, is reached');
+    assert.equal(await reach('.developer_layout', target('hero')), 'misses', 'an element outside is not');
+    assert.equal(await reach('.developer_layout', target('hero', { truncated: true })), 'unknown', 'above a component edge a miss is undecided');
+    assert.equal(await reach('.developer_layout:hover', target('hero')), 'unknown', 'a pseudo-class wrapper is undecided without the page');
+    assert.equal(await reach('.developer_layout', undefined), 'unknown', 'no element: undecided');
+    const page = new Map([
+      ['.developer_layout', false],
+      ['.developer_layout *', false],
+    ]);
+    assert.equal(await reach('.developer_layout', target('title', { domMatched: page })), 'misses', 'the rendered page answers over the source tree');
+    assert.equal(
+      await reach(
+        '.developer_layout:hover',
+        target('hero', {
+          domMatched: new Map([
+            ['.developer_layout:hover', false],
+            ['.developer_layout:hover *', true],
+          ]),
+        }),
+      ),
+      'reaches',
+      'and decides a pseudo-class wrapper too',
+    );
+    assert.deepEqual(queryModel.wrapperProbes('.a, .b'), ['.a', '.a *', '.b', '.b *'], 'each list member is probed as itself and as an ancestor');
+    assert.deepEqual(
+      queryModel.nestedWrappersOf([byText(/gap: 1rem/), byText(/\.top/), byText(/color: blue/)]).sort(),
+      ['.developer_layout', '.developer_layout .card'],
+      "the wrappers asked about are the nested rules' own",
+    );
   }
 
   // ── 2 and 3b. The rows, in the real Select ────────────────────────────────
@@ -255,6 +462,63 @@ const settle = (milliseconds = 0) => new Promise((resolve) => setTimeout(resolve
     }
     await act(async () => root.unmount());
     host.remove();
+  }
+
+  // Source chips: every query row names its stylesheet; the same query in two
+  // stylesheets is two rows told apart by their chips; the slots still line up.
+  {
+    const tagged = [
+      { value: '', label: 'Base', marked: true },
+      { value: 'a', label: '@media (width < 50rem)', overline: '.button', tag: { label: 'Button', tone: 'component', icon: 'C' }, marked: true },
+      { value: 'b', label: '@media (width < 50rem)', tag: { label: 'index.astro', tone: 'embed', icon: 'E' } },
+      {
+        value: 'c',
+        label: '@media (width < 50rem)',
+        tag: { label: 'global.css', tone: 'embed', icon: 'E' },
+        action: { icon: 'P', label: 'Edit', onSelect: () => {} },
+      },
+    ];
+    const { host, root } = await mount('', tagged);
+    const rows = [...host.querySelectorAll('.u-select-option')];
+    const tagOf = (row) => row.querySelector('.u-select-tag .u-select-tag-label')?.textContent;
+    assert.deepEqual(rows.map(tagOf), [undefined, 'Button', 'index.astro', 'global.css'], 'each query row carries its source chip');
+    assert.equal(new Set(rows.slice(1).map(tagOf)).size, 3, 'one query in three stylesheets reads as three rows');
+    for (const row of rows) {
+      assert.deepEqual(trailing(row), ['u-select-dot-slot', 'u-select-check'], `${row.textContent}: the slots still end the row`);
+    }
+    const nestedRow = rows[1];
+    assert.deepEqual(
+      [...nestedRow.querySelector('.u-select-overline').children].map((child) => child.className),
+      ['u-select-tag', 'u-select-overline-text'],
+      'the chip leads the first line, the wrapper follows',
+    );
+    assert.equal(nestedRow.querySelector('.u-select-tag').dataset.tone, 'component', 'the chip carries its tone');
+    assert.equal(nestedRow.querySelector('.u-select-label-line').textContent, '@media (width < 50rem)', 'the query stays the main line');
+    assert.equal(rows[2].querySelector('.u-select-overline-text') ?? undefined, undefined, 'a top-level row has the chip alone on its first line');
+    await act(async () => root.unmount());
+    host.remove();
+    const nestedTrigger = await mount('a', tagged);
+    assert.equal(
+      nestedTrigger.host.querySelector('.u-select-button .u-select-tag-label')?.textContent,
+      'Button',
+      'a two-line trigger shows the chip beside the wrapper',
+    );
+    await act(async () => nestedTrigger.root.unmount());
+    nestedTrigger.host.remove();
+    const topTrigger = await mount('b', tagged);
+    assert.equal(
+      topTrigger.host.querySelector('.u-select-button .u-select-overline') ?? undefined,
+      undefined,
+      'a one-line trigger does not grow a line for the chip',
+    );
+    await act(async () => topTrigger.root.unmount());
+    topTrigger.host.remove();
+    const css = fs.readFileSync(repoPath('src/features/style/utilities.css'), 'utf8');
+    const chip = /\.u-select-tag \{([^}]*)\}/.exec(css);
+    assert.ok(chip, 'the chip has its own rule');
+    assert.doesNotMatch(chip[1], /border:/, 'a fill, never a border');
+    assert.match(chip[1], /background:/, 'it is a filled chip');
+    assert.match(css, /\.u-select-tag-label \{[^}]*text-overflow: ellipsis;/, 'a long stylesheet name truncates');
   }
 
   // Both lines start at one left edge. jsdom lays nothing out, so this reads the

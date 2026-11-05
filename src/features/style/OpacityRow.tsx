@@ -6,7 +6,8 @@ import { useComputedValue } from './model/computedStyle';
 import { handleArrowStep } from './model/numberStep';
 import VariableConnect from './VariableConnect';
 import { useExternalDraft } from './model/fieldHooks';
-import { displayOf } from './model/styleDisplay';
+import { displayOf, keepImportant, parseImportant, withImportant } from './model/styleDisplay';
+import { assert } from '../../../shared/core/assert';
 import { type SetProp, type Props, stepInPlace, EffLabel } from './EffectsKit';
 
 // ─────────────────────────── Rows ───────────────────────────
@@ -45,6 +46,22 @@ function opacityAmount(value: number): number {
   return Math.round(value * 10_000) / 10_000;
 }
 
+/** One opacity write: the amount, and whether it is `!important`. The slider
+ *  keeps the flag the property has; the field takes it from its own text. */
+export interface OpacityWrite {
+  readonly opacity: OpacityValue;
+  readonly important: boolean;
+}
+
+/** The field's text, split into the opacity it names (if it names a number)
+ *  and its flag — the field shows `0.5 !important` like any other field. */
+export function parseOpacityField(text: string): { readonly opacity: OpacityValue | undefined; readonly value: string; readonly important: boolean } {
+  const typed = parseImportant(text);
+  const opacity = parseOpacity(typed.value);
+  assert(!/!\s*important/i.test(typed.value), 'parseOpacityField: the flag is split off the value');
+  return { opacity, value: typed.value, important: typed.important };
+}
+
 /** The field and CSS retain percent only when that unit was explicitly authored. */
 export function opacityText(opacity: OpacityValue): string {
   const value = clampOpacity(opacity.value);
@@ -69,11 +86,14 @@ export function OpacityRow({ props }: { props: Props }) {
   // written, so the variable chip shows and editing around it doesn't flatten it.
   const asNumber = authored !== undefined || !raw;
   // Drag previews live (DragSlider already throttles the writes); release commits.
-  const live = (next: OpacityValue) => liveSetProp('opacity', opacityText(next), false);
-  const commit = (next: OpacityValue) => setProp('opacity', opacityText(next), false);
+  const live = (next: OpacityWrite) => liveSetProp('opacity', opacityText(next.opacity), next.important);
+  const commit = (next: OpacityWrite) => setProp('opacity', opacityText(next.opacity), next.important);
+  // The slider has no text to delete the flag from, so it keeps the one shown.
+  const { important } = display;
+  const sliderText = (value: number) => withImportant({ value: opacityText({ value, unit }), important });
 
   // The number field's local draft: typing previews live; blur / Enter commits.
-  const fieldText = asNumber ? opacityText({ value: opacity.value, unit }) : raw;
+  const fieldText = withImportant({ value: asNumber ? opacityText({ value: opacity.value, unit }) : raw, important });
   const field = useExternalDraft(fieldText);
 
   return (
@@ -89,15 +109,15 @@ export function OpacityRow({ props }: { props: Props }) {
           ariaLabel="Opacity"
           onPreview={(value) => {
             if (!field.focused.current) {
-              field.setDraft(opacityText({ value, unit }));
+              field.setDraft(sliderText(value));
             }
           }}
-          onInput={(value) => live({ value, unit })}
+          onInput={(value) => live({ opacity: { value, unit }, important })}
           onCommit={(value) => {
             if (!field.focused.current) {
-              field.setDraft(opacityText({ value, unit }));
+              field.setDraft(sliderText(value));
             }
-            commit({ value, unit });
+            commit({ opacity: { value, unit }, important });
           }}
         />
         <OpacityNumberField
@@ -106,6 +126,7 @@ export function OpacityRow({ props }: { props: Props }) {
           focusedRef={field.focused}
           fieldText={fieldText}
           opacity={{ value: opacity.value, unit }}
+          important={important}
           busy={busy}
           live={live}
           commit={commit}
@@ -124,14 +145,23 @@ export interface OpacityFieldProps {
   focusedRef: React.MutableRefObject<boolean>;
   fieldText: string;
   opacity: OpacityValue;
+  /** Whether the property is `!important` now — a variable pick keeps it. */
+  important: boolean;
   busy: boolean;
-  live: (value: OpacityValue) => void;
-  commit: (value: OpacityValue) => void;
+  live: (value: OpacityWrite) => void;
+  commit: (value: OpacityWrite) => void;
   setProp: SetProp;
 }
 
 export function OpacityNumberField(props: OpacityFieldProps) {
-  const { text, setText, focusedRef, busy, live, setProp } = props;
+  const { text, setText, focusedRef, busy, live, setProp, important } = props;
+  // Typing and stepping preview what the text names, flag and all.
+  const liveText = (next: string) => {
+    const typed = parseOpacityField(next);
+    if (typed.opacity !== undefined) {
+      live({ opacity: typed.opacity, important: typed.important });
+    }
+  };
   const { scrub, commitTyped } = useOpacityField(props);
   return (
     <div className="embed-editor_field embed-editor_grad-num embed-editor_opacity-num">
@@ -140,7 +170,10 @@ export function OpacityNumberField(props: OpacityFieldProps) {
         ariaLabel="Connect Opacity to a variable"
         disabled={busy}
         prop="opacity"
-        onPick={(binding) => setProp('opacity', binding, false)}
+        onPick={(binding) => {
+          const kept = keepImportant(binding, { important });
+          setProp('opacity', kept.value, kept.important);
+        }}
       >
         <input
           {...scrub.input}
@@ -155,10 +188,7 @@ export function OpacityNumberField(props: OpacityFieldProps) {
           }}
           onChange={(event) => {
             setText(event.target.value);
-            const value = parseOpacity(event.target.value);
-            if (value !== undefined) {
-              live(value);
-            }
+            liveText(event.target.value);
           }}
           onBlur={() => {
             focusedRef.current = false;
@@ -170,10 +200,7 @@ export function OpacityNumberField(props: OpacityFieldProps) {
               return;
             }
             setText(stepped);
-            const value = parseOpacity(stepped);
-            if (value !== undefined) {
-              live(value);
-            }
+            liveText(stepped);
           }}
         />
       </VariableConnect>
@@ -186,11 +213,11 @@ export function OpacityNumberField(props: OpacityFieldProps) {
 export function useOpacityField({ text, setText, fieldText, opacity, busy, live, commit, setProp }: OpacityFieldProps) {
   const commitScrub = (next: string) => {
     setText(next);
-    const value = parseOpacity(next);
-    if (value !== undefined) {
-      commit(value);
+    const typed = parseOpacityField(next);
+    if (typed.opacity !== undefined) {
+      commit({ opacity: typed.opacity, important: typed.important });
     } else {
-      setText(opacityText(opacity));
+      setText(fieldText);
     }
   };
   const scrub = useScrub({
@@ -199,9 +226,9 @@ export function useOpacityField({ text, setText, fieldText, opacity, busy, live,
     stepScale: opacity.unit === 'percent' ? 1 : 0.01,
     onPreview: setText,
     onInput: (next) => {
-      const value = parseOpacity(next);
-      if (value !== undefined) {
-        live(value);
+      const typed = parseOpacityField(next);
+      if (typed.opacity !== undefined) {
+        live({ opacity: typed.opacity, important: typed.important });
       }
     },
     onCommit: commitScrub,
@@ -212,14 +239,15 @@ export function useOpacityField({ text, setText, fieldText, opacity, busy, live,
     if (trimmed === fieldText) {
       return;
     }
-    const value = parseOpacity(trimmed);
     // A number becomes an opacity; anything else (a var(), a calc()) is
-    // written as it stands, so a variable typed in here survives.
-    if (value !== undefined) {
-      commit(value);
-      setText(opacityText(value));
-    } else if (trimmed) {
-      setProp('opacity', trimmed, false);
+    // written as it stands, so a variable typed in here survives. The flag is
+    // whatever the text says: deleting `!important` from it removes it.
+    const typed = parseOpacityField(trimmed);
+    if (typed.opacity !== undefined) {
+      commit({ opacity: typed.opacity, important: typed.important });
+      setText(withImportant({ value: opacityText(typed.opacity), important: typed.important }));
+    } else if (typed.value) {
+      setProp('opacity', typed.value, typed.important);
     } else {
       setText(fieldText);
     }
@@ -232,19 +260,22 @@ function stepOpacityInPlace(event: React.KeyboardEvent<HTMLInputElement>): strin
     stepInPlace(event);
     return undefined;
   }
-  const scale = event.currentTarget.value.trim().endsWith('%') ? 1 : 0.01;
+  const scale = parseImportant(event.currentTarget.value).value.endsWith('%') ? 1 : 0.01;
   const stepped = handleArrowStep(event, 0, scale);
   if (stepped === undefined) {
     return undefined;
   }
-  const opacity = parseOpacity(stepped.text);
-  if (opacity === undefined) {
+  // The step changes the number; the flag after it stays in the text.
+  const typed = parseOpacityField(stepped.text);
+  if (typed.opacity === undefined) {
     return undefined;
   }
   event.preventDefault();
-  const text = opacityText(opacity);
+  const amount = opacityText(typed.opacity);
+  const text = withImportant({ value: amount, important: typed.important });
   const input = event.currentTarget;
   input.value = text;
-  input.setSelectionRange(text.length, text.length);
+  // The caret stays at the end of the number, before any flag, ready for the next step.
+  input.setSelectionRange(amount.length, amount.length);
   return text;
 }

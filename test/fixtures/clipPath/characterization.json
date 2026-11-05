@@ -3219,12 +3219,12 @@
       }
      }
     },
-    "css": "inset(10px 20% 10px 20%)"
+    "css": "inset(10px 20%)"
    },
-   "formatted": "inset(10px 20% 10px 20%)",
+   "formatted": "inset(10px 20%)",
    "reparsed": {
     "kind": "raw",
-    "value": "inset(10px 20% 10px 20%)",
+    "value": "inset(10px 20%)",
     "preset": "Inset",
     "editable": {
      "kind": "inset",
@@ -3247,7 +3247,7 @@
     }
    },
    "preview": "inset(10% 20% 10% 20%)",
-   "previewNoSize": "inset(10px 20% 10px 20%)",
+   "previewNoSize": "inset(10px 20%)",
    "highlights": [
     {
      "from": 6,
@@ -3255,6 +3255,9 @@
      "handles": [
       {
        "kind": "inset-top"
+      },
+      {
+       "kind": "inset-bottom"
       }
      ],
      "colorClass": "clip-path_color-a",
@@ -3266,32 +3269,13 @@
      "handles": [
       {
        "kind": "inset-right"
-      }
-     ],
-     "colorClass": "clip-path_color-b",
-     "className": "clip-path_code-token clip-path_color-b"
-    },
-    {
-     "from": 15,
-     "to": 19,
-     "handles": [
-      {
-       "kind": "inset-bottom"
-      }
-     ],
-     "colorClass": "clip-path_color-c",
-     "className": "clip-path_code-token clip-path_color-c"
-    },
-    {
-     "from": 20,
-     "to": 23,
-     "handles": [
+      },
       {
        "kind": "inset-left"
       }
      ],
-     "colorClass": "clip-path_color-d",
-     "className": "clip-path_code-token clip-path_color-d"
+     "colorClass": "clip-path_color-b",
+     "className": "clip-path_code-token clip-path_color-b"
     }
    ],
    "tokens": [
@@ -3302,14 +3286,6 @@
     {
      "from": 11,
      "to": 14
-    },
-    {
-     "from": 15,
-     "to": 19
-    },
-    {
-     "from": 20,
-     "to": 23
     }
    ],
    "preset": "Inset",
@@ -3711,12 +3687,12 @@
       }
      }
     },
-    "css": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5px 6px)"
+    "css": "inset(0 round 10% 20% 30% 40% / 5px 6px)"
    },
-   "formatted": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5px 6px)",
+   "formatted": "inset(0 round 10% 20% 30% 40% / 5px 6px)",
    "reparsed": {
     "kind": "raw",
-    "value": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5px 6px)",
+    "value": "inset(0 round 10% 20% 30% 40% / 5px 6px)",
     "preset": "Inset",
     "editable": {
      "kind": "inset",
@@ -3769,55 +3745,31 @@
     }
    },
    "preview": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5% 6% 5% 6%)",
-   "previewNoSize": "inset(0% 0% 0% 0% round 10% 20% 30% 40% / 5px 6px)",
+   "previewNoSize": "inset(0 round 10% 20% 30% 40% / 5px 6px)",
    "highlights": [
     {
      "from": 6,
-     "to": 8,
+     "to": 7,
      "handles": [
       {
        "kind": "inset-top"
+      },
+      {
+       "kind": "inset-right"
+      },
+      {
+       "kind": "inset-bottom"
+      },
+      {
+       "kind": "inset-left"
       }
      ],
      "colorClass": "clip-path_color-a",
      "className": "clip-path_code-token clip-path_color-a"
     },
     {
-     "from": 9,
-     "to": 11,
-     "handles": [
-      {
-       "kind": "inset-right"
-      }
-     ],
-     "colorClass": "clip-path_color-b",
-     "className": "clip-path_code-token clip-path_color-b"
-    },
-    {
-     "from": 12,
-     "to": 14,
-     "handles": [
-      {
-       "kind": "inset-bottom"
-      }
-     ],
-     "colorClass": "clip-path_color-c",
-     "className": "clip-path_code-token clip-path_color-c"
-    },
-    {
-     "from": 15,
+     "from": 14,
      "to": 17,
-     "handles": [
-      {
-       "kind": "inset-left"
-      }
-     ],
-     "colorClass": "clip-path_color-d",
-     "className": "clip-path_code-token clip-path_color-d"
-    },
-    {
-     "from": 24,
-     "to": 27,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3828,8 +3780,8 @@
      "className": "clip-path_code-token clip-path_color-e"
     },
     {
-     "from": 28,
-     "to": 31,
+     "from": 18,
+     "to": 21,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3840,8 +3792,8 @@
      "className": "clip-path_code-token clip-path_color-f"
     },
     {
-     "from": 32,
-     "to": 35,
+     "from": 22,
+     "to": 25,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3852,8 +3804,8 @@
      "className": "clip-path_code-token clip-path_color-g"
     },
     {
-     "from": 36,
-     "to": 39,
+     "from": 26,
+     "to": 29,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3864,8 +3816,8 @@
      "className": "clip-path_code-token clip-path_color-h"
     },
     {
-     "from": 42,
-     "to": 45,
+     "from": 32,
+     "to": 35,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3880,8 +3832,8 @@
      "className": "clip-path_code-token clip-path_color-e"
     },
     {
-     "from": 46,
-     "to": 49,
+     "from": 36,
+     "to": 39,
      "handles": [
       {
        "kind": "inset-radius",
@@ -3899,27 +3851,23 @@
    "tokens": [
     {
      "from": 6,
-     "to": 8
+     "to": 7
     },
     {
-     "from": 9,
-     "to": 11
-    },
-    {
-     "from": 12,
-     "to": 14
-    },
-    {
-     "from": 15,
+     "from": 14,
      "to": 17
     },
     {
-     "from": 24,
-     "to": 27
+     "from": 18,
+     "to": 21
     },
     {
-     "from": 28,
-     "to": 31
+     "from": 22,
+     "to": 25
+    },
+    {
+     "from": 26,
+     "to": 29
     },
     {
      "from": 32,
@@ -3928,14 +3876,6 @@
     {
      "from": 36,
      "to": 39
-    },
-    {
-     "from": 42,
-     "to": 45
-    },
-    {
-     "from": 46,
-     "to": 49
     }
    ],
    "preset": "Inset",

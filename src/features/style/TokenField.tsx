@@ -7,6 +7,7 @@ import type { MutableRefObject, RefObject } from 'react';
 import { caretOffset, highlightCss, setCaretOffset, stepNumberAt, stepSize } from './model/cssCode';
 import { isHTMLElementInDocument } from './model/dom';
 import { assert } from '../../../shared/core/assert';
+import { caretPlacementAt, placeCaret } from './tokenFieldCaret';
 import { EMPTY_FIELD_HISTORY, type FieldHistory, type FieldSnapshot, recordEdit, redoStep, undoStep } from './tokenFieldHistory';
 
 // ── Inline token editor ──────────────────────────────────────────────────────
@@ -376,10 +377,45 @@ export function TokenField({
         if (chip !== undefined) {
           event.preventDefault();
           onChipClick(chip);
+          return;
         }
+        if (disabled) {
+          return;
+        }
+        tokenFieldPress(event.currentTarget, event);
       }}
     />
   );
+}
+
+// A press on the field that is not on a chip. Only a plain single press is
+// placed here: a double press selects a word, and a modified one extends or
+// adds to a selection, and those stay the browser's (tokenFieldCaret.ts).
+export function tokenFieldPress(
+  field: HTMLElement,
+  press: Pick<MouseEvent, 'button' | 'detail' | 'shiftKey' | 'metaKey' | 'ctrlKey' | 'altKey' | 'clientX' | 'clientY' | 'preventDefault'>,
+): void {
+  if (press.button !== 0) {
+    return;
+  }
+  if (press.detail > 1) {
+    return;
+  }
+  if (press.shiftKey || press.metaKey || press.ctrlKey || press.altKey) {
+    return;
+  }
+  const placement = caretPlacementAt(field, { x: press.clientX, y: press.clientY });
+  if (placement.kind === 'browser') {
+    return;
+  }
+  // The press is answered here, so the browser's own placement must not run
+  // after it; focus is then given by hand, since preventing the press keeps it.
+  press.preventDefault();
+  if (field.ownerDocument.activeElement !== field) {
+    field.focus();
+  }
+  placeCaret(field, placement.target);
+  assert(field.ownerDocument.activeElement === field, 'tokenFieldPress: the pressed field holds focus');
 }
 
 // A chip the person pressed: its place among the field's chips, and its variable.

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
 import { ChevronIcon, tooltipArrowStyle } from './components/MenuParts';
-import { parseImportant } from './model/styleDisplay';
+import { parseImportant, withImportant } from './model/styleDisplay';
 
 // The flex Direction / flow control — shown only when `display` is flex. Two fixed
 // segments (→ single row, ↓ single column) plus a third slot that shows whichever
@@ -230,8 +230,6 @@ const TOOLTIP_DELAY_MS = 500;
 
 // ─────────────────────────── Custom value helpers ───────────────────────────
 
-const joinImportant = (parsed: { readonly value: string; readonly important: boolean }) => (parsed.important ? `${parsed.value} !important` : parsed.value);
-
 function CustomField({
   value,
   important,
@@ -245,11 +243,11 @@ function CustomField({
   inputRef: React.RefObject<HTMLInputElement>;
   onCommit: (value: string, important: boolean) => void;
 }) {
-  const [draft, setDraft] = useState(joinImportant({ value, important }));
+  const [draft, setDraft] = useState(withImportant({ value, important }));
   const focused = useRef(false);
   useEffect(() => {
     if (!focused.current) {
-      setDraft(joinImportant({ value, important }));
+      setDraft(withImportant({ value, important }));
     }
   }, [value, important]);
   const commit = () => {

@@ -14,7 +14,7 @@ import VariableConnect from './VariableConnect';
 import type { Contributor, ResolvedProp } from './model/resolved';
 import { commitInPlace } from './model/commitInPlace';
 import { useDebouncedLive } from './model/fieldHooks';
-import { displayOf, parseImportant, type Display } from './model/styleDisplay';
+import { displayOf, displayText, keepImportant, parseImportant, withImportant, type Display } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
@@ -122,7 +122,16 @@ export function LivePropField({
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <VariableConnect code ariaLabel={`Connect ${label} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+      <VariableConnect
+        code
+        ariaLabel={`Connect ${label} to a variable`}
+        disabled={busy}
+        prop={prop}
+        onPick={(binding) => {
+          const kept = keepImportant(binding, display);
+          setProp(prop, kept.value, kept.important);
+        }}
+      >
         <input
           {...field.scrub.input}
           className="u-input embed-editor_size-input"
@@ -159,7 +168,7 @@ export function useLivePropEditing({
   clearProp: ClearProp;
   liveSetProp: LiveSetProp;
 }) {
-  const external = display.present ? withImportant(display) : '';
+  const external = displayText(display);
   const { draft, setDraft, focused, cleared } = useFieldDraft(external, { busy });
   const { cancelLive, liveNow, scheduleLive } = useDebouncedLive((value, important) => liveSetProp(prop, value, important));
   const commit = (text = draft) => {
@@ -212,7 +221,8 @@ export function useLivePropEditing({
 
 // ─────────────────── Shared field plumbing ───────────────────
 
-export const withImportant = ({ value, important }: { value: string; important: boolean }) => (important ? `${value} !important` : value);
+// The join every field shares (model/styleDisplay.ts), re-exported for the size rows.
+export { withImportant };
 
 // A draft that follows `value` while the field is not focused, so an edit made
 // elsewhere shows up without overwriting what someone is typing.

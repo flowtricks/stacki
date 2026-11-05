@@ -11,6 +11,11 @@ export type SelectOption<T extends string> = {
    *  trigger alike (e.g. the selector a nested query is written inside). Absent
    *  means the option is one line. Not used for type-ahead: the label names it. */
   overline?: string;
+  /** A small chip at the start of the first line saying where the option comes
+   *  from (the stylesheet a query is written in). It takes the first line when
+   *  there is no overline. In the closed trigger it shows only beside an
+   *  overline, so a one-line trigger never grows a second line for it. */
+  tag?: SelectTag;
   /** Optional leading icon (e.g. a preset glyph). */
   icon?: ReactNode;
   /** Show a trailing status dot (white on the selected row, accent otherwise). */
@@ -35,6 +40,10 @@ export type SelectOption<T extends string> = {
    *  rather than picking it. Shown on the hovered/active row only. */
   action?: { icon: ReactNode; label: string; onSelect: () => void };
 };
+
+/** An option's source chip: its name, an icon, and a tone token the consumer's
+ *  CSS colours it by (`data-tone`). */
+export type SelectTag = { readonly label: string; readonly icon?: ReactNode; readonly tone?: string };
 
 export type Props<T extends string> = {
   value: T;

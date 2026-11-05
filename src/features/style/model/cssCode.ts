@@ -21,6 +21,9 @@ const HEX = /^#[0-9a-fA-F]{3,8}/;
 const NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/;
 const UNIT = /^(?:[A-Za-z]+|%)/;
 const IDENT = /^[A-Za-z_][\w-]*/;
+// The flag after a value. It gets its own run so a field can draw it quieter
+// than the value it qualifies, and so it never reads as a stray `!` and an ident.
+const IMPORTANT = /^!\s*important\b/i;
 
 /**
  * Split a CSS value into coloured runs. Unknown characters (punctuation,
@@ -53,6 +56,9 @@ export function cssTokens(value: string): CssToken[] {
       consumedLength = match[0].length;
     } else if ((match = rest.match(FUNCTION) ?? undefined)) {
       push('fn', match[0]);
+      consumedLength = match[0].length;
+    } else if ((match = rest.match(IMPORTANT) ?? undefined)) {
+      push('important', match[0]);
       consumedLength = match[0].length;
     } else if ((match = rest.match(HEX) ?? undefined)) {
       push('hex', match[0]);

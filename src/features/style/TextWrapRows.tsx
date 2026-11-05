@@ -5,8 +5,9 @@ import { useState } from 'react';
 import Select, { type SelectOption } from './components/Select';
 import SegmentedControl from './components/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
-import { displayOf } from './model/styleDisplay';
-import { type Props, joinImportant, CUSTOM, PropLabel, LiveInput, useSegCustomFocus } from './TypographyKit';
+import { displayOf, withImportant } from './model/styleDisplay';
+import ImportantMark from './components/ImportantMark';
+import { type Props, CUSTOM, PropLabel, LiveInput, useSegCustomFocus } from './TypographyKit';
 
 // ─────────────── Breaking (word-break / white-space) ───────────────
 
@@ -77,7 +78,8 @@ export function EnumSelect(props: EnumSelectProps) {
     choices.map(([value]) => value),
     fallback,
   );
-  const customMode = forceCustom || (display.present && !matched);
+  // A flagged value opens the custom field, whose text shows `!important`.
+  const customMode = forceCustom || (display.present && !matched) || display.important;
 
   const options: SelectOption<string>[] = [...choices.map(([value, optionLabel]) => ({ value, label: optionLabel })), { value: CUSTOM, label: 'Custom…' }];
 
@@ -110,7 +112,7 @@ export function EnumSelect(props: EnumSelectProps) {
         customMode ? (
           <LiveInput
             inputRef={inputRef}
-            value={display.present ? joinImportant(display) : 'unset'}
+            value={display.present ? withImportant(display) : 'unset'}
             busy={busy}
             placeholder={prop}
             ariaLabel={ariaLabel}
@@ -255,16 +257,20 @@ export function TruncateRow({ read, busy, setProp, clearProp, onProvenance, onSe
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <SegmentedControl
-        options={[
-          { value: 'clip', label: 'Clip' },
-          { value: 'ellipsis', label: 'Ellipsis' },
-        ]}
-        value={current}
-        onChange={(value) => setProp('text-overflow', value, false)}
-        ariaLabel="Truncate"
-        disabled={busy}
-      />
+      {/* Two segments and no custom field: a flagged value is marked, and a
+          pick keeps the flag, since there is no text to delete it from. */}
+      <ImportantMark important={display.important}>
+        <SegmentedControl
+          options={[
+            { value: 'clip', label: 'Clip' },
+            { value: 'ellipsis', label: 'Ellipsis' },
+          ]}
+          value={current}
+          onChange={(value) => setProp('text-overflow', value, display.important)}
+          ariaLabel="Truncate"
+          disabled={busy}
+        />
+      </ImportantMark>
     </div>
   );
 }

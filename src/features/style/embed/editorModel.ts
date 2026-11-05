@@ -16,6 +16,7 @@ import {
   createNestedRule,
   createRuleInMedia,
   createRuleInQuery,
+  createRuleInPlacedQuery,
   listAtRuleBlocks,
   parseNestedInput,
   type NestStep,
@@ -357,6 +358,47 @@ export function embedWriteTarget(
   return embedDocument && region ? { embedDocument, region } : undefined;
 }
 
+/**
+ * Where a new rule in a query context goes. A context listed from a stylesheet
+ * names it (model/queryWrapper.ts): that stylesheet, at the region holding the
+ * context's block. Otherwise, for a nested context, the chosen stylesheet when it
+ * holds the block, else the first that does; else the chosen stylesheet, where
+ * the block is then built. Undefined only when there is no stylesheet at all.
+ */
+export function placedQueryTarget(
+  chosen: { embedDocument: EmbedDocument; region: EmbedRegion } | undefined,
+  documents: ReadonlyMap<string, EmbedDocument>,
+  query: { readonly atContextKey: string; readonly wrapper: string | undefined; readonly source: string | undefined },
+): { embedDocument: EmbedDocument; region: EmbedRegion } | undefined {
+  const holds = (region: EmbedRegion) =>
+    listAtRuleBlocks(region).some((block) => {
+      if (block.atContext.join(' › ') !== query.atContextKey) {
+        return false;
+      }
+      if (query.wrapper === undefined) {
+        return block.placement.kind === 'top-level';
+      }
+      return block.placement.kind === 'nested' && block.placement.wrapper === query.wrapper;
+    });
+  const named = query.source === undefined ? undefined : documents.get(query.source);
+  if (named !== undefined) {
+    const region = named.regions.find(holds) ?? named.regions[0];
+    return region === undefined ? chosen : { embedDocument: named, region };
+  }
+  if (query.wrapper === undefined) {
+    return chosen;
+  }
+  const ordered =
+    chosen === undefined ? [...documents.values()] : [chosen.embedDocument, ...[...documents.values()].filter((document) => document !== chosen.embedDocument)];
+  for (const embedDocument of ordered) {
+    const region = embedDocument.regions.find(holds);
+    if (region !== undefined) {
+      return { embedDocument, region };
+    }
+  }
+  return chosen;
+}
+
 // Create the rule for a write: typed nested syntax writes real nested source; a
 // Webflow-breakpoint context with no equivalent embed query writes into a synthesized
 // @media block; otherwise the embed's base, or its existing query block (or a new one).
@@ -366,14 +408,21 @@ export function createRuleForWrite(
     nested: NestStep[] | undefined;
     bpMedia: string | undefined;
     embedContext: string | undefined;
+    /** The selector the chosen context's query is nested inside, if it is. */
+    wrapper: string | undefined;
     selector: string;
     write: PropWrite;
   },
 ): boolean {
-  const { nested, bpMedia, embedContext, selector } = where;
+  const { nested, bpMedia, embedContext, selector, wrapper } = where;
   const { prop, value, important } = where.write;
   if (nested) {
     return createNestedRule(region, nested, prop, { value, important });
+  }
+  // A nested context writes into ITS block, never the first block that spells
+  // the same query (model/queryWrapper.ts).
+  if (wrapper !== undefined && embedContext) {
+    return createRuleInPlacedQuery(region, { atContextKey: embedContext, wrapper, selector }, prop, { value, important });
   }
   if (bpMedia) {
     return createRuleInMedia(region, bpMedia, selector, prop, { value, important });
@@ -381,7 +430,7 @@ export function createRuleForWrite(
   if (!embedContext) {
     return createRuleAtRoot(region, selector, prop, { value, important });
   }
-  const block = listAtRuleBlocks(region).find((entry) => entry.atContext.join(' › ') === embedContext);
+  const block = listAtRuleBlocks(region).find((entry) => entry.atContext.join(' › ') === embedContext && entry.placement.kind === 'top-level');
   return block
     ? createRuleInAtRule(block.node, selector, prop, { value, important })
     : createRuleInQuery(region, embedContext, selector, prop, { value, important });

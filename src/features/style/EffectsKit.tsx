@@ -18,7 +18,8 @@ import VariableConnect from './VariableConnect';
 import type { Contributor, ResolvedProp } from './model/resolved';
 import { commitInPlace } from './model/commitInPlace';
 import { openAfterRemoval, useExternalDraft } from './model/fieldHooks';
-import { displayOf, parseImportant } from './model/styleDisplay';
+import { displayOf, displayText, keepImportant, parseImportant } from './model/styleDisplay';
+import ImportantMark from './components/ImportantMark';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -115,16 +116,19 @@ export function draftInputHandlers({
 }
 
 // Write a whole property value: live writes skip an empty value; a committed empty
-// value clears the property.
-export function writeValue(prop: string, value: string, options: WriteOptions, writers: Pick<Props, 'setProp' | 'clearProp' | 'liveSetProp'>) {
+// value clears the property. A layered list (shadows, filters, transforms,
+// transitions) is edited row by row, with no text to delete `!important` from,
+// so the write keeps the flag the property already has.
+export function writeValue(prop: string, value: string, options: WriteOptions, writers: Pick<Props, 'read' | 'setProp' | 'clearProp' | 'liveSetProp'>) {
+  const kept = keepImportant(value, displayOf(writers.read(prop)));
   if (options.live) {
-    if (value) {
-      writers.liveSetProp(prop, value, false);
+    if (kept.value) {
+      writers.liveSetProp(prop, kept.value, kept.important);
     }
     return;
   }
-  if (value) {
-    writers.setProp(prop, value, false);
+  if (kept.value) {
+    writers.setProp(prop, kept.value, kept.important);
   } else {
     writers.clearProp(prop);
   }
@@ -235,8 +239,7 @@ export function LiveText({ prop, placeholder, props, dragging }: { prop: string;
   const { read, busy, setProp, clearProp, liveSetProp } = props;
   const display = displayOf(read(prop));
   // `dragging` is what a swatch beside this field is showing mid-drag.
-  const written = display.important ? `${display.value} !important` : display.value;
-  const external = dragging ?? (display.present ? written : '');
+  const external = dragging ?? displayText(display);
   const computed = useStyleHint(external ? '' : prop);
   const { draft, setDraft, focused } = useExternalDraft(external);
   // Undelayed live write for the scrub, which throttles its own — see useScrub.
@@ -275,7 +278,10 @@ export function LiveText({ prop, placeholder, props, dragging }: { prop: string;
       ariaLabel={`Connect ${prop} to a variable`}
       disabled={busy}
       prop={prop}
-      onPick={(binding) => setProp(prop, binding, false)}
+      onPick={(binding) => {
+        const kept = keepImportant(binding, display);
+        setProp(prop, kept.value, kept.important);
+      }}
     >
       <input
         {...scrub.input}
@@ -434,7 +440,15 @@ export function CustomInput(props: CustomInputProps) {
     setProp(prop, parsed.value, parsed.important);
   };
   return (
-    <VariableConnect ariaLabel={`Connect ${prop} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+    <VariableConnect
+      ariaLabel={`Connect ${prop} to a variable`}
+      disabled={busy}
+      prop={prop}
+      onPick={(binding) => {
+        const kept = keepImportant(binding, parseImportant(value));
+        setProp(prop, kept.value, kept.important);
+      }}
+    >
       <input
         className="u-input u-select-custom-input"
         value={draft}
@@ -494,19 +508,23 @@ export function PresetSelectRow(row: PresetSelectRowProps) {
   );
   const isPreset = !current || presets.has(current);
   const [forceCustom, setForceCustom] = useState(false);
-  const customMode = allowCustom && (forceCustom || (display.present && !isPreset));
+  // A flagged value opens the custom field, whose text shows `!important` —
+  // the convention the panel's segmented bars follow. A select with no custom
+  // field marks the flag instead, and its picks keep it: there is no text to
+  // delete the flag from, so a pick that dropped it would change more than asked.
+  const customMode = allowCustom && (forceCustom || (display.present && !isPreset) || display.important);
+  const keptImportant = !allowCustom && display.important;
   const pick = (choice: string) => {
     if (choice === CUSTOM) {
       setForceCustom(true);
       return;
     }
     setForceCustom(false);
-    setProp(prop, choice, false);
+    setProp(prop, choice, keptImportant);
   };
   // "Custom…" has no value of its own to show, so landing on it reverts the preview.
-  const preview = (option: string | undefined) => liveSetProp(prop, option === CUSTOM ? undefined : option, false);
-  const written = display.important ? `${display.value} !important` : display.value;
-  const inputValue = forceCustom && isPreset ? '' : display.present ? written : '';
+  const preview = (option: string | undefined) => liveSetProp(prop, option === CUSTOM ? undefined : option, keptImportant);
+  const inputValue = forceCustom && isPreset && !display.important ? '' : displayText(display);
   const selectOptions = presetSelectOptions({
     options,
     allowCustom,
@@ -515,29 +533,31 @@ export function PresetSelectRow(row: PresetSelectRowProps) {
   return (
     <div className="embed-editor_size-row">
       <EffLabel label={label} prop={prop} props={props} />
-      <Select
-        value={customMode ? CUSTOM : shown}
-        options={selectOptions}
-        onChange={pick}
-        onPreview={(option) => preview(option ?? undefined)}
-        ariaLabel={label}
-        disabled={busy}
-        customInput={
-          customMode ? (
-            <CustomInput
-              prop={prop}
-              value={inputValue}
-              placeholder={row.placeholder}
-              busy={busy}
-              autoFocus={forceCustom}
-              setProp={setProp}
-              liveSetProp={liveSetProp}
-              clearProp={clearProp}
-              onExit={() => setForceCustom(false)}
-            />
-          ) : undefined
-        }
-      />
+      <ImportantMark important={keptImportant}>
+        <Select
+          value={customMode ? CUSTOM : shown}
+          options={selectOptions}
+          onChange={pick}
+          onPreview={(option) => preview(option ?? undefined)}
+          ariaLabel={label}
+          disabled={busy}
+          customInput={
+            customMode ? (
+              <CustomInput
+                prop={prop}
+                value={inputValue}
+                placeholder={row.placeholder}
+                busy={busy}
+                autoFocus={forceCustom}
+                setProp={setProp}
+                liveSetProp={liveSetProp}
+                clearProp={clearProp}
+                onExit={() => setForceCustom(false)}
+              />
+            ) : undefined
+          }
+        />
+      </ImportantMark>
     </div>
   );
 }

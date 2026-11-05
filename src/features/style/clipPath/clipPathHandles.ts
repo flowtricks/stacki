@@ -16,8 +16,12 @@ import {
   type HandleTarget,
   type DragTarget,
 } from './clipPathTypes';
+import { assert } from '../../../../shared/core/assert';
 import { CORNERS } from './clipPathConstants';
 import { formatPercent, formatCssUnitValue, formatCssCoordinatePoint } from './clipPathMeasure';
+
+// The most parts a box list (inset sides, corner radii) has.
+const BOX_PARTS_MAX = 4;
 
 export function makeInsetRadii(radius: number): CornerRadii {
   return {
@@ -41,17 +45,50 @@ export function hasRoundedCorners(radii: CornerRadii) {
 }
 
 export function formatRadiusList(values: number[]) {
-  const formatted = values.map(formatPercent);
-  if (formatted[0] === formatted[1] && formatted[0] === formatted[2] && formatted[0] === formatted[3]) {
-    return formatted[0];
+  return shortestBoxForm(values.map(formatPercent));
+}
+
+// The parts of a four-part box list — inset sides (top right bottom left) or
+// border radii (top-left top-right bottom-right bottom-left) — written out to
+// all four, as CSS fills them: a missing part copies the one two places back,
+// or the first. Clip paths list sides and corners in the same clockwise order,
+// so one rule serves both.
+export function expandBoxParts(parts: readonly string[]): readonly [string, string, string, string] {
+  assert(parts.length >= 1, 'expandBoxParts: a box list has at least one part');
+  assert(parts.length <= BOX_PARTS_MAX, 'expandBoxParts: a box list has at most four parts');
+  const first = parts[0] ?? '';
+  const second = parts[1] ?? first;
+  return [first, second, parts[2] ?? first, parts[3] ?? second];
+}
+
+// A box list in its shortest equivalent form, as margin, padding and
+// border-radius are written by hand: four equal parts are one, top = bottom
+// with left = right is two, left = right alone is three. The parts compare as
+// written text, so `0` and `0px` stay apart; that only ever keeps a longer
+// form, never changes the value.
+export function shortestBoxForm(parts: readonly string[]): string {
+  const [top, right, bottom, left] = expandBoxParts(parts);
+  const shortest = shortestBoxParts(top, right, bottom, left);
+  const expanded = expandBoxParts(shortest);
+  assert(expanded[0] === top, 'shortestBoxForm: the short form keeps the first part');
+  assert(expanded[1] === right, 'shortestBoxForm: the short form keeps the second part');
+  assert(expanded[2] === bottom, 'shortestBoxForm: the short form keeps the third part');
+  assert(expanded[3] === left, 'shortestBoxForm: the short form keeps the fourth part');
+  return shortest.join(' ');
+}
+
+// The fewest parts that expand back to these four.
+function shortestBoxParts(top: string, right: string, bottom: string, left: string): readonly string[] {
+  if (right === left) {
+    if (top === bottom) {
+      if (top === right) {
+        return [top];
+      }
+      return [top, right];
+    }
+    return [top, right, bottom];
   }
-  if (formatted[0] === formatted[2] && formatted[1] === formatted[3]) {
-    return `${formatted[0]} ${formatted[1]}`;
-  }
-  if (formatted[1] === formatted[3]) {
-    return `${formatted[0]} ${formatted[1]} ${formatted[2]}`;
-  }
-  return formatted.join(' ');
+  return [top, right, bottom, left];
 }
 
 export function formatRadii(radii: CornerRadii) {
@@ -64,10 +101,6 @@ export function formatRadii(radii: CornerRadii) {
 
 export function formatInsetSides(shape: InsetShape) {
   return formatRadiusList([shape.top, shape.right, shape.bottom, shape.left]);
-}
-
-export function formatCssUnitList(values: CssUnitValue[]) {
-  return values.map(formatCssUnitValue).join(' ');
 }
 
 export function formatRawEditableClipPath(editable: RawEditableClipPath) {
@@ -88,13 +121,27 @@ export function formatRawEditableClipPath(editable: RawEditableClipPath) {
     return `ellipse(${radii} at ${center})`;
   }
 
-  const sides = formatCssUnitList([editable.top, editable.right, editable.bottom, editable.left]);
+  // Shortest forms, as the sides and radii are written by hand: a drag of one
+  // handle must not spell `inset(0.5rem round 2rem)` out to four sides, four
+  // radii and a `/` of the same four again.
+  const sides = shortestBoxForm([editable.top, editable.right, editable.bottom, editable.left].map(formatCssUnitValue));
   if (!editable.radii) {
     return `inset(${sides})`;
   }
-  const horizontal = formatCssUnitList(editable.radii.horizontal);
-  const vertical = editable.radii.vertical ? ` / ${formatCssUnitList(editable.radii.vertical)}` : '';
-  return `inset(${sides} round ${horizontal}${vertical})`;
+  return `inset(${sides} round ${formatRawInsetRadii(editable.radii)})`;
+}
+
+// An inset's `round` radii, shortest first; the `/ vertical` half only when it
+// differs from the horizontal one, since CSS reads a missing half as equal.
+export function formatRawInsetRadii(radii: { horizontal: CssUnitValue[]; vertical?: CssUnitValue[] }): string {
+  const horizontalParts = radii.horizontal.map(formatCssUnitValue);
+  const horizontal = shortestBoxForm(horizontalParts);
+  if (!radii.vertical) {
+    return horizontal;
+  }
+  const vertical = shortestBoxForm(radii.vertical.map(formatCssUnitValue));
+  assert(horizontal.length > 0, 'formatRawInsetRadii: the horizontal radii are written');
+  return vertical === horizontal ? horizontal : `${horizontal} / ${vertical}`;
 }
 
 export function oppositeCorner(corner: CornerName): CornerName {

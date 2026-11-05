@@ -31,6 +31,7 @@ import {
 import { TrackIcon, type AutoFit, TrackSizeEditor, TrackPopover } from './TrackEditor';
 import { AreasSection } from './GridAreas';
 import { type TrackSectionProps, AutoSection, Modal } from './GridAutoSection';
+import { withImportant } from './model/styleDisplay';
 
 // The "Grid settings" modal (Webflow's Configure-grid popup): the Columns and Rows
 // track lists — drag to reorder, click a track to size it (a single Default size or a
@@ -182,7 +183,7 @@ function TrackSection({ title, prop, axis, setProp, labels }: TrackSectionProps)
   // strange name, and the first edit would write that reading back over it. In
   // that case the braces are pressed and stuck, which is the honest state.
   const [expression, setExpression] = useState(false);
-  const tracksCanHold = canEditAsTracks(important ? `${rawTemplate} !important` : rawTemplate);
+  const tracksCanHold = canEditAsTracks(withImportant({ value: rawTemplate, important }));
   const asExpression = expression || !tracksCanHold;
   const edits = useTrackEdits({ tracks, axis, write: list.write });
   const { open } = edits;
@@ -244,7 +245,7 @@ function useTrackList({ prop, setProp, labels }: Pick<TrackSectionProps, 'prop' 
   // `!important` is carried beside the value, not in it — the field shows it,
   // since the field is where it can be typed.
   const important = !!(read(prop)?.selectedValue ?? read(prop)?.winner)?.important;
-  const shown = important && rawTemplate ? `${rawTemplate} !important` : rawTemplate;
+  const shown = withImportant({ value: rawTemplate, important: important && rawTemplate !== '' });
   const tracks = parseTrackList(rawTemplate);
   // Which way this list is written. The value answers whenever it can — it is
   // either a repeat() or it isn't — and the preference only decides the cases

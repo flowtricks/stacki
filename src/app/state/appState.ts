@@ -12,6 +12,7 @@ import type { ScanResult } from '../../../shared/properties/projectScan';
 import { nodeAtPath, pathOfNode } from '../../editor/editorTree';
 import type { DevDiagnosis } from '../../features/preview/DevOffline';
 import type { PreviewDevice } from '../../features/preview/PreviewToolbar';
+import type { CanvasWidthRequest } from '../../features/preview/usePreviewSizing';
 import type { VariableSelection } from '../../features/variables/variablesBridge';
 import { type CodeWindowState } from '../../features/code/codeWindowTarget';
 import {
@@ -316,6 +317,13 @@ export function useWindowState() {
   // not silently drop the user out of the view they picked (which would
   // reload every preview iframe and flash the canvas white).
   const [device, setDevice] = useState<PreviewDevice>('desktop');
+  // A width the style panel asks the canvas for (a picked media query, see
+  // features/style/model/queryWidth.ts). Counted, so asking for the same width
+  // twice still applies it after the canvas was resized by hand in between.
+  const [canvasWidthRequest, setCanvasWidthRequest] = useState<CanvasWidthRequest | undefined>(undefined);
+  const requestCanvasWidth = useCallback((widthPx: number) => {
+    setCanvasWidthRequest((previous) => ({ widthPx, serial: (previous?.serial ?? 0) + 1 }));
+  }, []);
   // Bumped every time the page itself makes the selection, so the navigator
   // scrolls the row into view — a counter, not the id, so clicking the same
   // element twice still reveals it.
@@ -370,6 +378,8 @@ export function useWindowState() {
     setContentFocus,
     setCreateRequest,
     setDevice,
+    canvasWidthRequest,
+    requestCanvasWidth,
     setFileText,
     setGitInfo,
     setPreviewInfo,

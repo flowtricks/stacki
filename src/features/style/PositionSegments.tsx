@@ -11,7 +11,7 @@ import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { useCustomFocus } from './model/fieldHooks';
-import { parseImportant } from './model/styleDisplay';
+import { keepImportant, parseImportant } from './model/styleDisplay';
 import { CloseIcon, FloatLeftIcon, FloatRightIcon, ClearLeftIcon, ClearRightIcon, ClearBothIcon } from './PositionIcons';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
@@ -125,7 +125,17 @@ export function SegmentCustomInput({
     setProp(prop, parsed.value, parsed.important);
   };
   return (
-    <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+    <VariableConnect
+      code
+      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      disabled={busy}
+      prop={prop}
+      onPick={(binding) => {
+        // `current` is the field's text, flag and all: a pick keeps the flag.
+        const kept = keepImportant(binding, parseImportant(current));
+        setProp(prop, kept.value, kept.important);
+      }}
+    >
       <input
         ref={inputRef}
         className="embed-editor_value-input embed-editor_display-input"

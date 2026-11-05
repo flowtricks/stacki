@@ -7,6 +7,7 @@ import { getHost } from './model/host';
 import { getModifiers, onModifiers, setModifiers } from '../../editor/heldModifiers';
 import { assert } from '../../../shared/core/assert';
 import { type SetProp, type LiveSetProp, type Read, type Side, type Display, displayOf } from './spacingTypes';
+import { withImportant } from './model/styleDisplay';
 
 // Shared "spacing box" primitives: Webflow's masked-SVG frame with draggable side
 // handles, click-to-edit value labels, and a popover editor. Used by SpacingSection
@@ -487,7 +488,7 @@ export function useLiveFrame(
     const drag = dragRef.current;
     const value = pending.current;
     if (drag && value !== undefined) {
-      onLive(drag.props, drag.important ? `${value} !important` : value, drag);
+      onLive(drag.props, withImportant({ value, important: drag.important }), drag);
       // Linked sides are one visual edit. Sending them together lets the style
       // writer serialize the shared stylesheet once instead of once per side.
       liveSetProp(drag.props, value, drag.important);

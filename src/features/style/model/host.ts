@@ -99,6 +99,11 @@ export type HostState = {
   writeStyleNode: ((target: StyleNodeTarget, css: string, immediate?: boolean) => boolean | void) | undefined;
   /** Select a node in the app (used when navigating from a provenance chip). */
   selectNode: ((nodeId: string) => void) | undefined;
+  /** Set the canvas to a width, as typing it into the width field does (the
+   *  device becomes `custom`). Picking a media query in the context dropdown
+   *  moves the canvas inside it (model/queryWidth.ts). Absent where the host
+   *  has no canvas to size. */
+  setCanvasWidth: ((widthPx: number) => void) | undefined;
   /** Put a class on the selected element. Typing a bare class in the selector
    *  box should land it on the element, the way a class field would — a rule
    *  for a class the element doesn't carry would never apply. Resolves once the
@@ -159,6 +164,7 @@ const state: HostState = {
   projectClasses: [],
   writeStyleNode: undefined,
   selectNode: undefined,
+  setCanvasWidth: undefined,
   recordUndo: undefined,
   addClass: undefined,
   removeClass: undefined,

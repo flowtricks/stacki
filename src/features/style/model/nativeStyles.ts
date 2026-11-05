@@ -7,6 +7,7 @@
 import { assert } from '../../../../shared/core/assert';
 import { STATES, type NativeContribution, type StateKey, type StyleContext } from './resolved';
 import type { BreakpointId, NativeModel } from './styleTypes';
+import { nestedQueryOfKey, splitSourcedKey } from './queryWrapper';
 
 // ─────────────────────────── Breakpoints + states ───────────────────────────
 
@@ -187,7 +188,21 @@ export function buildStyleContexts(
       usedBp.add('main');
       return;
     }
-    const bp = breakpointForAtContext(key);
+    // A query nested inside a rule is its own row, labelled by its query and
+    // carrying its wrapper (model/queryWrapper.ts); it is never a breakpoint's row,
+    // which stands for the query at the top level.
+    // A key may also name the stylesheet the block is in (queryWrapper.ts): the
+    // same query in two stylesheets is two rows, each saying where it lives.
+    const { placed, source } = splitSourcedKey(key);
+    const sourced = source === undefined ? {} : { source };
+    const nested = nestedQueryOfKey(key);
+    if (nested !== undefined) {
+      if (styledEmbedContexts.has(key)) {
+        list.push({ key, label: nested.atContext, breakpoint: undefined, embedAtContext: nested.atContext, wrapper: nested.wrapper, ...sourced });
+      }
+      return;
+    }
+    const bp = breakpointForAtContext(placed);
     if (bp) {
       // A breakpoint query, listed when it carries values — native, or the
       // element has styles here. Key it by `bp:<id>` (NOT the embed @media
@@ -205,7 +220,7 @@ export function buildStyleContexts(
         key: `bp:${bp}`,
         label: breakpointLabel(bp),
         breakpoint: bp,
-        embedAtContext: key,
+        embedAtContext: placed,
       });
     } else {
       // A custom @media/@container: show only when the element has styles there,
@@ -213,7 +228,7 @@ export function buildStyleContexts(
       if (!styledEmbedContexts.has(key)) {
         return;
       }
-      list.push({ key, label: key, breakpoint: undefined, embedAtContext: key });
+      list.push({ key, label: placed, breakpoint: undefined, embedAtContext: placed, ...sourced });
     }
   });
 
@@ -257,7 +272,7 @@ function rank(context: StyleContext, ownContexts: ReadonlySet<string>): number {
   // among those, the open component's own queries come first. They're the ones
   // being worked on; a query reaching this element from a project-wide stylesheet
   // is further away in every sense.
-  return ownContexts.has(context.embedAtContext ?? '') ? 100 : 101;
+  return ownContexts.has(context.key) ? 100 : 101;
 }
 
 /**

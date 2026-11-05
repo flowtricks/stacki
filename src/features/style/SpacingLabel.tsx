@@ -9,10 +9,14 @@ import { type ResolvedProp } from './model/resolved';
 import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Side, displayOf, isWrappedValue } from './spacingTypes';
 import { siblingProps, useSideDrag, useSideHover } from './SpacingFill';
 import { withImportant } from './spacingValue';
+import { parseImportant } from './model/styleDisplay';
+import { ImportantBadge } from './components/ImportantMark';
 import { useStyleHint } from './model/computedStyle';
 
 /** Label text: the value with its unit (the empty placeholder when unset), sans
- *  !important. The CSS truncates it to the band, so the unit shows when there's room. */
+ *  !important — the band has no room for the word, so the label carries the
+ *  panel's `!` mark instead (labelLook's `important`). The CSS truncates it to
+ *  the band, so the unit shows when there's room. */
 export function labelFor(value: string, empty: string): string {
   const text = value.trim().replace(/\s*!important$/i, '');
   return text || empty;
@@ -94,6 +98,7 @@ export function SpacingLabel(props: SpacingLabelProps) {
         }}
       >
         {look.text}
+        {look.important ? <ImportantBadge /> : undefined}
       </button>
       {tooltip.shown && look.hasValue && buttonRef.current ? <SpacingLabelTooltip anchor={buttonRef.current} look={look} /> : undefined}
     </>
@@ -193,14 +198,17 @@ export function labelLook({
   const variable = override === undefined && variableLabels && !hasWrappedValue ? variableFor(value, variables) : undefined;
   const state = `${color}${variable ? ' is-variable' : ''}${overridden ? ' is-overridden' : ''}`;
   const variableFullName = variable ? (variable.group ? `${variable.group}/${variable.name}` : variable.name) : '';
-  const tooltipValue = variable ? variable.name : labelFor(value, emptyLabel);
+  // A live drag carries the flag in its text (SpacingFill.tsx), so both read it the same way.
+  const important = parseImportant(value).important;
+  // The tooltip has the room the band lacks, so it spells the flag out.
+  const tooltipValue = variable ? variable.name : withImportant({ value: labelFor(value, emptyLabel), important });
   const tooltipContent = variableFullName || (overridden ? `Overridden by ${display.winnerSelector}` : tooltipValue);
   // A side with nothing set already reads "Auto" / "0" on its face; a tooltip saying
   // the same thing is noise over every empty side of the box. Only a value worth
   // spelling out — one that's authored, a variable's full name, an override — gets one.
   const hasValue = override !== undefined || display.present;
   const text = variable?.name ?? labelFor(value, emptyLabel);
-  return { state, variableFullName, tooltipContent, hasValue, text };
+  return { state, variableFullName, tooltipContent, hasValue, text, important };
 }
 
 // The label's tooltip: after a short hover, or at once on keyboard focus, and

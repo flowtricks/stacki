@@ -248,7 +248,11 @@ export function spacingEditorHandlers({
       // commits whenever the draft differs from what the popover opened with,
       // and the pick is already written by the setProp below.
       commit.rebase(binding);
-      setProp(prop, binding, false);
+      // The field's text carries its `!important` (insertBinding.ts keeps it
+      // around a pick), so the flag is split off here rather than written into
+      // the value.
+      const parsed = parseImportant(binding);
+      setProp(prop, parsed.value, parsed.important);
     },
     blur: () => closeUnlessInPopup(rootRef, close),
     reset: () => {

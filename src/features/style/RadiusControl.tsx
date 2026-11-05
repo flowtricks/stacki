@@ -2,8 +2,8 @@
 // with its own icon (BordersSection.tsx).
 
 import { splitTopLevelSpaces } from './model/background';
-import { displayOf, parseImportant } from './model/styleDisplay';
-import { type Props, stripImportant, joinImportant, PropLabel, LiveInput } from './BordersKit';
+import { displayOf, parseImportant, withImportant } from './model/styleDisplay';
+import { type Props, stripImportant, PropLabel, LiveInput } from './BordersKit';
 
 // The Borders section: a corner-radius control (linked / per-corner) and a border
 // control scoped to a side (all / top / right / bottom / left) with style, width,
@@ -116,7 +116,7 @@ export function RadiusControl(props: Props) {
           onSelectSelector={props.onSelectSelector}
         />
         <div className="embed-editor_radius-head">
-          <LiveInput value={radiusDisplay.present ? joinImportant(radiusDisplay) : ''} busy={busy} ariaLabel="Border radius" prop={RADIUS} {...write(RADIUS)} />
+          <LiveInput value={radiusDisplay.present ? withImportant(radiusDisplay) : ''} busy={busy} ariaLabel="Border radius" prop={RADIUS} {...write(RADIUS)} />
         </div>
       </div>
       <div className="embed-editor_radius-grid">
@@ -153,7 +153,7 @@ export function CornerField({ field, placeholder, props, write }: { field: (type
         onSelectSelector={props.onSelectSelector}
       />
       <LiveInput
-        value={display.present ? joinImportant(display) : ''}
+        value={display.present ? withImportant(display) : ''}
         busy={busy}
         ariaLabel={`${field.name} radius`}
         placeholder={placeholder}

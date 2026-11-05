@@ -6,6 +6,7 @@ import type { CanvasAnswer } from '../../../editor/canvasReply';
 import { getHost } from './host';
 import type { ParsedRule } from './styleTypes';
 import type { MatchTarget } from './selectors';
+import { nestedWrappersOf, wrapperProbes } from './queryReach';
 import { hasCanvas, queryCanvas } from '../../../editor/canvasQuery';
 
 // ───────────────────────── Asking the rendered page ─────────────────────────
@@ -95,15 +96,30 @@ export function askableSelectors(rules: ParsedRule[]): Map<string, string[]> {
       if (!ask) {
         continue;
       }
-      const list = askedFor.get(ask);
-      if (list) {
-        list.push(selector.text);
-      } else {
-        askedFor.set(ask, [selector.text]);
+      addAsked(askedFor, ask, selector.text);
+    }
+  }
+  // Whether the element is, or sits inside, each nested query's wrapper: the
+  // context dropdown lists a nested query only where it can reach (queryReach.ts),
+  // and asking here costs no second round trip.
+  for (const wrapper of nestedWrappersOf(rules)) {
+    for (const probe of wrapperProbes(wrapper)) {
+      const ask = askableForm(probe);
+      if (ask !== undefined) {
+        addAsked(askedFor, ask, probe);
       }
     }
   }
   return askedFor;
+}
+
+function addAsked(askedFor: Map<string, string[]>, ask: string, text: string): void {
+  const list = askedFor.get(ask);
+  if (list) {
+    list.push(text);
+  } else {
+    askedFor.set(ask, [text]);
+  }
 }
 
 /** What the page said about one element: what it renders as, and which of the

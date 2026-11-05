@@ -11,7 +11,7 @@ import { filterCssProperties } from '../model/cssProperties';
 import { panelSpan } from '../model/panelBox';
 import { useSharedVars } from '../VariableConnect';
 import { useExternalDraft } from '../model/fieldHooks';
-import { parseImportant } from '../model/styleDisplay';
+import { parseImportant, withImportant } from '../model/styleDisplay';
 
 // ─────────────────────────── Declaration row ───────────────────────────
 
@@ -31,7 +31,7 @@ export const ValueField = forwardRef<
     onLiveCommit: (value: string, important: boolean) => void;
   }
 >(function ValueField({ value, important, busy, dataProp, onCommit, onLiveCommit }, forwardedRef) {
-  const external = important ? `${value} !important` : value;
+  const external = withImportant({ value, important });
   // Mirror external edits, but never clobber what the user is typing.
   const { draft, setDraft, focused } = useExternalDraft(external);
   const ref = useRef<HTMLTextAreaElement>(null);

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import SegmentPill from './components/SegmentPill';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { useCustomFocus } from './model/fieldHooks';
-import { parseImportant } from './model/styleDisplay';
+import { parseImportant, withImportant } from './model/styleDisplay';
 
 // A segmented button-list with a trailing dropdown arrow whose menu offers a
 // "Custom" escape hatch (writes `unset` and reveals a focused text field), and —
@@ -15,8 +15,6 @@ import { parseImportant } from './model/styleDisplay';
 // than clearing — clearing lives on the field label.
 
 export type SegOption = { value: string; label: ReactNode; menuLabel: string; ariaLabel?: string };
-
-const joinImportant = ({ value, important }: { value: string; important: boolean }) => (important ? `${value} !important` : value);
 
 // Editable text field for a custom value (defaults to `unset` when just entered).
 function CustomField({
@@ -32,11 +30,11 @@ function CustomField({
   inputRef: React.RefObject<HTMLInputElement>;
   onCommit: (value: string, important: boolean) => void;
 }) {
-  const [draft, setDraft] = useState(joinImportant({ value, important }));
+  const [draft, setDraft] = useState(withImportant({ value, important }));
   const focused = useRef(false);
   useEffect(() => {
     if (!focused.current) {
-      setDraft(joinImportant({ value, important }));
+      setDraft(withImportant({ value, important }));
     }
   }, [value, important]);
   const commit = () => {

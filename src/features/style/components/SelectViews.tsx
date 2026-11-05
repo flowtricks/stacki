@@ -3,22 +3,36 @@ import Popup from '../../../ui/Popup';
 // (Select.tsx).
 
 import type { KeyboardEvent, ReactNode, RefObject } from 'react';
-import { type SelectOption, type Props } from './selectTypes';
+import { type SelectOption, type SelectTag, type Props } from './selectTypes';
 
 // A ReactNode given as null by a caller means "none", the same as leaving it out.
 export const present = (node: ReactNode): boolean => (node ?? undefined) !== undefined;
 
-// The option's label, on one line, or on two with its overline above it. Both
-// lines truncate with an ellipsis rather than wrap, so a long selector never
-// grows the row or the trigger by a third line.
-export function OptionLabel({ label, overline }: { readonly label: string; readonly overline: string | undefined }) {
-  if (overline === undefined || overline.length === 0) {
+// The option's label, on one line, or on two with its overline (and its source
+// chip, when it has one) above it. Both lines truncate with an ellipsis rather
+// than wrap, so a long selector never grows the row or the trigger by a third
+// line; the chip keeps its size and the overline text gives way.
+export function OptionLabel({ label, overline, tag }: { readonly label: string; readonly overline: string | undefined; readonly tag?: SelectTag | undefined }) {
+  const hasOverline = overline !== undefined && overline.length > 0;
+  if (!hasOverline && tag === undefined) {
     return <span className="u-select-label">{label}</span>;
   }
   return (
     <span className="u-select-label has-overline">
-      <span className="u-select-overline">{overline}</span>
+      <span className="u-select-overline">
+        {tag === undefined ? undefined : <OptionTag tag={tag} />}
+        {hasOverline ? <span className="u-select-overline-text">{overline}</span> : undefined}
+      </span>
       <span className="u-select-label-line">{label}</span>
+    </span>
+  );
+}
+
+function OptionTag({ tag }: { readonly tag: SelectTag }) {
+  return (
+    <span className="u-select-tag" data-tone={tag.tone}>
+      {present(tag.icon) ? <span className="u-select-tag-icon">{tag.icon}</span> : undefined}
+      <span className="u-select-tag-label">{tag.label}</span>
     </span>
   );
 }
@@ -83,7 +97,7 @@ export function SelectTrigger<T extends string>({
     <button {...shared} className="u-select-button" data-tone={selectedOption?.tone}>
       <span className="u-select-value">
         {icon}
-        <OptionLabel label={triggerLabel} overline={triggerOverline} />
+        <OptionLabel label={triggerLabel} overline={triggerOverline} tag={triggerOverline === undefined ? undefined : selectedOption?.tag} />
       </span>
       {CHEVRON}
     </button>
@@ -232,7 +246,7 @@ export function SelectRow<T extends string>({
       onClick={onChoose}
     >
       {icon}
-      <OptionLabel label={option.label} overline={option.overline} />
+      <OptionLabel label={option.label} overline={option.overline} tag={option.tag} />
       {/* Fixed trailing slots, held open whether or not they are filled, so every
           row's dot stands in one column and every row's check or pencil in the
           one after it. The end slot ends the row, so icons align down the left

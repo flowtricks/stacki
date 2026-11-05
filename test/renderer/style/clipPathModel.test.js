@@ -12,8 +12,12 @@
 // now live in and run in jsdom (SVG import parses with DOMParser); every recorded
 // value must come back equal. One deliberate change since: the preview draws
 // absolute lengths at their real size (a px is a screen pixel, a rem 16px), so
-// the eight recorded `preview` values with px or rem lengths were re-recorded,
-// and nothing else.
+// the eight recorded `preview` values with px or rem lengths were re-recorded.
+// A second: a raw clip-path (one with px, rem or bare-zero lengths) now writes
+// back the text it was read from, not its parse spelled out to four sides, so
+// the two raw inset cases were re-recorded — their formatted, normalized,
+// reparsed and unsized preview CSS, and the code highlights and token ranges
+// of that shorter text. Nothing else changed.
 
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

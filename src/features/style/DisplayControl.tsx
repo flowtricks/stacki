@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
 import { ChevronIcon, MenuItem, tooltipArrowStyle } from './components/MenuParts';
-import { parseImportant } from './model/styleDisplay';
+import { parseImportant, withImportant } from './model/styleDisplay';
 
 // The value editor for `display`. For values we can represent it shows a
 // segmented bar (Block / Flex / Grid + a 4th slot for the inline set, None and
@@ -103,8 +103,6 @@ export function isDisplayValueSupported(value: string): boolean {
   return SUPPORTED.has(value.trim().toLowerCase());
 }
 
-const joinImportant = (parsed: { readonly value: string; readonly important: boolean }) => (parsed.important ? `${parsed.value} !important` : parsed.value);
-
 // Editable text field for a custom display value, shown next to the arrow.
 function CustomValueField({
   value,
@@ -119,13 +117,13 @@ function CustomValueField({
   inputRef: React.RefObject<HTMLInputElement>;
   onCommit: (value: string, important: boolean) => void;
 }) {
-  const [draft, setDraft] = useState(joinImportant({ value, important }));
+  const [draft, setDraft] = useState(withImportant({ value, important }));
   const focused = useRef(false);
 
   // Mirror external edits, but never clobber what the user is typing.
   useEffect(() => {
     if (!focused.current) {
-      setDraft(joinImportant({ value, important }));
+      setDraft(withImportant({ value, important }));
     }
   }, [value, important]);
 

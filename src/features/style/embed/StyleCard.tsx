@@ -174,14 +174,21 @@ export function StyleCardHead({ card, onVisibleSelectorsChange }: { card: StyleC
 // the last option adds a query.
 export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: StyleCardProps; onAddQuery: () => void; onEditQuery: (query: string) => void }) {
   const { contexts, contextInfos, queryUses } = card;
+  // Each query row names the stylesheet its block is written in, in the words and
+  // icon "Add custom styles in" uses for that stylesheet, so the two read alike.
+  const sourceByKey = new Map(card.sourceOptions.filter((option) => option.heading !== true).map((option) => [option.value, option]));
   const options = contexts.map((styleContext) => {
     // Editable when this stylesheet is where the query is written. A row can be here
     // for a query held in some other file (or for a native breakpoint, which is no
     // at-rule at all) — nothing to rename there, so no pencil. A nested chain's own
     // query is its last link; the ones before it are rows of their own.
     const query = (styleContext.embedAtContext || '').split(' › ').pop() || '';
-    const uses = queryUses.get(queryKey(query)) ?? 0;
+    // The pencil renames in the stylesheet the panel writes into, so it is offered
+    // only on rows written there (or typed, and so in no stylesheet yet).
+    const inSourceDocument = styleContext.source === undefined || styleContext.source === card.sourceValue;
+    const uses = inSourceDocument ? (queryUses.get(queryKey(query)) ?? 0) : 0;
     const info = contextInfos.find((entry) => entry.key === styleContext.key);
+    const source = styleContext.source === undefined ? undefined : sourceByKey.get(styleContext.source);
     return {
       value: styleContext.key,
       label: styleContext.label,
@@ -189,6 +196,15 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
       // selector chip below does (`.layout {@}`), so the two agree on where the
       // styles sit. Base and a top-level query stay one line.
       ...(info?.wrapper === undefined ? {} : { overline: info.wrapper }),
+      ...(source === undefined
+        ? {}
+        : {
+            tag: {
+              label: source.triggerLabel ?? source.label,
+              icon: source.fromComponent ? <ComponentIcon /> : <EmbedIcon />,
+              tone: source.fromComponent ? 'component' : 'embed',
+            },
+          }),
       icon: breakpointIcon(styleContext.breakpoint ?? undefined),
       marked: info?.hasStyles ?? false,
       ...(uses > 0

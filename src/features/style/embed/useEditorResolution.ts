@@ -6,10 +6,19 @@ import { useEffect } from 'react';
 import { hslaToRgba } from '../model/colorWrite';
 import { contextKeyOf, editableRuleFor, selectedRulesSetting, type SourceKey } from '../model/resolved';
 import { mediaParamsForBreakpoint, optionsFor } from '../model/nativeStyles';
-import { ensureNestPath, ensureQueryBlock, parseNestedInput, type NestStep } from '../model/css';
+import { createRuleInPlacedQuery, ensureNestPath, ensureQueryBlock, parseNestedInput, type NestStep } from '../model/css';
 import { applyNativePropertyAt, applyNativeToNewBaseClass, removeNativePropertyAt, webflowApi, writeEmbedDocument, type EmbedDocument } from '../model/webflow';
 import { type PropWrite } from './EditorBasics';
-import { upgradedDefault, type EmbedRegion, embedWriteTarget, createRuleForWrite, type NativeAttempt, styledSelectorsFor, takeTypedPath } from './editorModel';
+import {
+  upgradedDefault,
+  type EmbedRegion,
+  embedWriteTarget,
+  placedQueryTarget,
+  createRuleForWrite,
+  type NativeAttempt,
+  styledSelectorsFor,
+  takeTypedPath,
+} from './editorModel';
 import { EMBED_ONLY_PROPS } from './ResolvedRows';
 import { isGlobalSelector } from './LayoutRows';
 import { asQuery } from './SelectorPicker';
@@ -190,12 +199,13 @@ export function useWriteNewRule(
       embedDocument: EmbedDocument;
       region: EmbedRegion;
       embedContext: string | undefined;
+      wrapper: string | undefined;
       bpMedia: string | undefined;
       selector: string;
     },
     write: PropWrite,
   ) => {
-    const { embedDocument, region, embedContext, bpMedia } = where;
+    const { embedDocument, region, embedContext, wrapper, bpMedia } = where;
     const fullSelector = where.selector;
     setBusyBoth(true);
     setStatus('Saving…');
@@ -207,6 +217,7 @@ export function useWriteNewRule(
         nested,
         bpMedia,
         embedContext,
+        wrapper,
         selector: fullSelector,
         write,
       });
@@ -255,15 +266,49 @@ export function useCreateRule(
         : undefined;
     // Write into the chosen embed when one is selected; otherwise the embed of a
     // matching rule in this context (or the first embed).
-    const where = embedWriteTarget({ model, selectedEmbedKey, documentByKey }, (rule) => contextKeyOf(rule) === (embedContext ?? ''));
+    const where = newRuleTarget();
     if (!where) {
       setStatus('No embed here to write to — add an HTML embed first.');
       return;
     }
     const fullSelector = selectorOverride ?? activeSelector;
-    void writeNewRule({ ...where, embedContext, bpMedia, selector: fullSelector }, write);
+    void writeNewRule({ ...where, embedContext, wrapper: currentContext.wrapper, bpMedia, selector: fullSelector }, write);
   };
-  return { createSelectedRule };
+  // The stylesheet a new rule in the current context lands in. A query row names
+  // its block's stylesheet, so that wins over the source dropdown's pick, which
+  // still decides for Base and breakpoints (editorModel.ts placedQueryTarget).
+  const newRuleTarget = () => {
+    const embedContext = currentContext.embedAtContext;
+    const chosen = embedWriteTarget({ model, selectedEmbedKey, documentByKey }, (rule) => contextKeyOf(rule) === (embedContext ?? ''));
+    if (!embedContext) {
+      return chosen;
+    }
+    return placedQueryTarget(chosen, documentByKey, { atContextKey: embedContext, wrapper: currentContext.wrapper, source: currentContext.source });
+  };
+  // A live write (a drag, typing) in a nested context where the pick has no rule
+  // yet. Without it the canvas stood still until the commit: a live write only
+  // ever updated a rule that already existed. The block gets the value now, the
+  // same way the commit will write it, so the commit then finds it in place.
+  const liveCreateInNestedQuery = (write: PropWrite): boolean => {
+    const embedContext = currentContext.embedAtContext;
+    const wrapper = currentContext.wrapper;
+    if (wrapper === undefined || !embedContext || !activeSelector) {
+      return false;
+    }
+    const where = newRuleTarget();
+    if (!where) {
+      return false;
+    }
+    const placed = createRuleInPlacedQuery(where.region, { atContextKey: embedContext, wrapper, selector: activeSelector }, write.prop, {
+      value: write.value,
+      important: write.important,
+    });
+    if (placed) {
+      void writeEmbedDocument(where.embedDocument, true);
+    }
+    return placed;
+  };
+  return { createSelectedRule, liveCreateInNestedQuery };
 }
 
 // Scaffold a just-typed query into the embed.

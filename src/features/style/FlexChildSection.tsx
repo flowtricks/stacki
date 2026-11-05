@@ -4,7 +4,7 @@ import { SegBar, StackedField, LiveInput, PropLabel, GroupLabel, type Props, typ
 import { parseFlexShorthand } from './model/webflow';
 import { splitTopLevelSpaces } from './model/background';
 import SegmentPill from './components/SegmentPill';
-import { displayOf } from './model/styleDisplay';
+import { displayOf, displayText } from './model/styleDisplay';
 
 // The Flex Child section — the controls that apply to the selected element when it
 // is a child of a flex (or grid) container: its sizing (the `flex` shorthand), its
@@ -192,6 +192,10 @@ function canonBasis(basis: string): string {
 function flexCurrent(read: Props['read']): string {
   const shorthand = displayOf(read('flex'));
   let grow: string, shrink: string, basis: string;
+  if (shorthand.important) {
+    // The flag rides in the text, so the bar opens its single field and shows it.
+    return norm(displayText(shorthand));
+  }
   if (shorthand.present) {
     const parsed = parseFlexShorthand(shorthand.value);
     if (!parsed) {
@@ -227,6 +231,11 @@ function alignSelfCurrent(read: Props['read']): string {
   if (!display.present) {
     return 'auto';
   }
+  // A flagged value keeps its `!important` in the text: no segment matches it,
+  // so the bar opens its custom field, which shows the flag.
+  if (display.important) {
+    return norm(displayText(display));
+  }
   const normalized = norm(display.value);
   if (normalized === 'start' || normalized === 'self-start') {
     return 'flex-start';
@@ -242,6 +251,11 @@ function justifySelfCurrent(read: Props['read']): string {
   if (!display.present) {
     return 'auto';
   }
+  // A flagged value keeps its `!important` in the text: no segment matches it,
+  // so the bar opens its custom field, which shows the flag.
+  if (display.important) {
+    return norm(displayText(display));
+  }
   const normalized = norm(display.value);
   if (normalized === 'flex-start' || normalized === 'self-start' || normalized === 'left') {
     return 'start';
@@ -254,7 +268,7 @@ function justifySelfCurrent(read: Props['read']): string {
 
 function orderCurrent(read: Props['read']): string {
   const display = displayOf(read('order'));
-  return display.present ? norm(display.value) : '0';
+  return display.present ? norm(displayText(display)) : '0';
 }
 
 // ─────────────────────────── Sizing (flex) ───────────────────────────
@@ -468,7 +482,7 @@ function FlexSizingMenu({
 
 // ─────────────────────────── Grid-item position ───────────────────────────
 
-const rawOf = (display: ReturnType<typeof displayOf>) => (display.present ? (display.important ? `${display.value} !important` : display.value) : '');
+const rawOf = displayText;
 
 // Split a `grid-column` / `grid-row` shorthand into its start / end line values
 // (`auto / span 2` → ['auto', 'span 2']); a lone value is the start (end blank).

@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { Contributor } from './model/resolved';
+import { withImportant } from './model/styleDisplay';
 
 // Lets any ProvenanceList rendered under it name a contributor's source embed
 // (its full label, like "Global Styles #1") and select it on the Webflow canvas —
@@ -49,7 +50,7 @@ export default function ProvenanceList({
       {contributors.map((contributor, index) => {
         const activeClass = index === activeIndex ? 'is-active' : '';
         const className = `embed-editor_provenance-item ${activeClass}`;
-        const rawValue = contributor.important ? `${contributor.value} !important` : contributor.value;
+        const rawValue = withImportant(contributor);
         const body = (
           <>
             <ProvenanceOrigin contributor={contributor} nav={nav} />

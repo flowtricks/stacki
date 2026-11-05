@@ -11,6 +11,8 @@ import { handleArrowStep } from './model/numberStep';
 import { commitInPlace } from './model/commitInPlace';
 import { parseOrigin, serializeOrigin, type Origin } from './model/transformSettings';
 import type { ResolvedProp } from './model/resolved';
+import { displayOf } from './model/styleDisplay';
+import ImportantMark from './components/ImportantMark';
 
 // The settings behind the transform list, opened from the ⋯ beside its +: where a
 // transform pivots, whether a turned element shows its back, and the two
@@ -334,6 +336,8 @@ function TransformSection({ read, busy, setProp, clearProp, writeOrigin }: Secti
   // the real answer is always one or the other — backface-visibility has no unset
   // state at render time, it is `visible` until something says otherwise.
   const shownBackface = useHighlight(backface, 'backface-visibility', ['visible', 'hidden'], 'visible');
+  // Two segments and no custom field: a flagged value is marked, and a pick keeps the flag.
+  const backfaceImportant = displayOf(read('backface-visibility')).important;
   return (
     <section className="embed-editor_tsettings-section">
       <Heading
@@ -346,13 +350,15 @@ function TransformSection({ read, busy, setProp, clearProp, writeOrigin }: Secti
       <OriginRow label="Origin" origin={transformOrigin} busy={busy} ariaLabel="Transform origin" onChange={(next) => writeOrigin('transform-origin', next)} />
       <div className="embed-editor_size-row">
         <span className="embed-editor_size-label embed-editor_bg-caption">Backface</span>
-        <SegmentedControl
-          value={shownBackface}
-          options={BACKFACE}
-          onChange={(value) => setProp('backface-visibility', value, false)}
-          ariaLabel="Backface visibility"
-          disabled={busy}
-        />
+        <ImportantMark important={backfaceImportant}>
+          <SegmentedControl
+            value={shownBackface}
+            options={BACKFACE}
+            onChange={(value) => setProp('backface-visibility', value, backfaceImportant)}
+            ariaLabel="Backface visibility"
+            disabled={busy}
+          />
+        </ImportantMark>
       </div>
     </section>
   );

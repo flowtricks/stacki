@@ -1,10 +1,11 @@
 import { useCanvasText, type CanvasTextDocument } from './useCanvasText';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewSource } from './usePreviewSource';
 import { PreviewFrame } from './PreviewFrame';
-import { usePreviewDimensions, usePreviewSizing } from './usePreviewSizing';
+import { usePreviewDimensions, usePreviewSizing, type CanvasWidthRequest } from './usePreviewSizing';
+import { PREVIEW_WIDTH_LIMITS } from './previewViewport';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
 import type { OverlayInfo, SpacingHover } from './PreviewOverlays';
@@ -67,6 +68,9 @@ interface PreviewPaneProps {
   readonly focusWhole?: boolean;
   readonly device: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
+  /** A width asked of the canvas from outside (the style panel's media query
+   *  pick), applied as a typed width is: a `custom` device at that width. */
+  readonly canvasWidthRequest?: CanvasWidthRequest | undefined;
   /** The open project: the column guide's settings are kept per project. */
   readonly projectPath?: string | undefined;
 }
@@ -87,6 +91,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
   const source = usePreviewSource(url, runtime.post);
   const dimensions = usePreviewDimensions();
   const sizing = usePreviewSizing(props.device, dimensions, props.onDevice);
+  useCanvasWidthRequest(props.canvasWidthRequest, sizing.setWidthRef);
   const columnGuide = useColumnGuide({
     projectKey: props.projectPath,
     metrics: runtime.guide,
@@ -132,6 +137,19 @@ export default function PreviewPane(props: PreviewPaneProps) {
       </div>
     </>
   );
+}
+
+// Apply each new width request once, as the width field would.
+function useCanvasWidthRequest(request: CanvasWidthRequest | undefined, setWidthRef: { readonly current: (next: number) => void }): void {
+  const serial = request?.serial;
+  const widthPx = request?.widthPx;
+  useEffect(() => {
+    if (serial === undefined || widthPx === undefined) {
+      return;
+    }
+    const clamped = Math.min(PREVIEW_WIDTH_LIMITS.maximum, Math.max(PREVIEW_WIDTH_LIMITS.minimum, Math.round(widthPx)));
+    setWidthRef.current(clamped);
+  }, [serial, widthPx, setWidthRef]);
 }
 
 type Runtime = ReturnType<typeof usePreviewRuntime>;

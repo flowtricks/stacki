@@ -4,7 +4,10 @@
 // indented Astro <style> block used to show the file's whitespace as is
 // (`.a {\n        color: red;\n    }`). The style writer's new nested rules
 // had the same fault in the file: inside an indented, nested @media a new
-// rule's body ran far right and its brace landed off its selector.
+// rule's body ran far right and its brace landed off its selector. A selector
+// list spanning lines showed its later lines at the file's extra indentation
+// (`h1,\n    h2,\n    p {`), because they were re-indented as body levels; they
+// now sit at the rule's own level, and a save gives them the file's indentation.
 // Method: the real css.ts, cssRuleText.ts and cssEditorIndent.ts are bundled
 // as the app bundles them (with the CodeMirror pieces they share, so one copy
 // of @codemirror/state is in play). Pages are split into <style> regions and
@@ -118,6 +121,116 @@ test('an unchanged editor text writes the file back byte for byte', () => {
   const node = ruleNode(region, '.hero');
   assert.deepEqual(css.replaceRuleCss({ node }, ruleText.ruleEditorText(node)), { ok: true });
   assert.equal(css.renderEmbed(segments, [region]), INDENTED_PAGE);
+});
+
+// A global reset whose selector list continues four spaces past the rule's own
+// line, with a two-space body: the layout the user reported.
+const SELECTOR_LIST_PAGE = [
+  '<style is:global>',
+  '    h1,',
+  '        h2,',
+  '        h3,',
+  '        h4,',
+  '        h5,',
+  '        h6,',
+  '        p {',
+  '      margin-block: 0;',
+  '    }',
+  '    .after {',
+  '      color: red;',
+  '    }',
+  '</style>',
+  '',
+].join('\n');
+const SELECTOR_LIST = 'h1,\n        h2,\n        h3,\n        h4,\n        h5,\n        h6,\n        p';
+
+test('a selector list spanning lines shows every selector line flush left', () => {
+  const { region } = regionOf(SELECTOR_LIST_PAGE);
+  const node = ruleNode(region, SELECTOR_LIST);
+  assert.equal(ruleText.ruleEditorText(node), ['h1,', 'h2,', 'h3,', 'h4,', 'h5,', 'h6,', 'p {', '  margin-block: 0;', '}'].join('\n'));
+});
+
+test('an unchanged multi-line selector writes the file back byte for byte', () => {
+  const { segments, region } = regionOf(SELECTOR_LIST_PAGE);
+  const node = ruleNode(region, SELECTOR_LIST);
+  assert.deepEqual(css.replaceRuleCss({ node }, ruleText.ruleEditorText(node)), { ok: true });
+  assert.equal(css.renderEmbed(segments, [region]), SELECTOR_LIST_PAGE);
+});
+
+test('editing a declaration keeps the selector lines at their source indentation', () => {
+  const { segments, region } = regionOf(SELECTOR_LIST_PAGE);
+  const node = ruleNode(region, SELECTOR_LIST);
+  const edited = ruleText.ruleEditorText(node).replace('  margin-block: 0;', '  margin-block: 0;\n  padding: 0;');
+  assert.deepEqual(css.replaceRuleCss({ node }, edited), { ok: true });
+  const expected = SELECTOR_LIST_PAGE.replace('      margin-block: 0;\n', '      margin-block: 0;\n      padding: 0;\n');
+  assert.notEqual(expected, SELECTOR_LIST_PAGE, 'the expectation adds a line');
+  assert.equal(css.renderEmbed(segments, [region]), expected);
+});
+
+test('a selector line added in the editor takes the file continuation indentation', () => {
+  const { segments, region } = regionOf(SELECTOR_LIST_PAGE);
+  const node = ruleNode(region, SELECTOR_LIST);
+  const edited = ruleText.ruleEditorText(node).replace('p {', 'p,\nli {');
+  assert.deepEqual(css.replaceRuleCss({ node }, edited), { ok: true });
+  assert.equal(css.renderEmbed(segments, [region]), SELECTOR_LIST_PAGE.replace('        p {\n', '        p,\n        li {\n'));
+});
+
+test('a selector list without extra indentation in the file keeps it on save', () => {
+  const page = ['<style>', '  h1,', '  h2 {', '    margin: 0;', '  }', '</style>', ''].join('\n');
+  const { segments, region } = regionOf(page);
+  const node = ruleNode(region, 'h1,\n  h2');
+  const edited = ruleText.ruleEditorText(node).replace('h2 {', 'h2,\nh3 {');
+  assert.equal(edited, ['h1,', 'h2,', 'h3 {', '  margin: 0;', '}'].join('\n'));
+  assert.deepEqual(css.replaceRuleCss({ node }, edited), { ok: true });
+  assert.equal(css.renderEmbed(segments, [region]), page.replace('  h2 {\n', '  h2,\n  h3 {\n'));
+});
+
+test('a nested multi-line selector and a multi-line @media prelude sit at their own level', () => {
+  const page = [
+    '<style>',
+    '  .card {',
+    '    color: red;',
+    '    h2,',
+    '        h3 {',
+    '      margin: 0;',
+    '    }',
+    '    @media (width > 40rem) and',
+    '        (width < 60rem) {',
+    '      color: blue;',
+    '    }',
+    '    grid-template-areas:',
+    '      "a b"',
+    '      "c d";',
+    '  }',
+    '</style>',
+    '',
+  ].join('\n');
+  const { segments, region } = regionOf(page);
+  const outer = ruleNode(region, '.card');
+  const outerText = ruleText.ruleEditorText(outer);
+  assert.equal(
+    outerText,
+    [
+      '.card {',
+      '  color: red;',
+      '  h2,',
+      '  h3 {',
+      '    margin: 0;',
+      '  }',
+      '  @media (width > 40rem) and',
+      '  (width < 60rem) {',
+      '    color: blue;',
+      '  }',
+      '  grid-template-areas:',
+      '    "a b"',
+      '    "c d";',
+      '}',
+    ].join('\n'),
+  );
+  const inner = ruleNode(region, 'h2,\n        h3');
+  assert.equal(ruleText.ruleEditorText(inner), ['h2,', 'h3 {', '  margin: 0;', '}'].join('\n'));
+  assert.deepEqual(css.replaceRuleCss({ node: outer }, outerText), { ok: true });
+  assert.equal(css.renderEmbed(segments, [region]), page, 'an unchanged outer rule writes back byte for byte');
 });
 
 test('invalid editor text is refused and the file is untouched', () => {

@@ -26,8 +26,6 @@ export type Props = {
 };
 
 export const stripImportant = (value: string) => value.replace(/\s*!important\s*$/i, '').trim();
-export const joinImportant = (parsed: { readonly value: string; readonly important: boolean }) =>
-  parsed.important ? `${parsed.value} !important` : parsed.value;
 
 // ─────────────────── Provenance-aware label (mirrors SizeLabel) ───────────────────
 

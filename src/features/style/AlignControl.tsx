@@ -6,6 +6,8 @@ import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';
 import { commitInPlace } from './model/commitInPlace';
 import { assert } from '../../../shared/core/assert';
+import ImportantMark from './components/ImportantMark';
+import { displayOf } from './model/styleDisplay';
 
 // Webflow's flex-alignment control: a live preview grid on the left (3×3 click
 // targets under a real-flex bar preview) plus the X / Y axis dropdowns. The X axis
@@ -345,31 +347,33 @@ function AxisSelect(props: AxisSelectProps) {
         onProvenance={props.onProvenance}
         onSelectSelector={props.onSelectSelector}
       />
-      <Select
-        value={customMode ? CUSTOM : present ? normalized : shownComputed}
-        options={options}
-        ariaLabel={ariaLabel}
-        disabled={busy}
-        hideTriggerIcon
-        onChange={pick}
-        onPreview={(option) => preview(option ?? undefined)}
-        customInput={
-          customMode ? (
-            <CustomInput
-              value={value}
-              busy={busy}
-              ariaLabel={ariaLabel}
-              autoFocus={forceCustom}
-              onCommit={(next) => onSet(prop, next)}
-              onLive={(next) => onLive(prop, next)}
-              onClear={() => {
-                setForceCustom(false);
-                onClear(prop);
-              }}
-            />
-          ) : undefined
-        }
-      />
+      <ImportantMark important={displayOf(props.read(prop)).important}>
+        <Select
+          value={customMode ? CUSTOM : present ? normalized : shownComputed}
+          options={options}
+          ariaLabel={ariaLabel}
+          disabled={busy}
+          hideTriggerIcon
+          onChange={pick}
+          onPreview={(option) => preview(option ?? undefined)}
+          customInput={
+            customMode ? (
+              <CustomInput
+                value={value}
+                busy={busy}
+                ariaLabel={ariaLabel}
+                autoFocus={forceCustom}
+                onCommit={(next) => onSet(prop, next)}
+                onLive={(next) => onLive(prop, next)}
+                onClear={() => {
+                  setForceCustom(false);
+                  onClear(prop);
+                }}
+              />
+            ) : undefined
+          }
+        />
+      </ImportantMark>
     </div>
   );
 }

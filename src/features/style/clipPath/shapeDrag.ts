@@ -18,6 +18,7 @@ import {
   type InsetRadiusMode,
   type DragTarget,
 } from './clipPathTypes';
+import { assert } from '../../../../shared/core/assert';
 import { CORNERS } from './clipPathConstants';
 import { isCssUnitValue, insetBox } from './clipPathMeasure';
 import { formatRawEditableClipPath, oppositeCorner, oppositeInsetSide, insetSideForHandle } from './clipPathHandles';
@@ -89,9 +90,20 @@ export function updateRawShapeForDrag(
   return undefined;
 }
 
-// The shape with its raw editable replaced, and its CSS rewritten to match.
+// The shape with its raw editable replaced, and its CSS rewritten to match. A
+// geometry that writes the same CSS as before keeps the authored text: pressing
+// a handle without moving it must not rewrite `inset(1rem 1rem round 2rem)` as
+// `inset(1rem round 2rem)`, since that would count as an edit and be written.
 export function withRawEditable(shape: RawClipPathShape, nextEditable: RawEditableClipPath): ClipShape {
-  return { ...shape, editable: nextEditable, value: formatRawEditableClipPath(nextEditable) };
+  assert(nextEditable.kind === (shape.editable?.kind ?? nextEditable.kind), 'withRawEditable: an edit keeps the shape kind');
+  const value = formatRawEditableClipPath(nextEditable);
+  if (shape.editable !== undefined) {
+    if (formatRawEditableClipPath(shape.editable) === value) {
+      return shape;
+    }
+  }
+  assert(value.startsWith(`${nextEditable.kind}(`), 'withRawEditable: the CSS is the editable shape function');
+  return { ...shape, editable: nextEditable, value };
 }
 
 // Moves the dragged raw polygon point, and the other selected points with it.

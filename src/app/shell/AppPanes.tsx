@@ -81,6 +81,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         focusWhole={app.focusWhole}
         device={app.device}
         onDevice={app.setDevice}
+        canvasWidthRequest={app.canvasWidthRequest}
         projectPath={app.project.path}
         judgeEvent={app.judgeEvent}
         onStaleEvent={app.onStaleEvent}
@@ -407,6 +408,7 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
         return true;
       }}
       onSelectNode={app.setSelectedId}
+      onCanvasWidth={app.requestCanvasWidth}
       onRecordUndo={app.pushCommand}
       onAddClass={(name, placement) =>
         selectedId

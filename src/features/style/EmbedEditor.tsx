@@ -45,6 +45,7 @@ import {
 import {
   useEmbedContexts,
   useStyleContexts,
+  useWrapperReach,
   useNativeTarget,
   useComponentSource,
   useResolved,
@@ -201,7 +202,7 @@ function useEditorContexts(
   editorSelection: ReturnType<typeof useEditorSelection>,
   editorElement: ReturnType<typeof useEditorElement>,
 ) {
-  const { busyState, nativeState, pendingWrites, scanState, selectionState } = editorFoundation;
+  const { busyState, editorRefs, nativeState, pendingWrites, scanState, selectionState } = editorFoundation;
   const { refreshDerivedHook } = editorSelection;
   const { elementTokens, selectorPick } = editorElement;
 
@@ -210,7 +211,8 @@ function useEditorContexts(
   const contextKeys = useContextKeys(pendingWrites, elementTokens, selectorPick, sourceDocumentHook);
   const querySuggestionsHook = useQuerySuggestions(pendingWrites);
   const embedContexts = useEmbedContexts(selectionState, elementTokens, sourceDocumentHook, contextKeys);
-  const styleContextsHook = useStyleContexts(selectionState, nativeState, contextKeys, embedContexts);
+  const wrapperReachHook = useWrapperReach(editorRefs, elementTokens, contextKeys);
+  const styleContextsHook = useStyleContexts(selectionState, nativeState, contextKeys, embedContexts, wrapperReachHook);
   const nativeTarget = useNativeTarget(selectionState, nativeState, pendingWrites);
   const componentSource = useComponentSource(scanState, nativeState, nativeTarget);
   return {
@@ -351,6 +353,7 @@ function useEditorPropWrites(
     addQuery,
     autoSelect,
     clearPropHook,
+    createRule,
   );
   return { clearPropHook, liveSetPropHook, setPropHook };
 }

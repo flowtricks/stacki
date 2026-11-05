@@ -8,6 +8,7 @@ import { defaultSelectorTokens, selectorToClassTokens, tokensToSelector } from '
 import { stateForSelector, STATES, type ContextKey } from '../model/resolved';
 import { listAtRuleBlocks, parseNestedInput, renameAtRuleQuery, atRuleQueryText, queryKey, splitQuery } from '../model/css';
 import { canonicalCompound } from '../model/selectors';
+import { placedContextKey, placementOfPath, renameQueryInContextKey, sourcedContextKey, splitSourcedKey } from '../model/queryWrapper';
 import { findNode, getHost, onHostChange } from '../model/host';
 import { readNativeStyleByName, readNativeStyles, resolveIdentityElement, writeEmbedDocument, type EmbedDocument } from '../model/webflow';
 import type { NativeModel } from '../model/styleTypes';
@@ -277,7 +278,11 @@ export function useSelectorPick(
   // rule.
   const selectNested = useCallback(
     (parsed: NestedInput) => {
-      const contextKey = parsed.atContext.join(' › ');
+      // The typed path is remembered under the query chain (what the first write
+      // looks it up by), while the panel selects the PLACE it writes into: a query
+      // typed inside `.hero { }` is the nested `.hero` row, not the top-level one.
+      const atContextKey = parsed.atContext.join(' › ');
+      const contextKey = atContextKey ? placedContextKey(atContextKey, placementOfPath(parsed.path)) : '';
       if (contextKey) {
         setTypedContexts((previous) => (previous.includes(contextKey) ? previous : [...previous, contextKey]));
         setContext(contextKey);
@@ -286,7 +291,7 @@ export function useSelectorPick(
       }
       selectActiveSelector(parsed.selector);
       if (parsed.path.length >= 2) {
-        rememberTypedPath(typedPathsRef.current, parsed.selector, contextKey, parsed.path);
+        rememberTypedPath(typedPathsRef.current, parsed.selector, atContextKey, parsed.path);
       }
     },
     [selectActiveSelector, setContext],
@@ -480,11 +485,7 @@ export function useRenameQuery(
         }
         // The context key is the at-rule chain; only the renamed link changes, so
         // a nested context stays selected too.
-        const swap = (key: ContextKey) =>
-          key
-            .split(' › ')
-            .map((part) => (part === from ? next : part))
-            .join(' › ');
+        const swap = (key: ContextKey) => renameQueryInContextKey(key, from, next);
         setTypedContexts((previous) => previous.map(swap));
         setContext((previous) => swap(previous));
         setStatus(count === 1 ? `Renamed to ${next}.` : `Renamed ${count} blocks to ${next}.`);
@@ -516,7 +517,9 @@ export function useContextKeys(
     const take = (embedDocument: EmbedDocument) => {
       for (const region of embedDocument.regions) {
         for (const block of listAtRuleBlocks(region)) {
-          const contextLabel = block.atContext.join(' › ');
+          // One key per PLACE the query is written (model/queryWrapper.ts): the
+          // same query at the top level and nested inside a rule are two rows.
+          const contextLabel = sourcedContextKey(placedContextKey(block.atContext.join(' › '), block.placement), embedDocument.source.key);
           if (!seen.has(contextLabel)) {
             seen.add(contextLabel);
             keys.push(contextLabel);
@@ -542,8 +545,11 @@ export function useContextKeys(
       take(sourceDocument);
     }
     // Queries typed into the add-selector field (may not exist in any embed yet).
+    // Once one is written it is listed with its stylesheet above, and the typed
+    // row would only repeat it.
+    const placedListed = new Set(keys.map((key) => splitSourcedKey(key).placed));
     for (const typedContext of typedContexts) {
-      if (!seen.has(typedContext)) {
+      if (!seen.has(typedContext) && !placedListed.has(typedContext)) {
         seen.add(typedContext);
         keys.push(typedContext);
       }

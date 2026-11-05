@@ -16,7 +16,7 @@ import ProvenanceList from './ProvenanceList';
 import type { Contributor, ResolvedProp } from './model/resolved';
 import SegmentPill from './components/SegmentPill';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
-import { displayOf, type Display } from './model/styleDisplay';
+import { displayOf, type Display, withImportant } from './model/styleDisplay';
 import { LiveInput } from './LiveTextInput';
 export { LiveInput, type LiveInputProps, useLiveInputEditing, useDebouncedLive, stepLiveKey } from './LiveTextInput';
 
@@ -34,8 +34,6 @@ export type Props = {
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 };
-
-export const joinImportant = ({ value, important }: { value: string; important: boolean }) => (important ? `${value} !important` : value);
 
 export const CUSTOM = '__custom__';
 
@@ -154,7 +152,7 @@ export function TextField(props: TextFieldProps) {
   const { prop, label, placeholder, swatch, swatchLabel, read, busy } = props;
   const { setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = props;
   const display = displayOf(read(prop));
-  const external = display.present ? joinImportant(display) : '';
+  const external = display.present ? withImportant(display) : '';
   const [shown, noteLive] = useLiveColor(external);
   const computed = useComputedValue(swatchLabel && !shown ? prop : '');
   const ownSwatch = swatchLabel ? (
@@ -163,11 +161,12 @@ export function TextField(props: TextFieldProps) {
       busy={busy}
       ariaLabel={swatchLabel}
       onChange={(color, live) => {
-        noteLive(live ? color : undefined);
+        // The swatch picks a colour, not the flag: a flagged colour stays so.
+        noteLive(live ? withImportant({ value: color, important: display.important }) : undefined);
         if (live) {
-          liveSetProp(prop, color, false);
+          liveSetProp(prop, color, display.important);
         } else {
-          setProp(prop, color, false);
+          setProp(prop, color, display.important);
         }
       }}
     />
@@ -232,7 +231,7 @@ export function StackedField({
   placeholder?: string;
 } & Props) {
   const display = displayOf(read(prop));
-  const external = display.present ? joinImportant(display) : '';
+  const external = display.present ? withImportant(display) : '';
   return (
     <div className="embed-editor_type-cell">
       <LiveInput

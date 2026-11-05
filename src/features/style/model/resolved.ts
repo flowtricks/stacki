@@ -30,6 +30,14 @@ export type StyleContext = {
   breakpoint: BreakpointId | undefined;
   /** The embed at-context to match embed rules against ('' = base), or undefined. */
   embedAtContext: string | undefined;
+  /** The selector the query is nested inside (model/queryWrapper.ts), for a
+   *  context keyed by a nested placement; absent for Base, breakpoints and
+   *  top-level queries. */
+  wrapper?: string;
+  /** The key of the stylesheet the query's block is written in, for a context
+   *  that names one (model/queryWrapper.ts); absent for Base, breakpoints and
+   *  queries typed but not yet written. */
+  source?: string;
 };
 
 /** One property value contributed by a native Webflow class style. */
@@ -172,9 +180,8 @@ export type ContextInfo = {
   styledCombos: string[][];
   /** The strongest such combo — what to auto-select when switching here. */
   bestTokens: string[] | undefined;
-  /** The selector this context's query is nested inside, when every rule styling
-   *  the element here shares one (model/queryWrapper.ts) — the dropdown's first
-   *  line. Absent for Base, top-level queries and mixed placements. */
+  /** The selector this context's query is nested inside (model/queryWrapper.ts),
+   *  the dropdown's first line. Absent for Base and top-level queries. */
   wrapper?: string;
 };
 

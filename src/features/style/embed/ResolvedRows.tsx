@@ -18,6 +18,8 @@ import { type ResolvedProp } from '../model/resolved';
 import { splitTopLevelSpaces } from '../model/background';
 import { type LiveSetProp } from './EditorBasics';
 import { ValueField } from './AddProperty';
+import { keepImportant } from '../model/styleDisplay';
+import ImportantMark from '../components/ImportantMark';
 
 // A collapsible section header (Webflow's chevron + label) wrapping a group of
 // controls. Visibility is owned by the card so Shift-click can apply one
@@ -163,7 +165,15 @@ export function ResolvedRow({
       {isDisplay ? (
         <DisplayControl value={display.value} important={display.important} busy={busy} onCommit={(value, important) => setProp(prop, value, important)} />
       ) : (
-        <VariableConnect ariaLabel={`Connect ${prop} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+        <VariableConnect
+          ariaLabel={`Connect ${prop} to a variable`}
+          disabled={busy}
+          prop={prop}
+          onPick={(binding) => {
+            const kept = keepImportant(binding, display);
+            setProp(prop, kept.value, kept.important);
+          }}
+        >
           <ValueField
             value={display.value}
             important={display.important}
@@ -381,7 +391,9 @@ export function VerticalAlignRow({
   // Surface a pre-existing non-preset value (e.g. a length) as a trailing option so
   // the trigger reflects it instead of silently snapping back to Baseline.
   const options: SelectOption<string>[] = matched === undefined && raw ? [...VALIGN_OPTIONS, { value: raw, label: raw }] : [...VALIGN_OPTIONS];
-  const pick = (value: string) => setProp(prop, value, false);
+  // No custom field: a flagged value is marked, and a pick keeps the flag.
+  const important = effective?.important ?? false;
+  const pick = (value: string) => setProp(prop, value, important);
 
   return (
     <div className={`embed-editor_size-row ${dimmed ? 'is-inactive' : ''}`} title={dimmed ? 'Align Y applies when Display is inline or table-cell' : undefined}>
@@ -395,7 +407,9 @@ export function VerticalAlignRow({
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}
       />
-      <Select value={matched ?? (raw || 'baseline')} options={options} onChange={pick} ariaLabel="Align Y" disabled={busy} />
+      <ImportantMark important={important}>
+        <Select value={matched ?? (raw || 'baseline')} options={options} onChange={pick} ariaLabel="Align Y" disabled={busy} />
+      </ImportantMark>
     </div>
   );
 }

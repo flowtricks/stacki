@@ -113,7 +113,14 @@ export function clipPathType(value: string): string {
 // editor's clip-path writes are routed to the panel's selected selector via
 // setProp/clearProp (so its own class picker is hidden).
 export function ClipPathModal({ props, anchor, onClose }: { props: Props; anchor: HTMLElement; onClose: () => void }) {
-  const { onApply, onClear } = useSettledClipPath(props);
+  // The shape editor has no text to delete `!important` from, so its writes keep
+  // the flag the property already has; the hook writes plain, and this says which.
+  const { important } = displayOf(props.read('clip-path'));
+  const { onApply, onClear } = useSettledClipPath({
+    clearProp: props.clearProp,
+    setProp: (prop, value) => props.setProp(prop, value, important),
+    liveSetProp: (prop, value) => props.liveSetProp(prop, value, important),
+  });
   // What the panel shows now, read once: the editor opens on it (ClipPathProps.initialValue).
   const [initialValue] = useState(() => clipPathValueOf(props));
   return (
@@ -139,7 +146,7 @@ export function ClipPathModal({ props, anchor, onClose }: { props: Props; anchor
 // Stream fast previews as the shape is dragged; commit authoritatively (with the
 // panel's native→embed fallback) once edits settle, so a drag doesn't fire a read-back
 // per frame. Any un-committed edit is flushed when the popup closes before it settles.
-export function useSettledClipPath({ setProp, liveSetProp, clearProp }: Props) {
+export function useSettledClipPath({ setProp, liveSetProp, clearProp }: Pick<Props, 'setProp' | 'liveSetProp' | 'clearProp'>) {
   const pending = useRef<string | undefined>(undefined);
   const timer = useRef<number | undefined>(undefined);
   const commit = () => {

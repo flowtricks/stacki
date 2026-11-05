@@ -11,7 +11,7 @@ import { SpacingFill, useSpacingBox } from './SpacingBox';
 import { handleArrowStep } from './model/numberStep';
 import type { ResolvedProp } from './model/resolved';
 import { commitInPlace } from './model/commitInPlace';
-import { parseImportant } from './model/styleDisplay';
+import { displayText, keepImportant, parseImportant, withImportant } from './model/styleDisplay';
 import { CloseIcon, RelativeIcon, AbsoluteIcon, FixedIcon, StickyIcon } from './PositionIcons';
 import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Props, SegmentedIconControl, FLOAT_SEGS, CLEAR_SEGS } from './PositionSegments';
 
@@ -22,8 +22,6 @@ import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Props, 
 
 // ─────────────────────────── Helpers ───────────────────────────
 
-const joinImportant = ({ value, important }: { value: string; important: boolean }) => (important ? `${value} !important` : value);
-
 type Display = { present: boolean; value: string; important: boolean };
 function displayOf(resolved: ResolvedProp | undefined): Display {
   if (!resolved) {
@@ -33,6 +31,13 @@ function displayOf(resolved: ResolvedProp | undefined): Display {
   return { present: true, value: source.value, important: source.important };
 }
 const effectiveValue = (read: Read, prop: string) => displayOf(read(prop)).value.trim().toLowerCase();
+// What a Float / Clear bar compares against its segments: the value with its
+// flag, so a flagged value matches none and the bar opens its custom field,
+// which shows `!important` (the convention of every segmented bar here).
+const effectiveText = (read: Read, prop: string) =>
+  displayText(displayOf(read(prop)))
+    .trim()
+    .toLowerCase();
 
 // ─────────────────────────── Live text field ───────────────────────────
 
@@ -53,10 +58,19 @@ function LiveField({
   ariaLabel: string;
 } & Props) {
   const display = displayOf(read(prop));
-  const external = display.present ? joinImportant(display) : '';
+  const external = display.present ? withImportant(display) : '';
   const field = useLiveFieldEditing({ prop, external, busy, setProp, clearProp, liveSetProp });
   return (
-    <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => setProp(prop, binding, false)}>
+    <VariableConnect
+      code
+      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      disabled={busy}
+      prop={prop}
+      onPick={(binding) => {
+        const kept = keepImportant(binding, display);
+        setProp(prop, kept.value, kept.important);
+      }}
+    >
       <input
         {...field.scrub.input}
         className="u-input embed-editor_position-input"
@@ -205,7 +219,7 @@ const CUSTOM = '__custom__';
 // The editable field shown inside the position dropdown's trigger in custom mode.
 function PositionCustomField({ read, busy, setProp }: { read: Read; busy: boolean; setProp: SetProp }) {
   const display = displayOf(read('position'));
-  const external = display.present ? joinImportant(display) : '';
+  const external = display.present ? withImportant(display) : '';
   const [draft, setDraft] = useState(external);
   const focused = useRef(false);
   useEffect(() => {
@@ -221,7 +235,15 @@ function PositionCustomField({ read, busy, setProp }: { read: Read; busy: boolea
     }
   };
   return (
-    <VariableConnect ariaLabel="Connect Position to a variable" disabled={busy} prop="position" onPick={(binding) => setProp('position', binding, false)}>
+    <VariableConnect
+      ariaLabel="Connect Position to a variable"
+      disabled={busy}
+      prop="position"
+      onPick={(binding) => {
+        const kept = keepImportant(binding, display);
+        setProp('position', kept.value, kept.important);
+      }}
+    >
       <input
         className="embed-editor_value-input embed-editor_display-input"
         value={draft}
@@ -567,10 +589,10 @@ export default function PositionSection(props: Props) {
       </Row>
 
       <Row label={rowLabel('Float', 'float')}>
-        <SegmentedIconControl prop="float" ariaLabel="Float" segments={FLOAT_SEGS} current={effectiveValue(read, 'float') || 'none'} {...props} />
+        <SegmentedIconControl prop="float" ariaLabel="Float" segments={FLOAT_SEGS} current={effectiveText(read, 'float') || 'none'} {...props} />
       </Row>
       <Row label={rowLabel('Clear', 'clear')}>
-        <SegmentedIconControl prop="clear" ariaLabel="Clear" segments={CLEAR_SEGS} current={effectiveValue(read, 'clear') || 'none'} {...props} />
+        <SegmentedIconControl prop="clear" ariaLabel="Clear" segments={CLEAR_SEGS} current={effectiveText(read, 'clear') || 'none'} {...props} />
       </Row>
     </div>
   );

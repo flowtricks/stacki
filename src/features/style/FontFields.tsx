@@ -4,9 +4,9 @@
 import { useEffect, useState } from 'react';
 import Select, { type SelectOption } from './components/Select';
 import { getProjectFontFamilies } from './model/webflow';
-import { displayOf } from './model/styleDisplay';
+import { displayOf, displayText } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
-import { type Props, joinImportant, CUSTOM, PropLabel, LiveInput } from './TypographyKit';
+import { type Props, CUSTOM, PropLabel, LiveInput } from './TypographyKit';
 
 // The Typography section of the style panel. Like the Size section, every control
 // is always rendered and driven by the resolved model: a property is blue when the
@@ -64,7 +64,9 @@ export function FontFamilyField(props: Props) {
   const computed = useStyleHint(display.present ? '' : 'font-family');
   const current = display.present ? display.value : computed;
   const matched = current ? byPrimary.get(primaryFamily(current)) : undefined;
-  const customMode = forceCustom || (current.length > 0 && !matched);
+  // A flagged value opens the custom field, whose text shows `!important` —
+  // the convention every preset control in the panel follows.
+  const customMode = forceCustom || (current.length > 0 && !matched) || display.important;
 
   const pick = (value: string) => {
     if (value === CUSTOM) {
@@ -114,7 +116,7 @@ export function FontFamilyField(props: Props) {
               // Start empty when switching to Custom from a NAMED font (so typing doesn't
               // append onto e.g. "Montserrat" → "Montserratunset"); keep the current value
               // when it's already a custom one being edited.
-              value={forceCustom && matched ? '' : display.present ? joinImportant(display) : ''}
+              value={forceCustom && matched && !display.important ? '' : displayText(display)}
               busy={busy}
               placeholder="font-family"
               ariaLabel="Font family"
@@ -213,7 +215,8 @@ export function WeightField(props: Props) {
   const computed = useStyleHint(display.present ? '' : 'font-weight');
   const normalized = normalizeWeight(display.present ? display.value : computed);
   const matched = WEIGHT_VALUES.has(normalized) ? normalized : undefined;
-  const customMode = forceCustom || (normalized.length > 0 && !matched);
+  // A flagged weight opens the custom field, which shows its `!important`.
+  const customMode = forceCustom || (normalized.length > 0 && !matched) || display.important;
 
   const pick = (value: string) => {
     if (value === CUSTOM) {
@@ -253,7 +256,7 @@ export function WeightField(props: Props) {
         customInput={
           customMode ? (
             <LiveInput
-              value={display.present ? joinImportant(display) : ''}
+              value={displayText(display)}
               busy={busy}
               placeholder="font-weight"
               ariaLabel="Font weight"

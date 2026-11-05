@@ -105,7 +105,7 @@ export function orderContexts<T extends { readonly key: string }>(contexts: read
  * turns an at-context (`@media (width < 50rem)`) into the dropdown's key for it,
  * which for a breakpoint is not the query text.
  */
-export function indexQueriesByClass(rules: readonly IndexedRule[], keyOf: (atContext: string) => string): QueryIndex {
+export function indexQueriesByClass<R extends IndexedRule>(rules: readonly R[], keyOf: (atContext: string, rule: R) => string): QueryIndex {
   const index = new Map<string, QueryIndexEntry[]>();
   let entryCount = 0;
   for (const rule of rules) {
@@ -115,7 +115,7 @@ export function indexQueriesByClass(rules: readonly IndexedRule[], keyOf: (atCon
     if (rule.declarations.length === 0) {
       continue;
     }
-    const contextKey = keyOf(rule.atContext.join(' › '));
+    const contextKey = keyOf(rule.atContext.join(' › '), rule);
     for (const selector of rule.selectors) {
       for (const compiled of compileSelectorList(selector.text)) {
         const subject = compiled.compounds[compiled.compounds.length - 1];

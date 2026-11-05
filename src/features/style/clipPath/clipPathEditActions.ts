@@ -36,6 +36,7 @@ import {
   parseClipPathInput,
 } from './shapeFunctionModel';
 import { PRESETS, PRESET_NAMES, formatClipPath, formatCodeValue } from './clipPathFormat';
+import { matchPreset } from './clipPathShortcuts';
 import { writePastedShapeMetadata } from './clipPathStyleRead';
 import { styleOptionsForBreakpoint } from './clipPathStyleWrite';
 import { type EditorAfterPastedCacheActions, handleSelectionActions } from './clipPathEditorState';
@@ -520,6 +521,13 @@ export function presetChoiceActions(editor: EditorAfterPointDuplicateActions) {
   const choosePreset = (name: string) => {
     const preset = PRESETS[name];
     if (!preset) {
+      return;
+    }
+    // Picking the shape already in use changes nothing: replacing the user's
+    // own inset with the preset's would reset a value they never edited.
+    if (matchPreset(shapeRef.current) === name) {
+      setIsPresetOpen(false);
+      window.requestAnimationFrame(() => presetButtonRef.current?.focus());
       return;
     }
     let nextPreset = preset;

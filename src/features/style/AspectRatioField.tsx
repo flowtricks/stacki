@@ -219,7 +219,9 @@ export const RATIO_OPTIONS: SelectOption<string>[] = [
 export function AspectRatioField({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
   const display = displayOf(read('aspect-ratio'));
   const current = display.present ? display.value : '';
-  const derivedKey = display.present ? ratioKeyOf(current) : 'auto';
+  // A flagged ratio opens the free field ("other"), whose text shows `!important`
+  // — the convention of every preset control in the panel.
+  const derivedKey = display.important ? 'other' : display.present ? ratioKeyOf(current) : 'auto';
   const { key, askedForOther, onSelect, clear } = useRatioMode({
     current,
     derivedKey,

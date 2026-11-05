@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { GroupLabel, PropLabel } from './TypographySection';
-import { displayOf } from './model/styleDisplay';
+import { displayOf, parseImportant, withImportant } from './model/styleDisplay';
 import useScrub from './components/useScrub';
 import { handleArrowStep } from './model/numberStep';
 import { isNonNegative } from './model/cssProperties';
@@ -43,9 +43,12 @@ function shorthandPart(value: string, axis: 'row' | 'col'): string {
 }
 
 type Axis = {
-  /** The value to show in the field. */
+  /** The value, without its flag. */
   value: string;
   important: boolean;
+  /** What the field shows: the value with its `!important`, the way every field
+   *  in the panel spells it (model/styleDisplay.ts). */
+  text: string;
   /** Declarations a write should update — empty means nothing is set yet. */
   targets: string[];
   /** The declaration the shown value came from (for the label + provenance). */
@@ -75,19 +78,21 @@ function axisState(modern: string, legacy: string, axis: 'row' | 'col', read: (p
   const effective = own ?? legacyResolved ?? modernResolved;
   if (effective) {
     const raw = rawEffective(effective);
-    return { value: raw.value, important: raw.important, targets, resolved: effective };
+    return { value: raw.value, important: raw.important, text: withImportant(raw), targets, resolved: effective };
   }
   const short = read(SHORTHAND);
   if (short) {
     const raw = rawEffective(short);
+    const part = shorthandPart(raw.value, axis);
     return {
-      value: shorthandPart(raw.value, axis),
+      value: part,
       important: raw.important,
+      text: withImportant({ value: part, important: raw.important }),
       targets,
       resolved: short,
     };
   }
-  return { value: '', important: false, targets, resolved: undefined };
+  return { value: '', important: false, text: '', targets, resolved: undefined };
 }
 
 // The effective raw value + !important (not lowercased) — mirrors EmbedEditor's helper.
@@ -279,8 +284,8 @@ export default function GapControl(props: GapControlProps) {
   const { show, read, busy, setProp, clearProp, liveSetProp } = props;
   const rowAxis = axisState(ROW, ROW_LEGACY, 'row', read);
   const columnAxis = axisState(COL, COL_LEGACY, 'col', read);
-  const row = rowAxis.value;
-  const column = columnAxis.value;
+  const row = rowAxis.text;
+  const column = columnAxis.text;
   const [linkOverride, setLinkOverride] = useState<boolean | undefined>(undefined);
   const linked = linkOverride ?? row === column;
 
@@ -354,8 +359,12 @@ function axisWriter({ setProp, liveSetProp, clearProp }: Pick<GapControlProps, '
       }
       return;
     }
+    // The flag is what the text says: a field that shows `!important` keeps it
+    // through an edit, and deleting it from the text removes it. Before, the
+    // field hid the flag and every write re-applied it, so it could not go.
+    const parsed = parseImportant(trimmed);
     const put = options.live ? liveSetProp : setProp;
-    targets.forEach((prop) => put(prop, trimmed, axis.important));
+    targets.forEach((prop) => put(prop, parsed.value, parsed.important));
   };
 }
 
@@ -419,7 +428,7 @@ function GapCell({
     <div className="embed-editor_gap-cell">
       <GapInput
         prop={prop}
-        value={axis.value}
+        value={axis.text}
         busy={busy}
         ariaLabel={ariaLabel}
         axes={axesFor(prop, 'split')}

@@ -4,7 +4,7 @@ import { useHighlight } from './model/computedStyle';
 import { type SegmentedOption } from './components/SegmentedControl';
 import type { Contributor } from './model/resolved';
 import { ChevronIcon } from './components/MenuParts';
-import { displayOf, type Display } from './model/styleDisplay';
+import { displayOf, displayText, type Display } from './model/styleDisplay';
 import { type SetProp, type ClearProp, type LiveSetProp, type Props, SizeLabel, LivePropField, LENGTH_FIELDS } from './SizeKit';
 import { type SegmentBarConfig, SegmentBar } from './SizeSegmentBar';
 import { AspectRatioField } from './AspectRatioField';
@@ -175,7 +175,9 @@ function OverflowRow({
 }) {
   // Nothing authored here → the page's own computed overflow, then the caller's
   // fallback (the shorthand's value, for the X / Y rows).
-  const value = useHighlight(display.present ? display.value.toLowerCase() : fallback || '', prop, OVERFLOW_VALUES, '');
+  // A flagged value carries its `!important` in the text, so the bar opens its
+  // custom field and shows it, as every segmented bar does (SizeSegmentBar.tsx).
+  const value = useHighlight(display.present ? displayText(display).toLowerCase() : fallback || '', prop, OVERFLOW_VALUES, '');
   const labelElement = (
     <SizeLabel
       label={label}
@@ -361,7 +363,7 @@ function BoxSizingField({ read, busy, setProp, clearProp, liveSetProp, onProvena
       />
       <SegmentBar
         config={BOX_SIZING_BAR}
-        value={display.present ? display.value : ''}
+        value={displayText(display)}
         busy={busy}
         onCommit={(next, important) => setProp('box-sizing', next, important)}
         onLiveCommit={(next, important) => liveSetProp('box-sizing', next, important)}

@@ -6,6 +6,7 @@ import Select, { type SelectOption } from './components/Select';
 import ColorSwatch from './components/ColorSwatch';
 import { splitTopLevelSpaces } from './model/background';
 import { displayOf } from './model/styleDisplay';
+import ImportantMark from './components/ImportantMark';
 import { DecorNoneIcon, DecorStrikeIcon, DecorUnderlineIcon, DecorOverlineIcon } from './TypographyIcons';
 import { type Props, LiveInput } from './TypographyKit';
 import { PopLabel, LengthRow } from './TypographyColumns';
@@ -144,14 +145,17 @@ export function DecorationPopover(props: Props) {
       <DecorationColorRow {...rowProps} />
       <div className="embed-editor_size-row">
         <PopLabel label="Skip ink" prop="text-decoration-skip-ink" {...props} />
-        <Select
-          value={skip.present ? skip.value.trim().toLowerCase() : 'auto'}
-          options={SKIP_INK_OPTIONS}
-          onChange={(value) => setProp('text-decoration-skip-ink', value, false)}
-          onPreview={(value) => liveSetProp('text-decoration-skip-ink', value ?? undefined, false)}
-          ariaLabel="Skip ink"
-          disabled={busy}
-        />
+        {/* No custom field: a flagged value is marked, and picks keep the flag. */}
+        <ImportantMark important={skip.important}>
+          <Select
+            value={skip.present ? skip.value.trim().toLowerCase() : 'auto'}
+            options={SKIP_INK_OPTIONS}
+            onChange={(value) => setProp('text-decoration-skip-ink', value, skip.important)}
+            onPreview={(value) => liveSetProp('text-decoration-skip-ink', value ?? undefined, skip.important)}
+            ariaLabel="Skip ink"
+            disabled={busy}
+          />
+        </ImportantMark>
       </div>
       <p className="embed-editor_more-note">The browser will try to interrupt overlines and underlines to prevent drawing over glyphs.</p>
     </div>

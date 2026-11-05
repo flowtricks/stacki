@@ -8,7 +8,7 @@ import { useHighlight } from './model/computedStyle';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
-import { displayOf, parseImportant, type Display } from './model/styleDisplay';
+import { displayOf, displayText, parseImportant, withImportant, type Display } from './model/styleDisplay';
 import { type Read, type Props, stripImportant, PropLabel, LiveInput } from './BordersKit';
 import { RadiusControl } from './RadiusControl';
 
@@ -30,7 +30,6 @@ function facetRead(facet: Facet, side: Side, read: Read): { d: Display; prop: st
   const prop = side === 'all' ? `border-${facet}` : `border-${side}-${facet}`;
   return { d: displayOf(read(prop)), prop };
 }
-const facetExternal = (display: Display) => (display.present ? (display.important ? `${display.value} !important` : display.value) : '');
 // How a facet write lands: live while typing or dragging, or committed.
 interface WriteOptions {
   readonly live: boolean;
@@ -137,12 +136,15 @@ const STYLE_VALUES = new Set(STYLE_OPTIONS.map((option) => option.value));
 // "all" vs a per-side longhand).
 function StyleControl({
   value,
+  important,
   prop,
   busy,
   write,
   clear,
 }: {
   value: string;
+  /** Whether the style is written `!important`: the custom field shows it. */
+  important: boolean;
   /** The property this bar edits (side-aware) — its computed value highlights an
    *  unset control, so an inherited or UA style shows instead of an empty bar. */
   prop: string;
@@ -159,15 +161,21 @@ function StyleControl({
     STYLE_OPTIONS.map((option) => option.value),
     'none',
   );
-  const customMode = !!lower && !STYLE_VALUES.has(lower);
+  // The bar shows a listed style without `!important`, the convention every
+  // segmented bar in the panel follows (DisplayControl, SegmentedField): a
+  // flagged style opens the custom field, whose text shows the flag and lets it
+  // be deleted. Before, the bar drew `solid !important` as plain Solid.
+  const customMode = important || (!!lower && !STYLE_VALUES.has(lower));
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const requestFocus = useFocusOnceReady({ customMode, busy, inputRef });
 
+  // A pick returns to the bar, which shows no flag, so it writes the preset
+  // plain — the same as DisplayControl's pick.
   const pick = (next: string) => {
     setOpen(false);
-    if (next !== lower) {
+    if (next !== lower || important) {
       write(next, { live: false });
     }
   };
@@ -181,7 +189,7 @@ function StyleControl({
     <div ref={rootRef} className={`embed-editor_display embed-editor_border-style ${customMode ? 'is-custom' : ''}`} role="group" aria-label="Border style">
       <SegmentPill />
       {customMode ? (
-        <StyleCustomField value={value} busy={busy} inputRef={inputRef} write={write} clear={clear} />
+        <StyleCustomField value={withImportant({ value, important })} busy={busy} inputRef={inputRef} write={write} clear={clear} />
       ) : (
         <StyleSegments shown={shown} busy={busy} pick={pick} />
       )}
@@ -262,8 +270,7 @@ function StyleCustomField({
       clear();
       return;
     }
-    const { value: styleValue, important } = parseImportant(trimmed);
-    write(important ? `${styleValue} !important` : styleValue, { live: false });
+    write(withImportant(parseImportant(trimmed)), { live: false });
   };
   return (
     <VariableConnect ariaLabel="Connect border style to a variable" disabled={busy} prop="border-style" onPick={(binding) => write(binding, { live: false })}>
@@ -367,6 +374,9 @@ export function ColorVariableInput({
   // A live drag writes to the canvas, not to the model this field reads — so the
   // value it emitted is what both show until the model catches up.
   const [shown, noteLive] = useLiveColor(value);
+  // The swatch picks a colour, not the flag: a colour written `!important`
+  // stays so, and the field beside it keeps showing it through the drag.
+  const { important } = parseImportant(value);
   return (
     <div className="embed-editor_border-color">
       <ColorSwatch
@@ -374,11 +384,12 @@ export function ColorVariableInput({
         busy={busy}
         ariaLabel={ariaLabel}
         onChange={(color, live) => {
-          noteLive(live ? color : undefined);
+          const emitted = withImportant({ value: color, important });
+          noteLive(live ? emitted : undefined);
           if (live) {
-            onLive(color);
+            onLive(emitted);
           } else {
-            onCommit(color);
+            onCommit(emitted);
           }
         }}
       />
@@ -397,7 +408,7 @@ export function ColorVariableInput({
 }
 
 function ColorField({ side, props }: { side: Side; props: Props }) {
-  const value = facetExternal(facetRead('color', side, props.read).d);
+  const value = displayText(facetRead('color', side, props.read).d);
   const write = facetWrite('color', side, props);
   return (
     <ColorVariableInput
@@ -429,6 +440,7 @@ function BorderControl(props: Props) {
           <PropLabel label="Style" prop={styleFacet.prop} clearProps={facetClear('style', side)} {...props} />
           <StyleControl
             value={styleFacet.d.present ? styleFacet.d.value.trim() : ''}
+            important={styleFacet.d.important}
             prop={styleFacet.prop}
             busy={busy}
             write={writeStyle}
@@ -438,7 +450,7 @@ function BorderControl(props: Props) {
         <div className="embed-editor_size-row">
           <PropLabel label="Width" prop={widthFacet.prop} clearProps={facetClear('width', side)} {...props} />
           <LiveInput
-            value={facetExternal(widthFacet.d)}
+            value={displayText(widthFacet.d)}
             busy={busy}
             ariaLabel={`${side} border width`}
             prop="border-width"

@@ -147,6 +147,7 @@ export function useLiveSetProp(
   addQuery: ReturnType<typeof useAddQuery>,
   autoSelect: ReturnType<typeof useAutoSelect>,
   clearPropHook: ReturnType<typeof useClearProp>,
+  createRule: ReturnType<typeof useCreateRule>,
 ) {
   const { stateKey } = selectionState;
   const { nativeModelRef } = nativeState;
@@ -158,6 +159,7 @@ export function useLiveSetProp(
   const { nativeHandle, propLayer } = addQuery;
   const { autoSelectForEdit } = autoSelect;
   const { revertProp } = clearPropHook;
+  const { liveCreateInNestedQuery } = createRule;
 
   const liveSetProp: LiveSetProp = (propOrProps, typed, important) => {
     const props = typeof propOrProps === 'string' ? [propOrProps] : propOrProps;
@@ -207,6 +209,8 @@ export function useLiveSetProp(
       const rule = ruleFor(prop);
       if (rule) {
         embedWrites.push({ rule, prop, value, important });
+      } else {
+        liveCreateInNestedQuery({ prop, value, important });
       }
     }
     onLiveSetProps(embedWrites);

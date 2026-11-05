@@ -1,7 +1,7 @@
 import SegmentedField from './SegmentedField';
 import ColorSwatch from './components/ColorSwatch';
 import { useLiveColor } from './model/liveColor';
-import { displayOf } from './model/styleDisplay';
+import { displayOf, withImportant } from './model/styleDisplay';
 import { type Props, EffLabel, LiveText, BLEND_MODES, CURSORS, OUTLINE_OPTIONS, EVENTS_OPTIONS, BLEND_SET, CURSOR_SET, PresetSelectRow } from './EffectsKit';
 import { OpacityRow } from './OpacityRow';
 import { FiltersRow, TransformsRow } from './TransformsRow';
@@ -19,7 +19,7 @@ import { ClipPathRow } from './ClipPathRow';
 // as it happens. The drag writes to the canvas, not to the model the field
 // reads, so without this the page moves under the pointer while the number
 // sits still (see liveColor.ts).
-function OutlineColor({ props, value }: { props: Props; value: string }) {
+function OutlineColor({ props, value, important }: { props: Props; value: string; important: boolean }) {
   const { busy, setProp, liveSetProp } = props;
   const [shown, noteLive] = useLiveColor(value);
   return (
@@ -30,14 +30,20 @@ function OutlineColor({ props, value }: { props: Props; value: string }) {
         ariaLabel="Outline color"
         onChange={(color, live) => {
           noteLive(live ? color : undefined);
+          // The swatch picks a colour, not the flag: a flagged colour stays so.
           if (live) {
-            liveSetProp('outline-color', color, false);
+            liveSetProp('outline-color', color, important);
           } else {
-            setProp('outline-color', color, false);
+            setProp('outline-color', color, important);
           }
         }}
       />
-      <LiveText prop="outline-color" placeholder="currentColor" props={props} {...(shown === value ? {} : { dragging: shown })} />
+      <LiveText
+        prop="outline-color"
+        placeholder="currentColor"
+        props={props}
+        {...(shown === value ? {} : { dragging: withImportant({ value: shown, important }) })}
+      />
     </>
   );
 }
@@ -128,7 +134,7 @@ function OutlineRows({ props }: { props: Props }) {
       <div className="embed-editor_size-row">
         <EffLabel label="Color" prop="outline-color" props={props} />
         <div className="embed-editor_bg-inline">
-          <OutlineColor props={props} value={outlineColor.present ? outlineColor.value : ''} />
+          <OutlineColor props={props} value={outlineColor.present ? outlineColor.value : ''} important={outlineColor.important} />
         </div>
       </div>
     </>

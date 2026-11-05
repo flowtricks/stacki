@@ -12,6 +12,7 @@ import { commitInPlace } from './model/commitInPlace';
 import { countTracks, NEW_COLUMN, NEW_ROW, repeatTracks, isUniformTracks } from './gridTracks';
 import { GRID_ITEM_ALIGN, gridKeyword, GridAlignIcon, X_ALIGN_ICONS, Y_ALIGN_ICONS, X_ALIGN_LABELS, Y_ALIGN_LABELS, cap, CustomizeIcon } from './GridIcons';
 import { GridDirectionControl, GridContentControl, CountField } from './GridFlowControls';
+import { displayOf, displayText, parseImportant } from './model/styleDisplay';
 
 // The grid controls in the Layout section (shown when Display is grid). Mirrors
 // Webflow: Columns/Rows track counts, Direction (+ dense), Align (justify-items X /
@@ -244,6 +245,20 @@ interface GridControlsProps {
 }
 
 // The value the picked selector sets, else the winning one — trimmed, '' when unset.
+// What a preset control compares against its presets and seeds its custom field
+// with: the value and its `!important`. A flagged value matches no preset, so
+// the control opens its custom field, which shows the flag (the convention of
+// every preset control in the panel).
+function resolvedText(read: Read, prop: string): string {
+  return displayText(displayOf(read(prop))).trim();
+}
+
+// A write from one of those controls: the flag is whatever its text says.
+function writeText(setProp: SetProp, prop: string, text: string): void {
+  const parsed = parseImportant(text);
+  setProp(prop, parsed.value, parsed.important);
+}
+
 function resolvedValue(read: Read, prop: string): string {
   const resolved = read(prop);
   if (!resolved) {
@@ -268,9 +283,9 @@ export default function GridControls(props: GridControlsProps) {
       <div className="embed-editor_size-row">
         <GroupLabel label="Direction" props={['grid-auto-flow']} {...labelProps} onClear={() => clearProp('grid-auto-flow')} />
         <GridDirectionControl
-          value={resolvedValue(read, 'grid-auto-flow')}
+          value={resolvedText(read, 'grid-auto-flow')}
           busy={busy}
-          onSet={(next) => setProp('grid-auto-flow', next, false)}
+          onSet={(next) => writeText(setProp, 'grid-auto-flow', next)}
           onCommitCustom={(next, important) => setProp('grid-auto-flow', next, important)}
         />
       </div>
@@ -390,10 +405,10 @@ function GridAlignRow({ props }: { props: GridControlsProps }) {
     <GridAlignAxis
       axis={axis}
       prop={prop}
-      value={resolvedValue(read, prop).toLowerCase()}
+      value={resolvedText(read, prop).toLowerCase()}
       busy={busy}
       read={read}
-      onSet={(next) => setProp(prop, next, false)}
+      onSet={(next) => writeText(setProp, prop, next)}
       onPreview={(next) => liveSetProp(prop, next, false)}
       onClear={() => clearProp(prop)}
       onProvenance={props.onProvenance}
@@ -444,12 +459,12 @@ function ContentRow({ label, prop, vertical, props }: { label: string; prop: str
         onSelectSelector={props.onSelectSelector}
       />
       <GridContentControl
-        value={resolvedValue(read, prop)}
+        value={resolvedText(read, prop)}
         prop={prop}
         vertical={vertical}
         ariaLabel={label}
         busy={busy}
-        onSet={(next) => setProp(prop, next, false)}
+        onSet={(next) => writeText(setProp, prop, next)}
         onCommitCustom={(next, important) => setProp(prop, next, important)}
       />
     </div>

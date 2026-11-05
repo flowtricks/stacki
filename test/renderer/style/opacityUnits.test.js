@@ -63,7 +63,8 @@ const check = (what, condition, detail) => {
   check('the opacity slider exposes the normalized zero-to-one range', /<DragSlider\s+[\s\S]*?min=\{0\}[\s\S]*?max=\{1\}[\s\S]*?step=\{0\.01\}/.test(source));
   check(
     'slider writes reuse the authored unit instead of forcing percent',
-    /onInput=\{\(value\) => live\(\{ value, unit \}\)\}/.test(source) && /commit\(\{ value, unit \}\)/.test(source),
+    /onInput=\{\(value\) => live\(\{ opacity: \{ value, unit \}, important \}\)\}/.test(source) &&
+      /commit\(\{ opacity: \{ value, unit \}, important \}\)/.test(source),
   );
 
   if (failures.length) {

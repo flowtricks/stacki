@@ -6,6 +6,7 @@ import LayerList from './LayerList';
 import { PlusIcon } from './components/MenuParts';
 import { openAfterRemoval } from './model/fieldHooks';
 import { displayOf } from './model/styleDisplay';
+import ImportantMark from './components/ImportantMark';
 import { type Props, BgLabel, BgField, LayerEditorModal } from './BackgroundKit';
 import { imageUrlOf, assetSourceCandidates, FallbackImg } from './BackgroundLayerFields';
 import { LayerEditor } from './BackgroundLayerEditor';
@@ -107,14 +108,17 @@ function ClippingRow(props: Props) {
         onProvenance={props.onProvenance}
         onSelectSelector={props.onSelectSelector}
       />
-      <Select
-        value={clip}
-        options={CLIP_OPTIONS}
-        onChange={(next) => setProp('background-clip', next, false)}
-        onPreview={(next) => props.liveSetProp('background-clip', next ?? undefined, false)}
-        ariaLabel="Background clipping"
-        disabled={busy}
-      />
+      {/* No custom field: a flagged value is marked, and picks keep the flag. */}
+      <ImportantMark important={clipDisplay.important}>
+        <Select
+          value={clip}
+          options={CLIP_OPTIONS}
+          onChange={(next) => setProp('background-clip', next, clipDisplay.important)}
+          onPreview={(next) => props.liveSetProp('background-clip', next ?? undefined, clipDisplay.important)}
+          ariaLabel="Background clipping"
+          disabled={busy}
+        />
+      </ImportantMark>
     </div>
   );
 }

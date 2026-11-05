@@ -5336,6 +5336,11 @@ textarea.embed-editor_value-input.is-expanded {
   color: var(--color-text-tertiary, #a6a6a6);
   font-style: italic;
 }
+/* `!important` after a value: present in the text, so it can be read and
+   deleted, but quieter than the value it qualifies. */
+.cx-important {
+  color: var(--color-text-tertiary, #a6a6a6);
+}
 
 .embed-editor_varconnect-dot {
   --ee-connect: #7c5cff;
@@ -5767,4 +5772,51 @@ textarea.embed-editor_value-input.is-expanded {
   font-size: var(--font-size-2xs);
   color: var(--color-text-tertiary);
   text-transform: uppercase; /* DEG / % — Webflow shows the unit uppercase */
+}
+
+/* A context row's source chip, toned like the "Add custom styles in" tag: green
+   for a component's own styles, blue for a page block or a stylesheet. */
+.embed-editor_context-select .u-select-tag[data-tone='component'] {
+  background: var(--color-component-tag-bg);
+  color: var(--color-component-tag);
+}
+.embed-editor_context-select .u-select-tag[data-tone='embed'] {
+  background: var(--color-info-border);
+  color: var(--color-info);
+}
+
+/* A control with no text to show `!important` in (a segmented bar, a select,
+   a spacing label) carries this mark instead. The wrapper takes the control's
+   grid cell and stretches it, so the mark costs no layout of its own. */
+.embed-editor_important-mark {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+.embed-editor_important-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
+  border-radius: 6px;
+  background: var(--color-bg-inset);
+  color: var(--color-text-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  pointer-events: none;
+}
+/* Inside a spacing label the mark sits after the number, in the flow. */
+.embed-editor_spacing-label .embed-editor_important-badge {
+  position: static;
+  margin-left: 1px;
+  background: transparent;
+  min-width: 0;
+  padding: 0;
 }

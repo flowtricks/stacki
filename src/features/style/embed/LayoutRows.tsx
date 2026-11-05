@@ -15,6 +15,7 @@ import { type MatchedSelector, type ResolvedProp } from '../model/resolved';
 import { selectorDependsOnAncestor } from '../model/selectors';
 import { getHost, onHostChange } from '../model/host';
 import { type LiveSetProp } from './EditorBasics';
+import { keepImportant } from '../model/styleDisplay';
 import { VALIGN_DISPLAYS, VerticalAlignRow, effectiveValue, rawEffective, currentFlexFlow } from './ResolvedRows';
 
 // The flex Direction control — only rendered when `display` is flex. Writes the
@@ -120,8 +121,22 @@ export function AlignRow({
         column={column}
         busy={busy}
         read={read}
-        onSet={(prop, value) => setProp(prop, value, false)}
-        onLive={(prop, value) => liveSetProp(prop, value, false)}
+        // The box, its dots and the axis menus have no text that shows the flag
+        // (the menus carry the `!` mark instead), so every write keeps the flag
+        // the property already has; a flag typed into a custom field adds it.
+        onSet={(prop, value) => {
+          const kept = keepImportant(value, rawEffective(read(prop)));
+          setProp(prop, kept.value, kept.important);
+        }}
+        onLive={(prop, value) => {
+          // An undefined preview restores the committed value; there is no flag to carry.
+          if (value === undefined) {
+            liveSetProp(prop, undefined, false);
+            return;
+          }
+          const kept = keepImportant(value, rawEffective(read(prop)));
+          liveSetProp(prop, kept.value, kept.important);
+        }}
         onClear={(prop) => clearProp(prop)}
         onProvenance={onProvenance}
         onSelectSelector={onSelectSelector}

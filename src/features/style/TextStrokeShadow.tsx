@@ -8,9 +8,9 @@ import { parseShadows, serializeShadows, blankShadow, shadowLabel, type Shadow }
 import { parseHideable, serializeHideable, type Hideable } from './model/hideable';
 import LayerList from './LayerList';
 import LayerPopover from './LayerPopover';
-import { displayOf, type Display } from './model/styleDisplay';
+import { displayOf, type Display, withImportant } from './model/styleDisplay';
 import { useComputedValue } from './model/computedStyle';
-import { type Props, joinImportant, PropLabel, LiveInput } from './TypographyKit';
+import { type Props, PropLabel, LiveInput } from './TypographyKit';
 
 // ─────────────── Stroke (-webkit-text-stroke) ───────────────
 
@@ -46,10 +46,11 @@ export function StrokeRow(props: Props) {
               busy={busy}
               ariaLabel="Stroke color"
               onChange={(color, live) => {
+                // The swatch picks a colour, not the flag: a flagged colour stays so.
                 if (live) {
-                  props.liveSetProp('-webkit-text-stroke-color', color, false);
+                  props.liveSetProp('-webkit-text-stroke-color', color, colorDisplay.important);
                 } else {
-                  props.setProp('-webkit-text-stroke-color', color, false);
+                  props.setProp('-webkit-text-stroke-color', color, colorDisplay.important);
                 }
               }}
             />
@@ -93,7 +94,7 @@ export function StrokeInput({
 } & Props) {
   return (
     <LiveInput
-      value={display.present ? joinImportant(display) : ''}
+      value={display.present ? withImportant(display) : ''}
       busy={busy}
       placeholder={placeholder}
       ariaLabel={ariaLabel}
@@ -258,14 +259,17 @@ export function shadowRowEdits({
 }) {
   const write = (next: Array<Hideable<Shadow>>, mode: 'live' | 'commit') => {
     const value = serializeHideable(next, ',', serializeShadows);
+    // The list is edited row by row, with no text to delete `!important` from,
+    // so a write keeps the flag the property already has.
+    const { important } = displayOf(props.read('text-shadow'));
     if (mode === 'live') {
       if (value) {
-        props.liveSetProp('text-shadow', value, false);
+        props.liveSetProp('text-shadow', value, important);
       }
       return;
     }
     if (value) {
-      props.setProp('text-shadow', value, false);
+      props.setProp('text-shadow', value, important);
     } else {
       props.clearProp('text-shadow');
     }

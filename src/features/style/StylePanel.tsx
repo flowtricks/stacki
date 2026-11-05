@@ -21,6 +21,7 @@ interface StylePanelProps {
   readonly pathOf?: HostState['pathOf'];
   readonly onWriteStyleNode?: HostState['writeStyleNode'] | undefined;
   readonly onSelectNode?: HostState['selectNode'] | undefined;
+  readonly onCanvasWidth?: HostState['setCanvasWidth'] | undefined;
   readonly onRecordUndo?: HostState['recordUndo'] | undefined;
   readonly onAddClass?: HostState['addClass'] | undefined;
   readonly onRemoveClass?: HostState['removeClass'] | undefined;
@@ -79,6 +80,7 @@ function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleF
     contextPagePath: props.contextPagePath,
     writeStyleNode: props.onWriteStyleNode,
     selectNode: props.onSelectNode,
+    setCanvasWidth: props.onCanvasWidth,
     recordUndo: props.onRecordUndo,
     addClass: props.onAddClass,
     removeClass: props.onRemoveClass,
