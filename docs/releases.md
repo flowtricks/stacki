@@ -15,6 +15,26 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.11 style panel fixes: nested queries, live drags, !important, prop binding
+
+- Spacing drags update the canvas while the pointer moves: a live save was a debounce that every
+  animation frame pushed back, so nothing saved until the hand rested. It now throttles.
+- Nested media queries are read from where they are written: the wrapper selector shows over the
+  query for every element it reaches, a nested query is listed only for its wrapper and its
+  descendants, each row names its stylesheet, and edits in a nested block land in that block live
+  and on commit. The menu lists only authored queries; picking a px/rem query sizes the canvas,
+  and Desktop returns an @media context to Base.
+- `!important` shows in every Style panel field, and swatches, variable picks and list editors keep
+  it instead of dropping it.
+- The CSS Code editor shows two-space levels with selectors flush left, and new nested rules are
+  written at the file's own depth. Clip path keeps the authored text and writes the shortest form.
+- `--` suggests variables, and the bind circle sits on the field, in the clip-path and CSS Code
+  editors. A click past a variable chip puts the caret after it.
+- Components: plain text connects to a string prop, the bind dot replaces the value or inserts at
+  the caret, the Settings pop-up and Properties panel share one property editor, and double-clicking
+  slotted text edits it on the page instead of opening the component.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.11.
+
 ## 1.0.10 new collections load in a running preview, clean new entries
 
 - Astro reads `src/content.config.*` only when the dev server starts, so a collection added while
