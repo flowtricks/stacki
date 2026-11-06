@@ -40,6 +40,19 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.15 collection fields stick, prop renames follow through
+
+- Fields added in a content collection's settings now stay. A name like `My Field` becomes the key
+  `my-field`, an invalid name keeps its text and shows why, and a refused save no longer wipes the
+  form (#75).
+- Renaming a prop renames its local variable and every use in the file, in one undo step. A clash
+  is refused under Name.
+- With `::before` or `::after` selected, Duplicate, Wrap, Make component and Copy no longer act on
+  the parent element.
+- Studio: the chat no longer stacks copies of its transcript (#74).
+- Pushing a version tag now also runs the Linux preflight.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.15.
+
 ## 1.0.14 the 1.0.13 Desktop release, through the Linux build
 
 - The same app as 1.0.13, which never became a public Desktop release: its Linux build failed on
