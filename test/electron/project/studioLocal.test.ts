@@ -2,8 +2,10 @@
 // Method: use temporary projects to check installation detection, generated paths,
 // session storage boundaries, startup failures, and the browser entry's loopback restriction;
 // and that Studio's own folders move into the self-ignored `.stacki/studio/` once, whole.
+// Stand-in Astro CLIs record the real spawned environments: Studio's child carries the telemetry
+// opt-outs, and the canvas spawn, which Studio shares a host with, gains none of them.
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -11,6 +13,11 @@ import { studioEntryHTML } from '#dist/electron/previewServer/studioEntry.js';
 import { prepareStudioLocal } from '#dist/electron/previewServer/studioLocalMove.js';
 import { isStudioLocalPath } from '#dist/shared/properties/studioLocal.js';
 import { createLocalStudio, hasLocalStudio, writeLocalStudioConfig } from '#dist/electron/previewServer/studioLocal.js';
+import { setToolPathHome, spawnAstroServer } from '#dist/electron/lib/nodeTools.js';
+import { STUDIO_TELEMETRY_DISABLED } from '#dist/shared/properties/studioTelemetry.js';
+import { once } from 'node:events';
+
+setToolPathHome(os.homedir());
 
 test('local configuration uses website source and leaves its Astro config intact', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'stacki-studio-local-'));
@@ -110,4 +117,72 @@ test('only Studio-owned paths read as Studio state', () => {
     assert.equal(isStudioLocalPath(site), false, site);
   }
   assert.throws(() => isStudioLocalPath('.stacki\\studio'), /POSIX paths/);
+});
+
+const TELEMETRY_NAMES = Object.keys(STUDIO_TELEMETRY_DISABLED);
+const RECORD_ENVIRONMENT = 'import { writeFileSync } from "node:fs";\nwriteFileSync("environment.json", JSON.stringify(process.env));\n';
+
+async function recordedEnvironment(root: string): Promise<Readonly<Record<string, unknown>>> {
+  const value: unknown = JSON.parse(await readFile(path.join(root, 'environment.json'), 'utf8'));
+  assert.ok(typeof value === 'object' && value !== null);
+  return Object.fromEntries(Object.entries(value));
+}
+
+// The host's own values decide what a child inherits, so each test states them.
+function withHostEnvironment(context: TestContext, values: Readonly<Record<string, string>>): void {
+  const previous = Object.fromEntries(TELEMETRY_NAMES.map((name) => [name, process.env[name]]));
+  context.after(() => {
+    for (const [name, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  });
+  for (const name of TELEMETRY_NAMES) {
+    delete process.env[name];
+  }
+  Object.assign(process.env, values);
+}
+
+test('Studio started from Desktop carries the telemetry opt-outs, over an inherited value', async (context) => {
+  withHostEnvironment(context, { WRANGLER_SEND_METRICS: 'true' });
+  const root = await mkdtemp(path.join(os.tmpdir(), 'stacki-studio-telemetry-'));
+  await mkdir(path.join(root, 'studio/dist'), { recursive: true });
+  await writeFile(path.join(root, 'studio/dist/integration.mjs'), '');
+  await mkdir(path.join(root, 'node_modules/astro/bin'), { recursive: true });
+  await writeFile(
+    path.join(root, 'node_modules/astro/bin/astro.mjs'),
+    RECORD_ENVIRONMENT +
+      [
+        'import { createServer } from "node:http";',
+        'const port = Number(process.argv[process.argv.indexOf("--port") + 1]);',
+        'createServer((request, response) => response.end(JSON.stringify({ kind: "local" }))).listen(port, "127.0.0.1");',
+      ].join('\n'),
+  );
+  const studio = createLocalStudio(root, () => {});
+  // Stop the child first: Windows cannot remove a directory a process is running in.
+  context.after(async () => {
+    studio.close();
+    await rm(root, { recursive: true, force: true, maxRetries: 5 });
+  });
+  const result = await studio.open();
+  assert.equal(result.ok, true);
+  const environment = await recordedEnvironment(root);
+  assert.deepEqual(Object.fromEntries(TELEMETRY_NAMES.map((name) => [name, environment[name]])), STUDIO_TELEMETRY_DISABLED);
+});
+
+test("Desktop's canvas spawn keeps its environment", async (context) => {
+  withHostEnvironment(context, {});
+  const root = await mkdtemp(path.join(os.tmpdir(), 'stacki-canvas-telemetry-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const bin = path.join(root, 'astro.mjs');
+  await writeFile(bin, RECORD_ENVIRONMENT);
+  const child = spawnAstroServer(root, bin, ['dev']);
+  await once(child, 'exit');
+  const environment = await recordedEnvironment(root);
+  for (const name of TELEMETRY_NAMES) {
+    assert.equal(environment[name], undefined, name);
+  }
 });

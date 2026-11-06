@@ -1,5 +1,7 @@
 import './assemble';
 import { projectScripts } from './projectScripts';
+import { findTrackingFailures } from './noTracking';
+import { readNoTrackingInput } from './noTrackingTree';
 import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,6 +68,12 @@ const release = parseRelease({
   version,
   files: files.sort((left, right) => left.path.localeCompare(right.path)),
 });
+// GitHub and npm both publish this bundle, so one failure here blocks both. `release:bundle`
+// builds first, which is why a missing dist is a failure here and not a skipped check.
+const trackingFailures = findTrackingFailures(await readNoTrackingInput(root, 'required'));
+if (trackingFailures.length > 0) {
+  throw new Error(`Studio must not ship tracking:\n${trackingFailures.join('\n')}`);
+}
 await mkdir(path.join(root, 'release'), { recursive: true });
 const destination = path.join(root, 'release', `stacki-studio-${version}.json`);
 await writeFile(destination, JSON.stringify(release));

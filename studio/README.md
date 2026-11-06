@@ -85,6 +85,25 @@ The runner supports `astro.config.ts`, `.mts`, `.cts`, `.js`, `.mjs`, or `.cjs`,
 - Codex-style AI panel with saved parallel chats, per-chat model selection, browser dictation, image upload/paste/drop, and stop controls. Configurable OpenAI-compatible service with bounded context, reviewable replacements, stale-edit checks, and an explicit apply action. See [AI chat configuration](docs/ai-chat.md).
 - Cloudflare Worker/GitHub login, repository collaborator access, verified GitHub profile pictures, an account/sign-out menu, an isolated preview host, a single shared Container, and R2 persistence for draft recovery.
 
+## Privacy
+
+Studio sends no usage tracking. It has no analytics, no usage counter and no background
+update service, and it turns off the usage reporting of the tools it starts: Astro, Wrangler
+and Vercel's CLI. `scripts/noTracking.ts` checks this in the tests and before each release.
+
+Studio still contacts third parties to do what you ask of it:
+
+- GitHub, Sanity, Cloudflare, Vercel and your AI provider, when you connect them.
+- GitHub profile pictures, for people signed in to a hosted Studio.
+- YouTube, Vimeo, Loom, Wistia or Dailymotion, when you link one of their videos in a CMS
+  field and Studio fetches its preview.
+- GitHub's release feed, when you check for a Studio update.
+- Your browser's speech service, if you use dictation in the AI panel.
+
+Your website's own code, scripts and embeds also run in the preview and make their own
+requests. A `wrangler deploy` you run yourself is covered in the
+[deployment guide](docs/cloudflare.md).
+
 ## Install and update
 
 Studio is distributed as a versioned source bundle alongside Stacki desktop releases.

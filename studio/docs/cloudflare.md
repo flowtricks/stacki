@@ -55,6 +55,7 @@ serving the published website. Preview uses an isolated hostname.
 
 For a Container deployment, configure the build root as `studio`, build command
 `npm run build`, and deploy command `npx wrangler deploy --config cloudflare/wrangler.jsonc`.
+A `wrangler deploy` you run by hand or in your own pipeline is outside Stacki's control and sends Wrangler's metrics unless you set `WRANGLER_SEND_METRICS=false` or run `wrangler telemetry disable` once.
 Website deployment remains controlled by the website's own configuration. Accepting a
 Studio update creates a review branch; merge and redeploy the CMS to activate it.
 

@@ -25,6 +25,8 @@ RUN mkdir /workspace && chown node:node /workspace
 USER node
 EXPOSE 4350
 ENV ASTRO_TELEMETRY_DISABLED=1
+ENV VERCEL_TELEMETRY_DISABLED=1
+ENV WRANGLER_SEND_METRICS=false
 ENV NPM_CONFIG_UPDATE_NOTIFIER=false
 ENV PATH="/opt/studio/node_modules/.bin:${PATH}"
 CMD ["node", "dist/container.mjs"]

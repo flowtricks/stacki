@@ -11,6 +11,7 @@ import { assert } from '../../shared/core/assert';
 import { record } from '../../shared/core/boundary';
 import { err, ok, type Result } from '../../shared/core/result';
 import { releaseVersion } from '../../shared/ipc/studioRelease';
+import { withStudioTelemetryDisabled } from '../../shared/properties/studioTelemetry';
 
 export function hasLocalStudio(project: string): boolean {
   try {
@@ -90,7 +91,13 @@ async function launchLocalStudio(project: string, host: LaunchHost): Promise<Res
       '127.0.0.1',
       '--ignore-lock',
     ],
-    { cwd: project, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] },
+    {
+      cwd: project,
+      detached: process.platform !== 'win32',
+      // This child alone: the canvas server that starts it keeps its own environment.
+      env: withStudioTelemetryDisabled(process.env),
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
   );
   host.track(child);
   let failure: string | undefined;

@@ -191,6 +191,7 @@
     "shared/properties/componentSources.ts",
     "shared/properties/projectScan.ts",
     "shared/properties/studioLocal.ts",
+    "shared/properties/studioTelemetry.ts",
     "shared/properties/propSchema.ts",
     "shared/properties/propModel.ts",
     "shared/properties/propModelSchema.ts",

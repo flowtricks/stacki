@@ -7,6 +7,7 @@ import path from 'node:path';
 import { writeStudioConfig, exists } from './workspace';
 import { copyProject } from './copyProject';
 import { prepareStudioLocal } from '../vendor/stacki/electron/previewServer/studioLocalMove';
+import { withStudioTelemetryDisabled } from '../vendor/stacki/shared/properties/studioTelemetry';
 
 export async function startDraft(packageRoot: string, source: string, port: number) {
   const requested = path.resolve(process.env['STUDIO_WORKSPACE'] ?? '.studio/workspace');
@@ -67,7 +68,8 @@ export async function startDraft(packageRoot: string, source: string, port: numb
 }
 function run(executable: string, args: string[], cwd: string) {
   return new Promise<void>((resolve, reject) => {
-    const child = spawn(executable, args, { cwd, stdio: 'inherit', env: process.env });
+    // Astro hosts Studio, so its publishes inherit these too.
+    const child = spawn(executable, args, { cwd, stdio: 'inherit', env: withStudioTelemetryDisabled(process.env) });
     const stop = () => child.kill('SIGTERM');
     process.once('SIGTERM', stop);
     process.once('SIGINT', stop);

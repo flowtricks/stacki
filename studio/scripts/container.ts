@@ -13,6 +13,7 @@ import { writeStudioConfig } from './workspace';
 import { Room } from '../src/features/collaboration/rooms';
 import { preparePath } from '../src/features/project/projectServer';
 import { sourcePath, filePath } from '../src/shared/validation';
+import { withStudioTelemetryDisabled } from '../vendor/stacki/shared/properties/studioTelemetry';
 
 const root = '/workspace';
 const backend = process.env['STUDIO_BACKEND_URL'];
@@ -94,7 +95,8 @@ await command(
 );
 async function command(executable: string, args: string[], timeoutMs = 180_000) {
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(executable, args, { cwd: root, stdio: 'inherit', env: process.env });
+    // The image sets these too; applying them here covers a project's older Dockerfile.
+    const child = spawn(executable, args, { cwd: root, stdio: 'inherit', env: withStudioTelemetryDisabled(process.env) });
     const timer = timeoutMs ? setTimeout(() => child.kill('SIGKILL'), timeoutMs) : undefined;
     child.on('error', (error) => {
       clearTimeout(timer);
