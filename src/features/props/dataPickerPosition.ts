@@ -25,7 +25,7 @@ export interface ViewportSize {
 
 export function dataPickerPosition(
   anchor: AnchorBounds,
-  options: { readonly heightPxMax?: number; readonly viewport?: ViewportSize } = {},
+  options: { readonly heightPxMax?: number; readonly widthPxMin?: number; readonly viewport?: ViewportSize } = {},
 ): Required<FieldPosition> {
   const viewport = options.viewport ?? { width: window.innerWidth, height: window.innerHeight };
   const heightPxMax = options.heightPxMax ?? DATA_PICKER_HEIGHT_PX_MAX;
@@ -33,7 +33,7 @@ export function dataPickerPosition(
   assert(anchor.width >= 0, 'dataPickerPosition: anchor width must not be negative');
   assert(heightPxMax > 0, 'dataPickerPosition: height must be positive');
   const widthPxRoom = Math.max(0, viewport.width - VIEWPORT_GUTTER_PX * 2);
-  const width = Math.min(Math.max(anchor.width, DATA_PICKER_WIDTH_PX_MIN), widthPxRoom);
+  const width = Math.min(Math.max(anchor.width, options.widthPxMin ?? DATA_PICKER_WIDTH_PX_MIN), widthPxRoom);
   const leftPxMax = viewport.width - VIEWPORT_GUTTER_PX - width;
   const left = Math.max(VIEWPORT_GUTTER_PX, Math.min(anchor.left, leftPxMax));
   // Below the field, or above it when the field sits near the bottom of the

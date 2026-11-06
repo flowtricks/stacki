@@ -12,6 +12,7 @@ import type { ChipsOf } from '../../ui/ExprInput';
 import type { PickerNode } from './DataPicker';
 import type { NewPropSeed } from './newPropModel';
 import type { PropDeclaration } from '../../editor/propDeclaration';
+import type { VariableRename } from '../../editor/variableRename';
 import type { FieldFocus } from './fieldFocus';
 
 export interface FieldPosition {
@@ -29,6 +30,8 @@ export interface SourceContext {
   readonly projectPath?: string | undefined;
   readonly filePath?: string | undefined;
   readonly onSetFrontmatter?: ((source: string) => void) | undefined;
+  /** Renames a frontmatter variable across the file; a message says why it was refused. */
+  readonly onRenameVariable?: ((rename: VariableRename) => string | undefined) | undefined;
   readonly onOpenSymbol?: ((name: string) => void) | undefined;
 }
 export type ValueChange = (value: Attr | undefined, immediate?: boolean) => void;
@@ -107,5 +110,9 @@ export interface VarSourceEditorProps {
   readonly name: string;
   readonly code: string;
   readonly onChangeCode?: ((source: string) => void) | undefined;
+  /** Where a new name for the variable goes, so every read of it follows. */
+  readonly onRename?: ((rename: VariableRename) => string | undefined) | undefined;
+  /** The open file whose frontmatter this is. */
+  readonly filePath?: string | undefined;
   readonly onClose: () => void;
 }

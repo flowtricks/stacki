@@ -15,6 +15,7 @@ import {
   ElementImageIcon,
   FieldNumberIcon,
   FieldSwitchIcon,
+  GearIcon,
   SearchIcon,
   PencilIcon,
   RepeatIcon,
@@ -27,11 +28,13 @@ import {
   isComponentSection,
   pagesOfPath,
   sectionHeading,
+  settingsKeyOf,
   shownEntryRows,
   steppedEntryIndex,
   type DataOrigin,
   type EntryPages,
 } from './dataPickerModel';
+import type { PropSettingsOffer } from './newPropModel';
 
 // The data behind the page, as something you can look through rather than
 // something you have to already know. Every row is a value that is in scope
@@ -167,6 +170,8 @@ export interface DataPickerProps {
   readonly footer?: boolean;
   /** Rows above the search, for what the field can do besides pick: "New Text property" in a component. */
   readonly lead?: ReactNode;
+  /** Opens a prop's settings from its row. A host without it shows no gear. */
+  readonly propSettings?: PropSettingsOffer | undefined;
 }
 
 export default function DataPicker(props: DataPickerProps) {
@@ -175,36 +180,43 @@ export default function DataPicker(props: DataPickerProps) {
   const state = useDataPicker(props);
   const { query, setQuery, searchRef, listRef } = state;
   const origin = props.origin;
+  const { propSettings } = props;
+  const editing = propSettings === undefined ? undefined : state.settingsKey;
   return (
-    <div className="data-picker">
-      {lead}
-      {/* Which entry the values below are FROM. A dynamic route stands for
+    <>
+      {/* Hidden rather than unmounted while a prop's settings are open, so what
+          was opened, stepped to and searched for is still there afterwards. */}
+      <div className={editing === undefined ? 'data-picker' : 'data-picker is-covered'}>
+        {lead}
+        {/* Which entry the values below are FROM. A dynamic route stands for
           many, and the one on the canvas is the one being read here — so
           stepping through them previews the page against other content and
           re-reads this list against it at the same time. */}
-      {entries && entries.count > 1 && <EntryNavigation entries={entries} />}
-      <div className="dp-search">
-        <SearchIcon size={12} />
-        <input ref={searchRef} value={query} placeholder="Search data…" spellCheck={false} autoFocus onChange={(event) => setQuery(event.target.value)} />
-      </div>
-      <DataPickerResults state={state} origin={origin} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
-      {/* Above "Write an expression…", because it is about the thing already
+        {entries && entries.count > 1 && <EntryNavigation entries={entries} />}
+        <div className="dp-search">
+          <SearchIcon size={12} />
+          <input ref={searchRef} value={query} placeholder="Search data…" spellCheck={false} autoFocus onChange={(event) => setQuery(event.target.value)} />
+        </div>
+        <DataPickerResults state={state} origin={origin} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
+        {/* Above "Write an expression…", because it is about the thing already
           bound rather than about replacing it. Only ever rendered for a picker
           opened on a specific chip — the field's own handle opens this on
           nothing in particular, and there is no "the" value to edit then. */}
-      {allowCode && onEdit && (
-        <div className="dp-foot" onMouseDown={(event) => event.preventDefault()} onClick={onEdit}>
-          <PencilIcon size={11} />
-          {editLabel}
-        </div>
-      )}
-      {allowCode && footer && (
-        <div className="dp-foot" onMouseDown={(event) => event.preventDefault()} onClick={onWrite}>
-          <CodeIcon size={11} />
-          Write an expression…
-        </div>
-      )}
-    </div>
+        {allowCode && onEdit && (
+          <div className="dp-foot" onMouseDown={(event) => event.preventDefault()} onClick={onEdit}>
+            <PencilIcon size={11} />
+            {editLabel}
+          </div>
+        )}
+        {allowCode && footer && (
+          <div className="dp-foot" onMouseDown={(event) => event.preventDefault()} onClick={onWrite}>
+            <CodeIcon size={11} />
+            Write an expression…
+          </div>
+        )}
+      </div>
+      {editing !== undefined && propSettings !== undefined && <div className="dp-property-settings">{propSettings.render(editing, state.closeSettings)}</div>}
+    </>
   );
 }
 
@@ -237,8 +249,9 @@ function DataPickerResults({
   );
 }
 
-function useDataPicker({ tree: rawTree, current, onExpand }: DataPickerProps) {
+function useDataPicker({ tree: rawTree, current, onExpand, propSettings }: DataPickerProps) {
   const [query, setQuery] = useState('');
+  const [settingsKey, setSettingsKey] = useState<string | undefined>(undefined);
   const tree = useMemo(() => withCurrent(rawTree ?? [], current), [rawTree, current]);
   // Which entry each list of entries shows: the one the binding names, else the first.
   const [pages, setPages] = useState<EntryPages>(() => pagesOfPath(current));
@@ -337,7 +350,30 @@ function useDataPicker({ tree: rawTree, current, onExpand }: DataPickerProps) {
     setOpen((previous) => new Set(previous).add(entryPath(node.path, index)));
   };
 
-  return { query, setQuery, tree, open, pages, searchRef, listRef, selectedRef, matches, toggle, stepEntry, current };
+  const closeSettings = (): void => {
+    setSettingsKey(undefined);
+    // The search was hidden with the rest, so the keyboard goes back to where the picker starts.
+    searchRef.current?.focus();
+  };
+
+  return {
+    query,
+    setQuery,
+    tree,
+    open,
+    pages,
+    searchRef,
+    listRef,
+    selectedRef,
+    matches,
+    toggle,
+    stepEntry,
+    current,
+    settingsKey,
+    openSettings: setSettingsKey,
+    closeSettings,
+    keyOf: propSettings?.keyOf,
+  };
 }
 
 type PickerState = ReturnType<typeof useDataPicker>;
@@ -414,6 +450,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
         ) : (
           <PreviewValue preview={node.preview} kind={node.kind} image={node.image} />
         )}
+        {state.keyOf !== undefined && <PropSettingsSlot propKey={settingsKeyOf(node, state.keyOf)} onOpen={state.openSettings} />}
       </div>
       {isOpen &&
         (shown !== undefined ? (
@@ -437,6 +474,32 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
           </div>
         ) : undefined)}
     </React.Fragment>
+  );
+}
+// The end of every row of a picker that can open settings, filled only on a
+// prop's: the slot is there either way, so showing the gear moves nothing and
+// the column of values beside it stays one column.
+function PropSettingsSlot({ propKey, onOpen }: { readonly propKey: string | undefined; readonly onOpen: (key: string) => void }) {
+  return (
+    <span className="dp-settings-slot">
+      {propKey !== undefined && (
+        <button
+          type="button"
+          className="dp-settings"
+          aria-label={`Edit ${propKey} settings`}
+          title="Edit settings"
+          // Pressing it keeps the caret in the field, as pressing the row does.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={(event) => {
+            // The row picks on click; this opens settings and leaves the binding alone.
+            event.stopPropagation();
+            onOpen(propKey);
+          }}
+        >
+          <GearIcon size={12} />
+        </button>
+      )}
+    </span>
   );
 }
 function ItemNavigation({

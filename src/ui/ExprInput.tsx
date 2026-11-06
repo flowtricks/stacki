@@ -9,6 +9,7 @@ import type { TemplateHole } from '../editor/bindings';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
+import { html } from '@codemirror/lang-html';
 import { javascript } from '@codemirror/lang-javascript';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
@@ -159,6 +160,10 @@ export interface ExprInputProps {
   readonly onChipClick?: (range: TemplateHole | undefined) => void;
   readonly apiRef?: MutableRefObject<ExprInputAPI | undefined>;
   readonly completions?: readonly Completion[];
+  /** What the text is written in: an expression by default, a TypeScript type, or a line of markup. */
+  readonly language?: 'html' | 'javascript' | 'typescript';
+  /** The field's accessible name, for a field no <label> wraps. */
+  readonly ariaLabel?: string;
 }
 interface ExprRefs {
   readonly latest: MutableRefObject<ExprInputProps>;
@@ -220,7 +225,8 @@ function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs
         history(),
         drawSelection(),
         keymap.of(exprKeys(initial, refs)),
-        javascript(),
+        initial.language === 'html' ? html() : javascript({ typescript: initial.language === 'typescript' }),
+        ...(initial.ariaLabel === undefined ? [] : [EditorView.contentAttributes.of({ 'aria-label': initial.ariaLabel })]),
         // Scope is read at request time: frontmatter can change while this editor stays mounted.
         autocompletion({
           override: [(context) => exprCompletionSource(context, refs.latest.current)],

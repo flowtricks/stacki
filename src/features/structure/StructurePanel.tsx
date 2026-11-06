@@ -58,6 +58,7 @@ interface StructurePanelProps {
   readonly onDropComponent: (name: string, target: DropLocation) => void;
   readonly onMoveNode: (id: string, target: DropLocation) => void;
   readonly onWrapNode?: (id: string, tag: WrapperTag) => void;
+  readonly canDeleteNode?: (id: string) => boolean;
   readonly onRemoveNode: (id: string) => void;
   readonly onCopyNode: (id: string) => void;
   readonly onCutNode?: (id: string) => void;

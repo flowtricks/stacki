@@ -22,6 +22,18 @@
 // page down until it is on screen, even when the smooth scroll is halted
 // partway (the page halts the first one, as Linux did); revealing it again
 // does not move the page.
+//
+// Whether a reveal moves the page at all is then tested from a known place: the
+// host scrolls a box to a chosen top in the frame, reveals it, and compares the
+// scroll position before and after. The rule under test:
+//   - a box wholly inside the frame stays put, even touching its edge,
+//   - a box partly or wholly outside it scrolls, in either direction,
+//   - a box taller than the frame stays put while it covers the frame, and
+//     otherwise aligns to its top,
+//   - a ::before is judged by its own painted box, in both directions: in view
+//     inside a far taller host that a reveal would move, and out of view inside
+//     a host that covers the frame,
+//   - a ::before with no box falls back to its host.
 
 const fs = require('fs');
 const http = require('http');
@@ -48,6 +60,13 @@ const FRAME_PAGE = `<!doctype html><meta charset=utf-8>
   .bleed { margin-top: 20px; }
   .tall { height: 3000px; }
   .below { height: 200px; background: #36c; }
+  .gap { height: 1500px; }
+  .box { height: 100px; background: #3c6; }
+  .host { position: relative; height: 2000px; background: #eee; }
+  .host::before { content: ''; position: absolute; top: 50px; left: 20px; width: 100px; height: 60px; background: #c6c; }
+  .long { height: 1500px; background: #cc3; }
+  .bare { height: 100px; }
+  .bare::before { content: ''; }
 </style>
 <body>
   <div class="spacer"></div>
@@ -55,6 +74,15 @@ const FRAME_PAGE = `<!doctype html><meta charset=utf-8>
   <!--avb-s:1--><div class="video bleed" id="bleeding"></div><!--avb-e:1-->
   <div class="tall"></div>
   <!--avb-s:2--><section class="below" id="below"></section><!--avb-e:2-->
+  <div class="gap"></div>
+  <!--avb-s:3--><section class="box" id="box"></section><!--avb-e:3-->
+  <div class="gap"></div>
+  <!--avb-s:4--><section class="host" id="host"></section><!--avb-e:4-->
+  <div class="gap"></div>
+  <!--avb-s:5--><section class="long" id="long"></section><!--avb-e:5-->
+  <div class="gap"></div>
+  <!--avb-s:6--><section class="bare" id="bare"></section><!--avb-e:6-->
+  <div class="gap"></div>
   <script>
     // The stall the Linux runner showed, made to happen everywhere: the first
     // smooth scroll the page sees is halted where it is, a few pixels down.
@@ -120,7 +148,7 @@ const HOST_PAGE = `<!doctype html><meta charset=utf-8>
        await sleep(600);
        const run = (code) => win.webContents.executeJavaScript(code);
        await run(\`document.getElementById('canvas').contentWindow.postMessage(
-         { type: 'avb:track', paths: ['0', '1', '2'], scope: '', focus: '', focusOcc: 0 }, '*')\`);
+         { type: 'avb:track', paths: ['0', '1', '2', '3', '4', '4::before', '5', '6', '6::before'], scope: '', focus: '', focusOcc: 0 }, '*')\`);
        await sleep(300);
        // Reveal a path, let a smooth scroll finish (bounded), and read where everything is.
        const reveal = (nodePath, id) => run(\`(async () => {
@@ -153,11 +181,56 @@ const HOST_PAGE = `<!doctype html><meta charset=utf-8>
          const rect = element.getBoundingClientRect();
          return { scrollX: frame.scrollX, scrollY: frame.scrollY, lefts, top: rect.top, bottom: rect.bottom, height: frame.innerHeight };
        })()\`);
+       // Put a box at a chosen top in the frame, reveal a path, and read how far
+       // the page went. Settled means the page held still for ten readings: a
+       // reveal that wrongly scrolls has started well before the first of them.
+       const revealFrom = (nodePath, id, boxTop) => run(\`(async () => {
+         const frame = document.getElementById('canvas').contentWindow;
+         const element = frame.document.getElementById('\${id}');
+         frame.scrollTo({ top: frame.scrollY + element.getBoundingClientRect().top - \${boxTop}, behavior: 'instant' });
+         await new Promise((r) => setTimeout(r, 60));
+         const startY = frame.scrollY;
+         const placed = element.getBoundingClientRect().top;
+         frame.postMessage({ type: 'avb:scroll-to', path: '\${nodePath}', occ: 0 }, '*');
+         const SETTLE_TRIES_MAX = 80;
+         const STILL_READINGS_MAX = 10;
+         let last = startY;
+         let still = 0;
+         for (let attempt = 0; attempt < SETTLE_TRIES_MAX; attempt += 1) {
+           await new Promise((r) => setTimeout(r, 60));
+           still = frame.scrollY === last ? still + 1 : 0;
+           last = frame.scrollY;
+           if (still >= STILL_READINGS_MAX) { break; }
+         }
+         const rect = element.getBoundingClientRect();
+         return { startY, placed, scrollY: frame.scrollY, top: rect.top, bottom: rect.bottom, height: frame.innerHeight };
+       })()\`);
        const wrapped = await reveal('0', 'wrapped');
        const bleeding = await reveal('1', 'bleeding');
        const below = await reveal('2', 'below');
        const again = await reveal('2', 'below');
-       console.log(JSON.stringify({ wrapped, bleeding, below, again }));
+       const moves = {
+         inside: await revealFrom('3', 'box', 200),
+         touchingTop: await revealFrom('3', 'box', 0),
+         nearTop: await revealFrom('3', 'box', 5),
+         nearBottom: await revealFrom('3', 'box', 495),
+         touchingBottom: await revealFrom('3', 'box', 500),
+         cutByTop: await revealFrom('3', 'box', -40),
+         cutByBottom: await revealFrom('3', 'box', 550),
+         belowFrame: await revealFrom('3', 'box', 900),
+         aboveFrame: await revealFrom('3', 'box', -500),
+         pseudoInView: await revealFrom('4::before', 'host', 100),
+         hostOfPseudo: await revealFrom('4', 'host', 100),
+         pseudoAboveFrame: await revealFrom('4::before', 'host', -700),
+         longCovering: await revealFrom('5', 'long', -300),
+         longFlushTop: await revealFrom('5', 'long', 0),
+         longTopShowing: await revealFrom('5', 'long', 400),
+         longLanded: await revealFrom('5', 'long', 24),
+         longBottomShowing: await revealFrom('5', 'long', -1200),
+         bareInView: await revealFrom('6::before', 'bare', 200),
+         bareBelowFrame: await revealFrom('6::before', 'bare', 900),
+       };
+       console.log(JSON.stringify({ wrapped, bleeding, below, again, moves }));
        app.quit();
      });`,
   );
@@ -183,7 +256,7 @@ const HOST_PAGE = `<!doctype html><meta charset=utf-8>
   if (!line) {
     check('the browser probe ran', false, (run.stderr || run.stdout || '').slice(0, 800));
   } else {
-    const { wrapped, bleeding, below, again } = JSON.parse(line);
+    const { wrapped, bleeding, below, again, moves } = JSON.parse(line);
     const allZero = (lefts) => lefts.every((left) => left === 0);
 
     check('a video overflowing a clipped wrapper does not scroll the window sideways', wrapped.scrollX === 0, JSON.stringify(wrapped));
@@ -199,13 +272,80 @@ const HOST_PAGE = `<!doctype html><meta charset=utf-8>
     check('still without going sideways', below.scrollX === 0 && allZero(below.lefts), JSON.stringify(below));
 
     check('revealing it again does not move the page', again.scrollY === below.scrollY, JSON.stringify({ below, again }));
+
+    // Every case must have started where it asked to, or "did not move" proves nothing.
+    const placedAsAsked = {
+      inside: 200,
+      touchingTop: 0,
+      nearTop: 5,
+      nearBottom: 495,
+      touchingBottom: 500,
+      cutByTop: -40,
+      cutByBottom: 550,
+      belowFrame: 900,
+      aboveFrame: -500,
+      pseudoInView: 100,
+      hostOfPseudo: 100,
+      pseudoAboveFrame: -700,
+      longCovering: -300,
+      longFlushTop: 0,
+      longTopShowing: 400,
+      longLanded: 24,
+      longBottomShowing: -1200,
+      bareInView: 200,
+      bareBelowFrame: 900,
+    };
+    for (const [name, top] of Object.entries(placedAsAsked)) {
+      check(`the ${name} case starts where it asked to`, moves[name].placed === top, JSON.stringify(moves[name]));
+    }
+    const stays = (what, move) => check(what, move.scrollY === move.startY, JSON.stringify(move));
+    const scrollsOnScreen = (what, move) => {
+      check(what, move.scrollY !== move.startY, JSON.stringify(move));
+      check(`${what}, until all of it is on screen`, move.top >= 0 && move.bottom <= move.height, JSON.stringify(move));
+    };
+    const scrollsToTop = (what, move) => {
+      check(what, move.scrollY !== move.startY, JSON.stringify(move));
+      check(`${what}, landing a margin below the top of the frame`, Math.abs(move.top - 24) <= 1, JSON.stringify(move));
+    };
+
+    stays('a box inside the frame does not move the page', moves.inside);
+    stays('nor does one touching the top of the frame', moves.touchingTop);
+    stays('nor one inside the margin at the top', moves.nearTop);
+    stays('nor one inside the margin at the bottom', moves.nearBottom);
+    stays('nor one touching the bottom of the frame', moves.touchingBottom);
+
+    scrollsOnScreen('a box cut by the top of the frame scrolls', moves.cutByTop);
+    scrollsOnScreen('a box cut by the bottom of the frame scrolls', moves.cutByBottom);
+    scrollsOnScreen('a box below the frame scrolls', moves.belowFrame);
+    scrollsOnScreen('a box above the frame scrolls', moves.aboveFrame);
+
+    stays('a ::before in view does not move the page, however tall its host', moves.pseudoInView);
+    // The same host at the same place does move: the pseudo-element's own box is what held the page still.
+    scrollsToTop('the host itself, from that same place, is revealed', moves.hostOfPseudo);
+    check(
+      'a ::before out of view scrolls, though its host covers the frame',
+      moves.pseudoAboveFrame.scrollY !== moves.pseudoAboveFrame.startY,
+      JSON.stringify(moves.pseudoAboveFrame),
+    );
+    // The ::before sits 50px down its host and 60px tall, so its top is 50px below the host's.
+    const pseudoTop = moves.pseudoAboveFrame.top + 50;
+    check('until the ::before is on screen', pseudoTop >= 0 && pseudoTop + 60 <= moves.pseudoAboveFrame.height, JSON.stringify(moves.pseudoAboveFrame));
+
+    stays('a box taller than the frame does not move the page while it covers the frame', moves.longCovering);
+    stays('nor with its top exactly at the top of the frame', moves.longFlushTop);
+    scrollsToTop('one that does not reach the top of the frame aligns to its top', moves.longTopShowing);
+    stays('and, once aligned, stays there', moves.longLanded);
+    scrollsToTop('one that ends inside the frame aligns to its top', moves.longBottomShowing);
+
+    stays('a ::before with no box stays put while its host is in view', moves.bareInView);
+    scrollsOnScreen('and reveals its host when that is out of view', moves.bareBelowFrame);
   }
 
   if (failures.length) {
     console.error(`reveal-scrolls-down: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);
   }
-  console.log(`reveal-scrolls-down: ${checked} passed  [a reveal scrolls down, never sideways]`);
+  console.log(`reveal-scrolls-down: ${checked} passed  [a reveal scrolls down, never sideways, and only when out of view]`);
   process.exit(0);
 })().catch((error) => {
   console.error(error);

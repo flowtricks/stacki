@@ -151,7 +151,7 @@ export function useKeyboard(
   history: ReturnType<typeof useHistory>,
 ) {
   const { historyRef, reportFailure } = lifecycle;
-  const { openCodeWindowRef, pageStateRef, selectedIdRef, setClassFocus } = coreState;
+  const { openCodeWindowRef, pageStateRef, pseudoPickRef, selectedIdRef, setClassFocus } = coreState;
   const { setCreateRequest, setLeftTab, setRightTab } = coreState;
   const { copyNode, duplicateNode, nodeClipboardRef, pasteNode, removeNode } = nodeEdits;
   const { setInsertOpen } = nodeEdits;
@@ -166,6 +166,7 @@ export function useKeyboard(
       historyRef,
       pageStateRef,
       selectedIdRef,
+      pseudoPickRef,
       openCodeWindowRef,
       nodeClipboardRef,
       cmsOpenRef,
@@ -198,6 +199,7 @@ export function useKeyboard(
     nodeClipboardRef,
     openCodeWindowRef,
     pageStateRef,
+    pseudoPickRef,
     selectedIdRef,
     setClassFocus,
     setCreateRequest,

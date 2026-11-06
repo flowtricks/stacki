@@ -2,13 +2,8 @@ import { PageRenameButton } from '../../../vendor/stacki/src/features/pages/Page
 import { PageOrderGap } from '../../../vendor/stacki/src/features/pages/PageOrderGap';
 import { PageSearchPath } from '../../../vendor/stacki/src/features/pages/PageSearchPath';
 import { Fragment, useMemo, useState } from 'react';
-import {
-  buildPageTree,
-  pageDisplayName,
-  pageFolderDisplayName,
-  stripPageExtension,
-  type PageTreeNode,
-} from '../../../vendor/stacki/src/features/pages/pageTree';
+import { buildPageTree, type PageTreeNode } from '../../../vendor/stacki/src/features/pages/pageTree';
+import { pageDisplayName, pageFolderDisplayName, stripPageExtension } from '../../../vendor/stacki/src/lib/pageName';
 import { orderedPageTree } from '../../../vendor/stacki/src/features/pages/pageTreeOrder';
 import { type PageOrderDrag } from '../../../vendor/stacki/src/features/pages/usePageOrderDrag';
 import type { PageOrder } from '../../../vendor/stacki/shared/properties/pageOrder';

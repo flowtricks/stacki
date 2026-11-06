@@ -188,7 +188,7 @@ test('paste and extract-to-component insert, remove and import as requests', asy
     await tick();
   });
   await gesture(app, async () => {
-    await __panels.PalettePanel.onCreateComponent('Two');
+    await __panels.PalettePanel.onCreateComponent('Two', { asProp: [] });
   });
   assert.equal(
     disk(),

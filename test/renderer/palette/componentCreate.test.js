@@ -24,6 +24,19 @@ const path = require('path');
 const { readAppSource, readSource, sourceBlock } = require('../../helpers/sourceText.js');
 const { repoPath } = require('../../helpers/sources.js');
 
+// The dialog's half of a plan: what the rows show, with the rest of the plan empty.
+const dialogPlan = (names, locked, asProp) => ({
+  values: names.map((name) => {
+    if (locked[name] !== undefined) {
+      return { kind: 'locked', name, reason: locked[name] };
+    }
+    return asProp.has(name) ? { kind: 'prop', name } : { kind: 'move', name, note: undefined };
+  }),
+  props: [],
+  moved: { imports: [], code: '' },
+  parent: { imports: [], extraFrontmatter: '' },
+});
+
 const failures = [];
 let checked = 0;
 const check = (what, condition, detail) => {
@@ -512,7 +525,7 @@ const check = (what, condition, detail) => {
           ? {
               kind: 'ready',
               label: source.label || 'the selection',
-              props: source.props || [],
+              plan: (asProp) => dialogPlan(source.props || [], source.locked || {}, asProp),
               name: source.name,
             }
           : { kind: 'unavailable', reason: source.reason };
@@ -609,45 +622,71 @@ const check = (what, condition, detail) => {
     check('creating passes the converted name', created[0]?.name === 'ComponentName', JSON.stringify(created));
     check('and the dialog closes', !dom.window.document.querySelector('.modal'), 'still open');
 
-    // ── The offer ───────────────────────────────────────────────────────────
-    // A piece that reads the page can take those values as props, and does
-    // unless you say otherwise.
+    // ── The choice ──────────────────────────────────────────────────────────
+    // A piece that reads the page takes that value's code with it unless you
+    // say otherwise: Move leads, and passing it in as a prop is the second option.
     created.length = 0;
     await render({ name: 'Card', label: '<article>', props: ['title', 'items'] });
     await act(async () => {
       makeButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    const offer = () => dom.window.document.querySelector('.modal .check-row');
-    check('the values it reads are offered as props', !!offer(), 'no offer');
+    const rows = () => [...dom.window.document.querySelectorAll('.modal .extract-value')];
+    const rowOf = (name) => rows().find((row) => row.querySelector('.extract-value-name')?.textContent === name);
+    check('each value it reads has a row', rows().length === 2, String(rows().length));
     check(
       'named, so you can see what it will take',
-      /title/.test(offer()?.textContent || '') && /items/.test(offer()?.textContent || ''),
-      offer()?.textContent,
+      !!rowOf('title') && !!rowOf('items'),
+      rows()
+        .map((row) => row.textContent)
+        .join(' | '),
     );
-    check('taken by default', offer()?.querySelector('input')?.checked === true, 'unchecked');
+    check('Move is the default', /Move into this component/.test(rowOf('title')?.textContent || ''), rowOf('title')?.textContent);
+    check('no checkbox is left from before', !dom.window.document.querySelector('.modal input[type="checkbox"]'), 'a checkbox remains');
+    check('its name is highlighted code', !!rowOf('title')?.querySelector('code.code-inline'), rowOf('title')?.innerHTML);
     await act(async () => {
       createButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check('so creating takes them', created[0]?.withProps === true, JSON.stringify(created));
+    check('so creating moves them', JSON.stringify(created[0]?.asProp) === '[]', JSON.stringify(created));
 
-    // Turned off, the markup moves as it is — the old behaviour, on purpose.
+    // Chosen, one value is passed in and the other still moves.
     created.length = 0;
     await act(async () => {
       makeButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
     await act(async () => {
-      offer().querySelector('input').click();
-      await new Promise((resolve) => setTimeout(resolve, 5));
+      rowOf('items').querySelector('button').click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check('and it can be turned off', offer()?.querySelector('input')?.checked === false, 'still checked');
+    const propOption = [...dom.window.document.querySelectorAll('.dd-option')].find((option) => /Pass in as a prop/.test(option.textContent));
+    check('the prop option is on offer', !!propOption, dom.window.document.body.textContent);
+    await act(async () => {
+      propOption.click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check('and it shows as chosen', /Pass in as a prop/.test(rowOf('items')?.textContent || ''), rowOf('items')?.textContent);
     await act(async () => {
       createButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check('which is passed through', created[0]?.withProps === false, JSON.stringify(created));
+    check('which is passed through', JSON.stringify(created[0]?.asProp) === '["items"]', JSON.stringify(created));
+
+    // A value that can't move has no choice to offer, and says why.
+    created.length = 0;
+    await render({ name: 'Card', label: '<article>', props: ['title', 'item'], locked: { item: 'It comes from the loop around this element.' } });
+    await act(async () => {
+      makeButton().click();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    check('a locked value has no menu', !rowOf('item')?.querySelector('button'), rowOf('item')?.innerHTML);
+    check('it says what happens', /Passed in as a prop/.test(rowOf('item')?.textContent || ''), rowOf('item')?.textContent);
+    check('and why', /loop around this element/.test(rowOf('item')?.textContent || ''), rowOf('item')?.textContent);
+    await act(async () => {
+      dom.window.document.querySelector('.modal-footer button').click();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    });
 
     // ── The shortcut ────────────────────────────────────────────────────────
     // ⌘⇧A brings this panel up and asks for the name in one press. It arrives
@@ -856,7 +895,7 @@ const check = (what, condition, detail) => {
       makeButton().click();
       await new Promise((resolve) => setTimeout(resolve, 10));
     });
-    check('markup that reads nothing is asked nothing', !dom.window.document.querySelector('.modal .check-row'), 'offered props for markup with none');
+    check('markup that reads nothing is asked nothing', !dom.window.document.querySelector('.modal .extract-values'), 'offered a choice for markup with none');
     await act(async () => {
       [...dom.window.document.querySelectorAll('.modal-footer button')].find((button) => /Cancel/.test(button.textContent)).click();
       await new Promise((resolve) => setTimeout(resolve, 5));

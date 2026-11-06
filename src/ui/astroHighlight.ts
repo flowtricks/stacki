@@ -7,6 +7,7 @@ import { StateEffect, StateField, type Extension } from '@codemirror/state';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { LIMITS } from '../../shared/core/limits';
+import { plainCodeLines, type CodeLine, type CodeTokenStyle } from './codeHighlight';
 
 const highlightDelayMs = 60;
 const fontItalic = 1;
@@ -52,6 +53,9 @@ const astroHighlightField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
+const astroTokenOptions = { lang: 'astro', theme: 'tokyo-night', colorReplacements: mutedColorReplacements } as const;
+
+type AstroToken = { readonly color?: string | undefined; readonly fontStyle?: number | undefined };
 type AstroHighlighter = Awaited<ReturnType<typeof createAstroHighlighter>>;
 let highlighterPromise: Promise<AstroHighlighter> | undefined;
 
@@ -100,6 +104,20 @@ export const astroHighlight: Extension = [
   ),
 ];
 
+/**
+ * Astro source as lines of coloured tokens, for code that is shown rather than
+ * edited: the same grammar and colours as the editor, so a page reads the same
+ * in a preview as it does in the Code panel.
+ */
+export async function astroCodeLines(source: string): Promise<readonly CodeLine[]> {
+  if (source.length > LIMITS.syntaxHighlightCharsMax) {
+    return plainCodeLines(source);
+  }
+  const instance = await astroHighlighter();
+  const lines = instance.codeToTokensBase(source, astroTokenOptions);
+  return lines.map((line) => line.map((token) => ({ text: token.content, style: astroCodeStyle(token) })));
+}
+
 async function highlightAstro(view: EditorView, revision: number, currentRevision: () => number): Promise<void> {
   const source = view.state.doc.toString();
   if (source.length > LIMITS.syntaxHighlightCharsMax) {
@@ -107,11 +125,7 @@ async function highlightAstro(view: EditorView, revision: number, currentRevisio
     return;
   }
   const instance = await astroHighlighter();
-  const lines = instance.codeToTokensBase(source, {
-    lang: 'astro',
-    theme: 'tokyo-night',
-    colorReplacements: mutedColorReplacements,
-  });
+  const lines = instance.codeToTokensBase(source, astroTokenOptions);
   const ranges = lines.flatMap((line) =>
     line.flatMap((token) => {
       const to = token.offset + token.content.length;
@@ -143,29 +157,39 @@ function replaceHighlight(view: EditorView, decorations: DecorationSet, revision
   view.dispatch({ effects: replaceAstroHighlight.of(decorations) });
 }
 
-function astroTokenStyle(token: { readonly color?: string | undefined; readonly fontStyle?: number | undefined }): string {
+function astroTokenStyle(token: AstroToken): string {
+  const { color, fontStyle, fontWeight, textDecoration } = astroCodeStyle(token);
   const styles: string[] = [];
-  if (token.color && colorPattern.test(token.color)) {
-    styles.push(`--astro-token-color:${token.color};color:${token.color}`);
+  if (color !== undefined) {
+    styles.push(`--astro-token-color:${color};color:${color}`);
   }
-  const fontStyle = token.fontStyle ?? 0;
-  if ((fontStyle & fontItalic) !== 0) {
-    styles.push('font-style:italic');
+  if (fontStyle !== undefined) {
+    styles.push(`font-style:${fontStyle}`);
   }
-  if ((fontStyle & fontBold) !== 0) {
-    styles.push('font-weight:700');
+  if (fontWeight !== undefined) {
+    styles.push(`font-weight:${fontWeight}`);
   }
-  const lines = [];
-  if ((fontStyle & fontUnderline) !== 0) {
-    lines.push('underline');
-  }
-  if ((fontStyle & fontStrikethrough) !== 0) {
-    lines.push('line-through');
-  }
-  if (lines.length > 0) {
-    styles.push(`text-decoration:${lines.join(' ')}`);
+  if (textDecoration !== undefined) {
+    styles.push(`text-decoration:${textDecoration}`);
   }
   return styles.join(';');
+}
+
+function astroCodeStyle(token: AstroToken): CodeTokenStyle {
+  const flags = token.fontStyle ?? 0;
+  const lines = [];
+  if ((flags & fontUnderline) !== 0) {
+    lines.push('underline');
+  }
+  if ((flags & fontStrikethrough) !== 0) {
+    lines.push('line-through');
+  }
+  return {
+    ...(token.color !== undefined && colorPattern.test(token.color) ? { color: token.color } : {}),
+    ...((flags & fontItalic) !== 0 ? { fontStyle: 'italic' } : {}),
+    ...((flags & fontBold) !== 0 ? { fontWeight: '700' } : {}),
+    ...(lines.length > 0 ? { textDecoration: lines.join(' ') } : {}),
+  };
 }
 
 function astroHighlighter(): Promise<AstroHighlighter> {

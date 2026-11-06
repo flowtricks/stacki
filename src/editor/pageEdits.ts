@@ -73,9 +73,10 @@ export interface EditsRecord {
  * nodes), and its effect on the shown model. The effect is a pure function —
  * a new model, the old one untouched. `request` may be undefined when the
  * specialized edit cannot express the syntax; sending then derives a safe,
- * minimal node rewrite from `apply`. */
+ * minimal node rewrite from `apply`. `origin` is there for a gesture that edits
+ * the text itself, which is what its bytes must be stated against. */
 export interface EditGesture {
-  readonly request: (refOf: (nodeId: string) => NodeRef | undefined) => readonly Edit[] | undefined;
+  readonly request: (refOf: (nodeId: string) => NodeRef | undefined, origin: PageOrigin) => readonly Edit[] | undefined;
   readonly apply: (model: EditorModel) => EditorModel;
   /** Groups undo steps and coalesces bursts. */
   readonly coalesceKey: string | undefined;
@@ -434,7 +435,7 @@ interface GestureSendInput {
 export async function sendGesture(input: GestureSendInput): Promise<GestureSent> {
   const { origin } = input;
   const refOf = (nodeId: string): NodeRef | undefined => nodeRefIn(origin, nodeId);
-  const specialized = input.gesture.request(refOf);
+  const specialized = input.gesture.request(refOf, origin);
   if (specialized === undefined || specialized.length === 0) {
     return sendReplacement(input, refOf);
   }
@@ -463,8 +464,13 @@ export async function sendGesture(input: GestureSendInput): Promise<GestureSent>
 
 async function sendReplacement(input: GestureSendInput, refOf: (nodeId: string) => NodeRef | undefined): Promise<GestureSent> {
   const predicted = input.gesture.apply(input.origin.model);
-  const replacements = replacementEdits(input.origin, predicted, refOf);
+  const replaced = replacementEdits(input.origin, predicted, refOf);
+  const replacements = replaced === undefined ? undefined : [...frontmatterEdits(input.origin.model, predicted), ...replaced];
   if (replacements !== undefined && replacements.length > 0) {
+    const batched = await sendBatchedWhole(input, replacements);
+    if (batched !== undefined) {
+      return batched;
+    }
     const sent = await sendRequests(input, replacements);
     if (sent.tag !== 'refused' || sent.reason !== 'unsupported-operation') {
       return sent;
@@ -481,6 +487,28 @@ async function sendReplacement(input: GestureSendInput, refOf: (nodeId: string) 
   }
   const page: Edit = { tag: 'replace-page', model: replacementModel(predicted) };
   return sendRequests(input, [page]);
+}
+
+// A gesture that changes the block and the markup, such as a component made from
+// a piece of a loop, loses half of itself if only the nodes go. The block goes
+// first so that an instance never reaches disk ahead of its import.
+function frontmatterEdits(before: PageModel, after: EditorModel): readonly Edit[] {
+  if (before.extraFrontmatter === after.extraFrontmatter) {
+    if (JSON.stringify(before.imports) === JSON.stringify(after.imports)) {
+      return [];
+    }
+  }
+  return [{ tag: 'set-frontmatter', model: { ...after, nodes: [] } }];
+}
+
+async function sendBatchedWhole(input: GestureSendInput, requests: readonly Edit[]): Promise<GestureSent | undefined> {
+  if (input.sendBatch === undefined) {
+    return undefined;
+  }
+  if (requests.length <= 1) {
+    return undefined;
+  }
+  return requests.length <= EDIT_BATCH_EDITS_MAX ? sendBatched(input, requests, input.sendBatch) : undefined;
 }
 
 // One write of every request, or undefined when main refused the batch with

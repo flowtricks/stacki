@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useComponentProperties } from './useComponentProperties';
 import type { ComponentPropertiesPanelProps } from './useComponentProperties';
 import type { ComponentProperties, ComponentProperty, PropertyChange } from '../../../shared/properties/propertyEditing';
+import type { PropertySaveHost } from './propertyAutosave';
 import useListReorder from '../../ui/useListReorder';
 import ListFieldRow from '../../ui/ListFieldRow';
 import { WarningTriangleIcon } from '../../ui/Icons';
@@ -14,7 +15,7 @@ import { readAttributesProperty } from './attributesProperty';
 import { kindIcon } from './PropertyType';
 import { PropertyGrip, movePropertyItem } from './PropertyReorder';
 import { PropertiesIcon } from './PropertiesIcon';
-import { PropertyEditor, withListSettingType } from './PropertyEditor';
+import { PropertyEditor, propertyIsEditable, withListSettingType } from './PropertyEditor';
 import './componentProperties.css';
 
 type Selection =
@@ -55,6 +56,7 @@ export default function ComponentPropertiesPanel(props: PropertiesPanelProps) {
           data={data}
           busy={controller.busy}
           save={controller.save}
+          saveHost={controller.saveHost}
           host={{ nodes: props.nodes, onSelectNode: props.onSelectNode, onReplaceProps: props.onReplaceProps }}
         />
       )}
@@ -67,9 +69,10 @@ interface PropertyContentProps {
   readonly data: ComponentProperties;
   readonly busy: boolean;
   readonly save: (change: PropertyChange) => Promise<boolean>;
+  readonly saveHost: PropertySaveHost;
 }
 type ContentHost = AttributesHost & { readonly nodes: readonly EditorNode[] | undefined };
-function PropertyPanelContent({ data, busy, save, host }: PropertyContentProps & { readonly host: ContentHost }) {
+function PropertyPanelContent({ data, busy, save, saveHost, host }: PropertyContentProps & { readonly host: ContentHost }) {
   const [selection, setSelection] = useState<Selection>({ kind: 'none' });
   const attributes = useMemo(() => readAttributesProperty(data.frontmatter, host.nodes), [data.frontmatter, host.nodes]);
   return (
@@ -109,7 +112,7 @@ function PropertyPanelContent({ data, busy, save, host }: PropertyContentProps &
             onClose={() => setSelection({ kind: 'none' })}
           />
         )}
-        <PropertySelectionEditor selection={selection} data={data} busy={busy} save={save} onClose={() => setSelection({ kind: 'none' })} />
+        <PropertySelectionEditor selection={selection} data={data} busy={busy} save={save} saveHost={saveHost} onClose={() => setSelection({ kind: 'none' })} />
       </>
     </>
   );
@@ -120,6 +123,7 @@ function PropertySelectionEditor({
   data,
   busy,
   save,
+  saveHost,
   onClose,
 }: PropertyContentProps & {
   readonly selection: Selection;
@@ -133,14 +137,15 @@ function PropertySelectionEditor({
           property={selection.value}
           originalName={selection.originalName}
           frontmatter={data.frontmatter}
-          access={busy ? 'saving' : propertyIsEditable(selection.value, data) ? 'editable' : 'readonly'}
+          // An existing prop saves as it is typed in, so a save must not disable the field being typed in.
+          access={busy && selection.originalName === '' ? 'saving' : propertyIsEditable(selection.value, data) ? 'editable' : 'readonly'}
           onClose={onClose}
           onSave={async (change) => {
             if (await save(change)) {
               onClose();
             }
           }}
-          onCommit={save}
+          saveHost={saveHost}
         />
       )}
     </>
@@ -209,10 +214,6 @@ function PropertyList({ data, busy, onSelect, onChange }: PropertyListProps) {
       ))}
     </div>
   );
-}
-
-function propertyIsEditable(property: ComponentProperty, data: ComponentProperties): boolean {
-  return property.editing ? property.editing.kind !== 'restricted' : !data.advanced;
 }
 
 function propertyIsRemovable(property: ComponentProperty, data: ComponentProperties): boolean {

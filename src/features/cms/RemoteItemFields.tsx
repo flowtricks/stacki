@@ -4,7 +4,13 @@
 // required field empty is not written (saveRefused): the file keeps its value,
 // and the field says it is required, as every empty required field of the
 // entry does from the start.
-import { useMemo, useState } from 'react';
+//
+// Moving to another item keeps the last one on screen, held and unchecked,
+// until the new item's read answers (entryLoad.ts): the form never empties, and
+// nothing is reported about values that are not the selected item's. Every
+// write names the document its form shows, not the selection, which may have
+// moved on by the time an edit is saved.
+import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeftIcon } from '../../ui/Icons';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { remoteDocument, renameContentEntry, writeRemoteDocument } from '../../ipc/remoteSource';
@@ -14,7 +20,8 @@ import type { RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import { RemoteFieldList } from './RemoteFieldList';
 import type { RemoteEditContext } from './RemoteValueEditor';
 import { STATUS_LABELS } from './RemoteCmsBrowser';
-import { Loading, useRemote, type RemoteCmsSelection } from './remoteCmsShared';
+import { FieldChecksContext, Loading, useRemote, type FieldChecks, type RemoteCmsSelection } from './remoteCmsShared';
+import { entryShown, useEntryLoad, type EntryLoad } from './entryLoad';
 import { DOCUMENTS, documentKey } from './remoteCmsCache';
 import { RemoteDocumentActions } from './RemoteDocumentActions';
 import { isAstroContent } from '../../../shared/properties/astroContent';
@@ -41,45 +48,58 @@ export function RemoteItemFields(props: {
   const id = selection.item?.id ?? '';
   // Kept across opens: an item opened before, or pointed at in the list, shows at
   // once and is refreshed behind the view; a save shows the CMS's answer.
-  const { result, retry, replace } = useRemote(DOCUMENTS, documentKey(connection.id, id), () => remoteDocument(projectPath, connection.id, id));
-  const [error, setError] = useState<string | undefined>(undefined);
+  const { result, retry, replace, replaceAt } = useRemote(DOCUMENTS, documentKey(connection.id, id), () => remoteDocument(projectPath, connection.id, id));
+  const load = useEntryLoad(id, result);
+  // A failed edit is said on the item it failed on, not on the one opened after it.
+  const [error, setError] = useState<{ readonly id: string; readonly message: string } | undefined>(undefined);
   const enforced = isAstroContent(connection);
-  const save = async (field: RemoteDocumentField, value: RemoteValue | undefined) => {
+  const save = async (target: RemoteDocument, field: RemoteDocumentField, value: RemoteValue | undefined) => {
     setError(undefined);
     if (enforced && saveRefused(field, value)) {
       // Its control already says the field is required; the file is left as it was.
       return;
     }
-    const write = { id, field: field.name, value };
+    const write = { id: target.id, field: field.name, value };
     const written = await writeRemoteDocument(projectPath, connection.id, write);
     if (written.ok) {
-      replace(written.value);
+      replaceAt(documentKey(connection.id, target.id), written.value);
       props.onSaved();
     } else {
-      setError(written.message);
+      setError({ id: target.id, message: written.message });
     }
   };
   // One rename moves the file and every reference to it; the item is then named by its new id.
-  const rename = async (slug: EntrySlug, to: string) => {
+  const rename = async (target: RemoteDocument, slug: EntrySlug, to: string) => {
     setError(undefined);
-    const renamed = await renameContentEntry(projectPath, id, to);
+    const renamed = await renameContentEntry(projectPath, target.id, to);
     if (renamed.ok) {
       const before = `${slug.folder}${slug.value}`;
       const title = selection.item?.title ?? before;
       props.onRenamed({ id: renamed.value.id, title: title === before ? `${slug.folder}${to}` : title });
     } else {
-      setError(renamed.message);
+      setError({ id: target.id, message: renamed.message });
     }
   };
-  const renameTo = (loaded: RemoteDocument, to: string) => {
-    if (loaded.slug !== undefined) {
-      void rename(loaded.slug, to);
+  const renameTo = (target: RemoteDocument, to: string) => {
+    if (target.slug !== undefined) {
+      void rename(target, target.slug, to);
     }
   };
-  const document = result?.ok ? result.value : undefined;
-  const context = useEditContext(projectPath, connection.id, document);
-  // Every required field may say so: an empty one on an entry already saved is a problem now.
-  const requiredShown = enforced && document !== undefined ? new Set(document.fields.filter((field) => field.required).map((field) => field.name)) : undefined;
+  // The header speaks for the selected item, so it waits for that item's own read.
+  const document = load.kind === 'ready' ? load.document : undefined;
+  const context = useEditContext(projectPath, connection.id, entryShown(load));
+  const form = (shown: RemoteDocument, checks: FieldChecks) => (
+    <EntryForm
+      {...props}
+      document={shown}
+      checks={checks}
+      context={context}
+      error={error?.id === shown.id ? error.message : undefined}
+      enforced={enforced}
+      onSave={(field, value) => void save(shown, field, value)}
+      onRename={(to) => renameTo(shown, to)}
+    />
+  );
   return (
     <div className="cms-detail remote-cms-item">
       <ItemHeader
@@ -96,25 +116,87 @@ export function RemoteItemFields(props: {
         }}
       />
       <div className="cms-detail-body">
-        <Loading result={result} retry={retry}>
-          {(loaded) => (
-            <div className="remote-cms-fields">
-              {error && <ErrorToast message={error} />}
-              {loaded.slug && <EntrySlugField slug={loaded.slug} onCommit={(to) => renameTo(loaded, to)} />}
-              <RemoteFieldList document={loaded} context={context} requiredShown={requiredShown} onSave={(field, value) => void save(field, value)} />
-              <RemoteItemActions
-                projectPath={projectPath}
-                selection={selection}
-                document={loaded}
-                onChanged={props.onSaved}
-                onRemoved={props.onRemoved}
-                onDuplicate={props.onDuplicate}
-              />
-            </div>
-          )}
-        </Loading>
+        <EntryBody load={load} retry={retry}>
+          {form}
+        </EntryBody>
       </div>
     </div>
+  );
+}
+
+// What the body shows for each state of the read. A held entry and a ready one
+// are the same form in the same place, so moving between them keeps it standing.
+function EntryBody(props: {
+  readonly load: EntryLoad;
+  readonly retry: () => void;
+  readonly children: (document: RemoteDocument, checks: FieldChecks) => ReactNode;
+}) {
+  const { load, retry } = props;
+  switch (load.kind) {
+    case 'loading':
+      if (load.held === undefined) {
+        return (
+          <Loading result={undefined} retry={retry}>
+            {() => undefined}
+          </Loading>
+        );
+      }
+      return props.children(load.held, 'held');
+    case 'failed':
+      return (
+        <Loading result={{ ok: false, message: load.message }} retry={retry}>
+          {() => undefined}
+        </Loading>
+      );
+    case 'ready':
+      return props.children(load.document, 'shown');
+    default: {
+      const exhaustive: never = load;
+      return exhaustive;
+    }
+  }
+}
+
+// `inert` takes a held form out of reach of the pointer and the keyboard. React
+// 18's types do not list it, and it passes it on only as a string.
+const HELD_FORM = { inert: '' };
+
+// One document's fields and actions. Its checks run only while it is the
+// selected item's own document.
+function EntryForm(props: {
+  readonly projectPath: string;
+  readonly selection: RemoteCmsSelection;
+  readonly document: RemoteDocument;
+  readonly checks: FieldChecks;
+  readonly context: RemoteEditContext;
+  readonly error: string | undefined;
+  /** Required fields say so while empty: an Astro entry cannot be saved without them. */
+  readonly enforced: boolean;
+  readonly onSave: (field: RemoteDocumentField, value: RemoteValue | undefined) => void;
+  readonly onRename: (to: string) => void;
+  readonly onSaved: () => void;
+  readonly onRemoved: () => void;
+  readonly onDuplicate: (document: RemoteDocument) => void;
+}) {
+  const { document, enforced } = props;
+  // Every required field may say so: an empty one on an entry already saved is a problem now.
+  const requiredShown = enforced ? new Set(document.fields.filter((field) => field.required).map((field) => field.name)) : undefined;
+  return (
+    <FieldChecksContext.Provider value={props.checks}>
+      <div className="remote-cms-fields" {...(props.checks === 'held' ? HELD_FORM : {})}>
+        {props.error && <ErrorToast message={props.error} />}
+        {document.slug && <EntrySlugField key={document.id} slug={document.slug} onCommit={props.onRename} />}
+        <RemoteFieldList document={document} context={props.context} requiredShown={requiredShown} onSave={props.onSave} />
+        <RemoteItemActions
+          projectPath={props.projectPath}
+          selection={props.selection}
+          document={document}
+          onChanged={props.onSaved}
+          onRemoved={props.onRemoved}
+          onDuplicate={props.onDuplicate}
+        />
+      </div>
+    </FieldChecksContext.Provider>
   );
 }
 

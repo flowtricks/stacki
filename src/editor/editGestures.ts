@@ -15,6 +15,8 @@ import type { Attr } from '../../shared/page/pageNode';
 import { renamedAttr } from './attrOrder';
 import { loopVarsAt, parseLoopHead, renamedLoopVar, strippedBindings } from './loopBindings';
 import type { EditGesture } from './pageEdits';
+import type { CodeHunk } from '../../shared/engine/codePatch';
+import { planVariableRename, predictedRename, type FileCode, type VariableRename } from './variableRename';
 import {
   type Urgency,
   withNode,
@@ -138,9 +140,9 @@ export function inlineStyleGesture(
     // One declaration is its own stream: coalescing it with another property's
     // edit would lose that one on disk.
     stream: single ? `style:${nodeId}:${change.property}` : whole.stream,
-    request: (refOf) => {
+    request: (refOf, origin) => {
       if (!single) {
-        return whole.request(refOf);
+        return whole.request(refOf, origin);
       }
       const target = refOf(nodeId);
       if (target === undefined) {
@@ -347,9 +349,9 @@ export function sequence(first: EditGesture, second: EditGesture): EditGesture {
     coalesceKey: first.coalesceKey,
     urgency: first.urgency,
     stream: undefined,
-    request: (refOf) => {
-      const before = first.request(refOf);
-      const after = second.request(refOf);
+    request: (refOf, origin) => {
+      const before = first.request(refOf, origin);
+      const after = second.request(refOf, origin);
       if (before === undefined || after === undefined) {
         return undefined;
       }
@@ -422,6 +424,30 @@ function onlyRenames(before: string, after: string, renames: readonly LoopRename
     return false;
   }
   return renamed(old.item) === next.item && renamed(old.index) === next.index;
+}
+
+// --- A file's variable renamed ----------------------------------------------------------
+
+/** A frontmatter variable renamed across the file, as one patch of its bytes: one
+ * write and one undo step, however many places read it. The patch is stated
+ * again against the bytes it is sent to, since an earlier gesture may have
+ * changed them since the check. If that plan fails, the checked hunks go as they
+ * are: main refuses them when the bytes they witness have moved, and the page's
+ * conflict notice says so, which beats writing half a rename. */
+export function variableRenameGesture(file: FileCode, rename: VariableRename, hunks: readonly CodeHunk[]): EditGesture {
+  assert(rename.from !== rename.to, 'A rename changes the name');
+  assert(hunks.length > 0, 'A rename changes the file');
+  return {
+    coalesceKey: undefined,
+    urgency: true,
+    stream: undefined,
+    request: (_refOf, origin) => {
+      const plan = origin.source === file.source ? undefined : planVariableRename(origin, rename);
+      const edit: Edit = { tag: 'code-patch', hunks: plan?.ok === true ? plan.hunks : hunks };
+      return [edit];
+    },
+    apply: (model) => predictedRename(model, rename),
+  };
 }
 
 // --- Step 9: the gestures the whole-model save carried --------------------------------

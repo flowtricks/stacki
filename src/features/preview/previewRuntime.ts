@@ -38,6 +38,7 @@ export interface PreviewRuntimeProps {
     point: ContextPoint & {
       readonly outside: boolean;
       readonly occurrence: number;
+      readonly pseudo: PseudoLayer | undefined;
     },
   ) => void;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
@@ -412,6 +413,7 @@ function applyContextMenu(
       ...point,
       outside: message.outside,
       occurrence: message.occurrence,
+      pseudo: message.pseudo,
     });
   });
 }
@@ -503,11 +505,16 @@ function useSelectionScroll(props: PreviewRuntimeProps, iframeRef: React.RefObje
       }
     }
     if (!contextChanged) {
+      // A picked ::before or ::after is revealed by its own painted box, not its
+      // element's: that element can be far taller than the frame. Read from the
+      // ref so that a change of pick is not itself a reason to scroll: dropping
+      // one must not reveal the element, and a Navigator row bumps the tick.
+      const pseudo = refs.props.current.selPseudo;
       // The frame reads a missing occurrence as the first copy.
       frame.postMessage(
         {
           type: 'avb:scroll-to',
-          path: props.selPath,
+          path: pseudo === undefined ? props.selPath : pseudoPath(props.selPath, pseudo),
           occ: navigatorSelected ? 0 : refs.selectedOccurrence.current,
         },
         '*',

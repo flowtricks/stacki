@@ -9,15 +9,16 @@ import { PropertyDefault, propertyDefaultText } from './PropertyDefault';
 import { PropertyDefaultNote, PropertyKindSettings, PropertyTooltip } from './PropertySettings';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 export { literalOptions };
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import Popup from '../../ui/Popup';
 import { assert } from '../../../shared/core/assert';
-import type { ComponentProperty, PropertyChange, PropertyOptionRename } from '../../../shared/properties/propertyEditing';
+import type { ComponentProperties, ComponentProperty, PropertyChange, PropertyOptionRename } from '../../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { listPropsOf, type ListProp } from '../../editor/listProps';
 import { SETTING_PROP_TYPES } from '../../editor/optionsBinding';
 import { fieldNameProblem, listFieldsOfType, listTypeText, type ItemFieldDeclaration } from '../../editor/listPropType';
-import { ItemFieldsEditor, ListDefaultField, PropertyFlagsFields } from '../props/propBindings';
+import { ItemFieldsEditor, ListDefaultField, PropertyFlagsFields, type EditPace } from '../props/propBindings';
+import { propertyProblem, usePropertyAutosave, type PropertySaveHost } from './propertyAutosave';
 import { propertyKind } from './propertyKinds';
 
 interface PropertyEditorProps {
@@ -26,8 +27,10 @@ interface PropertyEditorProps {
   readonly frontmatter: string;
   readonly access: 'editable' | 'readonly' | 'saving';
   readonly onClose: () => void;
+  /** Creates a new prop, or deletes this one; both close the form. */
   readonly onSave: (change: PropertyChange) => Promise<void>;
-  readonly onCommit: (change: PropertyChange) => Promise<boolean>;
+  /** Where an existing prop's edits save themselves. */
+  readonly saveHost: PropertySaveHost;
 }
 // Types loose enough that a list setting's own type only says more.
 const LOOSE_TYPES = new Set(['', 'unknown', 'any', 'object', 'Record<string, unknown>']);
@@ -45,11 +48,26 @@ export function withListSettingType(property: ComponentProperty, listProps: Read
   return listProp === undefined ? property : { ...property, type: SETTING_PROP_TYPES[listProp.setting] };
 }
 
+/** Whether a property can be edited here, or only read: its declaration may be one only source can change. */
+export function propertyIsEditable(property: ComponentProperty, data: Pick<ComponentProperties, 'advanced'>): boolean {
+  return property.editing ? property.editing.kind !== 'restricted' : !data.advanced;
+}
+
 export function PropertyEditor(props: PropertyEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const draft = usePropertyEditorDraft(props);
   return (
-    <Popup mode="popover" portal={false} className="property-editor" ref={editorRef} onClose={props.onClose} dismissible={props.access !== 'saving'}>
+    <Popup
+      mode="popover"
+      portal={false}
+      className="property-editor"
+      ref={editorRef}
+      onClose={() => {
+        draft.close();
+        props.onClose();
+      }}
+      dismissible={props.access !== 'saving'}
+    >
       {({ close }) => (
         <>
           <header>
@@ -67,15 +85,22 @@ export function PropertyEditor(props: PropertyEditorProps) {
             <PropertyReadOnlyFields property={draft.property} />
           ) : (
             <PropertyEditorFields
-              property={draft.property}
-              originalName={props.originalName}
+              form={draft}
+              creating={props.originalName === ''}
               frontmatter={props.frontmatter}
               access={props.access}
-              onSave={props.onSave}
-              update={draft.update}
-              error={draft.error}
-              submit={draft.submit}
-              changeOptions={draft.changeOptions}
+              projectPath={undefined}
+              actions={
+                <PropertyActions
+                  name={props.originalName === '' ? '' : draft.savedName}
+                  removable={props.property.editing?.kind !== 'override'}
+                  onRemove={(name) => {
+                    draft.discard();
+                    void props.onSave({ kind: 'remove', name });
+                  }}
+                  submit={draft.submit}
+                />
+              }
             />
           )}
         </>
@@ -84,175 +109,184 @@ export function PropertyEditor(props: PropertyEditorProps) {
   );
 }
 
-function usePropertyEditorDraft(props: PropertyEditorProps) {
-  const [property, setProperty] = useState(() => withListSettingType(props.property, listPropsOf(props.frontmatter)));
-  const [optionRenames, setOptionRenames] = useState<readonly PropertyOptionRename[]>([]);
-  const [error, setError] = useState('');
-  const update = <Key extends keyof ComponentProperty>(key: Key, value: ComponentProperty[Key]) => {
-    setProperty((previous) => ({ ...previous, [key]: value }));
-    if (key === 'type') {
-      // Free-form type edits have no reliable old-to-new option identity.
-      setOptionRenames([]);
-    }
-    setError('');
-  };
-  const submit = (): void => {
-    if (!/^[A-Za-z_$][\w$]*$/.test(property.name)) {
-      setError('Use a name such as title, imageUrl, or isVisible.');
-      return;
-    }
-    const change: PropertyChange =
-      optionRenames.length > 0
-        ? {
-            kind: 'save',
-            originalName: props.originalName,
-            property,
-            optionRenames,
-          }
-        : { kind: 'save', originalName: props.originalName, property };
-    void props.onSave(change);
-  };
-  const changeOptions = (change: PropertyOptionChange): void => {
-    const previous = property;
-    const next = changePropertyOptions(previous, change.type, change.kind === 'draft' ? change.rename : undefined);
-    const nextRenames = changePropertyOptionRenames(optionRenames, change);
-    setProperty(next);
-    setOptionRenames(nextRenames);
-    setError('');
-    if (change.kind === 'reorder' && props.originalName && nextRenames.length === 0) {
-      void props
-        .onCommit({
-          kind: 'options',
-          name: props.originalName,
-          type: change.type,
-        })
-        .then((saved) => {
-          if (!saved) {
-            setProperty((current) => (current.type === change.type ? { ...current, type: previous.type } : current));
-          }
-        });
-    }
-  };
-  return { property, error, update, submit, changeOptions };
+/**
+ * The same fields, for a host with its own chrome: a picker row's settings
+ * (PropertySettingsDialog.tsx). They save themselves, so there are no buttons.
+ */
+export function PropertySettingsFields(props: {
+  readonly property: ComponentProperty;
+  readonly frontmatter: string;
+  readonly projectPath: string | undefined;
+  readonly saveHost: PropertySaveHost;
+}) {
+  const { property, frontmatter, projectPath, saveHost } = props;
+  const draft = usePropertyEditorDraft({ property, originalName: property.name, frontmatter, onSave: async () => undefined, saveHost });
+  return <PropertyEditorFields form={draft} creating={false} frontmatter={frontmatter} access="editable" projectPath={projectPath} actions={undefined} />;
 }
 
-interface PropertyEditorFieldsProps extends PropertyControls {
-  readonly originalName: string;
+function usePropertyEditorDraft(props: Pick<PropertyEditorProps, 'property' | 'originalName' | 'frontmatter' | 'onSave' | 'saveHost'>) {
+  // The list setting's own type is written with the first save, not on opening.
+  const [initial] = useState(() => ({ property: withListSettingType(props.property, listPropsOf(props.frontmatter)), optionRenames: [] }));
+  const autosave = usePropertyAutosave(initial, props.originalName === '' ? undefined : props.saveHost);
+  const { change, report } = autosave;
+  const property = autosave.draft.property;
+  const edit = (pace: EditPace, next: (current: ComponentProperty) => ComponentProperty): void => {
+    change(pace, (current) => ({ ...current, property: next(current.property) }));
+  };
+  const update = <Key extends keyof ComponentProperty>(key: Key, value: ComponentProperty[Key], pace: EditPace = 'typing') => {
+    change(pace, (current) => ({
+      property: { ...current.property, [key]: value },
+      // Free-form type edits have no reliable old-to-new option identity.
+      optionRenames: key === 'type' ? [] : current.optionRenames,
+    }));
+  };
+  // A new prop is written by its Save button; an existing one has none.
+  const submit = (): void => {
+    const problem = propertyProblem(property);
+    if (problem !== undefined) {
+      report({ error: problem, notice: '' });
+      return;
+    }
+    void props.onSave({ kind: 'save', originalName: props.originalName, property });
+  };
+  const changeOptions = (optionChange: PropertyOptionChange): void => {
+    const rename = optionChange.kind === 'draft' ? optionChange.rename : undefined;
+    // Typing an option's words is typing; adding, removing and moving one is not.
+    change(rename === undefined ? 'at-once' : 'typing', (current) => ({
+      property: changePropertyOptions(current.property, optionChange.type, rename),
+      optionRenames: changePropertyOptionRenames(current.optionRenames, optionChange),
+    }));
+  };
+  return { ...autosave, property, edit, update, submit, changeOptions };
+}
+
+type PropertyForm = ReturnType<typeof usePropertyEditorDraft>;
+
+interface PropertyEditorFieldsProps {
+  readonly form: PropertyForm;
+  /** A new prop saves from its button, and reports a problem as a toast; an existing one saves itself. */
+  readonly creating: boolean;
   readonly frontmatter: string;
   readonly access: 'editable' | 'saving';
-  readonly onSave: PropertyEditorProps['onSave'];
-  readonly error: string;
-  readonly submit: () => void;
-  readonly changeOptions: (change: PropertyOptionChange) => void;
+  /** The project, for the asset picker of a list's image fields. */
+  readonly projectPath: string | undefined;
+  /** The host's buttons, closing the form. */
+  readonly actions: ReactNode;
 }
-function PropertyEditorFields({ property, originalName, frontmatter, access, onSave, update, error, submit, changeOptions }: PropertyEditorFieldsProps) {
+function PropertyEditorFields({ form, creating, frontmatter, access, projectPath, actions }: PropertyEditorFieldsProps) {
+  const { property, update, error, notice } = form;
   const inherited = property.editing?.kind === 'override';
   const listFields = usePropertyListFields(property, frontmatter);
   return (
     <fieldset disabled={access === 'saving'}>
-      <PropertyIdentity property={property} originalName={originalName} inherited={inherited} update={update} />
+      <PropertyIdentity form={form} creating={creating} inherited={inherited} />
       <PropertyType
         property={property}
         frontmatter={frontmatter}
-        onChange={(change) => {
+        onChange={(change, pace) => {
           // Picking the kind it already is changes nothing, and keeps pending option renames.
-          if (change.type !== property.type) {
-            update('type', change.type);
-          }
-          if (change.description !== property.description) {
-            update('description', change.description);
-          }
-          if (change.defaultValue !== property.defaultValue) {
-            update('defaultValue', change.defaultValue);
+          if (change.type === property.type) {
+            form.edit(pace, (current) => ({ ...current, ...change }));
+          } else {
+            form.change(pace, (current) => ({ property: { ...current.property, ...change }, optionRenames: [] }));
           }
         }}
       />
-      <PropertyOptions type={property.type} disabled={access === 'saving'} onChange={changeOptions} />
+      <PropertyOptions type={property.type} disabled={access === 'saving'} onChange={form.changeOptions} />
       <PropertyKindSettings key={`${property.type} settings`} property={property} onChange={(description) => update('description', description)} />
-      {listFields !== undefined && <PropertyItemFields property={property} frontmatter={frontmatter} fields={listFields} update={update} />}
+      {listFields !== undefined && <PropertyItemFields form={form} frontmatter={frontmatter} fields={listFields} />}
       {/* The same Required and Readonly the Settings panel's Property settings has (PropertySections.tsx). */}
       <PropertyFlagsFields
         required={property.required}
         readonly={property.readonly}
-        onChange={(flags) => {
-          if (flags.required !== property.required) {
-            update('required', flags.required);
-          }
-          if (flags.readonly !== property.readonly) {
-            update('readonly', flags.readonly);
-          }
-        }}
+        onChange={(flags) => form.edit('at-once', (current) => ({ ...current, ...flags }))}
       />
       {listFields === undefined ? (
-        <PropertyDefault key={property.type} property={property} frontmatter={frontmatter} onChange={(value) => update('defaultValue', value)} />
+        <PropertyDefault key={property.type} property={property} frontmatter={frontmatter} onChange={(value, pace) => update('defaultValue', value, pace)} />
       ) : (
         // A list's default items are edited in the field an instance edits the list in, with its `{}` toggle.
-        <ListDefaultField fields={listFields.fields} code={property.defaultValue} projectPath={undefined} onChange={(code) => update('defaultValue', code)} />
+        <ListDefaultField
+          fields={listFields.fields}
+          code={property.defaultValue}
+          projectPath={projectPath}
+          onChange={(code, pace) => update('defaultValue', code, pace)}
+        />
       )}
       <PropertyDefaultNote property={property} />
       <PropertyTooltip property={property} onChange={(description) => update('description', description)} />
-      {error && <ErrorToast message={error} />}
-      <PropertyActions originalName={originalName} removable={!inherited} onSave={onSave} submit={submit} />
+      {creating
+        ? error && <ErrorToast message={error} />
+        : error && (
+            <p className="property-error" role="alert">
+              {error}
+            </p>
+          )}
+      {notice && (
+        <p className="property-help" role="status">
+          {notice}
+        </p>
+      )}
+      {actions}
     </fieldset>
   );
 }
 
+// What closes the form: Delete for a prop that has one to lose, and Save for a
+// new one, which has nothing on disk yet. An existing prop saves itself.
 function PropertyActions({
-  originalName,
+  name,
   removable,
-  onSave,
+  onRemove,
   submit,
 }: {
-  readonly originalName: string;
+  readonly name: string;
   readonly removable: boolean;
-  readonly onSave: PropertyEditorProps['onSave'];
+  readonly onRemove: (name: string) => void;
   readonly submit: () => void;
 }) {
+  if (name === '') {
+    return (
+      <div className="property-actions">
+        <span />
+        <button className="primary" onClick={submit}>
+          Save property
+        </button>
+      </div>
+    );
+  }
+  if (!removable) {
+    return undefined;
+  }
   return (
     <div className="property-actions">
-      {originalName && removable && (
-        <button
-          className="danger"
-          aria-label={`Delete ${originalName}`}
-          title="Delete property"
-          onClick={() => void onSave({ kind: 'remove', name: originalName })}
-        >
-          <TrashIcon size={14} />
-        </button>
-      )}
-      <button className="primary" onClick={submit}>
-        Save property
+      <button className="danger" aria-label={`Delete ${name}`} title="Delete property" onClick={() => onRemove(name)}>
+        <TrashIcon size={14} />
       </button>
     </div>
   );
 }
 
-interface PropertyControls {
-  readonly property: ComponentProperty;
-  readonly update: <Key extends keyof ComponentProperty>(key: Key, value: ComponentProperty[Key]) => void;
-}
-function PropertyIdentity({
-  property,
-  originalName,
-  inherited,
-  update,
-}: PropertyControls & {
-  readonly originalName: string;
-  readonly inherited: boolean;
-}) {
+function PropertyIdentity({ form, creating, inherited }: { readonly form: PropertyForm; readonly creating: boolean; readonly inherited: boolean }) {
   return (
     <>
       <label>
         Name
         <input
-          value={property.name}
+          value={form.nameText}
           maxLength={PROPERTY_LIMITS.nameCharsMax}
           autoFocus={!inherited}
           disabled={inherited}
-          onChange={(event) => update('name', event.target.value)}
+          onChange={(event) => form.setName(event.target.value)}
+          onBlur={form.commitName}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              form.commitName();
+            }
+          }}
         />
       </label>
-      {originalName && originalName !== property.name && (
+      {!creating && form.savedName !== form.nameText && (
         <p className="property-help">Renaming updates this component’s prop references and its instances across the website.</p>
       )}
     </>
@@ -284,27 +318,29 @@ function usePropertyListFields(
 }
 
 // The fields each item of a List has, edited with the Settings panel's own
-// editor; the type is written as that form writes it (listTypeText).
+// editor; the type is written as that form writes it (listTypeText). A name
+// being typed can be no name yet, and the default items already follow it, so
+// the form is held until the field reads as one again.
 function PropertyItemFields({
-  property,
+  form,
   frontmatter,
   fields,
-  update,
-}: PropertyControls & { readonly frontmatter: string; readonly fields: NonNullable<ReturnType<typeof usePropertyListFields>> }) {
+}: {
+  readonly form: PropertyForm;
+  readonly frontmatter: string;
+  readonly fields: NonNullable<ReturnType<typeof usePropertyListFields>>;
+}) {
+  const { property } = form;
   return (
     <ItemFieldsEditor
       fields={fields.fields}
       itemsText={property.defaultValue.trim() === '' ? '[]' : property.defaultValue}
-      onChange={(shape) => {
+      onChange={(shape, pace) => {
         const valid = shape.fields.every((field) => fieldNameProblem(field.name) === undefined);
         const type = valid ? listTypeText(frontmatter, shape.fields) : property.type;
         fields.set({ type, fields: shape.fields });
-        if (type !== property.type) {
-          update('type', type);
-        }
-        if (shape.itemsText !== property.defaultValue) {
-          update('defaultValue', shape.itemsText);
-        }
+        form.hold(valid ? 'free' : 'held');
+        form.edit(pace, (current) => ({ ...current, type, defaultValue: shape.itemsText }));
       }}
     />
   );

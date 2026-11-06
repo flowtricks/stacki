@@ -8,7 +8,9 @@
 // A document whose schema groups its fields shows them in tabs, as Sanity
 // Studio does: all fields first, then each group. It opens on all fields; a
 // chosen tab stays chosen for the next document shown that has it, so a run
-// of edits to one group does not mean choosing it again on every item.
+// of edits to one group does not mean choosing it again on every item. The
+// fields themselves start afresh for each document, slug sync included, because
+// a slug following one document's name must never be written to the next.
 import { useLayoutEffect, useRef, useState } from 'react';
 import type { RemoteDocument, RemoteDocumentField, RemoteFieldGroup } from '../../../shared/properties/cmsRemote';
 import type { RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
@@ -26,12 +28,28 @@ export function RemoteFieldList(props: {
   readonly onSave: (field: RemoteDocumentField, value: RemoteValue | undefined) => void;
 }) {
   const { document } = props;
-  const pair = slugPairOf(document.fields);
-  const sync = useSlugSync(document, pair);
   const [chosen, setChosen] = useState<string | undefined>(undefined);
   const tab = shownTab(document.fieldGroups, chosen);
+  return (
+    <>
+      {document.fieldGroups !== undefined && <FieldGroupTabs fieldGroups={document.fieldGroups} tab={tab} onTab={setChosen} />}
+      <DocumentFields {...props} key={document.id} tab={tab} />
+    </>
+  );
+}
+
+function DocumentFields(props: {
+  readonly document: RemoteDocument;
+  readonly context: RemoteEditContext;
+  readonly requiredShown?: ReadonlySet<string> | undefined;
+  readonly tab: string;
+  readonly onSave: (field: RemoteDocumentField, value: RemoteValue | undefined) => void;
+}) {
+  const { document, tab } = props;
+  const pair = slugPairOf(document.fields);
+  const sync = useSlugSync(document, pair);
   const fields = tab === ALL_FIELDS ? document.fields : document.fields.filter((field) => field.groups?.includes(tab) === true);
-  const inputs = fields.map((field) => {
+  return fields.map((field) => {
     const input = (
       <RemoteFieldInput
         key={`${document.id}:${field.name}`}
@@ -61,15 +79,6 @@ export function RemoteFieldList(props: {
       </div>
     );
   });
-  if (document.fieldGroups === undefined) {
-    return inputs;
-  }
-  return (
-    <>
-      <FieldGroupTabs fieldGroups={document.fieldGroups} tab={tab} onTab={setChosen} />
-      {inputs}
-    </>
-  );
 }
 
 // Sanity Studio's own name for the tab that shows every field.

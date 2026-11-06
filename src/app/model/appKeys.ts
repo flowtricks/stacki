@@ -15,11 +15,12 @@ import type { PageEditError, PageEdited } from '../../../shared/ipc/pageSave';
 import { loopVarsAt, strippedBindings } from '../../editor/loopBindings';
 import { cleanError } from '../../lib/cleanError';
 import { menuPasteClaimed } from '../../ui/menuPasteClaim';
-import { type AppHistory, type LeftTab, type NodeClipboard, type ProjectIdentity, type RightTab, type ToastKind } from '../appTypes';
+import { type AppHistory, type LeftTab, type NodeClipboard, type ProjectIdentity, type PseudoPick, type RightTab, type ToastKind } from '../appTypes';
 import { toEditorPageState, carriedParse, type EditorPageState, type OpenFile, type PageStateSnapshot } from '../../editor/pageState';
 import { nodeId, type EditorModel, type EditorNode } from '../../editor/pageView';
 import { copyEditorSelection, runNativeEdit, editProjectPage, type ImportPaths } from '../../ipc/appBridge';
 import { revertedOrigin, frontmatterOf } from './nodeFactory';
+import { deletableSelection } from './selectionDeletion';
 import { withPrunedImports, chooseImportPath, withLayoutField, type PasteNeeds } from './pageGestures';
 
 // The app's own keys, read through refs at keypress time: see the keydown effect in App.
@@ -27,6 +28,7 @@ export interface AppKeys {
   readonly historyRef: React.MutableRefObject<AppHistory>;
   readonly pageStateRef: React.MutableRefObject<PageStateSnapshot>;
   readonly selectedIdRef: React.MutableRefObject<string | undefined>;
+  readonly pseudoPickRef: React.MutableRefObject<PseudoPick | undefined>;
   readonly openCodeWindowRef: React.MutableRefObject<(() => boolean) | undefined>;
   readonly nodeClipboardRef: React.MutableRefObject<NodeClipboard | undefined>;
   readonly cmsOpenRef: React.MutableRefObject<boolean>;
@@ -203,11 +205,12 @@ export function handleSelectionKey(event: KeyboardEvent, keys: AppKeys): void {
   }
 
   if (!mod && (event.key === 'Delete' || event.key === 'Backspace')) {
-    if (!hasNodeSelection) {
+    const deletable = deletableSelection(selectionId, keys.pseudoPickRef.current);
+    if (deletable === undefined) {
       return;
     }
     event.preventDefault();
-    keys.removeNode(selectionId);
+    keys.removeNode(deletable);
   } else if (mod && event.key.toLowerCase() === 'c') {
     // Let native copy win when actual text is selected.
     if (!hasNodeSelection || String(window.getSelection() || '')) {

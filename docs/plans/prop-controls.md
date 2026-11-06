@@ -996,7 +996,7 @@ Rules (keeping what exists):
 - **Default display:** an unset prop shows its default as the *placeholder* (greyed), not as a value
   (exists via `placeholderFor`). Switch and Choice show the default as the selected state, with the
   label in regular weight. Once set, the label turns the "overridden" colour (Webflow's blue dot) and
-  a per-field **Reset to default** appears on hover and in the label's context menu, writing the
+  a per-field **Reset to default** appears in the label's menu (click or right-click), writing the
   attribute's removal. An expression default (`= SIZES[0]`, `= heroImage`) shows its resolved
   preview where possible (`defaultAsset` exists for images), else its code in the placeholder.
 - **Reset all** on the header removes every explicit prop that equals the default and offers to

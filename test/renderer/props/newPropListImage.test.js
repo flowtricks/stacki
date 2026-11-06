@@ -367,5 +367,5 @@ test('a list item can hold a switch, and it round-trips as a boolean', () => {
   assert.equal(items[0].fields[1].quote, undefined);
   assert.equal(arrays.arrayText(items), '[{ title: "Fast", featured: true }, { title: "Small", featured: false }]');
   assert.equal(arrays.itemLabel(arrays.arrayItems('[{ on: true, name2: "Named" }]')[0]), 'Named', 'a row is named by a text field, not a switch');
-  assert.equal(arrays.arrayItems('[{ on: maybe }]'), undefined, 'a name standing for a value is still code');
+  assert.equal(arrays.arrayText(arrays.arrayItems('[{ on: maybe }]')), '[{ on: maybe }]', 'a name standing for a value is a bound field');
 });

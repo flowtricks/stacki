@@ -6,6 +6,7 @@
 // the description only ever holds a value that reads back.
 
 import { useState } from 'react';
+import AutoTextarea from '../../ui/AutoTextarea';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { NUMBER_DECIMALS_MAX, SWITCH_LABELS, numberNote } from '../../editor/propDocumentation';
@@ -44,9 +45,8 @@ export function PropertyTooltip({ property, onChange }: SettingsProps) {
   return (
     <label>
       Tooltip
-      <textarea
+      <AutoTextarea
         value={tooltipOf(property.description)}
-        rows={5}
         maxLength={PROPERTY_LIMITS.textCharsMax}
         placeholder="Describe how to use this property…"
         onChange={(event) => onChange(withTooltip(property.description, event.target.value))}

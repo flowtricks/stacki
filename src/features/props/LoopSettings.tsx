@@ -10,8 +10,8 @@
 // opens here the same way: settings it can show are shown, and code it cannot
 // is kept and said to be custom rather than rewritten.
 
-import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { type DropdownOption } from '../../ui/Dropdown';
 import { AstroIcon, SanityIcon, CloseIcon, CollectionIcon, LayersIcon, TextIcon } from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
@@ -23,7 +23,20 @@ import { LiteralItemsSection } from './LoopLiteralItems';
 import { fieldListOf, type FieldList } from '../../editor/loopFieldList';
 import { fieldListPath, SourcePicker, sourcePath, type NewListOffer, type SourcePick, type SourcePickerData } from './LoopSourcePicker';
 import { listItemFields, loadFields, LOOP_CATALOG_LIMITS, titled, type CatalogField, type LoopCatalog } from './loopCatalog';
-import { fieldNamed, itemsModeQuery, readingKey, sourceKey } from './loopSettingsModel';
+import { fieldNamed, itemsModeQuery, readingKey, sectionFieldPaths, sectionPlaceholder, sourceKey } from './loopSettingsModel';
+import {
+  changedSection,
+  groqSectionProblem,
+  groqSectionQuery,
+  LOOP_SECTIONS,
+  readSections,
+  sectionCodeOf,
+  sectionCodeProblem,
+  sectionRefusal,
+  type LoopSection,
+  type LoopSections,
+} from '../../editor/loopSections';
+import { useSectionCode, type SectionCodeContext } from './LoopSectionCode';
 import { connectableProps, propNameProblem, SETTING_TITLES } from '../../editor/optionsBinding';
 import { propTooltip } from '../../editor/loopProps';
 import { listPropOf } from '../../editor/propDeclaration';
@@ -64,8 +77,8 @@ export interface LoopSettingsProps {
   readonly onApply: (target: LoopTarget, sanityClient: 'available' | 'unavailable', declaration?: PropDeclaration) => LoopApplyResult;
   /** Renames a linked setting's property or changes its tooltip, across the site. */
   readonly onEditProperty?: ((key: string, edit: { readonly name: string; readonly description: string }) => Promise<string | undefined>) | undefined;
-  /** A button opening the code that declares `name`, the list's holder. */
-  readonly sourceButton?: ((name: string) => ReactNode) | undefined;
+  /** A button opening the code that declares `name`, the list's holder, at the Source row (`anchorRef`). */
+  readonly sourceButton?: ((name: string, anchorRef: RefObject<HTMLElement>) => ReactNode) | undefined;
   /** The page's data, for the Source picker's tree of what a loop can go over. */
   readonly pickerData?: SourcePickerData | undefined;
   /** The open component, when the loop is in one: the Source menu can make a List property for it. */
@@ -84,7 +97,8 @@ interface SourceRowProps {
   readonly pickerData: SourcePickerData | undefined;
   readonly projectPath: string | undefined;
   readonly lists: readonly LoopListOption[];
-  readonly sourceButton: ReactNode;
+  /** The list holder's code button, told which row to open under. */
+  readonly sourceButton: ((anchorRef: RefObject<HTMLElement>) => ReactNode) | undefined;
   readonly catalog: LoopCatalog | undefined;
   /** The collection a traced list comes from, which names it in the menu. */
   readonly traced: TracedCollection | undefined;
@@ -122,7 +136,7 @@ const NOTICE_MS = 6_000;
 export default function LoopSettings(props: LoopSettingsProps) {
   const catalog = useLoopCatalog(props.projectPath);
   const [notice, setNotice] = useNotice();
-  const { reading, fields } = useLoopReading(props.input, props.projectPath, catalog);
+  const { reading, fields, sections } = useLoopReading(props.input, props.projectPath, catalog);
   const holder = readingChain(reading)[0];
   const traced = useTracedEditing(reading, { projectPath: props.projectPath, filePath: props.filePath, catalog }, setNotice);
   const apply = (target: LoopTarget): void => {
@@ -131,6 +145,12 @@ export default function LoopSettings(props: LoopSettingsProps) {
     setNotice(noticeFor(props.onApply(target, client), before));
   };
   const shared = { catalog, projectPath: props.projectPath };
+  const applySection = (section: LoopSection, code: string): string | undefined => {
+    const client = catalog?.sanity.kind === 'connected' ? catalog.sanity.client : 'unavailable';
+    const result = props.onApply({ kind: 'section', section, code }, client);
+    return result.ok ? undefined : result.message;
+  };
+  const code = sections === undefined ? undefined : sectionCodeContext(sections, { input: props.input, fields, applySection, applyQuery: apply });
   const literal = reading.kind === 'code' ? literalItems(props.input.data) : undefined;
   const readerOf = (path: string, exported: string): string | undefined =>
     props.input.imports.find((entry) => entry.path === path && (entry.imported ?? entry.name) === exported)?.name;
@@ -151,7 +171,7 @@ export default function LoopSettings(props: LoopSettingsProps) {
         pickerData={props.pickerData}
         projectPath={props.projectPath}
         lists={props.lists}
-        sourceButton={holder === undefined ? undefined : props.sourceButton?.(holder)}
+        sourceButton={holder === undefined ? undefined : (anchorRef) => props.sourceButton?.(holder, anchorRef)}
         catalog={catalog}
         traced={traced.collection}
         onChoose={apply}
@@ -159,11 +179,44 @@ export default function LoopSettings(props: LoopSettingsProps) {
         newList={newListOffer(props, catalog, setNotice)}
       />
       {notice !== undefined && <NoticeBanner notice={notice} onDismiss={() => setNotice(undefined)} />}
-      <ReadingSettings {...shared} reading={reading} traced={traced} fields={fields} binding={binding} literal={literal} onApply={apply} />
+      <ReadingSettings {...shared} reading={reading} traced={traced} fields={fields} binding={binding} literal={literal} code={code} onApply={apply} />
       {props.children}
-      <ReadingDetails reading={reading} data={props.input.data} traced={traced} catalog={catalog} />
+      <ReadingDetails reading={reading} data={props.input.data} traced={traced} catalog={catalog} split={sections !== undefined} />
     </div>
   );
+}
+
+// What a list's sections are edited through. Steps are rewritten where they are
+// written; a Sanity list's text is read into the query, which is then written
+// as any change to it is.
+function sectionCodeContext(
+  sections: LoopSections,
+  actions: {
+    readonly input: LoopSettingsProps['input'];
+    readonly fields: readonly CatalogField[] | undefined;
+    readonly applySection: SectionCodeContext['write'];
+    readonly applyQuery: (target: LoopTarget) => void;
+  },
+): SectionCodeContext {
+  const { query } = sections;
+  const groq = sections.store === 'groq';
+  return {
+    sections,
+    problemOf: (section, code) => (groq ? groqSectionProblem(section, code, query) : sectionCodeProblem(section, code)),
+    // A GROQ clause no control can say is kept as a custom row, so all of it shows.
+    refusalOf: (section, code) => (groq ? undefined : sectionRefusal(actions.input, section, code)),
+    write: (section, code) => {
+      if (!groq) {
+        return actions.applySection(section, code);
+      }
+      const next = groqSectionQuery(section, code, query);
+      assert(next !== undefined, 'GROQ a section accepted reads as a query');
+      actions.applyQuery({ kind: 'query', query: next, fields: actions.fields ?? [] });
+      return undefined;
+    },
+    completions: (section) => sectionFieldPaths(section, sections, actions.fields).map((label) => ({ label, type: 'property' })),
+    placeholder: (section) => sectionPlaceholder(section, query.source.kind),
+  };
 }
 
 // In a component, the Source menu makes a List property and loops over it:
@@ -246,14 +299,31 @@ function ReadingSettings(props: {
   readonly literal: readonly string[] | undefined;
   readonly catalog: LoopCatalog | undefined;
   readonly projectPath: string | undefined;
+  /** The list's sections as code, when it splits into them. */
+  readonly code: SectionCodeContext | undefined;
   readonly onApply: (target: LoopTarget) => void;
 }) {
-  const { reading, fields, literal, onApply } = props;
+  const { reading, fields, literal, onApply, code } = props;
   const shared = { catalog: props.catalog, projectPath: props.projectPath };
   return (
     <>
       {reading.kind === 'value' && reading.origin.kind === 'call' && <TracedSettings {...shared} traced={props.traced} />}
-      {reading.kind === 'partial' && <PartialNotice onReplace={() => onApply({ kind: 'query', query: emptyQuery(reading.source), fields: fields ?? [] })} />}
+      {reading.kind === 'partial' && code === undefined && (
+        <PartialNotice onReplace={() => onApply({ kind: 'query', query: emptyQuery(reading.source), fields: fields ?? [] })} />
+      )}
+      {/* Custom code in a section: that section is code, and the rest stay
+          controls. There is no Items switch: picking items would replace the code. */}
+      {reading.kind === 'partial' && code !== undefined && (
+        <QuerySections
+          {...shared}
+          query={code.sections.query}
+          fields={fields}
+          stored="code"
+          itemPath={code.sections.itemPath}
+          code={code}
+          onChange={(query) => onApply({ kind: 'query', query, fields: fields ?? [] })}
+        />
+      )}
       {reading.kind === 'query' && reading.query.source.kind === 'list' && (
         <QuerySections
           {...shared}
@@ -261,6 +331,7 @@ function ReadingSettings(props: {
           fields={fields}
           stored="code"
           itemPath={[]}
+          code={code}
           onChange={(query) => onApply({ kind: 'query', query, fields: [] })}
         />
       )}
@@ -271,6 +342,7 @@ function ReadingSettings(props: {
           home={reading.home}
           fields={fields}
           binding={props.binding}
+          code={code}
           onChange={(query) => onApply({ kind: 'query', query, fields: fields ?? [] })}
         />
       )}
@@ -287,6 +359,8 @@ function ReadingDetails(props: {
   readonly data: string;
   readonly traced: ReturnType<typeof useTracedEditing>;
   readonly catalog: LoopCatalog | undefined;
+  /** Whether the settings show the list's custom code themselves, section by section. */
+  readonly split: boolean;
 }) {
   const { reading, traced } = props;
   if (reading.kind === 'value' && reading.origin.kind === 'call') {
@@ -303,7 +377,7 @@ function ReadingDetails(props: {
     );
   }
   if (reading.kind === 'partial') {
-    return (
+    return props.split ? undefined : (
       <LoopDetails>
         <div className="loop-lineage-note">{reading.reason} It still works; edit it in the code.</div>
       </LoopDetails>
@@ -325,6 +399,7 @@ function CollectionSettings(props: {
   readonly fields: readonly CatalogField[] | undefined;
   readonly catalog: LoopCatalog | undefined;
   readonly projectPath: string | undefined;
+  readonly code: SectionCodeContext | undefined;
   readonly onChange: (query: LoopQuery) => void;
 }) {
   const { home } = props;
@@ -397,35 +472,60 @@ function QuerySections(props: {
   /** Where a kept list's items hold their fields: what custom code starts from. */
   readonly itemPath?: readonly string[] | undefined;
   readonly binding?: BindingContext | undefined;
+  /** Each section as code. Absent where settings are not code: data, another file's query. */
+  readonly code?: SectionCodeContext | undefined;
   readonly onChange: (query: LoopQuery) => void;
 }) {
+  const { code } = props;
+  const filterCode = useSectionCode('filter', code);
+  const sortCode = useSectionCode('sort', code);
+  const limitCode = useSectionCode('limit', code);
+  // Around a custom section a whole query cannot be written: it does not hold
+  // that section's code. A control's change goes in as its own section instead.
+  const onChange = (query: LoopQuery): void => {
+    const custom = code !== undefined && LOOP_SECTIONS.some((section) => code.sections[section].custom !== undefined);
+    if (!custom) {
+      props.onChange(query);
+      return;
+    }
+    const section = changedSection(props.query, query);
+    if (section !== undefined) {
+      code.write(section, sectionCodeOf(query, section, code.sections.itemPath));
+    }
+  };
   // Data has no "now" to compare with; a shuffle runs in JS, so neither data
   // nor another file's query string can hold one.
   const operatorSet = props.stored === 'data' ? 'data' : 'code';
   const randomOrder = props.stored === 'code' ? 'available' : 'unavailable';
   return (
     <>
-      <FilterSection
-        query={props.query}
-        fields={props.fields}
-        catalog={props.catalog}
-        projectPath={props.projectPath}
-        operatorSet={operatorSet}
-        itemPath={props.itemPath}
-        binding={props.binding}
-        onChange={props.onChange}
-      />
-      <SortSection
-        query={props.query}
-        fields={props.fields}
-        catalog={props.catalog}
-        projectPath={props.projectPath}
-        itemPath={props.itemPath}
-        randomOrder={randomOrder}
-        binding={props.binding}
-        onChange={props.onChange}
-      />
-      <LimitSection query={props.query} binding={props.binding} onChange={props.onChange} />
+      {filterCode.editor ?? (
+        <FilterSection
+          query={props.query}
+          fields={props.fields}
+          catalog={props.catalog}
+          projectPath={props.projectPath}
+          operatorSet={operatorSet}
+          itemPath={props.itemPath}
+          binding={props.binding}
+          toggle={filterCode.toggle}
+          onChange={onChange}
+        />
+      )}
+      {sortCode.editor ?? (
+        <SortSection
+          query={props.query}
+          fields={props.fields}
+          catalog={props.catalog}
+          projectPath={props.projectPath}
+          itemPath={props.itemPath}
+          randomOrder={randomOrder}
+          binding={props.binding}
+          toggle={sortCode.toggle}
+          onChange={onChange}
+        />
+      )}
+      {limitCode.editor ?? <LimitSection query={props.query} binding={props.binding} toggle={limitCode.toggle} onChange={onChange} />}
     </>
   );
 }
@@ -486,7 +586,11 @@ function useLoopReading(input: Omit<LoopReadInput, 'fieldKind'>, projectPath: st
     const fieldKind = (_source: LoopSource, path: string): LoopFieldKind | undefined => fieldNamed(fields, path)?.kind;
     return readLoop({ ...input, fieldKind });
   }, [first, fields, firstSource, input]);
-  return { reading, fields };
+  const sections = useMemo(() => {
+    const fieldKind = (_source: LoopSource, path: string): LoopFieldKind | undefined => fieldNamed(fields, path)?.kind;
+    return readSections({ ...input, fieldKind });
+  }, [fields, input]);
+  return { reading, fields, sections };
 }
 
 // A list an import computes, traced through the files it passes through to the
@@ -522,6 +626,7 @@ function useTracedEditing(
 
 function SourceRow(props: SourceRowProps) {
   const { reading, catalog } = props;
+  const rowRef = useRef<HTMLDivElement>(null);
   const current = sourceKeyOf(props);
   const shown = props.fieldList === undefined ? sourceOptions(props, catalog, current).find((option) => option.value === current) : undefined;
   const choose = (pick: SourcePick): void => {
@@ -551,7 +656,7 @@ function SourceRow(props: SourceRowProps) {
     void chooseCollection(props, catalog, pick.source);
   };
   return (
-    <div className="props-field loop-settings-row">
+    <div className="props-field loop-settings-row" ref={rowRef}>
       <label>
         <span className="prop-label">Source</span>
       </label>
@@ -568,7 +673,7 @@ function SourceRow(props: SourceRowProps) {
           }
           onPick={choose}
         />
-        {props.sourceButton}
+        {props.sourceButton?.(rowRef)}
       </div>
     </div>
   );

@@ -123,6 +123,7 @@ the agent hooks are guard rails, not a sandbox. CI is the gate that cannot be ar
 | 17 | Scripts are TypeScript | scan: `no-shell-script` |
 | 17 | Descriptive commit messages | hook: `commit-msg` |
 | — | No `@ts-nocheck`; `@ts-expect-error` says why | scan: `no-ts-nocheck`; lint: `ban-ts-comment` |
+| — | Code display: code in the UI is syntax highlighted | test: `test/renderer/ui/codeDisplayRule.test.js` (source scan with named allowlists); `test/renderer/ui/codeBlock.test.js` for each site; review for code that looks like a label |
 
 ## Changing a rule
 

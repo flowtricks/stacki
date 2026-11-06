@@ -203,6 +203,16 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     kind: 'image',
   },
   'cmsRemote:linkPreview': { url: 'https://youtu.be/gQIJRzTjvCA' },
+  'pageTemplate:create': {
+    projectPath: '/site',
+    draft: { route: '/blog/[slug]', source: { kind: 'content-collection', collection: 'blog', origin: 'existing', slug: { kind: 'entry-id' } } },
+  },
+  'pageTemplate:plan': {
+    projectPath: '/site',
+    draft: { route: '/blog/[slug]', source: { kind: 'content-collection', collection: 'blog', origin: 'existing', slug: { kind: 'entry-id' } } },
+  },
+  'pageTemplate:sample': { projectPath: '/site', request: { kind: 'http-json', url: 'https://api.example.com/items', headers: [] } },
+  'project:setEnv': { projectPath: '/site', name: 'API_TOKEN', value: 'value' },
   'content:remoteRead': {
     projectPath: '/site',
     request: { operation: 'documents', collection: 'blog' },

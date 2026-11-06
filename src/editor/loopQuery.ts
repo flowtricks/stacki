@@ -500,6 +500,25 @@ export function listQueryCode(query: LoopQuery): string {
   return code;
 }
 
+/**
+ * The filters as one function a `.filter()` takes, over items that hold their
+ * fields under `itemPath`, or undefined with no filters to say.
+ */
+export function filterFunctionCode(query: LoopQuery, itemPath: readonly string[]): string | undefined {
+  if (query.conditions.length === 0) {
+    return undefined;
+  }
+  if (query.parameter.kind === 'data' && itemPath.length === 1 && itemPath[0] === 'data') {
+    return astroFilterCode(query);
+  }
+  const name = query.parameter.kind === 'entry' ? query.parameter.name : 'entry';
+  const base = [name, ...itemPath].join('.');
+  const joiner = query.match === 'all' ? ' && ' : ' || ';
+  const code = `(${name}) => ${query.conditions.map((condition) => astroConditionCode(condition, base)).join(joiner)}`;
+  assert(code.includes('=>'), 'A filter is a function');
+  return code;
+}
+
 function astroFilterCode(query: LoopQuery): string | undefined {
   if (query.conditions.length === 0) {
     return undefined;
@@ -581,13 +600,19 @@ function groupedCode(code: string): string {
 // The sort step a JavaScript list takes: a shuffle, the code a custom sort
 // holds, or a comparator over the sort keys; none for the source's own order.
 function sortStepCode(query: LoopQuery, itemPath: readonly string[], method: 'sort' | 'toSorted'): string {
+  const comparator = sortFunctionCode(query, itemPath);
+  return comparator === undefined ? '' : `.${method}(${comparator})`;
+}
+
+/** The function a sort step takes, or undefined for the source's own order. */
+export function sortFunctionCode(query: LoopQuery, itemPath: readonly string[]): string | undefined {
   if (query.random) {
-    return `.${method}(() => Math.random() - 0.5)`;
+    return '() => Math.random() - 0.5';
   }
   if (query.customSort !== undefined) {
-    return `.${method}(${query.customSort.trim()})`;
+    return query.customSort.trim();
   }
-  return query.sorts.length > 0 ? `.${method}(${astroComparatorCode(query.sorts, itemPath)})` : '';
+  return query.sorts.length > 0 ? astroComparatorCode(query.sorts, itemPath) : undefined;
 }
 
 /** The sort keys as one comparator over items that hold their fields under
@@ -647,7 +672,8 @@ function fileSizeCode(image: string): string {
   return code;
 }
 
-function sliceCode(offset: number, limit: number | undefined): string {
+/** The slice a start and a limit take, or nothing when they ask for every item. */
+export function sliceCode(offset: number, limit: number | undefined): string {
   if (limit !== undefined) {
     return `.slice(${offset}, ${offset + limit})`;
   }
@@ -743,7 +769,7 @@ export function groqQueryText(query: LoopQuery, fields: readonly LoopField[]): s
   // A shuffle happens after the fetch (GROQ has no random order), so the
   // query returns every match and the slice is taken from the shuffled list.
   const sorted = !query.random && query.sorts.length > 0;
-  const order = sorted ? ` | order(${query.sorts.map((sort) => `${sort.field} ${sort.direction === 'ascending' ? 'asc' : 'desc'}`).join(', ')})` : '';
+  const order = sorted ? ` | ${groqOrderText(query.sorts)}` : '';
   // A custom sort, like a shuffle, runs on the fetched list: so does its slice.
   const afterFetch = query.random || query.customSort !== undefined;
   const slice = afterFetch ? '' : groqSlice(query.offset, query.limit);
@@ -815,6 +841,22 @@ export function groqConditionCode(condition: LoopCondition): string {
       return exhaustive;
     }
   }
+}
+
+/** The filters as the clauses of a GROQ filter, joined the way the query joins them. */
+export function groqFilterText(query: LoopQuery): string {
+  const clauses = query.conditions.map(groqConditionCode);
+  return clauses.join(query.match === 'all' ? ' && ' : ' || ');
+}
+
+/** The sort keys as a GROQ pipe, `order(name asc)`; nothing with no keys. */
+export function groqOrderText(sorts: readonly LoopSort[]): string {
+  return sorts.length === 0 ? '' : `order(${sorts.map((sort) => `${sort.field} ${sort.direction === 'ascending' ? 'asc' : 'desc'}`).join(', ')})`;
+}
+
+/** A start and a limit as a GROQ slice, trimmed of its leading space. */
+export function groqSliceText(offset: number, limit: number | undefined): string {
+  return groqSlice(offset, limit).trim();
 }
 
 function groqSlice(offset: number, limit: number | undefined): string {

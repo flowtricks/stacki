@@ -6,7 +6,9 @@
 // under the control, red when it blocks publishing and amber when it only warns.
 // A field the Studio locks (`readOnly`) shows its value without a control.
 // Where an empty required field blocks saving (an Astro entry), it says so
-// under the control once the editor asks it to (`requiredShown`).
+// under the control once the editor asks it to (`requiredShown`). An entry held
+// on screen while the next one loads says nothing at all (FieldChecksContext).
+import { useContext } from 'react';
 import {
   isLocked,
   remoteObject,
@@ -25,6 +27,7 @@ import Dropdown from '../../ui/Dropdown';
 import { hasOptionImage, OPTION_IMAGE_MENU, OptionImage } from './projectImages';
 import { ReferenceIcon, referenceTitle, useReferenceOptions } from './RemoteReferenceInput';
 import { typeIcons } from './SanityTypeIcon';
+import { FieldChecksContext } from './remoteCmsShared';
 
 export function RemoteField(props: {
   readonly field: RemoteSchemaField;
@@ -35,7 +38,9 @@ export function RemoteField(props: {
   readonly onChange: (value: RemoteValue | undefined) => void;
 }) {
   const { field, value } = props;
-  const missing = props.requiredShown === true && field.required && isEmptyValue(value);
+  const checks = useContext(FieldChecksContext);
+  const missing = checks === 'shown' && props.requiredShown === true && field.required && isEmptyValue(value);
+  const problems = checks === 'shown' ? problemsOf(field, value) : [];
   const name = fieldTitle(field);
   const help = field.description;
   const scalar = scalarOf(field.type);
@@ -70,7 +75,7 @@ export function RemoteField(props: {
       )}
       {missing && <span className="remote-cms-problem is-error">{requiredMessage(field)}</span>}
       {/* Required is the label's asterisk; Publish still waits for it (remoteValidation.ts). */}
-      {problemsOf(field, value)
+      {problems
         .filter((problem) => problem.message !== 'Required')
         .map((problem) => (
           <span key={problem.message} className={`remote-cms-problem is-${problem.level}`}>

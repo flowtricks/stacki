@@ -239,6 +239,7 @@ const PIXEL = 'data:image/png;base64,' + 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAA
     );
     const note = () => wizard.querySelector('.starter-note')?.textContent || '';
     check('with npm, the note names only the command it runs', note().startsWith('Runs npm create lumos@latest, then starts a git history'), note());
+    check('and that command is highlighted shell', !!wizard.querySelector('.starter-note .code-inline .code-token'));
     await act(async () => wizard.querySelector('.dd-trigger').click());
     await act(async () => dom.window.document.querySelectorAll('.dd-option')[1].click());
     check('with pnpm, it also says pnpm installs it', note().startsWith('Runs npm create lumos@latest, installs it with pnpm, then starts'), note());

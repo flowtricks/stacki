@@ -1,6 +1,7 @@
 import type { ScanPage } from '../../../shared/properties/projectScan';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS, pathText, record } from '../../../shared/core/boundary';
+import { pageSegments } from '../../lib/pageName';
 
 export interface PageTreePage extends ScanPage {
   readonly base: string;
@@ -81,31 +82,6 @@ export function parsePageDragText(input: string): PageDragPayload | undefined {
   }
 }
 
-export function pageDisplayName(page: ScanPage): string {
-  if (/^index\.(astro|mdx?)$/i.test(page.name)) {
-    return 'Home';
-  }
-  const parts = pageSegments(page.name);
-  const base = stripPageExtension(parts.at(-1) ?? page.name);
-  if (/^\[(?:\.\.\.)?[^\]]+\]$/.test(base)) {
-    // Template names explain the collection; file and route identities remain untouched.
-    const folder = parts.at(-2) ?? 'Page';
-    return pageFolderDisplayName(folder.replace(/[\[\]]/g, '')) + ' Template';
-  }
-  const title = page.title?.trim();
-  return title || base;
-}
-
-export function pageFolderDisplayName(name: string): string {
-  pathText(name);
-  const words = name.split(/[-\s]+/).filter((word) => word.length > 0);
-  return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ') || name;
-}
-
-export function stripPageExtension(base: string): string {
-  return base.replace(/\.(astro|mdx?)$/i, '');
-}
-
 export function pageExtension(base: string): string {
   return base.match(/\.(astro|mdx?)$/i)?.[0] ?? '.astro';
 }
@@ -134,16 +110,4 @@ function directoryNode(root: MutablePageTreeNode, rel: string): MutablePageTreeN
     }
   }
   return node;
-}
-
-function pageSegments(rel: string): readonly string[] {
-  pathText(rel);
-  const parts = rel.split('/');
-  if (parts.length > BOUNDARY_LIMITS.depthMax) {
-    throw new Error('Page tree: path depth exceeds limit');
-  }
-  if (parts.some((part) => part === '' || part === '.' || part === '..')) {
-    throw new Error('Page tree: expected relative path segments');
-  }
-  return parts;
 }

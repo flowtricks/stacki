@@ -46,6 +46,8 @@ type SortSectionProps = SectionProps & {
   readonly binding?: BindingContext | undefined;
   /** The section's label, when it says more than its title (a page's own value). */
   readonly label?: ReactNode;
+  /** The `{}` that shows the sort as code. */
+  readonly toggle?: ReactNode;
 };
 
 /** Sort, or, once linked to a property, its purple bar with the sort as its default. */
@@ -62,7 +64,7 @@ export function SortSection(props: SortSectionProps) {
 function sortDraft(props: SortSectionProps): DraftEditor {
   return {
     query: props.query,
-    render: (query, onChange) => <SortEditor {...props} query={query} binding={undefined} label={undefined} onChange={onChange} />,
+    render: (query, onChange) => <SortEditor {...props} query={query} binding={undefined} label={undefined} toggle={undefined} onChange={onChange} />,
   };
 }
 
@@ -127,6 +129,7 @@ function SortEditor(props: SortSectionProps) {
         title="Sort"
         label={props.label}
         dot={<SettingDot setting="sort" binding={props.binding} draft={sortDraft(props)} />}
+        toggle={props.toggle}
         addable={addable}
         onAdd={add}
       />
@@ -188,7 +191,6 @@ function CustomSortRow(props: {
             value={props.code}
             label="Sort code"
             placeholder={props.source === 'list' ? '(a, b) => a.order - b.order' : '(a, b) => a.data.order - b.data.order'}
-            charsMax={LOOP_QUERY_LIMITS.customCodeCharsMax}
             check={customSortProblem}
             onCommit={props.onChange}
           />
@@ -310,7 +312,7 @@ function orderOf(key: OrderKey, orders: readonly LoopSortOrder[]): Pick<LoopSort
 // Limit.
 // ---------------------------------------------------------------------------
 
-export function LimitSection(props: Omit<SectionProps, 'fields'> & { readonly binding?: BindingContext | undefined }) {
+export function LimitSection(props: Omit<SectionProps, 'fields'> & { readonly binding?: BindingContext | undefined; readonly toggle?: ReactNode }) {
   const { query } = props;
   // A linked Show or Skip keeps the section open: its row is the purple bar.
   const linked = props.binding?.settings.limit.kind === 'prop' || props.binding?.settings.offset.kind === 'prop';
@@ -321,7 +323,10 @@ export function LimitSection(props: Omit<SectionProps, 'fields'> & { readonly bi
   return (
     <div className="loop-settings-section">
       <div className="loop-settings-header">
-        <span className="prop-label">Limit items</span>
+        <span className="loop-settings-label">
+          <span className="prop-label">Limit items</span>
+          {props.toggle}
+        </span>
         <button type="button" role="switch" aria-checked={on} aria-label="Limit items" className={`cms-toggle ${on ? 'on' : ''}`} onClick={toggle}>
           <span className="cms-toggle-knob" />
         </button>

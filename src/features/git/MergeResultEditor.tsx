@@ -12,7 +12,7 @@ import { editConflictDraft } from './conflictDraft';
 import type { ConflictDraft } from './conflictDraft';
 import type { Clash } from './gitConflictModel';
 import { conflictHighlights } from './conflictHighlights';
-import { languageFor } from './Code';
+import { languageFor } from '../../ui/codeHighlight';
 
 interface MergeEditorProps {
   readonly path: string;
@@ -83,7 +83,7 @@ export default function MergeResultEditor(props: MergeEditorProps) {
 }
 
 function createMergeEditor(parent: HTMLDivElement, latest: MutableRefObject<MergeEditorProps>) {
-  const language = latest.current.path.endsWith('.astro') ? 'astro' : languageFor(latest.current.path);
+  const language = languageFor(latest.current.path);
   return new EditorView({
     parent,
     state: EditorState.create({

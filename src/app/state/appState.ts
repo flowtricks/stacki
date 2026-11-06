@@ -119,6 +119,9 @@ export function useCanvasReportState() {
   const [nodeClasses, setNodeClassesState] = useState<Readonly<Record<string, readonly string[]>> | undefined>(undefined);
   // The ::before or ::after last picked in the navigator (see PseudoPick).
   const [pseudoPick, setPseudoPick] = useState<PseudoPick | undefined>(undefined);
+  // The same pick for the keys, which read it at keypress time (see AppKeys).
+  const pseudoPickRef = useRef<PseudoPick | undefined>(undefined);
+  pseudoPickRef.current = pseudoPick;
   // The canvas re-reports after every walk of the page, mostly with what it
   // said last time. A report equal to the one held keeps the held one, and
   // React skips the render a new array or object would have cost the app.
@@ -137,6 +140,7 @@ export function useCanvasReportState() {
     nodeClasses,
     nodeStates,
     pseudoPick,
+    pseudoPickRef,
     renderedPaths,
     selectedClasses,
     setClassesTick,

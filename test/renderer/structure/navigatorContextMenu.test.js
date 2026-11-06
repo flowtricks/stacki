@@ -71,6 +71,33 @@ function checkWrap({ canWrapNode, wrapNodeGesture }) {
   assert.equal(slottedGesture.request(() => target)[0].tag, 'replace-node');
 }
 
+// A ::before or ::after is the selection: its element's menu takes nothing away,
+// a click on the disabled items included, and copying stays. Its row has no menu.
+async function checkPseudoMenu({ render, open, item, click, calls, act, dom }) {
+  await render({ canDeleteNode: () => false });
+  await open('n0');
+  assert.equal(item('Delete').disabled, true);
+  assert.equal(item('Cut').disabled, true);
+  assert.equal(item('Copy').disabled, false);
+  const before = calls.length;
+  await click('Delete');
+  await click('Cut');
+  assert.deepEqual(calls.slice(before), [], 'a disabled Delete or Cut does nothing');
+  await click('Copy');
+  assert.deepEqual(calls.at(-1), ['copy', 'n0']);
+  await render({ canDeleteNode: (id) => id !== 'n0', pseudoNodeIds: { before: new Set(['n0']), after: new Set() }, selectedPseudo: 'before' });
+  await open('n1');
+  assert.equal(item('Delete').disabled, false, 'another element still deletes');
+  await click('Delete');
+  assert.deepEqual(calls.at(-1), ['delete', 'n1']);
+  await act(() => {
+    document
+      .querySelector('[data-pseudo-of="n0"]')
+      .dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+  });
+  assert.equal(document.querySelector('[role="menu"]') ?? undefined, undefined, 'a pseudo-element row has no menu');
+}
+
 async function checkMenu(StructurePanel) {
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node']) {
@@ -194,6 +221,8 @@ async function checkMenu(StructurePanel) {
   assert.equal(document.querySelector('[role="menu"]') ?? undefined, undefined);
   await open('n1');
   assert.equal(item('Delete').disabled, true);
+  await key(document.activeElement, 'Escape');
+  await checkPseudoMenu({ render, open, item, click, calls, act, dom });
   await act(() => root.unmount());
   dom.window.close();
 }

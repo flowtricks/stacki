@@ -16,12 +16,18 @@
 // <Button> renders an error, not a button, unless Button comes with it. And an
 // import that came along can't simply be copied — a relative path is relative
 // to the file it was written in, and the new file is somewhere else.
+//
+// The frontmatter the piece's values are made by may travel too. Which code that
+// is, and what stays behind, is decided in the renderer
+// (src/editor/extractFrontmatter.ts); its paths are re-aimed here, where the two
+// folders are known.
 
 import fs from 'fs';
 import path from 'path';
 
 import { assert } from '../../shared/core/assert';
 import type { Digest } from '../../shared/core/brand';
+import { mapModuleSpecifiers } from '../../shared/page/frontmatterSource';
 import { isPathDescendant } from '../lib/platform';
 import { digestOf } from './atomicWrite';
 import { serializePage, serializeNodes } from '../parse/astroParser';
@@ -36,6 +42,16 @@ const VALID_NAME = /^[A-Z][A-Za-z0-9]*$/;
 interface ComponentImport {
   readonly name?: string;
   readonly path?: string;
+  readonly quote?: string;
+  readonly named?: boolean;
+  readonly imported?: string;
+  readonly typeOnly?: boolean;
+}
+
+/** Code moving out of the parent: its statements, and the imports they read. */
+interface MovedFrontmatter {
+  readonly imports: readonly ComponentImport[];
+  readonly code: string;
 }
 
 interface ComponentFileArgs {
@@ -45,6 +61,7 @@ interface ComponentFileArgs {
   readonly nodes: readonly unknown[];
   readonly imports?: readonly ComponentImport[];
   readonly props?: readonly unknown[];
+  readonly frontmatter?: MovedFrontmatter;
 }
 
 /**
@@ -52,7 +69,11 @@ interface ComponentFileArgs {
  * the name can't be used — nothing is written here; the caller does that, so
  * every write to the project stays in one place.
  */
-function componentFile({ projectPath, pagePath, name, nodes, imports = [], props = [] }: ComponentFileArgs): { path: string; rel: string; text: string } {
+function componentFile({ projectPath, pagePath, name, nodes, imports = [], props = [], frontmatter }: ComponentFileArgs): {
+  path: string;
+  rel: string;
+  text: string;
+} {
   if (!VALID_NAME.test(String(name || ''))) {
     throw new Error('A component name has to be a word starting with a capital letter.');
   }
@@ -76,33 +97,37 @@ function componentFile({ projectPath, pagePath, name, nodes, imports = [], props
   // expression (`{items.map(…)}`, `<Fragment set:html={raw} />`) counts too.
   const markup = serializeNodes(nodes);
   const used = imports.filter((imp) => imp?.name && new RegExp(`(^|[^A-Za-z0-9_$])${imp.name}([^A-Za-z0-9_$]|$)`).test(markup));
+  const needed = (frontmatter?.imports ?? []).filter((imp) => !used.some((other) => other.name === imp.name));
 
   // `@/components/Button.astro` and bare package names mean the same thing from
   // any file and travel untouched. A relative path was written from the page's
   // folder and has to be re-aimed from src/components.
   const pageDirectory = path.dirname(pagePath);
-  const moved = used.map((imp) => {
-    const spec = String(imp.path || '');
+  const rebased = (spec: string): string => {
     if (!spec.startsWith('.')) {
-      return { ...imp };
+      return spec;
     }
     const rel = toPosix(path.relative(componentsDirectory, path.resolve(pageDirectory, spec)));
-    return { ...imp, path: rel.startsWith('.') ? rel : './' + rel };
-  });
+    return rel.startsWith('.') ? rel : './' + rel;
+  };
+  const moved = [...used, ...needed].map((imp) => ({ ...imp, path: rebased(String(imp.path || '')) }));
 
   // The values the piece was reading from the page, now read from its props
   // instead. Astro's own convention, and the one the props panel reads back:
-  // a destructure off Astro.props IS the component's interface.
+  // a destructure off Astro.props IS the component's interface. It comes first
+  // because code that moved may read a prop, and never the other way round.
   const names = props.filter((prop) => /^[A-Za-z_$][\w$]*$/.test(String(prop || '')));
-  const extraFrontmatter = names.length ? `const { ${names.join(', ')} } = Astro.props;` : '';
+  const destructure = names.length ? `const { ${names.join(', ')} } = Astro.props;` : '';
+  const code = mapModuleSpecifiers(frontmatter?.code ?? '', rebased);
+  const extraFrontmatter = [destructure, code].filter((part) => part !== '').join('\n\n');
 
   const text = serializePage({
     imports: moved,
     extraFrontmatter,
     nodes,
-    // No imports and no props, no `---` block: a component that needs no
+    // No imports and no code, no `---` block: a component that needs no
     // frontmatter shouldn't be handed an empty one.
-    hadFrontmatter: moved.length > 0 || names.length > 0,
+    hadFrontmatter: moved.length > 0 || extraFrontmatter !== '',
   });
 
   return { path: target, rel: toPosix(path.relative(projectPath, target)), text };

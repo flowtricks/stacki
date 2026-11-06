@@ -1,14 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
+import type { Attr } from '../../../shared/page/pageNode';
 import type { Item, ItemField } from './arrayValue';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { PlusIcon, CloseIcon } from '../../ui/Icons';
 import ListFieldRow from '../../ui/ListFieldRow';
-import AssetField from '../../ui/AssetField';
+import type { PickedAsset } from '../../ui/AssetField';
 import { allowDragEffect } from '../../editor/dragState';
 import { arrayItems, arrayText, blankLike, itemLabel, moveItem } from './arrayValue';
-import { blankItemOf, conformedItem, itemFieldKind, type ItemShapeField } from './listItemShape';
-import SegSwitch from './SegSwitch';
+import type { SourceContext } from './bindingTypes';
+import { blankItemOf, conformedItem, itemFieldDefinition, itemFieldKind, itemFieldOf, itemFieldValue, type ItemShapeField } from './listItemShape';
+import PropField from './PropField';
+import type { RichContext } from './RichContent';
 
 // A prop that takes a list, edited as a list.
 //
@@ -26,7 +29,9 @@ import SegSwitch from './SegSwitch';
 // string; featured: boolean }[]`) is given that shape (listItemShape.ts): each
 // field in the popup is the control its kind takes (a switch for a boolean, a
 // number box, an image card, a link box), every item shows every declared
-// field, and Add item starts from the shape even when the list is empty. An
+// field, and Add item starts from the shape even when the list is empty. Those
+// are PropField's own controls, so a field binds to data as any prop's does and
+// the code lands in the literal: `{ title: entry.data.title, number: 0 }`. An
 // instance that sets nothing shows the component's default items, dimmed, and
 // the first change writes the list from them.
 //
@@ -45,40 +50,37 @@ interface ItemEditorProps {
   readonly item: Item;
   readonly shape: readonly ItemShapeField[] | undefined;
   readonly projectPath: string | undefined;
+  readonly bindContext: RichContext | undefined;
+  readonly dataContext: SourceContext | undefined;
   readonly position: Position;
   readonly trigger: HTMLElement;
   readonly onChange: (item: Item) => void;
   readonly onClose: () => void;
 }
-function ItemEditor({ item: given, shape, projectPath, position, trigger, onChange, onClose }: ItemEditorProps) {
+function ItemEditor({ item: given, shape, projectPath, bindContext, dataContext, position, trigger, onChange, onClose }: ItemEditorProps) {
   const ref = useListEditorDismiss(trigger, onClose);
-  const firstRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    firstRef.current?.focus();
-    firstRef.current?.select();
-  }, []);
+    const first = ref.current?.querySelector<HTMLInputElement>('input:not([type="color"]), .bind-input, .cm-content');
+    first?.focus();
+    if (first?.tagName === 'INPUT') {
+      first.select();
+    }
+  }, [ref]);
 
   // A word is one field called Value; an object is its own fields, named as the
   // file names them (every declared one, when the component declares them).
   // Either way the popup is a list of labelled fields, so there is one thing
   // to learn rather than two.
   const item = conformedItem(given, shape, '"');
-  const fields: readonly ItemField[] = item.fields || [{ key: 'value', keyQuote: undefined, text: item.text, quote: item.quote }];
-  const set = (i: number, text: string) => {
-    if (item.fields) {
-      onChange({
-        ...item,
-        fields: item.fields.map((field, at) => (at === i ? { ...field, text } : field)),
-      });
-      return;
-    }
-    onChange({ ...item, text });
-  };
-  const firstText = fields.findIndex((field) => field.quote !== undefined);
-
+  const fields = item.fields;
   return (
-    <div ref={ref} className="attr-editor list-item-editor" style={{ top: position.top, left: position.left, width: position.width }}>
+    <div
+      ref={ref}
+      className="attr-editor list-item-editor"
+      style={{ top: position.top, left: position.left, width: position.width }}
+      onKeyDown={(event) => closeOnEnter(event, onClose)}
+    >
       <div className="var-src-head">
         <span className="var-src-name">{item.fields ? 'Item' : 'Value'}</span>
         <span style={{ flex: 1 }} />
@@ -86,162 +88,105 @@ function ItemEditor({ item: given, shape, projectPath, position, trigger, onChan
           <CloseIcon size={12} />
         </button>
       </div>
-      {fields.map((field, i) => (
-        <ItemFieldControl
-          key={field.key}
-          field={field}
-          kind={item.fields ? itemFieldKind(field, shape) : 'text'}
-          projectPath={projectPath}
-          inputRef={i === firstText ? firstRef : undefined}
-          onSet={(text) => set(i, text)}
-          onClose={onClose}
-        />
-      ))}
+      {fields === undefined ? (
+        <WordItemInput text={item.text} onSet={(text) => onChange({ ...item, text })} />
+      ) : (
+        fields.map((field, at) => (
+          <ItemFieldControl
+            key={field.key}
+            field={field}
+            kind={itemFieldKind(field, shape)}
+            projectPath={projectPath}
+            bindContext={bindContext}
+            dataContext={dataContext}
+            onSet={(next) => onChange({ fields: fields.map((own, index) => (index === at ? next : own)) })}
+          />
+        ))
+      )}
     </div>
   );
 }
 
-// One field of an item, as its kind is edited.
+// Enter closes the popup from a one-line field. Not from a code editor, where it
+// commits, nor from the data picker a field opened, where it belongs to the search.
+function closeOnEnter(event: React.KeyboardEvent<HTMLDivElement>, onClose: () => void): void {
+  const ElementType = event.currentTarget.ownerDocument.defaultView?.Element;
+  if (event.key !== 'Enter' || ElementType === undefined || !(event.target instanceof ElementType)) {
+    return;
+  }
+  if (event.target.closest('.bind-menu, .cm-editor') === null) {
+    event.preventDefault();
+    onClose();
+  }
+}
+
+// One field of an object item, drawn by PropField as any prop's field is: its
+// label, its `{}`, its bind dot, its chips, and the control its kind takes.
 function ItemFieldControl(props: {
   readonly field: ItemField;
   readonly kind: ReturnType<typeof itemFieldKind>;
   readonly projectPath: string | undefined;
-  readonly inputRef: React.RefObject<HTMLInputElement> | undefined;
-  readonly onSet: (text: string) => void;
-  readonly onClose: () => void;
+  readonly bindContext: RichContext | undefined;
+  readonly dataContext: SourceContext | undefined;
+  readonly onSet: (field: ItemField) => void;
 }) {
-  const { field, kind, onSet, onClose } = props;
-  const closeOnEnter = (event: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      onClose();
+  const { field, kind, projectPath, onSet } = props;
+  const [note, setNote] = useState<string | undefined>(undefined);
+  // Code the list cannot hold yet stays on screen here, because the number box
+  // shows only what it is given and `-` has to survive on the way to `-2`.
+  const [draft, setDraft] = useState<Attr | undefined>(undefined);
+  const write = (value: Attr | undefined): void => {
+    const next = itemFieldOf(field, value, kind, '"');
+    setDraft(next === undefined ? heldDraft(value, kind) : undefined);
+    if (next !== undefined) {
+      setNote(undefined);
+      onSet(next);
     }
   };
-  switch (kind) {
-    case 'switch':
-      return (
-        <div className="list-item-field">
-          <span>{field.key}</span>
-          <SegSwitch
-            options={[
-              { value: 'true', label: 'On' },
-              { value: 'false', label: 'Off' },
-            ]}
-            current={field.text === 'true' ? 'true' : 'false'}
-            onPick={onSet}
-          />
-        </div>
-      );
-    case 'number':
-      return (
-        <label className="list-item-field">
-          <span>{field.key}</span>
-          <NumberItemInput value={field.text} label={field.key} onSet={onSet} onKeyDown={closeOnEnter} />
-        </label>
-      );
-    case 'image':
-      return props.projectPath === undefined ? (
-        <TextItemInput {...props} placeholder="https://… or /image.png" onKeyDown={closeOnEnter} />
-      ) : (
-        <ImageItemField field={field} projectPath={props.projectPath} onSet={onSet} />
-      );
-    case 'link':
-      return <TextItemInput {...props} placeholder="https://… or /page" onKeyDown={closeOnEnter} />;
-    case 'text':
-      return <TextItemInput {...props} placeholder="" onKeyDown={closeOnEnter} />;
-    default: {
-      const exhaustive: never = kind;
-      return exhaustive;
+  // An image in a list is a URL: the array literal can name a file in public/
+  // or one hosted elsewhere, but not import one from src/, which needs an import
+  // statement of its own.
+  const pickAsset = (_name: string, picked: PickedAsset): void => {
+    if (picked.root === 'public') {
+      write({ type: 'string', value: `/${picked.rel.split('/').slice(1).join('/')}` });
+    } else {
+      setNote('A list item’s image is a URL: choose one from public/, or enter its address.');
     }
-  }
+  };
+  return (
+    <>
+      <PropField
+        nodeKey={`item:${field.key}`}
+        field={itemFieldDefinition(field.key, kind)}
+        value={draft ?? itemFieldValue(field)}
+        bindContext={props.bindContext}
+        dataContext={props.dataContext}
+        assetContext={projectPath === undefined ? undefined : { projectPath, onPickAsset: pickAsset }}
+        onChange={write}
+      />
+      {note !== undefined && <div className="list-item-note">{note}</div>}
+    </>
+  );
 }
 
-function TextItemInput(props: {
-  readonly field: ItemField;
-  readonly placeholder: string;
-  readonly inputRef: React.RefObject<HTMLInputElement> | undefined;
-  readonly onSet: (text: string) => void;
-  readonly onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
-}) {
+// What a refused value is held as. As code, a number on its way (`-`) reads as
+// bound and PropField would swap the box for the code field under the caret;
+// as words it stays in the box until the next key makes it a number.
+function heldDraft(value: Attr | undefined, kind: ReturnType<typeof itemFieldKind>): Attr | undefined {
+  if (value?.type === 'expr' && kind === 'number' && /^[-+]?\.?$/.test(value.value.trim())) {
+    return { type: 'string', value: value.value };
+  }
+  return value;
+}
+
+// A list of words holds no fields to bind: an item that is code is a program
+// rather than a row (arrayValue.ts), so its one field stays a box for words.
+function WordItemInput(props: { readonly text: string; readonly onSet: (text: string) => void }) {
   return (
     <label className="list-item-field">
-      <span>{props.field.key}</span>
-      <input
-        ref={props.inputRef}
-        value={props.field.text}
-        aria-label={props.field.key}
-        placeholder={props.placeholder}
-        spellCheck={false}
-        maxLength={LIMITS.attrCharsMax}
-        onChange={(event) => props.onSet(event.target.value)}
-        onKeyDown={props.onKeyDown}
-      />
+      <span>value</span>
+      <input value={props.text} aria-label="value" spellCheck={false} maxLength={LIMITS.attrCharsMax} onChange={(event) => props.onSet(event.target.value)} />
     </label>
-  );
-}
-
-// A number is written as typed only once it is one: `-` or `1e` half-typed
-// would write an array the file cannot parse, and the list would drop into the
-// code editor mid-keystroke. An emptied box is 0.
-const NUMBER_TEXT = /^-?\d+(\.\d+)?$/;
-function NumberItemInput(props: {
-  readonly value: string;
-  readonly label: string;
-  readonly onSet: (text: string) => void;
-  readonly onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void;
-}) {
-  const [draft, setDraft] = useState(props.value);
-  useEffect(() => setDraft(props.value), [props.value]);
-  return (
-    <input
-      value={draft}
-      aria-label={props.label}
-      inputMode="decimal"
-      spellCheck={false}
-      onChange={(event) => {
-        const text = event.target.value;
-        setDraft(text);
-        if (text.trim() === '') {
-          props.onSet('0');
-        } else if (NUMBER_TEXT.test(text.trim())) {
-          props.onSet(text.trim());
-        }
-      }}
-      onBlur={() => setDraft(props.value)}
-      onKeyDown={props.onKeyDown}
-    />
-  );
-}
-
-// An image in a list is a URL: the array literal can name a file in public/
-// or one hosted elsewhere, but not import one from src/, which needs an import
-// statement of its own.
-function ImageItemField(props: { readonly field: ItemField; readonly projectPath: string; readonly onSet: (text: string) => void }) {
-  const [note, setNote] = useState<string | undefined>(undefined);
-  return (
-    <div className="list-item-field list-item-image">
-      <span>{props.field.key}</span>
-      <div className="list-item-image-body">
-        <AssetField
-          value={props.field.text === '' ? undefined : props.field.text}
-          mediaKind="image"
-          projectPath={props.projectPath}
-          onChange={(value) => {
-            setNote(undefined);
-            props.onSet(value);
-          }}
-          onPickEntry={(picked) => {
-            if (picked.root === 'public') {
-              setNote(undefined);
-              props.onSet(`/${picked.rel.split('/').slice(1).join('/')}`);
-            } else {
-              setNote('A list item’s image is a URL: choose one from public/, or enter its address.');
-            }
-          }}
-        />
-        {note !== undefined && <div className="list-item-note">{note}</div>}
-      </div>
-    </div>
   );
 }
 
@@ -259,7 +204,8 @@ function useListEditorDismiss(trigger: HTMLElement, onClose: () => void) {
       }
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      // A field's data picker takes its own Escape, and the item stays open under it.
+      if (event.key === 'Escape' && !ref.current?.querySelector('.bind-menu')) {
         event.stopPropagation();
         onClose();
       }
@@ -304,6 +250,9 @@ interface ListFieldProps {
   readonly fallback?: string | undefined;
   /** The project, for an image field's asset card. */
   readonly projectPath?: string | undefined;
+  /** The data an item's fields can bind to. Absent, they take typed values and code. */
+  readonly bindContext?: RichContext | undefined;
+  readonly dataContext?: SourceContext | undefined;
 }
 type Editor =
   | { readonly kind: 'closed' }
@@ -420,6 +369,8 @@ function useListField(props: ListFieldProps) {
     blank,
     itemShape,
     projectPath: props.projectPath,
+    bindContext: props.bindContext,
+    dataContext: props.dataContext,
     editor,
     setEditor,
     drag,
@@ -578,6 +529,8 @@ function ListEditor({ state }: { readonly state: ListState }) {
           item={item}
           shape={state.itemShape}
           projectPath={state.projectPath}
+          bindContext={state.bindContext}
+          dataContext={state.dataContext}
           position={editor.position}
           trigger={editor.trigger}
           onChange={(next) =>
@@ -599,6 +552,8 @@ function ListEditor({ state }: { readonly state: ListState }) {
           item={editor.item}
           shape={state.itemShape}
           projectPath={state.projectPath}
+          bindContext={state.bindContext}
+          dataContext={state.dataContext}
           position={editor.position}
           trigger={editor.trigger}
           onChange={(item) => setEditor((current) => (current.kind === 'pending' ? { ...current, item } : current))}

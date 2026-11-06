@@ -3,10 +3,13 @@
 // ::before, the children and ::after as siblings, and ↑ goes back to the
 // element. Method: a summary element drawing ::after inside a details element
 // drawing ::before, walked key by key, then the negative space: no ::before,
-// no children, and keys that lead nowhere.
+// no children, and keys that lead nowhere. Then ↑ walked through the real
+// tree lookup from a loop's item and from what a condition's then branch holds:
+// the Navigator draws no row for a then branch, so it must never be a stop.
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const { navigatorArrowTarget, rowsUnder } = load('src/features/structure/navigatorArrows.ts');
+const { findVisibleNode, navigatorChildren } = load('src/features/structure/structureModel.ts');
 
 const node = (id, children) => ({ id, kind: 'element', name: 'div', children });
 const summary = node('summary', [node('title', [])]);
@@ -57,4 +60,23 @@ assert.deepEqual(
   rowsUnder(summary, summary.children, ['before', 'after']).map((row) => (row.kind === 'node' ? row.node.id : row.pseudo)),
   ['before', 'title', 'after'],
 );
+// ↑ climbs item → loop → parent, as a click in a loop's gap expects it to.
+const card = node('card', []);
+const loop = { id: 'loop', kind: 'map', children: [card] };
+const inThen = node('inThen', []);
+const then = { id: 'then', kind: 'branch', name: 'then', children: [inThen] };
+const condition = { id: 'condition', kind: 'cond', children: [then] };
+const statLayout = node('statLayout', [loop, condition]);
+const page = [node('section', [statLayout])];
+const upFrom = (id) => {
+  const located = findVisibleNode(page, id);
+  assert.ok(located, `${id} has a row`);
+  return navigatorArrowTarget('ArrowUp', located, undefined, { childrenOf: navigatorChildren, pseudosOf: () => [] })?.node?.id;
+};
+assert.equal(upFrom('card'), 'loop');
+assert.equal(upFrom('loop'), 'statLayout');
+assert.equal(upFrom('statLayout'), 'section');
+assert.equal(upFrom('inThen'), 'condition', 'a then branch is not a stop on the way up');
+assert.equal(upFrom('condition'), 'statLayout');
+assert.equal(findVisibleNode(page, 'then'), undefined, 'a then branch has no row, so the canvas must not select one');
 console.log('navigator arrows: ok');

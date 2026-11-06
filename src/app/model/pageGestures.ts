@@ -10,6 +10,7 @@ import { getElementSchema, VOID_TAGS } from '../../editor/elementSchemas';
 import { isInlineOnly } from '../../features/props/RichContent';
 import { type EditGesture } from '../../editor/pageEdits';
 import { type InsertPlace, frontmatterGesture, insertGesture, removalGesture, sequence } from '../../editor/editGestures';
+import { ancestorChain } from '../../editor/editorTree';
 import type { NodeId } from '../../../shared/core/brand';
 import { nodeAtPath } from '../../editor/editorTree';
 import { namesUsedIn, neededFrontmatter, withStatements } from '../../editor/frontmatterMove';
@@ -217,9 +218,11 @@ export function extractionGesture(
     readonly props: readonly string[];
     readonly place: InsertPlace;
     readonly paths: ImportPaths;
+    /** The frontmatter once the moved code has left it, when any has. */
+    readonly parent?: { readonly imports: EditorModel['imports']; readonly extraFrontmatter: string };
   },
 ): EditGesture {
-  const { id, name, props, place, paths } = extracted;
+  const { id, name, props, place, paths, parent } = extracted;
   // The instance passes each value straight back in under its own name.
   // That's what reconnects it: `title` meant the page's title where this
   // markup used to sit, and it still does, one level out.
@@ -231,27 +234,57 @@ export function extractionGesture(
     children: undefined,
   };
   const urgent = { coalesceKey: undefined, urgency: true };
-  const replaced = sequence(insertGesture(shown, instance, place, urgent), removalGesture([nodeId], urgent));
+  const swapped = sequence(insertGesture(shown, instance, place, urgent), removalGesture([nodeId], urgent));
+  // A node inside a loop stands for every repeat, so main refuses to remove it on
+  // its own and only after the instance has gone in, leaving both in a loop body
+  // that holds one expression. Stated as no request, the gesture goes out as a
+  // replacement of the loop instead, in one piece.
+  const inLoop = (ancestorChain(shown.nodes, nodeId) ?? []).some((node) => node.kind === 'map');
+  const replaced: EditGesture = inLoop ? { ...swapped, request: () => undefined } : swapped;
   const after = replaced.apply(shown);
-  const imports = (pageModel: EditorModel): EditorModel =>
-    pageModel.imports.some((i) => i.name === name)
-      ? pageModel
+  // One frontmatter write says both things: what left it and the new import. It is
+  // part of this gesture, so Undo restores the moved code with the markup.
+  const imports = (pageModel: EditorModel): EditorModel => {
+    const left = parent === undefined ? pageModel : withFrontmatterLeft(pageModel, parent);
+    return left.imports.some((i) => i.name === name)
+      ? left
       : {
-          ...pageModel,
-          imports: [...pageModel.imports, { name, path: chooseImportPath(pageModel, paths), quote: "'" }],
+          ...left,
+          imports: [...left.imports, { name, path: chooseImportPath(left, paths), quote: "'" }],
         };
+  };
   return frontmatterOf(imports(after)) === frontmatterOf(after) ? replaced : sequence(replaced, frontmatterGesture(after, urgent, imports));
 }
 
+// The printer keeps the whitespace around the code as it was written, which is the
+// right thing while there is code. With none left it would stand as blank lines at
+// the bottom of the block, so it goes with the code.
+function withFrontmatterLeft(model: EditorModel, left: Pick<EditorModel, 'imports' | 'extraFrontmatter'>): EditorModel {
+  if (left.extraFrontmatter !== '') {
+    return { ...model, ...left };
+  }
+  const { slots } = model.frontmatterLayout;
+  return { ...model, ...left, frontmatterLayout: { extra: '', slots: slots.map((slot) => ({ ...slot, offset: 0 })) } };
+}
+
 // What creating a component says it did.
-export function createdComponentMessage(rel: string, propCount: number, { stranded }: { readonly stranded: boolean }): string {
+export function createdComponentMessage(
+  rel: string,
+  counts: { readonly props: number; readonly moved: number },
+  { stranded }: { readonly stranded: boolean },
+): string {
   if (stranded) {
     return `Created ${rel} — it reads page data, so it will need props.`;
   }
-  if (propCount > 0) {
-    return `Created ${rel} with ${propCount} prop${propCount === 1 ? '' : 's'}.`;
+  const parts = [plural(counts.moved, 'moved value'), plural(counts.props, 'prop')].filter((part) => part !== '');
+  return parts.length > 0 ? `Created ${rel} with ${parts.join(' and ')}.` : `Created ${rel}`;
+}
+
+function plural(count: number, noun: string): string {
+  if (count > 0) {
+    return `${count} ${noun}${count === 1 ? '' : 's'}`;
   }
-  return `Created ${rel}`;
+  return '';
 }
 
 // What a pasted subtree needs from its new page: project components to import from

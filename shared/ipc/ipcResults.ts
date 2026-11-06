@@ -11,6 +11,7 @@ import type {
   RemoteResult,
 } from '../properties/cmsRemote';
 import type { LinkPreview } from '../properties/linkPreview';
+import type { DataSample, PageTemplatePlan } from '../properties/pageTemplate';
 import type { AstroRemoteEditAnswer, AstroRemoteReadAnswer } from '../properties/astroContent';
 import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
@@ -534,6 +535,10 @@ export interface IpcResults {
   readonly 'page:delete': {
     readonly ok: true;
   };
+  readonly 'pageTemplate:create': RemoteResult<{ readonly pagePath: string }>;
+  readonly 'pageTemplate:plan': RemoteResult<PageTemplatePlan>;
+  readonly 'pageTemplate:sample': RemoteResult<DataSample>;
+  readonly 'project:setEnv': RemoteResult<{ readonly gitignore: 'already-ignored' | 'added' }>;
   readonly 'page:dynamicPaths':
     | {
         readonly entries: ReadonlyArray<never>;

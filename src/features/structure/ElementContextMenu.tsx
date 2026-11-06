@@ -11,6 +11,8 @@ export interface ElementActionProps {
   readonly onSetDefaults?: (name: string, id: string) => void;
   readonly onOpenComponent?: (name: string, id: string) => void;
   readonly onWrapNode?: (id: string, tag: WrapperTag) => void;
+  /** Whether Delete and Cut may take this node. Left out, the protected nodes alone are refused. */
+  readonly canDeleteNode?: (id: string) => boolean;
   readonly onRemoveNode: (id: string) => void;
   readonly onCopyNode: (id: string) => void;
   readonly onCutNode?: (id: string) => void;
@@ -65,7 +67,9 @@ function runContextAction(action: ContextAction, props: ElementActionProps, menu
       return;
     }
     case 'cut':
-      props.onCutNode?.(menu.nodeId);
+      if (capabilities.canCut) {
+        props.onCutNode?.(menu.nodeId);
+      }
       return;
     case 'copy':
       props.onCopyNode(menu.nodeId);
@@ -77,7 +81,9 @@ function runContextAction(action: ContextAction, props: ElementActionProps, menu
       props.onPasteNode();
       return;
     case 'delete':
-      props.onRemoveNode(menu.nodeId);
+      if (capabilities.canDelete) {
+        props.onRemoveNode(menu.nodeId);
+      }
       return;
     case 'div':
     case 'a':
@@ -101,11 +107,13 @@ function contextCapabilities(props: ElementActionProps, position: ContextPositio
     node.kind === 'branch' ||
     (props.clientMode === true && node.id === 'layout');
   const wrap = props.onWrapNode !== undefined && !protectedNode;
+  const canDelete = !protectedNode && props.canDeleteNode?.(position.nodeId) !== false;
   return {
     component,
     protectedNode,
+    canDelete,
     canSetDefaults: component && !props.clientMode && props.onSetDefaults !== undefined,
-    canCut: props.onCutNode !== undefined && !protectedNode,
+    canCut: props.onCutNode !== undefined && canDelete,
     canOpen: component && !node.astroAsset && props.onOpenComponent !== undefined,
     canWrapBox: wrap && canWrapNode(nodes, position.nodeId, 'div'),
     canWrapLink: wrap && canWrapNode(nodes, position.nodeId, 'a'),

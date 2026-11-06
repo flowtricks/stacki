@@ -384,7 +384,8 @@ test('the Source menu makes a List property with the item fields the designer de
   );
   await click(byText('Add field'));
   await type(fieldNames()[2], 'featured');
-  await choose([...document.querySelectorAll('.new-prop-form select[aria-label="Field type"]')][2], 'switch');
+  await click([...document.querySelectorAll('.new-prop-form .dd-trigger[aria-label="Field type"]')][2]);
+  await click([...document.querySelectorAll('.dd-option')].find((option) => option.textContent.includes('Switch')));
   await type(fieldNames()[2], 'featured!');
   assert.equal(fieldNames()[2].value, 'featured', 'a field name takes only what a name can hold');
 
@@ -393,11 +394,11 @@ test('the Source menu makes a List property with the item fields the designer de
   const popup = document.querySelector('.list-item-editor');
   assert.ok(popup, 'Add item opens the item');
   assert.deepEqual(
-    [...popup.querySelectorAll('.list-item-field > span')].map((label) => label.textContent),
+    [...popup.querySelectorAll('.prop-label')].map((label) => label.textContent),
     ['title', 'text', 'featured'],
   );
-  await type(popup.querySelector('input[aria-label="title"]'), 'Fast');
-  await click([...popup.querySelectorAll('button')].find((button) => button.textContent === 'On'));
+  await type(popup.querySelector('.props-field input'), 'Fast');
+  await click([...popup.querySelectorAll('button')].find((button) => button.textContent === 'True'));
   await click(popup.querySelector('button[title="Close"]'));
   assert.deepEqual(
     [...document.querySelectorAll('.new-prop-form .list-field-row')].map((row) => row.textContent.trim()),
@@ -447,9 +448,10 @@ test('the instance list editor adds, removes and reorders items of any declared 
   await draw('[]', undefined);
   await click(container.querySelector('.list-field-add'));
   const popup = document.querySelector('.list-item-editor');
-  await type(popup.querySelector('input[aria-label="title"]'), 'One');
-  await type(popup.querySelector('input[aria-label="count"]'), '-');
-  await type(popup.querySelector('input[aria-label="count"]'), '-2');
+  await type(popup.querySelector('.props-field input'), 'One');
+  await type(popup.querySelector('.num-field input'), '-');
+  assert.equal(popup.querySelector('.num-field input').value, '-', 'a half-typed number stays on screen');
+  await type(popup.querySelector('.num-field input'), '-2');
   await click(container.querySelector('.list-field-add'));
   assert.deepEqual(writes, ['[{ title: "One", count: -2, on: false }]'], 'a half-typed number is never written');
 

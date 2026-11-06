@@ -61,10 +61,21 @@
 .property-editor header {
   padding-bottom: 4px;
 }
+/* The app's square icon button, whatever the mark inside it is. */
 .property-editor header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 6px;
   font-size: 18px;
-  padding: 0 6px;
   background: transparent;
+}
+.property-editor header button:hover:not(:disabled) {
+  background: var(--bg-hover);
 }
 .property-editor fieldset {
   border: 0;
@@ -73,7 +84,10 @@
   gap: 12px;
   min-width: 0;
 }
-.property-editor label:not(.list-item-field) {
+/* Not a prop field's own label: that is a row of a chip and its `{}`, which a
+   column would stretch the chip across and drop the toggle under. In :where so
+   this keeps its specificity, and the flags' row below still overrides it. */
+.property-editor label:not(.list-item-field):not(:where(.props-field > label)) {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -85,13 +99,26 @@
   border-color: transparent;
   background: var(--bg-input);
 }
-.property-editor textarea {
-  resize: vertical;
-}
 .property-readonly-fields {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+/* A read-only type or default: a field's fill and shape, holding code. */
+.property-readonly-code {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-dim);
+}
+.property-readonly-code .code-block {
+  overflow: auto;
+  max-height: 120px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .property-editor-title {
   display: flex;
@@ -112,11 +139,6 @@
   margin: 6px 0 0;
   padding-left: 16px;
 }
-.property-editor .property-code {
-  font-family: var(--mono);
-  line-height: 1.5;
-  font-size: 11px;
-}
 .property-editor .property-flags label {
   flex-direction: row;
   align-items: center;
@@ -133,6 +155,9 @@
   max-height: min(180px, 30vh);
   overflow-y: auto;
   overscroll-behavior-y: contain;
+}
+.property-settings-dialog .property-error {
+  font-size: 11px;
 }
 .property-actions {
   display: flex;

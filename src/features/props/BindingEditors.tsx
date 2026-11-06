@@ -18,6 +18,8 @@ import { definedFields } from '../../../shared/core/boundary';
 import { dataTree, findDeclaration, findImportOf, scopeChips, scopeCompletions } from '../../editor/dataSuggest';
 import { resolvePick } from '../../editor/bindings';
 import { checkStatement } from './jsCheck';
+import { sourceFileLabel, type SourceFileLabel } from './sourceFileLabel';
+import { statementRename, type StatementRename } from '../../editor/variableRename';
 import { FIELD_UNFOCUSED, fieldFocusOf, fieldOfHandle, type FieldFocus } from './fieldFocus';
 import DataPicker from './DataPicker';
 import NewPropForm from './NewPropForm';
@@ -25,7 +27,7 @@ import NewPropForm from './NewPropForm';
 import './loopSettings.css';
 import { boundPath, fittingTree, newPropTitle, type NewPropHost, type NewPropSeed } from './newPropModel';
 import ExprInput from '../../ui/ExprInput';
-import { CodeIcon, CloseIcon, PencilIcon, PlusIcon } from '../../ui/Icons';
+import { CodeIcon, CloseIcon, ElementComponentIcon, FileIcon, PencilIcon, PlusIcon } from '../../ui/Icons';
 import {
   type FieldPosition,
   type SourceContext,
@@ -60,6 +62,11 @@ export function symbolTarget(name: string, dataContext: SourceContext | undefine
   return undefined;
 }
 
+// The popup is a row's width, so a narrow panel keeps it inside the panel; it
+// measures about this tall with a few lines of code in it.
+const SOURCE_EDITOR_WIDTH_PX_MIN = 260;
+const SOURCE_EDITOR_HEIGHT_PX_MAX = 240;
+
 export function SourceEditButton({ name, dataContext, anchorRef, className = 'attr-asset-toggle' }: SourceEditButtonProps) {
   const [position, setPosition] = useState<FieldPosition | undefined>(undefined);
   const target = symbolTarget(name, dataContext);
@@ -74,12 +81,9 @@ export function SourceEditButton({ name, dataContext, anchorRef, className = 'at
       return;
     }
     const rect = anchorRef?.current?.getBoundingClientRect();
-    const width = Math.max(rect?.width ?? 240, 260);
-    setPosition({
-      top: Math.min((rect?.bottom ?? 200) + 6, Math.max(60, window.innerHeight - 240)),
-      left: Math.min(rect?.left ?? 0, window.innerWidth - width - 12),
-      width,
-    });
+    setPosition(
+      dataPickerPosition(rect ?? { left: 0, bottom: 200, width: 0 }, { heightPxMax: SOURCE_EDITOR_HEIGHT_PX_MAX, widthPxMin: SOURCE_EDITOR_WIDTH_PX_MIN }),
+    );
   };
 
   return (
@@ -97,6 +101,8 @@ export function SourceEditButton({ name, dataContext, anchorRef, className = 'at
           name={name}
           code={dataContext?.frontmatter || ''}
           onChangeCode={dataContext?.onSetFrontmatter}
+          onRename={dataContext?.onRenameVariable}
+          filePath={dataContext?.filePath}
           onClose={() => setPosition(undefined)}
         />
       )}
@@ -325,6 +331,7 @@ export function FieldDataPicker({ pos: position, bindContext, current, tree, see
           {...definedFields({ onWrite })}
           footer={!!onWrite}
           lead={offer === undefined ? undefined : <NewPropRow host={offer.host} seed={offer.seed} onOpen={() => setCreating(true)} />}
+          propSettings={host?.propSettings}
         />
       )}
     </Popup>
@@ -449,7 +456,7 @@ function EditableVarSourceEditor(props: VarSourceEditorProps) {
   return <VarSourceEditorView state={state} />;
 }
 export function useVarSourceEditor(props: VarSourceEditorProps) {
-  const { code, name, onChangeCode } = props;
+  const { code, name, onChangeCode, onRename } = props;
   const ref = useRef<HTMLDivElement>(null);
   assert(code.length <= LIMITS.ipcFieldCharsMax, 'Source editor: source limit exceeded');
   const codeRef = useRef(code);
@@ -460,6 +467,9 @@ export function useVarSourceEditor(props: VarSourceEditorProps) {
   // takes to type one, and going red at every keystroke would be nagging about
   // a mistake that hasn't been made yet.
   const [error, setError] = useState('');
+  // Why a new name was refused. Beside the code rather than in a toast: the text
+  // parses, so it is the name to correct, and it has to stay up while that happens.
+  const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const rangeRef = useRef<{ readonly start: number; readonly end: number } | undefined>(undefined);
 
   const apply = (text: string) => {
@@ -493,7 +503,21 @@ export function useVarSourceEditor(props: VarSourceEditorProps) {
       return false;
     }
     setError('');
-    if (text !== (findDeclaration(codeRef.current, name)?.statement ?? '')) {
+    const current = findDeclaration(codeRef.current, name)?.statement;
+    // A new name is a rename of everything reading this one: written as a change
+    // to this line alone, each of those reads would crash the page.
+    const change: StatementRename = onRename === undefined || current === undefined ? { kind: 'same' } : statementRename(name, current, text);
+    if (change.kind === 'mixed') {
+      setRefusal('Rename the variable on its own, then change the rest of the line.');
+      return false;
+    }
+    if (change.kind === 'rename') {
+      const refused = onRename?.({ from: name, to: change.to });
+      setRefusal(refused);
+      return refused === undefined;
+    }
+    setRefusal(undefined);
+    if (text !== (current ?? '')) {
       apply(text);
     }
     return true;
@@ -511,7 +535,7 @@ export function useVarSourceEditor(props: VarSourceEditorProps) {
   // writes come back identical, so typing isn't fought.
   const external = findDeclaration(code, name)?.statement;
 
-  return { ...props, ref, draft, setDraft, error, setError, commit, draftRef, external };
+  return { ...props, ref, draft, setDraft, error, setError, refusal, setRefusal, commit, draftRef, external };
 }
 export type SourceEditorState = ReturnType<typeof useVarSourceEditor>;
 export function useVarSourceEditorDismiss({ ref, commit, draftRef, onClose }: SourceEditorState) {
@@ -542,7 +566,7 @@ export function useVarSourceEditorDismiss({ ref, commit, draftRef, onClose }: So
   });
 }
 export function VarSourceEditorView({ state }: { readonly state: SourceEditorState }) {
-  const { ref, pos: position, onClose, name, draft, external, error, setDraft, setError, commit } = state;
+  const { ref, pos: position, onClose, name, filePath, draft, external, error, refusal, setDraft, setError, setRefusal, commit } = state;
   return (
     <div
       ref={ref}
@@ -557,16 +581,17 @@ export function VarSourceEditorView({ state }: { readonly state: SourceEditorSta
         }
       }}
     >
-      <SourceEditorHeader name={name} onClose={onClose} />
+      <SourceEditorHeader name={name} file={sourceFileLabel(filePath)} onClose={onClose} />
       <ExprInput
         multiline
         autoFocus
         className="var-src-code"
         value={draft}
         syncValue={external ?? draft}
-        invalid={!!error}
+        invalid={!!error || refusal !== undefined}
         onChange={(text) => {
           setDraft(text);
+          setRefusal(undefined);
           // Only once it has already gone red: then it is a correction being
           // watched for, not a running commentary on an unfinished line.
           if (error) {
@@ -576,6 +601,11 @@ export function VarSourceEditorView({ state }: { readonly state: SourceEditorSta
         onCommit={commit}
       />
       {error ? <ErrorToast message={error} /> : undefined}
+      {refusal !== undefined && (
+        <div className="prop-field-note problem" role="alert">
+          {refusal}
+        </div>
+      )}
     </div>
   );
 }
@@ -584,11 +614,18 @@ export function eventElement(target: unknown): Element | undefined {
   return target instanceof window.Element ? target : undefined;
 }
 
-export function SourceEditorHeader({ name, onClose }: { readonly name: string; readonly onClose: () => void }) {
+export function SourceEditorHeader(props: { readonly name: string; readonly file?: SourceFileLabel | undefined; readonly onClose: () => void }) {
+  const { name, file, onClose } = props;
   return (
     <div className="var-src-head">
       <CodeIcon size={12} />
       <span className="var-src-name">{name}</span>
+      {file !== undefined && (
+        <span className={`var-src-file ${file.kind}`} title={file.kind === 'page' ? `In the page ${file.name}` : `In the component ${file.name}`}>
+          {file.kind === 'page' ? <FileIcon size={11} /> : <ElementComponentIcon size={11} />}
+          <span className="var-src-file-name">{file.name}</span>
+        </span>
+      )}
       <span style={{ flex: 1 }} />
       <button className="ghost" title="Close" onClick={onClose}>
         <CloseIcon size={12} />

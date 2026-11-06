@@ -54,9 +54,10 @@ const repeatedRoute = renderLink({
   name: 'care/plan-a-visit.astro',
   route: '/care/plan-a-visit',
 });
-assert.match(repeatedRoute, />care\/plan-a-visit</);
-assert.doesNotMatch(repeatedRoute, /care\/plan-a-visit.*care\/plan-a-visit/);
-assert.match(renderLink({ name: 'index.astro', route: '/' }), />index  ·  \//);
+// The closed trigger names the page alone; its route belongs to the open menu's rows.
+assert.match(repeatedRoute, />plan-a-visit</);
+assert.doesNotMatch(repeatedRoute, /care\/plan-a-visit/);
+assert.match(renderLink({ name: 'index.astro', route: '/' }), />Home</);
 assert.throws(
   () =>
     renderToStaticMarkup(

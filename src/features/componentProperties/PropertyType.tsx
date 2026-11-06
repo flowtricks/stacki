@@ -28,7 +28,7 @@ import {
 } from '../../ui/Icons';
 import { CODE_TYPE_CHOICES, KIND_CHOICES, carriedDefault, propertyKind, withKind, type PropertyKind } from './propertyKinds';
 import { withTag } from './settingTags';
-import { CodeTypeField } from '../props/propBindings';
+import { CodeTypeField, type EditPace } from '../props/propBindings';
 
 /** What a kind pick changes on the property. */
 export type KindChange = Pick<ComponentProperty, 'type' | 'description' | 'defaultValue'>;
@@ -36,7 +36,7 @@ export type KindChange = Pick<ComponentProperty, 'type' | 'description' | 'defau
 interface PropertyTypeProps {
   readonly property: ComponentProperty;
   readonly frontmatter: string;
-  readonly onChange: (change: KindChange) => void;
+  readonly onChange: (change: KindChange, pace: EditPace) => void;
 }
 
 const CODE_PREFIX = 'code:';
@@ -51,7 +51,7 @@ export function PropertyType({ property, frontmatter, onChange }: PropertyTypePr
     setNote('');
     if (value.startsWith(CODE_PREFIX)) {
       const type = value.slice(CODE_PREFIX.length);
-      onChange({ type, description: withTag(property.description, 'format', undefined), defaultValue: property.defaultValue });
+      onChange({ type, description: withTag(property.description, 'format', undefined), defaultValue: property.defaultValue }, 'at-once');
       return;
     }
     const chosen = KIND_CHOICES.find((choice) => choice.kind === value);
@@ -71,7 +71,7 @@ export function PropertyType({ property, frontmatter, onChange }: PropertyTypePr
     if (defaultValue === '' && property.defaultValue.trim() !== '') {
       setNote(`The default was cleared: it is not a ${chosen.label}.`);
     }
-    onChange({ ...next, defaultValue });
+    onChange({ ...next, defaultValue }, 'at-once');
   };
   return (
     <div className="property-type" role="group" aria-label="Kind">
@@ -94,7 +94,7 @@ export function PropertyType({ property, frontmatter, onChange }: PropertyTypePr
         placeholder=""
         open={codeOpen}
         onToggle={() => setCodeOpen(!codeOpen)}
-        onChange={(type) => onChange({ type, description: property.description, defaultValue: property.defaultValue })}
+        onChange={(type) => onChange({ type, description: property.description, defaultValue: property.defaultValue }, 'typing')}
       />
     </div>
   );

@@ -12,6 +12,8 @@ const POPUP_EDGE = 8;
 const POPUP_MIN = 120;
 const POPUP_PADDING_HEIGHT = 8;
 const OPTION_HEIGHT = 26;
+// A row with its description beneath the label (styles.css `.dd-stacked`).
+const STACKED_OPTION_HEIGHT = 40;
 const SEARCH_HEIGHT = 36;
 // A searchable menu is never narrower than this (styles.css `.dd-searchable`),
 // so its position is worked out at this width, inside the window.
@@ -40,6 +42,8 @@ export interface DropdownOption<T = string> {
   readonly description?: string;
   readonly icon?: ReactNode;
   readonly dim?: boolean;
+  /** Listed but not choosable; its `description` says why. */
+  readonly disabled?: boolean;
 }
 export interface DropdownProps<T = string> {
   readonly disabled?: boolean;
@@ -51,6 +55,8 @@ export interface DropdownProps<T = string> {
   readonly menuClassName?: string;
   /** The menu's least width; it is never narrower than its trigger either way. */
   readonly menuWidthMin?: number;
+  /** `stacked` draws each option's description beneath its label; the trigger still shows the label alone. */
+  readonly optionLayout?: 'line' | 'stacked';
   readonly placeholder?: string;
   readonly livePreview?: boolean;
   readonly onPrepare?: () => void;
@@ -96,7 +102,11 @@ export default function Dropdown<T>(props: DropdownProps<T>) {
   const state = useDropdownSelection(props);
   const actions = useDropdownActions(props, state);
   const control = { ...state, ...actions };
-  const position = useDropdownPosition(state, { searchable: props.searchable ?? false, widthPxMin: props.menuWidthMin ?? 0 });
+  const position = useDropdownPosition(state, {
+    optionHeightPx: props.optionLayout === 'stacked' ? STACKED_OPTION_HEIGHT : OPTION_HEIGHT,
+    searchable: props.searchable ?? false,
+    widthPxMin: props.menuWidthMin ?? 0,
+  });
   useDropdownSound(state);
   useDropdownFocus(state, { searchable: props.searchable ?? false });
   useEffect(() => {
@@ -180,6 +190,9 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
   }, []);
   useEffect(() => () => cancelHover(), [cancelHover]);
   const previewOption = (option: DropdownOption<T>): void => {
+    if (option.disabled === true) {
+      return;
+    }
     if (!livePreview) {
       return;
     }
@@ -225,6 +238,9 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
       }
     },
     pick: (option) => {
+      if (option.disabled === true) {
+        return;
+      }
       cancelHover();
       commitDropdownOption(props, state, option);
     },
@@ -259,10 +275,10 @@ function commitDropdownOption<T>(props: DropdownProps<T>, state: Selection<T>, o
   triggerRef.current?.focus();
 }
 
-function useDropdownPosition<T>(state: Selection<T>, options: { readonly searchable: boolean; readonly widthPxMin: number }) {
+function useDropdownPosition<T>(state: Selection<T>, options: { readonly optionHeightPx: number; readonly searchable: boolean; readonly widthPxMin: number }) {
   const [position, setPosition] = useState<PopupPosition | undefined>(undefined);
   const { open, triggerRef, visible } = state;
-  const { searchable, widthPxMin } = options;
+  const { optionHeightPx, searchable, widthPxMin } = options;
   useLayoutEffect(() => {
     if (!open || !triggerRef.current) {
       return;
@@ -272,7 +288,7 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly searcha
     // makes a long list alternate between capped and uncapped heights until
     // React aborts the render loop, so derive its intrinsic height from the
     // dimensions this component owns instead.
-    const wanted = (visible.length + dropdownGroupCount(visible)) * OPTION_HEIGHT + POPUP_PADDING_HEIGHT + (searchable ? SEARCH_HEIGHT : 0);
+    const wanted = visible.length * optionHeightPx + dropdownGroupCount(visible) * OPTION_HEIGHT + POPUP_PADDING_HEIGHT + (searchable ? SEARCH_HEIGHT : 0);
     const shown = Math.min(wanted, MENU_HEIGHT_MAX);
     const box = popupBox(rectangle, shown, window.innerHeight);
     // A menu wider than its trigger (a compact "Match all") grows to its
@@ -295,7 +311,7 @@ function useDropdownPosition<T>(state: Selection<T>, options: { readonly searcha
         ? previous
         : next,
     );
-  }, [open, triggerRef, visible, searchable, widthPxMin]);
+  }, [open, triggerRef, visible, optionHeightPx, searchable, widthPxMin]);
   return position;
 }
 
@@ -406,7 +422,7 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
       anchor={control.triggerRef.current ?? undefined}
       onClose={control.close}
       ref={control.popupRef}
-      className={`dd-popup ${props.searchable ? 'dd-searchable' : ''} ${props.menuClassName || ''}`}
+      className={`dd-popup ${props.searchable ? 'dd-searchable' : ''} ${props.optionLayout === 'stacked' ? 'dd-stacked' : ''} ${props.menuClassName || ''}`}
       style={position}
     >
       {props.searchable && (
@@ -445,7 +461,8 @@ function DropdownRow<T>({ option, index, control }: { readonly option: DropdownO
   const selected = option.value === control.committed.current && control.open ? 'selected' : '';
   return (
     <div
-      className={`dd-option ${highlight} ${selected} ${option.dim ? 'dim' : ''}`}
+      className={`dd-option ${highlight} ${selected} ${option.dim ? 'dim' : ''} ${option.disabled === true ? 'disabled' : ''}`}
+      aria-disabled={option.disabled === true ? true : undefined}
       onMouseEnter={() => control.hover(index)}
       onPointerDown={(event) => {
         if (event.pointerType === 'mouse' && event.button === 0) {

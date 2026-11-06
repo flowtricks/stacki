@@ -189,13 +189,32 @@ export class DevServers {
     this.contentConfigAtStart = undefined;
     const { projectPath } = server;
     this.pushLog('\n[stacki] the content config appeared after the preview started; restarting it so Astro loads its collections.\n');
+    const restarted = await this.restartAt(projectPath, devUrl);
+    assert(hasContentConfig(projectPath), 'A server restarted for its content config starts with one');
+    return restarted;
+  }
+
+  /**
+   * Restarts this project's dev server after its .env changed, because Astro
+   * reads env files only as it starts. False when no server of ours is running
+   * for the project, or it came back at another address.
+   */
+  async restartForProjectEnv(projectPath: string): Promise<boolean> {
+    const server = this.server;
+    if (server === undefined || server.external === true || !sameFilesystemPath(server.projectPath, projectPath)) {
+      return false;
+    }
+    this.pushLog('\n[stacki] the project .env changed; restarting the preview so Astro reads it.\n');
+    return this.restartAt(server.projectPath, server.url);
+  }
+
+  private async restartAt(projectPath: string, devUrl: string): Promise<boolean> {
     await this.pause();
     const restarted = await this.run(projectPath, async (assertActive) => ({
       ...(await this.start(projectPath, assertActive)),
       trailingSlash: this.readTrailingSlash(projectPath),
     }));
     assert(restarted.url.length > 0, 'A restarted server has an address');
-    assert(hasContentConfig(projectPath), 'A server restarted for its content config starts with one');
     if (restarted.url !== devUrl) {
       this.host.send('dev:exit', { code: 0, log: this.recentLog() });
       return false;

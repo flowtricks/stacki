@@ -36,6 +36,7 @@ import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEd
 import { assert } from '../../../shared/core/assert';
 import PanelBoundary from '../../ui/PanelBoundary';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
+import { selectedPseudo } from '../model/selectionDeletion';
 
 export function CanvasPane({ app }: { readonly app: ShellView }) {
   const hoverNodeId = useLiveValue(app.hoverNode);
@@ -74,7 +75,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         navigatorSelectionTick={app.navigatorSelectionTick}
         navHoverPath={app.pathFor(hoverNodeId)}
         navHoverPseudo={hoverPseudo}
-        selPseudo={app.pseudoPick?.nodeId === app.selectedId ? app.pseudoPick?.pseudo : undefined}
+        selPseudo={selectedPseudo(app.selectedId, app.pseudoPick)}
         overlayInfo={app.overlayInfo}
         focusPath={app.focusPath}
         focusOcc={app.focusOcc}
@@ -99,6 +100,9 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
   );
 }
 
+// Where a right-click on the canvas landed, and the ::before or ::after it landed on.
+type CanvasContextPoint = ContextPoint & { readonly outside: boolean; readonly pseudo: PseudoLayer | undefined };
+
 function useCanvasContextMenu(app: ShellView) {
   const [position, setPosition] = useState<ContextPosition & { readonly generation: number }>();
   const file = app.openEditableFile?.path;
@@ -110,7 +114,7 @@ function useCanvasContextMenu(app: ShellView) {
     }
   }, [position, app.selectedId]);
   return {
-    open: (path: string | undefined, point: ContextPoint & { readonly outside: boolean }) => {
+    open: (path: string | undefined, point: CanvasContextPoint) => {
       const next = canvasContextPosition(app, path, point);
       // Each request remounts the popup so an earlier dismissal cannot close its replacement.
       setPosition(
@@ -134,7 +138,7 @@ function useCanvasContextMenu(app: ShellView) {
   };
 }
 
-function canvasContextPosition(app: ShellView, path: string | undefined, point: ContextPoint & { readonly outside: boolean }): ContextPosition | undefined {
+function canvasContextPosition(app: ShellView, path: string | undefined, point: CanvasContextPoint): ContextPosition | undefined {
   const action = canvasClickAction({
     path,
     outside: point.outside,
@@ -531,6 +535,9 @@ export function settingsHandlers(app: ShellView) {
     onSetLoopSource: (target: LoopTarget, sanityClient: 'available' | 'unavailable', declaration?: PropDeclaration): LoopApplyResult =>
       selectedId ? app.setLoopSource(selectedId, target, sanityClient, declaration) : { ok: false, message: 'Select the loop first.' },
     onEditLoopProperty: loopPropertyEditor(app),
+    onCommitLoopHead: (value: string, renames: readonly Rename[]): string | undefined =>
+      selectedId ? app.setLoopHead(selectedId, value, renames) : 'Select the loop first.',
+    onRenameVariable: app.renameVariable,
     onOpenSymbol: app.onOpenSymbol,
     onToggleElse: (want: boolean) => {
       if (selectedId) {

@@ -110,7 +110,7 @@ const rows = () => [...document.querySelectorAll('[aria-label="Default items"] .
 const fieldRows = () =>
   [...document.querySelectorAll('[aria-label="Item fields"] .new-prop-list-field')].map((row) => [
     row.querySelector('input[aria-label="Field name"]').value,
-    row.querySelector('select[aria-label="Field type"]').value,
+    row.querySelector('.dd-trigger[aria-label="Field type"] .dd-label').textContent.toLowerCase(),
   ]);
 const codeView = () => {
   const element = document.querySelector('[aria-label="Default items"] .cm-editor');
@@ -160,11 +160,74 @@ async function drawEditor(property, onSave) {
       access: 'editable',
       onClose() {},
       onSave: async (change) => onSave(change),
-      onCommit: async () => true,
+      saveHost: {
+        save: async (change) => {
+          onSave(change);
+          return { kind: 'saved', source: '' };
+        },
+        reload: async () => ({ ok: false, error: 'not in this test' }),
+      },
     }),
   );
 }
 const listProperty = (fields) => ({ name: 'features', type: LIST_TYPE, required: false, readonly: false, defaultValue: ITEMS, description: '', ...fields });
+
+// The field a host draws its Code type in, opened.
+async function openCodeType() {
+  await click(document.querySelector('.property-code-toggle'));
+  const field = document.querySelector('.property-code');
+  assert.ok(field, 'the Code type field is open');
+  return field;
+}
+
+test('the Code type is highlighted TypeScript in both hosts, and editing it writes the same type', async () => {
+  // With commas, as the pop-up refuses a semicolon in a code type.
+  const typed = 'readonly { title: string, note?: string }[]';
+  const member = `  features?: ${typed};`;
+  const assertHighlighted = (field, host) => {
+    assert.ok(field.matches('.expr-input'), `${host}: it is the code field a default uses`);
+    assert.ok(!document.querySelector('input[aria-label="Code type"]'), `${host}: not a plain input`);
+    assert.ok(field.querySelector('.cm-content[aria-label="Code type"]'), `${host}: it keeps its accessible name`);
+    assert.ok(field.querySelector('.cm-line span[class]'), `${host}: its tokens are marked`);
+  };
+  const typeType = async (field) => {
+    const view = modules.EditorView.findFromDOM(field.querySelector('.cm-editor'));
+    await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: typed } }));
+  };
+
+  // The Properties panel: the change it sends is the type typed, written as ever.
+  let change;
+  await drawEditor(listProperty({}), (made) => {
+    change = made;
+  });
+  // A List keeps its disclosure shut, so the toggle opens it.
+  const panelField = await openCodeType();
+  assertHighlighted(panelField, 'the Properties panel');
+  assert.equal(panelField.querySelector('.cm-content').textContent, LIST_TYPE);
+  await typeType(panelField);
+  await click(document.querySelector('[aria-label="Close property settings"]'));
+  assert.equal(change.property.type, typed);
+  const declaredList = SOURCE.replace('heading?: string;', `heading?: string;\n  features?: ${LIST_TYPE};`);
+  const written = editPropertyDefinition(declaredList, change);
+  assert.ok(written.ok, JSON.stringify(written));
+  assert.ok(written.value.includes(member), written.value);
+  await clear();
+
+  // The pop-up: the same field, and the declaration carries what was typed.
+  let declaration;
+  await drawPopup({ fit: 'list', label: 'features', value: ITEMS }, (made) => {
+    declaration = made;
+  });
+  const popupField = await openCodeType();
+  await typeType(popupField);
+  assertHighlighted(popupField, 'the pop-up');
+  await click(byText('Create'));
+  assert.equal(declaration.typing.codeType, typed);
+  const declared = modules.declaredProp(SOURCE.split('---')[1], declaration, new Set(['heading']));
+  assert.ok(declared.ok, JSON.stringify(declared));
+  assert.ok(declared.value.frontmatter.includes(member), declared.value.frontmatter);
+  await clear();
+});
 
 test('both hosts offer the same options for a List and for a Text', async () => {
   const everything = { required: true, readonly: true, codeType: true, tooltip: true, itemFields: true, defaultItems: true, defaultToggle: true };
@@ -303,7 +366,7 @@ test('the default’s {} toggle: both views edit one value, and code the list ca
       assert.ok(made.ok, JSON.stringify(made));
       assert.match(made.value.frontmatter, /features = \[\.\.\.extraPlans, \{ title: "Pro", text: "Paid" \}\]/, 'the pop-up writes the code as typed');
     } else {
-      await click(byText('Save property'));
+      await click(document.querySelector('[aria-label="Close property settings"]'));
       assert.equal(saved, '[...extraPlans, { title: "Pro", text: "Paid" }]', 'the editor saves the code as typed');
     }
     await clear();

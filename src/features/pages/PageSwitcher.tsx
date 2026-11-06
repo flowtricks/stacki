@@ -5,7 +5,7 @@ import { comparePageNames, isCollectionRoute } from './pageOrder';
 import { FileIcon, CollectionIcon, ChevronDownIcon, CheckIcon } from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import { pageDisplayName } from './pageTree';
+import { pageDisplayName } from '../../lib/pageName';
 
 interface Page {
   readonly name: string;

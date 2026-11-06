@@ -402,10 +402,8 @@
   max-width: 680px;
 }
 .source-editor {
-  min-height: 60vh;
+  height: 60vh;
   margin-top: 16px;
-  font-family: var(--mono);
-  line-height: 1.7;
 }
 .boot {
   height: 100dvh;

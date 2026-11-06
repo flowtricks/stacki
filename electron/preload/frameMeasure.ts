@@ -76,6 +76,19 @@ const rectsForInlineText = (nodePath: string): Rect[] => {
   return out;
 };
 
+// The box one occurrence draws: its run, and when the path has only that run,
+// every tagged piece of it too (see rectsForPath). The outline and the hit test
+// both read this, so the space a click can land in is the space outlined.
+export const boxOfRun = (nodePath: string, run: readonly Node[], runCount: number): Box | undefined => {
+  let acc = run.reduce<Box | undefined>((grown, node) => addNode(grown, node), undefined);
+  if (runCount === 1) {
+    for (const element of elementsWithPath(nodePath)) {
+      acc = addNode(acc, element);
+    }
+  }
+  return acc;
+};
+
 export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   // A ::before or ::after layer (shared/page/pseudoPath.ts) is measured on its element.
   const pseudo = splitPseudoPath(nodePath);
@@ -109,10 +122,7 @@ export const rectsForPath = (nodePath: string): Rect[] | undefined => {
   // box. Repeated occurrences (a loop child, once per item) are meant to
   // stay separate boxes, so they keep the per-run rects above.
   if (runs.length === 1) {
-    let acc = (runs[0] || []).reduce<Box | undefined>((grown, node) => addNode(grown, node), undefined);
-    for (const element of elementsWithPath(nodePath)) {
-      acc = addNode(acc, element);
-    }
+    const acc = boxOfRun(nodePath, runs[0] || [], runs.length);
     // Nothing measurable: fall through to the children (see below).
     if (acc) {
       return [toRect(acc)];

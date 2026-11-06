@@ -1,3 +1,4 @@
+import { CodeBlock } from '../../ui/CodeBlock';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { useState } from 'react';
 import { STUDIO_LAUNCH_COMMAND } from '../../../shared/ipc/studioSetup';
@@ -61,7 +62,7 @@ function LaunchCommand() {
         <span>From your project folder</span>
       </div>
       <div className="studio-launch-command">
-        <textarea aria-label="Launch command" rows={2} readOnly value={STUDIO_LAUNCH_COMMAND} onFocus={(event) => event.currentTarget.select()} />
+        <CodeBlock className="studio-launch-code" label="Launch command" language="shell" text={STUDIO_LAUNCH_COMMAND} />
         <button aria-label="Copy launch command" title="Copy launch command" disabled={clipboard.status === 'copying'} onClick={() => void clipboard.copy()}>
           {clipboard.status === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
           {clipboard.status === 'copied' ? 'Copied' : 'Copy'}

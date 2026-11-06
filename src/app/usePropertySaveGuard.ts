@@ -4,14 +4,18 @@ import { useEffect, useRef, useState } from 'react';
 // has been replaced, otherwise an ordinary autosave could resurrect the old API.
 export function usePropertySaveGuard() {
   const saving = useRef(false);
-  const [phase, setPhase] = useState<'idle' | 'saving'>('idle');
-  const changePhase = (next: 'idle' | 'saving'): void => {
-    saving.current = next === 'saving';
+  // Input stops only for a whole-site save. A form saving itself holds page edits
+  // and undo (`saving`), but the person is still typing in that form.
+  const blocking = useRef(false);
+  const [phase, setPhase] = useState<'idle' | 'saving' | 'autosaving'>('idle');
+  const changePhase = (next: 'idle' | 'saving' | 'autosaving'): void => {
+    saving.current = next !== 'idle';
+    blocking.current = next === 'saving';
     setPhase(next);
   };
   useEffect(() => {
     const block = (event: Event): void => {
-      if (saving.current) {
+      if (blocking.current) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }

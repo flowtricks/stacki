@@ -1,5 +1,6 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
+import { CodeInline } from '../../ui/CodeBlock';
 import { CheckIcon, CopyIcon } from '../../ui/Icons';
 
 const COMMAND = 'npm create stacki@latest';
@@ -26,11 +27,7 @@ export default function InstallCommand() {
     <div className="studio-install-command">
       <p>Or run in your project folder:</p>
       <div className="studio-install-command-box">
-        <code>
-          <span className="studio-command-executable">npm</span> <span className="studio-command-action">create</span>{' '}
-          <span className="studio-command-package">stacki</span>
-          <span className="studio-command-version">@latest</span>
-        </code>
+        <CodeInline language="shell" text={COMMAND} />
         <button type="button" aria-label="Copy npm install command" title="Copy command" disabled={status === 'copying'} onClick={() => void copy()}>
           {status === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
           {status === 'copied' ? 'Copied' : 'Copy'}

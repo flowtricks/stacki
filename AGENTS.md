@@ -581,6 +581,12 @@ ESLint, production builds, contract tests, and the complete regression suite.
 - [ ] New dependencies carry a written justification
 - [ ] `npm run check:changed` passes (`tsc`, ESLint, Prettier, policy scan)
 
+## Code display
+
+Anywhere the UI shows code, it is syntax highlighted: read-only through `CodeBlock` or
+`CodeInline` (`src/ui/CodeBlock.tsx`), editable through a CodeMirror editor. Shell commands
+are code; logs and a name in a sentence are not.
+
 ## Project editor metadata
 
 Project insertion defaults live in `.stacki/components.json`; column guide preferences

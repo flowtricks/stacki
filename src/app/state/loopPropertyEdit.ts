@@ -7,20 +7,14 @@
 import { editComponentProperties, readComponentProperties } from '../../features/componentProperties/propertiesBridge';
 import { propertyName } from '../../../shared/properties/propertyEditing';
 import { assert } from '../../../shared/core/assert';
+import type { PropertySaver } from '../../features/componentProperties/propertySave';
 
 export interface LoopPropertyEdit {
   readonly name: string;
   readonly description: string;
 }
 
-export interface LoopPropertySaver {
-  readonly projectPath: string;
-  readonly file: string;
-  readonly flushSave: () => Promise<unknown>;
-  readonly changePhase: (phase: 'idle' | 'saving') => void;
-  readonly recordUndo: (token: string) => void;
-  readonly completeSave: () => Promise<void>;
-}
+export type LoopPropertySaver = PropertySaver;
 
 /** Applies the edit; undefined when it was saved, or why it was not. */
 export async function editLoopProperty(saver: LoopPropertySaver, key: string, edit: LoopPropertyEdit): Promise<string | undefined> {

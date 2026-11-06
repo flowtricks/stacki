@@ -108,7 +108,9 @@ test('Add to project installs once, shows progress, and advances to local previe
     assert.equal(state.opened.length, 0);
     await click(button('Open Studio'));
     assert.deepEqual(state.opened, ['http://localhost:4327/studio']);
-    assert.equal(document.querySelector('[aria-label="Launch command"]').value, 'npm run dev -- --config node_modules/.avb/astro.config.mjs');
+    const launchCommand = document.querySelector('[aria-label="Launch command"]');
+    assert.equal(launchCommand.textContent, 'npm run dev -- --config node_modules/.avb/astro.config.mjs');
+    assert.ok(launchCommand.querySelector('.code-token'), 'The launch command is highlighted shell');
     assert.equal(button('Close').disabled, false);
     await click(button('Back'));
     assert.match(currentStep(), /Install/);

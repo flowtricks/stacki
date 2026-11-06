@@ -28,7 +28,7 @@ import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useShortcuts } from './appPageOps';
 import type { useCodeWindow, usePageOps } from './appViewModel';
-import { pageDisplayName } from '../../features/pages/pageTree';
+import { pageDisplayName } from '../../lib/pageName';
 
 // Asset file edits, and the preview-token gate.
 export function useCanvasGate(

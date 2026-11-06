@@ -8,7 +8,8 @@ import React from 'react';
 import type { ScanPage } from '../../../shared/properties/projectScan';
 import type { PageTreeNode, PageTreePage } from './pageTree';
 import { isCollectionRoute } from './pageOrder';
-import { countTreePages, pageDisplayName, pageFolderDisplayName } from './pageTree';
+import { countTreePages } from './pageTree';
+import { pageDisplayName, pageFolderDisplayName } from '../../lib/pageName';
 import { CollectionIcon, FileIcon, FolderIcon, FolderOpenIcon, TrashIcon } from '../../ui/Icons';
 import { allowDragEffect } from '../../editor/dragState';
 

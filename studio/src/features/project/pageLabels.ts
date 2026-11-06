@@ -1,5 +1,5 @@
 import { layoutPageTitle } from '../../../vendor/stacki/shared/page/pageTitle';
-import { pageDisplayName } from '../../../vendor/stacki/src/features/pages/pageTree';
+import { pageDisplayName } from '../../../vendor/stacki/src/lib/pageName';
 import type { ParserNode } from '../source/source';
 import { routeFor, type Project } from './projectClient';
 

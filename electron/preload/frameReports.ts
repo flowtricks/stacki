@@ -6,7 +6,7 @@ import { authoredStyleMutation } from './frameAuthoredStyles';
 // one pass per frame. Mutations are classified here, so the frame's own
 // writes never trigger a pass.
 
-import type { PseudoLayer } from '../../shared/page/pseudoPath';
+import { splitPseudoPath, type PseudoLayer } from '../../shared/page/pseudoPath';
 import type { Rect, Spacing } from './frameBasics';
 import { PROBE_ATTR, isComment, isElement, isText } from './frameBasics';
 import {
@@ -319,8 +319,8 @@ export const sendClasses = () => {
 };
 
 // Selecting a node in the navigator brings it onto the page. Only scrolls
-// when the node is actually out of sight — re-selecting something already
-// on screen shouldn't move the page under the user.
+// when the node is actually out of sight (boxInView): selecting something
+// already on screen shouldn't move the page under the user.
 //
 // Only ever down the page, and only the page itself. A site is routinely wider
 // than the frame on purpose — a hero video bleeding off the right, a track of
@@ -332,15 +332,34 @@ export const sendClasses = () => {
 // ancestor on the way. So the target is computed here, vertically, and the
 // window is the one thing that moves.
 const SCROLL_MARGIN = 24;
+// Whether the person can already see a box, so a reveal has nothing to do. All
+// of it inside the frame is in view, up to the very edge: the margin says where
+// a reveal lands, not what counts as seen, and nothing covers the frame (the
+// toolbar sits outside it). A box too tall to fit is in view while it covers the
+// frame from edge to edge. Only its top showing is not enough: that may be a
+// sliver at the bottom, which a reveal is there to fix.
+const boxInView = (top: number, height: number, viewportHeight: number): boolean => {
+  assert(height >= 0, 'boxInView: a box has no negative height');
+  const bottom = top + height;
+  if (top >= 0) {
+    if (bottom <= viewportHeight) {
+      return true;
+    }
+  }
+  if (top <= 0) {
+    return bottom >= viewportHeight;
+  }
+  return false;
+};
 // Where the page has to go for a box to be on screen, vertically: the scroll
-// position it already has when the box is comfortably inside, and otherwise
-// enough to bring it in. A box taller than the viewport is aligned to its top
-// rather than centred, which would push the beginning of it out.
+// position it already has when the box is in view, and otherwise enough to
+// bring it in. A box taller than the viewport is aligned to its top rather than
+// centred, which would push the beginning of it out.
 const revealTop = (top: number, height: number, viewportHeight: number, scrollTop: number): number => {
   assert(Number.isFinite(top), 'revealTop: the box has a top');
   assert(Number.isFinite(height), 'revealTop: the box has a height');
   assert(viewportHeight >= 0, 'revealTop: the viewport has a height');
-  if (top >= SCROLL_MARGIN && top + height <= viewportHeight - SCROLL_MARGIN) {
+  if (boxInView(top, height, viewportHeight)) {
     return scrollTop;
   }
   const offset = height >= viewportHeight - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : Math.floor((viewportHeight - height) / 2);
@@ -348,8 +367,14 @@ const revealTop = (top: number, height: number, viewportHeight: number, scrollTo
   assert(target >= 0, 'revealTop: a scroll position is never negative');
   return target;
 };
+// A ::before or ::after that paints no box has nothing of its own to reveal, so
+// its element stands in: the row was picked to get to that place on the page.
+const rectsForPseudoHost = (nodePath: string): Rect[] | undefined => {
+  const pseudo = splitPseudoPath(nodePath);
+  return pseudo === undefined ? undefined : rectsForPath(pseudo.nodePath);
+};
 export const scrollPathIntoView = (nodePath: string, occ: number): void => {
-  const rects = rectsForPath(nodePath);
+  const rects = rectsForPath(nodePath) ?? rectsForPseudoHost(nodePath);
   if (!rects || !rects.length) {
     return;
   }

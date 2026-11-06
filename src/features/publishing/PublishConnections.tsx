@@ -1,4 +1,5 @@
 import { AddPublishAccount } from './PublishAccount';
+import { CodeInline } from '../../ui/CodeBlock';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
 import { RefreshIcon } from '../../ui/Icons';
@@ -163,13 +164,13 @@ function GitHubAvatar({ login }: { readonly login: string }) {
   );
 }
 
-function ConnectionHelp({ provider }: { readonly provider: Props['provider'] }) {
+export function ConnectionHelp({ provider }: { readonly provider: Props['provider'] }) {
   const command = { github: 'gh auth login', cloudflare: 'wrangler login', vercel: 'vercel login' };
   return (
     <details className="publish-connection-help">
       <summary>Connection help</summary>
       <p>
-        Run <code>{command[provider]}</code>, then refresh.
+        Run <CodeInline language="shell" text={command[provider]} />, then refresh.
       </p>
     </details>
   );

@@ -1,0 +1,267 @@
+/* The Create page template form. Sections are told apart by fills, never lines. */
+.dd-option.disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.modal.page-template-dialog {
+  width: 480px;
+}
+/* The whole dialog stays under about 560px at every step: the form is one short
+   column, and detail opens in popovers rather than adding height here. */
+.page-template-dialog .modal-body {
+  height: auto;
+  max-height: 460px;
+  overflow-y: auto;
+}
+.page-template-triggers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.page-template-triggers .dd-trigger {
+  width: auto;
+}
+.page-template-trigger {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.page-template-popover {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--panel-raised, #2a2a2a);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
+.page-template-popover .hint-text {
+  margin: 0;
+}
+.page-template-tree-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 20px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.page-template-tree-items {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.page-template-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: 240px;
+}
+.page-template-tree-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 14px;
+  gap: 10px;
+  align-items: start;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 11.5px;
+  text-align: left;
+}
+button.page-template-tree-row:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+}
+button.page-template-tree-row:disabled {
+  opacity: 0.55;
+}
+.page-template-tree-row.is-group {
+  grid-template-columns: 14px minmax(0, 1fr);
+}
+.page-template-tree-row.page-template-tree-field {
+  grid-template-columns: 14px 14px minmax(0, 1fr) minmax(0, 1.4fr);
+}
+.page-template-tree-chevron {
+  display: inline-flex;
+  padding: 0;
+  transition: transform 0.1s;
+}
+.page-template-tree-chevron.is-open {
+  transform: rotate(90deg);
+}
+.page-template-tree-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.page-template-tree-key {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.page-template-tree-note {
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+.page-template-tree-check {
+  display: inline-flex;
+  justify-content: flex-end;
+}
+.page-template-popover .page-template-example {
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: none;
+  margin: 0;
+  color: var(--text-faint);
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.page-template-refresh.is-loading svg {
+  animation: page-template-spin 0.9s linear infinite;
+}
+@keyframes page-template-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.page-template-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.page-template-connect button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.page-template-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.page-template-row input {
+  flex: 1;
+  min-width: 0;
+}
+.page-template-row button {
+  flex-shrink: 0;
+}
+.page-template-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.page-template-header-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+.page-template-header-send {
+  align-self: flex-start;
+  width: auto;
+  font-size: 11px;
+}
+.page-template-add {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  align-items: center;
+  padding: 3px 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.page-template-example {
+  margin-left: auto;
+  overflow: hidden;
+  max-width: 55%;
+  color: var(--text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-template-problem {
+  margin: 0;
+  color: #ff9b92;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.page-template-files {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.page-template-files h4 {
+  margin: 0 0 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+}
+.page-template-code {
+  overflow: auto;
+  max-height: 300px;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 11px;
+}
+.page-template-code-toggle {
+  margin-right: auto;
+}
+.page-template-code-toggle.is-on {
+  background: rgba(255, 255, 255, 0.12);
+}
+.page-template-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 11.5px;
+}
+.page-template-preview p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-template-address {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.page-template-shimmer {
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05));
+  background-size: 200% 100%;
+  animation: page-template-shimmer 1.2s linear infinite;
+}
+@keyframes page-template-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}

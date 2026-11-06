@@ -130,6 +130,7 @@ export function SourcePicker(props: {
               current={props.current}
               footer={false}
               origin={{ file: props.data?.file, page: undefined }}
+              propSettings={newList?.host.propSettings}
               {...(props.data?.onStepItem ? { onStepItem: props.data.onStepItem } : {})}
               onExpand={(node, index) => {
                 if (node.path.startsWith('sanity:')) {

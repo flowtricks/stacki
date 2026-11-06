@@ -5,6 +5,7 @@ import { PropPreviewContext } from './propPreviewContext';
 // imported asset, an object, a list, an expression or text (PropField.tsx).
 
 import React, { useContext, useEffect, useState } from 'react';
+import { CodeInline } from '../../ui/CodeBlock';
 import { assert } from '../../../shared/core/assert';
 import { definedFields } from '../../../shared/core/boundary';
 import { resolveAssetImport } from '../../ipc/assetBridge';
@@ -494,6 +495,8 @@ export function ListControl({ state }: { readonly state: PropControlState }) {
         itemShape={itemShape}
         fallback={fallback}
         projectPath={state.assetContext?.projectPath}
+        bindContext={state.bindContext}
+        dataContext={state.dataContext}
         onChange={(text, immediate) => onChange({ type: 'expr', value: text }, immediate)}
       />
     </div>
@@ -522,8 +525,8 @@ export function CodeControl({ state }: { readonly state: PropControlState }) {
       {label}
       <div className="props-code-row" title={field.typeText === undefined ? note : `${note}: ${field.typeText}`}>
         <span className="props-code-row-note">{note}</span>
-        {field.typeText !== undefined && <code className="props-code-row-type">{field.typeText}</code>}
-        {shown !== undefined && <code className="props-code-row-value">{shown}</code>}
+        {field.typeText !== undefined && <CodeInline className="props-code-row-type" language="typescript" text={field.typeText} />}
+        {shown !== undefined && <CodeInline className="props-code-row-value" language="typescript" text={shown} />}
       </div>
     </div>
   );

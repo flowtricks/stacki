@@ -1,7 +1,7 @@
 import type { Conflict, ConflictChoice } from './gitConflictModel';
 import type { MergeConflictModel } from './useMergeConflict';
 import MergeResultEditor from './MergeResultEditor';
-import Code from './Code';
+import { CodeBlock } from '../../ui/CodeBlock';
 
 interface DetailProps {
   readonly model: MergeConflictModel;
@@ -102,7 +102,7 @@ function SourceChoice({
     <div className={`merge-source-option merge-source-${choice}`}>
       <ChoiceButton model={model} working={working} choice={choice} label={`Keep ${label}`} />
       <div className="merge-source-preview">
-        {text === '' ? <span className="hint-text">Remove this text</span> : <Code text={text} filename={model.file.path} maxHeight={84} />}
+        {text === '' ? <span className="hint-text">Remove this text</span> : <CodeBlock text={text} filename={model.file.path} className="merge-source-code" />}
       </div>
     </div>
   );

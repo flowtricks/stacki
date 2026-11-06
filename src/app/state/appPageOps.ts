@@ -20,6 +20,7 @@ import { autoQueryName, namesInScope, queriesInScope, QUERY_MARK } from '../../e
 import { entrySampleKey } from '../../editor/dataSample';
 import type { FieldDefinition } from '../../features/props/propRules';
 import type { ComponentCreationSource } from '../../features/palette/PaletteDialogs';
+import { planExtraction, type ExtractionRead } from '../../editor/extractFrontmatter';
 import { type FrontmatterSubject } from '../../features/code/codeWindowTarget';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
@@ -56,6 +57,8 @@ import { useScopeSamples } from './scopeSamples';
 import { newPropGesture } from '../model/newPropGesture';
 import type { PropDeclaration } from '../../editor/propDeclaration';
 import { err, ok, type Result } from '../../../shared/core/result';
+import type { ConnectionKeyCopy, PageTemplateDraft } from '../../../shared/properties/pageTemplate';
+import { createPageTemplate } from '../../ipc/pageTemplateBridge';
 
 // Shortcuts, previews and the data the page reads.
 export function useShortcuts(
@@ -161,7 +164,7 @@ export function usePageCreation(
   lifecycle: ReturnType<typeof useLifecycle>,
   navigation: ReturnType<typeof useNavigation>,
 ) {
-  const { currentPage, projectRef, scan, setCurrentPage, setPageState } = coreState;
+  const { currentPage, devStatus, devUrl, projectRef, scan, setCurrentPage, setPageState } = coreState;
   const { rescan, showToast } = lifecycle;
   const { selectPage } = navigation;
 
@@ -190,6 +193,29 @@ export function usePageCreation(
       }
     },
     [scan.layouts, rescan, selectPage, showToast, projectRef],
+  );
+
+  // Answers what went wrong for the form to show, and keeps the form open for it.
+  const createTemplate = useCallback(
+    async (draft: PageTemplateDraft, keyCopy: ConnectionKeyCopy | undefined): Promise<string | undefined> => {
+      const projectPath = projectRef.current?.path;
+      if (!projectPath) {
+        return 'Open a project first.';
+      }
+      const created = await createPageTemplate(projectPath, draft, devStatus === 'on' ? devUrl : undefined, keyCopy);
+      if (!created.ok) {
+        return created.message;
+      }
+      const result = await rescan(projectPath);
+      const page = result.pages.find((candidate) => candidate.path === created.value.pagePath);
+      if (page) {
+        // Opening a page reports its own failures.
+        void selectPage(page);
+      }
+      showToast(`Created ${draft.route}`, 'success');
+      return undefined;
+    },
+    [devStatus, devUrl, rescan, selectPage, showToast, projectRef],
   );
 
   const deletePage = useCallback(
@@ -224,7 +250,7 @@ export function usePageCreation(
     },
     [currentPage, rescan, selectPage, showToast, projectRef, setCurrentPage, setPageState],
   );
-  return { createPage, deletePage };
+  return { createPage, createTemplate, deletePage };
 }
 
 // Moving pages and creating folders.
@@ -494,7 +520,7 @@ export function useCreateFrom(
   const { model } = shortcuts;
   const { classesForRef, classesTick, selectedId, setSelectedClasses } = coreState;
   const { frontmatterCode, tree } = selectionModel;
-  const { propsNeededFor } = nodeEdits;
+  const { extractionFor } = nodeEdits;
 
   const selectedNode: EditorNode | (FrontmatterSubject & { readonly value: string }) | undefined =
     model && selectedId
@@ -528,14 +554,19 @@ export function useCreateFrom(
     // Its first class is the name it already goes by — `.project-card` is a
     // better guess at a component name than `Div`. The tag is the fallback.
     const first = namesIn(node.props?.['class'])[0] || namesIn(node.props?.['class:list'])[0] || '';
+    // Reading the file walks all its code, and selection changes far more often
+    // than the dialog opens, so it waits for the first plan and is kept for the rest.
+    let read: ExtractionRead | undefined;
     return {
       kind: 'ready',
       name: toComponentName(first) || toComponentName(node.name) || 'Component',
       label: `<${node.name}>`,
-      // The page values it reads, which the new component can take as props.
-      props: propsNeededFor(model, node),
+      plan: (asProp) => {
+        read ??= extractionFor(model, node);
+        return planExtraction(read, asProp);
+      },
     };
-  }, [selectedId, tree, model, propsNeededFor]);
+  }, [selectedId, tree, model, extractionFor]);
 
   // Rendered classes describe one element, and the canvas can only say what the
   // NEW selection's are a frame or two later. Two ways to spend that gap, and

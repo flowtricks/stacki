@@ -5,7 +5,7 @@
 import { useCallback, useLayoutEffect, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import Popup from '../../ui/Popup';
-import AutoTextarea from '../../ui/AutoTextarea';
+import ExprInput from '../../ui/ExprInput';
 import { dataPickerPosition } from './dataPickerPosition';
 import type { FieldPosition } from './bindingTypes';
 import {
@@ -123,6 +123,8 @@ export function SectionHeader(props: {
   readonly dot?: ReactNode;
   /** The label in place of the plain title: a set value's reset label, say. */
   readonly label?: ReactNode;
+  /** The `{}` that shows the section as code (LoopSectionCode.tsx). */
+  readonly toggle?: ReactNode;
   readonly onAdd: () => void;
 }) {
   return (
@@ -130,6 +132,7 @@ export function SectionHeader(props: {
       <span className="loop-settings-label">
         {props.label ?? <span className="prop-label">{props.title}</span>}
         {props.dot}
+        {props.toggle}
       </span>
       <span className="loop-settings-header-tools">{props.extra}</span>
       <button
@@ -175,19 +178,19 @@ export function fieldIcon(kind: LoopFieldKind): ReactNode {
  * Code typed for a filter or a sort that no menu can say. It is written when
  * the box is left or ⌘↵ is pressed, and only once `check` accepts it, so code
  * that does not parse never reaches the page; until then the reason shows.
+ * `check` holds its length too: this editor has no maxLength to stop typing at.
  */
 export function CodeBox(props: {
   readonly value: string;
   readonly label: string;
   readonly placeholder: string;
-  readonly charsMax: number;
   readonly check: (code: string) => string | undefined;
   readonly onCommit: (code: string) => void;
 }) {
   const [draft, setDraft] = useState(props.value);
   const [problem, setProblem] = useState<string | undefined>(undefined);
-  const commit = (): void => {
-    const code = draft.trim();
+  const commit = (text: string): void => {
+    const code = text.trim();
     if (code === props.value.trim()) {
       setProblem(undefined);
       return;
@@ -199,24 +202,27 @@ export function CodeBox(props: {
     }
   };
   return (
-    <div className="loop-settings-code">
-      <AutoTextarea
+    // Capture: ⌘↵ is the editor's own "insert a blank line" once it reaches it.
+    <div
+      className="loop-settings-code"
+      role="group"
+      aria-label={props.label}
+      onKeyDownCapture={(event) => {
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          event.stopPropagation();
+          commit(draft);
+        }
+      }}
+    >
+      <ExprInput
         value={draft}
-        aria-label={props.label}
-        aria-invalid={problem !== undefined}
         placeholder={props.placeholder}
-        maxLength={props.charsMax}
-        spellCheck={false}
-        minRows={2}
-        heightPxMax={200}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault();
-            commit();
-          }
-        }}
+        invalid={problem !== undefined}
+        multiline={true}
+        wrap={true}
+        onChange={setDraft}
+        onCommit={commit}
       />
       {problem !== undefined && (
         <span className="loop-settings-code-problem" role="alert">

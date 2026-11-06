@@ -11,9 +11,13 @@
 // object with another object inside it: those are programs, and a row that
 // pretended otherwise would lose what it could not draw.
 //
+// One thing a row can show that is not a literal: a field of an object bound to
+// data, `{ title: entry.data.title }`. The popup draws it as the chip any bound
+// field is, so the list stays a list; the array is still one literal in the file.
+//
 // So this reads an array literal and answers with its items, or with undefined,
 // which is the field's cue to stay in the code editor. A `quote` of undefined marks a
-// value written without quotes: a number, or a yes/no.
+// value written without quotes: a number, a yes/no, or a field's code.
 
 export interface ScalarItem {
   readonly text: string;
@@ -38,9 +42,11 @@ export type Item = ScalarItem | ObjectItem;
 
 type ItemDraft = { text: string; quote: string | undefined } | { fields: ItemField[] };
 
-// `{ value: "a", label: "A" }` — an object whose every value is a word or a
-// number. That is a thing with several fields, which a row can name and a popup
-// can edit; an object with a call or another object inside it is not.
+const NUMBER_TEXT = /^[-+]?(\d+\.?\d*|\.\d+)$/;
+
+// `{ value: "a", label: "A" }` — an object whose every value is a word, a number
+// or an expression. That is a thing with several fields, which a row can name
+// and a popup can edit; an object with another object inside it is not.
 function objectFrom(source: string): { fields: ItemField[] } | undefined {
   const body = source.trim().slice(1, -1);
   const parts = splitTop(body);
@@ -73,16 +79,38 @@ function objectFrom(source: string): { fields: ItemField[] } | undefined {
       fields.push({ key, keyQuote, text: raw, quote: undefined });
       continue;
     }
-    const value = itemFrom(raw);
-    // A field holds a word or a number. An object inside an object is a shape
-    // with no depth of fields to show it in, and the popup would have nowhere
-    // to put it.
+    const value = itemFrom(raw) ?? codeFrom(raw);
+    // A field holds a word, a number or code. An object inside an object is a
+    // shape with no depth of fields to show it in, and the popup would have
+    // nowhere to put it.
     if (!value || 'fields' in value) {
       return undefined;
     }
     fields.push({ key, keyQuote, text: value.text, quote: value.quote });
   }
   return fields.length ? { fields } : undefined;
+}
+
+// A field's value as code, written back exactly as it reads. An object or an
+// array is structure rather than a value, so it stays the list's reason to be code.
+function codeFrom(raw: string): ItemDraft | undefined {
+  if (raw === '' || raw.startsWith('{') || raw.startsWith('[')) {
+    return undefined;
+  }
+  return { text: raw, quote: undefined };
+}
+
+/** Whether a field holds code, where a word, a number or a yes/no is a literal. */
+export function fieldHoldsCode(field: Pick<ItemField, 'text' | 'quote'>): boolean {
+  if (field.quote !== undefined) {
+    return false;
+  }
+  return field.text !== 'true' && field.text !== 'false' && !NUMBER_TEXT.test(field.text);
+}
+
+/** Whether any item is bound to data, so the list can only be written as the code it is. */
+export function itemsHoldCode(items: readonly Item[]): boolean {
+  return items.some((item) => (item.fields ?? []).some(fieldHoldsCode));
 }
 
 /** The first colon that separates a key from its value, at the top level. */
@@ -142,7 +170,7 @@ function itemFrom(source: string): ItemDraft | undefined {
     }
     return { text: body.replace(/\\(['"`\\])/g, '$1').replace(/\\n/g, '\n'), quote };
   }
-  if (/^[-+]?(\d+\.?\d*|\.\d+)$/.test(text)) {
+  if (NUMBER_TEXT.test(text)) {
     return { text, quote: undefined };
   }
   return undefined;

@@ -25,8 +25,10 @@ interface MoreMenuProps {
   readonly title?: string;
   readonly className?: string;
   readonly width?: number;
+  /** What the button shows, when the menu is not the usual `⋯`. */
+  readonly icon?: React.ReactNode;
 }
-export default function MoreMenu({ items, title = 'Options', className = '', width = 150 }: MoreMenuProps) {
+export default function MoreMenu({ items, title = 'Options', className = '', width = 150, icon }: MoreMenuProps) {
   const [open, setOpen] = useState(false);
   const [box, setBox] = useState<CSSProperties | undefined>(undefined);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -74,7 +76,7 @@ export default function MoreMenu({ items, title = 'Options', className = '', wid
           }
         }}
       >
-        <MoreIcon size={13} />
+        {icon ?? <MoreIcon size={13} />}
       </button>
       {box ? (
         <MenuSurface open={open} anchor={buttonRef.current ?? undefined} rows={rows} box={box} width={width} menuRef={menuRef} close={() => setOpen(false)} />

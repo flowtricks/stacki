@@ -1,18 +1,23 @@
 // The sections a component prop's settings are made of, shared by the two
 // places a prop is made or edited: the Settings panel's "Property settings"
 // pop-up (NewPropForm.tsx, opened from a field's bind dot) and the Properties
-// panel's property editor (PropertyEditor.tsx). Each host keeps its own chrome
+// panel's property editor (PropertyEditor.tsx), whose fields a picker row's
+// settings also draw (PropertySettingsDialog.tsx). Each host keeps its own chrome
 // — its title, its buttons, its own state — and draws these sections from it,
 // so an option offered in one place is the same control in the other.
 //
 // - Required and Readonly: whether the member is written without `?`, and
 //   with `readonly`.
-// - Code type: the TypeScript written for the prop, behind a disclosure.
+// - Code type: the TypeScript written for the prop, behind a disclosure, in the
+//   highlighted field a default's code is edited in.
 // - Item fields: a List's fields, a name and a kind each.
 // - The default items: the very field an instance of the component edits the
 //   list with (PropField), with its `{}` toggle between the list and its code.
 
+import { useRef } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
+import Dropdown from '../../ui/Dropdown';
+import ExprInput from '../../ui/ExprInput';
 import { assert } from '../../../shared/core/assert';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import {
@@ -30,6 +35,9 @@ import { blankItemOf, renamedItemField } from './listItemShape';
 import PropField from './PropField';
 import type { FieldDefinition } from './propRules';
 import './loopSettings.css';
+
+/** How a change arrived: typing, which waits for a pause to save, or a pick, a toggle or a list edit, which saves at once. */
+export type EditPace = 'typing' | 'at-once';
 
 /** The two TypeScript modifiers a prop's member can carry. */
 export interface PropertyFlags {
@@ -70,19 +78,28 @@ export function CodeTypeField(props: {
         Code type
       </button>
       {props.open && (
-        <input
-          aria-label="Code type"
+        <ExprInput
+          ariaLabel="Code type"
           className="property-code"
+          language="typescript"
           value={props.type}
+          syncValue={props.type}
           placeholder={props.placeholder}
-          maxLength={PROPERTY_LIMITS.textCharsMax}
-          spellCheck={false}
-          onChange={(event) => props.onChange(event.target.value)}
+          onChange={(type) => {
+            // An editor has no maxLength, so the bound the input held is held here.
+            if (type.length <= PROPERTY_LIMITS.textCharsMax) {
+              props.onChange(type);
+            }
+          }}
         />
       )}
     </>
   );
 }
+
+const ITEM_FIELD_OPTIONS = ITEM_FIELD_KINDS.map((kind) => ({ value: kind, label: ITEM_FIELD_TITLES[kind] }));
+// The field's trigger is narrow, and its longest title needs room beside the check.
+const ITEM_FIELD_MENU_WIDTH_PX_MIN = 120;
 
 /** A list's item fields and its default items, which change together: renaming a field renames it in every item. */
 export interface ListShape {
@@ -96,36 +113,58 @@ export interface ListShape {
  * Renaming a field keeps what the default items hold in it; changing its kind
  * or removing it clears that field in them, since a text cannot be a switch.
  */
-export function ItemFieldsEditor(props: ListShape & { readonly onChange: (shape: ListShape) => void }) {
+export function ItemFieldsEditor(props: ListShape & { readonly onChange: (shape: ListShape, pace: EditPace) => void }) {
   const { fields, itemsText, onChange } = props;
   const items = (): readonly Item[] => arrayItems(itemsText) ?? [];
+  // A name part-way through being typed can be no name at all, and an item cannot
+  // be written under one. The items keep the last real name until the row has
+  // another, so clearing a name to retype it keeps what they hold.
+  const heldKeys = useRef(new Map<number, string>());
   const rename = (index: number, name: string): void => {
     const previous = fields[index];
     assert(previous !== undefined, 'ItemFieldsEditor: the renamed field exists');
-    onChange({
-      fields: fields.map((field, at) => (at === index ? { ...field, name } : field)),
-      itemsText: arrayItems(itemsText) === undefined ? itemsText : arrayText(renamedItemField(items(), previous.name, name)),
-    });
+    const key = fieldNameProblem(previous.name) === undefined ? previous.name : (heldKeys.current.get(index) ?? previous.name);
+    const named = fieldNameProblem(name) === undefined;
+    if (named) {
+      heldKeys.current.delete(index);
+    } else {
+      heldKeys.current.set(index, key);
+    }
+    onChange(
+      {
+        fields: fields.map((field, at) => (at === index ? { ...field, name } : field)),
+        itemsText: arrayItems(itemsText) === undefined || !named ? itemsText : arrayText(renamedItemField(items(), key, name)),
+      },
+      'typing',
+    );
   };
   const retype = (index: number, kind: ItemFieldKind): void => {
     const previous = fields[index];
     assert(previous !== undefined, 'ItemFieldsEditor: the retyped field exists');
     const next = { ...previous, kind };
-    onChange({
-      fields: fields.map((field, at) => (at === index ? next : field)),
-      itemsText: arrayItems(itemsText) === undefined ? itemsText : arrayText(items().map((item) => withBlankField(item, next))),
-    });
+    onChange(
+      {
+        fields: fields.map((field, at) => (at === index ? next : field)),
+        itemsText: arrayItems(itemsText) === undefined ? itemsText : arrayText(items().map((item) => withBlankField(item, next))),
+      },
+      'at-once',
+    );
   };
   const remove = (index: number): void => {
     const removed = fields[index];
     assert(removed !== undefined, 'ItemFieldsEditor: the removed field exists');
-    onChange({
-      fields: fields.filter((_, at) => at !== index),
-      itemsText:
-        arrayItems(itemsText) === undefined
-          ? itemsText
-          : arrayText(items().map((item) => (item.fields === undefined ? item : { fields: item.fields.filter((field) => field.key !== removed.name) }))),
-    });
+    // Rows move up, so what was held by position no longer matches.
+    heldKeys.current.clear();
+    onChange(
+      {
+        fields: fields.filter((_, at) => at !== index),
+        itemsText:
+          arrayItems(itemsText) === undefined
+            ? itemsText
+            : arrayText(items().map((item) => (item.fields === undefined ? item : { fields: item.fields.filter((field) => field.key !== removed.name) }))),
+      },
+      'at-once',
+    );
   };
   const nameProblem = fields.map((field) => fieldNameProblem(field.name)).find((problem) => problem !== undefined);
   return (
@@ -141,13 +180,14 @@ export function ItemFieldsEditor(props: ListShape & { readonly onChange: (shape:
             value={field.name}
             onChange={(event) => rename(index, event.target.value.replace(/[^\w$]/g, ''))}
           />
-          <select className="new-prop-input" aria-label="Field type" value={field.kind} onChange={(event) => retype(index, itemKindOf(event.target.value))}>
-            {ITEM_FIELD_KINDS.map((kind) => (
-              <option key={kind} value={kind}>
-                {ITEM_FIELD_TITLES[kind]}
-              </option>
-            ))}
-          </select>
+          <Dropdown
+            ariaLabel="Field type"
+            value={field.kind}
+            options={ITEM_FIELD_OPTIONS}
+            livePreview={false}
+            menuWidthMin={ITEM_FIELD_MENU_WIDTH_PX_MIN}
+            onChange={(kind) => retype(index, kind)}
+          />
           <button
             type="button"
             className="loop-settings-remove"
@@ -165,7 +205,7 @@ export function ItemFieldsEditor(props: ListShape & { readonly onChange: (shape:
         type="button"
         className="loop-bind-button new-prop-add"
         disabled={fields.length >= LIST_LIMITS.fieldsMax}
-        onClick={() => onChange({ fields: [...fields, { name: freeFieldName(fields), kind: 'text' }], itemsText })}
+        onClick={() => onChange({ fields: [...fields, { name: freeFieldName(fields), kind: 'text' }], itemsText }, 'at-once')}
       >
         <PlusIcon size={11} /> Add field
       </button>
@@ -182,7 +222,7 @@ export function ListDefaultField(props: {
   readonly fields: readonly ItemFieldDeclaration[];
   readonly code: string;
   readonly projectPath: string | undefined;
-  readonly onChange: (code: string) => void;
+  readonly onChange: (code: string, pace: EditPace) => void;
 }) {
   const field = listDefaultField(props.fields);
   // Keyed by the shape, so a field's rows are redrawn when the fields above change.
@@ -195,7 +235,7 @@ export function ListDefaultField(props: {
         field={field}
         value={defaultAttr(props.code)}
         assetContext={props.projectPath === undefined ? undefined : { projectPath: props.projectPath }}
-        onChange={(next) => props.onChange(defaultCodeOf(next))}
+        onChange={(next, immediate) => props.onChange(defaultCodeOf(next), immediate === true ? 'at-once' : 'typing')}
       />
     </div>
   );
@@ -250,12 +290,6 @@ function withBlankField(item: Item, field: ItemFieldDeclaration): Item {
   const blank = blankItemOf([field], '"').fields?.[0];
   assert(blank !== undefined, 'withBlankField: a blank item has the field');
   return { fields: item.fields.map((own) => (own.key === field.name ? blank : own)) };
-}
-
-function itemKindOf(value: string): ItemFieldKind {
-  const kind = ITEM_FIELD_KINDS.find((candidate) => candidate === value);
-  assert(kind !== undefined, 'ItemFieldsEditor: the type menu offers only field kinds');
-  return kind;
 }
 
 // `field`, then `field2`: a name no other field has.

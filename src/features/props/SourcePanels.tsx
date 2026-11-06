@@ -37,6 +37,7 @@ export function panelDataContext(props: PropsPanelProps): SourceContext {
     projectPath: props.projectPath,
     filePath: props.filePath,
     onSetFrontmatter: props.onSetFrontmatter,
+    onRenameVariable: props.onRenameVariable,
     onOpenSymbol: props.onOpenSymbol,
   };
 }
@@ -156,13 +157,18 @@ export function RawLinePanel(props: NodePanelProps<'raw-line'>) {
             Line
           </span>
         </label>
-        <AutoTextarea
+        <ExprInput
           key={node.id}
-          minRows={1}
+          language="html"
+          multiline
+          ariaLabel={isDoctype ? 'Doctype' : 'Source line'}
           value={node.value}
-          spellCheck={false}
-          style={{ fontFamily: 'var(--mono)' }}
-          onChange={(event) => onSetText(event.target.value)}
+          syncValue={node.value}
+          onChange={(next) => {
+            if (next !== node.value) {
+              onSetText(next);
+            }
+          }}
         />
         <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 6, lineHeight: 1.5 }}>
           {isDoctype
@@ -192,6 +198,7 @@ export function MapPanel(props: NodePanelProps<'map'>) {
         onSetText={onSetText}
         imports={props.frontmatterImports}
         projectPath={props.projectPath}
+        onCommitHead={props.onCommitLoopHead}
         onSetLoopSource={props.onSetLoopSource}
         onEditLoopProperty={props.onEditLoopProperty}
       />

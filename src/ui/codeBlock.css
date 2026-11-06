@@ -1,0 +1,20 @@
+/* Code shown rather than edited: the editor's type, with nothing that invites a
+   cursor. Only what makes it read as code lives here. A call site's own class
+   sets its size, scroll and wrap, and a <pre> left alone keeps its lines. The
+   rules sit in :where so that class wins whichever stylesheet loads first. */
+:where(.code-block) {
+  margin: 0;
+  color: var(--text, #f5f5f5);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.55;
+  tab-size: 2;
+  user-select: text;
+}
+:where(.code-block) > code {
+  font: inherit;
+}
+:where(.code-inline) {
+  font-family: var(--mono, ui-monospace, monospace);
+  user-select: text;
+}

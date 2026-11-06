@@ -503,6 +503,14 @@ test('preview owns only mounted frames and cleans canceled/unmounted drags', asy
   await render({ selPath: '0.1', pathScope: '', focusPath: undefined });
   assert.equal(scrolls().at(-1)?.path, '0.1', 'ordinary selections still reveal the selected element');
   navigationMessages.length = 0;
+  await render({ selPseudo: 'before', navigatorSelectionTick: 1 });
+  assert.equal(scrolls().at(-1)?.path, '0.1::before', 'a ::before row reveals the pseudo-element, not the element that draws it');
+  navigationMessages.length = 0;
+  await render({ selPseudo: 'after' });
+  assert.equal(scrolls().length, 0, 'a pick that no selection came with does not move the page');
+  await render({ selPseudo: undefined, navigatorSelectionTick: 2 });
+  assert.equal(scrolls().at(-1)?.path, '0.1', 'the element row reveals the element again');
+  navigationMessages.length = 0;
   await render({
     selPath: 'src/components/Card.astro|0',
     pathScope: 'src/components/Card.astro|',
@@ -739,8 +747,11 @@ test('context events use the gate and translate zoomed frame coordinates', async
         top: 160,
         occurrence: 1,
         outside: false,
+        pseudo: undefined,
       },
     ]);
+    await send({ ...event, pseudo: 'before' });
+    assert.equal(calls.at(-1)[2].pseudo, 'before', 'a right-click on a ::before names it, as a click does');
     await send({
       type: 'avb:rects',
       classes: {},

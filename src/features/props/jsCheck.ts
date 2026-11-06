@@ -37,6 +37,14 @@ function firstError(code: string): number {
   return at;
 }
 
+/** Whether `code` reads as a whole expression: `format(` and `-` are on their way to being one. */
+export function isExpression(code: string): boolean {
+  if (code.trim() === '' || code.length > LIMITS.attrCharsMax) {
+    return false;
+  }
+  return firstError(`(${code});`) < 0;
+}
+
 /** Where `position` falls, for a message that can be acted on. */
 function lineOf(code: string, position: number): number {
   return code.slice(0, position).split('\n').length;

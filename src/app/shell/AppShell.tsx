@@ -12,6 +12,7 @@ import { ToastStack } from '../../features/notifications/ToastStack';
 import ComponentPropertiesPanel from '../../features/componentProperties/ComponentPropertiesPanel';
 import WelcomeScreen from '../../features/welcome/WelcomeScreen';
 import PagesPanel from '../../features/pages/PagesPanel';
+import { ConnectSanity } from '../../features/cmsConnections/ConnectSanity';
 import PalettePanel from '../../features/palette/PalettePanel';
 import StructurePanel from '../../features/structure/StructurePanel';
 import PanelBoundary from '../../ui/PanelBoundary';
@@ -37,6 +38,7 @@ import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel } from '../appPanel
 import { prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
 import { useEffect } from 'react';
 import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay, pickPseudo } from './AppPanes';
+import { selectedPseudo } from '../model/selectionDeletion';
 import type { AppView, ShellView } from '../App';
 
 // The start screen, before a project is open.
@@ -427,6 +429,8 @@ export function PagesTab({ app }: { readonly app: ShellView }) {
       onSelectRoute={app.onSelectRoute}
       onSelect={app.onSelectPage}
       onCreate={app.onCreatePage}
+      onCreateTemplate={app.createTemplate}
+      connectSanity={(input) => <ConnectSanity {...input} />}
       onDelete={app.onDeletePage}
       onMovePage={app.onMovePage}
       onCreateFolder={app.createPageFolder}
@@ -474,7 +478,7 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
         hiddenNodeIds={app.stateIds.hidden}
         inertNodeIds={app.stateIds.inert}
         pseudoNodeIds={{ before: app.stateIds.before, after: app.stateIds.after }}
-        selectedPseudo={app.pseudoPick?.nodeId === app.selectedId ? app.pseudoPick?.pseudo : undefined}
+        selectedPseudo={selectedPseudo(app.selectedId, app.pseudoPick)}
         onSelectPseudo={selectPseudo}
         liveClassesById={app.liveClassesById ?? new Map<string, readonly string[]>()}
         revealTick={app.revealTick}

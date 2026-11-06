@@ -8,7 +8,8 @@ import { useEditorRole } from '../roles/useEditorRole';
 import { parsePageNode } from '../../../vendor/stacki/shared/page/pageNode';
 import { type PropsPanelProps } from '../../../vendor/stacki/src/features/props/propsPanelTypes';
 import { applyEdits, contentEdit, flatten, nodeAt, type ParserNode } from '../source/source';
-import { routeFor, type Project, type Component } from '../project/projectClient';
+import type { Project, Component } from '../project/projectClient';
+import { projectPages } from '../project/pageLabels';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { assetProp, frontmatterEdit, inlineContentEdit, nodeTextEdit, renameTag, setAttributes } from './settingsEdits';
 
@@ -57,10 +58,7 @@ export function Settings(props: Props) {
         filePath={document.file}
         frontmatterSource={/^---\r?\n([\s\S]*?)\r?\n---/.exec(source)?.[1] ?? ''}
         linkContext={{
-          pages: project.pages.map((file) => ({
-            name: file.replace('src/pages/', ''),
-            route: routeFor(file),
-          })),
+          pages: projectPages(project),
           sectionIds: flatten(nodes).flatMap((node) => (node.props?.['id']?.type === 'string' ? [node.props['id'].value] : [])),
           projectPath: 'studio',
         }}

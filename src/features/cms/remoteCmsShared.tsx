@@ -1,6 +1,6 @@
 // What the connected-CMS panel and view share: one load per subject with its
 // failure in place, the open document, and each CMS's logo.
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useRef, useState } from 'react';
 import type { RemoteCache } from './remoteCmsCache';
 import { AstroIcon, CmsIcon, PayloadIcon, SanityIcon } from '../../ui/Icons';
 import type { CmsSource } from '../../../shared/properties/astroContent';
@@ -16,9 +16,19 @@ export interface RemoteCmsSelection {
   readonly mode?: 'settings' | undefined;
 }
 
+/**
+ * Whether the fields inside say what is wrong with their values. An entry held
+ * on screen while the next one loads (entryLoad.ts) is `held`: it is what was
+ * last shown, not what is selected, so nothing is reported about it.
+ */
+export type FieldChecks = 'shown' | 'held';
+export const FieldChecksContext = createContext<FieldChecks>('shown');
+
 // One read per subject, through its cache (remoteCmsCache.ts): what is kept for
 // `key` shows at once and is refreshed behind it. `replace` shows a value the
-// panel already knows — an edit's result, a list after a drag — without a read.
+// panel already knows — an edit's result, a list after a drag — without a read;
+// `replaceAt` keeps one for a key that may no longer be the one in view, as a
+// save that answers after the person moved on does.
 export function useRemote<T>(cache: RemoteCache<T>, key: string, load: () => Promise<RemoteResult<T>>) {
   const [shown, setShown] = useState(() => ({ key, result: cache.get(key) }));
   const current = useRef(key);
@@ -38,17 +48,20 @@ export function useRemote<T>(cache: RemoteCache<T>, key: string, load: () => Pro
     window.addEventListener('online', run);
     return () => window.removeEventListener('online', run);
   }, [run]);
-  const replace = useCallback(
-    (value: T) => {
-      cache.set(key, value);
-      setShown({ key, result: { ok: true, value } });
+  const replaceAt = useCallback(
+    (at: string, value: T) => {
+      cache.set(at, value);
+      if (current.current === at) {
+        setShown({ key: at, result: { ok: true, value } });
+      }
     },
-    [cache, key],
+    [cache],
   );
+  const replace = useCallback((value: T) => replaceAt(key, value), [replaceAt, key]);
   // Before the effect catches up with a new key, show that key's kept value,
   // never the previous subject's.
   const result = shown.key === key ? shown.result : cache.get(key);
-  return { result, retry: run, replace };
+  return { result, retry: run, replace, replaceAt };
 }
 
 export function Loading<T>(props: {

@@ -29,6 +29,8 @@ interface MapEditorProps {
   /** The file's imports, which say where a loop's list comes from. */
   readonly imports?: readonly ImportDecl[] | undefined;
   readonly projectPath?: string | undefined;
+  /** Writes the head, or says why it can't be; without it the head goes straight to onSetText. */
+  readonly onCommitHead?: ((value: string, renames: readonly Rename[]) => string | undefined) | undefined;
   readonly onSetLoopSource?: LoopSettingsProps['onApply'] | undefined;
   readonly onEditLoopProperty?: LoopSettingsProps['onEditProperty'];
 }
@@ -89,30 +91,62 @@ export function headRenames(before: string, after: string): readonly Rename[] {
 // is carried into the bindings inside. A head the editor does not split (a
 // destructured item, a statement body) is edited as code only.
 export function MapEditor(props: MapEditorProps) {
-  const { node, onSetText } = props;
-  const codeRef = useRef<HTMLDivElement>(null);
+  const { node, onSetText, onCommitHead } = props;
   const splittable = node.bodyParts === undefined && parseMapHead(node.head) !== undefined;
+  // What was typed stays, with the reason under it, until it is put right: this
+  // text compiles into the page, and a refused head must not be lost to retyping.
+  const [draft, setDraft] = useState(node.head);
+  const [problem, setProblem] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    setDraft(node.head);
+    setProblem(undefined);
+  }, [node.head]);
   const commitCode = (value: string): void => {
-    if (value !== node.head) {
-      onSetText(value, node.bodyParts === undefined ? headRenames(node.head, value) : []);
+    if (value === node.head) {
+      setProblem(undefined);
+      return;
     }
+    if (value.length > LIMITS.nodeValueCharsMax) {
+      setProblem('This code is too long.');
+      return;
+    }
+    const renames = node.bodyParts === undefined ? headRenames(node.head, value) : [];
+    if (onCommitHead === undefined) {
+      onSetText(value, renames);
+      return;
+    }
+    setProblem(onCommitHead(value, renames));
   };
   const code = (
-    <div className="props-field loop-settings-row" ref={codeRef}>
-      <label onClick={noLabelActivation}>
-        <span className="prop-label">
-          <CodeIcon size={12} className="prop-label-icon" />
-          Code
-        </span>
-      </label>
-      <ExprInput value={node.head} syncValue={node.head} onCommit={commitCode} />
-    </div>
+    <>
+      <div className="props-field loop-settings-row">
+        <label onClick={noLabelActivation}>
+          <span className="prop-label">
+            <CodeIcon size={12} className="prop-label-icon" />
+            Code
+          </span>
+        </label>
+        <ExprInput
+          value={draft}
+          syncValue={node.head}
+          invalid={problem !== undefined}
+          onChange={(text) => {
+            setDraft(text);
+            setProblem(undefined);
+          }}
+          onCommit={commitCode}
+        />
+      </div>
+      {problem !== undefined && (
+        <div className="prop-field-note problem" role="alert">
+          {problem}
+        </div>
+      )}
+    </>
   );
   // The Code field goes inside the settings, so their Details come after it.
   return splittable ? (
-    <MapListSettings props={props} anchorRef={codeRef}>
-      {code}
-    </MapListSettings>
+    <MapListSettings props={props}>{code}</MapListSettings>
   ) : (
     <>
       <div className="props-field" style={{ marginTop: 8, fontSize: 11, color: 'var(--text-faint)' }}>
@@ -358,15 +392,7 @@ function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField
 }
 
 // The list settings, when the app can write them.
-function MapListSettings({
-  props,
-  anchorRef,
-  children,
-}: {
-  readonly props: MapEditorProps;
-  readonly anchorRef: React.RefObject<HTMLDivElement>;
-  readonly children: React.ReactNode;
-}) {
+function MapListSettings({ props, children }: { readonly props: MapEditorProps; readonly children: React.ReactNode }) {
   const { node, dataContext, imports, projectPath, onSetLoopSource, bindContext, loopContext } = props;
   const data = parseMapHead(node.head)?.data ?? '';
   const frontmatter = dataContext?.frontmatter ?? '';
@@ -398,7 +424,7 @@ function MapListSettings({
       newProp={context?.newProp}
       onApply={onSetLoopSource}
       onEditProperty={props.onEditLoopProperty}
-      sourceButton={(name) => <SourceEditButton name={name} dataContext={dataContext} anchorRef={anchorRef} />}
+      sourceButton={(name, anchorRef) => <SourceEditButton name={name} dataContext={dataContext} anchorRef={anchorRef} />}
     >
       {children}
     </LoopSettings>

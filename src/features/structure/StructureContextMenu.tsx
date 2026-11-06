@@ -19,6 +19,7 @@ interface MenuProps {
   readonly canWrapLink: boolean;
   readonly canPaste: boolean;
   readonly canCut: boolean;
+  readonly canDelete: boolean;
   readonly protectedNode: boolean;
   readonly onClose: () => void;
   readonly onAction: (action: ContextAction) => void;
@@ -55,7 +56,7 @@ export function ContextMenu(props: MenuProps) {
       <MenuItem
         label="Delete"
         shortcut={currentDesktopPlatform() === 'darwin' ? '⌫' : 'Del'}
-        disabled={props.protectedNode}
+        disabled={!props.canDelete}
         onSelect={() => props.onAction('delete')}
       />
       {props.component && (

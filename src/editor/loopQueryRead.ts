@@ -107,6 +107,113 @@ export function readLoop(input: LoopReadInput): LoopReading {
   return reading;
 }
 
+/** Which text a step's spans index: the loop's data expression, or the frontmatter. */
+export type StepPlace = 'head' | 'frontmatter';
+
+/** One method call on a list, whether or not any setting can say it. */
+export interface PipelineStep {
+  readonly place: StepPlace;
+  readonly source: string;
+  readonly call: Js;
+}
+
+/** `getCollection`'s own filter: the argument, and the span from the name to the closing bracket. */
+export interface PipelineFilterArgument {
+  readonly place: StepPlace;
+  readonly code: string;
+  readonly from: number;
+  readonly to: number;
+}
+
+/** A list's steps as written, for reading and rewriting each by its own bytes (loopSections.ts). */
+export interface LoopPipeline {
+  readonly source: LoopSource;
+  /** The list before any step, as code a step can be chained on. */
+  readonly base: string;
+  readonly steps: readonly PipelineStep[];
+  readonly filterArgument: PipelineFilterArgument | undefined;
+  readonly itemPath: ItemPath;
+  /** The declarations followed from the loop to the list, head first. */
+  readonly chain: readonly string[];
+  /** Where the data expression starts inside the text its head spans index. */
+  readonly headOffset: number;
+}
+
+/**
+ * The steps a List prop or an Astro collection takes in code, or undefined for
+ * a list that has none to edit: a Sanity query (its steps are GROQ), an options
+ * object (its settings are data), picked items, a value from anywhere else.
+ */
+export function readPipeline(input: LoopReadInput): LoopPipeline | undefined {
+  const data = input.data.trim();
+  const parsed = data === '' ? undefined : parseExpression(data);
+  if (parsed === undefined) {
+    return undefined;
+  }
+  const frontmatter = parseFrontmatter(input.frontmatter);
+  const context: Context = { input, frontmatter };
+  const pipeline = pipelineOf({ source: parsed.source, node: parsed.expression }, context, []);
+  const headOffset = parsed.source.indexOf(data);
+  assert(headOffset >= 0, 'A parsed expression holds its own text');
+  const placed = (step: Step): PipelineStep => ({
+    place: step.call.source === parsed.source ? 'head' : 'frontmatter',
+    source: step.call.source,
+    call: step.call.node,
+  });
+  if (pipeline.kind === 'value') {
+    const reading = listPropReading(pipeline, context);
+    if (reading === undefined) {
+      return undefined;
+    }
+    const source: LoopSource = { kind: 'list', collection: pipeline.root };
+    return { source, base: pipeline.root, steps: (pipeline.steps ?? []).map(placed), filterArgument: undefined, itemPath: [], chain: [], headOffset };
+  }
+  if (pipeline.kind !== 'collection' || pipeline.base.kind !== 'astro') {
+    return undefined;
+  }
+  const base = pipeline.base;
+  if (base.selection !== undefined || !COLLECTION_NAME.test(base.collection)) {
+    return undefined;
+  }
+  if (base.filter === undefined && base.list === undefined && pickedSteps(pipeline.steps) !== undefined) {
+    return undefined;
+  }
+  const list = base.list?.text ?? astroBaseCode(base);
+  if (list === undefined) {
+    return undefined;
+  }
+  return {
+    source: { kind: 'astro', collection: base.collection },
+    base: list,
+    steps: pipeline.steps.map(placed),
+    filterArgument: filterArgumentOf(base, parsed.source),
+    itemPath: base.list?.itemPath ?? ['data'],
+    chain: pipeline.chain,
+    headOffset,
+  };
+}
+
+// `getCollection('blog')` as a list a step can be chained on, without its filter.
+function astroBaseCode(base: Extract<Base, { readonly kind: 'astro' }>): string | undefined {
+  const call = base.call?.node;
+  if (call?.kind !== 'call' || call.callee.kind !== 'name') {
+    return undefined;
+  }
+  return `(await ${call.callee.name}(${JSON.stringify(base.collection)}))`;
+}
+
+function filterArgumentOf(base: Extract<Base, { readonly kind: 'astro' }>, headSource: string): PipelineFilterArgument | undefined {
+  const located = base.call;
+  const name = located?.node.kind === 'call' ? located.node.args[0] : undefined;
+  if (located === undefined || base.filter === undefined || name === undefined) {
+    return undefined;
+  }
+  // The closing bracket, so a filter wrapped in brackets of its own goes whole.
+  const to = located.node.to - 1;
+  assert(name.to <= to, 'A filter follows the collection’s name');
+  return { place: located.source === headSource ? 'head' : 'frontmatter', code: textOf(base.filter, base.filter.node), from: name.to, to };
+}
+
 /** Where an item keeps its fields: `data` (an Astro entry), `fields` (a builder export), or on itself. */
 type ItemPath = readonly string[];
 
@@ -121,18 +228,23 @@ interface Located {
   readonly node: Js;
 }
 
-type Step =
+type StepBody =
   | { readonly kind: 'filter'; readonly function: Located }
   | { readonly kind: 'sort'; readonly function: Located | undefined }
   | { readonly kind: 'slice'; readonly start: number; readonly end: number | undefined }
   | { readonly kind: 'reverse' }
   | { readonly kind: 'other'; readonly name: string };
 
+/** A step and the call that says it, so its bytes can be found again (loopSections.ts). */
+type Step = StepBody & { readonly call: Located };
+
 type Base =
   | {
       readonly kind: 'astro';
       readonly collection: string;
       readonly filter: Located | undefined;
+      /** The `getCollection(…)` call itself, when the list is read by one. */
+      readonly call?: Located;
       /** A list expression kept as written (`[...collections["campus"]]`), and where its items hold fields. */
       readonly list?: { readonly text: string; readonly itemPath: ItemPath };
       /** Items picked by id, in order, in place of a filter (`getEntries`, a curated list). */
@@ -230,33 +342,33 @@ function stepOf(located: Located): { readonly step: Step; readonly from: Located
   const from = { source: located.source, node: node.callee.object };
   if (!METHOD_STEPS.has(method)) {
     // `.map(…)` and the like reshape items; the list is no longer the collection's.
-    return namePath(node.callee) === undefined ? { step: { kind: 'other', name: method }, from } : undefined;
+    return namePath(node.callee) === undefined ? { step: { kind: 'other', name: method, call: located }, from } : undefined;
   }
-  const argument = node.args[0];
+  return { step: { ...stepBodyOf(method, node.args, located.source), call: located }, from };
+}
+
+function stepBodyOf(method: string, args: readonly Js[], source: string): StepBody {
+  const argument = args[0];
   switch (method) {
     case 'filter':
-      return argument?.kind === 'function' && node.args.length === 1
-        ? { step: { kind: 'filter', function: { source: located.source, node: argument } }, from }
-        : { step: { kind: 'other', name: method }, from };
+      return argument?.kind === 'function' && args.length === 1 ? { kind: 'filter', function: { source, node: argument } } : { kind: 'other', name: method };
     case 'sort':
     case 'toSorted':
-      if (node.args.length === 0) {
-        return { step: { kind: 'sort', function: undefined }, from };
+      if (args.length === 0) {
+        return { kind: 'sort', function: undefined };
       }
-      return argument?.kind === 'function' && node.args.length === 1
-        ? { step: { kind: 'sort', function: { source: located.source, node: argument } }, from }
-        : { step: { kind: 'other', name: method }, from };
+      return argument?.kind === 'function' && args.length === 1 ? { kind: 'sort', function: { source, node: argument } } : { kind: 'other', name: method };
     case 'slice':
-      return { step: sliceStep(node.args), from };
+      return sliceStep(args);
     case 'reverse':
     case 'toReversed':
-      return { step: { kind: 'reverse' }, from };
+      return { kind: 'reverse' };
     default:
-      return { step: { kind: 'other', name: method }, from };
+      return { kind: 'other', name: method };
   }
 }
 
-function sliceStep(args: readonly Js[]): Step {
+function sliceStep(args: readonly Js[]): StepBody {
   const [first, second] = args;
   const start = first === undefined ? 0 : wholeNumber(first);
   const end = second === undefined ? undefined : wholeNumber(second);
@@ -282,10 +394,7 @@ function baseOf(located: Located, context: Context): Base | undefined {
     if (name?.kind !== 'string' || node.args.length > 2) {
       return undefined;
     }
-    if (filter !== undefined && filter.kind !== 'function') {
-      return undefined;
-    }
-    return { kind: 'astro', collection: name.value, filter: filter ? { source: located.source, node: filter } : undefined };
+    return { kind: 'astro', collection: name.value, filter: filter ? { source: located.source, node: filter } : undefined, call: located };
   }
   if (node.callee.kind === 'name' && importedFrom(context, node.callee.name, 'astro:content') === 'getEntries') {
     const entries = entriesSelection(node.args);

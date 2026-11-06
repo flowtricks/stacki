@@ -81,6 +81,7 @@ const PANEL_SOURCES = Object.freeze([
   'src/features/componentProperties/PropertyOptions.tsx',
   'src/features/componentProperties/PropertyReadOnlyFields.tsx',
   'src/features/componentProperties/PropertyReorder.tsx',
+  'src/features/componentProperties/PropertySettingsDialog.tsx',
   'src/features/componentProperties/PropertyType.tsx',
   'src/features/props/PropsPanel.tsx',
   'src/features/git/PublishModal.tsx',

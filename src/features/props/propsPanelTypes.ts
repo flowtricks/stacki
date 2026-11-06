@@ -9,7 +9,8 @@ import type { ListProp } from '../../editor/listProps';
 import type { LoopApplyResult } from './LoopSettings';
 import type { FieldDefinition, PropValues } from './propRules';
 import type { SetProp, SetProps } from './propAttributes';
-import type { SetText, TagOption, TagFieldProps } from './propNodeEditors';
+import type { Rename, SetText, TagOption, TagFieldProps } from './propNodeEditors';
+import type { VariableRename } from '../../editor/variableRename';
 import type { SourceContext } from './propBindings';
 import type { RichContext, InlineNode } from './RichContent';
 import type { TextPiece } from './textConnect';
@@ -60,6 +61,10 @@ export interface PropsPanelProps {
   /** The open file's imports: what a loop's source is read against. */
   readonly frontmatterImports?: readonly ImportDecl[] | undefined;
   /** Points the loop at a list; with a declaration, declares that List property first, in the same undo step. */
+  /** A loop's Code row: writes the head, renaming a variable when that is what it says; a message says why it was refused. */
+  readonly onCommitLoopHead?: ((value: string, renames: readonly Rename[]) => string | undefined) | undefined;
+  /** Renames a frontmatter variable across the file; a message says why it was refused. */
+  readonly onRenameVariable?: ((rename: VariableRename) => string | undefined) | undefined;
   readonly onSetLoopSource?: (target: LoopTarget, sanityClient: 'available' | 'unavailable', declaration?: PropDeclaration) => LoopApplyResult;
   /** Renames a list setting's property, or changes its tooltip; resolves with why it could not. */
   readonly onEditLoopProperty?: (key: string, edit: { readonly name: string; readonly description: string }) => Promise<string | undefined>;

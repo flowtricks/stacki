@@ -379,7 +379,7 @@ test('Limit and Sort hand back a query the writer turns into code', async (conte
   assert.equal(applied.length, 1);
   assert.equal(loopQuery.listQueryCode(applied[0].query), 'features.slice(0, 6)');
   const sort = [...host.querySelectorAll('.loop-settings-header')].find((header) => header.textContent.includes('Sort'));
-  await click(sort.querySelector('button'));
+  await click(sort.querySelector('.loop-settings-add'));
   assert.equal(applied.length, 2);
   assert.deepEqual(applied[1].query.sorts, [{ field: 'title', direction: 'ascending', order: 'text' }], 'the first field of the item type');
   assert.equal(loopQuery.listQueryCode(applied[1].query), "features.toSorted((a, b) => String(a.title ?? '').localeCompare(String(b.title ?? '')))");
@@ -388,7 +388,7 @@ test('Limit and Sort hand back a query the writer turns into code', async (conte
 test('a new filter starts on the item type’s first field', async (context) => {
   const { host } = await panel(context, { frontmatter: FRONTMATTER, data: 'features' });
   const filters = [...host.querySelectorAll('.loop-settings-header')].find((header) => header.textContent.includes('Filters'));
-  await click(filters.querySelector('button'));
+  await click(filters.querySelector('.loop-settings-add'));
   assert.match(host.textContent, /Title/);
 });
 

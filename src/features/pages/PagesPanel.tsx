@@ -7,10 +7,14 @@ import { PageOrderNotice } from './PageOrderNotice';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { WireInjectedRoute } from '../../../shared/ipc/ipcResults';
 import type { ScanPage, ScanResult } from '../../../shared/properties/projectScan';
-import { buildPageTree, collectPageTreeDirectories, pageDirectory, parsePageDragText, pageDisplayName } from './pageTree';
+import { buildPageTree, collectPageTreeDirectories, pageDirectory, parsePageDragText } from './pageTree';
+import { pageDisplayName } from '../../lib/pageName';
 import { comparePageNames, isCollectionRoute } from './pageOrder';
 import { CollectionIcon, FileIcon, FolderIcon, FolderPlusIcon, PlusIcon } from '../../ui/Icons';
+import MoreMenu from '../../ui/MoreMenu';
+import type { ConnectionKeyCopy, PageTemplateDraft } from '../../../shared/properties/pageTemplate';
 import { NewPageModal } from './PageDialogs';
+import { PageTemplateDialog, type ConnectSanity } from './PageTemplateDialog';
 import { PageSearchPath } from './PageSearchPath';
 import { PageTreeView, type PageEditing, type PageTreeActions } from './PageTreeView';
 
@@ -22,6 +26,9 @@ interface PagesPanelProps {
   readonly onSelectRoute?: (route: WireInjectedRoute) => void;
   readonly onSelect: (page: ScanPage) => void;
   readonly onCreate: (name: string, layout: string | undefined) => void;
+  /** Creates a page template, answering what went wrong, if anything. */
+  readonly onCreateTemplate: (draft: PageTemplateDraft, keyCopy: ConnectionKeyCopy | undefined) => Promise<string | undefined>;
+  readonly connectSanity: ConnectSanity;
   readonly onDelete: (page: ScanPage) => void;
   readonly onMovePage: (page: ScanPage, to: string) => void;
   readonly onCreateFolder: () => Promise<string | undefined>;
@@ -38,11 +45,26 @@ export default function PagesPanel(props: PagesPanelProps) {
     save: ordering.save,
   });
   const model = usePagesPanel(props);
-  const { showNew, setShowNew, query, setQuery, tree, searchResults, collapsed, editing, dropDirectory, setDropDirectory, actions, openFolder } = model;
+  const {
+    showNew,
+    setShowNew,
+    showTemplate,
+    setShowTemplate,
+    query,
+    setQuery,
+    tree,
+    searchResults,
+    collapsed,
+    editing,
+    dropDirectory,
+    setDropDirectory,
+    actions,
+    openFolder,
+  } = model;
 
   return (
     <div className="panel-section grow">
-      <PagesHeader createFolder={() => void openFolder()} createPage={() => setShowNew(true)} />
+      <PagesHeader createFolder={() => void openFolder()} createPage={() => setShowNew(true)} createTemplate={() => setShowTemplate(true)} />
       <div style={{ padding: '0 12px 8px' }}>
         <input
           value={query}
@@ -77,12 +99,22 @@ export default function PagesPanel(props: PagesPanelProps) {
           }}
         />
       )}
+      {showTemplate && props.projectPath !== undefined && (
+        <PageTemplateDialog
+          projectPath={props.projectPath}
+          layouts={props.scan.layouts}
+          onClose={() => setShowTemplate(false)}
+          onCreate={props.onCreateTemplate}
+          connectSanity={props.connectSanity}
+        />
+      )}
     </div>
   );
 }
 
 function usePagesPanel(props: PagesPanelProps) {
   const [showNew, setShowNew] = useState(false);
+  const [showTemplate, setShowTemplate] = useState(false);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [editing, setEditing] = useState<PageEditing>({ kind: 'none' });
@@ -110,6 +142,8 @@ function usePagesPanel(props: PagesPanelProps) {
   return {
     showNew,
     setShowNew,
+    showTemplate,
+    setShowTemplate,
     query,
     setQuery,
     tree,
@@ -311,7 +345,23 @@ function InjectedRoutes({
   );
 }
 
-function PagesHeader({ createFolder, createPage }: { readonly createFolder: () => void; readonly createPage: () => void }) {
+// The two things `+` makes. A template gets the collection icon its rows have in the tree.
+export function pageCreateMenuItems(actions: { readonly createPage: () => void; readonly createTemplate: () => void }) {
+  return [
+    { label: 'Create page', icon: <FileIcon size={13} />, onSelect: actions.createPage },
+    { label: 'Create page template', icon: <CollectionIcon size={13} />, onSelect: actions.createTemplate },
+  ];
+}
+
+function PagesHeader({
+  createFolder,
+  createPage,
+  createTemplate,
+}: {
+  readonly createFolder: () => void;
+  readonly createPage: () => void;
+  readonly createTemplate: () => void;
+}) {
   return (
     <div className="panel-header">
       <h2>Pages</h2>
@@ -319,9 +369,7 @@ function PagesHeader({ createFolder, createPage }: { readonly createFolder: () =
         <button className="ghost" title="New folder" onClick={createFolder}>
           <FolderPlusIcon size={13} />
         </button>
-        <button className="ghost" title="New page" onClick={createPage}>
-          <PlusIcon size={13} />
-        </button>
+        <MoreMenu className="ghost" title="New page" icon={<PlusIcon size={13} />} width={190} items={pageCreateMenuItems({ createPage, createTemplate })} />
       </div>
     </div>
   );

@@ -21,6 +21,7 @@
 
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import type { ReactNode } from 'react';
 import type { Result } from '../../../shared/core/result';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { memberTypes, type NewPropKind, type PropDeclaration } from '../../editor/propDeclaration';
@@ -51,6 +52,20 @@ export interface NewPropHost {
   readonly projectPath?: string | undefined;
   /** The component's folder in the project (`src/components`), which an imported image's path is relative to. */
   readonly fileDirectory?: string | undefined;
+  /** How a picker opens an existing prop's settings. Absent, its rows offer none. */
+  readonly propSettings?: PropSettingsOffer | undefined;
+}
+
+/**
+ * Editing an existing prop from a picker row. The form is drawn by the host
+ * rather than named here: it is the Properties panel's, and the props feature
+ * may not import that one (eslint.config.mjs featureEdges). Only the app sees both.
+ */
+export interface PropSettingsOffer {
+  /** The prop a row reads, by the row's path, or undefined for anything else. */
+  readonly keyOf: (path: string) => string | undefined;
+  /** The settings form for prop `key`, which calls `onClose` when it is done. */
+  readonly render: (key: string, onClose: () => void) => ReactNode;
 }
 
 /** What a field's picker offers a new prop from: its kind, its label and its current literal value. */
@@ -213,6 +228,33 @@ export function fittingTree<Node extends FitNode & { readonly path: string }>(
     return fit !== 'attributes' && (node.children?.length ?? 0) > 0;
   });
   assert(out.length <= tree.length, 'fittingTree: fitting only removes rows');
+  return out;
+}
+
+/**
+ * The component's props by the name its code reads each by, which is what a
+ * picker row's path says: `const { features: items } = Astro.props` lists
+ * `items`, and that row's prop is `features`. A prop declared but never
+ * destructured reads by its own name. The rest binding is not a prop with
+ * settings of its own: it holds the attributes the others leave.
+ */
+export function propKeysByLocal(
+  entries: readonly { readonly key: string; readonly local: string }[],
+  declared: readonly string[],
+  restLocal: string | undefined,
+): ReadonlyMap<string, string> {
+  assert(entries.length + declared.length <= LIMITS.treeNodesMax, 'propKeysByLocal: the props are bounded');
+  const out = new Map(entries.map((entry) => [entry.local, entry.key]));
+  const aliased = new Set(entries.map((entry) => entry.key));
+  for (const key of declared) {
+    if (!aliased.has(key)) {
+      out.set(key, key);
+    }
+  }
+  if (restLocal !== undefined) {
+    out.delete(restLocal);
+  }
+  assert(out.size <= entries.length + declared.length, 'propKeysByLocal: only known props are listed');
   return out;
 }
 

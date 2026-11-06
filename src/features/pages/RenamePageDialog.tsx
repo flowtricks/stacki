@@ -4,7 +4,8 @@ import Popup from '../../ui/Popup';
 import { parsePageRename, type PageRename } from '../../../shared/properties/pageRename';
 import { pageRenameConflicts, type RenameInventory } from '../../../shared/properties/pageRenameConflicts';
 import { err, ok, type Result } from '../../../shared/core/result';
-import { pageExtension, stripPageExtension } from './pageTree';
+import { pageExtension } from './pageTree';
+import { stripPageExtension } from '../../lib/pageName';
 
 export interface RenamePageDialogProps {
   readonly item: Pick<PageRename, 'kind' | 'from'>;

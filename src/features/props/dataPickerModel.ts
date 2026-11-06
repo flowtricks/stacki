@@ -168,6 +168,26 @@ export function isComponentSection(section: string | undefined, origin: DataOrig
 }
 
 /**
+ * The prop whose settings a picker row opens, or undefined for a row that has
+ * none. Only a component's own group qualifies, because the Source menu heads
+ * the file's frontmatter lists there too, and a loop item can share a prop's
+ * name: `keyOf` then says which of those rows really is a prop. A field inside
+ * a prop has a longer path, so it is never one.
+ */
+export function settingsKeyOf(
+  node: { readonly path: string; readonly section?: string | undefined },
+  keyOf: ((path: string) => string | undefined) | undefined,
+): string | undefined {
+  if (keyOf === undefined) {
+    return undefined;
+  }
+  if (node.section !== 'props' && node.section !== 'loop-component') {
+    return undefined;
+  }
+  return keyOf(node.path);
+}
+
+/**
  * The component a file is, as the app names one (`PricingCard`), or undefined
  * for a page or no file at all: nothing passes a page props, so what it holds
  * is the page's rather than a component's.

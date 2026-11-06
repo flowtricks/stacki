@@ -62,6 +62,7 @@ import { registerContentHandlers } from './handlers/contentHandlers';
 import { registerCssVariableHandlers } from './handlers/cssVariableHandlers';
 import { registerGitHandlers } from './handlers/gitHandlers';
 import { registerPageHandlers } from './handlers/pageHandlers';
+import { registerPageTemplateHandlers } from './handlers/pageTemplateHandlers';
 import { registerPreviewHandlers } from './handlers/previewHandlers';
 import { registerProjectHandlers } from './handlers/projectHandlers';
 import { registerProjectScanHandlers } from './handlers/projectScanHandlers';
@@ -939,6 +940,14 @@ registerGitHandlers(host);
 registerGitRepositoryHandlers(host);
 registerImageConversionHandler(host);
 registerPageHandlers(host);
+registerPageTemplateHandlers(
+  host,
+  {
+    restartForNewContentConfig: (devUrl) => devServers.restartForNewContentConfig(devUrl),
+    restartForProjectEnv: (projectPath) => devServers.restartForProjectEnv(projectPath),
+  },
+  cmsConnections,
+);
 registerPreviewHandlers(host);
 registerProjectHandlers(host);
 registerProjectMetadataHandlers(host);

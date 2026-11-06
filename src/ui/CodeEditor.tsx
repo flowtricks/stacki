@@ -13,8 +13,8 @@ import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { html } from '@codemirror/lang-html';
 import { syntaxHighlighting, HighlightStyle, LanguageDescription } from '@codemirror/language';
 import { search } from '@codemirror/search';
-import { tags as t } from '@lezer/highlight';
 import { astroHighlight } from './astroHighlight';
+import { CODE_TOKEN_RULES } from './codeHighlight';
 
 // CodeMirror 6 wrapper themed to match the app. Controlled-ish: `value` in,
 // `onChange(text)` out; external value changes replace the doc only when
@@ -93,42 +93,7 @@ export const appTheme = EditorView.theme(
 
 export const appHighlight = syntaxHighlighting(
   HighlightStyle.define(
-    [
-      { tag: [t.keyword, t.modifier], color: '#c792ea' },
-      { tag: [t.propertyName], color: '#80cbc4' },
-      { tag: [t.className, t.tagName], color: '#ffcb6b' },
-      { tag: [t.string, t.special(t.string)], color: '#c3e88d' },
-      { tag: [t.number, t.unit, t.bool, t.null, t.atom], color: '#f78c6c' },
-      {
-        tag: [t.function(t.variableName), t.function(t.propertyName)],
-        color: '#82aaff',
-      },
-      { tag: [t.variableName, t.definition(t.variableName)], color: '#e0e0e0' },
-      // Comments stay quiet but readable: #8a8a8a holds 5:1 on the panel, where
-      // the old #616161 was 3:1.
-      {
-        tag: [t.comment, t.blockComment, t.lineComment],
-        color: '#8a8a8a',
-        fontStyle: 'italic',
-      },
-      { tag: [t.operator, t.punctuation, t.separator], color: '#89ddff' },
-      { tag: [t.labelName, t.attributeName], color: '#80cbc4' },
-      {
-        tag: [t.color, t.constant(t.name), t.standard(t.name)],
-        color: '#f78c6c',
-      },
-      // Markdown: the structure of a document rather than of code. Headings
-      // lead, code and links pick up the colours their kind already has
-      // elsewhere in this theme, and the marks (#, *, `) stay quiet.
-      { tag: [t.heading], color: '#f5f5f5', fontWeight: '600' },
-      { tag: [t.emphasis], fontStyle: 'italic' },
-      { tag: [t.strong], fontWeight: '600', color: '#f5f5f5' },
-      { tag: [t.link, t.url], color: '#82aaff', textDecoration: 'underline' },
-      { tag: [t.monospace], color: '#c3e88d' },
-      { tag: [t.quote], color: '#999999', fontStyle: 'italic' },
-      { tag: [t.list], color: '#89ddff' },
-      { tag: [t.processingInstruction], color: '#8a8a8a' },
-    ],
+    CODE_TOKEN_RULES.map(({ tag, style }) => ({ tag, ...style })),
     { themeType: 'dark' },
   ),
 );

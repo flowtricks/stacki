@@ -6,6 +6,7 @@
 
 import { assert } from '../../../shared/core/assert';
 import type { LoopReading } from '../../editor/loopQueryRead';
+import type { LoopSection, LoopSections } from '../../editor/loopSections';
 import { parseExpression } from '../../editor/loopSyntax';
 import { readGroq } from '../../editor/groqSyntax';
 import {
@@ -351,6 +352,40 @@ export function itemsModeQuery(query: LoopQuery, mode: 'dynamic' | 'selected'): 
     return query.selection === undefined ? { ...base, selection: [] } : undefined;
   }
   return query.selection === undefined ? undefined : base;
+}
+
+/** What a section's empty code box suggests, in the code of the list's source. */
+export function sectionPlaceholder(section: LoopSection, source: LoopSourceKind): string {
+  switch (section) {
+    case 'filter':
+      return source === 'sanity' ? 'featured == true' : source === 'list' ? '(item) => item.number > 1' : '({ data }) => data.featured';
+    case 'sort':
+      return source === 'sanity' ? 'order(name asc)' : source === 'list' ? '(a, b) => a.number - b.number' : '(a, b) => a.data.order - b.data.order';
+    case 'limit':
+      return source === 'sanity' ? '[0...6]' : '6';
+    default: {
+      const exhaustive: never = section;
+      return exhaustive;
+    }
+  }
+}
+
+/**
+ * The fields a section's code can name, as its own code reads them: the item a
+ * filter's function takes, and the two a comparator compares.
+ */
+export function sectionFieldPaths(
+  section: LoopSection,
+  sections: Pick<LoopSections, 'query' | 'store' | 'itemPath'>,
+  fields: readonly CatalogField[] | undefined,
+): readonly string[] {
+  if (section === 'limit' || sections.store === 'groq') {
+    return (section === 'limit' ? [] : (fields ?? [])).map((field) => field.path);
+  }
+  const parameter = sections.query.parameter;
+  const item = parameter.kind === 'entry' ? [parameter.name, ...sections.itemPath] : ['data'];
+  const names = section === 'filter' ? [item.join('.')] : ['a', 'b'].map((name) => [name, ...sections.itemPath].join('.'));
+  return names.flatMap((name) => (fields ?? []).map((field) => `${name}.${field.path}`));
 }
 
 /**

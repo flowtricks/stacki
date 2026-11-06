@@ -24,7 +24,8 @@ import { createServer, type ViteDevServer } from 'vite';
 // (styleKeepList) that project metadata validates: two more. Reading what a loop goes
 // through (loopSource) and the dev server's answer about a page's last-rendered values
 // (previewScope), for the binding picker's loop items: two more.
-const MODULES_MAX = 61;
+// The page template form's plan and sample payloads (pageTemplate): one more.
+const MODULES_MAX = 62;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

@@ -2,8 +2,8 @@
 // (docs/plans/prop-controls.md §7.1): a required prop carries a marker and,
 // while the instance leaves it out, a note; an unset prop shows the
 // component's default dimmed and writes nothing; a set prop is "overridden"
-// (the label in the accent) with a Reset to default that removes the
-// attribute; a `@deprecated` prop has a muted tag and its notice in the
+// (the label in the accent) whose menu holds a Reset to default that removes
+// the attribute, with no reset button in the label row; a `@deprecated` prop has a muted tag and its notice in the
 // tooltip; and a colour prop gets a swatch beside its text, round-tripping
 // what is picked or typed.
 // Method: the real PropsPanel, bundled with esbuild and mounted in jsdom over
@@ -124,6 +124,8 @@ function label(name) {
 const field = (name) => label(name).closest('.props-field');
 // The first match under an element, undefined when there is none.
 const one = (element, selector) => element.querySelector(selector) ?? undefined;
+// The open menu's item that starts with these words, undefined when there is none.
+const menuItem = (words) => [...document.querySelectorAll('.prop-menu-item')].find((item) => item.textContent.startsWith(words));
 // The note PropField puts after the field, or undefined.
 function noteAfter(name) {
   let next = field(name).nextElementSibling ?? undefined;
@@ -200,7 +202,9 @@ test('an unset prop shows its default dimmed and writes nothing', () => {
   assert.equal(heading.getAttribute('placeholder'), 'Welcome', 'it is the placeholder');
   assert.equal(field('size').querySelector('input').getAttribute('placeholder'), '12');
   assert.equal(label('heading').classList.contains('set'), false, 'not overridden');
-  assert.equal(one(field('heading'), '.prop-reset'), undefined, 'nothing to reset');
+  assert.equal(menuItem('Reset to default'), undefined, 'nothing to reset');
+  act(() => label('heading').click());
+  assert.equal(menuItem('Reset to default'), undefined, 'the unset label opens no menu');
   assert.deepEqual(panel.writes, [], 'showing a default writes nothing');
   assert.deepEqual(panel.values, {});
   act(() => root.render(React.createElement(React.Fragment)));
@@ -210,23 +214,61 @@ test('a set prop is overridden, and Reset to default removes the attribute in on
   const schema = [{ name: 'heading', type: 'string', optional: true, default: 'Welcome' }];
   const panel = mount(schema, { heading: { type: 'string', value: 'Hi' } });
   assert.ok(label('heading').classList.contains('set'), 'the label takes the overridden state');
-  const button = field('heading').querySelector('.prop-reset');
-  assert.ok(button, 'the field offers Reset to default');
-  assert.equal(button.getAttribute('aria-label'), 'Reset to default');
-  act(() => button.click());
+  act(() => label('heading').click());
+  const clicked = menuItem('Reset to default');
+  assert.ok(clicked, "the label's menu offers Reset to default");
+  act(() => clicked.click());
   assert.deepEqual(panel.writes, [{ name: 'heading', value: undefined, immediate: true }], 'one write: the removal, committed as its own step');
   assert.equal(panel.values.heading, undefined);
   assert.equal(label('heading').classList.contains('set'), false);
   assert.equal(field('heading').querySelector('input').getAttribute('placeholder'), 'Welcome', 'the default shows again');
-  // The label's context menu holds the same action.
+  // Right-clicking the label opens the same menu, where the click was.
   typeInto(field('heading').querySelector('input'), 'Again');
   assert.ok(label('heading').classList.contains('set'));
   await act(async () => label('heading').dispatchEvent(new dom.window.MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 5, clientY: 6 })));
-  const item = [...document.querySelectorAll('.prop-menu-item')].find((candidate) => candidate.textContent.startsWith('Reset to default'));
+  const item = menuItem('Reset to default');
   assert.ok(item, 'the context menu offers Reset to default');
   await act(async () => item.click());
   assert.deepEqual(panel.writes.at(-1), { name: 'heading', value: undefined, immediate: true });
   assert.equal(panel.values.heading, undefined);
+  act(() => root.render(React.createElement(React.Fragment)));
+});
+
+test('no field kind has an inline reset button, and each resets from its label menu', () => {
+  const kinds = [
+    { schema: { name: 'heading', type: 'string', optional: true }, value: { type: 'string', value: 'Hi' } },
+    { schema: { name: 'size', type: 'number', optional: true }, value: { type: 'expr', value: '12' } },
+    { schema: { name: 'open', type: 'boolean', optional: true }, value: { type: 'expr', value: 'true' } },
+    { schema: { name: 'tone', type: 'enum', options: ['warm', 'cool'], optional: true }, value: { type: 'string', value: 'warm' } },
+    {
+      schema: { name: 'features', type: 'code', shape: [{ name: 'title', type: 'string' }], shapeIsList: true, optional: true },
+      value: { type: 'expr', value: '[{ title: "Fast" }]' },
+    },
+  ];
+  for (const kind of kinds) {
+    const { name } = kind.schema;
+    const panel = mount([kind.schema], { [name]: kind.value });
+    assert.ok(label(name).classList.contains('set'), `${name} is overridden`);
+    const row = label(name).closest('label');
+    const buttons = [...row.querySelectorAll('button')];
+    const resets = buttons.filter((button) => /reset/i.test(`${button.title} ${button.getAttribute('aria-label')}`));
+    assert.deepEqual(resets, [], `${name} has no inline reset button`);
+    assert.equal(one(row, '.prop-reset'), undefined, `${name} has no reset class left in its row`);
+    act(() => label(name).click());
+    const item = menuItem('Reset to default');
+    assert.ok(item, `${name} resets from its label menu`);
+    act(() => item.click());
+    assert.deepEqual(panel.writes, [{ name, value: undefined, immediate: true }], `${name} is removed in one write`);
+    assert.equal(panel.values[name], undefined);
+    act(() => root.render(React.createElement(React.Fragment)));
+  }
+});
+
+test('⌥-clicking a set label resets at once, with no menu', () => {
+  const panel = mount([{ name: 'heading', type: 'string', optional: true }], { heading: { type: 'string', value: 'Hi' } });
+  act(() => label('heading').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true, altKey: true })));
+  assert.deepEqual(panel.writes, [{ name: 'heading', value: undefined, immediate: true }]);
+  assert.equal(menuItem('Reset to default'), undefined, 'the shortcut opens nothing');
   act(() => root.render(React.createElement(React.Fragment)));
 });
 

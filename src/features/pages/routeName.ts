@@ -1,4 +1,4 @@
-import { stripPageExtension } from './pageTree';
+import { stripPageExtension } from '../../lib/pageName';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 
 // Route punctuation carries Astro semantics. Reject invalid filesystem segments

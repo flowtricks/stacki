@@ -37,6 +37,7 @@ export {
   defaultAttr,
   defaultCodeOf,
   listDefaultField,
+  type EditPace,
   type ListShape,
   type PropertyFlags,
 } from './PropertySections';
@@ -245,6 +246,7 @@ function BindFieldMenu({ state }: { readonly state: BindingViewState }) {
           origin={bindContext?.origin}
           onEdit={editTarget ? editChip : undefined}
           editLabel={editTarget === 'file' ? `Open where ${editName} is defined` : `Edit ${editName}`}
+          propSettings={bindContext?.newProp?.propSettings}
           onWrite={() => {
             setMenu(undefined);
             setRaw(true);
@@ -263,6 +265,8 @@ function BindFieldSource({ state }: { readonly state: BindingState }) {
         name={source.name}
         code={dataContext?.frontmatter || ''}
         onChangeCode={dataContext?.onSetFrontmatter}
+        onRename={dataContext?.onRenameVariable}
+        filePath={dataContext?.filePath}
         onClose={() => setSource(undefined)}
       />
     )

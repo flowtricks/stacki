@@ -49,14 +49,51 @@ export function scanValue(code: string, start: number): number {
   return code.length;
 }
 
+// The body of `export async function getStaticPaths() { … }`, as [start, end).
+// Its locals are not the page's: Astro runs it in its own scope, so a binding to
+// one would name nothing when the page renders.
+function staticPathsBody(code: string): readonly [number, number] | undefined {
+  const head = /export\s+(?:async\s+)?function\s+getStaticPaths\s*\([^)]*\)[^{]*\{/.exec(code);
+  if (head === null) {
+    return undefined;
+  }
+  const start = head.index + head[0].length;
+  let depth = 1;
+  for (let i = start; i < code.length; i++) {
+    const ch = code.charAt(i);
+    if (ch === '"' || ch === "'" || ch === '`') {
+      i = skipString(code, i);
+    } else if (code.startsWith('//', i)) {
+      const lineEnd = code.indexOf('\n', i);
+      i = lineEnd === -1 ? code.length : lineEnd;
+    } else if (code.startsWith('/*', i)) {
+      const commentEnd = code.indexOf('*/', i);
+      i = commentEnd === -1 ? code.length : commentEnd + 1;
+    } else if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        return [start, i];
+      }
+    }
+  }
+  return undefined;
+}
+
 // Top-level const/let/var declarations: name -> value text.
 export function parseDeclarations(code: string): Map<string, string> {
   const out = new Map<string, string>();
   const re = /(?:^|\n)\s*(?:export\s+)?(?:const|let|var)\s+([\w$]+)\s*=\s*/g;
+  const paths = staticPathsBody(code);
   let match;
   while ((match = re.exec(code)) !== null) {
     const name = match[1];
     if (name === undefined) {
+      continue;
+    }
+    if (paths !== undefined && match.index >= paths[0] - 1 && match.index < paths[1]) {
+      re.lastIndex = paths[1];
       continue;
     }
     const start = match.index + match[0].length;

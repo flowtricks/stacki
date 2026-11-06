@@ -14,8 +14,11 @@
 import { assert } from '../../../shared/core/assert';
 import { isLinkName, isMediaName } from '../../editor/fieldNames';
 import type { ItemFieldKind, ListItemValues } from '../../editor/listPropType';
-import { LIST_LIMITS } from '../../editor/listPropType';
-import type { Item, ItemField } from './arrayValue';
+import { itemFieldType, LIST_LIMITS } from '../../editor/listPropType';
+import type { Attr } from '../../../shared/page/pageNode';
+import { arrayItems, arrayText, fieldHoldsCode, type Item, type ItemField } from './arrayValue';
+import { isExpression } from './jsCheck';
+import type { FieldDefinition } from './propRules';
 
 /** One field of a list's items, as the editor draws it. */
 export interface ItemShapeField {
@@ -60,10 +63,59 @@ export function itemFieldKind(field: ItemField, shape: readonly ItemShapeField[]
   if (declared !== undefined) {
     return declared.kind;
   }
-  if (field.quote === undefined) {
+  if (field.quote === undefined && !fieldHoldsCode(field)) {
     return field.text === 'true' || field.text === 'false' ? 'switch' : 'number';
   }
   return namedKind(field.key);
+}
+
+/** What an item's field is to PropField, which draws it as any prop's field is drawn. */
+export function itemFieldDefinition(key: string, kind: ItemFieldKind): FieldDefinition {
+  return { name: key, type: itemFieldType(kind), optional: true };
+}
+
+/** A field's value as PropField holds one: words as a string, anything else as code; nothing for empty words. */
+export function itemFieldValue(field: ItemField): Attr | undefined {
+  if (field.quote === undefined) {
+    return { type: 'expr', value: field.text };
+  }
+  return field.text === '' ? undefined : { type: 'string', value: field.text };
+}
+
+/**
+ * The field holding what PropField wrote, or undefined for code the list cannot
+ * hold yet. Half-typed code (`format(`, a lone `-`) would break the file, or
+ * write an array the list cannot read and throw the field into the code editor
+ * mid-keystroke, so it waits until it reads as one value. A value taken away is
+ * the kind's blank.
+ */
+export function itemFieldOf(field: ItemField, value: Attr | undefined, kind: ItemFieldKind, quote: string): ItemField | undefined {
+  if (value === undefined) {
+    return { ...blankField({ name: field.key, kind }, quote), keyQuote: field.keyQuote };
+  }
+  switch (value.type) {
+    case 'string':
+      return { ...field, text: value.value, quote: field.quote ?? quote };
+    case 'bare':
+      return { ...field, text: 'true', quote: undefined };
+    case 'expr': {
+      const next = { ...field, text: value.value.trim(), quote: undefined };
+      if (!isExpression(next.text)) {
+        return undefined;
+      }
+      // An expression can still be more than one value here: `a, b` is two fields' worth.
+      const read = arrayItems(arrayText([{ fields: [next] }]))?.[0]?.fields;
+      return read?.length === 1 ? next : undefined;
+    }
+    case 'spread':
+      // A field's control writes a value, never `{...rest}`.
+      assert(false, 'itemFieldOf: an item field is not a spread');
+      return undefined;
+    default: {
+      const exhaustive: never = value;
+      return exhaustive;
+    }
+  }
 }
 
 /** An item with nothing in it yet: each field empty, a number 0 and a switch off. */

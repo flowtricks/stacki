@@ -348,6 +348,7 @@ function RichChipMenu({
         onExpand={(node, index) => node.query && bindContext?.onNeedSample?.(node.query.collection, index)}
         origin={bindContext?.origin}
         footer={false}
+        propSettings={bindContext?.newProp?.propSettings}
       />
     </Popup>
   );

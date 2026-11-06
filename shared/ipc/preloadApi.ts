@@ -71,6 +71,10 @@ interface InvokeChannels {
   readonly editPageBatch: 'page:editBatch';
   readonly previewPageEdit: 'page:previewEdit';
   readonly createPage: 'page:create';
+  readonly createPageTemplate: 'pageTemplate:create';
+  readonly planPageTemplate: 'pageTemplate:plan';
+  readonly sampleDataSource: 'pageTemplate:sample';
+  readonly setProjectEnv: 'project:setEnv';
   readonly deletePage: 'page:delete';
   readonly movePage: 'page:move';
   readonly createPageFolder: 'pagefolder:create';

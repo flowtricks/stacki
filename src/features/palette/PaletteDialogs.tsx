@@ -1,6 +1,9 @@
+import { CodeInline } from '../../ui/CodeBlock';
+import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { ExtractionPlan, ExtractionValue } from '../../editor/extractFrontmatter';
 import type { ComponentUsageFile } from './paletteModel';
 import { componentNameError, toComponentName } from './componentName';
 import { prettyComponentName, usageFileLabel } from './paletteModel';
@@ -11,7 +14,8 @@ export type ComponentCreationSource =
       readonly kind: 'ready';
       readonly name: string;
       readonly label: string;
-      readonly props: readonly string[];
+      /** What creating would do with these values passed in as props and the rest moved. */
+      readonly plan: (asProp: ReadonlySet<string>) => ExtractionPlan;
     }
   | { readonly kind: 'unavailable'; readonly reason: string };
 
@@ -40,12 +44,15 @@ interface CreateComponentModalProps {
   readonly source: Extract<ComponentCreationSource, { readonly kind: 'ready' }>;
   readonly taken: readonly string[];
   readonly onClose: () => void;
-  readonly onCreate: (name: string, options: { readonly withProps: boolean }) => void;
+  readonly onCreate: (name: string, options: { readonly asProp: readonly string[] }) => void;
 }
 
 export function CreateComponentModal(props: CreateComponentModalProps) {
   const [text, setText] = useState(props.source.name);
-  const [withProps, setWithProps] = useState(true);
+  // Empty is the default on purpose: every value moves unless the person says otherwise.
+  const [asProp, setAsProp] = useState<ReadonlySet<string>>(new Set());
+  const { plan: planFor } = props.source;
+  const plan = useMemo(() => planFor(asProp), [planFor, asProp]);
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     inputRef.current?.focus();
@@ -56,7 +63,7 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
   const shown = text.trim() ? error : undefined;
   const submit = (): void => {
     if (!error) {
-      props.onCreate(name, { withProps });
+      props.onCreate(name, { asProp: [...asProp] });
     }
   };
   return (
@@ -75,7 +82,7 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
               submit={submit}
               onClose={close}
             />
-            <PropsOffer names={props.source.props} checked={withProps} onChange={setWithProps} />
+            <ValueChoices values={plan.values} asProp={asProp} onChange={setAsProp} />
           </div>
           <div className="modal-footer">
             <button onClick={close}>Cancel</button>
@@ -136,35 +143,85 @@ function ComponentNameField({
   );
 }
 
-function PropsOffer({
-  names,
-  checked,
+type ValueChoice = 'move' | 'prop';
+
+const VALUE_CHOICES: readonly DropdownOption<ValueChoice>[] = [
+  { value: 'move', label: 'Move into this component' },
+  { value: 'prop', label: 'Pass in as a prop' },
+];
+
+// What the page does with each value the piece reads. Move leads because the
+// section and its data belong together; a value that can't move says why, in place
+// of a choice it doesn't have.
+function ValueChoices({
+  values,
+  asProp,
   onChange,
 }: {
-  readonly names: readonly string[];
-  readonly checked: boolean;
-  readonly onChange: (checked: boolean) => void;
+  readonly values: readonly ExtractionValue[];
+  readonly asProp: ReadonlySet<string>;
+  readonly onChange: (asProp: ReadonlySet<string>) => void;
 }) {
-  if (names.length === 0) {
+  if (values.length === 0) {
     return undefined;
   }
+  const choose = (name: string, choice: ValueChoice): void => {
+    const next = new Set(asProp);
+    if (choice === 'prop') {
+      next.add(name);
+    } else {
+      next.delete(name);
+    }
+    onChange(next);
+  };
   return (
-    <label className="check-row">
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.currentTarget.checked)} />
-      <span>
-        Take {names.length === 1 ? 'this page value' : `these ${names.length} page values`} as props: <PropNames names={names} />
-      </span>
-    </label>
+    <div className="extract-values">
+      <label>{values.length === 1 ? 'The value it reads' : 'The values it reads'}</label>
+      <div className="extract-value-list">
+        {values.map((value) => (
+          <ValueRow key={value.name} value={value} onChoose={choose} />
+        ))}
+      </div>
+    </div>
   );
 }
 
-function PropNames({ names }: { readonly names: readonly string[] }) {
-  return names.map((name, index) => (
-    <React.Fragment key={name}>
-      {index > 0 ? ', ' : ''}
-      <code>{name}</code>
-    </React.Fragment>
-  ));
+function ValueRow({ value, onChoose }: { readonly value: ExtractionValue; readonly onChoose: (name: string, choice: ValueChoice) => void }) {
+  const note = valueNote(value);
+  return (
+    <div className="extract-value">
+      <div className="extract-value-row">
+        <CodeInline className="extract-value-name" text={value.name} language="typescript" />
+        {value.kind === 'locked' ? (
+          <span className="extract-value-fixed">Passed in as a prop</span>
+        ) : (
+          <Dropdown<ValueChoice>
+            ariaLabel={`What to do with ${value.name}`}
+            className="extract-value-choice"
+            value={value.kind}
+            options={VALUE_CHOICES}
+            onChange={(choice) => onChoose(value.name, choice)}
+          />
+        )}
+      </div>
+      {note === undefined ? undefined : <div className="hint-text extract-value-note">{note}</div>}
+    </div>
+  );
+}
+
+function valueNote(value: ExtractionValue): string | undefined {
+  switch (value.kind) {
+    case 'move':
+      return value.note;
+    case 'prop':
+      return undefined;
+    case 'locked':
+      return value.reason;
+    default: {
+      const exhaustive: never = value;
+      return exhaustive;
+    }
+  }
 }
 
 interface InstancesPopupProps {

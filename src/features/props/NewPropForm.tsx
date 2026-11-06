@@ -22,10 +22,11 @@ import { useState } from 'react';
 import { CloseIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import AutoTextarea from '../../ui/AutoTextarea';
 import AssetField from '../../ui/AssetField';
+import Dropdown from '../../ui/Dropdown';
 import { assert } from '../../../shared/core/assert';
 import ListField from './ListField';
 import { CodeTypeField, ItemFieldsEditor, ListDefaultField, PropertyFlagsFields, type PropertyFlags } from './PropertySections';
-import { arrayItems, arrayText } from './arrayValue';
+import { arrayItems, arrayText, itemsHoldCode } from './arrayValue';
 import { LIST_STARTER_FIELDS, listSettingsProblem, type ItemFieldDeclaration } from '../../editor/listPropType';
 import { imageDefaultOf } from '../../editor/imagePropDefault';
 import { itemValuesOf } from './listItemShape';
@@ -165,7 +166,9 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
   const key = name.trim();
   const nameProblem = propNameProblem(key, host);
   // The default items as items when the list can show them; as code, written as typed, when not.
-  const listAsItems = arrayItems(listItems);
+  // A field bound to data reads as an item but is code: as a value it would be quoted into words.
+  const parsedItems = arrayItems(listItems);
+  const listAsItems = parsedItems !== undefined && !itemsHoldCode(parsedItems) ? parsedItems : undefined;
   const list = { fields: listFields, items: itemValuesOf(listAsItems ?? []) };
   const listExpression = kind === 'list' && listAsItems === undefined ? listItems : '';
   const declaration: PropDeclaration = {
@@ -378,14 +381,13 @@ function DefaultEditor({ form, host }: { readonly form: FormState; readonly host
       );
     case 'option':
       return (
-        <select className="new-prop-input" aria-label="Default" value={form.defaultText} onChange={(event) => form.setDefaultText(event.target.value)}>
-          <option value="">None</option>
-          {form.options.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
+        <Dropdown
+          ariaLabel="Default"
+          value={form.defaultText}
+          options={[{ value: '', label: 'None' }, ...form.options.map((option) => ({ value: option, label: option }))]}
+          livePreview={false}
+          onChange={form.setDefaultText}
+        />
       );
     case 'attributes':
       return <AttributeDefaultsEditor defaults={form.attributes} onChange={form.setAttributes} />;

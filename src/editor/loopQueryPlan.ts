@@ -23,7 +23,8 @@ import type { ImportDecl } from '../../shared/page/pageNode';
 import { astroQueryCode, assertLoopQuery, chainQueryCode, listQueryCode, sanityQueryCode, type LoopField, type LoopQuery, type LoopSource } from './loopQuery';
 import { readingChain, readLoop, type LoopReading } from './loopQueryRead';
 import { reboundItem, type ItemShape } from './loopRebind';
-import { parseFrontmatter, type ParsedFrontmatter } from './loopSyntax';
+import { appliedEdits, sectionCodeProblem, sectionEdits, type LoopSection } from './loopSections';
+import { parseExpression, parseFrontmatter, type ParsedFrontmatter } from './loopSyntax';
 import { dataFormProblem, optionsLiteral, rewrittenOptions } from './optionsQuery';
 import { LIST_ITEMS_HELPER, LIST_ITEMS_NAME, listItemsNeed } from './listItemsHelper';
 import { reboundOptions, type BindingChange } from './optionsBinding';
@@ -46,7 +47,9 @@ export type LoopTarget =
   /** One of the list's settings linked to a component prop, or unlinked. */
   | { readonly kind: 'binding'; readonly change: BindingChange }
   /** A list field inside a content collection's items, across all of them. */
-  | { readonly kind: 'field'; readonly list: FieldList };
+  | { readonly kind: 'field'; readonly list: FieldList }
+  /** One of the list's sections as code, rewritten where its steps are (loopSections.ts). */
+  | { readonly kind: 'section'; readonly section: LoopSection; readonly code: string };
 
 export interface LoopPlanInput {
   readonly model: Pick<EditorModel, 'extraFrontmatter' | 'imports' | 'nodes'>;
@@ -90,6 +93,9 @@ export function planLoop(input: LoopPlanInput): LoopPlanResult {
   const reading = readLoop({ frontmatter: input.model.extraFrontmatter, imports: input.model.imports, data: head.data });
   if (input.target.kind === 'binding') {
     return bindingEdit(input, input.target.change, { reading, frontmatter: before, data: head.data });
+  }
+  if (input.target.kind === 'section') {
+    return sectionEdit(input, input.target, { head, reading, frontmatter: before });
   }
   if (input.target.kind === 'query' && input.target.query.source.kind === 'list') {
     return { ok: true, plan: listEdit(input, input.target.query, head) };
@@ -144,6 +150,68 @@ function listEdit(input: LoopPlanInput, query: LoopQuery, head: LoopHead): LoopP
   const loop = { ...input.loop, head: loopHead };
   assert(splitMapHead(loop.head)?.item === head.item, 'A list prop’s head is one the loop editor reads back');
   return { ...inPlacePlan(input, input.model.extraFrontmatter, sourceKeyOf(query.source)), loop };
+}
+
+// A section as code: only its bytes change, in the head or the declaration its
+// steps are written in. The rest of the head, the other sections, the imports
+// and the children stay as they are, so there is nothing to clean up after it.
+function sectionEdit(
+  input: LoopPlanInput,
+  target: Extract<LoopTarget, { readonly kind: 'section' }>,
+  read: { readonly head: LoopHead; readonly reading: LoopReading; readonly frontmatter: ParsedFrontmatter },
+): LoopPlanResult {
+  const { head, frontmatter } = read;
+  const problem = sectionCodeProblem(target.section, target.code);
+  if (problem !== undefined) {
+    return { ok: false, message: problem };
+  }
+  const code = { frontmatter: input.model.extraFrontmatter, imports: input.model.imports, data: head.data };
+  const shared = sharedAt(frontmatter, readingChain(read.reading), markupWithout(input.model.nodes, input.loop.id));
+  const written = sectionEdits(code, target.section, target.code, shared);
+  if (!written.ok) {
+    return written;
+  }
+  const data = appliedEdits(
+    head.data,
+    written.edits.filter((edit) => edit.place === 'head'),
+  );
+  const extraFrontmatter = appliedEdits(
+    input.model.extraFrontmatter,
+    written.edits.filter((edit) => edit.place === 'frontmatter'),
+  );
+  const at = input.loop.head.indexOf(head.data);
+  assert(at >= 0, 'A loop’s head holds its data expression');
+  const loopHead = `${input.loop.head.slice(0, at)}${data}${input.loop.head.slice(at + head.data.length)}`;
+  // Checked once more as the whole it lands in: nothing that would not read back is written.
+  if (
+    splitMapHead(loopHead)?.data !== data.trim() ||
+    parseExpression(data) === undefined ||
+    parseFrontmatter(extraFrontmatter).declarations.size !== frontmatter.declarations.size
+  ) {
+    return { ok: false, message: 'This code would break the loop, so it was not written.' };
+  }
+  const loop = { ...input.loop, head: loopHead };
+  assert(loop.id === input.loop.id, 'A planned loop keeps its id');
+  return { ok: true, plan: { ...inPlacePlan(input, extraFrontmatter, ''), loop, previous: readingKeyOf(read.reading, head.data) } };
+}
+
+// Whether a frontmatter position is in a declaration something besides this
+// loop reads. The declarations the loop's list passes through read each other,
+// which is still this loop's own reading.
+function sharedAt(frontmatter: ParsedFrontmatter, chain: readonly string[], markup: string): (position: number) => boolean {
+  const spans = chain.flatMap((name) => {
+    const declaration = frontmatter.declarations.get(name);
+    return declaration === undefined ? [] : [{ name, statement: declaration.statement }];
+  });
+  const own = (position: number): boolean => spans.some(({ statement }) => position >= statement.from && position < statement.to);
+  return (position) => {
+    const holder = spans.find(({ statement }) => position >= statement.from && position <= statement.to);
+    if (holder === undefined) {
+      return true;
+    }
+    const readElsewhere = frontmatter.uses.some((use) => use.name === holder.name && !own(use.from));
+    return readElsewhere || exported(frontmatter, holder.statement.from) || mentions(markup, holder.name);
+  };
 }
 
 // The loop's children for the new source: put back as they were for it, re-pointed
@@ -314,6 +382,10 @@ function writtenTarget(
       // writes a new source.
       assert(false, 'A binding change is planned in place');
       return { ok: false, message: 'A binding change is planned in place.' };
+    case 'section':
+      // A section is rewritten in place too (sectionEdit).
+      assert(false, 'A section is planned in place');
+      return { ok: false, message: 'A section is planned in place.' };
     default: {
       const exhaustive: never = target;
       return exhaustive;
@@ -613,6 +685,9 @@ export function targetKey(target: LoopTarget): string {
     case 'binding':
       // Not a source: no children are kept or restored under it.
       return `binding:${target.change.setting}`;
+    case 'section':
+      // Nor is a section: the loop still reads the same list.
+      return `section:${target.section}`;
     case 'field':
       return `field:${target.list.source.kind}:${target.list.source.collection}:${target.list.path.join('.')}`;
     default: {

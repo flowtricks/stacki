@@ -59,7 +59,7 @@ export function boxAt(offset: Box, hostLeft: number, hostTop: number): Box {
 
 // Edges count: the outline is drawn on the boundary. A box with no area draws
 // nothing to point at, so it holds no point.
-function boxHolds(box: Box, x: number, y: number): boolean {
+export function boxHolds(box: Box, x: number, y: number): boolean {
   if (box.right <= box.left) {
     return false;
   }

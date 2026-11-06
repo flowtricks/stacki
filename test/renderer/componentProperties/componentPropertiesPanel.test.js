@@ -22,7 +22,8 @@ test('component properties lifecycle and controls', async () => {
        from './src/features/componentProperties/ComponentPropertiesPanel';
      export {default as Rail} from './src/app/LeftRail';
      export {literalOptions} from './src/features/componentProperties/PropertyEditor';
-     export {movePropertyItem} from './src/features/componentProperties/PropertyReorder';`,
+     export {movePropertyItem} from './src/features/componentProperties/PropertyReorder';
+     export {EditorView} from '@codemirror/view';`,
       resolveDir: ROOT,
       loader: 'tsx',
     },
@@ -50,7 +51,7 @@ test('component properties lifecycle and controls', async () => {
   const React = require('react');
   const { act } = React;
   const { createRoot } = require('react-dom/client');
-  const { Panel, Rail, literalOptions, movePropertyItem } = require(bundle);
+  const { Panel, Rail, literalOptions, movePropertyItem, EditorView } = require(bundle);
   const names = ['title', 'variant', 'visible'];
   assert.deepEqual(movePropertyItem(names, 0, 3), ['variant', 'visible', 'title']);
   assert.deepEqual(movePropertyItem(names, 2, 0), ['visible', 'title', 'variant']);
@@ -259,6 +260,18 @@ test('component properties lifecycle and controls', async () => {
   assert.deepEqual(order.slice(-5), ['saving', 'flush', 'write', 'refresh', 'idle']);
   await act(async () => document.querySelector('[aria-label="Add property"]').click());
   assert.match(document.body.textContent, /New property/);
+  const setValue = async (element, value) =>
+    act(async () => {
+      const prototype = element.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
+      element.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+  // An existing prop saves itself; closing its form saves what is pending, and the save takes a turn to land.
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+  const closeEditor = async () => {
+    await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
+    await settle();
+  };
   const save = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property');
   await act(async () => save.click());
   assert.match(toastMessages(), /Use a name/);
@@ -266,35 +279,29 @@ test('component properties lifecycle and controls', async () => {
   await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
   await act(async () => [...document.querySelectorAll('.property-row-main')].find((button) => button.textContent.includes('title')).click());
   assert.equal(document.querySelector('[aria-label="Default text"]').value, 'Hello');
-  await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property').click());
-  assert.match(toastMessages(), /Write failed/);
-  assert.match(document.body.textContent, /Property settings/);
+  await setValue(document.querySelector('[aria-label="Default text"]'), 'Hello there');
+  await closeEditor();
+  assert.match(toastMessages(), /Write failed/, 'a save refused as the form closes still says why');
   assert.deepEqual(literalOptions('"One | two" | "Three"'), ['"One | two"', '"Three"']);
   assert.equal(literalOptions('string | { tag: "a" | "b" }'), undefined);
-  await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
   await act(async () => document.querySelector('[aria-label="Delete title"]').click());
   assert.deepEqual(edits.at(-1).change, { kind: 'remove', name: 'title' });
   await act(async () => document.querySelector('.property-row-main').click());
   await dragOptions(0, 2);
+  await settle();
   assert.equal(optionValues()[0], 'Outline');
   assert.equal(optionValues()[1], 'Solid');
-  assert.deepEqual(edits.at(-1).change, {
-    kind: 'options',
-    name: 'variant',
-    type: '"Outline" | "Solid"',
-  });
+  assert.equal(edits.at(-1).change.property.type, '"Outline" | "Solid"', 'a move saves at once');
+  const movesSent = edits.length;
   await dragOptions(1, 0);
+  await settle();
   assert.equal(optionValues()[0], 'Solid');
-  assert.deepEqual(edits.at(-1).change, {
-    kind: 'options',
-    name: 'variant',
-    type: '"Solid" | "Outline"',
-  });
+  assert.equal(edits.length, movesSent, 'the move above was refused, so moving back to what the file holds has nothing to save');
   await act(async () => document.querySelector('.property-options .list-field-remove').click());
   assert.equal(optionValues()[0], 'Outline');
   assert.equal(document.querySelector('.property-options .list-field-remove').disabled, true);
-  await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property').click());
-  assert.equal(edits.at(-1).change.property.type, '"Outline"');
+  await settle();
+  assert.equal(edits.at(-1).change.property.type, '"Outline"', 'removing an option saves at once');
   const previousReads = reads;
   const flushCount = order.filter((item) => item === 'flush').length;
   await notify(['/site/src/components/Other.astro']);
@@ -364,8 +371,8 @@ test('component properties lifecycle and controls', async () => {
   readProperties = async () => ({ ok: true, value: data });
   await notify();
   assert.match(document.querySelector('.property-list').textContent, /afterSave/);
-  // A conflict can arrive before its watcher event. Reconcile it automatically
-  // so removing Reload cannot leave the panel stuck on an obsolete revision.
+  // A conflict can arrive before its watcher event. The form reloads what the file
+  // holds, so the panel cannot be left stuck on an obsolete revision.
   await act(async () => document.querySelector('.property-row-main').click());
   data = {
     ...data,
@@ -373,7 +380,10 @@ test('component properties lifecycle and controls', async () => {
     properties: [{ ...property, name: 'reconciled' }],
   };
   failure = { code: 'conflict', message: 'Changed on disk' };
-  await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property').click());
+  await act(async () => document.querySelector('.property-flags input').click());
+  await settle();
+  assert.match(document.querySelector('.property-editor [role="alert"]').textContent, /no longer has/, 'the form reloads, and says the prop is gone');
+  await closeEditor();
   assert.match(document.querySelector('.property-list').textContent, /reconciled/);
   assert.ok(document.querySelector('.property-editor') === null);
 
@@ -401,12 +411,6 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   await act(async () => document.querySelector('.property-row-main').click());
   assert.ok(document.querySelector('[aria-label="Component TypeScript source"]') === null);
   assert.equal(optionValues()[0], 'small');
-  const setValue = async (element, value) =>
-    act(async () => {
-      const prototype = element.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-      Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
-      element.dispatchEvent(new window.Event('input', { bubbles: true }));
-    });
   const pressDown = async (element) => act(async () => element.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })));
   assert.ok(document.querySelector('.property-options input') === null);
   await act(async () => document.querySelector('.property-options .list-field-text').click());
@@ -442,13 +446,17 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
     .querySelector('textarea');
   await setValue(tooltip, 'Choose space between items.');
   await act(async () => document.querySelector('.property-flags input').click());
-  await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property').click());
+  await closeEditor();
   const editedGap = data.properties.find((field) => field.name === 'spacing');
   assert.equal(editedGap.required, true);
   assert.equal(editedGap.description, 'Choose space between items.');
   assert.equal(editedGap.type, `'large' | "compact" | 'medium'`);
   assert.equal(editedGap.defaultValue, '"compact"');
-  assert.deepEqual(edits.at(-1).change.optionRenames, [{ from: "'small'", to: '"compact"' }]);
+  // Sent once, with the save that changed the option; the rename on closing does not repeat it.
+  assert.deepEqual(
+    edits.flatMap((edit) => edit.change.optionRenames ?? []),
+    [{ from: "'small'", to: '"compact"' }],
+  );
   assert.match(data.source, /other\?: ContainerGap/);
   assert.match(data.source, /Props extends HTMLAttributes<'section'>/);
   assert.match(data.source, /type ContainerGap = 'small' \| 'medium' \| 'large'/);
@@ -456,11 +464,16 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   // shows the exact expression. Browsing kinds does not replace the current union.
   await act(async () => document.querySelector('.property-row-main').click());
   assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Choice/);
-  const codeInput = () => document.querySelector('input[aria-label="Code type"]');
+  const codeInput = () => document.querySelector('[aria-label="Code type"]');
+  // The field is CodeMirror, so it is typed through its own transactions.
+  const typeCode = async (text) => {
+    const view = EditorView.findFromDOM(document.querySelector('.property-code .cm-editor'));
+    await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }));
+  };
   const toggleCode = async () => act(async () => document.querySelector('.property-code-toggle').click());
   assert.ok(codeInput() === null);
   await toggleCode();
-  assert.equal(codeInput().value, editedGap.type);
+  assert.equal(codeInput().textContent, editedGap.type);
   await toggleCode();
   assert.ok(codeInput() === null);
   assert.equal(optionValues()[0], 'large');
@@ -478,11 +491,11 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   assert.ok(document.querySelector('.property-options .list-field') === null);
   assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Switch/);
   await toggleCode();
-  assert.equal(codeInput().value, 'boolean');
-  await setValue(codeInput(), 'typeof designTheme');
+  assert.equal(codeInput().textContent, 'boolean');
+  await typeCode('typeof designTheme');
   assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Code type/);
-  assert.equal(codeInput().value, 'typeof designTheme');
-  // Existing unsupported types open directly as ordinary inputs.
+  assert.equal(codeInput().textContent, 'typeof designTheme');
+  // Existing unsupported types open directly in the Code type field.
   data = {
     ...data,
     source: 'custom type',
@@ -490,7 +503,7 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   };
   await notify();
   await act(async () => document.querySelector('.property-row-main').click());
-  assert.equal(codeInput().value, 'typeof designTheme');
+  assert.equal(codeInput().textContent, 'typeof designTheme');
   // A default that names another frontmatter value is shown as a binding. Its
   // chip opens the same scoped picker used by prop values and can be repointed.
   const boundDefault = `---
@@ -512,7 +525,7 @@ const { tag = 'h2', variant = tag } = Astro.props;
   assert.equal(document.querySelector('.bind-menu .dp-row.selected .dp-key').textContent, 'tag');
   await act(async () => [...document.querySelectorAll('.bind-menu .dp-row')].find((row) => row.title.startsWith('fallback')).click());
   assert.equal(document.querySelector('.property-default .cm-content').textContent, 'fallback');
-  await act(async () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property').click());
+  await closeEditor();
   assert.equal(data.properties.find((field) => field.name === 'variant').defaultValue, 'fallback');
   assert.match(data.source, /variant = fallback/);
   // The shared editor handles add/edit/remove and drag while the adapter keeps
@@ -533,14 +546,14 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await act(async () => document.querySelector('.property-row-main').click());
   await dragOptions(4, 0);
   await toggleCode();
-  assert.equal(codeInput().value, '"1" | true | false | "true" | 1');
+  assert.equal(codeInput().textContent, '"1" | true | false | "true" | 1');
   await toggleCode();
   await act(async () => document.querySelectorAll('.property-options .list-field-text')[4].click());
   await setValue(document.querySelector('.list-item-field input'), '-');
   await setValue(document.querySelector('.list-item-field input'), '-2');
   await act(async () => document.querySelector('.list-item-editor [title="Close"]').click());
   await toggleCode();
-  assert.equal(codeInput().value, '"1" | true | false | "true" | -2');
+  assert.equal(codeInput().textContent, '"1" | true | false | "true" | -2');
   await toggleCode();
   await act(async () => document.querySelector('.property-options .list-field-add').click());
   assert.equal(document.querySelector('.list-item-field input').value, '');
@@ -561,8 +574,10 @@ const { tag = 'h2', variant = tag } = Astro.props;
   // Nested option popovers and dropdowns above remain inside the settings editor.
   const editsBeforeDismiss = edits.length;
   await pressDown(document.querySelector('.property-component'));
+  await settle();
   assert.equal(document.querySelector('.property-editor') === null, true);
-  assert.equal(edits.length, editsBeforeDismiss);
+  assert.equal(edits.length, editsBeforeDismiss + 1, 'a dismissal is a close, so it saves what was pending');
+  const editsAfterDismiss = edits.length;
   await act(async () => document.querySelector('.property-row-main').click());
   await act(async () =>
     window.dispatchEvent(
@@ -572,7 +587,7 @@ const { tag = 'h2', variant = tag } = Astro.props;
     ),
   );
   assert.equal(document.querySelector('.property-editor') === null, true);
-  assert.equal(edits.length, editsBeforeDismiss);
+  assert.equal(edits.length, editsAfterDismiss, 'with nothing pending, it writes nothing');
   // Unsupported contracts still open property settings rather than raw source.
   data = {
     ...data,
@@ -606,7 +621,7 @@ const { tag = 'h2', variant = tag } = Astro.props;
   await act(async () => document.querySelector('.property-row-main').click());
   await pressDown(document.querySelector('.property-component'));
   assert.ok(document.querySelector('.property-editor') === null);
-  assert.equal(edits.length, editsBeforeDismiss);
+  assert.equal(edits.length, editsAfterDismiss);
   // Common fields in a combined contract use normal editing; only affected props are restricted.
   data = {
     ...data,

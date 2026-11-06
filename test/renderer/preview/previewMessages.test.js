@@ -241,6 +241,7 @@ test('context menu coordinates are bounded and preserve the located target', () 
     occurrence: 2,
     token: TOKEN,
     outside: false,
+    pseudo: undefined,
     left: 12.5,
     top: 400,
   });
@@ -248,7 +249,10 @@ test('context menu coordinates are bounded and preserve the located target', () 
     assert.equal(parsePreviewMessage({ ...message, left: bad }), undefined);
     assert.equal(parsePreviewMessage({ ...message, top: bad }), undefined);
   }
-  for (const bad of [{ occurrence: -1 }, { outside: undefined }, { token: 'invalid' }]) {
+  for (const bad of [{ occurrence: -1 }, { outside: undefined }, { token: 'invalid' }, { pseudo: 'marker' }]) {
     assert.equal(parsePreviewMessage({ ...message, ...bad }), undefined);
   }
+  assert.equal(parsePreviewMessage({ ...message, pseudo: 'before' }).pseudo, 'before');
+  assert.equal(parsePreviewMessage({ ...message, pseudo: 'after' }).pseudo, 'after');
+  assert.equal(parsePreviewMessage({ ...message, path: undefined, pseudo: 'after' }), undefined, 'a pseudo-element belongs to a node');
 });

@@ -32,7 +32,7 @@ export type PreviewMessage =
   | ({ readonly kind: 'hover-node'; readonly pseudo: PseudoLayer | undefined } & LocatedEvent)
   | ({ readonly kind: 'click-node'; readonly outside: boolean; readonly pseudo: PseudoLayer | undefined } & LocatedEvent)
   | ({ readonly kind: 'open-node' } & LocatedEvent)
-  | ({ readonly kind: 'context-node'; readonly outside: boolean } & LocatedEvent & ContextPoint)
+  | ({ readonly kind: 'context-node'; readonly outside: boolean; readonly pseudo: PseudoLayer | undefined } & LocatedEvent & ContextPoint)
   | { readonly kind: 'canvas-ready' }
   /** What the column guide is drawn from (electron/preload/frameGuide.ts). */
   | { readonly kind: 'guide'; readonly metrics: GuideMetrics }
@@ -191,6 +191,7 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         ...parseLocatedMessage(value),
         ...parseContextPoint(value),
         outside: boolean(value['outside']),
+        pseudo: parseLocatedPseudo(value),
       };
     case 'avb:open-node':
       return { kind: 'open-node', ...parseLocatedMessage(value) };

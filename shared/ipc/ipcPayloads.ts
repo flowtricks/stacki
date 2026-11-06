@@ -15,6 +15,7 @@ import {
   parseRemoteRevisionId,
 } from '../properties/cmsRemote';
 import { parseVideoLinkURL } from '../properties/linkPreview';
+import { parseConnectionKeyCopy, parseDataSampleRequest, parseEnvPayloadName, parsePageTemplateDraft, parseSecretValue } from '../properties/pageTemplate';
 import { parseAstroRemoteEdit, parseAstroRemoteRead } from '../properties/astroContent';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
 import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCanvas';
@@ -101,6 +102,15 @@ const cssTarget = (input: unknown): string | undefined => {
   return text(input);
 };
 const maybeFlag = optional(boolean);
+// All of an import, or `{ a }` would print as `a`, a default import of something else.
+const componentImport = object({
+  name: optional(text),
+  path: optional(text),
+  quote: optional(text),
+  named: maybeFlag,
+  imported: optional(text),
+  typeOnly: maybeFlag,
+});
 const strings = list(text);
 const project = { projectPath: pathText };
 const relative = { ...project, rel: pathText };
@@ -176,8 +186,9 @@ export const IPC_PAYLOADS = {
     ...named,
     pagePath: pathText,
     nodes: list(data),
-    imports: optional(list(object({ name: optional(text), path: optional(text) }))),
+    imports: optional(list(componentImport)),
     props: optional(list(data)),
+    frontmatter: optional(object({ imports: list(componentImport), code: text })),
   }),
   'component:discard': object({ ...project, path: pathText, checksum: digest, force: maybeFlag }),
   'component:properties': object({ ...project, file: pathText }),
@@ -365,6 +376,10 @@ export const IPC_PAYLOADS = {
     layout: optional(nullable(object({ name: text, path: pathText }))),
   }),
   'page:delete': pathText,
+  'pageTemplate:create': object({ ...project, draft: parsePageTemplateDraft, devUrl: maybeText, keyCopy: optional(parseConnectionKeyCopy) }),
+  'pageTemplate:plan': object({ ...project, draft: parsePageTemplateDraft }),
+  'pageTemplate:sample': object({ ...project, request: parseDataSampleRequest }),
+  'project:setEnv': object({ ...project, name: parseEnvPayloadName, value: parseSecretValue }),
   'page:dynamicPaths': object({ ...project, pagePath: pathText, devUrl: maybeText }),
   // A visual edit in the renderer's terms, authored against the checksum of
   // the page it shows; main turns it into an intent (step 6).

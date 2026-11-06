@@ -8,6 +8,7 @@ import { isElement } from './frameBasics';
 import { PATH_ATTR, announceMapped, collectRegions, inFocus, inScope, pathsOf, regions, renderToken, runsOf, taggedAncestor } from './frameRegions';
 import { thinAt } from './frameMeasure';
 import { forgetPseudoBoxes, pseudoTargetAt } from './framePseudoTarget';
+import { forgetUnionBoxes, unionTargetAt } from './frameUnionTarget';
 import { type PseudoLayer } from '../../shared/page/pseudoPath';
 import { LOOK_EVERY, mutationKind, occurrenceOf, queueRects, remeasure, remeasureStyles, watchMotion } from './frameReports';
 
@@ -57,6 +58,15 @@ const nodeAt = (
     const text = inlineTextPathAt(best, x, y);
     if (text) {
       return { path: text, occurrence: occurrenceOf(best, target), outside: false, pseudo: undefined };
+    }
+  }
+  // The space between a loop's items is the element holding them as far as the
+  // browser can say, but it is inside the loop's outline. Last, so it only ever
+  // takes over from that element, never from anything actually under the pointer.
+  if (x !== undefined && y !== undefined) {
+    const union = unionTargetAt(best, target, x, y);
+    if (union) {
+      return { path: union.path, occurrence: union.occurrence, outside: false, pseudo: undefined };
     }
   }
   // Resolved separately from the search above: when the winning path came
@@ -263,6 +273,7 @@ const listenForPointer = () => {
       // in-scope marker, and the app opens the layout for those.
       // With the occurrence: a component inside a loop renders once per
       // item, and opening it means the one under the cursor.
+      forgetKeptBoxes();
       const { path: nodePath, occurrence } = nodeAtEvent(event);
       postLocated('avb:open-node', { path: nodePath || undefined, occurrence });
     },
@@ -287,8 +298,8 @@ const listenForPointer = () => {
       // A click that hits no marked node still reports (no path), with
       // `outside` saying whether it landed on something the open file simply
       // doesn't own — which is what the app backs out of a component on.
-      // The pseudo boxes kept for hover may be stale; a click measures afresh.
-      forgetPseudoBoxes();
+      // The boxes kept for hover may be stale; a click measures afresh.
+      forgetKeptBoxes();
       const { path: nodePath, occurrence, outside, pseudo } = nodeAtEvent(event);
       postLocated('avb:click-node', {
         path: nodePath || undefined,
@@ -311,13 +322,16 @@ function listenForContextMenu(): void {
       }
       event.preventDefault();
       event.stopImmediatePropagation();
-      const { path, occurrence, outside } = nodeAtEvent(event);
+      // As for a click: the boxes kept for hover may be stale.
+      forgetKeptBoxes();
+      const { path, occurrence, outside, pseudo } = nodeAtEvent(event);
       postLocated('avb:context-node', {
         path: path || undefined,
         occurrence,
         outside: !!outside,
         left: event.clientX,
         top: event.clientY,
+        ...pseudoField(pseudo),
       });
     },
     true,
@@ -325,14 +339,20 @@ function listenForContextMenu(): void {
 }
 
 function startOutlinesClearHover(): void {
-  // Coming back in, the page may have changed under the kept pseudo boxes.
-  forgetPseudoBoxes();
+  // Coming back in, the page may have changed under the kept boxes.
+  forgetKeptBoxes();
   // Told nothing yet, or told of a node: either way, the pointer has left.
   if (lastHover === undefined || lastHover.path !== undefined) {
     lastHover = { path: undefined, occurrence: 0, pseudo: undefined };
     // Clear messages use the same located-message contract as hover hits.
     postLocated('avb:hover-node', { path: undefined, occurrence: 0 });
   }
+}
+
+// What hover keeps between moves, dropped wherever the page must be seen as it is.
+function forgetKeptBoxes(): void {
+  forgetPseudoBoxes();
+  forgetUnionBoxes();
 }
 
 // The pseudo-element a hover or click landed on, said only when there is one:

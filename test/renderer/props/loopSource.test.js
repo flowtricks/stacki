@@ -40,7 +40,7 @@ assert.throws(() => headRenames('x'.repeat(1_000_001), 'posts.map((post) => ('),
 
 // The panel: one Code field, with no binding handle and no field restating the head.
 const source = readSourceGroup(['src/features/props/propNodeEditors.tsx']);
-assert.ok(/onSetText\(value, node\.bodyParts === undefined \? headRenames\(node\.head, value\) : \[\]\)/.test(source), 'the Code field carries renames');
+assert.ok(/const renames = node\.bodyParts === undefined \? headRenames\(node\.head, value\) : \[\];/.test(source), 'the Code field carries renames');
 assert.equal((source.match(/<BindHandle /g) ?? []).length, 0, 'the Code field takes no binding: it is the loop itself');
 for (const gone of ['Item name', 'Index name', '>Data<', 'sourceChip', 'withSource']) {
   assert.ok(!source.includes(gone), `${gone} is gone from the loop panel`);

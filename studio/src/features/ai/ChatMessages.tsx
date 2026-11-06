@@ -1,3 +1,4 @@
+import { CodeBlock } from '../../../vendor/stacki/src/ui/CodeBlock';
 import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import { ChatText } from './ChatText';
 import { useEffect, useRef, useState } from 'react';
@@ -70,8 +71,8 @@ function ProposalCard({ chat, message, refresh }: { readonly chat: ChatThread; r
       {proposal.changes.map((change) => (
         <details key={change.file}>
           <summary>{change.file.replace(/^src\//, '')}</summary>
-          <pre className="diff-before">{change.before || '(new file)'}</pre>
-          <pre className="diff-after">{change.after}</pre>
+          <CodeBlock className="diff-before" text={change.before || '(new file)'} filename={change.before ? change.file : undefined} />
+          <CodeBlock className="diff-after" text={change.after} filename={change.file} />
         </details>
       ))}
       <div className="chat-proposal-actions">

@@ -32,13 +32,24 @@ export interface AppCollection {
   readonly count?: number;
 }
 
+interface CreateComponentImport {
+  readonly name?: string;
+  readonly path?: string;
+  readonly quote?: string;
+  readonly named?: boolean;
+  readonly imported?: string;
+  readonly typeOnly?: boolean;
+}
+
 interface CreateComponentInput {
   readonly projectPath: string;
   readonly pagePath: string;
   readonly name: string;
   readonly nodes: unknown;
-  readonly imports: readonly { readonly name?: string; readonly path?: string }[];
+  readonly imports: readonly CreateComponentImport[];
   readonly props: readonly string[];
+  /** Code moving out of the parent into the new file. */
+  readonly frontmatter: { readonly imports: readonly CreateComponentImport[]; readonly code: string };
 }
 
 export function diagnoseProject(projectPath: string): Promise<IpcResults['dev:diagnose']> {
@@ -297,6 +308,7 @@ export function createProjectComponent(input: CreateComponentInput): Promise<Ipc
     nodes: [data(input.nodes)],
     imports: input.imports,
     props: input.props.map(data),
+    frontmatter: input.frontmatter,
   });
   return window.avb.createComponent(payload).then((raw) => {
     const value = record(raw);

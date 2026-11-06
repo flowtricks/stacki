@@ -7,12 +7,15 @@
 // rename is committed on Enter or blur, never per keystroke, because renaming an
 // id moves a file and rewrites every reference to it. Escape puts the stored
 // slug back. An id the panel cannot rename (a loader that builds ids in code)
-// shows read-only, with why.
-import { useEffect, useState } from 'react';
+// shows read-only, with why. What is typed belongs to one entry, so a form that
+// moves to another entry gives this field a new key: the slugs beside an entry
+// include the entry before it, and text carried over reads as already taken.
+import { useContext, useEffect, useState } from 'react';
 import { checkEntrySlug, ENTRY_SLUG_LIMITS, slugNote, slugProblem, type EntrySlug } from '../../../shared/properties/entrySlug';
 import { TagIcon } from '../../ui/Icons';
 import { CmsFieldFrame } from './CmsPropField';
 import { committable } from './entrySlugDraft';
+import { FieldChecksContext } from './remoteCmsShared';
 
 const SLUG_HELP = 'The entry’s id: its file name, and what references and getEntry() calls name it by.';
 
@@ -27,6 +30,7 @@ export function EntrySlugField(props: {
   readonly onCommit: (slug: string) => void;
 }) {
   const { slug } = props;
+  const checks = useContext(FieldChecksContext);
   const [typed, setTyped] = useState(slug.value);
   // A stored slug that changed (a rename, a reload) replaces what was typed.
   useEffect(() => setTyped(slug.value), [slug.value]);
@@ -43,7 +47,8 @@ export function EntrySlugField(props: {
   }
   const check = checkEntrySlug(text, { taken: slug.taken });
   const blank = text === '' && props.placeholder !== undefined;
-  const problem = blank ? undefined : slugProblem(check);
+  // An entry only held on screen is not being edited, and its slug is not checked.
+  const problem = blank || checks === 'held' ? undefined : slugProblem(check);
   const note = slugNote(check);
   const type = (next: string) => {
     setTyped(next);

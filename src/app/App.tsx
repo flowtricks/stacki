@@ -10,7 +10,8 @@ import { collectionReader } from '../editor/collectionReader';
 import { canvasPageOf } from '../editor/pageState';
 import { readPropsDestructure } from '../editor/loopProps';
 import { readRestBinding } from '../editor/propDeclaration';
-import { imagePropsOf, type NewPropHost } from '../features/props/newPropModel';
+import { imagePropsOf, propKeysByLocal, type NewPropHost, type PropSettingsOffer } from '../features/props/newPropModel';
+import PropertySettingsDialog from '../features/componentProperties/PropertySettingsDialog';
 import PanelBoundary from '../ui/PanelBoundary';
 
 export default function App() {
@@ -223,16 +224,36 @@ function newPropHostOf(
     return undefined;
   }
   const frontmatter = app.model.extraFrontmatter;
-  const keys = new Set([...(readPropsDestructure(frontmatter)?.entries ?? []).map((prop) => prop.key), ...(entry?.schema ?? []).map((prop) => prop.name)]);
+  const entries = readPropsDestructure(frontmatter)?.entries ?? [];
+  const declared = (entry?.schema ?? []).map((prop) => prop.name);
+  const keys = new Set([...entries.map((prop) => prop.key), ...declared]);
   const projectPath = app.project?.path;
+  const restLocal = readRestBinding(frontmatter)?.local;
   return {
     componentName: page.path.split(/[\\/]/).pop() ?? page.path,
     propKeys: [...keys],
-    restLocal: readRestBinding(frontmatter)?.local,
+    restLocal,
     create: app.createBoundProp,
     imageProps: imagePropsOf(frontmatter),
     projectPath,
     fileDirectory: projectDirectoryOf(projectPath, page.path),
+    propSettings: projectPath === undefined ? undefined : propSettingsOf(app, projectPath, page.path, propKeysByLocal(entries, declared, restLocal)),
+  };
+}
+
+// A picker row's way to its prop's settings, saved as the Properties panel saves.
+function propSettingsOf(app: AppView, projectPath: string, file: string, keys: ReadonlyMap<string, string>): PropSettingsOffer {
+  const saver = {
+    projectPath,
+    file,
+    flushSave: app.flushSave,
+    changePhase: app.propertySave.changePhase,
+    recordUndo: app.recordPropertyUndo,
+    completeSave: app.completePropertySave,
+  };
+  return {
+    keyOf: (path) => keys.get(path),
+    render: (key, onClose) => <PropertySettingsDialog propertyKey={key} saver={saver} onClose={onClose} />,
   };
 }
 

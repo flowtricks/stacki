@@ -1,5 +1,7 @@
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import type { ScanPage } from '../../../shared/properties/projectScan';
+import { pageDisplayName } from '../../lib/pageName';
 
 // Which link-type tab an href opens on. The tab is a reading of the value, so
 // it is a pure function of the value and of what the page and project hold:
@@ -14,6 +16,23 @@ export interface LinkTypeContext {
   readonly routes: readonly string[];
   // The ids on the current page, exactly as written.
   readonly sectionIds: readonly string[];
+}
+
+export type LinkPage = Pick<ScanPage, 'name' | 'route' | 'title'>;
+
+export interface LinkPageOption {
+  // The route, which is what the href stores.
+  readonly value: string;
+  readonly label: string;
+  readonly description: string;
+}
+
+// The Page tab lists pages exactly as the Pages panel does, so a page has one
+// name in the app: the panel's name over the panel's route. A file name here
+// would make `index` and "Home" read as two different pages.
+export function linkPageOptions(pages: readonly LinkPage[]): readonly LinkPageOption[] {
+  assert(pages.length <= LIMITS.scanEntriesMax, 'linkPageOptions: page limit exceeded');
+  return pages.map((page) => ({ value: page.route, label: pageDisplayName(page), description: page.route }));
 }
 
 export function detectLinkType(text: string, context: LinkTypeContext): LinkType {

@@ -79,6 +79,33 @@ renames, and drag operations. Open-page edits update the label from the live mod
 external changes update it through the normal project rescan. Scanning never executes
 project expressions to obtain a label.
 
+## Page templates
+
+The Pages panel's `+` creates a page or a page template. `shared/properties/pageTemplate.ts`
+is the contract: `DataSource` is `content-collection`, `sanity` or `http-json`, and the route,
+address, variable names, and field paths are checked there for both the form and the IPC
+boundary. `pageTemplate:plan` returns every file a template will write, computed from the
+disk; `pageTemplate:create` recomputes that plan, so the renderer never sends file text.
+
+Template fields may be nested (`author.name`), and a generated `entry` keeps that shape. A template is an ordinary `[slug].astro` page. It reads `const { entry } = Astro.props`, and
+`page:dynamicPaths` samples that prop, so all three sources reach the same data picker with
+no per-source code. `getStaticPaths` runs in its own scope, so `parseDeclarations` leaves its
+locals out of the page's. Nothing records which source a template came from: its code is the
+record, and a developer may change it freely.
+
+`pageTemplate:sample` fetches in the main process with a deadline, a size limit and no
+redirects, so a key header cannot follow a redirect to another host. A sample's reply crosses
+as fields and short examples, never a body. A request names environment variables; values
+are read from the project's env files in the main process and never reach the renderer.
+A Sanity template reads through a saved CMS connection, by id: main resolves its project and
+key for samples, and asks once without the key to learn whether the dataset is public. A
+generated page still reads any token from `SANITY_API_TOKEN`; for a private dataset, creating
+can copy the connection's key there under the `project:setEnv` rules. A
+secret travels once, through `project:setEnv`, which refuses a tracked `.env`, adds `.env` to
+`.gitignore` when it is missing, and restarts the preview because Astro reads env files only
+as it starts. Addresses with credentials or secret-looking query parameters, and `PUBLIC_`
+variables, are refused because each would publish the secret.
+
 ## IPC
 
 Layout fields may request the rendered page's social image and type through `avb:query`

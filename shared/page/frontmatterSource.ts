@@ -529,7 +529,11 @@ export function mapModuleSpecifiers(source: string, map: (path: string) => strin
     if (match && path) {
       const end = index + match[0].length;
       const start = end - path.length - 2;
-      edits.push({ start, end, text: JSON.stringify(map(path)) });
+      const mapped = map(path);
+      // One that does not change keeps the quotes it was written with.
+      if (mapped !== path) {
+        edits.push({ start, end, text: JSON.stringify(mapped) });
+      }
       index = end - 1;
     }
   }

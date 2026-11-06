@@ -4,12 +4,12 @@ import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 import Dropdown from '../../ui/Dropdown';
 import { BracesIcon } from '../../ui/Icons';
-import { ExpressionBindingField } from '../props/propBindings';
+import { ExpressionBindingField, type EditPace } from '../props/propBindings';
 
 interface DefaultProps {
   readonly property: ComponentProperty;
   readonly frontmatter: string;
-  readonly onChange: (value: string) => void;
+  readonly onChange: (value: string, pace: EditPace) => void;
 }
 export function PropertyDefault({ property, frontmatter, onChange }: DefaultProps) {
   const simple = ['string', 'number', 'boolean'].includes(property.type) || literalOptions(property.type) !== undefined;
@@ -42,7 +42,7 @@ export function PropertyDefault({ property, frontmatter, onChange }: DefaultProp
           placeholder={'"Hello", 42, true, [], {…}'}
           onChange={(value) => {
             if (value.length <= PROPERTY_LIMITS.textCharsMax) {
-              onChange(value);
+              onChange(value, 'typing');
             }
           }}
         />
@@ -64,7 +64,7 @@ function DefaultControl({ property, onChange }: DefaultProps) {
             label: propertyDefaultText(choice) ?? choice,
           })),
         ]}
-        onChange={onChange}
+        onChange={(value) => onChange(value, 'at-once')}
         livePreview={false}
         searchable
         searchPlaceholder="Search defaults…"
@@ -78,7 +78,7 @@ function DefaultControl({ property, onChange }: DefaultProps) {
         type="number"
         step="any"
         value={Number.isFinite(Number(property.defaultValue)) ? property.defaultValue : ''}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(event) => onChange(event.target.value, 'typing')}
       />
     );
   }
@@ -87,7 +87,7 @@ function DefaultControl({ property, onChange }: DefaultProps) {
       aria-label="Default text"
       value={propertyDefaultText(property.defaultValue) ?? ''}
       maxLength={PROPERTY_LIMITS.textCharsMax - 2}
-      onChange={(event) => onChange(JSON.stringify(event.target.value))}
+      onChange={(event) => onChange(JSON.stringify(event.target.value), 'typing')}
     />
   );
 }

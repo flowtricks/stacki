@@ -1,3 +1,5 @@
+import CodeEditor from '../../../vendor/stacki/src/ui/CodeEditor';
+import { languageFor } from '../../../vendor/stacki/src/ui/codeHighlight';
 import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import { useState } from 'react';
 import type { SharedDocument } from '../collaboration/useDocument';
@@ -59,13 +61,9 @@ export function CollectionEditor({ document }: { document: SharedDocument }) {
         <>
           <ErrorToast message={problem} />
           {!problem && <p className="muted">Changes are shared live.</p>}
-          <textarea
-            aria-label="Collection source"
-            className="source-editor"
-            spellCheck={false}
-            value={source}
-            onChange={(event) => replace(event.target.value)}
-          />
+          <div aria-label="Collection source" className="source-editor" role="group">
+            <CodeEditor key={document.file} language={languageFor(document.file)} value={source} onChange={replace} />
+          </div>
         </>
       )}
     </div>

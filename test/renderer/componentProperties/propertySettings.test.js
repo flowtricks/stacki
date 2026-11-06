@@ -66,7 +66,8 @@ async function bundle() {
       contents: `export {default as Panel} from './src/features/componentProperties/ComponentPropertiesPanel';
        export * from './src/features/componentProperties/settingTags';
        export * from './src/features/componentProperties/propertyKinds';
-       export * from './src/features/componentProperties/attributesProperty';`,
+       export * from './src/features/componentProperties/attributesProperty';
+       export { EditorView } from '@codemirror/view';`,
       resolveDir: ROOT,
       loader: 'tsx',
     },
@@ -250,7 +251,10 @@ async function mountPanel(source, host = {}) {
     });
   const click = async (element) => act(async () => element.click());
   const row = (name) => [...document.querySelectorAll('.property-row-main')].find((button) => button.textContent.startsWith(name));
-  const saveButton = () => [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property');
+  // An existing prop saves itself, and closing its form saves what is pending. An attributes prop keeps its button.
+  const saveButton = () =>
+    [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property') ??
+    document.querySelector('[aria-label="Close property settings"]');
   const field = (label) => document.querySelector(`.property-editor input[aria-label="${label}"]`);
   const tooltip = () =>
     [...document.querySelectorAll('.property-editor label')].find((label) => label.textContent.trim().startsWith('Tooltip')).querySelector('textarea');
@@ -265,6 +269,11 @@ async function mountPanel(source, host = {}) {
     source: () => data.source,
     writes,
     setValue,
+    // The Code type field is CodeMirror, so it is typed through its own transactions.
+    setCode: async (text) => {
+      const view = modules.EditorView.findFromDOM(document.querySelector('.property-code .cm-editor'));
+      await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }));
+    },
     click,
     row,
     saveButton,
@@ -357,10 +366,10 @@ test('the Kind picker writes the native type, and the format tag for Link', asyn
     assert.match(panel.source(), written, `${kind} writes its type`);
     // Back to Text for the next case, through the Code type field.
     await panel.click(panel.row('caption'));
-    if (!document.querySelector('input[aria-label="Code type"]')) {
+    if (!document.querySelector('[aria-label="Code type"]')) {
       await panel.click(document.querySelector('.property-code-toggle'));
     }
-    await panel.setValue(document.querySelector('input[aria-label="Code type"]'), 'string');
+    await panel.setCode('string');
     await panel.pickKind('Text');
     await panel.click(panel.saveButton());
     assert.equal(panel.source(), before, `${kind}: back to Text restores the bytes`);

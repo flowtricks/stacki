@@ -13,6 +13,8 @@ import { keepsSlot as keepsSlotAttribute } from '../../editor/slotAttr';
 import { duplicateGesture, frontmatterGesture, insertGesture, moveGesture, removalGesture, sequence } from '../../editor/editGestures';
 import { loopVarsAt, strippedBindings } from '../../editor/loopBindings';
 import { propsForExtraction } from '../../editor/extractProps';
+import { planExtraction, readExtraction, type ExtractionRead } from '../../editor/extractFrontmatter';
+import { ancestorChain } from '../../editor/editorTree';
 import { cleanError } from '../../lib/cleanError';
 import { namesInScope } from '../../editor/dataSuggest';
 import type { InsertTarget } from '../../editor/insertTarget';
@@ -168,6 +170,28 @@ export function useComponentQueries(coreState: ReturnType<typeof useCoreState>) 
     return propsForExtraction(node, scope);
   }, []);
 
+  // What moving those values would take, read from the bytes the page's edits
+  // are stated against. An edit still on its way would make those bytes wrong
+  // about what the page reads, so until it lands every value stays a prop.
+  const extractionFor = useCallback(
+    (model: EditorModel, node: EditorNode): ExtractionRead => {
+      const { currentPage, pageState } = pageStateRef.current;
+      const settled = pageState?.editable === true && pageState.save.tag === 'clean';
+      const origin = settled && frontmatterOf(pageState.origin?.model ?? model) === frontmatterOf(model) ? pageState.origin : undefined;
+      const chain = ancestorChain(model.nodes, node.id) ?? [];
+      return readExtraction({
+        origin,
+        nodeId: node.id,
+        names: propsNeededFor(model, node),
+        loopNames: new Set(loopVarsAt(model.nodes, node.id)),
+        inLoop: chain.some((ancestor) => ancestor.kind === 'map'),
+        parent: /[\\/]src[\\/]pages[\\/]/.test(currentPage?.path ?? '') ? 'page' : 'component',
+        shown: model,
+      });
+    },
+    [pageStateRef, propsNeededFor],
+  );
+
   // Where a component is used, for the palette's instance count. Asked of the
   // project (not the open file) so it covers pages and components alike; the
   // component's own file is left out — a file is not one of its own users.
@@ -214,7 +238,7 @@ export function useComponentQueries(coreState: ReturnType<typeof useCoreState>) 
     },
     [pageStateRef],
   );
-  return { componentUsage, pageInstancesOf, propsNeededFor };
+  return { componentUsage, extractionFor, pageInstancesOf, propsNeededFor };
 }
 
 // Turning the selection into a component.
@@ -225,7 +249,7 @@ export function useCreateComponent(
   history: ReturnType<typeof useHistory>,
 ) {
   const { pageStateRef, projectRef, selectedIdRef, setSelectedId } = coreState;
-  const { propsNeededFor } = componentQueries;
+  const { extractionFor } = componentQueries;
   const { rescan, showToast } = lifecycle;
   const { commitEdit } = history;
 
@@ -235,13 +259,16 @@ export function useCreateComponent(
   // edit to two files, and the component file is written first: a page that
   // imports a file that isn't there yet is a broken page, however briefly.
   //
+  // The frontmatter the piece reads moves with it unless the person chose to pass
+  // a value in as a prop (extractFrontmatter.ts). Its removal from the page is the
+  // same gesture's frontmatter write, so the one step below covers it.
+  //
   // The page's CSS is the user's and is never rewritten here: its `<style>`
   // blocks stay byte for byte as they were. And it is one undo step: ⌘Z
   // restores the page and the markup, and takes the new file back
   // (componentCreation.ts).
   const createComponentFromSelection = useCallback(
-    async (name: string, options: { readonly withProps?: boolean } = {}) => {
-      const { withProps = true } = options;
+    async (name: string, options: { readonly asProp: readonly string[] }) => {
       const page = pageStateRef.current.currentPage;
       const state = pageStateRef.current.pageState;
       const model = state?.editable ? state.model : undefined;
@@ -250,7 +277,8 @@ export function useCreateComponent(
       if (!page?.path || !model || !node || !projectPath) {
         return;
       }
-      const props = withProps ? propsNeededFor(model, node) : [];
+      const plan = planExtraction(extractionFor(model, node), new Set(options.asProp));
+      const { props } = plan;
       const input = {
         projectPath,
         pagePath: page.path,
@@ -258,6 +286,7 @@ export function useCreateComponent(
         nodes: node,
         imports: model.imports || [],
         props,
+        frontmatter: plan.moved,
       };
       let created;
       try {
@@ -297,8 +326,15 @@ export function useCreateComponent(
         await files.undo(); // The page moved on meanwhile: nothing will import the file.
         return;
       }
+      if (frontmatterOf(shown) !== frontmatterOf(model)) {
+        // The plan took code out of a frontmatter that has changed since, and
+        // writing it would put the old text back over the new.
+        await files.undo();
+        showToast('The page’s code changed while the component was being made. Try again.', 'error');
+        return;
+      }
       const place = { parentId: found.parent?.id ?? undefined, index: found.index };
-      const extracted = { id, name, props, place, paths };
+      const extracted = { id, name, props, place, paths, parent: plan.parent };
       const extraction = extractionGesture(shown, node.id, extracted);
       if (!commitEdit(extraction, { files })) {
         await files.undo(); // Refused: the page won't import the file, so it doesn't stay.
@@ -306,13 +342,14 @@ export function useCreateComponent(
       }
       setSelectedId(id);
       await rescan(projectPath);
-      // Anything left reading the page's scope can't be reconnected on its own
-      // — an expression naming something that isn't a value the page holds, or
-      // props turned off. The person who just moved it knows what it needs.
-      const stranded = usesPageScope(node) && !props.length;
-      showToast(createdComponentMessage(created.rel, props.length, { stranded }));
+      // Anything left reading the page's scope can't be reconnected on its own:
+      // an expression naming something that isn't a value the page holds. The
+      // person who just moved it knows what it needs.
+      const movedCount = plan.values.filter((value) => value.kind === 'move').length;
+      const stranded = usesPageScope(node) && plan.values.length === 0;
+      showToast(createdComponentMessage(created.rel, { props: props.length, moved: movedCount }, { stranded }));
     },
-    [commitEdit, propsNeededFor, rescan, showToast, pageStateRef, projectRef, selectedIdRef, setSelectedId],
+    [commitEdit, extractionFor, rescan, showToast, pageStateRef, projectRef, selectedIdRef, setSelectedId],
   );
   return { createComponentFromSelection };
 }

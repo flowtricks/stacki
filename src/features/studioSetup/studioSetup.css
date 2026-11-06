@@ -233,21 +233,13 @@
   border-radius: 8px;
   background: #111;
 }
-.studio-launch-command textarea {
+.studio-launch-code {
   flex: 1;
   min-width: 0;
-  resize: none;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: #d2d2d2;
-  font:
-    12px/1.6 ui-monospace,
-    SFMono-Regular,
-    Menlo,
-    Consolas,
-    monospace;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.6;
 }
 .studio-launch-command button,
 .studio-copy-action {
@@ -398,18 +390,6 @@
   min-width: 72px;
   padding: 6px 8px;
   font-size: 11px;
-}
-.studio-command-executable {
-  color: #8bd8a2;
-}
-.studio-command-action {
-  color: #c4a7e7;
-}
-.studio-command-package {
-  color: #e5bf83;
-}
-.studio-command-version {
-  color: #82cfff;
 }
 .studio-command-status {
   position: absolute;

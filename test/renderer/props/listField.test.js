@@ -121,15 +121,20 @@ const check = (what, condition, detail) => {
     };
     // The popup, and its fields by the name the file gives them.
     const popup = () => document.querySelector('.list-item-editor');
-    const fieldNames = () => [...document.querySelectorAll('.list-item-field > span')].map((span) => span.textContent);
+    const fieldNames = () => [...document.querySelectorAll('.list-item-field > span, .list-item-editor .prop-label')].map((span) => span.textContent);
     const typeInto = async (text, at = 0) => {
-      const input = document.querySelectorAll('.list-item-editor input')[at];
+      // A word's box, or the field an object's text is typed in as any prop's is.
+      const input = document.querySelectorAll('.list-item-editor input, .list-item-editor .bind-input')[at];
       if (!input) {
         return false;
       }
       await act(async () => {
-        const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
-        setter.call(input, text);
+        if (input.tagName === 'INPUT') {
+          const setter = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set;
+          setter.call(input, text);
+        } else {
+          input.textContent = text;
+        }
         input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
       });
       await render();
@@ -182,7 +187,7 @@ const check = (what, condition, detail) => {
       clickAway,
       dragTo,
       add: () => press(host.querySelector('.list-field-add')),
-      input: () => document.querySelector('.list-item-editor input'),
+      input: () => document.querySelector('.list-item-editor input, .list-item-editor .bind-input'),
       done: async () => {
         await act(async () => root.unmount());
       },

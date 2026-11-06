@@ -4,7 +4,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
-const { pageDisplayName, buildPageTree } = load('src/features/pages/pageTree.ts');
+const { buildPageTree } = load('src/features/pages/pageTree.ts');
+const { pageDisplayName } = load('src/lib/pageName.ts');
 const { updatePageTitle } = load('src/features/pages/usePageTitles.ts');
 const { PageSearchPath } = load('src/features/pages/PageSearchPath.tsx');
 const { renderToStaticMarkup } = require('react-dom/server');

@@ -1,3 +1,4 @@
+import { CodeInline } from '../../ui/CodeBlock';
 import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import React, { useEffect, useRef, useState } from 'react';
@@ -65,10 +66,10 @@ export function StarterWizard({ parentPath, onClose, onDone }: WizardProps & { r
       <SiteNameField parentPath={parentPath} name={name} running={running} change={setName} submit={() => void run()} />
       <PackageManagerField value={manager} disabled={running} change={setManager} />
       <div className="starter-note">
-        Runs <code>npm create lumos@latest</code>
+        Runs <CodeInline language="shell" text="npm create lumos@latest" />
         {manager !== 'npm' && (
           <>
-            , installs it with <code>{manager}</code>
+            , installs it with <CodeInline language="shell" text={manager} />
           </>
         )}
         , then starts a git history of its own — so publishing it later publishes your site, not a fork of the starter.

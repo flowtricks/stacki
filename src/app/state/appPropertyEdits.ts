@@ -14,6 +14,7 @@ import {
   inlineStyleGesture,
   insertGesture,
   loopRenameGesture,
+  variableRenameGesture,
   nodeGesture,
   propsGesture,
   removalGesture,
@@ -31,6 +32,7 @@ import type { InlineNode } from '../../features/props/RichContent';
 import type { TextPiece } from '../../features/props/textConnect';
 import { textPiecesGesture } from '../model/textPieces';
 import type { Rename } from '../../features/props/propNodeEditors';
+import { checkLoopHead, planVariableRename, type VariableRename } from '../../editor/variableRename';
 import type { PropValues } from '../../features/props/propRules';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
@@ -540,7 +542,50 @@ export function useNodeText(coreState: ReturnType<typeof useCoreState>, history:
     },
     [commitEdit, pageStateRef],
   );
-  return { setFrontmatter, setNodeText };
+
+  // A frontmatter variable renamed across the file, or why it can't be: the Code
+  // row and the declaration's popup both come through here, so they refuse the
+  // same things. Stated against the bytes the page's edits are stated against.
+  const renameVariable = useCallback(
+    (rename: VariableRename): string | undefined => {
+      const state = pageStateRef.current.pageState;
+      const origin = state?.editable ? state.origin : undefined;
+      if (origin === undefined) {
+        return 'Wait for the current code change to finish saving, then try again.';
+      }
+      const plan = planVariableRename(origin, rename);
+      if (!plan.ok) {
+        return plan.message;
+      }
+      return commitEdit(variableRenameGesture(origin, rename, plan.hunks)) ? undefined : 'This page can’t be edited right now.';
+    },
+    [commitEdit, pageStateRef],
+  );
+
+  // The Code row: checked first, because this text compiles into the page and a
+  // wrong name there is a crash. `renames` are the loop's own parameters, which
+  // the ordinary edit carries into its children.
+  const setLoopHead = useCallback(
+    (nodeId: string, value: string, renames: readonly Rename[]): string | undefined => {
+      const state = pageStateRef.current.pageState;
+      const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
+      if (node?.kind !== 'map') {
+        return 'That loop is no longer on the page.';
+      }
+      const origin = state?.editable ? state.origin : undefined;
+      const checked = origin === undefined ? undefined : checkLoopHead(origin, { id: nodeId, before: node.head, after: value });
+      if (checked?.kind === 'problem') {
+        return checked.message;
+      }
+      if (checked?.kind === 'rename') {
+        return renameVariable(checked.rename);
+      }
+      setNodeText(nodeId, value, renames);
+      return undefined;
+    },
+    [pageStateRef, renameVariable, setNodeText],
+  );
+  return { renameVariable, setFrontmatter, setLoopHead, setNodeText };
 }
 
 // A condition’s else branch, and the frontmatter’s declarations.

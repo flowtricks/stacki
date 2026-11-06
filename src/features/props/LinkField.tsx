@@ -5,14 +5,14 @@ import { LIMITS } from '../../../shared/core/limits';
 import Dropdown from '../../ui/Dropdown';
 import AssetField from '../../ui/AssetField';
 import { ElementLinkIcon, FileIcon, PhoneIcon, ElementImageIcon } from '../../ui/Icons';
-import { anchorTargetExists, detectLinkType, type LinkType, type LinkTypeContext } from './linkType';
+import { anchorTargetExists, detectLinkType, linkPageOptions, type LinkPage, type LinkType, type LinkTypeContext } from './linkType';
 
 // Webflow-style link settings for href props: a Type segmented control
 // (URL / Page / Section / Email / Phone / Asset) whose fields all compile
 // down to one href string. Plain URL mode stays available for anything
 // custom; the value's shape picks the initial type (see linkType.ts).
 //
-// context: { pages: [{name, route}], sectionIds: [string], projectPath }
+// context: { pages: [{name, route, title}], sectionIds: [string], projectPath }
 
 const TYPES: ReadonlyArray<{ readonly id: LinkType; readonly title: string; readonly icon: React.ReactNode }> = [
   { id: 'url', title: 'URL', icon: <ElementLinkIcon size={13} /> },
@@ -22,20 +22,6 @@ const TYPES: ReadonlyArray<{ readonly id: LinkType; readonly title: string; read
   { id: 'phone', title: 'Phone', icon: <PhoneIcon size={13} /> },
   { id: 'asset', title: 'File / asset', icon: <ElementImageIcon size={13} /> },
 ];
-interface LinkPage {
-  readonly name: string;
-  readonly route: string;
-}
-
-function linkPageLabel(page: LinkPage): string {
-  const name = page.name.replace(/\.(astro|md)$/i, '');
-  const namePath = name.replace(/^\/+|\/+$/g, '');
-  const routePath = page.route.replace(/^\/+|\/+$/g, '');
-  if (namePath === routePath) {
-    return name;
-  }
-  return `${name}  ·  ${page.route}`;
-}
 
 function parseMailto(text: string) {
   const match = String(text).match(/^mailto:([^?]*)(?:\?(.*))?$/);
@@ -112,10 +98,8 @@ function LinkControl({
         <Dropdown
           value={(context.pages || []).some((page) => page.route === text) ? text : ''}
           placeholder="Choose a page…"
-          options={(context.pages || []).map((page) => ({
-            value: page.route,
-            label: linkPageLabel(page),
-          }))}
+          optionLayout="stacked"
+          options={linkPageOptions(context.pages ?? [])}
           onChange={(value) => commit(value, { immediate: true })}
         />
       );

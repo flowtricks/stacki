@@ -61,7 +61,6 @@ const check = (what, condition, detail) => {
   refuses('jobs', 'a name standing for a list');
   refuses('[...defaults, "other"]', 'a spread');
   refuses('[{ value, label }]', 'an object that names things instead of saying them');
-  refuses('[{ value: "a", label: pretty(a) }]', 'an object with a call in it');
   refuses('[{ value: { deep: 1 } }]', 'an object inside an object');
   refuses('["a", other]', 'an item that is a name');
   refuses('[items.map((i) => i.name)]', 'a call');

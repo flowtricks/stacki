@@ -454,6 +454,7 @@
 .loop-settings-picker-list {
   display: flex;
   flex-direction: column;
+  gap: var(--space-1);
   overflow-y: auto;
   scrollbar-gutter: stable;
   min-height: 0;
@@ -842,6 +843,13 @@
   min-height: 0;
   max-height: 380px;
 }
+/* A prop's settings take the whole Source pop-up, the rows above the tree too. */
+.loop-source-picker .dp-property-settings {
+  max-height: 440px;
+}
+.loop-source-picker:has(.dp-property-settings) .loop-source-extras {
+  display: none;
+}
 .loop-source-extras {
   display: flex;
   flex-direction: column;
@@ -898,25 +906,34 @@
 }
 
 /* Custom code for a filter or a sort: monospace, on the field fill. */
+/* A section as code: the prop field's `{}` and red note, in a section's spacing. */
+.loop-settings-section:hover .prop-expr-toggle:not(.on) {
+  color: var(--text-dim);
+}
+/* The label's flex gap already is the toggle's own 4px margin; both would double it. */
+.loop-settings-label > .prop-expr-toggle {
+  margin-left: 0;
+}
+.loop-settings-section > .prop-field-note {
+  margin: 0;
+}
+.loop-section-code {
+  min-width: 0;
+}
+
 .loop-settings-code {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
 }
-.loop-settings-code textarea {
-  width: 100%;
-  min-width: 0;
-  padding: 6px 8px;
-  border: none;
-  border-radius: 6px;
-  background: var(--bg-input);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 11px;
-  line-height: 1.5;
+/* Two lines to start, as tall as a pop-up has room for, then it scrolls. */
+.loop-settings-code .expr-input {
+  min-height: 48px;
+  max-height: 200px;
+  overflow-y: auto;
 }
-.loop-settings-code textarea[aria-invalid='true'] {
+.loop-settings-code .expr-input.invalid {
   background: rgba(255, 80, 80, 0.12);
 }
 .loop-settings-code-problem {
@@ -963,6 +980,11 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 92px) auto;
   align-items: center;
   gap: 6px;
+}
+.new-prop-list-field .dd-trigger,
+.loop-property-default .dd-trigger {
+  width: 100%;
+  min-width: 0;
 }
 .new-prop-note {
   color: var(--text-dim);
@@ -1051,6 +1073,12 @@
 /* The sections both places a prop is edited share (PropertySections.tsx): the
    Required and Readonly flags, and the Code type disclosure, the exact type
    expression shown on demand. */
+/* A List's default items are the instance's own field, so its label row and its
+   list stay as an instance draws them. A field's side margins are the panel's
+   gutter; here the form already has one, and the field runs edge to edge. */
+.property-list-default > .props-field {
+  margin: 0;
+}
 .property-flags {
   display: flex;
   flex-wrap: wrap;
@@ -1085,15 +1113,26 @@
   flex-direction: column;
   gap: 6px;
 }
-.new-prop-code-type .property-code {
-  width: 100%;
-  min-width: 0;
-  height: 26px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 6px;
-  background: var(--bg-input);
-  color: var(--text);
+/* The Code type field is the code field a default uses (.expr-input), which
+   brings its fill and its scrolling; only its height and type size are its own,
+   kept to the input it replaced. */
+.expr-input.property-code {
+  min-height: 26px;
   font-family: var(--mono);
   font-size: 11px;
+}
+.expr-input.property-code .cm-content {
+  padding: 4px 8px;
+}
+/* The placeholder here is the type the kind writes, so it reads as code, and it
+   clips to one line as an input's would. Out of the line's flow, because in it
+   a long type would widen the line and bring a scrollbar with it. */
+.expr-input.property-code .cm-placeholder {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  overflow: hidden;
+  font-family: var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

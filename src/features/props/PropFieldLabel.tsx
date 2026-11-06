@@ -7,16 +7,7 @@ import { ResetMenu } from '../../ui/ResetLabel';
 import { valueFromParts } from '../../editor/bindings';
 import { BindHandle, FieldDataPicker } from './propBindings';
 import PropTip from './PropTip';
-import {
-  FieldNumberIcon,
-  ComponentPropertiesIcon,
-  FieldSwitchIcon,
-  BracesIcon,
-  CodeIcon,
-  ElementSlotIcon,
-  VariableTextSizeIcon,
-  ResetIcon,
-} from '../../ui/Icons';
+import { FieldNumberIcon, ComponentPropertiesIcon, FieldSwitchIcon, BracesIcon, CodeIcon, ElementSlotIcon, VariableTextSizeIcon } from '../../ui/Icons';
 import { controlWord, type PropState } from './propFieldModel';
 import { fitOfFieldType, literalOf, type NewPropSeed } from './newPropModel';
 import { fieldTooltip } from '../../editor/propDocumentation';
@@ -128,13 +119,6 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
           cannot hold — `href={page.url}` is not a link setting — and until this
           existed the only way in was to pick data, which is a value rather than
           the code somebody had in mind. */}
-      {/* Reset to default, one click away while the field is hovered; the
-          label's menu holds the same action. */}
-      {state.isSet && (
-        <button type="button" className="prop-reset" title="Reset to default" aria-label="Reset to default" onClick={state.reset}>
-          <ResetIcon size={11} />
-        </button>
-      )}
       {bindable && (
         <button
           type="button"

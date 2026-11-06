@@ -870,19 +870,13 @@ html[data-platform='win32'] .titlebar {
   }
 }
 
-/* Code shown rather than edited — the editor's own type and colours, with
-   nothing that invites a cursor. */
-.code-block {
-  font-size: 11px;
-}
-.code-block .cm-editor {
-  background: transparent;
-}
-.code-block .cm-content {
+/* One side of a merge conflict: a short, wrapped excerpt. */
+.merge-source-code {
+  overflow: auto;
+  max-height: 84px;
   padding: 6px 8px;
-}
-.code-block .cm-line {
-  padding: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 /* An old version, covering the canvas. Laid out as a column so the banner is
@@ -1231,37 +1225,26 @@ html[data-platform='win32'] .titlebar {
 }
 
 /* One item's fields, in the same box the attribute editor uses. */
-.list-item-editor {
-  padding-bottom: 8px;
+/* An item's fields are prop fields, spaced as the panel spaces them: a field's
+   label keeps its own gap to its control, and the popup's gap replaces the
+   margins that hold a field off the panel's edges. Named with .attr-editor,
+   which comes later in this file and would otherwise keep its own gap. */
+.attr-editor.list-item-editor {
+  gap: 12px;
 }
-.list-item-field {
+.list-item-editor .props-field {
+  margin: 0;
+}
+/* A list of words has one box, laid out as those fields are. It is inside a
+   prop field's own markup, whose label rule this has to outrank. */
+.list-item-editor label.list-item-field {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  font-size: 12px;
-}
-.list-item-field > span {
-  width: 74px;
-  flex-shrink: 0;
-  color: var(--text-dim);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.list-item-field > input {
-  flex: 1;
-  min-width: 0;
-}
-/* An image field's card is taller than a row, so its name sits at the top. */
-.list-item-field.list-item-image {
-  align-items: flex-start;
-}
-.list-item-image-body {
-  flex: 1;
-  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
 }
 .list-item-note {
-  margin-top: 4px;
+  margin-top: -8px;
   color: var(--text-dim);
   font-size: 11px;
 }
@@ -1541,6 +1524,28 @@ html[data-platform='win32'] .titlebar {
 .var-src-head .ghost {
   padding: 2px;
 }
+/* Which file's frontmatter this is, in the fill a route chip wears; the green is
+   the one a component's icon has everywhere else. */
+.var-src-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.var-src-file.component svg {
+  color: #79e09c;
+  flex-shrink: 0;
+}
+.var-src-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .var-src-code {
   max-height: 260px;
   border: 1px solid var(--border);
@@ -1554,6 +1559,9 @@ html[data-platform='win32'] .titlebar {
 }
 .var-src .var-src-code .cm-content {
   max-width: none;
+}
+.var-src > .prop-field-note {
+  margin: 0;
 }
 
 /* Insert palette (⌘F / ⌘E / ⌘K) */
@@ -2930,6 +2938,41 @@ body > .embed-editor_provenance {
   flex-shrink: 0;
   color: var(--collection-purple);
 }
+/* A row's way to its prop's settings, always there and muted until it is
+   reached for. The slot ends every row of a picker that has one, so a row with
+   no gear keeps its values in line with the rows that have one. */
+.dp-settings-slot {
+  flex: 0 0 18px;
+  display: inline-flex;
+  height: 18px;
+}
+.dp-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+}
+.dp-row:hover .dp-settings,
+.dp-settings:focus-visible {
+  color: var(--text-dim);
+}
+.dp-row .dp-settings:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+/* A prop's settings open in the picker's place, as tall as the picker was. */
+.data-picker.is-covered {
+  display: none;
+}
+.dp-property-settings {
+  max-height: 340px;
+  overflow-y: auto;
+}
 /* What the value IS, down the right — the column you actually read to find
    the field you mean. Dim, and the first thing to give up space. */
 .dp-val {
@@ -3706,6 +3749,38 @@ body > .embed-editor_provenance {
 .dd-option.highlight .dd-hint {
   color: rgba(255, 255, 255, 0.8);
 }
+/* Two-line rows: the description sits under the label, in the type the Pages
+   panel gives a page's route, and the check stays at the end of the row. The
+   height is STACKED_OPTION_HEIGHT in Dropdown.tsx. */
+.dd-stacked .dd-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16px;
+  align-content: center;
+  gap: 0 6px;
+  height: 40px;
+}
+.dd-stacked .dd-option-label {
+  grid-area: 1 / 1;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.dd-stacked .dd-description {
+  grid-area: 2 / 1;
+  overflow: hidden;
+  margin-top: 3px;
+  color: #fff;
+  font-size: 10px;
+  line-height: 1.3;
+  opacity: 0.55;
+  text-overflow: ellipsis;
+}
+.dd-stacked .dd-option.highlight .dd-description {
+  opacity: 0.8;
+}
+.dd-stacked .dd-check {
+  grid-area: 1 / 2 / 3 / 3;
+  align-self: center;
+}
 
 /* ------------------------------------------------------------------ */
 /* Props panel                                                         */
@@ -3804,27 +3879,6 @@ body > .embed-editor_provenance {
 .prop-field-note.problem {
   color: var(--red);
 }
-/* Reset to default: beside the name of a set field while it is hovered. The
-   label's menu (click, right-click) holds the same action. */
-.prop-reset {
-  display: inline-flex;
-  vertical-align: middle;
-  margin-left: 4px;
-  padding: 2px;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--text-dim);
-  opacity: 0;
-}
-.props-field:hover > label > .prop-reset,
-.prop-reset:focus-visible {
-  opacity: 1;
-}
-.prop-reset:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
 /* A colour prop: the swatch opens the system picker (the native input fills
    it, invisible), and the text beside it holds any CSS colour or token. */
 .prop-color {
@@ -4699,6 +4753,44 @@ body > .embed-editor_provenance {
   color: var(--text-dim);
 }
 .hint-text.component-name-hint code {
+  color: var(--text-dim);
+}
+
+/* A row per value the new component reads. A long list scrolls so the dialog keeps its
+   footer in view; most sections read one or two. */
+.extract-values {
+  margin-top: 12px;
+}
+.extract-value-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 176px;
+  overflow-y: auto;
+}
+.extract-value-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 26px;
+}
+.extract-value-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.extract-value-choice {
+  flex: 0 0 190px;
+}
+.extract-value-fixed {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.hint-text.extract-value-note {
+  margin-top: 2px;
   color: var(--text-dim);
 }
 
@@ -9134,26 +9226,9 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   margin-top: 6px;
   color: var(--text);
 }
-.parse-error-diagnostic code {
-  font-family: var(--mono);
-  word-break: break-all;
-}
 .parse-error-open {
   display: block;
   margin-top: 8px;
-}
-.parse-error-output {
-  margin-bottom: 8px;
-  font-size: 11.5px;
-  color: var(--text-dim);
-}
-.parse-error-output pre {
-  max-height: 160px;
-  overflow: auto;
-  margin: 6px 0 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  white-space: pre-wrap;
 }
 
 .asset-batch-tools {

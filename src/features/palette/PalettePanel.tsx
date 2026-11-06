@@ -20,7 +20,7 @@ interface PalettePanelProps {
   readonly trailingSlash: TrailingSlash;
   readonly onInsert: (name: string) => void;
   readonly onDragBegin?: () => void;
-  readonly onCreateComponent: (name: string, options: { readonly withProps: boolean }) => void;
+  readonly onCreateComponent: (name: string, options: { readonly asProp: readonly string[] }) => void;
   readonly onUsage?: (component: ScanComponent) => Promise<unknown>;
   readonly onOpenUsage?: (file: ComponentUsageFile) => void;
   readonly pageInstances?: (name: string) => readonly { readonly id: string }[];
