@@ -24,6 +24,7 @@ import { isGroqPath, type FieldList } from '../../editor/loopFieldList';
 import { toRecord } from '../../../shared/core/record';
 import type { LoopSource } from '../../editor/loopQuery';
 import type { LoopCatalog } from './loopCatalog';
+import { componentNameOf } from './dataPickerModel';
 import { RowPopup } from './LoopRows';
 
 /** The page's data, as the data picker reads it, for the Source picker. */
@@ -35,6 +36,8 @@ export interface SourcePickerData {
   readonly onStepItem?: DataPickerProps['onStepItem'];
   /** The frontmatter, so imported functions are not offered as lists. */
   readonly frontmatter: string;
+  /** The open file: a component's lists are headed by its name, and lead the tree. */
+  readonly file: string | undefined;
 }
 
 /** What a pick in the Source picker means. */
@@ -126,6 +129,7 @@ export function SourcePicker(props: {
               tree={sourceTree(props.catalog, props.data, sanity.samples)}
               current={props.current}
               footer={false}
+              origin={{ file: props.data?.file, page: undefined }}
               {...(props.data?.onStepItem ? { onStepItem: props.data.onStepItem } : {})}
               onExpand={(node, index) => {
                 if (node.path.startsWith('sanity:')) {
@@ -150,7 +154,8 @@ export function SourcePicker(props: {
 
 /** The tree path a loop's source is at, for the picker's mark. */
 export function sourcePath(source: LoopSource): string {
-  return `${source.kind}:${source.collection}`;
+  // A List prop's row is the page's own, at the name it is read by.
+  return source.kind === 'list' ? source.collection : `${source.kind}:${source.collection}`;
 }
 
 /** The tree path of a list inside a collection's items. */
@@ -212,14 +217,15 @@ function useSanitySamples(load: ((type: string) => Promise<unknown>) | undefined
   };
 }
 
-// The project's collections, each opening to one item's fields, then the
-// page's lists.
-function sourceTree(
+// The project's collections, each opening to one item's fields, and the
+// page's lists after them. A component's own lists lead instead: they are what
+// its markup is given to loop over, and a collection is a list from outside it.
+export function sourceTree(
   catalog: LoopCatalog | undefined,
   data: SourcePickerData | undefined,
   sanitySamples: Readonly<Record<string, unknown>>,
 ): readonly PickerNode[] {
-  const nodes: PickerNode[] = [];
+  const collections: PickerNode[] = [];
   for (const collection of catalog?.collections ?? []) {
     const { source } = collection;
     const preview = collection.count === undefined ? 'collection' : `${collection.count} items`;
@@ -228,7 +234,7 @@ function sourceTree(
     // An Astro entry keeps its fields under `data`; a Sanity document is its fields.
     const fields = sample === undefined ? undefined : fieldsOf(source.kind === 'astro' ? (toRecord(sample)?.['data'] ?? sample) : sample, path);
     const query = { collection: source.collection, name: path };
-    nodes.push({
+    collections.push({
       path,
       key: collection.title,
       kind: 'collection',
@@ -240,9 +246,9 @@ function sourceTree(
       pickable: true,
     });
   }
-  for (const node of pageLists(data)) {
-    nodes.push({ ...node, section: 'loop-page' });
-  }
+  const inComponent = componentNameOf(data?.file) !== undefined;
+  const own = pageLists(data).map((node) => ({ ...node, section: inComponent ? 'loop-component' : 'loop-page' }));
+  const nodes = inComponent ? [...own, ...collections] : [...collections, ...own];
   assert(nodes.length <= LIMITS.treeNodesMax, 'The Source tree is bounded');
   return nodes;
 }

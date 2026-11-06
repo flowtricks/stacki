@@ -8,6 +8,7 @@ import { assert } from '../../../shared/core/assert';
 import { toRecord } from '../../../shared/core/record';
 import { ASTRO_CONTENT_ID } from '../../../shared/properties/astroContent';
 import type { RemoteSchemaField, RemoteType } from '../../../shared/properties/cmsRemoteSchema';
+import type { ItemFieldDeclaration, ItemFieldKind } from '../../editor/listPropType';
 import type { LoopField, LoopFieldKind, LoopSource, LoopSourceKind } from '../../editor/loopQuery';
 import { isFieldPath } from '../../editor/loopQuery';
 import { listCmsConnections, remoteReferenceOptions } from '../../ipc/cmsConnectionsBridge';
@@ -43,6 +44,32 @@ export interface LoopCatalog {
 export interface CatalogField extends LoopField {
   /** The types or collections a reference field points at, whose items are its choices. */
   readonly references: readonly string[];
+}
+
+/** A List prop's item fields as the filter and sort menus offer them. */
+export function listItemFields(fields: readonly ItemFieldDeclaration[]): readonly CatalogField[] {
+  assert(fields.length <= LOOP_CATALOG_LIMITS.fieldsMax, 'A list’s item fields are bounded');
+  return fields.map((field) => ({ path: field.name, title: titled(field.name), kind: itemFieldKind(field.kind), options: [], references: [] }));
+}
+
+// A link is words to compare; an image is only there or not, since its text is
+// an address rather than something a person filters by.
+function itemFieldKind(kind: ItemFieldKind): LoopFieldKind {
+  switch (kind) {
+    case 'text':
+    case 'link':
+      return 'text';
+    case 'number':
+      return 'number';
+    case 'switch':
+      return 'boolean';
+    case 'image':
+      return 'image';
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
+  }
 }
 
 export async function loadCatalog(projectPath: string): Promise<LoopCatalog> {

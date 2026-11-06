@@ -20,7 +20,7 @@
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import type { ImportDecl } from '../../shared/page/pageNode';
-import { astroQueryCode, assertLoopQuery, chainQueryCode, sanityQueryCode, type LoopField, type LoopQuery } from './loopQuery';
+import { astroQueryCode, assertLoopQuery, chainQueryCode, listQueryCode, sanityQueryCode, type LoopField, type LoopQuery, type LoopSource } from './loopQuery';
 import { readingChain, readLoop, type LoopReading } from './loopQueryRead';
 import { reboundItem, type ItemShape } from './loopRebind';
 import { parseFrontmatter, type ParsedFrontmatter } from './loopSyntax';
@@ -28,7 +28,7 @@ import { dataFormProblem, optionsLiteral, rewrittenOptions } from './optionsQuer
 import { LIST_ITEMS_HELPER, LIST_ITEMS_NAME, listItemsNeed } from './listItemsHelper';
 import { reboundOptions, type BindingChange } from './optionsBinding';
 import { fieldListCode, type FieldList } from './loopFieldList';
-import { splitMapHead } from './loopBindings';
+import { splitMapHead, type LoopHead } from './loopBindings';
 import { autoQueryName, QUERY_MARK } from './dataScope';
 import type { EditorModel, EditorNode } from './pageView';
 
@@ -91,6 +91,9 @@ export function planLoop(input: LoopPlanInput): LoopPlanResult {
   if (input.target.kind === 'binding') {
     return bindingEdit(input, input.target.change, { reading, frontmatter: before, data: head.data });
   }
+  if (input.target.kind === 'query' && input.target.query.source.kind === 'list') {
+    return { ok: true, plan: listEdit(input, input.target.query, head) };
+  }
   const inPlace = optionsEdit(input, reading, before);
   if (inPlace !== undefined) {
     return inPlace;
@@ -133,6 +136,16 @@ export function planLoop(input: LoopPlanInput): LoopPlanResult {
   };
 }
 
+// A List prop's settings live in the loop's own head, where the prop is read:
+// the frontmatter, the imports and the children stay as they are, since a
+// filter, a sort and a limit leave each item as it was.
+function listEdit(input: LoopPlanInput, query: LoopQuery, head: LoopHead): LoopPlan {
+  const loopHead = `${listQueryCode(query)}.map((${head.item}${head.index ? `, ${head.index}` : ''}) => (`;
+  const loop = { ...input.loop, head: loopHead };
+  assert(splitMapHead(loop.head)?.item === head.item, 'A list prop’s head is one the loop editor reads back');
+  return { ...inPlacePlan(input, input.model.extraFrontmatter, sourceKeyOf(query.source)), loop };
+}
+
 // The loop's children for the new source: put back as they were for it, re-pointed
 // at its fields when items take another shape, or left as they are.
 function reboundChildren(
@@ -158,7 +171,7 @@ function optionsEdit(input: LoopPlanInput, reading: LoopReading, frontmatter: Pa
   if (reading.kind !== 'query' || reading.home === undefined || target.kind !== 'query') {
     return undefined;
   }
-  if (targetKey(target) !== `${reading.query.source.kind}:${reading.query.source.collection}`) {
+  if (targetKey(target) !== sourceKeyOf(reading.query.source)) {
     return undefined;
   }
   const holder = reading.chain[reading.chain.length - 1];
@@ -199,7 +212,7 @@ function bindingEdit(
   read: { readonly reading: LoopReading; readonly frontmatter: ParsedFrontmatter; readonly data: string },
 ): LoopPlanResult {
   const { reading, frontmatter } = read;
-  if (reading.kind === 'query' && reading.home === undefined && change.kind !== 'unbind') {
+  if (reading.kind === 'query' && reading.home === undefined && reading.query.source.kind !== 'list' && change.kind !== 'unbind') {
     return convertedBinding(input, reading.query, change);
   }
   if (reading.kind !== 'query' || reading.home?.kind !== 'options') {
@@ -316,6 +329,7 @@ function writtenQuery(
 ): Written | { readonly ok: false; readonly message: string } {
   const query = target.query;
   assertLoopQuery(query);
+  assert(query.source.kind !== 'list', 'A list prop’s settings are written in the loop’s head');
   let imports = input.model.imports;
   let code: string;
   if (query.source.kind === 'astro') {
@@ -581,11 +595,17 @@ function withoutSourceSpans(nodes: readonly EditorNode[], depth: number): readon
   });
 }
 
+// A List prop is keyed as the value it is, whatever its settings say, so a
+// switch away from it and back finds the same remembered children.
+function sourceKeyOf(source: LoopSource): string {
+  return source.kind === 'list' ? `value:${source.collection}` : `${source.kind}:${source.collection}`;
+}
+
 /** What a loop reads, by key: `astro:blog`, `sanity:pastor`, `value:items`. */
 export function targetKey(target: LoopTarget): string {
   switch (target.kind) {
     case 'query':
-      return `${target.query.source.kind}:${target.query.source.collection}`;
+      return sourceKeyOf(target.query.source);
     case 'value':
       return `value:${target.data.trim()}`;
     case 'empty':
@@ -605,9 +625,9 @@ export function targetKey(target: LoopTarget): string {
 function readingKeyOf(reading: LoopReading, data: string): string | undefined {
   switch (reading.kind) {
     case 'query':
-      return `${reading.query.source.kind}:${reading.query.source.collection}`;
+      return sourceKeyOf(reading.query.source);
     case 'partial':
-      return `${reading.source.kind}:${reading.source.collection}`;
+      return sourceKeyOf(reading.source);
     case 'value':
       return `value:${data.trim()}`;
     case 'empty':

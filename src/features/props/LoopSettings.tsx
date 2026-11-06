@@ -22,10 +22,11 @@ import { literalCode, literalItems, STARTER_ITEMS } from '../../editor/loopLiter
 import { LiteralItemsSection } from './LoopLiteralItems';
 import { fieldListOf, type FieldList } from '../../editor/loopFieldList';
 import { fieldListPath, SourcePicker, sourcePath, type NewListOffer, type SourcePick, type SourcePickerData } from './LoopSourcePicker';
-import { loadFields, LOOP_CATALOG_LIMITS, titled, type CatalogField, type LoopCatalog } from './loopCatalog';
+import { listItemFields, loadFields, LOOP_CATALOG_LIMITS, titled, type CatalogField, type LoopCatalog } from './loopCatalog';
 import { fieldNamed, itemsModeQuery, readingKey, sourceKey } from './loopSettingsModel';
 import { connectableProps, propNameProblem, SETTING_TITLES } from '../../editor/optionsBinding';
 import { propTooltip } from '../../editor/loopProps';
+import { listPropOf } from '../../editor/propDeclaration';
 import type { BindingContext } from './LoopBinding';
 import { LOOP_SETTINGS, type LoopSetting, type SettingHome } from '../../editor/optionsQuery';
 import { LoopLineage, tracedCollection, useLoopTrace, type TracedCollection } from './LoopLineage';
@@ -235,7 +236,8 @@ const UNLINKED: Readonly<Record<LoopSetting, SettingHome>> = {
 };
 
 // The settings the reading has: a traced list's, a partly custom list's
-// notice, a collection list's, or a typed list's items.
+// notice, a List prop's, a collection list's, or a typed list's items. A List
+// prop has no Dynamic and Selected switch: its items have no ids to pick by.
 function ReadingSettings(props: {
   readonly reading: LoopReading;
   readonly traced: ReturnType<typeof useTracedEditing>;
@@ -252,7 +254,17 @@ function ReadingSettings(props: {
     <>
       {reading.kind === 'value' && reading.origin.kind === 'call' && <TracedSettings {...shared} traced={props.traced} />}
       {reading.kind === 'partial' && <PartialNotice onReplace={() => onApply({ kind: 'query', query: emptyQuery(reading.source), fields: fields ?? [] })} />}
-      {reading.kind === 'query' && (
+      {reading.kind === 'query' && reading.query.source.kind === 'list' && (
+        <QuerySections
+          {...shared}
+          query={reading.query}
+          fields={fields}
+          stored="code"
+          itemPath={[]}
+          onChange={(query) => onApply({ kind: 'query', query, fields: [] })}
+        />
+      )}
+      {reading.kind === 'query' && reading.query.source.kind !== 'list' && (
         <CollectionSettings
           {...shared}
           query={reading.query}
@@ -461,7 +473,12 @@ function useNotice(): readonly [Notice | undefined, (notice: Notice | undefined)
 function useLoopReading(input: Omit<LoopReadInput, 'fieldKind'>, projectPath: string | undefined, catalog: LoopCatalog | undefined) {
   const first = useMemo(() => readLoop(input), [input]);
   const firstSource = first.kind === 'query' ? first.query.source : first.kind === 'partial' ? first.source : undefined;
-  const fields = useCatalogFields(projectPath, catalog, firstSource);
+  const catalogFields = useCatalogFields(projectPath, catalog, firstSource);
+  const listFields = useMemo(() => {
+    const declared = firstSource?.kind === 'list' ? listPropOf(input.frontmatter, firstSource.collection)?.fields : undefined;
+    return declared === undefined ? undefined : listItemFields(declared);
+  }, [firstSource, input.frontmatter]);
+  const fields = listFields ?? catalogFields;
   const reading = useMemo(() => {
     if (fields === undefined || firstSource === undefined) {
       return first;
@@ -508,6 +525,10 @@ function SourceRow(props: SourceRowProps) {
   const current = sourceKeyOf(props);
   const shown = props.fieldList === undefined ? sourceOptions(props, catalog, current).find((option) => option.value === current) : undefined;
   const choose = (pick: SourcePick): void => {
+    // Picking the list it already reads keeps the settings refining it.
+    if (pick.kind === 'value' && `value:${pick.data}` === current) {
+      return;
+    }
     if (pick.kind === 'empty' || pick.kind === 'value') {
       props.onChoose(pick);
       return;
@@ -568,6 +589,9 @@ function pickerPath(props: SourceRowProps, reading: LoopReading): string | undef
   }
   if (reading.kind === 'query') {
     return sourcePath(reading.query.source);
+  }
+  if (reading.kind === 'partial' && reading.source.kind === 'list') {
+    return sourcePath(reading.source);
   }
   return reading.kind === 'value' ? props.data.trim() : undefined;
 }
@@ -635,6 +659,9 @@ function currentOption(props: SourceRowProps, current: string): DropdownOption<s
   const reading = props.reading;
   if (reading.kind === 'query' || reading.kind === 'partial') {
     const source = reading.kind === 'query' ? reading.query.source : reading.source;
+    if (source.kind === 'list') {
+      return { value: current, label: source.collection, group: 'On this page', hint: '', icon: <LayersIcon size={13} /> };
+    }
     return { value: current, label: source.collection, group: source.kind === 'astro' ? 'Content collections' : 'Sanity', icon: <CollectionIcon size={13} /> };
   }
   if (reading.kind === 'value' && props.traced !== undefined) {

@@ -198,7 +198,7 @@ test('in a component: fitting props, CMS data, and a new prop bound in one undo 
   assert.ok(rows.includes('count'), 'a number prop prints as words, so it is listed');
   assert.ok(!rows.includes('shown'), 'a switch does not fit a text field');
   const headings = [...menu.querySelectorAll('.dp-section')].map((heading) => heading.textContent);
-  assert.deepEqual(headings, ['Button.astro props', 'Content Collections'], 'props first, then the CMS data');
+  assert.deepEqual(headings, ['Button', 'Content Collections'], 'the component’s props first, under its name, then the CMS data');
   assert.ok(menu.querySelector('.dp-kind-icon'), 'each prop row leads with its type icon');
 
   await click(byText('New Plain Text property'));

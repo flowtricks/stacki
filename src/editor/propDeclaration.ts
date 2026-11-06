@@ -38,9 +38,9 @@ import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { err, ok, type Result } from '../../shared/core/result';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
-import { destructureEnd, freeLocal, propsInterfaceBody, propsInterfaceEnd, propsPattern, readPropsDestructure } from './loopProps';
+import { destructureEnd, freeLocal, propNamed, propsInterfaceBody, propsInterfaceEnd, propsPattern, readPropsDestructure } from './loopProps';
 import { NUMBER_DECIMALS_MAX, type NumberSettings, type SwitchSettings } from './propDocumentation';
-import { listDefaultCode, listSettingsProblem, listTypeText, type ListSettings } from './listPropType';
+import { isListType, listDefaultCode, listFieldsOfType, listSettingsProblem, listTypeText, type ItemFieldDeclaration, type ListSettings } from './listPropType';
 import { IMAGE_TYPE, imageDefaultOf, imageTypeText, type ImageDefault } from './imagePropDefault';
 
 /** What a new prop holds: words, a number, a switch, one of a list of words, attributes, a list of items or an image. */
@@ -707,6 +707,33 @@ export function memberTypes(frontmatter: string): ReadonlyMap<string, string> {
   }
   assert(out.size <= LIMITS.propSchemaFieldsMax, 'memberTypes: the members are bounded');
   return out;
+}
+
+/** A prop that holds a list, as a loop over it reads it. */
+export interface ListPropReading {
+  /** The prop's name, as a page passes it. */
+  readonly key: string;
+  /** Its items' fields, when its type states them as plain fields. */
+  readonly fields: readonly ItemFieldDeclaration[] | undefined;
+}
+
+/**
+ * The list prop the frontmatter reads by `local`, or undefined when that name
+ * is no prop or holds no list. Its type says so, read by the Properties panel's
+ * own reader (listFieldsOfType); a prop with no type of its own is a list when
+ * its default is written as one, and its items' fields are then unknown.
+ */
+export function listPropOf(frontmatter: string, local: string): ListPropReading | undefined {
+  const entry = propNamed(frontmatter, local);
+  if (entry === undefined) {
+    return undefined;
+  }
+  const type = memberTypes(frontmatter).get(entry.key);
+  if (type !== undefined) {
+    return isListType(type) ? { key: entry.key, fields: listFieldsOfType(type, frontmatter) } : undefined;
+  }
+  const span = entry.defaultValue;
+  return span !== undefined && frontmatter.slice(span.from, span.to).startsWith('[') ? { key: entry.key, fields: undefined } : undefined;
 }
 
 function hasMember(frontmatter: string, key: string): boolean {

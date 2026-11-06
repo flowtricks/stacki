@@ -315,6 +315,11 @@ export function listFieldsOfType(type: string, frontmatter: string): readonly It
   return fields;
 }
 
+/** Whether a type is a list of something, whatever its items hold: what a loop can go over. */
+export function isListType(type: string): boolean {
+  return type.length <= LOOP_SYNTAX_LIMITS.sourceCharsMax && arrayItemType(type.trim()) !== undefined;
+}
+
 // `readonly X[]`, `X[]`, `Array<X>` or `ReadonlyArray<X>`: X.
 function arrayItemType(type: string): string | undefined {
   const bare = type.replace(/^readonly\s+/, '').trim();

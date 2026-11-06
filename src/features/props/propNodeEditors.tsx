@@ -381,8 +381,9 @@ function MapListSettings({
       onNeedSample: context?.onNeedSample,
       onStepItem: context?.onStepItem,
       frontmatter,
+      file: dataContext?.filePath,
     }),
-    [tree, context, frontmatter],
+    [tree, context, frontmatter, dataContext?.filePath],
   );
   if (onSetLoopSource === undefined) {
     return children;

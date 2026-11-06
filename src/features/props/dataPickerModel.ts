@@ -135,11 +135,14 @@ export interface DataOrigin {
  */
 export function sectionHeading(section: string, origin: DataOrigin | undefined): string | undefined {
   const file = fileNameOf(origin?.file);
+  const component = componentNameOf(origin?.file);
   switch (section) {
     case 'loop':
       return 'Loop item';
     case 'props':
-      return file === undefined ? 'Props' : `${file} props`;
+      // A component's props are the component's own, so its name says it all;
+      // a page is not one, and says which file's props these are.
+      return component ?? (file === undefined ? 'Props' : `${file} props`);
     case 'frontmatter':
       return file === undefined ? 'Frontmatter' : `${file} frontmatter`;
     case 'collections':
@@ -149,9 +152,32 @@ export function sectionHeading(section: string, origin: DataOrigin | undefined):
       return 'Sanity';
     case 'loop-page':
       return 'On this page';
+    case 'loop-component':
+      return component ?? 'On this page';
     default:
       return undefined;
   }
+}
+
+/** Whether a group of rows is a component's own: its heading is drawn as components are. */
+export function isComponentSection(section: string | undefined, origin: DataOrigin | undefined): boolean {
+  if (section !== 'props' && section !== 'loop-component') {
+    return false;
+  }
+  return componentNameOf(origin?.file) !== undefined;
+}
+
+/**
+ * The component a file is, as the app names one (`PricingCard`), or undefined
+ * for a page or no file at all: nothing passes a page props, so what it holds
+ * is the page's rather than a component's.
+ */
+export function componentNameOf(file: string | undefined): string | undefined {
+  const name = fileNameOf(file);
+  if (file === undefined || name === undefined || /(^|[\\/])src[\\/]pages[\\/]/.test(file)) {
+    return undefined;
+  }
+  return name.replace(/\.astro$/, '');
 }
 
 function fileNameOf(path: string | undefined): string | undefined {

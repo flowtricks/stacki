@@ -21,7 +21,17 @@ import {
   TextIcon,
 } from '../../ui/Icons';
 import { pathSteps } from '../../editor/dataSample';
-import { entryPageOf, entryPath, pagesOfPath, sectionHeading, shownEntryRows, steppedEntryIndex, type DataOrigin, type EntryPages } from './dataPickerModel';
+import {
+  entryPageOf,
+  entryPath,
+  isComponentSection,
+  pagesOfPath,
+  sectionHeading,
+  shownEntryRows,
+  steppedEntryIndex,
+  type DataOrigin,
+  type EntryPages,
+} from './dataPickerModel';
 
 // The data behind the page, as something you can look through rather than
 // something you have to already know. Every row is a value that is in scope
@@ -487,7 +497,7 @@ function DataRoots({
     return (
       <React.Fragment key={`s:${node.path}`}>
         {head && (
-          <div className="dp-section">
+          <div className={isComponentSection(node.section, origin) ? 'dp-section component' : 'dp-section'}>
             <SectionIcon section={node.section} />
             {head}
           </div>
@@ -500,7 +510,7 @@ function DataRoots({
 // Where a section's data comes from, as a mark beside its heading: the
 // component whose props these are, or Astro for its content collections.
 function SectionIcon({ section }: { readonly section: string | undefined }) {
-  if (section === 'props') {
+  if (section === 'props' || section === 'loop-component') {
     return <ElementComponentIcon size={11} className="dp-section-icon" />;
   }
   if (section === 'collections') {

@@ -3037,6 +3037,13 @@ body > .embed-editor_provenance {
 .dp-section-icon {
   flex: none;
 }
+/* A component's own group is headed by its name, kept as it is written and in
+   the green a component is drawn in everywhere else. */
+.dp-section.component {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--component-green);
+}
 .dp-loading {
   padding: 4px 6px;
   font-size: 11px;

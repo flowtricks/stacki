@@ -117,7 +117,7 @@ test('a sampled list of records pages; a list of words does not', () => {
 test('every group is headed by where its data lives', () => {
   const component = { file: 'src/components/Button.astro', page: 'src/pages/index.astro' };
   // A heading is only the group's name: no note says what its data depends on.
-  assert.equal(sectionHeading('props', component), 'Button.astro props');
+  assert.equal(sectionHeading('props', component), 'Button', 'a component’s props are headed by its name');
   assert.equal(sectionHeading('frontmatter', component), 'Button.astro frontmatter');
   assert.equal(sectionHeading('collections', component), 'Content Collections');
   const page = { file: 'src/pages/index.astro', page: undefined };

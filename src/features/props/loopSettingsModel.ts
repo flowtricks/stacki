@@ -89,7 +89,19 @@ export function orderLabels(order: LoopSortOrder): { readonly ascending: string;
 export type SourceKey = 'empty' | 'custom' | `astro:${string}` | `sanity:${string}` | `value:${string}`;
 
 export function sourceKey(source: LoopSource): SourceKey {
-  return source.kind === 'astro' ? `astro:${source.collection}` : `sanity:${source.collection}`;
+  switch (source.kind) {
+    case 'astro':
+      return `astro:${source.collection}`;
+    case 'sanity':
+      return `sanity:${source.collection}`;
+    case 'list':
+      // The prop as the Source menu lists it, whatever settings refine it.
+      return `value:${source.collection}`;
+    default: {
+      const exhaustive: never = source.kind;
+      return exhaustive;
+    }
+  }
 }
 
 /** What the Source menu shows as chosen for a reading. */

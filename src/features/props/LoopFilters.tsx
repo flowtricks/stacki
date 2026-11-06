@@ -13,6 +13,7 @@ import {
   type LoopFieldKind,
   type LoopOperator,
   type LoopQuery,
+  type LoopSourceKind,
 } from '../../editor/loopQuery';
 import { CodeIcon } from '../../ui/Icons';
 import { type CatalogField, type LoopCatalog } from './loopCatalog';
@@ -244,13 +245,29 @@ function CustomConditionEditor(props: {
       <CodeBox
         value={props.code}
         label="Filter code"
-        placeholder={source === 'sanity' ? 'count(serviceTimes) > 1' : 'data.title.startsWith("Pastor")'}
+        placeholder={customFilterPlaceholder(source)}
         charsMax={LOOP_QUERY_LIMITS.customCodeCharsMax}
         check={(code) => customFilterProblem(code, source)}
         onCommit={(code) => props.onCommit({ kind: 'custom', code })}
       />
     </div>
   );
+}
+
+// What a custom filter reads its fields from, as an example of the source's own code.
+function customFilterPlaceholder(source: LoopSourceKind): string {
+  switch (source) {
+    case 'astro':
+      return 'data.title.startsWith("Pastor")';
+    case 'sanity':
+      return 'count(serviceTimes) > 1';
+    case 'list':
+      return 'item.title.startsWith("Pastor")';
+    default: {
+      const exhaustive: never = source;
+      return exhaustive;
+    }
+  }
 }
 
 // The fields a filter can name, as a tree of what an item holds with each

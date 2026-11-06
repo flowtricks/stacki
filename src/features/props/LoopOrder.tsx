@@ -136,6 +136,7 @@ function SortEditor(props: SortSectionProps) {
           {custom !== undefined && (
             <CustomSortRow
               code={custom}
+              source={source}
               open={open === 0}
               onToggle={() => setOpen(open === 0 ? undefined : 0)}
               onChange={(customSort) => props.onChange({ ...query, customSort })}
@@ -170,6 +171,7 @@ function SortEditor(props: SortSectionProps) {
 // the list to its source's own order.
 function CustomSortRow(props: {
   readonly code: string;
+  readonly source: LoopSourceKind;
   readonly open: boolean;
   readonly onToggle: () => void;
   readonly onChange: (code: string | undefined) => void;
@@ -185,7 +187,7 @@ function CustomSortRow(props: {
           <CodeBox
             value={props.code}
             label="Sort code"
-            placeholder="(a, b) => a.data.order - b.data.order"
+            placeholder={props.source === 'list' ? '(a, b) => a.order - b.order' : '(a, b) => a.data.order - b.data.order'}
             charsMax={LOOP_QUERY_LIMITS.customCodeCharsMax}
             check={customSortProblem}
             onCommit={props.onChange}
