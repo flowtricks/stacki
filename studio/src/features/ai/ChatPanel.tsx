@@ -57,8 +57,10 @@ export function ChatPanel({ file, refresh }: { readonly file: string; readonly r
           <button onClick={reload}>Retry connection</button>
         </div>
       )}
-      {chat.messages.length || chat.error ? <ChatMessages key={chat.id} chat={chat} refresh={refresh} /> : <ChatWelcome chat={chat} />}
-      <ChatComposer key={chat.id} chat={chat} file={file} config={config} />
+      {/* The keys reset each part's local state when the chat changes. They must differ: siblings that share a
+          key make React leave an orphaned transcript in the page on every render, in development and production alike. */}
+      {chat.messages.length || chat.error ? <ChatMessages key={`messages-${chat.id}`} chat={chat} refresh={refresh} /> : <ChatWelcome chat={chat} />}
+      <ChatComposer key={`composer-${chat.id}`} chat={chat} file={file} config={config} />
     </section>
   );
 }

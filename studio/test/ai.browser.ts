@@ -30,9 +30,10 @@ try {
   assert.ok(composer && composer.x >= 0 && composer.x + composer.width <= 390);
   assert.ok(await page.getByRole('button', { name: 'Voice input', exact: true }).isVisible());
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  await verifySingleTranscript(page);
   assert.deepEqual(errors, []);
   console.log(
-    'Chat drafts, switching, image preparation/removal, reload persistence, and mobile composer passed. Live AI and microphone recognition require a configured provider and an interactive microphone.',
+    'Chat drafts, switching, image preparation/removal, reload persistence, single transcript across renders, and mobile composer passed. Live AI and microphone recognition require a configured provider and an interactive microphone.',
   );
 } finally {
   await browser.close();
@@ -61,6 +62,45 @@ async function verifyDrafts(page: Page) {
     await prompt.press('Enter');
     assert.equal(await prompt.inputValue(), 'First draft');
   }
+}
+// The transcript and the composer once shared a React key. React then left one orphaned
+// transcript in the page per render, so a chat with history filled with stale copies.
+// Typing renders the panel once per keystroke, which reproduced the fault without a provider.
+async function verifySingleTranscript(page: Page) {
+  const keystrokeCount = 6;
+  await page.evaluate(async () => {
+    const thread = {
+      id: 'single-transcript',
+      title: 'Saved chat',
+      draft: '',
+      images: [],
+      model: '',
+      messages: [
+        { id: 'question', role: 'user', content: 'Saved question', images: [] },
+        { id: 'answer', role: 'assistant', content: 'Saved answer', images: [] },
+      ],
+      status: 'idle',
+    };
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const open = indexedDB.open('studio-ai-chats', 1);
+      open.onsuccess = () => resolve(open.result);
+      open.onerror = () => reject(new Error('Could not open the chat database'));
+    });
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction('chats', 'readwrite');
+      transaction.objectStore('chats').put({ threads: [thread], active: thread.id }, 'session');
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(new Error('Could not save the chat'));
+    });
+    database.close();
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'AI chat', exact: true }).click();
+  await page.getByText('Saved answer', { exact: true }).waitFor();
+  await page.getByLabel('AI prompt', { exact: true }).pressSequentially('x'.repeat(keystrokeCount));
+  assert.equal(await page.getByLabel('AI prompt', { exact: true }).inputValue(), 'x'.repeat(keystrokeCount));
+  assert.equal(await page.locator('.chat-transcript').count(), 1);
+  assert.equal(await page.getByText('Saved answer', { exact: true }).count(), 1);
 }
 async function verifyImages(page: Page) {
   const image = await page.screenshot({ clip: { x: 0, y: 0, width: 100, height: 100 } });
