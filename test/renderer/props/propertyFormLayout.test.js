@@ -269,7 +269,9 @@ const check = (what, condition, detail) => {
         );
         check(
           `${where}: the chip is as small as the instance's`,
-          host.pill.width === hosts.instance.pill.width,
+          // Within a pixel: the same chip lands on a different subpixel in each
+          // host, and Linux text rounds it to 97 in one and 98 in the other.
+          Math.abs(host.pill.width - hosts.instance.pill.width) <= 1,
           JSON.stringify([host.pill, hosts.instance.pill]),
         );
         check(

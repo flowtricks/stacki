@@ -200,7 +200,16 @@ const HOST_PAGE = `<!doctype html><meta charset=utf-8>
            await new Promise((r) => setTimeout(r, 60));
            still = frame.scrollY === last ? still + 1 : 0;
            last = frame.scrollY;
-           if (still >= STILL_READINGS_MAX) { break; }
+           // A scroll that has begun is not settled until it lands: the Linux
+           // runner paused one 10px in for longer than ten readings, on a box
+           // that fits the frame and so has a place to land. A box too tall to
+           // fit has no such place, and stillness alone settles it.
+           const box = element.getBoundingClientRect();
+           const moved = frame.scrollY !== startY;
+           const fits = box.height <= frame.innerHeight;
+           const landed = box.top >= 0 && box.bottom <= frame.innerHeight;
+           const waiting = moved && fits && !landed;
+           if (still >= STILL_READINGS_MAX && !waiting) { break; }
          }
          const rect = element.getBoundingClientRect();
          return { startY, placed, scrollY: frame.scrollY, top: rect.top, bottom: rect.bottom, height: frame.innerHeight };

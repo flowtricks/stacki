@@ -36,6 +36,15 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.14 the 1.0.13 Desktop release, through the Linux build
+
+- The same app as 1.0.13, which never became a public Desktop release: its Linux build failed on
+  two tests, and a tag is never moved. A reveal check read a smooth scroll the runner had paused
+  10px in, and a chip width compared exactly differed by a pixel in Linux text rendering. Both
+  tests are fixed; no app code changed.
+- `create-stacki` 1.0.13 is on npm, and it creates the same project as 1.0.14. It is republished
+  when someone can approve the sign-in, so npm can trail Desktop by this one version.
+
 ## 1.0.13 page templates, moving frontmatter into components, prop settings
 
 - Create page template: the Pages `+` menu makes a template from a content collection, a Sanity
