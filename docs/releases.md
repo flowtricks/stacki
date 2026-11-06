@@ -36,6 +36,25 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.13 page templates, moving frontmatter into components, prop settings
+
+- Create page template: the Pages `+` menu makes a template from a content collection, a Sanity
+  connection or JSON from a link. The form fills itself from a fetched sample, shows the pages it
+  will make, and keeps secrets in `.env`.
+- Making a section a component moves the frontmatter it reads into the new component, leaving a
+  copy when the parent still uses it. Passing a prop is the secondary choice. Extracting a section
+  inside a loop no longer breaks the page.
+- Props: a settings gear in the data picker opens the Properties form, existing props save as you
+  edit, and list item fields can bind to data. Reset moves to the label's menu.
+- Loops over a List prop have Filters, Sort and Limit, each with a code view for code the controls
+  cannot show. Renaming a loop's variable updates every reference and refuses names that would
+  break the page.
+- Canvas: a click in a loop's outline selects the loop, an element in view no longer scrolls, and
+  Delete on `::before` or `::after` no longer deletes the parent element.
+- Code shown anywhere in the app is syntax highlighted, and the page dropdown matches the Pages
+  panel's names. Switching CMS entries no longer flashes a slug error.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.13.
+
 ## 1.0.12 clip-path SVG paste is back, a new default shape, quieter undo
 
 - Pasting an SVG into the clip-path tool works again. ⌘V never reached the tool: Desktop's Paste
