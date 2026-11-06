@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
-import type { Result } from '../../../shared/core/result';
+import type { AppError, Result } from '../../../shared/core/result';
 import { reportErrorToast } from '../../ui/errorNotices';
 import type { ComponentProperty, PropertyChange, PropertyOptionRename } from '../../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
@@ -39,10 +39,25 @@ export interface PropertyDraft {
 
 export type PropertySaveOutcome =
   | { readonly kind: 'saved'; readonly source: string }
-  /** Not written, and saving the same again would not help: bad code, a name already taken. */
+  /** Not written, and saving the same again would not help: bad code, a rename that cannot be made safely. */
   | { readonly kind: 'refused'; readonly message: string }
+  /** Refused for the name it gives the prop, so the reason shows under the Name field. */
+  | { readonly kind: 'name-refused'; readonly message: string }
   /** The file is newer than the source the save was checked against. */
   | { readonly kind: 'conflict'; readonly message: string };
+
+// What main says when the name is what cannot be written: the prop's local
+// variable cannot take it (`name`), or another prop already has it (`duplicate`).
+const NAME_REFUSALS: ReadonlySet<string> = new Set(['name', 'duplicate']);
+
+/** What a save main did not write came to, with the reason placed by its code. */
+export function refusalOf(error: AppError): PropertySaveOutcome {
+  assert(error.message !== '', 'refusalOf: a refusal says why');
+  if (error.code === 'conflict') {
+    return { kind: 'conflict', message: error.message };
+  }
+  return { kind: NAME_REFUSALS.has(error.code) ? 'name-refused' : 'refused', message: error.message };
+}
 
 /** How a form reaches its file. */
 export interface PropertySaveHost {
@@ -84,6 +99,8 @@ export function mergedProperty(base: ComponentProperty, draft: ComponentProperty
 
 interface FormStatus {
   readonly error: string;
+  /** Why the name was refused, shown under the Name field. */
+  readonly nameError: string;
   readonly notice: string;
   /** The name the file holds the prop by, which a rename moves. */
   readonly savedName: string;
@@ -107,7 +124,7 @@ interface Autosave {
 export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHost | undefined) {
   const [draft, setDraft] = useState(initial);
   const [nameText, setNameText] = useState(initial.property.name);
-  const [status, setStatus] = useState<FormStatus>({ error: '', notice: '', savedName: initial.property.name });
+  const [status, setStatus] = useState<FormStatus>({ error: '', nameError: '', notice: '', savedName: initial.property.name });
   const state = useRef<Autosave>({
     draft: initial,
     saved: initial.property,
@@ -122,12 +139,15 @@ export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHo
   const hostRef = useRef(host);
   hostRef.current = host;
 
-  const report = useCallback((next: Pick<FormStatus, 'error' | 'notice'>): void => {
+  const report = useCallback((next: Pick<FormStatus, 'error' | 'notice'> & { readonly nameError?: string }): void => {
+    const nameError = next.nameError ?? '';
     if (state.current.mounted) {
-      setStatus((previous) => ({ ...previous, ...next }));
+      setStatus((previous) => ({ ...previous, ...next, nameError }));
     } else if (next.error !== '') {
       // The form closed with this save pending, so nothing is left to show it beside.
       reportErrorToast(next.error, []);
+    } else if (nameError !== '') {
+      reportErrorToast(nameError, []);
     }
   }, []);
 
@@ -169,7 +189,7 @@ export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHo
       // A rename of an option applies once: only what came after this save is still owed.
       replaceDraft({ ...own.draft, optionRenames: own.draft.optionRenames.filter((rename) => !sent.optionRenames.includes(rename)) });
       if (own.mounted) {
-        setStatus((previous) => ({ ...previous, error: '', savedName: sent.property.name }));
+        setStatus((previous) => ({ ...previous, error: '', nameError: '', savedName: sent.property.name }));
       }
     },
     [replaceDraft],
@@ -206,6 +226,10 @@ export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHo
           case 'refused':
             own.refused = sent.property;
             report({ error: outcome.message, notice: '' });
+            return;
+          case 'name-refused':
+            own.refused = sent.property;
+            report({ error: '', nameError: outcome.message, notice: '' });
             return;
           case 'conflict':
             if ((await recover(target, outcome.message)) === 'stop') {

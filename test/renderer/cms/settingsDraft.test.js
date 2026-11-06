@@ -20,7 +20,7 @@ buildSync({
   format: 'cjs',
   logLevel: 'silent',
 });
-const { applyDraft } = require(output);
+const { applyDraft, applyDrafts, newFieldFormState, openFieldFormState, replayDrafts } = require(output);
 
 const field = (name, kind = 'text') => ({
   name,
@@ -108,4 +108,79 @@ test('a change the config would refuse is refused while it is made', () => {
     max: undefined,
   };
   assert.equal(applyDraft(settings, { kind: 'updateField', update }).ok, false);
+});
+
+const addition = (name) => ({
+  kind: 'addField',
+  name,
+  fieldKind: 'text',
+  target: undefined,
+  settings: { description: undefined, required: false, checks: {}, options: undefined, defaultValue: undefined },
+});
+
+test('a name the boundary would refuse is refused here, so it is never staged', () => {
+  for (const name of ['', 'My Field', '9lives', 'a'.repeat(65)]) {
+    assert.equal(applyDraft(settings, addition(name)).ok, false, `add ${name}`);
+    assert.equal(applyDraft(settings, { kind: 'renameField', from: 'title', to: name }).ok, false, `rename to ${name}`);
+  }
+  assert.match(applyDraft(settings, addition('My Field')).message, /starts with a letter/);
+  assert.match(applyDraft(settings, addition('a'.repeat(65))).message, /at most 64/);
+  assert.equal(applyDraft(settings, addition('a'.repeat(64))).ok, true, 'the longest name passes');
+});
+
+test('changes are staged together: a later one sees the earlier, and one refused stages none', () => {
+  const renamed = applyDrafts(settings, [
+    { kind: 'renameField', from: 'title', to: 'heading' },
+    { kind: 'updateField', update: { name: 'heading', description: 'Shown first', required: true, checks: {} } },
+  ]);
+  assert.deepEqual(names(renamed), ['heading', 'views']);
+  assert.equal(renamed.value.fields[0].description, 'Shown first', 'the update reached the renamed field');
+  const refused = applyDrafts(settings, [addition('fresh'), addition('title')]);
+  assert.equal(refused.ok, false);
+  assert.match(refused.message, /already exists/);
+});
+
+test('changes left over from a refused save are made again on the config as it stands', () => {
+  const replayed = replayDrafts(settings, [addition('fresh'), addition('title'), { kind: 'renameField', from: 'views', to: 'reads' }]);
+  assert.deepEqual(
+    replayed.value.fields.map((each) => each.name),
+    ['title', 'reads', 'fresh'],
+  );
+  assert.deepEqual(
+    replayed.changes.map((change) => change.kind),
+    ['addField', 'renameField'],
+    'one the config has made impossible is left out',
+  );
+});
+
+test('a new field form is blank until named, and then saved under its key', () => {
+  const form = (name, kind = 'text', target = '') => ({ draft: { ...field(name, kind) }, kind, target });
+  assert.deepEqual(newFieldFormState(settings, form('')), { kind: 'blank' });
+  assert.deepEqual(newFieldFormState(settings, form('  ')), { kind: 'blank' });
+  const ready = newFieldFormState(settings, form(' My Field '));
+  assert.equal(ready.kind, 'ready');
+  assert.equal(ready.changes[0].name, 'my-field');
+  assert.equal(newFieldFormState(settings, form('Title')).changes[0].name, 'Title', 'a key is kept as written');
+  assert.match(newFieldFormState(settings, form('title')).message, /title already exists/);
+  assert.match(newFieldFormState(settings, form('9 lives')).message, /starts with a letter/);
+  assert.match(newFieldFormState(settings, form('author', 'reference')).message, /Choose the collection/);
+  assert.equal(newFieldFormState(settings, form('author', 'reference', 'people')).changes[0].target, 'people');
+  assert.equal(newFieldFormState(settings, form('note', 'text', 'people')).changes[0].target, undefined, 'only a reference has a target');
+});
+
+test('an open field form changes only what changed, renaming first', () => {
+  const [title] = settings.fields;
+  assert.deepEqual(openFieldFormState(settings, title, title), { kind: 'ready', changes: [] });
+  assert.deepEqual(openFieldFormState(settings, title, { ...title, name: ' title ' }), { kind: 'ready', changes: [] }, 'spaces around a name are no rename');
+  assert.deepEqual(openFieldFormState(settings, title, { ...title, name: 'Main Title' }).changes, [{ kind: 'renameField', from: 'title', to: 'main-title' }]);
+  const both = openFieldFormState(settings, title, { ...title, name: 'heading', required: true });
+  assert.deepEqual(
+    both.changes.map((change) => change.kind),
+    ['renameField', 'updateField'],
+  );
+  assert.equal(both.changes[1].update.name, 'heading');
+  assert.match(openFieldFormState(settings, title, { ...title, name: 'views' }).message, /views already exists/);
+  assert.match(openFieldFormState(settings, title, { ...title, name: '' }).message, /Name the field/);
+  const fixed = { ...title, editable: false };
+  assert.deepEqual(openFieldFormState(settings, fixed, { ...fixed, required: true }).changes, [], 'a field written as a method keeps its settings');
 });

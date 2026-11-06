@@ -3,7 +3,8 @@
 //
 //   pre-commit   staged files: Prettier check, policy scan, ESLint
 //   commit-msg   the message: typed subject, length, a body (AGENTS.md §17)
-//   pre-push     the full CI gate: clean builds, static checks, every test
+//   pre-push     the full CI gate: clean builds, static checks, every test;
+//                a release tag also runs the Linux preflight
 //
 // The checks are the ones every agent harness runs (checks.mts); CI runs the
 // full gate. `git commit --no-verify` skips these, which is why the agent
@@ -14,9 +15,10 @@ import { pathToFileURL } from 'node:url';
 import { assert } from './assert.mts';
 import { checkFiles, repositoryRoot, stagedFiles } from './checks.mts';
 import { commitMessageProblems, describeCommitMessageProblem } from './commitMessage.mts';
-import { runPushChecks } from './pushChecks.mts';
+import { readPushedRefs, runPushChecks } from './pushChecks.mts';
 
 const HOOKS = ['pre-commit', 'commit-msg', 'pre-push'] as const;
+const STDIN_DESCRIPTOR = 0;
 type Hook = (typeof HOOKS)[number];
 
 function parseHook(name: string | undefined): Hook {
@@ -48,6 +50,15 @@ function commitMessage(messageFile: string | undefined): number {
   return 1;
 }
 
+function prePush(root: string): number {
+  const pushedRefs = readPushedRefs(STDIN_DESCRIPTOR);
+  if (pushedRefs === undefined) {
+    console.error('pre-push: too many refs to read; push them in smaller groups.');
+    return 1;
+  }
+  return runPushChecks(root, pushedRefs);
+}
+
 function main(argumentsList: readonly string[]): number {
   const hook = parseHook(argumentsList[0]);
   const root = repositoryRoot();
@@ -57,7 +68,7 @@ function main(argumentsList: readonly string[]): number {
     case 'commit-msg':
       return commitMessage(argumentsList[1]);
     case 'pre-push':
-      return runPushChecks(root);
+      return prePush(root);
     default: {
       const unreachable: never = hook;
       return unreachable;

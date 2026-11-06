@@ -1,10 +1,19 @@
 // Rename only parsed component attributes and Astro.props accesses. Text, CSS,
 // unrelated components, and lexical aliases retain their original spelling.
+//
+// A prop's own local variable is renamed here too, by the scope-aware plan a
+// loop's variable uses. It runs in main, not in the renderer, for three reasons:
+// the panel edits a component that may not be the open page, so only main has
+// its parsed model; this file is the one transaction every host goes through,
+// Studio's server included; and a write is rechecked against the file it lands on.
 import { parse } from '@astrojs/compiler/sync';
 import type { Node, AttributeNode } from '@astrojs/compiler/types';
 import ts from 'typescript';
 import { readPropertyContracts } from './propertyContracts';
+import { parsePage } from '../parse/astroParser';
 import { assert } from '../../shared/core/assert';
+import { planVariableRename } from '../../shared/engine/variableRename';
+import { parsePageResult } from '../../shared/page/pageNode';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import type { PropertyOptionRename } from '../../shared/properties/propertyEditing';
 import { err, ok, type Result } from '../../shared/core/result';
@@ -49,6 +58,27 @@ export function renameComponentReferences(
 ): Result<string> {
   const typeNames = owner === 'definition' ? readPropertyContracts(readPropertySyntax(source)).names : new Set<string>();
   return editComponentReferences(source, names, { kind: 'rename', ...rename, typeNames: new Set(['Props', ...typeNames]) }, owner);
+}
+
+/**
+ * The file with a prop's local variable renamed, or why it cannot be, under the
+ * code `name`: the form shows that reason under its Name field. It never falls
+ * back to an alias, because `{ perks: features }` is the code this exists to stop
+ * writing. `{ features }` comes back as `{ features: perks }`, whose key the
+ * definition's own edit then renames, which leaves `{ perks }`.
+ */
+export function renamePropertyLocal(source: string, rename: PropertyRename): Result<string> {
+  assert(rename.from !== rename.to, 'A local rename changes the name');
+  const parsed = parsePageResult(parsePage(source, { locs: true }));
+  if (!parsed.editable) {
+    return err({ code: 'name', message: `This component can’t be read to rename “${rename.from}” safely. ${parsed.reason}` });
+  }
+  const plan = planVariableRename({ source, model: parsed.model }, rename);
+  if (!plan.ok) {
+    return err({ code: 'name', message: plan.message });
+  }
+  assert(plan.text !== source, 'A planned rename changes the file');
+  return ok(plan.text);
 }
 
 export function renameComponentOptionValues(

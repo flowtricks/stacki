@@ -198,14 +198,23 @@ test('a destructured prop missing from Props gets a member only when its declara
   assert.match(declared, /\n {2}extra\?: number;\n\}/);
 });
 
-test('renames edit the key, keep the local, and shorthand returns when the names meet again', () => {
+test('renames edit the key and take the local along, and an alias keeps its own name', () => {
   const source = '---\ninterface Props {\n  /** Tip. */\n  title?: string;\n}\nconst { title = "A" } = Astro.props;\n---\n<h1>{title}</h1>';
   const title = propertyOf(source, 'title');
   const renamed = value(editPropertyDefinition(source, save(title, { name: 'heading' })));
-  assert.equal(renamed, source.replace('title?: string', 'heading?: string').replace('{ title = "A" }', '{ heading: title = "A" }'));
+  assert.equal(
+    renamed,
+    source.replace('title?: string', 'heading?: string').replace('{ title = "A" }', '{ heading = "A" }').replace('<h1>{title}</h1>', '<h1>{heading}</h1>'),
+  );
   const heading = propertyOf(renamed, 'heading');
   const back = value(editPropertyDefinition(renamed, { kind: 'save', originalName: 'heading', property: { ...heading, name: 'title' } }));
   assert.equal(back, source);
+  // An alias keeps its name, and shorthand returns when the key comes round to it.
+  const aliased = source.replace('{ title = "A" }', '{ title: label = "A" }').replace('{title}', '{label}');
+  const key = value(editPropertyDefinition(aliased, save(propertyOf(aliased, 'title'), { name: 'heading' })));
+  assert.match(key, /\{ heading: label = "A" \}/);
+  const met = value(editPropertyDefinition(key, { kind: 'save', originalName: 'heading', property: { ...propertyOf(key, 'heading'), name: 'label' } }));
+  assert.match(met, /\{ label = "A" \}/);
   // Removing a default drops ` = …` and nothing else.
   assert.equal(value(editPropertyDefinition(source, save(title, { defaultValue: '' }))), source.replace(' = "A"', ''));
 });

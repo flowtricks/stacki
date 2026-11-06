@@ -18,7 +18,13 @@ const {
   renameFieldIn,
   unlinkCollectionIn,
 } = require('#dist/electron/content/astroCollectionSettings.js');
-const { newFieldSettings, parseSettingsChange, parseCollectionRename } = require('#dist/shared/properties/collectionSettings.js');
+const {
+  newFieldSettings,
+  parseSettingsChange,
+  parseCollectionRename,
+  parseSettingsFieldName,
+  typedFieldName,
+} = require('#dist/shared/properties/collectionSettings.js');
 
 const CONFIG = [
   "import { defineCollection, z } from 'astro:content';",
@@ -567,4 +573,26 @@ test('every new kind’s plain schema reads back as the settings its form starts
   for (const kind of kinds) {
     assert.equal(settledFieldText(kind, 'team', newFieldSettings(kind)), newFieldText(kind, 'team'), kind);
   }
+});
+
+test('a typed field name becomes a key the way a collection name does, and the boundary takes only keys', () => {
+  const key = (typed) => typedFieldName(typed);
+  assert.deepEqual(key('My Field'), { kind: 'key', key: 'my-field' });
+  assert.deepEqual(key('  Hero   Image! '), { kind: 'key', key: 'hero-image' });
+  assert.deepEqual(key('Café Menu'), { kind: 'key', key: 'cafe-menu' }, 'an accent leaves its letter');
+  assert.deepEqual(key('Is it live?'), { kind: 'key', key: 'is-it-live' });
+  for (const kept of ['heroImage', 'hero_image', 'hero-image', 'Title', 'a1']) {
+    assert.deepEqual(key(kept), { kind: 'key', key: kept }, 'a key is kept as written');
+    assert.equal(parseSettingsFieldName(kept), kept);
+  }
+  assert.equal(parseCollectionRename('Café Menu'), 'cafe-menu', 'a collection name derives alike');
+  assert.deepEqual(key(''), { kind: 'blank' });
+  assert.deepEqual(key('   '), { kind: 'blank' });
+  assert.equal(key('9 lives').kind, 'invalid');
+  assert.match(key('!!!').message, /starts with a letter/, 'no words is a bad name, not a missing one');
+  assert.match(key('a'.repeat(65)).message, /at most 64/);
+  assert.match(key(`${'long word '.repeat(7)}`).message, /at most 64/, 'the derived key is held to the limit too');
+  assert.throws(() => parseSettingsFieldName('My Field'), /starts with a letter/);
+  assert.throws(() => parseSettingsFieldName(' '), /Name the field/);
+  assert.throws(() => parseSettingsFieldName('a'.repeat(65)), /at most 64/);
 });

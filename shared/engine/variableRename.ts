@@ -17,13 +17,11 @@
 // appears in it: the wrong answer here is a dangling reference, and a reason
 // shown under the field costs the person one manual edit.
 
-import { assert } from '../../shared/core/assert';
-import { LIMITS } from '../../shared/core/limits';
-import { diffCodePatch, type CodeHunk } from '../../shared/engine/codePatch';
-import type { ImportDecl, PageModel, PageNode } from '../../shared/page/pageNode';
+import { assert } from '../core/assert';
+import { LIMITS } from '../core/limits';
+import { diffCodePatch, type CodeHunk } from './codePatch';
+import type { PageModel, PageNode } from '../page/pageNode';
 import { bindingScope, innerNamesAt, readModuleScope, readTemplateScope, scopeAt, type JsAnalysis, type JsDefinitionForm, type JsScope } from './jsScope';
-import { renamedLoopVar } from './loopBindings';
-import type { EditorModel } from './pageView';
 
 export interface FileCode {
   readonly source: string;
@@ -129,6 +127,7 @@ export function variableNameProblem(name: string): string | undefined {
 /** The rename of `from` to `to` across the file, or why it cannot be made. */
 export function planVariableRename(file: FileCode, rename: VariableRename): RenamePlan {
   assert(rename.from !== rename.to, 'A rename changes the name');
+  assert(rename.from !== '', 'A rename names what it renames');
   const read = readFile(file);
   const problem = renameProblem(read, rename, { around: new Set(), hint: '' });
   if (problem !== undefined) {
@@ -139,6 +138,7 @@ export function planVariableRename(file: FileCode, rename: VariableRename): Rena
 
 /** Why a head cannot be written, whether it renames a variable, or neither. */
 export function checkLoopHead(file: FileCode, loop: { readonly id: string; readonly before: string; readonly after: string }): HeadCheck {
+  assert(loop.id !== '', 'A loop head belongs to a node');
   // Markdown keeps its code in another shape, which the scan below does not read.
   if (file.model.format !== undefined) {
     return { kind: 'edit' };
@@ -178,34 +178,16 @@ export function statementRename(name: string, before: string, after: string): St
   if (declared === undefined || declared.name === name) {
     return { kind: 'same' };
   }
+  assert(declared.from <= declared.to, 'A declared name starts before it ends');
+  assert(declared.to <= after.length, 'A declared name lies inside its statement');
   // The new name is the only difference, or the rest would be lost in the rename.
   const restored = after.slice(0, declared.from) + name + after.slice(declared.to);
   return restored.trim() === before.trim() ? { kind: 'rename', to: declared.name } : { kind: 'mixed' };
 }
 
-/**
- * The model as the rename should leave it, shown until the file's reply replaces
- * it a moment later. The nodes go through the loop rename's approximation, which
- * is fine for that long and only that long: what is written is planVariableRename.
- */
-export function predictedRename(model: EditorModel, rename: VariableRename): EditorModel {
-  const imports = model.imports.map((entry) => renamedImport(entry, rename));
-  return {
-    ...model,
-    imports,
-    extraFrontmatter: renamedFrontmatter(model.extraFrontmatter, rename),
-    nodes: renamedLoopVar(model.nodes, rename.from, rename.to),
-  };
-}
-
-function renamedImport(entry: ImportDecl, rename: VariableRename): ImportDecl {
-  if (entry.name !== rename.from) {
-    return entry;
-  }
-  return entry.named === true ? { ...entry, name: rename.to, imported: entry.imported ?? rename.from } : { ...entry, name: rename.to };
-}
-
-function renamedFrontmatter(code: string, rename: VariableRename): string {
+/** The frontmatter's own code with the name changed: what a rename's prediction shows until the file replies. */
+export function renamedFrontmatter(code: string, rename: VariableRename): string {
+  assert(rename.from !== rename.to, 'A rename changes the name');
   const analysis = readModuleScope(code);
   const read = frontmatterRead(analysis, 0);
   return applied(code, renameChanges(read.definitions, read.uses, rename));
@@ -214,6 +196,7 @@ function renamedFrontmatter(code: string, rename: VariableRename): string {
 // --- Checks ------------------------------------------------------------------------------
 
 function renameProblem(read: FileRead, rename: VariableRename, context: { readonly around: ReadonlySet<string>; readonly hint: string }): string | undefined {
+  assert(rename.from !== rename.to, 'A rename checked changes the name');
   const { from, to } = rename;
   const name = variableNameProblem(to);
   if (name !== undefined) {
@@ -237,6 +220,7 @@ function taken(read: FileRead, name: string, around: ReadonlySet<string>): boole
 }
 
 function blockedReason(read: FileRead, rename: VariableRename): string | undefined {
+  assert(read.bound.has(rename.from), 'Only a declared name reaches the blocking checks');
   const { from, to } = rename;
   if (!read.frontmatterValid) {
     return 'The frontmatter has a syntax error, so this can’t be renamed safely. Fix it first.';
@@ -258,6 +242,7 @@ function blockedReason(read: FileRead, rename: VariableRename): string | undefin
 }
 
 function captureProblem(read: FileRead, rename: VariableRename): string | undefined {
+  assert(rename.to !== '', 'Only a valid name reaches the capture check');
   const captured = read.uses.some((use) => use.name === rename.from && use.bindsInside(rename.to));
   return captured ? `“${rename.to}” is already a name inside a loop or function that reads “${rename.from}”, so it would read that instead.` : undefined;
 }
@@ -382,6 +367,8 @@ function headClosings(): readonly HeadClosing[] {
 }
 
 function closedHead(head: string, closing: HeadClosing): string {
+  assert(closing.parentheses >= 1, 'A closing shuts at least the head’s own call');
+  assert(closing.parentheses <= HEAD_PARENTHESES_MAX, 'A closing stays inside the bound tried');
   const parentheses = ')'.repeat(closing.parentheses);
   // A `function (item) {` has no `(` to fill: the placeholder gives way to a block.
   return closing.form === 'value' ? `${head}null)${parentheses}` : `${head.replace(/\($/, '')}{ return null; }${parentheses}`;
@@ -395,6 +382,11 @@ function readHeadClosed(head: string, closing: HeadClosing): HeadRead | undefine
   const free = analysis.references
     .filter((reference) => bindingScope(reference.scope, reference.name) === undefined)
     .map((reference) => ({ name: reference.name, from: reference.from - 1, to: reference.to - 1 }));
+  // The wrapping `(` is one character, which every offset above takes back off.
+  assert(
+    free.every((reference) => reference.from >= 0),
+    'A head’s reads lie after the parenthesis around it',
+  );
   return { closing, free };
 }
 
@@ -429,6 +421,8 @@ interface Walk {
 /** Every name the file binds and reads, frontmatter and template, with where each is. */
 export function readFile(file: FileCode, options: { readonly leaving?: string } = {}): FileRead {
   const at = frontmatterRange(file);
+  assert(at.from <= at.to, 'The frontmatter opens before it closes');
+  assert(at.to <= file.source.length, 'The frontmatter ends inside the file');
   const analysis = readModuleScope(file.source.slice(at.from, at.to));
   const top = frontmatterRead(analysis, at.from);
   const walk: Walk = { source: file.source, uses: [...top.uses], tags: new Set(), unreadable: [], around: new Map(), unplaced: [], leaving: options.leaving };
@@ -460,6 +454,7 @@ function frontmatterRange(file: FileCode): { readonly from: number; readonly to:
 }
 
 function frontmatterRead(analysis: JsAnalysis, offset: number): { readonly definitions: readonly FileDefinition[]; readonly uses: readonly FileUse[] } {
+  assert(offset >= 0, 'The frontmatter sits at an offset of the file');
   const definitions = analysis.definitions
     .filter((definition) => definition.scope === analysis.root)
     .map((definition) => ({ name: definition.name, from: definition.from + offset, to: definition.to + offset, form: definition.form }));
@@ -481,6 +476,7 @@ function frontmatterRead(analysis: JsAnalysis, offset: number): { readonly defin
 }
 
 function bindsBelowRoot(analysis: JsAnalysis, scope: JsScope, name: string): boolean {
+  assert(name !== '', 'A capture is asked about a name');
   const found = bindingScope(scope, name);
   return found !== undefined && found !== analysis.root;
 }
@@ -553,6 +549,7 @@ function readCode(node: PageNode, children: readonly PageNode[], around: Readonl
     return;
   }
   const holes = holesOf(children, walk);
+  assert(holes.length <= children.length, 'Children make at most one mask each');
   const inner = withoutBraces(walk.source, range);
   const analysis = readRegion(inner, holes, around, walk);
   for (const child of children) {
@@ -569,6 +566,8 @@ function namesAt(analysis: JsAnalysis, position: number, around: ReadonlySet<str
 
 // A `{…}` in markup, or the bare expression an else-if chain nests.
 function withoutBraces(source: string, range: Range): Range {
+  assert(range.from <= range.to, 'A code range starts before it ends');
+  assert(range.to <= source.length, 'A code range ends inside the file');
   const braced = source.charAt(range.from) === '{' && source.charAt(range.to - 1) === '}';
   return braced ? { from: range.from + 1, to: range.to - 1 } : range;
 }
@@ -593,6 +592,8 @@ function holesOf(children: readonly PageNode[], walk: Walk): readonly Range[] {
 }
 
 function maskedRegion(source: string, region: Range, holes: readonly Range[]): string {
+  assert(region.from <= region.to, 'A masked region starts before it ends');
+  assert(region.to <= source.length, 'A masked region ends inside the file');
   const pieces: string[] = [];
   let at = region.from;
   for (const hole of holes) {
@@ -619,6 +620,7 @@ function readRegion(region: Range, holes: readonly Range[], around: ReadonlySet<
 }
 
 function collectUses(analysis: JsAnalysis, offset: number, around: ReadonlySet<string>, walk: Walk): void {
+  assert(analysis.valid, 'Only code that was read has uses to collect');
   for (const reference of analysis.references) {
     // Read by a binding of this code, or of a loop around it: not the file's.
     if (bindingScope(reference.scope, reference.name) === undefined) {
@@ -654,7 +656,8 @@ function readTag(node: Extract<PageNode, { readonly kind: 'element' | 'component
   }
   if (node.kind !== 'raw') {
     const root = node.name.split('.')[0] ?? '';
-    if (node.kind === 'component' || node.dynamicTag === true) {
+    // A dot makes a tag a component to Astro at any case: `<icons.Star />` reads `icons`.
+    if (node.kind === 'component' || node.dynamicTag === true || root !== node.name) {
       if (!around.has(root)) {
         walk.tags.add(root);
       }
@@ -668,13 +671,16 @@ function readTag(node: Extract<PageNode, { readonly kind: 'element' | 'component
     if (char === '>') {
       return;
     }
-    at = readTagPart(char, at, { range, around, walk });
+    const next = readTagPart(char, at, { range, around, walk });
+    assert(next > at, 'Every pass over a tag moves forward');
+    at = next;
   }
 }
 
 function readTagPart(char: string, at: number, context: { readonly range: Range; readonly around: ReadonlySet<string>; readonly walk: Walk }): number {
   const { range, around, walk } = context;
   const { source } = walk;
+  assert(at < range.to, 'A tag is read inside its own range');
   if (char === '"' || char === "'") {
     const close = source.indexOf(char, at + 1);
     return close === -1 ? range.to : close + 1;
@@ -693,6 +699,7 @@ function readTagPart(char: string, at: number, context: { readonly range: Range;
 
 function readTagCode(range: Range, around: ReadonlySet<string>, walk: Walk): void {
   const { source } = walk;
+  assert(range.from < range.to, 'Code in a tag holds at least its delimiters');
   if (source.charAt(range.from) === '`') {
     readRegion(range, [], around, walk);
     return;
@@ -717,12 +724,15 @@ function readTagCode(range: Range, around: ReadonlySet<string>, walk: Walk): voi
 
 // `{name}` is `name={name}`: the attribute keeps its name when the variable changes.
 function readShorthandAttribute(name: string, range: Range, around: ReadonlySet<string>, walk: Walk): void {
+  assert(IDENTIFIER_RE.test(name), 'A shorthand attribute is a name');
+  assert(walk.source.charAt(range.from) === '{', 'A shorthand attribute opens with its brace');
   if (!around.has(name)) {
     walk.uses.push({ name, from: range.from, to: range.to, form: 'attribute', written: false, bindsInside: (inner) => around.has(inner) });
   }
 }
 
 function precededByEquals(source: string, at: number): boolean {
+  assert(at < source.length, 'A value starts inside the file');
   let before = at - 1;
   // The gap before a value is a few spaces, and the scan stops at anything else.
   while (before > 0 && source.charAt(before).trim() === '') {
@@ -735,6 +745,8 @@ type Lexing = 'code' | 'template';
 
 /** Where the `{` or backtick at `open` closes, skipping strings, comments and nesting. */
 function closingOf(source: string, open: number, end: number): number | undefined {
+  assert(open < end, 'What opens sits before the end searched to');
+  assert(end <= source.length, 'A search for a closing stays inside the file');
   const modes: Lexing[] = [source.charAt(open) === '`' ? 'template' : 'code'];
   for (let at = open + 1; at < end; at++) {
     const mode = modes[modes.length - 1];
@@ -753,6 +765,7 @@ function closingOf(source: string, open: number, end: number): number | undefine
 }
 
 function stepTemplate(source: string, at: number, modes: Lexing[]): number {
+  assert(modes[modes.length - 1] === 'template', 'stepTemplate: reads a template');
   const char = source.charAt(at);
   if (char === '\\') {
     return at + 1;
@@ -769,6 +782,7 @@ function stepTemplate(source: string, at: number, modes: Lexing[]): number {
 }
 
 function stepCode(source: string, at: number, modes: Lexing[]): number {
+  assert(modes[modes.length - 1] === 'code', 'stepCode: reads code');
   const char = source.charAt(at);
   switch (char) {
     case '"':
@@ -792,6 +806,7 @@ function stepCode(source: string, at: number, modes: Lexing[]): number {
 
 function stringEnd(source: string, open: number): number {
   const quote = source.charAt(open);
+  assert(quote === '"' || quote === "'", 'stringEnd: starts at a quote');
   for (let at = open + 1; at < source.length; at++) {
     const char = source.charAt(at);
     if (char === '\\') {
@@ -804,6 +819,7 @@ function stringEnd(source: string, open: number): number {
 }
 
 function commentEnd(source: string, at: number): number {
+  assert(source.charAt(at) === '/', 'commentEnd: starts at a slash');
   const next = source.charAt(at + 1);
   if (next === '/') {
     const line = source.indexOf('\n', at);
@@ -819,11 +835,29 @@ function commentEnd(source: string, at: number): number {
 // --- Writing -----------------------------------------------------------------------------
 
 function writtenRename(source: string, read: FileRead, rename: VariableRename): RenamePlan {
+  assertSpelled(source, read, rename);
   const changes = renameChanges(read.definitions, read.uses, rename);
   assert(changes.length > 0, 'A declared name is at least declared');
   const text = applied(source, changes);
   const patch = diffCodePatch(source, text);
   return patch.ok ? { ok: true, text, hunks: patch.value } : { ok: false, message: 'This file is too large to rename in.' };
+}
+
+// Every byte a rename replaces is the old name as read, or `{name}` around it: a
+// range that drifted would otherwise overwrite something else without a word.
+function assertSpelled(source: string, read: FileRead, rename: VariableRename): void {
+  for (const definition of read.definitions) {
+    if (definition.name === rename.from) {
+      assert(source.slice(definition.from, definition.to) === rename.from, 'A definition replaced is spelled as the old name');
+    }
+  }
+  for (const use of read.uses) {
+    if (use.name === rename.from) {
+      const text = source.slice(use.from, use.to);
+      assert(text.includes(rename.from), 'A use replaced holds the old name');
+      assert(use.form === 'attribute' || text === rename.from, 'A use replaced is the old name alone, unless it is a shorthand attribute');
+    }
+  }
 }
 
 function renameChanges(definitions: readonly FileDefinition[], uses: readonly FileUse[], rename: VariableRename): readonly TextChange[] {
@@ -837,6 +871,7 @@ function renameChanges(definitions: readonly FileDefinition[], uses: readonly Fi
 }
 
 function definitionText(form: JsDefinitionForm, rename: VariableRename): string {
+  assert(rename.to !== '', 'A definition is given a name');
   switch (form) {
     case 'plain':
       return rename.to;
@@ -852,6 +887,7 @@ function definitionText(form: JsDefinitionForm, rename: VariableRename): string 
 }
 
 function useText(form: UseForm, rename: VariableRename): string {
+  assert(rename.to !== '', 'A use is given a name');
   switch (form) {
     case 'plain':
       return rename.to;
@@ -881,6 +917,11 @@ function applied(text: string, changes: readonly TextChange[]): string {
 
 /** Whether `name` stands as a whole word in code no reader could follow. */
 export function mentions(code: string, name: string): boolean {
+  // Broken code can yield an empty name, which would be found everywhere and never
+  // move the search on. It is no word, so it stands nowhere.
+  if (name === '') {
+    return false;
+  }
   let at = code.indexOf(name);
   // Each pass starts past the last hit, so the code's length bounds the loop.
   while (at !== -1) {
@@ -900,5 +941,7 @@ const EXCERPT_CHARS_MAX = 60;
 
 function excerpt(code: string): string {
   const flat = code.replace(/\s+/g, ' ').trim();
-  return flat.length > EXCERPT_CHARS_MAX ? `${flat.slice(0, EXCERPT_CHARS_MAX)}….` : `${flat}.`;
+  const shown = flat.length > EXCERPT_CHARS_MAX ? `${flat.slice(0, EXCERPT_CHARS_MAX)}….` : `${flat}.`;
+  assert(shown.length <= EXCERPT_CHARS_MAX + 2, 'An excerpt stays short enough to show under a field');
+  return shown;
 }

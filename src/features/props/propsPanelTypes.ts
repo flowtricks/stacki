@@ -10,7 +10,7 @@ import type { LoopApplyResult } from './LoopSettings';
 import type { FieldDefinition, PropValues } from './propRules';
 import type { SetProp, SetProps } from './propAttributes';
 import type { Rename, SetText, TagOption, TagFieldProps } from './propNodeEditors';
-import type { VariableRename } from '../../editor/variableRename';
+import type { VariableRename } from '../../../shared/engine/variableRename';
 import type { SourceContext } from './propBindings';
 import type { RichContext, InlineNode } from './RichContent';
 import type { TextPiece } from './textConnect';

@@ -11,8 +11,12 @@ Run the fast checks and complete regression suite locally before pushing. Also r
 `npm run verify` and `npm run test:browser` against a disposable fixture workspace before tagging:
 the Desktop regression gate does not run that separate Studio browser scenario.
 
-After the regression suite passes and before tagging, run `npm run check:linux` (about 30 seconds).
-It checks, on a Mac, the ways the Linux release job has failed:
+Pushing a version tag runs the Linux preflight automatically: the `pre-push` hook runs it after the
+full gate has rebuilt `dist/`, and a failure stops the tag reaching GitHub, so no release build
+starts. `npm run release` pushes the version commit before the tag, so after a failure that commit
+is on `main` and the tag exists only locally: fix the finding and release a new version rather than
+moving the tag. Run `npm run check:linux` by hand (about 30 seconds) to find problems before
+tagging. It checks, on a Mac, the ways the Linux release job has failed:
 
 - relative imports and package or workflow paths match their files' case exactly (macOS ignores
   case, Linux does not), and no two tracked paths differ only in case;
@@ -27,7 +31,7 @@ It checks, on a Mac, the ways the Linux release job has failed:
   failures have been probes that measured before a popup, scroll or hover finished moving. A
   warning lists probes that measure after a fixed sleep without waiting for the motion.
 
-It runs the probes from the existing build, so run it after the regression suite. `--static`
+By hand, it runs the probes from the existing build, so run it after the regression suite. `--static`
 skips the probes, `--repeat=3` runs them three times, and `--only=<name>` narrows them. What it
 cannot reproduce stays with the Linux job: xvfb's GPU and capture paths (`thumbs`), inotify watcher
 timing in Studio, the packaged deb and AppImage installs, and native module builds.

@@ -52,8 +52,8 @@ test('property API renames definition and aliased instances, persists drafts and
     });
     assert.equal(saved['ok'], true, JSON.stringify(saved));
     const changed = await fixture.rooms.read(component);
-    assert.match(changed, /heading: title = 'Hello'/);
-    assert.match(changed, /\{title\}/);
+    assert.match(changed, /const \{ heading = 'Hello',/);
+    assert.match(changed, /\{heading\}/);
     assert.equal(await fixture.rooms.read(consumer), instance.replace('title=', 'heading='));
     assert.equal(await readFile(path.join(fixture.root, component), 'utf8'), changed);
     const undo = await fixture.post({ undo: string(record(saved['value'])['undo']) });

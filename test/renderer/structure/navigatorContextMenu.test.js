@@ -71,21 +71,65 @@ function checkWrap({ canWrapNode, wrapNodeGesture }) {
   assert.equal(slottedGesture.request(() => target)[0].tag, 'replace-node');
 }
 
-// A ::before or ::after is the selection: its element's menu takes nothing away,
-// a click on the disabled items included, and copying stays. Its row has no menu.
+// A ::before or ::after is the selection: its element's menu changes nothing, a
+// click on the disabled items included. An item the menu showed
+// enabled is asked again when clicked, as the selection can move while it is open.
+// Its row has no menu.
 async function checkPseudoMenu({ render, open, item, click, calls, act, dom }) {
-  await render({ canDeleteNode: () => false });
+  await render({ canChangeStructure: () => false });
   await open('n0');
-  assert.equal(item('Delete').disabled, true);
-  assert.equal(item('Cut').disabled, true);
-  assert.equal(item('Copy').disabled, false);
+  for (const label of ['Delete', 'Cut', 'Copy', 'Duplicate', 'Wrap in']) {
+    assert.equal(item(label).disabled, true, `${label} is disabled`);
+  }
   const before = calls.length;
   await click('Delete');
   await click('Cut');
-  assert.deepEqual(calls.slice(before), [], 'a disabled Delete or Cut does nothing');
   await click('Copy');
-  assert.deepEqual(calls.at(-1), ['copy', 'n0']);
-  await render({ canDeleteNode: (id) => id !== 'n0', pseudoNodeIds: { before: new Set(['n0']), after: new Set() }, selectedPseudo: 'before' });
+  await click('Duplicate');
+  await click('Wrap in');
+  assert.equal(item('div'), undefined, 'a disabled Wrap in opens nothing');
+  assert.deepEqual(calls.slice(before), [], 'a disabled item does nothing');
+
+  let allowed = true;
+  await render({ canChangeStructure: () => allowed });
+  await open('n0');
+  const opened = calls.length;
+  allowed = false;
+  await click('Duplicate');
+  allowed = true;
+  await open('n0');
+  allowed = false;
+  await click('Copy');
+  allowed = true;
+  await open('n0');
+  await click('Wrap in');
+  allowed = false;
+  await click('div');
+  allowed = true;
+  await open('n0');
+  await click('Wrap in');
+  allowed = false;
+  await click('<a>');
+  const acted = calls.slice(opened).filter((call) => call[0] !== 'select');
+  assert.deepEqual(acted, [], 'the menu checks again when an item is clicked');
+
+  await render({
+    canChangeStructure: (id) => id !== 'n0',
+    pseudoNodeIds: { before: new Set(['n0']), after: new Set() },
+    selectedPseudo: 'before',
+  });
+  await open('n1');
+  assert.equal(item('Duplicate').disabled, false, 'another element still duplicates');
+  await click('Duplicate');
+  assert.deepEqual(calls.at(-1), ['duplicate', 'n1']);
+  await open('n1');
+  assert.equal(item('Copy').disabled, false, 'another element still copies');
+  await click('Copy');
+  assert.deepEqual(calls.at(-1), ['copy', 'n1']);
+  await open('n1');
+  await click('Wrap in');
+  await click('div');
+  assert.deepEqual(calls.at(-1), ['wrap', 'n1', 'div']);
   await open('n1');
   assert.equal(item('Delete').disabled, false, 'another element still deletes');
   await click('Delete');

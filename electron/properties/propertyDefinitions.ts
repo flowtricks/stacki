@@ -6,7 +6,8 @@ import type { ModelSchemaField } from '../../shared/properties/propModelSchema';
 import { schemaFieldsOf } from '../../shared/properties/propModelSchema';
 import { readPropModel } from '../parse/propModel/readPropModel';
 import { createPropertyTypeReader } from './propertyTypes';
-import { bindComponentDefault } from './propertyRename';
+import { bindComponentDefault, renamePropertyLocal } from './propertyRename';
+import type { PropertyRename } from './propertyRename';
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
 import type { ComponentProperties, ComponentProperty, PropertyChange, PropertyEditing } from '../../shared/properties/propertyEditing';
@@ -164,6 +165,41 @@ function contractEditing(definitions: Definitions, contracts: PropertyContracts,
 }
 
 export function editPropertyDefinition(source: string, change: PropertyChange): Result<string> {
+  const rename = localRename(source, change);
+  if (rename === undefined) {
+    return editDefinition(source, change);
+  }
+  // The edit is tried first so that what the definition refuses (a prop of that
+  // name, an inherited attribute) keeps its own reason. A syntax error is left to
+  // the plan, which reads the whole file and says what to do about it.
+  const edited = editDefinition(source, change);
+  if (!edited.ok) {
+    if (edited.error.code !== 'syntax') {
+      return edited;
+    }
+  }
+  const local = renamePropertyLocal(source, rename);
+  return local.ok ? editDefinition(local.value, change) : local;
+}
+
+// The local to rename with its prop: one spelled as the prop is, and no other.
+// `{ features: list }` chose its own name, so only that key changes.
+function localRename(source: string, change: PropertyChange): PropertyRename | undefined {
+  if (change.kind !== 'save') {
+    return undefined;
+  }
+  const from = change.originalName;
+  if (from === '' || from === change.property.name) {
+    return undefined;
+  }
+  const binding = readDefinitions(source).bindings.find((item) => propertyKey(item.propertyName ?? item.name) === from);
+  if (binding === undefined) {
+    return undefined;
+  }
+  return ts.isIdentifier(binding.name) && binding.name.text === from ? { from, to: change.property.name } : undefined;
+}
+
+function editDefinition(source: string, change: PropertyChange): Result<string> {
   const definitions = readDefinitions(source);
   if (change.kind === 'source') {
     const error = syntaxError(change.frontmatter);
@@ -412,7 +448,8 @@ function saveDefinitionBinding(
   const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === originalName);
   if (binding) {
     assert(previous !== undefined, 'A destructured prop was read before its save');
-    // Keep the lexical binding: aliases prevent accidental edits to shadowed locals in templates.
+    // The binding's local is not this edit's to change: a local spelled as the prop
+    // was renamed across the file before this (editPropertyDefinition), and an alias stays.
     return ok(bindingEdits(binding, previous, property));
   }
   const fallback = property.defaultValue.trim() ? ` = ${defaultExpression(property.defaultValue.trim())}` : '';

@@ -35,6 +35,7 @@ import {
 } from '../../ipc/appBridge';
 import { withPrunedImports, schemaFor, withClassField } from '../model/pageGestures';
 import { markdownLayoutGesture, withImportsGesture, layoutWrapperGesture } from '../model/appKeys';
+import { selectedPseudo, structuralSelection } from '../model/selectionStructure';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useNavigation } from './appHistory';
@@ -518,7 +519,7 @@ export function useCreateFrom(
   nodeEdits: ReturnType<typeof useNodeEdits>,
 ) {
   const { model } = shortcuts;
-  const { classesForRef, classesTick, selectedId, setSelectedClasses } = coreState;
+  const { classesForRef, classesTick, pseudoPick, selectedId, setSelectedClasses } = coreState;
   const { frontmatterCode, tree } = selectionModel;
   const { extractionFor } = nodeEdits;
 
@@ -534,8 +535,14 @@ export function useCreateFrom(
     if (!model) {
       return { kind: 'unavailable', reason: 'Open a page to make components from it.' };
     }
+    // A pseudo-element's selection names its element, whose markup would move.
+    const pseudo = selectedPseudo(selectedId, pseudoPick);
+    if (pseudo !== undefined) {
+      return { kind: 'unavailable', reason: `::${pseudo} is drawn by CSS. Select its element to make a component.` };
+    }
     // The frontmatter row is no element to make a component from.
-    const node = selectedId && selectedId !== 'frontmatter' ? tree.node(selectedId) : undefined;
+    const selectionId = structuralSelection(selectedId, pseudoPick);
+    const node = selectionId === undefined ? undefined : tree.node(selectionId);
     if (!node) {
       return { kind: 'unavailable', reason: 'Select an element on the canvas first.' };
     }
@@ -566,7 +573,7 @@ export function useCreateFrom(
         return planExtraction(read, asProp);
       },
     };
-  }, [selectedId, tree, model, extractionFor]);
+  }, [pseudoPick, selectedId, tree, model, extractionFor]);
 
   // Rendered classes describe one element, and the canvas can only say what the
   // NEW selection's are a frame or two later. Two ways to spend that gap, and

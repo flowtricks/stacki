@@ -13,7 +13,10 @@ const { test } = require('node:test');
 const load = require('../../helpers/rendererModule');
 const { parsePage } = require('#dist/electron/parse/astroParser.js');
 
-const { planVariableRename, checkLoopHead, statementRename, variableNameProblem, predictedRename } = load('src/editor/variableRename.ts');
+const { planVariableRename, checkLoopHead, statementRename, variableNameProblem, renamedFrontmatter, readFile, mentions } =
+  load('shared/engine/variableRename.ts');
+const { readModuleScope, scopeAt, innerNamesAt } = load('shared/engine/jsScope.ts');
+const { predictedRename } = load('src/editor/predictedRename.ts');
 const { variableRenameGesture } = load('src/editor/editGestures.ts');
 const { sendGesture } = load('src/editor/pageEdits.ts');
 const { applyCodePatch } = load('shared/engine/codePatch.ts');
@@ -424,4 +427,26 @@ test('the model shown until the reply reads the new name', () => {
   );
   assert.equal(shown.nodes[0].head, 'rows.map((item) => (');
   assert.equal(model.nodes[0].head, 'items.map((item) => (', 'The shown model is left as it was');
+});
+
+test('the invariants the rename relies on crash loudly when broken, each with its own message', () => {
+  const failure = (message) => new RegExp(`^Error: Assertion failed: ${message}$`);
+  const analysis = readModuleScope('const items = [];');
+  assert.throws(() => scopeAt(analysis, analysis.root.to), failure('A position lies before the end of the code it was read from'));
+  assert.throws(() => innerNamesAt(analysis, { ...analysis.root, to: analysis.root.to + 1 }), failure('A scope ends inside its parent'));
+  assert.throws(() => innerNamesAt(analysis, { ...analysis.root, from: -1 }), failure('A scope starts inside its parent'));
+  assert.throws(() => renamedFrontmatter('const items = [];', { from: 'items', to: 'items' }), failure('A rename changes the name'));
+  const file = fileOf(page('const items = [];', '<p>{items.length}</p>'));
+  assert.throws(
+    () => checkLoopHead(file, { id: '', before: 'items.map((item) => (', after: 'rows.map((item) => (' }),
+    failure('A loop head belongs to a node'),
+  );
+  // A model that does not belong to these bytes is a bug in the caller, never a user's input.
+  const short = file.source.slice(0, file.model.bodyStart + 2);
+  assert.throws(() => readFile({ source: short, model: file.model }), /Assertion failed: A (code range|tag|masked region)/);
+});
+
+test('an empty name, which broken code can yield, stands nowhere and ends the search', () => {
+  assert.equal(mentions('items', ''), false);
+  assert.equal(mentions('items', 'items'), true);
 });

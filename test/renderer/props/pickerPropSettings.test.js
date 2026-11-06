@@ -39,6 +39,8 @@ buildSync({
       "export { FieldPicker } from './src/features/props/LoopFieldPicker';",
       "export { default as PropertySettingsDialog } from './src/features/componentProperties/PropertySettingsDialog';",
       "export { propKeysByLocal } from './src/features/props/newPropModel';",
+      "export { readPropsDestructure } from './src/editor/loopProps';",
+      "export { dataTree } from './src/editor/dataSuggest';",
       "export { settingsKeyOf } from './src/features/props/dataPickerModel';",
       "export { mergedProperty, savePhaseOf } from './src/features/componentProperties/propertyAutosave';",
       "export { EditorView } from '@codemirror/view';",
@@ -388,9 +390,9 @@ test('a rename commits on blur, never per keystroke, and keeps the binding worki
   assert.deepEqual(log.phases, ['saving', 'idle'], 'a rename holds the whole app until the page is replaced');
   const written = source();
   assert.match(written, /perks\?: readonly/, 'the declaration is renamed');
-  assert.match(written, /perks: features = \[/, 'the local a binding reads is kept, as the Properties panel keeps it');
+  assert.match(written, /\{ perks = \[/, 'the local takes the new name, with no alias left behind');
   assert.match(written, /Astro\.props\.perks/, 'a direct read follows the new name');
-  assert.match(written, /\{features\.map\(/, 'the bound markup still reads a name in scope');
+  assert.match(written, /\{perks\.map\(/, 'the bound markup reads the new name');
   assert.match(pageSource(), /<PricingCard heading="Plans" perks=\{\[\]\} \/>/, 'the instance passes the new name');
 
   // The next edit saves under the name the file now holds.
@@ -459,8 +461,62 @@ test('closing the form commits a name still being typed', async () => {
   assert.match(source(), /perks\?: readonly/, 'the whole picker going away is a close too');
 });
 
-test('the row of a renamed prop opens the prop by its new name', () => {
-  // `{ perks: features }` lists `features`, whose prop is now `perks`.
+test('a name the local cannot take is blocked under Name: the text stays and nothing is written', async () => {
+  const { saver, source, pageSource, log } = project();
+  await drawPicker(saver);
+  await openFeatures();
+  const name = () => labelled('Name').querySelector('input');
+  await type(name(), 'local');
+  await act(async () => name().dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true })));
+  await flush();
+  assert.equal(log.edits, 1, 'main was asked, and is the one that refused');
+  assert.deepEqual(log.undo, [], 'there is nothing to undo');
+  assert.equal(source(), COMPONENT);
+  assert.equal(pageSource(), PAGE);
+  assert.equal(name().value, 'local', 'the text stays to be fixed');
+  const alert = form().querySelector('[role="alert"]');
+  assert.equal(alert.textContent, '“local” already exists in this file.');
+  assert.equal(labelled('Name').nextElementSibling, alert, 'the reason sits directly under the field');
+
+  // Blurring again is not a second attempt; a free name clears it and saves.
+  await act(async () => name().dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true })));
+  await flush();
+  assert.equal(log.edits, 1);
+  await type(name(), 'perks');
+  await act(async () => name().dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true })));
+  await flush();
+  assert.equal(form().querySelector('[role="alert"]') ?? undefined, undefined);
+  assert.match(source(), /\{ perks = \[/);
+  await clear();
+});
+
+test('after a rename the picker’s row reads the new name, and its gear opens that prop', async () => {
+  const { saver, source } = project();
+  await drawPicker(saver);
+  await openFeatures();
+  const name = labelled('Name').querySelector('input');
+  await type(name, 'perks');
+  await act(async () => name.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  await flush();
+  await clear();
+
+  // The rows as the app builds them from the file the rename left.
+  const frontmatter = source().split('---')[1];
+  const tree = modules.dataTree({ frontmatter });
+  const entries = modules.readPropsDestructure(frontmatter).entries;
+  assert.deepEqual(entries.map((entry) => [entry.key, entry.local]).slice(0, 1), [['perks', 'perks']]);
+  const keys = modules.propKeysByLocal(entries, ['perks', 'heading'], undefined);
+  await drawPicker(saver, { tree, propSettings: { ...offerFor(saver), keyOf: (key) => keys.get(key) } });
+  assert.ok(rowOf('perks'), 'the row reads the new name');
+  assert.equal(rowOf('features'), undefined, 'and the old one is gone');
+  await click(rowOf('perks').querySelector('.dp-settings'));
+  await flush();
+  assert.equal(labelled('Name').querySelector('input').value, 'perks');
+  await clear();
+});
+
+test('the row of a prop aliased by hand opens the prop by its key', () => {
+  // `{ perks: features }` lists `features`, whose prop is `perks`.
   const keys = modules.propKeysByLocal([{ key: 'perks', local: 'features' }], ['perks', 'heading'], undefined);
   assert.equal(keys.get('features'), 'perks');
   assert.equal(keys.get('heading'), 'heading');

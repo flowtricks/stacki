@@ -1,9 +1,11 @@
-// What the selection means to Delete and Cut. A ::before or ::after row selects
-// its element, with the pick saying which layer (see PseudoPick), so the selected
-// id alone reads as the element and every delete would take the element with it.
-// A pseudo-element is drawn by CSS and has no markup to remove, so nothing is
-// deleted while one is the selection. The keyboard, and through it the canvas,
-// and the element menu all ask here, so they cannot disagree.
+// What the selection means to the actions that change the page's structure:
+// Delete, Cut, Copy, Duplicate, Wrap and Make component. A ::before or ::after row
+// selects its element, with the pick saying which layer (see PseudoPick), so the
+// selected id alone reads as the element and every one of these would take the
+// element with it. A pseudo-element is drawn by CSS and has no markup of its own
+// to remove, copy, wrap or move, so none of them acts while one is the selection.
+// The keyboard, and through it the canvas, the element menu and the Components
+// panel all ask here, so they cannot disagree.
 
 import { assert } from '../../../shared/core/assert';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
@@ -18,8 +20,8 @@ export function selectedPseudo(selectionId: string | undefined, pick: PseudoPick
   return pick.nodeId === selectionId ? pick.pseudo : undefined;
 }
 
-/** The node Delete or Cut may remove for this selection, or undefined when it may remove nothing. */
-export function deletableSelection(selectionId: string | undefined, pick: PseudoPick | undefined): string | undefined {
+/** The node a structural action may change for this selection, or undefined when it may change nothing. */
+export function structuralSelection(selectionId: string | undefined, pick: PseudoPick | undefined): string | undefined {
   if (selectionId === undefined || selectionId.length === 0) {
     return undefined;
   }

@@ -19,7 +19,7 @@ import { dataTree, findDeclaration, findImportOf, scopeChips, scopeCompletions }
 import { resolvePick } from '../../editor/bindings';
 import { checkStatement } from './jsCheck';
 import { sourceFileLabel, type SourceFileLabel } from './sourceFileLabel';
-import { statementRename, type StatementRename } from '../../editor/variableRename';
+import { statementRename, type StatementRename } from '../../../shared/engine/variableRename';
 import { FIELD_UNFOCUSED, fieldFocusOf, fieldOfHandle, type FieldFocus } from './fieldFocus';
 import DataPicker from './DataPicker';
 import NewPropForm from './NewPropForm';

@@ -36,7 +36,7 @@ import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEd
 import { assert } from '../../../shared/core/assert';
 import PanelBoundary from '../../ui/PanelBoundary';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
-import { selectedPseudo } from '../model/selectionDeletion';
+import { selectedPseudo } from '../model/selectionStructure';
 
 export function CanvasPane({ app }: { readonly app: ShellView }) {
   const hoverNodeId = useLiveValue(app.hoverNode);

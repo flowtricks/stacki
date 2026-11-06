@@ -130,7 +130,8 @@ export function memberEdits(frontmatter: string, member: ts.PropertySignature, p
 /**
  * The edits that turn a destructure entry (read as `previous`) into
  * `property`: the key on a rename, the default on a default change. The local
- * name the markup reads is kept, so a rename never touches the template here.
+ * name is left as it stands, so nothing here touches the template: a local that
+ * follows its prop was renamed before this, by scope, and arrives as `old: new`.
  */
 export function bindingEdits(
   binding: ts.BindingElement,

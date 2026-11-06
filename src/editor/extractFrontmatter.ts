@@ -27,8 +27,8 @@
 
 import { assert } from '../../shared/core/assert';
 import type { ImportDecl, PageModel, PageNode } from '../../shared/page/pageNode';
-import { bindingScope, readModuleScope, readModuleStatements, type JsAnalysis, type JsStatement } from './jsScope';
-import { mentions, readFile, type FileCode, type FileRead } from './variableRename';
+import { bindingScope, readModuleScope, readModuleStatements, type JsAnalysis, type JsStatement } from '../../shared/engine/jsScope';
+import { mentions, readFile, type FileCode, type FileRead } from '../../shared/engine/variableRename';
 
 /** What becomes of one value the piece reads. */
 export type ExtractionValue =

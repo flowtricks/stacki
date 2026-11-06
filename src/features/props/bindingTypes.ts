@@ -12,7 +12,7 @@ import type { ChipsOf } from '../../ui/ExprInput';
 import type { PickerNode } from './DataPicker';
 import type { NewPropSeed } from './newPropModel';
 import type { PropDeclaration } from '../../editor/propDeclaration';
-import type { VariableRename } from '../../editor/variableRename';
+import type { VariableRename } from '../../../shared/engine/variableRename';
 import type { FieldFocus } from './fieldFocus';
 
 export interface FieldPosition {

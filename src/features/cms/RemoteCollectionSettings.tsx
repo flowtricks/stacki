@@ -1,18 +1,12 @@
 // A content collection's settings, in the main view where its items show:
 // its name, and its fields in order — dragged to reorder, clicked to open
 // their settings in place (name, help text, minimum and maximum, required),
-// deleted or duplicated, and new ones added. Each change is written to the
-// content config at once, with the entries and code that depend on it
-// (astroCollectionSettings.ts), and the view shows the config as it then is.
-import { useEffect, useState, type ReactElement } from 'react';
-import type {
-  CollectionSettings,
-  FieldSettings,
-  NewFieldKind,
-  SettingsChange,
-  SettingsField,
-  SettingsFieldKind,
-} from '../../../shared/properties/collectionSettings';
+// deleted or duplicated, and new ones added. Changes are held in a copy until
+// Save collection (settingsDraft.ts), which takes any field form still open and
+// writes them to the content config, with the entries and code that depend on
+// them (astroCollectionSettings.ts).
+import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react';
+import type { CollectionSettings, NewFieldKind, SettingsChange, SettingsField, SettingsFieldKind } from '../../../shared/properties/collectionSettings';
 import { newFieldSettings, pointsAtCollection } from '../../../shared/properties/collectionSettings';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import Dropdown from '../../ui/Dropdown';
@@ -42,10 +36,18 @@ import useListReorder from '../../ui/useListReorder';
 import { labelize } from './cmsSchema';
 import type { RemoteCmsSelection } from './remoteCmsShared';
 import { changeCollectionSettings, collectionSettings, remoteCollections } from '../../ipc/remoteSource';
-import { applyDraft } from './settingsDraft';
+import { applyDrafts, fieldSettingsOf, newFieldFormState, openFieldFormState, replayDrafts, type FieldFormState } from './settingsDraft';
 import { FieldInputs } from './RemoteFieldSettings';
 
-type Change = (change: SettingsChange) => Promise<boolean>;
+// Stages changes together, or none of them, and says whether it did.
+type Change = (changes: readonly SettingsChange[]) => boolean;
+
+// The two forms that can be open at once, and how each reports what it would save.
+type FormSlot = 'adding' | 'open';
+type FormReport = (slot: FormSlot, state: FieldFormState | undefined) => void;
+type OpenForms = Readonly<Record<FormSlot, FieldFormState | undefined>>;
+
+const NO_FORMS: OpenForms = { adding: undefined, open: undefined };
 
 export function RemoteCollectionSettings(props: {
   readonly projectPath: string;
@@ -74,7 +76,7 @@ export function RemoteCollectionSettings(props: {
         >
           Cancel
         </button>
-        <button className="primary" disabled={!editing.dirty || editing.saving} onClick={() => void editing.save()}>
+        <button className="primary" disabled={!editing.dirty || editing.blocked || editing.saving} onClick={() => void editing.save()}>
           {editing.saving ? 'Saving…' : 'Save collection'}
         </button>
       </div>
@@ -86,7 +88,7 @@ export function RemoteCollectionSettings(props: {
           ) : (
             <>
               <CollectionName settings={draft} name={editing.name} onName={editing.setName} />
-              <FieldList settings={draft} collections={editing.collections} onChange={editing.stage} />
+              <FieldList key={editing.formRound} settings={draft} collections={editing.collections} onChange={editing.stage} onForm={editing.reportForm} />
               <div className="remote-cms-settings-danger">
                 <button className="danger" disabled={editing.saving} onClick={() => void editing.remove()}>
                   <TrashIcon size={12} /> Delete collection
@@ -115,6 +117,10 @@ function useSettingsDraft(props: {
   const [name, setName] = useState('');
   const [error, setError] = useState<string | undefined>(undefined);
   const [saving, setSaving] = useState(false);
+  const [forms, setForms] = useState<OpenForms>(NO_FORMS);
+  // Moves on when Save takes the open forms' fields, which closes those forms:
+  // left open, a field already staged would be staged again by the next Save.
+  const [formRound, setFormRound] = useState(0);
   const collections = useCollectionNames(projectPath, selection.connection.id);
   const show = (settings: CollectionSettings) => {
     setSaved(settings);
@@ -125,44 +131,64 @@ function useSettingsDraft(props: {
   useEffect(() => {
     void collectionSettings(projectPath, selection.collection).then((read) => (read.ok ? show(read.value) : setError(read.message)));
   }, [projectPath, selection.collection]);
-  const stage: Change = async (change) => {
-    const next = draft === undefined ? undefined : applyDraft(draft, change);
+  const reportForm = useCallback<FormReport>((slot, state) => setForms((current) => ({ ...current, [slot]: state })), []);
+  const stage: Change = (made) => {
+    const next = draft === undefined ? undefined : applyDrafts(draft, made);
     if (next !== undefined && !next.ok) {
       setError(next.message);
     }
     if (next?.ok === true) {
       setError(undefined);
       setDraft(next.value);
-      setChanges((made) => [...made, change]);
+      setChanges((staged) => [...staged, ...made]);
     }
-    return Promise.resolve(next?.ok === true);
+    return next?.ok === true;
   };
   const renamed = saved !== undefined && name.trim() !== '' && name.trim() !== saved.name;
+  const pending = [...readyChanges(forms.open), ...readyChanges(forms.adding)];
   const save = async () => {
+    if (pending.length > 0) {
+      if (!stage(pending)) {
+        return;
+      }
+      setFormRound((round) => round + 1);
+    }
     setSaving(true);
-    const all = renamed ? [...changes, { kind: 'renameCollection' as const, to: name.trim() }] : changes;
+    const staged = [...changes, ...pending];
+    const all = renamed ? [...staged, { kind: 'renameCollection' as const, to: name.trim() }] : staged;
     const result = await sendChanges(projectPath, selection.collection, all);
     setSaving(false);
     setError(result.error);
     if (result.settings === undefined) {
       return;
     }
-    show(result.settings);
-    // Saved whole: back to the items, which a field rename or delete may have
-    // rewritten, so they are read again. A refused change keeps the settings
-    // open on what was saved, with why, under the collection's new name if the
-    // rename went through before it.
-    if (result.error === undefined) {
-      props.onSaved();
-      props.onSelect({ ...selection, collection: result.settings.name, mode: undefined });
-    } else if (result.settings.name !== selection.collection) {
-      props.onSelect({ ...selection, collection: result.settings.name, mode: 'settings' });
+    // Refused: what reached the config is shown as saved, and what did not stays
+    // staged, the refused change with it, to be fixed and saved again. The
+    // collection's rename goes last, so nothing is ever left after it, and its
+    // typed name stays in its box.
+    if (result.error !== undefined) {
+      const kept = replayDrafts(result.settings, staged.slice(result.sent));
+      setSaved(result.settings);
+      setDraft(kept.value);
+      setChanges(kept.changes);
+      return;
     }
+    // Saved whole: back to the items, which a field rename or delete may have
+    // rewritten, so they are read again.
+    show(result.settings);
+    props.onSaved();
+    props.onSelect({ ...selection, collection: result.settings.name, mode: undefined });
   };
   const cancel = () => (saved === undefined ? undefined : show(saved));
   const remove = () => deleteWholeCollection({ ...props, setError });
-  const dirty = changes.length > 0 || renamed;
-  return { draft, error, saving, dirty, name, setName, collections, stage, save, cancel, remove };
+  const dirty = changes.length > 0 || renamed || pending.length > 0;
+  // A form that cannot be saved holds Save back rather than being dropped by it.
+  const blocked = forms.open?.kind === 'invalid' || forms.adding?.kind === 'invalid';
+  return { draft, error, saving, dirty, blocked, name, setName, collections, stage, save, cancel, remove, reportForm, formRound };
+}
+
+function readyChanges(state: FieldFormState | undefined): readonly SettingsChange[] {
+  return state?.kind === 'ready' ? state.changes : [];
 }
 
 function useCollectionNames(projectPath: string, connectionId: string): readonly string[] {
@@ -174,7 +200,7 @@ function useCollectionNames(projectPath: string, connectionId: string): readonly
 }
 
 // The changes, one by one and in order; the first refused stops the rest, and the
-// settings as they then stand are shown, with why.
+// settings as they then stand come back with why, and how many changes landed.
 async function sendChanges(
   projectPath: string,
   collection: string,
@@ -182,19 +208,22 @@ async function sendChanges(
 ): Promise<{
   readonly settings: CollectionSettings | undefined;
   readonly error: string | undefined;
+  readonly sent: number;
 }> {
   let name = collection;
   let settings: CollectionSettings | undefined;
+  let sent = 0;
   for (const change of changes) {
     const changed = await changeCollectionSettings(projectPath, name, change);
     if (!changed.ok) {
       const read = await collectionSettings(projectPath, name);
-      return { settings: read.ok ? read.value : settings, error: changed.message };
+      return { settings: read.ok ? read.value : settings, error: changed.message, sent };
     }
     settings = changed.value;
     name = changed.value.name;
+    sent += 1;
   }
-  return { settings, error: undefined };
+  return { settings, error: undefined, sent };
 }
 
 async function deleteWholeCollection(context: {
@@ -240,14 +269,19 @@ function CollectionName(props: { readonly settings: CollectionSettings; readonly
   );
 }
 
-function FieldList(props: { readonly settings: CollectionSettings; readonly collections: readonly string[]; readonly onChange: Change }) {
+function FieldList(props: {
+  readonly settings: CollectionSettings;
+  readonly collections: readonly string[];
+  readonly onChange: Change;
+  readonly onForm: FormReport;
+}) {
   const { fields } = props.settings;
   const [open, setOpen] = useState<string | undefined>(undefined);
   const [adding, setAdding] = useState(false);
   const reorder = useListReorder({
     count: fields.length,
     disabled: open !== undefined,
-    onMove: (from, to) => void props.onChange({ kind: 'reorder', order: moved(fields, from, to) }),
+    onMove: (from, to) => void props.onChange([{ kind: 'reorder', order: moved(fields, from, to) }]),
   });
   return (
     <section className="remote-cms-settings-section">
@@ -255,7 +289,14 @@ function FieldList(props: { readonly settings: CollectionSettings; readonly coll
       <div className="remote-cms-settings-fields">
         {fields.map((field, index) =>
           field.name === open ? (
-            <FieldEditor key={field.name} field={field} onChange={props.onChange} onClose={() => setOpen(undefined)} />
+            <FieldEditor
+              key={field.name}
+              settings={props.settings}
+              field={field}
+              onChange={props.onChange}
+              onForm={props.onForm}
+              onClose={() => setOpen(undefined)}
+            />
           ) : (
             <div
               key={field.name}
@@ -275,7 +316,7 @@ function FieldList(props: { readonly settings: CollectionSettings; readonly coll
         )}
       </div>
       {adding ? (
-        <AddField collections={props.collections} onChange={props.onChange} onClose={() => setAdding(false)} />
+        <AddField settings={props.settings} collections={props.collections} onChange={props.onChange} onForm={props.onForm} onClose={() => setAdding(false)} />
       ) : (
         <button className="remote-cms-settings-add" onClick={() => setAdding(true)}>
           <PlusIcon size={12} /> Add field
@@ -285,18 +326,28 @@ function FieldList(props: { readonly settings: CollectionSettings; readonly coll
   );
 }
 
+// Tells the settings what an open form would save, for as long as the form is open.
+function useFormReport(slot: FormSlot, state: FieldFormState, onForm: FormReport): void {
+  useEffect(() => {
+    onForm(slot, state);
+    return () => onForm(slot, undefined);
+  }, [slot, state, onForm]);
+}
+
 // One field's settings, open in its row: saved together, renamed first when its name changed.
-function FieldEditor(props: { readonly field: SettingsField; readonly onChange: Change; readonly onClose: () => void }) {
-  const { field } = props;
+function FieldEditor(props: {
+  readonly settings: CollectionSettings;
+  readonly field: SettingsField;
+  readonly onChange: Change;
+  readonly onForm: FormReport;
+  readonly onClose: () => void;
+}) {
+  const { field, settings } = props;
   const [draft, setDraft] = useState(field);
-  const [busy, setBusy] = useState(false);
-  const save = async () => {
-    setBusy(true);
-    const renamed = draft.name === field.name || (await props.onChange({ kind: 'renameField', from: field.name, to: draft.name }));
-    const update = { name: draft.name, ...settingsOf(draft) };
-    const saved = renamed && (!field.editable || (await props.onChange({ kind: 'updateField', update })));
-    setBusy(false);
-    if (saved) {
+  const state = useMemo(() => openFieldFormState(settings, field, draft), [settings, field, draft]);
+  useFormReport('open', state, props.onForm);
+  const save = () => {
+    if (props.onChange(readyChanges(state))) {
       props.onClose();
     }
   };
@@ -308,25 +359,18 @@ function FieldEditor(props: { readonly field: SettingsField; readonly onChange: 
         <span className="remote-cms-settings-name">{field.name}</span>
         <span className="remote-cms-settings-kind">({KIND_LABELS[field.kind]})</span>
         <span className="remote-cms-settings-spacer" />
-        <button className="ghost remote-cms-settings-tool" title="Delete field" disabled={busy} onClick={() => void removeField(props)}>
+        <button className="ghost remote-cms-settings-tool" title="Delete field" onClick={() => void removeField(props)}>
           <TrashIcon size={13} />
         </button>
-        <button
-          className="ghost remote-cms-settings-tool"
-          title="Duplicate field"
-          disabled={busy || !duplicable(field.kind)}
-          onClick={() => void duplicateField(props)}
-        >
+        <button className="ghost remote-cms-settings-tool" title="Duplicate field" disabled={!duplicable(field.kind)} onClick={() => duplicateField(props)}>
           <CopyIcon size={13} />
         </button>
-        <button disabled={busy} onClick={props.onClose}>
-          Cancel
-        </button>
-        <button className="primary" disabled={busy} onClick={() => void save()}>
-          {busy ? 'Saving…' : 'Save field'}
+        <button onClick={props.onClose}>Cancel</button>
+        <button className="primary" disabled={state.kind !== 'ready'} onClick={save}>
+          Save field
         </button>
       </div>
-      <FieldInputs field={field} draft={draft} onDraft={setDraft} />
+      <FieldInputs field={field} draft={draft} nameProblem={state.kind === 'invalid' ? state.message : undefined} onDraft={setDraft} />
     </div>
   );
 }
@@ -334,7 +378,13 @@ function FieldEditor(props: { readonly field: SettingsField; readonly onChange: 
 // Adding a field: first its kind, from a grid of every kind a collection can
 // hold, then its name, for a reference the collection it points at, and the
 // same settings an existing field opens with — written with the field at once.
-function AddField(props: { readonly collections: readonly string[]; readonly onChange: Change; readonly onClose: () => void }) {
+function AddField(props: {
+  readonly settings: CollectionSettings;
+  readonly collections: readonly string[];
+  readonly onChange: Change;
+  readonly onForm: FormReport;
+  readonly onClose: () => void;
+}) {
   const [kind, setKind] = useState<NewFieldKind | undefined>(undefined);
   if (kind === undefined) {
     return (
@@ -364,48 +414,43 @@ function AddField(props: { readonly collections: readonly string[]; readonly onC
 }
 
 function NewFieldForm(props: {
+  readonly settings: CollectionSettings;
   readonly kind: NewFieldKind;
   readonly collections: readonly string[];
   readonly onChange: Change;
+  readonly onForm: FormReport;
   readonly onBack: () => void;
   readonly onClose: () => void;
 }) {
+  const { settings, kind } = props;
   // The settings a new field of this kind is written with until they are changed.
   const [field] = useState<SettingsField>(() => ({
     name: '',
-    kind: props.kind,
-    ...newFieldSettings(props.kind),
+    kind,
+    ...newFieldSettings(kind),
     editable: true,
   }));
   const [draft, setDraft] = useState(field);
-  const [busy, setBusy] = useState(false);
-  const pointing = pointsAtCollection(props.kind);
-  const [target, setTarget] = useState(props.collections[0] ?? '');
-  const add = async () => {
-    setBusy(true);
-    const added = await props.onChange({
-      kind: 'addField',
-      name: draft.name.trim(),
-      fieldKind: props.kind,
-      target: pointing ? target : undefined,
-      settings: settingsOf(draft),
-    });
-    setBusy(false);
-    if (added) {
+  const pointing = pointsAtCollection(kind);
+  // The collections may still be loading when the form opens, so an unchosen target follows them.
+  const [chosen, setChosen] = useState<string | undefined>(undefined);
+  const target = chosen ?? props.collections[0] ?? '';
+  const state = useMemo(() => newFieldFormState(settings, { draft, kind, target }), [settings, draft, kind, target]);
+  useFormReport('adding', state, props.onForm);
+  const add = () => {
+    if (props.onChange(readyChanges(state))) {
       props.onClose();
     }
   };
   return (
     <div className="remote-cms-settings-editor">
       <div className="remote-cms-settings-editor-head">
-        <KindIcon kind={props.kind} />
-        <span className="remote-cms-settings-name">New {KIND_LABELS[props.kind].toLowerCase()} field</span>
+        <KindIcon kind={kind} />
+        <span className="remote-cms-settings-name">New {KIND_LABELS[kind].toLowerCase()} field</span>
         <span className="remote-cms-settings-spacer" />
-        <button disabled={busy} onClick={props.onBack}>
-          Back
-        </button>
-        <button className="primary" disabled={busy || draft.name.trim() === '' || (pointing && target === '')} onClick={() => void add()}>
-          {busy ? 'Adding…' : 'Add field'}
+        <button onClick={props.onBack}>Back</button>
+        <button className="primary" disabled={state.kind !== 'ready'} onClick={add}>
+          Add field
         </button>
       </div>
       {pointing && (
@@ -415,24 +460,13 @@ function NewFieldForm(props: {
             value={target}
             livePreview={false}
             options={props.collections.map((each) => ({ value: each, label: labelize(each) }))}
-            onChange={setTarget}
+            onChange={setChosen}
           />
         </label>
       )}
-      <FieldInputs field={field} draft={draft} onDraft={setDraft} autoFocusName />
+      <FieldInputs field={field} draft={draft} nameProblem={state.kind === 'invalid' ? state.message : undefined} onDraft={setDraft} autoFocusName />
     </div>
   );
-}
-
-// What the form saves beside a field's name: blank help text is no help text.
-function settingsOf(draft: SettingsField): FieldSettings {
-  return {
-    description: draft.description?.trim() || undefined,
-    required: draft.required,
-    checks: draft.checks,
-    options: draft.options,
-    defaultValue: draft.defaultValue,
-  };
 }
 
 async function removeField(props: { readonly field: SettingsField; readonly onChange: Change }) {
@@ -443,24 +477,17 @@ async function removeField(props: { readonly field: SettingsField; readonly onCh
     danger: true,
   });
   if (confirmed) {
-    await props.onChange({ kind: 'removeField', name: props.field.name });
+    props.onChange([{ kind: 'removeField', name: props.field.name }]);
   }
 }
 
 // A copy: a new field of the same kind beside it, given the same settings.
-async function duplicateField(props: { readonly field: SettingsField; readonly onChange: Change }) {
+function duplicateField(props: { readonly field: SettingsField; readonly onChange: Change }) {
   const { field } = props;
   if (!duplicable(field.kind)) {
     return;
   }
-  const name = `${field.name}-copy`;
-  await props.onChange({
-    kind: 'addField',
-    name,
-    fieldKind: field.kind,
-    target: undefined,
-    settings: settingsOf(field),
-  });
+  props.onChange([{ kind: 'addField', name: `${field.name}-copy`, fieldKind: field.kind, target: undefined, settings: fieldSettingsOf(field) }]);
 }
 
 // A reference is not duplicated: the collection it points at is not read back here.

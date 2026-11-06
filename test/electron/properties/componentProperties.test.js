@@ -203,11 +203,11 @@ test('invalid syntax, duplicate fields and complex contracts refuse destructive 
   assert.match(output, /<slot \/>/);
 });
 
-test('rename keeps lexical aliases, and updates direct and computed Astro.props references', () => {
+test('rename takes the local with it, and updates direct and computed Astro.props references', () => {
   const output = value(editPropertyDefinition(source, save({ name: 'heading', defaultValue: '' })));
   const renamed = value(renameComponentReferences(output, new Set(), { from: 'title', to: 'heading' }, 'definition'));
-  assert.match(renamed, /heading: title/);
-  assert.match(renamed, /\{title\} \{Astro.props.heading\}/);
+  assert.doesNotMatch(renamed, /heading: title/);
+  assert.match(renamed, /\{heading\} \{Astro.props.heading\}/);
   const computed = value(renameComponentReferences('<p>{Astro.props["title"]}</p>', new Set(), { from: 'title', to: 'heading' }, 'definition'));
   assert.match(computed, /Astro.props\["heading"\]/);
 });
@@ -598,13 +598,13 @@ test('renaming a common prop updates its instances, ' + 'runtime binding and rel
     );
     assert.equal(updated.properties.find((property) => property.name === 'kicker').editing.kind, 'editable');
     const after = fs.readFileSync(component, 'utf8');
-    assert.match(after, /kicker: eyebrow/);
+    assert.doesNotMatch(after, /kicker: eyebrow/);
     assert.match(after, /Astro.props.kicker/);
     assert.match(after, /Base\["kicker"\]/);
     assert.match(after, /AllProps\["kicker"\]/);
     assert.match(after, /Pick<Base, "kicker">/);
     assert.match(after, /Other\["eyebrow"\]/);
-    assert.match(after, /\{eyebrow\}/);
+    assert.match(after, /\{kicker\}/);
     assert.equal(fs.readFileSync(page, 'utf8').match(/kicker=/g).length, 2);
   });
 });
@@ -1024,7 +1024,7 @@ const { gap = 'small', otherGap = 'large', render = true, ...rest } = Astro.prop
     }),
   );
   assert.match(options, /spacing: 'large' \| 'compact' \| 'medium'/);
-  assert.match(options, /spacing: gap = 'compact'/);
+  assert.match(options, /const \{ spacing = 'compact',/);
   assert.match(options, /type ContainerGap = GapBase \| 'large'/);
   assert.match(options, /otherGap\?: ContainerGap/);
   const reordered = value(

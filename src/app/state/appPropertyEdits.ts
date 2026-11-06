@@ -32,7 +32,7 @@ import type { InlineNode } from '../../features/props/RichContent';
 import type { TextPiece } from '../../features/props/textConnect';
 import { textPiecesGesture } from '../model/textPieces';
 import type { Rename } from '../../features/props/propNodeEditors';
-import { checkLoopHead, planVariableRename, type VariableRename } from '../../editor/variableRename';
+import { checkLoopHead, planVariableRename, type VariableRename } from '../../../shared/engine/variableRename';
 import type { PropValues } from '../../features/props/propRules';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';

@@ -37,6 +37,7 @@ import { newId, withNewIds, usesPageScope, slotHostOf, definitionOf, frontmatter
 import { extractionGesture, createdComponentMessage, pasteNeeds, pastedImports, pastePlace } from '../model/pageGestures';
 import { pastedInScope, broughtMessage } from '../model/appKeys';
 import { prunedAfterRemoval } from '../model/pageQueries';
+import { structuralSelection } from '../model/selectionStructure';
 import { loadComponentInstance, componentInstancePlacement } from '../model/componentInstances';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
@@ -248,7 +249,7 @@ export function useCreateComponent(
   lifecycle: ReturnType<typeof useLifecycle>,
   history: ReturnType<typeof useHistory>,
 ) {
-  const { pageStateRef, projectRef, selectedIdRef, setSelectedId } = coreState;
+  const { pageStateRef, projectRef, pseudoPickRef, selectedIdRef, setSelectedId } = coreState;
   const { extractionFor } = componentQueries;
   const { rescan, showToast } = lifecycle;
   const { commitEdit } = history;
@@ -272,7 +273,8 @@ export function useCreateComponent(
       const page = pageStateRef.current.currentPage;
       const state = pageStateRef.current.pageState;
       const model = state?.editable ? state.model : undefined;
-      const node = model && selectedIdRef.current ? findNodeById(model.nodes, selectedIdRef.current) : undefined;
+      const selectionId = structuralSelection(selectedIdRef.current, pseudoPickRef.current);
+      const node = model && selectionId !== undefined ? findNodeById(model.nodes, selectionId) : undefined;
       const projectPath = projectRef.current?.path;
       if (!page?.path || !model || !node || !projectPath) {
         return;
@@ -349,7 +351,7 @@ export function useCreateComponent(
       const stranded = usesPageScope(node) && plan.values.length === 0;
       showToast(createdComponentMessage(created.rel, { props: props.length, moved: movedCount }, { stranded }));
     },
-    [commitEdit, extractionFor, rescan, showToast, pageStateRef, projectRef, selectedIdRef, setSelectedId],
+    [commitEdit, extractionFor, rescan, showToast, pageStateRef, projectRef, pseudoPickRef, selectedIdRef, setSelectedId],
   );
   return { createComponentFromSelection };
 }

@@ -7,12 +7,14 @@
 // Lezer parses here for the reasons it does there: it is already in the renderer
 // for the code editors, it reads TypeScript, and it never throws. The TypeScript
 // compiler lives in the main process and ts-morph is not a dependency, while this
-// runs on every commit of a field, in the renderer and in Studio.
+// runs on every commit of a field, in the renderer and in Studio. It sits in
+// shared/ because a prop's rename plans here too, in main and in Studio's server:
+// the process that holds the file and its parser (propertyRename.ts).
 
 import { parser } from '@lezer/javascript';
 import type { SyntaxNode, SyntaxNodeRef } from '@lezer/common';
-import { assert } from '../../shared/core/assert';
-import { LIMITS } from '../../shared/core/limits';
+import { assert } from '../core/assert';
+import { LIMITS } from '../core/limits';
 
 const frontmatterParser = parser.configure({ dialect: 'ts' });
 const templateParser = parser.configure({ dialect: 'ts jsx' });
@@ -127,6 +129,7 @@ export function bindingScope(scope: JsScope, name: string): JsScope | undefined 
 /** The innermost scope around `position`. */
 export function scopeAt(analysis: JsAnalysis, position: number): JsScope {
   assert(position >= analysis.root.from, 'A position lies inside the code it was read from');
+  assert(position < analysis.root.to, 'A position lies before the end of the code it was read from');
   let found = analysis.root;
   for (const scope of analysis.scopes) {
     // Scopes are listed outermost first, so the last match is the innermost.
@@ -134,11 +137,14 @@ export function scopeAt(analysis: JsAnalysis, position: number): JsScope {
       found = scope;
     }
   }
+  assert(found.from <= position, 'The scope found starts at or before the position');
+  assert(position < found.to, 'The scope found ends after the position');
   return found;
 }
 
 /** What is bound at `scope` by anything below the code's own top level. */
 export function innerNamesAt(analysis: JsAnalysis, scope: JsScope): ReadonlySet<string> {
+  assertNested(scope, analysis.root);
   const names = new Set<string>();
   let at: JsScope | undefined = scope;
   for (let count = 0; at !== undefined && at !== analysis.root && count < JS_SCOPE_LIMITS.ancestorsMax; count++) {
@@ -179,11 +185,9 @@ export function readModuleStatements(source: string): readonly JsStatement[] {
     }
     node = node.nextSibling ?? undefined;
   }
-  assert(
-    statements.every((statement) => statement.from < statement.to),
-    'A statement holds code',
-  );
-  return statements;
+  // Broken code is user input, not a broken invariant: the parser can recover
+  // with a node that holds nothing, and such a node is simply no statement.
+  return statements.filter((statement) => statement.from < statement.to);
 }
 
 /** One expression of the template, where markup can stand as a value. */
@@ -261,6 +265,8 @@ function readScopes(source: string, reader: typeof frontmatterParser): JsAnalysi
     },
   });
   assert(reading.stack.length === 1 || !valid, 'Every scope opened was closed');
+  assert(reading.stack[0] === root, 'The top level stays at the bottom of the scopes');
+  assert(reading.scopes[0] === root, 'The top level is the first scope listed');
   return {
     valid,
     root,
@@ -313,7 +319,9 @@ function enterNode(node: SyntaxNodeRef, reading: Reading): void {
 }
 
 function openScope(node: SyntaxNodeRef, reading: Reading): void {
+  assert(opensScope(node.name), 'openScope: only a scope-opening node opens one');
   const scope: JsScope = { from: node.from, to: node.to, parent: currentScope(reading), names: new Set(), hoists: FUNCTION_NODES.has(node.name) };
+  assertNested(scope, currentScope(reading));
   reading.stack.push(scope);
   reading.scopes.push(scope);
 }
@@ -324,11 +332,24 @@ function currentScope(reading: Reading): JsScope {
   return scope;
 }
 
+// Both halves are what lookups by position rely on: a child scope lies inside its parent.
+function assertNested(scope: JsScope, parent: JsScope): void {
+  assert(parent.from <= scope.from, 'A scope starts inside its parent');
+  assert(scope.to <= parent.to, 'A scope ends inside its parent');
+}
+
+function assertSpan(reading: Reading, node: SyntaxNode): void {
+  assert(node.from <= node.to, 'A node starts before it ends');
+  assert(node.to <= reading.source.length, 'A node ends inside its source');
+}
+
 function textOf(reading: Reading, node: SyntaxNode): string {
+  assertSpan(reading, node);
   return reading.source.slice(node.from, node.to);
 }
 
 function define(reading: Reading, node: SyntaxNode, how: { readonly form: JsDefinitionForm; readonly scope: JsScope }): void {
+  assert(reading.scopes.includes(how.scope), 'define: a name lands in a scope of this reading');
   const name = textOf(reading, node);
   how.scope.names.add(name);
   reading.definitions.push({ name, from: node.from, to: node.to, form: how.form, scope: how.scope });
@@ -338,6 +359,7 @@ function define(reading: Reading, node: SyntaxNode, how: { readonly form: JsDefi
 }
 
 function readVariableDefinition(node: SyntaxNode, reading: Reading): void {
+  assert(node.name === 'VariableDefinition', 'readVariableDefinition: reads a definition');
   const parent = node.parent?.name ?? '';
   if (parent === 'ImportGroup') {
     // `{ a as b }` binds `b` under another name; `{ b }` binds the export's own.
@@ -349,10 +371,26 @@ function readVariableDefinition(node: SyntaxNode, reading: Reading): void {
     define(reading, node, { form: 'plain', scope: currentScope(reading).parent ?? currentScope(reading) });
     return;
   }
-  define(reading, node, { form: 'plain', scope: declaresVar(node) ? hoistScope(reading) : currentScope(reading) });
+  define(reading, node, { form: patternForm(node), scope: declaresVar(node) ? hoistScope(reading) : currentScope(reading) });
+}
+
+// Lezer 1.5.6 reads the `x` of `{ x }` as a definition where 1.5.4 read a key, and
+// Studio installs the newer one: a new name must keep the key under either. `{ a: x }`
+// and `{ ...x }` hold a definition under both, and have no key to keep.
+function patternForm(node: SyntaxNode): JsDefinitionForm {
+  assert(node.name === 'VariableDefinition', 'patternForm: classifies a definition');
+  const property = node.parent;
+  if (property?.name !== 'PatternProperty') {
+    return 'plain';
+  }
+  if (property.getChild(':') !== null) {
+    return 'plain';
+  }
+  return property.getChild('Spread') === null ? 'shorthand' : 'plain';
 }
 
 function readPatternKey(node: SyntaxNode, reading: Reading): void {
+  assert(node.name === 'PropertyName', 'readPatternKey: reads a key');
   const parent = node.parent;
   // `{ x }` and `{ x = 1 }` bind the key's own name; `{ x: y }` binds `y`.
   if (parent?.name === 'PatternProperty') {
@@ -363,6 +401,7 @@ function readPatternKey(node: SyntaxNode, reading: Reading): void {
 }
 
 function readObjectKey(node: SyntaxNode, reading: Reading): void {
+  assert(node.name === 'PropertyDefinition', 'readObjectKey: reads a key');
   const parent = node.parent;
   if (parent?.name !== 'Property') {
     return; // A class member's name, which is no variable.
@@ -376,6 +415,8 @@ function readObjectKey(node: SyntaxNode, reading: Reading): void {
 }
 
 function readVariableName(node: SyntaxNode, reading: Reading): void {
+  assert(node.name === 'VariableName', 'readVariableName: reads a name');
+  assertSpan(reading, node);
   const parent = node.parent?.name;
   if (parent === 'ImportGroup') {
     return; // The export's own name, in `{ a as b }`.
@@ -397,6 +438,7 @@ function readVariableName(node: SyntaxNode, reading: Reading): void {
 // Climbs from a name through what it is the object of, to whatever finally
 // decides: an assignment's left side, `++`, `delete`, or a mutating method.
 function writtenAt(name: SyntaxNode, reading: Reading): boolean {
+  assert(name.name === 'VariableName', 'writtenAt: climbs from a name');
   let at = name;
   let inLiteral = false;
   for (let count = 0; count < JS_SCOPE_LIMITS.ancestorsMax; count++) {
@@ -439,12 +481,15 @@ function writtenAt(name: SyntaxNode, reading: Reading): boolean {
 }
 
 function textOfOperator(unary: SyntaxNode, reading: Reading): string | undefined {
+  assert(unary.name === 'UnaryExpression', 'textOfOperator: reads a unary expression');
   const operator = unary.getChild('ArithOp');
   return operator === null ? undefined : textOf(reading, operator);
 }
 
 // `x.push(1)` writes `x`; `f(x)` and `x.map(g)` do not.
 function calledMutator(call: SyntaxNode, callee: SyntaxNode, reading: Reading): boolean {
+  assert(call.name === 'CallExpression', 'calledMutator: reads a call');
+  assert(call.from <= callee.from, 'calledMutator: what is climbed from lies inside the call');
   if (call.firstChild?.from !== callee.from) {
     return false;
   }
@@ -456,6 +501,7 @@ function calledMutator(call: SyntaxNode, callee: SyntaxNode, reading: Reading): 
 }
 
 function readTag(node: SyntaxNode, reading: Reading): void {
+  assert(node.name === 'JSXIdentifier', 'readTag: reads a tag name');
   const parent = node.parent;
   const named = TAG_NODES.has(parent?.name ?? '');
   const member = parent?.name === 'JSXMemberExpression' && parent.firstChild?.from === node.from;
@@ -465,15 +511,19 @@ function readTag(node: SyntaxNode, reading: Reading): void {
 }
 
 function sameLine(source: string, from: number, to: number): boolean {
+  assert(from <= to, 'sameLine: statements are read in source order');
   return !source.slice(from, to).includes('\n');
 }
 
 // A comment belongs to the statement below it when no blank line parts them.
 function directlyAbove(source: string, from: number, to: number): boolean {
+  assert(from <= to, 'directlyAbove: a comment comes before what it is above');
   return source.slice(from, to).split('\n').length <= 2;
 }
 
 function readStatement(node: SyntaxNode, from: number, source: string): JsStatement {
+  assert(from <= node.from, 'readStatement: a statement’s comments come before it');
+  assert(node.to <= source.length, 'readStatement: a statement ends inside its source');
   const declared = node.name === 'ExportDeclaration' ? (firstDeclaration(node) ?? node) : node;
   const kind = statementKind(node, declared);
   const parts = new Set<StatementPart | undefined>();

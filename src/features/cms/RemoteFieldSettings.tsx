@@ -3,7 +3,7 @@
 // under Advanced validation, and whether it is required. Values are drafts:
 // RemoteCollectionSettings.tsx saves them with the field.
 import { useState } from 'react';
-import type { SettingsField } from '../../../shared/properties/collectionSettings';
+import { typedFieldName, type SettingsField } from '../../../shared/properties/collectionSettings';
 import { checksFor, FIELD_CHECKS, type FieldCheckKey, type FieldChecks } from '../../../shared/properties/fieldChecks';
 import Dropdown from '../../ui/Dropdown';
 import { ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
@@ -16,14 +16,22 @@ export function FieldInputs(props: {
   readonly draft: SettingsField;
   /** A new field's form starts in its name; an open field's does not move focus. */
   readonly autoFocusName?: boolean;
+  /** Why the name cannot be saved, said under it. The text stays as typed. */
+  readonly nameProblem: string | undefined;
   readonly onDraft: Draft;
 }) {
-  const { draft, onDraft } = props;
+  const { draft, onDraft, nameProblem } = props;
   return (
     <div className="field-settings">
       <div className="field-settings-grid">
         <Labelled label="Name" wide>
-          <input autoFocus={props.autoFocusName === true} value={draft.name} onChange={(event) => onDraft({ ...draft, name: event.target.value })} />
+          <input
+            autoFocus={props.autoFocusName === true}
+            aria-invalid={nameProblem !== undefined}
+            value={draft.name}
+            onChange={(event) => onDraft({ ...draft, name: event.target.value })}
+          />
+          {nameProblem === undefined ? <SavedKey typed={draft.name} /> : <span className="remote-cms-problem">{nameProblem}</span>}
         </Labelled>
         {props.field.editable && (
           <Labelled label="Help text" wide>
@@ -44,6 +52,15 @@ export function FieldInputs(props: {
       )}
     </div>
   );
+}
+
+// The key a typed label is saved as, when that is not what was typed.
+function SavedKey(props: { readonly typed: string }) {
+  const name = typedFieldName(props.typed);
+  if (name.kind === 'key' && name.key !== props.typed.trim()) {
+    return <span className="remote-cms-problem is-note">Saved as {name.key}</span>;
+  }
+  return undefined;
 }
 
 // The kind's common checks, the others behind a disclosure, then Required.

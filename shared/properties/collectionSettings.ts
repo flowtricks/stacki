@@ -135,17 +135,47 @@ export function newFieldSettings(kind: NewFieldKind): FieldSettings {
   };
 }
 
-/** A field's name as typed: letters, digits, `-` and `_`, starting with a letter. */
+/** A field's key: letters, digits, `-` and `_`, starting with a letter. */
 export function parseSettingsFieldName(input: unknown): string {
   const name = text(input).trim();
-  if (name.length === 0) {
-    throw new Error('Name the field.');
-  }
-  if (!FIELD_NAME.test(name)) {
-    throw new Error('A field name starts with a letter and holds letters, digits, - and _.');
+  const refusal = fieldNameRefusal(name);
+  if (refusal !== undefined) {
+    throw new Error(refusal);
   }
   assert(name.length <= COLLECTION_SETTINGS_LIMITS.fieldNameCharsMax, 'A field name is short');
   return name;
+}
+
+/** Why `name` cannot be a field's key, or nothing when it can. */
+export function fieldNameRefusal(name: string): string | undefined {
+  if (name.length === 0) {
+    return 'Name the field.';
+  }
+  if (name.length > COLLECTION_SETTINGS_LIMITS.fieldNameCharsMax) {
+    return `A field name is at most ${String(COLLECTION_SETTINGS_LIMITS.fieldNameCharsMax)} characters.`;
+  }
+  return FIELD_NAME.test(name) ? undefined : 'A field name starts with a letter and holds letters, digits, - and _.';
+}
+
+/** What a field's name box holds, as the form reads it. */
+export type TypedFieldName =
+  { readonly kind: 'blank' } | { readonly kind: 'invalid'; readonly message: string } | { readonly kind: 'key'; readonly key: string };
+
+/**
+ * What a typed name is saved as, the way a collection's name is: kept as written
+ * when it already is a key (`heroImage`, `hero_image`), otherwise its words
+ * joined with dashes (`My Field` → `my-field`). Blank is not a mistake, only a
+ * name not yet given, so a form can tell an unfinished row from a wrong one.
+ */
+export function typedFieldName(typed: string): TypedFieldName {
+  const trimmed = typed.trim();
+  if (trimmed.length === 0) {
+    return { kind: 'blank' };
+  }
+  const key = FIELD_NAME.test(trimmed) ? trimmed : dashedWords(trimmed);
+  // A label of no words leaves no key, which is a bad name and not a missing one.
+  const refusal = fieldNameRefusal(key === '' ? trimmed : key);
+  return refusal === undefined ? { kind: 'key', key } : { kind: 'invalid', message: refusal };
 }
 
 export function parseSettingsChange(input: unknown): SettingsChange {
@@ -273,18 +303,24 @@ function parseAstroCollectionNameOrStored(input: unknown): string {
  */
 export function parseCollectionRename(input: unknown): string {
   const typed = text(input).trim();
-  const name = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(typed)
-    ? typed
-    : typed
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((word) => word.length > 0)
-        .join('-');
+  const name = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(typed) ? typed : dashedWords(typed);
   if (!/^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(name)) {
     throw new Error('A collection name starts with a letter and holds letters, digits, - and _.');
   }
   assert(name.length <= 64, 'A collection name is short');
   return name;
+}
+
+// A label's words in lowercase, joined with dashes. An accent is dropped from its
+// letter first, so `Café` keeps its last letter rather than splitting on it.
+function dashedWords(label: string): string {
+  return label
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length > 0)
+    .join('-');
 }
 
 function parseOrder(input: unknown): readonly string[] {

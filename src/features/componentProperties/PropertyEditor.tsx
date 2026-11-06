@@ -286,8 +286,13 @@ function PropertyIdentity({ form, creating, inherited }: { readonly form: Proper
           }}
         />
       </label>
-      {!creating && form.savedName !== form.nameText && (
-        <p className="property-help">Renaming updates this component’s prop references and its instances across the website.</p>
+      {form.nameError !== '' && (
+        <p className="property-error" role="alert">
+          {form.nameError}
+        </p>
+      )}
+      {!creating && form.nameError === '' && form.savedName !== form.nameText && (
+        <p className="property-help">Renaming updates this component’s prop, the variable that reads it, and its instances across the website.</p>
       )}
     </>
   );

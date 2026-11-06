@@ -5,7 +5,7 @@ import { onPropertyFilesChanged as onFilesChanged } from '../../ipc/editorEnviro
 import { onWindowReturn } from '../../lib/windowReturn';
 import { err, ok } from '../../../shared/core/result';
 import { editComponentProperties, readComponentProperties } from './propertiesBridge';
-import { savePhaseOf, type PropertySaveHost, type PropertySaveOutcome } from './propertyAutosave';
+import { refusalOf, savePhaseOf, type PropertySaveHost, type PropertySaveOutcome } from './propertyAutosave';
 
 export interface ComponentPropertiesPanelProps {
   readonly projectPath: string;
@@ -59,7 +59,7 @@ export function useComponentProperties(props: ComponentPropertiesPanelProps) {
           snapshot.requestRefresh();
         }
         tell(result.error.message);
-        return { kind: conflict ? 'conflict' : 'refused', message: result.error.message };
+        return refusalOf(result.error);
       }
       if (snapshot.active.current) {
         snapshot.accept(result.value);

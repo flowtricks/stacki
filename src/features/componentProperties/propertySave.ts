@@ -2,14 +2,14 @@
 // settings (PropertySettingsDialog.tsx). The transaction is the panel's: the open
 // file is saved first, the change is applied against the source that was read,
 // so a newer file is refused rather than overwritten; main updates every
-// reference and instance on a rename; and one undo step reverts the batch.
+// reference, the local variable and every instance on a rename; and one undo step reverts the batch.
 
 import { assert } from '../../../shared/core/assert';
 import { err, ok, type Result } from '../../../shared/core/result';
 import type { ComponentProperty, PropertyChange } from '../../../shared/properties/propertyEditing';
 import { propertyIsEditable } from './PropertyEditor';
 import { editComponentProperties, readComponentProperties } from './propertiesBridge';
-import { savePhaseOf, type PropertySaveOutcome } from './propertyAutosave';
+import { refusalOf, savePhaseOf, type PropertySaveOutcome } from './propertyAutosave';
 
 /** What a property edit needs from the app: the file, and its save and undo steps. */
 export interface PropertySaver {
@@ -54,7 +54,7 @@ export async function saveProperty(saver: PropertySaver, source: string, change:
     await saver.flushSave();
     const result = await editComponentProperties(saver.projectPath, saver.file, source, change);
     if (!result.ok) {
-      return { kind: result.error.code === 'conflict' ? 'conflict' : 'refused', message: result.error.message };
+      return refusalOf(result.error);
     }
     saver.recordUndo(result.value.undo);
     await saver.completeSave();

@@ -38,7 +38,7 @@ import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel } from '../appPanel
 import { prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
 import { useEffect } from 'react';
 import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay, pickPseudo } from './AppPanes';
-import { selectedPseudo } from '../model/selectionDeletion';
+import { selectedPseudo } from '../model/selectionStructure';
 import type { AppView, ShellView } from '../App';
 
 // The start screen, before a project is open.

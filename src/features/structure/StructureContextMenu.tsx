@@ -19,7 +19,7 @@ interface MenuProps {
   readonly canWrapLink: boolean;
   readonly canPaste: boolean;
   readonly canCut: boolean;
-  readonly canDelete: boolean;
+  readonly canChange: boolean;
   readonly protectedNode: boolean;
   readonly onClose: () => void;
   readonly onAction: (action: ContextAction) => void;
@@ -50,13 +50,13 @@ export function ContextMenu(props: MenuProps) {
       <WrapMenu {...props} />
       <div className="ctx-divider" role="separator" />
       <MenuItem label="Cut" disabled={!props.canCut} onSelect={() => props.onAction('cut')} />
-      <MenuItem label="Copy" shortcut={shortcut('C')} disabled={props.protectedNode} onSelect={() => props.onAction('copy')} />
+      <MenuItem label="Copy" shortcut={shortcut('C')} disabled={!props.canChange} onSelect={() => props.onAction('copy')} />
       <MenuItem label="Paste" shortcut={shortcut('V')} disabled={!props.canPaste} onSelect={() => props.onAction('paste')} />
-      <MenuItem label="Duplicate" shortcut={shortcut('D')} disabled={props.protectedNode} onSelect={() => props.onAction('duplicate')} />
+      <MenuItem label="Duplicate" shortcut={shortcut('D')} disabled={!props.canChange} onSelect={() => props.onAction('duplicate')} />
       <MenuItem
         label="Delete"
         shortcut={currentDesktopPlatform() === 'darwin' ? '⌫' : 'Del'}
-        disabled={!props.canDelete}
+        disabled={!props.canChange}
         onSelect={() => props.onAction('delete')}
       />
       {props.component && (

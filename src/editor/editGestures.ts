@@ -16,7 +16,8 @@ import { renamedAttr } from './attrOrder';
 import { loopVarsAt, parseLoopHead, renamedLoopVar, strippedBindings } from './loopBindings';
 import type { EditGesture } from './pageEdits';
 import type { CodeHunk } from '../../shared/engine/codePatch';
-import { planVariableRename, predictedRename, type FileCode, type VariableRename } from './variableRename';
+import { planVariableRename, type FileCode, type VariableRename } from '../../shared/engine/variableRename';
+import { predictedRename } from './predictedRename';
 import {
   type Urgency,
   withNode,

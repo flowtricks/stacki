@@ -19,7 +19,7 @@ const { installPopupDOM } = require('../../helpers/popupDom.js');
 const load = require('../../helpers/rendererModule');
 const { parsePage } = require('#dist/electron/parse/astroParser.js');
 
-const { checkLoopHead, planVariableRename } = load('src/editor/variableRename.ts');
+const { checkLoopHead, planVariableRename } = load('shared/engine/variableRename.ts');
 const { sourceFileLabel } = load('src/features/props/sourceFileLabel.ts');
 
 const directory = repoPath('node_modules/.stacki-test/loop-head-rename');
