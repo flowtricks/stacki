@@ -161,6 +161,14 @@ function dataBridge() {
       return () => ipcRenderer.removeListener('cms:changed', listener);
     },
 
+    listComponentShots: invoke('componentShots:list'),
+    readComponentShot: invoke('componentShots:read'),
+    onComponentShotsChanged: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('componentShots:changed', listener);
+      return () => ipcRenderer.removeListener('componentShots:changed', listener);
+    },
+
     // Recent projects:
     listRecents: invoke('recents:list'),
     addRecent: invoke('recents:add'),

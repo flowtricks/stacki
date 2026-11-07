@@ -1,5 +1,5 @@
 // Goal: same-named components remain distinct while the insert search filters its rows.
-// Method: mount the real palette, type and navigate results, and inspect rows and insert targets.
+// Method: mount the real palette on All results, type and navigate results, and inspect rows and insert targets.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -56,6 +56,10 @@ test('duplicate component names cannot leave stale highlighted search results', 
         }),
       );
     });
+    // The palette opens on Components; this test wants the element list beside them.
+    await React.act(async () => {
+      Simulate.click(container.querySelector('.insert-tab'));
+    });
     // "paragraph" also names the `<p>` element, listed after matching components.
     await query('paragraph');
     assert.deepEqual(labels(), ['Paragraph', '<p>'], 'unmatched duplicate names must leave the DOM');
@@ -63,7 +67,7 @@ test('duplicate component names cannot leave stale highlighted search results', 
     await query('plan');
     assert.deepEqual(labels(), ['PlanYourVisit', 'PlanYourVisit']);
     await React.act(async () => {
-      Simulate.mouseEnter(container.querySelectorAll('.insert-item')[1]);
+      Simulate.mouseMove(container.querySelectorAll('.insert-item')[1]);
     });
     assert.equal(highlighted().length, 1, 'pointer navigation keeps one active row');
     await React.act(async () => {

@@ -88,13 +88,25 @@ export function prettyComponentName(name: string): string {
   return name.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 }
 
-export function componentPreviewURL(devURL: string, component: ScanComponent, trailingSlash: TrailingSlash): string {
+/** How the preview route lays a component out; see ComponentPreviewLayout in the route. `popup` is what it always did. */
+export type PreviewLayout = 'popup' | 'page';
+
+export function componentPreviewURL(
+  devURL: string,
+  component: ScanComponent,
+  trailingSlash: TrailingSlash,
+  options: { readonly layout: PreviewLayout } = { layout: 'popup' },
+): string {
   // A basename cannot distinguish components in different folders or a layout
   // from a component. Match the scan's folder convention without exposing an absolute path.
   const base = component.isLayout ? 'src' : 'src/components';
   const file =
     component.origin?.kind === 'package' ? packagePreviewPath(component) : [base, component.folder, `${component.name}.astro`].filter(Boolean).join('/');
   const query = new URLSearchParams({ c: component.name, p: file });
+  // The popup layout is the route's default, so its URL stays exactly as it was.
+  if (options.layout === 'page') {
+    query.set('layout', 'page');
+  }
   // Astro 5 returns a 404 when an injected page violates the project's slash policy.
   const route = trailingSlash === 'always' ? '/__avb/preview/' : '/__avb/preview';
   return `${devURL.replace(/\/+$/, '')}${route}?${query}`;

@@ -222,10 +222,76 @@ export function forwardsRest(source: string): boolean {
 // options } when a prop decides it (`<Tag>` from `const Tag = tag`, with
 // `tag = "h2"` in the destructure), or undefined when it can't be told.
 export function rootTag(source: string): RenderTag | undefined {
+  const root = rootElement(source);
+  if (root === undefined) {
+    return undefined;
+  }
+  const { name, frontmatter } = root;
+  const lower = name.toLowerCase();
+  if (!/^[A-Z]/.test(name)) {
+    return { tag: lower };
+  }
+  // A capitalised name is either another component — whose own tag this
+  // file can't know — or a variable holding one.
+  const alias = destructuredTag(frontmatter, name);
+  if (alias) {
+    return alias;
+  }
+  const decl = frontmatter.match(new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`));
+  if (!decl) {
+    return undefined;
+  }
+  const expr = required(decl[1], 'Dynamic tag expression capture').trim();
+  // `const Tag = tag` — the prop decides, so report it along with the
+  // default, and an instance that sets the prop overrides the default.
+  const ident = expr.match(/^([A-Za-z_$][\w$]*)$/);
+  if (ident) {
+    const prop = required(ident[1], 'Dynamic tag prop capture');
+    const dflt = frontmatter.match(new RegExp(`\\b${prop}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`));
+    return dflt ? { prop, tag: required(dflt[1], 'Root tag default capture').toLowerCase() } : { prop };
+  }
+  // `const Tag = isLink ? "a" : "button"` — it's one of these, and which
+  // one depends on values only the page knows.
+  const lits = [...expr.matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g)].map((x) => required(x[1], 'Root tag literal capture').toLowerCase());
+  if (lits.length === 1) {
+    return { tag: required(lits[0], 'Root has exactly one literal tag') };
+  }
+  if (lits.length > 1) {
+    return { options: lits };
+  }
+  return undefined;
+}
+
+// The component a component's template opens with, by name: `Section` for a
+// file that starts `<Section class="hero">`. It is the capitalised root that
+// rootTag reports as unknown, because it is neither a destructured tag prop nor
+// a variable holding a tag. Undefined when the root is a plain element, a
+// variable or alias, or there is no root. The insert palette follows these names
+// to learn whether a component ends up rendering a <section>.
+export function rootComponent(source: string): string | undefined {
+  const root = rootElement(source);
+  if (root === undefined) {
+    return undefined;
+  }
+  const { name, frontmatter } = root;
+  if (!/^[A-Z]/.test(name)) {
+    return undefined;
+  }
+  if (destructuredTag(frontmatter, name)) {
+    return undefined;
+  }
+  if (frontmatter.match(new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`))) {
+    return undefined;
+  }
+  return name;
+}
+
+// The first element of the template that isn't a wrapper Astro strips, with
+// the frontmatter that declares what a capitalised name might be.
+function rootElement(source: string): { readonly name: string; readonly frontmatter: string } | undefined {
   const fm = source.match(/^---\r?\n(?:[\s\S]*?\r?\n)?---\r?\n?/);
   const frontmatter = fm ? fm[0] : '';
   const body = fm ? source.slice(fm[0].length) : source;
-  // The first element of the template that isn't a wrapper Astro strips.
   const re = /<(\/?)([A-Za-z][\w.-]*)\b((?:[^>"'{]|"[^"]*"|'[^']*'|\{[^}]*\})*?)(\/?)>/g;
   let match;
   while ((match = re.exec(body)) !== null) {
@@ -238,38 +304,7 @@ export function rootTag(source: string): RenderTag | undefined {
     if (lower === 'fragment' || lower === 'slot' || lower === 'style' || lower === 'script') {
       continue;
     }
-    if (!/^[A-Z]/.test(name)) {
-      return { tag: lower };
-    }
-    // A capitalised name is either another component — whose own tag this
-    // file can't know — or a variable holding one.
-    const alias = destructuredTag(frontmatter, name);
-    if (alias) {
-      return alias;
-    }
-    const decl = frontmatter.match(new RegExp(`\\b(?:const|let|var)\\s+${name}\\s*=\\s*([^;\\n]+)`));
-    if (!decl) {
-      return undefined;
-    }
-    const expr = required(decl[1], 'Dynamic tag expression capture').trim();
-    // `const Tag = tag` — the prop decides, so report it along with the
-    // default, and an instance that sets the prop overrides the default.
-    const ident = expr.match(/^([A-Za-z_$][\w$]*)$/);
-    if (ident) {
-      const prop = required(ident[1], 'Dynamic tag prop capture');
-      const dflt = frontmatter.match(new RegExp(`\\b${prop}\\s*=\\s*["'\`]([A-Za-z][\\w-]*)["'\`]`));
-      return dflt ? { prop, tag: required(dflt[1], 'Root tag default capture').toLowerCase() } : { prop };
-    }
-    // `const Tag = isLink ? "a" : "button"` — it's one of these, and which
-    // one depends on values only the page knows.
-    const lits = [...expr.matchAll(/["'`]([A-Za-z][\w-]*)["'`]/g)].map((x) => required(x[1], 'Root tag literal capture').toLowerCase());
-    if (lits.length === 1) {
-      return { tag: required(lits[0], 'Root has exactly one literal tag') };
-    }
-    if (lits.length > 1) {
-      return { options: lits };
-    }
-    return undefined;
+    return { name, frontmatter };
   }
   return undefined;
 }

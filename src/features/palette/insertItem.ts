@@ -1,0 +1,27 @@
+import type { ReactNode } from 'react';
+import type { ScanComponent } from '../../../shared/properties/projectScan';
+import type { InsertGroup } from './insertGroups';
+
+// What the insert palette lists and hands to `onInsert`. Kept apart from the component so the
+// grid's cards can name the type without importing the palette that renders them.
+
+export type InsertChoice =
+  | { readonly type: 'component' | 'astroAsset'; readonly name: string; readonly path?: string }
+  | { readonly type: 'element'; readonly tag: string }
+  | {
+      readonly type: 'map' | 'cond' | 'text' | 'comment' | 'expr' | 'doctype' | 'style' | 'script';
+    };
+
+export type InsertItem = InsertChoice & {
+  readonly label: string;
+  readonly sub?: string;
+  readonly search?: string;
+  readonly cat: 'components' | 'elements' | 'other';
+  readonly icon: ReactNode;
+  /** Present on every item that is a card: components and `astro:assets` components. */
+  readonly group?: InsertGroup;
+  /** How often the project uses it; shown as `10×` when above zero. */
+  readonly instances?: number;
+  /** What the preview route needs to render it; absent when the component has no file to address. */
+  readonly preview?: ScanComponent;
+};

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import type { TrailingSlash } from '../../editor/pageState';
-import { componentPreviewURL, parseComponentPreviewMessage, prettyComponentName } from './paletteModel';
+import { componentPreviewURL, prettyComponentName, type ComponentPreviewMessage } from './paletteModel';
+import { useResolvedPreviewURL, usePreviewMessages } from './previewSource';
 
 interface PreviewTarget {
   readonly url: string;
@@ -18,8 +19,6 @@ interface PreviewEntry {
 const previewFramesMax = 4;
 
 type PreviewStatusHandler = (target: PreviewTarget, status: 'ready' | 'empty') => void;
-
-type PreviewURL = { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly url: string } | { readonly kind: 'empty' };
 
 export function ComponentPreviewPopup({
   preview,
@@ -113,19 +112,13 @@ function ComponentPreviewFrame({
 }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const resolvedURL = useResolvedPreviewURL(target.url, resolvePreviewURL);
-  useEffect(() => {
-    const receive = (event: MessageEvent<unknown>): void => {
-      if (event.source !== frameRef.current?.contentWindow) {
-        return;
-      }
-      const message = parseComponentPreviewMessage(event.data);
-      if (message) {
-        onStatus(target, message.status);
-      }
-    };
-    window.addEventListener('message', receive);
-    return () => window.removeEventListener('message', receive);
-  }, [target, onStatus]);
+  const receive = useCallback(
+    (message: ComponentPreviewMessage): void => {
+      onStatus(target, message.status);
+    },
+    [target, onStatus],
+  );
+  usePreviewMessages(frameRef, receive);
   useEffect(() => {
     if (resolvedURL.kind === 'empty') {
       onStatus(target, 'empty');
@@ -135,30 +128,4 @@ function ComponentPreviewFrame({
     return undefined;
   }
   return <iframe ref={frameRef} src={resolvedURL.url} title={`${target.name} preview`} style={{ opacity: visible ? 1 : 0 }} aria-hidden={!visible} />;
-}
-
-function useResolvedPreviewURL(directURL: string, resolvePreviewURL?: (url: string) => Promise<string>): PreviewURL {
-  const [resolvedURL, setResolvedURL] = useState<PreviewURL>({ kind: 'loading' });
-  useEffect(() => {
-    if (!resolvePreviewURL) {
-      return;
-    }
-    let active = true;
-    void resolvePreviewURL(directURL)
-      .then((url) => {
-        if (active) {
-          setResolvedURL({ kind: 'ready', url });
-        }
-      })
-      .catch(() => {
-        // An expired draft session cannot display a component preview.
-        if (active) {
-          setResolvedURL({ kind: 'empty' });
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, [directURL, resolvePreviewURL]);
-  return resolvePreviewURL ? resolvedURL : { kind: 'ready', url: directURL };
 }

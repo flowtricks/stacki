@@ -56,6 +56,7 @@ import { stopAllPreviews } from './preview/previewServers';
 import type { MainHost } from './handlers/mainHost';
 import { DevServers, registerDevServerHandlers } from './handlers/devServers';
 import { Thumbnails, registerThumbnailHandlers } from './handlers/thumbnails';
+import { ComponentShots, componentShotsHost, registerComponentShotHandlers } from './handlers/componentShots';
 import { registerAssetHandlers } from './handlers/assetHandlers';
 import { registerCmsHandlers } from './handlers/cmsHandlers';
 import { registerComponentHandlers } from './handlers/componentHandlers';
@@ -91,6 +92,13 @@ const thumbnails = new Thumbnails({
   devServers,
   userDataPath: () => app.getPath('userData'),
 });
+const componentShots = new ComponentShots(
+  componentShotsHost({
+    devServers,
+    userDataPath: () => app.getPath('userData'),
+    send,
+  }),
+);
 const autoUpdates = new AutoUpdates({
   app,
   autoUpdater,
@@ -886,6 +894,7 @@ function stopWatchingProject() {
   pageChangeTimer = undefined;
   pageChangeExternal = false;
   thumbnails.stop();
+  componentShots.stop();
   documents.clear();
 }
 
@@ -961,3 +970,4 @@ registerStyleSourceHandlers(host);
 registerSelectorHandlers(host);
 registerDevServerHandlers({ ipcMain, devServers, thumbnails });
 registerThumbnailHandlers({ ipcMain, thumbnails, userDataPath: () => app.getPath('userData') });
+registerComponentShotHandlers({ ipcMain, componentShots });

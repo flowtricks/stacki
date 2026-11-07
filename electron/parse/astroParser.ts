@@ -28,7 +28,7 @@ import { parseTemplate } from './astroTemplate';
 import { serializeNodesMarked, type MarkedSource } from './astroSerializeMarked';
 import { resolveChunks, chunkImportMarks, markChunkHtml } from './astroChunks';
 import { parsePropSchema } from './astroPropSchema';
-import { parseSlots, rootTag, defaultSlotInline, parseExtendsTag } from './astroComponentApi';
+import { parseSlots, rootTag, rootComponent, defaultSlotInline, parseExtendsTag } from './astroComponentApi';
 import type { PreviewStamp } from '../../shared/page/previewToken';
 
 export {
@@ -45,6 +45,7 @@ export {
   parseSlots,
   defaultSlotInline,
   rootTag,
+  rootComponent,
   parseAttrs,
   serializeAttrs,
 };

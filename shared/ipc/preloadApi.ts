@@ -61,6 +61,8 @@ interface InvokeChannels {
   readonly contentRemoteRead: 'content:remoteRead';
   readonly contentRemoteEdit: 'content:remoteEdit';
   readonly setCmsMeta: 'cms:setMeta';
+  readonly listComponentShots: 'componentShots:list';
+  readonly readComponentShot: 'componentShots:read';
   readonly listRecents: 'recents:list';
   readonly addRecent: 'recents:add';
   readonly removeRecent: 'recents:remove';
@@ -186,6 +188,7 @@ export type PreloadBridge = InvokeSurface & {
   readonly onAssetsChanged: (callback: () => void) => () => void;
   readonly onCssChanged: (callback: () => void) => () => void;
   readonly onCmsChanged: (callback: () => void) => () => void;
+  readonly onComponentShotsChanged: (callback: () => void) => () => void;
   readonly onPageMaybeChanged: (callback: (data: unknown) => void) => () => void;
   readonly onTerminalData: (callback: (data: unknown) => void) => () => void;
   readonly onTerminalExit: (callback: (data: unknown) => void) => () => void;
