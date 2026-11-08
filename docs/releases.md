@@ -40,6 +40,17 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.18 the 1.0.16 changes, through a clean checkout
+
+- The same app as 1.0.17, which never became public. Its Linux build and the `create-stacki`
+  workflow failed Studio's verify on a clean checkout: the demo bake tests borrowed Astro from the
+  git-ignored `test/fixtures/site/node_modules`, copied a `dist/` that verify builds only after its
+  tests, and shared one `node_modules` whose `.astro` and `.vite` caches parallel bakes overwrote.
+- The tests now install the fixture site and build the preview runtime once under a lock, and each
+  test project gets its own `node_modules` of linked packages. Run on a fresh clone with no build
+  and no fixture packages, Studio's verify passed 667/667 and the full gate 604/604.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.18.
+
 ## 1.0.17 the 1.0.16 changes, with a Studio bundle that installs
 
 - The same app as 1.0.16, which never became public. Its Studio bundle shipped
