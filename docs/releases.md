@@ -40,6 +40,24 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.16 the editor on stacki.build, instant reorders, touch and rem
+
+- stacki.build opens every page in the Studio demo, starting in preview: docs entries through
+  their template page and entry switcher, prop edits rendered without Astro (variants, lists and
+  layouts included), preview links, downloads and back/forward behaving like the site, and the
+  reset bar shown only once there are edits.
+- Drag to reorder updates the canvas the moment you drop; the render then confirms it, and a
+  refused write puts the page back. Reordering works by touch on iPhone.
+- Style drags and Variables nudges preview at once and write one at a time, so fast drags no
+  longer report "This file changed". Lumos projects write rem for every length.
+- Selector chips include classes an instance passes in, no longer flicker, and are ordered by
+  specificity with a styled tag first. The canvas preview keeps the file's whitespace.
+- Studio: Navigator picks scroll the canvas, through smooth-scroll libraries too; the editor
+  collapses by canvas width; Safari and iOS fixes; swipes scroll the Style panel.
+- Desktop: preview mode opens off-site redirects in the browser; the app is 28.8 MB smaller.
+- Each release uploads the optional Studio demo and asks stacki.build to rebuild.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.16.
+
 ## 1.0.15 collection fields stick, prop renames follow through
 
 - Fields added in a content collection's settings now stay. A name like `My Field` becomes the key
