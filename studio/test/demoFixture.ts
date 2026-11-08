@@ -1,12 +1,14 @@
 // A disposable Astro project, baked and laid out as a static host would serve it. The
 // server below only reads files: no route in it knows what Studio is, which is what
 // lets the demo's browser test claim that nothing server-side is involved.
-import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { access, cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { bakeSite } from '../src/features/bake/bakeDemo';
 
 const studio = fileURLToPath(new URL('../', import.meta.url));
@@ -90,6 +92,56 @@ const notes = await getCollection("notes");
 `,
 };
 
+// The fixture site's dependencies are git-ignored, so a clean checkout (CI, the npm publish
+// workflow) has none: the bake tests then found no Astro. They are installed once, from the
+// fixture's own lockfile, the first time a test needs them. Bounded by npm's own timeout.
+const FIXTURE_SITE = path.join(studio, 'test/fixtures/site');
+const FIXTURE_INSTALL_MS_MAX = 300_000;
+let fixtureInstall: Promise<void> | undefined;
+
+const FIXTURE_ASTRO = path.join(FIXTURE_SITE, 'node_modules/astro/package.json');
+// Test files run in parallel processes, so the install is guarded by a lock directory
+// (mkdir is atomic): one process installs, the others wait for Astro to appear.
+const FIXTURE_LOCK = path.join(FIXTURE_SITE, '.installing');
+const FIXTURE_WAIT_MS = 500;
+
+async function installed(): Promise<boolean> {
+  return access(FIXTURE_ASTRO).then(
+    () => true,
+    () => false,
+  );
+}
+
+async function installFixtureSite(): Promise<void> {
+  const started = Date.now();
+  while (!(await installed())) {
+    if (Date.now() - started > FIXTURE_INSTALL_MS_MAX) {
+      throw new Error('The fixture site dependencies did not install in time');
+    }
+    const owner = await mkdir(FIXTURE_LOCK).then(
+      () => true,
+      () => false,
+    );
+    if (owner) {
+      try {
+        await promisify(execFile)('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
+          cwd: FIXTURE_SITE,
+          timeout: FIXTURE_INSTALL_MS_MAX,
+        });
+      } finally {
+        await rm(FIXTURE_LOCK, { recursive: true, force: true });
+      }
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, FIXTURE_WAIT_MS));
+    }
+  }
+}
+
+function ensureFixtureInstalled(): Promise<void> {
+  fixtureInstall ??= installFixtureSite();
+  return fixtureInstall;
+}
+
 export async function makeProject(): Promise<{ readonly root: string; readonly stop: () => Promise<void> }> {
   // The real path: Astro and Vite disagree about a symlinked temporary folder.
   const root = await realpath(await mkdtemp(path.join(os.tmpdir(), 'stacki-demo-')));
@@ -98,6 +150,7 @@ export async function makeProject(): Promise<{ readonly root: string; readonly s
     await writeFile(path.join(root, file), text);
   }
   // The fixture site's installed Astro, so this needs no install of its own.
+  await ensureFixtureInstalled();
   await symlink(path.join(studio, 'test/fixtures/site/node_modules'), path.join(root, 'node_modules'));
   return { root, stop: () => rm(root, { recursive: true, force: true }) };
 }

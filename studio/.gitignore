@@ -19,3 +19,4 @@ release/
 # Project-specific secrets and draft state.
 .dev.vars*
 .studio-state/
+test/fixtures/site/.installing/
