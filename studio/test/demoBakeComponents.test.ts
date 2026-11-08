@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseBakeSnapshot } from '../src/features/bake/bakeSnapshot';
 import { renderTemplate, joinOutput } from '../src/features/bake/componentTemplates';
-import { makeProject } from './demoFixture';
+import { ensureStudioBuilt, makeProject } from './demoFixture';
 
 const BAKE_EXIT_MS_MAX = 240_000;
 const studio = fileURLToPath(new URL('../', import.meta.url));
@@ -59,6 +59,7 @@ async function bakeInChild(root: string, out: string): Promise<Readonly<Record<s
 
 test('a clean site bakes templates for its instances and exits', { timeout: BAKE_EXIT_MS_MAX + 30_000 }, async () => {
   const project = await makeProject();
+  await ensureStudioBuilt();
   const out = await mkdtemp(path.join(os.tmpdir(), 'stacki-bake-components-'));
   try {
     const result = await bakeInChild(project.root, out);
@@ -95,6 +96,7 @@ test('a clean site bakes templates for its instances and exits', { timeout: BAKE
 
 test('a component that throws for a probe costs that page its probes, and the bake still exits', { timeout: BAKE_EXIT_MS_MAX + 30_000 }, async () => {
   const project = await makeProject();
+  await ensureStudioBuilt();
   const out = await mkdtemp(path.join(os.tmpdir(), 'stacki-bake-throws-'));
   try {
     // An empty title throws: the probe for the "empty" state fails the page's render.
