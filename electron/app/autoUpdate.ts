@@ -212,13 +212,40 @@ export class AutoUpdates {
   }
 }
 
+// Chromium's transport failures, which electron-updater's net requests report as
+// `net::ERR_…` in the message: a dropped, reset or timed-out connection, or a
+// network that changed under the request. A user saw a dialog for
+// ERR_CONNECTION_CLOSED while the feed itself answered; the next check succeeds.
+const CHROMIUM_TRANSIENT_ERRORS = [
+  'ERR_ADDRESS_UNREACHABLE',
+  'ERR_CONNECTION_ABORTED',
+  'ERR_CONNECTION_CLOSED',
+  'ERR_CONNECTION_FAILED',
+  'ERR_CONNECTION_REFUSED',
+  'ERR_CONNECTION_RESET',
+  'ERR_CONNECTION_TIMED_OUT',
+  'ERR_EMPTY_RESPONSE',
+  'ERR_HTTP2_PROTOCOL_ERROR',
+  'ERR_INTERNET_DISCONNECTED',
+  'ERR_NAME_NOT_RESOLVED',
+  'ERR_NETWORK_CHANGED',
+  'ERR_NETWORK_IO_SUSPENDED',
+  'ERR_PROXY_CONNECTION_FAILED',
+  'ERR_QUIC_PROTOCOL_ERROR',
+  'ERR_TIMED_OUT',
+] as const;
+
 // Update-check failures the user can do nothing about, and so should never
-// see a dialog for: they're offline, or a release is mid-publish and its
-// channel file for this platform hasn't uploaded yet. Both resolve on their
-// own by the next check.
-function isExpectedAutoUpdateNetworkError(error: unknown) {
+// see a dialog for: they're offline, the connection dropped, or a release is
+// mid-publish and its channel file for this platform hasn't uploaded yet. All
+// resolve on their own by the next check.
+export function isExpectedAutoUpdateNetworkError(error: unknown): boolean {
   const code = String(toRecord(error)?.['code'] || '').toUpperCase();
   const message = String(toRecord(error)?.['message'] || error || '').toLowerCase();
+
+  if (CHROMIUM_TRANSIENT_ERRORS.some((name) => code === name || message.includes(`net::${name.toLowerCase()}`))) {
+    return true;
+  }
 
   // A release whose other platform published first: the channel file is
   // briefly absent, which surfaces as a 404 on latest-mac.yml / latest.yml.
