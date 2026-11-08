@@ -40,6 +40,15 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.20 the 1.0.16 changes, published
+
+- The same app as 1.0.19, which never became public. On the Linux runner, the reveal let go
+  between two widely spaced frames of a smooth-scroll library's glide, so the glide carried the
+  node off screen; it now waits for the page to hold at the landing spot (2 s, or three times the
+  longest gap between its scroll events) and jumps once more after a glide.
+- On Windows a bake test imported by `D:\` path, which ESM refuses; it now uses a `file://` URL.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.20.
+
 ## 1.0.19 the 1.0.16 changes, through every platform's build
 
 - The same app as 1.0.18, which never became public: its Mac build passed, but Windows and Linux
