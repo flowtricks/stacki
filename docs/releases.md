@@ -40,6 +40,19 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.22 live component props and regression fixes
+
+- Hovering an enum prop option previews it on the canvas and survives a page pull; number props
+  show each value at once in Desktop. Saves no longer reload the canvas on pages whose JSON-LD
+  script carries a source marker.
+- The Studio demo bake sizes its build heap: on a 2 GB heap it silently shipped no component
+  states, so prop changes did nothing on stacki.build. A lost probe is now logged.
+- Demo notices use Stacki's toasts.
+- Update checks stay quiet on dropped connections and GitHub 5xx or 429 responses, and the File
+  menu reports a running download.
+- Fixes eight regressions found by auditing the changes since 1.0.15.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.22.
+
 ## 1.0.21 the 1.0.16 changes, with undo after a reorder
 
 - Desktop 1.0.20 never became public: Studio's browser test failed. After a Navigator drag,
