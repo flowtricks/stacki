@@ -172,24 +172,31 @@ const landingOf = (scrollport: Scrollport, rect: Rect | undefined): Landing | un
 // not by the direction of travel, which a library's animation shares.
 //
 // "Quiet" is measured against the page's own pace, not a fixed time. A library
-// writes once per animation frame, and frames arrive late on a slow machine: the
-// Linux release runner draws about one every 200ms, and runs every animation, the
-// library's glide included, at a quarter of its speed. A fixed stillness of a few
-// checks read a gap between two of those frames as the end of the glide. So the
-// watch times the gaps between the page's scroll events and needs the page to
-// hold still for twice the longest one (at least QUIET_MS_MIN) before it jumps
-// again, or before it calls the box landed and lets go.
+// writes once per animation frame, and frames arrive late on a slow machine: a
+// hidden window on GitHub's Linux runner (xvfb) can go a second or more between
+// them. So the watch times the gaps between the page's scroll events and judges
+// quiet against the longest one it has seen:
 //
-// Bounded on two counts: REVEAL_CHECKS_MAX looks, REVEAL_CHECK_MS apart, which
-// outlasts a glide even at a quarter speed; and REVEAL_JUMPS_MAX jumps, so a page
-// that keeps moving itself is not fought for that whole time.
+// - It jumps again once the page has held still away from the landing for twice
+//   that gap (at least JUMP_QUIET_MS_MIN): the library has let go.
+// - It lets go itself only once the page has held still at the landing for three
+//   times that gap (at least REST_QUIET_MS_MIN), which is longer. Letting go on
+//   a short stillness at the landing ended the watch between two frames of a
+//   glide on the runner; the glide then carried the page on to its own target,
+//   and nothing was left to bring the box back.
+//
+// So the watch lasts as long as the page keeps moving on its own, and ends a
+// rest after it stops. Bounded on two counts as well: REVEAL_CHECKS_MAX looks,
+// REVEAL_CHECK_MS apart (a minute), and REVEAL_JUMPS_MAX jumps, so a page that
+// keeps undoing the reveal is not fought for all of that minute.
 const REVEAL_CHECK_MS = 100;
-const REVEAL_CHECKS_MAX = 300;
-const REVEAL_JUMPS_MAX = 10;
-const QUIET_MS_MIN = 300;
+const REVEAL_CHECKS_MAX = 600;
+const REVEAL_JUMPS_MAX = 20;
+const JUMP_QUIET_MS_MIN = 300;
+const REST_QUIET_MS_MIN = 2_000;
 // A gap longer than this is the page at rest between two unrelated moves, not a
 // slow frame, and must not stretch the wait.
-const FRAME_GAP_MS_MAX = 1_000;
+const FRAME_GAP_MS_MAX = 5_000;
 const ARRIVED_PX = 1;
 const TAKEOVER_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const;
 
@@ -237,7 +244,8 @@ const watchReveal = (scrollport: Scrollport, measure: () => Landing | undefined)
     const step = revealStep({
       arrived: Math.abs(landing.position - landing.top) <= ARRIVED_PX,
       quietMs: performance.now() - movedAt,
-      quietMsNeeded: Math.max(QUIET_MS_MIN, frameGapMs * 2),
+      jumpQuietMs: Math.max(JUMP_QUIET_MS_MIN, frameGapMs * 2),
+      restQuietMs: Math.max(REST_QUIET_MS_MIN, frameGapMs * 3),
       checksLeft: REVEAL_CHECKS_MAX - checks,
       jumpsLeft: REVEAL_JUMPS_MAX - jumps,
     });
@@ -278,28 +286,28 @@ type RevealStep = 'done' | 'wait' | 'jump';
 const revealStep = (look: {
   readonly arrived: boolean;
   readonly quietMs: number;
-  readonly quietMsNeeded: number;
+  readonly jumpQuietMs: number;
+  readonly restQuietMs: number;
   readonly checksLeft: number;
   readonly jumpsLeft: number;
 }): RevealStep => {
   assert(look.checksLeft >= 0, 'revealStep: the watch has checks left to count');
   assert(look.jumpsLeft >= 0, 'revealStep: the watch never jumps past its bound');
-  assert(look.quietMsNeeded >= QUIET_MS_MIN, 'revealStep: quiet is never judged on less than the minimum');
-  const quiet = look.quietMs >= look.quietMsNeeded;
+  assert(look.jumpQuietMs >= JUMP_QUIET_MS_MIN, 'revealStep: a jump never waits less than the minimum');
+  assert(look.restQuietMs > look.jumpQuietMs, 'revealStep: letting go waits longer than jumping');
   if (look.arrived) {
-    // Landed, and held long enough that a library's next frame would have shown.
-    if (quiet) {
-      return 'done';
+    if (look.quietMs >= look.restQuietMs) {
+      return 'done'; // At rest on the landing: no library is pulling it away.
     }
     return look.checksLeft === 0 ? 'done' : 'wait';
   }
   if (look.jumpsLeft === 0) {
-    return 'done'; // The jumps are spent: a page that keeps moving itself wins.
+    return 'done'; // The jumps are spent: a page that keeps undoing the reveal wins.
   }
-  if (quiet) {
-    return 'jump'; // Quiet away from the landing: let go of by a library's animation.
+  if (look.quietMs >= look.jumpQuietMs) {
+    return 'jump'; // At rest away from the landing: let go of by a library's glide.
   }
-  // Still moving, or not quiet long enough to tell. The last look jumps anyway.
+  // Still moving on its own, or not quiet long enough to tell. The last look jumps.
   return look.checksLeft === 0 ? 'jump' : 'wait';
 };
 

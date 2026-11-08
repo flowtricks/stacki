@@ -28,6 +28,9 @@
 //   - Lenis idle: a section far below is revealed, and Lenis adopts the position,
 //   - Lenis gliding elsewhere when the reveal arrives (the person wheeled just
 //     before picking a row): the reveal waits out the glide and still lands,
+//   - the same with the stand-in drawing one frame every 700ms, as a hidden window
+//     on the Linux runner does: the reveal must not take a gap between two frames
+//     of the glide for its end,
 //   - a person who scrolls during a reveal keeps the page where they put it,
 //   - a box far down a scrolling <main> scrolls <main>, not the window,
 //   - a box hidden above the top of a scroller that sits below a header is judged
@@ -88,9 +91,19 @@ const LENIS_SCRIPT = `<script>
       }
       scrollTo({ top: lenis.animated, behavior: 'instant' });
     }
-    requestAnimationFrame(frame);
+    next();
   };
-  requestAnimationFrame(frame);
+  // A hidden window on GitHub's Linux runner (xvfb) draws a frame far less often
+  // than a visible one: lenis.frameGapMs holds the stand-in to that pace.
+  lenis.frameGapMs = 0;
+  const next = () => {
+    if (lenis.frameGapMs > 0) {
+      setTimeout(() => requestAnimationFrame(frame), lenis.frameGapMs);
+    } else {
+      requestAnimationFrame(frame);
+    }
+  };
+  next();
   // What a wheel does under Lenis: a glide toward a new target of its own.
   window.glide = (top) => {
     lenis.animated = scrollY;
@@ -137,13 +150,17 @@ const hostPage = (frameFile) => `<!doctype html><meta charset=utf-8>
 
 // Runs in the host page: every reading of the canvas goes through this.
 const HOST_HELPERS = `
-  // 18 seconds: a glide at a quarter speed, then the watch's longest quiet wait.
-  const SETTLE_TRIES_MAX = 300;
+  // 60 seconds, the watch's own bound (frameReveal.ts): a slow runner can spend
+  // most of it gliding and then resting before the reveal lands.
+  const SETTLE_TRIES_MAX = 1000;
+  // A frame every 700ms: as sparse as a hidden window on the Linux runner draws.
+  const SPARSE_FRAME_GAP_MS = 700;
   const READING_MS = 60;
   // Still for 720ms: longer than the frame's watch takes to judge a page still
   // (three looks 100ms apart) plus a late animation frame on a slow machine.
   const STILL_READINGS = 12;
-  // 2.1 seconds: twice the longest frame gap the watch will wait out (frameReveal.ts).
+  // 2.1 seconds landed with the stand-in idle: longer than three of its sparse
+  // frame gaps, so a frame that would still undo the reveal has had time to show.
   const WATCH_DONE_READINGS = 35;
   const frame = document.getElementById('canvas').contentWindow;
   const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -232,6 +249,11 @@ const HOST_HELPERS = `
       frame.glide(1200);
       await pause(50);
     }
+    if (before === 'sparse glide') {
+      frame.testLenis.frameGapMs = SPARSE_FRAME_GAP_MS;
+      frame.glide(1200);
+      await pause(50);
+    }
     frame.postMessage({ type: 'avb:scroll-to', path: '0', occ: 0 }, '*');
     await handled();
     if (during === 'person') {
@@ -303,6 +325,8 @@ const HOST_HELPERS = `
        await open('lenis');
        const idle = await reveal({ from: 0, expected: 'lands' });
        const gliding = await reveal({ from: 0, before: 'glide', expected: 'lands' });
+       const sparse = await reveal({ from: 0, before: 'sparse glide', expected: 'lands' });
+       await run('document.getElementById("canvas").contentWindow.testLenis.frameGapMs = 0');
        const person = await reveal({ from: 0, during: 'person', expected: 'stays' });
 
        await open('shell');
@@ -312,7 +336,7 @@ const HOST_HELPERS = `
        const hidden = await reveal({ from: 2650, scrollerId: 'scroller', expected: 'lands' });
        const showing = await reveal({ from: 2400, scrollerId: 'scroller', expected: 'stays' });
 
-       console.log(JSON.stringify({ idle, gliding, person, below, hidden, showing }));
+       console.log(JSON.stringify({ idle, gliding, sparse, person, below, hidden, showing }));
        app.quit();
      });`,
   );
@@ -339,11 +363,11 @@ const HOST_HELPERS = `
   if (!line) {
     check('the browser probe ran', false, (run.stderr || run.stdout || '').slice(0, 800));
   } else {
-    const { idle, gliding, person, below, hidden, showing } = JSON.parse(line);
+    const { idle, gliding, sparse, person, below, hidden, showing } = JSON.parse(line);
     const onScreen = (reading) => reading.top >= reading.viewTop && reading.bottom <= reading.viewBottom;
     // Every reading is taken after the page, the Lenis stand-in and the frame's
     // watch have all come to rest, or it says nothing about where a reveal ends.
-    for (const [name, result] of Object.entries({ idle, gliding, person, below, hidden, showing })) {
+    for (const [name, result] of Object.entries({ idle, gliding, sparse, person, below, hidden, showing })) {
       check(`the ${name} case came to rest before it was read`, result.settled === true, JSON.stringify(result));
     }
 
@@ -353,6 +377,8 @@ const HOST_HELPERS = `
 
     check('with Lenis gliding elsewhere, the reveal still lands once the glide ends', onScreen(gliding), JSON.stringify(gliding));
     check('and Lenis holds it there', Math.abs(gliding.lenis.target - gliding.end) <= 1, JSON.stringify(gliding));
+    check('with Lenis gliding on sparse frames, the reveal still lands once the glide ends', onScreen(sparse), JSON.stringify(sparse));
+    check('and Lenis holds it there too', Math.abs(sparse.lenis.target - sparse.end) <= 1, JSON.stringify(sparse));
 
     // At 400, far from the 2250 the reveal was heading for.
     check('a person who scrolls during a reveal keeps the page where they put it', Math.abs(person.end - 400) <= PERSON_SLACK_PX, JSON.stringify(person));

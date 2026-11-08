@@ -12,7 +12,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseBakeSnapshot } from '../src/features/bake/bakeSnapshot';
 import { renderTemplate, joinOutput } from '../src/features/bake/componentTemplates';
 import { ensureStudioBuilt, makeProject } from './demoFixture';
@@ -26,7 +26,8 @@ async function bakeInChild(root: string, out: string): Promise<Readonly<Record<s
   const script = path.join(out, '..', `bake-${path.basename(out)}.mts`);
   await writeFile(
     script,
-    `import { bakeSite } from ${JSON.stringify(path.join(studio, 'src/features/bake/bakeSite.ts'))};\n` +
+    // A file:// URL, not a path: on Windows an absolute path (D:\\…) is not a valid import.
+    `import { bakeSite } from ${JSON.stringify(pathToFileURL(path.join(studio, 'src/features/bake/bakeSite.ts')).href)};\n` +
       `const result = await bakeSite({ root: ${JSON.stringify(root)}, out: ${JSON.stringify(out)}, base: '/demo/site/', runtime: ${JSON.stringify(path.join(studio, 'dist'))}, studioVersion: '0.0.0-test' });\n` +
       `console.log('BAKE ' + JSON.stringify(result));\n`,
   );
