@@ -96,9 +96,14 @@ interface LooseNode {
 }
 
 // A drop's order, shown in the Navigator until the source it was planned over changes
-// (the server's answer) or the server refuses it.
+// (the server's answer) or the server refuses it. The move is forgotten on the first
+// change, not merely hidden: an undo restores exactly the source it was planned over,
+// and a hidden move would then show again over the restored order.
 function useShownMove(source: string) {
   const [state, setState] = useState<{ readonly source: string; readonly move: CanvasMove } | undefined>(undefined);
+  if (state !== undefined && state.source !== source) {
+    setState(undefined); // React re-renders before committing; the stale move never shows.
+  }
   useEffect(() => {
     const refused = () => setState(undefined);
     window.addEventListener('studio:action-refused', refused);

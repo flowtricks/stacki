@@ -119,7 +119,7 @@ async function assetsAndPicker(page: Page) {
 
 async function mobilePicker(page: Page) {
   await page.getByLabel('Close panel').click();
-  await page.locator('.preview-toolbar').getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.locator('.preview-toolbar').getByRole('button', { name: 'Show style and settings panel', exact: true }).click();
   await page.getByRole('button', { name: 'Choose Image…', exact: true }).click();
   await page.locator('.asset-picking').waitFor();
   assert.equal(await page.locator('.studio-right.mobile-open').count(), 0, 'Asset picker must be above the inspector');

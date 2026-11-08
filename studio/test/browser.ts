@@ -4,6 +4,7 @@ import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { checkInteractivePreview, checkPreviewNavigation, checkPreviewOverflow } from './interactivePreview.browser';
+import { TOUCH_TREE } from '../src/features/navigator/useTouchTree';
 
 const browser = await chromium.launch({
   executablePath:
@@ -154,7 +155,8 @@ try {
     type: 'touchStart',
     touchPoints: [{ x: from.x + 8, y: from.y + 8 }],
   });
-  await phone.waitForTimeout(220);
+  // Hold past the press that becomes a drag; a shorter hold is a scroll and never drags.
+  await phone.waitForTimeout(TOUCH_TREE.holdMs + 120);
   for (let step = 1; step <= 12; step++) {
     await touch.send('Input.dispatchTouchEvent', {
       type: 'touchMove',
@@ -180,7 +182,7 @@ try {
     return labels.indexOf('Heading') < labels.indexOf('Eyebrow');
   });
   await phone.getByLabel('Close panel').click();
-  await phone.locator('.preview-toolbar').getByRole('button', { name: 'Settings', exact: true }).click();
+  await phone.locator('.preview-toolbar').getByRole('button', { name: 'Show style and settings panel', exact: true }).click();
   await phone.locator('.studio-right.mobile-open').waitFor();
   await phone.screenshot({ path: 'test-results/mobile.png' });
   assert.equal(await phone.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
