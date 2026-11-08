@@ -8,8 +8,9 @@
 // its transport failures as `net::ERR_…` in the message, and the quiet list only
 // knew Node's error codes. The method: feed the classifier the shapes the
 // updater produces (Chromium messages, Node codes, a mid-publish 404) and check
-// each transient one is expected; then feed it failures the user must hear about
-// (a bad signature, a 500, a malformed feed) and check they are not.
+// each transient one is expected (GitHub's 5xx and 429 included, after a user
+// saw "HttpError: 504"); then feed it failures the user must hear about (a bad
+// signature, a 403, a malformed feed) and check they are not.
 
 const { isExpectedAutoUpdateNetworkError } = require('#dist/electron/app/autoUpdate.js');
 
@@ -32,6 +33,13 @@ const expected = [
   ['a Chromium code on the error', Object.assign(new Error('request failed'), { code: 'ERR_CONNECTION_CLOSED' })],
   ['Node offline', Object.assign(new Error('getaddrinfo ENOTFOUND github.com'), { code: 'ENOTFOUND' })],
   ['Node reset', Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' })],
+  [
+    'the reported dialog: a GitHub gateway timeout',
+    new Error('HttpError: 504 Gateway Time-out\n"method: GET url: https://github.com/flowtricks/stacki-releases/releases.atom"'),
+  ],
+  ['a GitHub server error', new Error('HttpError: 500 Internal Server Error "method: GET url: https://github.com/flowtricks/stacki-releases"')],
+  ['GitHub unavailable, with the status on the error', Object.assign(new Error('Service Unavailable'), { statusCode: 503 })],
+  ['rate limiting', new Error('HttpError: 429 Too Many Requests')],
   ['a channel file not uploaded yet', new Error('Cannot find latest-mac.yml in the latest release artifacts: HttpError: 404')],
 ];
 for (const [what, error] of expected) {
@@ -40,7 +48,8 @@ for (const [what, error] of expected) {
 
 const reported = [
   ['a bad code signature', new Error('Code signature at URL file:///Applications/Stacki.app did not pass validation')],
-  ['a server error', new Error('HttpError: 500 Internal Server Error "method: GET url: https://github.com/flowtricks/stacki-releases"')],
+  ['a forbidden feed', new Error('HttpError: 403 Forbidden')],
+  ['a status mentioned outside an HttpError', new Error('Cannot parse update info: expected 504 entries')],
   ['a malformed feed', new Error('Cannot parse update info from latest-mac.yml: YAMLException: bad indentation')],
   ['a certificate failure', new Error('net::ERR_CERT_AUTHORITY_INVALID')],
   ['an unknown Chromium failure', new Error('net::ERR_UNSAFE_REDIRECT')],

@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { BrowserWindow, MessageBoxOptions, MessageBoxReturnValue } from 'electron';
 import type { AppUpdater } from 'electron-updater';
+import { assert } from '../../shared/core/assert';
 import { toRecord } from '../../shared/core/record';
 
 export interface AutoUpdateHost {
@@ -24,10 +25,36 @@ export interface AutoUpdateHost {
 
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * Where the update this app found stands. The version is absent when progress
+ * arrives before `update-available` names it (a resumed download can).
+ */
+export type UpdateDownload =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'downloading'; readonly version: string | undefined; readonly percent: number }
+  | { readonly kind: 'downloaded'; readonly version: string };
+
+/**
+ * What the File menu's check says while an update is already downloading. A
+ * download runs inside the check that found it, and a whole app takes minutes
+ * on a slow connection: "Already checking for updates" there read as stuck.
+ */
+export function updateDownloadingMessage(download: Extract<UpdateDownload, { kind: 'downloading' }>): { readonly message: string; readonly detail: string } {
+  assert(Number.isFinite(download.percent), 'download progress is a number');
+  const percent = Math.min(100, Math.max(0, Math.floor(download.percent)));
+  assert(percent >= 0, 'download progress is not negative');
+  assert(percent <= 100, 'download progress is at most 100%');
+  return {
+    message: download.version === undefined ? 'Downloading the Stacki update…' : `Downloading Stacki ${download.version}…`,
+    detail: `${percent}% downloaded. You’ll be asked whether to restart once it has finished.`,
+  };
+}
+
 export class AutoUpdates {
   private interval: ReturnType<typeof setTimeout> | undefined = undefined;
   private checkInFlight = false;
   private errorDialogShown = false;
+  private download: UpdateDownload = { kind: 'none' };
   // A check somebody asked for, rather than the scheduled one. It answers in a
   // dialog either way, so the error handler below leaves the talking to it.
   private manualCheck = false;
@@ -68,6 +95,22 @@ export class AutoUpdates {
         detail: `This is a development build (${this.host.app.getVersion()}), ` + 'which updates when you rebuild it.',
       });
       return;
+    }
+
+    // An update already found: say where it stands rather than checking again.
+    switch (this.download.kind) {
+      case 'downloaded':
+        await this.promptToInstall(this.download.version);
+        return;
+      case 'downloading':
+        await this.host.showMessageBox(parent, { type: 'info', title: 'Check for Updates', ...updateDownloadingMessage(this.download) });
+        return;
+      case 'none':
+        break;
+      default: {
+        const exhaustive: never = this.download;
+        return exhaustive;
+      }
     }
 
     if (this.checkInFlight) {
@@ -140,16 +183,30 @@ export class AutoUpdates {
     this.host.autoUpdater.autoInstallOnAppQuit = true;
 
     this.host.autoUpdater.on('checking-for-update', () => this.log('Checking for updates'));
-    this.host.autoUpdater.on('update-available', (info) => this.log('Update available', { version: info.version }));
+    this.host.autoUpdater.on('update-available', (info) => {
+      this.log('Update available', { version: info.version });
+      this.download = { kind: 'downloading', version: info.version, percent: 0 };
+    });
+    this.host.autoUpdater.on('download-progress', (progress) => {
+      const version = this.download.kind === 'downloading' ? this.download.version : undefined;
+      // The updater's own number: a download of unknown length can report NaN.
+      const percent = Number.isFinite(progress.percent) ? progress.percent : 0;
+      this.download = { kind: 'downloading', version, percent };
+    });
     this.host.autoUpdater.on('update-not-available', (info) => this.log('No update available', { version: info.version }));
 
     this.host.autoUpdater.on('update-downloaded', (info) => {
       this.log('Update downloaded', { version: info.version });
+      this.download = { kind: 'downloaded', version: info.version };
       void this.promptToInstall(info.version);
     });
 
     this.host.autoUpdater.on('error', (error) => {
       this.log('Auto update error', formatAutoUpdateError(error));
+      // A failed download starts over at the next check; a downloaded one stays ready.
+      if (this.download.kind === 'downloading') {
+        this.download = { kind: 'none' };
+      }
 
       // A check from the File menu reports its own failure, and reports it even
       // when this dialog has already been shown once — two dialogs for the one
@@ -236,8 +293,8 @@ const CHROMIUM_TRANSIENT_ERRORS = [
 ] as const;
 
 // Update-check failures the user can do nothing about, and so should never
-// see a dialog for: they're offline, the connection dropped, or a release is
-// mid-publish and its channel file for this platform hasn't uploaded yet. All
+// see a dialog for: they're offline, the connection dropped, GitHub is having
+// trouble, or a release is mid-publish and its channel file for this platform hasn't uploaded yet. All
 // resolve on their own by the next check.
 export function isExpectedAutoUpdateNetworkError(error: unknown): boolean {
   const code = String(toRecord(error)?.['code'] || '').toUpperCase();
@@ -245,6 +302,19 @@ export function isExpectedAutoUpdateNetworkError(error: unknown): boolean {
 
   if (CHROMIUM_TRANSIENT_ERRORS.some((name) => code === name || message.includes(`net::${name.toLowerCase()}`))) {
     return true;
+  }
+
+  // GitHub's own trouble: a server error or gateway timeout (a user saw
+  // "HttpError: 504") or rate limiting. electron-updater reports these as
+  // `HttpError: <status> …`; the next check asks again.
+  const status = Number(toRecord(error)?.['statusCode'] ?? /^(?:\w+: )?httperror: (\d{3})\b/.exec(message)?.[1] ?? Number.NaN);
+  if (Number.isSafeInteger(status)) {
+    if (status === 429) {
+      return true;
+    }
+    if (status >= 500) {
+      return status <= 599;
+    }
   }
 
   // A release whose other platform published first: the channel file is
