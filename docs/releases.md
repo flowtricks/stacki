@@ -40,6 +40,19 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.21 the 1.0.16 changes, with undo after a reorder
+
+- Desktop 1.0.20 never became public: Studio's browser test failed. After a Navigator drag,
+  undo restored the page but the Navigator still showed the dragged order, because the drop's
+  order was hidden rather than forgotten once the server answered, and the undo restored the
+  exact source it was planned over. The order is now forgotten on the first source change.
+- `create-stacki` 1.0.20 shipped that Studio; 1.0.21 replaces it.
+- The browser test holds a touch past the drag threshold it reads from the Navigator, and finds
+  the phone toolbar's single style and settings panel button.
+- `npm run verify` does not run the browser test; run `npm run test:browser` against the fixture
+  site before tagging.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.21.
+
 ## 1.0.20 the 1.0.16 changes, published
 
 - The same app as 1.0.19, which never became public. On the Linux runner, the reveal let go
