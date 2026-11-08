@@ -40,6 +40,18 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.19 the 1.0.16 changes, through every platform's build
+
+- The same app as 1.0.18, which never became public: its Mac build passed, but Windows and Linux
+  failed.
+  - Windows could not start `npm` from the bake tests (a `.cmd` file) and needed junctions.
+  - On the Linux runner the Navigator reveal overshot its target. The browser's smooth scroll kept
+    animating after the reveal had jumped, which the local slow-motion preflight cannot show.
+- Every reveal now jumps instantly to an absolute landing spot, recomputed from the box and the
+  scroller each time, so repeating it never moves the page. Desktop's Navigator reveal jumps
+  rather than glides, as Studio's already did.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.19.
+
 ## 1.0.18 the 1.0.16 changes, through a clean checkout
 
 - The same app as 1.0.17, which never became public. Its Linux build and the `create-stacki`
