@@ -7,7 +7,7 @@ import { lstat, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEMO_ASSETS, DEMO_MANIFEST_ASSET, demoAssetName } from '../scripts/demoAssets';
-import { RELEASE_DIRECTORIES, RELEASE_FILES } from '../scripts/releaseFiles';
+import { RELEASE_DIRECTORIES, RELEASE_EXCLUDED_FILES, RELEASE_FILES } from '../scripts/releaseFiles';
 import { record } from '../src/shared/validation';
 
 const studio = fileURLToPath(new URL('../', import.meta.url));
@@ -78,7 +78,10 @@ test('the demo is not in the package or in a Cloudflare deployment', async () =>
 test('nothing an install runs imports the demo', async () => {
   for (const directory of RELEASE_DIRECTORIES) {
     for (const file of await walk(directory)) {
-      if (/\.tsx?$/.test(file) && file !== 'scripts/buildDemoAssets.ts') {
+      // A file that imports demo/ is allowed only when the release leaves it out:
+      // an install has no demo/, so shipping it would fail the type check there.
+      const excluded: ReadonlySet<string> = new Set(RELEASE_EXCLUDED_FILES);
+      if (/\.tsx?$/.test(file) && !excluded.has(file)) {
         const text = await readFile(path.join(studio, file), 'utf8');
         assert.doesNotMatch(text, /from ['"](\.\.?\/)+demo\//, `${file} stays clear of demo/`);
       }

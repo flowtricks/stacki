@@ -1,6 +1,6 @@
 import './assemble';
 import { projectScripts } from './projectScripts';
-import { RELEASE_DIRECTORIES, RELEASE_FILES } from './releaseFiles';
+import { RELEASE_DIRECTORIES, RELEASE_EXCLUDED_FILES, RELEASE_FILES } from './releaseFiles';
 import { findTrackingFailures } from './noTracking';
 import { readNoTrackingInput } from './noTrackingTree';
 import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { parseRelease, releaseVersion, RELEASE_FILES_MAX } from '../src/features/updates/release';
 import { record } from '../src/shared/validation';
 
+const excluded: ReadonlySet<string> = new Set(RELEASE_EXCLUDED_FILES);
 const root = fileURLToPath(new URL('../', import.meta.url));
 const version = releaseVersion(record(JSON.parse(await readFile(path.join(root, 'src/shared/release.json'), 'utf8')))['version']);
 const files: { path: string; content: string }[] = [];
@@ -24,6 +25,8 @@ async function collect(relative: string): Promise<void> {
     }
     if (entry.isDirectory()) {
       await collect(file);
+    } else if (excluded.has(file)) {
+      continue;
     } else {
       if (files.length >= RELEASE_FILES_MAX) {
         throw new Error('Release file limit exceeded');
