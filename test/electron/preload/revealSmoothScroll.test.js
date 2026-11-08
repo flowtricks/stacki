@@ -40,8 +40,9 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { repoPath } = require('../../helpers/sources.js');
 
-// How far one frame of an interrupted smooth scroll can carry the page.
-const PERSON_SLACK_PX = 40;
+// Rounding only: every scroll the reveal makes is instant, so nothing is left in
+// flight to carry the page on after the person's jump.
+const PERSON_SLACK_PX = 1;
 
 const failures = [];
 let checked = 0;
@@ -217,6 +218,8 @@ const HOST_HELPERS = `
   // what a person does once the reveal has started.
   window.reveal = async ({ from, scrollerId, before, during, expected }) => {
     const scroller = scrollerOf(scrollerId);
+    // Placed as a person would, with a wheel, which also ends the last case's watch.
+    frame.dispatchEvent(new WheelEvent('wheel', { deltaY: 1 }));
     if (scroller === undefined) {
       frame.scrollTo({ top: from, behavior: 'instant' });
     } else {
@@ -351,8 +354,7 @@ const HOST_HELPERS = `
     check('with Lenis gliding elsewhere, the reveal still lands once the glide ends', onScreen(gliding), JSON.stringify(gliding));
     check('and Lenis holds it there', Math.abs(gliding.lenis.target - gliding.end) <= 1, JSON.stringify(gliding));
 
-    // Near 400, not exactly: a smooth scroll already under way can take one more
-    // step after the person's jump. Far from the 2250 the reveal was heading for.
+    // At 400, far from the 2250 the reveal was heading for.
     check('a person who scrolls during a reveal keeps the page where they put it', Math.abs(person.end - 400) <= PERSON_SLACK_PX, JSON.stringify(person));
     check('and the box they scrolled away from stays off screen', !onScreen(person), JSON.stringify(person));
 

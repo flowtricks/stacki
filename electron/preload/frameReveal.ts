@@ -16,8 +16,15 @@
 //   events instead. The frame cannot reach the library: Desktop's preload runs
 //   in an isolated world that never sees the page's globals, and a site need not
 //   publish its instance anyway. So the reveal relies on the one behaviour they
-//   share: it watches the scroll it started, lets a library's animation run
-//   out, and then jumps the rest of the way, which the now-idle library adopts.
+//   share: it watches the scroll it made, lets a library's animation run out,
+//   and then jumps again, which the now-idle library adopts.
+//
+// Every scroll a reveal makes is instant. The browser's own smooth scroll is an
+// animation the reveal can neither see nor stop: on GitHub's Linux runner (xvfb)
+// one still in flight carried on after the reveal had jumped, and after the next
+// placement of the page, landing thousands of pixels past the box and moving a
+// page that should have stayed put. A jump is synchronous, so what the reveal
+// reads afterwards is what it did.
 //
 // What is out of reach: a library that never scrolls natively and moves the page
 // with a transform instead (Locomotive v4's smooth mode). No scroll position
@@ -29,9 +36,6 @@ import type { Rect } from './frameBasics';
 import { isElement } from './frameBasics';
 import { rectsForPath } from './frameMeasure';
 import { elementsWithPath, runsOf, taggedPlaces } from './frameRegions';
-
-// Desktop glides to a selection; a follow or a reload in Studio may jump.
-export type RevealMotion = 'smooth' | 'instant';
 
 // Brings one occurrence of a path into view, when it is out of sight. Nothing
 // moves when the path has no box, is the page itself, or has any part showing
@@ -46,7 +50,7 @@ export type RevealMotion = 'smooth' | 'instant';
 // the page stays stuck to one side. `scrollIntoView` is worse still, because it
 // also scrolls every clipping ancestor on the way. So the target is computed
 // here, vertically, and only the one scroller that holds the box moves.
-export const revealPath = (nodePath: string, occurrence: number, motion: RevealMotion): void => {
+export const revealPath = (nodePath: string, occurrence: number): void => {
   assert(Number.isSafeInteger(occurrence), 'revealPath: an occurrence is an integer');
   assert(occurrence >= 0, 'revealPath: an occurrence is never negative');
   // Whatever an earlier reveal was still watching for is stale now, even when this
@@ -63,23 +67,25 @@ export const revealPath = (nodePath: string, occurrence: number, motion: RevealM
   }
   const anchor = anchorOf(nodePath, occurrence);
   const scroller = anchor === undefined ? undefined : nearestScroller(anchor);
-  if (scroller === undefined) {
-    // The window scrolls, and its visible area starts at the top of the frame.
-    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-    const top = revealTopWithin(box.rect, viewportHeight, window.scrollY);
-    if (top === window.scrollY) {
-      return;
-    }
-    startReveal(PAGE_SCROLLPORT, top, motion);
+  const scrollport = scroller === undefined ? PAGE_SCROLLPORT : elementScrollport(scroller);
+  const measure = (): Landing | undefined => landingOf(scrollport, boxOf(nodePath, occurrence)?.rect);
+  const first = measure();
+  if (first === undefined) {
     return;
   }
-  const view = scroller.getBoundingClientRect();
-  const viewTop = view.top + scroller.clientTop;
-  const top = revealTopWithin({ ...box.rect, y: box.rect.y - viewTop }, scroller.clientHeight, scroller.scrollTop);
-  if (top === scroller.scrollTop) {
+  if (first.showing) {
     return;
   }
-  startReveal(elementScrollport(scroller), top, motion);
+  scrollport.scrollTo(first.top);
+  watchReveal(scrollport, measure);
+};
+
+// Ends the reveal in progress, if any. Every new reveal does this first, and a
+// canvas selects with it too: once the selection has moved on, the old target
+// must never be acted on.
+export const cancelReveal = (): void => {
+  stopWatch?.();
+  assert(stopWatch === undefined, 'cancelReveal: a stopped watch forgets itself');
 };
 
 // Something that scrolls vertically: the page, or one element on it.
@@ -87,7 +93,11 @@ interface Scrollport {
   readonly position: () => number;
   // The furthest down it can go: a target past it is clamped, or it never arrives.
   readonly positionMax: () => number;
-  readonly scrollTo: (top: number, behavior: ScrollBehavior) => void;
+  // Where its visible area starts, from the top of the frame, and how tall it is.
+  readonly viewTop: () => number;
+  readonly viewHeight: () => number;
+  // Always instant: see the note at the top of this file.
+  readonly scrollTo: (top: number) => void;
   // Where the events a person scrolls with arrive.
   readonly events: EventTarget;
   // Where its own `scroll` events fire, whoever moved it.
@@ -100,8 +110,10 @@ const PAGE_SCROLLPORT: Scrollport = {
     const page = document.scrollingElement ?? document.documentElement;
     return Math.max(0, page.scrollHeight - page.clientHeight);
   },
+  viewTop: () => 0,
+  viewHeight: () => window.innerHeight || document.documentElement.clientHeight,
   // No `left`: the horizontal scroll stays wherever it is (see revealPath).
-  scrollTo: (top, behavior) => window.scrollTo({ top, behavior }),
+  scrollTo: (top) => window.scrollTo({ top, behavior: 'instant' }),
   // Read when a reveal starts, not when the module loads: the frame's modules are also
   // loaded where there is no window (frameReports' tests), and the page's window is
   // the same object either way.
@@ -116,19 +128,44 @@ const PAGE_SCROLLPORT: Scrollport = {
 const elementScrollport = (element: Element): Scrollport => ({
   position: () => element.scrollTop,
   positionMax: () => Math.max(0, element.scrollHeight - element.clientHeight),
-  scrollTo: (top, behavior) => element.scrollTo({ top, behavior }),
+  viewTop: () => element.getBoundingClientRect().top + element.clientTop,
+  viewHeight: () => element.clientHeight,
+  scrollTo: (top) => element.scrollTo({ top, behavior: 'instant' }),
   // A wheel over the scroller and a key pressed anywhere both reach the window.
   events: window,
   moves: element,
 });
 
-// The scroll a reveal started, watched until it arrives. A smooth scroll can
-// stall short of where it was sent: on Linux the first reveal of a page stopped
-// 9px down and stayed there. A smooth-scroll library animating when the reveal
-// arrives replaces the position on every one of its frames until its animation
-// ends. Either way the page goes quiet short of the target, and the watch then
-// jumps the rest of the way. While it still moves, the watch waits, whichever way
-// it goes: a library pulls it back toward its own target before it lets go.
+// Where a box is against its scroller right now, read in one go: the scroller's
+// position, whether any of the box shows, and the absolute position that would
+// land it, clamped to the scroller's range. Every decision the watch makes reads
+// a fresh one, so a jump always goes to a place worked out from where the box is
+// now, never by adding a distance to a position that may have moved since.
+interface Landing {
+  readonly position: number;
+  readonly showing: boolean;
+  readonly top: number;
+}
+
+const landingOf = (scrollport: Scrollport, rect: Rect | undefined): Landing | undefined => {
+  if (rect === undefined) {
+    return undefined;
+  }
+  const viewHeight = scrollport.viewHeight();
+  const position = scrollport.position();
+  const inView = { ...rect, y: rect.y - scrollport.viewTop() };
+  const top = Math.min(landingTop(inView, viewHeight, position), scrollport.positionMax());
+  assert(Number.isFinite(top), 'landingOf: a landing is a number');
+  assert(top >= 0, 'landingOf: a landing is never above the top');
+  return { position, showing: boxShowing(inView, viewHeight), top };
+};
+
+// The watch after a reveal's jump. A smooth-scroll library animating when the
+// reveal arrives replaces the position on every one of its frames until its
+// animation ends, which undoes the jump. So the watch waits for the page to go
+// quiet, and jumps again if the box is not where the reveal put it. While the
+// page still moves, the watch waits, whichever way it goes: a library pulls it
+// back toward its own target before it lets go.
 //
 // A person who scrolls in the meantime has taken over, and is left alone. That
 // is told by their input (a wheel, a touch, a key, a press on a scrollbar) and
@@ -138,11 +175,10 @@ const elementScrollport = (element: Element): Scrollport => ({
 // writes once per animation frame, and frames arrive late on a slow machine: the
 // Linux release runner draws about one every 200ms, and runs every animation, the
 // library's glide included, at a quarter of its speed. A fixed stillness of a few
-// checks read a gap between two of those frames as the end of the glide, jumped,
-// met the next frame, and gave up before the glide was over, leaving the
-// selection off screen. So the watch times the gaps between the page's scroll
-// events and needs the page to hold still for twice the longest one (at least
-// QUIET_MS_MIN) before it jumps, or before it calls a target reached.
+// checks read a gap between two of those frames as the end of the glide. So the
+// watch times the gaps between the page's scroll events and needs the page to
+// hold still for twice the longest one (at least QUIET_MS_MIN) before it jumps
+// again, or before it calls the box landed and lets go.
 //
 // Bounded on two counts: REVEAL_CHECKS_MAX looks, REVEAL_CHECK_MS apart, which
 // outlasts a glide even at a quarter speed; and REVEAL_JUMPS_MAX jumps, so a page
@@ -159,23 +195,11 @@ const TAKEOVER_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as con
 
 let stopWatch: (() => void) | undefined;
 
-// Ends the reveal in progress, if any. Every new reveal does this first, and a
-// canvas selects with it too: once the selection has moved on, the old target
-// must never be acted on.
-export const cancelReveal = (): void => {
-  stopWatch?.();
-  assert(stopWatch === undefined, 'cancelReveal: a stopped watch forgets itself');
-};
-
-const startReveal = (scrollport: Scrollport, wanted: number, motion: RevealMotion): void => {
-  assert(Number.isFinite(wanted), 'startReveal: a scroll target is a number');
-  assert(wanted >= 0, 'startReveal: a scroll target is never negative');
-  assert(stopWatch === undefined, 'startReveal: the reveal before it was cancelled');
-  const target = Math.min(wanted, scrollport.positionMax());
-  scrollport.scrollTo(target, motion);
+const watchReveal = (scrollport: Scrollport, measure: () => Landing | undefined): void => {
+  assert(stopWatch === undefined, 'watchReveal: the reveal before it was cancelled');
   let timer: ReturnType<typeof setTimeout> | undefined;
   let checks = 0;
-  let jumps = 0;
+  let jumps = 1; // The reveal's own scroll.
   let last = scrollport.position();
   let movedAt = performance.now();
   let frameGapMs = 0;
@@ -199,16 +223,19 @@ const startReveal = (scrollport: Scrollport, wanted: number, motion: RevealMotio
   };
   const check = (): void => {
     checks += 1;
-    assert(checks <= REVEAL_CHECKS_MAX, 'startReveal: the watch is bounded');
-    const position = scrollport.position();
-    if (Math.abs(position - last) > ARRIVED_PX) {
+    assert(checks <= REVEAL_CHECKS_MAX, 'watchReveal: the watch is bounded');
+    const landing = measure();
+    if (landing === undefined) {
+      stop(); // The box has gone: nothing is left to reveal.
+      return;
+    }
+    if (Math.abs(landing.position - last) > ARRIVED_PX) {
       // A move the scroll event has not reported yet still counts.
       movedAt = Math.max(movedAt, performance.now() - REVEAL_CHECK_MS);
     }
-    last = position;
+    last = landing.position;
     const step = revealStep({
-      position,
-      target,
+      arrived: Math.abs(landing.position - landing.top) <= ARRIVED_PX,
       quietMs: performance.now() - movedAt,
       quietMsNeeded: Math.max(QUIET_MS_MIN, frameGapMs * 2),
       checksLeft: REVEAL_CHECKS_MAX - checks,
@@ -222,7 +249,7 @@ const startReveal = (scrollport: Scrollport, wanted: number, motion: RevealMotio
         break;
       case 'jump':
         jumps += 1;
-        scrollport.scrollTo(target, 'instant');
+        scrollport.scrollTo(landing.top);
         last = scrollport.position();
         movedAt = performance.now();
         break;
@@ -249,8 +276,7 @@ const startReveal = (scrollport: Scrollport, wanted: number, motion: RevealMotio
 type RevealStep = 'done' | 'wait' | 'jump';
 
 const revealStep = (look: {
-  readonly position: number;
-  readonly target: number;
+  readonly arrived: boolean;
   readonly quietMs: number;
   readonly quietMsNeeded: number;
   readonly checksLeft: number;
@@ -259,22 +285,22 @@ const revealStep = (look: {
   assert(look.checksLeft >= 0, 'revealStep: the watch has checks left to count');
   assert(look.jumpsLeft >= 0, 'revealStep: the watch never jumps past its bound');
   assert(look.quietMsNeeded >= QUIET_MS_MIN, 'revealStep: quiet is never judged on less than the minimum');
-  const arrived = Math.abs(look.position - look.target) <= ARRIVED_PX;
-  if (look.quietMs < look.quietMsNeeded) {
-    if (look.checksLeft === 0) {
-      // The last look: arrive now, whatever else is going on, unless the jumps are spent.
-      if (arrived) {
-        return 'done';
-      }
-      return look.jumpsLeft > 0 ? 'jump' : 'done';
+  const quiet = look.quietMs >= look.quietMsNeeded;
+  if (look.arrived) {
+    // Landed, and held long enough that a library's next frame would have shown.
+    if (quiet) {
+      return 'done';
     }
-    return 'wait'; // Still moving, or not quiet for long enough to tell.
+    return look.checksLeft === 0 ? 'done' : 'wait';
   }
-  if (arrived) {
-    return 'done';
+  if (look.jumpsLeft === 0) {
+    return 'done'; // The jumps are spent: a page that keeps moving itself wins.
   }
-  // Quiet short of the target: stalled, or let go of by a library's animation.
-  return look.jumpsLeft > 0 ? 'jump' : 'done';
+  if (quiet) {
+    return 'jump'; // Quiet away from the landing: let go of by a library's animation.
+  }
+  // Still moving, or not quiet long enough to tell. The last look jumps anyway.
+  return look.checksLeft === 0 ? 'jump' : 'wait';
 };
 
 // An element that stands for one occurrence of a path, to find what scrolls it.
@@ -368,23 +394,20 @@ const scrollsItself = (element: Element, root: Element): boolean => {
   return true;
 };
 
-// Where a scroller has to go for a box to show in it, vertically: the position it
-// already has when the box is showing, and otherwise enough to bring it in. `rect.y`
-// is measured from the top of the scroller's visible area. A box too tall to
-// centre is aligned to its top instead, which would otherwise be pushed out, and
-// lands SCROLL_MARGIN below it. The margin says where a reveal lands, not what
-// counts as seen.
+// The scroll position that lands a box: centred in its scroller's visible area,
+// or, for a box too tall to centre, its top SCROLL_MARGIN below the top of that
+// area, since centring would push its beginning out. `rect.y` is measured from
+// the top of the visible area. Absolute, and stable: read again once the box is
+// there, it gives the same position, so repeating a jump never moves the page.
+// The margin says where a reveal lands, not what counts as seen (boxShowing).
 const SCROLL_MARGIN = 24;
 
-const revealTopWithin = (rect: Rect, viewportHeight: number, scrollTop: number): number => {
-  assert(viewportHeight >= 0, 'revealTopWithin: a scroller has a height');
-  assert(Number.isFinite(scrollTop), 'revealTopWithin: a scroller has a position');
-  if (boxShowing(rect, viewportHeight)) {
-    return scrollTop;
-  }
+const landingTop = (rect: Rect, viewportHeight: number, scrollTop: number): number => {
+  assert(viewportHeight >= 0, 'landingTop: a scroller has a height');
+  assert(Number.isFinite(scrollTop), 'landingTop: a scroller has a position');
   const offset = rect.h >= viewportHeight - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : Math.floor((viewportHeight - rect.h) / 2);
   const target = Math.max(0, Math.round(scrollTop + rect.y - offset));
-  assert(target >= 0, 'revealTopWithin: a scroll position is never negative');
+  assert(target >= 0, 'landingTop: a scroll position is never negative');
   return target;
 };
 

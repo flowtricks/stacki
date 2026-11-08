@@ -19,9 +19,9 @@
 //   - a video bleeding off the right of a body with `overflow-x: hidden`,
 // both already in vertical view, leave the window and every ancestor at
 // scrollLeft 0 and the page where it was; a section below the fold scrolls the
-// page down until it is on screen, even when the smooth scroll is halted
-// partway (the page halts the first one, as Linux did); revealing it again
-// does not move the page.
+// page down until it is on screen, even when the page undoes the first scroll
+// and leaves itself a few pixels down (as a stalled smooth scroll did on Linux,
+// and as a smooth-scroll library does); revealing it again does not move the page.
 //
 // Whether a reveal moves the page at all is then tested from a known place: the
 // host scrolls a box to a chosen top in the frame, reveals it, and compares the
@@ -38,7 +38,7 @@
 //     pages whose scrolling happens in <body> or a wrapper,
 //   - a box with no area is judged whole, and a node with no box does nothing.
 //
-// Reading the result must not depend on how long a smooth scroll takes, because
+// Reading the result must not depend on how long a reveal takes, because
 // on a slow Linux machine one can pause between frames for longer than any fixed
 // wait. So each case says what it expects. The host first waits for a reply from
 // the frame, which proves the reveal was handled, as messages arrive in order. A
@@ -133,13 +133,13 @@ const FRAME_PAGE = `<!doctype html><!--avb-s:${ROOT_PATH}--><html data-avb-p="${
   ${REPLY_SCRIPT}
   <script>
     // The stall the Linux runner showed, made to happen everywhere: the first
-    // smooth scroll the page sees is halted where it is, a few pixels down.
-    // The reveal must still arrive at the section.
+    // scroll the page sees is undone, leaving it 9px down. The reveal must still
+    // arrive at the section.
     let halted = false;
     addEventListener('scroll', () => {
-      if (!halted && scrollY > 0) {
+      if (!halted && scrollY > 9) {
         halted = true;
-        scrollTo({ top: scrollY, behavior: 'instant' });
+        scrollTo({ top: 9, behavior: 'instant' });
       }
     });
   </script>
@@ -184,9 +184,10 @@ const hostPage = (frameFile) => `<!doctype html><meta charset=utf-8>
 const FRAME_PATHS = ['0', '1', '2', '3', '4', '4::before', '5', '6', '6::before', ROOT_PATH, BODY_PATH, '10', '11', '12', '13', '14', '15', '16'];
 const ROOT_PAGE_PATHS = ['0', '1', ROOT_PATH, BODY_PATH, `${BODY_PATH}::before`];
 
-// How far from its margin a box too tall to fit may land. On a starved machine one
-// animation step can carry a smooth scroll past its target, and it stops there: 61px
-// is the most seen with the probe held to background priority. This is still far
+// How far from its margin a box too tall to fit may land. When the reveal still
+// glided, one animation step on a starved machine carried it past its target, and it
+// stopped there: 61px was the most seen with the probe held to background priority.
+// The reveal now jumps, so it lands on the margin; the slack stays as it was. This is still far
 // from any wrong answer: a centred box of 1500px would sit 450px above the frame.
 const LANDING_SLACK_PX = 150;
 
@@ -196,8 +197,8 @@ const HOST_HELPERS = `
   const READING_MS = 60;
   // Past the frame's own watch, which looks every 100ms: a page still for this
   // long has been seen by it, so a stalled scroll has already been finished.
-  // The watch may still be running when a case ends; the next case's reveal
-  // cancels it (frameReveal.ts), so no case relies on it having ended.
+  // The watch may still be running when a case ends: placing the page for the
+  // next case ends it, as a person's scroll does, so no case relies on it.
   const STILL_READINGS_LANDED = 5;
   const STILL_READINGS_STAYED = 10;
   const MARGIN = 24;
@@ -222,10 +223,27 @@ const HOST_HELPERS = `
     }
     return Math.abs(top - MARGIN) <= LANDING_SLACK;
   };
+  // Waits, within a bound, until the page holds still where it was put, one
+  // animation frame at a time: the placement check after the reveal says whether
+  // it got there.
+  const settlePlacement = async () => {
+    let last = frame.scrollY;
+    for (let attempt = 0; attempt < SETTLE_TRIES_MAX; attempt += 1) {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (frame.scrollY === last) {
+        return;
+      }
+      last = frame.scrollY;
+    }
+  };
+  // A person puts the page somewhere, with a wheel as a person would. That input
+  // also ends an earlier reveal's watch (frameReveal.ts), which would otherwise be
+  // free to act on the page until this case's reveal cancels it.
   window.place = async (id, boxTop) => {
     const element = frame.document.getElementById(id);
+    frame.dispatchEvent(new WheelEvent('wheel', { deltaY: 1 }));
     frame.scrollTo({ top: frame.scrollY + element.getBoundingClientRect().top - boxTop, behavior: 'instant' });
-    await pause(READING_MS);
+    await settlePlacement();
   };
   // Reveals a path and reads where everything ended up. "painted" is the part of
   // the element that was asked for, for a ::before inside its host.
@@ -419,7 +437,7 @@ const HOST_HELPERS = `
          const scroller = { scrollerId };
          // The box is placed by scrolling the scroller, since the window cannot.
          const placeInScroller = (boxTop) =>
-           run('(() => { const frame = document.getElementById("canvas").contentWindow; const scroller = frame.document.querySelector(' + JSON.stringify(scrollerId) + '); scroller.scrollTop += frame.document.getElementById("box").getBoundingClientRect().top - ' + boxTop + '; })()');
+           run('(() => { const frame = document.getElementById("canvas").contentWindow; const scroller = frame.document.querySelector(' + JSON.stringify(scrollerId) + '); frame.dispatchEvent(new WheelEvent("wheel", { deltaY: 1 })); scroller.scrollTop += frame.document.getElementById("box").getBoundingClientRect().top - ' + boxTop + '; })()');
          await placeInScroller(200);
          const body = await reveal({ nodePath: '${BODY_PATH}', id: 'box', expected: 'stays', ...scroller });
          const html = await reveal({ nodePath: '${ROOT_PATH}', id: 'box', expected: 'stays', ...scroller });

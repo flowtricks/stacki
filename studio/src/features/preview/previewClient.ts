@@ -352,9 +352,9 @@ function revealSelection(data: object): void {
   const occurrence =
     'occurrence' in data && typeof data.occurrence === 'number' && Number.isSafeInteger(data.occurrence) ? Math.max(0, Math.min(9999, data.occurrence)) : 0;
   // The Desktop canvas reveals through the same code (frameReports.ts): only when
-  // the box is out of sight, only vertically, in the element's own scroller, and
-  // so that a smooth-scroll library on the site does not undo it.
-  revealPath(data.id.slice(0, 1000), occurrence, 'smooth');
+  // the box is out of sight, only vertically, in the element's own scroller, with
+  // instant scrolls that a smooth-scroll library on the site does not undo.
+  revealPath(data.id.slice(0, 1000), occurrence);
 }
 function focusScope(data: object) {
   setTracking({

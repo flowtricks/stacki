@@ -105,6 +105,14 @@ const FIXTURE_ASTRO = path.join(FIXTURE_SITE, 'node_modules/astro/package.json')
 const FIXTURE_LOCK = path.join(FIXTURE_SITE, '.installing');
 const FIXTURE_WAIT_MS = 500;
 
+function npmCommand(): readonly [string, readonly string[]] {
+  const script = process.env['npm_execpath'];
+  if (script !== undefined && script.length > 0) {
+    return [process.execPath, [script]];
+  }
+  return [process.platform === 'win32' ? 'npm.cmd' : 'npm', []];
+}
+
 async function installed(): Promise<boolean> {
   return access(FIXTURE_ASTRO).then(
     () => true,
@@ -124,7 +132,10 @@ async function installFixtureSite(): Promise<void> {
     );
     if (owner) {
       try {
-        await promisify(execFile)('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
+        // npm through Node and npm's own script, as `npm test` names it: on Windows the
+        // `npm` command is a .cmd file, which execFile cannot start without a shell.
+        const [command, prefix] = npmCommand();
+        await promisify(execFile)(command, [...prefix, 'ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
           cwd: FIXTURE_SITE,
           timeout: FIXTURE_INSTALL_MS_MAX,
         });
@@ -196,14 +207,17 @@ const FIXTURE_PACKAGES_MAX = 2_000;
 
 async function linkFixturePackages(target: string): Promise<void> {
   const source = path.join(FIXTURE_SITE, 'node_modules');
-  const entries = await readdir(source);
+  const entries = await readdir(source, { withFileTypes: true });
   if (entries.length > FIXTURE_PACKAGES_MAX) {
     throw new Error('The fixture site has more packages than expected');
   }
   await mkdir(target, { recursive: true });
   for (const entry of entries) {
-    if (!CACHE_FOLDERS.has(entry)) {
-      await symlink(path.join(source, entry), path.join(target, entry));
+    // Directories only, as junctions: Windows creates a junction without admin rights, where a
+    // symlink needs them; elsewhere the type is ignored. npm's loose files (.package-lock.json)
+    // are not needed to resolve a package.
+    if (entry.isDirectory() && !CACHE_FOLDERS.has(entry.name)) {
+      await symlink(path.join(source, entry.name), path.join(target, entry.name), 'junction');
     }
   }
 }

@@ -323,7 +323,7 @@ export const sendClasses = () => {
 // repeatedly): the occurrence names the instance being worked in, not whichever
 // one comes first. frameReveal.ts decides and scrolls, for Studio's canvas too.
 export const scrollPathIntoView = (nodePath: string, occ: number): void => {
-  revealPath(nodePath, occ, 'smooth');
+  revealPath(nodePath, occ);
 };
 
 // `stacki-opened` on the instance being edited — the one that was actually
