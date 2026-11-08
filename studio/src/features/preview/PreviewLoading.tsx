@@ -1,10 +1,20 @@
 import { useLayoutEffect, useState } from 'react';
 
+// Readiness belongs to the document the frame is showing, not to the URL Studio
+// last asked for. Following a link in interact mode loads the new page in the
+// frame first; Studio learns the route afterwards and sets the frame to the URL
+// it already shows, which does not load it again, so no second ready message
+// comes. Keyed by the URL alone, that first one was thrown away and the canvas
+// waited behind its loader. The client says which page it is (previewClient.ts),
+// and that page answers for any URL with the same path.
+const READY_PATH_CHARS_MAX = 4000;
+
 export function usePreviewLoading(url: string | undefined, container: React.RefObject<HTMLElement>, canvas: boolean, refresh: () => void) {
-  const [readyKey, setReadyKey] = useState('');
+  const [ready, setReady] = useState<{ readonly session: string; readonly path: string }>();
   const [slowKey, setSlowKey] = useState('');
   const [attempt, setAttempt] = useState(0);
-  const key = `${url ?? ''}:${canvas}:${attempt}`;
+  const session = `${canvas}:${attempt}`;
+  const key = `${url ?? ''}:${session}`;
   // Attach before yielding to the browser so a cached frame cannot announce
   // readiness before the parent starts listening.
   useLayoutEffect(() => {
@@ -21,7 +31,9 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
       }
       const data: unknown = event.data;
       if (data && typeof data === 'object' && 'type' in data && data.type === 'studio:preview-ready') {
-        setReadyKey(key);
+        // A client from an older bake names no page: it answers for the URL asked for.
+        const path = 'path' in data ? readyPath(data.path) : undefined;
+        setReady({ session, path: path ?? pagePath(url) });
       }
     };
     window.addEventListener('message', receive);
@@ -29,16 +41,34 @@ export function usePreviewLoading(url: string | undefined, container: React.RefO
       clearTimeout(timer);
       window.removeEventListener('message', receive);
     };
-  }, [url, container, key]);
+  }, [url, container, key, session]);
+  const shown = url !== undefined && ready !== undefined && ready.session === session && ready.path === pagePath(url);
   return {
-    ready: !!url && readyKey === key,
-    slow: slowKey === key,
+    ready: shown,
+    // A frame that has shown its page is never "slow" for a URL it is already showing.
+    slow: !shown && slowKey === key,
     attempt,
     retry: () => {
       setAttempt((value) => value + 1);
       refresh();
     },
   };
+}
+
+/** The page a URL names: its path and query, without the editor's fragment. */
+export function pagePath(url: string): string {
+  const parsed = new URL(url, location.href);
+  return parsed.pathname + parsed.search;
+}
+
+function readyPath(input: unknown): string | undefined {
+  if (typeof input !== 'string') {
+    return undefined;
+  }
+  if (input.length > READY_PATH_CHARS_MAX) {
+    return undefined;
+  }
+  return input.startsWith('/') ? input : undefined;
 }
 
 export function PreviewLoading({ slow, retry }: { readonly slow: boolean; readonly retry: () => void }) {

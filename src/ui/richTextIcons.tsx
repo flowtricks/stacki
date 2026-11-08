@@ -27,6 +27,23 @@ export const StrikeIcon = (props: IconProps) => (
   </I>
 );
 
+// An X with a small 2 raised to its top right, or dropped to its bottom right:
+// the glyphs every editor uses, drawn as strokes so they sit at the weight of
+// the icons beside them rather than as a heavier typed X².
+export const SuperscriptIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M2.75 5.5 8.25 12.5M8.25 5.5 2.75 12.5" />
+    <path d="M10.25 3.6c.2-.65.75-1.1 1.45-1.1.8 0 1.35.5 1.35 1.2 0 .5-.25.85-.75 1.3L10.25 7h2.9" />
+  </I>
+);
+
+export const SubscriptIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M2.75 3.5 8.25 10.5M8.25 3.5 2.75 10.5" />
+    <path d="M10.25 10.1c.2-.65.75-1.1 1.45-1.1.8 0 1.35.5 1.35 1.2 0 .5-.25.85-.75 1.3L10.25 13.5h2.9" />
+  </I>
+);
+
 export const InlineCodeIcon = (props: IconProps) => (
   <I {...props}>
     <path d="m5.5 4.5-3.5 3.5 3.5 3.5M10.5 4.5l3.5 3.5-3.5 3.5" />

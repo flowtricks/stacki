@@ -207,3 +207,56 @@ function fileNameOf(path: string | undefined): string | undefined {
   const name = path.split(/[\\/]/).pop() ?? '';
   return name === '' ? undefined : name;
 }
+
+// ---------------------------------------------------------------------------
+// A binding the tree does not hold.
+// ---------------------------------------------------------------------------
+
+/** What a picker row knows about a node it reads a missing path's place from. */
+export interface MissingAnchor {
+  readonly key: string;
+  readonly preview: string;
+  readonly query?: { readonly collection: string; readonly name: string } | undefined;
+  readonly nav?: EntryPage | undefined;
+  readonly children: readonly { readonly key: string }[] | undefined;
+}
+
+/**
+ * Why a bound path has no row, said as the kind beside it. `anchors` are the
+ * path's ancestors the tree does hold, outermost first. Only a field under a
+ * collection entry is "not in this entry": an optional field the entry left
+ * unset, which is normal and not a broken binding. Elsewhere the label says
+ * what is actually known: a value whose fields the app has listed and that
+ * has no such one, a value whose fields it cannot see, or a name that is not
+ * in scope here at all.
+ */
+export function missingLabel(anchors: readonly MissingAnchor[]): string {
+  assert(anchors.length <= LIMITS.treeDepthMax, 'missingLabel: anchors stay inside the depth limit');
+  const nearest = anchors[anchors.length - 1];
+  if (nearest === undefined) {
+    return 'not in scope';
+  }
+  if (anchors.some(isEntryLike)) {
+    return 'not in this entry';
+  }
+  if (nearest.children === undefined || nearest.children.length === 0) {
+    return 'fields not known';
+  }
+  assert(nearest.children.length > 0, 'missingLabel: a value with listed fields has some');
+  return 'no such field';
+}
+
+// A collection entry, or a list or item made of them: a project collection
+// (it carries the query that reads it), a sampled query result ("blog entries",
+// "portfolio entry"), a loop item stepping through entries, or a sampled entry
+// itself, which carries Astro's `collection` and `data` beside each other.
+function isEntryLike(node: MissingAnchor): boolean {
+  if (node.query !== undefined || node.nav !== undefined) {
+    return true;
+  }
+  if (/\bentr(?:y|ies)$/.test(node.preview)) {
+    return true;
+  }
+  const keys = new Set((node.children ?? []).map((child) => child.key));
+  return keys.has('collection') && keys.has('data');
+}

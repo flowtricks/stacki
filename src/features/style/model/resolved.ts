@@ -8,7 +8,15 @@
 import { compareCascade } from './cascade';
 import type { MatchedRule, RuleModel } from './cascade';
 import { assert } from '../../../../shared/core/assert';
-import { canonicalCompound, compareSpecificity, normalizePseudoElement } from './selectors';
+import {
+  canonicalCompound,
+  compareSpecificity,
+  normalizePseudoElement,
+  parseSelectorList,
+  selectorLayerOf,
+  selectorListLayers,
+  type SelectorLayer,
+} from './selectors';
 import { spacingSides } from './spacingShorthand';
 import type { BreakpointId, ParsedRule, Specificity } from './styleTypes';
 
@@ -61,6 +69,13 @@ export type NativeContribution = {
   atState: boolean;
 };
 
+/**
+ * Which boxes the panel lists for the selection: one layer, or `every` for a
+ * host whose navigator has no ::before and ::after rows, where a chip is the
+ * only way to reach a pseudo-element's rules.
+ */
+export type PanelLayer = SelectorLayer | 'every';
+
 export const STATES: readonly StateKey[] = ['', ':hover', ':focus', ':active'];
 const INTERACTION_STATES = new Set<string>([':hover', ':focus', ':active']);
 
@@ -96,6 +111,8 @@ export type NativeResolveInput = {
 export type Contributor = {
   /** The matched selector's own text (e.g. '.a', '.parent .a', '.a:hover'). */
   selectorText: string;
+  /** How a nested rule's selector reads as written (`.hero {.title}`); matching keeps `selectorText`. */
+  display?: string;
   value: string;
   important: boolean;
   specificity: Specificity;
@@ -183,6 +200,9 @@ export type ContextInfo = {
   /** The selector this context's query is nested inside (model/queryWrapper.ts),
    *  the dropdown's first line. Absent for Base and top-level queries. */
   wrapper?: string;
+  /** The selectors written inside this context's query (model/queryWrapper.ts),
+   *  the dropdown's last line. Absent for Base and a query with none. */
+  querySelectors?: readonly string[];
 };
 
 /**
@@ -192,7 +212,7 @@ export type ContextInfo = {
  * queries with no element styles (so the dropdown can offer them); those come
  * back with hasStyles=false.
  */
-export function indexContexts(model: RuleModel, contextKeys: ContextKey[]): ContextInfo[] {
+export function indexContexts(model: RuleModel, contextKeys: ContextKey[], layer: PanelLayer = ''): ContextInfo[] {
   const all = [...model.base, ...model.conditional];
   return contextKeys.map((key) => {
     let hasStyles = false;
@@ -203,6 +223,9 @@ export function indexContexts(model: RuleModel, contextKeys: ContextKey[]): Cont
       }
       if (matched.rule.declarations.length === 0) {
         continue;
+      }
+      if (!ruleOnLayer(matched, layer)) {
+        continue; // styles another box of this element
       }
       hasStyles = true;
       for (const selector of matched.matchedSelectors) {
@@ -232,6 +255,11 @@ export function indexContexts(model: RuleModel, contextKeys: ContextKey[]): Cont
   });
 }
 
+/** Whether a matched rule styles `layer` of the element, in at least one of its members. */
+export function ruleOnLayer(matched: Pick<MatchedRule, 'matchedSelectors'>, layer: PanelLayer): boolean {
+  return layer === 'every' || matched.matchedSelectors.some((selector) => selectorLayerOf(selector.pseudoElement) === layer);
+}
+
 /** A selector (subject = the element) that has styles — one chip in the picker. */
 export type MatchedSelector = {
   /** The authored selector text, e.g. `.test:hover`, `.parent.is-active .test`. */
@@ -243,8 +271,15 @@ export type MatchedSelector = {
   simple: boolean;
   /** True when at least one matching rule comes from a component's style tag. */
   fromComponent: boolean;
+  /** True when the chip names a class the instance passed to the component open on
+   *  the canvas (`column1Class="hero_copy"`): the page's class, not the component's
+   *  (model/instanceClasses.ts). */
+  fromInstance?: boolean;
   /** Normalized identity key (also used to dedupe + compare). */
   key: string;
+  /** The box this chip's rule styles on the element. Set for chips made from a
+   *  rule; a native or pending chip is read from its text (chipLayer). */
+  layer?: SelectorLayer;
   /** Set for the active selector when no rule exists for it yet (a freshly picked /
    *  typed selector) — rendered as a pending chip until its first property lands. */
   pending?: boolean;
@@ -271,16 +306,22 @@ function listMatchedSelectorsCandidate(input: {
   readonly state: StateKey;
   readonly simple: boolean;
   readonly inContext: boolean;
+  readonly layer: SelectorLayer;
+  /** A chip for one member of the rule's list reads as itself, not as the whole list. */
+  readonly member?: boolean;
 }): MatchedSelectorCandidate {
+  const display = input.member === true ? undefined : input.rule.nestedDisplay;
+  const queryDisplay = input.member === true ? undefined : input.rule.queryDisplay;
   return {
     text: input.text,
+    layer: input.layer,
     specificity: input.specificity,
     state: input.state,
     simple: input.simple,
     inContext: input.inContext,
     fromComponent: input.rule.fromComponent,
-    ...(input.rule.nestedDisplay === undefined ? {} : { display: input.rule.nestedDisplay }),
-    ...(input.rule.queryDisplay === undefined ? {} : { queryDisplay: input.rule.queryDisplay }),
+    ...(display === undefined ? {} : { display }),
+    ...(queryDisplay === undefined ? {} : { queryDisplay }),
   };
 }
 
@@ -307,6 +348,11 @@ export function selectorKey(text: string): string {
 /** Whether two selectors are the same target (subject compound / full selector). */
 export function selectorsMatch(left: string, right: string): boolean {
   return selectorKey(left) === selectorKey(right);
+}
+
+/** The box a chip styles. A chip with no rule behind it says so in its text. */
+export function chipLayer(chip: Pick<MatchedSelector, 'layer' | 'text'>): SelectorLayer {
+  return chip.layer ?? selectorListLayers(chip.text)[0] ?? '';
 }
 
 /** The interaction state a selector targets, from its subject pseudo-classes. */
@@ -360,9 +406,15 @@ export function listMatchedSelectors(model: RuleModel, context: ContextKey): Mat
 // its own chip — editing it splits it out of the grouped rule. Complex matched
 // selectors (`:not(.x) > :is(...)`, which can't be cleanly split) are folded into ONE
 // chip showing the rule's FULL grouped selector, so it's clear that editing touches
-// every selector/element it targets.
+// every selector/element it targets. A rule styling several boxes of the element
+// is the exception: see chipsForMixedRule.
 function chipsForRule(matched: MatchedRule, options: { readonly inContext: boolean }): MatchedSelectorCandidate[] {
   const { inContext } = options;
+  const layers = new Set(matched.matchedSelectors.map((selector) => selectorLayerOf(selector.pseudoElement)));
+  if (layers.size > 1) {
+    return chipsForMixedRule(matched, options);
+  }
+  const [layer = ''] = layers;
   const chips: MatchedSelectorCandidate[] = [];
   let complexSpec: Specificity | undefined;
   for (const selector of matched.matchedSelectors) {
@@ -379,6 +431,7 @@ function chipsForRule(matched: MatchedRule, options: { readonly inContext: boole
           state: stateOf(canon.pseudoClasses),
           specificity: selector.specificity,
           inContext,
+          layer,
         }),
       );
     } else if (!complexSpec || compareSpecificity(selector.specificity, complexSpec) > 0) {
@@ -395,16 +448,74 @@ function chipsForRule(matched: MatchedRule, options: { readonly inContext: boole
         state: stateOf(canon.pseudoClasses),
         specificity: complexSpec,
         inContext,
+        layer,
       }),
     );
   }
   return chips;
 }
 
+// A rule that styles the element and its ::after (`.a .b, .a .b::after`) belongs in
+// both lists, each showing its own part. So each member is a chip of its own, whatever
+// its shape, and editing one splits it out (groupMemberToSplit) rather than changing
+// the other box too. The nested display reads as the whole list, so a member shows
+// its own resolved text instead.
+function chipsForMixedRule(matched: MatchedRule, options: { readonly inContext: boolean }): MatchedSelectorCandidate[] {
+  const chips = matched.matchedSelectors.flatMap((selector) => {
+    const canon = canonicalCompound(selector.text);
+    if (isBareSelector(canon)) {
+      return [];
+    }
+    return [
+      listMatchedSelectorsCandidate({
+        rule: matched.rule,
+        text: selector.text,
+        simple: canon.simple,
+        state: stateOf(canon.pseudoClasses),
+        specificity: selector.specificity,
+        inContext: options.inContext,
+        layer: selectorLayerOf(selector.pseudoElement),
+        member: true,
+      }),
+    ];
+  });
+  assert(chips.length <= matched.matchedSelectors.length, 'chipsForMixedRule: at most one chip per member');
+  return chips;
+}
+
+/**
+ * The member of `rule`'s written list to split out before editing for `active`, or
+ * undefined to edit the rule whole. A splittable member is split as ever. So is any
+ * member of a rule styling several boxes, since its chip stands for that member
+ * alone (chipsForMixedRule): the written `&::after` is found through its resolved
+ * text, and a list nested in a list resolves one written member per parent, in order.
+ */
+export function groupMemberToSplit(
+  rule: Pick<ParsedRule, 'selectors'> & { readonly node: { readonly selectors?: readonly string[] } },
+  active: string,
+): number | undefined {
+  const written = rule.node.selectors;
+  if (written === undefined || written.length <= 1 || active.length === 0) {
+    return undefined;
+  }
+  const splittable = written.findIndex((selector) => selectorsMatch(selector, active) && canonicalCompound(selector).splittable);
+  if (splittable >= 0) {
+    return splittable;
+  }
+  const layers = new Set(rule.selectors.map((selector) => selectorLayerOf(selector.pseudoElement)));
+  const member = rule.selectors.findIndex((selector) => selectorsMatch(selector.text, active));
+  if (layers.size < 2 || member < 0 || rule.selectors.length % written.length !== 0) {
+    return undefined;
+  }
+  const index = member % written.length;
+  assert(index < written.length, 'groupMemberToSplit: the member is one of the written ones');
+  return index;
+}
+
 function isBareSelector(canon: ReturnType<typeof canonicalCompound>): boolean {
   // A BARE pseudo-element (`::before`, `*::before`) styles every element's box with
   // no element-specific selector — it'd pollute every element's list; skip it.
-  if (canon.pseudoElement && canon.oneCompound && canon.tokens.length === 0) {
+  if (canon.pseudoElement && canon.oneCompound && canon.tokens.length === 0 && !canon.functional) {
     return true;
   }
   // A lone universal (`*`) matches everything — too generic to be a useful chip on
@@ -420,16 +531,12 @@ export function resolveStyle(model: RuleModel, context: ContextKey, activeSelect
   // both derived from the active selector: `.a:hover` → hover state, `.a::before` →
   // the ::before box. Picking a `::before` chip shows only that box's styles (not the
   // element's); picking the element (no pseudo-element) hides `::before`/`::after`.
-  const activeCanon = canonicalCompound(activeSelector);
+  const activePseudo = activePseudoOf(activeSelector, native?.pseudoLayer);
   const view: ResolveView = {
     context,
     activeSelector,
-    state: stateOf(activeCanon.pseudoClasses),
-    // A picked pseudo-element selector names its own target. Otherwise, on a
-    // navigator ::after layer, that box is the target: with no chip picked the
-    // active selector falls back to the element's own (`.faq_summary`), whose
-    // view showed the element's styles and none of the ::after's.
-    activePseudo: activeCanon.pseudoElement || (native?.pseudoLayer ?? ''),
+    state: stateOfMember(activeSelector, activePseudo),
+    activePseudo,
   };
 
   const byProp = new Map<string, Contributor[]>();
@@ -507,6 +614,27 @@ export function editableRuleFor(resolved: ResolvedStyle, prop: string): ParsedRu
   assert(rule !== undefined, 'editableRuleFor: the edited value comes from a picked rule');
   assert(rule.ruleId === setHere.ruleId, 'editableRuleFor: the rule is the one named');
   return rule;
+}
+
+// The box the panel views. A picked pseudo-element selector names its own target.
+// Otherwise, on a navigator ::after layer, that box is the target: with no chip
+// picked the active selector falls back to the element's own (`.faq_summary`), whose
+// view showed the element's styles and none of the ::after's. A list's first member
+// does not speak for it: a list holding the box in view stays on that box.
+function activePseudoOf(activeSelector: string, pseudoLayer: string | undefined): string {
+  const members = parseSelectorList(activeSelector).map((selector) => normalizePseudoElement(selector.pseudoElement));
+  const named = members.filter((member) => member !== '');
+  if (pseudoLayer !== undefined && pseudoLayer !== '') {
+    return named.includes(pseudoLayer) ? pseudoLayer : (named[0] ?? pseudoLayer);
+  }
+  return members.includes('') ? '' : (named[0] ?? '');
+}
+
+// The interaction state of the active list's member that styles the box in view.
+function stateOfMember(activeSelector: string, activePseudo: string): StateKey {
+  const members = parseSelectorList(activeSelector);
+  const member = members.find((selector) => normalizePseudoElement(selector.pseudoElement) === activePseudo) ?? members[0];
+  return stateOf(canonicalCompound(member?.text ?? activeSelector).pseudoClasses);
 }
 
 /** What resolveStyle is looking at: the context, the active selector, and its view. */
@@ -593,6 +721,7 @@ function foldEmbedRule(matched: MatchedRule, view: ResolveView): FoldedRule | un
     prop,
     contributor: {
       selectorText: winner.text,
+      ...(matched.rule.nestedDisplay === undefined ? {} : { display: matched.rule.nestedDisplay }),
       value: decl.value,
       important: decl.important,
       specificity: winner.specificity,

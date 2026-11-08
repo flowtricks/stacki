@@ -25,6 +25,7 @@ import { editInlineStyle, singleDeclarationChange } from '#dist/shared/engine/in
 import { toIntent, type Intent, type Operation } from '#dist/shared/engine/intent.js';
 import { renameSites } from '#dist/shared/engine/loopScope.js';
 import { planIntent, planIntentThroughDiff, type Plan } from '#dist/shared/engine/planner.js';
+import { labelsNode } from '#dist/shared/page/leadingNote.js';
 import { toAnchorRef, type AnchorRef } from '#dist/shared/page/ref.js';
 import type { Snapshot } from '#dist/shared/page/snapshot.js';
 import type { ProjectedNode } from '#dist/shared/page/sourceProjection.js';
@@ -104,6 +105,25 @@ function withInsertion(snapshot: Snapshot): {
   const text = insertedAbove(snapshot);
   const bytes = Buffer.concat([snapshot.bytes.subarray(0, at), Buffer.from(text), snapshot.bytes.subarray(at)]);
   return { bytes, at, text };
+}
+
+/** Whether the outside insertion (a comment above the body's first root) labels
+ * `node` in the current bytes: the node is the authored first root, and in the
+ * current bytes the inserted comment stands directly before it as its label. */
+function labelledByOutside(page: Snapshot, current: Snapshot, node: ProjectedNode): boolean {
+  if (page.projection.tag !== 'valid' || current.projection.tag !== 'valid') {
+    return false;
+  }
+  const first = page.projection.nodes.find((candidate) => candidate.path.length === 1);
+  if (first !== node) {
+    return false;
+  }
+  const roots = current.projection.nodes.filter((candidate) => candidate.path.length === 1);
+  const [inserted, moved] = roots;
+  if (inserted === undefined || moved === undefined) {
+    return false;
+  }
+  return inserted.span.start === bodyStart(page) && labelsNode(inserted.kind, moved.kind);
 }
 
 /** Undo, planned: the inverse of `plan` as a revert against the bytes it wrote. */
@@ -193,19 +213,28 @@ test('insert-node beside a node copies its separator; inside, it fills an empty 
   assert.equal(insert('last-child', [0]), '<ul>\n  <li>a</li>\n  <li>b</li>\n  <li>n</li>\n</ul>\n');
   const empty = snapshotText('<div>\n</div>\n<aside></aside>\n<hr />\n<Wrapper />\n');
   const into = (at: readonly number[]) => run(empty, { tag: 'insert-node', placement: 'first-child', source: '<p>x</p>' }, anchorAt(empty, at));
-  assert.equal(into([0]), '<div>\n  <p>x</p>\n</div>\n<aside></aside>\n<hr />\n<Wrapper />\n');
-  assert.equal(into([1]), '<div>\n</div>\n<aside><p>x</p></aside>\n<hr />\n<Wrapper />\n');
+  // Nothing in this file is indented, so the new line takes Stacki's own unit: a tab.
+  assert.equal(into([0]), '<div>\n\t<p>x</p>\n</div>\n<aside></aside>\n<hr />\n<Wrapper />\n');
+  const spaced = snapshotText('<main>\n  <div>\n  </div>\n</main>\n');
+  assert.equal(
+    run(spaced, { tag: 'insert-node', placement: 'first-child', source: '<p>x</p>' }, anchorAt(spaced, [0, 0])),
+    '<main>\n  <div>\n    <p>x</p>\n  </div>\n</main>\n',
+    'a file indented with spaces keeps them',
+  );
+  // A block in an empty block parent stands on its own line: left inline, every
+  // later child copied that, and a section built on the canvas became one long line.
+  assert.equal(into([1]), '<div>\n</div>\n<aside>\n\t<p>x</p>\n</aside>\n<hr />\n<Wrapper />\n');
   assert.equal(into([2]), 'rejected: unsupported-operation', 'a self-closing tag has no inside');
   assert.equal(
     into([3]),
-    '<div>\n</div>\n<aside></aside>\n<hr />\n<Wrapper><p>x</p></Wrapper>\n',
+    '<div>\n</div>\n<aside></aside>\n<hr />\n<Wrapper>\n\t<p>x</p>\n</Wrapper>\n',
     'a self-closing component opens when it gains its first child',
   );
 });
 
 test('self-closing non-void HTML tags gain children while inline moves preserve separators', () => {
   const empty = snapshotText('<main />');
-  assert.equal(run(empty, { tag: 'insert-node', placement: 'last-child', source: '<p>x</p>' }, anchorAt(empty, [0])), '<main><p>x</p></main>');
+  assert.equal(run(empty, { tag: 'insert-node', placement: 'last-child', source: '<p>x</p>' }, anchorAt(empty, [0])), '<main>\n\t<p>x</p>\n</main>');
   const original = '<main>  <b>a</b>  <i>b</i>  <!-- Keep --> </main>';
   let source = original;
   for (let index = 0; index < 40; index++) {
@@ -261,7 +290,7 @@ test('move-node relocates the original bytes; into itself is refused', () => {
     run(page, { tag: 'move-node', destination: anchorAt(page, to), placement }, anchorAt(page, from));
   assert.equal(move([0, 0], [0, 1], 'after'), '<ul>\n  <li>b</li>\n  <li class="a">a</li>\n</ul>\n<ol></ol>\n');
   assert.equal(move([0, 1], [0, 0], 'before'), '<ul>\n  <li>b</li>\n  <li class="a">a</li>\n</ul>\n<ol></ol>\n');
-  assert.equal(move([0, 0], [1], 'first-child'), '<ul>\n  <li>b</li>\n</ul>\n<ol><li class="a">a</li></ol>\n');
+  assert.equal(move([0, 0], [1], 'first-child'), '<ul>\n  <li>b</li>\n</ul>\n<ol>\n  <li class="a">a</li>\n</ol>\n');
   assert.equal(move([0], [0, 0], 'after'), 'rejected: unsupported-operation');
 
   const selfClosing = snapshotText('<Button />\n<ButtonWrapper />\n');
@@ -275,7 +304,7 @@ test('move-node relocates the original bytes; into itself is refused', () => {
       },
       anchorAt(selfClosing, [0]),
     ),
-    '<ButtonWrapper><Button /></ButtonWrapper>\n',
+    '<ButtonWrapper>\n\t<Button />\n</ButtonWrapper>\n',
     'a child can move into a self-closing component instance',
   );
 });
@@ -549,6 +578,14 @@ for (const [label, sweep] of Object.entries(SWEEPS)) {
         // writes is the fresh result with that insertion kept, up to spacing.
         const staleText = textOf(applySplices(current.bytes, mapped.value.splices));
         const outside = stale.text.trim();
+        if (operation.tag === 'remove-node' && labelledByOutside(page, current, node)) {
+          // The outside edit is a comment written directly above the first root,
+          // so in the current bytes it labels that node (shared/page/leadingNote.ts)
+          // and a removal takes it along, as the Navigator shows them as one row.
+          assert.equal(staleText.includes(outside), false, `${where}: the label goes with its node`);
+          shifted += 1;
+          continue;
+        }
         assert.ok(staleText.includes(outside), `${where}: the outside edit survives`);
         const spacing = (text: string) => text.replace(outside, '').replace(/\s+/g, ' ').trim();
         assert.equal(spacing(staleText), spacing(textOf(written.bytes)), `${where}: stale`);

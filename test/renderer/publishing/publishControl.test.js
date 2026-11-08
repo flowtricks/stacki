@@ -92,6 +92,7 @@ function fixture(context, config = DEFAULT_PUBLISH_CONFIG) {
   };
 }
 
+const split = () => document.querySelector('.stacki-publish-split');
 const main = () => document.querySelector('.stacki-publish-main button');
 const arrow = () => document.querySelector('[aria-label="More publish options"]');
 const options = () => [...document.querySelectorAll('.stacki-publish-menu button')];
@@ -147,6 +148,10 @@ test('Current actions disable with explanations; settings stay available', async
   assert.equal(main().disabled, true);
   assert.equal(main().parentElement.title, 'All changes are up to date');
   assert.equal(arrow().disabled, false);
+  // Finished work rests as a neutral split control, not a dimmed blue call to action.
+  assert.equal(split().dataset.state, 'current');
+  assert.equal(main().classList.contains('primary'), false);
+  assert.equal(arrow().classList.contains('primary'), false);
   await act(async () => arrow().click());
   const [github, hosting, settings] = options();
   assert.equal(github.disabled, true);
@@ -163,6 +168,9 @@ test('Current actions disable with explanations; settings stay available', async
   assert.deepEqual(published, []);
   await show({ github: 'pending', hosting: 'pending' });
   assert.equal(main().disabled, false);
+  assert.equal(split().dataset.state, 'ready');
+  assert.equal(main().classList.contains('primary'), true);
+  assert.equal(arrow().classList.contains('primary'), true);
   assert.equal(main().parentElement.title, '');
   assert.equal(options()[0].disabled, false);
   assert.equal(options()[1].disabled, false);
@@ -217,6 +225,7 @@ test('Push and deployment disable independently', async (context) => {
   assert.match(options()[1].textContent, /Deployment status unavailable/);
   assert.equal(document.querySelector('.publish-checking') === null, true);
   assert.equal(main().disabled, false);
+  assert.equal(split().dataset.state, 'ready', 'A recheck after an edit never shows as finished');
   assert.equal(options()[0].disabled, false);
   assert.equal(options()[1].disabled, false);
   await show({ github: 'current', hosting: 'unconfigured' });

@@ -257,8 +257,7 @@ function useRichSelection(state: RichState): void {
 function useRichPosition(state: RichState): void {
   const { bubbleRef, bubble, linkMode, setPos: setPosition } = state;
   // Measure the rendered bubble and keep it inside the window: clamp
-  // horizontally, flip below the selection when it would hit the titlebar,
-  // and keep the arrow pointing at the selection midpoint.
+  // horizontally, and flip below the selection when it would hit the titlebar.
   React.useLayoutEffect(() => {
     const element = bubbleRef.current;
     if (!bubble || !element) {
@@ -353,17 +352,15 @@ function RichChipMenu({
     </Popup>
   );
 }
-type BubbleStyle = React.CSSProperties & { readonly '--arrow-x': string };
 function RichBubble({ state, emit }: { readonly state: RichState; readonly emit: () => void }) {
   const { bubble, bubbleRef, pos: position, linkMode } = state;
   if (!bubble) {
     return undefined;
   }
-  const style: BubbleStyle = {
+  const style: React.CSSProperties = {
     left: position ? position.left : bubble.x,
     top: position ? position.top : bubble.top - 10,
     visibility: position ? 'visible' : 'hidden',
-    '--arrow-x': position ? `${position.arrowX}px` : '50%',
   };
   return (
     <div ref={bubbleRef} className={`rich-bubble ${position?.below ? 'below' : ''}`} style={style} onMouseDown={(event) => event.stopPropagation()}>

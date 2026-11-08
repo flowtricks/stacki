@@ -2520,7 +2520,7 @@ body > .embed-editor_bg-modal-backdrop {
   right: auto;
   bottom: auto;
   width: var(--style-panel-width, 100vw);
-  height: var(--style-panel-height, 100vh);
+  height: var(--style-panel-height, 100dvh);
   justify-content: center;
 }
 body > .embed-editor_bg-modal-backdrop > .embed-editor_clip-modal,
@@ -4072,7 +4072,7 @@ body > .embed-editor_provenance {
   border-radius: 10px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
   padding: 5px;
-  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
   overflow-y: auto;
 }
 /* The menu owns initial focus; arrow navigation highlights individual actions. */
@@ -4166,77 +4166,106 @@ body > .embed-editor_provenance {
   text-decoration: underline;
 }
 
+/* The format bar over selected words, on the canvas and in the Content field:
+   a compact dark pill of evenly sized buttons, set apart by space rather than
+   dividers. The pressed format shows as a lighter fill behind its button, hover
+   as a fainter one, so the row reads as one quiet control. The surface is the
+   context menu's, so every floating control over the canvas is the same colour. */
 .rich-bubble {
   position: fixed;
   z-index: 550;
   transform: translate(-50%, -100%);
   display: flex;
-  align-items: stretch;
+  align-items: center;
+  padding: 3px;
   background: #232323;
-  border: 1px solid var(--border-strong);
-  border-radius: 9px;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
-  overflow: hidden;
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
 .rich-bubble.below {
   transform: translate(-50%, 0);
 }
-.rich-bubble::after {
-  content: '';
-  position: absolute;
-  left: var(--arrow-x, 50%);
-  bottom: -4px;
-  width: 8px;
-  height: 8px;
-  transform: translateX(-50%) rotate(45deg);
-  background: #232323;
-  border-right: 1px solid var(--border-strong);
-  border-bottom: 1px solid var(--border-strong);
+/* The buttons sit on one shared highlight that slides to the hovered or
+   keyboard-focused button (RichFormatButtons). Hover is --bg-active, a step
+   above --bg-hover so it reads on the bar's own grey; a pressed format keeps a
+   stronger fill of its own, so it shows wherever the highlight is. */
+.rich-format-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
-.rich-bubble.below::after {
-  bottom: auto;
-  top: -4px;
-  border-right: none;
-  border-bottom: none;
-  border-left: 1px solid var(--border-strong);
-  border-top: 1px solid var(--border-strong);
+.rich-format-glide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 5px;
+  background: var(--bg-active);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+.rich-format-glide.shown {
+  opacity: 1;
+}
+.rich-format-glide.slide {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    width 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 120ms ease-out;
+}
+/* Reduced motion: the highlight moves at once and only fades. */
+@media (prefers-reduced-motion: reduce) {
+  .rich-format-glide.slide {
+    transition: opacity 120ms ease-out;
+  }
 }
 .rich-bubble button {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
   background: transparent;
   border: none;
-  border-radius: 0;
-  color: var(--text);
-  font-size: 12.5px;
-  padding: 7px 11px;
-  min-width: 36px;
-}
-.rich-bubble button + button {
-  border-left: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1;
 }
 .rich-bubble button:hover:not(:disabled) {
-  background: var(--bg-active);
+  background: transparent;
+  color: var(--text);
 }
-.rich-bubble button.on {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
+/* Pressed: 16% white, a clear step above the 9% hover highlight, with full text. */
+.rich-bubble button.on,
 .rich-bubble button.on:hover:not(:disabled) {
-  background: rgba(0, 153, 255, 0.26);
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--text);
 }
-.rich-bubble button .mono {
-  font-family: var(--mono);
+.rich-bubble .rich-glyph-bold {
+  font-weight: 650;
+}
+.rich-bubble .rich-glyph-italic {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 14px;
+  font-style: italic;
+}
+/* The span button names the tag it writes. Small and in the interface face,
+   so the word sits at the weight of the glyphs beside it. */
+.rich-bubble .rich-glyph-tag {
   font-size: 11px;
-}
-.rich-bubble button sup,
-.rich-bubble button sub {
-  font-size: 9px;
+  font-weight: 500;
 }
 .rich-bubble-url {
   width: 220px;
+  height: 28px;
   background: transparent;
   border: none;
-  border-radius: 0;
-  padding: 7px 10px;
+  border-radius: 5px;
+  padding: 0 7px;
   font-size: 12px;
 }
 
@@ -5844,6 +5873,16 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .cms-collection-chevron {
   color: var(--text-faint);
   display: flex;
+}
+/* Who a <style> block's variables reach: a stylesheet's carry no badge. */
+.vars-scope {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--surface-2, rgba(255, 255, 255, 0.06));
+  white-space: nowrap;
 }
 .cms-collection .row-action {
   opacity: 0;
@@ -8116,7 +8155,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .history-files-dialog {
   width: 560px;
   max-width: calc(100vw - 32px);
-  max-height: min(620px, calc(100vh - 48px));
+  max-height: min(620px, calc(100dvh - 48px));
   padding: 0;
   margin: auto;
   color: var(--text);
@@ -8405,8 +8444,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 .history-files-dialog.with-diff {
   width: 960px;
-  height: min(720px, calc(100vh - 48px));
-  max-height: min(720px, calc(100vh - 48px));
+  height: min(720px, calc(100dvh - 48px));
+  max-height: min(720px, calc(100dvh - 48px));
 }
 .history-diff {
   display: flex;
@@ -9506,7 +9545,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
 .git-commit-files-dialog {
   width: 600px;
   max-width: calc(100vw - 32px);
-  max-height: min(700px, calc(100vh - 48px));
+  max-height: min(700px, calc(100dvh - 48px));
   padding: 0;
   margin: auto;
   color: var(--text);
@@ -9538,7 +9577,7 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   min-height: 0;
 }
 .git-commit-files-content .fb-list {
-  max-height: min(440px, calc(100vh - 240px));
+  max-height: min(440px, calc(100dvh - 240px));
   overflow-y: auto;
 }
 .git-commit-files-dialog .modal-footer {

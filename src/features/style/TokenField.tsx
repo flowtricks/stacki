@@ -104,18 +104,28 @@ export function buildTokenHtml(value: string, chips: Chip[], code = false): stri
     if (found < 0) {
       return;
     }
-    let before = spaceRun(write(value.slice(at, found)));
+    let before = runHtml(value.slice(at, found), write);
     if (before === '' && index === 0) {
       before = '\u200B';
     }
     out += before + tokenChipHtml(chip);
     at = found + chip.text.length;
   });
-  let after = spaceRun(write(value.slice(at)));
+  let after = runHtml(value.slice(at), write);
   if (after === '') {
     after = '\u200B';
   }
   return out + after;
+}
+
+// The text between two chips. A run that is only whitespace is a gap, drawn
+// plain whether or not the field colours code, so it is always the one
+// `spaceRun` element below; anything else is written as the field writes text.
+function runHtml(text: string, write: (text: string) => string): string {
+  if (text !== '' && text.trim() === '') {
+    return spaceRun(escapeHtml(text));
+  }
+  return spaceRun(write(text));
 }
 
 // The space in `var(--space-1) var(--space-2)`, wrapped so it survives.

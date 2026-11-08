@@ -10,9 +10,54 @@
 
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import { INLINE_TAGS, isChippable, isInlineOnly, nodesToHtml, type InlineNode } from '../../features/props/richContentModel';
+import { INLINE_TAGS, isChippable, isInlineOnly, nodesToHtml, type InlineCandidate, type InlineNode } from '../../features/props/richContentModel';
 import { richApplyLink, richContentNodes, richExec, richWrapTag, type FormatState } from '../../features/props/richFormat';
 import type { CanvasFormatAction } from '../../features/preview/canvasTextSelection';
+import type { CanvasTextFormatter } from '../../features/preview/useCanvasText';
+
+/**
+ * The canvas bar's presses for a page's nodes, saved the way the Content field
+ * saves: the whole inline content of the element, through `setInline`. Desktop
+ * and Studio share it, so a press writes the same markup in both; only the
+ * write differs (Desktop's page model, Studio's shared source).
+ */
+export function canvasTextFormatter<Node extends CanvasFormatTree<Node> & InlineCandidate>(
+  nodes: readonly Node[],
+  setInline: (rootId: string, children: readonly InlineNode[]) => void,
+): CanvasTextFormatter {
+  const contentOf = (textId: string) => {
+    const found = inlineRootOf(nodes, textId);
+    if (!found?.root.id) {
+      return undefined;
+    }
+    const children = found.root.children;
+    if (!isInlineOnly(children)) {
+      return undefined;
+    }
+    return { rootId: found.root.id, children, trail: found.trail };
+  };
+  return {
+    states: (textId) => {
+      const content = contentOf(textId);
+      return content ? inlineStatesAt(content.children, content.trail) : undefined;
+    },
+    apply: (textId, selection, action) => {
+      const content = contentOf(textId);
+      if (!content) {
+        return false;
+      }
+      assert(content.trail.length > 0, 'Formatted text sits inside its element');
+      const typed = inlineWithValue(content.children, content.trail, selection.value);
+      const next = formatInlineSelection(typed, { ...selection, trail: content.trail }, action);
+      if (!next) {
+        return false;
+      }
+      assert(next.length > 0, 'A press leaves the element its content');
+      setInline(content.rootId, next);
+      return true;
+    },
+  };
+}
 
 /** A model node whose children are its own kind, as the page model's are. */
 export interface CanvasFormatTree<Node> {

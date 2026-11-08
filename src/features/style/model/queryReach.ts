@@ -16,8 +16,9 @@
 
 import { assert } from '../../../../shared/core/assert';
 import { matchSelectorList, type MatchTarget } from './selectors';
-import { selectorListMembers } from './selectorParse';
+import { selectorListLayers, selectorListMembers } from './selectorParse';
 import { queryPlacementOf } from './queryWrapper';
+import type { PanelLayer } from './resolved';
 import type { ParsedRule } from './styleTypes';
 
 /** What is known about one wrapper and the selected element. */
@@ -41,6 +42,20 @@ export function wrapperProbes(wrapper: string): string[] {
   const probes = members.flatMap((member) => [member, `${member} *`]);
   assert(probes.length === members.length * 2, 'wrapperProbes: the element itself and its ancestors, per member');
   return probes;
+}
+
+/**
+ * Whether a wrapper can hold `layer`'s styles at all. The probes drop pseudo-elements,
+ * so `.a::after` probes as `.a` and reads as reaching `.a`, but a query nested in it
+ * styles only the ::after: the element's own list must not offer it, nor the
+ * ::before's. A generated box has no children, so nothing sits inside one either.
+ */
+export function wrapperOnLayer(wrapper: string, layer: PanelLayer): boolean {
+  if (layer === 'every') {
+    return true;
+  }
+  const layers = selectorListLayers(wrapper);
+  return layers.length === 0 || layers.includes('') || layers.includes(layer);
 }
 
 /** Every distinct wrapper a nested rule in `rules` sits in, bounded. */

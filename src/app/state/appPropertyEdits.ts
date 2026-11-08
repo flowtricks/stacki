@@ -3,11 +3,12 @@
 
 import type { ClassOutcome } from '../../features/style/model/host';
 import { useCallback, useRef } from 'react';
+import { labelsNode } from '../../../shared/page/leadingNote';
 import type { Attr } from '../../../shared/page/pageNode';
 import { findWithParent, noteValue } from '../../editor/treeSelection';
 import { assert } from '../../../shared/core/assert';
-import { ASTRO_ASSETS, ASTRO_ASSETS_MODULE } from '../../features/palette/astroAssets';
-import { getElementSchema, GLOBAL_ATTRS } from '../../editor/elementSchemas';
+import { ASTRO_ASSETS } from '../../features/palette/astroAssets';
+import { droppedForComponent, droppedForElement, toggledElseBranch, withComponentImport } from '../model/pageModelGestures';
 import {
   attributeRenameGesture,
   frontmatterGesture,
@@ -22,6 +23,7 @@ import {
   withChildren,
 } from '../../editor/editGestures';
 import { readFrontmatter } from '../../../shared/page/frontmatterSource';
+import { isAttributeHost } from '../../../shared/engine/intent';
 import { hasClass, withClass, type ClassPlacement } from '../../editor/classAttr';
 import { attributeRemoval, classRemoval, type PropRemoval } from '../../editor/selectorRemoval';
 import { withAttributes } from '../../editor/attributesBinding';
@@ -37,7 +39,7 @@ import type { PropValues } from '../../features/props/propRules';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { findImportPath } from '../../ipc/appBridge';
-import { newId, inlineWithIds, type BranchNode, tagChangeGesture, restatedText, statedText, frontmatterOf } from '../model/nodeFactory';
+import { newId, inlineWithIds, tagChangeGesture, restatedText, statedText, frontmatterOf } from '../model/nodeFactory';
 import { withPrunedImports, chooseImportPath } from '../model/pageGestures';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
@@ -62,7 +64,8 @@ export function useComment(coreState: ReturnType<typeof useCoreState>, history: 
         return;
       }
       const previous = found.index > 0 ? found.siblings[found.index - 1] : undefined;
-      const existing = previous && previous.kind === 'comment' ? previous : undefined;
+      // The label by the Navigator's rule (shared/page/leadingNote.ts), the one a move carries.
+      const existing = previous !== undefined && labelsNode(previous.kind, found.node.kind) ? previous : undefined;
       const body = String(text ?? '').trim();
       if (!body) {
         if (existing) {
@@ -180,6 +183,13 @@ function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle
       const node = findNodeById(state.model.nodes, nodeId);
       if (!node) {
         return { tag: 'refused', message: 'the element is gone' };
+      }
+      // Bare text has no tag to hold the class. Refused here, so the panel can
+      // say why and the page never queues an edit it cannot state.
+      if (!isAttributeHost(node.kind)) {
+        const message = 'Plain text has no tag to hold a class. Right-click it and use Convert to first.';
+        showToast(message, 'error');
+        return { tag: 'refused', message };
       }
       if (hasClass(node.props, clean)) {
         return { tag: 'applied' };
@@ -418,19 +428,8 @@ export function useNodeKind(coreState: ReturnType<typeof useCoreState>, nodeEdit
       // Attributes that belonged to the old element's tag mean nothing to a
       // component; class, data- and aria- carry over the way they do for a
       // tag change.
-      const oldNames = node.kind === 'element' ? new Set(getElementSchema(node.name).map((field) => field.name)) : undefined;
-      const dropped = Object.keys(node.props || {}).filter((attr) => oldNames?.has(attr) && !GLOBAL_ATTRS.has(attr) && !/^(data-|aria-)/.test(attr));
-      const imported = (pageModel: EditorModel): EditorModel => {
-        if (pageModel.imports.some((i) => i.name === name)) {
-          return withPrunedImports(pageModel);
-        }
-        const entry = paths
-          ? { name, path: chooseImportPath(pageModel, paths), quote: "'" }
-          : asset
-            ? { name, imported: name, path: ASTRO_ASSETS_MODULE, quote: "'", named: true }
-            : undefined;
-        return withPrunedImports(entry ? { ...pageModel, imports: [...pageModel.imports, entry] } : pageModel);
-      };
+      const dropped = droppedForComponent(node);
+      const imported = (pageModel: EditorModel): EditorModel => withComponentImport(pageModel, name, { paths, asset });
       const change = { kind: 'component' as const, name, asset, dropped };
       commitEdit(tagChangeGesture(model, node, change, imported));
       return true;
@@ -462,12 +461,7 @@ export function useElementTag(coreState: ReturnType<typeof useCoreState>, histor
       // A component becoming a plain tag keeps only what a tag understands:
       // its props were the component's API, and they'd be junk attributes on
       // a <div>.
-      const wasComponent = node.kind !== 'element';
-      const oldNames = wasComponent ? new Set(Object.keys(node.props || {})) : new Set(getElementSchema(node.name).map((field) => field.name));
-      const newNames = new Set(getElementSchema(tag).map((field) => field.name));
-      const dropped = Object.keys(node.props || {}).filter(
-        (attr) => oldNames.has(attr) && !newNames.has(attr) && !GLOBAL_ATTRS.has(attr) && !/^(data-|aria-)/.test(attr),
-      );
+      const dropped = droppedForElement(node, tag);
       const change = { kind: 'element' as const, name: tag, asset: false, dropped };
       commitEdit(tagChangeGesture(model, node, change, withPrunedImports));
     },
@@ -604,24 +598,7 @@ export function useBranchEdits(coreState: ReturnType<typeof useCoreState>, histo
       if (!node || node.kind !== 'cond') {
         return;
       }
-      const kids = node.children;
-      const thenBranch: BranchNode = kids[0] ?? {
-        id: newId(),
-        kind: 'branch',
-        name: 'then',
-        children: [],
-      };
-      let next: EditorNode | undefined;
-      if (want && kids.length < 2) {
-        const elseBranch: BranchNode = { id: newId(), kind: 'branch', name: 'else', children: [] };
-        next = { ...node, op: '?', children: [thenBranch, elseBranch] };
-      } else if (!want && kids.length > 1) {
-        const elseBranch = kids[1];
-        assert(elseBranch !== undefined, 'Else branch exists before removal');
-        const rescued = elseBranch.children || [];
-        const merged = { ...thenBranch, children: [...(thenBranch.children || []), ...rescued] };
-        next = { ...node, op: '&&', children: [merged] };
-      }
+      const next = toggledElseBranch(node, want ? 'else' : 'no-else', newId);
       if (!next) {
         return;
       }

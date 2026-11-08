@@ -9,6 +9,9 @@ import type { StyleRegion } from './styleTypes';
 import { listAssetEntries } from '../../../ipc/assetBridge';
 import { readAstroStyleFiles, readStyleFiles } from '../stylePanelBridge';
 import { variableEdit } from '../../../ipc/variableEditBridge';
+import { readCSSVariables, type VariablesSnapshot } from '../../../ipc/variablesBridge';
+import { onVariablesChanged } from '../../../ipc/editorEnvironment';
+import { projectRelative } from '../../../editor/variablePlace';
 
 // Model kinds that render exactly one element (so CSS counts them as a child),
 // and kinds whose element count can't be known without running the page.
@@ -46,6 +49,8 @@ export type ProjectVariable = {
   value: string;
   binding: string;
   type: string;
+  /** The project-relative Astro file whose `<style>` declares it; absent for a stylesheet's. */
+  readonly file?: string;
 };
 
 // The panel filters the picker by variable type, and it speaks Webflow's
@@ -127,6 +132,10 @@ export function resolveAlias(value: string, values: Map<string, string>, depth =
 // Custom properties declared anywhere in the project's CSS. The rule they sit
 // in is the closest thing to Webflow's collection, so it groups them.
 export async function readAllProjectCss(): Promise<Array<{ label: string; css: string }>> {
+  return [...(await readStylesheetCss()), ...(await readAstroGlobalCss()), ...readOpenFileCss()];
+}
+
+async function readStylesheetCss(): Promise<Array<{ label: string; css: string }>> {
   const host = getHost();
   const out: Array<{ label: string; css: string }> = [];
   // Ask for the stylesheet list rather than trusting host.files: the variable
@@ -161,8 +170,14 @@ export async function readAllProjectCss(): Promise<Array<{ label: string; css: s
       out.push(entry);
     }
   }
-  // Variables are just as often declared in a component's global block as in a
-  // stylesheet, so the picker has to read those too.
+  return out;
+}
+
+// A component's global blocks, for what is read off every rule (font families).
+// Variables come from the panel's reader instead, which knows the template.
+async function readAstroGlobalCss(): Promise<Array<{ label: string; css: string }>> {
+  const host = getHost();
+  const out: Array<{ label: string; css: string }> = [];
   let astro = host.astroFiles;
   if (!astro.length && host.projectPath) {
     try {
@@ -192,12 +207,57 @@ export async function readAllProjectCss(): Promise<Array<{ label: string; css: s
       }
     }
   }
+  return out;
+}
+
+// The open file's blocks come from its model, so they hold what is on the canvas.
+// Each carries the file it is in: the list outlives the page, and on the next one
+// these must not read as stylesheet variables (variablePlace.ts).
+function readOpenFileCss(): Array<{ label: string; css: string; file?: string }> {
+  const host = getHost();
+  const file = projectRelative(host.projectPath, host.openFilePath);
+  const out: Array<{ label: string; css: string; file?: string }> = [];
   walkNodes(host.nodes, (node) => {
     if (node.kind === 'raw' && node.name === 'style') {
-      out.push({ label: '<style>', css: String(node.inner ?? '') });
+      out.push({ label: '<style>', css: String(node.inner ?? ''), ...(file === undefined ? {} : { file }) });
     }
   });
   return out;
+}
+
+// Every `<style>` variable in the project, as the Variables panel reads them. One
+// reader means the picker sees every block the panel does, `is:inline` and scoped
+// ones too, and none of what is only text in a comment, a string or an expression.
+async function readBlockVariables(): Promise<VariablesSnapshot | undefined> {
+  const { projectPath } = getHost();
+  if (projectPath === undefined) {
+    return undefined;
+  }
+  const result = await readCSSVariables(projectPath);
+  return result.ok ? result.value : undefined;
+}
+
+type BlockVariable = { readonly collection: string; readonly group: string; readonly name: string; readonly value: string; readonly file: string };
+
+function blockVariables(snapshot: VariablesSnapshot | undefined): readonly BlockVariable[] {
+  const found: BlockVariable[] = [];
+  for (const file of snapshot?.files ?? []) {
+    for (const group of file.groups) {
+      if (group.scope === undefined) {
+        continue;
+      }
+      for (const block of group.blocks) {
+        for (const row of block.rows) {
+          for (const cell of row.cells) {
+            if (cell !== undefined) {
+              found.push({ collection: file.name, group: cell.selector, name: cell.name.slice(2), value: cell.value.trim(), file: file.rel });
+            }
+          }
+        }
+      }
+    }
+  }
+  return found;
 }
 
 // The panel kicks the variable scan off once and caches the result for the
@@ -222,17 +282,41 @@ export function whenProjectReady(timeoutMs = 4000): Promise<void> {
   });
 }
 
-export async function streamProjectVariables(onAdd: (v: ProjectVariable) => void, isCancelled: () => boolean = () => false): Promise<ProjectVariable[]> {
+// `onChanged` runs once, at the next change to the project's variables: what this
+// read returns is out of date from then on. It listens from before the first read,
+// so a change made during the read is not missed.
+export async function streamProjectVariables(
+  onAdd: (v: ProjectVariable) => void,
+  isCancelled: () => boolean = () => false,
+  onChanged?: () => void,
+): Promise<ProjectVariable[]> {
+  if (onChanged !== undefined) {
+    const stop = onVariablesChanged(() => {
+      stop();
+      onChanged();
+    });
+  }
   await whenProjectReady();
   const all: ProjectVariable[] = [];
+  // One entry per name in each file, not per name: a page and a stylesheet may both
+  // declare `--accent`, and which one the picker offers depends on the page open
+  // when it opens (useSharedVars), long after this list was read.
   const seen = new Set<string>();
+  const keyOf = (file: string | undefined, name: string): string => `${file ?? ''}\u0000${name}`;
   // Parse everything up front and index every custom property by name: a variable's type
   // often lives in the variable it aliases (`--h6-font-family: var(--font-display)`),
   // which may be declared in a file we haven't reached yet, so the whole map has to exist
   // before the first type is inferred.
-  const parsed: Array<{ label: string; root: ReturnType<typeof postcss.parse> }> = [];
+  const parsed: Array<{ label: string; file: string | undefined; root: ReturnType<typeof postcss.parse> }> = [];
   const values = new Map<string, string>();
-  for (const { label, css } of await readAllProjectCss()) {
+  // The open file first: where a name is declared twice, its own value is the one
+  // this page has. The picker keeps one entry per name, and the canvas decides which
+  // of them reach the selected element (useDefinedVariables).
+  const sources: ReadonlyArray<{ readonly label: string; readonly css: string; readonly file?: string }> = [
+    ...readOpenFileCss(),
+    ...(await readStylesheetCss()),
+  ];
+  for (const { label, css, file } of sources) {
     if (isCancelled()) {
       break;
     }
@@ -242,7 +326,7 @@ export async function streamProjectVariables(onAdd: (v: ProjectVariable) => void
     } catch {
       continue;
     }
-    parsed.push({ label, root });
+    parsed.push({ label, file, root });
     root.walkDecls((decl) => {
       const key = decl.prop.startsWith('--') ? decl.prop.slice(2) : undefined;
       if (key && !values.has(key)) {
@@ -250,7 +334,14 @@ export async function streamProjectVariables(onAdd: (v: ProjectVariable) => void
       }
     });
   }
-  for (const { label, root } of parsed) {
+  const snapshot = await readBlockVariables();
+  const inBlocks = blockVariables(snapshot);
+  for (const { name, value } of inBlocks) {
+    if (!values.has(name)) {
+      values.set(name, value);
+    }
+  }
+  for (const { label, file, root } of parsed) {
     if (isCancelled()) {
       break;
     }
@@ -259,10 +350,10 @@ export async function streamProjectVariables(onAdd: (v: ProjectVariable) => void
         return;
       }
       const name = decl.prop.slice(2);
-      if (seen.has(name)) {
+      if (seen.has(keyOf(file, name))) {
         return;
       }
-      seen.add(name);
+      seen.add(keyOf(file, name));
       const variable: ProjectVariable = {
         collection: label,
         group: ruleSelectorOf(decl.parent) || ':root',
@@ -270,10 +361,22 @@ export async function streamProjectVariables(onAdd: (v: ProjectVariable) => void
         value: decl.value.trim(),
         binding: `var(${decl.prop})`,
         type: varKind(name, resolveAlias(decl.value, values)),
+        ...(file === undefined ? {} : { file }),
       };
       all.push(variable);
       onAdd(variable);
     });
+  }
+  for (const { collection, group, name, value, file } of inBlocks) {
+    if (isCancelled()) {
+      break;
+    }
+    if (!seen.has(keyOf(file, name))) {
+      seen.add(keyOf(file, name));
+      const variable: ProjectVariable = { collection, group, name, value, binding: `var(--${name})`, type: varKind(name, resolveAlias(value, values)), file };
+      all.push(variable);
+      onAdd(variable);
+    }
   }
   return all;
 }

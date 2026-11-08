@@ -86,7 +86,7 @@ const marked = (body, frontmatter = 'import Split from "./Split.astro";\nimport 
     // Ordinary slot content still gets the Fragment form, for the same reason
     // it always did: Astro drops a plain comment there.
     check('slot content keeps its comment in a Fragment', /<Fragment set:html=\{"<!--avb-s:0\.0-->"\} \/>/.test(out), out);
-    check('and the page around it is plain comments', /^<!--avb-s:0-->$/m.test(out), out);
+    check('and the page around it is plain comments, against the node they mark', /^<!--avb-s:0--><Split /m.test(out), out);
   }
   {
     // The node that can hold no attribute of its own — a <Fragment slot="…">

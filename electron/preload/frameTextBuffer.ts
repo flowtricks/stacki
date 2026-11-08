@@ -1,17 +1,26 @@
 import { assert } from '../../shared/core/assert';
 import { CANVAS_TEXT_LIMIT } from '../../shared/properties/canvasText';
-import { selectTextOffsets, type TextOffsets } from './frameTextSelection';
+import { selectRunsOffsets, type TextOffsets, type TextSpace } from './frameTextSelection';
 
 interface TextState {
   readonly texts: readonly string[];
   readonly selection: TextOffsets;
 }
 
-export function createTextBuffer(root: HTMLElement, nodes: readonly Text[], changed: (value: string) => void = () => {}) {
+/** A run whose words differ from the ones it opened with. */
+export interface TextRunChange {
+  readonly run: number;
+  readonly value: string;
+}
+
+export function createTextBuffer(root: HTMLElement, space: TextSpace, changed: (value: string) => void = () => {}) {
+  assert(space.runs[space.primary] !== undefined, 'The opened run is one of the editor runs');
+  const nodes = space.runs.flat();
   const structure = captureStructure(root, nodes);
   if (!structure) {
     return undefined;
   }
+  const seams = seamsOf(space);
   const original = nodes.map((node) => node.data);
   let rendered: readonly string[] = original;
   let history: readonly TextState[] = [{ texts: original, selection: { start: 0, end: 0 } }];
@@ -21,6 +30,11 @@ export function createTextBuffer(root: HTMLElement, nodes: readonly Text[], chan
     writeTexts(nodes, texts);
     rendered = texts;
   };
+  const primaryText = () => runTexts(space, rendered)[space.primary] ?? '';
+  const changes = (): readonly TextRunChange[] => {
+    const before = runTexts(space, original);
+    return runTexts(space, rendered).flatMap((value, run) => (value === before[run] ? [] : [{ run, value }]));
+  };
   const remember = (selection: TextOffsets) => {
     // Bound per-session undo memory: 64 text snapshots of at most 10,000 characters.
     history = [...history.slice(0, index + 1), { texts: rendered, selection }].slice(-64);
@@ -28,20 +42,31 @@ export function createTextBuffer(root: HTMLElement, nodes: readonly Text[], chan
   };
   return {
     intact,
-    value: () => (rendered.join('') === original.join('') ? undefined : rendered.join('')),
-    length: () => rendered.join('').length,
+    changes,
+    // Words changed outside the opened run: a save of that run alone would lose them.
+    spread: () => changes().some((change) => change.run !== space.primary),
+    // Where the opened run lies, for select all.
+    primaryRange: () => runRanges(space, rendered)[space.primary] ?? { start: 0, end: 0 },
+    crosses: (range: TextOffsets) => runWords(space, rendered, range) === undefined,
+    // The source's own words in a range inside one run; undefined across runs.
+    words: (range: TextOffsets) => runWords(space, rendered, range),
     // The original words back; `keep` shows the typed ones again once a save is checked.
     restore: () => closeTextBuffer(original, rendered, { intact, write }),
     replace: (range: TextOffsets, text: string) => {
-      if (!intact() || rendered.join('').length - (range.end - range.start) + text.length > CANVAS_TEXT_LIMIT) {
+      if (!intact()) {
+        return;
+      }
+      const next = replaceText(rendered, seams, range, text);
+      // Deleting across only a seam changes no words: a <br> is not text to delete.
+      if (next.join('').length > CANVAS_TEXT_LIMIT || next.every((value, position) => value === rendered[position])) {
         return;
       }
       history = history.map((entry, position) => (position === index ? { texts: entry.texts, selection: range } : entry));
-      write(replaceText(rendered, range, text));
+      write(next);
       const selection = { start: range.start + text.length, end: range.start + text.length };
       remember(selection);
-      selectTextOffsets(nodes, selection);
-      changed(rendered.join(''));
+      selectRunsOffsets(space.runs, selection);
+      changed(primaryText());
     },
     composition: () => {
       const texts = nodes.map((node) => node.data);
@@ -49,7 +74,7 @@ export function createTextBuffer(root: HTMLElement, nodes: readonly Text[], chan
         return false;
       }
       rendered = texts;
-      changed(rendered.join(''));
+      changed(primaryText());
       return true;
     },
     remember,
@@ -63,8 +88,8 @@ export function createTextBuffer(root: HTMLElement, nodes: readonly Text[], chan
       if (intact() && state) {
         index = next;
         write(state.texts);
-        selectTextOffsets(nodes, state.selection);
-        changed(rendered.join(''));
+        selectRunsOffsets(space.runs, state.selection);
+        changed(primaryText());
       }
     },
   };
@@ -90,18 +115,54 @@ function restoreTextBuffer(texts: readonly string[], intact: () => boolean, writ
   return true;
 }
 
-function replaceText(texts: readonly string[], range: TextOffsets, insert: string): string[] {
+// The node positions that end a run, before the last: each is followed by a seam.
+function seamsOf(space: TextSpace): ReadonlySet<number> {
+  const seams = new Set<number>();
+  let position = 0;
+  for (const run of space.runs.slice(0, -1)) {
+    position += run.length;
+    seams.add(position - 1);
+  }
+  return seams;
+}
+
+function runTexts(space: TextSpace, texts: readonly string[]): readonly string[] {
+  let position = 0;
+  return space.runs.map((run) => {
+    const start = position;
+    position += run.length;
+    return texts.slice(start, position).join('');
+  });
+}
+
+function runRanges(space: TextSpace, texts: readonly string[]): readonly TextOffsets[] {
+  let position = 0;
+  return runTexts(space, texts).map((text) => {
+    const start = position;
+    position += text.length + 1;
+    return { start, end: start + text.length };
+  });
+}
+
+function runWords(space: TextSpace, texts: readonly string[], range: TextOffsets): string | undefined {
+  const run = runRanges(space, texts).findIndex((entry) => entry.start <= range.start && range.end <= entry.end);
+  const bounds = runRanges(space, texts)[run];
+  return bounds && runTexts(space, texts)[run]?.slice(range.start - bounds.start, range.end - bounds.start);
+}
+
+function replaceText(texts: readonly string[], seams: ReadonlySet<number>, range: TextOffsets, insert: string): string[] {
   assert(Number.isSafeInteger(range.start), 'Text selection start must be an integer');
   assert(Number.isSafeInteger(range.end), 'Text selection end must be an integer');
   assert(range.start >= 0, 'Text selection start must not be negative');
   assert(range.end >= range.start, 'Text selection must be ordered');
-  assert(range.end <= texts.join('').length, 'Text selection must stay inside its segment');
+  assert(range.end <= texts.join('').length + seams.size, 'Text selection must stay inside its segment');
   let position = 0;
   let inserted = false;
-  return texts.map((text) => {
+  return texts.map((text, node) => {
     const start = position;
-    position += text.length;
-    if (position < range.start || start > range.end) {
+    const end = start + text.length;
+    position = end + (seams.has(node) ? 1 : 0);
+    if (end < range.start || start > range.end) {
       return text;
     }
     const prefix = text.slice(0, Math.max(0, range.start - start));

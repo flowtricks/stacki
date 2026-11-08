@@ -168,7 +168,9 @@ const settle = (ms = 20) => new Promise((resolve) => setTimeout(resolve, ms));
     'a change the app did not make is marked as coming from outside',
     // The document actors hear it too (plan §7): a hint to re-read, not an authority.
     new RegExp(
-      String.raw`if \(isSelfWrite\(changed\)\) \{\s*return;\s*\}\s*` + String.raw`noteExternalChange\(changed\);\s*notePageMayHaveChanged\(true\);`,
+      // The self-write branch may refresh panels, but it never reports an outside change.
+      String.raw`if \(isSelfWrite\(changed\)\) \{(?:(?!noteExternalChange|notePageMayHaveChanged)[\s\S])*?return;\s*\}\s*` +
+        String.raw`noteExternalChange\(changed\);\s*notePageMayHaveChanged\(true\);`,
     ).test(watcher),
     'the app cannot tell an outside edit from its own',
   );

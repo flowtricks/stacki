@@ -634,7 +634,12 @@ build (`test/legacy-parity.bench.js`) was retired at step 10 with the
 - `brand.ts` constructs `NodeId`, `FilePath`, `ProjectPath`, `Digest`,
   `ByteOffset`, `Utf16Offset`, and `IntentId` after validating the primitive value.
 - `projectScan.ts` validates project pages, layouts, components, schemas, and scan
-  collection limits.
+  collection limits. The scan also carries the project's `lengthUnit`.
+- `lengthUnit.ts` decides what the style panel writes lengths in: rem in a Lumos project (a
+  `lumos` block in package.json, or a LUMOS.md), px elsewhere, at the root font size a global
+  stylesheet sets statically (16px otherwise). `electron/project/lengthUnitMarkers.ts` reads the
+  markers for both Desktop's `project:scan` and Studio's `/studio/api/project`, so the two hosts
+  and the baked demo agree. `parseLengthUnit` checks the setting at the scan boundary.
 - `propSchema.ts` validates component field schemas and their nested options, including the
   optional `deprecated` notice and `usage` the prop model adds.
 - `propModel.ts` is the one description of a component's props (docs/plans/prop-controls.md §2):
@@ -1023,13 +1028,52 @@ period. Interrupted checkpoint acknowledgement blocks edits until startup recove
 
 The canvas cursor toggle starts in selection mode for each project session. The parent sends
 `avb:interaction` with `select` or `interact`; both frame clients validate the mode and accept it
-only from their parent. Desktop and Studio replay it after each frame load. In interaction mode,
-the page owns clicks, forms, focus, keyboard input and pointer feedback; selection and hover outlines remain.
+only from their parent. Desktop and Studio replay it after each frame load. Interaction mode is
+selection mode plus one difference: the page also receives the activation. A click still selects
+(`avb:click-node` / `studio:select`), and double-click text editing, component drill-in, the context
+menu, editor shortcuts and outlines behave as in selection mode. The click then reaches the page, so
+buttons, `<summary>`, labels and page scripts run, presses focus fields and forms submit; the page
+shows its own cursors. A click on a link is held for `LINK_HOLD_MS` (350 ms,
+`electron/preload/frameInteraction.ts`) and then replayed once to the page, so the page's own
+handlers and the browser's navigation see one click; the second click of a double-click cancels it,
+so the link's words open for editing instead. Leaving interaction mode cancels a held click.
+Only a link that stays in the frame on the frame's own origin is replayed, and it loads with
+`#avb-design` kept (a plain visitor's URL would have its markers stripped). Any other web link
+(another origin, `_blank`, `_top`, a modifier) opens through `window.open(…, 'noopener')`: a new tab
+in Studio, the system browser on Desktop through the window-open handler. Other schemes
+(`mailto:`, `tel:`) do nothing, as Desktop's `isBrowserLink` allows only http(s). Canvas frames
+cancel off-origin navigations with the Navigation API where the browser has it; Desktop's main
+process refuses them for every preview frame directly in the window (`will-frame-navigate`, and
+`will-redirect` for a site route the server redirects off-site, such as `/download`;
+`electron/app/previewNavigation.ts`) and opens web links externally. The interactive preview frame
+is held to the same rule and to nothing else: no inert links, no held clicks. Frames post `avb:leaving` on
+`pagehide`; Studio (`offSite` in `useCanvasInteraction`) clears outlines on it and, when the next
+document loads without reporting `avb:navigated` within 1.5 s, sets the frame back to the open page.
+The host also sends `avb:site-pages` (`{ base, routes }`, parsed by `parseCanvasSitePages`): a
+same-origin link whose path matches none of the routes (`[param]` one segment, `[...rest]` any), or
+one marked `download`, opens in the browser like an off-site link, so a download route the site's
+own server answers works as on the live site. Until the list arrives every same-origin link counts
+as a page. In interact mode the canvas cursor is the editor's arrow over text (no I-beam), the
+pointer over links, buttons, `<summary>`, labels and controls, the page's own cursor where it sets
+one, and the I-beam in fields; select mode keeps the arrow everywhere (`canvasCursorCSS`). Arrow keys
+pressed in a canvas frame move the editor's selection in both modes (Desktop `avb:shortcut` arrow,
+Studio `studio:key`, caught at capture so the page neither scrolls nor takes them); a page field or
+the canvas text editor keeps them.
+A node with no element whose markers are gone (a component that renders its slot to a string
+and strips comments, such as a `<Section>` using `slots.render()` and a regex) is derived from its
+items: a path no element carries and no marker pair encloses, but the parent of paths elements do
+carry, gets one run per holding element of those elements (`collectHollowRegions` in
+`electron/preload/frameRegions.ts`). Hit-testing, outlines and rendered-node reports then treat it as
+a marked node. Marker pairs always win; derived runs tag nothing and are recollected every pass.
+Studio's `studio:preview-ready` names the frame's path, and the loader counts it as ready for any
+URL with that path, so a URL change that does not reload the frame cannot leave the loader up.
 In selection mode, capture listeners stop click actions before page handlers run. Pointer streams
 remain available to slider libraries, and a drag of at least six pixels does not select a node on
 release. Libraries that require an uncancelled mouse-focus default may still need interaction mode.
 Navigation reports are bounded local paths from the current frame and preview origin. Each
-navigation immediately opens the matching project page while preserving interaction mode; a route
+navigation immediately opens the matching project page while preserving interaction mode (Studio
+first removes the path the frame's pages are served under, the static demo's bake base, by
+comparing the frame's URL with the route it was opened on: `studio/src/features/preview/canvasRoute.ts`); a route
 without editable source restores the editor preview. Mode is session UI state and is not written into project settings.
 
 ### Page and folder rename
@@ -1126,6 +1170,18 @@ inline markup survives the projection, and expression chips retain their origina
 while displaying the draft value. Cancellation and source changes discard the mirror. A save
 precedes the inactive message so the mirror remains until the source acknowledges the edit.
 Leaving native editing clears its text selection without clearing another element's selection.
+
+One element can hold several source texts, such as the words either side of a `<br>`. A drag
+that began in the editor belongs to it wherever it is released. The editor also holds the
+literal texts of the same element next to the opened one (`textRunsAround`), marked `literal`
+in the catalog, so a selection across a wordless element can be typed over or deleted: only
+words change, and the element stays. Any other words end the run list: an inline child's, a
+shared variable's or a component's. A selection reaching them stays selected and can be copied,
+and typing over it is refused, so authored content is never replaced. A caret's delete stops at
+a run's edge. An edit across runs is one
+`avb:text-save` naming the other texts in `also`, at most 100, which the host writes as a
+single source edit. All of them land together or none does. Drafts describe the opened text
+alone, and the formatting bar is withheld once another text has changed.
 
 Validated `avb:text-selection` messages report the words selected in the open editor: offsets
 counted in shown characters (`canvasTextFolded`: a whitespace run is one space, leading

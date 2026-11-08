@@ -25,7 +25,7 @@ import { assignPathIds, parseAttrs, serializeAttrs, required } from './astroAttr
 import { parseState, resetParseBail } from './astroParseState';
 import { serializeNode, serializeNodes } from './astroSerialize';
 import { parseTemplate } from './astroTemplate';
-import { serializeNodeMarked } from './astroSerializeMarked';
+import { serializeNodesMarked, type MarkedSource } from './astroSerializeMarked';
 import { resolveChunks, chunkImportMarks, markChunkHtml } from './astroChunks';
 import { parsePropSchema } from './astroPropSchema';
 import { parseSlots, rootTag, defaultSlotInline, parseExtendsTag } from './astroComponentApi';
@@ -165,7 +165,7 @@ function serializeFrontmatter(model: FrontmatterModel, lines: string[], specFor?
   }
 }
 
-function serializePage(input: unknown): string {
+function serializePage(input: unknown, unit?: string): string {
   const model = parseSerializePage(input);
   // A file that never had a frontmatter block does not acquire one. Writing
   // `---` twice at the top of a component that had none is a change to every
@@ -178,7 +178,7 @@ function serializePage(input: unknown): string {
   }
 
   for (const node of model.nodes) {
-    serializeNode(node, '', lines, 0);
+    serializeNode(node, '', lines, 0, unit);
   }
   // Blank lines the file ended on.
   for (let i = 0; i < (model.trailingBlank || 0); i++) {
@@ -208,7 +208,7 @@ function serializePage(input: unknown): string {
 // with the page’s. A page marks as "0.1"; src/components/Card.astro marks as
 // "src/components/Card.astro|0.1", and the app asks for that namespace while
 // that component is the file being edited.
-function serializePageMarked(input: unknown, prefix = '', stamp: PreviewStamp | undefined = undefined): string {
+function serializePageMarked(input: unknown, prefix = '', stamp: PreviewStamp | undefined = undefined, source: MarkedSource = undefined): string {
   const model = parseSerializePage(input);
   const marks = chunkImportMarks(model);
   const lines = ['---'];
@@ -223,15 +223,10 @@ function serializePageMarked(input: unknown, prefix = '', stamp: PreviewStamp | 
   // The file's own roots: what a caller sees of this file is whatever these
   // put on the page, so they are where a caller's name for this instance
   // belongs (see `atRoot`).
-  model.nodes.forEach((node, i) =>
-    serializeNodeMarked(node, '', lines, {
-      path: `${prefix}${i}`,
-      inSlot: false,
-      atRoot: true,
-      depth: 0,
-      stamp,
-    }),
-  );
+  const roots = serializeNodesMarked(model.nodes, { pathOf: (i) => `${prefix}${i}`, atRoot: true, stamp, source });
+  if (roots !== '') {
+    lines.push(roots);
+  }
   return lines.join('\n') + '\n';
 }
 

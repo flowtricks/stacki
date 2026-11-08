@@ -91,6 +91,7 @@ test('a drag reports its value to the canvas; the hover stays silent meanwhile',
   // One longhand per side: the box reads those on every version of the panel.
   let disk = `.card { ${SIDES.map((side) => `padding-${side}: 2rem;`).join(' ')} }`;
   window.avb = {
+    onCssChanged: () => () => {},
     listStyleFiles: async () => ({ files: [SHEET] }),
     listAstroStyleFiles: async () => ({ files: [] }),
     listAssets: async () => ({ entries: [] }),

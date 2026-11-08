@@ -55,17 +55,20 @@ function checkCodeWindowRule({ codeWindowFor }) {
     targetId: 's1',
     title: '<style>',
     language: 'css',
+    indentation: 'block',
   });
   assert.deepEqual(codeWindowFor(raw('j1', 'script')), {
     targetId: 'j1',
     title: '<script>',
     language: 'javascript',
+    indentation: 'block',
   });
   // The parser keeps a tag as written, so a capitalised one must still open.
   assert.deepEqual(codeWindowFor(raw('s2', 'STYLE')), {
     targetId: 's2',
     title: '<STYLE>',
     language: 'css',
+    indentation: 'block',
   });
   // Markup has no code editor of its own: Enter on it must stay unhandled.
   assert.equal(codeWindowFor(element('e1', 'div')), undefined);

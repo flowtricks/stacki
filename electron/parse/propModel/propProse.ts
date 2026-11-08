@@ -119,6 +119,7 @@ export function statedDefault(documentation: string | undefined): StatedDefault 
 // exact, or in the sentence a human reads, which is a guess and can be
 // overridden by a tag. Returns {} when the doc says nothing about a range.
 const NUMBER_RE = String.raw`-?\d+(?:\.\d+)?`;
+const UNSIGNED_RE = String.raw`\d+(?:\.\d+)?`;
 export function numberRules(documentation: string | undefined): NumberRules {
   if (!documentation) {
     return {};
@@ -157,6 +158,22 @@ export function numberRules(documentation: string | undefined): NumberRules {
       rules.max = high;
     }
   });
+  // A range written as one: "Overall strength, 0–1", "from 1 to 6", "1-12".
+  // A dash range needs both ends unsigned, so "-1-1" or a date's "2024-01" is
+  // not mistaken for one, and its low end must not be past its high end.
+  const fromRange = (low: number, high: number) => {
+    if (low <= high) {
+      if (rules.min === undefined) {
+        rules.min = low;
+      }
+      if (rules.max === undefined) {
+        rules.max = high;
+      }
+    }
+  };
+  take(new RegExp(`\\bfrom\\s+(${NUMBER_RE})\\s+(?:to|through)\\s+(${NUMBER_RE})`, 'i'), fromRange);
+  take(new RegExp(`(?<![\\w\\-–—]|\\d\\.)(${UNSIGNED_RE})\\s*[–—]\\s*(${UNSIGNED_RE})(?![\\w\\-–—]|\\.\\d)`), fromRange);
+  take(new RegExp(`(?<![\\w\\-–—]|\\d\\.)(${UNSIGNED_RE})-(${UNSIGNED_RE})(?![\\w\\-–—]|\\.\\d)`), fromRange);
   // Inclusive bounds first: they contain the words the exclusive ones use.
   take(new RegExp(`(?:no more than|not more than|at most|maximum(?: of)?|up to)\\s+(${NUMBER_RE})`, 'i'), (bound) => {
     if (rules.max === undefined) {

@@ -8,14 +8,15 @@ import * as fs from 'fs';
 import { toPosix } from '../lib/mainHelpers';
 import { resolveImportPath, declarationLine } from '../properties/importPaths';
 import { listCssFiles, listAstroStyleFiles } from '../project/styleFiles';
+import { announceVariableWrite } from './cssVariableHandlers';
 import type { MainHost } from './mainHost';
 
-export function registerStyleSourceHandlers(host: Pick<MainHost, 'assertInProject' | 'ipcMain'>): void {
+export function registerStyleSourceHandlers(host: Pick<MainHost, 'assertInProject' | 'ipcMain' | 'send'>): void {
   registerStyleListFilesHandlers(host);
   registerSourceWriteTextHandler(host);
 }
 
-function registerStyleListFilesHandlers({ ipcMain, assertInProject }: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
+function registerStyleListFilesHandlers({ ipcMain, assertInProject, send }: Pick<MainHost, 'ipcMain' | 'assertInProject' | 'send'>): void {
   ipcMain.handle('style:listFiles', async (_event, projectPath) => {
     if (!projectPath) {
       return { files: [] };
@@ -35,9 +36,12 @@ function registerStyleListFilesHandlers({ ipcMain, assertInProject }: Pick<MainH
     return { css: readSource(abs) };
   });
 
-  ipcMain.handle('style:writeFile', async (_event, { filePath, css }) => {
+  ipcMain.handle('style:writeFile', async (_event, { filePath, css, announce }) => {
     const abs = assertInProject(filePath);
     writeProjectText(abs, css); // notes the write, so the watcher does not see it as external
+    if (announce === true) {
+      announceVariableWrite(send, [abs]);
+    }
     return { ok: true as const };
   });
 

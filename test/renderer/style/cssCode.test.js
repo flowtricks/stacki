@@ -135,7 +135,7 @@ const same = (what, got, want) => check(what, JSON.stringify(got) === JSON.strin
   check('the most specific selector is shown first', ruleView.code.startsWith('.specific {'));
   check('every matching selector remains in the code view', ruleView.code.includes('.general {'));
   const struckText = ruleView.highlights.map((range) => ruleView.code.slice(range.from, range.to));
-  same('overridden declarations are highlighted for strikethrough', struckText, ['  color: red;']);
+  same('overridden declarations are highlighted for strikethrough', struckText, ['\tcolor: red;']);
 
   const headingGroup = 'p,\nh1,\nh2,\nh3,\nh4,\nh5,\nh6';
   const headingView = buildCssRuleView([
@@ -169,7 +169,7 @@ const same = (what, got, want) => check(what, JSON.stringify(got) === JSON.strin
       atContext: ['@media (width > 40rem)'],
     }),
   ]);
-  check('query context is preserved around its rule', queryView.code === '@media (width > 40rem) {\n  .card {\n    color: green;\n  }\n}');
+  check('query context is preserved around its rule', queryView.code === '@media (width > 40rem) {\n\t.card {\n\t\tcolor: green;\n\t}\n}');
 
   // --- stepping -------------------------------------------------------------
   same('alt is a tenth', stepSize({ altKey: true }), 0.1);

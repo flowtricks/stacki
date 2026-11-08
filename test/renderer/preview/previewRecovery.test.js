@@ -304,7 +304,9 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     check(
       'and not for the app’s own writes, which say it themselves',
       new RegExp(
-        String.raw`if \(isSelfWrite\(changed\)\) \{\s*return;\s*\}\s*` + String.raw`noteExternalChange\(changed\);\s*notePageMayHaveChanged\(true\);`,
+        // The self-write branch may tell the Variables panel; it may not poke the page.
+        String.raw`if \(isSelfWrite\(changed\)\) \{(?:(?!notePageMayHaveChanged)[\s\S])*?return;\s*\}\s*` +
+          String.raw`noteExternalChange\(changed\);\s*notePageMayHaveChanged\(true\);`,
       ).test(handler),
       handler.slice(0, 400),
     );

@@ -2,7 +2,7 @@
   margin: auto;
   inset: 0;
   width: min(620px, calc(100vw - 48px));
-  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   padding: 0;
   border: 1px solid #3a3a3a;
   border-radius: 16px;
@@ -405,7 +405,7 @@
 @media (max-width: 540px) {
   .studio-setup {
     width: calc(100vw - 24px);
-    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
   }
   .studio-setup header,
   .studio-setup footer,

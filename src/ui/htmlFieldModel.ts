@@ -4,7 +4,7 @@ import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
 const TAGS = new Set(
   (
     'p div br strong b em i u s strike a h1 h2 h3 h4 h5 h6 ul ol li blockquote pre code span ' +
-    'sub sup hr small mark table thead tbody tfoot tr th td caption figure figcaption img'
+    'sub sup hr small mark kbd table thead tbody tfoot tr th td caption figure figcaption img'
   ).split(' '),
 );
 const ATTRIBUTES = new Set('class title alt width height colspan rowspan scope'.split(' '));

@@ -15,6 +15,7 @@
 import { parser } from '@lezer/javascript';
 import type { SyntaxNode } from '@lezer/common';
 import { assert } from '../../shared/core/assert';
+import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import { LIMITS } from '../../shared/core/limits';
 import { LOOP_SYNTAX_LIMITS } from './loopSyntax';
 
@@ -111,14 +112,22 @@ export function withProp(frontmatter: string, prop: NewProp, anchor: number): st
   } else {
     // A destructure on one line stays on one line; one entry per line stays so.
     const oneLine = !frontmatter.slice(destructure.pattern.from, destructure.pattern.to).includes('\n');
-    const separator = oneLine ? ', ' : ',\n  ';
-    const first = oneLine ? ` ${entry} ` : `\n  ${entry}\n`;
-    edits.push({ at: destructureEnd(frontmatter, destructure), text: destructure.entries.length === 0 ? first : `${separator}${entry}` });
+    const unit = indentUnitOf(frontmatter);
+    const separator = oneLine ? ', ' : `,\n${unit}`;
+    const first = oneLine ? ` ${entry} ` : `\n${unit}${entry}\n`;
+    const restOnly =
+      destructure.entries.length === 0 && REST_ELEMENT.test(frontmatter.slice(destructure.pattern.from + 1, destructure.pattern.to - 1).trimEnd());
+    if (restOnly) {
+      // Only `{ ...rest }`: the new entry goes first, the rest stays last.
+      edits.push({ at: destructure.pattern.from + 1, text: oneLine ? ` ${entry},` : `\n${unit}${entry},` });
+    } else {
+      edits.push({ at: destructureEnd(frontmatter, destructure), text: destructure.entries.length === 0 ? first : `${separator}${entry}` });
+    }
   }
   const members = propsInterfaceEnd(frontmatter);
   if (members !== undefined) {
     const lineBreak = frontmatter.slice(0, members).trimEnd().length === members ? '\n' : '';
-    edits.push({ at: members, text: `${lineBreak}  /** ${prop.description} */\n  ${prop.key}?: ${prop.type};\n` });
+    edits.push({ at: members, text: withIndentUnit(`${lineBreak}\t/** ${prop.description} */\n\t${prop.key}?: ${prop.type};\n`, indentUnitOf(frontmatter)) });
   }
   // From the end, so an earlier position still points at its text.
   edits.sort((left, right) => right.at - left.at);
@@ -159,8 +168,13 @@ export function destructureEnd(frontmatter: string, destructure: PropsDestructur
   const inside = frontmatter.slice(destructure.pattern.from + 1, destructure.pattern.to - 1);
   const kept = inside.replace(/[\s,]*$/, '');
   assert(kept.length <= inside.length, 'Trimming keeps a prefix');
-  return destructure.pattern.from + 1 + kept.length;
+  // A rest element (`...rest`) must stay last, so the end of the named entries is before it.
+  const rest = REST_ELEMENT.exec(kept);
+  return destructure.pattern.from + 1 + (rest === null ? kept.length : rest.index);
 }
+
+/** The `...rest` closing a destructure, with the separator in front of it. */
+const REST_ELEMENT = /[\s,]*\.\.\.\s*[A-Za-z_$][\w$]*$/;
 
 // The position just before `interface Props`' closing brace's line.
 export function propsInterfaceEnd(frontmatter: string): number | undefined {
@@ -213,7 +227,13 @@ export function propsPattern(frontmatter: string): SyntaxNode | undefined {
 
 // `key: local = default`, `key = default`, `key: local` or `key`.
 function entryOf(node: SyntaxNode, source: string): PropEntry | undefined {
-  const key = textOf(source, node.getChild('PropertyName') ?? undefined);
+  if (node.getChild('Spread') !== null) {
+    return undefined; // `...rest` is the props not named, not a prop (1.5.6 parses it as a PatternProperty).
+  }
+  // A shorthand (`{ title = "Hi" }`) names its prop by its binding: @lezer/javascript
+  // before 1.5.6 parses that name as a PropertyName, from 1.5.6 (Studio's) as a
+  // VariableDefinition alone.
+  const key = textOf(source, node.getChild('PropertyName') ?? node.getChild('VariableDefinition') ?? undefined);
   if (key === undefined || !IDENTIFIER.test(key)) {
     return undefined;
   }

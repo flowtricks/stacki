@@ -51,6 +51,7 @@ export function markdownEditDraft(edit: Edit, authored: Authored): Drafted {
     case 'set-inline-style':
     case 'rename-attribute':
     case 'wrap-nodes':
+    case 'wrap-text':
     case 'unwrap-node':
       // Markdown writes no tag to style, name or wrap.
       return onMarkdown(authored, edit.target, () => err('unsupported-operation'));

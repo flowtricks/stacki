@@ -23,6 +23,12 @@ export type ScanState = {
   rememberedPageEmbedCount: number;
   errors: Array<{ label: string; message: string }>;
   inComponentContext: boolean;
+  /** True once the element's selectors come from a complete resolve the canvas
+   *  answered. False from the moment another element is selected until then: the
+   *  model is blanked, then filled in steps (source-known first, then the DOM's
+   *  answer). The selector well keeps its last settled chips across those steps
+   *  rather than showing each one (heldSelection.ts). */
+  settled: boolean;
 };
 
 export type Phase = 'idle' | 'scanning' | 'ready' | 'no-selection' | 'unsupported';

@@ -52,6 +52,8 @@ const check = (what, condition, detail) => {
     pretendToBeVisual: true,
   });
   global.window = dom.window;
+  // The pickers listen for variable changes, as they do under the real preload.
+  dom.window.avb = { onCssChanged: () => () => {} };
   global.document = dom.window.document;
   global.IS_REACT_ACT_ENVIRONMENT = true;
   global.MutationObserver = dom.window.MutationObserver;

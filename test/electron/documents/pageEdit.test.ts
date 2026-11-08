@@ -21,7 +21,8 @@ import { mainHarness } from '../../helpers/mainHarness.ts';
 import { EDIT_BATCH_EDITS_MAX, parseEditBatchRequest, parseEditRequest, type Edit, type NodeRef } from '#dist/shared/engine/editRequest.js';
 import { parsePageDiskRead, parsePageEditResult, type PageDiskRead } from '#dist/shared/ipc/pageSave.js';
 import { parsePageNode, type PageNode } from '#dist/shared/page/pageNode.js';
-import { toUtf16Span } from '#dist/shared/core/span.js';
+import { toByteSpan, toUtf16Span } from '#dist/shared/core/span.js';
+import { wrappedTextHunk } from '#dist/shared/engine/planText.js';
 
 // Null as a boundary receives it, parsed from JSON: inputs may hold it; our values never do.
 const jsonNull: unknown = JSON.parse('null');
@@ -449,7 +450,7 @@ test('queued edits follow a moved subtree even beside an identical sibling', asy
   assert.equal(conflicting.ok, false, 'a move does not bypass later overlapping changes');
   assert.equal(
     fs.readFileSync(file, 'utf8'),
-    `<main>${card}</main><aside><article title="Moved">` + '<p title="Child">Edited</p></article></aside>',
+    `<main>${card}</main><aside>\n\t<article title="Moved">` + '<p title="Child">Edited</p></article>\n</aside>',
     'only the moved subtree is edited; its identical sibling stays untouched',
   );
 });
@@ -499,7 +500,8 @@ test('deleting a moved element never redirects edits onto its twin', async (cont
   const late = await edit(harness, file, page.checksum, title(target, 'Wrong element'));
   assert.equal(late.ok, false);
   assert.equal(!late.ok && late.error.code === 'rejected' && late.error.reason, 'anchor-moved');
-  assert.equal(fs.readFileSync(file, 'utf8'), `<main>${card}</main><aside></aside>`);
+  // The move gave the empty parent lines; the deletion takes the node and its own.
+  assert.equal(fs.readFileSync(file, 'utf8'), `<main>${card}</main><aside>\n</aside>`);
 });
 
 test('an outside edit elsewhere maps; one on the same value is refused', async (context) => {
@@ -901,4 +903,113 @@ test('removing the space at the end of a text run before an element applies', as
     assert.equal(echo.value, to);
   }
   assert.equal(fs.readFileSync(file, 'utf8'), before.replace('Send your first pigeon ', 'Send a &lt;pigeon&gt; &amp; go '));
+});
+
+// The text runs of `<code>` in a source a person wrote: entities, quotes and braces, split by breaks.
+const CODE_RUNS = '<code>import &#123; Pidgin &#125; from "x";<br /> to: "Dana",<br />&#125;);</code>\n';
+
+test('an attribute edit on bare text is a refusal, never a thrown intent', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  fs.writeFileSync(file, CODE_RUNS);
+  const page = await read(harness, file);
+  const run = refAt(page, [0, 2]);
+  assert.equal(run.kind, 'text');
+  const requests: readonly Edit[] = [
+    title(run, 'x'),
+    { tag: 'remove-attribute', target: run, name: 'title' },
+    { tag: 'set-inline-style', target: run, property: 'color', declaration: { tag: 'set', value: 'red' } },
+    { tag: 'rename-attribute', target: run, from: 'a', to: 'b' },
+  ];
+  for (const request of requests) {
+    const refused = await edit(harness, file, page.checksum, request);
+    assert.ok(!refused.ok, `${request.tag} is refused`);
+    assert.equal(refused.error.code, 'rejected');
+    assert.equal(refused.error.reason, 'unsupported-operation');
+  }
+  assert.equal(fs.readFileSync(file, 'utf8'), CODE_RUNS, 'the disk is untouched');
+});
+
+test('every text run of a code element saves its edit and keeps its meaning', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  for (const [at, value, expected] of [
+    [0, 'import { Pidgin } from "y";', '<code>import &#123; Pidgin &#125; from "y";<br /> to: "Dana",<br />&#125;);</code>\n'],
+    [2, ' to: "Dana {x}",', '<code>import &#123; Pidgin &#125; from "x";<br /> to: "Dana &#123;x&#125;",<br />&#125;);</code>\n'],
+    [4, '}); // done', '<code>import &#123; Pidgin &#125; from "x";<br /> to: "Dana",<br />&#125;); // done</code>\n'],
+  ] as const) {
+    fs.writeFileSync(file, CODE_RUNS);
+    const page = await read(harness, file);
+    const target = refAt(page, [0, at]);
+    const node = nodeAt(page, [0, at]);
+    assert.equal(node.kind, 'text');
+    const saved = await edit(harness, file, page.checksum, { tag: 'replace-node', target, node: { ...node, value } });
+    assert.ok(saved.ok, `run ${at} saves`);
+    assert.equal(fs.readFileSync(file, 'utf8'), expected);
+    const again = await read(harness, file);
+    const reread = nodeAt(again, [0, at]);
+    assert.ok(reread.kind === 'text' && reread.value === value, 'the saved words read back as typed');
+  }
+});
+
+test('wrap-text writes the tag tight around the run and its inverse restores the bytes', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  fs.writeFileSync(file, CODE_RUNS);
+  const page = await read(harness, file);
+  const wrapped = await edit(harness, file, page.checksum, { tag: 'wrap-text', target: refAt(page, [0, 0]), name: 'span' });
+  assert.ok(wrapped.ok, 'the wrap applies');
+  assert.equal(fs.readFileSync(file, 'utf8'), CODE_RUNS.replace('import &#123; Pidgin &#125; from "x";', '<span>import &#123; Pidgin &#125; from "x";</span>'));
+  const restored = await edit(harness, file, wrapped.value.checksum, { tag: 'revert', hunks: wrapped.value.inverse });
+  assert.ok(restored.ok, 'the inverse applies');
+  assert.equal(fs.readFileSync(file, 'utf8'), CODE_RUNS);
+});
+
+test('wrap-text refuses what has no words to wrap, and a Markdown page', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  const body = '<div><b>x</b> <i>y</i></div>\n';
+  fs.writeFileSync(file, body);
+  const page = await read(harness, file);
+  for (const at of [
+    [0, 1], // A blank run.
+    [0, 0], // A tag.
+  ]) {
+    const refused = await edit(harness, file, page.checksum, { tag: 'wrap-text', target: refAt(page, at), name: 'span' });
+    assert.ok(!refused.ok, `the node at ${at.join('/')} is refused`);
+    assert.equal(refused.error.code, 'rejected');
+    assert.equal(refused.error.reason, 'unsupported-operation');
+  }
+  assert.equal(fs.readFileSync(file, 'utf8'), body);
+  const markdown = path.join(harness.root, 'src/pages/post.md');
+  fs.writeFileSync(markdown, 'Words of a post.\n');
+  const post = await read(harness, markdown);
+  const refused = await edit(harness, markdown, post.checksum, { tag: 'wrap-text', target: refAt(post, [0]), name: 'span' });
+  assert.ok(!refused.ok, 'Markdown writes no tag');
+  assert.equal(fs.readFileSync(markdown, 'utf8'), 'Words of a post.\n');
+});
+
+test('wrap-text parses at the boundary', () => {
+  const edit = { tag: 'wrap-text', target: REF, name: 'span' };
+  const base = { pagePath: '/project/src/pages/index.astro', authoredChecksum: DIGEST };
+  assert.deepEqual(parseEditRequest({ ...base, edit }).edit, edit);
+  assert.throws(() => parseEditRequest({ ...base, edit: { ...edit, name: '<span>' } }), /Edit\.name/);
+  assert.throws(() => parseEditRequest({ ...base, edit: { tag: 'wrap-text', target: REF } }), /Edit\.name/);
+  assert.throws(() => parseEditRequest({ ...base, edit: { tag: 'wrap-text', name: 'span' } }), /Edit\.target/);
+});
+
+test('wrappedTextHunk keeps layout outside the tag and checks its inputs', () => {
+  const hunk = (run: string) => wrappedTextHunk(run, toByteSpan(10, 10 + Buffer.byteLength(run)), 'span');
+  assert.deepEqual(hunk('words'), { span: toByteSpan(10, 15), text: '<span>words</span>' });
+  assert.deepEqual(hunk(' words '), { span: toByteSpan(10, 17), text: '<span> words </span>' });
+  assert.deepEqual(hunk('\n  words\n'), { span: toByteSpan(13, 18), text: '<span>words</span>' });
+  assert.deepEqual(hunk('\r\n  é one\n  two '), { span: toByteSpan(14, 27), text: '<span>é one\n  two </span>' });
+  assert.equal(hunk(' \n '), undefined);
+  assert.equal(hunk(''), undefined);
+  assert.throws(() => wrappedTextHunk('words', toByteSpan(0, 4), 'span'), /A run is the text of its span/);
+  assert.throws(() => wrappedTextHunk('words', toByteSpan(0, 5), '<b>'), /A wrapped run gets a valid tag name/);
 });

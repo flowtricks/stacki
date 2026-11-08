@@ -1,6 +1,7 @@
 // Goal: both panel edges resize within their bounds without leaking drag state.
 // Methodology: mount real panels in jsdom, drive pointer and keyboard gestures,
 // and verify cancellation, unmount, tab changes, persistence, and invalid stored widths.
+// A probe reads the shared widths the editor layout rule uses: they change on release, not mid-drag.
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
@@ -15,7 +16,12 @@ const directory = repoPath('node_modules/.stacki-test/panel-resize');
 fs.mkdirSync(directory, { recursive: true });
 const output = path.join(directory, 'panel.cjs');
 buildSync({
-  entryPoints: [path.join(ROOT, 'src/app/shell/ResizablePanel.tsx')],
+  // One bundle, so the panel and the test share the drag phase the canvas reads.
+  stdin: {
+    contents: "export * from './src/app/shell/ResizablePanel'; export { panelDragPhase } from './src/ui/panelDragPhase';",
+    resolveDir: ROOT,
+    loader: 'ts',
+  },
   outfile: output,
   bundle: true,
   platform: 'node',
@@ -23,7 +29,7 @@ buildSync({
   logLevel: 'silent',
   external: ['react', 'react-dom', 'react/jsx-runtime'],
 });
-const { ResizablePanel, parsePanelWidth } = require(output);
+const { ResizablePanel, parsePanelWidth, panelDragPhase, usePanelWidths } = require(output);
 
 test('stored widths reject malformed values and enforce each panel minimum', () => {
   for (const [kind, minimum] of [
@@ -54,7 +60,22 @@ test('panel gestures clamp, persist, isolate code widths, and clean up', async (
     cancelAnimationFrame: dom.window.cancelAnimationFrame.bind(dom.window),
   });
   const root = createRoot(document.getElementById('root'));
-  const render = (kind) => act(() => root.render(React.createElement(ResizablePanel, { kind }, React.createElement('div', undefined, 'Content'))));
+  const seen = [];
+  const Probe = () => {
+    seen.push(usePanelWidths().left);
+    return undefined;
+  };
+  const render = (kind) =>
+    act(() =>
+      root.render(
+        React.createElement(
+          React.Fragment,
+          undefined,
+          React.createElement(ResizablePanel, { kind }, React.createElement('div', undefined, 'Content')),
+          React.createElement(Probe),
+        ),
+      ),
+    );
   const handle = () => document.querySelector('[role="separator"]');
   const panel = () => handle().parentElement;
   const width = () => Number(handle().getAttribute('aria-valuenow'));
@@ -75,7 +96,15 @@ test('panel gestures clamp, persist, isolate code widths, and clean up', async (
     assert.equal(width(), 260);
     await start();
     assert.ok(document.querySelector('.panel-resize-cover'));
+    assert.equal(panelDragPhase(), 'dragging', 'The canvas is told to hold its page width');
+    await pointer(window, 'pointermove', 600);
+    // Moves apply once per animation frame.
+    await act(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+    assert.equal(width(), 360, 'The handle follows the pointer');
+    assert.equal(seen.at(-1), 260, 'The layout keeps the settled width mid-drag');
     await pointer(window, 'pointerup', 650);
+    assert.equal(seen.at(-1), 410, 'Release shares the new width with the layout');
+    assert.equal(panelDragPhase(), 'idle', 'Release lets the canvas apply its real width');
     assert.equal(width(), 410);
     assert.equal(localStorage.getItem('stacki.panel.width.left'), '410');
     assert.equal(document.body.style.cursor, '');
@@ -118,6 +147,7 @@ test('panel gestures clamp, persist, isolate code widths, and clean up', async (
     await start();
     await act(() => root.render(undefined));
     assert.equal(document.body.style.cursor, '');
+    assert.equal(panelDragPhase(), 'idle', 'Unmounting mid-drag releases the canvas hold');
     await pointer(window, 'pointermove', 0);
     await render('right');
     assert.equal(width(), 522, 'Saved width survives remount');

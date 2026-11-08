@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, MutableRefObject, PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import { assert } from '../../../../shared/core/assert';
+import { startTouchClaim, useTouchClaimGuard, type TouchClaim } from '../../../ui/touchClaim';
 
 function sliderStyle(percent: number): CSSProperties & { readonly '--pct': string } {
   return { '--pct': `${percent}%` };
@@ -170,20 +171,31 @@ type SliderDrag = {
 // once per animation frame, and the actual write is time-throttled to WRITE_MS —
 // fast enough to feel live, slow enough never to queue. The final position always
 // commits on release, so no move is lost.
+//
+// On touch the slider sits in a panel that scrolls, so a press does not move the thumb at
+// once (ui/touchClaim.ts): a horizontal drag or a held press grabs it, a tap sets the value
+// where it landed, and a vertical swipe scrolls the panel and leaves the value alone.
 function useSliderDrag(drag: SliderDrag) {
   const { trackRef, dragging, local, setLocal, min, max, step, disabled } = drag;
   const WRITE_MS = 50;
   const rafId = useRef<number | undefined>(undefined);
   const latestX = useRef(0);
   const lastWriteAt = useRef(0);
+  const claim = useRef<TouchClaim | undefined>(undefined);
+  useTouchClaimGuard();
   useEffect(
     () => () => {
       if (rafId.current !== undefined) {
         cancelAnimationFrame(rafId.current);
       }
+      claim.current?.end();
     },
     [],
   );
+  const endClaim = () => {
+    claim.current?.end();
+    claim.current = undefined;
+  };
   const range = { min, max, step, fallback: local };
   const valueAt = (clientX: number) => valueAtX(trackRef.current ?? undefined, clientX, range);
 
@@ -198,20 +210,32 @@ function useSliderDrag(drag: SliderDrag) {
       drag.onInput(next);
     }
   };
+  // The press is the slider's: the thumb jumps under it and the live writes begin.
+  const grab = (element: HTMLDivElement, clientX: number) => {
+    assert(!dragging.current, 'DragSlider: a drag is grabbed once');
+    element.focus();
+    dragging.current = true;
+    latestX.current = clientX;
+    lastWriteAt.current = performance.now();
+    const next = valueAt(clientX);
+    setLocal(next);
+    drag.onPreview?.(next);
+    drag.onInput(next);
+  };
   const down = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (disabled) {
       return;
     }
     event.preventDefault();
-    event.currentTarget.focus();
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragging.current = true;
-    latestX.current = event.clientX;
-    lastWriteAt.current = performance.now();
-    const next = valueAt(event.clientX);
-    setLocal(next);
-    drag.onPreview?.(next);
-    drag.onInput(next);
+    endClaim();
+    const element = event.currentTarget;
+    const clientX = event.clientX;
+    const pressClaim = startTouchClaim(event, { axis: 'x' }, () => grab(element, clientX));
+    claim.current = pressClaim;
+    if (pressClaim.state() === 'claimed') {
+      grab(element, clientX);
+    }
   };
   const move = (event: ReactPointerEvent<HTMLDivElement>) => {
     // Once a drag is in progress (pointer captured), keep tracking even if `disabled`
@@ -219,6 +243,20 @@ function useSliderDrag(drag: SliderDrag) {
     // not freeze the thumb. The drag only STARTS when enabled (see `down`).
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
       return;
+    }
+    const state = claim.current?.move(event) ?? 'claimed';
+    if (state === 'released') {
+      // A vertical swipe: the panel scrolls, and the value never moved.
+      assert(!dragging.current, 'DragSlider: a released touch never dragged');
+      event.currentTarget.releasePointerCapture(event.pointerId);
+      endClaim();
+      return;
+    }
+    if (state === 'pending') {
+      return;
+    }
+    if (!dragging.current) {
+      grab(event.currentTarget, event.clientX);
     }
     latestX.current = event.clientX;
     if (rafId.current === undefined) {
@@ -230,9 +268,25 @@ function useSliderDrag(drag: SliderDrag) {
       return;
     }
     event.currentTarget.releasePointerCapture(event.pointerId);
+    const state = claim.current?.state() ?? 'claimed';
+    endClaim();
     if (rafId.current !== undefined) {
       cancelAnimationFrame(rafId.current);
       rafId.current = undefined;
+    }
+    if (!dragging.current) {
+      // A touch that never became a drag. Lifted where it landed, it was a tap, which sets
+      // the value there as a click does; cancelled, the browser took it to scroll.
+      assert(state !== 'claimed', 'DragSlider: a claimed press is dragging');
+      if (state === 'pending') {
+        if (event.type === 'pointerup') {
+          const tapped = valueAt(event.clientX);
+          setLocal(tapped);
+          drag.onPreview?.(tapped);
+          drag.onCommit(tapped);
+        }
+      }
+      return;
     }
     dragging.current = false;
     const next = valueAt(event.clientX);

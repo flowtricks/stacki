@@ -5,8 +5,9 @@
 import { useMemo } from 'react';
 import { saveEmbedSource } from '../model/toolPreferences';
 import { hslaToRgba } from '../model/colorWrite';
-import { clampNonNegative } from '../model/cssProperties';
-import { contextKeyOf } from '../model/resolved';
+import { writtenValue } from '../model/lengthUnit';
+import { contextKeyOf, ruleOnLayer } from '../model/resolved';
+import { pseudoPickPending, usePanelLayer } from './editorModel';
 import type { ParsedRule } from '../model/styleTypes';
 import { optionsFor } from '../model/nativeStyles';
 import { embedSourceClassSuffix, type EmbedDocument } from '../model/webflow';
@@ -48,11 +49,16 @@ export function useSetProp(
     // A gap or a padding cannot go below zero. Here rather than in the fields
     // themselves: a value reaches this point from a typed edit, an arrow step, a
     // drag, a variable pick and the add-property row, and a rule enforced in one
-    // field is a rule the other four ways around it don't have.
-    const write: PropWrite = { prop, value: clampNonNegative(prop, typed), important };
+    // field is a rule the other four ways around it don't have. The project's
+    // length unit is held here for the same reason (model/lengthUnit.ts).
+    const write: PropWrite = { prop, value: writtenValue(prop, typed), important };
     // A commit is the new baseline: whatever a live write overwrote on the way here is
     // no longer what "revert" should restore.
     liveOriginRef.current.delete(prop);
+    if (pseudoPickPending(activeSelector)) {
+      setStatus('Reading this pseudo-element’s rules. Try that again in a moment.');
+      return;
+    }
     if (!activeSelector) {
       const route = autoSelectForEdit();
       if (route && 'native' in route) {
@@ -170,6 +176,10 @@ export function useLiveSetProp(
       props.forEach(revertProp);
       return;
     }
+    // The commit says why nothing lands yet (useSetProp).
+    if (pseudoPickPending(activeSelector)) {
+      return;
+    }
     if (!activeSelector) {
       // Select the default target so the blur commit + later edits land on it; live-
       // preview natively when it's a class (an embed rule doesn't exist yet to scrub).
@@ -178,7 +188,7 @@ export function useLiveSetProp(
         const handle = nativeModelRef.current?.styles[route.native]?.style;
         if (handle) {
           for (const prop of props) {
-            const value = clampNonNegative(prop, typed);
+            const value = writtenValue(prop, typed);
             if (isSupportedCssValue(prop, value)) {
               nativeLiveSet(handle, prop, hslaToRgba(value), optionsFor(currentContext, stateKey));
             }
@@ -194,7 +204,7 @@ export function useLiveSetProp(
       readonly important: boolean;
     }> = [];
     for (const prop of props) {
-      const value = clampNonNegative(prop, typed);
+      const value = writtenValue(prop, typed);
       // Don't push half-typed / invalid values live: the native API can get stuck.
       if (!isSupportedCssValue(prop, value)) {
         continue;
@@ -242,18 +252,19 @@ export function useSourceOptions(
   const sourceNote: string | undefined = undefined;
 
   // Which embeds carry a rule for this element in the current context (dropdown dot).
+  const layer = usePanelLayer();
   const embedsWithRules = useMemo(() => {
     const set = new Set<string>();
     if (!model || currentContext.embedAtContext === undefined) {
       return set;
     }
     for (const matched of [...model.base, ...model.conditional]) {
-      if (contextKeyOf(matched.rule) === currentContext.embedAtContext) {
+      if (contextKeyOf(matched.rule) === currentContext.embedAtContext && ruleOnLayer(matched, layer)) {
         set.add(matched.rule.embedKey);
       }
     }
     return set;
-  }, [model, currentContext]);
+  }, [model, currentContext, layer]);
 
   // The source dropdown: every embed in page order (later embeds win the cascade).
   // Webflow isn't a choice — styles apply natively first and fall back to the
@@ -340,7 +351,7 @@ export function useSelectionCard(
   selectorChipsHook: ReturnType<typeof useSelectorChips>,
 ) {
   const { selectedSelectorText } = selectionState;
-  const { selectorSuggestions, snapshot } = elementTokens;
+  const { scan, selectorSuggestions, snapshot } = elementTokens;
   const { activeSelector } = activeSelectorHook;
   const { selectActiveSelector } = selectorPick;
   const { addTypedSelector, deselect } = typedSelector;
@@ -351,6 +362,8 @@ export function useSelectionCard(
     snapshot,
     selectedSelector: activeSelector,
     activePicked: selectedSelectorText !== undefined,
+    // No scan at all (the panel's first moments) has nothing on its way to hold for.
+    selectionSettled: scan === undefined || scan.settled,
     selectors: selectorChips,
     suggestions: selectorSuggestions,
     activeSelector,

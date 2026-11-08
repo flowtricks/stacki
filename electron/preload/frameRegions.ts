@@ -498,6 +498,7 @@ const markerPath = (node: Node, kind: 's' | 'e'): string | undefined => {
 };
 
 export const collectRegions = () => {
+  forgetHollowRegions();
   pruneRegions();
   const { starts, markers } = findMarkers();
   // What each path was found to hold this pass, so a tag left on an element
@@ -530,7 +531,100 @@ export const collectRegions = () => {
     }
   }
   promoteInstanceTags();
+  collectHollowRegions();
   focusCache = undefined; // new runs — the focused instance may be among them
+};
+
+// --- Nodes whose markers were stripped -------------------------------------
+// A loop, a condition or a fragment puts no element of its own on the page: its
+// markers are all that say where it is. A component that renders its slot to a
+// string and strips the comments out (`slots.render()` then a regex, the usual way
+// to ask "is my slot empty?") takes those markers with it. The items the loop
+// rendered keep their `data-avb-p`, though, and each one's path is the loop's path
+// plus its own index. So a path that no element carries and no marker pair
+// encloses, but that is the parent of paths elements do carry, is a node with no
+// element: its runs are those elements, grouped by the element holding them, one
+// run per rendered copy, in document order. Markers stay the first answer: a path
+// with a marker pair is never derived. Derived runs tag nothing (a tag would make
+// the path look carried by an element on the next pass) and are recollected each
+// pass, so a page whose markers come back drops them.
+const hollowPaths = new Set<string>();
+// Tagged elements read per pass for it; past this, the rest of a giant page derives nothing.
+const HOLLOW_TAGGED_ELEMENTS_MAX = 100_000;
+
+const forgetHollowRegions = () => {
+  for (const nodePath of hollowPaths) {
+    regions.delete(nodePath);
+  }
+  hollowPaths.clear();
+};
+
+const collectHollowRegions = () => {
+  const elements = Array.from(document.querySelectorAll(`[${PATH_ATTR}]`)).slice(0, HOLLOW_TAGGED_ELEMENTS_MAX);
+  const carried = new Set<string>();
+  for (const element of elements) {
+    for (const nodePath of pathsOf(element)) {
+      carried.add(nodePath);
+    }
+  }
+  // Path -> one copy (see hollowCopyKey) -> that copy's elements, all in document order.
+  const found = new Map<string, Map<string, Node[]>>();
+  const holders = new Map<Node, number>();
+  for (const element of elements) {
+    const holder = element.parentNode;
+    if (holder === null) {
+      continue;
+    }
+    for (const nodePath of pathsOf(element)) {
+      const parent = parentPath(nodePath);
+      if (parent === undefined || carried.has(parent) || regions.has(parent)) {
+        continue;
+      }
+      const copies = found.get(parent) ?? new Map<string, Node[]>();
+      found.set(parent, copies);
+      const holderIndex = holders.get(holder) ?? holders.size;
+      holders.set(holder, holderIndex);
+      const key = hollowCopyKey(holderIndex, nodePath, pathsOf(element));
+      const run = copies.get(key) ?? [];
+      copies.set(key, run);
+      if (!run.includes(element)) {
+        run.push(element);
+      }
+    }
+  }
+  for (const [nodePath, copies] of found) {
+    const runs = Array.from(copies.values());
+    assert(runs.length > 0, 'collectHollowRegions: a derived path has at least one run');
+    regions.set(nodePath, runs);
+    hollowPaths.add(nodePath);
+  }
+};
+
+// Which copy of a derived node an element belongs to. Elements in one holder are
+// one copy, unless they are the roots of separate component instances: five
+// <Button>s side by side all carry `Button.astro|0.0.0`, and each is a copy of
+// its own, told apart by the paths the calling file gave them (`0.1`, `0.2`…).
+// A loop's items carry the same paths as each other, so they stay one copy.
+// Grouping the buttons as one would put the open instance's siblings inside it.
+function hollowCopyKey(holderIndex: number, nodePath: string, paths: readonly string[]): string {
+  const namespace = nodePath.slice(0, nodePath.lastIndexOf('|') + 1);
+  const others = paths.filter((other) => other.slice(0, other.lastIndexOf('|') + 1) !== namespace).sort();
+  return `${holderIndex} ${others.join(' ')}`;
+}
+
+// The path a node's parent has: `0.1.5` for `0.1.5.6`, inside the same file's
+// namespace. A file's top node (`0`, `Card.astro|0`) has none.
+export const parentPath = (nodePath: string): string | undefined => {
+  const bar = nodePath.lastIndexOf('|');
+  const indexes = nodePath.slice(bar + 1);
+  const dot = indexes.lastIndexOf('.');
+  if (dot < 0) {
+    return undefined;
+  }
+  if (!/^\d+(\.\d+)*$/.test(indexes)) {
+    return undefined;
+  }
+  return nodePath.slice(0, bar + 1) + indexes.slice(0, dot);
 };
 
 // Runs that have left the document go first. A patched page collects

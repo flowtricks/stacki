@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { KeyboardEvent, PointerEvent } from 'react';
+import { FLOATING_DRAG_IGNORE_SELECTOR } from './floatingDrag';
 import { usePointerDrag } from './usePointerDrag';
 import { fitWindowRectangle, resizeWindowRectangle, type WindowEdge, type WindowSize } from './windowGeometry';
 import { readWindowRectangle, storeWindowRectangle } from './windowPreferences';
@@ -13,7 +14,7 @@ export function useWindowRectangle(minimum: WindowSize, storageKey?: string) {
     if (event.button !== 0 || event.isPrimary === false) {
       return;
     }
-    if (event.target instanceof Element && event.target.closest('button, input, select, textarea, a, [contenteditable], [role=button]')) {
+    if (event.target instanceof Element && event.target.closest(FLOATING_DRAG_IGNORE_SELECTOR)) {
       return;
     }
     event.preventDefault();

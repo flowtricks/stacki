@@ -20,6 +20,9 @@ export interface PopupProps extends Pick<
   readonly onClose: () => void;
   readonly onEscape?: () => void;
   readonly dismissible?: boolean;
+  // A popover closes when anything scrolls, because it usually sits on what moved.
+  // Set for one placed at the pointer, which a scroll elsewhere leaves where it is.
+  readonly keepOnScroll?: boolean;
   readonly anchor?: HTMLElement | undefined;
   // A press inside this element is not an outside press: the popup stays open and the click
   // goes through, so a control beside the anchor (a split button's main half) acts at once.
@@ -42,7 +45,10 @@ const Popup = forwardRef<HTMLDivElement, PopupProps>(function Popup(props, forwa
   const active = lifecycle.phase !== 'closed';
   const scope = usePopupScope(surface, { active, anchor: props.anchor, role: props.role });
   usePopupFocus(dialog, surface, { active, mode, anchor: props.anchor });
-  usePopupDismiss(surface, { ...props, active, mode }, lifecycle);
+  // A popup on its way out no longer owns presses: the click that comes during its exit
+  // motion (Escape, then straight to another control) belongs to what it lands on.
+  const dismissing = lifecycle.phase === 'opening' || lifecycle.phase === 'open';
+  usePopupDismiss(surface, { ...props, active: dismissing, mode }, lifecycle);
   const content = typeof props.children === 'function' ? props.children(lifecycle) : props.children;
   if (!active) {
     return undefined;

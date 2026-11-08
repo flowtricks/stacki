@@ -11,8 +11,15 @@
 //
 // Works with any unit (px, ch, cqw, cqh, em, vw, vh, svh, lvh, %, …) and no unit
 // (line-height, font-weight, …) — the unit only matters for rem's fine step.
+//
+// A rem project (shared/properties/lengthUnit.ts) steps lengths the way a px
+// project steps px: a step is one pixel, ten with Shift, a tenth with Alt, all
+// written in rem (0.0625rem at a 16px root). A px number stepped there is
+// written in rem from the first step: the project never writes px.
 
 import type { KeyboardEvent } from 'react';
+import { projectLength, type LengthUnit } from '../../../../shared/properties/lengthUnit';
+import { projectLengthUnit } from './lengthUnit';
 
 export type StepMode = 'whole' | 'ten' | 'fine';
 
@@ -35,7 +42,11 @@ const ROOT_PX = 16;
 // two groups so the caret can sit anywhere in the number OR the unit to step it.
 const NUMBER_UNIT_RE = /([-+]?(?:\d+\.?\d*|\.\d+))([a-zA-Z%]*)/g;
 
-function stepSizeFor(mode: StepMode, unit: string, scale: number): number {
+function stepSizeFor(mode: StepMode, unit: string, scale: number, lengthUnit: LengthUnit): number {
+  if (lengthUnit.kind === 'rem' && unit === 'rem') {
+    // One pixel in rem: the project's lengths move in pixels, written in rem.
+    return pixelSteps(mode) * (scale / lengthUnit.rootFontPx);
+  }
   if (mode === 'ten') {
     return 10 * scale;
   }
@@ -47,6 +58,31 @@ function stepSizeFor(mode: StepMode, unit: string, scale: number): number {
     return scale / ROOT_PX;
   }
   return 0.1 * scale;
+}
+
+// Pixels per step for each mode, matching the px steps above.
+function pixelSteps(mode: StepMode): number {
+  if (mode === 'ten') {
+    return 10;
+  }
+  if (mode === 'whole') {
+    return 1;
+  }
+  return 0.1;
+}
+
+// The number a step starts from, in the unit it will be written in: a px run in a
+// rem project is read as its rem. `unitText` is what follows the new number — the
+// run's own spelling when the unit is kept, so `PX` and `Rem` survive untouched.
+function stepBase(text: string, run: NumberRun, lengthUnit: LengthUnit): { amount: number; unit: string; unitText: string } | undefined {
+  const parsed = Number.parseFloat(run.raw);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  const written = projectLength(parsed, run.unit, lengthUnit);
+  const unit = written.unit.toLowerCase();
+  const unitText = written.unit === run.unit ? text.slice(run.numEnd, run.end) : written.unit;
+  return { amount: written.amount, unit, unitText };
 }
 
 // Next multiple of `step` strictly past `value` in the given direction.
@@ -85,21 +121,23 @@ export function stepNumberAtCaret(
   mode: StepMode,
   min?: number,
   scale = 1,
+  lengthUnit: LengthUnit = projectLengthUnit(),
 ): { text: string; caret: number } | undefined {
   const hit = numberRuns(text).find((run) => caret >= run.start && caret <= run.end);
   if (!hit) {
     return undefined;
   }
-  const parsed = Number.parseFloat(hit.raw);
-  if (!Number.isFinite(parsed)) {
+  const base = stepBase(text, hit, lengthUnit);
+  if (base === undefined) {
     return undefined;
   }
-  const stepped = snapStep(parsed, stepSizeFor(mode, hit.unit.toLowerCase(), scale), direction);
+  const stepped = snapStep(base.amount, stepSizeFor(mode, base.unit, scale, lengthUnit), direction);
   const nextText = String(min !== undefined && stepped < min ? min : stepped);
   // Keep the caret where it was: end of the new number if it was in the number,
-  // else shift it along with the unit by the number's length change.
-  const nextCaret = caret <= hit.numEnd ? hit.start + nextText.length : caret + (nextText.length - hit.raw.length);
-  return { text: text.slice(0, hit.start) + nextText + text.slice(hit.numEnd), caret: nextCaret };
+  // else at the same place in the unit, which may now be spelled differently.
+  const unitOffset = Math.min(caret - hit.numEnd, base.unitText.length);
+  const nextCaret = caret <= hit.numEnd ? hit.start + nextText.length : hit.start + nextText.length + unitOffset;
+  return { text: text.slice(0, hit.start) + nextText + base.unitText + text.slice(hit.end), caret: nextCaret };
 }
 
 // ───────────────────────────── Pointer scrubbing ─────────────────────────────
@@ -206,13 +244,13 @@ export function hasScrubTarget(text: string): boolean {
  * changing the modifier mid-drag rescales from the same base rather than from wherever
  * the previous mode happened to leave it.
  */
-export function scrubNumber(text: string, run: NumberRun, steps: number, mode: StepMode, scale = 1): string {
-  const base = Number.parseFloat(run.raw);
-  if (!Number.isFinite(base)) {
+export function scrubNumber(text: string, run: NumberRun, steps: number, mode: StepMode, scale = 1, lengthUnit: LengthUnit = projectLengthUnit()): string {
+  const base = stepBase(text, run, lengthUnit);
+  if (base === undefined) {
     return text;
   }
-  const next = Math.round((base + steps * stepSizeFor(mode, run.unit.toLowerCase(), scale)) * 1e5) / 1e5;
-  return text.slice(0, run.start) + String(next) + text.slice(run.numEnd);
+  const next = Math.round((base.amount + steps * stepSizeFor(mode, base.unit, scale, lengthUnit)) * 1e5) / 1e5;
+  return text.slice(0, run.start) + String(next) + base.unitText + text.slice(run.end);
 }
 
 /** The step mode a pointer/key event's modifiers ask for — shared by both gestures. */

@@ -7,12 +7,100 @@
 // a value as something it was not.
 
 import { assert } from '../../shared/core/assert';
-import { parseExpression } from './loopSyntax';
+import { isFieldPath, ITEM_FIELD, type LoopFieldKind } from './loopQuery';
+import { parseExpression, parseFrontmatter, type Js } from './loopSyntax';
 
 export const LOOP_LITERAL_LIMITS = {
   itemsMax: 200,
   itemCharsMax: 500,
+  // The fields read off a written-out list's objects: a card's few keys, never hundreds.
+  fieldsMax: 64,
 } as const satisfies Record<string, number>;
+
+/** A field the items of a written-out list hold, as their values say it. */
+export interface WrittenField {
+  readonly path: string;
+  readonly kind: LoopFieldKind;
+}
+
+/**
+ * The fields the items of a list written out in a frontmatter constant hold
+ * (`const plans = [{ title: "Pro", price: 9 }]`), read off the values as they
+ * are written, or undefined when `name` holds no list written out. Items that
+ * are plain values (`["Free", "Open"]`) are their own field, ITEM_FIELD, so a
+ * filter compares the text and a sort orders by it.
+ *
+ * A key whose values disagree on their kind is `other`, which a filter can
+ * still test for being set; it is never guessed as one kind or the other.
+ */
+export function writtenListFields(frontmatter: string, name: string): readonly WrittenField[] | undefined {
+  const init = parseFrontmatter(frontmatter).declarations.get(name)?.init;
+  const list = init?.kind === 'await' ? init.value : init;
+  if (list?.kind !== 'array') {
+    return undefined;
+  }
+  const kinds = new Map<string, LoopFieldKind>();
+  const note = (path: string, kind: LoopFieldKind): void => {
+    const known = kinds.get(path);
+    if (known === undefined && kinds.size < LOOP_LITERAL_LIMITS.fieldsMax) {
+      kinds.set(path, kind);
+    } else if (known !== undefined && known !== kind) {
+      kinds.set(path, 'other');
+    }
+  };
+  for (const item of list.items.slice(0, LOOP_LITERAL_LIMITS.itemsMax)) {
+    if (item.kind === 'object') {
+      for (const entry of item.entries) {
+        // A key the item-itself field is named by would read as the item.
+        if (entry.key !== undefined && isFieldPath(entry.key) && !entry.key.includes('.') && entry.key !== ITEM_FIELD) {
+          note(entry.key, writtenKind(entry.value));
+        }
+      }
+    } else if (item.kind === 'string' || item.kind === 'number' || item.kind === 'boolean') {
+      note(ITEM_FIELD, writtenKind(item));
+    }
+  }
+  const fields = [...kinds].map(([path, kind]) => ({ path, kind }));
+  assert(fields.length <= LOOP_LITERAL_LIMITS.fieldsMax, 'A written-out list’s fields are bounded');
+  assert(
+    fields.every((field) => isFieldPath(field.path)),
+    'A written-out list’s fields are paths a filter can name',
+  );
+  return fields;
+}
+
+// What a written value is, as filtering and sorting it cares.
+function writtenKind(value: Js): LoopFieldKind {
+  switch (value.kind) {
+    case 'string':
+      return 'text';
+    case 'number':
+      return 'number';
+    case 'boolean':
+      return 'boolean';
+    case 'array':
+      return 'list';
+    case 'object':
+    case 'function':
+    case 'name':
+    case 'member':
+    case 'index':
+    case 'call':
+    case 'new':
+    case 'await':
+    case 'null':
+    case 'unary':
+    case 'binary':
+    case 'conditional':
+    case 'other':
+      // A value code computes, or one no filter compares: only set or not.
+      return 'other';
+    default: {
+      const exhaustive: never = value;
+      return exhaustive;
+    }
+  }
+}
 
 /** What a new custom list starts with, so the loop shows something at once. */
 export const STARTER_ITEMS: readonly string[] = ['Item 1', 'Item 2', 'Item 3'];

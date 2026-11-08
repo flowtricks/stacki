@@ -28,6 +28,8 @@ import { parseFilters, serializeFilters, blankFilter, filterLabel, type Filter }
 import FilterEditor from './FilterFields';
 import { useExternalDraft } from './model/fieldHooks';
 import { displayOf } from './model/styleDisplay';
+import { useLengthUnit } from './model/lengthUnit';
+import { projectLength, type LengthUnit } from '../../../shared/properties/lengthUnit';
 import { type Props, type WriteOptions, useLiveTimer, draftInputHandlers, writeValue, useLayerRows, EffLabel } from './EffectsKit';
 
 // ─────────────── 2D & 3D transforms (layered, mirrors text-shadow) ───────────────
@@ -125,6 +127,25 @@ export const AXIS_CONFIG: Record<TransformType, { unit: string; min: number; max
   skew: { unit: 'deg', min: -90, max: 90, steps: 1 },
 };
 
+// The axis config a project uses: in a rem project a move slider notches in whole
+// pixels (rootFontPx notches per rem, 0.0625rem at a 16px root), not hundredths of a rem.
+export function projectAxisConfig(type: TransformType, lengthUnit: LengthUnit): { unit: string; min: number; max: number; steps: number } {
+  const config = AXIS_CONFIG[type];
+  if (lengthUnit.kind === 'rem' && config.unit === 'rem') {
+    return { ...config, steps: lengthUnit.rootFontPx };
+  }
+  return config;
+}
+
+// An axis value in the unit the project writes: a px move reads as its rem in a rem project.
+export function projectAxis(parsed: { num: number; unit: string } | undefined, lengthUnit: LengthUnit): { num: number; unit: string } | undefined {
+  if (parsed === undefined) {
+    return undefined;
+  }
+  const written = projectLength(parsed.num, parsed.unit, lengthUnit);
+  return { num: written.amount, unit: written.unit };
+}
+
 // Split "10px" / "1.5" / "45deg" into number + unit (bare number → the type's default
 // unit); undefined for var()/calc()/… so the slider disables but the field stays editable.
 export function parseAxis(value: string, fallbackUnit: string): { num: number; unit: string } | undefined {
@@ -156,8 +177,9 @@ export interface AxisInputProps {
 }
 export function AxisInput(props: AxisInputProps) {
   const { type, label, value, placeholder, busy, onPreview, onLive, onCommit } = props;
-  const config = AXIS_CONFIG[type];
-  const parsed = parseAxis(value, config.unit);
+  const lengthUnit = useLengthUnit();
+  const config = projectAxisConfig(type, lengthUnit);
+  const parsed = projectAxis(parseAxis(value, config.unit), lengthUnit);
   const unit = parsed?.unit ?? config.unit;
   const fmt = (slider: number): string => `${Number((slider / config.steps).toFixed(4))}${unit}`;
   const { draft, setDraft, focused } = useExternalDraft(value);

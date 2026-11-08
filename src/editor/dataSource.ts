@@ -347,6 +347,11 @@ export const TOOL_MODULE = /^(astro(:|$)|node:)/;
 export interface ImportLike {
   readonly name?: string;
   readonly path?: string;
+  /** `import { a }` rather than `import a`: the binding names an export, not the default. */
+  readonly named?: boolean;
+  /** The export a named import reads, when the local name differs: `import { a as b }`. */
+  readonly imported?: string;
+  readonly typeOnly?: boolean;
 }
 
 export function mayHoldData(imp: ImportLike | undefined): boolean {

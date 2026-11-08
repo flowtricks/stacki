@@ -2,30 +2,122 @@ import Popup from '../../../ui/Popup';
 // What a Select draws: the trigger, the list and its rows, each row's action
 // (Select.tsx).
 
-import type { KeyboardEvent, ReactNode, RefObject } from 'react';
+import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
+import { assert } from '../../../../shared/core/assert';
 import { type SelectOption, type SelectTag, type Props } from './selectTypes';
 
 // A ReactNode given as null by a caller means "none", the same as leaving it out.
 export const present = (node: ReactNode): boolean => (node ?? undefined) !== undefined;
 
-// The option's label, on one line, or on two with its overline (and its source
-// chip, when it has one) above it. Both lines truncate with an ellipsis rather
-// than wrap, so a long selector never grows the row or the trigger by a third
-// line; the chip keeps its size and the overline text gives way.
-export function OptionLabel({ label, overline, tag }: { readonly label: string; readonly overline: string | undefined; readonly tag?: SelectTag | undefined }) {
+const SUBLINE_SEPARATOR = ', ';
+const SUBLINE_MORE = '…';
+// Held back from the row's width: clientWidth is rounded and text is not, and the
+// last item should not lose a glyph to that rounding.
+const SUBLINE_SLACK_PX = 1;
+
+// The option's label, on one line, or with its overline (and its source chip, when
+// it has one) above it and its subline below. Every line truncates with an ellipsis
+// rather than wraps, so a long selector never grows the row or the trigger; the chip
+// keeps its size and the overline text gives way.
+export function OptionLabel({
+  label,
+  overline,
+  tag,
+  subline,
+}: {
+  readonly label: string;
+  readonly overline: string | undefined;
+  readonly tag?: SelectTag | undefined;
+  readonly subline?: readonly string[] | undefined;
+}) {
   const hasOverline = overline !== undefined && overline.length > 0;
-  if (!hasOverline && tag === undefined) {
+  const hasFirstLine = hasOverline || tag !== undefined;
+  const hasSubline = subline !== undefined && subline.length > 0;
+  if (!hasFirstLine && !hasSubline) {
     return <span className="u-select-label">{label}</span>;
   }
   return (
     <span className="u-select-label has-overline">
-      <span className="u-select-overline">
-        {tag === undefined ? undefined : <OptionTag tag={tag} />}
-        {hasOverline ? <span className="u-select-overline-text">{overline}</span> : undefined}
-      </span>
+      {hasFirstLine ? (
+        <span className="u-select-overline">
+          {tag === undefined ? undefined : <OptionTag tag={tag} />}
+          {hasOverline ? <span className="u-select-overline-text">{overline}</span> : undefined}
+        </span>
+      ) : undefined}
       <span className="u-select-label-line">{label}</span>
+      {hasSubline ? <OptionSubline items={subline} /> : undefined}
     </span>
   );
+}
+
+// Fitted after layout, before paint, and again whenever the row's width changes,
+// so the count follows the real row and not a fixed number of items.
+function OptionSubline({ items }: { readonly items: readonly string[] }) {
+  const lineRef = useRef<HTMLSpanElement>(null);
+  const full = items.join(SUBLINE_SEPARATOR);
+  const [text, setText] = useState(full);
+  useLayoutEffect(() => {
+    const line = lineRef.current;
+    assert(line !== null, 'OptionSubline: the line is mounted before it is fitted');
+    const fit = () => setText(fitSublineToElement(line, items));
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(line);
+    return () => observer.disconnect();
+  }, [items]);
+  return (
+    <span ref={lineRef} className="u-select-subline" title={full}>
+      {text}
+    </span>
+  );
+}
+
+/**
+ * The most leading items that fit `widthPx` whole, then an ellipsis, so a name is
+ * never cut into what reads as another name. The first item always shows: when even
+ * it does not fit, the line's own ellipsis cuts it, in plain sight.
+ */
+export function fitSubline(items: readonly string[], widthPx: number, measure: (text: string) => number): string {
+  assert(items.length > 0, 'fitSubline: a subline has items');
+  assert(widthPx >= 0, 'fitSubline: a width is not negative');
+  const full = items.join(SUBLINE_SEPARATOR);
+  if (measure(full) <= widthPx) {
+    return full;
+  }
+  let fitted = sublineWithMore(items, 1);
+  // Widths only grow with the count, so the first miss ends the search.
+  for (let count = 2; count < items.length; count += 1) {
+    const candidate = sublineWithMore(items, count);
+    if (measure(candidate) > widthPx) {
+      break;
+    }
+    fitted = candidate;
+  }
+  assert(fitted.length > 0, 'fitSubline: the first item always shows');
+  return fitted;
+}
+
+// One item alone in a list of one has nothing after it to stand for.
+function sublineWithMore(items: readonly string[], count: number): string {
+  const shown = items.slice(0, count).join(SUBLINE_SEPARATOR);
+  return count < items.length ? `${shown}${SUBLINE_SEPARATOR}${SUBLINE_MORE}` : shown;
+}
+
+// A line with no width is not laid out, and a page with no canvas cannot measure:
+// either way the whole list goes in and the line's own ellipsis ends it.
+function fitSublineToElement(line: HTMLElement, items: readonly string[]): string {
+  const full = items.join(SUBLINE_SEPARATOR);
+  if (line.clientWidth === 0) {
+    return full;
+  }
+  const context = document.createElement('canvas').getContext('2d');
+  if (context === null) {
+    return full;
+  }
+  const style = getComputedStyle(line);
+  context.font = style.font;
+  context.letterSpacing = style.letterSpacing;
+  return fitSubline(items, Math.max(0, line.clientWidth - SUBLINE_SLACK_PX), (text) => context.measureText(text).width);
 }
 
 function OptionTag({ tag }: { readonly tag: SelectTag }) {
@@ -230,6 +322,7 @@ export function SelectRow<T extends string>({
         selected ? 'is-selected' : '',
         option.indent ? 'is-indented' : '',
         option.action ? 'has-action' : '',
+        (option.subline?.length ?? 0) > 0 ? 'has-subline' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -246,7 +339,7 @@ export function SelectRow<T extends string>({
       onClick={onChoose}
     >
       {icon}
-      <OptionLabel label={option.label} overline={option.overline} tag={option.tag} />
+      <OptionLabel label={option.label} overline={option.overline} tag={option.tag} subline={option.subline} />
       {/* Fixed trailing slots, held open whether or not they are filled, so every
           row's dot stands in one column and every row's check or pencil in the
           one after it. The end slot ends the row, so icons align down the left

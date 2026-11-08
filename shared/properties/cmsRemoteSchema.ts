@@ -34,6 +34,8 @@ export type RemoteType =
       readonly options: readonly RemoteOption[];
       /** A string that names a project file of this kind: an Astro `image()` path. */
       readonly asset?: 'image';
+      /** Text written in this language: a Markdown entry's body is edited as formatted text. */
+      readonly format?: 'markdown';
     }
   | { readonly kind: 'geopoint' }
   | {
@@ -165,7 +167,7 @@ export function parseRemoteType(input: unknown, depth = 0): RemoteType {
   const kind = value['kind'];
   const scalar = SCALARS.find((candidate) => candidate === kind);
   if (scalar !== undefined) {
-    return { kind: scalar, options: parseOptions(value['options']), ...parseAsset(value, scalar) };
+    return { kind: scalar, options: parseOptions(value['options']), ...parseAsset(value, scalar), ...parseFormat(value, scalar) };
   }
   switch (kind) {
     case 'geopoint':
@@ -300,6 +302,19 @@ function parseAsset(value: Readonly<Record<string, unknown>>, kind: RemoteScalar
   }
   assert(kind === 'string', 'Only a string field names an asset');
   return { asset };
+}
+
+function parseFormat(value: Readonly<Record<string, unknown>>, kind: RemoteScalarKind): { readonly format?: 'markdown' } {
+  const format = value['format'];
+  if (format === undefined) {
+    return {};
+  }
+  // Only long text is written in a language; a one-line string never is.
+  if (format !== 'markdown' || kind !== 'text') {
+    throw new Error('Invalid text format.');
+  }
+  assert(kind === 'text', 'Only a text field is written in a language');
+  return { format };
 }
 
 const PREVIEW_PATH = /^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){0,2}$/;

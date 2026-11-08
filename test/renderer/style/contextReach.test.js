@@ -103,6 +103,7 @@ const element = (id, name, className, children = []) => ({ id, kind: 'element', 
   dom.window.Element.prototype.scrollIntoView = function () {};
   dom.window.addEventListener('error', (event) => check('the panel throws nothing', false, String(event.error?.stack || event.message)));
   dom.window.avb = {
+    onCssChanged: () => () => {},
     listStyleFiles: async () => ({ files: [] }),
     listAstroStyleFiles: async () => ({ files: [] }),
     listAssets: async () => ({ entries: [] }),

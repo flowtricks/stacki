@@ -7,21 +7,22 @@ import { canvasTextHasFocus } from '../../editor/canvasTextFocus';
 import React from 'react';
 import type { ScanComponent, ScanResult } from '../../../shared/properties/projectScan';
 import { readPage } from '../../ipc/bridge';
-import { type AppliedEdit, type PageOrigin, type EditGesture } from '../../editor/pageEdits';
+import { type AppliedEdit, type PageOrigin } from '../../editor/pageEdits';
 import { describeRejection, type RejectionReason } from '../../../shared/engine/intent';
 import { assert } from '../../../shared/core/assert';
-import { type InsertPlace, frontmatterGesture, insertGesture, sequence, tagRenameGesture, wrapGesture } from '../../editor/editGestures';
+import { type InsertPlace, insertGesture } from '../../editor/editGestures';
 import type { PageEditError, PageEdited } from '../../../shared/ipc/pageSave';
 import { loopVarsAt, strippedBindings } from '../../editor/loopBindings';
 import { cleanError } from '../../lib/cleanError';
 import { menuPasteClaimed } from '../../ui/menuPasteClaim';
 import { type AppHistory, type LeftTab, type NodeClipboard, type ProjectIdentity, type PseudoPick, type RightTab, type ToastKind } from '../appTypes';
 import { toEditorPageState, carriedParse, type EditorPageState, type OpenFile, type PageStateSnapshot } from '../../editor/pageState';
-import { nodeId, type EditorModel, type EditorNode } from '../../editor/pageView';
-import { copyEditorSelection, runNativeEdit, editProjectPage, type ImportPaths } from '../../ipc/appBridge';
-import { revertedOrigin, frontmatterOf } from './nodeFactory';
+import { type EditorModel, type EditorNode } from '../../editor/pageView';
+import { copyEditorSelection, runNativeEdit, editProjectPage } from '../../ipc/appBridge';
+import { revertedOrigin } from './nodeFactory';
 import { structuralSelection } from './selectionStructure';
-import { withPrunedImports, chooseImportPath, withLayoutField, type PasteNeeds } from './pageGestures';
+import { type PasteNeeds } from './pageGestures';
+export { layoutWrapperGesture, markdownLayoutGesture, withImportsGesture } from './pageModelGestures';
 
 // The app's own keys, read through refs at keypress time: see the keydown effect in App.
 export interface AppKeys {
@@ -410,63 +411,6 @@ export async function copySelectionTrail(context: {
   } else {
     context.showToast('Nothing selected to copy.', 'error');
   }
-}
-
-// A markdown page's layout, written into its `layout:` frontmatter key.
-export function markdownLayoutGesture(model: EditorModel, rel: string | undefined): EditGesture {
-  const framed = (pageModel: EditorModel): EditorModel => ({
-    ...pageModel,
-    extraFrontmatter: withLayoutField(pageModel.extraFrontmatter, rel),
-    layoutPath: rel,
-  });
-  return frontmatterGesture(model, { coalesceKey: undefined, urgency: true }, framed);
-}
-
-// The imports a wrapper change needs, and those it leaves unused, as the same
-// undo step (step 9: a frontmatter slot).
-export function withImportsGesture(model: EditorModel, gesture: EditGesture, imports: (pageModel: EditorModel) => EditorModel): EditGesture {
-  const after = gesture.apply(model);
-  const options = { coalesceKey: undefined, urgency: true };
-  return frontmatterOf(imports(after)) === frontmatterOf(after) ? gesture : sequence(gesture, frontmatterGesture(after, options, imports));
-}
-
-// The page's layout wrapper renamed to `layout`, or the page wrapped in it when it has
-// none; undefined when the wrapper already is that layout or is not a tag.
-export function layoutWrapperGesture(
-  model: EditorModel,
-  wrapper: EditorNode | undefined,
-  layout: { readonly name: string; readonly paths: ImportPaths },
-): EditGesture | undefined {
-  const { name, paths } = layout;
-  const imports = (pageModel: EditorModel): EditorModel =>
-    withPrunedImports(
-      pageModel.imports.some((i) => i.name === name)
-        ? pageModel
-        : {
-            ...pageModel,
-            imports: [...pageModel.imports, { name, path: chooseImportPath(pageModel, paths), quote: "'" }],
-          },
-    );
-  if (wrapper) {
-    if (wrapper.kind !== 'component' && wrapper.kind !== 'element') {
-      return undefined;
-    }
-    if (wrapper.name === name) {
-      return undefined;
-    }
-    const renamed: EditorNode = { ...wrapper, name };
-    const options = { coalesceKey: undefined, urgency: true };
-    return withImportsGesture(model, tagRenameGesture(wrapper, renamed, options), imports);
-  }
-  // No wrapper yet — wrap the whole page in the new layout.
-  const created: EditorNode = {
-    id: nodeId('layout'),
-    kind: 'component',
-    name,
-    props: {},
-    children: [],
-  };
-  return withImportsGesture(model, wrapGesture(model, created), imports);
 }
 
 // Saves what is pending before a navigation goes on. False when the save failed —

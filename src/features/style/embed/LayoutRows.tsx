@@ -352,6 +352,9 @@ export function selectorAccessibleLabel(entry: ClassifiedSelector, label: string
   if (entry.selector.fromComponent) {
     categories.push('component');
   }
+  if (entry.selector.fromInstance === true) {
+    categories.push('instance');
+  }
   if (categories.length === 0) {
     return label;
   }
@@ -366,7 +369,7 @@ export function selectorAccessibleLabel(entry: ClassifiedSelector, label: string
 // ↑/↓ move, Enter applies the highlighted one (or the typed text), Tab fills it
 // into the input to keep typing.
 export type SelectorPickerProps = {
-  selectors: MatchedSelector[];
+  selectors: readonly MatchedSelector[];
   suggestions: SelectorSuggestion[];
   activeSelector: string;
   /** True when the active selector is one the user clicked or typed, rather than
@@ -375,6 +378,9 @@ export type SelectorPickerProps = {
   busy: boolean;
   /** Still scanning — the chips that will fill this well are on their way. */
   loading: boolean;
+  /** False while a newly selected element's chips are still landing; the well keeps
+   *  the previous list until they settle (heldSelection.ts). Absent means settled. */
+  settled?: boolean;
   onSelect: (selector: string) => void;
   onDeselect: () => void;
   /** Adds a typed selector; a lone class is written at `placement` among the

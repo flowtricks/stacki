@@ -10,12 +10,14 @@ import { addStyleClass } from './styleClassEdit';
 import type { ParserNode } from '../source/source';
 import type { OutlineState } from '../preview/outlineState';
 import { pathFor } from '../project/previewSelection';
+import type { LengthUnit } from '../../../vendor/stacki/shared/properties/lengthUnit';
 
 export function StyleSettings({
   document,
   nodes,
   selected,
   classes,
+  lengthUnit,
   select,
   device,
   report,
@@ -25,6 +27,8 @@ export function StyleSettings({
   readonly nodes: readonly ParserNode[];
   readonly selected: string;
   readonly classes: readonly string[];
+  /** What the panel writes lengths in, from the project scan: rem in a Lumos project. */
+  readonly lengthUnit: LengthUnit | undefined;
   readonly select: (id: string) => void;
   readonly device: string;
   readonly report: (error: unknown) => void;
@@ -47,6 +51,7 @@ export function StyleSettings({
         openFilePath={document.file}
         openFileKind={document.file.startsWith('src/pages/') ? 'page' : 'component'}
         projectClasses={classes}
+        lengthUnit={lengthUnit}
         renderedClasses={preview.selected?.id === path ? preview.classes[path]?.[preview.selected.occurrence ?? 0] : []}
         historyTick={document.revision}
         onSelectNode={select}

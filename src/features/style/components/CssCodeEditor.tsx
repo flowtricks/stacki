@@ -5,11 +5,13 @@ import { search } from '@codemirror/search';
 import { Decoration, EditorView } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
 import { cssEditorIndentExtensions } from './cssEditorIndent';
+import { lockedEdgeExtensions, type CodeEditorLockedEdges } from '../../../ui/codeEditorLockedEdges';
 import { type CodeVariableScope } from '../model/codeVariableScope';
 import { useCodeVariables } from './CodeVariables';
 import './CssCodeEditor.css';
 
 type CodeEditorLanguage = 'css';
+type CodeEditorLineOverflow = 'scroll' | 'wrap';
 export type CodeEditorTokenHighlight = {
   from: number;
   to: number;
@@ -32,6 +34,14 @@ type CodeEditorProps = {
   className?: string;
   minHeight?: string;
   tokenHighlights?: CodeEditorTokenHighlight[];
+  /**
+   * What a line too long for the box does. A rule reads as one declaration per
+   * line, so the CSS Code box scrolls; a clip-path is one long value, so its
+   * short field wraps to show all of it.
+   */
+  lineOverflow?: CodeEditorLineOverflow;
+  /** Context at the ends of the text: shown, never editable. */
+  lockedEdges?: CodeEditorLockedEdges;
   onChange?: (value: string) => void;
   onSelectionChange?: (position: number) => void;
 };
@@ -99,7 +109,7 @@ const codeEditorTheme = EditorView.theme(
 const codeEditorExtensions = {
   // ⌘F opens at the top: this editor is short, and a panel at the bottom covers
   // the end of the file — which is where a search that has run leaves you.
-  css: [...cssEditorIndentExtensions(), search({ top: true }), EditorView.lineWrapping, syntaxHighlighting(codeEditorHighlightStyle), codeEditorTheme],
+  css: [...cssEditorIndentExtensions(), search({ top: true }), syntaxHighlighting(codeEditorHighlightStyle), codeEditorTheme],
 };
 
 const codeEditorBasicSetup = {
@@ -164,21 +174,27 @@ export function CodeEditor({
   className,
   minHeight: heightMin = '124px',
   tokenHighlights = [],
+  lineOverflow = 'wrap',
+  lockedEdges,
   onChange,
   onSelectionChange,
 }: CodeEditorProps) {
   const codeVariables = useCodeVariables(variables, { readOnly });
   const variableExtension = codeVariables.extension;
+  const prefixLength = lockedEdges?.prefixLength ?? 0;
+  const suffixLength = lockedEdges?.suffixLength ?? 0;
   const extensions = useMemo(() => {
     const highlights = tokenHighlights
       .filter((highlight) => highlight.from >= 0 && highlight.to > highlight.from && highlight.to <= value.length)
       .sort((left, right) => left.from - right.from || left.to - right.to);
     const selectionExtensions = onSelectionChange ? selectionListeners(onSelectionChange) : [];
+    const locked = lockedEdgeExtensions({ prefixLength, suffixLength });
+    const wrapping = lineOverflow === 'wrap' ? [EditorView.lineWrapping] : [];
     if (!highlights.length) {
-      return [...codeEditorExtensions[language], variableExtension, ...selectionExtensions];
+      return [...codeEditorExtensions[language], ...wrapping, variableExtension, ...locked, ...selectionExtensions];
     }
-    return [...codeEditorExtensions[language], variableExtension, highlightDecorations(highlights), ...selectionExtensions];
-  }, [language, onSelectionChange, tokenHighlights, value.length, variableExtension]);
+    return [...codeEditorExtensions[language], ...wrapping, variableExtension, ...locked, highlightDecorations(highlights), ...selectionExtensions];
+  }, [language, lineOverflow, onSelectionChange, prefixLength, suffixLength, tokenHighlights, value.length, variableExtension]);
 
   // The frame holds the bind dot in the editor's top-left corner, shown on
   // hover as it is over every value field (embed-editor_varconnect's rules).
@@ -194,7 +210,8 @@ export function CodeEditor({
         minHeight={heightMin}
         readOnly={readOnly}
         editable={!readOnly}
-        indentWithTab={!readOnly}
+        // cssEditorIndentExtensions binds the key: Tab inserts a tab at the caret.
+        indentWithTab={false}
         {...(onChange === undefined ? {} : { onChange })}
         aria-label={ariaLabel}
       />

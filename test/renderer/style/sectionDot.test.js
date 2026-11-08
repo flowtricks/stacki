@@ -95,6 +95,7 @@ const check = (what, condition, detail) => {
     size: 10,
   };
   dom.window.avb = {
+    onCssChanged: () => () => {},
     listStyleFiles: async () => ({ files: [SHEET] }),
     listAstroStyleFiles: async () => ({ files: [] }),
     listAssets: async () => ({ entries: [] }),

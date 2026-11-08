@@ -25,3 +25,25 @@ export function previewViewport(width: number | undefined, available: { readonly
   const viewportHeight = height ?? Math.max(1, available.height - (fixed ? 32 : 0)) / scale;
   return { width: viewportWidth, height: viewportHeight, scale };
 }
+
+export interface PreviewSize {
+  readonly width: number;
+  readonly height: number;
+}
+
+// While a side panel is dragged, the page keeps the viewport it had when the drag began
+// (`held`) and only its scale follows the space. Re-laying out the page at every
+// intermediate width makes pages that re-measure on resize, such as text split into lines,
+// flicker; one layout on release does not. The frame never scales up past its held size.
+export function heldPreviewViewport(width: number | undefined, available: PreviewSize, held: PreviewSize | undefined, height: number | undefined) {
+  if (held === undefined) {
+    return previewViewport(width, available, height);
+  }
+  const base = previewViewport(width, held, height);
+  assert(Number.isFinite(available.width), 'Preview container width must be finite');
+  assert(held.width >= 0, 'Held preview width must not be negative');
+  const fit = held.width > 0 ? Math.min(1, Math.max(1, available.width) / held.width) : 1;
+  const scale = base.scale * fit;
+  assert(scale > 0, 'Held preview scale must be positive');
+  return { ...base, scale };
+}

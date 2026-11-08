@@ -12,9 +12,14 @@ interface CodeWindowProps extends CodeEditorProps {
   readonly editorKey?: React.Key | undefined;
 }
 
+/** A window showing only CSS or a script pins its headers; one showing markup does not. */
+export function codeWindowPinsHeaders(language: string | undefined): boolean {
+  return language === 'css' || language === 'javascript' || language === 'typescript';
+}
+
 // A single pointer session owns movement and cleanup, including closing mid-drag.
 export default function CodeWindow(props: CodeWindowProps) {
-  const { title, language, value, onChange, onClose, editorKey, revealLine } = props;
+  const { title, language, indentation, value, onChange, onClose, editorKey, revealLine } = props;
   const windowState = useWindowRectangle({ width: 340, height: 220 });
   const { rectangle } = windowState;
   return (
@@ -42,7 +47,15 @@ export default function CodeWindow(props: CodeWindowProps) {
         </button>
       </div>
       <div className="code-window-body">
-        <CodeEditor key={editorKey} language={language} value={value} onChange={onChange} revealLine={revealLine} />
+        <CodeEditor
+          key={editorKey}
+          language={language}
+          indentation={indentation}
+          stickyHeaders={codeWindowPinsHeaders(language)}
+          value={value}
+          onChange={onChange}
+          revealLine={revealLine}
+        />
       </div>
       <WindowResizeHandles windowState={windowState} />
     </Popup>

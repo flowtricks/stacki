@@ -24,6 +24,8 @@ import { useColumnGuide, type ShownGuide } from './guideSettings';
 export { deviceForWidth } from './PreviewToolbar';
 
 interface PreviewPaneProps {
+  /** The project's page routes: in interact mode a link to any other path on the site opens in the browser. */
+  readonly pageRoutes?: readonly string[] | undefined;
   readonly textDocument?: CanvasTextDocument | undefined;
   readonly spacingHover?: SpacingHover | undefined;
   readonly devUrl?: string | undefined;
@@ -87,6 +89,8 @@ export default function PreviewPane(props: PreviewPaneProps) {
     post: runtime.post,
     subscribeLoad: runtime.subscribeLoad,
     editRoute: props.onEditRoute,
+    // The dev server serves every page at the site root.
+    pages: props.pageRoutes === undefined ? undefined : { base: '', routes: props.pageRoutes },
   });
   const source = usePreviewSource(url, runtime.post);
   const dimensions = usePreviewDimensions();
@@ -201,7 +205,7 @@ function DesignPreview({
     <>
       <div
         ref={sizing.frameRef}
-        className={`frame-sized ${width ? '' : 'full'} ${sizing.resizing ? 'resizing' : ''}`}
+        className={`frame-sized ${width ? '' : 'full'} ${sizing.resizing || sizing.panelSettling ? 'resizing' : ''}`}
         style={{
           width: sizing.viewport.width,
           height: sizing.viewport.height,

@@ -12,6 +12,12 @@ import { serializeMapCallback } from './astroMapSerialize';
 import { attrsAsWritten, serializeAttrs, required } from './astroAttrs';
 import { normalizeHead, blockHead } from './astroScan';
 
+// The unit of a printed comparison. Edits compare two printings of a node and
+// place the difference on the file's bytes, so these must stay the printer's own
+// and never decide what a file looks like. Code that ends up in a file is
+// printed with the unit it is going to: the file's own, or a tab in a new file.
+const PRINT_INDENT_UNIT = '  ';
+
 // Inline runs (text + simple tags like <strong>/<em>) serialize on a single
 // line so the exact spacing between words and tags survives the round trip.
 const INLINE_TAGS = new Set(['strong', 'em', 'b', 'i', 'sup', 'sub', 'code', 'a', 'span', 'br', 'small', 'mark', 'u', 's']);
@@ -187,13 +193,13 @@ function inlineRunUnchanged(node: ParserNode, depth: number): boolean {
 // rather than whether they were laid out the same way. Rebuilding by running
 // the serializer over a copy with the source removed means there is only one
 // description of how these are written, and this cannot drift from it.
-function blockAsWritten(node: ParserNode, indent: string, depth: number): string[] | undefined {
+function blockAsWritten(node: ParserNode, indent: string, depth: number, unit: string): string[] | undefined {
   if (!node.source) {
     return undefined;
   }
   const probe = { ...node, source: undefined, blankBefore: 0, blankAfter: 0 };
   const rebuilt: string[] = [];
-  serializeNode(probe, '', rebuilt, depth);
+  serializeNode(probe, '', rebuilt, depth, unit);
   const flat = (text: string) => text.replace(/[\s(){}]+/g, '').trim();
   // A trailing callback comma belongs to `.map(...)`, not to the returned
   // conditional. The rebuilt form may omit that optional separator while the
@@ -213,7 +219,7 @@ function blockAsWritten(node: ParserNode, indent: string, depth: number): string
 // chain is one of these directly inside another's else — writing the braces
 // there would make it an object literal, not a nested condition.
 // `depth` is the condition's own; its branches sit one below it and their contents two.
-function serializeCondBody(node: CondNode, indent: string, lines: string[], depth: number): void {
+function serializeCondBody(node: CondNode, indent: string, lines: string[], depth: number, unit: string): void {
   assert(depth <= LIMITS.treeDepthMax, 'serializeCondBody: depth limit');
   const kidsOf = (i: number) => node.children?.[i]?.children || [];
   const thenKids = kidsOf(0);
@@ -236,25 +242,25 @@ function serializeCondBody(node: CondNode, indent: string, lines: string[], dept
       return;
     }
     for (const child of kids) {
-      serializeNode(child, at, lines, depth + 2);
+      serializeNode(child, at, lines, depth + 2, unit);
     }
   };
   if (thenKids.length) {
     lines.push(indent + head + '(');
-    branchOut(thenKids, indent + '  ');
+    branchOut(thenKids, indent + unit);
     lines.push(indent + ')' + tail);
   } else {
     lines.push(indent + head + 'null' + tail);
   }
   if (chained) {
-    serializeCondBody(chained, indent, lines, depth + 2);
+    serializeCondBody(chained, indent, lines, depth + 2, unit);
   } else if (elseKids && elseKids.length) {
-    branchOut(elseKids, indent + '  ');
+    branchOut(elseKids, indent + unit);
     lines.push(indent + ')');
   }
 }
 
-export function serializeNode(node: ParserNode, indent: string, lines: string[], depth: number): void {
+export function serializeNode(node: ParserNode, indent: string, lines: string[], depth: number, unit: string = PRINT_INDENT_UNIT): void {
   // Every caller hands over a validated tree (parseSerializePage, parseSerializeNodes), whose
   // depth is already within the bound.
   assert(depth <= LIMITS.treeDepthMax, 'serializeNode: depth limit');
@@ -285,9 +291,9 @@ export function serializeNode(node: ParserNode, indent: string, lines: string[],
       return;
     }
     case 'map':
-      return serializeNodeMap(node, indent, lines, depth);
+      return serializeNodeMap(node, indent, lines, depth, unit);
     case 'cond': {
-      const kept = blockAsWritten(node, indent, depth);
+      const kept = blockAsWritten(node, indent, depth, unit);
       if (kept) {
         for (const line of kept) {
           lines.push(line);
@@ -295,7 +301,7 @@ export function serializeNode(node: ParserNode, indent: string, lines: string[],
         return;
       }
       lines.push(indent + '{');
-      serializeCondBody(node, indent + '  ', lines, depth);
+      serializeCondBody(node, indent + unit, lines, depth, unit);
       lines.push(indent + '}');
       return;
     }
@@ -303,7 +309,7 @@ export function serializeNode(node: ParserNode, indent: string, lines: string[],
       // Written by the condition above; standing on its own it is just its
       // contents.
       for (const child of node.children || []) {
-        serializeNode(child, indent, lines, depth + 1);
+        serializeNode(child, indent, lines, depth + 1, unit);
       }
       return;
     case 'comment':
@@ -316,24 +322,24 @@ export function serializeNode(node: ParserNode, indent: string, lines: string[],
       return serializeNodeRaw(node, indent, lines);
     case 'component':
     case 'element':
-      return serializeNodeElement(node, indent, lines, depth);
+      return serializeNodeElement(node, indent, lines, depth, unit);
   }
 }
 
 // Serializes a plain node list (used for standalone HTML chunk files).
-export function serializeNodes(input: readonly unknown[]): string {
+export function serializeNodes(input: readonly unknown[], unit: string = PRINT_INDENT_UNIT): string {
   const nodes = parseSerializeNodes(input);
   const lines: string[] = [];
   for (const node of nodes) {
-    serializeNode(node, '', lines, 0);
+    serializeNode(node, '', lines, 0, unit);
   }
   return lines.join('\n') + '\n';
 }
 
-function serializeNodeCallback(node: MapNode, indent: string, lines: string[], depth: number): void {
+function serializeNodeCallback(node: MapNode, indent: string, lines: string[], depth: number, unit: string): void {
   const text = serializeMapCallback(node, (child) => {
     const rendered: string[] = [];
-    serializeNode(child, '', rendered, depth + 1);
+    serializeNode(child, '', rendered, depth + 1, unit);
     return rendered.join('\n');
   });
   lines.push(indent + text);
@@ -365,8 +371,8 @@ function serializeNodeText(node: ValueNode, indent: string, lines: string[]): vo
   return;
 }
 
-function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth: number): void {
-  const keptMap = blockAsWritten(node, indent, depth);
+function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth: number, unit: string): void {
+  const keptMap = blockAsWritten(node, indent, depth, unit);
   if (keptMap) {
     for (const line of keptMap) {
       lines.push(line);
@@ -374,18 +380,18 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
     return;
   }
   if (node.bodyParts !== undefined) {
-    return serializeNodeCallback(node, indent, lines, depth);
+    return serializeNodeCallback(node, indent, lines, depth, unit);
   }
   lines.push(indent + '{');
   // A loop whose body declares things keeps the statement form: the
   // declarations, then the markup inside `return ( … )`.
   if (node.body && node.body.length) {
-    lines.push(indent + '  ' + blockHead(node.head));
+    lines.push(indent + unit + blockHead(node.head));
     for (const line of node.body) {
-      lines.push(indent + '    ' + line);
+      lines.push(indent + unit + unit + line);
     }
     lines.push(indent + '    return (');
-    serializeLoopBody(node, indent + '      ', lines, depth);
+    serializeLoopBody(node, indent + unit + unit + unit, lines, depth, unit);
     lines.push(indent + '    );');
     lines.push(indent + '  })');
     lines.push(indent + '}');
@@ -395,8 +401,8 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
   // conditional as a template `{...}` here would turn it into a block instead.
   const conditional = node.children.length === 1 ? node.children[0] : undefined;
   if (conditional?.kind === 'cond') {
-    lines.push(indent + '  ' + node.head);
-    serializeCondBody(conditional, indent + '    ', lines, depth + 1);
+    lines.push(indent + unit + node.head);
+    serializeCondBody(conditional, indent + unit + unit, lines, depth + 1, unit);
     lines.push(indent + '  ))');
     lines.push(indent + '}');
     return;
@@ -404,8 +410,8 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
   // A loop written without parens around its body keeps that shape —
   // adding them would rewrite a line the user never edited.
   if (node.bare) {
-    lines.push(indent + '  ' + node.head.replace(/\($/, '').trimEnd());
-    serializeLoopBody(node, indent + '    ', lines, depth);
+    lines.push(indent + unit + node.head.replace(/\($/, '').trimEnd());
+    serializeLoopBody(node, indent + unit + unit, lines, depth, unit);
     lines.push(indent + '  )');
     lines.push(indent + '}');
     return;
@@ -420,14 +426,14 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
   if (kept) {
     const headLines = kept.split('\n');
     for (const line of headLines) {
-      lines.push(line ? indent + '  ' + line : '');
+      lines.push(line ? indent + unit + line : '');
     }
     inner = required(headLines[headLines.length - 1], 'Loop head has a final line').match(/^[ \t]*/)?.[0] ?? '';
   } else {
-    lines.push(indent + '  ' + node.head);
+    lines.push(indent + unit + node.head);
   }
-  serializeLoopBody(node, indent + '  ' + inner + '  ', lines, depth);
-  lines.push(indent + '  ' + inner + '))');
+  serializeLoopBody(node, indent + unit + inner + unit, lines, depth, unit);
+  lines.push(indent + unit + inner + '))');
   lines.push(indent + '}');
   return;
 }
@@ -435,7 +441,7 @@ function serializeNodeMap(node: MapNode, indent: string, lines: string[], depth:
 // What a loop renders for each item. An arrow's parenthesized body cannot be
 // empty: `(item) => ()` does not parse, and the page with it stops building,
 // so a loop with nothing in it yet (one just inserted) renders `null`.
-function serializeLoopBody(node: MapNode, indent: string, lines: string[], depth: number): void {
+function serializeLoopBody(node: MapNode, indent: string, lines: string[], depth: number, unit: string): void {
   const children = node.children || [];
   if (children.length === 0) {
     lines.push(indent + 'null');
@@ -444,13 +450,13 @@ function serializeLoopBody(node: MapNode, indent: string, lines: string[], depth
   const wrapper = loopBodyWrapper(node);
   if (wrapper === undefined) {
     for (const child of children) {
-      serializeNode(child, indent, lines, depth + 1);
+      serializeNode(child, indent, lines, depth + 1, unit);
     }
     return;
   }
   lines.push(indent + (wrapper === '<>' ? '<>' : '<Fragment>'));
   for (const child of children) {
-    serializeNode(child, indent + '  ', lines, depth + 1);
+    serializeNode(child, indent + unit, lines, depth + 1, unit);
   }
   lines.push(indent + (wrapper === '<>' ? '</>' : '</Fragment>'));
 }
@@ -518,7 +524,13 @@ function serializeNodeRaw(node: Extract<ParserNode, { kind: 'raw' }>, indent: st
   return;
 }
 
-function serializeNodeElement(node: Extract<ParserNode, { kind: 'element' | 'component' }>, indent: string, lines: string[], depth: number): void {
+function serializeNodeElement(
+  node: Extract<ParserNode, { kind: 'element' | 'component' }>,
+  indent: string,
+  lines: string[],
+  depth: number,
+  unit: string,
+): void {
   const kept = attrsAsWritten(node);
   const attrs = kept === undefined ? serializeAttrs(node.props, node.attrOrder) : kept;
   // A shorthand fragment has no attributes. If the editor adds one (for
@@ -577,7 +589,7 @@ function serializeNodeElement(node: Extract<ParserNode, { kind: 'element' | 'com
   }
   openTag('>');
   for (const child of node.children) {
-    serializeNode(child, indent + '  ', lines, depth + 1);
+    serializeNode(child, indent + unit, lines, depth + 1, unit);
   }
   for (let i = 0; i < (node.blankAfter || 0); i++) {
     lines.push('');

@@ -35,7 +35,14 @@ const renderData = (props) =>
       ...props,
     }),
   );
-assert.match(renderData({ tree: [leaf], current: 'post.title' }), /not in this entry/);
+// A field an entry left unset is "not in this entry"; a field under a value whose
+// fields are unknown, or a name nothing declares, says so instead.
+const entryField = (key) => ({ path: `post.${key}`, key, kind: 'text', preview: '', children: undefined });
+const entry = { ...leaf, children: [entryField('collection'), entryField('data')] };
+assert.match(renderData({ tree: [entry], current: 'post.data.subtitle' }), /not in this entry/);
+assert.match(renderData({ tree: [leaf], current: 'post.title' }), /fields not known/);
+assert.doesNotMatch(renderData({ tree: [leaf], current: 'post.title' }), /not in this entry/);
+assert.match(renderData({ tree: [leaf], current: 'APP_VERSION' }), /not in scope/);
 assert.match(renderData({ tree: [leaf], current: 'post' }), /dp-row selected/);
 assert.throws(() => renderData({ tree: Array(20001).fill(leaf) }), /node limit exceeded/);
 assert.throws(() => renderData({ current: 'x'.repeat(8193) }), /binding path limit exceeded/);

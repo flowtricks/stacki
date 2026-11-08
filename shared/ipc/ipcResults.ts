@@ -17,6 +17,7 @@ import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
 import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
 import type { MetadataFile } from '../properties/projectMetadata';
+import type { LengthUnit } from '../properties/lengthUnit';
 import type { SelectorRemoval, SelectorReport } from '../properties/selectorUsage';
 import type { ConversionResult } from './assetConversion';
 import type { CommitDiffResult } from './gitCommitDiff';
@@ -326,6 +327,7 @@ export interface IpcResults {
     readonly ok: boolean;
     readonly files?: number;
     readonly occurrences?: number;
+    readonly paths?: ReadonlyArray<string>;
     readonly error?: string;
   };
   readonly 'css:setSectionTitle': {
@@ -693,6 +695,7 @@ export interface IpcResults {
     }>;
     readonly pageFolders: ReadonlyArray<string>;
     readonly trailingSlash: string;
+    readonly lengthUnit: LengthUnit;
   };
   readonly 'recents:add': {
     readonly ok: true;

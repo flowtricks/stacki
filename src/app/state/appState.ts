@@ -13,7 +13,7 @@ import { nodeAtPath, pathOfNode } from '../../editor/editorTree';
 import type { DevDiagnosis } from '../../features/preview/DevOffline';
 import type { PreviewDevice } from '../../features/preview/PreviewToolbar';
 import type { CanvasWidthRequest } from '../../features/preview/usePreviewSizing';
-import type { VariableSelection } from '../../features/variables/variablesBridge';
+import type { VariableSelection } from '../../ipc/variablesBridge';
 import { type CodeWindowState } from '../../features/code/codeWindowTarget';
 import {
   type AssetPick,

@@ -610,7 +610,14 @@ export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, sc
       // Scaffolds come from the current context's own (writable) embeds — the
       // component's embeds while inside one, the page's otherwise.
       classListRef.current = rootSnapshot.classList;
-      setScan(scanStateFor(content, { rootSnapshot, model }, pageDocsRef.current.length));
+      // A streamed partial is a step on the way (EditorBasics.tsx). So is a
+      // source-only pass that could not read the element's classes (markup a
+      // component renders): its list is the page's global selectors alone, and
+      // drawing it flashed them between two elements' chips. One that did read
+      // them is a real answer, shown while a busy canvas is still answering.
+      const sourceKnown = rootSnapshot.classList.length > 0;
+      const settled = !content.partial && (options.sourceOnly !== true || sourceKnown);
+      setScan(scanStateFor(content, { rootSnapshot, model, settled }, pageDocsRef.current.length));
       setPhase('ready');
       setScanningMore(!!content.partial);
       if (!options.silent) {

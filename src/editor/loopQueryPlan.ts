@@ -27,6 +27,7 @@ import { appliedEdits, sectionCodeProblem, sectionEdits, type LoopSection } from
 import { parseExpression, parseFrontmatter, type ParsedFrontmatter } from './loopSyntax';
 import { dataFormProblem, optionsLiteral, rewrittenOptions } from './optionsQuery';
 import { LIST_ITEMS_HELPER, LIST_ITEMS_NAME, listItemsNeed } from './listItemsHelper';
+import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import { reboundOptions, type BindingChange } from './optionsBinding';
 import { fieldListCode, type FieldList } from './loopFieldList';
 import { splitMapHead, type LoopHead } from './loopBindings';
@@ -146,11 +147,31 @@ export function planLoop(input: LoopPlanInput): LoopPlanResult {
 // the frontmatter, the imports and the children stay as they are, since a
 // filter, a sort and a limit leave each item as it was.
 function listEdit(input: LoopPlanInput, query: LoopQuery, head: LoopHead): LoopPlan {
-  const loopHead = `${listQueryCode(query)}.map((${head.item}${head.index ? `, ${head.index}` : ''}) => (`;
+  const loopHead = `${listQueryCode(itemNamedQuery(query, head.item))}.map((${head.item}${head.index ? `, ${head.index}` : ''}) => (`;
   const loop = { ...input.loop, head: loopHead };
   assert(splitMapHead(loop.head)?.item === head.item, 'A list prop’s head is one the loop editor reads back');
   return { ...inPlacePlan(input, input.model.extraFrontmatter, sourceKeyOf(query.source)), loop };
 }
+
+// A filter Stacki writes names each item as the loop does (`promises.filter((promise)
+// => …)`), so the head reads as one sentence. Only the default name is replaced:
+// a name the code chose stays, and custom code is written against its own name.
+function itemNamedQuery(query: LoopQuery, item: string): LoopQuery {
+  assert(query.source.kind === 'list', 'Only a list’s filter is named in the loop’s head');
+  const parameter = query.parameter;
+  if (parameter.kind !== 'entry' || parameter.name !== DEFAULT_ITEM_NAME || item === query.source.collection) {
+    return query;
+  }
+  if (!ITEM_NAME.test(item) || query.conditions.some((condition) => condition.kind === 'custom')) {
+    return query;
+  }
+  const named: LoopQuery = { ...query, parameter: { kind: 'entry', name: item } };
+  assertLoopQuery(named);
+  return named;
+}
+
+const DEFAULT_ITEM_NAME = 'item';
+const ITEM_NAME = /^[A-Za-z_$][\w$]*$/;
 
 // A section as code: only its bytes change, in the head or the declaration its
 // steps are written in. The rest of the head, the other sections, the imports
@@ -441,7 +462,8 @@ function writtenQuery(
   if (need.kind === 'taken') {
     return { ok: false, message: `This file already has its own ${LIST_ITEMS_NAME}. Rename it to link list settings to properties.` };
   }
-  const written = need.kind === 'add' ? `${LIST_ITEMS_HELPER}\n${statement}` : statement;
+  const helper = withIndentUnit(LIST_ITEMS_HELPER, indentUnitOf(input.model.extraFrontmatter));
+  const written = need.kind === 'add' ? `${helper}\n${statement}` : statement;
   const frontmatter = holder ? spliced(input.model.extraFrontmatter, holder, `${written}\n`) : appended(input.model.extraFrontmatter, written);
   return { ok: true, frontmatter, imports, data: name, name };
 }

@@ -17,8 +17,12 @@ export {
   canonicalCompound,
   selectorDependsOnAncestor,
   normalizePseudoElement,
+  type SelectorLayer,
+  selectorLayerOf,
+  selectorListLayers,
   formatSpecificity,
   compareSpecificity,
+  selectorSpecificity,
 } from './selectorParse';
 
 // ─────────────────────────── Matching ───────────────────────────

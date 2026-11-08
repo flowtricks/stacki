@@ -5,7 +5,8 @@ import type { PublishTarget } from '../../../vendor/stacki/shared/properties/pub
 import { useEffect, useRef, useState } from 'react';
 import { publishProject } from './publishClient';
 import type { PublishState } from './publish';
-import { PublishProgress } from './PublishProgress';
+import { PublishStatus } from '../../../vendor/stacki/src/features/publishing/PublishStatus';
+import { publishStatusView, STUDIO_PUBLISH_RUNNING_NOTE } from './publishStatusView';
 import { useSharedPublish } from './sharedPublish';
 import './publish.css';
 
@@ -48,6 +49,9 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
       active.current = undefined;
       if (!controller.signal.aborted) {
         setBusy(false);
+        // Recheck at once: the shared broadcast may never change (the demo has none), and the
+        // button must grey out as soon as nothing is left to push or deploy.
+        availability.refresh();
       }
     }
   }
@@ -61,9 +65,15 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
         refreshAvailability={availability.refresh}
         settingsClosed={availability.refresh}
       />
-      {visible && <PublishProgress state={state} busy={busy} failed={failed} dismiss={() => setVisible(false)} />}
+      {visible && <PublishStatusPopup state={state} failed={failed} close={() => setVisible(false)} />}
     </div>
   );
+}
+
+// The same popup Desktop shows; only the job status is translated.
+function PublishStatusPopup({ state, failed, close }: { readonly state: PublishState | undefined; readonly failed: boolean; readonly close: () => void }) {
+  const view = publishStatusView(state, failed ? 'interrupted' : 'running');
+  return <PublishStatus state={view.state} close={close} runningNote={STUDIO_PUBLISH_RUNNING_NOTE} {...(view.note === undefined ? {} : { note: view.note })} />;
 }
 
 function usePublishBroadcast(

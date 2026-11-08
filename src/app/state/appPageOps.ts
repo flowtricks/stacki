@@ -55,6 +55,7 @@ import {
   useQueryCleanup,
 } from './appShortcuts';
 import { useScopeSamples } from './scopeSamples';
+import { useImportedValues } from './appImportedValues';
 import { newPropGesture } from '../model/newPropGesture';
 import type { PropDeclaration } from '../../editor/propDeclaration';
 import { err, ok, type Result } from '../../../shared/core/result';
@@ -80,8 +81,9 @@ export function useShortcuts(
   useSampleEntries(coreState, routes);
   useSampleValues(coreState, routes);
   useScopeSamples(coreState, routes);
+  const importedValues = useImportedValues(coreState, routes);
   useQueryCleanup(routes, history);
-  return { ...insertItemScope, ...interactivePreview, ...routes };
+  return { ...insertItemScope, ...interactivePreview, ...routes, importedValues };
 }
 
 // Changing the page’s layout.

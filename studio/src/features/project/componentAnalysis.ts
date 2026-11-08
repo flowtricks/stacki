@@ -1,5 +1,5 @@
 import { assert } from '../../../vendor/stacki/shared/core/assert';
-import { parseSlots, rootTag, defaultSlotInline } from '../../../vendor/stacki/electron/parse/astroComponentApi';
+import { forwardsRest, parseSlots, rootTag, defaultSlotInline } from '../../../vendor/stacki/electron/parse/astroComponentApi';
 import { componentSchema } from '../components/componentSchema';
 import { numericStyleBindings } from '../preview/numericStyleBindings';
 
@@ -95,6 +95,9 @@ async function analyzeComponent(file: string, source: string, read: (file: strin
     slots: parseSlots(source),
     numericStyles: numericStyleBindings(source),
     slotText: defaultSlotInline(source),
+    // A `...rest` spread on Astro.props: its instances take free-form attributes,
+    // as Desktop's scan reads it (electron/properties/propDefaults.ts).
+    hasRest: forwardsRest(source),
     ...(renderTag === undefined ? {} : { renderTag }),
   };
 }

@@ -7,6 +7,9 @@ import type { Extension, Range } from '@codemirror/state';
 import type { Completion, CompletionContext } from '@codemirror/autocomplete';
 import type { TemplateHole } from '../editor/bindings';
 import { assert } from '../../shared/core/assert';
+import { codeIndentExtensions, codeIndentSettings } from './codeEditorIndent';
+import { editCodeView, openCodeView, sourceCodeView, type CodeView } from './codeIndentView';
+import { codeLineClassifier } from './codeLineRoles';
 import { LIMITS } from '../../shared/core/limits';
 import { EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
 import { html } from '@codemirror/lang-html';
@@ -169,6 +172,7 @@ interface ExprRefs {
   readonly latest: MutableRefObject<ExprInputProps>;
   readonly view: MutableRefObject<EditorView | undefined>;
   readonly touched: MutableRefObject<boolean>;
+  readonly codeView: MutableRefObject<CodeView>;
 }
 
 export default function ExprInput(props: ExprInputProps) {
@@ -182,11 +186,12 @@ function EditableExprInput(props: ExprInputProps) {
   const latest = useRef(props);
   latest.current = props;
   const [initial] = useState(() => props);
+  const codeView = useRef(exprCodeView(initial, initial.value ?? ''));
   useEffect(() => {
     const parent = hostRef.current;
     assert(parent !== null, 'ExprInput: mounted host exists');
     assert(view.current === undefined, 'ExprInput: only one editor owns the host');
-    const editor = exprCreate(parent, initial, { latest, view, touched });
+    const editor = exprCreate(parent, initial, { latest, view, touched, codeView });
     view.current = editor;
     if (initial.autoFocus) {
       editor.focus();
@@ -196,7 +201,7 @@ function EditableExprInput(props: ExprInputProps) {
       view.current = undefined;
     };
   }, [initial]);
-  useExprAPI(props.apiRef, { latest, view, touched });
+  useExprAPI(props.apiRef, { latest, view, touched, codeView });
   // External edits replace the document, so they also invalidate chip ranges.
   useEffect(() => {
     view.current?.dispatch({ effects: setChips.of(chipsOf || (chip ? findOne(chip) : undefined)) });
@@ -206,24 +211,34 @@ function EditableExprInput(props: ExprInputProps) {
     if (!editor || syncValue === undefined) {
       return;
     }
-    const current = editor.state.doc.toString();
-    if (syncValue !== current) {
+    if (syncValue !== codeView.current.source) {
+      codeView.current = exprCodeView(initial, syncValue);
       // A value arriving from outside is not an edit made here: kept off the
       // field's undo stack, so ⌘Z never undoes it back to a stale value.
-      editor.dispatch({ changes: { from: 0, to: current.length, insert: syncValue }, annotations: Transaction.addToHistory.of(false) });
+      editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: codeView.current.text }, annotations: Transaction.addToHistory.of(false) });
     }
-  }, [syncValue]);
+  }, [initial, syncValue]);
   return <div ref={hostRef} className={`expr-input ${invalid ? 'invalid' : ''} ${className}`} />;
+}
+
+// A multi-line field shows its indentation as tabs, as every code editor does.
+// A field with chips or an API is the exception: their offsets are offsets into
+// the value, so that field's document has to be the value byte for byte.
+function exprCodeView(initial: ExprInputProps, value: string): CodeView {
+  const plain = !initial.multiline || initial.chip !== undefined || initial.chipsOf !== undefined || initial.apiRef !== undefined;
+  return plain ? sourceCodeView(value) : openCodeView(value, { extent: 'document', classify: codeLineClassifier(initial.language) });
 }
 
 function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs): EditorView {
   return new EditorView({
     parent,
     state: EditorState.create({
-      doc: initial.value ?? '',
+      doc: refs.codeView.current.text,
       extensions: [
         history(),
         drawSelection(),
+        // A one-line field is shaped like an input, so Tab leaves it as Tab leaves one.
+        initial.multiline ? codeIndentExtensions() : codeIndentSettings(),
         keymap.of(exprKeys(initial, refs)),
         initial.language === 'html' ? html() : javascript({ typescript: initial.language === 'typescript' }),
         ...(initial.ariaLabel === undefined ? [] : [EditorView.contentAttributes.of({ 'aria-label': initial.ariaLabel })]),
@@ -244,7 +259,9 @@ function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs
         exprEvents(refs),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
-            refs.latest.current.onChange?.(update.state.doc.toString());
+            const codeViewRef = refs.codeView;
+            codeViewRef.current = editCodeView(codeViewRef.current, update.state.doc.toString());
+            refs.latest.current.onChange?.(codeViewRef.current.source);
           }
         }),
       ],
@@ -326,7 +343,7 @@ function exprEvents(refs: ExprRefs): Extension {
       return false;
     },
     blur: () => {
-      refs.latest.current.onCommit?.(refs.view.current?.state.doc.toString() ?? '');
+      refs.latest.current.onCommit?.(refs.codeView.current.source);
       return false;
     },
   });

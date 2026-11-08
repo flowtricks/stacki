@@ -51,6 +51,11 @@ export class SharedDocument {
   private attempts = 0;
   private synchronized = false;
   private saveRecoveries = 0;
+  // The save sequence of the last structural action sent and not yet answered. The
+  // server answers an applied action with its own update before the save
+  // acknowledgement; one acknowledged with no update, or answered with an error, was
+  // refused, and whatever the canvas showed ahead of it goes back (actionRefused).
+  private actionSave: number | undefined;
   private readonly saves = new SaveWatch(() => this.recoverSave());
   private reconnect?: ReturnType<typeof setTimeout>;
   private stopWatching?: () => void;
@@ -196,6 +201,9 @@ export class SharedDocument {
           this.peers = [];
         }
         const shouldReplay = this.ready || this.doc.getMap('metadata').has('epoch');
+        if (message['ownAction'] === true) {
+          this.actionSave = undefined;
+        }
         this.applyServerUpdate(message);
         if (message['type'] === 'sync') {
           this.attempts = 0;
@@ -216,10 +224,15 @@ export class SharedDocument {
           notifySourceUpdated(message);
         }
       } else if (message['type'] === 'saved') {
-        this.receiveSaved(parseSaveSequence(message['save']));
+        const sequence = parseSaveSequence(message['save']);
+        if (this.actionSave !== undefined && sequence !== undefined && sequence >= this.actionSave) {
+          this.refuseAction();
+        }
+        this.receiveSaved(sequence);
       } else if (message['type'] === 'selection') {
         this.receiveSelection(message);
       } else if (message['type'] === 'error') {
+        this.refuseAction();
         this.error = string(message['message']);
         this.status = 'Needs attention';
       } else if (message['type'] === 'presence' && Array.isArray(message['peers'])) {
@@ -251,6 +264,13 @@ export class SharedDocument {
       default:
         return false;
     }
+  }
+  private refuseAction() {
+    if (this.actionSave === undefined) {
+      return;
+    }
+    this.actionSave = undefined;
+    window.dispatchEvent(new CustomEvent('studio:action-refused'));
   }
   private receiveSaved(sequence: number | undefined) {
     if (!this.saves.saved(sequence)) {
@@ -370,7 +390,8 @@ export class SharedDocument {
       this.text.insert(edit.start + minimal.start, minimal.insert);
     }, LOCAL);
   }
-  async action(action: TreeAction) {
+  /** Sends a structural action; false when it was not sent (nothing to edit). */
+  async action(action: TreeAction): Promise<boolean> {
     if (getEditorRole() === 'client') {
       if (!this.file.startsWith('src/pages/')) {
         throw new Error('Component source is protected in Client mode.');
@@ -378,7 +399,7 @@ export class SharedDocument {
       assertClientAction(this.text.toString(), action);
     }
     if ('node' in action && !this.canEdit(action.node)) {
-      return;
+      return false;
     }
     if (!this.synchronized || this.socket?.readyState !== WebSocket.OPEN) {
       throw new Error('Reconnect before rearranging the page');
@@ -390,6 +411,7 @@ export class SharedDocument {
     }
     const checksum = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
     this.send({ type: 'action', epoch: this.epoch, checksum, action });
+    return true;
   }
   private send(data: unknown) {
     if (this.socket?.readyState === WebSocket.OPEN) {
@@ -406,6 +428,9 @@ export class SharedDocument {
         if (save === undefined) {
           this.recoverSave();
           return;
+        }
+        if (data.type === 'action') {
+          this.actionSave = save;
         }
         this.status = 'Saving';
         this.socket.send(JSON.stringify({ ...data, save }));

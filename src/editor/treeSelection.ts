@@ -1,5 +1,6 @@
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
+import { labelsNode } from '../../shared/page/leadingNote';
 import { treeBudget, type TreeView } from './treeView';
 // Tree questions the navigator and the editor both ask, kept apart from both
 // so they can be reasoned about (and tested) on their own: which nodes get a
@@ -68,7 +69,11 @@ function isInlineRunWalk(nodes: readonly TreeView[] | undefined, depth: number, 
 // someone else's note to whatever ends up next.
 export function noteIndexAbove(list: readonly TreeView[], index: number): number {
   const previous = index > 0 ? list[index - 1] : undefined;
-  return previous && previous.kind === 'comment' ? index - 1 : -1;
+  const node = list[index];
+  if (previous === undefined || node === undefined) {
+    return -1;
+  }
+  return labelsNode(previous.kind, node.kind) ? index - 1 : -1;
 }
 
 // Node plus the list it sits in and the node holding that list.
@@ -139,7 +144,8 @@ export function selectionAfterDelete(model: { readonly nodes: readonly TreeView[
   const folded = (i: number): boolean => {
     const node = rest[i];
     assert(node !== undefined, 'Selection index must name a surviving node');
-    return isContentOnlyChild(node) || (node.kind === 'comment' && (rest[i + 1]?.kind === 'element' || rest[i + 1]?.kind === 'component'));
+    const next = rest[i + 1];
+    return isContentOnlyChild(node) || (next !== undefined && labelsNode(node.kind, next.kind));
   };
   for (let i = at; i < rest.length; i++) {
     if (!folded(i)) {

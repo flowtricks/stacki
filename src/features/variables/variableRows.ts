@@ -1,4 +1,4 @@
-import type { VariableBlock, VariableCell, VariableRow } from './variablesBridge';
+import type { VariableBlock, VariableCell, VariableRow } from '../../ipc/variablesBridge';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 

@@ -9,6 +9,7 @@ import { sourcePath, filePath, MAX_SOURCE } from '../../shared/validation';
 import { packageComponentFiles, readPackageSource, packageComponentImport } from '../../../vendor/stacki/electron/lib/componentSources';
 import { componentSpecifier } from '../../../vendor/stacki/electron/properties/componentImports';
 import { packageOf } from '../../../vendor/stacki/electron/lib/installedPackages';
+import { readLengthUnit } from '../../../vendor/stacki/electron/project/lengthUnitMarkers';
 
 export async function safePath(root: string, relative: string): Promise<string> {
   filePath(relative);
@@ -143,6 +144,8 @@ export async function scanProject(root: string, analysis = new ComponentAnalysis
     assets: files.filter((file) => /\.(svg|png|jpe?g|gif|webp|avif|mp4|pdf|woff2?)$/i.test(file)),
     components,
     classes: [...classes].sort(),
+    // The same detection Desktop's scan runs, so a Lumos site writes rem in both.
+    lengthUnit: readLengthUnit(path.resolve(root)),
   };
 }
 

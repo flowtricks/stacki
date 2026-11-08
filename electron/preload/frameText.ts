@@ -4,6 +4,7 @@ import { canvasDragged } from './frameInteraction';
 import { matchCanvasText, canvasTextRect } from './frameTextMatch';
 import { createCanvasTextSession } from './frameTextSession';
 import { installTextMarks } from './frameTextMarks';
+import { isTouchDoubleTap, type TapPoint } from './frameDoubleTap';
 
 export function installCanvasText(
   post: (message: unknown) => void,
@@ -26,7 +27,11 @@ export function installCanvasText(
     session.receive(event.data);
     redrawMarks();
   });
+  // The last tap's point, while a touch may still make it a double tap.
+  let touchTap: TapPoint | undefined;
+  let touchPointer = false;
   const click = (event: MouseEvent) => {
+    const doubled = event.type === 'dblclick' || touchDoubled(event);
     if (session.contains(event)) {
       // The native mousedown has already placed/extended the caret. Keep editing
       // while suppressing page click handlers and component drill-in behavior.
@@ -39,7 +44,7 @@ export function installCanvasText(
     // A single click belongs to element selection, marked prop text included.
     // Only a double click may take over focus for typing; clicks inside an
     // open editor still place its caret.
-    if (event.type !== 'dblclick') {
+    if (!doubled) {
       return;
     }
     const catalog = session.catalog();
@@ -63,6 +68,31 @@ export function installCanvasText(
     session.open(hit.target, hit.match, event);
     redrawMarks();
   };
+  // Safari on iPhone and iPad may answer a double tap with two clicks and no
+  // dblclick (it keeps the gesture for zooming), so two touch clicks close
+  // together in time and place count as one. A mouse never takes this path,
+  // which leaves Desktop and every pointer-driven browser as they were.
+  const touchDoubled = (event: MouseEvent): boolean => {
+    if (event.type !== 'click') {
+      touchTap = undefined;
+      return false;
+    }
+    if (!touchPointer) {
+      touchTap = undefined;
+      return false;
+    }
+    const tap: TapPoint = { x: event.clientX, y: event.clientY, timeMs: event.timeStamp };
+    const doubled = isTouchDoubleTap(touchTap, tap);
+    touchTap = doubled ? undefined : tap;
+    return doubled;
+  };
+  window.addEventListener(
+    'pointerdown',
+    (event: PointerEvent) => {
+      touchPointer = event.pointerType === 'touch';
+    },
+    true,
+  );
   window.addEventListener('click', click, true);
   window.addEventListener('dblclick', click, true);
   window.addEventListener('scroll', session.dismiss, true);

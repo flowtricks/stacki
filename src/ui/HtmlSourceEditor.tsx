@@ -10,6 +10,7 @@ import { html } from '@codemirror/lang-html';
 import { assert } from '../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
 import { appHighlight, appTheme } from './CodeEditor';
+import { codeIndentExtensions } from './codeEditorIndent';
 import { formatHTML } from './richTextModel';
 
 /** The HTML the view opens on: laid out to read when it is short enough to lay out. */
@@ -44,6 +45,7 @@ export function HtmlSourceEditor(props: {
       doc: opened.current,
       extensions: [
         minimalSetup,
+        codeIndentExtensions(),
         html(),
         appTheme,
         appHighlight,

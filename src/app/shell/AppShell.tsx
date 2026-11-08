@@ -35,6 +35,8 @@ import { useDelayedTooltip } from '../../ui/delayedTooltip';
 import { type LeftTab } from '../appTypes';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
 import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel } from '../appPanels';
+import { canvasPageOf } from '../../editor/pageState';
+import { projectRelative, type VariablePlace } from '../../editor/variablePlace';
 import { prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
 import { useEffect } from 'react';
 import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay, pickPseudo } from './AppPanes';
@@ -369,6 +371,16 @@ export function togglePreview(app: ShellView): void {
   app.enterPreview();
 }
 
+// The open file decides which `<style>` variables the panel lists: the page, or
+// the component drilled into. The selection does not, so the list holds still.
+function variablePlace(app: ShellView): VariablePlace {
+  const projectPath = app.project.path;
+  return {
+    openFile: projectRelative(projectPath, app.openEditableFile?.path),
+    contextPage: projectRelative(projectPath, canvasPageOf(app.editStack)),
+  };
+}
+
 export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab: LeftTabName }) {
   return (
     <ResizablePanel kind={tab === 'code' ? 'code' : 'left'}>
@@ -377,7 +389,7 @@ export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab:
       {tab === 'navigator' && <NavigatorTab app={app} />}
       {tab === 'components' && <PaletteTab app={app} />}
       {tab === 'cms' && <CmsTab app={app} />}
-      {tab === 'variables' && <VariablesPanel project={app.project} selected={app.varsGroup} onSelect={app.setVarsGroup} />}
+      {tab === 'variables' && <VariablesPanel project={app.project} place={variablePlace(app)} selected={app.varsGroup} onSelect={app.setVarsGroup} />}
       {tab === 'selectors' && <SelectorsPanel project={app.project} showToast={app.showToast} onRecordUndo={app.pushCommand} />}
       {tab === 'code' && <CodeTab app={app} />}
       {tab === 'history' && <HistoryTab app={app} />}

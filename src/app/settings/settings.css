@@ -2,7 +2,7 @@
   margin: auto;
   inset: 0;
   width: min(560px, calc(100vw - 48px));
-  max-height: calc(100vh - 48px);
+  max-height: calc(100dvh - 48px);
   padding: 0;
   border: 1px solid #3a3a3a;
   border-radius: 16px;
@@ -27,7 +27,7 @@
 }
 .app-settings-content {
   overflow-y: auto;
-  max-height: calc(100vh - 220px);
+  max-height: calc(100dvh - 220px);
   padding: 0 24px 24px;
 }
 .app-preferences {

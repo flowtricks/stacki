@@ -203,26 +203,32 @@ try {
   });
   await first.getByRole('button', { name: 'Publish', exact: true }).click();
   for (const page of pages) {
-    await page.getByText('Building website', { exact: true }).waitFor();
+    await page.getByText('Building website…', { exact: true }).waitFor();
     assert.match(decodeURIComponent((await page.locator('link[rel="icon"]').getAttribute('href')) ?? ''), /circle cx="72" cy="386"/);
-    assert.equal(await page.locator('.studio-publish-track').evaluate((element) => getComputedStyle(element, '::after').content), 'none');
+    // Studio shows the popup Desktop shows: the shared modal, not a panel under the button.
+    assert.equal(await page.getByRole('dialog', { name: 'Publishing' }).locator('.publish-status-body').count(), 1);
+    assert.match(await page.locator('.publish-status-body small').innerText(), /^Step 2 of [45]$/);
     assert.equal(await page.getByRole('button', { name: 'Publishing…', exact: true }).isDisabled(), true);
   }
-  assert.equal(await first.locator('.studio-publish-track progress').count(), 1);
+  assert.equal(await first.locator('.publish-status-running progress').count(), 1);
   if (process.env['PUBLISH_SCREENSHOT']) {
-    await first.locator('.studio-publish-progress').screenshot({
+    await first.locator('.publish-status').screenshot({
       path: process.env['PUBLISH_SCREENSHOT'] + '.progress.png',
       animations: 'disabled',
     });
   }
   await second.reload();
-  await second.getByText('Building website', { exact: true }).waitFor();
+  await second.getByText('Building website…', { exact: true }).waitFor();
   assert.equal(await second.getByRole('button', { name: 'Publishing…', exact: true }).isDisabled(), true);
   const checks = fixture.checks();
   await new Promise((resolve) => setTimeout(resolve, 250));
   assert.equal(fixture.checks(), checks, 'Automatic sync pauses during a publish');
   fixture.release();
   for (const page of pages) {
+    const failure = page.getByRole('dialog', { name: 'Publish needs attention' });
+    await failure.getByRole('alert').waitFor();
+    await failure.getByRole('button', { name: 'Close', exact: true }).click();
+    await failure.waitFor({ state: 'hidden' });
     await page.getByRole('button', { name: 'Publish', exact: true }).waitFor();
     if (page === first) {
       assert.equal(await page.locator('link[rel="icon"]').getAttribute('href'), '/original.png');

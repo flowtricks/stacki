@@ -3,7 +3,7 @@
 // keys joined with `||`, a builder export's generated comparator, or a shuffle.
 // Anything else is not a comparator the list settings can show.
 
-import { chainOf, isName, relativeField } from './loopConditionRead';
+import { chainOf, isName, relativeField, type ItemSelf } from './loopConditionRead';
 import { LOOP_QUERY_LIMITS, type LoopSort, type LoopSortOrder } from './loopQuery';
 import { namePath, type Js } from './loopSyntax';
 
@@ -26,7 +26,7 @@ export interface Sorting {
 }
 
 /** A comparator as sort keys, or a shuffle; undefined when it is other code. */
-export function readComparator(located: Located, itemPath: ItemPath): Sorting | undefined {
+export function readComparator(located: Located, itemPath: ItemPath, self: ItemSelf): Sorting | undefined {
   const node = located.node;
   if (node.kind !== 'function' || node.body === undefined) {
     return undefined;
@@ -42,7 +42,7 @@ export function readComparator(located: Located, itemPath: ItemPath): Sorting | 
   const keys = chainOf(node.body, '||');
   const sorts: LoopSort[] = [];
   for (const key of keys) {
-    const sort = comparatorKey(key, { left: base(first.name), right: base(second.name) });
+    const sort = comparatorKey(key, { left: base(first.name), right: base(second.name), self });
     if (sort === undefined || sorts.length >= LOOP_QUERY_LIMITS.sortsMax) {
       return undefined;
     }
@@ -63,6 +63,8 @@ function isShuffle(body: Js): boolean {
 interface ComparatorBases {
   readonly left: readonly string[];
   readonly right: readonly string[];
+  /** Whether `a` and `b` themselves compare, as a list of plain values sorts. */
+  readonly self: ItemSelf;
 }
 
 function comparatorKey(node: Js, bases: ComparatorBases): LoopSort | undefined {
@@ -191,13 +193,13 @@ function keyOf(left: SortValue | undefined, right: SortValue | undefined, bases:
   if (left === undefined || right === undefined) {
     return undefined;
   }
-  const forward = relativeField(left.path, bases.left);
-  const forwardRight = relativeField(right.path, bases.right);
+  const forward = relativeField(left.path, bases.left, bases.self);
+  const forwardRight = relativeField(right.path, bases.right, bases.self);
   if (forward !== undefined && forward === forwardRight) {
     return { field: forward, direction: 'ascending', order };
   }
-  const backward = relativeField(left.path, bases.right);
-  const backwardRight = relativeField(right.path, bases.left);
+  const backward = relativeField(left.path, bases.right, bases.self);
+  const backwardRight = relativeField(right.path, bases.left, bases.self);
   if (backward !== undefined && backward === backwardRight) {
     return { field: backward, direction: 'descending', order };
   }

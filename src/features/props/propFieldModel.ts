@@ -204,7 +204,6 @@ export function usePropFieldModel(props: PropFieldProps) {
   const { name, type } = field;
   const isSet = value !== undefined;
   const [menuPosition, setMenuPosition] = useState<FieldPosition | undefined>(undefined);
-  const lastGoodRef = useRef('');
   const [custom, setCustomState] = useState(false);
   // Why the field stayed on its code after "use the control" was asked for:
   // code the control cannot show is kept as written rather than dropped.
@@ -254,7 +253,6 @@ export function usePropFieldModel(props: PropFieldProps) {
     isSet,
     menuPosition,
     setMenuPosition,
-    lastGoodRef,
     custom,
     setCustom,
     customProblem,
@@ -475,6 +473,77 @@ export function numberControlBounds(field: FieldDefinition) {
     return Math.round(clamped * 1e6) / 1e6;
   };
   return { bounded, allows, clamp };
+}
+
+// A complete number literal as a person types one; "-", "." and "1e" are on
+// the way to one and are not it yet.
+const NUMBER_LITERAL = /^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i;
+
+/**
+ * What a keystroke in a number field does. A bounded field writes only a
+ * complete number it accepts; anything else (a partial "-", an out-of-range
+ * 1.1, a step the field does not take) is held in the field as a draft and
+ * settled on commit, so the source never holds a value the component rejects.
+ * An unbounded field writes what is typed, as it always has.
+ */
+export type NumberTyped = { readonly kind: 'clear' } | { readonly kind: 'write'; readonly text: string } | { readonly kind: 'hold'; readonly text: string };
+export function numberTyped(field: FieldDefinition, text: string): NumberTyped {
+  assert(text.length <= LIMITS.attrCharsMax, 'numberTyped: typed text is bounded');
+  if (text === '') {
+    return { kind: 'clear' };
+  }
+  const { bounded, allows } = numberControlBounds(field);
+  if (!bounded) {
+    return { kind: 'write', text };
+  }
+  const trimmed = text.trim();
+  if (NUMBER_LITERAL.test(trimmed)) {
+    if (allows(Number(trimmed))) {
+      return { kind: 'write', text: trimmed };
+    }
+    return { kind: 'hold', text };
+  }
+  return { kind: 'hold', text };
+}
+
+/**
+ * The text a held draft commits as (blur or Enter): the number clamped into
+ * what the field accepts, or undefined when the draft is no number at all and
+ * the field goes back to the value its source holds.
+ */
+export function numberCommitted(field: FieldDefinition, draft: string): string | undefined {
+  assert(draft.length <= LIMITS.attrCharsMax, 'numberCommitted: the draft is bounded');
+  const parsed = Number.parseFloat(draft);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  const { bounded, allows, clamp } = numberControlBounds(field);
+  const next = bounded ? clamp(parsed) : parsed;
+  assert(!bounded || allows(next), 'numberCommitted: a clamped value is one the field accepts');
+  return String(next);
+}
+
+/**
+ * One step from `base`: the field's own `@step` (else 1), ×10 with Shift and
+ * ÷10 with Option when the field has no grain of its own; then clamped, so a
+ * step can never leave the range the component accepts.
+ */
+export function numberStepped(field: FieldDefinition, base: number, direction: 1 | -1, mods: { readonly shiftKey: boolean; readonly altKey: boolean }): string {
+  assert(Number.isFinite(base), 'numberStepped: steps from a number');
+  const grain = field.step;
+  const unit = grain ?? 1;
+  let size = unit;
+  if (mods.shiftKey) {
+    size = unit * 10;
+  } else if (mods.altKey) {
+    size = grain === undefined ? 0.1 : grain;
+  }
+  // Round away float noise (38.1 + 0.1 = 38.199999…) before clamping.
+  const next = Math.round((base + direction * size) * 1e6) / 1e6;
+  const { bounded, allows, clamp } = numberControlBounds(field);
+  const stepped = bounded ? clamp(next) : next;
+  assert(!bounded || allows(stepped), 'numberStepped: a step lands inside the range');
+  return String(stepped);
 }
 
 /** A colour as the six-digit hex the platform picker takes, or undefined when it is not a hex colour. */

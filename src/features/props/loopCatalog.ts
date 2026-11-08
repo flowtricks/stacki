@@ -10,7 +10,7 @@ import { ASTRO_CONTENT_ID } from '../../../shared/properties/astroContent';
 import type { RemoteSchemaField, RemoteType } from '../../../shared/properties/cmsRemoteSchema';
 import type { ItemFieldDeclaration, ItemFieldKind } from '../../editor/listPropType';
 import type { LoopField, LoopFieldKind, LoopSource, LoopSourceKind } from '../../editor/loopQuery';
-import { isFieldPath } from '../../editor/loopQuery';
+import { isFieldPath, ITEM_FIELD } from '../../editor/loopQuery';
 import { listCmsConnections, remoteReferenceOptions } from '../../ipc/cmsConnectionsBridge';
 import { readText } from '../../ipc/bridge';
 import { remoteCollections, remoteTemplate } from '../../ipc/remoteSource';
@@ -308,6 +308,10 @@ function listField(field: RemoteSchemaField, members: readonly RemoteType[], bas
 
 /** `case-studies` → "Case Studies", `sermonSpeaker` → "Sermon Speaker". */
 export function titled(name: string): string {
+  if (name === ITEM_FIELD) {
+    // A list of plain values, filtered or sorted by each value itself.
+    return 'Item';
+  }
   const words = name
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .split(/[\s_.-]+/)

@@ -119,6 +119,14 @@ export const LayoutIcon = (props: IconProps) => (
   </I>
 );
 
+// A window with its right-hand column marked: the Style and Settings panel.
+export const PanelRightIcon = (props: IconProps) => (
+  <I {...props}>
+    <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
+    <path d="M10 2.5v11M11.75 5.5h0.5M11.75 7.5h0.5" />
+  </I>
+);
+
 export const TextIcon = (props: IconProps) => (
   <I {...props}>
     <path d="M3.5 4.5V3.5h9v1M8 3.5v9M6.3 12.5h3.4" />

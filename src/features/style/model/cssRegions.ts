@@ -4,6 +4,7 @@
 
 import postcss, { type AtRule, type ChildNode, type Declaration, type Document, type Root, type Rule } from 'postcss';
 import { assert } from '../../../../shared/core/assert';
+import { CODE_INDENT_UNIT, indentUnitOf } from '../../../../shared/core/indent';
 import type { StyleRegion } from './styleTypes';
 import { selectorKey } from './resolved';
 import { isPaddingProperty, setPaddingDeclaration } from './spacingShorthand';
@@ -91,7 +92,12 @@ export function extractStyleRegions(code: string): StyleRegion[] {
  *  parsed region; the one passed in is left as it was. */
 export function parseRegion(region: StyleRegion): StyleRegion {
   try {
-    return { ...region, root: postcss.parse(region.css), parseError: undefined };
+    const root = postcss.parse(region.css);
+    // With nothing indented to learn from, PostCSS indents a new rule four spaces.
+    if (!/^[ \t]+\S/m.test(region.css)) {
+      root.raws['indent'] = CODE_INDENT_UNIT;
+    }
+    return { ...region, root, parseError: undefined };
   } catch (error: unknown) {
     const parseError = error instanceof Error ? error.message : String(error);
     return { ...region, root: undefined, parseError };
@@ -221,8 +227,8 @@ function lineIndentOf(raw: string | undefined): string | undefined {
 }
 
 // How far this stylesheet indents a declaration inside its rule: the first
-// declaration on its own line under a rule on its own line says; two spaces
-// when none does.
+// declaration on its own line under a rule on its own line says; otherwise the
+// stylesheet's own indentation, which is a tab when nothing in it is indented.
 function indentStep(root: Root | Document): string {
   let step: string | undefined;
   root.walkDecls((decl) => {
@@ -235,7 +241,7 @@ function indentStep(root: Root | Document): string {
     }
     return undefined;
   });
-  return step ?? '  ';
+  return step ?? indentUnitOf(root.toString());
 }
 
 /** Set (update-or-append) a DIRECT declaration on a node — scoped so a nested rule's

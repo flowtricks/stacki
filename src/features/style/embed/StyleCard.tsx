@@ -160,6 +160,7 @@ export function StyleCardHead({ card, onVisibleSelectorsChange }: { card: StyleC
         activePicked={card.activePicked}
         busy={busy}
         loading={card.resolving}
+        settled={card.selectionSettled}
         onSelect={card.onSelectActive}
         onDeselect={card.onDeselect}
         onAdd={card.onAddSelector}
@@ -196,6 +197,8 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
       // selector chip below does (`.layout {@}`), so the two agree on where the
       // styles sit. Base and a top-level query stay one line.
       ...(info?.wrapper === undefined ? {} : { overline: info.wrapper }),
+      // The selectors written inside the query go under it, as they sit in the code.
+      ...(info?.querySelectors === undefined ? {} : { subline: info.querySelectors }),
       ...(source === undefined
         ? {}
         : {

@@ -10,6 +10,7 @@ import { presenceUsers } from '../collaboration/presenceUsers';
 import { presenceColor } from '../collaboration/presenceColors';
 import PageSwitcher from '../../../vendor/stacki/src/features/pages/PageSwitcher';
 import { useComponentBack } from './useComponentBack';
+import { TemplateEntryPicker } from '../pages/TemplateEntryPicker';
 import { useEditorRole } from '../roles/useEditorRole';
 import { projectPages } from './pageLabels';
 import { PreviewButton, type InteractivePreviewState } from '../preview/InteractivePreview';
@@ -48,13 +49,19 @@ export function EditorHeader({
   const componentOpen = !isCanvasPage(file) && file.endsWith('.astro');
   const back = defaultsMode ? closeDefaults : () => headerBack({ document, previewFile, open, report });
   useComponentBack((componentOpen || defaultsMode) && !interactivePreview.active, back);
-  const switcher = <PageSwitcher pages={pages} currentPage={pages.find((page) => page.path === previewFile)} onSelect={(page) => open(page.path)} />;
+  // A template page's entry switcher stands beside the page switcher, as on Desktop.
+  const switcher = (
+    <>
+      <PageSwitcher pages={pages} currentPage={pages.find((page) => page.path === previewFile)} onSelect={(page) => open(page.path)} />
+      <TemplateEntryPicker file={previewFile} />
+    </>
+  );
   return (
     <header className={`titlebar studio-titlebar ${componentOpen ? 'component-open' : ''}`}>
       <div className="studio-titlebar-start">
         <AccountMenu saved={!defaultsMode && document?.status === 'Saved'} session={session} cursorChat={cursorChat} />
         <span className="project-name">{project.name}</span>
-        <span className="save-state" role="status">
+        <span className="save-state" role="status" data-saved={document?.status === 'Saved' ? '' : undefined}>
           {document?.status ?? 'Connecting'}
         </span>
         {role === 'client' && <span className="client-role-badge">Client</span>}

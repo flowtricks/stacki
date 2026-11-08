@@ -403,6 +403,6 @@ test('a component with no frontmatter gets one holding the new prop', async (con
   });
   assert.equal(outcome.tag, 'applied');
   const written = fs.readFileSync(file, 'utf8');
-  assert.match(written, /^---\ninterface Props \{\n {2}\/\*\* Where the button goes \*\/\n {2}href\?: string;\n\}\nconst \{ href = "#" \} = Astro\.props;\n/);
+  assert.match(written, /^---\ninterface Props \{\n\t\/\*\* Where the button goes \*\/\n\thref\?: string;\n\}\nconst \{ href = "#" \} = Astro\.props;\n/);
   assert.ok(written.includes('<a href={href} class="button"\n  ><slot></slot><span>→</span></a\n>'), 'the markup keeps its own line breaks');
 });

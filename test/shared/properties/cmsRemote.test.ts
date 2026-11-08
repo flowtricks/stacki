@@ -123,6 +123,13 @@ test('types nest only to their bound', () => {
   });
 });
 
+test('only long text is marked as Markdown, and only as Markdown', () => {
+  assert.deepEqual(parseRemoteType({ kind: 'text', options: [], format: 'markdown' }), { kind: 'text', options: [], format: 'markdown' });
+  assert.deepEqual(parseRemoteType({ kind: 'text', options: [] }), { kind: 'text', options: [] });
+  assert.throws(() => parseRemoteType({ kind: 'string', options: [], format: 'markdown' }), /Invalid text format/);
+  assert.throws(() => parseRemoteType({ kind: 'text', options: [], format: 'html' }), /Invalid text format/);
+});
+
 test('results carry a value or a short message', () => {
   assert.deepEqual(
     parseRemoteResult({ ok: true, value: [] }, (value) => value),

@@ -166,7 +166,15 @@ export function readPipeline(input: LoopReadInput): LoopPipeline | undefined {
       return undefined;
     }
     const source: LoopSource = { kind: 'list', collection: pipeline.root };
-    return { source, base: pipeline.root, steps: (pipeline.steps ?? []).map(placed), filterArgument: undefined, itemPath: [], chain: [], headOffset };
+    return {
+      source,
+      base: pipeline.root,
+      steps: (pipeline.steps ?? []).map(placed),
+      filterArgument: undefined,
+      itemPath: [],
+      chain: readingChain(reading),
+      headOffset,
+    };
   }
   if (pipeline.kind !== 'collection' || pipeline.base.kind !== 'astro') {
     return undefined;
@@ -260,6 +268,8 @@ type Pipeline =
       readonly chain: readonly string[];
       /** The steps taken on `root` itself, when the expression ended at that bare name. */
       readonly steps?: readonly Step[];
+      /** `array` when the loop names a frontmatter constant holding a list written out. */
+      readonly held?: 'array';
     }
   | { readonly kind: 'options'; readonly query: LoopQuery; readonly home: OptionsHome; readonly chain: readonly string[] }
   | { readonly kind: 'unknown' };
@@ -283,6 +293,12 @@ function pipelineOf(start: Located, context: Context, chainStart: readonly strin
       const declaration = context.frontmatter.declarations.get(node.name);
       if (!declaration?.init || chain.includes(node.name) || chain.length >= CHAIN_STEPS_MAX) {
         return { kind: 'value', root: node.name, chain, steps: [...steps].reverse() };
+      }
+      // A list written out in the frontmatter (`const promises = ["…", "…"]`),
+      // named by the loop itself: every step the loop takes on it is in the
+      // head, so its settings are the head's, as a List prop's are.
+      if (chain.length === 0 && unwrapAwait(declaration.init).kind === 'array') {
+        return { kind: 'value', root: node.name, chain: [node.name], steps: [...steps].reverse(), held: 'array' };
       }
       chain.push(node.name);
       // A builder's collection list: its settings are an options object here.
@@ -468,17 +484,37 @@ function originOf(root: string, context: Context): LoopValueOrigin {
 // A List prop read where the loop reads it (`features`, `features.slice(0, 3)`),
 // whose steps are list settings too. One held in a constant first stays a value:
 // its steps could be spread over declarations that other code also reads.
+//
+// A list written out in a frontmatter constant reads the same way, with the
+// constant as the declaration it is held in, so its Source row opens it.
 function listPropReading(pipeline: Extract<Pipeline, { readonly kind: 'value' }>, context: Context): LoopReading | undefined {
   const steps = pipeline.steps;
-  if (steps === undefined || pipeline.chain.length > 0 || !COLLECTION_NAME.test(pipeline.root)) {
+  if (steps === undefined || !COLLECTION_NAME.test(pipeline.root)) {
     return undefined;
   }
-  if (listPropOf(context.input.frontmatter, pipeline.root) === undefined) {
+  const chain = heldListChain(pipeline, context);
+  if (chain === undefined) {
     return undefined;
   }
-  const reading = stepsReading({ source: { kind: 'list', collection: pipeline.root }, steps, chain: [], filter: undefined, itemPath: [] }, context);
+  const reading = stepsReading({ source: { kind: 'list', collection: pipeline.root }, steps, chain, filter: undefined, itemPath: [] }, context);
   assert(reading.kind === 'query' || reading.kind === 'partial', 'A list prop’s steps read as a query or partly');
+  assert(reading.chain.length <= 1, 'A list read where the loop reads it passes through one declaration at most');
   return reading;
+}
+
+// The declarations a List prop or a written-out list is reached through, or
+// undefined when the value is neither: a prop is reached directly, and a
+// constant through its own declaration.
+function heldListChain(pipeline: Extract<Pipeline, { readonly kind: 'value' }>, context: Context): readonly string[] | undefined {
+  if (pipeline.held === 'array') {
+    assert(pipeline.chain.length === 1, 'A written-out list is held in one constant');
+    assert(pipeline.chain[0] === pipeline.root, 'A written-out list is named for its constant');
+    return pipeline.chain;
+  }
+  if (pipeline.chain.length > 0) {
+    return undefined;
+  }
+  return listPropOf(context.input.frontmatter, pipeline.root) === undefined ? undefined : [];
 }
 
 // ---------------------------------------------------------------------------
@@ -533,7 +569,8 @@ function stepsReading(
   if (conditions === undefined) {
     return partial(source, pipeline, 'Its filter is written in a way the list settings cannot show.');
   }
-  const sorting = order.sort === undefined ? { sorts: [], random: false } : readComparator(order.sort, itemPath);
+  const sorting =
+    order.sort === undefined ? { sorts: [], random: false } : readComparator(order.sort, itemPath, source.kind === 'list' ? 'field' : 'not-field');
   // A comparator no sort key can say is kept as code: a custom sort.
   const customSort = sorting === undefined && order.sort !== undefined ? customSortOf(order.sort) : undefined;
   if (sorting === undefined && customSort === undefined) {
@@ -602,7 +639,7 @@ function sanityQueryOf(
   if (order === undefined || order.filters.length > 0 || order.reversed) {
     return partial(source, pipeline, 'Its items are changed by code after they are fetched.');
   }
-  const random = order.sort === undefined ? false : readComparator(order.sort, [])?.random === true;
+  const random = order.sort === undefined ? false : readComparator(order.sort, [], 'not-field')?.random === true;
   // A sort after the fetch that is not a shuffle is a custom sort: GROQ's own
   // order and a slice before it would both be undone by it.
   const customSort = order.sort !== undefined && !random ? customSortOf(order.sort) : undefined;

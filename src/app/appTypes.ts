@@ -8,7 +8,7 @@ import type { AssetRequest } from '../ui/assetPick';
 import type { CoalescedRun } from '../lib/coalescedRun';
 import type { EditsRecord } from '../editor/pageEdits';
 import type { EditorNode } from '../editor/pageView';
-import type { VariableSelection } from '../features/variables/variablesBridge';
+import type { VariableSelection } from '../ipc/variablesBridge';
 
 export interface ProjectIdentity {
   readonly path: string;

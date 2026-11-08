@@ -2,8 +2,8 @@ import { cmsTransport } from '../../ipc/editorEnvironment';
 import { noteCanvasTextEditing } from '../../editor/canvasTextFocus';
 import type { CanvasEditFormat, CanvasTextEdit } from './canvasTextSource';
 import { useEffect, useRef, type RefObject } from 'react';
-import { canvasTextUnfolded, parseCanvasTextEvent, type CanvasTextCatalog } from '../../../shared/properties/canvasText';
-import { applyCanvasText, canvasTextNodes, canvasTextPlans, type CanvasSourceNode } from './canvasTextSource';
+import { canvasTextUnfolded, parseCanvasTextEvent, type CanvasTextCatalog, type CanvasTextRunValue } from '../../../shared/properties/canvasText';
+import { applyCanvasText, applyCanvasTexts, canvasTextNodes, canvasTextPlans, type CanvasSourceNode } from './canvasTextSource';
 import { createCanvasTextOverlay } from './canvasTextOverlay';
 import {
   CANVAS_FOCUS_PATHS_MAX,
@@ -173,8 +173,7 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
     }
     busy = true;
     const draft = canvasTextDraft.get();
-    void plan
-      .apply(message.value)
+    void saveCanvasText(plan, message, options)
       .catch((error: unknown) => options.initial.report(String(error)))
       .finally(() => {
         busy = false;
@@ -183,6 +182,28 @@ function createCanvasTextReceiver(options: CanvasTextReceiverOptions) {
         }
       });
   };
+}
+
+// One text saves through its own plan. Texts one selection changed together are
+// written in one source edit, so they land together and undo as one step.
+function saveCanvasText(
+  plan: CanvasTextEdit,
+  message: CanvasTextRunValue & { readonly also?: readonly CanvasTextRunValue[] },
+  options: CanvasTextReceiverOptions,
+) {
+  if (!message.also) {
+    return plan.apply(message.value);
+  }
+  const edits = [message, ...message.also].flatMap(({ key, value }) => {
+    const edit = options.plans().find((entry) => entry.target.key === key);
+    return edit?.plan ? [{ plan: edit.plan, value: canvasTypedText(edit.target.value, value) }] : [];
+  });
+  if (edits.length !== message.also.length + 1) {
+    options.initial.report('The page changed while editing. The text was not saved; select it again.');
+    return Promise.resolve();
+  }
+  const position = Math.min(...edits.map((edit) => edit.plan.start));
+  return options.initial.apply(applyCanvasTexts(options.initial.source, edits), position);
 }
 
 // The words being typed, mirrored into the field that shows them: a text
@@ -253,6 +274,7 @@ async function publishCanvasTextSession(
   const plans: readonly CanvasTextEdit[] = [
     ...literal.map((plan) => ({
       target: plan.target,
+      plan,
       apply: (value: string) => {
         const typed = canvasTypedText(plan.target.value, value);
         return document.apply(applyCanvasText(document.source, plan, typed), plan.start);

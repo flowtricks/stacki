@@ -2,6 +2,7 @@ import { useAstroFileNotifications } from '../features/notifications/useAstroFil
 import { useEditorNavigation } from '../features/project/editorNavigation';
 import { useEffect } from 'react';
 import { useProjectLoad } from '../features/project/useProjectLoad';
+import { pageAddressHost } from '../features/project/pageAddress';
 import { BootScreen } from './BootScreen';
 import { Editor } from './Editor';
 import { useEditorView } from './useEditorView';
@@ -15,7 +16,10 @@ export function App() {
   const { notices, performAction, report, dismiss } = useNotifications();
   const { project, refresh, reconcile, attempt, failure, revision } = useProjectLoad(report);
   useEffect(() => {
-    document.title = project ? `Stacki - ${project.name}` : 'Stacki';
+    // A host that keeps the address in step also keeps the title: the open page's own.
+    if (pageAddressHost() === undefined) {
+      document.title = project ? `Stacki - ${project.name}` : 'Stacki';
+    }
   }, [project]);
   useAstroFileNotifications(report, refresh, reconcile);
   const session = useSession(report);

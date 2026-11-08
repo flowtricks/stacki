@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <!-- maximum-scale stops iOS zooming the editor whenever a field under 16px takes focus. Pinch zoom stays: Safari ignores the limit for a visitor's own gestures. -->
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <meta name="stacki-demo-base" content="__BASE__" />
+    <title>Stacki Studio demo</title>
+    <link rel="stylesheet" href="__APP__/demo.css" />
+    <link rel="stylesheet" href="__APP__/studio.css" />
+    <!-- Fetched alongside demo.js, which would otherwise only ask for it at the end. -->
+    <link rel="modulepreload" href="__APP__/studio.js" />
+    <script type="module" src="__APP__/demo.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

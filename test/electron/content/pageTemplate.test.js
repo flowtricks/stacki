@@ -47,12 +47,12 @@ import type { CollectionEntry } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 
 export async function getStaticPaths() {
-  const entries = await getCollection('blog');
-  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+	const entries = await getCollection('blog');
+	return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
 }
 
 interface Props {
-  entry: CollectionEntry<'blog'>;
+	entry: CollectionEntry<'blog'>;
 }
 
 const { entry } = Astro.props;
@@ -60,8 +60,8 @@ const { Content } = await render(entry);
 ---
 
 <Base>
-  <h1>{entry.data.title}</h1>
-  <Content />
+	<h1>{entry.data.title}</h1>
+	<Content />
 </Base>
 `,
   );
@@ -85,12 +85,12 @@ import type { CollectionEntry } from 'astro:content';
 export const prerender = true;
 
 export async function getStaticPaths() {
-  const entries = await getCollection('nav-links');
-  return entries.map((entry) => ({ params: { path: entry.data["url-path"] }, props: { entry } }));
+	const entries = await getCollection('nav-links');
+	return entries.map((entry) => ({ params: { path: entry.data["url-path"] }, props: { entry } }));
 }
 
 interface Props {
-  entry: CollectionEntry<'nav-links'>;
+	entry: CollectionEntry<'nav-links'>;
 }
 
 const { entry } = Astro.props;
@@ -129,61 +129,61 @@ test('a JSON page fetches, validates each item, and reads its header from the en
 import Base from '../../layouts/Base.astro';
 
 export async function getStaticPaths() {
-  const url = 'https://api.example.com/products?o\\'clock=1';
-  const secret0 = import.meta.env.API_TOKEN;
-  if (!secret0) {
-    throw new Error('Set API_TOKEN in .env to load this page.');
-  }
-  const secret1 = import.meta.env.TEAM_KEY;
-  if (!secret1) {
-    throw new Error('Set TEAM_KEY in .env to load this page.');
-  }
-  const response = await fetch(url, {
-    headers: { 'Authorization': \`Bearer \${secret0}\`, 'X-Team': secret1 },
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!response.ok) {
-    throw new Error(\`\${url} answered \${response.status}.\`);
-  }
-  const body = await response.json();
-  const list = body?.data?.['items-list'];
-  if (!Array.isArray(list)) {
-    throw new Error('Expected a list at data.items-list.');
-  }
-  const kinds = { title: 'string', price: 'number', tags: 'object', 'sale-price': 'number' };
-  return list.map((item, index) => {
-    const slug = item?.meta?.handle;
-    if (typeof slug !== 'string' && typeof slug !== 'number') {
-      throw new Error(\`Item \${index}: meta.handle is not text or a number.\`);
-    }
-    if (slug === '') {
-      throw new Error(\`Item \${index}: meta.handle is empty.\`);
-    }
-    for (const [name, kind] of Object.entries(kinds)) {
-      const value = name.split('.').reduce((part, step) => part?.[step], item);
-      if (value !== undefined && value !== null && typeof value !== kind) {
-        throw new Error(\`Item \${index}: \${name} is not a \${kind}.\`);
-      }
-    }
-    const entry = { title: item.title, price: item.price, tags: item.tags, 'sale-price': item['sale-price'] };
-    return { params: { slug: String(slug) }, props: { entry } };
-  });
+	const url = 'https://api.example.com/products?o\\'clock=1';
+	const secret0 = import.meta.env.API_TOKEN;
+	if (!secret0) {
+		throw new Error('Set API_TOKEN in .env to load this page.');
+	}
+	const secret1 = import.meta.env.TEAM_KEY;
+	if (!secret1) {
+		throw new Error('Set TEAM_KEY in .env to load this page.');
+	}
+	const response = await fetch(url, {
+		headers: { 'Authorization': \`Bearer \${secret0}\`, 'X-Team': secret1 },
+		signal: AbortSignal.timeout(15000),
+	});
+	if (!response.ok) {
+		throw new Error(\`\${url} answered \${response.status}.\`);
+	}
+	const body = await response.json();
+	const list = body?.data?.['items-list'];
+	if (!Array.isArray(list)) {
+		throw new Error('Expected a list at data.items-list.');
+	}
+	const kinds = { title: 'string', price: 'number', tags: 'object', 'sale-price': 'number' };
+	return list.map((item, index) => {
+		const slug = item?.meta?.handle;
+		if (typeof slug !== 'string' && typeof slug !== 'number') {
+			throw new Error(\`Item \${index}: meta.handle is not text or a number.\`);
+		}
+		if (slug === '') {
+			throw new Error(\`Item \${index}: meta.handle is empty.\`);
+		}
+		for (const [name, kind] of Object.entries(kinds)) {
+			const value = name.split('.').reduce((part, step) => part?.[step], item);
+			if (value !== undefined && value !== null && typeof value !== kind) {
+				throw new Error(\`Item \${index}: \${name} is not a \${kind}.\`);
+			}
+		}
+		const entry = { title: item.title, price: item.price, tags: item.tags, 'sale-price': item['sale-price'] };
+		return { params: { slug: String(slug) }, props: { entry } };
+	});
 }
 
 interface Props {
-  entry: {
-    title?: string;
-    price?: number;
-    tags?: unknown[];
-    'sale-price'?: number;
-  };
+	entry: {
+		title?: string;
+		price?: number;
+		tags?: unknown[];
+		'sale-price'?: number;
+	};
 }
 
 const { entry } = Astro.props;
 ---
 
 <Base>
-  <h1>{entry.title}</h1>
+	<h1>{entry.title}</h1>
 </Base>
 `,
   );
@@ -215,16 +215,16 @@ test('nested fields keep their shape in the entry and in its type', () => {
   );
   assert.ok(
     text.includes(`interface Props {
-  entry: {
-    title?: string;
-    author?: {
-      name?: string;
-      links?: {
-        web?: string;
-      };
-    };
-    meta?: Record<string, unknown>;
-  };
+	entry: {
+		title?: string;
+		author?: {
+			name?: string;
+			links?: {
+				web?: string;
+			};
+		};
+		meta?: Record<string, unknown>;
+	};
 }`),
     text,
   );
@@ -243,7 +243,7 @@ test('a JSON reply that is the list itself is read from the top', () => {
   const text = pageTemplateText({ route, source, layout: undefined, collection: undefined, prerender: 'inherited' });
   assert.match(
     text,
-    /^---\nexport async function getStaticPaths\(\) \{\n {2}const url = 'https:\/\/api\.example\.com\/items';\n {2}const response = await fetch\(url, \{\n {4}signal:/,
+    /^---\nexport async function getStaticPaths\(\) \{\n\tconst url = 'https:\/\/api\.example\.com\/items';\n\tconst response = await fetch\(url, \{\n\t\tsignal:/,
   );
   assert.match(text, /const list = body;/);
   assert.match(text, /Expected a list at the top of the reply\./);
@@ -266,53 +266,53 @@ test('a Sanity page asks over plain HTTP: the CDN when public, the API with a to
     text,
     `---
 export async function getStaticPaths() {
-  const query = new URLSearchParams({
-    query: '*[_type == $type && defined(slug.current)]',
-    $type: JSON.stringify('post'),
-  });
-  const url = \`https://abc123.apicdn.sanity.io/v2025-02-19/data/query/production?\${query}\`;
-  const response = await fetch(url, {
-    signal: AbortSignal.timeout(15000),
-  });
-  if (!response.ok) {
-    throw new Error(\`\${url} answered \${response.status}.\`);
-  }
-  const body = await response.json();
-  const list = body?.result;
-  if (!Array.isArray(list)) {
-    throw new Error('Expected a list at result.');
-  }
-  const kinds = { title: 'string' };
-  return list.map((item, index) => {
-    const slug = item?.slug?.current;
-    if (typeof slug !== 'string' && typeof slug !== 'number') {
-      throw new Error(\`Item \${index}: slug.current is not text or a number.\`);
-    }
-    if (slug === '') {
-      throw new Error(\`Item \${index}: slug.current is empty.\`);
-    }
-    for (const [name, kind] of Object.entries(kinds)) {
-      const value = name.split('.').reduce((part, step) => part?.[step], item);
-      if (value !== undefined && value !== null && typeof value !== kind) {
-        throw new Error(\`Item \${index}: \${name} is not a \${kind}.\`);
-      }
-    }
-    const entry = { title: item.title };
-    return { params: { slug: String(slug) }, props: { entry } };
-  });
+	const query = new URLSearchParams({
+		query: '*[_type == $type && defined(slug.current)]',
+		$type: JSON.stringify('post'),
+	});
+	const url = \`https://abc123.apicdn.sanity.io/v2025-02-19/data/query/production?\${query}\`;
+	const response = await fetch(url, {
+		signal: AbortSignal.timeout(15000),
+	});
+	if (!response.ok) {
+		throw new Error(\`\${url} answered \${response.status}.\`);
+	}
+	const body = await response.json();
+	const list = body?.result;
+	if (!Array.isArray(list)) {
+		throw new Error('Expected a list at result.');
+	}
+	const kinds = { title: 'string' };
+	return list.map((item, index) => {
+		const slug = item?.slug?.current;
+		if (typeof slug !== 'string' && typeof slug !== 'number') {
+			throw new Error(\`Item \${index}: slug.current is not text or a number.\`);
+		}
+		if (slug === '') {
+			throw new Error(\`Item \${index}: slug.current is empty.\`);
+		}
+		for (const [name, kind] of Object.entries(kinds)) {
+			const value = name.split('.').reduce((part, step) => part?.[step], item);
+			if (value !== undefined && value !== null && typeof value !== kind) {
+				throw new Error(\`Item \${index}: \${name} is not a \${kind}.\`);
+			}
+		}
+		const entry = { title: item.title };
+		return { params: { slug: String(slug) }, props: { entry } };
+	});
 }
 
 interface Props {
-  entry: {
-    title?: string;
-  };
+	entry: {
+		title?: string;
+	};
 }
 
 const { entry } = Astro.props;
 ---
 
 <article>
-  <h1>{entry.title}</h1>
+	<h1>{entry.title}</h1>
 </article>
 `,
   );
@@ -423,14 +423,14 @@ test('a collection is sampled from its entries, each field judged as an address'
   });
 });
 
-const SLUG_HELPER = `  const toSlug = (value: unknown) =>
-    String(value ?? '')
-      .normalize('NFKD')
-      .replace(/[\\u0300-\\u036f]/g, '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  const seen = new Map();
+const SLUG_HELPER = `	const toSlug = (value: unknown) =>
+		String(value ?? '')
+			.normalize('NFKD')
+			.replace(/[\\u0300-\\u036f]/g, '')
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-+|-+$/g, '');
+	const seen = new Map();
 `;
 
 test('a slugified content field makes safe, unique addresses in one small helper', () => {
@@ -439,18 +439,18 @@ test('a slugified content field makes safe, unique addresses in one small helper
   const text = pageTemplateText({ route: { file: 'stats/[slug].astro', param: 'slug' }, source, layout: undefined, collection, prerender: 'inherited' });
   assert.ok(
     text.includes(`export async function getStaticPaths() {
-${SLUG_HELPER}  const entries = await getCollection('stats');
-  return entries.map((entry) => {
-    const slug = toSlug(entry.data.Number);
-    if (slug === '') {
-      throw new Error(\`\${entry.id}: Number has no letters or numbers for its page address.\`);
-    }
-    if (seen.has(slug)) {
-      throw new Error(\`\${seen.get(slug)} and \${entry.id} would both be at \${slug}. Change Number on one of them.\`);
-    }
-    seen.set(slug, entry.id);
-    return { params: { slug: slug }, props: { entry } };
-  });
+${SLUG_HELPER}	const entries = await getCollection('stats');
+	return entries.map((entry) => {
+		const slug = toSlug(entry.data.Number);
+		if (slug === '') {
+			throw new Error(\`\${entry.id}: Number has no letters or numbers for its page address.\`);
+		}
+		if (seen.has(slug)) {
+			throw new Error(\`\${seen.get(slug)} and \${entry.id} would both be at \${slug}. Change Number on one of them.\`);
+		}
+		seen.set(slug, entry.id);
+		return { params: { slug: slug }, props: { entry } };
+	});
 }
 `),
     text,
@@ -459,19 +459,19 @@ ${SLUG_HELPER}  const entries = await getCollection('stats');
   assert.ok(!entryId.includes('toSlug'), 'an entry id needs no slugify step');
 });
 
-const SLUGGED_ITEM = `  return list.map((item, index) => {
-    const address = item?.Number;
-    if (typeof address !== 'string' && typeof address !== 'number') {
-      throw new Error(\`Item \${index}: Number is not text or a number.\`);
-    }
-    const slug = toSlug(address);
-    if (slug === '') {
-      throw new Error(\`Item \${index}: Number has no letters or numbers for its page address.\`);
-    }
-    if (seen.has(slug)) {
-      throw new Error(\`Items \${seen.get(slug)} and \${index} would both be at \${slug}. Change Number on one of them.\`);
-    }
-    seen.set(slug, index);
+const SLUGGED_ITEM = `	return list.map((item, index) => {
+		const address = item?.Number;
+		if (typeof address !== 'string' && typeof address !== 'number') {
+			throw new Error(\`Item \${index}: Number is not text or a number.\`);
+		}
+		const slug = toSlug(address);
+		if (slug === '') {
+			throw new Error(\`Item \${index}: Number has no letters or numbers for its page address.\`);
+		}
+		if (seen.has(slug)) {
+			throw new Error(\`Items \${seen.get(slug)} and \${index} would both be at \${slug}. Change Number on one of them.\`);
+		}
+		seen.set(slug, index);
 `;
 
 test('a slugified external field checks every item at build, for JSON and for Sanity', () => {
@@ -491,7 +491,7 @@ test('the generated helper makes the address the form showed', () => {
   const { slugifyAddress } = require('#dist/shared/properties/pageTemplate.js');
   const source = { ...content, slug: { kind: 'field', name: 'Number', treatment: 'slugified' } };
   const text = pageTemplateText({ route, source, layout: undefined, collection: facts, prerender: 'inherited' });
-  const helper = /const toSlug = \(value: unknown\) =>([\s\S]*?);\n {2}const seen/.exec(text)[1];
+  const helper = /const toSlug = \(value: unknown\) =>([\s\S]*?);\n\tconst seen/.exec(text)[1];
   const toSlug = vm.runInNewContext(`(value) => ${helper}`);
   for (const value of ['25%', 'Uptime (copy)', '  Déjà  Vu! ', '%%%', 'plain', 3.5]) {
     assert.equal(toSlug(value), slugifyAddress(String(value)), String(value));
@@ -775,7 +775,7 @@ test('a new collection is planned in full and written beside its page', async (c
   assert.ok(after.includes("import { defineCollection } from 'astro:content';"), 'what was there stays');
   assert.match(after, /export const collections = \{ teamMembers \}/);
   assert.match(fs.readFileSync(path.join(root, 'src/content/team-members/first-entry.md'), 'utf8'), /^---\ntitle: First entry\n---/);
-  assert.match(fs.readFileSync(path.join(root, 'src/pages/team/[slug].astro'), 'utf8'), /<h1>\{entry\.data\.title\}<\/h1>\n {2}<Content \/>/);
+  assert.match(fs.readFileSync(path.join(root, 'src/pages/team/[slug].astro'), 'utf8'), /<h1>\{entry\.data\.title\}<\/h1>\n\t<Content \/>/);
 });
 
 test('a project without a content config gets one, and a config it cannot patch stops everything', async (context) => {

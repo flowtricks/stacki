@@ -67,11 +67,11 @@ export function PagesPanel({ project, flushSave, peers, file, open, refresh, err
 }
 
 async function newFileSource({ name, file, duplicate, collection }: { name: string; file: string; duplicate: boolean; collection: boolean }) {
-  let source = '---\n---\n\n<main>\n  <h1>New page</h1>\n</main>\n';
+  let source = '---\n---\n\n<main>\n\t<h1>New page</h1>\n</main>\n';
   if (duplicate) {
     source = string(record(await request(`/studio/api/file?file=${encodeURIComponent(file)}`))['source']);
   } else if (collection) {
-    source = name.endsWith('.json') ? '{\n  "title": "New item"\n}\n' : '---\ntitle: New item\n---\n\nWrite your content here.\n';
+    source = name.endsWith('.json') ? '{\n\t"title": "New item"\n}\n' : '---\ntitle: New item\n---\n\nWrite your content here.\n';
   }
   return source;
 }

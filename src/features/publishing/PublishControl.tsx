@@ -5,7 +5,7 @@ import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 import Popup from '../../ui/Popup';
 import { PublishSettings } from './PublishSettings';
 import { PublishMenuOptions } from './PublishMenuOptions';
-import { UNKNOWN_PUBLISH_AVAILABILITY, type PublishAvailability } from '../../../shared/properties/publishState';
+import { publishButtonState, UNKNOWN_PUBLISH_AVAILABILITY, type PublishAvailability, type PublishButtonState } from '../../../shared/properties/publishState';
 import { usePublishConfiguration, configuredPublishAvailability } from './usePublishConfiguration';
 import { cachedPublishingDiscovery } from './publishDiscoveryCache';
 import './publishing.css';
@@ -35,7 +35,7 @@ export function PublishControl({
   const provider = 'config' in configuration ? configuration.config.hosting.provider : 'none';
   const repositoryURL = usePublishRepositoryURL(projectPath, availability);
   const container = useRef<HTMLDivElement>(null);
-  const current = publishTargetCurrent(availability, defaultTarget);
+  const state = publishButtonState(availability, defaultTarget);
   return (
     <div
       className="stacki-publish-control"
@@ -46,7 +46,7 @@ export function PublishControl({
         }
       }}
     >
-      <PublishButtons busy={busy} checking={checking} current={current} open={open} publish={() => run('default')} toggle={() => setOpen(!open)} />
+      <PublishButtons busy={busy} checking={checking} state={state} open={open} publish={() => run('default')} toggle={() => setOpen(!open)} />
       <Popup
         mode="popover"
         portal={false}
@@ -127,25 +127,29 @@ function usePublishRepositoryURL(projectPath: string, availability: PublishAvail
 function PublishButtons(props: {
   readonly busy: boolean;
   readonly checking: boolean;
-  readonly current: boolean;
+  readonly state: PublishButtonState;
   readonly open: boolean;
   readonly publish: () => void;
   readonly toggle: () => void;
 }) {
+  // A finished publish rests as a neutral control, not a dimmed call to action; a running one
+  // keeps its blue so "Publishing…" still reads as the app at work.
+  const current = props.state === 'current';
+  const resting = current && !props.busy;
   return (
-    <div className="stacki-publish-split">
-      <span className="stacki-publish-main" title={props.current ? 'All changes are up to date' : undefined}>
+    <div className="stacki-publish-split" data-state={resting ? 'current' : 'ready'}>
+      <span className="stacki-publish-main" title={current ? 'All changes are up to date' : undefined}>
         <button
-          className="primary"
-          disabled={props.busy || props.checking || props.current}
-          aria-description={props.current ? 'All changes are up to date' : undefined}
+          className={resting ? undefined : 'primary'}
+          disabled={props.busy || props.checking || current}
+          aria-description={current ? 'All changes are up to date' : undefined}
           onClick={props.publish}
         >
           {props.busy ? 'Publishing…' : 'Publish'}
         </button>
       </span>
       <button
-        className="primary stacki-publish-arrow"
+        className={resting ? 'stacki-publish-arrow' : 'primary stacki-publish-arrow'}
         aria-label="More publish options"
         aria-expanded={props.open}
         disabled={props.busy || props.checking}
@@ -224,15 +228,4 @@ async function saveLinkedHosting(projectPath: string, config: PublishConfig): Pr
     source: JSON.stringify(validated, undefined, 2) + '\n',
   });
   return true;
-}
-
-function publishTargetCurrent(availability: PublishAvailability, target: PublishTarget): boolean {
-  switch (target) {
-    case 'github':
-      return availability.github === 'current';
-    case 'hosting':
-      return availability.hosting === 'current';
-    case 'all':
-      return availability.github === 'current' && (availability.hosting === 'current' || availability.hosting === 'unconfigured');
-  }
 }

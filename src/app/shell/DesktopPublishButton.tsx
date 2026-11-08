@@ -1,8 +1,7 @@
 import Popup from '../../ui/Popup';
 import { readMetadata } from '../../ipc/projectMetadataBridge';
 import { parsePublishSource } from '../../../shared/properties/publishConfig';
-import { CheckIcon, CloseIcon, UploadCloudIcon } from '../../ui/Icons';
-import { PublishProviderIcon } from '../../features/publishing/PublishProviderIcon';
+import { PublishStatus } from '../../features/publishing/PublishStatus';
 import { useEffect, useRef, useState } from 'react';
 import { parsePublishCommitMessage, type PublishTarget } from '../../../shared/properties/publishConfig';
 import type { DesktopPublishState } from '../../../shared/properties/publishState';
@@ -44,7 +43,7 @@ function DesktopPublishSession({ projectPath, flushSave, refresh, saveState, rep
         publish={(target) => void action.publish(target)}
       />
       {(action.visible || state.kind === 'running') && (
-        <DesktopPublishStatus state={action.starting ? { kind: 'running', step: 'Preparing publish…' } : state} close={() => action.setVisible(false)} />
+        <PublishStatus state={action.starting ? { kind: 'running', step: 'Preparing publish…' } : state} close={() => action.setVisible(false)} />
       )}
       {action.setup?.kind === 'commit' && (
         <PublishCommitMessage
@@ -172,95 +171,6 @@ export function PublishCommitMessage({ close, submit }: { readonly close: () => 
         </form>
       )}
     </Popup>
-  );
-}
-
-export function DesktopPublishStatus({ state, close }: { readonly state: DesktopPublishState; readonly close: () => void }) {
-  const busy = state.kind === 'idle' || state.kind === 'running';
-  const title =
-    state.kind === 'review-open'
-      ? 'Ready for review'
-      : state.kind === 'done'
-        ? 'Published successfully'
-        : state.kind === 'failed'
-          ? 'Publish needs attention'
-          : 'Publishing';
-  return (
-    <Popup className="modal desktop-publish-status" label={title} onClose={close} dismissible={!busy}>
-      {({ close: dismiss }) => (
-        <>
-          <div className="modal-body publish-status-body" data-state={state.kind}>
-            <div className="publish-status-symbol" aria-hidden="true">
-              {state.kind === 'done' ? <CheckIcon size={24} /> : state.kind === 'failed' ? <CloseIcon size={24} /> : <UploadCloudIcon size={24} />}
-            </div>
-            <h2>{title}</h2>
-            {busy ? (
-              <PublishRunning state={state} />
-            ) : (
-              <>
-                {state.kind === 'failed' && <p role="alert">{state.message}</p>}
-                {state.kind === 'review-open' && (
-                  <p>
-                    <a href={state.url} target="_blank" rel="noreferrer">
-                      Open pull request
-                    </a>{' '}
-                    Your live site and current branch are unchanged.
-                  </p>
-                )}
-                <PublishResults state={state} />
-              </>
-            )}
-          </div>
-          <div className="modal-footer">
-            {busy ? (
-              <span>Keep Stacki open until publishing finishes.</span>
-            ) : (
-              <button className="primary" onClick={dismiss}>
-                {state.kind === 'done' ? 'Done' : 'Close'}
-              </button>
-            )}
-          </div>
-        </>
-      )}
-    </Popup>
-  );
-}
-
-function PublishRunning({ state }: { readonly state: DesktopPublishState }) {
-  const message = state.kind === 'running' ? state.step : 'Preparing publish…';
-  const progress = state.kind === 'running' ? state.progress : undefined;
-  return (
-    <div className="publish-status-running" aria-busy="true">
-      <p role="status" aria-live="polite">
-        {message}
-      </p>
-      <progress max={progress?.total ?? 1} value={progress?.completed} aria-label="Publish progress" aria-valuetext={message} />
-      <small>{progress ? `Step ${progress.completed + 1} of ${progress.total}` : 'Preparing your project'}</small>
-    </div>
-  );
-}
-
-function PublishResults({ state }: { readonly state: DesktopPublishState }) {
-  if (state.kind !== 'done' && state.kind !== 'failed') {
-    return undefined;
-  }
-  return (
-    <div className="publish-status-results" role="status" aria-live="polite">
-      {state.github && (
-        <div>
-          <PublishProviderIcon provider="github" />
-          <span>Changes pushed to GitHub</span>
-          <CheckIcon size={14} />
-        </div>
-      )}
-      {state.hosting && (
-        <div>
-          <UploadCloudIcon />
-          <span>Hosting deployment completed</span>
-          <CheckIcon size={14} />
-        </div>
-      )}
-    </div>
   );
 }
 

@@ -7,19 +7,17 @@ import type { Attr, PageModel, PageNode, PairedNode } from '../../../shared/page
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { LIMITS } from '../../../shared/core/limits';
 import { assert } from '../../../shared/core/assert';
-import { VOID_TAGS } from '../../editor/elementSchemas';
 import { previewGestures } from '../../editor/pageSender';
 import { carryHandles, seedOf } from '../../editor/nodeHandles';
-import { type PageOrigin, type EditGesture, type EditsRecord, type QueueEntry } from '../../editor/pageEdits';
-import { frontmatterGesture, propsGesture, sequence, tagRenameGesture } from '../../editor/editGestures';
+import { type PageOrigin, type EditsRecord, type QueueEntry } from '../../editor/pageEdits';
 import type { PageEdited } from '../../../shared/ipc/pageSave';
 import { ancestorChain, nodeAtPath } from '../../editor/editorTree';
-import { renamedLoopVar, parseLoopHead, disconnectedLoops } from '../../editor/loopBindings';
 import type { InlineNode } from '../../features/props/RichContent';
-import type { Rename } from '../../features/props/propNodeEditors';
-import { findEditorNodeById as findNodeById, type EditablePageState, type EditorPageState, type OpenFile, type TrailingSlash } from '../../editor/pageState';
-import { nodeId, type EditorModel, type EditorNode } from '../../editor/pageView';
+import { type EditablePageState, type EditorPageState, type OpenFile, type TrailingSlash } from '../../editor/pageState';
+import { nodeId, type EditorNode } from '../../editor/pageView';
 import { previewProjectPageEdit } from '../../ipc/appBridge';
+// Pure model edits shared with Studio, which vendors src/editor and not the app.
+export { codeText, collectUsedNames, frontmatterOf, restatedText, statedText, stripComments, tagChangeGesture, type TagChange } from './pageModelGestures';
 
 // A node a gesture creates has no parse yet to name it: its handle is random,
 // unique without a counter, and carried onto the reply that first contains it
@@ -237,114 +235,7 @@ export function openFileSelection(entry: OpenFile, result: EditorPageState, sele
   return entry.kind === 'component' ? openingSelection(result.model.nodes) : outermostNode(result.model.nodes);
 }
 
-export function collectUsedNames(model: PageModel): Set<string> {
-  const used = new Set<string>();
-  const walk = (list: readonly PageNode[], depth: number): void => {
-    assert(depth <= LIMITS.treeDepthMax, 'collectUsedNames: depth exceeds the tree cap');
-    for (const node of list) {
-      if ('name' in node && node.name) {
-        used.add(node.name);
-      }
-      if ('children' in node && Array.isArray(node.children)) {
-        walk(node.children, depth + 1);
-      }
-    }
-  };
-  walk(model.nodes, 0);
-  return used;
-}
-
-// Comments in the frontmatter are prose about the page, and prose names the
-// things the page is built from — `// Hero copy` is talk about <Hero>, not a
-// use of it. Only whole-line `//` comments go: a trailing one can't be told
-// from the `//` inside a URL without really parsing, and cutting a string in
-// half there would hide a reference that is real.
-export function stripComments(code: string): string {
-  return code.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
-}
-
-// Everything in the file that is code rather than markup: the frontmatter, a
-// loop's head, a condition's test, an expression node, and any prop whose
-// value is an expression. An imported name can be used in any of them without
-// ever appearing as a tag.
-//
-// <style> and <script> bodies are pointedly not code for this purpose. Both
-// are their own scope in Astro — CSS never sees a frontmatter binding, and a
-// <script> is a separate module — so a name inside one is a coincidence, not
-// a use. Reading them meant a `.Hero` class or a `/* Hero */` note pinned
-// <Hero>'s import in place for good. What those blocks genuinely share comes
-// in through `define:vars`, which is a prop expression and is still read.
-export function codeText(model: PageModel): string {
-  const parts = [stripComments(model.extraFrontmatter || '')];
-  const walk = (list: readonly PageNode[], depth: number): void => {
-    assert(depth <= LIMITS.treeDepthMax, 'codeText: depth exceeds the tree cap');
-    for (const node of list) {
-      if (node.kind === 'expr' || node.kind === 'raw-line') {
-        parts.push(node.value || '');
-      }
-      if (node.kind === 'map') {
-        parts.push(node.head || '');
-      }
-      if (node.kind === 'cond') {
-        parts.push(node.test || '');
-      }
-      const props = 'props' in node ? node.props : undefined;
-      for (const value of Object.values(props || {})) {
-        if (value && (value.type === 'expr' || value.type === 'spread')) {
-          parts.push(String(value.value ?? ''));
-        }
-      }
-      if ('children' in node && Array.isArray(node.children)) {
-        walk(node.children, depth + 1);
-      }
-    }
-  };
-  walk(model.nodes, 0);
-  return parts.join('\n');
-}
-
 export type BranchNode = Extract<EditorNode, { readonly kind: 'branch' }>;
-
-/** A tag's new name and kind, and the attributes the new name does not keep. */
-export interface TagChange {
-  readonly kind: 'element' | 'component';
-  readonly name: string;
-  readonly asset: boolean;
-  readonly dropped: readonly string[];
-}
-
-// A tag renamed (step 9): the attributes the new name does not keep removed
-// first — removals anchor on the node as authored, and a rename may change
-// its kind, which the next request's anchor would no longer match — then the
-// name, then the imports the new name needs and the old one leaves unused, all
-// one undo step. Void tags keep no children: `<img>` holds none.
-export function tagChangeGesture(model: EditorModel, node: EditorNode, change: TagChange, imports: (model: EditorModel) => EditorModel): EditGesture {
-  const options = { coalesceKey: undefined, urgency: true };
-  const patch = Object.fromEntries(change.dropped.map((attr) => [attr, undefined]));
-  const removal = propsGesture(node.id, patch, options);
-  const kept = change.dropped.length > 0 ? removal.apply(model) : model;
-  const before = findNodeById(kept.nodes, node.id);
-  assert(before !== undefined, 'The renamed node survives its attribute removals');
-  const children = VOID_TAGS.has(change.name) ? undefined : before.children;
-  // A fresh copy, so taking the old tag's flags off it edits nothing shown.
-  const next: EditorNode = Object.assign({}, before, {
-    kind: change.kind,
-    name: change.name,
-    children,
-  });
-  Reflect.deleteProperty(next, 'dynamicTag');
-  Reflect.deleteProperty(next, 'astroAsset');
-  if (change.asset) {
-    Object.assign(next, { astroAsset: true });
-  }
-  const rename = tagRenameGesture(node, next, options);
-  const renamed = rename.apply(kept);
-  const named = change.dropped.length > 0 ? sequence(removal, rename) : rename;
-  if (frontmatterOf(imports(renamed)) === frontmatterOf(renamed)) {
-    return named;
-  }
-  return sequence(named, frontmatterGesture(renamed, options, imports));
-}
 
 // The unsaved version of a conflicted page as text, for review (plan §7). The
 // page's queued gestures are planned as the splices they would write, against
@@ -371,75 +262,6 @@ export async function reviewedSource(path: string, state: EditablePageState, que
       return shown;
     default: {
       const exhaustive: never = shown;
-      return exhaustive;
-    }
-  }
-}
-
-// The node as a text field states it (step 9): a loop's head — the renames
-// followed below it, and loops reading an item whose data changed disconnected
-// — a condition's test, a style or script body, or the value of a text, an
-// expression or a note. A new node; the shown one is left as it was, and the
-// loop helpers edit a private copy of the loop only.
-export function restatedText(node: EditorNode, value: string, renames: readonly Rename[] | undefined): EditorNode | undefined {
-  switch (node.kind) {
-    case 'map': {
-      const renamed = (renames || []).reduce(
-        (children, { from, to }) => (from && to && from !== to ? renamedLoopVar(children, from, to) : children),
-        node.children,
-      );
-      // Renames above already re-pointed the children, so compare the data
-      // sources and orphan-proof what reads from this item.
-      const before = parseLoopHead(node.head);
-      const after = parseLoopHead(value);
-      const vars = after ? [after.item, after.index].filter(Boolean) : [];
-      const moved = before && after && before.data !== after.data && vars.length > 0;
-      const children = moved ? disconnectedLoops(renamed, vars) : renamed;
-      return { ...node, head: value, children };
-    }
-    case 'cond':
-      return { ...node, test: value };
-    case 'raw':
-      return { ...node, inner: value };
-    case 'text':
-    case 'expr':
-    case 'comment':
-      return { ...node, value };
-    case 'element':
-    case 'component':
-    case 'branch':
-    case 'raw-line':
-    case 'chunk-group':
-      return undefined; // No text field states these.
-    default: {
-      const exhaustive: never = node;
-      return exhaustive;
-    }
-  }
-}
-
-// The text a node's field states, as restatedText writes it back: undefined
-// for a node no text field states.
-export function statedText(node: EditorNode): string | undefined {
-  switch (node.kind) {
-    case 'map':
-      return node.head;
-    case 'cond':
-      return node.test;
-    case 'raw':
-      return node.inner;
-    case 'text':
-    case 'expr':
-    case 'comment':
-      return node.value;
-    case 'element':
-    case 'component':
-    case 'branch':
-    case 'raw-line':
-    case 'chunk-group':
-      return undefined;
-    default: {
-      const exhaustive: never = node;
       return exhaustive;
     }
   }
@@ -552,9 +374,4 @@ export function parseTrailingSlash(value: string): TrailingSlash {
     return value;
   }
   throw new Error(`Unknown trailing-slash mode: ${value}`);
-}
-
-// The frontmatter a model describes, compared as data.
-export function frontmatterOf(model: PageModel): string {
-  return JSON.stringify([model.imports, model.extraFrontmatter]);
 }

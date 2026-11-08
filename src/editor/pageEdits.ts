@@ -464,8 +464,7 @@ export async function sendGesture(input: GestureSendInput): Promise<GestureSent>
 
 async function sendReplacement(input: GestureSendInput, refOf: (nodeId: string) => NodeRef | undefined): Promise<GestureSent> {
   const predicted = input.gesture.apply(input.origin.model);
-  const replaced = replacementEdits(input.origin, predicted, refOf);
-  const replacements = replaced === undefined ? undefined : [...frontmatterEdits(input.origin.model, predicted), ...replaced];
+  const replacements = replacementRequests(input.origin, predicted, refOf);
   if (replacements !== undefined && replacements.length > 0) {
     const batched = await sendBatchedWhole(input, replacements);
     if (batched !== undefined) {
@@ -485,8 +484,21 @@ async function sendReplacement(input: GestureSendInput, refOf: (nodeId: string) 
     recordNoChange(input.record);
     return { tag: 'applied', replies: [] };
   }
-  const page: Edit = { tag: 'replace-page', model: replacementModel(predicted) };
-  return sendRequests(input, [page]);
+  return sendRequests(input, [replacementPageRequest(predicted)]);
+}
+
+/** A gesture's effect as node rewrites: the frontmatter first when it changed,
+ * then the smallest changed nodes (replacementEdits). Undefined when a changed
+ * node has no reference main can name. Studio's writer sends the same
+ * requests (studio/src/features/source/gestureWrite.ts). */
+export function replacementRequests(origin: PageOrigin, predicted: EditorModel, refOf: (nodeId: string) => NodeRef | undefined): readonly Edit[] | undefined {
+  const replaced = replacementEdits(origin, predicted, refOf);
+  return replaced === undefined ? undefined : [...frontmatterEdits(origin.model, predicted), ...replaced];
+}
+
+/** The last resort: the whole predicted page, whose semantic hunks main maps onto the bytes. */
+export function replacementPageRequest(predicted: EditorModel): Edit {
+  return { tag: 'replace-page', model: replacementModel(predicted) };
 }
 
 // A gesture that changes the block and the markup, such as a component made from

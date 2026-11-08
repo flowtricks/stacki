@@ -348,7 +348,7 @@ function bodyField(entry: Pick<Entry, 'hasBody' | 'body'>, declared: readonly Re
     description: 'The entry’s Markdown, below its frontmatter.',
     required: false,
     rules: [],
-    type: { kind: 'text', options: [] },
+    type: { kind: 'text', options: [], format: 'markdown' },
     value: entry.body === undefined || entry.body.length === 0 ? undefined : entry.body,
   };
 }

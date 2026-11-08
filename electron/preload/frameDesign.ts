@@ -1,5 +1,5 @@
 import { isCanvasTextEditing } from './frameTextNative';
-import { canvasSelects, trackCanvasGesture } from './frameInteraction';
+import { canvasCursorCSS, canvasInert, canvasSelects, guardCanvasNavigation, trackCanvasGesture } from './frameInteraction';
 // Which frame this is, and what that changes. A class on <html> says canvas
 // (`stacki-designer`) or interactive preview (`stacki-preview`); a design-mode
 // frame (#avb-design) also gets an editor cursor, inert links and forms, and
@@ -28,13 +28,28 @@ export function markFrameMode(): void {
 
 // Design-mode frames (canvas + editor preview) are marked with #avb-design.
 // They get an editor cursor (no I-beam over text) and links/forms are
-// inert — navigation only happens in the interactive preview mode.
+// inert — navigation only happens in the canvas's interact mode and the
+// interactive preview.
 export function listenForDesign(): void {
   trackCanvasGesture();
+  guardCanvasNavigation();
+  announceLeaving();
   showDesignCursor();
   makeNavigationInert();
   forwardModifiers();
   window.addEventListener('keydown', forwardShortcut, true);
+}
+
+// Said as the document goes, whatever takes it away: the host clears outlines
+// drawn for it and checks that what loads next is still the site (useCanvasInteraction).
+function announceLeaving(): void {
+  window.addEventListener('pagehide', () => {
+    try {
+      window.parent.postMessage({ type: 'avb:leaving' }, '*');
+    } catch {
+      /* no parent to tell */
+    }
+  });
 }
 
 function showDesignCursor(): void {
@@ -45,7 +60,7 @@ function showDesignCursor(): void {
     const style = document.createElement('style');
     style.id = 'avb-design-style';
     style.disabled = !canvasSelects();
-    style.textContent = '*, *::before, *::after { cursor: default !important; }';
+    style.textContent = canvasCursorCSS();
     (document.head || document.documentElement)?.appendChild(style);
   };
   if (document.readyState === 'loading') {
@@ -60,7 +75,7 @@ function makeNavigationInert(): void {
   window.addEventListener(
     'click',
     (event) => {
-      if (!canvasSelects()) {
+      if (!canvasInert()) {
         return;
       }
       const anchor = event.target instanceof Element ? event.target.closest('a[href]') : undefined;
@@ -73,7 +88,7 @@ function makeNavigationInert(): void {
   window.addEventListener(
     'submit',
     (event) => {
-      if (canvasSelects()) {
+      if (canvasInert()) {
         event.preventDefault();
         event.stopImmediatePropagation();
       }
@@ -97,8 +112,8 @@ function makeNavigationInert(): void {
   window.addEventListener(
     'mousedown',
     (event) => {
-      if (!canvasSelects()) {
-        return;
+      if (!canvasInert()) {
+        return; // Interact mode: a press focuses a field, opens a <select>, starts a drag.
       }
       if (isCanvasTextEditing(event.target)) {
         return;

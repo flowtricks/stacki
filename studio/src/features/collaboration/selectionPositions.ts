@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import { flatten, parsePage } from '../source/source';
+import { flatten, parsePage, type ParserNode } from '../source/source';
 import type { Peer } from './presence';
 
 // Undo and redo arrive as CRDT updates, not tree actions. Anchor selections to
@@ -33,15 +33,26 @@ export function captureSelectionPositions(document: Y.Doc, peers: Iterable<Peer>
     if (!next.editable) {
       return;
     }
-    const nodes = new Map(flatten(next.model.nodes).map((node) => [`${node.kind}:${node.start}`, node]));
+    const flat = flatten(next.model.nodes);
+    const nodes = new Map(flat.map((node) => [`${node.kind}:${node.start}`, node]));
+    const runs = flat.filter((node) => node.kind === 'text');
     for (const [key, peer] of clients) {
       const anchor = positions.get(peer.id);
       if (!anchor) {
         continue;
       }
       const position = Y.createAbsolutePositionFromRelativePosition(anchor.position, document);
-      const node = position?.type === text ? nodes.get(`${anchor.kind}:${position.index}`) : undefined;
+      const node = position?.type === text ? (nodes.get(`${anchor.kind}:${position.index}`) ?? unwrappedRun(runs, anchor.kind, position.index)) : undefined;
       clients.set(key, { ...peer, selection: node?.id ?? '' });
     }
   };
+}
+
+// Undoing Convert to takes the element away and leaves its words: the anchor on the
+// opening tag now sits on them, inside a run that may start earlier, at its layout.
+function unwrappedRun(runs: readonly ParserNode[], kind: ParserNode['kind'], index: number): ParserNode | undefined {
+  if (kind !== 'element') {
+    return undefined;
+  }
+  return runs.find((run) => run.start !== undefined && run.end !== undefined && run.start <= index && index < run.end);
 }

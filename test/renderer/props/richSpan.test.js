@@ -161,6 +161,64 @@ const check = (what, condition, detail) => {
     const link = bubbleButton('Link');
     check('the link button is there', !!link, buttons.map((button) => button.getAttribute('title')).join(', '));
     check('and it is drawn, not typed', !!link?.querySelector('svg'), link?.innerHTML);
+    // The compact bar draws superscript, subscript and code on the icon grid,
+    // so none of them is a typed glyph heavier than its neighbours.
+    for (const title of ['Superscript', 'Subscript', 'Code']) {
+      const button = bubbleButton(title);
+      check(`${title} is drawn, not typed`, !!button?.querySelector('svg'), button?.innerHTML);
+    }
+    // Every function the bar had before the restyle is still in it, in order.
+    check(
+      'the bar keeps every press, in order',
+      JSON.stringify(buttons.map((button) => button.getAttribute('title'))) ===
+        JSON.stringify(['Bold', 'Italic', 'Superscript', 'Subscript', 'Code', 'Wrap in a span', 'Link']),
+      JSON.stringify(buttons.map((button) => button.getAttribute('title'))),
+    );
+    // The pressed state is a fill on screen; for a screen reader it is aria-pressed,
+    // which must agree with the class that draws the fill, on and off alike.
+    const disagree = buttons.filter((button) => (button.getAttribute('aria-pressed') === 'true') !== button.classList.contains('on'));
+    check('each button says whether it is pressed', disagree.length === 0, disagree.map((button) => button.getAttribute('title')).join(', '));
+    // Space separates the buttons; the only other thing in the row is the one
+    // highlight that slides behind them, hidden from assistive technology.
+    const row = host.querySelector('.rich-bubble .rich-format-row');
+    const strangers = [...(row?.children ?? [])].filter((child) => child.tagName !== 'BUTTON' && !child.classList.contains('rich-format-glide'));
+    check('nothing but buttons and the highlight in the row', !!row && strangers.length === 0, strangers.map((child) => child.outerHTML).join(', '));
+    const glides = row ? row.querySelectorAll(':scope > .rich-format-glide') : [];
+    check('one highlight for the whole row', glides.length === 1, String(glides.length));
+    check('and it is not announced', glides[0]?.getAttribute('aria-hidden') === 'true', glides[0]?.outerHTML);
+  }
+
+  // The hover highlight is one element that follows the pointer: it lands in
+  // place on the first button, slides to the next, and fades where it was when
+  // the pointer leaves. JSDOM lays nothing out, so each button is given a place.
+  {
+    const glide = host.querySelector('.rich-format-glide');
+    const row = host.querySelector('.rich-format-row');
+    [...row.querySelectorAll('button')].forEach((button, index) => {
+      Object.defineProperty(button, 'offsetLeft', { configurable: true, value: 3 + index * 30 });
+      Object.defineProperty(button, 'offsetWidth', { configurable: true, value: 28 });
+    });
+    const hover = async (target) => {
+      await act(async () => {
+        target.dispatchEvent(new dom.window.MouseEvent('pointerover', { bubbles: true }));
+      });
+    };
+    // React derives leave from the pointer going out to something outside the row.
+    const leave = async (from) => {
+      await act(async () => {
+        from.dispatchEvent(new dom.window.MouseEvent('pointerout', { bubbles: true, relatedTarget: document.body }));
+      });
+    };
+    check('the highlight starts hidden', !!glide && !glide.classList.contains('shown'), glide?.className);
+    await hover(bubbleButton('Bold'));
+    check('first hover shows it under that button', glide.style.transform === 'translateX(3px)' && glide.style.width === '28px', glide.style.cssText);
+    check('in place, without sliding in', glide.classList.contains('shown') && !glide.classList.contains('slide'), glide.className);
+    await hover(bubbleButton('Italic'));
+    check('the next hover moves it to that button', glide.style.transform === 'translateX(33px)', glide.style.cssText);
+    check('and the move slides', glide.classList.contains('slide'), glide.className);
+    await leave(bubbleButton('Italic'));
+    check('leaving the bar hides it', !glide.classList.contains('shown'), glide.className);
+    check('where it was', glide.style.transform === 'translateX(33px)', glide.style.cssText);
   }
 
   const spanButton = bubbleButton('Wrap in a span');

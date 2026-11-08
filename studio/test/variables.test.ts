@@ -10,7 +10,7 @@ import { variableRoutes } from '../src/features/variables/variableServer';
 import { applyVariableOperation } from '../src/features/variables/variableOperations';
 import { VARIABLE_ROOT, withVariableWorkspace } from '../src/features/variables/variableWorkspace';
 import { readVariables } from '../vendor/stacki/electron/project/cssVarModel';
-import { parseCSSVariables } from '../vendor/stacki/src/features/variables/variablesBridge';
+import { parseCSSVariables } from '../vendor/stacki/src/ipc/variablesBridge';
 import { record } from '../src/shared/validation';
 
 const file = 'src/styles/tokens.css';

@@ -208,6 +208,19 @@ jobs:
         run: |
           gh release upload "$TAG" "studio/release/stacki-studio-${TAG#v}.json" \
             --repo flowtricks/stacki-releases --clobber
+      # The stacki.build demo is optional: a failure here must never hold back a
+      # release, so these assets stay out of the publish job's required list and
+      # the site keeps serving its last good copy.
+      - name: Upload the optional Studio demo
+        if: github.event_name == 'push'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          npm --prefix studio run release:demo
+          gh release upload "$TAG" studio/.studio/demo-release/upload/* \
+            --repo flowtricks/stacki-releases --clobber
 
   # Publish only when every platform has uploaded and both Linux installs work.
   publish:
@@ -237,3 +250,13 @@ jobs:
             esac
           done
           gh release edit "$TAG" --repo flowtricks/stacki-releases --draft=false --latest
+
+      # stacki.build bakes its /demo from the newest public release, so it is
+      # rebuilt as soon as this one is public. Best effort: the site also checks
+      # once a day for a release newer than the one it was built from, so a token
+      # without access to the site repository only delays the update.
+      - name: Rebuild stacki.build from this release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: gh workflow run deploy.yml --repo flowtricks/stacki-marketing-site --ref main

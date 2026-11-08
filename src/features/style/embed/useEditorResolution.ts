@@ -16,6 +16,8 @@ import {
   placedQueryTarget,
   createRuleForWrite,
   type NativeAttempt,
+  pseudoLayerChips,
+  readPanelLayer,
   styledSelectorsFor,
   takeTypedPath,
 } from './editorModel';
@@ -65,7 +67,8 @@ export function useDefaultUpgrade(
     if (!activeContext) {
       return;
     }
-    const styled = styledSelectorsFor(model, nativeModel, activeContext).filter((entry) => entry.inContext !== false);
+    // The element's default is one of its own selectors, never its ::after's.
+    const styled = pseudoLayerChips(styledSelectorsFor(model, nativeModel, activeContext), readPanelLayer()).filter((entry) => entry.inContext !== false);
     // Nothing styled yet — likely mid-scan (embeds still streaming). Leave the default
     // armed so we retry as they arrive, instead of committing to the unstyled combo.
     if (!styled.length) {

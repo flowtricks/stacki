@@ -55,7 +55,7 @@ export default function ProvenanceList({
           <>
             <ProvenanceOrigin contributor={contributor} nav={nav} />
             <div className="embed-editor_provenance-line">
-              <code className="embed-editor_provenance-sel">{contributor.selectorText}</code>
+              <code className="embed-editor_provenance-sel">{contributor.display ?? contributor.selectorText}</code>
               <span className="embed-editor_provenance-val" title={rawValue}>
                 {rawValue}
               </span>

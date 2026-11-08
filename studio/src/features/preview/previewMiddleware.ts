@@ -1,4 +1,5 @@
 import type { MiddlewareHandler } from 'astro';
+import { renderBaselineScript } from './renderBaseline';
 import { renderScope } from './renderRequest';
 
 const MAX_RENDER_BYTES = 4_000_000;
@@ -45,10 +46,7 @@ export async function withRenderBaseline(response: Response): Promise<Response> 
     offset += chunk.byteLength;
   }
   const html = new TextDecoder().decode(bytes);
-  // Escaping '<' prevents page content from ending this inert JSON script.
-  const encoded = JSON.stringify(html).replaceAll('<', '\\u003c');
-  const baseline = `<script id="studio-render-baseline" type="application/json">${encoded}</script>`;
   const headers = new Headers(response.headers);
   headers.delete('content-length');
-  return new Response(html + baseline, { status: response.status, headers });
+  return new Response(html + renderBaselineScript(html), { status: response.status, headers });
 }

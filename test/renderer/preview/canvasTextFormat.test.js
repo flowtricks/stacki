@@ -133,6 +133,68 @@ test('a press refuses text that does not read what the canvas selected', () => {
   });
 });
 
+test('the shared formatter writes the element’s inline content, for plain and slotted text alike', () => {
+  // Desktop and Studio both build their bar from canvasTextFormatter; only setInline differs.
+  const source = `---
+import Heading from '../components/Heading.astro';
+---
+<h1>Edit Astro sites visually</h1><Heading>Edit Astro sites visually</Heading>`;
+  const nodes = model(source);
+  const [plain, slotted] = nodes.filter((node) => node.kind === 'element' || node.kind === 'component');
+  assert.equal(plain.name, 'h1');
+  assert.equal(slotted.kind, 'component');
+  for (const root of [plain, slotted]) {
+    const writes = [];
+    const formatter = format.canvasTextFormatter(nodes, (rootId, children) => writes.push({ rootId, children }));
+    const textId = root.children[0].id;
+    assert.deepEqual(formatter.states(textId), {
+      bold: false,
+      italic: false,
+      superscript: false,
+      subscript: false,
+      code: false,
+      span: false,
+      link: false,
+    });
+    const value = 'Edit Astro sites visually';
+    const changed = withDocument(() => formatter.apply(textId, { start: 17, end: 25, value }, { kind: 'wrap', tag: 'code' }));
+    assert.equal(changed, true);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].rootId, root.id, 'the slot’s own instance is written, not its component');
+    assert.deepEqual(writes[0].children, [
+      { kind: 'text', value: 'Edit Astro sites ' },
+      { kind: 'element', name: 'code', props: {}, children: [{ kind: 'text', value: 'visually' }] },
+    ]);
+  }
+  const formatter = format.canvasTextFormatter(nodes, () => assert.fail('nothing is written'));
+  assert.equal(formatter.states('missing'), undefined);
+  assert.equal(formatter.apply('missing', { start: 0, end: 4, value: 'Edit' }, { kind: 'wrap', tag: 'code' }), false);
+});
+
+test('words inside <strong> or <em> light their button, and a press there takes markup off', () => {
+  // The canvas reports the text inside the markup; the formatter edits the element around it,
+  // so the same press that put a format on can take it off. Bold and italic toggle through
+  // execCommand, which JSDOM lacks (studio/test/canvasTextFormat.browser.ts presses them);
+  // code toggles through the same wrap code in JSDOM, so it stands in for the round trip here.
+  const nodes = model('<h1>Edit <strong>bold</strong> and <em>slanted</em> and <code>typed</code> words</h1>');
+  const writes = [];
+  const formatter = format.canvasTextFormatter(nodes, (rootId, children) => writes.push({ rootId, children }));
+  const lit = (value) =>
+    Object.entries(formatter.states(findText(nodes, value).id))
+      .filter(([, on]) => on)
+      .map(([name]) => name);
+  assert.deepEqual(lit('bold'), ['bold']);
+  assert.deepEqual(lit('slanted'), ['italic']);
+  assert.deepEqual(lit('typed'), ['code']);
+  assert.deepEqual(lit(' words'), []);
+  const changed = withDocument(() => formatter.apply(findText(nodes, 'typed').id, { start: 0, end: 5, value: 'typed' }, { kind: 'wrap', tag: 'code' }));
+  assert.equal(changed, true);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].rootId, nodes[0].id, 'the heading is written, not the <code>');
+  const html = writes[0].children.map((node) => (node.kind === 'text' ? node.value : `<${node.name}>`)).join('');
+  assert.equal(html, 'Edit <strong> and <em> and typed words', 'the code is gone and its words stay');
+});
+
 test('the selection message is parsed before the host acts on it', () => {
   const good = {
     type: 'avb:text-selection',

@@ -96,6 +96,8 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   global.MutationObserver = dom.window.MutationObserver;
   global.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
   global.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
+  // JSDOM has no layout, and a typed name's create row is selected as it appears.
+  dom.window.Element.prototype.scrollIntoView = () => {};
 
   const bundle = require(bundlePath);
   const { caretAtPoint, caretStep, clampCaret, chipAtCaret, chipPart, attributeChipName } = bundle;

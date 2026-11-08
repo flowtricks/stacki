@@ -9,6 +9,7 @@ import { listAtRuleBlocks } from '../model/css';
 import {
   contextKeysWithStyles,
   indexPlacedContexts,
+  indexQuerySelectors,
   modelForContext,
   nestedQueryOfKey,
   placedContextKey,
@@ -17,15 +18,16 @@ import {
   sourcedContextKey,
   splitSourcedKey,
 } from '../model/queryWrapper';
-import { reachOfWrapper, type WrapperReach } from '../model/queryReach';
+import { reachOfWrapper, wrapperOnLayer, type WrapperReach } from '../model/queryReach';
 import { canvasWidthForQuery } from '../model/queryWidth';
 import type { MatchTarget } from '../model/selectors';
 import { nativeStylingAvailable, rebuildRules } from '../model/webflow';
 import { indexQueriesByClass, orderContexts, relativeContexts, relativesOf } from '../model/contextOrder';
 import { getHost, onHostChange } from '../model/host';
+import { instanceSourceKey, type InstanceStyleDocument } from '../model/instanceClasses';
 import { contextAfterDevice, deviceTargetOf } from '../model/deviceContext';
 import { EMPTY_RULE_MODEL } from './EditorBasics';
-import { chipsFor, styledSelectorsFor, usePseudoTarget } from './editorModel';
+import { chipsFor, pseudoLayerChips, readPanelLayer, styledSelectorsFor, usePanelLayer, usePseudoTarget } from './editorModel';
 import { isGlobalSelector } from './LayoutRows';
 import { useEditorRefs, useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { useElementTokens } from './useEditorRuleEdits';
@@ -42,6 +44,7 @@ export function useEmbedContexts(
   const { model } = elementTokens;
   const { sourceDocument } = sourceDocumentHook;
   const { allContextKeys } = contextKeys;
+  const layer = usePanelLayer();
 
   // Embed queries where THIS element actually has styles — so custom @media /
   // @container (and up-breakpoints) only appear in the dropdown when used. The
@@ -65,7 +68,7 @@ export function useEmbedContexts(
     // nested block the element has styles in names that block, not the query.
     if (model) {
       const known = new Set(allContextKeys);
-      for (const key of contextKeysWithStyles(model)) {
+      for (const key of contextKeysWithStyles(model, layer)) {
         if (known.has(key)) {
           set.add(key);
         }
@@ -82,7 +85,7 @@ export function useEmbedContexts(
       set.add(key);
     }
     return set;
-  }, [model, allContextKeys, context, sourceContexts]);
+  }, [model, allContextKeys, context, sourceContexts, layer]);
   return { sourceContexts, styledEmbedContexts };
 }
 
@@ -164,6 +167,7 @@ export function useWrapperReach(
   const { selectedRef, targetRef } = editorRefs;
   const { model } = elementTokens;
   const { allContextKeys } = contextKeys;
+  const layer = usePanelLayer();
   const wrappers = useMemo(() => {
     const set = new Set<string>();
     for (const key of allContextKeys) {
@@ -204,13 +208,16 @@ export function useWrapperReach(
       if (nested === undefined) {
         return { kind: 'reaches' };
       }
+      if (!wrapperOnLayer(nested.wrapper, layer)) {
+        return { kind: 'misses' };
+      }
       const target = selectedRef.current ? targetRef.current : undefined;
       if (answers.target !== target) {
         return { kind: 'unknown' };
       }
       return answers.reach.get(nested.wrapper) ?? { kind: 'unknown' };
     },
-    [answers, selectedRef, targetRef],
+    [answers, layer, selectedRef, targetRef],
   );
   return { reachOf };
 }
@@ -349,12 +356,12 @@ export function useResolved(
   componentSource: ReturnType<typeof useComponentSource>,
 ) {
   const { stateKey } = selectionState;
-  const { nativeModel, setSourceSelection } = nativeState;
-  const { model } = elementTokens;
+  const { nativeModel, setSourceSelection, sourceSelectionRef } = nativeState;
+  const { instanceClasses, model } = elementTokens;
   const { elementIdentity } = tokenDefault;
   const { activeSelector } = activeSelectorHook;
   const { currentContext } = styleContextsHook;
-  const { canNative, effectiveSourceSelection, nativeIndex } = nativeTarget;
+  const { canNative, effectiveSourceSelection, embedList, nativeIndex } = nativeTarget;
   const { inComponentContext } = componentSource;
 
   // Webflow's native style system only supports its own breakpoints (Base/Tablet/…)
@@ -365,16 +372,18 @@ export function useResolved(
   // Native is the primary layer whenever the selection can carry a class Style AND the
   // context is native-capable; otherwise (tag / attribute / complex selector, or a
   // custom query) the embed is the only target.
-  const effectiveSource: SourceKey = canNative && nativeContextOk ? 'native' : 'embed';
+  // A pseudo-element's box has no class Style: on its row the embed is the only target.
+  const pseudoLayer = usePseudoTarget();
+  const nativeTargetOk = canNative && nativeContextOk && pseudoLayer === undefined;
+  const effectiveSource: SourceKey = nativeTargetOk ? 'native' : 'embed';
   // The chosen embed: always the fallback target, and the editable layer for props
   // the native class doesn't set.
   const selectedEmbedKey = effectiveSourceSelection || undefined;
-  const selectedNativeIndex = canNative && nativeContextOk ? nativeIndex : undefined;
+  const selectedNativeIndex = nativeTargetOk ? nativeIndex : undefined;
 
   // Native contributions for the current context + state, folded into the model.
   const nativeContribs = useMemo(() => nativeContribsFor(nativeModel, currentContext, stateKey), [nativeModel, currentContext, stateKey]);
 
-  const pseudoLayer = usePseudoTarget();
   const resolved = useMemo(
     () =>
       resolveStyle(modelForContext(model ?? EMPTY_RULE_MODEL, currentContext), currentContext.embedAtContext ?? ' native-only', activeSelector, {
@@ -405,7 +414,74 @@ export function useResolved(
     }
     setSourceSelection((previous) => (previous === homeEmbedKey ? previous : homeEmbedKey));
   }, [elementIdentity, activeSelector, homeEmbedKey, inComponentContext, setSourceSelection]);
+
+  useInstanceSource({
+    activeSelector,
+    contextPagePath: getHost().contextPagePath,
+    elementIdentity,
+    embedList,
+    homeEmbedKey,
+    inComponentContext,
+    instanceClasses,
+    setSourceSelection,
+    sourceSelectionRef,
+  });
   return { effectiveSource, nativeContextOk, resolved, selectedEmbedKey, selectedNativeIndex };
+}
+
+// Inside a component opened from an instance, a selector naming a class that
+// instance passed (`.hero_copy` from `column1Class="hero_copy"`) is the page's:
+// "Add custom styles in" moves to where the page's class rules live
+// (model/instanceClasses.ts), not the component file every instance shares.
+// Picking a component selector again moves it back, unless the person chose
+// another source since. Runs only when the element, the selector or that
+// target changes, so an explicit pick wins until then.
+function useInstanceSource(input: {
+  readonly activeSelector: string;
+  readonly contextPagePath: string | undefined;
+  readonly elementIdentity: string;
+  readonly embedList: readonly InstanceStyleDocument[];
+  readonly homeEmbedKey: string | undefined;
+  readonly inComponentContext: boolean;
+  readonly instanceClasses: readonly string[];
+  readonly setSourceSelection: (key: string | undefined) => void;
+  readonly sourceSelectionRef: { readonly current: string | undefined };
+}): void {
+  const {
+    activeSelector,
+    contextPagePath,
+    elementIdentity,
+    embedList,
+    homeEmbedKey,
+    inComponentContext,
+    instanceClasses,
+    setSourceSelection,
+    sourceSelectionRef,
+  } = input;
+  const target = useMemo(
+    () => (inComponentContext ? instanceSourceKey({ activeSelector, instanceClasses, documents: embedList, contextPagePath, homeEmbedKey }) : undefined),
+    [inComponentContext, activeSelector, instanceClasses, embedList, contextPagePath, homeEmbedKey],
+  );
+  // The source this hook moved to, and the one to go back to.
+  const movedRef = useRef<{ readonly key: string; readonly restore: string | undefined } | undefined>(undefined);
+  useEffect(() => {
+    const moved = movedRef.current;
+    if (target !== undefined) {
+      if (sourceSelectionRef.current !== target) {
+        movedRef.current = { key: target, restore: moved === undefined ? sourceSelectionRef.current : moved.restore };
+        setSourceSelection(target);
+      }
+      return;
+    }
+    if (moved === undefined) {
+      return;
+    }
+    movedRef.current = undefined;
+    // Leaving the component restores the page's pick on its own (useComponentSource).
+    if (inComponentContext && sourceSelectionRef.current === moved.key) {
+      setSourceSelection(moved.restore);
+    }
+  }, [elementIdentity, target, inComponentContext, setSourceSelection, sourceSelectionRef]);
 }
 
 // The chip picker's selectors and the context dropdown's info.
@@ -422,10 +498,10 @@ export function useSelectorChips(
   const { documentByKey } = pendingWrites;
   const { selectedSelectorText } = selectionState;
   const { nativeModel } = nativeState;
-  const { model, snapshot, tokens } = elementTokens;
+  const { instanceClasses, model, snapshot, tokens } = elementTokens;
   const { activeSelector } = activeSelectorHook;
   const { currentContext, styleContexts } = styleContextsHook;
-  const pseudo = usePseudoTarget();
+  const pseudo = usePanelLayer();
 
   // Every selector (with styles) that targets this element in the current context —
   // the element's own classes, stateful, and complex/ancestor selectors — for the
@@ -443,16 +519,20 @@ export function useSelectorChips(
         classList: snapshot?.classList ?? [],
         removedClasses,
         pseudo,
+        instanceClasses,
       }),
-    [model, nativeModel, currentContext, activeSelector, selectedSelectorText, tokens, snapshot, removedClasses, pseudo],
+    [model, nativeModel, currentContext, activeSelector, selectedSelectorText, tokens, snapshot, removedClasses, pseudo, instanceClasses],
   );
 
   // Per-context dropdown info: embed hasStyles/combos (for the dot + auto-highlight)
   // plus whether the breakpoint carries native values.
+  // Every selector in the stylesheets, not only the element's: a row says what its
+  // query holds. Rebuilt per scan, as documentByKey is.
+  const querySelectorIndex = useMemo(() => indexQuerySelectors([...documentByKey.values()]), [documentByKey]);
   const contextInfos = useMemo<ContextInfo[]>(() => {
     // Each row read through its own placement (model/queryWrapper.ts): a nested
     // row's dot is about that block, and its wrapper is where the block is.
-    const embedInfos = indexPlacedContexts(model ?? EMPTY_RULE_MODEL, styleContexts);
+    const embedInfos = indexPlacedContexts(model ?? EMPTY_RULE_MODEL, styleContexts, querySelectorIndex, pseudo);
     return styleContexts.map((sc, index) => {
       const embed = embedInfos[index];
       const nativeHas = sc.breakpoint ? nativeHasValues(nativeModel, sc.breakpoint) : false;
@@ -462,9 +542,10 @@ export function useSelectorChips(
         styledCombos: embed?.styledCombos ?? [],
         bestTokens: embed?.bestTokens,
         ...(embed?.wrapper === undefined ? {} : { wrapper: embed.wrapper }),
+        ...(embed?.querySelectors === undefined ? {} : { querySelectors: embed.querySelectors }),
       };
     });
-  }, [model, styleContexts, nativeModel]);
+  }, [model, styleContexts, nativeModel, querySelectorIndex, pseudo]);
 
   // The dropdown's order (model/contextOrder.ts): Base, the queries this element
   // has styles in, the ones its nearest relatives have styles in, then the rest.
@@ -535,7 +616,9 @@ export function useContextChange(
       // Only selectors with styles IN this context (drop the dimmed other-context ones).
       // Never jump to a global selector (`:focus-visible`, `*`): editing one edits
       // most of the site, and it isn't about this element.
-      const styled = styledSelectorsFor(modelForContext(model, nextContext), nativeModel, nextContext).filter(
+      // …and only the box in view's: a query styling just the ::after is no reason
+      // to move the element's pick onto it.
+      const styled = pseudoLayerChips(styledSelectorsFor(modelForContext(model, nextContext), nativeModel, nextContext), readPanelLayer()).filter(
         (entry) => entry.inContext !== false && !isGlobalSelector(entry.text),
       );
       if (!styled.length) {

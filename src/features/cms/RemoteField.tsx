@@ -23,6 +23,7 @@ import { problemsOf, requiredMessage } from './remoteValidation';
 import { fieldTitle, isEmptyValue } from './remoteValues';
 import { RemoteValueEditor, type RemoteEditContext } from './RemoteValueEditor';
 import AssetField from '../../ui/AssetField';
+import MarkdownField from '../../ui/MarkdownField';
 import Dropdown from '../../ui/Dropdown';
 import { hasOptionImage, OPTION_IMAGE_MENU, OptionImage } from './projectImages';
 import { ReferenceIcon, referenceTitle, useReferenceOptions } from './RemoteReferenceInput';
@@ -54,6 +55,10 @@ export function RemoteField(props: {
       ) : isImagePath(field.type) ? (
         <CmsFieldFrame name={name} help={help} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
           <ImagePathField value={value} context={props.context} onChange={props.onChange} />
+        </CmsFieldFrame>
+      ) : isMarkdown(field.type) ? (
+        <CmsFieldFrame name={name} help={help} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
+          <MarkdownField value={typeof value === 'string' ? value : ''} label={name} onChange={(next) => props.onChange(next === '' ? undefined : next)} />
         </CmsFieldFrame>
       ) : titledOptions(field.type) ? (
         <CmsFieldFrame name={name} help={help} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
@@ -230,6 +235,11 @@ interface Scalar {
 
 const asText = (value: RemoteValue | undefined) => (typeof value === 'string' ? value : undefined);
 const same = (value: CmsScalar | undefined): RemoteValue | undefined => value;
+
+// A Markdown body is edited as formatted text and written back as Markdown.
+function isMarkdown(type: RemoteType): boolean {
+  return type.kind === 'text' && type.format === 'markdown';
+}
 
 // The kinds a prop field holds outright, and how each reads and writes its value.
 function scalarOf(type: RemoteType): Scalar | undefined {

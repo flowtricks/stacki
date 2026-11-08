@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IconProps } from '../../ui/Icons';
-import { CanvasIcon, ChevronRightIcon, DesktopIcon, PhoneIcon, TabletIcon } from '../../ui/Icons';
+import { CanvasIcon, ChevronRightIcon, DesktopIcon, PanelRightIcon, PhoneIcon, TabletIcon } from '../../ui/Icons';
 import { PreviewSizeControls } from './PreviewSizeControls';
 import { GuideMenu, type GuideMenuProps } from './GuideMenu';
 import type { PreviewSizeControlsProps } from './PreviewSizeControls';
@@ -54,9 +54,11 @@ export function deviceWidth(device: PreviewDevice): number | undefined {
   return DEVICES.find((entry) => entry.key === device)?.width;
 }
 
+// In a collapsed editor the Style and Settings panel floats over the canvas; one toolbar
+// button opens it and closes it again. The panel keeps its own Style and Settings tabs.
 export interface PreviewInspectorActions {
-  readonly settings: () => void;
-  readonly style: (() => void) | undefined;
+  readonly open: boolean;
+  readonly toggle: () => void;
 }
 
 interface PreviewToolbarProps {
@@ -74,10 +76,14 @@ interface PreviewToolbarProps {
   readonly inspector?: PreviewInspectorActions | undefined;
 }
 
+// The breadcrumb keeps room for a page name and one element name at 11.5px, such as
+// "Home › Layout"; longer trails fold their middle or end in an ellipsis inside it.
+const CRUMBS_WIDTH_PX_MIN = 120;
+
 export function PreviewToolbar(props: PreviewToolbarProps) {
   const shownCrumbs = useFoldedCrumbs(props.crumbs);
   return (
-    <ToolbarOverflow items={toolbarItems(props)}>
+    <ToolbarOverflow items={toolbarItems(props)} childrenWidthPxMin={CRUMBS_WIDTH_PX_MIN}>
       <CrumbTrail crumbs={shownCrumbs.crumbs} {...(props.onCrumb === undefined ? {} : { onCrumb: props.onCrumb })} onExpand={shownCrumbs.expand} />
     </ToolbarOverflow>
   );
@@ -88,20 +94,7 @@ function toolbarItems(props: PreviewToolbarProps): readonly ToolbarItem[] {
     id: 'devices',
     priority: 90,
     content: <DeviceButtons activeDevice={props.activeDevice} onDevice={props.onDevice} />,
-    menu: (finish) =>
-      DEVICES.map(({ key, Icon, title }) => (
-        <button
-          key={key}
-          className="preview-toolbar-action"
-          data-tooltip={title}
-          aria-label={title}
-          aria-pressed={props.activeDevice === key}
-          onClick={() => finish(() => props.onDevice(key))}
-        >
-          <Icon size={15} />
-          <span>{title.split(' — ')[0]}</span>
-        </button>
-      )),
+    afterPress: 'close',
   };
   const sizing: readonly ToolbarItem[] = props.sizing
     ? [
@@ -109,7 +102,7 @@ function toolbarItems(props: PreviewToolbarProps): readonly ToolbarItem[] {
           id: 'sizing',
           priority: 20,
           content: <PreviewSizeControls {...props.sizing} />,
-          menu: () => props.sizing && <PreviewSizeControls {...props.sizing} />,
+          afterPress: 'stay',
         },
       ]
     : [];
@@ -118,12 +111,7 @@ function toolbarItems(props: PreviewToolbarProps): readonly ToolbarItem[] {
       id: 'guide',
       priority: 30,
       content: <GuideMenu {...props.guide} />,
-      menu: () => (
-        <div className="preview-toolbar-menu-control">
-          <span>Column guide</span>
-          <GuideMenu {...props.guide} />
-        </div>
-      ),
+      afterPress: 'stay',
     },
     ...interactionItems(props.interaction),
     ...sizing,
@@ -171,23 +159,22 @@ function inspectorItems(inspector: PreviewInspectorActions | undefined): readonl
   if (!inspector) {
     return [];
   }
-  return [
-    { id: 'settings', label: 'Settings', run: inspector.settings },
-    ...(inspector.style ? [{ id: 'style', label: 'Style', run: inspector.style }] : []),
-  ].map(({ id, label, run }) => ({
-    id,
-    priority: 100,
-    content: (
-      <button className="preview-toolbar-action" onClick={run}>
-        {label}
+  const label = inspector.open ? 'Hide style and settings panel' : 'Show style and settings panel';
+  const button = (
+    <div className="device-btns guide-btns">
+      <button
+        type="button"
+        aria-label={label}
+        data-tooltip={label}
+        aria-pressed={inspector.open}
+        className={inspector.open ? 'on' : ''}
+        onClick={inspector.toggle}
+      >
+        <PanelRightIcon size={13} />
       </button>
-    ),
-    menu: (finish) => (
-      <button className="preview-toolbar-action" onClick={() => finish(run)}>
-        {label}
-      </button>
-    ),
-  }));
+    </div>
+  );
+  return [{ id: 'inspector', priority: 100, content: button, afterPress: 'close' }];
 }
 
 function useFoldedCrumbs(crumbs: readonly PreviewCrumb[]): {
@@ -283,5 +270,5 @@ function interactionItems(interaction: PreviewToolbarProps['interaction']): read
       </button>
     </div>
   );
-  return [{ id: 'interaction', priority: 40, content: button, menu: () => button }];
+  return [{ id: 'interaction', priority: 40, content: button, afterPress: 'close' }];
 }

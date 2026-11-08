@@ -5,13 +5,13 @@
 // against the intent's own snapshot; stale ones are mapped through the diff
 // with the region they sit in, and only exactly.
 import { assert } from '../core/assert';
-import type { Operation, RejectionReason, SourceEdit } from './intent';
+import { TAG_NAME_RE, type Operation, type RejectionReason, type SourceEdit } from './intent';
 import { LIMITS } from '../core/limits';
 import type { CandidatePolicy, Plan, Splice } from './planner';
 import { nodeEditable, nodeRewriteable, nodeUnchanged, resolveTarget, sameSpan, slice, validProjections, type PlanContext } from './planSupport';
 import type { AnchorRef } from '../page/ref';
 import { err, ok, type Result } from '../core/result';
-import { byteStringsEqual, encodeUtf8, spansAscending, toByteSpan, type ByteSpan, type ByteString } from '../core/span';
+import { byteStringsEqual, encodeUtf8, spansAscending, toByteSpan, utf8ByteLength, type ByteSpan, type ByteString } from '../core/span';
 
 /** Bytes of context each side of a hunk when it is mapped through the diff.
  * A hunk of a few bytes (`Old`, a closing brace) repeats everywhere, and the
@@ -19,6 +19,33 @@ import { byteStringsEqual, encodeUtf8, spansAscending, toByteSpan, type ByteSpan
  * The trade is the patch tool's: more context resolves more hunks and rejects
  * more of those whose neighbourhood someone else edited. */
 const HUNK_CONTEXT_BYTES = 64;
+
+/** A bare text run given a tag of its own, as one hunk. The run's bytes are
+ * kept as written, so an entity such as `&#123;` stays an entity. The tag goes
+ * on the same line as the words: a line break inside it would add a space the
+ * run did not have. Whitespace holding a line break is the file's layout and
+ * stays outside the tag; a space on the run's own line is part of the run. One
+ * hunk rather than two insertions, so the new element and its text lie wholly
+ * inside what the edit wrote, which is how the session pairs them with the
+ * nodes it predicted (src/editor/nodeHandles.ts). Undefined for a blank run:
+ * there are no words to wrap. */
+export function wrappedTextHunk(run: string, span: ByteSpan, name: string): SourceEdit | undefined {
+  assert(utf8ByteLength(run) === span.end - span.start, 'A run is the text of its span');
+  assert(TAG_NAME_RE.test(name), 'A wrapped run gets a valid tag name');
+  if (run.trim() === '') {
+    return undefined;
+  }
+  const leading = run.slice(0, run.length - run.trimStart().length);
+  const trailing = run.slice(run.trimEnd().length);
+  const before = leading.includes('\n') ? leading : '';
+  const after = trailing.includes('\n') ? trailing : '';
+  const kept = run.slice(before.length, run.length - after.length);
+  const start = span.start + utf8ByteLength(before);
+  const end = span.end - utf8ByteLength(after);
+  assert(start < end, 'A wrapped run keeps at least one byte');
+  assert(kept.trim() === run.trim(), 'Wrapping keeps every word of the run');
+  return { span: toByteSpan(start, end), text: `<${name}>${kept}</${name}>` };
+}
 
 /** A loop rename (multi-span): every site holds the old name, as a whole
  * identifier, inside the loop the anchor resolves to. */

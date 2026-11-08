@@ -457,6 +457,9 @@ export function useSavers(toasts: ReturnType<typeof useToasts>, coreState: Retur
         onAppliedUrgentEdit: () => {
           tellCanvas({ type: 'avb:patch-now' });
         },
+        onRefusedGesture: () => {
+          tellCanvas({ type: 'avb:move-revert' });
+        },
         edit: editProjectPage,
         editBatch: editProjectPageBatch,
         read: readPage,

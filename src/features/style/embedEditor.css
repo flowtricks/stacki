@@ -515,11 +515,15 @@
   pointer-events: none;
 }
 
-/* Each trapezoid is a drag handle: opt into pointer events, show a resize cursor
-   along its axis, and suppress touch scrolling so a drag doesn't pan the panel. */
+/* Each trapezoid is a drag handle: opt into pointer events and show a resize cursor
+   along its axis. On touch the panel keeps its vertical swipe (`pan-y`): the band takes
+   a horizontal drag or a held press, and cancels the pan itself once it has (useSideDrag,
+   ui/touchClaim.ts). With `none`, a swipe across the box edited a side instead of
+   scrolling, and on a phone the box fills much of the panel. */
 .embed-editor_spacing-tri {
   pointer-events: auto;
-  touch-action: none;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
   transition: fill var(--transition-fast);
 }
 .embed-editor_spacing-tri.is-top,
@@ -641,9 +645,11 @@
 /* The number still drags (see useSideDrag), but it reads as a button first —
    clicking it opens the editor — so it keeps the plain pointer. The resize cursor
    belongs to the band around it (.embed-editor_spacing-tri), which is only a drag
-   handle. `touch-action: none` stays: a drag from here must not pan the panel. */
+   handle. On touch it scrolls with the panel like the band does, until a horizontal
+   drag or a held press claims it (ui/touchClaim.ts). */
 .embed-editor_spacing-label {
-  touch-action: none;
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
 }
 
 /* Unset ("0") — dim with a faint neutral hover so it still reads as clickable. */
@@ -3407,13 +3413,26 @@ textarea.embed-editor_value-input.is-expanded {
 }
 .embed-editor_css-code-editor .cm-scroller {
   max-height: min(36vh, 360px);
+  overflow-x: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
 }
 .embed-editor_css-code-editor .cm-content {
   min-height: 100px;
+}
+/* The scroller holds the height, so the content must not. Two classes, because
+   CssCodeEditor.css loads after this sheet and caps it at 70vh: a taller rule
+   then ran out of its content box, past the bottom padding, and its last line
+   ended under the sideways bar. */
+.code-editor.embed-editor_css-code-editor .cm-content {
   max-height: none;
+}
+/* The sideways bar starts past the box's rounded corners: at the ends of its
+   travel they would otherwise shave the thumb. */
+.embed-editor_css-code-editor .cm-scroller::-webkit-scrollbar-track:horizontal,
+.embed-editor_css-code-preview::-webkit-scrollbar-track:horizontal {
+  margin-inline: var(--radius-xl);
 }
 .embed-editor_css-code-preview {
   width: 100%;
@@ -3428,8 +3447,9 @@ textarea.embed-editor_value-input.is-expanded {
   font-family: var(--font-family-mono);
   font-size: var(--font-size-sm);
   line-height: var(--line-height-normal);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  /* One declaration per line, as the editor beside it: a long one scrolls. */
+  white-space: pre;
+  overflow-x: auto;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -3441,6 +3461,11 @@ textarea.embed-editor_value-input.is-expanded {
 }
 .embed-editor_css-code-line {
   display: block;
+  /* As wide as its text, so the box's right padding comes after a long line at
+     the end of the scroll. A line held to the box's width overflows past that
+     padding, and the text stops flush against the edge. */
+  width: max-content;
+  min-width: 100%;
   min-height: 1lh;
 }
 .embed-editor_css-code-selector,
@@ -3893,6 +3918,31 @@ textarea.embed-editor_value-input.is-expanded {
 /* Non-active tags sit clearly darker so the selected one reads as the brightest;
    the selected tag gets no border/ring — only the fuller blue. Hover lifts partway
    toward the selected blue, but stays well short of it so the two never look alike. */
+/* A long selector is cut from its start: chips of one nested rule share their whole
+   beginning and differ only at the end. An RTL box puts the ellipsis on the left, and
+   the `<bdi dir="ltr">` inside keeps the selector's order. Without it the bidi algorithm
+   moves the punctuation at the ends of the text: `:open > a::after` drew as
+   `open > a::after:`. This box does the cutting, not the chip, because every button is
+   a centred flex container (styles.css), where a child overflows both ways with no
+   ellipsis. CSS rather than measuring, so the text stays whole in the DOM and refits
+   at any width. */
+.embed-editor_selector-chip-text {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  direction: rtl;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The chip's whole selector in its tooltip (SelectorPicker.tsx). A selector has few
+   places to break and its text may be one long word, so it breaks anywhere rather
+   than running past the tooltip's edge; the tooltip's height follows. */
+.embed-editor_selector-tip-code {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .embed-editor_selector-chip:not(.is-active):not(.is-pending) {
   background: color-mix(in srgb, var(--color-class-tag-bg) 45%, #000);
 }
@@ -4020,6 +4070,12 @@ textarea.embed-editor_value-input.is-expanded {
 .embed-editor_suggest-item.is-active {
   background: var(--color-info-border);
   color: var(--color-text-primary);
+}
+/* Why Enter left a name in the field: a line of the list, never a row to pick. */
+.embed-editor_suggest-note {
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
 }
 /* The letters a typed query matched (fuzzyRank.ts): a tint behind them, not a
    border, so the name keeps its width and reads as one word. */
@@ -5340,6 +5396,18 @@ textarea.embed-editor_value-input.is-expanded {
    deleted, but quieter than the value it qualifies. */
 .cx-important {
   color: var(--color-text-tertiary, #a6a6a6);
+}
+/* The whitespace in a coloured value (see plainHtml in model/cssCode.ts). The
+   single-line field is a flex row, which trims the edges of bare text and drops
+   whitespace-only text; as an element with `pre` the space keeps its width, so
+   `rgb(255 255 255 / 0.09)` never reads `rgb(255255255/0.09)`. */
+.cx-space {
+  white-space: pre;
+}
+/* The multi-line editor is a block that wraps, where bare spaces already keep
+   their width; `pre` there would stop a long value wrapping at its spaces. */
+.embed-editor_varconnect.is-multiline .cx-space {
+  white-space: inherit;
 }
 
 .embed-editor_varconnect-dot {

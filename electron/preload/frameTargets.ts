@@ -2,7 +2,7 @@
 // tagged elements and the widened thin targets, and the hover, click and
 // double-click the canvas turns into selection.
 
-import { canvasSelects, canvasDragged, trackCanvas } from './frameInteraction';
+import { canvasDragged, canvasInert, canvasSelects, holdLinkClick, replayingLinkClick, trackCanvas } from './frameInteraction';
 import { inlineTextPathAt } from './inlineText';
 import { isElement } from './frameBasics';
 import { PATH_ATTR, announceMapped, collectRegions, inFocus, inScope, pathsOf, regions, renderToken, runsOf, taggedAncestor } from './frameRegions';
@@ -281,7 +281,8 @@ const listenForPointer = () => {
   );
 
   // In the design canvas (any frame the app tracks paths in), clicking
-  // selects the node in the app instead of activating links/buttons.
+  // selects the node in the app. Select mode keeps the click from the page;
+  // interact mode selects and then lets the page have it too (frameInteraction.ts).
   // Interactive preview frames never receive avb:track, so they keep
   // normal page behavior.
   window.addEventListener(
@@ -290,8 +291,13 @@ const listenForPointer = () => {
       if (!canvasSelects()) {
         return;
       }
-      event.preventDefault();
-      event.stopImmediatePropagation();
+      if (replayingLinkClick()) {
+        return; // Selected when it was first clicked.
+      }
+      if (canvasInert()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
       if (canvasDragged()) {
         return;
       }
@@ -307,6 +313,10 @@ const listenForPointer = () => {
         outside: !!outside,
         ...pseudoField(pseudo),
       });
+      if (canvasInert()) {
+        return; // Select mode has already kept the click from the page.
+      }
+      holdLinkClick(event);
     },
     true,
   );

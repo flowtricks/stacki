@@ -4,8 +4,8 @@ import { withNode } from './insertGestures';
 import type { EditGesture } from './pageEdits';
 import type { EditorModel, EditorNode } from './pageView';
 import { findEditorNodeById } from './pageState';
-import { canWrapNode, type WrapperTag } from './wrapRules';
-export { canWrapNode, type WrapperTag } from './wrapRules';
+import { canConvertText, canWrapNode, type TextTag, type WrapperTag } from './wrapRules';
+export { canConvertText, canWrapNode, type TextTag, type WrapperTag } from './wrapRules';
 
 /** One undoable wrap, retaining the selected node's identity and named slot. */
 export function wrapNodeGesture(model: EditorModel, nodeId: string, wrapper: { readonly id: NodeId; readonly name: WrapperTag }): EditGesture {
@@ -32,6 +32,23 @@ export function wrapNodeGesture(model: EditorModel, nodeId: string, wrapper: { r
       return [{ tag: 'wrap-nodes', target, last: target, name: wrapper.name }];
     },
     apply: (current) => withNode(current, nodeId, (node) => wrappedNode(node, wrapper)),
+  };
+}
+
+/** Bare text given a tag, as one undoable edit. The text node's handle moves
+ * inside the new element, which takes the wrapper's handle. */
+export function textWrapGesture(model: EditorModel, nodeId: string, wrapper: { readonly id: NodeId; readonly name: TextTag }): EditGesture {
+  assert(canConvertText(model.nodes, nodeId, wrapper.name), 'The text accepts this tag');
+  assert(wrapper.id !== nodeId, 'A wrapper has its own identity');
+  return {
+    coalesceKey: undefined,
+    urgency: true,
+    stream: undefined,
+    request: (refOf) => {
+      const target = refOf(nodeId);
+      return target === undefined ? undefined : [{ tag: 'wrap-text', target, name: wrapper.name }];
+    },
+    apply: (current) => withNode(current, nodeId, (node) => ({ ...wrapper, kind: 'element', props: {}, children: [node] })),
   };
 }
 

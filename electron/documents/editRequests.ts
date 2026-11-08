@@ -19,10 +19,12 @@
 import { assert } from '../../shared/core/assert';
 import type { Edit, NodeRef } from '../../shared/engine/editRequest';
 import type { BuiltEdit, EditBase, IntentDraft } from './documentActors';
-import { TAG_NAME_RE } from '../../shared/engine/intent';
-import type { Operation, Placement, RejectionReason, SourceEdit } from '../../shared/engine/intent';
+import { isAttributeHost, TAG_NAME_RE } from '../../shared/engine/intent';
+import type { Operation, RejectionReason, SourceEdit } from '../../shared/engine/intent';
 import { renameSites } from '../../shared/engine/loopScope';
-import { closeTagStart, lineIndent, nodeAtPath, openTagEnd, tagNameEnd, textOf } from '../../shared/engine/planSupport';
+import { closeTagStart, indentedFragment, lineIndent, nodeAtPath, openTagEnd, tagNameEnd, textOf } from '../../shared/engine/planSupport';
+import { insertedIndent, labelledSpan, wrapperTakesLines } from '../../shared/engine/planTree';
+import { wrappedTextHunk } from '../../shared/engine/planText';
 import { diffCodePatch } from '../../shared/engine/codePatch';
 import { encodeText } from '../../shared/page/htmlText';
 import { parsePageResult, type PageNode } from '../../shared/page/pageNode';
@@ -31,6 +33,7 @@ import { err, ok, type Result } from '../../shared/core/result';
 import type { Snapshot } from '../../shared/page/snapshot';
 import { byteStringsEqual, decodeUtf8, encodeUtf8, spansAscending, toByteSpan, toByteString } from '../../shared/core/span';
 import { parsePage, serializeNodes, serializePage } from '../parse/astroParser';
+import { indentUnitOf } from '../../shared/core/indent';
 import { frontmatterSlot, pageFormat, placedHunks, resolveRef, shiftedHunks, type Authored } from './editAnchors';
 import { markdownEditDraft, markdownPageNodes } from './markdownEdits';
 
@@ -86,7 +89,14 @@ function nodeEditDraft(edit: Exclude<Edit, { readonly tag: 'revert' | 'code-patc
   switch (edit.tag) {
     case 'set-attribute':
     case 'remove-attribute':
-    case 'set-inline-style':
+    case 'set-inline-style': {
+      // A node with no tag has nowhere to write this: a refusal, not a thrown
+      // intent. A throw reads as a failed transport, so the saver would keep
+      // the gesture at the head of the queue and every later edit of the page
+      // would fail behind it.
+      const { target, ...rest } = edit;
+      return withAnchor(authored, target, (anchor) => (isAttributeHost(anchor.expectedKind) ? ok({ anchor, operation: rest }) : err('unsupported-operation')));
+    }
     case 'remove-node': {
       const { target, ...rest } = edit;
       return withAnchor(authored, target, (anchor) => ok({ anchor, operation: rest }));
@@ -103,12 +113,16 @@ function nodeEditDraft(edit: Exclude<Edit, { readonly tag: 'revert' | 'code-patc
       return withAnchor(authored, edit.target, (anchor) => tagRenameDraft(authored, anchor, edit.to));
     case 'rename-attribute':
       return withAnchor(authored, edit.target, (anchor) =>
-        tagAnchor(anchor) ? ok({ anchor, operation: { tag: 'rename-attribute', from: edit.from, to: edit.to } }) : err('unsupported-operation'),
+        isAttributeHost(anchor.expectedKind)
+          ? ok({ anchor, operation: { tag: 'rename-attribute', from: edit.from, to: edit.to } })
+          : err('unsupported-operation'),
       );
     case 'replace-node':
       return withAnchor(authored, edit.target, (anchor) => replaceDraft(authored, anchor, edit.node));
     case 'wrap-nodes':
       return withAnchor(authored, edit.target, (anchor) => withAnchor(authored, edit.last, (last) => wrapDraft(authored, anchor, last, edit.name)));
+    case 'wrap-text':
+      return withAnchor(authored, edit.target, (anchor) => textWrapDraft(authored, anchor, edit.name));
     case 'unwrap-node':
       return withAnchor(authored, edit.target, (anchor) => unwrapDraft(authored, anchor));
     case 'append-body':
@@ -149,7 +163,7 @@ function replacePageDraft(authored: Authored, next: Extract<Edit, { tag: 'replac
 // The body's first nodes, printed as a new node is; the planner refuses them
 // once the body has any node (they must stand beside it then).
 function appendDraft(authored: Authored, nodes: readonly PageNode[]): IntentDraft {
-  const source = serializeNodes(nodes).replace(/\r?\n$/, '');
+  const source = serializeNodes(nodes, indentUnitOf(authored.text)).replace(/\r?\n$/, '');
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
   const anchor = toAnchorRef({
     span: toByteSpan(0, authored.snapshot.bytes.length),
@@ -169,14 +183,19 @@ function withAnchor(authored: Authored, ref: NodeRef, next: (anchor: AnchorRef) 
 }
 
 // New nodes print with the legacy printer, their continuation lines indented
-// to where they land; a copy is the source node's own bytes.
+// to where the planner lands them; a copy is the source node's own bytes.
 function insertDraft(authored: Authored, anchor: AnchorRef, edit: Extract<Edit, { tag: 'insert-node' }>): Result<IntentDraft, RejectionReason> {
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
-  const indent = lineIndent(authored.snapshot.bytes, anchor.span.start) + (inside(edit.placement) ? '  ' : '');
+  const unit = indentUnitOf(authored.text);
   const content = edit.content;
   if (content.tag === 'copy') {
     return withAnchor(authored, content.source, (source) => {
-      const bytes = authored.snapshot.bytes.subarray(source.span.start, source.span.end);
+      // A copy takes the node's label with it (planTree.ts, labelledSpan), so the
+      // duplicate reads in the Navigator as its original does.
+      const copied = nodeAtPath(authored.projection, source.path);
+      assert(copied !== undefined, 'A checked copy source names a projected node');
+      const span = labelledSpan(authored.snapshot.bytes, authored.projection, copied);
+      const bytes = authored.snapshot.bytes.subarray(span.start, span.end);
       const text = Buffer.from(bytes).toString('utf8');
       return ok({
         anchor,
@@ -184,8 +203,11 @@ function insertDraft(authored: Authored, anchor: AnchorRef, edit: Extract<Edit, 
       });
     });
   }
-  const printed = serializeNodes(content.nodes).replace(/\r?\n$/, '');
-  const text = printed.split(/\r?\n/).join(`${eol}${indent}`);
+  const landing = nodeAtPath(authored.projection, anchor.path);
+  assert(landing !== undefined, 'A checked anchor names a projected node');
+  const indent = insertedIndent(authored.snapshot.bytes, authored.projection, landing, edit.placement);
+  const printed = serializeNodes(content.nodes, unit).replace(/\r?\n$/, '');
+  const text = indentedFragment(printed, indent, eol);
   const operation: Operation = { tag: 'insert-node', placement: edit.placement, source: text };
   return ok({ anchor, operation });
 }
@@ -357,25 +379,38 @@ function textDraft(
   return ok({ anchor, operation: { tag: 'rewrite-node', hunks } });
 }
 
-// Attributes live on tags: elements, component invocations, `<style>`/`<script>`.
-function tagAnchor(anchor: AnchorRef): boolean {
-  const kind = anchor.expectedKind;
-  return kind === 'element' || kind === 'component' || kind === 'raw';
-}
-
 // A run of siblings inside a new tag: the opening tag on its own line before
 // the first, the closing tag on its own line after the last, at the first
-// one's indentation. The run's own bytes are not re-indented.
+// one's indentation, or tight around it where a line break would show (the layout
+// rule, planTree.ts). The run's own bytes are not re-indented.
 function wrapDraft(authored: Authored, anchor: AnchorRef, last: AnchorRef, name: string): Result<IntentDraft, RejectionReason> {
+  const first = nodeAtPath(authored.projection, anchor.path);
+  assert(first !== undefined, 'A checked anchor names a projected node');
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
   const indent = lineIndent(authored.snapshot.bytes, anchor.span.start);
+  const lines = wrapperTakesLines(authored.snapshot.bytes, authored.projection, first, name);
   const operation: Operation = {
     tag: 'wrap-nodes',
     last,
-    open: `<${name}>${eol}${indent}`,
-    close: `${eol}${indent}</${name}>`,
+    open: lines ? `<${name}>${eol}${indent}` : `<${name}>`,
+    close: lines ? `${eol}${indent}</${name}>` : `</${name}>`,
   };
   return ok({ anchor, operation });
+}
+
+// A text run inside a new tag, written as a rewrite of the run: `wrap-nodes`
+// puts its tags on lines of their own, which here would add spaces to the words.
+function textWrapDraft(authored: Authored, anchor: AnchorRef, name: string): Result<IntentDraft, RejectionReason> {
+  const node = nodeAtPath(authored.projection, anchor.path);
+  assert(node !== undefined, 'A checked anchor names a projected node');
+  if (node.kind !== 'text') {
+    return err('unsupported-operation');
+  }
+  const hunk = wrappedTextHunk(textOf(authored.snapshot.bytes, node.span), node.span, name);
+  if (hunk === undefined) {
+    return err('unsupported-operation'); // A blank run has no words to wrap.
+  }
+  return ok({ anchor, operation: { tag: 'rewrite-node', hunks: [hunk] } });
 }
 
 // A paired tag taken away, its children kept as they are written: the opening
@@ -548,8 +583,4 @@ function continuesCodePoint(bytes: Uint8Array, offset: number): boolean {
     return false; // The end of the file is a boundary.
   }
   return byte >= 0x80 && byte < 0xc0;
-}
-
-function inside(placement: Placement): boolean {
-  return placement === 'first-child' || placement === 'last-child';
 }

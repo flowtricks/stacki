@@ -85,7 +85,9 @@ check('and the same for redo', /ipcMain\.handle\('native:redo'[\s\S]{0,120}webCo
 // that wrote and said nothing, which is what "undo doesn't work here" was.
 const vars = read('src/features/variables/VariablesView.tsx') + read('src/features/variables/variableHistory.ts');
 for (const [what, near] of [
-  ['a value', 'const save = useCallback'],
+  // A value save goes through a queue (one write in flight, the latest draft
+  // waiting), so the undoable write is the queue's writer, not `save` itself.
+  ['a value', 'const writeOnce = useCallback'],
   ['a new variable', 'const add = useCallback'],
   ['a row moved', 'const move = useCallback'],
   ['a group moved', "await writeWithUndo(selectedFile.rel, 'the group'"],

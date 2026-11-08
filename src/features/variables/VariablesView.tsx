@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onVariablesChanged } from '../../ipc/editorEnvironment';
-import type { VariableBlock, VariableCell, VariableFile, VariableSelection } from './variablesBridge';
+import type { VariableBlock, VariableCell, VariableFile, VariableSelection } from '../../ipc/variablesBridge';
 import type { WireColumn } from '../../../shared/ipc/ipcResults';
 import type { VariableSlot, VariableRename } from './variableRows';
 import { assert } from '../../../shared/core/assert';
@@ -9,11 +9,14 @@ import { definedFields } from '../../../shared/core/boundary';
 import { variableEdit as bridge } from '../../ipc/variableEditBridge';
 import { createVariableHistory, type VariableUndo } from './variableHistory';
 import { createVariableRefresh } from './variableRefresh';
+import { createLiveVariables, createVariableSaves, liveVariableOf, VariablePreviewContext } from './liveVariableEdits';
+import { tellCanvas } from '../../editor/canvasQuery';
 import { dropPlan, stemOf } from './variableRows';
 import { fluidCheck, resolveValue } from './fluid';
 import { getHost, setHost } from '../style/model/host';
 import { CloseIcon, CheckIcon } from '../../ui/Icons';
 import Sheet from './VariableTable';
+import { VariableScopeBadge } from './VariableScopeBadge';
 import DockableWindow, { type WindowMode } from '../../ui/DockableWindow';
 import { readWindowMode, storeWindowMode } from '../../ui/windowPreferences';
 import '../style/utilities.css';
@@ -89,19 +92,21 @@ function VariablesViewBody({
       storageKey="stacki.window.variables"
       header={<VariablesWindowHeader state={state} />}
     >
-      <Sheet
-        blocks={state.blocks}
-        group={group}
-        onSave={state.save}
-        onMove={state.move}
-        onAdd={state.add}
-        onRename={state.rename}
-        onRetitle={state.retitle}
-        onDuplicateSection={state.duplicateSection}
-        onDeleteSection={state.deleteSection}
-        fluidOf={state.fluidOf}
-        onDraft={state.noteDraft}
-      />
+      <VariablePreviewContext.Provider value={state.preview}>
+        <Sheet
+          blocks={state.blocks}
+          group={group}
+          onSave={state.save}
+          onMove={state.move}
+          onAdd={state.add}
+          onRename={state.rename}
+          onRetitle={state.retitle}
+          onDuplicateSection={state.duplicateSection}
+          onDeleteSection={state.deleteSection}
+          fluidOf={state.fluidOf}
+          onDraft={state.noteDraft}
+        />
+      </VariablePreviewContext.Provider>
     </DockableWindow>
   );
 }
@@ -116,6 +121,7 @@ function VariablesWindowHeader({ state }: { readonly state: ReturnType<typeof us
         <span className="cms-detail-title" title={state.group?.label}>
           {state.group?.label}
         </span>
+        <VariableScopeBadge scope={state.group?.scope} />
         <span className={`cms-saved ${state.saved ? 'on' : ''}`}>
           <CheckIcon size={11} /> Saved
         </span>
@@ -248,13 +254,21 @@ function useVariableModel(props: VariablesViewProps) {
 type VariableModel = ReturnType<typeof useVariableModel>;
 type VariableHistory = ReturnType<typeof createVariableHistory>;
 function useVariableSave(model: VariableModel, writeWithUndo: VariableHistory) {
-  const { project, showToast, refresh, markSaved } = model;
+  const { project, showToast, refresh, markSaved, files } = model;
+  // The latest read, for the frame to find a value's declaration; read at the
+  // moment of the edit, so the callbacks below need not change with every read.
+  const filesRef = useRef(files);
+  filesRef.current = files;
 
-  const save = useCallback(
-    async (cell: VariableCell, value: string) => {
-      // One step per value, not per keystroke: the field writes as it is typed
-      // and the burst collapses on the key.
-      await writeWithUndo(cell.file, 'the value', `var:${cell.file}:${cell.name}`, async () => {
+  const live = useMemo(() => createLiveVariables((message) => void tellCanvas(message)), []);
+  // A page change (or the panel closing) leaves nothing to preview.
+  useEffect(() => () => live.clear(), [live, project.path]);
+
+  // One undoable write of one value. The undo step coalesces on the key, so a
+  // held arrow is one step, however many writes it took.
+  const writeOnce = useCallback(
+    async (cell: VariableCell, value: string): Promise<boolean> => {
+      return writeWithUndo(cell.file, 'the value', `var:${cell.file}:${cell.name}`, async () => {
         const result = await bridge('setCssVariable', {
           projectPath: project.path,
           file: cell.file,
@@ -275,7 +289,33 @@ function useVariableSave(model: VariableModel, writeWithUndo: VariableHistory) {
     },
     [project.path, refresh, showToast, writeWithUndo, markSaved],
   );
-  return { save };
+  const writeRef = useRef(writeOnce);
+  writeRef.current = writeOnce;
+
+  const saves = useMemo(
+    () =>
+      createVariableSaves((cell, value) => writeRef.current(cell, value), {
+        onStart: (cell) => live.saving(liveVariableOf(filesRef.current, cell)),
+        onIdle: (cell, value) => live.saved(liveVariableOf(filesRef.current, cell), value),
+      }),
+    [live],
+  );
+
+  const save = useCallback(
+    async (cell: VariableCell, value: string) => {
+      live.saving(liveVariableOf(filesRef.current, cell));
+      await saves.save(cell, value);
+    },
+    [live, saves],
+  );
+  // A field's draft, straight to the canvas; undefined when it was abandoned.
+  const preview = useCallback(
+    (cell: VariableCell, value: string | undefined) => {
+      live.draft(liveVariableOf(filesRef.current, cell), value);
+    },
+    [live],
+  );
+  return { save, preview };
 }
 function useVariableMove(model: VariableModel, writeWithUndo: VariableHistory) {
   const { project, showToast, refresh, fileRef, firstSelectorRef } = model;

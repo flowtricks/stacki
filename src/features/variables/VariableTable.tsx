@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { VariableBlock, VariableGroup } from './variablesBridge';
+import type { VariableBlock, VariableGroup } from '../../ipc/variablesBridge';
 import type { WireColumn } from '../../../shared/ipc/ipcResults';
 import type { VariableCellProps } from './VariableCell';
 import type { VariableSlot, VariableRename, SlotOffset } from './variableRows';
@@ -13,6 +13,8 @@ import useListReorder from '../../ui/useListReorder';
 import MoreMenu from '../../ui/MoreMenu';
 import VariableTypeIcon from './VariableTypeIcon';
 import { PencilIcon, CopyIcon, TrashIcon, DragIcon, PlusIcon } from '../../ui/Icons';
+import { CodeInline } from '../../ui/CodeBlock';
+import { labelParts, labelPlainText } from '../../../shared/page/commentLabel';
 
 type EditName = (name: string) => boolean | void | Promise<boolean | void>;
 type AddVariable = (block: VariableBlock, columns: readonly WireColumn[], word: string) => void | Promise<void>;
@@ -547,7 +549,15 @@ function CommentHeading({ state, title }: { readonly state: ReturnType<typeof us
   const { renameSignal, setRenameSignal } = state;
   return (
     <>
-      <EditableName className="vars-section-text" value={title} title={title} openSignal={renameSignal} onRename={(next) => onRetitle?.(block, next)} />
+      <EditableName
+        className="vars-section-text"
+        value={title}
+        title={block.description ?? labelPlainText(title)}
+        openSignal={renameSignal}
+        onRename={(next) => onRetitle?.(block, next)}
+      >
+        <CommentTitle title={title} />
+      </EditableName>
       <SectionMenu
         onRename={() => setRenameSignal((signal) => signal + 1)}
         onDuplicate={() => {
@@ -557,6 +567,19 @@ function CommentHeading({ state, title }: { readonly state: ReturnType<typeof us
           void Promise.resolve(onDeleteSection?.(block)).catch(reportEditFailure);
         }}
       />
+    </>
+  );
+}
+
+// A heading read from a comment: its words, with what the author put in
+// backticks drawn as code (AGENTS.md, "Code display"). The field that renames it
+// edits the title as written, backticks and all.
+function CommentTitle({ title }: { readonly title: string }) {
+  return (
+    <>
+      {labelParts(title).map((part, index) =>
+        part.kind === 'code' ? <CodeInline key={index} text={part.text} language="css" /> : <React.Fragment key={index}>{part.text}</React.Fragment>,
+      )}
     </>
   );
 }
@@ -598,7 +621,9 @@ function TableTitle({ state }: { readonly state: ReturnType<typeof useVariableTa
             // the comment, and the names underneath are its own business.
             <CommentHeading state={state} title={block.title} />
           ) : (
-            <span className="vars-section-text">{block.title}</span>
+            <span className="vars-section-text" title={block.description ?? labelPlainText(block.title)}>
+              <CommentTitle title={block.title} />
+            </span>
           )}
         </h3>
       )}

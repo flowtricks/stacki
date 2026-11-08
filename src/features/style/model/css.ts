@@ -9,7 +9,7 @@
 import postcss, { type Root, type Rule, type AtRule, type ChildNode } from 'postcss';
 import type { ParsedDeclaration, ParsedRule, StyleRegion } from './styleTypes';
 import { parseSelectorList, selectorListMembers } from './selectors';
-import { ruleLayout, sourceTextFromEditor } from './cssRuleText';
+import { ruleChainLevels, ruleHead, ruleLayout, sourceTextFromEditor } from './cssRuleText';
 import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
 import {
@@ -684,6 +684,7 @@ function buildRule(
   // A nested rule matches/displays by its selector RESOLVED against the parent; the
   // postcss node keeps the raw nested selector (`.hero_title`) for editing.
   const selectorText = resolvedSelectors && resolvedSelectors.length ? resolvedSelectors.join(', ') : node.selector;
+  const parents = ruleChainLevels(node);
 
   return {
     ruleId,
@@ -697,6 +698,7 @@ function buildRule(
     selectorText,
     ...(nestedDisplay === undefined ? {} : { nestedDisplay }),
     ...(queryDisplay === undefined ? {} : { queryDisplay }),
+    ...(parents.length === 0 ? {} : { written: { parents, head: ruleHead(node) } }),
     atContext,
     selectors: parseSelectorList(selectorText),
     declarations,
@@ -787,7 +789,7 @@ export function reorderDeclarations(rule: ParsedRule, orderedDeclIds: string[]) 
 
 /**
  * Replace a rule's entire body by re-parsing the CSS Code editor's text for that rule.
- * The editor shows the rule flush left with two-space levels (ruleEditorText); the
+ * The editor shows the rule flush left with a tab per level (ruleEditorText); the
  * block's indentation and the file's own indent unit go back before parsing, and the
  * rule keeps the whitespace that led up to it, so the file keeps its layout.
  */
@@ -796,7 +798,8 @@ export function replaceRuleCss(rule: ParsedRule, editorCss: string): { ok: true 
   const sourceCss = sourceTextFromEditor(editorCss, ruleLayout(rule.node));
   try {
     const parsed = postcss.parse(sourceCss);
-    const nodes = parsed.nodes.filter((node): node is Rule => node.type === 'rule');
+    // A nested query's own declarations are a rule bound to the at-rule itself.
+    const nodes = parsed.nodes.filter((node) => node.type === rule.node.type);
     if (!nodes.length) {
       return { ok: false, error: 'No CSS rule found in the edited text.' };
     }

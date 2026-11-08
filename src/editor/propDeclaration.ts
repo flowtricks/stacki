@@ -35,6 +35,7 @@
 
 import type { SyntaxNode } from '@lezer/common';
 import { assert } from '../../shared/core/assert';
+import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import { LIMITS } from '../../shared/core/limits';
 import { err, ok, type Result } from '../../shared/core/result';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
@@ -582,10 +583,10 @@ function entryText(declaration: PropDeclaration, local: string, fallback: string
 // The member and its doc comment, indented as a member of `interface Props`.
 function memberText(declaration: PropDeclaration, type: string): string {
   const lines = [tooltipText(declaration.tooltip), ...settingTags(declaration)].filter((line) => line !== '');
-  const comment = lines.length === 0 ? '' : `  /** ${lines.join('\n   * ')} */\n`;
+  const comment = lines.length === 0 ? '' : `\t/** ${lines.join('\n\t * ')} */\n`;
   const modifier = declaration.typing?.readonly === true ? 'readonly ' : '';
   const optional = declaration.typing?.required === true ? '' : '?';
-  return `${comment}  ${modifier}${declaration.key}${optional}: ${type};\n`;
+  return `${comment}\t${modifier}${declaration.key}${optional}: ${type};\n`;
 }
 
 // A prop's settings as JSDoc tags; a setting left at its default is not written.
@@ -631,16 +632,17 @@ function destructureEdits(frontmatter: string, entry: string, kind: NewPropKind)
 // top declaring every prop the destructure already reads, so adding it types
 // nothing that was untyped as an error.
 function interfaceEdits(frontmatter: string, member: string, options: { readonly restBefore: boolean }): readonly TextEdit[] {
+  const unit = indentUnitOf(frontmatter);
   const end = propsInterfaceEnd(frontmatter);
   if (end !== undefined) {
     const lineBreak = frontmatter.slice(0, end).trimEnd().length === end ? '\n' : '';
-    return [{ at: end, text: `${lineBreak}${member}`, order: 0 }];
+    return [{ at: end, text: `${lineBreak}${withIndentUnit(member, unit)}`, order: 0 }];
   }
   // A rest binding with no interface takes any attribute; an interface that
   // left it out would turn every attribute an instance passes into a type
   // error, and no tag is known here to extend HTMLAttributes with.
-  const restMember = options.restBefore ? ['  [attribute: string]: unknown;\n'] : [];
-  return [{ at: 0, text: `interface Props {\n${[...existingMembers(frontmatter), ...restMember].join('')}${member}}\n`, order: 0 }];
+  const restMember = options.restBefore ? ['\t[attribute: string]: unknown;\n'] : [];
+  return [{ at: 0, text: withIndentUnit(`interface Props {\n${[...existingMembers(frontmatter), ...restMember].join('')}${member}}\n`, unit), order: 0 }];
 }
 
 // `extends HTMLAttributes<"tag">` on `interface Props`, added to an extends
@@ -651,7 +653,8 @@ function attributesEdits(frontmatter: string, declaration: PropDeclaration): rea
   const base = `${ATTRIBUTES_TYPE.name}<${JSON.stringify(declaration.tag)}>`;
   const head = interfaceHead(frontmatter);
   if (head === undefined) {
-    return [{ at: 0, text: `${comment}interface Props extends ${base} {\n${existingMembers(frontmatter).join('')}}\n`, order: 0 }];
+    const text = `${comment}interface Props extends ${base} {\n${existingMembers(frontmatter).join('')}}\n`;
+    return [{ at: 0, text: withIndentUnit(text, indentUnitOf(frontmatter)), order: 0 }];
   }
   const edits: TextEdit[] = comment === '' ? [] : [{ at: head.statement, text: comment, order: 0 }];
   if (/\bHTMLAttributes\s*</.test(head.text)) {
@@ -668,7 +671,7 @@ function attributesEdits(frontmatter: string, declaration: PropDeclaration): rea
 function existingMembers(frontmatter: string): readonly string[] {
   return (readPropsDestructure(frontmatter)?.entries ?? []).map((entry) => {
     const value = entry.defaultValue === undefined ? '' : frontmatter.slice(entry.defaultValue.from, entry.defaultValue.to);
-    return `  ${entry.key}?: ${literalType(value)};\n`;
+    return `\t${entry.key}?: ${literalType(value)};\n`;
   });
 }
 

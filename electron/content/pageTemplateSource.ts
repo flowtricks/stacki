@@ -46,14 +46,14 @@ const REQUEST_TIMEOUT_MS = 15_000;
 // scope. It matches slugifyAddress (shared/properties/pageTemplate.ts), so the
 // example the form showed is the address the build makes.
 const SLUG_HELPER = [
-  '  const toSlug = (value: unknown) =>',
-  "    String(value ?? '')",
-  "      .normalize('NFKD')",
-  "      .replace(/[\\u0300-\\u036f]/g, '')",
-  '      .toLowerCase()',
-  "      .replace(/[^a-z0-9]+/g, '-')",
-  "      .replace(/^-+|-+$/g, '');",
-  '  const seen = new Map();',
+  '\tconst toSlug = (value: unknown) =>',
+  "\t\tString(value ?? '')",
+  "\t\t\t.normalize('NFKD')",
+  "\t\t\t.replace(/[\\u0300-\\u036f]/g, '')",
+  '\t\t\t.toLowerCase()',
+  "\t\t\t.replace(/[^a-z0-9]+/g, '-')",
+  "\t\t\t.replace(/^-+|-+$/g, '');",
+  '\tconst seen = new Map();',
 ] as const;
 
 export function pageTemplateText(input: TemplatePageInput): string {
@@ -111,7 +111,7 @@ function contentPageText(input: TemplatePageInput, source: ContentSource, facts:
     '}',
     '',
     'interface Props {',
-    `  entry: CollectionEntry<${name}>;`,
+    `\tentry: CollectionEntry<${name}>;`,
     '}',
     '',
     'const { entry } = Astro.props;',
@@ -122,28 +122,28 @@ function contentPageText(input: TemplatePageInput, source: ContentSource, facts:
 }
 
 function contentPathLines(param: string, slug: ContentSlug, names: { readonly name: string; readonly idField: string }): readonly string[] {
-  const entries = `  const entries = await getCollection(${names.name});`;
+  const entries = `\tconst entries = await getCollection(${names.name});`;
   if (slug.kind === 'entry-id') {
-    return [entries, `  return entries.map((entry) => ({ params: { ${key(param)}: ${names.idField} }, props: { entry } }));`];
+    return [entries, `\treturn entries.map((entry) => ({ params: { ${key(param)}: ${names.idField} }, props: { entry } }));`];
   }
   const value = `entry.data${member(slug.name)}`;
   if (slug.treatment === 'exact') {
-    return [entries, `  return entries.map((entry) => ({ params: { ${key(param)}: ${value} }, props: { entry } }));`];
+    return [entries, `\treturn entries.map((entry) => ({ params: { ${key(param)}: ${value} }, props: { entry } }));`];
   }
   return [
     ...SLUG_HELPER,
     entries,
-    '  return entries.map((entry) => {',
-    `    const slug = toSlug(${value});`,
-    "    if (slug === '') {",
-    `      throw new Error(\`\${${names.idField}}: ${slug.name} has no letters or numbers for its page address.\`);`,
-    '    }',
-    '    if (seen.has(slug)) {',
-    `      throw new Error(\`\${seen.get(slug)} and \${${names.idField}} would both be at \${slug}. Change ${slug.name} on one of them.\`);`,
-    '    }',
-    `    seen.set(slug, ${names.idField});`,
-    `    return { params: { ${key(param)}: slug }, props: { entry } };`,
-    '  });',
+    '\treturn entries.map((entry) => {',
+    `\t\tconst slug = toSlug(${value});`,
+    "\t\tif (slug === '') {",
+    `\t\t\tthrow new Error(\`\${${names.idField}}: ${slug.name} has no letters or numbers for its page address.\`);`,
+    '\t\t}',
+    '\t\tif (seen.has(slug)) {',
+    `\t\t\tthrow new Error(\`\${seen.get(slug)} and \${${names.idField}} would both be at \${slug}. Change ${slug.name} on one of them.\`);`,
+    '\t\t}',
+    `\t\tseen.set(slug, ${names.idField});`,
+    `\t\treturn { params: { ${key(param)}: slug }, props: { entry } };`,
+    '\t});',
   ];
 }
 
@@ -167,32 +167,32 @@ function externalPageText(input: TemplatePageInput, request: readonly string[], 
     'export async function getStaticPaths() {',
     ...(slugified ? SLUG_HELPER : []),
     ...request,
-    '  if (!response.ok) {',
-    '    throw new Error(`${url} answered ${response.status}.`);',
-    '  }',
-    '  const body = await response.json();',
-    `  const list = ${shape.listAccess};`,
-    '  if (!Array.isArray(list)) {',
-    `    throw new Error(${quoted(`Expected a list at ${shape.listLabel}.`)});`,
-    '  }',
-    `  const kinds = { ${fields.map((field) => `${key(field.path)}: ${quoted(runtimeKind(field.kind))}`).join(', ')} };`,
-    '  return list.map((item, index) => {',
+    '\tif (!response.ok) {',
+    '\t\tthrow new Error(`${url} answered ${response.status}.`);',
+    '\t}',
+    '\tconst body = await response.json();',
+    `\tconst list = ${shape.listAccess};`,
+    '\tif (!Array.isArray(list)) {',
+    `\t\tthrow new Error(${quoted(`Expected a list at ${shape.listLabel}.`)});`,
+    '\t}',
+    `\tconst kinds = { ${fields.map((field) => `${key(field.path)}: ${quoted(runtimeKind(field.kind))}`).join(', ')} };`,
+    '\treturn list.map((item, index) => {',
     ...itemSlugLines(shape),
-    '    for (const [name, kind] of Object.entries(kinds)) {',
-    "      const value = name.split('.').reduce((part, step) => part?.[step], item);",
-    '      if (value !== undefined && value !== null && typeof value !== kind) {',
-    '        throw new Error(`Item ${index}: ${name} is not a ${kind}.`);',
-    '      }',
-    '    }',
-    `    const entry = ${entryLiteral(tree, 0)};`,
-    `    return { params: { ${key(input.route.param)}: ${slugified ? 'slug' : 'String(slug)'} }, props: { entry } };`,
-    '  });',
+    '\t\tfor (const [name, kind] of Object.entries(kinds)) {',
+    "\t\t\tconst value = name.split('.').reduce((part, step) => part?.[step], item);",
+    '\t\t\tif (value !== undefined && value !== null && typeof value !== kind) {',
+    '\t\t\t\tthrow new Error(`Item ${index}: ${name} is not a ${kind}.`);',
+    '\t\t\t}',
+    '\t\t}',
+    `\t\tconst entry = ${entryLiteral(tree, 0)};`,
+    `\t\treturn { params: { ${key(input.route.param)}: ${slugified ? 'slug' : 'String(slug)'} }, props: { entry } };`,
+    '\t});',
     '}',
     '',
     'interface Props {',
-    '  entry: {',
+    '\tentry: {',
     ...propLines(tree, 0),
-    '  };',
+    '\t};',
     '}',
     '',
     'const { entry } = Astro.props;',
@@ -246,7 +246,7 @@ function entryLiteral(nodes: readonly FieldNode[], depth: number): string {
 
 function propLines(nodes: readonly FieldNode[], depth: number): readonly string[] {
   assert(depth <= LIMITS.treeDepthMax, 'propLines: a field path is bounded');
-  const indent = ' '.repeat(4 + depth * 2);
+  const indent = '\t'.repeat(2 + depth);
   return nodes.flatMap((node) =>
     node.children.length > 0
       ? [`${indent}${key(node.key)}?: {`, ...propLines(node.children, depth + 1), `${indent}};`]
@@ -258,24 +258,24 @@ function itemSlugLines(shape: ListShape): readonly string[] {
   const value = accessor('item', shape.slugPath);
   const path = shape.slugPath;
   const scalar = (name: string): readonly string[] => [
-    `    const ${name} = ${value};`,
-    `    if (typeof ${name} !== 'string' && typeof ${name} !== 'number') {`,
-    `      throw new Error(\`Item \${index}: ${path} is not text or a number.\`);`,
-    '    }',
+    `\t\tconst ${name} = ${value};`,
+    `\t\tif (typeof ${name} !== 'string' && typeof ${name} !== 'number') {`,
+    `\t\t\tthrow new Error(\`Item \${index}: ${path} is not text or a number.\`);`,
+    '\t\t}',
   ];
   if (shape.slugTreatment === 'exact') {
-    return [...scalar('slug'), "    if (slug === '') {", `      throw new Error(\`Item \${index}: ${path} is empty.\`);`, '    }'];
+    return [...scalar('slug'), "\t\tif (slug === '') {", `\t\t\tthrow new Error(\`Item \${index}: ${path} is empty.\`);`, '\t\t}'];
   }
   return [
     ...scalar('address'),
-    '    const slug = toSlug(address);',
-    "    if (slug === '') {",
-    `      throw new Error(\`Item \${index}: ${path} has no letters or numbers for its page address.\`);`,
-    '    }',
-    '    if (seen.has(slug)) {',
-    `      throw new Error(\`Items \${seen.get(slug)} and \${index} would both be at \${slug}. Change ${path} on one of them.\`);`,
-    '    }',
-    '    seen.set(slug, index);',
+    '\t\tconst slug = toSlug(address);',
+    "\t\tif (slug === '') {",
+    `\t\t\tthrow new Error(\`Item \${index}: ${path} has no letters or numbers for its page address.\`);`,
+    '\t\t}',
+    '\t\tif (seen.has(slug)) {',
+    `\t\t\tthrow new Error(\`Items \${seen.get(slug)} and \${index} would both be at \${slug}. Change ${path} on one of them.\`);`,
+    '\t\t}',
+    '\t\tseen.set(slug, index);',
   ];
 }
 
@@ -289,12 +289,12 @@ function httpRequestLines(source: HttpSource): readonly string[] {
     return `${quoted(header.name)}: ${value}`;
   });
   return [
-    `  const url = ${quoted(source.url)};`,
+    `\tconst url = ${quoted(source.url)};`,
     ...secrets,
-    '  const response = await fetch(url, {',
-    ...(headers.length === 0 ? [] : [`    headers: { ${headers.join(', ')} },`]),
-    `    signal: AbortSignal.timeout(${REQUEST_TIMEOUT_MS}),`,
-    '  });',
+    '\tconst response = await fetch(url, {',
+    ...(headers.length === 0 ? [] : [`\t\theaders: { ${headers.join(', ')} },`]),
+    `\t\tsignal: AbortSignal.timeout(${REQUEST_TIMEOUT_MS}),`,
+    '\t});',
   ];
 }
 
@@ -304,21 +304,21 @@ function sanityRequestLines(source: SanitySource): readonly string[] {
   const host = tokenEnv === undefined ? 'apicdn' : 'api';
   const defined = source.slugPath;
   return [
-    '  const query = new URLSearchParams({',
-    `    query: ${quoted(`*[_type == $type && defined(${defined})]`)},`,
-    `    $type: JSON.stringify(${quoted(source.documentType)}),`,
-    '  });',
-    `  const url = \`https://${source.projectId}.${host}.sanity.io/${SANITY_API_VERSION}/data/query/${source.dataset}?\${query}\`;`,
+    '\tconst query = new URLSearchParams({',
+    `\t\tquery: ${quoted(`*[_type == $type && defined(${defined})]`)},`,
+    `\t\t$type: JSON.stringify(${quoted(source.documentType)}),`,
+    '\t});',
+    `\tconst url = \`https://${source.projectId}.${host}.sanity.io/${SANITY_API_VERSION}/data/query/${source.dataset}?\${query}\`;`,
     ...(tokenEnv === undefined ? [] : secretLines('secret0', tokenEnv)),
-    '  const response = await fetch(url, {',
-    ...(tokenEnv === undefined ? [] : ['    headers: { Authorization: `Bearer ${secret0}` },']),
-    `    signal: AbortSignal.timeout(${REQUEST_TIMEOUT_MS}),`,
-    '  });',
+    '\tconst response = await fetch(url, {',
+    ...(tokenEnv === undefined ? [] : ['\t\theaders: { Authorization: `Bearer ${secret0}` },']),
+    `\t\tsignal: AbortSignal.timeout(${REQUEST_TIMEOUT_MS}),`,
+    '\t});',
   ];
 }
 
 function secretLines(name: string, env: string): readonly string[] {
-  return [`  const ${name} = import.meta.env.${env};`, `  if (!${name}) {`, `    throw new Error(${quoted(`Set ${env} in .env to load this page.`)});`, '  }'];
+  return [`\tconst ${name} = import.meta.env.${env};`, `\tif (!${name}) {`, `\t\tthrow new Error(${quoted(`Set ${env} in .env to load this page.`)});`, '\t}'];
 }
 
 function layoutImport(input: TemplatePageInput): readonly string[] {
@@ -340,7 +340,7 @@ function pageText(input: TemplatePageInput, frontmatter: readonly string[], cont
 }
 
 function indented(lines: readonly string[]): readonly string[] {
-  return lines.map((line) => `  ${line}`);
+  return lines.map((line) => `\t${line}`);
 }
 
 function runtimeKind(kind: SampleFieldKind): string {

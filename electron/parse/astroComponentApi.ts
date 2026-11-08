@@ -206,6 +206,16 @@ function destructuredTag(frontmatter: string, name: string): { prop: string; tag
   return undefined;
 }
 
+// Whether a component forwards arbitrary attributes: a `...rest` spread on
+// Astro.props, which the Settings panel answers with a free-form Attributes
+// section on its instances. Anchored to the end of the destructure rather than
+// scanning forward from its `{`: a rest element is always last, and looking
+// forward tripped over any `}` in front of it (`containerAttrs = {}, ...rest`).
+// The optional `: Type` covers an annotated destructure.
+export function forwardsRest(source: string): boolean {
+  return /\.\.\.\s*\w+\s*\}\s*(?::[^=]+)?=\s*Astro\.props/.test(source);
+}
+
 // The HTML tag a component renders as, so nesting rules can reach through it:
 // a <Paragraph> is a <p>, and a <p> can't go inside an <h1> however the
 // component is named. Returns { tag } when it's fixed, { prop, fallback,

@@ -14,7 +14,16 @@ import { readNativeStyleByName, readNativeStyles, resolveIdentityElement, writeE
 import type { NativeModel } from '../model/styleTypes';
 import { standaloneNativeClass } from './EditorBasics';
 import { PLACEMENT_END, type ClassPlacement } from '../../../editor/classAttr';
-import { loneTypedClass, type NestedInput, nativeModelCache, pseudoPickFor, rememberTypedPath, type TypedPaths, usePseudoTarget } from './editorModel';
+import {
+  loneTypedClass,
+  type NestedInput,
+  nativeModelCache,
+  pseudoPickFor,
+  readPseudoTarget,
+  rememberTypedPath,
+  type TypedPaths,
+  usePseudoTarget,
+} from './editorModel';
 import { asQuery, type QuerySuggestion, COMMON_QUERIES } from './SelectorPicker';
 import { useEditorRefs, useBusyState, useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { assert } from '../../../../shared/core/assert';
@@ -343,8 +352,12 @@ export function useTypedSelector(
   );
   // Deselect (click the active chip again): no selector is picked, so the panel
   // shows every property's cascade winner read-only. The first edit re-picks a
-  // default target (see autoSelectForEdit).
+  // default target (see autoSelectForEdit). A ::before or ::after row keeps its pick:
+  // that default is the element's, so the next edit would land on the element.
   const deselect = useCallback(() => {
+    if (readPseudoTarget() !== undefined) {
+      return;
+    }
     pendingDefaultRef.current = false;
     setSelectedTokens([]);
     setSelectedSelectorText(undefined);

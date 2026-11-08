@@ -90,6 +90,10 @@ export type Edit =
       readonly last: NodeRef;
       readonly name: string;
     }
+  /** A bare text run given a tag of its own (Convert to): `<name>` written
+   * tight around the run's words, on their line, so only that run is wrapped
+   * and no whitespace is added to the text around it. */
+  | { readonly tag: 'wrap-text'; readonly target: NodeRef; readonly name: string }
   /** Step 9: a tag taken away, its children left where they are (a layout
    * removed from a page). */
   | { readonly tag: 'unwrap-node'; readonly target: NodeRef }
@@ -191,6 +195,7 @@ export function parseEdit(input: unknown): Edit {
     case 'remove-node':
     case 'move-node':
     case 'wrap-nodes':
+    case 'wrap-text':
     case 'unwrap-node':
     case 'replace-node':
       return parseStructureEdit(record, tag);
@@ -253,7 +258,7 @@ function parseAttributeEdit(record: Record<string, unknown>, tag: 'set-attribute
 // The edits that add, remove, move or replace whole nodes around the target.
 function parseStructureEdit(
   record: Record<string, unknown>,
-  tag: 'insert-node' | 'remove-node' | 'move-node' | 'wrap-nodes' | 'unwrap-node' | 'replace-node',
+  tag: 'insert-node' | 'remove-node' | 'move-node' | 'wrap-nodes' | 'wrap-text' | 'unwrap-node' | 'replace-node',
 ): Edit {
   // Paired with parseEdit's dispatch: the record is the edit it was routed as.
   assert(record['tag'] === tag, 'parseStructureEdit: record tag matches its dispatch');
@@ -283,6 +288,8 @@ function parseStructureEdit(
         last: parseNodeRef(record['last'], 'Edit.last'),
         name: tagName(record['name'], 'Edit.name'),
       };
+    case 'wrap-text':
+      return { tag, target, name: tagName(record['name'], 'Edit.name') };
     case 'replace-node':
       // One counter bounds the node like one page tree.
       return { tag, target, node: parsePageNode(record['node'], 'Edit.node', 0, { nodes: 0 }) };

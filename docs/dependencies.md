@@ -18,17 +18,59 @@ Each entry answers three questions: **Does** (what it does for Stacki), **Why no
 parser; this is the reference implementation. **Cost:** WASM payload; its AST shape is a contract we
 pin with round-trip tests.
 
-### `@codemirror/autocomplete`, `@codemirror/commands`, `@codemirror/lang-css`, `@codemirror/lang-html`, `@codemirror/lang-javascript`, `@codemirror/lang-markdown`, `@codemirror/language`, `@codemirror/search`, `@codemirror/state`, `@codemirror/view`, `codemirror`
-
-**Does:** the code editor panels (source, CSS, frontmatter). **Why not the platform:** a
-`<textarea>` has no syntax model, incremental parsing, or transactions. **Cost:** the largest
-renderer dependency family; split per language so only what is used ships.
-
 ### `@lezer/highlight`, `@lezer/javascript`
 
 **Does:** syntax-highlight tags for the editors, and the JavaScript parser behind `src/features/props/jsCheck.ts`.
 **Why not the platform:** no incremental JS parser exists in the browser. **Cost:** small; already
 a transitive dependency of CodeMirror, declared because we import it directly.
+
+### `electron-updater`
+
+**Does:** in-app updates from GitHub releases. **Why not the platform:** Electron's `autoUpdater`
+lacks the GitHub provider and differential downloads. **Cost:** runs with network access in main;
+its inputs are release metadata we publish.
+
+### `node-pty`
+
+**Does:** spawns the terminal's pseudo-terminal. **Why not the platform:** Node's `child_process`
+has no PTY. **Cost:** native module — the reason for `fix:install` and `afterPack` handling.
+
+### `postcss`, `postcss-selector-parser`
+
+**Does:** parses and rewrites stylesheets and selectors for the style panel. **Why not the
+platform:** CSSOM drops comments and formatting, and edits must preserve the author's source.
+**Cost:** moderate; parsing happens in the renderer on user-sized files.
+
+### `smol-toml`
+
+**Does:** reads TOML content files (`electron/content/formats/toml.ts`). **Why not the platform:** no TOML
+parser in Node. **Cost:** small, dependency-free.
+
+### `typescript`
+
+**Does:** at runtime, the compiler API reads component property types
+(`electron/property*.ts`); at build time, it compiles the project. **Why not the platform:** no
+TypeScript type-checker exists outside it. **Cost:** large install; required at runtime, so it
+stays in `dependencies`.
+
+### `yaml`
+
+**Does:** frontmatter and YAML content files, keeping comments and formatting on round trip. **Why
+not the platform:** no YAML parser in Node. **Cost:** moderate; its document API is what makes
+lossless edits possible.
+
+## Renderer, bundled at build time (`devDependencies`)
+
+Vite bundles these into `dist/renderer`, and neither the main process nor the preload loads
+them at run time, so they are `devDependencies`: electron-builder copies only `dependencies`
+into the packaged app, and a copy there would be about 30 MB that nothing reads. A package
+the main process starts to import belongs back under Runtime.
+
+### `@codemirror/autocomplete`, `@codemirror/commands`, `@codemirror/lang-css`, `@codemirror/lang-html`, `@codemirror/lang-javascript`, `@codemirror/lang-markdown`, `@codemirror/language`, `@codemirror/search`, `@codemirror/state`, `@codemirror/view`, `codemirror`
+
+**Does:** the code editor panels (source, CSS, frontmatter). **Why not the platform:** a
+`<textarea>` has no syntax model, incremental parsing, or transactions. **Cost:** the largest
+renderer dependency family; split per language so only what is used ships.
 
 ### `@sanity/icons`
 
@@ -56,51 +98,16 @@ state and CodeMirror transactions. **Cost:** thin wrapper; replaceable by a loca
 **Does:** the integrated terminal renderer. **Why not the platform:** no terminal emulator exists in
 the browser. **Cost:** renderer weight; paired with `node-pty`.
 
-### `electron-updater`
-
-**Does:** in-app updates from GitHub releases. **Why not the platform:** Electron's `autoUpdater`
-lacks the GitHub provider and differential downloads. **Cost:** runs with network access in main;
-its inputs are release metadata we publish.
-
 ### `known-css-properties`
 
 **Does:** the list of valid CSS property names for the style panel. **Why not the platform:**
 `CSS.supports` answers per value, not "list every property", and differs by engine. **Cost:** a
 data file; no code.
 
-### `node-pty`
-
-**Does:** spawns the terminal's pseudo-terminal. **Why not the platform:** Node's `child_process`
-has no PTY. **Cost:** native module — the reason for `fix:install` and `afterPack` handling.
-
-### `postcss`, `postcss-selector-parser`
-
-**Does:** parses and rewrites stylesheets and selectors for the style panel. **Why not the
-platform:** CSSOM drops comments and formatting, and edits must preserve the author's source.
-**Cost:** moderate; parsing happens in the renderer on user-sized files.
-
 ### `react`, `react-dom`
 
 **Does:** the renderer UI. **Why not the platform:** the whole UI is built on it. **Cost:** the
 framework choice; pinned to the 18 line.
-
-### `smol-toml`
-
-**Does:** reads TOML content files (`electron/content/formats/toml.ts`). **Why not the platform:** no TOML
-parser in Node. **Cost:** small, dependency-free.
-
-### `typescript`
-
-**Does:** at runtime, the compiler API reads component property types
-(`electron/property*.ts`); at build time, it compiles the project. **Why not the platform:** no
-TypeScript type-checker exists outside it. **Cost:** large install; required at runtime, so it
-stays in `dependencies`.
-
-### `yaml`
-
-**Does:** frontmatter and YAML content files, keeping comments and formatting on round trip. **Why
-not the platform:** no YAML parser in Node. **Cost:** moderate; its document API is what makes
-lossless edits possible.
 
 ## Development (`devDependencies`)
 

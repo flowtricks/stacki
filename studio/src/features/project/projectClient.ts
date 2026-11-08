@@ -8,6 +8,7 @@ import { beginOperation } from '../session/activity';
 import { record, string } from '../../shared/validation';
 import { componentFile } from '../../../vendor/stacki/shared/properties/componentDefaults';
 import { parseComponentOrigin, type ComponentOrigin } from '../../../vendor/stacki/shared/properties/componentSources';
+import { parseLengthUnit, type LengthUnit } from '../../../vendor/stacki/shared/properties/lengthUnit';
 
 export interface Component {
   readonly origin?: ComponentOrigin;
@@ -19,6 +20,8 @@ export interface Component {
   readonly fields: PropField[];
   readonly slots: string[];
   readonly slotText?: boolean;
+  /** Whether it forwards arbitrary attributes (`...rest` on Astro.props), so its instances show Attributes. */
+  readonly hasRest?: boolean;
 }
 export interface Project {
   readonly workspaceId?: string;
@@ -30,6 +33,8 @@ export interface Project {
   readonly assets: string[];
   readonly components: Component[];
   readonly classes: string[];
+  /** What the style panel writes lengths in (the same scan Desktop runs). Absent → px. */
+  readonly lengthUnit?: LengthUnit;
 }
 let requestWorkspace = '';
 let workspaceRevision = 0;
@@ -101,6 +106,9 @@ export function parseProject(input: unknown): Project {
     if (item['slotText'] !== undefined && typeof item['slotText'] !== 'boolean') {
       throw new Error('Invalid default slot type');
     }
+    if (item['hasRest'] !== undefined && typeof item['hasRest'] !== 'boolean') {
+      throw new Error('Invalid rest attributes flag');
+    }
     return {
       file: componentFile(item['file']),
       origin: parseComponentOrigin(item['origin']),
@@ -110,6 +118,7 @@ export function parseProject(input: unknown): Project {
       slots: strings(item['slots']),
       numericStyles: parseNumericBindings(item['numericStyles']),
       slotText: item['slotText'] === true,
+      hasRest: item['hasRest'] === true,
       ...parseRenderTag(item['renderTag']),
     };
   });
@@ -124,6 +133,7 @@ export function parseProject(input: unknown): Project {
     assets: strings(data['assets']),
     classes: strings(data['classes']),
     components,
+    ...(data['lengthUnit'] === undefined ? {} : { lengthUnit: parseLengthUnit(data['lengthUnit']) }),
   };
 }
 function parseRenderTag(input: unknown): Pick<Component, 'renderTag'> {

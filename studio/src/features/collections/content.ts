@@ -1,3 +1,4 @@
+import { CODE_INDENT_UNIT, CODE_TAB_WIDTH, indentUnitOf } from '../../../vendor/stacki/shared/core/indent';
 import { parseDocument } from 'yaml';
 import { parseTree, findNodeAtLocation, modify, applyEdits, type ParseError } from 'jsonc-parser';
 import { record } from '../../shared/validation';
@@ -36,5 +37,9 @@ function updateJson(source: string, key: string, value: unknown) {
   if (!root || errors.length || !findNodeAtLocation(root, [key])) {
     throw new Error('Collection changed. Reload its fields.');
   }
-  return applyEdits(source, modify(source, [key], value, { formattingOptions: { insertSpaces: true, tabSize: 2 } }));
+  // A changed value follows the file: it may hold a nested value, which must not
+  // sit in a different indentation from the lines around it.
+  const unit = indentUnitOf(source);
+  const formattingOptions = unit === CODE_INDENT_UNIT ? { insertSpaces: false, tabSize: CODE_TAB_WIDTH } : { insertSpaces: true, tabSize: unit.length };
+  return applyEdits(source, modify(source, [key], value, { formattingOptions }));
 }

@@ -2,6 +2,7 @@
 // binding can use, and the chips a code field draws (dataSuggest.ts).
 
 import { parseDeclarations, type ImportLike, parseDestructures, looksCallable, collectionCallIn } from './dataSource';
+import type { ImportedValue } from './importedValues';
 
 // Numbered names tried for a collection's entries before settling on `…X`: a
 // page reads a handful of collections, never dozens under one name.
@@ -106,6 +107,13 @@ export interface DataContext {
    * the value's name.
    */
   readonly valueSamples?: Record<string, unknown>;
+  /**
+   * What the file's imports hold, read from the modules they name without
+   * running them (importedValues.ts) — `APP_VERSION` for
+   * `import { APP_VERSION } from "@/consts.ts"`. Keyed by the local name; an
+   * import with no entry is one whose value could not be read.
+   */
+  readonly importedValues?: Readonly<Record<string, ImportedValue>>;
   /** How a value the file computes reads a collection (collectionReader.ts), when the app can tell. */
   readonly collectionReader?: CollectionReader;
 }

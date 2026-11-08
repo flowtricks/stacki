@@ -19,3 +19,10 @@
 .panel-sheet.panel-sheet.is-framed {
   transform: none;
 }
+/* The header that moves its sheet (useFloatingDrag). Its buttons keep their own
+   cursor; the header itself reads as a handle and never selects its title. */
+.panel-sheet [data-floating-drag-handle] {
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}

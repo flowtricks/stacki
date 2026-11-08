@@ -197,11 +197,11 @@ export function useElementReset(
       setQuickSnapshot(undefined); // drop the previous element's chips
       // The chips are derived from these two models, and both are refilled by
       // async reads. Left alone they keep listing the PREVIOUS element's
-      // selectors until those land — the list looks stale for as long as the
-      // scan takes. Blank them now: an empty well for a moment is honest,
-      // another element's selectors are not. A cached native model comes
-      // straight back in the identity effect, so that case barely blinks.
-      setScan((previous) => (previous ? { ...previous, rootSnapshot: undefined, model: EMPTY_RULE_MODEL } : previous));
+      // selectors as if they were this one's. Blank them now and mark the scan
+      // unsettled: the well then keeps drawing its last settled list, inert,
+      // until the new one has landed whole (heldSelection.ts), so neither the
+      // blank nor the stages in between reach the screen.
+      setScan((previous) => (previous ? { ...previous, rootSnapshot: undefined, model: EMPTY_RULE_MODEL, settled: false } : previous));
       setNativeModel(undefined);
       nativeModelRef.current = undefined;
       nativeIdentityRef.current = '';

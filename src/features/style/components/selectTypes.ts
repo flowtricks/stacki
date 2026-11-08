@@ -11,6 +11,11 @@ export type SelectOption<T extends string> = {
    *  trigger alike (e.g. the selector a nested query is written inside). Absent
    *  means the option is one line. Not used for type-ahead: the label names it. */
   overline?: string;
+  /** Items for a smaller, muted last line under the label, comma separated (e.g.
+   *  the selectors written inside a query). As many whole items as fit the row
+   *  show, then an ellipsis; the row's title holds them all. List rows only: the
+   *  closed trigger keeps its height. Not used for type-ahead. */
+  subline?: readonly string[];
   /** A small chip at the start of the first line saying where the option comes
    *  from (the stylesheet a query is written in). It takes the first line when
    *  there is no overline. In the closed trigger it shows only beside an

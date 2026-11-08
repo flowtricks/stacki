@@ -20,7 +20,9 @@
 // show why it is there.
 //
 // Shared by the Style panel's selector field and the Settings panel's class box,
-// so the two fields agree on what a query finds.
+// so the two fields agree on what a query finds. For the same reason the rows both
+// fields draw from their matches live here too: a typed name nothing matches
+// exactly leads with a row that creates it (classRows).
 
 import { assert } from '../../shared/core/assert';
 
@@ -214,6 +216,83 @@ function fits(haystack: string, rest: string, from: number): boolean {
 
 function run(start: number, length: number): readonly number[] {
   return Array.from({ length }, (_, offset) => start + offset);
+}
+
+// The shape shared/page/classNames.ts reads classes in: what the suggestions can
+// hold is what the fields can create. Written out here because Studio's vendored
+// tree has this file and not that one, and both panels ship in Studio.
+const CLASS_NAME = /^-?[A-Za-z_][\w-]*$/;
+
+/** Whether `text` is one plain class name, with no selector syntax in it. */
+export function isClassName(text: string): boolean {
+  return CLASS_NAME.test(text);
+}
+
+/** Said when a field refuses a name, in the words the app's add-class failure uses. */
+export const CLASS_NAME_REFUSAL = 'Check the class name and retry.';
+
+/** A row of a class field's list: the class the typed text would create, or a match. */
+export type ClassRow<T> = { readonly kind: 'create'; readonly name: string } | { readonly kind: 'match'; readonly item: T };
+
+export interface ClassRowList<T> {
+  readonly rows: readonly ClassRow<T>[];
+  /** The row selected until an arrow moves it, and the highest ↑ can reach; -1 is no row. */
+  readonly rest: number;
+}
+
+/**
+ * A class field's list. Matches are ranked with case ignored, but a class name is
+ * not, so the exact class is pulled to the front here rather than left to its tier.
+ * When there is one it is selected. Otherwise a valid name leads with a create row,
+ * selected. A class the element already carries gets neither: nothing is selected,
+ * and Enter falls to the field's own typed-text path, which never writes it twice.
+ * Text that names no class leaves the list as ranked, resting on `restPlain`.
+ */
+export function classRows<T>(inputs: {
+  /** The class the typed text would mean, if it means one. */
+  readonly name: string | undefined;
+  readonly matches: readonly T[];
+  readonly nameOf: (item: T) => string | undefined;
+  /** Whether the element already carries `name`. */
+  readonly carried: boolean;
+  readonly restPlain: -1 | 0;
+}): ClassRowList<T> {
+  const { name, matches, nameOf, carried, restPlain } = inputs;
+  assert(matches.length <= FUZZY_CANDIDATES_MAX, 'classRows: a bounded list');
+  const rows = matches.map((item): ClassRow<T> => ({ kind: 'match', item }));
+  if (carried) {
+    return { rows, rest: -1 };
+  }
+  if (name === undefined) {
+    return { rows, rest: restPlain };
+  }
+  const exact = matches.findIndex((item) => nameOf(item) === name);
+  if (exact >= 0) {
+    const row = rows[exact];
+    assert(row !== undefined, 'classRows: the exact match has a row');
+    return { rows: [row, ...rows.slice(0, exact), ...rows.slice(exact + 1)], rest: 0 };
+  }
+  if (isClassName(name)) {
+    return { rows: [{ kind: 'create', name }, ...rows], rest: 0 };
+  }
+  return { rows, rest: restPlain };
+}
+
+/** `index` kept on the list: never above its resting row, never past its last. */
+export function classRowStep(index: number, list: ClassRowList<unknown>): number {
+  assert(list.rest >= -1, 'classRowStep: the resting row is a row or none');
+  assert(list.rest <= 0, 'classRowStep: the list rests at its top');
+  return Math.min(Math.max(index, list.rest), list.rows.length - 1);
+}
+
+/** What Tab takes: the selected match, or the first when the selection is not one. */
+export function classRowMatch<T>(list: ClassRowList<T>, selected: number): T | undefined {
+  const row = list.rows[selected];
+  if (row?.kind === 'match') {
+    return row.item;
+  }
+  const first = list.rows.find((candidate) => candidate.kind === 'match');
+  return first?.kind === 'match' ? first.item : undefined;
 }
 
 const collator = new Intl.Collator('en', { sensitivity: 'base', numeric: true });

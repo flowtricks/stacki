@@ -25,7 +25,8 @@ import { createServer, type ViteDevServer } from 'vite';
 // through (loopSource) and the dev server's answer about a page's last-rendered values
 // (previewScope), for the binding picker's loop items: two more.
 // The page template form's plan and sample payloads (pageTemplate): one more.
-const MODULES_MAX = 62;
+// The project scan's length unit (lengthUnit), rem in a Lumos project: one more.
+const MODULES_MAX = 63;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

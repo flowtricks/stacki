@@ -3,7 +3,7 @@
 // (VariableConnect.tsx).
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { CSSProperties, MutableRefObject, RefCallback } from 'react';
+import type { CSSProperties, MutableRefObject } from 'react';
 import Popup from '../../ui/Popup';
 import { type ProjectVariable } from './model/webflow';
 import { panelBox, panelSpan } from './model/panelBox';
@@ -79,10 +79,9 @@ export function VariablePicker({
   const [ownSearch, setSearch] = useState('');
   const search = typing === undefined ? ownSearch : typing.query;
   // Held here rather than in the list, which unmounts while a search matches
-  // nothing: what was collapsed, and whether the selection was scrolled to, both
-  // outlive that.
-  const selectedItemRef = useScrollToSelected();
+  // nothing: what was collapsed outlives that.
   const [collapsed, toggleCollapse] = useCollapsedSet();
+  const listRef = useRef<HTMLDivElement>(null);
   const style = usePickerPosition(ref, anchor);
   usePickerFocus(searchRef);
   const query = search.trim().toLowerCase();
@@ -93,6 +92,10 @@ export function VariablePicker({
   // applied variable to the one being previewed. Following typing, the mark
   // stays on the applied variable and the keyboard row is tinted instead.
   const markedBinding = typing === undefined ? (activeBinding ?? selectedBinding) : selectedBinding;
+  const holdSelected = useHoldSelectedInView(listRef, {
+    rows: filtered.map((variable) => variable.binding).join('\n'),
+    following: typing === undefined && activeBinding === undefined && search === '' && selectedBinding !== undefined,
+  });
 
   return (
     <Popup
@@ -118,7 +121,13 @@ export function VariablePicker({
           aria-label="Search variables"
         />
       ) : undefined}
-      <div className="embed-editor_varpicker-list">
+      <div
+        ref={listRef}
+        className="embed-editor_varpicker-list"
+        onWheel={holdSelected.release}
+        onPointerDown={holdSelected.release}
+        onTouchStart={holdSelected.release}
+      >
         {loading && !vars.length ? (
           <p className="embed-editor_varpicker-empty">Loading variables…</p>
         ) : !filtered.length ? (
@@ -130,7 +139,6 @@ export function VariablePicker({
             collapsed={collapsed}
             selectedBinding={markedBinding}
             activeBinding={typing === undefined ? undefined : activeBinding}
-            selectedItemRef={selectedItemRef}
             onToggleCollapse={toggleCollapse}
             onPick={onPick}
           />
@@ -176,7 +184,6 @@ export function PickerCollections({
   collapsed,
   selectedBinding,
   activeBinding,
-  selectedItemRef,
   onToggleCollapse,
   onPick,
 }: {
@@ -186,7 +193,6 @@ export function PickerCollections({
   selectedBinding: string | undefined;
   /** The row the keyboard is on while a reference is typed, if any. */
   activeBinding?: string | undefined;
-  selectedItemRef: RefCallback<HTMLButtonElement>;
   onToggleCollapse: (name: string) => void;
   onPick: (binding: string) => void;
 }) {
@@ -213,7 +219,6 @@ export function PickerCollections({
                     group={group}
                     selected={sameVariable(variable.binding, selectedBinding)}
                     active={variable.binding === activeBinding}
-                    selectedItemRef={selectedItemRef}
                     onPick={onPick}
                   />
                 ))}
@@ -232,7 +237,6 @@ export function PickerItem({
   group,
   selected,
   active,
-  selectedItemRef,
   onPick,
 }: {
   variable: ProjectVariable;
@@ -240,7 +244,6 @@ export function PickerItem({
   group: string;
   selected: boolean;
   active?: boolean;
-  selectedItemRef: RefCallback<HTMLButtonElement>;
   onPick: (binding: string) => void;
 }) {
   const selectedClassName = `${selected ? 'is-selected' : ''}${active === true ? ' is-active' : ''}`;
@@ -248,7 +251,6 @@ export function PickerItem({
   const valueSuffix = variable.value ? ` — ${variable.value}` : '';
   return (
     <button
-      ref={selected ? selectedItemRef : undefined}
       type="button"
       className={`embed-editor_varpicker-item ${selectedClassName}`}
       aria-current={selected || undefined}
@@ -333,33 +335,69 @@ function VariableSwatch({ binding }: { binding: string }) {
   );
 }
 
-// Scroll the selected item to the middle of the list, once, when it first mounts.
-// A callback ref: React calls it with the element on mount (and `null`, its own
-// protocol, on unmount).
-export function useScrollToSelected(): RefCallback<HTMLButtonElement> {
-  const scrolledToSelected = useRef(false);
-  return (element) => {
-    if (!element || scrolledToSelected.current) {
-      return;
+// Keep the applied variable's row in the middle of the list until the person
+// takes the list over.
+//
+// Scrolling once, when the row first mounted, was not enough: the rows keep
+// changing after the picker opens. Variables stream in on a first load, a
+// reload replaces the list, and the canvas answers later which variables reach
+// the selected element (useDefinedVariables), which drops rows above the
+// applied one. Each change moved the row away from where it had been centred,
+// so the picker opened on some other stretch of the list. So the row is centred
+// again after every change of the rows, while `following` holds, until a wheel,
+// a press or a touch in the list hands its scroll to the person.
+//
+// The centring waits for the next frame: the picker mounts hidden and unsized
+// and is given its place and height in a layout effect (usePickerPosition), and
+// a row centred before that is centred in a list that then changes height.
+export function useHoldSelectedInView(
+  listRef: React.RefObject<HTMLDivElement>,
+  { rows, following }: { readonly rows: string; readonly following: boolean },
+): { readonly release: () => void } {
+  const released = useRef(false);
+  useLayoutEffect(() => {
+    if (!following) {
+      // Once the arrows, a search or typing move the mark, the list is theirs.
+      released.current = true;
+      return undefined;
     }
-    scrolledToSelected.current = true;
-    // The picker mounts hidden and unsized, and is given its place and height
-    // in a layout effect that runs after this ref. Centred now, the row was
-    // centred in a list that then changed height under it; wait for the frame
-    // that shows the list at the size it will have.
-    requestAnimationFrame(() => centreInList(element));
+    if (released.current) {
+      return undefined;
+    }
+    const frame = requestAnimationFrame(() => {
+      const list = listRef.current;
+      const row = list?.querySelector<HTMLElement>('.embed-editor_varpicker-item.is-selected');
+      if (row !== null && row !== undefined && !released.current) {
+        centreInList(row);
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [listRef, rows, following]);
+  return {
+    release: () => {
+      released.current = true;
+    },
   };
 }
 
-// Scroll the list so `element` sits in its vertical middle.
+// Scroll the list so `element` sits in its vertical middle. The list's own
+// scroll, never scrollIntoView, which would also scroll the panels behind the
+// portalled picker.
 export function centreInList(element: HTMLElement): void {
   const list = element.closest<HTMLElement>('.embed-editor_varpicker-list');
   if (!list) {
     return;
   }
+  assert(list.contains(element), 'centreInList: the row is inside the list it scrolls');
   const listRect = list.getBoundingClientRect();
   const itemRect = element.getBoundingClientRect();
-  list.scrollTop += Math.round(itemRect.top - listRect.top - (list.clientHeight - element.clientHeight) / 2);
+  // The popup opens with a slight scale (popup.css), and a rect is measured in
+  // the scaled box while scrollTop is in the list's own pixels: undo the scale,
+  // or a row far down lands short of the middle.
+  const scale = list.offsetHeight > 0 && listRect.height > 0 ? listRect.height / list.offsetHeight : 1;
+  assert(scale > 0, 'centreInList: the list has a positive scale');
+  const offset = (itemRect.top - listRect.top) / scale;
+  list.scrollTop += Math.round(offset - (list.clientHeight - element.clientHeight) / 2);
 }
 
 // Scroll the list just enough to show `element`. The list's own scroll, never

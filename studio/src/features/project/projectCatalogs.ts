@@ -7,6 +7,8 @@ import { CoalescedRead } from '../../shared/coalescedRead';
 import { assetCatalog } from '../assets/assetCatalog';
 import { scanProject } from './projectServer';
 import { valueSampler } from './valueSampler';
+import { importSource } from './importSource';
+import { templateEntriesReader } from '../pages/templateEntriesServer';
 
 export function projectCatalogs(server: ViteDevServer, root: string) {
   const analysis = new ComponentAnalysis();
@@ -27,6 +29,10 @@ export function projectCatalogs(server: ViteDevServer, root: string) {
   return {
     // What a page's calls to its imports return, for the binding picker.
     values: valueSampler(server, root),
+    // The source of a module the page imports, read for the values it exports.
+    importSource: importSource(server, root),
+    // The entries a template page renders, from its own getStaticPaths.
+    templateEntries: templateEntriesReader(server, root),
     project: async () => {
       const cached = await project.read();
       return { ...cached, value: { ...cached.value, workspaceId: await readWorkspaceId(root) } };

@@ -198,6 +198,26 @@
   padding: 0;
   background: transparent;
 }
+/* Markdown the editor cannot model (a table, an HTML block, an MDX import), shown as
+   its own source and written back as it is unless it is edited here. */
+.html-content pre.stacki-markdown-kept {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim);
+}
+.html-content pre.stacki-markdown-kept::before {
+  content: 'Kept as written: Markdown the editor cannot show';
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.8;
+}
+.html-content kbd {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  font: 0.88em/1.4 var(--mono);
+}
 .html-content hr {
   height: 2px;
   margin: 1.2em 0;
@@ -254,6 +274,11 @@
   overflow: auto;
   padding: 6px 4px;
   font-size: 12px;
+}
+.markdown-source {
+  height: 420px;
+  max-height: none;
+  padding: 0;
 }
 .html-notice {
   padding: 10px 16px 0;

@@ -196,6 +196,9 @@ export type CanonicalCompound = {
   splittable: boolean;
   /** True when the subject compound is the universal `*` (with no tag/class/attr). */
   universal: boolean;
+  /** True when the subject is narrowed by `:is()`, `:not()`, `:has()` or `:global()`,
+   *  which leave no token but keep `:is(.a, .b)::after` from being a bare `::after`. */
+  functional: boolean;
 };
 
 // Pseudo-classes representable as a Webflow class STATE (a chip / native-editable
@@ -216,6 +219,7 @@ export function canonicalCompound(selectorText: string): CanonicalCompound {
       pseudoElement: '',
       splittable: false,
       universal: false,
+      functional: false,
     };
   }
 
@@ -249,6 +253,7 @@ export function canonicalCompound(selectorText: string): CanonicalCompound {
     pseudoElement,
     splittable,
     universal: subject.universal,
+    functional: !noFunctionalPseudo,
   };
 }
 
@@ -264,6 +269,26 @@ export function normalizePseudoElement(pseudoElement: string | undefined): strin
     return '';
   }
   return `::${pseudoElement.replace(/^::?/, '').toLowerCase()}`;
+}
+
+/**
+ * The box a selector styles, as the navigator lists boxes: the element ('') or
+ * one of its ::before and ::after rows. Other pseudo-elements (`::marker`,
+ * `::placeholder`) have no row, so they stay with the element.
+ */
+export type SelectorLayer = '' | '::before' | '::after';
+
+/** The layer of a parsed selector, from the pseudo-element on its subject. */
+export function selectorLayerOf(pseudoElement: string | undefined): SelectorLayer {
+  const normalized = normalizePseudoElement(pseudoElement);
+  return normalized === '::before' || normalized === '::after' ? normalized : '';
+}
+
+/** The layer each member of a selector list styles, in list order. */
+export function selectorListLayers(selectorText: string): readonly SelectorLayer[] {
+  const layers = compileSelectorList(selectorText).map((selector) => selectorLayerOf(selector.pseudoElement));
+  assert(layers.length <= selectorText.length + 1, 'selectorListLayers: one layer per member');
+  return layers;
 }
 
 export const compileCache = new Map<string, CompiledSelector[]>();
@@ -323,7 +348,6 @@ export class SelectorBuilder {
   private classCount = 0;
   private typeCount = 0;
   private hasPseudoClass = false;
-  private pseudoElement: string | undefined;
 
   add(node: selectorParser.Node): void {
     switch (node.type) {
@@ -386,7 +410,6 @@ export class SelectorBuilder {
     const value = node.value;
     if (isPseudoElement(value)) {
       this.current.pseudoElement = value;
-      this.pseudoElement = value;
       this.typeCount += 1;
     } else if (value === ':not') {
       // Negation: compile inner, negate at match time; specificity = the
@@ -404,6 +427,8 @@ export class SelectorBuilder {
         this.current.requireAny.push(inner);
       }
       this.addSpecificity(mostSpecific(inner));
+      // `:global(.a::after)` styles what its argument styles, a generated box included.
+      this.current.pseudoElement ??= sharedPseudoElement(inner);
     } else if (value === ':is' || value === ':matches' || value === ':where') {
       // :is()/:where() are static structural matchers, NOT state pseudo-
       // classes — the element must match one of their arguments. :where
@@ -460,9 +485,16 @@ export class SelectorBuilder {
       combinators: this.combinators,
       specificity: [this.idCount, this.classCount, this.typeCount],
       hasPseudoClass: this.hasPseudoClass,
-      pseudoElement: this.pseudoElement,
+      // Only the subject's: a pseudo-element on any other compound styles nothing here.
+      pseudoElement: this.compounds[this.compounds.length - 1]?.pseudoElement,
     };
   }
+}
+
+// The pseudo-element every argument styles, or undefined when they do not agree.
+function sharedPseudoElement(selectors: readonly CompiledSelector[]): string | undefined {
+  const first = selectors[0]?.pseudoElement;
+  return selectors.every((selector) => normalizePseudoElement(selector.pseudoElement) === normalizePseudoElement(first)) ? first : undefined;
 }
 
 export function compileFunctionalArg(node: selectorParser.Pseudo): CompiledSelector[] {
@@ -513,6 +545,25 @@ export function mostSpecific(selectors: CompiledSelector[]): Specificity | undef
     }
   }
   return best;
+}
+
+/**
+ * The (a, b, c) specificity of a selector text, by the parser above: `:is()`, `:not()`
+ * and `:has()` count their most specific argument, `:where()` counts nothing, and a
+ * pseudo-element counts as a type. A list is as specific as its strongest member; text
+ * that does not parse counts (0, 0, 0), as its stub rule does.
+ */
+export function selectorSpecificity(selectorText: string): Specificity {
+  const strongest = mostSpecific(compileSelectorList(selectorText)) ?? [0, 0, 0];
+  assert(
+    strongest.every((count) => Number.isSafeInteger(count)),
+    'selectorSpecificity: counts are integers',
+  );
+  assert(
+    strongest.every((count) => count >= 0),
+    'selectorSpecificity: counts are never negative',
+  );
+  return strongest;
 }
 
 // Pseudo-classes decided by position among siblings rather than runtime state.

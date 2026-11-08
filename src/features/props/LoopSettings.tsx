@@ -18,7 +18,7 @@ import { assert } from '../../../shared/core/assert';
 import { emptyQuery, type LoopFieldKind, type LoopQuery, type LoopSource } from '../../editor/loopQuery';
 import { readLoop, readingChain, type LoopReadInput, type LoopReading, type QueryHome } from '../../editor/loopQueryRead';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
-import { literalCode, literalItems, STARTER_ITEMS } from '../../editor/loopLiteral';
+import { literalCode, literalItems, STARTER_ITEMS, writtenListFields } from '../../editor/loopLiteral';
 import { LiteralItemsSection } from './LoopLiteralItems';
 import { fieldListOf, type FieldList } from '../../editor/loopFieldList';
 import { fieldListPath, SourcePicker, sourcePath, type NewListOffer, type SourcePick, type SourcePickerData } from './LoopSourcePicker';
@@ -574,10 +574,10 @@ function useLoopReading(input: Omit<LoopReadInput, 'fieldKind'>, projectPath: st
   const first = useMemo(() => readLoop(input), [input]);
   const firstSource = first.kind === 'query' ? first.query.source : first.kind === 'partial' ? first.source : undefined;
   const catalogFields = useCatalogFields(projectPath, catalog, firstSource);
-  const listFields = useMemo(() => {
-    const declared = firstSource?.kind === 'list' ? listPropOf(input.frontmatter, firstSource.collection)?.fields : undefined;
-    return declared === undefined ? undefined : listItemFields(declared);
-  }, [firstSource, input.frontmatter]);
+  const listFields = useMemo(
+    () => (firstSource?.kind === 'list' ? listSourceFields(input.frontmatter, firstSource.collection) : undefined),
+    [firstSource, input.frontmatter],
+  );
   const fields = listFields ?? catalogFields;
   const reading = useMemo(() => {
     if (fields === undefined || firstSource === undefined) {
@@ -591,6 +591,17 @@ function useLoopReading(input: Omit<LoopReadInput, 'fieldKind'>, projectPath: st
     return readSections({ ...input, fieldKind });
   }, [fields, input]);
   return { reading, fields, sections };
+}
+
+// The fields a List prop's item type declares, or those a list written out in
+// the frontmatter holds; undefined for an untyped prop, whose fields are unknown.
+function listSourceFields(frontmatter: string, name: string): readonly CatalogField[] | undefined {
+  const prop = listPropOf(frontmatter, name);
+  if (prop !== undefined) {
+    return prop.fields === undefined ? undefined : listItemFields(prop.fields);
+  }
+  const written = writtenListFields(frontmatter, name);
+  return written?.map((field) => ({ path: field.path, title: titled(field.path), kind: field.kind, options: [], references: [] }));
 }
 
 // A list an import computes, traced through the files it passes through to the

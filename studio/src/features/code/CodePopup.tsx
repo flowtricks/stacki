@@ -10,6 +10,7 @@ export function CodePopup({ editor }: { readonly editor: ReturnType<typeof useCo
     <CodeWindow
       title={current.title}
       language={current.language}
+      indentation={current.indentation}
       value={current.value}
       editorKey={editor.key}
       revealLine={1}

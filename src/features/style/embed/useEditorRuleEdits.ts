@@ -4,12 +4,13 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { snapshotTokens } from '../model/elementTokens';
-import { selectorsMatch } from '../model/resolved';
+import { groupMemberToSplit } from '../model/resolved';
 import type { Declaration } from 'postcss';
 import { addDeclaration, appendDecl, directDecls, removeRule, removeRuleIfEmpty, replaceRuleCss, splitRuleSelectorAt } from '../model/css';
-import { canonicalCompound, parseSelectorList } from '../model/selectors';
+import { parseSelectorList } from '../model/selectors';
 import { clearPaddingSides, isPaddingProperty, setPaddingDeclaration } from '../model/spacingShorthand';
 import { getHost, type ClassOutcome } from '../model/host';
+import { selectedInstanceClasses } from '../model/webflowElement';
 import { type EmbedDocument, navigateToEmbed, writeEmbedDocument } from '../model/webflow';
 import type { ParsedDeclaration, ParsedRule } from '../model/styleTypes';
 import { declsFor, lastDeclFor, editorSession, withoutClasses } from './editorModel';
@@ -21,20 +22,13 @@ import { useRefreshDerived } from './useEditorScanning';
 export function useSplitForEdit(nativeState: ReturnType<typeof useNativeState>) {
   const { activeSelectorRef } = nativeState;
 
-  // True when the active selector is ONE splittable member of a grouped rule
+  // True when the active selector is ONE member of a grouped rule to edit on its own
   // (`.a::before, .b::after { … }`) — i.e. an edit should be scoped to just that
   // selector rather than the whole comma-separated group. Complex grouped
   // selectors (shown as a single full-group chip) don't match any lone member and
   // so return false — they edit the whole rule.
   const isGroupedSplittable = useCallback(
-    (rule: ParsedRule): boolean => {
-      const selectors = rule.node.selectors;
-      const active = activeSelectorRef.current;
-      if (!selectors || selectors.length <= 1 || !active) {
-        return false;
-      }
-      return selectors.some((selector) => selectorsMatch(selector, active) && canonicalCompound(selector).splittable);
-    },
+    (rule: ParsedRule): boolean => groupMemberToSplit(rule, activeSelectorRef.current) !== undefined,
     [activeSelectorRef],
   );
   // Isolate the active selector out of a grouped rule before editing so the change
@@ -50,13 +44,8 @@ export function useSplitForEdit(nativeState: ReturnType<typeof useNativeState>) 
       remap: (decl: ParsedDeclaration) => ParsedDeclaration;
     } => {
       const identity = { rule, remap: (declaration: ParsedDeclaration) => declaration };
-      const selectors = rule.node.selectors;
-      const active = activeSelectorRef.current;
-      if (!selectors || selectors.length <= 1 || !active) {
-        return identity;
-      }
-      const index = selectors.findIndex((selector) => selectorsMatch(selector, active) && canonicalCompound(selector).splittable);
-      if (index < 0) {
+      const index = groupMemberToSplit(rule, activeSelectorRef.current);
+      if (index === undefined) {
         return identity;
       }
       const origNodes: Declaration[] = [];
@@ -453,5 +442,9 @@ export function useElementTokens(scanState: ReturnType<typeof useScanState>) {
     }
     return out;
   }, [tokens, snapshot]);
-  return { model, selectorSuggestions, snapshot, tokens };
+  // The classes this instance passed to the open component (model/instanceClasses.ts).
+  // The snapshot is rebuilt on every selection and every class the canvas reports,
+  // and opening or leaving a component rescans, so it is the memo's whole input.
+  const instanceClasses = useMemo(() => selectedInstanceClasses(snapshot?.classList ?? []), [snapshot]);
+  return { instanceClasses, model, scan, selectorSuggestions, snapshot, tokens };
 }

@@ -18,6 +18,7 @@ import { safeSchema } from '../properties/propDefaults';
 import type { MainHost } from './mainHost';
 import { packageComponentFiles, packageComponentImport } from '../lib/componentSources';
 import { packageOf } from '../lib/installedPackages';
+import { readLengthUnit } from '../project/lengthUnitMarkers';
 
 export function registerProjectScanHandlers(host: Pick<MainHost, 'ipcMain' | 'noteProjectRoot' | 'readTrailingSlash'>): void {
   registerProjectScanHandler(host);
@@ -104,6 +105,7 @@ function registerProjectScanHandler({
       components,
       pageFolders,
       trailingSlash: readTrailingSlash(projectPath),
+      lengthUnit: readLengthUnit(projectPath),
     };
   });
 }

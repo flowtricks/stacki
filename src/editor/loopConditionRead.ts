@@ -6,7 +6,7 @@
 
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
-import { isDateValue, isDocumentId, isFieldPath, LOOP_QUERY_LIMITS } from './loopQuery';
+import { isDateValue, isDocumentId, isFieldPath, ITEM_FIELD, LOOP_QUERY_LIMITS } from './loopQuery';
 import type { LoopCondition, LoopFieldKind, LoopLiteral, LoopSource } from './loopQuery';
 import { namePath, textOf, type Js } from './loopSyntax';
 
@@ -85,14 +85,14 @@ function valueField(node: Js, context: ConditionContext): FieldValue | undefined
   }
   const either = referenceIdOf(current);
   if (either !== undefined) {
-    const field = relativeField(either, context.base);
+    const field = relativeField(either, context.base, itemSelf(context));
     return field === undefined || date ? undefined : { path: field, date, referenceId: true };
   }
   const path = namePath(current);
   if (path === undefined) {
     return undefined;
   }
-  const field = relativeField(path, context.base);
+  const field = relativeField(path, context.base, itemSelf(context));
   if (field === undefined) {
     return undefined;
   }
@@ -117,15 +117,33 @@ function referenceIdOf(node: Js): readonly string[] | undefined {
 
 function fieldOf(node: Js, context: ConditionContext): string | undefined {
   const path = namePath(node);
-  return path === undefined ? undefined : relativeField(path, context.base);
+  return path === undefined ? undefined : relativeField(path, context.base, itemSelf(context));
 }
 
-export function relativeField(path: readonly string[], base: readonly string[]): string | undefined {
-  if (path.length <= base.length || base.some((segment, index) => path[index] !== segment)) {
+/**
+ * Whether the item itself reads as a field (ITEM_FIELD): only a List's items
+ * may be plain values. A collection's `data` alone is never compared whole.
+ */
+export type ItemSelf = 'field' | 'not-field';
+
+function itemSelf(context: ConditionContext): ItemSelf {
+  return context.collection.kind === 'list' ? 'field' : 'not-field';
+}
+
+export function relativeField(path: readonly string[], base: readonly string[], self: ItemSelf): string | undefined {
+  if (path.length < base.length || base.some((segment, index) => path[index] !== segment)) {
     return undefined;
   }
+  if (path.length === base.length) {
+    // The parameter itself: `promise`, as a filter over plain values reads it.
+    assert(
+      path.every((segment, index) => segment === base[index]),
+      'A whole item is its base',
+    );
+    return self === 'field' ? ITEM_FIELD : undefined;
+  }
   const field = path.slice(base.length).join('.');
-  return isFieldPath(field) ? field : undefined;
+  return isFieldPath(field) && field !== ITEM_FIELD ? field : undefined;
 }
 
 // `data.featured` alone means "is true" only for a switch; on text it means

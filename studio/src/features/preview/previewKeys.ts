@@ -17,9 +17,43 @@ const keys = new Set([
   '4',
   'escape',
   'enter',
+  // The Navigator's arrows: ↑ parent, ↓ first child, ← → siblings (navigatorArrows.ts).
+  'arrowup',
+  'arrowdown',
+  'arrowleft',
+  'arrowright',
 ]);
+const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 export function forwardPreviewKeys(post: (message: unknown) => void, interactive: () => boolean) {
+  // Arrow keys, as Desktop's canvas forwards them (frameDesign.ts forwardShortcut): a click on
+  // the canvas puts keyboard focus in here, so without this they scroll the page instead of
+  // moving the selection. Caught on the way down, before the page's own handlers, and in both
+  // canvas modes, so a page carousel in interact mode does not take them either. A field in the
+  // page, or the canvas's own text editor, keeps them for its caret.
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (!ARROWS.has(event.key)) {
+        return;
+      }
+      if (interactive() || event.isComposing) {
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+        return;
+      }
+      if (keyInField(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      post({ type: 'studio:key', key: event.key, ctrlKey: false, metaKey: false, shiftKey: false });
+    },
+    true,
+  );
   document.addEventListener('keydown', (event) => {
+    if (ARROWS.has(event.key)) {
+      return; // Forwarded above.
+    }
     const insert = (event.metaKey || event.ctrlKey) && ['f', 'e'].includes(event.key.toLowerCase());
     if (
       event.defaultPrevented ||
@@ -57,4 +91,15 @@ export function receivePreviewKey(input: unknown) {
       cancelable: true,
     }),
   );
+}
+
+// A field in the page, or the canvas's text editor (contenteditable), types with the key.
+function keyInField(target: EventTarget | null): boolean {
+  if (target instanceof Element) {
+    if (target.closest('#studio-live-cursors')) {
+      return true;
+    }
+    return target.closest('input, textarea, select, [contenteditable=true], [contenteditable=""], [contenteditable=plaintext-only]') !== null;
+  }
+  return false;
 }

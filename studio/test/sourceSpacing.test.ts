@@ -71,3 +71,52 @@ test('insertions use existing indentation and preserve unrelated blank lines', (
   const result = applyEdits(source, [edit]);
   assert.equal(result, source.replace('</Button>\n', '</Button>\n  <mark>New</mark>\n'));
 });
+
+// The same layout Desktop writes: Studio's palette, component and paste actions all
+// reach the shared planner through insertFragment, with a fragment printed at column
+// zero, and the first section below grew onto one line before the planner laid it out.
+function target(source: string, name: string) {
+  const found = flatten(nodesOf(source)).find((node) => node.name === name);
+  assert.ok(found?.id);
+  return found.id;
+}
+
+test('palette elements build a nested structure, one element per line', () => {
+  const action = (source: string, name: string, tag: string) =>
+    applyEdits(
+      source,
+      structuralEdits(source, { kind: 'insert-content', target: target(source, name), placement: 'inside', content: { type: 'element', tag } }),
+    );
+  let source = '<main>\n\t<section></section>\n</main>\n';
+  source = action(source, 'section', 'div');
+  source = action(source, 'div', 'h2');
+  source = action(source, 'div', 'article');
+  assert.equal(source, '<main>\n\t<section>\n\t\t<div>\n\t\t\t<h2>Heading</h2>\n\t\t\t<article></article>\n\t\t</div>\n\t</section>\n</main>\n');
+});
+
+test('a multi-line fragment is indented where it lands, without a trailing line', () => {
+  const spaced = '<main>\n  <header>\n    <h1>a</h1>\n  </header>\n  <section></section>\n</main>\n';
+  const edit = insertFragment(spaced, { target: target(spaced, 'section'), placement: 'inside' }, '<div>\n  <p>x</p>\n</div>\n', false);
+  assert.equal(
+    applyEdits(spaced, [edit]),
+    '<main>\n  <header>\n    <h1>a</h1>\n  </header>\n  <section>\n    <div>\n      <p>x</p>\n    </div>\n  </section>\n</main>\n',
+  );
+});
+
+test('text parents, code and one-line runs stay on their line', () => {
+  const into = (source: string, name: string, fragment: string) =>
+    applyEdits(source, [insertFragment(source, { target: target(source, name), placement: 'inside' }, fragment, false)]);
+  assert.equal(into('<p></p>\n', 'p', '<span>x</span>'), '<p><span>x</span></p>\n');
+  assert.equal(into('<code></code>\n', 'code', '<span>x</span>'), '<code><span>x</span></code>\n');
+  assert.equal(into('<pre></pre>\n', 'pre', '<div>x</div>'), '<pre><div>x</div></pre>\n');
+  assert.equal(into('<p>a <b>b</b></p>\n', 'p', '<i>c</i>'), '<p>a <b>b</b><i>c</i></p>\n');
+});
+
+test('a self-closing component gains a child on its own line, and an undo restores the bytes', () => {
+  const source = '<main>\n\t<Wrapper />\n</main>\n';
+  const edit = insertFragment(source, { target: target(source, 'Wrapper'), placement: 'inside' }, '<p>x</p>', false);
+  const written = applyEdits(source, [edit]);
+  assert.equal(written, '<main>\n\t<Wrapper>\n\t\t<p>x</p>\n\t</Wrapper>\n</main>\n');
+  const undo = { start: edit.start, end: edit.start + edit.text.length, text: source.slice(edit.start, edit.end) };
+  assert.equal(applyEdits(written, [undo]), source);
+});

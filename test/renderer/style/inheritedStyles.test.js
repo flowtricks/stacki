@@ -31,6 +31,8 @@ test('computed inheritance fills style controls without authoring CSS', async ()
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
   const { window } = dom;
+  // The pickers listen for variable changes, as they do under the real preload.
+  window.avb = { onCssChanged: () => () => {} };
   const globals = {
     window,
     document: window.document,

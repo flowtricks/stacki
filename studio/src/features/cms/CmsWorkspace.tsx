@@ -1,3 +1,4 @@
+import { isMobileEditor } from '../../app/mobileEditor';
 import './cms.css';
 import { useCallback, useState } from 'react';
 import CmsPanel from '../../../vendor/stacki/src/features/cms/CmsPanel';
@@ -62,7 +63,7 @@ export function CmsWorkspace({ props, document }: { readonly props: EditorProps;
     [document],
   );
   const close = () => {
-    if (window.matchMedia('(max-width: 700px)').matches) {
+    if (isMobileEditor()) {
       setCms(undefined);
     } else {
       setPanel(undefined);

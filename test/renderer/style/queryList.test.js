@@ -205,6 +205,7 @@ const SHEET = `.card {
   let onDisk = SHEET;
   const writes = [];
   dom.window.avb = {
+    onCssChanged: () => () => {},
     listStyleFiles: async () => ({ files: [FILE, OTHER] }),
     listAstroStyleFiles: async () => ({ files: [] }),
     listAssets: async () => ({ entries: [] }),

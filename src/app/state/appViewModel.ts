@@ -6,8 +6,7 @@ import { componentReference } from '../model/componentReference';
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { readPage, readSymbol } from '../../ipc/bridge';
-import { ASTRO_ASSETS } from '../../features/palette/astroAssets';
-import { HTML_TAGS } from '../../editor/elementSchemas';
+import { tagOptionsOf } from '../model/pageModelGestures';
 import { ancestorChain, nodeAtPath } from '../../editor/editorTree';
 import { resolveInstanceProps } from '../../editor/instanceProps';
 import { cleanError } from '../../lib/cleanError';
@@ -196,30 +195,7 @@ export function useTagOptions(coreState: ReturnType<typeof useCoreState>, pageOp
   // is how `<AstroLogo />` from an imported .svg becomes reachable.
   // Each option carries what it is, so the list can wear the same icons the
   // insert palette does — a tag, a component, a layout, one of Astro's.
-  const tagOptions = React.useMemo<readonly TagOption[]>(() => {
-    const out: TagOption[] = [];
-    const seen = new Set<string>();
-    const add = (name: string, kind: string): void => {
-      if (!name || seen.has(name)) {
-        return;
-      }
-      seen.add(name);
-      out.push({ name, kind });
-    };
-    for (const tag of HTML_TAGS) {
-      add(tag, 'element');
-    }
-    for (const component of insertables) {
-      add(component.name, component.isLayout ? 'layout' : 'component');
-    }
-    for (const asset of ASTRO_ASSETS) {
-      add(asset.name, 'astroAsset');
-    }
-    for (const i of model?.imports || []) {
-      add(i.name, 'component');
-    }
-    return out;
-  }, [insertables, model]);
+  const tagOptions = React.useMemo<readonly TagOption[]>(() => tagOptionsOf(insertables, model?.imports || []), [insertables, model]);
   return { linkContext, tagOptions };
 }
 

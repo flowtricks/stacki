@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { structuralEdits } from '../src/features/source/sourceOperations';
-import { applyEdits, nodeId, attributeEdit, contentEdit, flatten, nodesOf, parsePage } from '../src/features/source/source';
+import { applyEdits, nodeId, attributeEdit, contentEdit, flatten, nodesOf, parseAction, parsePage } from '../src/features/source/source';
 import { filePath, sourcePath } from '../src/shared/validation';
 
 const source = await readFile(new URL('./fixtures/homepage.astro', import.meta.url), 'utf8');
@@ -91,4 +91,34 @@ test('path guards reject traversal, hidden files and unsupported sources', () =>
   assert.equal(sourcePath('src/pages/campus/[slug].astro'), 'src/pages/campus/[slug].astro');
   assert.equal(sourcePath('src/pages/[...path].astro'), 'src/pages/[...path].astro');
   assert.throws(() => sourcePath('src/pages/[slug]/../../.env'));
+});
+test('plain text converts to a tag around that run alone, with its bytes kept', () => {
+  const text = '<code>one &#123;<br /> two<br />three</code>';
+  const run = (words: string) => {
+    const node = flatten(nodesOf(text)).find((item) => item.kind === 'text' && item.value?.includes(words));
+    assert.ok(node);
+    return nodeId(node);
+  };
+  const converted = (words: string, name: 'div' | 'span') => applyEdits(text, structuralEdits(text, { kind: 'wrap-text', node: run(words), name }));
+  assert.equal(converted('one', 'span'), '<code><span>one &#123;</span><br /> two<br />three</code>');
+  assert.equal(converted('two', 'div'), '<code>one &#123;<br /><div> two</div><br />three</code>');
+  const layout = '<p>\n  words\n  <b>x</b></p>';
+  const words = flatten(nodesOf(layout)).find((item) => item.kind === 'text');
+  assert.ok(words);
+  assert.equal(
+    applyEdits(layout, structuralEdits(layout, { kind: 'wrap-text', node: nodeId(words), name: 'span' })),
+    '<p>\n  <span>words</span>\n  <b>x</b></p>',
+  );
+});
+test('text conversion refuses anything but words and bad wire input', () => {
+  const text = '<code><b>x</b> <i>y</i></code>';
+  const nodes = flatten(nodesOf(text));
+  const tag = nodes.find((item) => item.name === 'b');
+  const blank = nodes.find((item) => item.kind === 'text' && item.value?.trim() === '');
+  assert.ok(tag);
+  assert.ok(blank);
+  assert.throws(() => structuralEdits(text, { kind: 'wrap-text', node: nodeId(tag), name: 'span' }), /Only plain text/);
+  assert.throws(() => structuralEdits(text, { kind: 'wrap-text', node: nodeId(blank), name: 'span' }), /blank/);
+  assert.deepEqual(parseAction({ kind: 'wrap-text', node: 'n0', name: 'div' }), { kind: 'wrap-text', node: 'n0', name: 'div' });
+  assert.throws(() => parseAction({ kind: 'wrap-text', node: 'n0', name: 'section' }), /Invalid text tag/);
 });

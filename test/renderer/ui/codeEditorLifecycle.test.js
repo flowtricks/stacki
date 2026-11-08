@@ -171,6 +171,46 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
     assert.match(attribute.getAttribute('style'), /rgb\(170, 148, 192\)/, 'attributes use muted purple');
     assert.match(number.getAttribute('style'), /rgb\(201, 148, 112\)/, 'numbers use muted orange');
     assert.match(punctuation.getAttribute('style'), /rgb\(174, 120, 159\)/, 'tag punctuation uses muted pink');
+    // A <style> block: what the editor holds is a view, and everything crossing
+    // the props is the source. A separate root so its view is a fresh one.
+    const blockHost = document.createElement('div');
+    document.body.append(blockHost);
+    const blockRoot = createRoot(blockHost);
+    const block = '\n    .a {\n      color: red;\n    }\n  ';
+    const blockEdits = [];
+    const renderBlock = async (value) => {
+      await React.act(async () =>
+        blockRoot.render(
+          React.createElement(CodeEditor, {
+            value,
+            language: 'css',
+            indentation: 'block',
+            onChange: (text, position) => blockEdits.push({ text, position }),
+          }),
+        ),
+      );
+    };
+    await renderBlock(block);
+    const blockView = EditorView.findFromDOM(blockHost.querySelector('.cm-editor'));
+    assert.equal(blockView.state.doc.toString(), '.a {\n\tcolor: red;\n}', 'a block opens flush left with tabs');
+    assert.deepEqual(blockEdits, [], 'opening a block writes nothing');
+    await renderBlock(block);
+    assert.deepEqual(blockEdits, [], 'rendering it again writes nothing');
+    const redAt = blockView.state.doc.toString().indexOf('red');
+    await React.act(async () => blockView.dispatch({ changes: { from: redAt, to: redAt + 3, insert: 'blue' }, selection: { anchor: redAt + 4 } }));
+    const blue = block.replace('red', 'blue');
+    assert.deepEqual(blockEdits, [{ text: blue, position: blue.indexOf('blue') + 4 }], 'an edit reports the source and its position there');
+    await renderBlock(blue);
+    assert.equal(blockView.state.doc.toString(), '.a {\n\tcolor: blue;\n}', 'the saved source does not disturb the text being edited');
+    assert.equal(blockView.state.selection.main.head, redAt + 4, 'the caret stays where it was');
+    await React.act(async () => blockView.dispatch({ changes: { from: blockView.state.doc.length, insert: '\n' } }));
+    const trailing = blockEdits.at(-1).text;
+    await renderBlock(trailing);
+    assert.equal(blockView.state.doc.toString(), '.a {\n\tcolor: blue;\n}\n', 'a new last line is not trimmed away while typing');
+    await renderBlock(block);
+    assert.equal(blockView.state.doc.toString(), '.a {\n\tcolor: red;\n}', 'a value from outside replaces the view');
+    assert.equal(blockEdits.length, 2, 'and is not an edit');
+    await React.act(async () => blockRoot.unmount());
     assert.deepEqual(errors, [], 'the editor reports no asynchronous errors');
   } finally {
     await React.act(async () => root.unmount());

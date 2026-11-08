@@ -1,5 +1,8 @@
+import { useFrameAddress } from './frameAddress';
+import type { CanvasSitePages } from '../../../vendor/stacki/shared/properties/canvasInteraction';
 import { useCanvasText } from '../../../vendor/stacki/src/features/preview/useCanvasText';
 import { studioCanvasText } from './studioCanvasText';
+import { CanvasTextFormatBar } from '../../../vendor/stacki/src/app/shell/CanvasTextFormatBar';
 import { useCanvasInteraction } from '../../../vendor/stacki/src/features/preview/useCanvasInteraction';
 import './previewToolbar.css';
 import { PreviewLoading, usePreviewLoading } from './PreviewLoading';
@@ -12,7 +15,7 @@ import { PreviewOverlays } from '../../../vendor/stacki/src/features/preview/Pre
 import { GuideOverlay } from '../../../vendor/stacki/src/features/preview/GuideOverlay';
 import { useColumnGuide, type ShownGuide } from '../../../vendor/stacki/src/features/preview/guideSettings';
 import { outlineInfo, outlineNode } from './outlineInfo';
-import type { CSSProperties } from 'react';
+import { useMemo, useRef, type CSSProperties } from 'react';
 import { PreviewToolbar, type PreviewDevice, type PreviewInspectorActions } from '../../../vendor/stacki/src/features/preview/PreviewToolbar';
 import CanvasView from '../../../vendor/stacki/src/features/preview/CanvasView';
 import { usePreviewSizing } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
@@ -31,6 +34,8 @@ interface Props {
   readonly projectName: string;
   readonly pageLabel?: string | undefined;
   readonly editRoute: (route: string) => void;
+  /** The project's pages: in interact mode a link to any other path on the site opens in a new tab. */
+  readonly sitePages?: CanvasSitePages | undefined;
   readonly collaborators: readonly Peer[];
   readonly collection: boolean;
   readonly document: SharedDocument | undefined;
@@ -56,6 +61,8 @@ export function PreviewCanvas(props: Props) {
     post: props.preview.send,
     subscribeLoad: props.preview.subscribeLoad,
     editRoute: props.editRoute,
+    offSite: { clearOverlays: props.preview.clearOverlays },
+    pages: props.sitePages,
   });
   const sizing = usePreviewSizing(props.device, props.dimensions, props.onDevice);
   useCursorScale(props.preview, sizing.viewport.scale);
@@ -98,15 +105,18 @@ export function PreviewCanvas(props: Props) {
       ) : (
         <PreviewSurface interactive={interaction.active} props={props} sizing={sizing} shownGuide={columnGuide.shown} />
       )}
+      {/* Desktop's bar over words selected on the canvas; it portals to the body. */}
+      <CanvasTextFormatBar />
     </main>
   );
 }
 // Text editing on the canvas, with the text the selected instance's props and
 // slot show marked and editable as on the page itself.
 function useStudioCanvasText(props: Props) {
+  const components = useSameComponents(props.components);
   useCanvasText({
     document: studioCanvasText(props.file, props.document, props.nodes, {
-      components: props.components,
+      components,
       selected: props.selected,
     }),
     frame: props.preview.frame,
@@ -114,6 +124,22 @@ function useStudioCanvasText(props: Props) {
     post: props.preview.send,
     subscribeLoad: props.preview.subscribeLoad,
   });
+}
+
+// The project reloads whenever the window regains focus, as it does when the
+// format bar's link field takes focus from the canvas, and each load is a new
+// component list. A new list restarts the canvas text session, which closes
+// the bar mid-link; so a list equal to the last one is the last one.
+function useSameComponents(components: readonly Component[]): readonly Component[] {
+  const last = useRef<{ readonly signature: string; readonly components: readonly Component[] }>();
+  return useMemo(() => {
+    const signature = JSON.stringify(components);
+    if (last.current?.signature === signature) {
+      return last.current.components;
+    }
+    last.current = { signature, components };
+    return components;
+  }, [components]);
 }
 
 function PreviewSurface({
@@ -151,11 +177,13 @@ function DesignFrame({
   readonly shownGuide: ShownGuide | undefined;
   readonly interactive?: boolean;
 }) {
+  // Later pages replace the frame's history entry: the canvas never adds back steps (frameAddress.ts).
+  const frameAddress = useFrameAddress(props.preview.frame, props.preview.url);
   return (
     <>
       <div
         ref={sizing.frameRef}
-        className={`frame-sized ${sizing.width ? '' : 'full'} ${sizing.resizing ? 'resizing' : ''}`}
+        className={`frame-sized ${sizing.width ? '' : 'full'} ${sizing.resizing || sizing.panelSettling ? 'resizing' : ''}`}
         style={{
           width: sizing.viewport.width,
           height: sizing.viewport.height,
@@ -167,12 +195,11 @@ function DesignFrame({
           <iframe
             ref={props.preview.frame}
             title="Site preview"
-            src={props.preview.url}
+            src={frameAddress}
             onLoad={() => {
               props.preview.loaded({ preserveNavigation: interactive ?? false });
-              if (!interactive) {
-                props.restoreSelection();
-              }
+              // Interact mode selects too, so the frame needs its scope, labels and selection.
+              props.restoreSelection();
               // The render subscription catches edits made during navigation. A load-time
               // pull races that render and repeats work for every page switch.
             }}

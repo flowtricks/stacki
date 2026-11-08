@@ -4,7 +4,7 @@
   margin: auto;
   inset: 0;
   width: min(720px, calc(100vw - 48px));
-  height: min(760px, calc(100vh - 48px));
+  height: min(760px, calc(100dvh - 48px));
   display: flex;
   flex-direction: column;
   padding: 0;

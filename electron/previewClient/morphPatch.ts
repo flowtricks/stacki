@@ -10,23 +10,20 @@ import { spendMorphWork } from './morphBudget';
 // data-vite-dev-id; an external script re-runs if it is re-inserted, which is
 // the reload this exists to avoid.
 //
-// <noscript> is here for a different and less obvious reason. Whether its
-// markup is parsed at all depends on whether scripting is enabled in the
-// document doing the parsing. In the live page it is, so the contents are
-// inert text and the element has no children. In a DOMParser document it is
-// not, so the same markup comes back as real elements. The two can never be
-// compared, and walking in found children on one side and none on the other,
-// gave up, and reloaded — on every patch, for any page carrying a <noscript>.
-// Nothing in it can change without the file around it changing anyway.
+// <template> is opaque for a different reason: its markup lives in a separate
+// fragment rather than in childNodes.
 //
-// <template> is opaque for the same kind of reason: its markup lives in a
-// separate fragment rather than in childNodes.
+// <noscript> is not here. A fetched rendering is parsed with scripting off, so
+// its <noscript> markup came back as elements while the live page holds text;
+// pinning it hid that mismatch from the walk, but an insertion still carried
+// the elements in, live. morphClient now flattens every parsed <noscript> to
+// its text first (inertNoscripts), so all three trees agree and its text is
+// patched like any other.
 const pinned = (node: Node): boolean => {
   if (!asElement(node)) {
     return false;
   }
   return (
-    node.tagName === 'NOSCRIPT' ||
     node.tagName === 'TEMPLATE' ||
     (node.tagName === 'SCRIPT' && !!node.getAttribute('src')) ||
     (node.tagName === 'STYLE' && node.hasAttribute('data-vite-dev-id'))
@@ -298,7 +295,29 @@ function patchNode(live: Node, previous: Node, next: Node): void {
     return;
   }
   patchAttrs(live, previous, next);
+  // A change to the element's own attributes (a class, a style, a prop's value) is not
+  // a change to what it holds. Its children are left to the page when the server's are
+  // the same: a script may have rebuilt them (split text into lines, wrapped words for
+  // an entrance), and lining that up with the server's children would fail and reload
+  // the page, restarting every animation on it, for an edit that changed one attribute.
+  if (sameChildren(previous, next)) {
+    return;
+  }
   patchChildren(live, previous, next);
+}
+
+function sameChildren(previous: Element, next: Element): boolean {
+  if (previous.childNodes.length !== next.childNodes.length) {
+    return false;
+  }
+  for (let index = 0; index < previous.childNodes.length; index++) {
+    const before = previous.childNodes[index];
+    const after = next.childNodes[index];
+    if (before === undefined || after === undefined || !before.isEqualNode(after)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function patchChildren(liveParent: Element, previousParent: Element, nextParent: Element): void {

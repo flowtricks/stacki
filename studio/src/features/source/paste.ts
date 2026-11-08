@@ -1,4 +1,6 @@
 import ts from 'typescript';
+import { indentUnitOf } from '../../../vendor/stacki/shared/core/indent';
+import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
 import { parsePageTree } from '../../../vendor/stacki/shared/page/pageNode';
 import { namesUsedIn } from '../../../vendor/stacki/src/editor/frontmatterMove';
 import { frontmatterRange } from './frontmatter';
@@ -10,7 +12,9 @@ import { carriedBindings } from './pasteBindings';
 export function pasteEdits(source: string, file: string, action: Extract<TreeAction, { kind: 'paste' }>) {
   const clip = action.clipboard;
   const nodes = parsePageTree(nodesOf(clip.fragment));
-  const edits = [insertFragment(source, action, clip.fragment, false)];
+  // Printed, as Desktop prints a pasted node: the copied bytes keep the indentation
+  // of the place they left, and one element per line whatever they were written as.
+  const edits = [insertFragment(source, action, serializeNodes(nodes, indentUnitOf(source)), false)];
   if (file === clip.file) {
     return edits;
   }

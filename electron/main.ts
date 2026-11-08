@@ -7,6 +7,7 @@ import { registerProjectMetadataHandlers } from './handlers/projectMetadataHandl
 import { registerImageConversionHandler } from './handlers/imageConversionHandler';
 import { registerGitRepositoryHandlers } from './handlers/gitRepositoryHandlers';
 import { listenForPreviewFailures } from './preview/previewFailure';
+import { keepPreviewsOnSite } from './app/previewNavigation';
 import { registerStudioHandlers } from './handlers/studioHandlers';
 import { createIpcRegistrar } from './lib/ipcRegistrar';
 import { RUNTIME_PATHS, resourcePath } from './lib/runtimePaths';
@@ -290,6 +291,7 @@ function createWindow() {
   });
 
   listenForPreviewFailures(mainWindow.webContents, () => devServers.current()?.url);
+  keepPreviewsOnSite(mainWindow.webContents, openExternalLink);
 
   // A renderer that does not load leaves an empty window; the log says why.
   const loaded = process.env['VITE_DEV_SERVER_URL'] ? mainWindow.loadURL(process.env['VITE_DEV_SERVER_URL']) : mainWindow.loadFile(RUNTIME_PATHS.rendererIndex);

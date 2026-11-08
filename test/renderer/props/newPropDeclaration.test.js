@@ -39,10 +39,10 @@ test('a text prop joins interface Props and the destructure, with its tooltip an
 test('a file with neither gets an interface and a destructure', () => {
   const out = declared('const other = 1;\n', { key: 'count', kind: 'number', defaultText: '3' });
   assert.ok(out.ok);
-  assert.equal(out.value.frontmatter, 'interface Props {\n  count?: number;\n}\nconst { count = 3 } = Astro.props;\nconst other = 1;\n');
+  assert.equal(out.value.frontmatter, 'interface Props {\n\tcount?: number;\n}\nconst { count = 3 } = Astro.props;\nconst other = 1;\n');
   const empty = declared('', { key: 'label', kind: 'string' });
   assert.ok(empty.ok);
-  assert.equal(empty.value.frontmatter, 'interface Props {\n  label?: string;\n}\nconst { label } = Astro.props;\n', 'an empty default is no default');
+  assert.equal(empty.value.frontmatter, 'interface Props {\n\tlabel?: string;\n}\nconst { label } = Astro.props;\n', 'an empty default is no default');
 });
 
 test('a destructure without an interface keeps its props typed in the new interface', () => {
@@ -50,7 +50,7 @@ test('a destructure without an interface keeps its props typed in the new interf
   assert.ok(out.ok);
   assert.match(
     out.value.frontmatter,
-    /^interface Props \{\n {2}title\?: string;\n {2}size\?: number;\n {2}on\?: boolean;\n {2}data\?: unknown;\n {2}label\?: string;\n\}\n/,
+    /^interface Props \{\n\ttitle\?: string;\n\tsize\?: number;\n\ton\?: boolean;\n\tdata\?: unknown;\n\tlabel\?: string;\n\}\n/,
   );
 });
 
@@ -77,7 +77,7 @@ test('number settings are JSDoc tags, and the default has to fit them', () => {
   const settings = { min: 0, max: 10, decimals: 0 };
   const out = declared('', { key: 'count', kind: 'number', tooltip: 'Card count shown in the badge', number: settings, defaultText: '4' });
   assert.ok(out.ok);
-  assert.match(out.value.frontmatter, /\/\*\* Card count shown in the badge\n {3}\* @min 0\n {3}\* @max 10\n {3}\* @decimals 0 \*\/\n {2}count\?: number;/);
+  assert.match(out.value.frontmatter, /\/\*\* Card count shown in the badge\n\t \* @min 0\n\t \* @max 10\n\t \* @decimals 0 \*\/\n\tcount\?: number;/);
   const read = documentation.readPropDocumentation('Card count shown in the badge\n@min 0\n@max 10\n@decimals 0');
   assert.deepEqual(read.number, settings);
   assert.equal(read.tooltip, 'Card count shown in the badge');
@@ -108,7 +108,7 @@ test('number settings read back bounded, and a typed number is held to them', ()
 test('switch labels are JSDoc tags with On and Off left out, and the default is true or false', () => {
   const out = declared('', { key: 'shown', kind: 'boolean', switch: { onLabel: 'Visible', offLabel: 'Off' }, defaultText: 'true' });
   assert.ok(out.ok);
-  assert.match(out.value.frontmatter, /\/\*\* @onLabel Visible \*\/\n {2}shown\?: boolean;\n\}\nconst \{ shown = true \}/);
+  assert.match(out.value.frontmatter, /\/\*\* @onLabel Visible \*\/\n\tshown\?: boolean;\n\}\nconst \{ shown = true \}/);
   assert.deepEqual(documentation.readPropDocumentation('@onLabel Visible').switch, { onLabel: 'Visible', offLabel: 'Off' });
   assert.equal(documentation.statedSwitchLabels('Just words'), undefined, 'a doc without labels keeps the field’s words');
   assert.equal(declared('', { key: 'shown', kind: 'boolean', defaultText: 'yes' }).error, 'The default is on or off.');

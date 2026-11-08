@@ -33,7 +33,9 @@ import {
   mediaWord,
   boundsHint,
   type PropControlState,
-  numberControlBounds,
+  numberCommitted,
+  numberStepped,
+  numberTyped,
   isColorText,
   hexOfColor,
 } from './propFieldModel';
@@ -299,51 +301,73 @@ export function BooleanControl({ state }: { readonly state: PropControlState }) 
   );
 }
 export function NumberControl({ state }: { readonly state: PropControlState }) {
-  const model = numberControlState(state);
+  // What is typed but not written: a partial number on its way ("-", "1.") or
+  // one past the component's range. It is shown, never saved, until commit.
+  const [draft, setDraft] = useState<string | undefined>(undefined);
+  const model = numberControlState(state, { draft, setDraft });
   return <NumberControlView state={model} />;
 }
-export function numberControlState(state: PropControlState) {
-  const { field, value, onChange, lastGoodRef, placeholderFor } = state;
-
-  const numberText = value?.type === 'expr' ? value.value : (attrText(value) ?? '');
+export function numberControlState(
+  state: PropControlState,
+  held: { readonly draft: string | undefined; readonly setDraft: (draft: string | undefined) => void },
+) {
+  const { field, value, onChange, placeholderFor } = state;
+  const { draft, setDraft } = held;
+  const sourceText = value?.type === 'expr' ? value.value : (attrText(value) ?? '');
   // What the component says it will accept (see numberRules): a bound the
-  // type can't express, read from the doc comment. Typing stays free — you
-  // have to be able to pass through "-" or "1." on the way to a real number
-  // — and the check happens when the value is committed, on Enter or on
-  // leaving the field.
-  const { bounded, allows, clamp } = numberControlBounds(field);
-  // The last value that was allowed, to fall back to. An empty field is
-  // allowed — it means "unset", and the component's own default applies.
-  if (numberText === '' || allows(parseFloat(numberText))) {
-    lastGoodRef.current = numberText;
-  }
-  const revertIfRejected = () => {
-    if (!bounded || numberText === '' || allows(parseFloat(numberText))) {
+  // type can't express, read from the doc comment's @min, @max and @step or
+  // its prose. Typing stays free — you have to be able to pass through "-"
+  // or "1." on the way to a real number — but only an accepted number is
+  // written; the rest waits in the draft and is clamped when committed, on
+  // Enter or on leaving the field.
+  const numberText = draft ?? sourceText;
+  const onType = (text: string) => {
+    const typed = numberTyped(field, text);
+    switch (typed.kind) {
+      case 'clear':
+        setDraft(undefined);
+        onChange(undefined);
+        return;
+      case 'write':
+        setDraft(undefined);
+        onChange({ type: 'expr', value: typed.text });
+        return;
+      case 'hold':
+        setDraft(typed.text);
+        return;
+      default: {
+        const exhaustive: never = typed;
+        return exhaustive;
+      }
+    }
+  };
+  const commit = () => {
+    if (draft === undefined) {
       return;
     }
-    const back = lastGoodRef.current;
-    onChange(back === '' ? undefined : { type: 'expr', value: back }, true);
+    setDraft(undefined);
+    const committed = numberCommitted(field, draft);
+    if (committed === undefined) {
+      return; // Not a number: the field shows its source value again.
+    }
+    onChange({ type: 'expr', value: committed }, true);
   };
   // One place decides what a step does, so the arrow keys and the buttons
   // can't drift apart. Shift ×10, Option ÷10 — the modifiers the style
   // panel's number fields already use.
-  const step = (direction: number, mods: { readonly shiftKey: boolean; readonly altKey: boolean }, from: string) => {
-    const size = mods.shiftKey ? 10 : mods.altKey ? 0.1 : 1;
+  const step = (direction: 1 | -1, mods: { readonly shiftKey: boolean; readonly altKey: boolean }, from: string) => {
     const current = parseFloat(from);
     // An empty field steps from the value it is SHOWING — the placeholder is
     // the effective value (the source image's 115, the component's default),
     // so ▲ on a blank width goes to 116, not 1.
     const shown = parseFloat(placeholderFor(field));
     const base = Number.isFinite(current) ? current : Number.isFinite(shown) ? shown : parseFloat(String(field.default)) || 0;
-    // Round away float noise (e.g. 38.1 + 0.1 = 38.199999…), then keep the
-    // result inside what the component accepts — a step is an applied value,
-    // so it should never land somewhere the field would reject.
-    const next = Math.round((base + direction * size) * 1e6) / 1e6;
-    onChange({ type: 'expr', value: String(bounded ? clamp(next) : next) });
+    setDraft(undefined);
+    onChange({ type: 'expr', value: numberStepped(field, base, direction, mods) });
   };
   const onStepKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'Enter') {
-      revertIfRejected();
+      commit();
       return;
     }
     if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
@@ -352,10 +376,10 @@ export function numberControlState(state: PropControlState) {
     event.preventDefault();
     step(event.key === 'ArrowUp' ? 1 : -1, event, event.currentTarget.value);
   };
-  return { ...state, numberText, revertIfRejected, onStepKey, step };
+  return { ...state, numberText, commit, onType, onStepKey, step };
 }
 export function NumberControlView({ state }: { readonly state: ReturnType<typeof numberControlState> }) {
-  const { label, numberText, placeholderFor, field, onStepKey, revertIfRejected, onChange, step } = state;
+  const { label, numberText, placeholderFor, field, onStepKey, commit, onType, step } = state;
 
   return (
     <div className="props-field">
@@ -370,12 +394,13 @@ export function NumberControlView({ state }: { readonly state: ReturnType<typeof
           value={numberText}
           placeholder={placeholderFor(field)}
           onKeyDown={onStepKey}
-          onBlur={revertIfRejected}
+          onBlur={commit}
           title={boundsHint(field)}
-          onChange={(event) => (event.target.value === '' ? onChange(undefined) : onChange({ type: 'expr', value: event.target.value }))}
+          aria-label={boundsHint(field)}
+          onChange={(event) => onType(event.target.value)}
         />
         <span className="num-steppers">
-          {[1, -1].map((direction) => (
+          {([1, -1] as const).map((direction) => (
             <button
               key={direction}
               type="button"

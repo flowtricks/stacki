@@ -212,7 +212,8 @@ export function HoverTooltip({ anchor, children }: { anchor: HTMLElement; childr
       const centerX = anchorRect.left + anchorRect.width / 2;
       const left = Math.max(margin, Math.min(centerX - width / 2, window.innerWidth - margin - width));
       const fitsAbove = anchorRect.top - gap - height >= margin;
-      const top = fitsAbove ? anchorRect.top - gap - height : anchorRect.bottom + gap;
+      const below = Math.max(margin, Math.min(anchorRect.bottom + gap, window.innerHeight - margin - height));
+      const top = fitsAbove ? anchorRect.top - gap - height : below;
       const arrowLeft = Math.max(12, Math.min(centerX - left, width - 12));
       setArrow({ left: arrowLeft, above: fitsAbove });
       setStyle({ position: 'fixed', top, left, visibility: 'visible' });

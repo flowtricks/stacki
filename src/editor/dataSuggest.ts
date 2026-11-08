@@ -11,6 +11,8 @@ import {
   parseDeclarations,
   type ImportLike,
   mayHoldData,
+  NON_DATA_EXT,
+  TOOL_MODULE,
   type Destructure,
   parseDestructures,
   looksCallable,
@@ -20,6 +22,7 @@ import {
 import { entrySampleKey, sampleAt, sampleKey, type TreeNode, sampleNode, literalNode } from './dataSample';
 import { queriesInScope, namesInScope, type CollectionReader, type DataContext, type SchemaField, autoQueryName } from './dataScope';
 import { loopSourcePath, parseLoopHead } from './loopSource';
+import type { ImportedValue } from './importedValues';
 export {
   QUERY_MARK,
   type MarkedQuery,
@@ -343,7 +346,7 @@ function buildValueNodes(
       seen,
     );
   }
-  addImportNodes(values, decls, imports, seen, valueSamples);
+  addImportNodes(values, decls, { imports, importedValues: page.importedValues, valueSamples }, seen);
   return values;
 }
 
@@ -360,30 +363,61 @@ function sampledValueNode(name: string, declaration: string, sampled: unknown): 
   return node;
 }
 
-// The imports that may hold data, for a value read straight from one — with
-// what it held on the last render when the dev server has said
-// (`import team from '../data/team.json'`).
+// Every import that may hold data, for a value read straight from one: what
+// it held on the last render when the dev server has said
+// (`import team from '../data/team.json'`), else the literal its module
+// declares (`APP_VERSION` from `src/consts.ts`, importedValues.ts), else the
+// name alone, marked "imported" with nothing to preview — a package's export
+// or a computed value, which the picker can still bind to.
 function addImportNodes(
   values: TreeNode[],
   decls: ReadonlyMap<string, string>,
-  imports: readonly ImportLike[],
+  scope: {
+    readonly imports: readonly ImportLike[];
+    readonly importedValues: Readonly<Record<string, ImportedValue>>;
+    readonly valueSamples: Record<string, unknown>;
+  },
   seen: Set<string>,
-  valueSamples: Record<string, unknown>,
 ): void {
-  for (const imp of imports) {
-    if (imp.name === undefined || decls.has(imp.name)) {
+  const before = values.length;
+  for (const imp of scope.imports) {
+    if (imp.name === undefined || imp.typeOnly === true || decls.has(imp.name)) {
       continue;
     }
-    if (!mayHoldData(imp)) {
-      continue;
+    const node = importNode(imp.name, imp, scope.importedValues[imp.name], scope.valueSamples[imp.name]);
+    if (node !== undefined) {
+      assert(node.path === imp.name, 'An import is named as the file names it');
+      addUnique(values, node, seen);
     }
-    const sampled = valueSamples[imp.name];
-    const node =
-      sampled === undefined || sampled === null
-        ? { path: imp.name, key: imp.name, kind: 'import', preview: '', children: undefined }
-        : sampleNode(imp.name, imp.name, sampled, 0);
-    addUnique(values, node, seen);
   }
+  assert(values.length - before <= scope.imports.length, 'One node per import at most');
+}
+
+// A name in constant case (`APP_VERSION`, `MAX_ITEMS`): a value by
+// convention, where a capitalised name with no underscore is a component.
+const CONSTANT_CASE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
+
+// The node one import gets, or undefined for one that is not data: markup,
+// styles, media, Astro's own modules, and a component (a capitalised name)
+// whose module did not show it to be a value. `LINKS` is capitalised too, and
+// is listed because its module declares it as an object literal.
+function importNode(name: string, imp: ImportLike, declared: ImportedValue | undefined, sampled: unknown): TreeNode | undefined {
+  const path = imp.path ?? '';
+  if (NON_DATA_EXT.test(path) || TOOL_MODULE.test(path)) {
+    return undefined;
+  }
+  if (declared === undefined && !mayHoldData(imp) && !CONSTANT_CASE.test(name)) {
+    return undefined;
+  }
+  // The render's own value wins: it is what the canvas is showing.
+  if (sampled !== undefined && sampled !== null) {
+    return sampleNode(name, name, sampled, 0);
+  }
+  if (declared !== undefined) {
+    const node = declared.kind === 'data' ? sampleNode(name, name, declared.value, 0) : literalNode(name, name, declared.text, 0);
+    return node.kind === 'value' ? { ...node, kind: 'imported', preview: '' } : node;
+  }
+  return { path: name, key: name, kind: 'imported', preview: '', children: undefined };
 }
 
 // A value that is another value narrowed — `headings.filter(…)` — gets that
@@ -679,7 +713,14 @@ export function dataTree(context: DataContext | undefined): TreeNode[] {
   const derived = withDerivedShapes(
     decls,
     buildPropNodes(destructures, schema, sample, seen),
-    buildValueNodes(decls, destructures, { frontmatter: fm, imports, samples, reader: context?.collectionReader }, sample, seen, context?.valueSamples),
+    buildValueNodes(
+      decls,
+      destructures,
+      { frontmatter: fm, imports, samples, reader: context?.collectionReader, importedValues: context?.importedValues ?? {} },
+      sample,
+      seen,
+      context?.valueSamples,
+    ),
   );
   const props = derived.props;
   const values = [...derived.values, ...buildCollectionNodes(context?.collections ?? [], fm, imports, samples, seen)];
@@ -753,12 +794,13 @@ interface PageData {
   readonly imports: readonly ImportLike[];
   readonly samples: Record<string, unknown>;
   readonly reader: CollectionReader | undefined;
+  readonly importedValues: Readonly<Record<string, ImportedValue>>;
 }
 
 // What can be looped over: a list, or a value whose shape the app cannot see
 // and which may well be one (an import, a query result, a loop item). Text,
 // numbers, dates and objects cannot.
-const LOOPABLE = new Set(['list', 'value', 'import', 'loop item', 'prop', 'rest props']);
+const LOOPABLE = new Set(['list', 'value', 'imported', 'loop item', 'prop', 'rest props']);
 
 export interface PickableNode extends TreeNode {
   pickable: boolean;

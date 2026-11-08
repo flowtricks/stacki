@@ -34,7 +34,7 @@ try {
   assert.equal(await page.locator('.studio-left').count(), 0);
   assert.equal(await page.locator('.studio-right.mobile-open').count(), 0);
   await checkInspectors(page);
-  for (const width of [320, 375, 390, 430, 600, 700, 701, 768, 1024, 1440]) {
+  for (const width of [320, 375, 390, 430, 600, 700, 701, 768, 825, 900, 1024, 1100, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     await settle(page);
     await checkToolbarBounds(page);
@@ -52,24 +52,9 @@ try {
   await page.getByLabel('Stacki account menu', { exact: true }).tap();
   await page.getByRole('menuitemradio', { name: 'Client', exact: true }).tap();
   await page.locator('.account-popover').waitFor({ state: 'detached' });
-  assert.equal(
-    await page
-      .locator('.preview-toolbar')
-      .getByRole('button', {
-        name: 'Style',
-        exact: true,
-      })
-      .count(),
-    0,
-  );
-  await page
-    .locator('.preview-toolbar')
-    .getByRole('button', {
-      name: 'Settings',
-      exact: true,
-    })
-    .tap();
+  await page.locator('.preview-toolbar').getByRole('button', { name: 'Show style and settings panel', exact: true }).tap();
   await page.locator('.studio-right.mobile-open').waitFor();
+  assert.equal(await page.locator('.studio-right.mobile-open').getByRole('button', { name: 'Style', exact: true }).count(), 0);
   assert.deepEqual(errors, []);
   console.log('Touch selection, both inspectors, client role and toolbar fitting at 10 widths passed.');
 } finally {
@@ -77,13 +62,14 @@ try {
 }
 
 async function checkInspectors(page: Page) {
+  // One toolbar button opens the Style and Settings panel; its own tabs pick between them.
   const toolbar = page.locator('.preview-toolbar');
-  await toolbar.getByRole('button', { name: 'Settings', exact: true }).tap();
+  await toolbar.getByRole('button', { name: 'Show style and settings panel', exact: true }).tap();
   const inspector = page.locator('.studio-right.mobile-open');
+  await inspector.getByRole('button', { name: 'Settings', exact: true }).tap();
   await inspector.getByText('Content', { exact: true }).waitFor();
   await page.screenshot({ path: '/tmp/stacki-mobile-settings.png' });
-  await inspector.getByRole('button', { name: 'Close settings', exact: true }).tap();
-  await toolbar.getByRole('button', { name: 'Style', exact: true }).tap();
+  await inspector.getByRole('button', { name: 'Style', exact: true }).tap();
   await inspector.getByText('CSS Code', { exact: true }).waitFor();
   await page.screenshot({ path: '/tmp/stacki-mobile-style.png' });
   await inspector.getByRole('button', { name: 'Close settings', exact: true }).tap();

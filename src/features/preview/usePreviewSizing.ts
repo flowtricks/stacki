@@ -2,7 +2,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 import { deviceForWidth, deviceWidth, type PreviewDevice } from './PreviewToolbar';
-import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
+import { PREVIEW_WIDTH_LIMITS, heldPreviewViewport, type PreviewSize } from './previewViewport';
+import { usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
 /** A width asked of the canvas from outside it (the style panel picking a media
  *  query). `serial` counts the asks, so the same width asked again still applies. */
 export type CanvasWidthRequest = { readonly widthPx: number; readonly serial: number };
@@ -30,7 +31,8 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
     }
   }, [device, setCustomWidth, setCustomHeight]);
   const width = customWidth ?? deviceWidth(device);
-  const viewport = previewViewport(width, available, customHeight);
+  const panelHold = usePanelHold(available, usePanelDragPhase());
+  const viewport = heldPreviewViewport(width, available, panelHold.held, customHeight);
   const activeDevice = device === 'canvas' ? 'canvas' : (deviceForWidth(viewport.width) ?? device);
   const setWidth = (next: number): void => {
     setCustomWidth(next);
@@ -59,6 +61,8 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
     setWidth,
     customHeight,
     resizing,
+    // True from a side-panel drag's start until the frame after release: the frame skips its size transition.
+    panelSettling: panelHold.settling,
     width,
     activeDevice,
     startResize,
@@ -77,6 +81,37 @@ function useMeasuredSize(ref: React.RefObject<HTMLDivElement>, setSize: React.Di
     observer.observe(element);
     return () => observer.disconnect();
   }, [ref, setSize]);
+}
+
+// A side-panel drag holds the canvas size it began with; on release the real size applies
+// for one frame without the frame's width transition, which would otherwise re-lay out the
+// page at every animated width. The hold is captured in a layout effect, before any resize
+// observer can report the panel's new width. (A state update during render would be simpler,
+// but React then skips its store-snapshot bookkeeping and misses the release.)
+type PanelHold = { readonly kind: 'live' } | { readonly kind: 'held'; readonly size: PreviewSize } | { readonly kind: 'releasing' };
+
+function usePanelHold(available: PreviewSize, phase: PanelDragPhase): { readonly held: PreviewSize | undefined; readonly settling: boolean } {
+  const [hold, setHold] = useState<PanelHold>({ kind: 'live' });
+  const availableRef = useRef(available);
+  availableRef.current = available;
+  useLayoutEffect(() => {
+    if (phase === 'dragging') {
+      setHold((current) => (current.kind === 'held' ? current : { kind: 'held', size: availableRef.current }));
+    } else {
+      setHold((current) => (current.kind === 'held' ? { kind: 'releasing' } : current));
+    }
+  }, [phase]);
+  useEffect(() => {
+    if (hold.kind !== 'releasing') {
+      return undefined;
+    }
+    const frame = requestAnimationFrame(() => setHold({ kind: 'live' }));
+    return () => cancelAnimationFrame(frame);
+  }, [hold.kind]);
+  if (phase === 'dragging') {
+    return { held: hold.kind === 'held' ? hold.size : available, settling: true };
+  }
+  return { held: undefined, settling: hold.kind !== 'live' };
 }
 
 function useDeviceShortcuts(onDevice: (device: PreviewDevice) => void): void {

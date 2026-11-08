@@ -2,6 +2,7 @@
 // types and what it becomes, the markup a paste may bring in, and the counts
 // shown under the text. HtmlField.tsx and richTextCommands.ts act on these.
 import { assert } from '../../shared/core/assert';
+import { CODE_INDENT_UNIT } from '../../shared/core/indent';
 import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
 import { safeHTMLLink } from './htmlFieldModel';
 
@@ -194,7 +195,7 @@ const LINE_TAGS = new Set(('p div h1 h2 h3 h4 h5 h6 ul ol li blockquote pre hr t
 
 /**
  * Rich text HTML laid out to read, the way Prettier lays out a page: every
- * block on its own line, nested blocks indented two spaces, and the text of a
+ * block on its own line, nested blocks indented a tab, and the text of a
  * paragraph kept whole on its line. Only whitespace between blocks changes, so
  * the page renders the same.
  */
@@ -204,7 +205,7 @@ export function formatHTML(html: string, document: Document): string {
   template.innerHTML = html;
   const lines = formatChildren(template.content, 0);
   const formatted = lines.join('\n');
-  assert(!formatted.startsWith(' '), 'The top level is not indented');
+  assert(!formatted.startsWith(CODE_INDENT_UNIT), 'The top level is not indented');
   return formatted;
 }
 
@@ -214,7 +215,7 @@ function formatChildren(parent: ParentNode, depth: number): string[] {
   let inline = '';
   const flush = (): void => {
     if (inline.trim() !== '') {
-      lines.push('  '.repeat(depth) + inline.trim());
+      lines.push(CODE_INDENT_UNIT.repeat(depth) + inline.trim());
     }
     inline = '';
   };
@@ -232,7 +233,7 @@ function formatChildren(parent: ParentNode, depth: number): string[] {
 
 // A block on one line, or, holding blocks of its own, opened and closed around them.
 function formatBlock(element: Element, depth: number): string[] {
-  const indent = '  '.repeat(depth);
+  const indent = CODE_INDENT_UNIT.repeat(depth);
   const nested = [...element.children].some((child) => LINE_TAGS.has(child.localName));
   if (!nested || element.localName === 'pre' || depth >= RICH_TEXT_LIMITS.formatDepthMax) {
     return [indent + element.outerHTML];

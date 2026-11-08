@@ -2,7 +2,8 @@
 // choosing an import path, a layout's fields, a schema, the class field,
 // extracting a component, and what a paste brings in (App.tsx).
 
-import type { ImportDecl, PageModel, PageNode } from '../../../shared/page/pageNode';
+import { labelsNode } from '../../../shared/page/leadingNote';
+import type { ImportDecl, PageNode } from '../../../shared/page/pageNode';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { findWithParent } from '../../editor/treeSelection';
 import { ASTRO_ASSETS_MODULE, PLACEHOLDER_PROPS } from '../../features/palette/astroAssets';
@@ -21,56 +22,10 @@ import { type HistoryEntry, type NodeClipboard } from '../appTypes';
 import { findEditorNodeById as findNodeById, findEditorParentList as findParentList, type OpenFile } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { findImportPath, rebaseProjectImport, type ImportPaths } from '../../ipc/appBridge';
-import { newId, defaultText, collectUsedNames, codeText, voided, frontmatterOf } from './nodeFactory';
+import { newId, defaultText, voided, frontmatterOf } from './nodeFactory';
 import { STYLE_GLOBAL_ATTRIBUTE } from './styleBlockScope';
-
-// Imports the app is willing to remove once nothing refers to them: a
-// component file of any flavour Astro renders, an image, and Astro's own
-// <Image>/<Picture>. All three are reachable only as a tag or from an
-// expression, both of which the check below reads in full. A stylesheet, a
-// data module or a utility is left alone — those get imported for effects
-// this file can't see, and dropping one that is still doing its job breaks
-// the page.
-export const COMPONENT_IMPORT_RE = /\.(astro|jsx|tsx|vue|svelte)$/i;
-export const ASSET_IMPORT_RE = /\.(png|jpe?g|gif|webp|avif|svg)$/i;
-
-export function prunableImport(i: ImportDecl): boolean {
-  return COMPONENT_IMPORT_RE.test(i.path) || ASSET_IMPORT_RE.test(i.path) || i.path === ASTRO_ASSETS_MODULE;
-}
-
-export function withPrunedImports(model: EditorModel): EditorModel {
-  const used = collectUsedNames(model);
-  // A name can be referenced as code rather than as a tag — inside a
-  // `<Fragment set:html>` chunk, a frontmatter const, a prop expression. The
-  // test is deliberately loose (a bare word anywhere in the code counts),
-  // because the cost of a false positive is a stray import and the cost of a
-  // false negative is deleting something the page still needs.
-  const code = codeText(model);
-  const mentioned = (name: string): boolean => new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(code);
-  const imports = model.imports.filter((i) => !prunableImport(i) || used.has(i.name) || mentioned(i.name));
-  return imports.length === model.imports.length ? model : { ...model, imports };
-}
-
-// Chooses an import path matching the page's existing style: if it already
-// imports via a src alias (e.g. "@/components/X.astro"), reuse that alias
-// root for the new import; otherwise fall back to a relative path.
-export function chooseImportPath(model: Pick<PageModel, 'imports'>, paths: { readonly relative: string; readonly srcRelative: string | undefined }): string {
-  const { relative, srcRelative: sourceRelative } = paths;
-  if (sourceRelative) {
-    for (const imp of model.imports) {
-      if (imp.path.startsWith('.')) {
-        continue;
-      }
-      for (const marker of ['/components/', '/layouts/']) {
-        const index = imp.path.indexOf(marker);
-        if (index > 0) {
-          return imp.path.slice(0, index + 1) + sourceRelative;
-        }
-      }
-    }
-  }
-  return relative;
-}
+import { chooseImportPath } from './pageModelGestures';
+export { ASSET_IMPORT_RE, chooseImportPath, COMPONENT_IMPORT_RE, prunableImport, withLayoutField, withPrunedImports } from './pageModelGestures';
 
 // Whether the props panel would offer this node a Content field — the rich
 // inline editor over its words. The same test PropsPanel makes: children that
@@ -116,25 +71,17 @@ export const commentAbove = (model: EditorModel | undefined, nodeId: string | un
     return undefined;
   }
   const previous = found.list[found.index - 1];
-  return previous && previous.kind === 'comment' ? previous : undefined;
+  const node = found.list[found.index];
+  if (previous === undefined || node === undefined) {
+    return undefined;
+  }
+  return labelsNode(previous.kind, node.kind) ? previous : undefined;
 };
 
 // Set/replace/remove the `layout:` key in a markdown page's YAML
 // frontmatter, leaving every other key and its formatting alone. The
 // frontmatter text stays the single source of truth — editing it by hand in
 // the frontmatter editor and picking a layout here write to the same place.
-export const withLayoutField = (frontmatter: string, layoutPath: string | undefined): string => {
-  const fm = frontmatter ?? '';
-  if (/^[ \t]*layout[ \t]*:/m.test(fm)) {
-    return layoutPath ? fm.replace(/^[ \t]*layout[ \t]*:.*$/m, `layout: ${layoutPath}`) : fm.replace(/^[ \t]*layout[ \t]*:.*(\n|$)/m, '');
-  }
-  if (!layoutPath) {
-    return fm;
-  }
-  // First, so it reads as the page's frame rather than one field among many.
-  return fm ? `layout: ${layoutPath}\n${fm}` : `layout: ${layoutPath}`;
-};
-
 // A component whose Props extends HTMLAttributes<"tag"> also accepts that
 // element's built-in attributes — merge them in after its own props.
 export const schemaFor = (entry: ScanComponent | AstroAsset | undefined): readonly FieldDefinition[] => {

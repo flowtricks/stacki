@@ -257,7 +257,7 @@ test('a List property made from a loop’s Source is declared and looped over in
   const written = await sendAndUndo(harness, file, read, gesture);
   assert.ok(
     written.startsWith(
-      '---\ninterface Props {\n  heading?: string;\n  items?: readonly { title: string; text: string }[];\n}\n' +
+      '---\ninterface Props {\n\theading?: string;\n\titems?: readonly { title: string; text: string }[];\n}\n' +
         'const { heading = "Values", items = [{ title: "Commit", text: "to a genuine relationship" }] } = Astro.props;\n---\n',
     ),
     written,

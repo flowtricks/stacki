@@ -281,7 +281,7 @@ function pageLists(data: SourcePickerData | undefined): readonly PickerNode[] {
     if (node.section === 'collections' || node.query !== undefined) {
       return false;
     }
-    return !(node.kind === 'import' && calledIn(data.frontmatter, node.key));
+    return !(node.kind === 'imported' && calledIn(data.frontmatter, node.key));
   });
 }
 

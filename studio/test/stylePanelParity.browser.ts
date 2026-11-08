@@ -64,7 +64,8 @@ async function checkColors(page: Page) {
   await chipColor(blue, 'rgb(1, 107, 205)');
   const dimmed = chip.filter({ hasText: /^\.query-only$/ });
   assert.match((await dimmed.getAttribute('class')) ?? '', /is-dimmed/);
-  await page.getByRole('checkbox', { name: /Show inherited styles/ }).check();
+  // Hiding is the checked state, so unchecking it shows the inherited `.parent .component` rule.
+  await page.getByRole('checkbox', { name: /Hide inherited styles/ }).uncheck();
   const inherited = chip.filter({ hasText: /^\.parent \.component$/ });
   await selectChip(inherited);
   await chipColor(inherited, 'rgb(74, 74, 74)');

@@ -35,6 +35,9 @@ import type { ShellView } from '../App';
 import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEdit';
 import { assert } from '../../../shared/core/assert';
 import PanelBoundary from '../../ui/PanelBoundary';
+import { KeptTabPanel } from '../../ui/KeptTabPanel';
+import { PropPreviewContext } from '../../features/props/propPreviewContext';
+import { propPreviewInstance, useDesktopPropPreview } from './desktopPropPreview';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { selectedPseudo } from '../model/selectionStructure';
 
@@ -53,6 +56,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         devLog={app.devLog}
         devDiag={app.devDiag}
         route={app.pageUrlPath}
+        pageRoutes={app.scan.pages.map((page) => page.route)}
         onEditRoute={(route) => {
           const page = app.scan.pages.find((entry) => (entry.route.replace(/\/$/, '') || '/') === route);
           if (page) {
@@ -343,19 +347,25 @@ export function OldVersionCover({ app }: { readonly app: ShellView }) {
 }
 
 export function RightPanel({ app }: { readonly app: ShellView }) {
+  // Hovering a component prop's option previews it on the canvas without writing.
+  const propPreview = useDesktopPropPreview(
+    propPreviewInstance(app.selectedComponent?.path, app.project.path ?? undefined, app.selectedId ? app.pathFor(app.selectedId) : undefined),
+  );
   return (
     <ResizablePanel kind="right">
       <RightTabs app={app} />
-      {app.rightTab === 'style' && (
+      <KeptTabPanel shown={app.rightTab === 'style'}>
         <PanelBoundary name="The Style panel" resetKey={app.selectedId}>
           <StyleTab app={app} />
         </PanelBoundary>
-      )}
-      <div style={{ display: app.rightTab === 'settings' ? 'contents' : 'none' }}>
-        <PanelBoundary name="The Settings panel" resetKey={app.selectedId}>
-          <PropsPanel {...settingsValues(app)} {...settingsHandlers(app)} />
-        </PanelBoundary>
-      </div>
+      </KeptTabPanel>
+      <KeptTabPanel shown={app.rightTab === 'settings'}>
+        <PropPreviewContext.Provider value={propPreview}>
+          <PanelBoundary name="The Settings panel" resetKey={app.selectedId}>
+            <PropsPanel {...settingsValues(app)} {...settingsHandlers(app)} />
+          </PanelBoundary>
+        </PropPreviewContext.Provider>
+      </KeptTabPanel>
     </ResizablePanel>
   );
 }
@@ -391,6 +401,7 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
   return (
     <StylePanel
       project={app.project}
+      lengthUnit={app.scan.lengthUnit}
       model={app.model}
       node={app.selectedNode}
       device={app.device}
@@ -431,6 +442,7 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       projectClasses={app.projectClasses}
       historyTick={app.historyTick}
       pseudoRequest={app.pseudoPick}
+      pseudoRows
       selectorFocus={app.classFocus}
       openFilePath={app.openEditableFile?.path ?? undefined}
       openFileKind={app.openEditableFile?.kind ?? undefined}
@@ -588,6 +600,7 @@ export function CodeWindowHost({ app }: { readonly app: ShellView }) {
     <CodeWindow
       title={codeWin.title}
       language={codeWin.language}
+      indentation={codeWin.indentation}
       value={codeWinValue}
       editorKey={isFileWin ? `file:${codeWin.rel}` : targetId}
       revealLine={codeWin.revealLine}

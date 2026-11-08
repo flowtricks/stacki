@@ -332,6 +332,13 @@ export type WireGroup = {
   readonly label: string;
   readonly columns: ReadonlyArray<WireColumn>;
   readonly blocks: ReadonlyArray<WireBlock>;
+  readonly scope?: WireVariableScope;
+};
+
+/** Who a `<style>` block's variables reach, and how the block was written. */
+export type WireVariableScope = {
+  readonly reach: 'page' | 'rendered' | 'scoped';
+  readonly written: 'global' | 'inline' | 'scoped';
 };
 
 export type WireRule = {
@@ -576,6 +583,7 @@ export type WireBlock = {
   readonly title: undefined | string;
   readonly titleStart?: number;
   readonly titleEnd?: number;
+  readonly description?: string;
   readonly rows: ReadonlyArray<WireRow>;
   readonly columns?: ReadonlyArray<WireColumn>;
 };
@@ -666,6 +674,7 @@ export type WireCommentEntry = {
   readonly text: string;
   readonly textStart: number;
   readonly textEnd: number;
+  readonly description?: string;
 };
 
 export type WirePropValue = {

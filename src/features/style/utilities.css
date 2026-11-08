@@ -820,7 +820,10 @@ body.is-scrubbing * {
   display: flex;
   align-items: center;
   cursor: pointer;
-  touch-action: none;
+  /* A vertical swipe scrolls the panel; a horizontal drag or a held press takes the thumb
+     (DragSlider, ui/touchClaim.ts). */
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
 }
 /* The thin track. */
 .u-drag-slider::before {
@@ -1047,8 +1050,8 @@ body.is-scrubbing * {
 }
 /* Two lines: a smaller, muted first line (a nested query's wrapping selector) over
    the label at a step down from the one-line size, so both fit the trigger's
-   height. Each line truncates on its own, so a long selector never wraps into a
-   third line. Both lines start at the same left edge: the trigger is a <button>,
+   height. A list row can add a muted last line (.u-select-subline). Each line
+   truncates on its own, so a long selector never wraps. All lines start at the same left edge: the trigger is a <button>,
    whose text is centred by default, and a stretched line shorter than its column
    would otherwise sit in its middle. */
 .u-select-label.has-overline {
@@ -1060,13 +1063,15 @@ body.is-scrubbing * {
   line-height: var(--line-height-tight);
 }
 .u-select-overline,
-.u-select-label-line {
+.u-select-label-line,
+.u-select-subline {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.u-select-overline {
+.u-select-overline,
+.u-select-subline {
   color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
 }
@@ -1220,6 +1225,13 @@ body.is-scrubbing * {
 .u-select-option.is-active.is-selected {
   background: var(--color-bg-hover);
 }
+/* A row with a subline is taller than the row's minimum. The list is a capped flex
+   column, so without this it would squeeze the row back to the minimum once the
+   list scrolls; the padding keeps the outer lines off the highlight's edges. */
+.u-select-option.has-subline {
+  flex-shrink: 0;
+  padding-block: var(--space-1);
+}
 /* The label takes the row's free space, so the trailing slots (dot, then
    check or action) are pinned to the right end. */
 .u-select-option > .u-select-label {
@@ -1357,6 +1369,10 @@ body.is-scrubbing * {
   /* While empty, the caption is inert so clicks pass through to the input it
      labels (e.g. a min-field pill). It becomes interactive once active. */
   pointer-events: none;
+  /* An active label scrubs its value horizontally (useScrub): the browser keeps only the
+     vertical swipe that scrolls the panel, and a held press can still be a scrub. */
+  touch-action: pan-y;
+  -webkit-touch-callout: none;
 }
 
 /* A dim caption is inert so clicks reach the field beneath it — except when it

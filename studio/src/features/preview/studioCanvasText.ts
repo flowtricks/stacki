@@ -1,16 +1,17 @@
 import { canvasContentEdits } from '../../../vendor/stacki/src/app/model/canvasTextContent';
 import { canvasPropEdits, type ComponentSource } from '../../../vendor/stacki/src/app/model/canvasPropText';
+import { canvasTextFormatter } from '../../../vendor/stacki/src/app/model/canvasTextFormat';
 import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import type { ScanComponent } from '../../../vendor/stacki/shared/properties/projectScan';
 import type { Attr } from '../../../vendor/stacki/shared/page/pageNode';
 import type { CanvasTextDocument } from '../../../vendor/stacki/src/features/preview/useCanvasText';
 import { reportErrorToast } from '../../../vendor/stacki/src/ui/errorNotices';
 import type { SharedDocument } from '../collaboration/useDocument';
-import { parsePage, type ParserNode } from '../source/source';
+import { applyEdits, parsePage, type ParserNode } from '../source/source';
 import { pathFor } from '../project/previewSelection';
 import { request, type Component } from '../project/projectClient';
 import { record, string } from '../../shared/validation';
-import { setAttributes } from '../settings/settingsEdits';
+import { inlineContentEdit, setAttributes } from '../settings/settingsEdits';
 
 // Studio's files are project-relative; the prop finder resolves imports against
 // a project root, so both are read under this one stand-in.
@@ -59,6 +60,16 @@ export function studioCanvasText(
     apply: async (next) => replace(next),
     report: reportErrorToast,
     components: context.components,
+    // Words selected on the canvas get Desktop's format bar, written as the
+    // Content field writes them: the element's inline content in this page's
+    // source. Slot text is the page's own markup, so it formats the same way.
+    format: canvasTextFormatter(nodes, (rootId, children) => {
+      try {
+        replace(applyEdits(source, [inlineContentEdit(source, rootId, children)]));
+      } catch (error: unknown) {
+        reportErrorToast(error instanceof Error ? error.message : String(error));
+      }
+    }),
     // The selected node's page path: its text from a prop or a slot is marked.
     focus: context.selected ? [pathOf(context.selected)] : [],
   };

@@ -146,6 +146,37 @@ test('shared popup motion, dismissal and nested focus', async () => {
     });
     await tick(180);
     assert.equal(document.querySelector('dialog') === null, true, 'Opening cannot cancel dismissal');
+
+    // A press during a menu's exit motion belongs to the control it lands on: Escape,
+    // then straight to another button, must not lose that button's click.
+    const menuContainer = document.createElement('div');
+    document.body.append(menuContainer);
+    const menuRoot = createRoot(menuContainer);
+    await act(async () =>
+      menuRoot.render(
+        React.createElement(
+          Popup,
+          { mode: 'popover', portal: false, label: 'Menu', role: 'dialog', onClose: () => events.push('menu') },
+          React.createElement('button', undefined, 'Option'),
+        ),
+      ),
+    );
+    await tick(50);
+    assert.equal(menuContainer.querySelector('.popup-surface')?.dataset.popupPhase, 'open');
+    await escape();
+    assert.equal(menuContainer.querySelector('.popup-surface')?.dataset.popupPhase, 'closing');
+    let clicked = 0;
+    trigger.addEventListener('click', () => (clicked += 1));
+    const press = new window.MouseEvent('pointerdown', { bubbles: true, cancelable: true });
+    await act(async () => {
+      trigger.dispatchEvent(press);
+      trigger.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+    assert.equal(press.defaultPrevented, false, 'The closing menu does not take the press');
+    assert.equal(clicked, 1, 'The click reaches the control');
+    await tick(180);
+    assert.equal(events.at(-1), 'menu');
+    await act(async () => menuRoot.unmount());
   } finally {
     await act(async () => root.unmount());
     dom.window.close();

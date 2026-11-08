@@ -240,7 +240,7 @@ test('edits queued during a move keep the moved element and child selected', asy
   for (const _gesture of gestures) {
     assert.deepEqual(await send(PATH, queue.shift(PATH)), { tag: 'sent' });
   }
-  assert.equal(disk.text, `<main>${card}</main><aside><article title="Moved">` + '<p title="Child">Same</p></article></aside>');
+  assert.equal(disk.text, `<main>${card}</main><aside>\n\t<article title="Moved">` + '<p title="Child">Same</p></article>\n</aside>');
   const moved = box.state.model.nodes[1].children[0];
   assert.equal(moved.id, target.id, 'selection follows the moved element');
   assert.equal(moved.children[0].id, child.id, 'selection also follows its child');

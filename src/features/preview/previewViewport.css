@@ -1,8 +1,11 @@
-/* Keep viewport controls with the preview so global input styles cannot expand them. */
-.preview-toolbar .device-btns {
+/* Keep viewport controls with the preview so global input styles cannot expand them.
+   The "More" popover shows the same controls, so it carries the same rules. */
+.preview-toolbar .device-btns,
+.preview-toolbar-menu .device-btns {
   flex-shrink: 0;
 }
-.preview-toolbar .preview-size-controls {
+.preview-toolbar .preview-size-controls,
+.preview-toolbar-menu .preview-size-controls {
   display: flex;
   align-items: center;
   flex: 0 0 auto;

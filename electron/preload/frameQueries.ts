@@ -1,6 +1,9 @@
-import { parseCanvasInteraction } from '../../shared/properties/canvasInteraction';
+import { receiveLiveVariables } from './frameLiveVariables';
+import { parseCanvasInteraction, parseCanvasSitePages } from '../../shared/properties/canvasInteraction';
 import { hidePendingDelete, settlePendingDeletes } from './framePendingDelete';
-import { setCanvasInteraction } from './frameInteraction';
+import { listenForCanvasMoves, revertCanvasMoves, showCanvasMove } from './frameMove';
+import { parseCanvasMove } from '../../shared/page/canvasMove';
+import { setCanvasInteraction, setCanvasSitePages } from './frameInteraction';
 // The app asking the frame: a path's elements and computed values, the paths
 // it tracks, scrolling a node into view and the viewport height to freeze; and
 // starting the frame once the document is ready.
@@ -112,6 +115,8 @@ const recordPayload = (x: unknown): x is Record<string, unknown> => typeof x ===
 export function listenForQueries(): void {
   // After the patch has swapped the nodes and their stamps (see the listener's note).
   document.addEventListener('avb:morphed', () => setTimeout(settlePendingDeletes, 0));
+  // A reorder shown at once, and reconciled by the patch that follows (frameMove.ts).
+  listenForCanvasMoves();
   window.addEventListener('message', (event: MessageEvent) => {
     if (event.source !== window.parent) {
       return;
@@ -123,6 +128,14 @@ export function listenForQueries(): void {
     const interaction = parseCanvasInteraction(data);
     if (interaction !== undefined) {
       setCanvasInteraction(interaction);
+      return;
+    }
+    const pages = parseCanvasSitePages(data);
+    if (pages !== undefined) {
+      setCanvasSitePages(pages);
+      return;
+    }
+    if (receiveLiveVariables(data)) {
       return;
     }
     if (data['type'] === 'avb:query' && typeof data['id'] === 'number') {
@@ -146,6 +159,19 @@ export function listenForQueries(): void {
     }
     if (data['type'] === 'avb:hide-pending') {
       hidePending(data['path']);
+      return;
+    }
+    if (data['type'] === 'avb:optimistic-move') {
+      const move = parseCanvasMove(data['move']);
+      if (move !== undefined) {
+        showCanvasMove(move);
+        sendRects();
+      }
+      return;
+    }
+    if (data['type'] === 'avb:move-revert') {
+      revertCanvasMoves();
+      sendRects();
       return;
     }
     guideFrame?.receive(data);
@@ -414,6 +440,14 @@ const track = (data: Record<string, unknown>, paths: unknown[]) => {
   }
 };
 
+function reportNavigation(): void {
+  try {
+    window.parent.postMessage({ type: 'avb:navigated', path: location.pathname + location.search }, '*');
+  } catch {
+    /* no parent to tell */
+  }
+}
+
 // The column guide's page side, once the frame has started.
 let guideFrame: GuideFrame | undefined;
 
@@ -422,12 +456,12 @@ const start = () => {
   startOutlines();
   guideFrame = startGuide((message) => window.parent.postMessage(message, '*'));
   // Tell the app which route this frame is on (used by interactive
-  // preview mode to follow link navigation).
-  try {
-    window.parent.postMessage({ type: 'avb:navigated', path: location.pathname + location.search }, '*');
-  } catch {
-    /* ignore */
-  }
+  // preview mode to follow link navigation): now, and after each
+  // client-side navigation (Astro's <ClientRouter /> swaps pages without
+  // loading a document), as Studio's frame client does.
+  reportNavigation();
+  document.addEventListener('astro:page-load', reportNavigation);
+  window.addEventListener('popstate', reportNavigation);
   try {
     const ro = new ResizeObserver(report);
     ro.observe(document.documentElement);

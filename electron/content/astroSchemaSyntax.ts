@@ -7,6 +7,7 @@
 import ts from 'typescript';
 
 import { assert } from '../../shared/core/assert';
+import { indentUnitOf } from '../../shared/core/indent';
 import type { Result } from '../../shared/core/result';
 
 export interface SpanEdit {
@@ -40,8 +41,8 @@ export function propertyList(object: ts.ObjectLiteralExpression, file: ts.Source
     return { start: open, end: close, text: `{ ${texts.join(', ')} }` };
   }
   const first = object.properties[0];
-  const indent = first === undefined ? '  ' : lineIndent(file.text, first.getStart(file));
   const closing = lineIndent(file.text, close - 1);
+  const indent = first === undefined ? closing + indentUnitOf(file.text) : lineIndent(file.text, first.getStart(file));
   const trailing = object.properties.hasTrailingComma || object.properties.length === 0 ? ',' : '';
   const body = texts.map((part) => `${indent}${part}`).join(',\n');
   return { start: open, end: close, text: `{\n${body}${trailing}\n${closing}}` };

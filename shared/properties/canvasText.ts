@@ -33,6 +33,11 @@ export interface CanvasTextTarget {
    * carries no canvas paths, so its runs are told apart by position.
    */
   readonly segment?: number;
+  /**
+   * Words written in the open file itself, never a shared value: only these
+   * may be changed together with the text beside them, by one selection.
+   */
+  readonly literal?: true;
 }
 
 export interface CanvasTextCatalog {
@@ -43,9 +48,23 @@ export interface CanvasTextCatalog {
   readonly targets: readonly CanvasTextTarget[];
 }
 
+/** The words of one text, in a save that changes several at once. */
+export interface CanvasTextRunValue {
+  readonly key: string;
+  readonly value: string;
+}
+
 export type CanvasTextEvent =
   | {
-      readonly type: 'avb:text-save' | 'avb:text-draft';
+      readonly type: 'avb:text-save';
+      readonly session: string;
+      readonly key: string;
+      readonly value: string;
+      /** The other texts one selection changed: all land together, or none. */
+      readonly also?: readonly CanvasTextRunValue[];
+    }
+  | {
+      readonly type: 'avb:text-draft';
       readonly session: string;
       readonly key: string;
       readonly value: string;
@@ -54,6 +73,7 @@ export type CanvasTextEvent =
 
 export const CANVAS_TEXT_LIMIT = 10_000;
 export const CANVAS_TARGET_LIMIT = 2_000;
+export const CANVAS_RUNS_SAVED_MAX = 100;
 
 export function canvasTextValue(input: unknown): string {
   const value = text(input);
@@ -106,7 +126,15 @@ function parseTarget(input: unknown): CanvasTextTarget {
     ...(data['scope'] === undefined ? {} : { scope: pathText(data['scope']) }),
     ...(data['from'] === undefined ? {} : { from: parseFrom(data['from']) }),
     ...(data['segment'] === undefined ? {} : { segment: parseSegment(data['segment']) }),
+    ...(data['literal'] === undefined ? {} : { literal: parseLiteral(data['literal']) }),
   };
+}
+
+function parseLiteral(input: unknown): true {
+  if (input !== true) {
+    throw new Error('Expected literal canvas text to say so');
+  }
+  return input;
 }
 
 function parseFrom(input: unknown): 'slot' | 'prop' {
@@ -131,9 +159,16 @@ export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefine
   const data = record(input);
   switch (data['type']) {
     case 'avb:text-save':
+      return {
+        type: 'avb:text-save',
+        session: pathText(data['session']),
+        key: pathText(data['key']),
+        value: canvasTextValue(data['value']),
+        ...(data['also'] === undefined ? {} : { also: parseRunValues(data['also']) }),
+      };
     case 'avb:text-draft':
       return {
-        type: data['type'],
+        type: 'avb:text-draft',
         session: pathText(data['session']),
         key: pathText(data['key']),
         value: canvasTextValue(data['value']),
@@ -143,6 +178,17 @@ export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefine
     default:
       return undefined;
   }
+}
+
+function parseRunValues(input: unknown): readonly CanvasTextRunValue[] {
+  const values = list((entry) => {
+    const data = record(entry);
+    return { key: pathText(data['key']), value: canvasTextValue(data['value']) };
+  })(input);
+  if (values.length === 0 || values.length > CANVAS_RUNS_SAVED_MAX) {
+    throw new Error('Expected a bounded list of canvas text runs');
+  }
+  return values;
 }
 
 // Positions in canvas text, counted the way HTML shows it: a run of ASCII

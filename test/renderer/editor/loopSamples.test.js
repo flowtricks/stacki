@@ -65,7 +65,7 @@ test('a JSON import and a named array export sample as imports', () => {
   const post = itemOf({ frontmatter: '', imports, ancestorHeads: ['posts.map((post) => ('], valueSamples }, 'post');
   assert.equal(fieldsOf(post).title, '"Hello"');
   const unsampled = dataTree({ frontmatter: '', imports }).find((node) => node.path === 'team');
-  assert.equal(unsampled.kind, 'import', 'without a sample an import is still offered');
+  assert.equal(unsampled.kind, 'imported', 'without a sample an import is still offered, marked imported');
 });
 
 test('Astro.glob and an eager import.meta.glob sample their modules', () => {

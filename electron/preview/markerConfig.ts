@@ -341,7 +341,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const require = createRequire(import.meta.url);
 // Marking happens in electron/previewServer/previewMarkers.ts, in memory: it reads project
 // files and returns strings, and nothing it returns is ever written back.
-const { markSourceFile, markChunkFile } = require(`,
+const { markCanvasSourceFile, markChunkFile, variantScopeMiddleware } = require(`,
   `);
 const componentPreviewModule = `,
   `;
@@ -499,6 +499,10 @@ const avbMorph = {
     return rest.length === ctx.modules.length ? undefined : rest;
   },
   configureServer(server) {
+    // A hover preview asks for the page with one instance's prop changed, in a
+    // header; it renders inside that override's scope and writes nothing
+    // (shared/page/variantOverride.ts). Every other request passes untouched.
+    server.middlewares.use(variantScopeMiddleware);
     const seen = new Set();
     const channels = [server.hot, server.ws];
     for (const env of Object.values(server.environments || {})) channels.push(env && env.hot);
@@ -547,7 +551,7 @@ const avbMarkers = {
     // namespace, and each marked file carries its stamp — the checksum of the
     // bytes it was marked from, which the canvas's preview token is made of.
     try {
-      const marked = markSourceFile(file, PROJECT_DIRS);
+      const marked = markCanvasSourceFile(file, PROJECT_DIRS);
       if (!marked) return null;
       // Seeded here so the very first edit already has something to compare
       // against, rather than spending one stylesheet rewrite learning it.

@@ -10,6 +10,7 @@ export function studioElementActions(props: ActionOptions, role: 'client' | 'des
     editRootId: props.editRootId,
     ...(role === 'designer' ? { onOpenComponent: props.openComponent } : {}),
     ...(role === 'designer' && props.setDefaults ? { onSetDefaults: props.setDefaults } : {}),
+    ...(role === 'designer' ? { onConvertText: (id: string, name: 'div' | 'span') => props.action({ kind: 'wrap-text', node: id, name }) } : {}),
     onRemoveNode: (id) => props.action({ kind: 'delete', node: id }),
     onDuplicateNode: (id) => props.action({ kind: 'duplicate', node: id }),
     onCopyNode: (id) => copyNode(props.document, id, props.report),

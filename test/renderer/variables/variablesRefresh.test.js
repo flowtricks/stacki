@@ -46,7 +46,7 @@ test('variables refresh coalesces watcher bursts and ignores obsolete projects',
   const root = createRoot(document.getElementById('root'));
   const show = (project) =>
     act(async () => {
-      root.render(React.createElement(Panel, { project: { path: project }, onSelect() {} }));
+      root.render(React.createElement(Panel, { project: { path: project }, place: { openFile: undefined, contextPage: undefined }, onSelect() {} }));
     });
   const fixture = await cssVars.readVariables(repoPath('test/fixtures/css-vars'));
   assert.ok(fixture.files[0].count > 0, 'refresh fixture contains real variables');

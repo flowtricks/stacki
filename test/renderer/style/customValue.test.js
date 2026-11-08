@@ -159,6 +159,8 @@ const check = (what, condition, detail) => {
     };
     require('../../helpers/popupDom').installPopupDOM(win);
     global.window = win;
+    // The pickers listen for variable changes, as they do under the real preload.
+    win.avb = { onCssChanged: () => () => {} };
     global.document = win.document;
     global.navigator = win.navigator;
     global.Node = win.Node;

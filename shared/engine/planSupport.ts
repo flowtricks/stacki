@@ -383,6 +383,24 @@ export function containsNewline(bytes: ByteString, span: ByteSpan): boolean {
   return bytes.subarray(span.start, span.end).includes(NEWLINE);
 }
 
+// An element whose line breaks are content, as a fragment writes it (HTML_WHITESPACE_TAGS).
+const WHITESPACE_ELEMENT = /<(code|pre|script|style|textarea)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+
+/** A printed fragment for a place `indent` deep: its first line goes where the
+ * insertion puts it, each later line takes the indent, and line breaks become the
+ * file's `eol`. A line inside `<pre>` or its like is content, so it keeps its own
+ * start: indenting it would put spaces on the page. */
+export function indentedFragment(text: string, indent: string, eol: '\n' | '\r\n'): string {
+  assert(indent.trim().length === 0, 'indentedFragment: an indent is only whitespace');
+  const kept = Array.from(text.matchAll(WHITESPACE_ELEMENT), (match) => ({ start: match.index, end: match.index + match[0].length }));
+  const written = text.replace(/\r?\n/g, (_lineBreak: string, at: number) => {
+    const content = kept.some((element) => element.start <= at && at < element.end);
+    return content ? eol : `${eol}${indent}`;
+  });
+  assert(written.split('\n').length === text.split('\n').length, 'indentedFragment: every line stays a line');
+  return written;
+}
+
 /** The indentation of the line holding `offset`: its leading spaces and tabs. */
 export function lineIndent(bytes: ByteString, offset: number): string {
   let lineStart = offset;

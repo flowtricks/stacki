@@ -82,6 +82,27 @@
   min-width: 20px;
   padding-inline: 0;
 }
+.stacki-publish-split[data-state='current'] {
+  /* Nothing is left to publish: both halves rest as one neutral control, split by a hairline
+     of the title bar showing through rather than a border. */
+  gap: 1px;
+}
+.stacki-publish-split[data-state='current'] > .stacki-publish-main > button:disabled {
+  /* The app's disabled fill with muted text, at full opacity so it matches the menu half. */
+  opacity: 1;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.stacki-publish-split[data-state='current'] > .stacki-publish-arrow {
+  border-left: 0;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.stacki-publish-split[data-state='current'] > .stacki-publish-arrow:hover:not(:disabled),
+.stacki-publish-split[data-state='current'] > .stacki-publish-arrow[aria-expanded='true'] {
+  background: var(--bg-active);
+  color: var(--text);
+}
 .stacki-publish-arrow > svg {
   /* Lower the top-heavy triangle so its visual weight sits at the button's center. */
   transform: translateY(0.5px);
@@ -272,7 +293,7 @@
   padding: 12px 20px;
   background: inherit;
 }
-.modal.desktop-publish-status {
+.modal.publish-status {
   width: min(420px, calc(100vw - 32px));
 }
 .modal.publish-commit-message {
@@ -297,17 +318,17 @@
   min-height: 76px;
   max-height: 200px;
 }
-.desktop-publish-status .publish-status-body {
+.publish-status .publish-status-body {
   display: grid;
   justify-items: center;
   gap: 16px;
   padding: 28px 24px;
   text-align: center;
 }
-.popup-dialog:has(> .desktop-publish-status):focus-visible {
+.popup-dialog:has(> .publish-status):focus-visible {
   outline: none;
 }
-.desktop-publish-status .modal-footer:has(> span) {
+.publish-status .modal-footer:has(> span) {
   justify-content: center;
 }
 .publish-status-body h2 {
@@ -345,7 +366,7 @@
   width: 100%;
 }
 .publish-status-running small,
-.desktop-publish-status .modal-footer > span {
+.publish-status .modal-footer > span {
   color: var(--text-dim);
   font-size: 11px;
 }
@@ -401,6 +422,13 @@
 }
 .publish-status-results > div > svg:last-child {
   color: var(--green);
+}
+.publish-status-body .publish-status-note {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  font-size: 12px;
 }
 
 .publish-settings .publish-connections {

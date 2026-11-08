@@ -282,9 +282,9 @@ test('native text operations preserve spans and refuse external mutations', () =
     assert.ok(match);
     const { createTextBuffer } = loadRenderer('electron/preload/frameTextBuffer.ts');
     const drafts = [];
-    const buffer = createTextBuffer(root, match.nodes, (value) => drafts.push(value));
+    const buffer = createTextBuffer(root, { runs: [match.nodes], primary: 0 }, (value) => drafts.push(value));
     assert.ok(buffer);
-    assert.throws(() => createTextBuffer(root, []), /requires a matched text node/);
+    assert.throws(() => createTextBuffer(root, { runs: [[]], primary: 0 }), /requires a matched text node/);
     assert.throws(() => buffer.replace({ start: -1, end: 0 }, ''), /must not be negative/);
     buffer.replace({ start: 2, end: 2 }, 'X');
     assert.equal(root.textContent, 'HeXllo world again');
@@ -321,7 +321,7 @@ test('native composition cannot introduce elements or remove authored children',
     root.setAttribute('data-avb-p', targets[0].target.parent);
     const match = matchText(targets[0].target, root);
     const { createTextBuffer } = loadRenderer('electron/preload/frameTextBuffer.ts');
-    const buffer = createTextBuffer(root, match.nodes);
+    const buffer = createTextBuffer(root, { runs: [match.nodes], primary: 0 });
     const original = root.firstChild;
     root.replaceChildren(document.createElement('br'));
     assert.equal(buffer.composition(), false);

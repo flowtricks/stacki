@@ -45,8 +45,13 @@ test('cross-page paste carries recursive bindings and rebases imports without ch
   assert.ok(!output.includes('unused') && !output.includes('unrelated') && !output.includes('ignored'));
   assert.ok(output.includes("// Keep this comment and formatting.\nconst untouched = 'leave me alone';"));
   assert.ok(output.endsWith('<!-- Keep this too. -->'));
-  assert.match(output, /<main><Card title=\{title\} items=\{posts\} \/><\/main>/);
+  assert.match(output, /<main>\n\t<Card title=\{title\} items=\{posts\} \/>\n<\/main>/);
   assert.equal(parsePage(output).editable, true);
+});
+
+test('a paste is printed for where it lands, not the indentation it left', () => {
+  const fragment = '<div class="a">\n              <p>x</p>\n              <p>y</p>\n            </div>';
+  assert.match(pasted('', fragment), /<main>\n\t<div class="a">\n\t\t<p>x<\/p>\n\t\t<p>y<\/p>\n\t<\/div>\n<\/main>/);
 });
 
 test('existing destination bindings are reused without carrying their old dependencies', () => {

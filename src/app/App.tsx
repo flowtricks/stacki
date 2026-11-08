@@ -196,6 +196,9 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
         ...valueSamplesOf(app.valueSamples, app.currentPage?.path),
         ...valueSamplesOf(app.scopeSamples, app.currentPage?.path),
       },
+      // What the file's imports hold, read from their modules: `APP_VERSION`
+      // from src/consts.ts is a value to bind to, not a missing field.
+      importedValues: app.importedValues,
       collections: app.collections,
       // Opening a collection in the picker asks for one entry of it; nothing is
       // fetched for collections nobody looks at.

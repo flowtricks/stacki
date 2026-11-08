@@ -9,7 +9,7 @@ import { LIMITS } from '../../shared/core/limits';
 import type { ParserNode, ParserPageModel } from './astroParserTypes';
 import { makeId, assignPathIds, required } from './astroAttrs';
 import { parseTemplate } from './astroTemplate';
-import { serializeNodeMarked } from './astroSerializeMarked';
+import { serializeNodesMarked } from './astroSerializeMarked';
 
 // ---------------------------------------------------------------------------
 // HTML chunks
@@ -119,27 +119,17 @@ export function chunkImportMarks(model: ParserPageModel): Map<string, { path: st
 // a marker pair of its own — nothing in the page wraps it. Returns undefined when
 // the chunk isn't representable, so the caller can serve it unmarked.
 export function markChunkHtml(source: string, prefix: string, { group }: { readonly group: boolean }): string | undefined {
-  const { nodes, clean } = parseTemplate(source);
+  // Located from offset 0, so the whitespace between the chunk's nodes is the
+  // chunk file's own (see MarkedSource): a chunk renders as set:html, and a
+  // space the file doesn't have is a space on the page.
+  const { nodes, clean } = parseTemplate(source, 0);
   if (!clean) {
     return undefined;
   }
-  const lines: string[] = [];
-  if (group) {
-    lines.push(`<!--avb-s:${prefix}-->`);
-  }
-  nodes.forEach((node, i) =>
-    serializeNodeMarked(node, '', lines, {
-      path: `${prefix}.${i}`,
-      inSlot: false,
-      atRoot: false,
-      depth: 0,
-      stamp: undefined,
-    }),
-  );
-  if (group) {
-    lines.push(`<!--avb-e:${prefix}-->`);
-  }
-  return lines.join('\n') + '\n';
+  const roots = serializeNodesMarked(nodes, { pathOf: (i) => `${prefix}.${i}`, atRoot: false, stamp: undefined, source });
+  const marked = group ? `<!--avb-s:${prefix}-->${roots}<!--avb-e:${prefix}-->` : roots;
+  assert(group || nodes.length === 0 || marked.length > 0, 'markChunkHtml: a chunk with nodes prints them');
+  return `${marked}\n`;
 }
 
 function resolveChunksParseFile(filePath: string, options: { readonly locs?: boolean }): ParserNode[] | undefined {

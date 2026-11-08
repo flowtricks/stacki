@@ -51,6 +51,20 @@ test('preview message parser preserves every supported message variant', () => {
   assert.deepEqual(parsePreviewMessage(messages[0]).spacing['0'], [spacing]);
 });
 
+// A negative margin is ordinary CSS (`calc(-1 * var(--space-8))`). Rejecting it
+// dropped the whole rects message, so every outline and spacing band went stale
+// while such an element was tracked. Padding has no negative space, so it still
+// refuses one, and a margin still has to be a finite number.
+test('a negative margin is a measurement, a negative padding is not', () => {
+  const rectsWith = (measured) => ({ type: 'avb:rects', rects: { 0: [box] }, classes: {}, spacing: { 0: [measured] } });
+  const pulled = { margin: { top: -20.54, bottom: -8 }, padding: { top: 4 } };
+  assert.deepEqual(parsePreviewMessage(rectsWith(pulled))?.spacing['0'], [pulled]);
+  assert.equal(parsePreviewMessage(rectsWith({ padding: { top: -1 } })), undefined);
+  assert.equal(parsePreviewMessage(rectsWith({ margin: { top: Number.NaN } })), undefined);
+  assert.equal(parsePreviewMessage(rectsWith({ margin: { top: Number.NEGATIVE_INFINITY } })), undefined);
+  assert.equal(parsePreviewMessage(rectsWith({ margin: { top: '-4' } })), undefined);
+});
+
 test('a hover or click on a ::before or ::after names the pseudo-element with its node', () => {
   for (const type of ['avb:hover-node', 'avb:click-node']) {
     const located = { type, path: '0.2', occurrence: 1, outside: false };

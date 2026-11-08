@@ -26,6 +26,7 @@ import {
   entryPageOf,
   entryPath,
   isComponentSection,
+  missingLabel,
   pagesOfPath,
   sectionHeading,
   settingsKeyOf,
@@ -82,8 +83,8 @@ function flatten(nodes: readonly PickerNode[]): PickerNode[] {
   return out;
 }
 
-// A field can be bound to something this entry doesn't have — an optional
-// field left unset, or data the app can't see the shape of. The path is still
+// A field can be bound to something the tree doesn't hold — an optional
+// field an entry left unset, or data the app can't see the shape of. The path is still
 // what the chip says, so it is shown where it belongs and marked, rather than
 // leaving the picker looking like it doesn't know what the chip points at.
 function withCurrent(tree: readonly PickerNode[], current: string | undefined) {
@@ -94,17 +95,20 @@ function withCurrent(tree: readonly PickerNode[], current: string | undefined) {
   if (flat.some((node) => node.path === current)) {
     return tree;
   }
-  let anchor: PickerNode | undefined;
+  const anchors: PickerNode[] = [];
   for (const ancestor of ancestorsOf(current)) {
     const found = flat.find((node) => node.path === ancestor);
     if (found) {
-      anchor = found;
+      anchors.push(found);
     }
   }
+  const anchor = anchors[anchors.length - 1];
   const missing: PickerNode = {
     path: current,
     key: anchor ? current.slice(anchor.path.length).replace(/^\./, '') : current,
-    kind: 'not in this entry',
+    // "not in this entry" only for a field a collection entry left unset;
+    // anything else says what is really known about it (dataPickerModel.ts).
+    kind: missingLabel(anchors),
     preview: '',
     children: undefined,
     missing: true,

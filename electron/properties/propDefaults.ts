@@ -7,6 +7,7 @@ import type { SchemaField } from '../parse/astroParserTypes';
 import * as path from 'path';
 import * as fs from 'fs';
 import { parsePropSchema, parseExtendsTag, parseSlots, defaultSlotInline, rootTag } from '../parse/astroParser';
+import { forwardsRest } from '../parse/astroComponentApi';
 import { capture } from '../lib/mainHelpers';
 import { resolveImportPath } from './importPaths';
 import ts from 'typescript';
@@ -132,11 +133,8 @@ export function safeSchema(filePath: string, projectPath: string) {
       renderTag: rootTag(source) ?? undefined,
       // A `...rest` spread on Astro.props means the component forwards
       // arbitrary attributes — the UI offers a free-form Attributes section.
-      // Anchored to the end of the destructure rather than scanning forward
-      // from its `{`: a rest element is always last, and looking forward
-      // tripped over any `}` in front of it (`containerAttrs = {}, ...rest`).
-      // The optional `: Type` covers an annotated destructure.
-      hasRest: /\.\.\.\s*\w+\s*\}\s*(?::[^=]+)?=\s*Astro\.props/.test(source),
+      // Studio reads it with the same rule (astroComponentApi.ts).
+      hasRest: forwardsRest(source),
     };
   } catch {
     return {

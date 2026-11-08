@@ -56,12 +56,18 @@ function usePageSwitcher<T extends Page>({ pages, currentPage, onSelect }: PageS
   const inputRef = useRef<HTMLInputElement>(null);
   const position = usePagePosition(buttonRef, { open });
   const filtered = pageSwitcherFilter(pages, query);
+  // Read when the menu opens, not as effect dependencies: a page list that
+  // changes while the menu is open must not clear the search the user typed.
+  const opening = useRef({ pages, currentPage });
+  opening.current = { pages, currentPage };
   useEffect(() => {
     if (!open) {
       return;
     }
     setQuery('');
-    setHighlight(0);
+    // Open on the page being edited, not the first row, so the highlight and
+    // the check agree and Enter keeps the current page.
+    setHighlight(pageSwitcherOpeningIndex(pageSwitcherFilter(opening.current.pages, ''), opening.current.currentPage));
     const timer = setTimeout(() => inputRef.current?.focus(), 0);
     return () => clearTimeout(timer);
   }, [open]);
@@ -189,6 +195,15 @@ function PageRow({
       {current && <CheckIcon size={11} />}
     </div>
   );
+}
+
+/** The row the menu opens on: the current page's row, or the first when the current page is not listed. */
+export function pageSwitcherOpeningIndex(pages: readonly Page[], currentPage: Page | undefined): number {
+  const index = currentPage === undefined ? -1 : pages.findIndex((page) => page.path === currentPage.path);
+  const opening = index < 0 ? 0 : index;
+  assert(opening >= 0, 'PageSwitcher: opening row is negative');
+  assert(pages.length === 0 || opening < pages.length, 'PageSwitcher: opening row is past the list');
+  return opening;
 }
 
 function pageSwitcherFilter<T extends Page>(pages: readonly T[] | undefined, query: string): T[] {

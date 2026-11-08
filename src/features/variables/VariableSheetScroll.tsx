@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { VariableBlock } from './variablesBridge';
+import type { VariableBlock } from '../../ipc/variablesBridge';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { createScrollLanes, SCROLL_PEERS_MAX } from './variableScroll';

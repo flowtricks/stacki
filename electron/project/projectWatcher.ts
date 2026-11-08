@@ -63,6 +63,11 @@ function watchProject({
         // Comparing self writes can read the file. Do it once per event, before
         // routing it to the panels interested in that kind of file.
         if (isSelfWrite(changed)) {
+          // A save of the open page can change its `<style>` variables, and
+          // nothing else tells the Variables panel.
+          if (/\.astro$/i.test(name)) {
+            notifier.debounce('css:changed');
+          }
           return;
         }
         noteExternalChange(changed);
@@ -72,6 +77,10 @@ function watchProject({
           notifier.addFile(changed);
           scheduleThumb(projectPath, 60000);
           notifier.debounce(channel, 150);
+          // `<style>` blocks declare variables, so a page is a stylesheet too.
+          if (/\.astro$/i.test(name)) {
+            notifier.debounce('css:changed');
+          }
         } else if (channel !== undefined) {
           notifier.debounce(channel);
         }

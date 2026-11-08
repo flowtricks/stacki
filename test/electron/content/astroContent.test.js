@@ -229,6 +229,8 @@ test('an entry reads as a remote document and writes one field or its body in pl
   assert.equal(document.file, 'src/content/blog/2024/post one.md', 'image paths resolve here');
   const author = document.fields.find((field) => field.name === 'author');
   assert.deepEqual(author.type.options, [{ title: 'Ada', value: 'ada' }]);
+  const body = document.fields.find((field) => field.name === 'body');
+  assert.deepEqual(body.type, { kind: 'text', options: [], format: 'markdown' }, 'the body is Markdown, edited as formatted text');
   await content.write({ id: summary.id, field: 'author', value: 'ada' });
   await content.write({ id: summary.id, field: 'body', value: 'Changed\n' });
   const written = await content.write({ id: summary.id, field: 'date', value: undefined });

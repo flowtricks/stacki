@@ -18,9 +18,11 @@ import { AtRule, Rule, type ChildNode, type Container, type Document } from 'pos
 import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
 import type { RuleModel } from './cascade';
-import { resolveSelectorChain, type BlockPlacement, type NestStep } from './css';
-import { contextKeyOf, indexContexts, type ContextInfo, type ContextKey, type StyleContext } from './resolved';
+import { listAtRuleBlocks, resolveSelectorChain, type BlockPlacement, type NestStep } from './css';
+import { contextKeyOf, indexContexts, ruleOnLayer, type ContextInfo, type ContextKey, type PanelLayer, type StyleContext } from './resolved';
+import { selectorListMembers } from './selectorParse';
 import type { ParsedRule } from './styleTypes';
+import type { EmbedDocument } from './webflow';
 
 export type { BlockPlacement } from './css';
 
@@ -46,6 +48,16 @@ export type QueryPlacement = { readonly kind: 'none' } | BlockPlacement;
 
 /** A nested query context's two halves. */
 export type NestedQuery = { readonly wrapper: string; readonly atContext: string };
+
+/** The selectors written inside each query, by the key of the place they are
+ *  written: a sourced key for one stylesheet, a placed key for all of them. */
+export type QuerySelectorIndex = ReadonlyMap<ContextKey, readonly string[]>;
+
+export const QUERY_SELECTOR_LIMITS = {
+  /** Selectors kept per query. A row shows a handful, so a stylesheet's worth is
+   *  plenty, and a list a stylesheet multiplies by nesting stays small. */
+  entriesMax: 256,
+} as const satisfies Record<string, number>;
 
 /** A context key's place (Base, a breakpoint, or a placed query key) and the
  *  stylesheet it names, when it names one. Typed queries, not yet written
@@ -198,10 +210,10 @@ export function modelForContext(model: RuleModel, context: Pick<StyleContext, 'k
 }
 
 /** The placed contexts, each in its stylesheet, the element has at least one declaration in. */
-export function contextKeysWithStyles(model: RuleModel): ReadonlySet<ContextKey> {
+export function contextKeysWithStyles(model: RuleModel, layer: PanelLayer = ''): ReadonlySet<ContextKey> {
   const keys = new Set<ContextKey>();
   for (const entry of [...model.base, ...model.conditional]) {
-    if (entry.rule.declarations.length === 0) {
+    if (entry.rule.declarations.length === 0 || !ruleOnLayer(entry, layer)) {
       continue;
     }
     const key = ruleSourcedContextKey(entry.rule);
@@ -214,21 +226,72 @@ export function contextKeysWithStyles(model: RuleModel): ReadonlySet<ContextKey>
 }
 
 /**
- * The dropdown's per-row summary (dot, combos, wrapper line), each row read
- * through its own placement: a nested row's dot says whether the element has
- * styles in THAT block, not in the same query somewhere else.
+ * The selectors written inside one query block, in source order, each once. They
+ * are relative to the query: a selector around the query is its wrapper, shown on
+ * the row's own line, so `.a { @media x { .b { } } }` gives `.b`. A list counts as
+ * its members, and a nested rule resolves against the rules between it and the
+ * query. A rule holding only other blocks styles nothing itself, so it is a path
+ * and not an entry. A query inside this one is a row of its own, and at-rules like
+ * @keyframes hold no selectors (their `from` and `to` parse as rules).
  */
-export function indexPlacedContexts(model: RuleModel, contexts: readonly StyleContext[]): ContextInfo[] {
+export function querySelectorsOf(query: AtRule): readonly string[] {
+  const selectors = new Set<string>();
+  collectQuerySelectors(query, { chain: [], expansion: 1, depth: 0 }, selectors);
+  assert(selectors.size <= QUERY_SELECTOR_LIMITS.entriesMax, 'querySelectorsOf: bounded');
+  return [...selectors];
+}
+
+/** Every query block's selectors across `documents`, in cascade order. The same
+ *  query written twice in one stylesheet is one row, so its blocks merge. */
+export function indexQuerySelectors(documents: readonly Pick<EmbedDocument, 'source' | 'regions'>[]): QuerySelectorIndex {
+  const merged = new Map<ContextKey, Set<string>>();
+  const ordered = [...documents].sort((left, right) => left.source.order - right.source.order);
+  for (const embedDocument of ordered) {
+    for (const region of embedDocument.regions) {
+      for (const block of listAtRuleBlocks(region)) {
+        const placed = placedContextKey(block.atContext.join(' › '), block.placement);
+        const selectors = querySelectorsOf(block.node);
+        mergeQuerySelectors(merged, placed, selectors);
+        mergeQuerySelectors(merged, sourcedContextKey(placed, embedDocument.source.key), selectors);
+      }
+    }
+  }
+  return new Map([...merged].map(([key, selectors]) => [key, [...selectors]]));
+}
+
+/** The selectors inside a context's query: one stylesheet's block for a sourced
+ *  row, every stylesheet's for a breakpoint row, none for Base. */
+export function selectorsInContext(index: QuerySelectorIndex, context: Pick<StyleContext, 'key' | 'embedAtContext'>): readonly string[] {
+  const placement = contextPlacement(context);
+  if (placement === undefined) {
+    return [];
+  }
+  const key = placement.source === undefined ? placement.placed : sourcedContextKey(placement.placed, placement.source);
+  return index.get(key) ?? [];
+}
+
+/**
+ * The dropdown's per-row summary (dot, combos, wrapper line, selectors inside),
+ * each row read through its own placement: a nested row's dot says whether the
+ * element has styles in THAT block, not in the same query somewhere else.
+ */
+export function indexPlacedContexts(
+  model: RuleModel,
+  contexts: readonly StyleContext[],
+  selectorIndex: QuerySelectorIndex,
+  layer: PanelLayer = '',
+): ContextInfo[] {
   const infos = contexts.map((context): ContextInfo => {
     const atContext = context.embedAtContext;
     const nested = nestedQueryOfKey(context.key);
-    const wrapper = nested === undefined ? {} : { wrapper: nested.wrapper };
+    const selectors = selectorsInContext(selectorIndex, context);
+    const place = { ...(nested === undefined ? {} : { wrapper: nested.wrapper }), ...(selectors.length === 0 ? {} : { querySelectors: selectors }) };
     if (atContext === undefined) {
-      return { key: context.key, hasStyles: false, styledCombos: [], bestTokens: undefined, ...wrapper };
+      return { key: context.key, hasStyles: false, styledCombos: [], bestTokens: undefined, ...place };
     }
-    const [info] = indexContexts(modelForContext(model, context), [atContext]);
+    const [info] = indexContexts(modelForContext(model, context), [atContext], layer);
     assert(info !== undefined, 'indexPlacedContexts: one summary per asked context');
-    return { ...info, key: context.key, ...wrapper };
+    return { ...info, key: context.key, ...place };
   });
   assert(infos.length === contexts.length, 'indexPlacedContexts: one summary per row');
   return infos;
@@ -269,6 +332,70 @@ export function placementOfPath(path: readonly NestStep[]): BlockPlacement {
   }
   const wrapper = resolveSelectorChain(wrapperSelectors);
   return wrapper.length === 0 ? { kind: 'top-level' } : { kind: 'nested', wrapper };
+}
+
+// `chain` is the raw selectors between the query and `container`, outermost first.
+// `expansion` is how many selectors that chain resolves to at most: nested lists
+// multiply, so a chain past the limit is left out rather than expanded. A stylesheet
+// is untrusted input, so blocks past `depth`'s limit are not walked, and since each
+// level adds at most one selector the chain stays within what resolving it allows.
+function collectQuerySelectors(
+  container: AtRule | Rule,
+  { chain, expansion, depth }: { readonly chain: readonly string[]; readonly expansion: number; readonly depth: number },
+  selectors: Set<string>,
+): void {
+  if (depth >= LIMITS.treeDepthMax) {
+    return;
+  }
+  container.each((child: ChildNode) => {
+    if (child.type === 'atrule') {
+      if (child.name.toLowerCase() === 'layer') {
+        collectQuerySelectors(child, { chain, expansion, depth: depth + 1 }, selectors);
+      }
+      return;
+    }
+    if (child.type !== 'rule') {
+      return;
+    }
+    const nextChain = [...chain, child.selector.trim()];
+    const nextExpansion = expansion * selectorListMembers(child.selector).length;
+    if (nextExpansion > QUERY_SELECTOR_LIMITS.entriesMax) {
+      return;
+    }
+    if (ruleCarriesStyles(child)) {
+      addQuerySelectors(selectors, nextChain);
+    }
+    collectQuerySelectors(child, { chain: nextChain, expansion: nextExpansion, depth: depth + 1 }, selectors);
+  });
+}
+
+// A bare `&` is the wrapper itself, which the row already names.
+function addQuerySelectors(selectors: Set<string>, chain: readonly string[]): void {
+  const members = selectorListMembers(resolveSelectorChain(chain)).filter((member) => member.text !== '&');
+  for (const member of members) {
+    if (selectors.size < QUERY_SELECTOR_LIMITS.entriesMax) {
+      selectors.add(member.text);
+    }
+  }
+}
+
+// An empty rule still names a selector the author wrote; only a rule that holds
+// other blocks and no declarations is a path to them.
+function ruleCarriesStyles(rule: Rule): boolean {
+  if (rule.some((node) => node.type === 'decl')) {
+    return true;
+  }
+  return rule.every((node) => node.type === 'comment');
+}
+
+function mergeQuerySelectors(merged: Map<ContextKey, Set<string>>, key: ContextKey, selectors: readonly string[]): void {
+  const entries = merged.get(key) ?? new Set<string>();
+  for (const selector of selectors) {
+    if (entries.size < QUERY_SELECTOR_LIMITS.entriesMax) {
+      entries.add(selector);
+    }
+  }
+  merged.set(key, entries);
 }
 
 // The nearest conditional at-rule at or above `node`. Bounded by the tree depth

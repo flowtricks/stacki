@@ -2,11 +2,8 @@ import { canvasContentEdits } from '../model/canvasTextContent';
 import { canvasPropEdits, type ComponentSource } from '../model/canvasPropText';
 import { readPage } from '../../ipc/bridge';
 import type { ShellView } from '../App';
-import type { CanvasTextDocument, CanvasTextFormatter } from '../../features/preview/useCanvasText';
-import { formatInlineSelection, inlineRootOf, inlineStatesAt, inlineWithValue } from '../model/canvasTextFormat';
-import { isInlineOnly } from '../../features/props/richContentModel';
-import type { PageNode } from '../../../shared/page/pageNode';
-import { assert } from '../../../shared/core/assert';
+import type { CanvasTextDocument } from '../../features/preview/useCanvasText';
+import { canvasTextFormatter } from '../model/canvasTextFormat';
 import { projectRelativePath } from '../../lib/projectPath';
 
 export function desktopCanvasText(app: ShellView): CanvasTextDocument | undefined {
@@ -39,7 +36,8 @@ export function desktopCanvasText(app: ShellView): CanvasTextDocument | undefine
     pathFor: app.pathFor,
     apply: app.changeCodeSource,
     report: app.showToast,
-    format: desktopCanvasFormat(state.model.nodes, app.setNodeInline),
+    // The canvas bar's presses, saved as the Content field saves them.
+    format: canvasTextFormatter(state.model.nodes, app.setNodeInline),
     focus: canvasFocus(app.selectedId, app.pathFor),
     components: app.insertables,
   };
@@ -61,40 +59,4 @@ async function readComponent(path: string): Promise<ComponentSource | undefined>
     return undefined;
   }
   return { nodes: read.model.nodes, imports: read.model.imports, extraFrontmatter: read.model.extraFrontmatter };
-}
-
-// The canvas bar's presses, saved the way the Content field saves: the whole
-// inline content of the element, through setNodeInline.
-function desktopCanvasFormat(nodes: readonly PageNode[], setNodeInline: ShellView['setNodeInline']): CanvasTextFormatter {
-  const contentOf = (textId: string) => {
-    const found = inlineRootOf(nodes, textId);
-    if (!found?.root.id) {
-      return undefined;
-    }
-    const children = 'children' in found.root ? found.root.children : undefined;
-    if (!isInlineOnly(children)) {
-      return undefined;
-    }
-    return { rootId: found.root.id, children, trail: found.trail };
-  };
-  return {
-    states: (textId) => {
-      const content = contentOf(textId);
-      return content ? inlineStatesAt(content.children, content.trail) : undefined;
-    },
-    apply: (textId, selection, action) => {
-      const content = contentOf(textId);
-      if (!content) {
-        return false;
-      }
-      assert(content.trail.length > 0, 'Formatted text sits inside its element');
-      const typed = inlineWithValue(content.children, content.trail, selection.value);
-      const next = formatInlineSelection(typed, { ...selection, trail: content.trail }, action);
-      if (!next) {
-        return false;
-      }
-      setNodeInline(content.rootId, next);
-      return true;
-    },
-  };
 }

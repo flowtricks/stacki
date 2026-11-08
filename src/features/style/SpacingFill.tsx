@@ -8,6 +8,9 @@ import { getModifiers, onModifiers, setModifiers } from '../../editor/heldModifi
 import { assert } from '../../../shared/core/assert';
 import { type SetProp, type LiveSetProp, type Read, type Side, type Display, displayOf } from './spacingTypes';
 import { withImportant } from './model/styleDisplay';
+import { projectLengthUnit } from './model/lengthUnit';
+import { formatPxLength, projectLength, type LengthUnit } from '../../../shared/properties/lengthUnit';
+import { startTouchClaim, useTouchClaimGuard, type TouchClaim } from '../../ui/touchClaim';
 
 // Shared "spacing box" primitives: Webflow's masked-SVG frame with draggable side
 // handles, click-to-edit value labels, and a popover editor. Used by SpacingSection
@@ -85,8 +88,12 @@ export function pxPerUnit(unit: string): number {
   }
 }
 
-/** Round to a sensible precision for the unit and re-attach it. */
-export function formatLength(amount: number, unit: string): string {
+/** Round to a sensible precision for the unit and re-attach it. A rem project
+ *  rounds rem to whole pixels (0.0625rem at a 16px root), the step px gets. */
+export function formatLength(amount: number, unit: string, lengthUnit: LengthUnit = projectLengthUnit()): string {
+  if (lengthUnit.kind === 'rem' && unit === 'rem') {
+    return formatPxLength(Math.round(amount * lengthUnit.rootFontPx), lengthUnit);
+  }
   const rounded = unit === 'px' || unit === '%' ? Math.round(amount) : Math.round(amount * 100) / 100;
   return `${rounded}${unit}`;
 }
@@ -255,6 +262,16 @@ function useDragReport(
 export function useSideDrag({ propFor, inward, kind, read, busy, setProp, liveSetProp, onLive, onLiveEnd, threshold = 0 }: SideDragOptions) {
   const dragRef = useRef<SideDrag | undefined>(undefined);
   const dragged = useRef(false);
+  // On touch the box sits in a panel that scrolls, so a press is only a candidate until the
+  // gesture is clear (ui/touchClaim.ts): a horizontal drag claims a left or right side, a held
+  // press claims any side, and a vertical swipe goes to the panel's scroll.
+  const claimRef = useRef<TouchClaim | undefined>(undefined);
+  useTouchClaimGuard();
+  useEffect(() => () => claimRef.current?.end(), []);
+  const endClaim = () => {
+    claimRef.current?.end();
+    claimRef.current = undefined;
+  };
   const report = useDragReport(dragRef, { kind, propFor });
   const frame = useLiveFrame(dragRef, liveSetProp, (props, display, drag) => {
     onLive(props, display);
@@ -281,12 +298,43 @@ export function useSideDrag({ propFor, inward, kind, read, busy, setProp, liveSe
       event.preventDefault();
     }
     const shown = displayOf(read(propFor(side)));
-    dragRef.current = startSideDrag({ side, shown, inward, threshold, event });
+    const drag = startSideDrag({ side, shown, inward, threshold, event });
+    endClaim();
+    const claim = startTouchClaim(event, { axis: SIDE_AXIS[side].axis === 'x' ? 'x' : 'hold' }, () => {
+      // Held still: the band is the drag's now, before the finger moves.
+      if (threshold === 0 && dragRef.current === drag) {
+        drag.active = true;
+      }
+    });
+    if (claim.state() !== 'claimed') {
+      drag.active = false;
+    }
+    assert(claim.state() === 'claimed' || !drag.active, 'useSideDrag: an unclaimed touch is not a drag yet');
+    dragRef.current = drag;
+    claimRef.current = claim;
     dragged.current = false;
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
 
   const onPointerMove = (event: React.PointerEvent) => {
+    const drag = dragRef.current;
+    if (!drag) {
+      return;
+    }
+    const claim = claimRef.current?.move(event) ?? 'claimed';
+    if (claim === 'released') {
+      // A vertical swipe: the panel scrolls, and nothing was written.
+      assert(!dragged.current, 'useSideDrag: a released touch never dragged');
+      dragRef.current = undefined;
+      endClaim();
+      return;
+    }
+    if (claim === 'pending') {
+      return;
+    }
+    if (threshold === 0) {
+      drag.active = true;
+    }
     if (followPointer(dragRef, event, threshold)) {
       apply();
     }
@@ -294,6 +342,7 @@ export function useSideDrag({ propFor, inward, kind, read, busy, setProp, liveSe
 
   const onPointerUp = (event: React.PointerEvent) => {
     const drag = dragRef.current;
+    endClaim();
     if (!drag) {
       return;
     }
@@ -405,7 +454,9 @@ export function startSideDrag({
   threshold: number;
   event: React.PointerEvent;
 }): SideDrag {
-  const { amount, unit } = parseAmountUnit(shown.value);
+  // A px side drags in rem in a rem project: the project never writes px.
+  const authored = parseAmountUnit(shown.value);
+  const { amount, unit } = projectLength(authored.amount, authored.unit, projectLengthUnit());
   const sideAxis = SIDE_AXIS[side];
   // Outward grows away from centre; inward (padding) drags the opposite way
   // (Webflow flips the resize cursors to match).

@@ -12,7 +12,7 @@ import { once } from 'node:events';
 import { PublishStatusSource } from '../src/features/publishing/publishStatusSource';
 import { availabilityRoutes } from '../src/features/publishing/availabilityRoutes';
 import { parsePublishedStatusFiles, readDeployedStatusRevision } from '../src/features/publishing/publishStatusRemote';
-import { parsePublishAvailability } from '../vendor/stacki/shared/properties/publishState';
+import { parsePublishAvailability, publishButtonState } from '../vendor/stacki/shared/properties/publishState';
 import { ok } from '../vendor/stacki/shared/core/result';
 
 const revision = 'a'.repeat(40);
@@ -86,16 +86,17 @@ test('remote parsers reject partial trees, bad revisions, traversal, modes, and 
 });
 
 for (const scenario of [
-  { draft: source, deployed: revision, github: 'current', hosting: 'current', commits: 0 },
+  { draft: source, deployed: revision, github: 'current', hosting: 'current', commits: 0, button: 'current' },
   {
     draft: '<h1>Draft</h1>',
     deployed: revision,
     github: 'pending',
     hosting: 'pending',
     commits: 1,
+    button: 'ready',
   },
-  { draft: source, deployed: otherRevision, github: 'current', hosting: 'pending', commits: 0 },
-  { draft: source, deployed: 'invalid', github: 'current', hosting: 'unknown', commits: 0 },
+  { draft: source, deployed: otherRevision, github: 'current', hosting: 'pending', commits: 0, button: 'ready' },
+  { draft: source, deployed: 'invalid', github: 'current', hosting: 'unknown', commits: 0, button: 'ready' },
 ]) {
   test(`HTTP status: ${scenario.github}/${scenario.hosting}/${scenario.deployed}`, async (t) => {
     const fixture = await sourceFixture();
@@ -147,6 +148,8 @@ for (const scenario of [
       assert.equal(value.hosting, scenario.hosting);
       assert.equal(value.githubPush?.commits, scenario.commits);
       assert.equal(value.githubPush?.repositoryUrl, 'https://github.com/example/site');
+      // The title-bar Publish button greys out only when both destinations are finished.
+      assert.equal(publishButtonState(value, 'all'), scenario.button);
     }
     assert.equal(connections, 1, 'Concurrent readers share one bounded inspection');
     assert.equal((await fetch(url, { method: 'POST' })).status, 405);

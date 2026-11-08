@@ -85,7 +85,7 @@ const SIZE = 240;
   dom.window.Element.prototype.getBoundingClientRect = function rect() {
     return { x: 0, y: 0, top: 0, left: 0, right: SIZE, bottom: SIZE, width: SIZE, height: SIZE };
   };
-  dom.window.avb = { listAssets: async () => ({ entries: [] }) };
+  dom.window.avb = { listAssets: async () => ({ entries: [] }), onCssChanged: () => () => {} };
 
   const React = require('react');
   const { createRoot } = require('react-dom/client');

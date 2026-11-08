@@ -2,8 +2,9 @@ import { useLayoutEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import { basicSetup } from 'codemirror';
 import { Annotation, EditorState, StateEffect, StateField } from '@codemirror/state';
-import { Decoration, EditorView, keymap } from '@codemirror/view';
-import { indentWithTab, invertedEffects, isolateHistory } from '@codemirror/commands';
+import { Decoration, EditorView } from '@codemirror/view';
+import { invertedEffects, isolateHistory } from '@codemirror/commands';
+import { codeIndentExtensions, codeIndentStyleFor } from '../../ui/codeEditorIndent';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { assert } from '../../../shared/core/assert';
 import { appTheme, appHighlight, externalChange, codeEditorLanguage } from '../../ui/CodeEditor';
@@ -90,7 +91,7 @@ function createMergeEditor(parent: HTMLDivElement, latest: MutableRefObject<Merg
       doc: latest.current.draft.text,
       extensions: [
         basicSetup,
-        keymap.of([indentWithTab]),
+        codeIndentExtensions(codeIndentStyleFor(latest.current.path)),
         appTheme,
         codeEditorLanguage(language),
         language === 'astro' ? astroHighlight : appHighlight,

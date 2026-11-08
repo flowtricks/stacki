@@ -1,3 +1,4 @@
+import { indentUnitOf } from '../../../vendor/stacki/shared/core/indent';
 import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
 import { VOID_TAGS } from '../../../vendor/stacki/src/editor/elementSchemas';
 import { PLACEHOLDER_PROPS } from '../../../vendor/stacki/src/features/palette/astroAssets';
@@ -24,7 +25,7 @@ export function contentInsertionEdits(source: string, action: Extract<TreeAction
   }
   const node =
     content.type === 'astroAsset' ? { kind: 'component' as const, name, props: { ...PLACEHOLDER_PROPS }, children: undefined } : insertedContentNode(content);
-  const fragment = serializeNodes([node]);
+  const fragment = serializeNodes([node], indentUnitOf(source));
   const edits = [insertFragment(source, action, fragment, parsed.model.nodes.length === 0)];
   if (content.type === 'astroAsset' && !existing) {
     const imported = content.name === name ? name : `${content.name} as ${name}`;

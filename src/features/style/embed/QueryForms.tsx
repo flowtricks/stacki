@@ -6,14 +6,25 @@ import type { ClassPlacement } from '../../../editor/classAttr';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { CodeEditor } from '../components/CssCodeEditor';
-import { ruleEditorText } from '../model/cssRuleText';
+import { ruleChainText, ruleTextFromChain } from '../model/cssRuleText';
 import SegmentedControl from '../components/SegmentedControl';
 import { type MatchedRule, type RuleModel } from '../model/cascade';
 import { cssTokens } from '../model/cssCode';
 import { buildCssRuleView, type CssRuleRange, type CssRuleView } from '../model/cssRuleView';
-import { selectorsMatch, type ContextInfo, type ContextKey, type MatchedSelector, type ResolvedStyle, type StyleContext } from '../model/resolved';
+import {
+  ruleOnLayer,
+  selectorsMatch,
+  type ContextInfo,
+  type ContextKey,
+  type MatchedSelector,
+  type PanelLayer,
+  type ResolvedStyle,
+  type StyleContext,
+} from '../model/resolved';
+import { selectorLayerOf } from '../model/selectors';
 import type { ElementSnapshot, ParsedRule } from '../model/styleTypes';
 import { type LiveSetProp } from './EditorBasics';
+import { usePanelLayer } from './editorModel';
 import { type SourceOption, type SelectorSuggestion } from './LayoutRows';
 import { useHighlightInView, QUERY_MODES, type QuerySuggestion, type QueryComboProps } from './SelectorPicker';
 
@@ -300,6 +311,14 @@ export function cssRuleMatchesVisibleSelector(matched: MatchedRule, visibleSelec
   return visibleSelectors.some((selector) => cssRuleMatchesSelector(matched, selector));
 }
 
+/** A rule as the box in view reads it: a mixed list marks only that box's members. */
+export function cssRuleForLayer(matched: MatchedRule, layer: PanelLayer): MatchedRule {
+  if (layer === 'every' || !ruleOnLayer(matched, layer)) {
+    return matched;
+  }
+  return { ...matched, matchedSelectors: matched.matchedSelectors.filter((selector) => selectorLayerOf(selector.pseudoElement) === layer) };
+}
+
 export function cssSelectorLine(line: string, lineFrom: number, matchedRanges: readonly CssRuleRange[]): ReactNode {
   const segments: ReactNode[] = [];
   let cursor = 0;
@@ -396,9 +415,12 @@ export function EditableCssRule({
   readonly busy: boolean;
   readonly onSave: (rule: ParsedRule, css: string) => void;
 }) {
-  // Flush left with two-space levels, whatever the <style> block's own indentation
-  // (replaceRuleCss puts the block's indentation back on save).
-  const sourceCss = ruleEditorText(rule.node);
+  // Flush left with a tab per level, whatever the <style> block's own indentation
+  // (replaceRuleCss puts the block's indentation back on save), inside the selectors
+  // and queries it is written in. Those are read-only: they may hold other rules,
+  // so a change to one is not an edit of this rule. A save writes the rule alone.
+  const chain = ruleChainText(rule.node);
+  const sourceCss = chain.text;
   const [draft, setDraft] = useState(sourceCss);
   const attemptedDraftRef = useRef<string | undefined>(undefined);
   const previousSourceRef = useRef(sourceCss);
@@ -425,7 +447,10 @@ export function EditableCssRule({
     }
     const timer = window.setTimeout(() => {
       attemptedDraftRef.current = draft;
-      onSave(rule, draft);
+      const ruleCss = ruleTextFromChain(draft, ruleChainText(rule.node));
+      if (ruleCss !== undefined) {
+        onSave(rule, ruleCss);
+      }
     }, 300);
     return () => window.clearTimeout(timer);
   }, [busy, draft, onSave, rule, sourceCss]);
@@ -434,11 +459,13 @@ export function EditableCssRule({
     <CodeEditor
       value={draft}
       language="css"
-      ariaLabel={`Editable CSS for ${rule.selectorText}; changes save automatically`}
+      ariaLabel={`Editable CSS for ${rule.nestedDisplay ?? rule.selectorText}; changes save automatically`}
       // A whole rule: `--` offers variables in each declaration's value. There is
       // no one property to bind the whole text to, so it has no bind dot.
       variables={{ kind: 'declarations' }}
       minHeight="100px"
+      lineOverflow="scroll"
+      lockedEdges={{ prefixLength: chain.prefix.length, suffixLength: chain.suffix.length }}
       onChange={setDraft}
       className="embed-editor_css-code-editor"
     />
@@ -481,13 +508,12 @@ export function CssCodeHeader({ open, sourceLabel, onToggle }: { readonly open: 
 }
 
 export function CssCodeSection({ model, activeSelector, visibleSelectors, editableRule, busy, open, onToggle, onSave }: CssCodeSectionProps) {
+  const layer = usePanelLayer();
   const rules = useMemo(() => {
     const visible = [...model.base, ...model.conditional].filter((rule) => cssRuleMatchesVisibleSelector(rule, visibleSelectors));
-    if (!activeSelector) {
-      return visible;
-    }
-    return visible.filter((rule) => cssRuleMatchesSelector(rule, activeSelector));
-  }, [model, activeSelector, visibleSelectors]);
+    const picked = activeSelector ? visible.filter((rule) => cssRuleMatchesSelector(rule, activeSelector)) : visible;
+    return picked.map((rule) => cssRuleForLayer(rule, layer));
+  }, [model, activeSelector, visibleSelectors, layer]);
   const view = useMemo(() => buildCssRuleView(rules), [rules]);
   const sources = useMemo(() => [...new Set(rules.map((entry) => entry.rule.embedLabel))], [rules]);
   const sourceLabel = activeSelector ? (editableRule?.embedLabel ?? sources.join(', ')) : '';
@@ -514,6 +540,8 @@ export type StyleCardProps = {
   snapshot: ElementSnapshot | undefined;
   selectedSelector: string;
   activePicked: boolean;
+  /** Whether the selected element's chips have finished landing (ScanState.settled). */
+  selectionSettled: boolean;
   cssCodeOpen: boolean;
   onToggleCssCode: () => void;
   model: RuleModel;

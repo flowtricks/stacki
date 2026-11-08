@@ -75,6 +75,20 @@
   color: var(--text-dim);
   white-space: nowrap;
 }
+/* A phone's title bar has no room to spare, and "Saved" is the quiet,
+   expected state, so it is hidden from sight there. It stays readable to
+   screen readers, and every other state (connecting, saving, offline)
+   still shows, because those need the user's attention. */
+@media (max-width: 700px) {
+  .save-state[data-saved] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
 .studio-workspace {
   position: relative;
 }
@@ -98,9 +112,6 @@
   color: var(--text-dim);
 }
 @media (max-width: 700px) {
-  .studio-left[data-variable-selected='true'] {
-    display: none;
-  }
   /* The body and its sibling scrollbar must inherit the same column sizes. */
   .studio-editor-content .vars-sheet {
     --vars-name-col: 140px;
@@ -124,13 +135,15 @@
 .ai-icon {
   font-size: 24px;
 }
+/* Like Desktop's .panel, the side panels do not clip: each panel body scrolls itself,
+   and the shared resize handle reaches 4px past the panel edge. */
 .studio-left {
   width: 260px;
   min-width: 210px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   background: var(--bg-panel);
-  overflow: auto;
+  overflow: visible;
   position: relative;
 }
 .studio-right {
@@ -138,7 +151,15 @@
   flex-shrink: 0;
   border-left: 1px solid var(--border);
   background: var(--bg-panel);
-  overflow: auto;
+  overflow: visible;
+  position: relative;
+}
+/* Desktop's shared resize handle straddles the panel edge, as on .panel.left and .panel.right. */
+.studio-left > .panel-resize {
+  right: -4px;
+}
+.studio-right > .panel-resize {
+  left: -4px;
 }
 
 .muted {
@@ -450,16 +471,82 @@
     opacity: 0.6;
   }
 }
-.mobile-close {
+.panel-close {
   display: none;
 }
+/* The inspector's tab row: the tabs, then (collapsed) the close button on the same line. */
+.studio-inspector-head {
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.studio-inspector-head > .right-tabs {
+  flex: 1;
+  min-width: 0;
+  border-bottom: 0;
+}
+/* The collapsed layout (mobileEditor.ts, after Desktop's editorLayout.ts): when docked panels
+   would leave the canvas too narrow, they float over a full-width canvas instead. Each keeps
+   the width the user set, up to the room there is, and docks at that width again later. */
+.studio-app[data-editor-layout='collapsed'] .studio-left {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 44px;
+  max-width: calc(100% - 44px);
+  z-index: 40;
+  border-right: 0;
+  overflow: hidden;
+  box-shadow: 0 12px 40px #0005;
+}
+.studio-app[data-editor-layout='collapsed'] .studio-left[data-variable-selected='true'] {
+  display: none;
+}
+.studio-app[data-editor-layout='collapsed'] .studio-right {
+  display: none;
+}
+/* Below the canvas toolbar, so its panel button stays in reach to close the panel again. */
+.studio-app[data-editor-layout='collapsed'] .studio-right.mobile-open {
+  display: flex;
+  position: absolute;
+  top: 44px;
+  right: 0;
+  bottom: 0;
+  max-width: 100%;
+  z-index: 45;
+  border-left: 0;
+  overflow: hidden;
+  box-shadow: 0 12px 40px #0005;
+}
+/* A quiet icon button the size of the panel headers' own (22px), filled on hover. */
+.studio-app[data-editor-layout='collapsed'] .panel-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+}
+/* In the panel header's row, inside its 12px padding, beside the header's own actions. */
+.studio-app[data-editor-layout='collapsed'] .studio-left > .panel-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 2;
+}
+.studio-app[data-editor-layout='collapsed'] .studio-left .panel-header {
+  padding-right: 38px;
+}
+/* In the tab row: the tabs' height and top and bottom insets, and the 12px right inset of the
+   panel's content below (and of the Navigator header's close button). */
+.studio-app[data-editor-layout='collapsed'] .studio-inspector-head > .panel-close {
+  width: 26px;
+  height: auto;
+  margin: 8px 12px 4px 0;
+}
 @media (max-width: 1000px) {
-  .studio-left {
-    width: 220px;
-  }
-  .studio-right {
-    width: 250px;
-  }
   .canvas-stage {
     padding: 10px;
   }
@@ -484,41 +571,20 @@
   .studio-titlebar.component-open .collaborators {
     display: none;
   }
-  .studio-rail {
-    width: 44px;
+  /* A phone has no room beside a panel: the collapsed overlays take the full width and height. */
+  .studio-app[data-editor-layout='collapsed'] .studio-left {
+    min-width: calc(100% - 44px);
   }
-  .studio-left {
-    position: fixed;
-    top: 50px;
-    bottom: 0;
-    left: 44px;
-    width: calc(100% - 44px);
-    z-index: 40;
-    border-right: 0;
-  }
-  .studio-right {
-    display: none;
-  }
-  .studio-right.mobile-open {
-    display: block;
-    position: fixed;
-    top: 50px;
-    bottom: 0;
-    left: 44px;
-    width: calc(100% - 44px);
-    z-index: 45;
-  }
-  .mobile-close {
-    display: flex;
-    position: absolute;
-    right: 12px;
-    top: 10px;
-    z-index: 2;
-    font-size: 22px;
+  .studio-app[data-editor-layout='collapsed'] .studio-right.mobile-open {
+    top: 0;
+    min-width: 100%;
   }
   .panel-header {
-    padding-right: 48px;
     min-height: 48px;
+  }
+  /* A 48px header centres its row 3px lower than the 12px top padding does. */
+  .studio-app[data-editor-layout='collapsed'] .studio-left > .panel-close {
+    top: 15px;
   }
   .studio-tree-row {
     min-height: 44px;
@@ -536,10 +602,6 @@
   }
   .preview-url {
     max-width: 80px;
-  }
-  .studio-right .right-tabs {
-    margin-right: 44px;
-    flex-shrink: 0;
   }
   .canvas-footer {
     min-height: 38px;
@@ -713,7 +775,6 @@
 .studio-left:has(.studio-code-panel) {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 .studio-navigator > .panel-section {
   width: 100%;
@@ -727,7 +788,6 @@
 .studio-right {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 .studio-code-panel {
   height: 100%;
@@ -736,14 +796,6 @@
 .studio-code-panel > .code-editor-host {
   flex: 1;
   min-height: 0;
-}
-@media (max-width: 700px) {
-  .studio-right {
-    display: none;
-  }
-  .studio-right.mobile-open {
-    display: flex;
-  }
 }
 
 .collaborators > button {
@@ -843,10 +895,8 @@
 .studio-left {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 .studio-left.code-panel-shell {
-  width: clamp(360px, 34vw, 620px);
   background: #111;
 }
 .studio-panel-actions {
@@ -874,9 +924,6 @@
   background: rgba(0, 0, 0, 0.5);
 }
 @media (max-width: 700px) {
-  .studio-left.code-panel-shell {
-    width: calc(100% - 44px);
-  }
   .studio-titlebar .page-switch-btn {
     min-width: 0;
   }
@@ -891,4 +938,13 @@
 }
 .studio-page-list .list-item.active {
   background: var(--accent-soft);
+}
+/* A press that may become a touch drag (useTouchTree.ts): no long-press callout, no text
+   selection and no system drag lift on the rows, which would take the touch away. */
+.studio-navigator.touch-pressing .structure-node,
+.studio-navigator.touch-dragging .structure-node {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }

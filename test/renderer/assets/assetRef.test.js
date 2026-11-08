@@ -129,12 +129,13 @@ const SCREENS = [
 
 {
   // An empty collection has no rows to take the indent from, so the file is
-  // asked — and in this file the first indented line is inside the comment.
+  // asked — and in this file the only indented lines are inside the comment, which
+  // say nothing, so the row takes Stacki's own tab.
   const empty = FM.replace(/const SCREENS = \[[\s\S]*?\];/, 'const SCREENS = [];');
   const out = writeBack(empty, [{ label: 'First' }]);
   check(
-    'the first row added to an empty one is indented like the file, not like the comment',
-    /\n  \{ label: "First" \},\n/.test(out),
+    'the first row added to an empty one takes a tab, not the comment’s indent',
+    /\n\t\{ label: "First" \},\n/.test(out),
     out.split('\n').slice(-5).join('\n'),
   );
 }

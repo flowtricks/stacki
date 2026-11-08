@@ -3,6 +3,11 @@
   min-width: 0;
 }
 
+/* The selectors and queries a nested rule sits in: its address, not editable. */
+.code-editor .code-editor_context {
+  opacity: 0.55;
+}
+
 .code-editor .cm-editor {
   min-height: inherit;
   overflow: hidden;

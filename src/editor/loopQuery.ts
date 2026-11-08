@@ -150,6 +150,14 @@ export interface LoopQuery {
 }
 
 const FIELD_SEGMENT = /^[A-Za-z_$][\w$-]*$/;
+
+/**
+ * The field that is an item itself, in a list of plain values
+ * (`["Free", "Open"]`): a filter compares `promise`, not `promise.title`, and a
+ * sort compares `a` with `b`. A name no object key in a written-out list takes
+ * (loopLiteral.ts), so it never stands for a real field.
+ */
+export const ITEM_FIELD = '$item';
 const DATE_VALUE = /^\d{4}-\d{2}-\d{2}$/;
 const COLLECTION_NAME = /^[A-Za-z0-9_][\w.-]*$/;
 const PARAMETER_NAME = /^[A-Za-z_$][\w$]*$/;
@@ -286,6 +294,11 @@ export function assertLoopQuery(query: LoopQuery): void {
   }
   if (query.parameter.kind === 'entry') {
     assert(PARAMETER_NAME.test(query.parameter.name), 'An entry parameter is a name');
+  }
+  if (query.source.kind !== 'list') {
+    // Only a list of plain values has items that are their own value.
+    assert(!query.conditions.some((condition) => condition.kind === 'test' && condition.field === ITEM_FIELD), 'Only a list’s filter compares the item itself');
+    assert(!query.sorts.some((sort) => sort.field === ITEM_FIELD), 'Only a list sorts by the item itself');
   }
   if (query.source.kind === 'list') {
     assert(query.parameter.kind === 'entry', 'A list prop’s filter names its item');
@@ -683,6 +696,9 @@ export function sliceCode(offset: number, limit: number | undefined): string {
 /** `data.title`, `data.Picture?.width` for a nested field, or `data["campus-name"]` for a name that is not an identifier. */
 export function fieldAccess(base: string, path: string): string {
   assertFieldPath(path);
+  if (path === ITEM_FIELD) {
+    return base;
+  }
   let code = base;
   // A nested field is read past a missing parent (`data.Picture?.width`): an
   // item without the parent compares as having no value, never throws.

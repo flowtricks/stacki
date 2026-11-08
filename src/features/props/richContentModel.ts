@@ -10,7 +10,7 @@ export interface InlineCandidate {
   readonly kind: string;
   readonly name?: string;
   readonly value?: string;
-  readonly props?: Readonly<Record<string, { readonly type: string; readonly value?: string } | undefined>>;
+  readonly props?: Readonly<Record<string, { readonly type: string; readonly value?: string } | undefined>> | undefined;
   readonly children?: readonly InlineCandidate[] | undefined;
 }
 export interface InlineExpression {

@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { useStyleFiles } from './useStyleFiles';
 import type { HostState } from './model/host';
 import { setHost } from './model/host';
+import { PX_LENGTHS, sameLengthUnit, type LengthUnit } from '../../../shared/properties/lengthUnit';
 import EmbedEditor from './EmbedEditor';
 import './tokens.css';
 import './utilities.css';
@@ -35,8 +36,12 @@ interface StylePanelProps {
   /** The page a component is being edited on, whose styles reach it (HostState). */
   readonly contextPagePath?: string | undefined;
   readonly pseudoRequest?: HostState['pseudoRequest'];
+  /** The navigator lists ::before and ::after rows (HostState). */
+  readonly pseudoRows?: boolean;
   /** Counts ⌘Enter presses: each new one puts the caret in the selector field. */
   readonly selectorFocus?: number;
+  /** The project's length unit, from its scan (HostState). Absent → px. */
+  readonly lengthUnit?: LengthUnit | undefined;
 }
 
 type StyleFiles = HostState['files'];
@@ -44,7 +49,8 @@ type StyleFiles = HostState['files'];
 export default function StylePanel(props: StylePanelProps) {
   const files = useStyleFiles(props.project?.path, undefined, readStyleFiles);
   const astroFiles = useStyleFiles(props.project?.path, props.openFilePath, readAstroStyleFiles);
-  const host = hostState(props, files.files, astroFiles.files);
+  const lengthUnit = useStableLengthUnit(props.lengthUnit ?? PX_LENGTHS);
+  const host = hostState(props, files.files, astroFiles.files, lengthUnit);
   // Children read the bridge during their own effects, which run before the
   // parent's effects. Publishing here ensures their first read is current.
   setHost(host);
@@ -66,7 +72,17 @@ export default function StylePanel(props: StylePanelProps) {
   );
 }
 
-function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleFiles): HostState {
+// A rescan builds a new setting object each time; the host compares by identity,
+// so the same setting keeps the object it had and wakes no subscriber.
+function useStableLengthUnit(next: LengthUnit): LengthUnit {
+  const held = useRef(next);
+  if (!sameLengthUnit(held.current, next)) {
+    held.current = next;
+  }
+  return held.current;
+}
+
+function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleFiles, lengthUnit: LengthUnit): HostState {
   return {
     projectPath: props.project?.path,
     nodes: props.model?.nodes ?? [],
@@ -90,16 +106,18 @@ function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleF
     projectClasses: [...(props.projectClasses ?? [])],
     historyTick: props.historyTick ?? 0,
     pseudoRequest: props.pseudoRequest,
+    pseudoRows: props.pseudoRows === true,
+    lengthUnit,
   };
 }
 
-// The ⌘Enter presses already answered: the panel remounts with each tab
-// switch, and an old press must not take the caret again.
+// The ⌘Enter presses already answered: the panel can remount (a new
+// project, a reset panel boundary), and an old press must not take the caret again.
 let selectorFocusHandled = 0;
 const SELECTOR_FOCUS_FRAMES_MAX = 30;
 
 // Puts the caret in the selector field on a new ⌘Enter press, waiting a few
-// frames for the field when the panel has only just been switched to.
+// frames for the field when the panel has only just been shown or mounted.
 function useSelectorFocus(hostRef: React.RefObject<HTMLDivElement>, tick: number): void {
   useEffect(() => {
     if (tick <= selectorFocusHandled) {

@@ -31,6 +31,7 @@ import { mapModuleSpecifiers } from '../../shared/page/frontmatterSource';
 import { isPathDescendant } from '../lib/platform';
 import { digestOf } from './atomicWrite';
 import { serializePage, serializeNodes } from '../parse/astroParser';
+import { CODE_INDENT_UNIT } from '../../shared/core/indent';
 
 const toPosix = (filePath: string): string => filePath.split(path.sep).join('/');
 
@@ -121,14 +122,17 @@ function componentFile({ projectPath, pagePath, name, nodes, imports = [], props
   const code = mapModuleSpecifiers(frontmatter?.code ?? '', rebased);
   const extraFrontmatter = [destructure, code].filter((part) => part !== '').join('\n\n');
 
-  const text = serializePage({
-    imports: moved,
-    extraFrontmatter,
-    nodes,
-    // No imports and no code, no `---` block: a component that needs no
-    // frontmatter shouldn't be handed an empty one.
-    hadFrontmatter: moved.length > 0 || extraFrontmatter !== '',
-  });
+  const text = serializePage(
+    {
+      imports: moved,
+      extraFrontmatter,
+      nodes,
+      // No imports and no code, no `---` block: a component that needs no
+      // frontmatter shouldn't be handed an empty one.
+      hadFrontmatter: moved.length > 0 || extraFrontmatter !== '',
+    },
+    CODE_INDENT_UNIT,
+  );
 
   return { path: target, rel: toPosix(path.relative(projectPath, target)), text };
 }
@@ -156,7 +160,7 @@ function newPageText(input: { readonly pagePath: string; readonly layout: NewPag
   const rel = toPosix(path.relative(path.dirname(input.pagePath), layout.path));
   const wrapper = { id: 'layout', kind: 'component', name: layout.name, props: {}, children: [] };
   const imports = [{ name: layout.name, path: rel.startsWith('.') ? rel : './' + rel }];
-  const text = serializePage({ ...base, imports, nodes: [wrapper] });
+  const text = serializePage({ ...base, imports, nodes: [wrapper] }, CODE_INDENT_UNIT);
   assert(text.includes(`<${layout.name}`), 'A new page prints its layout wrapper');
   assert(text.includes(rel), 'A new page imports its layout');
   return text;

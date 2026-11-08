@@ -1,9 +1,9 @@
-import type { Parser } from '../../../shared/core/boundary';
-import type { Result } from '../../../shared/core/result';
-import type { WireCell, WireColumn } from '../../../shared/ipc/ipcResults';
-import { boolean, count, dictionary, object, optional, pathText, record, text } from '../../../shared/core/boundary';
-import { toArray } from '../../../shared/core/record';
-import { readVariables } from '../../ipc/editorEnvironment';
+import type { Parser } from '../../shared/core/boundary';
+import type { Result } from '../../shared/core/result';
+import type { WireCell, WireColumn, WireVariableScope } from '../../shared/ipc/ipcResults';
+import { boolean, count, dictionary, object, optional, pathText, record, text } from '../../shared/core/boundary';
+import { toArray } from '../../shared/core/record';
+import { readVariables } from './editorEnvironment';
 
 export interface VariableSelection {
   readonly file: string;
@@ -25,6 +25,8 @@ interface VariableBlockBase {
   readonly title: string | undefined;
   readonly titleStart?: number;
   readonly titleEnd?: number;
+  /** The heading comment in full, gutters taken off, when it says more than the title. */
+  readonly description?: string;
   readonly rows: readonly VariableRow[];
 }
 export type VariableBlock = VariableBlockBase &
@@ -34,6 +36,8 @@ export interface VariableGroup {
   readonly label: string;
   readonly columns: readonly WireColumn[];
   readonly blocks: readonly VariableBlock[];
+  /** Absent for a stylesheet: only a `<style>` block's variables have a limited reach. */
+  readonly scope?: WireVariableScope | undefined;
 }
 export interface VariableFile {
   readonly rel: string;
@@ -159,6 +163,19 @@ function blockKind(input: unknown): VariableBlock['kind'] {
   }
   throw new Error('CSSVariables: invalid block kind');
 }
+const variableScope = object({ reach: scopeReach, written: scopeWriting });
+function scopeReach(input: unknown): WireVariableScope['reach'] {
+  if (input === 'page' || input === 'rendered' || input === 'scoped') {
+    return input;
+  }
+  throw new Error('CSSVariables: invalid scope reach');
+}
+function scopeWriting(input: unknown): WireVariableScope['written'] {
+  if (input === 'global' || input === 'inline' || input === 'scoped') {
+    return input;
+  }
+  throw new Error('CSSVariables: invalid style block kind');
+}
 function groupKind(input: unknown): VariableGroup['kind'] {
   if (input === 'modes' || input === 'single') {
     return input;
@@ -209,6 +226,7 @@ function variableFileParser(budget: VariablesBudget): Parser<VariableFile> {
     title: optional(variableText),
     titleStart: optional(sourceOffset),
     titleEnd: optional(sourceOffset),
+    description: optional(variableText),
     rows: budget.list(row),
     columns: optional(budget.list(column)),
   });
@@ -233,6 +251,7 @@ function variableFileParser(budget: VariablesBudget): Parser<VariableFile> {
     label: variableText,
     columns: budget.list(column),
     blocks: budget.list(block),
+    scope: optional(variableScope),
   });
   return object({
     rel: pathText,

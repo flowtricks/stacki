@@ -1,5 +1,6 @@
 import './assemble';
 import { projectScripts } from './projectScripts';
+import { RELEASE_DIRECTORIES, RELEASE_FILES } from './releaseFiles';
 import { findTrackingFailures } from './noTracking';
 import { readNoTrackingInput } from './noTrackingTree';
 import { readdir, readFile, mkdir, writeFile } from 'node:fs/promises';
@@ -31,21 +32,10 @@ async function collect(relative: string): Promise<void> {
     }
   }
 }
-for (const directory of ['src', 'scripts', 'vendor', 'docs', 'templates']) {
+for (const directory of RELEASE_DIRECTORIES) {
   await collect(directory);
 }
-for (const file of [
-  'package.json',
-  'package-lock.json',
-  'Dockerfile',
-  '.dockerignore',
-  '.gitignore',
-  'tsconfig.json',
-  'tsconfig.worker.json',
-  'README.md',
-  'AGENTS.md',
-  'LICENSE',
-]) {
+for (const file of RELEASE_FILES) {
   let content = await readFile(path.join(root, file), 'utf8');
   if (file === 'package.json' || file === 'package-lock.json') {
     const value = record(JSON.parse(content));

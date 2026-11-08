@@ -10,8 +10,6 @@ import { useLiveValue } from '../../ui/liveValue';
 import { RichFormatButtons, RichLinkField, richBubblePlace, type BubblePosition } from '../../features/props/RichFormatButtons';
 import { canvasTextSelection, type CanvasTextSelectionState } from '../../features/preview/canvasTextSelection';
 
-type BubbleStyle = React.CSSProperties & { readonly '--arrow-x': string };
-
 export function CanvasTextFormatBar() {
   const selection = useLiveValue(canvasTextSelection);
   if (!selection) {
@@ -29,11 +27,10 @@ function CanvasTextBubble({ selection }: { readonly selection: CanvasTextSelecti
   useLayoutEffect(() => {
     setPosition(element.current ? richBubblePlace(bubble, element.current) : undefined);
   }, [bubble, linking]);
-  const style: BubbleStyle = {
+  const style: React.CSSProperties = {
     left: position ? position.left : bubble.x,
     top: position ? position.top : bubble.top - 10,
     visibility: position ? 'visible' : 'hidden',
-    '--arrow-x': position ? `${position.arrowX}px` : '50%',
   };
   const endLink = (value: string | undefined) => {
     setLinking(false);

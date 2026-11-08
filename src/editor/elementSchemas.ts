@@ -217,93 +217,10 @@ export const HTML_TAGS = [
 export { HTML_VOID_TAGS as VOID_TAGS } from '../../shared/page/htmlTags';
 import { HTML_VOID_TAGS as VOID_TAGS } from '../../shared/page/htmlTags';
 
-// Inline (phrasing) tags — the only element content a heading, paragraph, or
-// other text-level container may hold.
-export const PHRASING_TAGS = new Set([
-  'a',
-  'abbr',
-  'b',
-  'bdi',
-  'bdo',
-  'br',
-  'button',
-  'cite',
-  'code',
-  'data',
-  'datalist',
-  'del',
-  'dfn',
-  'em',
-  'i',
-  'img',
-  'input',
-  'ins',
-  'kbd',
-  'label',
-  'mark',
-  'meter',
-  'output',
-  'picture',
-  'progress',
-  'q',
-  'ruby',
-  's',
-  'samp',
-  'select',
-  'small',
-  'span',
-  'strong',
-  'sub',
-  'sup',
-  'svg',
-  'textarea',
-  'time',
-  // Astro's <slot />: whatever the caller passes lands here, so it's allowed
-  // wherever text is — `<h1><slot /></h1>` is the standard layout heading.
-  'slot',
-  'u',
-  'var',
-  'wbr',
-]);
-
-// Containers whose content model is phrasing-only: dropping a <div> or a
-// second <p> inside one produces markup the browser silently reparents.
-const TEXT_ONLY_PARENTS = new Set([
-  'h1',
-  'h2',
-  'h3',
-  'h4',
-  'h5',
-  'h6',
-  'p',
-  'span',
-  'strong',
-  'em',
-  'b',
-  'i',
-  'u',
-  's',
-  'small',
-  'code',
-  'kbd',
-  'samp',
-  'sub',
-  'sup',
-  'mark',
-  'abbr',
-  'cite',
-  'q',
-  'dfn',
-  'label',
-  'legend',
-  'summary',
-  'dt',
-  'figcaption',
-  'caption',
-  'option',
-  'textarea',
-  'title',
-]);
+// The phrasing tags and the text-only parents live beside the void tags, in shared,
+// because the planner lays out new source by the same classification.
+export { HTML_PHRASING_TAGS as PHRASING_TAGS } from '../../shared/page/htmlTags';
+import { HTML_PHRASING_TAGS as PHRASING_TAGS, HTML_TEXT_ONLY_PARENTS as TEXT_ONLY_PARENTS } from '../../shared/page/htmlTags';
 
 // Parents that accept only a fixed set of children.
 const ONLY_CHILDREN: Readonly<Record<string, readonly string[] | undefined>> = {

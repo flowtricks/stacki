@@ -8,6 +8,8 @@ import type { EditorModel, EditorNode } from './pageView';
 import type { Edit } from '../../shared/engine/editRequest';
 import { LIMITS } from '../../shared/core/limits';
 import type { EditGesture } from './pageEdits';
+import { labelsNode } from '../../shared/page/leadingNote';
+import { nodeId as toNodeId } from './pageView';
 
 export type Urgency = boolean | 'live';
 
@@ -79,8 +81,12 @@ export function insertGesture(model: EditorModel, node: EditorNode, place: Inser
 }
 
 /** A copy of a node right after it: the request copies the node's own bytes
- * (plan §3.4: never a reprint), the effect its clone with new ids. */
+ * (plan §3.4: never a reprint), and main copies its label with them
+ * (shared/page/leadingNote.ts); the effect is its clone with new ids, a copy
+ * of the label above it. */
 export function duplicateGesture(nodeId: string, clone: EditorNode, options: { readonly urgency: Urgency }): EditGesture {
+  assert(clone.id !== nodeId, 'A duplicate has its own id');
+  assert(clone.kind.length > 0, 'A duplicate has a kind');
   return {
     coalesceKey: undefined,
     urgency: options.urgency,
@@ -93,12 +99,43 @@ export function duplicateGesture(nodeId: string, clone: EditorNode, options: { r
       const content = { tag: 'copy' as const, source: target };
       return [{ tag: 'insert-node', target, placement: 'after', content }];
     },
-    apply: (current) => withInsertedAfter(current, nodeId, clone),
+    apply: (current) => {
+      const label = labelAbove(current, nodeId);
+      if (label === undefined) {
+        return withInsertedAfter(current, nodeId, clone);
+      }
+      // A node the gesture creates takes a random handle (nodeFactory.ts, newId).
+      const note: EditorNode = { ...label, id: toNodeId(`g${crypto.randomUUID().replace(/-/g, '')}`) };
+      return withInsertedAfter(withInsertedAfter(current, nodeId, note), note.id, clone);
+    },
   };
 }
 
-/** Remove nodes, in the order given (a note before the node it annotates).
- * What the removal leaves unused in the frontmatter is its own gesture,
+/** The comment that labels a node in the model, by the Navigator's rule
+ * (shared/page/leadingNote.ts): what main moves, removes and copies with it. */
+export function labelAbove(model: EditorModel, nodeId: string): EditorNode | undefined {
+  const pending: (readonly EditorNode[])[] = [model.nodes];
+  for (let visited = 0; visited < pending.length; visited++) {
+    assert(visited < LIMITS.treeNodesMax, 'A model stays inside its node bound');
+    const list = pending[visited];
+    assert(list !== undefined, 'The visit index lies inside the list');
+    for (const [index, node] of list.entries()) {
+      if (node.id === nodeId) {
+        const previous = list[index - 1];
+        return previous !== undefined && labelsNode(previous.kind, node.kind) ? previous : undefined;
+      }
+      if (Array.isArray(node.children)) {
+        pending.push(node.children);
+      }
+    }
+  }
+  return undefined;
+}
+
+/** Remove nodes, in the order given. Main removes each node's label with it
+ * (shared/engine/planTree.ts, removalRange), so the effect drops the labels too;
+ * a label is never requested on its own, or the comment above it would become
+ * the next label and go as well. What the removal leaves unused in the frontmatter is its own gesture,
  * sequenced after this one (App.tsx, removeNode). */
 export function removalGesture(nodeIds: readonly string[], options: { readonly urgency: Urgency }): EditGesture {
   return {
@@ -116,7 +153,10 @@ export function removalGesture(nodeIds: readonly string[], options: { readonly u
       }
       return edits;
     },
-    apply: (model) => withoutNodes(model, nodeIds),
+    apply: (model) => {
+      const labels = nodeIds.map((id) => labelAbove(model, id)?.id).filter((id) => id !== undefined);
+      return withoutNodes(model, [...nodeIds, ...labels]);
+    },
   };
 }
 

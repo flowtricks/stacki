@@ -1,6 +1,6 @@
 import type { TextMatch } from './frameTextMatch';
-import { createTextBuffer } from './frameTextBuffer';
-import { placeTextCaret, textEditorRoot, textSelection } from './frameTextSelection';
+import { createTextBuffer, type TextRunChange } from './frameTextBuffer';
+import { placeTextCaret, textEditorRoot, textSelection, type TextSpace } from './frameTextSelection';
 import { installNativeTextEvents } from './frameTextNativeEvents';
 
 let editingRoot: HTMLElement | undefined;
@@ -11,18 +11,26 @@ export function isCanvasTextEditing(target: unknown): boolean {
 }
 
 export interface NativeTextResult {
-  readonly value: string | undefined;
+  /** What to save: empty when nothing changed or the edit was cancelled. */
+  readonly changes: readonly TextRunChange[];
   readonly restored: boolean;
   /** Shows the typed words again: the save is on its way, so the old ones never flash. */
   readonly keep: () => void;
 }
 
-export function openNativeText(match: TextMatch, event: MouseEvent, changed: (value: string) => void, done: (result: NativeTextResult) => void) {
+interface NativeTextCallbacks {
+  readonly changed: (value: string) => void;
+  readonly refused: () => void;
+  readonly done: (result: NativeTextResult) => void;
+}
+
+export function openNativeText(match: TextMatch, space: TextSpace, event: MouseEvent, callbacks: NativeTextCallbacks) {
   const root = textEditorRoot(match);
   if (!root || match.nodes.map((node) => node.data).join('').length > 10_000) {
     return undefined;
   }
-  const buffer = createTextBuffer(root, match.nodes, changed);
+  const { changed, refused, done } = callbacks;
+  const buffer = createTextBuffer(root, space, changed);
   if (!buffer) {
     return undefined;
   }
@@ -38,7 +46,7 @@ export function openNativeText(match: TextMatch, event: MouseEvent, changed: (va
     closed = true;
     cleanup();
     clearNativeTextSelection(root);
-    const value = action === 'apply' ? buffer.value() : undefined;
+    const changes = action === 'apply' ? buffer.changes() : [];
     // The original words come back first: the save is checked against them.
     const { restored, keep } = buffer.restore();
     for (const attribute of attributes) {
@@ -50,23 +58,41 @@ export function openNativeText(match: TextMatch, event: MouseEvent, changed: (va
     }
     editingRoot = undefined;
     root.blur();
-    done({ value, restored, keep });
+    done({ changes, restored, keep });
   };
   installNativeTextStyle(root);
   root.setAttribute('contenteditable', 'true');
   root.setAttribute('data-avb-text-editor', '');
   editingRoot = root;
-  const cleanup = installNativeTextEvents({ root, nodes: match.nodes, buffer, finish });
+  const { cleanup, pressed } = installNativeTextEvents({ root, space, buffer, finish, refused });
   root.focus({ preventScroll: true });
   placeTextCaret(match.nodes, event);
   return {
     finish,
     intact: buffer.intact,
+    spread: buffer.spread,
+    // Any words typed at all: a selection outside the opened text is offered
+    // only before typing, since a press there saves that text alone.
+    edited: () => buffer.changes().length > 0,
     contains: (click: MouseEvent) => {
+      // A drag ends with its click on whatever holds both of its ends, and its
+      // release may be over other text or none: it began here, so it is the
+      // editor's, and the selection it made stands.
+      if (pressed() && holdsSelection(root)) {
+        return true;
+      }
       const range = document.caretRangeFromPoint(click.clientX, click.clientY);
       return isCanvasTextEditing(click.target) && !!range && !!textSelection(match.nodes, range);
     },
   };
+}
+
+function holdsSelection(root: HTMLElement): boolean {
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) {
+    return false;
+  }
+  return root.contains(selection.anchorNode) && root.contains(selection.focusNode);
 }
 
 function clearNativeTextSelection(root: HTMLElement): void {

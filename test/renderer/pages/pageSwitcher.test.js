@@ -71,3 +71,52 @@ test('a quick press commits a page choice', async () => {
     dom.window.close();
   }
 });
+
+// Goal: the menu opens with the page being edited highlighted, not the first
+// row, so the highlight agrees with the check and Enter keeps the page.
+// Method: pick the second page, reopen the menu, and read which row is
+// highlighted; then check the pure opening-row helper at its edges.
+test('the menu opens on the current page', async () => {
+  const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+  for (const key of ['window', 'document', 'navigator', 'HTMLElement', 'Node']) {
+    global[key] = key === 'window' ? dom.window : dom.window[key];
+  }
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  const React = require('react');
+  const { createRoot } = require('react-dom/client');
+  const PageSwitcher = require(path.join(directory, 'pageSwitcher.js')).default;
+  const pages = [
+    { name: 'about.astro', path: '/about.astro', route: '/about' },
+    { name: 'index.astro', path: '/index.astro', route: '/' },
+    { name: 'studio.astro', path: '/studio.astro', route: '/studio' },
+  ];
+  const root = createRoot(document.getElementById('root'));
+  const act = (action) =>
+    React.act(async () => {
+      await action();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  try {
+    await act(() => root.render(React.createElement(PageSwitcher, { pages, currentPage: pages[2], onSelect: () => undefined })));
+    await act(() => document.querySelector('.page-switch-btn').click());
+    const highlighted = document.querySelector('.page-menu-item.highlight');
+    assert.ok(highlighted);
+    assert.match(highlighted.textContent, /studio/);
+    assert.ok(highlighted.classList.contains('current'));
+  } finally {
+    await act(() => root.unmount());
+    dom.window.close();
+  }
+});
+
+test('the opening row falls back to the first row', () => {
+  const { pageSwitcherOpeningIndex } = require(path.join(directory, 'pageSwitcher.js'));
+  const pages = [
+    { name: 'a.astro', path: '/a.astro', route: '/a' },
+    { name: 'b.astro', path: '/b.astro', route: '/b' },
+  ];
+  assert.equal(pageSwitcherOpeningIndex(pages, pages[1]), 1);
+  assert.equal(pageSwitcherOpeningIndex(pages, undefined), 0);
+  assert.equal(pageSwitcherOpeningIndex(pages, { name: 'x.astro', path: '/x.astro', route: '/x' }), 0);
+  assert.equal(pageSwitcherOpeningIndex([], undefined), 0);
+});

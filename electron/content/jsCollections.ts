@@ -13,6 +13,7 @@
 // imports, comments above the export, other constants — is untouched.
 
 import { assert } from '../../shared/core/assert';
+import { CODE_INDENT_UNIT } from '../../shared/core/indent';
 import { LIMITS } from '../../shared/core/limits';
 import { toRecord } from '../../shared/core/record';
 
@@ -487,7 +488,7 @@ function literal(value: unknown, indent: string, pad: string, depth = 0): string
 }
 
 /** The array literal text for `data`, indented to sit at column 0 of a statement. */
-function serializeCollection(data: readonly unknown[], indent = '  '): string {
+function serializeCollection(data: readonly unknown[], indent = CODE_INDENT_UNIT): string {
   if (!data.length) {
     return '[]';
   }
@@ -518,7 +519,7 @@ function replaceCollection(source: string, name: string, data: readonly unknown[
   if (!found || found.data === undefined) {
     return undefined;
   }
-  const indent = indentOf(source.slice(found.start, found.end), indentOf(source, '  '));
+  const indent = indentOf(source.slice(found.start, found.end), indentOf(source, CODE_INDENT_UNIT));
   return source.slice(0, found.start) + serializeCollection(data, indent) + source.slice(found.end);
 }
 
@@ -622,7 +623,7 @@ function writeGeneral(source: string, data: Record<string, unknown>, options?: S
     // Only the value itself is replaced. The span starts after whatever
     // whitespace the file used, so a string the file had wrapped onto its own
     // line stays wrapped, and one written inline stays inline.
-    out = out.slice(0, scalar.start) + literal(next, '  ', '') + out.slice(scalar.end);
+    out = out.slice(0, scalar.start) + literal(next, indentOf(source, CODE_INDENT_UNIT), '') + out.slice(scalar.end);
   }
   return out;
 }

@@ -400,9 +400,11 @@ export default function EasingEditor({
   );
 }
 
+// The header is the editor's drag handle (see PanelSheet): it opens over the
+// variables window it was launched from, and has to be moved to see that window.
 function EasingHeader({ onClose }: { onClose: () => void }) {
   return (
-    <header className="embed-editor_ease-head">
+    <header className="embed-editor_ease-head" data-floating-drag-handle="">
       <span className="embed-editor_ease-title">
         <GearIcon /> Easing Editor
       </span>

@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readVariables } from '../../../vendor/stacki/electron/project/cssVarModel';
 import { checksum, type createRooms } from '../collaboration/rooms';
-import { walk } from '../project/projectServer';
+import { readSource, walk } from '../project/projectServer';
 import { record, string } from '../../shared/validation';
 import { applyVariableOperation } from './variableOperations';
 import { VARIABLE_ROOT, withVariableWorkspace } from './variableWorkspace';
@@ -30,6 +30,12 @@ export function variableRoutes(root: string, rooms: Rooms) {
     return true;
   };
 }
+/** The Variables route's read, for a bake, where no room exists to read through. */
+export async function scanProjectVariables(root: string) {
+  const sources = await variableSources(root, { read: (file) => readSource(root, file) });
+  const versions = Object.fromEntries([...sources].map(([file, text]) => [file, checksum(text)]));
+  return readVariableSnapshot(sources, versions);
+}
 function cachedVariableReader() {
   let cached: { readonly signature: string; readonly value: ReturnType<typeof readVariableSnapshot> } | undefined;
   return (sources: Map<string, string>) => {
@@ -44,7 +50,7 @@ function cachedVariableReader() {
 function readVariableSnapshot(sources: Map<string, string>, versions: Readonly<Record<string, string>>) {
   return withVariableWorkspace(sources, () => ({ ...readVariables(VARIABLE_ROOT), versions }));
 }
-async function variableSources(root: string, rooms: Rooms) {
+async function variableSources(root: string, rooms: Pick<Rooms, 'read'>) {
   const paths = [...(await walk(root, 'src')), ...(await walk(root, 'public'))].filter((file) => /\.(astro|md|mdx|css|ts|js)$/.test(file));
   if (paths.length > 1000) {
     throw new Error('Variable scan exceeds 1,000 source files');

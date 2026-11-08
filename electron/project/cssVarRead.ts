@@ -5,6 +5,7 @@ import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
 import postcss from 'postcss';
 import type { Declaration, Rule as PostcssRule } from 'postcss';
+import { commentLabel } from '../../shared/page/commentLabel';
 
 // Folders deeper than the stylesheet bound are not where a project keeps its CSS; the rename walk
 // covers the whole project, where a config or a helper module can sit two levels deeper. A
@@ -63,9 +64,13 @@ export interface VarEntry {
 }
 export interface CommentEntry {
   readonly kind: 'comment';
+  /** The comment as a label: its first sentence, as written (shared/page/commentLabel.ts). */
   readonly text: string;
+  /** Where that label sits in the file, so renaming it rewrites those words only. */
   readonly textStart: number;
   readonly textEnd: number;
+  /** The whole comment without its docblock gutters, when it says more than the label. */
+  readonly description?: string;
 }
 export type Entry = VarEntry | CommentEntry;
 
@@ -106,14 +111,18 @@ export function readDeclarations(text: string): Rule[] {
       if (node.type === 'comment') {
         // Where the words are, inside the `/*` and the spacing postcss keeps in
         // raws: a heading in a single-rule file IS this comment, so renaming it
-        // means writing here.
+        // means writing here. The heading is the comment's first sentence, and
+        // its span is that sentence's, so a rename leaves a docblock's other
+        // lines where they are.
         const open = node.source?.start?.offset ?? 0;
-        const textStart = open + 2 + (node.raws?.['left']?.length ?? 0);
+        const bodyStart = open + 2 + (node.raws?.['left']?.length ?? 0);
+        const label = commentLabel(node.text);
         entries.push({
           kind: 'comment',
-          text: node.text.trim(),
-          textStart,
-          textEnd: textStart + node.text.length,
+          text: label.title,
+          textStart: bodyStart + label.titleStart,
+          textEnd: bodyStart + label.titleEnd,
+          ...(label.description === undefined ? {} : { description: label.description }),
         });
         continue;
       }

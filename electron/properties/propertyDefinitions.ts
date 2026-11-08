@@ -10,6 +10,7 @@ import { bindComponentDefault, renamePropertyLocal } from './propertyRename';
 import type { PropertyRename } from './propertyRename';
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
+import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import type { ComponentProperties, ComponentProperty, PropertyChange, PropertyEditing } from '../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { err, ok, type Result } from '../../shared/core/result';
@@ -330,8 +331,8 @@ function readDescription(member: ts.PropertySignature, source: string): string {
 
 function renderDefinition(property: ComponentProperty): string {
   const documentation = property.description.trim();
-  const description = documentation ? `  /** ${documentation.replace(/\*\//g, '* /').replace(/\n/g, '\n   * ')} */\n` : '';
-  return `\n${description}  ${property.readonly ? 'readonly ' : ''}${property.name}` + `${property.required ? '' : '?'}: ${property.type};`;
+  const description = documentation ? `\t/** ${documentation.replace(/\*\//g, '* /').replace(/\n/g, '\n\t * ')} */\n` : '';
+  return `\n${description}\t${property.readonly ? 'readonly ' : ''}${property.name}` + `${property.required ? '' : '?'}: ${property.type};`;
 }
 function saveDefinition(definitions: Definitions, originalName: string, property: ComponentProperty): Result<string> {
   const valid = validatePropertyCode(property.type, property.defaultValue);
@@ -396,7 +397,13 @@ function declarationEdits(
     return ok([]);
   }
   if (definitions.container) {
-    return ok([{ start: definitions.container.end - 1, end: definitions.container.end - 1, text: renderDefinition(property) + '\n' }]);
+    return ok([
+      {
+        start: definitions.container.end - 1,
+        end: definitions.container.end - 1,
+        text: withIndentUnit(renderDefinition(property), indentUnitOf(definitions.document.frontmatter)) + '\n',
+      },
+    ]);
   }
   if (previous === undefined && LOOSE_TYPES.has(property.type.trim()) && !property.description.trim() && !property.required && !property.readonly) {
     // A new prop that states nothing a type would carry needs only its destructure entry.
@@ -410,7 +417,13 @@ function declarationEdits(
   // The new interface lists the props in the order the panel shows them, the saved one in its place.
   const fields =
     previous === undefined ? [...snapshot.properties, property] : snapshot.properties.map((field) => (field.name === originalName ? property : field));
-  return ok([{ start: 0, end: 0, text: `interface Props {${fields.map(renderDefinition).join('')}\n}\n` }]);
+  return ok([
+    {
+      start: 0,
+      end: 0,
+      text: withIndentUnit(`interface Props {${fields.map(renderDefinition).join('')}\n}\n`, indentUnitOf(definitions.document.frontmatter)),
+    },
+  ]);
 }
 
 const LOOSE_TYPES = new Set(['', 'unknown']);
@@ -487,7 +500,7 @@ function reorderDefinitions(definitions: Definitions, names: readonly string[]):
       message: 'Reorder must include every declared property exactly once.',
     });
   }
-  const chunks = new Map(fields.map((field) => [field.name, renderDefinition(field)]));
+  const chunks = new Map(fields.map((field) => [field.name, withIndentUnit(renderDefinition(field), indentUnitOf(definitions.document.frontmatter))]));
   for (const member of definitions.members) {
     const name = propertyKey(member.name);
     assert(name !== undefined, 'Editable property has a name');

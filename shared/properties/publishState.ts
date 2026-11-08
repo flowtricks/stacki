@@ -1,6 +1,7 @@
 import { boolean, count, object, optional, record, text } from '../core/boundary';
 import { assert } from '../core/assert';
 import { parseReviewReceipt, type ReviewReceipt } from './publishReview';
+import type { PublishTarget } from './publishConfig';
 
 export type PublishDestinationState = 'current' | 'pending' | 'unknown' | 'unconfigured';
 
@@ -19,6 +20,48 @@ export const UNKNOWN_PUBLISH_AVAILABILITY: PublishAvailability = {
   github: 'unknown',
   hosting: 'unknown',
 };
+
+/**
+ * What the main Publish half of the split button shows. `current` means the default target has
+ * nothing left to commit, push or deploy, read from the same destination states the menu rows
+ * use, so the button and the rows can never disagree. The button then rests as a neutral,
+ * disabled control while its menu half stays open for settings.
+ */
+export type PublishButtonState = 'ready' | 'current';
+
+export function publishButtonState(availability: PublishAvailability, target: PublishTarget): PublishButtonState {
+  switch (target) {
+    case 'github':
+      return availability.github === 'current' ? 'current' : 'ready';
+    case 'hosting':
+      return availability.hosting === 'current' ? 'current' : 'ready';
+    case 'all':
+      return publishButtonStateAll(availability);
+  }
+}
+
+// Publishing everything skips a destination that is not set up, so an unconfigured host is as
+// finished as a current one; an unknown status is never treated as finished.
+function publishButtonStateAll(availability: PublishAvailability): PublishButtonState {
+  switch (availability.github) {
+    case 'pending':
+    case 'unknown':
+      return 'ready';
+    case 'current':
+      return publishButtonStateHosting(availability.hosting);
+  }
+}
+
+function publishButtonStateHosting(hosting: PublishDestinationState): PublishButtonState {
+  switch (hosting) {
+    case 'current':
+    case 'unconfigured':
+      return 'current';
+    case 'pending':
+    case 'unknown':
+      return 'ready';
+  }
+}
 
 export function parsePublishAvailability(input: unknown): PublishAvailability {
   const value = object({

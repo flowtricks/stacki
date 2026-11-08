@@ -5,18 +5,32 @@ import Popup from '../../ui/Popup';
 import { toolbarOverflow } from './toolbarFit';
 import './toolbarOverflow.css';
 
+// An overflowed action renders its own toolbar control, unchanged, inside the "More" popover:
+// moving into the menu must not change a control's look, grouping or active state.
+// `afterPress` says whether pressing one of its buttons there closes the popover. Controls that
+// open their own popup or take typed input stay, so the popover does not unmount them mid-use.
 export interface ToolbarItem {
   readonly id: string;
   readonly priority: number;
   readonly content: ReactNode;
-  readonly menu: (finish: (action: () => void) => void) => ReactNode;
+  readonly afterPress: 'close' | 'stay';
 }
 
-export function ToolbarOverflow({ items, children }: { readonly items: readonly ToolbarItem[]; readonly children: ReactNode }) {
+// `childrenWidthPxMin` is the room the leading content (the breadcrumb) keeps before any
+// action stays in the toolbar: without it the actions fill the row and squeeze it to nothing.
+export function ToolbarOverflow({
+  items,
+  childrenWidthPxMin,
+  children,
+}: {
+  readonly items: readonly ToolbarItem[];
+  readonly childrenWidthPxMin: number;
+  readonly children: ReactNode;
+}) {
   const toolbar = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const hidden = useToolbarOverflow(toolbar, more, items);
+  const hidden = useToolbarOverflow(toolbar, more, items, childrenWidthPxMin);
   useCloseEmptyOverflow(hidden.length, setOpen);
   return (
     <div className="preview-toolbar" ref={toolbar}>
@@ -59,13 +73,18 @@ export function ToolbarOverflow({ items, children }: { readonly items: readonly 
             items
               .filter((item) => hidden.includes(item.id))
               .map((item) => (
-                <div key={item.id} className="preview-toolbar-menu-item">
-                  {item.menu((action) =>
-                    finish(() => {
-                      setOpen(false);
-                      action();
-                    }),
-                  )}
+                <div
+                  key={item.id}
+                  data-toolbar-item={item.id}
+                  className="preview-toolbar-item"
+                  onClick={(event) => {
+                    // The control's own handler has already run; this only dismisses the menu.
+                    if (item.afterPress === 'close' && pressedButton(event.target)) {
+                      finish(() => setOpen(false));
+                    }
+                  }}
+                >
+                  {item.content}
                 </div>
               ))
           }
@@ -75,7 +94,12 @@ export function ToolbarOverflow({ items, children }: { readonly items: readonly 
   );
 }
 
-function useToolbarOverflow(toolbar: RefObject<HTMLDivElement>, more: RefObject<HTMLButtonElement>, items: readonly ToolbarItem[]): readonly string[] {
+function useToolbarOverflow(
+  toolbar: RefObject<HTMLDivElement>,
+  more: RefObject<HTMLButtonElement>,
+  items: readonly ToolbarItem[],
+  childrenWidthPxMin: number,
+): readonly string[] {
   const [hidden, setHidden] = useState<readonly string[]>([]);
   useLayoutEffect(() => {
     const element = toolbar.current;
@@ -86,7 +110,8 @@ function useToolbarOverflow(toolbar: RefObject<HTMLDivElement>, more: RefObject<
     const controls = Array.from(element.querySelectorAll<HTMLElement>('[data-toolbar-item]'));
     const measure = () => {
       const style = window.getComputedStyle(element);
-      const available = element.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0) - (parseFloat(style.columnGap) || 0);
+      const padding = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+      const available = Math.max(0, element.clientWidth - padding - (parseFloat(style.columnGap) || 0) - childrenWidthPxMin);
       const measurements = items.map((item, index) => ({
         id: item.id,
         priority: item.priority,
@@ -101,18 +126,26 @@ function useToolbarOverflow(toolbar: RefObject<HTMLDivElement>, more: RefObject<
     observer.observe(button);
     controls.forEach((control) => observer.observe(control));
     return () => observer.disconnect();
-  }, [toolbar, more, items]);
+  }, [toolbar, more, items, childrenWidthPxMin]);
   return hidden;
 }
 
+function pressedButton(target: EventTarget): boolean {
+  if (target instanceof Element) {
+    const button = target.closest('button');
+    return button !== null && !button.disabled;
+  }
+  return false;
+}
+
+// The popover hugs its controls and right-aligns under the "More" button, inside the viewport.
 function menuPosition(anchor: HTMLElement) {
   const rect = anchor.getBoundingClientRect();
-  const width = Math.min(280, window.innerWidth - 16);
   return {
     position: 'fixed' as const,
     top: rect.bottom + 6,
-    left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
-    width,
+    right: Math.max(8, window.innerWidth - rect.right),
+    maxWidth: Math.max(80, window.innerWidth - 16),
     maxHeight: Math.max(80, window.innerHeight - rect.bottom - 14),
   };
 }

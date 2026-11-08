@@ -325,8 +325,12 @@ function parseTextMarkBox(input: unknown): TextMarkBox {
 
 function parseSpacing(input: unknown): Spacing {
   const value = record(input);
-  const padding = optional(parseSides)(value['padding']);
-  const margin = optional(parseSides)(value['margin']);
+  const padding = optional(parseSides(nonnegativeFinite))(value['padding']);
+  // A margin can be negative (`calc(-1 * var(--space-8))` pulls a box outward)
+  // and padding cannot. Rejecting a negative margin here threw away the whole
+  // rects message, every outline and band with it, for a value the bands
+  // already clamp to nothing (spacingBands.ts).
+  const margin = optional(parseSides(finite))(value['margin']);
   const gaps = optional(list(parseGap))(value['gaps']);
   const units = optional(dictionary(nonnegativeFinite))(value['units']);
   return {
@@ -337,14 +341,16 @@ function parseSpacing(input: unknown): Spacing {
   };
 }
 
-function parseSides(input: unknown) {
-  const value = record(input);
-  return optionalFields({
-    top: optional(nonnegativeFinite)(value['top']),
-    right: optional(nonnegativeFinite)(value['right']),
-    bottom: optional(nonnegativeFinite)(value['bottom']),
-    left: optional(nonnegativeFinite)(value['left']),
-  });
+function parseSides(side: (input: unknown) => number) {
+  return (input: unknown) => {
+    const value = record(input);
+    return optionalFields({
+      top: optional(side)(value['top']),
+      right: optional(side)(value['right']),
+      bottom: optional(side)(value['bottom']),
+      left: optional(side)(value['left']),
+    });
+  };
 }
 
 function parseGap(input: unknown): Box & { readonly axis: 'row' | 'column' } {

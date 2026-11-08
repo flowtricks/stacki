@@ -230,7 +230,11 @@ const settle = (milliseconds = 0) => new Promise((resolve) => setTimeout(resolve
     );
 
     // Each context sees only the rules written at its place.
-    const model = (list) => ({ base: [], conditional: list.map((rule) => ({ rule, matchedSelectors: [] })), matchedRuleCount: list.length });
+    const model = (list) => ({
+      base: [],
+      conditional: list.map((rule) => ({ rule, matchedSelectors: [{ text: '.a', specificity: [0, 1, 0], pseudoElement: undefined }] })),
+      matchedRuleCount: list.length,
+    });
     const mixed = model([byText(/gap: 1rem/), byText(/\.top/)]);
     const nestedContext = both[2];
     const topContext = both[1];
@@ -245,7 +249,7 @@ const settle = (milliseconds = 0) => new Promise((resolve) => setTimeout(resolve
       'the top-level context sees its own',
     );
     assert.deepEqual([...queryModel.contextKeysWithStyles(mixed)].sort(), [nestedRow, topKey].sort(), 'styles are keyed by place and stylesheet');
-    const infos = queryModel.indexPlacedContexts(mixed, both);
+    const infos = queryModel.indexPlacedContexts(mixed, both, new Map());
     assert.deepEqual(
       infos.map((info) => info.wrapper),
       [undefined, undefined, '.developer_layout'],

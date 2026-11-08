@@ -36,6 +36,9 @@ export interface SenderDeps {
   /** Prompt the canvas after a discrete edit is confirmed on disk. HMR can
    * arrive later; the canvas serializes overlapping patch requests. */
   readonly onAppliedUrgentEdit?: () => void;
+  /** A gesture was refused and will not be written: whatever the canvas showed ahead
+   * of the write (a reorder, electron/preload/frameMove.ts) goes back. */
+  readonly onRefusedGesture?: () => void;
   readonly edit: (request: EditRequest) => Promise<Result<PageEdited, PageEditError>>;
   /** Several requests of one gesture, written at once. */
   readonly editBatch: (request: EditBatchRequest) => Promise<Result<PageEdited, PageEditError>>;
@@ -88,6 +91,7 @@ async function sendGestureEntry(deps: SenderDeps, path: string, entry: Extract<Q
       }
       return { tag: 'sent' };
     case 'refused': {
+      deps.onRefusedGesture?.();
       const now = advanced(origin, sent.replies, entry.gesture);
       if (sent.diskChecksum === now.checksum) {
         // Nothing changed on disk: the gesture itself has no form the engine

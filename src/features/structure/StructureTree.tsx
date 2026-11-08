@@ -27,6 +27,7 @@ import {
 import { defaultCollapsed, navigatorChildren, navigatorHost } from './structureModel';
 import { navigatorHostsDrop } from './navigatorDrop';
 import { isFragmentNode } from '../../editor/liveClasses';
+import { labelsNode } from '../../../shared/page/leadingNote';
 
 export interface StructureTreeContext {
   readonly clientMode?: boolean;
@@ -72,8 +73,6 @@ interface NodeListProps extends StructureTreeContext {
   readonly depth: number;
 }
 
-const ANNOTATABLE = new Set(['element', 'component']);
-
 export function NodeList({ nodes, parentId, depth, ...context }: NodeListProps) {
   const { noteFor, folded } = foldedNotes(nodes);
   return (
@@ -99,7 +98,7 @@ function foldedNotes(nodes: readonly NavigatorNode[]): {
   const folded = new Set<number>();
   for (const [index, node] of nodes.entries()) {
     const next = nodes[index + 1];
-    if (node.kind === 'comment' && next && ANNOTATABLE.has(next.kind)) {
+    if (next !== undefined && labelsNode(node.kind, next.kind)) {
       noteFor.set(index + 1, node);
       folded.add(index);
     }

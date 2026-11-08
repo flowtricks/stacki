@@ -5,6 +5,8 @@
 import type { MatchedRule } from './cascade';
 import { compareSpecificity, selectorListMembers } from './selectors';
 import type { Specificity } from './styleTypes';
+import { indentedRuleHead } from './cssRuleText';
+import { CODE_INDENT_UNIT } from '../../../../shared/core/indent';
 
 export type CssRuleHighlight = {
   readonly from: number;
@@ -44,7 +46,7 @@ function strongestSpecificity(matched: MatchedRule): Specificity {
 }
 
 function indent(depth: number): string {
-  return '  '.repeat(depth);
+  return CODE_INDENT_UNIT.repeat(depth);
 }
 
 function formatRule(matched: MatchedRule): RuleCode {
@@ -58,24 +60,36 @@ function formatRule(matched: MatchedRule): RuleCode {
     length += text.length;
   };
   let depth = 0;
-
-  for (const context of matched.rule.atContext) {
-    append(`${indent(depth)}${context} {\n`);
+  // Shown as written. The resolved `selectorText` is what matching uses, and a
+  // nested rule reads as a different rule when it is printed flat.
+  const written = matched.rule.written;
+  let selectorLine: CssRuleRange | undefined;
+  for (const level of written?.parents ?? matched.rule.atContext) {
+    const line = indentedRuleHead(level, depth);
+    if (!level.startsWith('@')) {
+      selectorLine = { from: length + indent(depth).length, to: length + line.length };
+    }
+    append(`${line} {\n`);
     depth += 1;
   }
-  const selectorIndent = indent(depth);
-  const selectorFrom = length + selectorIndent.length;
-  append(`${selectorIndent}${matched.rule.selectorText} {\n`);
-  selectorLists.push({ from: selectorFrom, to: selectorFrom + matched.rule.selectorText.length });
-  const matchedTexts = new Set(matched.matchedSelectors.map((selector) => selector.text));
-  for (const member of selectorListMembers(matched.rule.selectorText)) {
-    if (!matchedTexts.has(member.text)) {
-      continue;
+  const head = written === undefined ? matched.rule.selectorText : indentedRuleHead(written.head, depth).slice(depth);
+  const headFrom = length + depth;
+  append(`${indent(depth)}${head} {\n`);
+  // A nested query's own declarations have no selector line of their own: they
+  // belong to the selector around the query, and that line is the one to mark.
+  const selectorRange = head.startsWith('@') ? selectorLine : { from: headFrom, to: headFrom + head.length };
+  if (selectorRange !== undefined) {
+    selectorLists.push(selectorRange);
+    const matchedTexts = new Set(matched.matchedSelectors.map((selector) => selector.text));
+    for (const member of selectorListMembers(head)) {
+      if (matchedTexts.has(member.text)) {
+        selectors.push({ from: headFrom + member.from, to: headFrom + member.to });
+      }
     }
-    selectors.push({ from: selectorFrom + member.from, to: selectorFrom + member.to });
-  }
-  if (selectors.length === 0 && matched.matchedSelectors.length > 0) {
-    selectors.push({ from: selectorFrom, to: selectorFrom + matched.rule.selectorText.length });
+    // A nested member is written unresolved, so it is not the text that matched.
+    if (selectors.length === 0 && matched.matchedSelectors.length > 0) {
+      selectors.push(selectorRange);
+    }
   }
   for (const declaration of matched.rule.declarations) {
     const line = `${indent(depth + 1)}${declaration.prop}: ${declaration.value}` + `${declaration.important ? ' !important' : ''};`;

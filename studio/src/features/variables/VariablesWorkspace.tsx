@@ -1,3 +1,4 @@
+import { isMobileEditor } from '../../app/mobileEditor';
 import { useCallback } from 'react';
 import VariablesView from '../../../vendor/stacki/src/features/variables/VariablesView';
 import VariablesPanel from '../../../vendor/stacki/src/features/variables/VariablesPanel';
@@ -29,7 +30,7 @@ export function VariablesWorkspace({ props, document }: { readonly props: Editor
       onDock={() => props.view.setPanel('variables')}
       onClose={() => {
         props.view.setVariable(undefined);
-        if (!window.matchMedia('(max-width: 700px)').matches) {
+        if (!isMobileEditor()) {
           props.view.setPanel(undefined);
         }
       }}
@@ -38,6 +39,10 @@ export function VariablesWorkspace({ props, document }: { readonly props: Editor
     />
   );
 }
-export function VariableNavigation({ view }: { readonly view: EditorProps['view'] }) {
-  return <VariablesPanel project={{ path: 'studio' }} selected={view.variable} onSelect={view.setVariable} />;
+// The open document decides which `<style>` variables the panel lists, as on
+// Desktop: a page's or a component's own only while it is the one open.
+export function VariableNavigation({ view, file }: { readonly view: EditorProps['view']; readonly file: string }) {
+  return (
+    <VariablesPanel project={{ path: 'studio' }} place={{ openFile: file, contextPage: undefined }} selected={view.variable} onSelect={view.setVariable} />
+  );
 }

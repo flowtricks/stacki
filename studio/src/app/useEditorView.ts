@@ -7,7 +7,7 @@ import { onAssetRequest, type AssetRequest } from '../../vendor/stacki/src/ui/as
 import type { PreviewDevice } from '../../vendor/stacki/src/features/preview/PreviewToolbar';
 import type { Panel } from './EditorRail';
 import { usePreviewDimensions } from '../../vendor/stacki/src/features/preview/usePreviewSizing';
-import type { VariableSelection } from '../../vendor/stacki/src/features/variables/variablesBridge';
+import type { VariableSelection } from '../../vendor/stacki/src/ipc/variablesBridge';
 
 // Editor chrome belongs to the app; source document connections switch independently.
 export function useEditorView() {

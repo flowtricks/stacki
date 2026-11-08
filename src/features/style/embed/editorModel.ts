@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { type RuleModel } from '../model/cascade';
 import { snapshotTokens, tokensToSelector } from '../model/elementTokens';
-import { selectorsMatch, stateForSelector, STATES, type MatchedSelector, type StyleContext } from '../model/resolved';
+import { chipLayer, selectorsMatch, stateForSelector, STATES, type MatchedSelector, type PanelLayer, type StyleContext } from '../model/resolved';
 import type { Declaration } from 'postcss';
 import {
   directDecls,
@@ -21,8 +21,7 @@ import {
   parseNestedInput,
   type NestStep,
 } from '../model/css';
-import { canonicalCompound, compareSpecificity } from '../model/selectors';
-import { normalizePseudoElement } from '../model/selectorParse';
+import { canonicalCompound, compareSpecificity, normalizePseudoElement, selectorListLayers, selectorSpecificity } from '../model/selectors';
 import { findNode, getHost, onHostChange, propText, type HostNode } from '../model/host';
 import {
   dedupeByKey,
@@ -41,6 +40,7 @@ import {
 import type { ElementSnapshot, NativeModel, ParsedRule } from '../model/styleTypes';
 import { type ScanState, type PropWrite, EMPTY_RULE_MODEL, type Placeholder, computePlaceholders } from './EditorBasics';
 import { selectorOrder, styledSelectorsFor } from './editorSignatures';
+import { withInstanceChips, writableRegion } from '../model/instanceClasses';
 export {
   BG_REFRESH_THROTTLE_MS,
   sheetSignature,
@@ -178,29 +178,24 @@ export interface ChipInputs {
   tokens: ReturnType<typeof snapshotTokens>;
   classList: string[];
   removedClasses: ReadonlySet<string>;
-  /** The pseudo-element layer picked in the navigator, when one is. */
-  pseudo?: PseudoTarget | undefined;
+  /** Which box the list is for: the element unless a layer is named (usePanelLayer). */
+  pseudo?: PanelLayer | undefined;
+  /** Classes the instance passed to the component open on the canvas, offered as
+   *  chips of their own (model/instanceClasses.ts). Empty outside a component. */
+  instanceClasses?: readonly string[] | undefined;
 }
 
 /** A pseudo-element the navigator shows as a layer of its own. */
 export type PseudoTarget = '::before' | '::after';
 
-/** The chips a pseudo-element layer shows: those styling it, or all with no layer picked. */
-export function pseudoLayerChips(list: readonly MatchedSelector[], pseudo: PseudoTarget | undefined): MatchedSelector[] {
-  if (pseudo === undefined) {
-    return [...list];
-  }
-  const shown = list.filter((entry) => chipPseudoElement(entry.text) === pseudo);
+/**
+ * The chips of one box: a rule styling `::after` is about that box, not the element,
+ * and shows on its navigator row and nowhere else. Bounded by `list`.
+ */
+export function pseudoLayerChips(list: readonly MatchedSelector[], layer: PanelLayer): MatchedSelector[] {
+  const shown = layer === 'every' ? [...list] : list.filter((entry) => chipLayer(entry) === layer);
   assert(shown.length <= list.length, 'pseudoLayerChips: a filter never adds');
   return shown;
-}
-
-// The pseudo-element a chip's selector styles, `::before` for `.a{&::before}`'s
-// display `.a::before`; the empty string for one that styles the element itself.
-// A grouped chip (`.a::before, .a::after`) styles both; it counts as its first.
-function chipPseudoElement(text: string): string {
-  const first = text.split(',')[0] ?? '';
-  return normalizePseudoElement(canonicalCompound(first).pseudoElement);
 }
 
 // Every selector (with styles) that targets the element in the current context, for
@@ -215,24 +210,34 @@ export function chipsFor(inputs: ChipInputs): MatchedSelector[] {
   // element no longer has doesn't any more — drop it now instead of leaving it in
   // the well until the next resolve. Complex selectors are left to that resolve:
   // the class may be an ancestor's, which this can't tell apart.
-  const list = styledSelectorsFor(model, nativeModel, currentContext).filter((entry) => {
+  const styled = styledSelectorsFor(model, nativeModel, currentContext).filter((entry) => {
     if (!removedClasses.size) {
       return true;
     }
     const canon = canonicalCompound(entry.text);
     return !(canon.simple && canon.tokens.some((tok) => removedClasses.has(tok)));
   });
+  // Inside a component opened from an instance, the classes that instance passed
+  // (`column1Class="hero_copy"`) are the element's too: chips of their own, even
+  // before any rule styles them, so they can be picked. Added before the pending
+  // chip, which then never doubles one.
+  const list = withInstanceChips(styled, inputs.instanceClasses ?? []);
   const pending = pendingActiveChip(list, inputs);
   if (pending) {
     list.push(pending);
   }
   // A ::before or ::after layer picked in the navigator is its own target: only
   // the selectors that style that pseudo-element are about it, so the element's
-  // own (`.stat_wrap`) and the other pseudo-element's are left out.
-  const shown = pseudoLayerChips(list, inputs.pseudo);
-  // Order for readability: tag → base class + pseudos → applied combo chain + pseudos
-  // → standalone/global classes → data attributes → complex selectors.
-  return inChipOrder(shown, inputs.classList, { byOrder: true }).map((selector) =>
+  // own (`.stat_wrap`) and the other pseudo-element's are left out. The element's
+  // list likewise leaves out its pseudo-elements'. A pseudo-element selector typed
+  // on the element's row is the exception: it is the target, so its chip stays.
+  const layered = pseudoLayerChips(list, inputs.pseudo ?? '');
+  const typed = list.filter((entry) => chipLayer(entry) !== '' && !layered.includes(entry) && selectorsMatch(entry.text, inputs.activeSelector));
+  const shown = [...layered, ...typed];
+  // The styled tag first, then least specific to most (wellOrder); a tie keeps the
+  // readable order: tag → base class + pseudos → applied combo chain + pseudos →
+  // standalone/global classes → data attributes → complex selectors.
+  return wellOrder(inChipOrder(shown, inputs.classList, { byOrder: true })).map((selector) =>
     // In a query context, show the display with an `@` at the query position;
     // on Base / other contexts show the plain nested display.
     currentContext.embedAtContext && selector.inContext !== false && selector.queryDisplay ? { ...selector, display: selector.queryDisplay } : selector,
@@ -263,7 +268,8 @@ export function pendingActiveChip(
   }
   return {
     text: activeSelector,
-    specificity: [0, 0, 0],
+    // Ranked like any chip in the well (wellOrder), by what its text weighs.
+    specificity: selectorSpecificity(activeSelector),
     state: stateForSelector(activeSelector),
     simple: canon.simple,
     key: `active:${activeSelector}`,
@@ -273,8 +279,57 @@ export function pendingActiveChip(
   };
 }
 
-// Selectors in chip display order (see selectorOrder), then by specificity; with
-// `byOrder`, a selector's own source order breaks the tie before its text does.
+/**
+ * The well's order: the element's tag first when a rule styles it, then every other
+ * chip from least specific to most. Read left to right, the list builds up the way
+ * the cascade does: each chip can override the ones before it, so the chip whose
+ * values win sits last. The tag leads because it names what the element is, the
+ * way the Style header (`h2.heading`) does; an unstyled tag (a pending chip) has no
+ * values to show, so it takes its place by specificity like any other.
+ */
+export function wellOrder<Chip extends Pick<MatchedSelector, 'specificity' | 'text' | 'pending'>>(chips: readonly Chip[]): Chip[] {
+  const sorted = bySpecificity(chips);
+  const tag = sorted.find((chip) => chip.pending !== true && isBareTagSelector(chip.text));
+  const ordered = tag === undefined ? sorted : [tag, ...sorted.filter((chip) => chip !== tag)];
+  assert(ordered.length === chips.length, 'wellOrder: every chip is kept');
+  assert(tag === undefined || ordered[0] === tag, 'wellOrder: a styled tag leads');
+  return ordered;
+}
+
+/** Whether a selector is the element's tag alone (`h2`): no class, attribute or pseudo. */
+export function isBareTagSelector(text: string): boolean {
+  const canon = canonicalCompound(text);
+  if (!canon.oneCompound) {
+    return false;
+  }
+  if (canon.pseudoClasses.length > 0 || canon.pseudoElement !== '' || canon.functional) {
+    return false;
+  }
+  return canon.tokens.length === 1 && (canon.tokens[0] ?? '').startsWith('tag:');
+}
+
+/**
+ * Chips from least specific to most, (a, b, c) compared in turn. The sort is
+ * stable, so chips of equal specificity keep the order they came in (inChipOrder,
+ * which falls back to source order). The well is one list, not groups: global and
+ * inherited chips keep their colour and filter wherever they land.
+ */
+export function bySpecificity<Chip extends Pick<MatchedSelector, 'specificity'>>(chips: readonly Chip[]): Chip[] {
+  const sorted = [...chips].sort((left, right) => compareSpecificity(left.specificity, right.specificity));
+  assert(sorted.length === chips.length, 'bySpecificity: a sort keeps every chip');
+  for (let index = 1; index < sorted.length; index += 1) {
+    const previous = sorted[index - 1];
+    const current = sorted[index];
+    assert(previous !== undefined, 'bySpecificity: the previous chip is in range');
+    assert(current !== undefined, 'bySpecificity: the current chip is in range');
+    assert(compareSpecificity(previous.specificity, current.specificity) <= 0, 'bySpecificity: no chip is weaker than the one before it');
+  }
+  return sorted;
+}
+
+// Selectors in readable order (see selectorOrder), then by specificity; with
+// `byOrder`, a selector's own source order breaks the tie before its text does. The
+// well ranks this list by specificity (wellOrder); this order settles its ties.
 export function inChipOrder(selectors: MatchedSelector[], classList: string[], { byOrder }: { readonly byOrder: boolean }): MatchedSelector[] {
   return selectors
     .map((entry) => ({ s: entry, rank: selectorOrder(entry.text, classList) }))
@@ -353,8 +408,15 @@ export function embedWriteTarget(
     anchor = matched.find(inContext) ?? matched[0];
   }
   const embedDocument = selectedEmbedKey ? documentByKey.get(selectedEmbedKey) : anchor ? documentByKey.get(anchor.embedKey) : [...documentByKey.values()][0];
+  // With no rule of its own to join, a new rule goes into the first global
+  // block of the source (see writableRegion), because a scoped block would hash
+  // the selector away from the element it was written for.
   const region =
-    anchor && embedDocument && anchor.embedKey === embedDocument.source.key ? embedDocument.regions[anchor.regionIndex] : embedDocument?.regions[0];
+    anchor && embedDocument && anchor.embedKey === embedDocument.source.key
+      ? embedDocument.regions[anchor.regionIndex]
+      : embedDocument === undefined
+        ? undefined
+        : writableRegion(embedDocument.regions);
   return embedDocument && region ? { embedDocument, region } : undefined;
 }
 
@@ -459,6 +521,8 @@ export function unselectedScanState(content: Content, rememberedPageEmbedCount: 
     rememberedPageEmbedCount: content.scan.inComponentContext ? rememberedPageEmbedCount : 0,
     errors: content.errors,
     inComponentContext: content.scan.inComponentContext,
+    // No element, so no selectors on their way: nothing to hold for.
+    settled: true,
   };
 }
 
@@ -466,10 +530,10 @@ export function unselectedScanState(content: Content, rememberedPageEmbedCount: 
 // (inside a component only), and the scan's counts.
 export function scanStateFor(
   content: Content,
-  resolvedElement: { rootSnapshot: ElementSnapshot; model: RuleModel },
+  resolvedElement: { rootSnapshot: ElementSnapshot; model: RuleModel; settled: boolean },
   rememberedPageEmbedCount: number,
 ): ScanState {
-  const { rootSnapshot, model } = resolvedElement;
+  const { rootSnapshot, model, settled } = resolvedElement;
   return {
     rootSnapshot,
     model,
@@ -479,6 +543,7 @@ export function scanStateFor(
     rememberedPageEmbedCount: content.scan.inComponentContext ? rememberedPageEmbedCount : 0,
     errors: content.errors,
     inComponentContext: content.scan.inComponentContext,
+    settled,
   };
 }
 
@@ -765,7 +830,38 @@ export function usePseudoTarget(): PseudoTarget | undefined {
   return target;
 }
 
-function readPseudoTarget(): PseudoTarget | undefined {
+/**
+ * The box the panel lists: the picked layer, the element, or every box on a host
+ * with no pseudo-element rows, where a chip is the only way to reach their rules.
+ */
+export function usePanelLayer(): PanelLayer {
+  const [layer, setLayer] = useState(readPanelLayer);
+  useEffect(() => onHostChange(() => setLayer(readPanelLayer())), []);
+  return layer;
+}
+
+/** usePanelLayer, for a callback that runs outside render. */
+export function readPanelLayer(): PanelLayer {
+  if (!getHost().pseudoRows) {
+    return 'every';
+  }
+  return readPseudoTarget() ?? '';
+}
+
+/**
+ * Whether `activeSelector` is not yet the picked layer's. A navigator row picks its
+ * selector once the panel's scan is of that element, and until then the active
+ * selector is still the element's: a write now would land on the element while the
+ * panel shows the pseudo-element. A selector naming any pseudo-element was picked.
+ */
+export function pseudoPickPending(activeSelector: string): boolean {
+  if (readPseudoTarget() === undefined) {
+    return false;
+  }
+  return selectorListLayers(activeSelector).every((layer) => layer === '');
+}
+
+export function readPseudoTarget(): PseudoTarget | undefined {
   const host = getHost();
   const request = host.pseudoRequest;
   if (request === undefined) {
@@ -806,10 +902,12 @@ export function pseudoPickFor(
 // element: the cascade files pseudo-element rules with the conditional ones
 // (cascade.ts classifyHit), so both lists are searched. A rule inside an
 // at-rule is left out: it styles the pseudo-element only in that query.
-// Specificity decides, then source order, as the cascade does.
+// A selector with no pseudo-class beats one with: `&:hover::after` and
+// `:open > &::after` are variants of `&::after`, which is the row's own rule.
+// Then specificity decides, then source order, as the cascade does.
 function strongestPseudoSelector(model: RuleModel, wanted: string): string | undefined {
   assert(wanted.startsWith('::'), 'strongestPseudoSelector: a pseudo-element is named with ::');
-  let strongest: { readonly text: string; readonly specificity: MatchedSelector['specificity']; readonly order: number } | undefined;
+  let strongest: { readonly text: string; readonly specificity: MatchedSelector['specificity']; readonly order: number; readonly variant: boolean } | undefined;
   for (const matched of [...model.base, ...model.conditional]) {
     if (matched.rule.atContext.length > 0) {
       continue;
@@ -818,17 +916,26 @@ function strongestPseudoSelector(model: RuleModel, wanted: string): string | und
       if (normalizePseudoElement(selector.pseudoElement) !== wanted) {
         continue;
       }
-      const stronger =
-        strongest === undefined ||
-        compareSpecificity(selector.specificity, strongest.specificity) > 0 ||
-        (compareSpecificity(selector.specificity, strongest.specificity) === 0 && matched.rule.order >= strongest.order);
-      if (stronger) {
-        strongest = { text: selector.text, specificity: selector.specificity, order: matched.rule.order };
+      const candidate = { text: selector.text, specificity: selector.specificity, order: matched.rule.order, variant: selector.hasPseudoClass };
+      if (strongest === undefined || outranks(candidate, strongest)) {
+        strongest = candidate;
       }
     }
   }
-  assert(strongest === undefined || strongest.text.includes(wanted.slice(1)), 'strongestPseudoSelector: the pick names its pseudo-element');
+  assert(strongest === undefined || strongest.text.toLowerCase().includes(wanted.slice(1)), 'strongestPseudoSelector: the pick names its pseudo-element');
   return strongest?.text;
+}
+
+// Whether `candidate` is the better pick for a pseudo-element row (strongestPseudoSelector).
+function outranks(
+  candidate: { readonly specificity: MatchedSelector['specificity']; readonly order: number; readonly variant: boolean },
+  held: { readonly specificity: MatchedSelector['specificity']; readonly order: number; readonly variant: boolean },
+): boolean {
+  if (candidate.variant !== held.variant) {
+    return held.variant;
+  }
+  const specificity = compareSpecificity(candidate.specificity, held.specificity);
+  return specificity === 0 ? candidate.order >= held.order : specificity > 0;
 }
 
 // Whether a snapshot is of `node`: the same tag, and every class its source writes.

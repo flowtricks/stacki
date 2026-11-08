@@ -448,7 +448,7 @@ export const IPC_PAYLOADS = {
   'style:listAstroStyles': pathText,
   'style:listFiles': pathText,
   'style:readFile': pathText,
-  'style:writeFile': object({ filePath: pathText, css: text }),
+  'style:writeFile': object({ filePath: pathText, css: text, announce: maybeFlag }),
   'style:selectorUsage': object({ ...project, packages: optional(packageSearch) }),
   'style:removeSelectors': object({ ...project, ids: parseSelectorIds, files: parseSelectorFileDigests }),
   'style:restoreSelectors': object({ ...project, changes: parseSelectorFileChanges, to: restoreDirection }),

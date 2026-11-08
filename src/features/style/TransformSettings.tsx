@@ -13,6 +13,8 @@ import { parseOrigin, serializeOrigin, type Origin } from './model/transformSett
 import type { ResolvedProp } from './model/resolved';
 import { displayOf } from './model/styleDisplay';
 import ImportantMark from './components/ImportantMark';
+import { useLengthUnit } from './model/lengthUnit';
+import { formatPxLength, lengthUnitName, pxPerLengthUnit, type LengthUnit, type LengthUnitName } from '../../../shared/properties/lengthUnit';
 
 // The settings behind the transform list, opened from the ⋯ beside its +: where a
 // transform pivots, whether a turned element shows its back, and the two
@@ -44,9 +46,15 @@ const effectiveValue = (read: Read, prop: string): string => {
   return (resolved.source === 'selected' && resolved.selectedValue ? resolved.selectedValue.value : resolved.winner.value).trim();
 };
 
-const pxNumber = (value: string): number | undefined => {
-  const match = value.trim().match(/^(-?\d*\.?\d+)\s*px$/i);
-  return match ? parseFloat(match[1] ?? '') : undefined;
+// A px or rem distance in px (rem at the project's root font size), so the
+// slider sits right whichever unit the project writes.
+const pxNumber = (value: string, lengthUnit: LengthUnit): number | undefined => {
+  const match = value.trim().match(/^(-?\d*\.?\d+)\s*(px|rem)$/i);
+  if (!match) {
+    return undefined;
+  }
+  const perUnit = pxPerLengthUnit(match[2] ?? '', lengthUnit);
+  return perUnit === undefined ? undefined : parseFloat(match[1] ?? '') * perUnit;
 };
 
 /** A section heading, with the properties it writes on hover. */
@@ -166,7 +174,9 @@ function DistanceRow({
 }) {
   // Undefined for a var()/calc(): the slider has no number to sit at, so it
   // disables while the field stays editable.
-  const distancePx = pxNumber(value);
+  const lengthUnit = useLengthUnit();
+  const distancePx = pxNumber(value, lengthUnit);
+  const written = (amountPx: number): string => formatPxLength(amountPx, lengthUnit);
   const [draft, setDraft] = useState(value || '0');
   const focused = useRef(false);
   useEffect(() => {
@@ -186,11 +196,11 @@ function DistanceRow({
           ariaLabel={ariaLabel}
           onPreview={(amount) => {
             if (!focused.current) {
-              setDraft(`${amount}px`);
+              setDraft(written(amount));
             }
           }}
-          onInput={(amount) => onLive(`${amount}px`)}
-          onCommit={(amount) => onCommit(amount === 0 ? '' : `${amount}px`)}
+          onInput={(amount) => onLive(written(amount))}
+          onCommit={(amount) => onCommit(amount === 0 ? '' : written(amount))}
         />
         {/* Connected like every other single-value field, so a var() distance
             reads as a chip and the dot can pick or swap one. */}
@@ -215,7 +225,7 @@ function DistanceRow({
             }}
             onBlur={() => {
               focused.current = false;
-              onCommit(distanceText(draft));
+              onCommit(distanceText(draft, lengthUnitName(lengthUnit)));
             }}
             onKeyDown={(event) => {
               const stepped = stepDistanceKey(event);
@@ -225,20 +235,21 @@ function DistanceRow({
             }}
           />
         </VariableConnect>
-        <span className="embed-editor_tsettings-unit">PX</span>
+        <span className="embed-editor_tsettings-unit">{lengthUnitName(lengthUnit).toUpperCase()}</span>
       </div>
     </div>
   );
 }
 
 // The typed distance as written: blank or zero clears, a value with its own unit
-// (or a var()/calc()) passes through, and a bare number is read as px.
-function distanceText(draft: string): string {
+// (or a var()/calc()) passes through, and a bare number is read in the unit the
+// field shows (px, or rem in a rem project).
+function distanceText(draft: string, unit: LengthUnitName): string {
   const trimmed = draft.trim();
-  if (!trimmed || /^0(?:px)?$/i.test(trimmed)) {
+  if (!trimmed || /^0(?:px|rem)?$/i.test(trimmed)) {
     return '';
   }
-  return /[a-z%)]$/i.test(trimmed) ? trimmed : `${trimmed}px`;
+  return /[a-z%)]$/i.test(trimmed) ? trimmed : `${trimmed}${unit}`;
 }
 
 // Enter commits in place; an arrow key steps the number under the caret and

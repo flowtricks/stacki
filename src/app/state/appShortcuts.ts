@@ -34,6 +34,7 @@ import {
   runNativeEdit,
 } from '../../ipc/appBridge';
 import { newId, routeToPath } from '../model/nodeFactory';
+import { previewNeedsPath, previewPageFor } from '../model/previewPage';
 import { astroAssetGesture, insertedNode } from '../model/pageGestures';
 import { type AppKeys, handleAppKeyDown, copySelectionTrail, inEditable, type MenuEdits, menuCopy, menuPaste } from '../model/appKeys';
 import { useCoreState } from './appLifecycle';
@@ -299,48 +300,59 @@ export function useMenuShortcuts(
 
 // The interactive preview mode.
 export function useInteractivePreview(coreState: ReturnType<typeof useCoreState>, navigation: ReturnType<typeof useNavigation>) {
-  const { devUrl, inPreviewRef, livePathRef, pageStateRef, previewIframeRef } = coreState;
-  const { previewPathRef, scan, setInPreview, setPreviewSource, trailingSlash } = coreState;
+  const { devUrl, inPreview, inPreviewRef, livePathRef, pageStateRef, previewIframeRef } = coreState;
+  const { currentPage, previewPathRef, scan, setInPreview, setPreviewSource, trailingSlash } = coreState;
   const { selectPage } = navigation;
 
   // ----------------------------------------------------------------
-  // Interactive preview mode — browse the site inside the app; on exit,
-  // the editor follows whichever page was navigated to.
+  // Interactive preview mode — browse the site inside the app. The page
+  // switcher and the preview drive each other (previewPage.ts): a page
+  // picked while previewing loads in the preview, and a link followed in
+  // the preview opens its page in the editor, preview mode staying on.
   // ----------------------------------------------------------------
+
+  // Whatever the canvas is showing — which for a dynamic page is one entry's
+  // URL, not its pattern. Opening /blog/[...id] asks the dev server for a
+  // route no page produces, and it answers with the site's 404, while the
+  // URL field (built from the same entry) went on claiming otherwise.
+  const canvasPath = useCallback(
+    () => livePathRef.current || routeToPath(pageStateRef.current.currentPage?.route || '/', trailingSlash),
+    [livePathRef, pageStateRef, trailingSlash],
+  );
 
   const enterPreview = useCallback(() => {
     if (!devUrl) {
       return;
     }
-    // Whatever the canvas is showing — which for a dynamic page is one entry's
-    // URL, not its pattern. Opening /blog/[...id] asks the dev server for a
-    // route no page produces, and it answers with the site's 404, while the
-    // URL field (built from the same entry) went on claiming otherwise.
-    const path = livePathRef.current || routeToPath(pageStateRef.current.currentPage?.route || '/', trailingSlash);
+    const path = canvasPath();
     previewPathRef.current = path;
     setPreviewSource(devUrl + path);
     setInPreview(true);
-  }, [devUrl, trailingSlash, livePathRef, pageStateRef, previewPathRef, setInPreview, setPreviewSource]);
+  }, [devUrl, canvasPath, previewPathRef, setInPreview, setPreviewSource]);
 
+  // The editor already follows the preview's page as it goes, so leaving only closes it.
   const exitPreview = useCallback(() => {
     setInPreview(false);
-    const raw = previewPathRef.current;
-    if (!raw) {
+  }, [setInPreview]);
+
+  // The switcher drives the preview: a page opened while previewing loads in it,
+  // unless the preview is already there (it opened the page itself, below).
+  const openPath = currentPage?.path;
+  useEffect(() => {
+    if (!inPreview || !devUrl) {
       return;
     }
-    let path = raw.split('?')[0]?.split('#')[0] ?? '';
-    if (path.length > 1 && path.endsWith('/')) {
-      path = path.slice(0, -1);
+    const path = canvasPath();
+    if (previewNeedsPath(previewPathRef.current, path)) {
+      previewPathRef.current = path;
+      setPreviewSource(devUrl + path);
     }
-    const page = scan.pages.find((pg) => pg.route === (path || '/'));
-    if (page && page.path !== pageStateRef.current.currentPage?.path) {
-      // Opening a page reports its own failures.
-      void selectPage(page);
-    }
-  }, [scan.pages, selectPage, pageStateRef, previewPathRef, setInPreview]);
+  }, [inPreview, devUrl, openPath, canvasPath, previewPathRef, setPreviewSource]);
 
-  // Track navigation inside the preview iframe (the preload posts
-  // avb:navigated from every loaded frame).
+  // The preview drives the switcher: the preload posts avb:navigated from every
+  // loaded frame and after each client-side navigation, and the page it names opens.
+  const follow = useRef({ pages: scan.pages, selectPage, pageStateRef });
+  follow.current = { pages: scan.pages, selectPage, pageStateRef };
   useEffect(() => {
     const onMessage = (event: MessageEvent<unknown>): void => {
       const message = toRecord(event.data);
@@ -348,11 +360,19 @@ export function useInteractivePreview(coreState: ReturnType<typeof useCoreState>
         return;
       }
       const ifr = previewIframeRef.current;
-      if (ifr && event.source === ifr.contentWindow) {
-        const path = message['path'];
-        if (typeof path === 'string') {
-          previewPathRef.current = path;
-        }
+      if (!ifr || event.source !== ifr.contentWindow) {
+        return;
+      }
+      const path = message['path'];
+      if (typeof path !== 'string' || !path.startsWith('/')) {
+        return;
+      }
+      previewPathRef.current = path;
+      const { pages, selectPage: open, pageStateRef: state } = follow.current;
+      const page = previewPageFor(pages, path);
+      if (page && page.path !== state.current.currentPage?.path) {
+        // Opening a page reports its own failures.
+        void open(page);
       }
     };
     window.addEventListener('message', onMessage);

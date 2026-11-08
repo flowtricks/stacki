@@ -366,15 +366,116 @@ export async function loadEmbedDocs(
   return { docs, errors };
 }
 
-// Counts the panel's writes. A stylesheet read that started before a write can
-// finish after it, holding the file as it was: whoever stores a read compares
-// this before and after, and reads again rather than putting the old CSS back.
+// Counts the panel's write activity: one when a write starts, one when it settles.
+// A stylesheet read that overlaps either can hold the file as it was before the
+// write: whoever stores a read compares this before and after, and reads again
+// rather than putting the old CSS back.
 let embedWriteCount = 0;
 
-/** How many writes the panel has started — compare across a read to know
- *  whether one landed while it was in flight. */
+/** How much write activity the panel has had — compare across a read to know
+ *  whether a write started or landed while it was in flight. */
 export function embedWritesStarted(): number {
   return embedWriteCount;
+}
+
+export type EmbedWriteResult = { ok: true; code: string } | { ok: false; error: string };
+
+// One file's writes, in order. Studio and the demo check each write against the
+// version it was made from (its `base`), so a write may only start once the one
+// before it has been acknowledged: a drag that sent a second write while the first
+// was in flight sent the original text as its base, and the guard refused our own
+// edit as "This file changed". At most one write runs and at most one waits; a
+// waiting write serializes the document when it starts, so every edit made while
+// it waited rides along in it, and a burst of ticks costs two writes, not one each.
+type FileWriteLane = {
+  /** Settles when the last queued task has finished. Never rejects. */
+  tail: Promise<void>;
+  /** The flush queued behind the running task, not started yet. */
+  waiting: { readonly embedDocument: EmbedDocument; readonly result: Promise<EmbedWriteResult> } | undefined;
+};
+
+// Lanes are per file path, so two documents over one file still write in turn.
+// Bounded by the files the panel edits; a lane is dropped once its tail is idle.
+const fileWriteLanes = new Map<string, FileWriteLane>();
+const FILE_WRITE_LANES_MAX = 1_000;
+
+function fileWriteLane(path: string): FileWriteLane {
+  const existing = fileWriteLanes.get(path);
+  if (existing !== undefined) {
+    return existing;
+  }
+  assert(fileWriteLanes.size < FILE_WRITE_LANES_MAX, 'fileWriteLane: one lane per edited file');
+  const lane: FileWriteLane = { tail: Promise.resolve(), waiting: undefined };
+  fileWriteLanes.set(path, lane);
+  return lane;
+}
+
+// Runs `task` after everything already queued on `path`'s lane.
+function queueOnLane<T>(path: string, task: () => Promise<T>): Promise<T> {
+  const lane = fileWriteLane(path);
+  const run = lane.tail.then(task);
+  const tail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  lane.tail = tail;
+  void tail.then(() => {
+    if (lane.tail === tail) {
+      assert(lane.waiting === undefined, 'queueOnLane: an idle lane has nothing waiting');
+      fileWriteLanes.delete(path);
+    }
+  });
+  return run;
+}
+
+// Queues one write of `embedDocument`'s current regions, or joins the one already
+// waiting for this document: it has not serialized yet, so it will carry this edit.
+function queueFileWrite(embedDocument: EmbedDocument, path: string): Promise<EmbedWriteResult> {
+  const lane = fileWriteLane(path);
+  if (lane.waiting !== undefined && lane.waiting.embedDocument === embedDocument) {
+    return lane.waiting.result;
+  }
+  const result = queueOnLane(path, () => {
+    // Serializing starts now: an edit after this point needs a write of its own.
+    if (lane.waiting?.result === result) {
+      lane.waiting = undefined;
+    }
+    return writeFileNow(embedDocument, path);
+  });
+  lane.waiting = { embedDocument, result };
+  return result;
+}
+
+// The one place a stylesheet write is sent. The lane guarantees nothing else is in
+// flight for this file, so the document's code is what the file holds — the base.
+async function writeFileNow(embedDocument: EmbedDocument, path: string): Promise<EmbedWriteResult> {
+  const code = serializeDocument(embedDocument);
+  // What the file held before this write — the undo target, and the version the
+  // host checks the write against.
+  const before = embedDocument.code;
+  try {
+    if (before !== code) {
+      await styleTransport.writeStyleFile({ filePath: path, css: code, base: before });
+      // A <style> node's write goes through the page model, which the app
+      // already snapshots — only stylesheets need their own history entry.
+      getHost().recordUndo?.({
+        label: `styles in ${embedDocument.source.label}`,
+        // One step per file per burst: a slider drag writes on every tick.
+        coalesceKey: `css:${path}`,
+        undo: () => writeStyleFileAndReload(embedDocument, path, before),
+        redo: () => writeStyleFileAndReload(embedDocument, path, code),
+      });
+    }
+    embedDocument.recordWritten(code);
+    assert(embedDocument.code === code, 'writeFileNow: the document holds what was written');
+    return { ok: true, code };
+  } catch (error: unknown) {
+    // An empty message says nothing, so it falls back to the thrown value itself.
+    const message = error instanceof Error ? error.message : '';
+    return { ok: false, error: message || String(error) };
+  } finally {
+    embedWriteCount += 1;
+  }
 }
 
 export async function writeEmbedDocument(
@@ -383,48 +484,31 @@ export async function writeEmbedDocument(
    *  ones around it instead of saving the page per tick. A committed edit saves at once,
    *  so the canvas doesn't wait out a typing debounce for a single click. */
   live = false,
-): Promise<{ ok: true; code: string } | { ok: false; error: string }> {
+): Promise<EmbedWriteResult> {
   embedWriteCount += 1;
+  const origin = embedDocument.source.origin;
+  if (origin.kind === 'file' || origin.kind === 'astro') {
+    return queueFileWrite(embedDocument, origin.path);
+  }
   const code = serializeDocument(embedDocument);
-  // What the file held before this write — the undo target, captured before
-  // doc.code is advanced below.
-  const before = embedDocument.code;
+  const write = getHost().writeStyleNode;
+  if (!write) {
+    return { ok: false, error: 'No page open to write into.' };
+  }
+  // A <style> block belonging to the page, while a component is open: there
+  // is no such node in the model being edited. The write used to find
+  // nothing and quietly do nothing, leaving the panel to report a save the
+  // canvas would never show.
   try {
-    if (embedDocument.source.origin.kind === 'file' || embedDocument.source.origin.kind === 'astro') {
-      const { path } = embedDocument.source.origin;
-      await styleTransport.writeStyleFile({ filePath: path, css: code, base: before });
-      // A <style> node's write goes through the page model, which the app
-      // already snapshots — only stylesheets need their own history entry.
-      if (before !== code) {
-        getHost().recordUndo?.({
-          label: `styles in ${embedDocument.source.label}`,
-          // One step per file per burst: a slider drag writes on every tick.
-          coalesceKey: `css:${path}`,
-          undo: () => writeStyleFileAndReload(embedDocument, path, before),
-          redo: () => writeStyleFileAndReload(embedDocument, path, code),
-        });
-      }
-    } else {
-      const write = getHost().writeStyleNode;
-      if (!write) {
-        return { ok: false, error: 'No page open to write into.' };
-      }
-      // A <style> block belonging to the page, while a component is open: there
-      // is no such node in the model being edited. The write used to find
-      // nothing and quietly do nothing, leaving the panel to report a save the
-      // canvas would never show.
-      const { nodeId, filePath } = embedDocument.source.origin;
-      if (write({ nodeId, filePath }, code, !live) === false) {
-        return { ok: false, error: "Couldn't find that <style> block in the open file." };
-      }
+    if (write({ nodeId: origin.nodeId, filePath: origin.filePath }, code, !live) === false) {
+      return { ok: false, error: "Couldn't find that <style> block in the open file." };
     }
-    embedDocument.recordWritten(code);
-    return { ok: true, code };
   } catch (error: unknown) {
-    // An empty message says nothing, so it falls back to the thrown value itself.
     const message = error instanceof Error ? error.message : '';
     return { ok: false, error: message || String(error) };
   }
+  embedDocument.recordWritten(code);
+  return { ok: true, code };
 }
 
 // Undo/redo rewrites a stylesheet behind the panel's back, so the doc it will
@@ -440,7 +524,14 @@ export function onDocsReloaded(listener: () => void): () => void {
 
 async function writeStyleFileAndReload(embedDocument: EmbedDocument, path: string, text: string): Promise<void> {
   embedWriteCount += 1;
-  await styleTransport.writeStyleFile({ filePath: path, css: text, base: embedDocument.code });
+  // Behind any write still in flight for this file, so its base is what the file holds.
+  await queueOnLane(path, async () => {
+    try {
+      await styleTransport.writeStyleFile({ filePath: path, css: text, base: embedDocument.code });
+    } finally {
+      embedWriteCount += 1;
+    }
+  });
   // Re-derive the doc from what the file now holds, the same way it was first
   // read — for a component file that means re-splitting its markup, not
   // treating the whole file as one region of CSS.

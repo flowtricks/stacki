@@ -1,8 +1,9 @@
 // A source text region is authoritative. A fallback may ignore animation wrappers,
 // but never an authored child element, duplicate text, or changed rendered words.
-import type { CanvasTextTarget } from '../../shared/properties/canvasText';
+import { CANVAS_TEXT_LIMIT, type CanvasTextCatalog, type CanvasTextTarget } from '../../shared/properties/canvasText';
 import { assert } from '../../shared/core/assert';
 import { elementsWithPath, pathsOf, runsOf } from './frameRegions';
+import { textEditorRoot } from './frameTextSelection';
 
 export interface TextMatch {
   readonly nodes: readonly Text[];
@@ -174,4 +175,87 @@ export function canvasTextRect(match: TextMatch): DOMRect | undefined {
   range.setStartBefore(first);
   range.setEndAfter(last);
   return range.getBoundingClientRect();
+}
+
+// One heading can hold several source texts: `Messaging with<br />actual wings.`
+// is two, and a drag across the break selects from both. The editor therefore
+// knows the literal texts beside the opened one, so such a selection can be
+// replaced as one edit. An element with words in it is authored content, and a
+// selection may never replace it: its words end the list, as any others do.
+export interface TextRun {
+  readonly target: CanvasTextTarget;
+  readonly match: TextMatch;
+}
+
+// Text nodes read inside one editor, matching the buffer's structure bound.
+const RUN_NODES_MAX = 1_000;
+const ANCESTORS_MAX = 32;
+
+/**
+ * The opened run and its neighbours, in document order: literal texts of the
+ * same element. Any other words end the list, be they a child's, a shared
+ * variable's or a component's, so a selection reaching them falls outside the
+ * editor and typing over it is refused.
+ */
+export function textRunsAround(catalog: CanvasTextCatalog, opened: TextRun): readonly TextRun[] {
+  const root = textEditorRoot(opened.match);
+  if (!root || opened.target.literal !== true) {
+    return [opened];
+  }
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const claimed = new Set<Node>();
+  let runs: TextRun[] = [];
+  let found = false;
+  let node = walker.nextNode();
+  for (let count = 0; node; count++) {
+    if (count >= RUN_NODES_MAX) {
+      return [opened];
+    }
+    if (!claimed.has(node)) {
+      const run = node instanceof Text && opened.match.nodes.includes(node) ? opened : neighbourRun(catalog, opened, node);
+      if (run) {
+        found ||= run === opened;
+        runs.push(run);
+        run.match.nodes.forEach((text) => claimed.add(text));
+      } else if (node.textContent?.trim()) {
+        if (found) {
+          break;
+        }
+        runs = [];
+      }
+    }
+    node = walker.nextNode();
+  }
+  assert(runs.includes(opened), 'The opened run is among its neighbours');
+  // The buffer bounds all of its words: too many and the opened run stays alone.
+  return runs.flatMap((run) => run.match.nodes).reduce((total, text) => total + text.length, 0) <= CANVAS_TEXT_LIMIT ? runs : [opened];
+}
+
+function neighbourRun(catalog: CanvasTextCatalog, opened: TextRun, node: Node): TextRun | undefined {
+  const element = node.parentElement;
+  if (!element || !(node instanceof Text)) {
+    return undefined;
+  }
+  const around = pathsAround(element);
+  for (const target of catalog.targets) {
+    if (target.literal === true && target.key !== opened.target.key && target.parent === opened.target.parent) {
+      if (target.scope === undefined || around.has(target.scope)) {
+        const match = matchCanvasText(target, element);
+        if (match?.nodes.includes(node)) {
+          return { target, match };
+        }
+      }
+    }
+  }
+  return undefined;
+}
+
+function pathsAround(element: Element): ReadonlySet<string> {
+  const paths = new Set<string>();
+  let current: Element | undefined = element;
+  for (let depth = 0; current && depth < ANCESTORS_MAX; depth++) {
+    pathsOf(current).forEach((path) => paths.add(path));
+    current = current.parentElement ?? undefined;
+  }
+  return paths;
 }

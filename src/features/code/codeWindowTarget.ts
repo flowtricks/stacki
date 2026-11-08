@@ -1,5 +1,6 @@
 import { assert } from '../../../shared/core/assert';
 import type { EditorNode } from '../../editor/pageView';
+import type { CodeExtent } from '../../ui/codeIndentView';
 
 export interface CodeWindowState {
   readonly kind?: 'file';
@@ -8,6 +9,8 @@ export interface CodeWindowState {
   readonly rel?: string;
   readonly title: string;
   readonly language: string;
+  /** How the editor shows it: the inside of a tag is a block, anything else a document. */
+  readonly indentation?: CodeExtent;
   readonly revealLine?: number;
 }
 
@@ -35,7 +38,7 @@ export function codeWindowFor(subject: CodeSubject): CodeWindowState | undefined
     // so `<STYLE>` arrives here as "STYLE".
     const language = RAW_CODE_LANGUAGES[subject.name.toLowerCase()];
     assert(language !== undefined, `raw node <${subject.name}> has no code language`);
-    return { targetId: subject.id, title: `<${subject.name}>`, language };
+    return { targetId: subject.id, title: `<${subject.name}>`, language, indentation: 'block' };
   }
   return undefined;
 }

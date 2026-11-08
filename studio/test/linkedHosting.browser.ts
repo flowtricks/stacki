@@ -38,7 +38,7 @@ try {
   await deploy.waitFor();
   assert.equal(await page.locator('.publish-settings').count(), 0);
   await deploy.click();
-  await page.getByText('Building website', { exact: true }).waitFor();
+  await page.getByText('Building website…', { exact: true }).waitFor();
   assert.equal(await page.locator('.publish-settings').count(), 0);
   assert.equal(fixture.publisher.state.kind, 'building');
   const config = parsePublishSource((await readMetadataSource(fixture.root, 'publish')).source);

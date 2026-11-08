@@ -8,6 +8,7 @@
 
 import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
+import { PX_LENGTHS, type LengthUnit } from '../../../../shared/properties/lengthUnit';
 import type { ClassPlacement } from '../../../editor/classAttr';
 
 type HostAttr = { readonly type: string; readonly value?: string };
@@ -136,6 +137,14 @@ export type HostState = {
    * picking it again a new request.
    */
   pseudoRequest: PseudoRequest | undefined;
+  /** Whether the navigator lists ::before and ::after as rows of their own. Where
+   *  it does, their rules show on those rows and not in the element's list. Studio's
+   *  navigator has none, so its selector list stays the way to reach them. */
+  pseudoRows: boolean;
+  /** What the panel writes lengths in: rem in a Lumos project, px elsewhere.
+   *  One project-level setting from the scan (shared/properties/lengthUnit.ts),
+   *  read through model/lengthUnit.ts so no control decides it for itself. */
+  lengthUnit: LengthUnit;
 };
 
 export type PseudoRequest = { readonly nodeId: string; readonly pseudo: 'before' | 'after'; readonly serial: number };
@@ -170,6 +179,8 @@ const state: HostState = {
   removeClass: undefined,
   removeAttribute: undefined,
   pseudoRequest: undefined,
+  pseudoRows: false,
+  lengthUnit: PX_LENGTHS,
   onSpacingHover: undefined,
 };
 

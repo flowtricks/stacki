@@ -89,11 +89,38 @@ function escapeHtml(text: string): string {
 }
 
 /** The value as coloured HTML. `plain` runs stay bare text so the markup — and
- *  the DOM the caret walks — is no deeper than it needs to be. */
+ *  the DOM the caret walks — is no deeper than it needs to be, except for their
+ *  whitespace (see plainHtml). */
 export function highlightCss(value: string): string {
   return cssTokens(value)
-    .map((token) => (token.kind === 'plain' ? escapeHtml(token.text) : `<span class="cx-${token.kind}">${escapeHtml(token.text)}</span>`))
+    .map((token) => (token.kind === 'plain' ? plainHtml(token.text) : `<span class="cx-${token.kind}">${escapeHtml(token.text)}</span>`))
     .join('');
+}
+
+// Whitespace in a coloured value is wrapped in an element of its own.
+//
+// The single-line field is a flex container, so every bare text run between two
+// coloured spans becomes an anonymous flex item, and a flex item trims the
+// whitespace at its edges and drops a run that is only whitespace. Painted bare,
+// `rgb(255 255 255 / 0.09)` read `rgb(255255255/0.09)` and `in lab, x` read
+// `inlab,x`: still the right text in the DOM, but the wrong value on screen. A
+// `.cx-space` element is a flex item whose `white-space: pre` keeps its width,
+// and its text node is still where the caret and the serializer find it.
+const WHITESPACE_RUN = /(\s+)/;
+const WHITESPACE = /\s/;
+function plainHtml(text: string): string {
+  if (WHITESPACE.test(text)) {
+    return text.split(WHITESPACE_RUN).map(plainPartHtml).join('');
+  }
+  return escapeHtml(text);
+}
+// One piece of a split plain run: whitespace, other text, or the empty string
+// `split` leaves at either end when the run starts or ends with whitespace.
+function plainPartHtml(part: string): string {
+  if (part.trim() === '') {
+    return part === '' ? '' : `<span class="cx-space">${part}</span>`;
+  }
+  return escapeHtml(part);
 }
 
 // ───────────────────────────── Arrow-key stepping ─────────────────────────────

@@ -161,3 +161,14 @@ test('inherited page titles use the same boundary validation as direct titles', 
     assert.throws(() => scan(value), /inheritedTitle:/);
   }
 });
+
+// The project's length unit rides on the scan (lengthUnit.ts): parsed when present,
+// absent from an older host, refused when malformed.
+test('the scan carries the project length unit', () => {
+  const rem = parseScanResult({ ...structuredClone(goodScan), lengthUnit: { kind: 'rem', rootFontPx: 16 } });
+  assert.deepEqual(rem.lengthUnit, { kind: 'rem', rootFontPx: 16 });
+  assert.equal(parseScanResult(structuredClone(goodScan)).lengthUnit, undefined);
+  assert.throws(() => parseScanResult({ ...structuredClone(goodScan), lengthUnit: { kind: 'vw' } }), {
+    message: 'LengthUnit.kind: expected "px" or "rem"',
+  });
+});

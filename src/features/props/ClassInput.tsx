@@ -1,5 +1,15 @@
 import Popup from '../../ui/Popup';
-import { fuzzyMatch, fuzzySegments, rankFuzzy } from '../../lib/fuzzyRank';
+import {
+  CLASS_NAME_REFUSAL,
+  classRowMatch,
+  classRows,
+  classRowStep,
+  fuzzyMatch,
+  fuzzySegments,
+  isClassName,
+  rankFuzzy,
+  type ClassRow,
+} from '../../lib/fuzzyRank';
 import React, { useEffect, useRef, useState } from 'react';
 import { useClassPopup } from './useClassPopup';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
@@ -24,7 +34,9 @@ function familyPrefix(cls: string) {
 // it), and typing filters a suggestion list of every class used across the
 // project. A class typed at the caret is written there, because the order of
 // the classes is the order in the class attribute. The Style panel's selector
-// field deliberately has no such caret (SelectorPicker.tsx).
+// field deliberately has no such caret (SelectorPicker.tsx). A new name leads the
+// list with a create row, so a name that fuzzily matches others can still be
+// added (classRows in src/lib/fuzzyRank.ts).
 interface ClassInputProps {
   readonly value?: string | undefined;
   readonly suggestions?: readonly string[];
@@ -86,7 +98,10 @@ function useClassInput({ value, suggestions = [], onChange }: ClassInputProps) {
   const [caret, setCaret] = useState(tokens.length);
   const [draft, setDraft] = useState('');
   const [focused, setFocused] = useState(false);
-  const [highlight, setHighlight] = useState(0);
+  // -1 until an arrow or the pointer moves it: the list then says where it rests.
+  const [moved, setHighlight] = useState(-1);
+  // The text Enter last refused; the refusal shows until the text changes.
+  const [refused, setRefused] = useState<string | undefined>(undefined);
   const wrapRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -94,7 +109,14 @@ function useClassInput({ value, suggestions = [], onChange }: ClassInputProps) {
 
   const tokenActions = classTokenActions({ tokens, at, setCaret, setDraft, onChange });
   const familyState = useClassFamily(tokens, onChange);
-  const matches = classMatches(draft, suggestions, tokens);
+  const query = draft.trim();
+  const list = classRows({
+    name: query === '' ? undefined : query,
+    matches: classMatches(draft, suggestions, tokens),
+    nameOf: (name) => name,
+    carried: tokens.includes(query),
+    restPlain: 0,
+  });
 
   return {
     ...tokenActions,
@@ -106,11 +128,13 @@ function useClassInput({ value, suggestions = [], onChange }: ClassInputProps) {
     setDraft,
     focused,
     setFocused,
-    highlight,
+    highlight: classRowStep(moved, list),
     setHighlight,
+    refusal: refused === query,
+    setRefused,
     wrapRef,
     inputRef,
-    matches,
+    list,
     suggestions,
   };
 }
@@ -309,7 +333,7 @@ function ClassMatchLabel({ name, draft }: { readonly name: string; readonly draf
   );
 }
 function classInputKey(event: React.KeyboardEvent<HTMLInputElement>, state: ClassState): void {
-  const { draft, removeAt, at, setCaret, tokens, matches, setHighlight, highlight, addToken, setDraft, inputRef } = state;
+  const { draft, removeAt, at, setCaret, tokens, list, setHighlight, highlight, addToken, setDraft, inputRef } = state;
   // While the family menu is up it owns the arrows and Enter: the caret and
   // the suggestion list are both idle behind it.
   if (classFamilyKey(event, state)) {
@@ -327,29 +351,49 @@ function classInputKey(event: React.KeyboardEvent<HTMLInputElement>, state: Clas
   } else if (event.key === 'ArrowRight' && !draft) {
     event.preventDefault();
     setCaret(caretStep(at, tokens.length, 1));
-  } else if (event.key === 'ArrowDown' && matches.length) {
+  } else if (event.key === 'ArrowDown' && list.rows.length) {
     event.preventDefault();
-    setHighlight((current) => Math.min(current + 1, matches.length - 1));
-  } else if (event.key === 'ArrowUp' && matches.length) {
+    setHighlight(classRowStep(highlight + 1, list));
+  } else if (event.key === 'ArrowUp' && list.rows.length) {
     event.preventDefault();
-    setHighlight((current) => Math.max(current - 1, 0));
+    setHighlight(classRowStep(highlight - 1, list));
   } else if (event.key === 'Enter') {
     event.preventDefault();
-    if (matches.length) {
-      addToken(matches[Math.min(highlight, matches.length - 1)]);
-    } else {
-      addToken(draft);
-    }
+    classInputEnter(state);
   } else if (event.key === ' ') {
     event.preventDefault();
     addToken(draft);
   } else if (event.key === 'Tab' && draft) {
     event.preventDefault();
-    addToken(matches.length ? matches[Math.min(highlight, matches.length - 1)] : draft);
+    addToken(classRowMatch(list, highlight) ?? draft);
   } else if (event.key === 'Escape') {
     setDraft('');
     inputRef.current?.blur();
   }
+}
+// Enter takes the selected row. With none selected the typed text is left: a class
+// already on the element (addToken moves the caret to it), an empty field, or a
+// name nothing can be made from, which stays in the field to be corrected.
+function classInputEnter(state: ClassState): void {
+  const { draft, tokens, list, highlight, addToken, setRefused } = state;
+  const row = list.rows[highlight];
+  if (row !== undefined) {
+    addToken(classRowText(row));
+    return;
+  }
+  const query = draft.trim();
+  assert(highlight < list.rows.length, 'classInputEnter: the selection is on the list');
+  if (query === '') {
+    addToken(draft);
+  } else if (tokens.includes(query)) {
+    addToken(draft);
+  } else {
+    assert(!isClassName(query), 'classInputEnter: a valid new name has a create row');
+    setRefused(query);
+  }
+}
+function classRowText(row: ClassRow<string>): string {
+  return row.kind === 'create' ? row.name : row.item;
 }
 function classFamilyKey(event: React.KeyboardEvent<HTMLInputElement>, state: ClassState): boolean {
   const { family, previewFamily, famHighlight, applyFamily, closeFamily } = state;
@@ -399,7 +443,7 @@ function ClassCaret({ state }: { readonly state: ClassState }) {
       spellCheck={false}
       onChange={(event) => {
         setDraft(event.target.value);
-        setHighlight(0);
+        setHighlight(-1);
       }}
       onKeyDown={(event) => classInputKey(event, state)}
       onFocus={() => setFocused(true)}
@@ -458,28 +502,34 @@ function ClassTokens({ state }: { readonly state: ClassState }) {
   return items;
 }
 function ClassSuggestions({ state }: { readonly state: ClassState }) {
-  const { matches, highlight, setHighlight, addToken, focused, wrapRef, draft } = state;
-  const popupPosition = useClassPopup(wrapRef, matches.length, { open: focused });
+  const { list, highlight, setHighlight, addToken, focused, wrapRef, draft, refusal } = state;
+  const popupPosition = useClassPopup(wrapRef, list.rows.length + (refusal ? 1 : 0), { open: focused });
   const popupRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     popupRef.current?.children[highlight]?.scrollIntoView({ block: 'nearest' });
-  }, [highlight, matches.length, draft]);
+  }, [highlight, list.rows.length, draft]);
   if (!popupPosition) {
     return undefined;
   }
   return (
     <Popup mode="popover" portal={true} onClose={() => state.setFocused(false)} ref={popupRef} className="dd-popup class-suggest" style={popupPosition}>
-      {matches.map((suggestion, i) => (
+      {list.rows.map((row, i) => (
         <div
-          key={suggestion}
+          key={`${row.kind}:${classRowText(row)}`}
           className={`dd-option ${i === highlight ? 'highlight' : ''}`}
           onMouseDown={(event) => event.preventDefault()}
           onMouseEnter={() => setHighlight(i)}
-          onClick={() => addToken(suggestion)}
+          onClick={() => addToken(classRowText(row))}
         >
-          <ClassMatchLabel name={suggestion} draft={draft} />
+          {row.kind === 'create' ? <span className="dd-option-label">Create {row.name}</span> : <ClassMatchLabel name={row.item} draft={draft} />}
         </div>
       ))}
+      {/* Last, so a row's place among the children stays its index in the list. */}
+      {refusal ? (
+        <div className="dd-empty" role="status">
+          {CLASS_NAME_REFUSAL}
+        </div>
+      ) : undefined}
     </Popup>
   );
 }

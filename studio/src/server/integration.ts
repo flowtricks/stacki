@@ -321,8 +321,9 @@ function configureProjectWatching(server: ViteDevServer, root: string, rooms: Re
   });
 }
 
-// Reads of a project file: its source, or what its call to one of its imports
-// returns, sampled for the binding picker (valueSampler.ts). False: not a read.
+// Reads of a project file: its source, what its call to one of its imports
+// returns, sampled for the binding picker (valueSampler.ts), or the source of
+// a module it imports (importSource.ts). False: not a read.
 async function sendSourceRead(response: ServerResponse, url: URL, options: Options, catalogs: ReturnType<typeof projectCatalogs>): Promise<boolean> {
   if (url.pathname === '/studio/api/file') {
     const file = sourcePath(url.searchParams.get('file'));
@@ -334,6 +335,16 @@ async function sendSourceRead(response: ServerResponse, url: URL, options: Optio
     const spec = string(url.searchParams.get('spec'), 500);
     const name = string(url.searchParams.get('name'), 200);
     json(response, 200, await catalogs.values({ file, spec, name }));
+    return true;
+  }
+  if (url.pathname === '/studio/api/page-entries') {
+    json(response, 200, await catalogs.templateEntries(sourcePath(url.searchParams.get('page'))));
+    return true;
+  }
+  if (url.pathname === '/studio/api/import-source') {
+    const file = sourcePath(url.searchParams.get('file'));
+    const spec = string(url.searchParams.get('spec'), 500);
+    json(response, 200, await catalogs.importSource({ file, spec }));
     return true;
   }
   return false;

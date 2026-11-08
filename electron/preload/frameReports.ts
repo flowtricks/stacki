@@ -1,4 +1,3 @@
-import { assert } from '../../shared/core/assert';
 import { authoredStyleMutation } from './frameAuthoredStyles';
 // What the frame tells the app as the page changes: the tracked rectangles,
 // following a page that moves by itself, which nodes rendered, their states
@@ -6,7 +5,7 @@ import { authoredStyleMutation } from './frameAuthoredStyles';
 // one pass per frame. Mutations are classified here, so the frame's own
 // writes never trigger a pass.
 
-import { splitPseudoPath, type PseudoLayer } from '../../shared/page/pseudoPath';
+import type { PseudoLayer } from '../../shared/page/pseudoPath';
 import type { Rect, Spacing } from './frameBasics';
 import { PROBE_ATTR, isComment, isElement, isText } from './frameBasics';
 import {
@@ -23,6 +22,7 @@ import {
   trackedPaths,
 } from './frameRegions';
 import { STACKI_CLASSES, classesForPath, ownClasses, rectsForPath, resetThinCache, spacingForPath } from './frameMeasure';
+import { revealPath } from './frameReveal';
 
 // The boxes as last reported, so the watcher below can tell whether the page
 // has moved since — see `followMotion`.
@@ -318,121 +318,12 @@ export const sendClasses = () => {
   window.parent.postMessage({ type: 'avb:node-classes', classes: out }, '*');
 };
 
-// Selecting a node in the navigator brings it onto the page. Only scrolls
-// when the node is actually out of sight (boxInView): selecting something
-// already on screen shouldn't move the page under the user.
-//
-// Only ever down the page, and only the page itself. A site is routinely wider
-// than the frame on purpose — a hero video bleeding off the right, a track of
-// cards, a decorative circle hanging off the edge — and clips it with
-// `overflow-x: hidden` or `clip` on the body or a wrapper. Scrolling sideways
-// to reveal such a node moves a viewport the site never meant to scroll, and
-// nothing on the canvas can scroll it back: the page stays stuck to one side.
-// `scrollIntoView` is worse still, because it also scrolls every clipping
-// ancestor on the way. So the target is computed here, vertically, and the
-// window is the one thing that moves.
-const SCROLL_MARGIN = 24;
-// Whether the person can already see a box, so a reveal has nothing to do. All
-// of it inside the frame is in view, up to the very edge: the margin says where
-// a reveal lands, not what counts as seen, and nothing covers the frame (the
-// toolbar sits outside it). A box too tall to fit is in view while it covers the
-// frame from edge to edge. Only its top showing is not enough: that may be a
-// sliver at the bottom, which a reveal is there to fix.
-const boxInView = (top: number, height: number, viewportHeight: number): boolean => {
-  assert(height >= 0, 'boxInView: a box has no negative height');
-  const bottom = top + height;
-  if (top >= 0) {
-    if (bottom <= viewportHeight) {
-      return true;
-    }
-  }
-  if (top <= 0) {
-    return bottom >= viewportHeight;
-  }
-  return false;
-};
-// Where the page has to go for a box to be on screen, vertically: the scroll
-// position it already has when the box is in view, and otherwise enough to
-// bring it in. A box taller than the viewport is aligned to its top rather than
-// centred, which would push the beginning of it out.
-const revealTop = (top: number, height: number, viewportHeight: number, scrollTop: number): number => {
-  assert(Number.isFinite(top), 'revealTop: the box has a top');
-  assert(Number.isFinite(height), 'revealTop: the box has a height');
-  assert(viewportHeight >= 0, 'revealTop: the viewport has a height');
-  if (boxInView(top, height, viewportHeight)) {
-    return scrollTop;
-  }
-  const offset = height >= viewportHeight - SCROLL_MARGIN * 2 ? SCROLL_MARGIN : Math.floor((viewportHeight - height) / 2);
-  const target = Math.max(0, Math.round(scrollTop + top - offset));
-  assert(target >= 0, 'revealTop: a scroll position is never negative');
-  return target;
-};
-// A ::before or ::after that paints no box has nothing of its own to reveal, so
-// its element stands in: the row was picked to get to that place on the page.
-const rectsForPseudoHost = (nodePath: string): Rect[] | undefined => {
-  const pseudo = splitPseudoPath(nodePath);
-  return pseudo === undefined ? undefined : rectsForPath(pseudo.nodePath);
-};
+// Selecting a node in the navigator brings it onto the page, when it is out of
+// sight. One path can render many times (a node inside a loop, a component used
+// repeatedly): the occurrence names the instance being worked in, not whichever
+// one comes first. frameReveal.ts decides and scrolls, for Studio's canvas too.
 export const scrollPathIntoView = (nodePath: string, occ: number): void => {
-  const rects = rectsForPath(nodePath) ?? rectsForPseudoHost(nodePath);
-  if (!rects || !rects.length) {
-    return;
-  }
-  // One path can render many times (a node inside a loop, a component used
-  // repeatedly). Scroll to the instance being worked in, not whichever one
-  // happens to come first in the document.
-  const rect = rects[occ] ?? rects[0]; // viewport-relative
-  if (!rect) {
-    return;
-  }
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-  const top = revealTop(rect.y, rect.h, viewportHeight, window.scrollY);
-  if (top === window.scrollY) {
-    return;
-  }
-  // No `left`: the horizontal scroll stays wherever it is (see above).
-  window.scrollTo({ top, behavior: 'smooth' });
-  finishReveal(top);
-};
-
-// A smooth scroll can stall short of where it was sent: on Linux the first
-// reveal of a page stopped 9px down and stayed there, the selection still far
-// below the fold, until the next reveal. So the frame watches the scroll it
-// started, and when the page stops moving before it arrives, it jumps the
-// rest of the way. A person who scrolls in the meantime has taken over, and
-// is left alone. Bounded: REVEAL_CHECKS_MAX checks, REVEAL_CHECK_MS apart.
-const REVEAL_CHECK_MS = 100;
-const REVEAL_CHECKS_MAX = 10;
-let revealWatch: ReturnType<typeof setTimeout> | undefined;
-const finishReveal = (target: number): void => {
-  assert(target >= 0, 'finishReveal: a scroll target is never negative');
-  clearTimeout(revealWatch);
-  let last = window.scrollY;
-  let checks = 0;
-  const check = (): void => {
-    checks += 1;
-    assert(checks <= REVEAL_CHECKS_MAX, 'finishReveal: the watch is bounded');
-    const now = window.scrollY;
-    const arrived = Math.abs(now - target) <= 1;
-    if (arrived) {
-      revealWatch = undefined;
-      return;
-    }
-    // Moving away from the target means a person scrolled: theirs now.
-    const awayFromTarget = Math.abs(now - target) > Math.abs(last - target) + 1;
-    if (awayFromTarget) {
-      revealWatch = undefined;
-      return;
-    }
-    if (now === last || checks === REVEAL_CHECKS_MAX) {
-      revealWatch = undefined;
-      window.scrollTo({ top: target, behavior: 'instant' });
-      return;
-    }
-    last = now;
-    revealWatch = setTimeout(check, REVEAL_CHECK_MS);
-  };
-  revealWatch = setTimeout(check, REVEAL_CHECK_MS);
+  revealPath(nodePath, occ, 'smooth');
 };
 
 // `stacki-opened` on the instance being edited — the one that was actually

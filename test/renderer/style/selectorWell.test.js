@@ -323,6 +323,7 @@ const contrastRatio = (first, second) => {
   let styleWriteCount = 0;
   let writtenCss = '';
   dom.window.avb = {
+    onCssChanged: () => () => {},
     listStyleFiles: async () => ({ files: [] }),
     listAstroStyleFiles: async () => ({ files: [] }),
     listAssets: async () => ({ entries: [] }),

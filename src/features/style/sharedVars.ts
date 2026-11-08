@@ -2,8 +2,11 @@
 // one list that each open picker listens to — and which types a property can
 // take (VariableConnect.tsx).
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { streamProjectVariables, type ProjectVariable } from './model/webflow';
+import { getHost } from './model/host';
+import { projectRelative, variableFileOffered, type VariablePlace } from '../../editor/variablePlace';
+import { assert } from '../../../shared/core/assert';
 
 // Which variable types make sense for the property being edited: a color property
 // (color / *-color / fill / stroke) shows only Color variables; font-family shows only
@@ -123,28 +126,99 @@ export let sharedVars: ProjectVariable[] = [];
 export let sharedDone = false;
 export let sharedLoading = false;
 export const sharedListeners = new Set<() => void>();
+// Which load may still publish: a change starts a new one and retires the last.
+let sharedLoad = 0;
 export function ensureSharedVars() {
   if (sharedDone || sharedLoading) {
     return;
   }
   sharedLoading = true;
+  sharedLoad += 1;
+  const load = sharedLoad;
+  // A reload streams into the same list by replacing it at the end, so a picker that
+  // is open keeps its rows rather than emptying and filling again.
+  const reloading = sharedVars.length > 0;
+  const loaded: ProjectVariable[] = [];
   const seen = new Set<string>();
   void streamProjectVariables(
     (variable) => {
-      if (seen.has(variable.binding)) {
+      // A name declared in two files is two entries; which one is offered is
+      // decided where the list is read (variablesAt), by the page open then.
+      const key = `${variable.file ?? ''}\u0000${variable.binding}`;
+      if (seen.has(key)) {
         return;
       }
-      seen.add(variable.binding);
-      sharedVars = [...sharedVars, variable];
-      sharedListeners.forEach((listener) => listener());
+      seen.add(key);
+      loaded.push(variable);
+      if (load === sharedLoad && !reloading) {
+        sharedVars = [...loaded];
+        sharedListeners.forEach((listener) => listener());
+      }
     },
-    () => false,
+    () => load !== sharedLoad,
+    reloadSharedVars,
   ).then(() => {
+    if (load !== sharedLoad) {
+      return;
+    }
+    sharedVars = loaded;
     sharedDone = true;
     sharedLoading = false;
     sharedListeners.forEach((listener) => listener());
   });
 }
+
+// The list outlives any picker, and a variable edited in the panel, in a stylesheet
+// or in a page's `<style>` must not be offered at its old value, or at all once gone.
+function reloadSharedVars(): void {
+  sharedDone = false;
+  sharedLoading = false;
+  ensureSharedVars();
+}
+/**
+ * The variables that can apply where the user is: never another page's `<style>`
+ * variables (variablePlace.ts), and one entry per name. Where several files
+ * declare a name, the open file's value is the one this canvas has, then the
+ * page a component is shown on, then the first read (stylesheets before other
+ * blocks), which is the order the list was streamed in.
+ */
+export function variablesAt(vars: readonly ProjectVariable[], place: VariablePlace): ProjectVariable[] {
+  assert(place.openFile !== '', 'variablesAt: an open file has a path');
+  const rankOf = (variable: ProjectVariable): number => {
+    if (variable.file === undefined) {
+      return 2;
+    }
+    if (variable.file === place.openFile) {
+      return 0;
+    }
+    return variable.file === place.contextPage ? 1 : 2;
+  };
+  const chosen = new Map<string, ProjectVariable>();
+  for (const variable of vars) {
+    if (variable.file !== undefined && !variableFileOffered(variable.file, place)) {
+      continue;
+    }
+    const held = chosen.get(variable.binding);
+    if (held === undefined) {
+      chosen.set(variable.binding, variable);
+    } else if (rankOf(variable) < rankOf(held)) {
+      chosen.set(variable.binding, variable);
+    }
+  }
+  const offered = vars.filter((variable) => chosen.get(variable.binding) === variable);
+  assert(offered.length === chosen.size, 'variablesAt: one entry per offered name');
+  return offered;
+}
+
+/** Where the style panel says the user is: the file on the canvas, and the page it is shown on. */
+export function hostVariablePlace(): VariablePlace {
+  const host = getHost();
+  return {
+    openFile: projectRelative(host.projectPath, host.openFilePath),
+    contextPage: projectRelative(host.projectPath, host.contextPagePath),
+  };
+}
+
 export function useSharedVars({ active }: { active: boolean }): {
   vars: ProjectVariable[];
   loading: boolean;
@@ -161,5 +235,10 @@ export function useSharedVars({ active }: { active: boolean }): {
       sharedListeners.delete(listener);
     };
   }, [active]);
-  return { vars: sharedVars, loading: !sharedDone };
+  // The host is read each render, not subscribed to: every reader re-renders when
+  // the page or the selection changes, and a picker opens on a fresh render.
+  const { openFile, contextPage } = hostVariablePlace();
+  const listed = sharedVars;
+  const vars = useMemo(() => variablesAt(listed, { openFile, contextPage }), [listed, openFile, contextPage]);
+  return { vars, loading: !sharedDone };
 }

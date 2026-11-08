@@ -206,3 +206,55 @@ test('code kinds, type text and expression options are preserved, and validated'
   assert.throws(() => parseField({ ...action, typeText: 7 }, 'onSelect'), /typeText: expected string/);
   assert.throws(() => parseField({ ...choice, expressionOptions: [true] }, 'flag'), /expressionOptions: expected string array/);
 });
+
+// A number prop's range comes from its doc: the @min/@max/@step tags, else a
+// range its prose states outright ("0–1", "from 1 to 6", "between 2 and 8").
+// The number field clamps to what this reads, so each form is pinned, and so
+// is the negative space: a signed or reversed dash, a word like "h1-h6", and a
+// date are not ranges, and a tag always wins over the prose beside it.
+test('a number prop reads its declared range from tags and prose', () => {
+  const source = [
+    '---',
+    'interface Props {',
+    '  /** Opacity of the backdrop. @min 0 @max 1 @step 0.05 */',
+    '  tagged?: number;',
+    '  /** Overall strength, 0–1. */',
+    '  dashed?: number;',
+    '  /** Columns, from 1 to 6. */',
+    '  spoken?: number;',
+    '  /** Between 2 and 8 items. */',
+    '  between?: number;',
+    '  /** A level, 1-12. */',
+    '  hyphen?: number;',
+    '  /** Any heading, h1-h6. */',
+    '  words?: number;',
+    '  /** Shifted -1–1. */',
+    '  signed?: number;',
+    '  /** Reversed, 5–1. */',
+    '  reversed?: number;',
+    '  /** Released 2024-01. */',
+    '  dated?: number;',
+    '  /** Strength, 0–1. @max 0.8 */',
+    '  overridden?: number;',
+    '}',
+    'const { tagged, dashed, spoken, between, hyphen, words, signed, reversed, dated, overridden } = Astro.props;',
+    '---',
+    '<div />',
+  ].join('\n');
+  const fields = new Map(parseAstroSchema(source).map((field) => [field.name, field]));
+  const range = (name: string) => {
+    const field = fields.get(name);
+    assert.ok(field, `${name} is read`);
+    return { min: field.min, max: field.max, step: field.step };
+  };
+  assert.deepEqual(range('tagged'), { min: 0, max: 1, step: 0.05 });
+  assert.deepEqual(range('dashed'), { min: 0, max: 1, step: undefined });
+  assert.deepEqual(range('spoken'), { min: 1, max: 6, step: undefined });
+  assert.deepEqual(range('between'), { min: 2, max: 8, step: undefined });
+  assert.deepEqual(range('hyphen'), { min: 1, max: 12, step: undefined });
+  assert.deepEqual(range('words'), { min: undefined, max: undefined, step: undefined });
+  assert.deepEqual(range('signed'), { min: undefined, max: undefined, step: undefined });
+  assert.deepEqual(range('reversed'), { min: undefined, max: undefined, step: undefined });
+  assert.deepEqual(range('dated'), { min: undefined, max: undefined, step: undefined });
+  assert.deepEqual(range('overridden'), { min: 0, max: 0.8, step: undefined });
+});

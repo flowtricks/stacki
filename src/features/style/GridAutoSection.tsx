@@ -109,7 +109,7 @@ export function Modal({ onClose, children }: { onClose: () => void; children: Re
     <PanelSheet className="style-panel-surface embed-editor_grid-modal u-surface-surface" label="Grid settings" onClose={onClose}>
       {({ close }) => (
         <>
-          <div className="embed-editor_grid-modal-head">
+          <div className="embed-editor_grid-modal-head" data-floating-drag-handle="">
             <span className="embed-editor_grid-modal-title">Grid settings</span>
             <button type="button" className="embed-editor_bg-modal-close" onClick={close} aria-label="Close">
               <CloseIcon />

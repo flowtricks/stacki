@@ -2,7 +2,7 @@ import { inOwnedPopup, isTopPopupLayer } from './popupOwnership';
 import { useEffect, type RefObject } from 'react';
 import type { PopupProps, PopupActions } from './Popup';
 import { toRecord } from '../../shared/core/record';
-interface DismissOptions extends Pick<PopupProps, 'dismissible' | 'anchor' | 'within' | 'onEscape'> {
+interface DismissOptions extends Pick<PopupProps, 'dismissible' | 'keepOnScroll' | 'anchor' | 'within' | 'onEscape'> {
   readonly active: boolean;
   readonly mode: 'modal' | 'popover';
 }
@@ -76,7 +76,7 @@ export function popupIsTop(surface: RefObject<HTMLDivElement>['current']): boole
 
 // Canvas focus and viewport movement can happen outside this document's click stream.
 function usePopupEnvironment(surface: RefObject<HTMLDivElement>, options: DismissOptions, close: () => void): void {
-  const { active, dismissible = true, mode } = options;
+  const { active, dismissible = true, keepOnScroll = false, mode } = options;
   useEffect(() => {
     if (!active || !dismissible || mode === 'modal') {
       return undefined;
@@ -91,7 +91,7 @@ function usePopupEnvironment(surface: RefObject<HTMLDivElement>, options: Dismis
       }, 0);
     };
     const scroll = (event: Event): void => {
-      if (event.target instanceof window.Node && surface.current?.contains(event.target)) {
+      if (keepOnScroll || (event.target instanceof window.Node && surface.current?.contains(event.target))) {
         return;
       }
       if (popupIsTop(surface.current)) {
@@ -107,7 +107,7 @@ function usePopupEnvironment(surface: RefObject<HTMLDivElement>, options: Dismis
       window.removeEventListener('scroll', scroll, true);
       window.removeEventListener('resize', close);
     };
-  }, [active, close, dismissible, mode, surface]);
+  }, [active, close, dismissible, keepOnScroll, mode, surface]);
 }
 
 let pendingClickCleanup: (() => void) | undefined;

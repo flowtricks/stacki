@@ -3,7 +3,7 @@ import Popup from '../../ui/Popup';
 import { ChevronRightIcon } from '../../ui/Icons';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 
-export type ContextAction = 'defaults' | 'open' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a';
+export type ContextAction = 'defaults' | 'open' | 'cut' | 'copy' | 'paste' | 'duplicate' | 'delete' | 'div' | 'a' | 'convert-div' | 'convert-span';
 export interface ContextPosition {
   readonly left: number;
   readonly top: number;
@@ -17,6 +17,10 @@ interface MenuProps {
   readonly canSetDefaults: boolean;
   readonly canWrapBox: boolean;
   readonly canWrapLink: boolean;
+  /** Bare text: it has no tag to wrap, so it is offered one instead. */
+  readonly plainText: boolean;
+  readonly canConvertDiv: boolean;
+  readonly canConvertSpan: boolean;
   readonly canPaste: boolean;
   readonly canCut: boolean;
   readonly canChange: boolean;
@@ -32,6 +36,9 @@ export function ContextMenu(props: MenuProps) {
   return (
     <Popup
       mode="popover"
+      // Opening this menu selects the node, and the navigator scrolls to its row.
+      // The menu sits at the pointer, not on anything that scrolled, so it stays.
+      keepOnScroll
       onClose={props.onClose}
       ref={ref}
       role="menu"
@@ -47,7 +54,7 @@ export function ContextMenu(props: MenuProps) {
       }}
     >
       {props.component && <ComponentMenuHeader {...props} />}
-      <WrapMenu {...props} />
+      {props.plainText ? <ConvertMenu {...props} /> : <WrapMenu {...props} />}
       <div className="ctx-divider" role="separator" />
       <MenuItem label="Cut" disabled={!props.canCut} onSelect={() => props.onAction('cut')} />
       <MenuItem label="Copy" shortcut={shortcut('C')} disabled={!props.canChange} onSelect={() => props.onAction('copy')} />
@@ -100,10 +107,27 @@ function MenuItem({
 }
 
 function WrapMenu(props: MenuProps) {
+  return (
+    <Submenu label="Wrap in" disabled={!props.canWrapBox && !props.canWrapLink}>
+      <MenuItem label="div" disabled={!props.canWrapBox} onSelect={() => props.onAction('div')} />
+      <MenuItem label="<a>" disabled={!props.canWrapLink} onSelect={() => props.onAction('a')} />
+    </Submenu>
+  );
+}
+
+function ConvertMenu(props: MenuProps) {
+  return (
+    <Submenu label="Convert to" disabled={!props.canConvertDiv && !props.canConvertSpan}>
+      <MenuItem label="div" disabled={!props.canConvertDiv} onSelect={() => props.onAction('convert-div')} />
+      <MenuItem label="span" disabled={!props.canConvertSpan} onSelect={() => props.onAction('convert-span')} />
+    </Submenu>
+  );
+}
+
+function Submenu({ label, disabled, children }: { readonly label: string; readonly disabled: boolean; readonly children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const submenu = useRef<HTMLDivElement>(null);
-  const disabled = !props.canWrapBox && !props.canWrapLink;
   useSubmenuPosition(submenu, trigger, open ? 'open' : 'closed');
   return (
     <div className="ctx-wrap" onMouseEnter={() => setOpen(!disabled)} onMouseLeave={() => setOpen(false)}>
@@ -127,7 +151,7 @@ function WrapMenu(props: MenuProps) {
           }
         }}
       >
-        <span>Wrap in</span>
+        <span>{label}</span>
         <ChevronRightIcon size={12} />
       </button>
       {open && (
@@ -137,7 +161,7 @@ function WrapMenu(props: MenuProps) {
           onClose={() => setOpen(false)}
           ref={submenu}
           role="menu"
-          label="Wrap in"
+          label={label}
           className="ctx-menu ctx-submenu"
           onKeyDown={(event) => {
             if (event.key === 'ArrowLeft' || event.key === 'Escape') {
@@ -148,8 +172,7 @@ function WrapMenu(props: MenuProps) {
             }
           }}
         >
-          <MenuItem label="div" disabled={!props.canWrapBox} onSelect={() => props.onAction('div')} />
-          <MenuItem label="<a>" disabled={!props.canWrapLink} onSelect={() => props.onAction('a')} />
+          {children}
         </Popup>
       )}
     </div>

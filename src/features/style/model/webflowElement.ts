@@ -2,7 +2,9 @@
 // as CSS, the host bridge's api, the snapshot a selection is read from, and
 // the breakpoint the canvas shows (webflow.ts).
 
+import { isClassName } from '../../../lib/fuzzyRank';
 import { findNode, getHost, onHostChange, propText, type HostNode } from './host';
+import { instanceClassesOf } from './instanceClasses';
 import type { BreakpointId, ElementSnapshot } from './styleTypes';
 
 export type AnyElement = unknown;
@@ -92,7 +94,6 @@ export const nodeById = (id: string | undefined): HostNode | undefined => (id ? 
 // instead of waiting on the canvas. Template literals with a `${}` hole are
 // skipped: only the rendered element knows what they became. Values that aren't
 // class-shaped (selectors, URLs, sentences) are dropped.
-export const CLASS_RE = /^[A-Za-z_-][A-Za-z0-9_-]*$/;
 export const literalClasses = (node: HostNode | undefined, name: string): string[] => {
   const prop = node?.props?.[name];
   if (!prop || prop.type !== 'expr') {
@@ -105,7 +106,7 @@ export const literalClasses = (node: HostNode | undefined, name: string): string
       continue;
     }
     for (const tok of literalBody.split(/\s+/)) {
-      if (CLASS_RE.test(tok)) {
+      if (isClassName(tok)) {
         out.push(tok);
       }
     }
@@ -113,17 +114,21 @@ export const literalClasses = (node: HostNode | undefined, name: string): string
   return out;
 };
 
+// The classes the node's own source names: `class="a b"` and the literals of a
+// `class:list` or `class={…}` expression. A class can be named in more than one
+// place (`class` plus `class:list`, or twice within one list); the element still
+// carries it once.
+export const authoredClassTokens = (node: HostNode | undefined): string[] => [
+  ...new Set([
+    ...propText(node, 'class').split(/\s+/).filter(Boolean),
+    // `class:list={[…]}`, and `class={…}` when it's an expression.
+    ...literalClasses(node, 'class:list'),
+    ...literalClasses(node, 'class'),
+  ]),
+];
+
 export const classTokens = (node: HostNode | undefined): string[] => {
-  // A class can be named in more than one place (`class` plus `class:list`, or
-  // twice within one list) — the element still carries it once.
-  const authored = [
-    ...new Set([
-      ...propText(node, 'class').split(/\s+/).filter(Boolean),
-      // `class:list={[…]}`, and `class={…}` when it's an expression.
-      ...literalClasses(node, 'class:list'),
-      ...literalClasses(node, 'class'),
-    ]),
-  ];
+  const authored = authoredClassTokens(node);
   const host = getHost();
   // Rendered classes describe the selected element only — attributing them to
   // any other node (an ancestor being matched, say) would be wrong.
@@ -138,6 +143,21 @@ export const classTokens = (node: HostNode | undefined): string[] => {
   }
   return out;
 };
+
+// The classes the selected element got from the instance it is shown for, when
+// a component is open on the canvas in a page's context (instanceClasses.ts).
+// Outside one (a page, or a component opened on its own) there is no instance,
+// and a computed class is the element's own.
+export function selectedInstanceClasses(classList: readonly string[]): string[] {
+  const host = getHost();
+  if (host.openFileKind !== 'component') {
+    return [];
+  }
+  if (host.contextPagePath === undefined || host.contextPagePath === host.openFilePath) {
+    return [];
+  }
+  return instanceClassesOf({ authored: authoredClassTokens(nodeById(host.selectedId)), rendered: classList });
+}
 
 // Elements reach the panel through the Designer-shaped API as `unknown`; one is
 // read as a node only when it carries a node's identity.

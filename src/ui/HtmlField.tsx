@@ -5,7 +5,7 @@
 // under the caret shows a bubble to open, change or remove it. Opening a field
 // never rewrites its HTML: only an edit writes, and markup the editor cannot
 // show locks the visual editor rather than being dropped (htmlFieldModel.ts).
-import { useEffect, useRef, useState, type KeyboardEvent, type MutableRefObject } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react';
 import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
 import { HtmlSourceEditor } from './HtmlSourceEditor';
 import { HtmlLinkEditor, type LinkBubble, type LinkBubblePlace } from './HtmlLinkEditor';
@@ -34,7 +34,15 @@ import './richText.css';
 interface Props {
   readonly value: string;
   readonly label?: string | undefined;
+  /** The source view in place of the HTML one: a Markdown body shows its Markdown. */
+  readonly sourceView?: SourceView | undefined;
   readonly onChange: (value: string) => void;
+}
+
+export interface SourceView {
+  /** The toggle's name for it: `Markdown`. */
+  readonly label: string;
+  readonly render: () => ReactNode;
 }
 
 // The live editor and what it remembers between events.
@@ -48,7 +56,7 @@ interface Editor {
   readonly restore: () => HTMLDivElement | undefined;
 }
 
-export default function HtmlField({ value, label = 'Rich text', onChange }: Props) {
+export default function HtmlField({ value, label = 'Rich text', sourceView, onChange }: Props) {
   const [source, setSource] = useState(false);
   const [formatCount, setFormatCount] = useState(0);
   const projection = editableHTML(value, document);
@@ -60,6 +68,8 @@ export default function HtmlField({ value, label = 'Rich text', onChange }: Prop
         format={state.format}
         source={source}
         locked={projection.restricted}
+        sourceLabel={sourceView?.label ?? 'HTML'}
+        formattable={sourceView === undefined}
         onAction={state.run}
         onFormat={() => setFormatCount(formatCount + 1)}
         onToggleSource={() => {
@@ -69,7 +79,7 @@ export default function HtmlField({ value, label = 'Rich text', onChange }: Prop
           setSource(!source);
         }}
       />
-      <HtmlBody {...{ value, label, source, projection, editor, formatCount }} onAction={state.run} onChange={onChange} />
+      <HtmlBody {...{ value, label, source, sourceView, projection, editor, formatCount }} onAction={state.run} onChange={onChange} />
       {bubble && !source && (
         <HtmlLinkEditor
           bubble={bubble}
@@ -160,6 +170,9 @@ interface BodyProps extends Props {
 
 function HtmlBody(props: BodyProps) {
   const { editor } = props;
+  if (props.source && props.sourceView !== undefined) {
+    return <>{props.sourceView.render()}</>;
+  }
   if (props.source) {
     return <HtmlSourceEditor value={props.value} label={props.label ?? 'Rich text'} formatCount={props.formatCount} onChange={props.onChange} />;
   }

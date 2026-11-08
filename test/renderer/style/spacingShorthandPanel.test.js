@@ -89,6 +89,7 @@ test('the spacing box reads a padding shorthand and writes drags back compact', 
 
   let disk = '.card { color: red; padding: 2rem; }';
   window.avb = {
+    onCssChanged: () => () => {},
     listStyleFiles: async () => ({ files: [SHEET] }),
     listAstroStyleFiles: async () => ({ files: [] }),
     listAssets: async () => ({ entries: [] }),

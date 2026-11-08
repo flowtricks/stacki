@@ -7,6 +7,7 @@ import path from 'path';
 import { writeProjectText } from './variableWorkspace';
 import { MAIN_LIMITS } from './variableWorkspace';
 import { CSS_VARIABLE_LIMITS, SKIPPED_DIRECTORIES, findStylesheets } from './cssVarRead';
+import { astroDeclaredNames, findAstroSources, relativeTo } from './cssVarRegions';
 
 // --- renaming ----------------------------------------------------------------
 //
@@ -94,10 +95,10 @@ export interface Rename {
 export function renameVariables(
   projectPath: string,
   { renames }: { readonly renames?: readonly Rename[] },
-): { ok: boolean; files?: number; occurrences?: number; error?: string } {
+): { ok: boolean; files?: number; occurrences?: number; paths?: readonly string[]; error?: string } {
   const list = (renames || []).filter((rename) => rename && rename.from !== rename.to);
   if (!list.length) {
-    return { ok: true, files: 0, occurrences: 0 };
+    return { ok: true, files: 0, occurrences: 0, paths: [] };
   }
   const problem = renameBatchProblem(list) ?? renameTakenProblem(projectPath, list);
   if (problem !== undefined) {
@@ -144,7 +145,7 @@ export function renameVariables(
   for (const [abs, next] of writes) {
     writeProjectText(abs, next);
   }
-  return { ok: true, files: writes.length, occurrences };
+  return { ok: true, files: writes.length, occurrences, paths: writes.map(([abs]) => abs) };
 }
 
 // Why the batch cannot be applied as asked, before looking at the project: a name that is not
@@ -188,6 +189,19 @@ export function renameTakenProblem(projectPath: string, list: readonly Rename[])
       if (name) {
         declared.add(name);
       }
+    }
+  }
+  // A `<style>` block declares names as a stylesheet does; only its CSS counts,
+  // so a `--x:` in a page's frontmatter or markup does not take the name.
+  for (const abs of findAstroSources(projectPath)) {
+    let text: string;
+    try {
+      text = fs.readFileSync(abs, 'utf8');
+    } catch {
+      continue;
+    }
+    for (const name of astroDeclaredNames(relativeTo(projectPath, abs), text)) {
+      declared.add(name);
     }
   }
   for (const { to } of list) {

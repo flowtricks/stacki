@@ -26,6 +26,7 @@ export type TreeAction =
     }
   | { readonly kind: 'delete'; readonly node: string }
   | { readonly kind: 'duplicate'; readonly node: string }
+  | { readonly kind: 'wrap-text'; readonly node: string; readonly name: 'div' | 'span' }
   | {
       readonly kind: 'move';
       readonly node: string;
@@ -165,6 +166,13 @@ export function parseAction(input: unknown): TreeAction {
   }
   if (kind === 'delete' || kind === 'duplicate') {
     return { kind, node: string(action['node'], 200) };
+  }
+  if (kind === 'wrap-text') {
+    const name = action['name'];
+    if (name !== 'div' && name !== 'span') {
+      throw new Error('Invalid text tag');
+    }
+    return { kind, node: string(action['node'], 200), name };
   }
   if (kind === 'move') {
     const placement = action['placement'];

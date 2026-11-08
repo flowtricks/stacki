@@ -4,8 +4,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { tellCanvas } from '../../editor/canvasQuery';
+import { planCanvasMove } from '../../../shared/page/canvasMove';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
-import { findWithParent, noteIndexAbove, selectionAfterDelete } from '../../editor/treeSelection';
+import { findWithParent, selectionAfterDelete } from '../../editor/treeSelection';
 import { setSoundEnabled } from '../../ui/sound';
 import { LIMITS } from '../../../shared/core/limits';
 import { assert } from '../../../shared/core/assert';
@@ -19,7 +20,7 @@ import { cleanError } from '../../lib/cleanError';
 import { namesInScope } from '../../editor/dataSuggest';
 import type { InsertTarget } from '../../editor/insertTarget';
 import { type NodeClipboard } from '../appTypes';
-import { findEditorNodeById as findNodeById, findEditorParentList as findParentList } from '../../editor/pageState';
+import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { createdComponentFiles } from '../model/componentCreation';
@@ -358,7 +359,7 @@ export function useCreateComponent(
 
 // Moving a node.
 export function useMoveNode(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>, lifecycle: ReturnType<typeof useLifecycle>) {
-  const { insertables, pageStateRef } = coreState;
+  const { canvasPathForRef, insertables, pageStateRef } = coreState;
   const { commitEdit } = history;
   const { showToast } = lifecycle;
 
@@ -393,12 +394,21 @@ export function useMoveNode(coreState: ReturnType<typeof useCoreState>, history:
       const lost = before.filter((variable) => !after.includes(variable));
       const node = findNodeById(state.model.nodes, nodeId);
       const removed = node && lost.length ? strippedBindings(node, lost).removed : 0;
-      commitEdit(gesture);
+      // Planned against the tree the canvas shows now, before the gesture changes it.
+      const canvasMove = target === undefined ? undefined : planCanvasMove(state.model.nodes, nodeId, target, (id) => canvasPathForRef.current(id));
+      if (!commitEdit(gesture)) {
+        return;
+      }
+      if (canvasMove !== undefined) {
+        // The canvas moves the node's elements at once; the rebuilt page confirms it
+        // (electron/preload/frameMove.ts), and a refused write takes it back.
+        tellCanvas({ type: 'avb:optimistic-move', move: canvasMove });
+      }
       if (removed) {
         showToast(`Removed ${removed} binding${removed === 1 ? '' : 's'} that referenced ${lost.join(', ')}.`, 'info');
       }
     },
-    [insertables, commitEdit, showToast, pageStateRef],
+    [insertables, commitEdit, showToast, canvasPathForRef, pageStateRef],
   );
   return { moveNode };
 }
@@ -422,13 +432,10 @@ export function useRemoveNode(coreState: ReturnType<typeof useCoreState>, lifecy
       }
       // Worked out against the tree as it stands, before the node is gone.
       const nextId = selectionAfterDelete(state.model, nodeId) ?? undefined;
-      // Delete the node's note with it, or it would re-attach to whatever now
-      // follows and read as that element's description. The note goes first.
-      const found = findParentList(state.model, nodeId);
-      const noteAt = found ? noteIndexAbove(found.list, found.index) : -1;
-      const note = found && noteAt !== -1 ? found.list[noteAt] : undefined;
-      const ids = note ? [note.id, nodeId] : [nodeId];
-      const removal = removalGesture(ids, { urgency: true });
+      // The node's note goes with it, or it would re-attach to whatever now
+      // follows and read as that element's description: main takes the label
+      // with the node's removal and the gesture's effect drops it too.
+      const removal = removalGesture([nodeId], { urgency: true });
       const afterRemoval = removal.apply(state.model);
       const removed = prunedAfterRemoval(afterRemoval);
       // Step 6: the nodes go as requests, and what they leave unused in the
@@ -531,7 +538,8 @@ export function useCopyNode(
         return;
       }
       const clone = withNewIds(sourceNode);
-      // Step 6, insert: the copy is the node's own bytes, spliced after it.
+      // Step 6, insert: the copy is the node's own bytes, its note's with them,
+      // spliced after it (electron/documents/editRequests.ts, labelledSpan).
       commitEdit(duplicateGesture(nodeId, clone, { urgency: true }));
       setSelectedId(clone.id);
     },

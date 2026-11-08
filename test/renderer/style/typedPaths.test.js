@@ -117,13 +117,15 @@ assert.equal(parseNestedInput(pseudoSelectorInput(element({}), 'before')).select
   assert.deepEqual(pseudoPickFor(section, 'before', { snapshot: undefined, model }), { kind: 'wait' });
 }
 // A ::before layer lists only the selectors that style its ::before: the
-// element's own `.stat_wrap` and the ::after rule are left out.
+// element's own `.stat_wrap` and the ::after rule are left out. The element's list
+// leaves those out in turn; only a host with no such rows lists every chip.
 {
   const chip = (text) => ({ text, specificity: [0, 1, 0], state: '', simple: false, key: text, inContext: true, fromComponent: false });
   const list = [chip('.stat_wrap'), chip('.divider::before'), chip('.divider::after'), chip(':open > .stat_wrap::before')];
   const shown = (pseudo) => pseudoLayerChips(list, pseudo).map((entry) => entry.text);
   assert.deepEqual(shown('::before').sort(), [':open > .stat_wrap::before', '.divider::before'].sort());
   assert.deepEqual(shown('::after'), ['.divider::after']);
-  assert.equal(shown(undefined).length, list.length, 'the element itself lists every chip');
+  assert.deepEqual(shown(''), ['.stat_wrap'], 'the element lists its own');
+  assert.equal(shown('every').length, list.length, 'a host with no pseudo-element rows lists every chip');
 }
 console.log('typed paths: ok');

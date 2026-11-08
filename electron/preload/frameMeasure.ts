@@ -2,8 +2,9 @@
 // padding, margins and gap bands, and the thin elements that get a wider hit
 // area so they can still be pointed at.
 
+import { assert } from '../../shared/core/assert';
 import type { Box, GapBand, GapRow, Rect, Spacing, ThinTarget } from './frameBasics';
-import { isElement } from './frameBasics';
+import { PROBE_ATTR, isElement } from './frameBasics';
 import { PATH_ATTR, addNode, elementsWithPath, inFocus, inScope, pathsOf, regions, runsOf, taggedPlaces, toRect } from './frameRegions';
 import { inlineTextRuns } from './inlineText';
 import { rectsForPseudo } from './framePseudo';
@@ -298,13 +299,94 @@ const rowGapBands = (rows: GapRow[], rowGap: number): GapBand[] => {
   return bands;
 };
 
+// A gap in px, as the page lays it out.
+//
+// The authored value is never parsed: `var(--site-gutter)`, `calc()` and
+// `clamp()` are all the engine's to resolve. But the computed value of
+// `column-gap` and `row-gap` is not always pixels either. Variables, `em`,
+// `rem`, `vw` and container units are resolved, while a percentage is kept,
+// because it resolves against the box only at layout time. So a gutter written
+// as `min(5%, 40px)` or `calc(2% + 4px)` computes to that same text, and
+// `parseFloat` read it as no gap at all (or `8.33333%` as 8px): hovering the
+// field drew nothing, or a sliver, while a plain `16px` drew its bands.
+//
+// Pixels are read directly. Anything else is handed back to the engine on a
+// probe the size of this element's content box, which is what a percentage gap
+// resolves against: the width for the column gap, the height for the row gap.
+const PX_LENGTH = /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?px$/i;
+const gapPx = (cs: CSSStyleDeclaration, axis: GapBand['axis']): number => {
+  const value = (axis === 'column' ? cs.columnGap : cs.rowGap).trim();
+  // `normal` is zero in flex and grid, which is the only place a gap is drawn.
+  if (value === '' || value === 'normal') {
+    return 0;
+  }
+  if (PX_LENGTH.test(value)) {
+    return Math.max(0, parseFloat(value));
+  }
+  const basisPx = contentBoxPx(cs, axis);
+  const resolved = probeLengthPx(value, basisPx, axis);
+  assert(Number.isFinite(resolved), 'gapPx: a probed gap is a finite number');
+  return Math.max(0, resolved);
+};
+
+// The element's content box along one axis, in px: what a percentage gap on
+// that axis is a percentage of. `width` and `height` are used values here, so
+// they are px; with `border-box` they include padding and border, taken off.
+const contentBoxPx = (cs: CSSStyleDeclaration, axis: GapBand['axis']): number => {
+  const sides = axis === 'column' ? (['left', 'right'] as const) : (['top', 'bottom'] as const);
+  const size = parseFloat(axis === 'column' ? cs.width : cs.height) || 0;
+  if (cs.boxSizing !== 'border-box') {
+    return Math.max(0, size);
+  }
+  let edges = 0;
+  for (const side of sides) {
+    edges += (parseFloat(cs.getPropertyValue(`padding-${side}`)) || 0) + (parseFloat(cs.getPropertyValue(`border-${side}-width`)) || 0);
+  }
+  return Math.max(0, size - edges);
+};
+
+// What `value` is in px inside a box `basisPx` wide (or tall, for the row
+// axis). The probe is the canvas's own (PROBE_ATTR): adding and removing it
+// never starts a page walk. Its outer box fixes the percentage basis, and the
+// inner one takes the value as its width or height; a value the engine
+// rejects leaves the inner box at zero, which is no gap.
+const probeLengthPx = (value: string, basisPx: number, axis: GapBand['axis']): number => {
+  assert(basisPx >= 0, 'probeLengthPx: a percentage basis is never negative');
+  const body = document.body;
+  if (!body) {
+    return 0;
+  }
+  const reset = 'margin:0;padding:0;border:0;box-sizing:content-box;';
+  const outer = document.createElement('div');
+  outer.setAttribute(PROBE_ATTR, '');
+  outer.setAttribute(
+    'style',
+    `position:absolute;left:0;top:0;visibility:hidden;pointer-events:none;overflow:hidden;${reset}width:${basisPx}px;height:${basisPx}px`,
+  );
+  const inner = document.createElement('div');
+  inner.setAttribute(PROBE_ATTR, '');
+  inner.setAttribute('style', `display:block;${reset}width:0;height:0`);
+  inner.style.setProperty(axis === 'column' ? 'width' : 'height', value);
+  outer.appendChild(inner);
+  body.appendChild(outer);
+  try {
+    const rect = inner.getBoundingClientRect();
+    const size = axis === 'column' ? rect.width : rect.height;
+    return Number.isFinite(size) ? size : 0;
+  } finally {
+    outer.remove();
+  }
+};
+
 export const gapBandsFor = (element: Element, cs: CSSStyleDeclaration): GapBand[] => {
   const display = cs.display;
   if (!/(^|\s)(flex|grid|inline-flex|inline-grid)$/.test(display)) {
     return [];
   }
-  const colGap = parseFloat(cs.columnGap) || 0;
-  const rowGap = parseFloat(cs.rowGap) || 0;
+  const colGap = gapPx(cs, 'column');
+  const rowGap = gapPx(cs, 'row');
+  assert(colGap >= 0, 'gapBandsFor: a column gap is never negative');
+  assert(rowGap >= 0, 'gapBandsFor: a row gap is never negative');
   if (colGap <= 0 && rowGap <= 0) {
     return [];
   }

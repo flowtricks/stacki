@@ -5,6 +5,7 @@
 import { LIMITS } from '../core/limits';
 import { parseComponentOrigin, type ComponentOrigin } from './componentSources';
 import { parseField, type PropField } from './propSchema';
+import { parseLengthUnit, type LengthUnit } from './lengthUnit';
 
 export interface ScanPage {
   readonly path: string;
@@ -44,6 +45,8 @@ export interface ScanResult {
   readonly layouts: readonly ScanComponent[];
   readonly components: readonly ScanComponent[];
   readonly trailingSlash?: string;
+  /** What the style panel writes lengths in (lengthUnit.ts). Absent from an older host → px. */
+  readonly lengthUnit?: LengthUnit;
 }
 
 function fail(where: string, what: string): never {
@@ -171,6 +174,9 @@ export function parseScanResult(input: unknown): ScanResult {
   };
   if (record['trailingSlash'] !== undefined) {
     result['trailingSlash'] = asString(record['trailingSlash'], 'trailingSlash');
+  }
+  if (record['lengthUnit'] !== undefined) {
+    result['lengthUnit'] = parseLengthUnit(record['lengthUnit']);
   }
   return result as unknown as ScanResult;
 }

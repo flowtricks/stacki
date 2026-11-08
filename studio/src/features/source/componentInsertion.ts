@@ -1,3 +1,4 @@
+import { indentUnitOf } from '../../../vendor/stacki/shared/core/indent';
 import { serializeNodes } from '../../../vendor/stacki/electron/parse/astroSerialize';
 import { defaultInstance, type InsertionDefaults } from './instanceDefaults';
 import { componentImport, resolveImport, type ComponentImport } from './imports';
@@ -20,7 +21,7 @@ export function componentInsertionEdits(source: string, action: Insert, file: st
   const node = defaultInstance(resolved, settings, (child, name) =>
     imports.resolve(child, name, componentImport(file, components.find((item) => item.file === child) ?? { file: child })),
   );
-  const fragment = node ? serializeNodes([node]) : action.paired ? `<${rootName}>Text</${rootName}>` : `<${rootName} />`;
+  const fragment = node ? serializeNodes([node], indentUnitOf(source)) : action.paired ? `<${rootName}>Text</${rootName}>` : `<${rootName} />`;
   const edits: Edit[] = [insertFragment(source, action, fragment, parsed.model.nodes.length === 0)];
   if (imports.statements.length) {
     const eol = parsed.model.eol;

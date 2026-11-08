@@ -5,14 +5,29 @@ export interface TextOffsets {
   readonly end: number;
 }
 
+/**
+ * The text one editor may change: separate source texts in document order, and
+ * the one that was opened. Offsets into runs count one extra position at each
+ * seam between two runs, so the end of one run and the start of the next stay
+ * different places: a caret after a <br> must not type before it.
+ */
+export interface TextSpace {
+  readonly runs: readonly (readonly Text[])[];
+  readonly primary: number;
+}
+
 export function textSelection(nodes: readonly Text[], range?: AbstractRange): TextOffsets | undefined {
+  return runsSelection([nodes], range);
+}
+
+export function runsSelection(runs: TextSpace['runs'], range?: AbstractRange): TextOffsets | undefined {
   const selection = window.getSelection();
   const current = range ?? (selection?.rangeCount ? selection.getRangeAt(0) : undefined);
   if (!current) {
     return undefined;
   }
-  const start = textOffset(nodes, current.startContainer, current.startOffset);
-  const end = textOffset(nodes, current.endContainer, current.endOffset);
+  const start = textOffset(runs, current.startContainer, current.startOffset);
+  const end = textOffset(runs, current.endContainer, current.endOffset);
   if (start === undefined || end === undefined || start > end) {
     return undefined;
   }
@@ -20,8 +35,12 @@ export function textSelection(nodes: readonly Text[], range?: AbstractRange): Te
 }
 
 export function selectTextOffsets(nodes: readonly Text[], offsets: TextOffsets): void {
-  const first = positionAt(nodes, offsets.start);
-  const last = positionAt(nodes, offsets.end);
+  selectRunsOffsets([nodes], offsets);
+}
+
+export function selectRunsOffsets(runs: TextSpace['runs'], offsets: TextOffsets): void {
+  const first = positionAt(runs, offsets.start);
+  const last = positionAt(runs, offsets.end);
   if (!first || !last) {
     return;
   }
@@ -74,36 +93,42 @@ export function textEditorRoot(match: TextMatch): HTMLElement | undefined {
   return undefined;
 }
 
-function textOffset(nodes: readonly Text[], container: Node, offset: number): number | undefined {
+function textOffset(runs: TextSpace['runs'], container: Node, offset: number): number | undefined {
   let total = 0;
-  for (const node of nodes) {
-    if (container === node) {
-      return offset <= node.length ? total + offset : undefined;
-    }
-    // Browsers can represent a selection at the parent's child boundary.
-    const children = node.parentNode?.childNodes;
-    if (container === node.parentNode && children) {
-      const index = Array.from(children).indexOf(node);
-      if (offset === index) {
-        return total;
+  for (const run of runs) {
+    for (const node of run) {
+      if (container === node) {
+        return offset <= node.length ? total + offset : undefined;
       }
-      if (offset === index + 1) {
-        return total + node.length;
+      // Browsers can represent a selection at the parent's child boundary.
+      const children = node.parentNode?.childNodes;
+      if (container === node.parentNode && children) {
+        const index = Array.from(children).indexOf(node);
+        if (offset === index) {
+          return total;
+        }
+        if (offset === index + 1) {
+          return total + node.length;
+        }
       }
+      total += node.length;
     }
-    total += node.length;
+    total += 1; // The seam before the next run.
   }
   return undefined;
 }
 
-function positionAt(nodes: readonly Text[], offset: number) {
+function positionAt(runs: TextSpace['runs'], offset: number) {
   let remaining = offset;
-  for (const node of nodes) {
-    if (remaining <= node.length) {
-      return { node, offset: remaining };
+  for (const run of runs) {
+    for (const node of run) {
+      if (remaining <= node.length) {
+        return { node, offset: remaining };
+      }
+      remaining -= node.length;
     }
-    remaining -= node.length;
+    remaining -= 1; // The seam before the next run.
   }
-  const node = nodes.at(-1);
+  const node = runs.at(-1)?.at(-1);
   return node ? { node, offset: node.length } : undefined;
 }

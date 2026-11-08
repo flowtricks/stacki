@@ -70,7 +70,7 @@ test('a list prop is an inline readonly item type with its default array', () =>
 test('a list with no items still gets a default it can be looped over', () => {
   const out = declared('', { key: 'items', kind: 'list', list: { fields: TITLE_TEXT, items: [] } });
   assert.ok(out.ok, out.error);
-  assert.equal(out.value.frontmatter, 'interface Props {\n  items?: readonly { title: string; text: string }[];\n}\nconst { items = [] } = Astro.props;\n');
+  assert.equal(out.value.frontmatter, 'interface Props {\n\titems?: readonly { title: string; text: string }[];\n}\nconst { items = [] } = Astro.props;\n');
 });
 
 test('a type the file declares with exactly those fields is reused by name', () => {
@@ -156,7 +156,7 @@ test('an image from src/ is imported and typed ImageMetadata', () => {
   assert.ok(out.ok, out.error);
   assert.equal(
     out.value.frontmatter,
-    'interface Props {\n  /** The card’s picture */\n  image?: ImageMetadata;\n}\nconst { image = placeholder } = Astro.props;\n',
+    'interface Props {\n\t/** The card’s picture */\n\timage?: ImageMetadata;\n}\nconst { image = placeholder } = Astro.props;\n',
   );
   assert.deepEqual(out.value.imports, [
     { name: 'ImageMetadata', path: 'astro', named: true, typeOnly: true },
@@ -190,7 +190,7 @@ test('the import is named after the file, numbered when that name is taken, and 
 test('an image in public/ or on the web is a URL string', () => {
   const remote = declared('', { key: 'image', kind: 'image', image: 'https://cdn.example.com/hero.jpg' });
   assert.ok(remote.ok);
-  assert.equal(remote.value.frontmatter, 'interface Props {\n  image?: string;\n}\nconst { image = "https://cdn.example.com/hero.jpg" } = Astro.props;\n');
+  assert.equal(remote.value.frontmatter, 'interface Props {\n\timage?: string;\n}\nconst { image = "https://cdn.example.com/hero.jpg" } = Astro.props;\n');
   assert.deepEqual(remote.value.imports, []);
   const local = declared('', { key: 'cover', kind: 'image', image: '/images/cover.webp' });
   assert.ok(local.ok);

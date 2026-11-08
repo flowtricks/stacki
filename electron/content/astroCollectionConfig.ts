@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { assert } from '../../shared/core/assert';
+import { CODE_INDENT_UNIT, indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import type { Result } from '../../shared/core/result';
 import { createProjectText, writeProjectText } from '../documents/documentWrites';
 import { cmsSourcePath } from '../lib/contentPaths';
@@ -64,7 +65,7 @@ export function addCollectionToConfig(source: string | undefined, name: string):
   const entry = constant === name ? name : `${name}: ${constant}`;
   const patched =
     source.slice(0, opening.index) +
-    declaration(constant, folder) +
+    withIndentUnit(declaration(constant, folder), indentUnitOf(source)) +
     '\n\n' +
     source.slice(opening.index, open + 1) +
     withEntry(listed, entry) +
@@ -116,10 +117,10 @@ function newConfig(name: string, folder: string): string {
 function declaration(constant: string, folder: string): string {
   return [
     `const ${constant} = defineCollection({`,
-    `  loader: glob({ base: './${folder}', pattern: '**/*.{md,mdx}' }),`,
-    '  schema: z.object({',
-    '    title: z.string(),',
-    '  }),',
+    `\tloader: glob({ base: './${folder}', pattern: '**/*.{md,mdx}' }),`,
+    '\tschema: z.object({',
+    '\t\ttitle: z.string(),',
+    '\t}),',
     '});',
   ].join('\n');
 }
@@ -133,7 +134,7 @@ function withEntry(listed: string, entry: string): string {
   }
   const comma = body.endsWith(',') ? '' : ',';
   if (listed.includes('\n')) {
-    const indent = /\n([ \t]*)\S/.exec(listed)?.[1] ?? '  ';
+    const indent = /\n([ \t]*)\S/.exec(listed)?.[1] ?? CODE_INDENT_UNIT;
     return `${body}${comma}\n${indent}${entry},\n`;
   }
   return `${body}${comma} ${entry} `;

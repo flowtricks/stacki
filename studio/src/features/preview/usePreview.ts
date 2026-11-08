@@ -8,7 +8,8 @@ import { receiveCanvasReply, setCanvasFrame, noteCanvasReady } from '../../../ve
 import { NO_TEXT_MARKS, parsePreviewMessage, type TextMarks } from '../../../vendor/stacki/src/features/preview/previewMessages';
 import type { GuideMetrics } from '../../../vendor/stacki/src/features/preview/guideModel';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { request, routeFor } from '../project/projectClient';
+import { request } from '../project/projectClient';
+import { useCanvasRoute } from '../pages/templateEntryStore';
 import { record, string } from '../../shared/validation';
 
 export function usePreview(
@@ -51,9 +52,13 @@ export function usePreview(
     textMarks,
     subscribeLoad,
     subscribeOutside,
-    reveal: (id: string, occurrence = 0) => {
-      reveal.current = { type: 'studio:reveal', id, occurrence };
-      postToFrame(frame.current, target?.origin, reveal.current);
+    // A follow is kept and sent again once the peer's page has loaded here. A
+    // Navigator pick is not: the page is already there, and replaying it after a
+    // later reload would pull the page back from wherever the person scrolled.
+    reveal: (id: string, occurrence = 0, options: { readonly replayOnLoad?: boolean } = {}) => {
+      const message = { type: 'studio:reveal', id, occurrence };
+      reveal.current = options.replayOnLoad === false ? undefined : message;
+      postToFrame(frame.current, target?.origin, message);
     },
     loaded: (options: { readonly preserveNavigation?: boolean } = {}) => {
       if (!options.preserveNavigation) {
@@ -70,6 +75,12 @@ export function usePreview(
       if (reveal.current && !options.preserveNavigation) {
         postToFrame(frame.current, target?.origin, reveal.current);
       }
+    },
+    // Outlines measured on a document that has gone: a frame that left the site
+    // must not keep the old page's boxes over whatever replaced it.
+    clearOverlays: () => {
+      setOutlines(emptyOutlines);
+      setTextMarks(NO_TEXT_MARKS);
     },
     url: source.url,
     renderURL: target?.url,
@@ -215,6 +226,8 @@ function receiveStudioSignals(data: unknown, patch: () => void) {
 function usePreviewTarget(file: string, enabled: boolean, callbacks: React.MutableRefObject<{ report: (error: unknown) => void }>) {
   const [target, setTarget] = useState<{ url: string; origin: string }>();
   const [revision, setRevision] = useState(0);
+  // A template page shows the entry chosen for it; until there is one, there is nothing to load.
+  const route = useCanvasRoute(file, enabled);
   const retry = useCallback(() => {
     // Hosted entry URLs expire. A retry needs a fresh grant, not another iframe
     // pointed at the expired URL. Removing the old target also resets readiness.
@@ -223,11 +236,11 @@ function usePreviewTarget(file: string, enabled: boolean, callbacks: React.Mutab
   }, []);
   useEffect(() => {
     let active = true;
-    if (!enabled || !isCanvasPage(file)) {
+    if (!enabled || !isCanvasPage(file) || route === undefined) {
       setTarget(undefined);
       return;
     }
-    void request('/studio/api/preview-url?page=' + encodeURIComponent(routeFor(file)))
+    void request('/studio/api/preview-url?page=' + encodeURIComponent(route))
       .then((value) => {
         const target = parsePreviewTarget(value);
         if (active) {
@@ -242,7 +255,7 @@ function usePreviewTarget(file: string, enabled: boolean, callbacks: React.Mutab
     return () => {
       active = false;
     };
-  }, [file, enabled, callbacks, revision]);
+  }, [file, route, enabled, callbacks, revision]);
   return { target, retry };
 }
 

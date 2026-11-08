@@ -88,6 +88,8 @@ interface Actions<T> {
   readonly close: () => void;
   readonly preview: (index: number) => void;
   readonly hover: (index: number) => void;
+  /** The pointer left the options: a preview that can be dropped without a write is dropped. */
+  readonly leave: () => void;
   readonly pick: (option: DropdownOption<T>) => void;
 }
 type Controller<T> = Selection<T> & Actions<T>;
@@ -235,6 +237,18 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
       const option = visible[index];
       if (option && livePreview) {
         hoverFrame.current = window.requestAnimationFrame(() => previewOption(option));
+      }
+    },
+    leave: () => {
+      // Only a canvas preview (onCancelPreview) is dropped on the way out. A dropdown
+      // that previews by writing keeps its row until it closes, as it always has.
+      if (onCancelPreview === undefined) {
+        return;
+      }
+      cancelHover();
+      if (previewed.current !== undefined) {
+        previewed.current = undefined;
+        onCancelPreview();
       }
     },
     pick: (option) => {
@@ -439,7 +453,7 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
           onKeyDown={onKey}
         />
       )}
-      <div className="dd-list" ref={control.listRef}>
+      <div className="dd-list" ref={control.listRef} onMouseLeave={control.leave}>
         {control.visible.map((option, index) => (
           <Fragment key={`${String(option.value)}-${index}`}>
             {option.group && option.group !== control.visible[index - 1]?.group && (

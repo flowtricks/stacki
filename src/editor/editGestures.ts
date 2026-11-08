@@ -12,6 +12,7 @@ import type { Edit, NodeRef } from '../../shared/engine/editRequest';
 import { singleDeclarationChange } from '../../shared/engine/inlineStyle';
 import { LIMITS } from '../../shared/core/limits';
 import type { Attr } from '../../shared/page/pageNode';
+import { labelsNode } from '../../shared/page/leadingNote';
 import { renamedAttr } from './attrOrder';
 import { loopVarsAt, parseLoopHead, renamedLoopVar, strippedBindings } from './loopBindings';
 import type { EditGesture } from './pageEdits';
@@ -183,7 +184,7 @@ export function moveGesture(
     return undefined; // Into itself: nothing to do.
   }
   const previous = found.list[found.index - 1];
-  const note = previous?.kind === 'comment' ? previous : undefined;
+  const note = previous !== undefined && labelsNode(previous.kind, found.node.kind) ? previous : undefined;
   const moving = note === undefined ? [nodeId] : [note.id, nodeId];
   const landing = relocated(model, found, moving, place);
   const slot = found.node.props?.['slot'];
@@ -194,7 +195,7 @@ export function moveGesture(
     coalesceKey: undefined,
     urgency: options.urgency,
     stream: undefined,
-    request: (refOf) => moveRequest({ nodeId, noteId: note?.id, beside, dropSlot }, refOf),
+    request: (refOf) => moveRequest({ nodeId, beside, dropSlot }, refOf),
     apply: (current) => {
       const again = findWithList(current.nodes, nodeId);
       if (again === undefined) {
@@ -210,11 +211,13 @@ export function moveGesture(
 }
 
 /** A move's requests against a parse: the `slot` removal first when it goes,
- * then the node and its note, in the order that lands them as they stood. */
+ * then the node. One move carries the node's note too: the planner relocates a
+ * node with its label (shared/engine/planTree.ts), by the rule the Navigator
+ * folds it with (shared/page/leadingNote.ts). A second move of the note would
+ * land it under whatever the first move left above it. */
 function moveRequest(
   move: {
     readonly nodeId: string;
-    readonly noteId: string | undefined;
     readonly beside: { readonly anchorId: string; readonly placement: Placement } | undefined;
     readonly dropSlot: boolean;
   },
@@ -222,29 +225,17 @@ function moveRequest(
 ): readonly Edit[] | undefined {
   const { beside } = move;
   const target = refOf(move.nodeId);
-  const noteRef = move.noteId === undefined ? undefined : refOf(move.noteId);
   const destination = beside === undefined ? undefined : refOf(beside.anchorId);
   if (target === undefined || beside === undefined || destination === undefined) {
-    return undefined;
-  }
-  if (move.noteId !== undefined && noteRef === undefined) {
     return undefined;
   }
   const edits: Edit[] = [];
   if (move.dropSlot) {
     edits.push({ tag: 'remove-attribute', target, name: 'slot' });
   }
-  const moveOf = (ref: NodeRef): Edit => ({
-    tag: 'move-node',
-    target: ref,
-    destination,
-    placement: beside.placement,
-  });
-  // Before a node, the note goes first and the node after it; after a node
-  // or into a parent, the node goes first and the note lands in front of it.
-  const order = noteRef === undefined ? [target] : beside.placement === 'before' ? [noteRef, target] : [target, noteRef];
-  edits.push(...order.map(moveOf));
+  edits.push({ tag: 'move-node', target, destination, placement: beside.placement });
   assert(edits.length > 0, 'A move states at least one edit');
+  assert(edits.at(-1)?.tag === 'move-node', 'A move ends with the relocation');
   return edits;
 }
 

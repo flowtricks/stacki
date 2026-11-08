@@ -1,4 +1,5 @@
 import CodeEditor from '../../../vendor/stacki/src/ui/CodeEditor';
+import { codeIndentStyleFor } from '../../../vendor/stacki/src/ui/codeEditorIndent';
 import { languageFor } from '../../../vendor/stacki/src/ui/codeHighlight';
 import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import { useState } from 'react';
@@ -62,7 +63,13 @@ export function CollectionEditor({ document }: { document: SharedDocument }) {
           <ErrorToast message={problem} />
           {!problem && <p className="muted">Changes are shared live.</p>}
           <div aria-label="Collection source" className="source-editor" role="group">
-            <CodeEditor key={document.file} language={languageFor(document.file)} value={source} onChange={replace} />
+            <CodeEditor
+              key={document.file}
+              language={languageFor(document.file)}
+              indentation={codeIndentStyleFor(document.file) === 'spaces' ? 'spaces' : 'document'}
+              value={source}
+              onChange={replace}
+            />
           </div>
         </>
       )}

@@ -1,12 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import type { VariableCell } from './variablesBridge';
-import { VARIABLES_LIMITS } from './variablesBridge';
+import React, { useContext, useEffect, useRef, useState } from 'react';
+import type { VariableCell } from '../../ipc/variablesBridge';
+import { VARIABLES_LIMITS } from '../../ipc/variablesBridge';
 import { assert } from '../../../shared/core/assert';
 import ColorSwatch from '../style/components/ColorSwatch';
 import VariableConnect, { connectCustomField } from '../style/VariableConnect';
 import EasingEditor, { MiniCurve } from '../style/EasingEditor';
 import { easingToBezier, isEasing } from '../style/model/transition';
 import FluidBadge from './FluidBadge';
+import { VariablePreviewContext } from './liveVariableEdits';
 import CustomValue, { doesNotFit, isLong, withBinding } from '../style/CustomValueEditor';
 
 type CellValue = VariableCell & {
@@ -52,7 +53,33 @@ function useVariableCell({ cell, onSave, fluidOf, onDraft }: PopulatedCellProps)
   assert(value.length <= VARIABLES_LIMITS.fileCharsMax, 'Variable cell: value limit exceeded');
   assert(cell.name.length <= VARIABLES_LIMITS.fileCharsMax, 'Variable cell: name limit exceeded');
 
-  useEffect(() => setDraft(undefined), [cell?.value, cell?.valueStart]);
+  // A reread that brings the value the field holds ends the draft. One that does
+  // not is either our own earlier write landing while the field has moved on (a
+  // held arrow key), or someone else's edit: the field keeps what is being typed.
+  useEffect(() => setDraft((current) => (current === cell.value ? undefined : current)), [cell.value, cell.valueStart]);
+
+  // Each draft straight to the canvas, and its end when it is abandoned. A draft
+  // that ends because it was written is released by the save instead, once the
+  // page has caught up (liveVariableEdits.ts).
+  const preview = useContext(VariablePreviewContext);
+  const previewed = useRef<string | undefined>(undefined);
+  const cellRef = useRef(cell);
+  cellRef.current = cell;
+  useEffect(() => {
+    if (draft === previewed.current) {
+      return;
+    }
+    previewed.current = draft;
+    preview?.(cellRef.current, draft);
+  }, [draft, preview]);
+  useEffect(
+    () => () => {
+      if (previewed.current !== undefined) {
+        preview?.(cellRef.current, undefined);
+      }
+    },
+    [preview],
+  );
 
   // Every keystroke goes up as well as into the field: another row's badge may
   // be about this value.
@@ -64,12 +91,19 @@ function useVariableCell({ cell, onSave, fluidOf, onDraft }: PopulatedCellProps)
     return () => onDraft?.(cell.name, undefined);
   }, [cell?.name, draft, onDraft]);
 
+  // The draft stays on screen until its write lands: cleared first, the field
+  // showed the old value for the length of the write and the reread.
   const write = async (next: string) => {
-    setDraft(undefined);
     if (next === cell.value) {
+      setDraft(undefined);
       return;
     }
-    await onSave(cell, next);
+    try {
+      await onSave(cell, next);
+    } finally {
+      // Unless the field has moved on since: that draft is newer than this write.
+      setDraft((current) => (current === next ? undefined : current));
+    }
   };
   const commit = (next = value): void => {
     void write(next).catch(reportSaveFailure);
@@ -158,6 +192,16 @@ function CellView({ state }: { readonly state: CellState }) {
         // the press reaches nothing inside the cell.
         event.stopPropagation();
         openCustom(event.currentTarget);
+      }}
+      // A held arrow nudges the draft, and the canvas follows each step live;
+      // letting go is the moment the value is written, while the caret stays.
+      onKeyUpCapture={(event) => {
+        if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+          return;
+        }
+        if (state.draft !== undefined && state.draft !== cell.value) {
+          state.commit(state.draft);
+        }
       }}
       onKeyDownCapture={(event) => {
         // The same shortcut, wherever the caret is — the token editor holds it

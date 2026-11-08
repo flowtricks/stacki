@@ -124,6 +124,7 @@ const SHEETS = [
     const anchor = { id: 'n0', kind: 'element', name: 'a', props: { class: { type: 'string', value: 'button' } }, children: [] };
     const astroSource = (inner) => `---\n---\n<a class="button"><slot /></a>\n<style is:global>${inner}</style>\n`;
     dom.window.avb = {
+      onCssChanged: () => () => {},
       listStyleFiles: async () => ({ files: [] }),
       listAstroStyleFiles: async () => ({ files: [] }),
       listAssets: async () => ({ entries: [] }),

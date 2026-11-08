@@ -669,14 +669,15 @@ test('moveGesture: a note travels with its node, a ' + 'stale slot goes first, n
     [
       ['remove-attribute', x, undefined],
       ['move-node', x, 'after'],
-      ['move-node', note, 'after'],
     ],
-    'after a node: the node, then its note in front of it',
+    'after a node: one move, which main plans with the note it carries (planTree.ts, labelOf)',
   );
-  assert.deepEqual(tags({ parentId: 'z', index: 0 }).slice(1), [
-    ['move-node', x, 'first-child'],
-    ['move-node', note, 'first-child'],
-  ]);
+  assert.deepEqual(tags({ parentId: 'z', index: 0 }).slice(1), [['move-node', x, 'first-child']]);
+  assert.equal(
+    tags({ parentId: 'z', index: 0 }).some((edit) => edit[1] === note),
+    false,
+    'the note is never moved on its own',
+  );
   const moved = gestures.moveGesture(model, 'x', { parentId: 'z', index: 0 }, rules, { urgency: true }).apply(model);
   assert.deepEqual(
     moved.nodes.map((node) => node.id),

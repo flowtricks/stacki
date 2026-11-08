@@ -92,6 +92,8 @@ async function restoreTexts(options: HistoryOptions, texts: FileTexts): Promise<
     const result = await variableEdit('writeStyleFile', {
       filePath: `${options.projectPath}/${file}`,
       css,
+      // An Astro file may be the open page, whose model must hear of the restore.
+      announce: true,
     });
     if (!result.ok) {
       options.report(result.error || 'Could not restore that stylesheet.');

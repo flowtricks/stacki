@@ -82,6 +82,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     selected = value;
     return React.createElement(VariablesPanel, {
       project: { path: directory },
+      place: { openFile: undefined, contextPage: undefined },
       selected: value,
       onSelect: setValue,
     });

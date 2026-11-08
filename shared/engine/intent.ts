@@ -294,8 +294,9 @@ function checkOperationAnchor(operation: Operation, anchor: AnchorRef): void {
   }
 }
 
-// Tags carry attributes: elements, component invocations, and <style>/<script>.
-function isAttributeHost(kind: AnchorKind): boolean {
+/** Tags carry attributes: elements, component invocations, and <style>/<script>.
+ * Bare text has no tag, so nothing can be set on it until it is given one. */
+export function isAttributeHost(kind: AnchorKind): boolean {
   switch (kind) {
     case 'element':
     case 'component':

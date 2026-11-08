@@ -27,6 +27,10 @@ interface Props {
   readonly source: boolean;
   /** Markup the editor cannot show locks the visual controls; HTML still edits it. */
   readonly locked: boolean;
+  /** What the source view edits: `HTML`, or a Markdown body's `Markdown`. */
+  readonly sourceLabel: string;
+  /** Whether the source view has a Format button (HTML lays itself out to read). */
+  readonly formattable: boolean;
   readonly onAction: (action: RichTextAction) => void;
   readonly onToggleSource: () => void;
   readonly onFormat: () => void;
@@ -107,7 +111,7 @@ export function HtmlToolbar(props: Props) {
           <InsertButtons format={format} onAction={onAction} />
         </fieldset>
       )}
-      {props.source && (
+      {props.source && props.formattable && (
         <button type="button" className="html-source-toggle html-format" title="Lay the HTML out to read" onClick={props.onFormat}>
           Format
         </button>
@@ -116,11 +120,11 @@ export function HtmlToolbar(props: Props) {
         type="button"
         className="html-source-toggle"
         aria-pressed={props.source}
-        title={props.source ? 'Back to the visual editor' : 'Edit the HTML'}
+        title={props.source ? 'Back to the visual editor' : `Edit the ${props.sourceLabel}`}
         onMouseDown={(event) => event.preventDefault()}
         onClick={props.onToggleSource}
       >
-        {props.source ? 'Visual' : 'HTML'}
+        {props.source ? 'Visual' : props.sourceLabel}
       </button>
     </div>
   );

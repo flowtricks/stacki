@@ -77,7 +77,10 @@ function textPlan(source: string, node: CanvasSourceNode, parent: CanvasSourceNo
     return undefined;
   }
   const target = canvasTextTarget(node, parent, value, binding ? 'Shared variable · changes other uses too' : 'Edit text', pathFor);
-  return target ? { start, end, encoding: literal ? 'html' : 'string', target } : undefined;
+  if (!target) {
+    return undefined;
+  }
+  return { start, end, encoding: literal ? 'html' : 'string', target: literal ? { ...target, literal: true } : target };
 }
 
 export function canvasTextTarget(
@@ -126,6 +129,22 @@ export function applyCanvasText(source: string, plan: CanvasTextPlan, value: str
   return source.slice(0, plan.start) + replacement + source.slice(plan.end);
 }
 
+/**
+ * Several texts of one source in a single edit: one selection across a <br>
+ * changes the words either side and must not leave half of them saved. Later
+ * texts go first, so each plan's offsets still hold when it is applied.
+ */
+export function applyCanvasTexts(source: string, edits: readonly { readonly plan: CanvasTextPlan; readonly value: string }[]): string {
+  assert(edits.length > 0, 'A combined text edit has edits');
+  const ordered = [...edits].sort((left, right) => right.plan.start - left.plan.start);
+  ordered.slice(1).forEach((edit, index) => {
+    const later = ordered[index];
+    assert(later !== undefined, 'Each text has a later neighbour');
+    assert(edit.plan.end <= later.plan.start, 'Combined text edits do not overlap');
+  });
+  return ordered.reduce((next, edit) => applyCanvasText(next, edit.plan, edit.value), source);
+}
+
 function escapeCanvasText(value: string): string {
   // Braces must remain literal text rather than introducing executable Astro expressions.
   return textValueCanonical(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('{', '&#123;').replaceAll('}', '&#125;');
@@ -134,6 +153,8 @@ function escapeCanvasText(value: string): string {
 export interface CanvasTextEdit {
   readonly target: CanvasTextTarget;
   readonly apply: (value: string) => Promise<void>;
+  /** For words written in this file: where, so several can be saved as one edit. */
+  readonly plan?: CanvasTextPlan;
   /**
    * For text a component prop sets: the instance and prop the props panel
    * shows it in, and that prop's value once the typed words replace these.

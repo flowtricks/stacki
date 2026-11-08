@@ -13,7 +13,9 @@
 // It runs inside the project's dev server, a plain Node process, so it is
 // unpacked beside the archive (package.json build.asarUnpack) and requires only
 // modules that are.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHash } from 'node:crypto';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
@@ -23,6 +25,7 @@ import { LIMITS } from '../../shared/core/limits';
 import { stampComment, stampPathProblem, type PreviewStamp } from '../../shared/page/previewToken';
 import { markChunkHtml, parsePage, resolveChunks, serializePageMarked } from '../parse/astroParser';
 import { withScopeCapture } from './scopeCapture';
+import { parseVariantHeader, VARIANT_HEADER, VARIANT_SCOPE_GLOBAL, withVariantOverride, type VariantOverride } from '../../shared/page/variantOverride';
 
 export interface MarkedSource {
   /** The marked template Vite compiles in place of the file. */
@@ -31,6 +34,8 @@ export interface MarkedSource {
   readonly source: string;
   /** A page under src/pages: it also gets the canvas patcher. */
   readonly page: boolean;
+  /** The file's project-relative path, as its stamp names it. */
+  readonly file: string;
 }
 
 /** The marked copy of `file`, or undefined when it is not a project .astro file the
@@ -56,7 +61,10 @@ export function markSourceFile(file: string, projectDirectories: readonly string
     return undefined; // Past the file bound: the editor shows it as code, not nodes.
   }
   const source = bytes.toString('utf8');
-  const parsed = parsePage(source);
+  // Located, so the marked copy takes the whitespace between nodes from the
+  // file itself and renders exactly the spaces the real build does
+  // (astroSerializeMarked.ts, MarkedSource).
+  const parsed = parsePage(source, { locs: true });
   if (!parsed.editable) {
     return undefined;
   }
@@ -66,7 +74,7 @@ export function markSourceFile(file: string, projectDirectories: readonly string
   const page = relativePath.startsWith('src/pages/') || isDefaultsCanvas(relativePath);
   const checksum = toDigest(createHash('sha256').update(bytes).digest('hex'));
   const stamp: PreviewStamp = { file: relativePath, checksum };
-  const marked = page ? serializePageMarked(parsed.model, '', stamp) : serializePageMarked(parsed.model, `${relativePath}|`, stamp);
+  const marked = serializePageMarked(parsed.model, page ? '' : `${relativePath}|`, stamp, source);
   assert(marked.endsWith('\n'), 'The marked serializer ends on a line of its own');
   // The frontmatter files what it computed under this path as it finishes, so
   // the binding picker can show a loop's real items (scopeCapture.ts).
@@ -74,7 +82,48 @@ export function markSourceFile(file: string, projectDirectories: readonly string
   assert(captured.endsWith('\n'), 'The scope capture keeps the template’s last line');
   // Last, at the top level of the file's template, where the compiler keeps a
   // plain comment: after `</html>` for a page, which leaves the doctype alone.
-  return { code: `${captured}${stampComment(stamp)}\n`, source, page };
+  // Against the last node, like every marker, so it adds no line break the
+  // file doesn't end with — unless the template is empty and the last line is
+  // the frontmatter's closing fence, which must stay a line of its own.
+  const template = captured.endsWith('---\n') ? captured : captured.slice(0, -1);
+  return { code: `${template}${stampComment(stamp)}\n`, source, page, file: relativePath };
+}
+
+/**
+ * The marked copy Desktop's canvas compiles: markSourceFile's, and a component
+ * (never a page) also checks the hover-preview scope as it starts, so one of
+ * its instances can render with one prop changed (shared/page/variantOverride.ts).
+ */
+export function markCanvasSourceFile(file: string, projectDirectories: readonly string[]): MarkedSource | undefined {
+  const marked = markSourceFile(file, projectDirectories);
+  if (marked === undefined || marked.page) {
+    return marked;
+  }
+  const code = withVariantOverride(marked.code, marked.file);
+  assert(code.length > marked.code.length, 'markCanvasSourceFile: the preview check is added');
+  return { ...marked, code };
+}
+
+// One scope per dev server process, on the global every component module reads
+// it from: the middleware below runs a preview request inside it, and the
+// statement withVariantOverride adds reads it during that request's render.
+const variantScope = new AsyncLocalStorage<VariantOverride>();
+Reflect.set(globalThis, VARIANT_SCOPE_GLOBAL, variantScope);
+
+/**
+ * The dev server middleware for hover previews: a request that carries a valid
+ * override header renders inside the override's scope; any other request,
+ * including one whose header does not parse, renders as written. It renders
+ * only; nothing here can write.
+ */
+export function variantScopeMiddleware(request: IncomingMessage, _response: ServerResponse, next: () => void): void {
+  const override = parseVariantHeader(request.headers[VARIANT_HEADER]);
+  if (override === undefined) {
+    next();
+    return;
+  }
+  assert(override.prop.length > 0, 'variantScopeMiddleware: an override names its prop');
+  variantScope.run(override, next);
 }
 
 /** The marked copy of a chunk imported as `?raw` (see serializePageMarked's

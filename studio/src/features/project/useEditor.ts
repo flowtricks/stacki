@@ -12,7 +12,8 @@ import { componentAt, componentEntry } from './componentEntry';
 import type { ComponentFocus, OpenFile } from './editorNavigation';
 import { dropTarget } from '../navigator/dropTarget';
 import type { DropLocation } from '../../../vendor/stacki/src/features/structure/structureModel';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import type { CanvasMove } from '../../../vendor/stacki/shared/page/canvasMove';
 import type { Project } from './projectClient';
 import { useDocument } from '../collaboration/useDocument';
 import type { Session } from '../auth/useSession';
@@ -44,7 +45,7 @@ export function useEditor(
   const preview = usePreview(
     previewFile,
     (id, occurrence) => {
-      select(id === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + id, occurrence);
+      selection.selectFromCanvas(id === '0' && nodes[0]?.id === 'layout' ? 'layout' : 'n' + id, occurrence);
       onCanvasSelect();
     },
     report,
@@ -65,6 +66,28 @@ export function useEditor(
   function action(value: TreeAction) {
     void document?.action(value).catch(report);
   }
+  const revertMove = useCanvasMoveRevert(preview.send);
+  // A reorder shows on the canvas at once (electron/preload/frameMove.ts); the page the
+  // server renders confirms it, and an action that is not sent or is refused takes it back.
+  function move(value: TreeAction, canvasMove: CanvasMove | undefined) {
+    if (canvasMove !== undefined) {
+      preview.send({ type: 'avb:optimistic-move', move: canvasMove });
+    }
+    const pending = document?.action(value) ?? Promise.resolve(false);
+    void pending.then(
+      (sent) => {
+        if (!sent && canvasMove !== undefined) {
+          revertMove();
+        }
+      },
+      (error: unknown) => {
+        if (canvasMove !== undefined) {
+          revertMove();
+        }
+        report(error);
+      },
+    );
+  }
   return {
     codeWindow,
     document,
@@ -79,10 +102,23 @@ export function useEditor(
     select,
     restoreSelection: selection.restore,
     action,
+    move,
     openComponent: enter,
     insert: (componentFile: string, location?: DropLocation) => insertComponent(project, file, parsed, selected, action, componentFile, location),
     editable: !!parsed?.editable,
   };
+}
+// The canvas takes a shown reorder back when the server refuses the action
+// (useDocument.ts says so with `studio:action-refused`).
+function useCanvasMoveRevert(send: (message: unknown) => void): () => void {
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    const refused = () => sendRef.current({ type: 'avb:move-revert' });
+    window.addEventListener('studio:action-refused', refused);
+    return () => window.removeEventListener('studio:action-refused', refused);
+  }, []);
+  return () => sendRef.current({ type: 'avb:move-revert' });
 }
 function useDocumentError(error: string | undefined, report: (error: unknown) => void) {
   useEffect(() => {

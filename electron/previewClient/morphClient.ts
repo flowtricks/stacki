@@ -22,12 +22,13 @@
 // and hands it to the dev plugin as virtual:avb-morph, which has no folder for
 // an import to resolve against.
 
-import { stripTemplateMarkers, asDocument } from './morphNodes';
+import { stripTemplateMarkers, asDocument, inertNoscripts } from './morphNodes';
 import { parsePreviewRoute } from '../../shared/properties/previewRoute';
 import { type ReloadReason, OverCap, refillMorphWork, checkMarkerCap } from './morphBudget';
 import { previewHost, stripAnchors, stripPreviewInstrumentation, syncAnchors, syncStamps } from './morphAnchors';
 import { patchAttrs, patchChildren } from './morphPatch';
 import { addedScripts, noteScripts, runScripts, noteStyles, loadStyles, refreshDevStyles } from './morphAssets';
+import { createVariantPreview } from './morphVariant';
 
 declare global {
   // Vite's import.meta.hot; only .on is used here, so only .on is declared.
@@ -63,6 +64,9 @@ function fetchDocument(initialHTML?: string, signal?: AbortSignal): Promise<Fetc
       : Promise.resolve(initialHTML);
   return rendering.then((html) => {
     const withAnchors = new DOMParser().parseFromString(html, 'text/html');
+    // Before anything reads the tree: the canvas parsed <noscript> as text, and
+    // every comparison and insertion below must see it the same way.
+    inertNoscripts(withAnchors);
     withAnchors.getElementById('studio-render-baseline')?.remove();
     stripTemplateMarkers(withAnchors);
     const clone = withAnchors.cloneNode(true);
@@ -168,17 +172,23 @@ document.addEventListener('studio:render-pending', () => {
     void update();
   }, 20_000);
 });
-document.addEventListener('studio:render-html', (event) => {
-  if (!(event instanceof CustomEvent) || typeof event.detail !== 'string' || event.detail.length > 4_000_000) {
-    return;
-  }
+function paintRendering(html: string): void {
   clearFallback();
-  pushedHTML = event.detail;
+  pushedHTML = html;
   // A structural edit can start a WAN refresh before its socket render arrives.
   // Cancel that redundant pull so completed HTML never waits behind the network.
   activePull?.abort();
   void update();
+}
+document.addEventListener('studio:render-html', (event) => {
+  if (!(event instanceof CustomEvent) || typeof event.detail !== 'string' || event.detail.length > 4_000_000) {
+    return;
+  }
+  paintRendering(event.detail);
 });
+// Desktop's prop hover preview (morphVariant.ts): a rendering of the page with
+// one prop changed is painted like any other, and cancel pulls the real one.
+const variantPreview = createVariantPreview({ paint: paintRendering, restore: () => void update() });
 document.addEventListener('studio:render-fallback', () => {
   clearFallback();
   void update();
@@ -259,6 +269,11 @@ function applyRendering(next: FetchedDocument): void {
   if (!liveRoot || !previousRoot || !nextRoot) {
     throw new Error('missing <html> in one of the renderings');
   }
+  // The patch assumes the live page is the previous rendering plus what the page's
+  // own scripts did. A reorder the canvas showed before this rendering arrived
+  // (electron/preload/frameMove.ts) is taken back here, in this task, and shown again
+  // after it when this is still a rendering of the old file: nothing paints between.
+  document.dispatchEvent(new CustomEvent('avb:before-morph', { detail: next.withAnchors }));
   patchAttrs(liveRoot, previousRoot, nextRoot);
   patchChildren(document.head, previousDocument.head, next.clean.head);
   patchChildren(document.body, previousDocument.body, next.clean.body);
@@ -276,6 +291,7 @@ function applyRendering(next: FetchedDocument): void {
   }
   syncAnchors(liveBody, serverBody);
   syncStamps(document, next.withAnchors);
+  document.dispatchEvent(new CustomEvent('avb:after-patch', { detail: next.withAnchors }));
   document.dispatchEvent(new CustomEvent('avb:morphed', { detail: next.withAnchors }));
 }
 
@@ -293,6 +309,7 @@ function applyRendering(next: FetchedDocument): void {
 // Patching twice for one edit costs a fetch and a diff that finds nothing.
 if (import.meta.hot) {
   import.meta.hot.on('avb:page-changed', () => {
+    variantPreview.forget();
     if (host === 'stacki') {
       // update() reports its own failures and reloads; nothing is left to catch.
       requestUpdate();
@@ -309,6 +326,9 @@ window.addEventListener('message', (event: MessageEvent) => {
   }
   const data: unknown = event.data;
   if (event.source === window.parent) {
+    if (variantPreview.receive(data)) {
+      return;
+    }
     const route = parsePreviewRoute(data, location.href);
     if (route && route !== location.pathname + location.search + location.hash) {
       // Reset queued renders before changing subscriptions so an old response cannot

@@ -21,7 +21,8 @@
     "prebuild": "npm run assemble",
     "precheck": "npm run assemble",
     "pretest": "npm run assemble",
-    "release:bundle": "npm run build && tsx scripts/release.ts"
+    "release:bundle": "npm run build && tsx scripts/release.ts",
+    "release:demo": "npm run build && tsx scripts/buildDemoAssets.ts"
   },
   "dependencies": {
     "@astrojs/compiler": "^4.0.0",
@@ -82,6 +83,10 @@
     ".": {
       "types": "./src/server/integration.ts",
       "import": "./dist/integration.mjs"
+    },
+    "./bake": {
+      "types": "./src/features/bake/bakeSite.ts",
+      "import": "./dist/bake.mjs"
     }
   },
   "files": [
