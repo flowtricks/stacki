@@ -204,6 +204,24 @@ test('between inline siblings the author set apart, the separator is copied and 
   assert.equal(insert(page, '<a>new</a>', 'before', [0, 2]), '<div>\n\t<a>one</a>\n\t<a>new</a>\n\t<a>two</a>\n</div>\n');
 });
 
+// Duplicate is an insert after the original, so a regression here read "OneOne Two"
+// for a duplicated first link: the first sibling's own separator is the parent's
+// edge, and the run's spacing is the gap after it.
+test('beside the first of the inline siblings the author set apart, the new node takes their spacing', () => {
+  const page = '<nav>\n\t<a>one</a>\n\t<a>two</a>\n</nav>\n';
+  assert.equal(insert(page, '<a>new</a>', 'after', [0, 0]), '<nav>\n\t<a>one</a>\n\t<a>new</a>\n\t<a>two</a>\n</nav>\n');
+  assert.equal(insert(page, '<a>new</a>', 'before', [0, 0]), '<nav>\n\t<a>new</a>\n\t<a>one</a>\n\t<a>two</a>\n</nav>\n');
+  assert.equal(insert(page, '<a>new</a>', 'first-child', [0]), '<nav>\n\t<a>new</a>\n\t<a>one</a>\n\t<a>two</a>\n</nav>\n');
+  const spaced = '<p><a>one</a> <a>two</a></p>\n';
+  assert.equal(insert(spaced, '<a>new</a>', 'after', [0, 0]), '<p><a>one</a> <a>new</a> <a>two</a></p>\n', 'a one-line run keeps its single space');
+  const blockAfter = '<div>\n\t<a>one</a>\n\t<h2>a</h2>\n</div>\n';
+  assert.equal(
+    insert(blockAfter, '<a>new</a>', 'after', [0, 0]),
+    '<div>\n\t<a>one</a><a>new</a>\n\t<h2>a</h2>\n</div>\n',
+    'a block after is no spacing to copy',
+  );
+});
+
 test('text and text-holding parents stay on one line', () => {
   assert.equal(insert('<p></p>\n', '<span>x</span>', 'last-child', [0]), '<p><span>x</span></p>\n');
   assert.equal(insert('<h1></h1>\n', '<em>x</em>', 'last-child', [0]), '<h1><em>x</em></h1>\n');

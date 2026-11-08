@@ -17,6 +17,9 @@ export function isStyleModule(source: string): boolean {
   return /[?&]astro&type=style|\.(css|s[ac]ss|less|pcss|styl)(\?|$)/.test(source || '');
 }
 
+/** Every attribute the canvas markers add starts with this (data-avb-p, data-avb-d). */
+const MARKER_ATTRIBUTE_PREFIX = 'data-avb-';
+
 interface ScriptInfo {
   readonly src: string;
   readonly type: string;
@@ -58,7 +61,12 @@ function scriptsOf(page: Document): ScriptInfo[] {
       src: source,
       type: script.getAttribute('type') || '',
       attrs,
-      signature: JSON.stringify([attrs, script.textContent]),
+      // Marker attributes are left out: they name where a node came from, and the stamp
+      // among them (data-avb-d) changes with every save of the file. A page whose layout
+      // spreads its props onto a JSON-LD <script> (stacki.build's BaseHead) carried the
+      // page's stamp there, so every prop edit read as "scripts changed" and reloaded
+      // the canvas: the flicker, and a second of delay per keystroke.
+      signature: JSON.stringify([attrs.filter(([name]) => !name.startsWith(MARKER_ATTRIBUTE_PREFIX)), script.textContent]),
     });
   }
   return out;

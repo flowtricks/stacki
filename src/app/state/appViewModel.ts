@@ -12,7 +12,7 @@ import { resolveInstanceProps } from '../../editor/instanceProps';
 import { cleanError } from '../../lib/cleanError';
 import { findImportOf } from '../../editor/dataSuggest';
 import type { TagOption } from '../../features/props/propNodeEditors';
-import { codeWindowFor, FRONTMATTER_SUBJECT, type CodeSubject } from '../../features/code/codeWindowTarget';
+import { codeWindowFor, fileWindowIndentation, FRONTMATTER_SUBJECT, type CodeSubject } from '../../features/code/codeWindowTarget';
 import { toEditorPageState } from '../../editor/pageState';
 import { readProjectAsset } from '../../ipc/appBridge';
 import { useCoreState } from './appLifecycle';
@@ -262,6 +262,7 @@ export function useCodeWindow(
           rel,
           title: name,
           language: /\.css$/i.test(name) ? 'css' : 'javascript',
+          ...fileWindowIndentation(rel),
         });
       } catch (error: unknown) {
         showToast(cleanError(error), 'error');
@@ -313,6 +314,7 @@ export function useSymbolFile(coreState: ReturnType<typeof useCoreState>, pageOp
           rel: symbol.rel,
           title: symbol.rel,
           language: /\.css$/i.test(symbol.rel) ? 'css' : 'javascript',
+          ...fileWindowIndentation(symbol.rel),
           revealLine: symbol.line,
         });
         return true;

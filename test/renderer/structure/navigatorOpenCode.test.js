@@ -45,7 +45,12 @@ const element = (id, name, children = []) => ({
 });
 const component = (id, name) => ({ id, kind: 'component', name, props: {}, children: [] });
 
-function checkCodeWindowRule({ codeWindowFor }) {
+function checkCodeWindowRule({ codeWindowFor, fileWindowIndentation }) {
+  // A project file's window: YAML forbids tabs, so a Tab there must write spaces.
+  assert.deepEqual(fileWindowIndentation('public/admin/config.yml'), { indentation: 'spaces' });
+  assert.deepEqual(fileWindowIndentation('data/site.YAML'), { indentation: 'spaces' });
+  assert.deepEqual(fileWindowIndentation('src/styles/site.css'), {});
+  assert.throws(() => fileWindowIndentation(''), /a file window has a path/);
   assert.deepEqual(codeWindowFor({ id: 'frontmatter', kind: 'frontmatter' }), {
     targetId: 'frontmatter',
     title: 'Frontmatter',

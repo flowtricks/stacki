@@ -6,6 +6,7 @@
 // it), started with BAKE_CHILD_COMMAND as its first argument.
 import { fork } from 'node:child_process';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { err, ok, type Result } from '../../../vendor/stacki/shared/core/result';
@@ -19,6 +20,39 @@ export const BAKE_CHILD_COMMAND = '__stacki-bake-build';
 /** A site's build is minutes at most; past this the child is ended and the bake fails. */
 const BUILD_TIMEOUT_MS = 30 * 60_000;
 const PROBE_PAGES_MAX = 2_000;
+
+/** The child's heap, stated rather than left to Node's default. Node sizes its default
+ * heap from the machine, about 2 GB on an 8 GB CI runner, and a probed build of a real
+ * site needs more: stacki.build's home page alone asks for 40,000 renderings, and its
+ * build peaks near 3 GB. A child that runs out is killed mid-build, the bake drops every
+ * probe, and the demo then refuses every component prop edit. So the child gets a share
+ * of the machine's memory, never less than Node's own floor and never more than the cap. */
+export const BUILD_HEAP_LIMITS = {
+  /** The share of the machine's memory the child may use, in percent. */
+  sharePercent: 60,
+  mbMin: 2_048,
+  mbMax: 8_192,
+} as const satisfies Record<string, number>;
+
+/** The heap size, in MB, the build child is started with on a machine of `memoryBytes`. */
+export function buildHeapMb(memoryBytes: number): number {
+  assert(Number.isSafeInteger(memoryBytes), 'Machine memory is a whole number of bytes');
+  assert(memoryBytes > 0, 'Machine memory is positive');
+  const shareMb = Math.floor((memoryBytes / 2 ** 20) * (BUILD_HEAP_LIMITS.sharePercent / 100));
+  const heapMb = Math.min(BUILD_HEAP_LIMITS.mbMax, Math.max(BUILD_HEAP_LIMITS.mbMin, shareMb));
+  assert(heapMb >= BUILD_HEAP_LIMITS.mbMin, 'The heap is at least the floor');
+  assert(heapMb <= BUILD_HEAP_LIMITS.mbMax, 'The heap is at most the cap');
+  return heapMb;
+}
+
+/** Why a child that never answered ended: a signal (an out-of-memory abort) or its exit code. */
+export function buildExitMessage(code: number | null, signal: NodeJS.Signals | null): string {
+  if (signal !== null) {
+    // V8 aborts on an exhausted heap, so a signal here is most often that.
+    return `astro build was ended by ${signal} without an answer (out of memory, most often)`;
+  }
+  return `astro build ended without an answer (exit ${String(code)})`;
+}
 
 export type BakeError = { readonly code: string; readonly message: string };
 
@@ -62,7 +96,12 @@ export function runBuild(request: BuildRequest): Promise<Result<BuildDone, BakeE
   assert(path.isAbsolute(request.root), 'The build root is absolute');
   assert(request.probes.length <= PROBE_PAGES_MAX, 'Probe pages stay within their limit');
   return new Promise((resolve) => {
-    const child = fork(fileURLToPath(import.meta.url), [BAKE_CHILD_COMMAND], { cwd: request.root, stdio: 'inherit' });
+    const child = fork(fileURLToPath(import.meta.url), [BAKE_CHILD_COMMAND], {
+      cwd: request.root,
+      stdio: 'inherit',
+      // After NODE_OPTIONS on the child's command line, so this size is the one that holds.
+      execArgv: [...process.execArgv, `--max-old-space-size=${String(buildHeapMb(os.totalmem()))}`],
+    });
     let settled = false;
     const finish = (result: Result<BuildDone, BakeError>) => {
       if (!settled) {
@@ -75,7 +114,7 @@ export function runBuild(request: BuildRequest): Promise<Result<BuildDone, BakeE
     const timer = setTimeout(() => finish(err({ code: 'build-timeout', message: 'astro build did not finish in time' })), BUILD_TIMEOUT_MS);
     child.once('message', (message: unknown) => finish(replyResult(message)));
     child.once('error', (error) => finish(err({ code: 'build-failed', message: `astro build could not start: ${String(error)}` })));
-    child.once('exit', (code) => finish(err({ code: 'build-failed', message: `astro build ended without an answer (exit ${String(code)})` })));
+    child.once('exit', (code, signal) => finish(err({ code: 'build-failed', message: buildExitMessage(code, signal) })));
     child.send(request);
   });
 }

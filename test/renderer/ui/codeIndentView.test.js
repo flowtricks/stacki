@@ -221,6 +221,14 @@ test('carriage returns stay on untouched lines and go on new ones', () => {
   );
 });
 
+test('a file with CRLF line ends gains no carriage return at its end when its last line is edited', () => {
+  const opened = (source) => bundle.openCodeView(source, { extent: 'document', classify: bundle.codeLineClassifier('css') });
+  const unended = opened('a {\r\n  color: red;\r\n}');
+  assert.equal(bundle.editCodeView(unended, 'a {\n\tcolor: red;\n}x').source, 'a {\r\n  color: red;\r\n}x');
+  const ended = opened('a {\r\n  color: red;\r\n}\r\n');
+  assert.equal(bundle.editCodeView(ended, 'a {\n\tcolor: blue;\n}\n').source, 'a {\r\n  color: blue;\r\n}\r\n');
+});
+
 test('offsets map through the indentation, in both directions', () => {
   const view = open(STYLE);
   const sourceAt = STYLE.indexOf('color');

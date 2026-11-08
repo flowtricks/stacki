@@ -28,3 +28,22 @@ export function previewNeedsPath(shown: string | undefined, wanted: string | und
   }
   return previewRouteOf(shown) !== previewRouteOf(wanted);
 }
+
+/**
+ * Where the preview should be for the page the editor has open, or undefined while
+ * that is not known yet. `canvasPath` is the canvas's own address, which for a dynamic
+ * page is one entry's URL, and which still holds the previous page's entry for the
+ * render in which the page changes (the entries are cleared by an effect after it).
+ * So a page with a route of its own is at that route, whatever the canvas says, and a
+ * dynamic page waits until the canvas names one of its entries: its pattern is a 404.
+ */
+export function previewPathOfPage(page: { readonly route: string; readonly path: string } | undefined, canvasPath: string): string | undefined {
+  assert(canvasPath.startsWith('/'), 'A canvas path is a site path');
+  if (page === undefined) {
+    return canvasPath;
+  }
+  if (!page.route.includes('[')) {
+    return page.path;
+  }
+  return canvasPath.includes('[') ? undefined : canvasPath;
+}

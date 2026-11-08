@@ -1001,19 +1001,35 @@ function blockOrEdge(bytes: ByteString, node: ProjectedNode | undefined): boolea
 
 // The separator a new node takes beside a sibling: the sibling's own, unless that
 // renders nothing where it stands and both sides of the new seam are inline, where
-// it would (rule 2).
+// it would (rule 2). There the space the author put between the anchor and an
+// inline sibling after it is the run's own spacing, and the new seam takes that:
+// a link duplicated at the start of a nav written one link per line is spaced
+// like its neighbours, never welded to the original ("OneOne Two").
 function separatorBeside(bytes: ByteString, projection: ValidProjection, anchor: ProjectedNode, text: string): string {
   const separator = separatorBefore(bytes, projection, anchor);
   if (tagParent(projection, anchor) === undefined) {
     return separator;
   }
-  if (!blockOrEdge(bytes, neighboursOf(bytes, projection, anchor).previous)) {
+  const neighbours = neighboursOf(bytes, projection, anchor);
+  if (!blockOrEdge(bytes, neighbours.previous)) {
     return separator;
   }
   if (!inlineLevel(fragmentLevel(text))) {
     return separator;
   }
-  return inlineLevel(nodeLevel(bytes, anchor)) ? '' : separator;
+  if (!inlineLevel(nodeLevel(bytes, anchor))) {
+    return separator;
+  }
+  const next = neighbours.next;
+  if (next === undefined) {
+    return ''; // An only child at the parent's edges: nothing to space it from.
+  }
+  if (!inlineLevel(nodeLevel(bytes, next))) {
+    return '';
+  }
+  const spacing = separatorBefore(bytes, projection, next);
+  assert(spacing.trim() === '', 'separatorBeside: the spacing between siblings is whitespace');
+  return spacing;
 }
 
 function inlineLevel(level: FlowLevel): boolean {

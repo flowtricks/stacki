@@ -226,3 +226,16 @@ test('Desktop: the switcher and the preview follow each other by route', () => {
   assert.equal(previewNeedsPath('/', undefined), false);
   assert.throws(() => previewRouteOf('studio'), /a site path/);
 });
+
+// The canvas path still names the previous page's dynamic entry in the render where
+// the page changes. Read then, a link off a blog post sent the preview back to the post.
+test('Desktop: the preview loads the opened page, never the entry it just left', () => {
+  const { previewPathOfPage } = loadRenderer('src/app/model/previewPage.ts');
+  const about = { route: '/about', path: '/about' };
+  const post = { route: '/blog/[slug]', path: '/blog/[slug]' };
+  assert.equal(previewPathOfPage(about, '/blog/first-post'), '/about', 'a page with a route is at that route');
+  assert.equal(previewPathOfPage(post, '/blog/[slug]'), undefined, 'a dynamic page waits for an entry');
+  assert.equal(previewPathOfPage(post, '/blog/first-post'), '/blog/first-post', 'and goes to the one the canvas shows');
+  assert.equal(previewPathOfPage(undefined, '/'), '/', 'with no page the canvas says');
+  assert.throws(() => previewPathOfPage(about, 'about'), /a site path/);
+});

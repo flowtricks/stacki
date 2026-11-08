@@ -133,8 +133,12 @@ export function editCodeView(view: CodeView, text: string): CodeView {
     return { ...view, source: opened.source, text, sourceLines: opened.sourceLines, shownLines: opened.shownLines };
   }
   const roles = opened.classify(text);
+  // A line end is a line's carriage return before the `\n` that joins it to the next,
+  // so the last line takes one only if it had one: the text ends where it ended.
+  const lastLine = nextLines.length - 1;
+  const lastLayout = (opened.sourceLines.at(-1) ?? '').endsWith('\r') ? opened.layout : { ...opened.layout, lineEnd: '' as const };
   const sourceLines = keepUntouchedLines({ source: opened.sourceLines, shown: opened.shownLines, next: nextLines }, (line, index, pair) =>
-    writtenLine(line, index, { layout: opened.layout, roles, pair }),
+    writtenLine(line, index, { layout: index === lastLine ? lastLayout : opened.layout, roles, pair }),
   );
   assert(sourceLines.length === nextLines.length, 'editCodeView: one source line per shown line');
   const source = text.length === 0 ? opened.tail : `${opened.head}${sourceLines.join('\n')}${opened.tail}`;

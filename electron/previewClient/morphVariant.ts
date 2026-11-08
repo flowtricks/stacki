@@ -30,11 +30,17 @@ export function createVariantPreview(host: VariantPreviewHost) {
   // that lands after the pointer moved on, or after a cancel, is dropped.
   let generation = 0;
   let shown = false;
+  // The header of the override on show, kept while it is: any other rendering the
+  // page pulls meanwhile (a patch-now, a dev server's page-changed) asks for it too.
+  // Without it, such a pull painted the plain page over the preview while the pointer
+  // still rested on the option, and the canvas went back to the written value.
+  let current: string | undefined;
 
   const show = (override: VariantOverride): void => {
     generation++;
     const asked = generation;
     const header = variantHeaderValue(override);
+    current = header;
     const cached = renders.get(header);
     if (cached !== undefined) {
       shown = true;
@@ -71,6 +77,7 @@ export function createVariantPreview(host: VariantPreviewHost) {
           return true;
         case 'cancel':
           generation++;
+          current = undefined;
           renders.clear();
           if (shown) {
             shown = false;
@@ -80,6 +87,7 @@ export function createVariantPreview(host: VariantPreviewHost) {
         case 'commit':
           // The write is on its way, and its own rendering replaces this one.
           generation++;
+          current = undefined;
           renders.clear();
           shown = false;
           return true;
@@ -88,6 +96,10 @@ export function createVariantPreview(host: VariantPreviewHost) {
           return exhaustive;
         }
       }
+    },
+    /** The headers a pull of the page carries: the override on show, or none. */
+    headers(): Readonly<Record<string, string>> {
+      return current === undefined ? {} : { [VARIANT_HEADER]: current };
     },
     /** The page changed under the preview: every cached render is stale. */
     forget(): void {

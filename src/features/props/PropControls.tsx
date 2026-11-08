@@ -304,8 +304,28 @@ export function NumberControl({ state }: { readonly state: PropControlState }) {
   // What is typed but not written: a partial number on its way ("-", "1.") or
   // one past the component's range. It is shown, never saved, until commit.
   const [draft, setDraft] = useState<string | undefined>(undefined);
-  const model = numberControlState(state, { draft, setDraft });
+  const preview = useContext(PropPreviewContext);
+  const model = numberControlState(livePreviewed(state, preview), { draft, setDraft });
   return <NumberControlView state={model} />;
+}
+// Every number the field writes is shown on the canvas as it is written, when the
+// panel can render it live (PropPreview.live); the write follows as it always has.
+function livePreviewed(state: PropControlState, preview: React.ContextType<typeof PropPreviewContext>): PropControlState {
+  const live = preview?.live;
+  if (live === undefined) {
+    return state;
+  }
+  const { field, onChange } = state;
+  return {
+    ...state,
+    onChange: (next, commit) => {
+      const number = next?.type === 'expr' ? Number(next.value) : Number.NaN;
+      if (Number.isFinite(number)) {
+        live(field.name, number);
+      }
+      onChange(next, commit);
+    },
+  };
 }
 export function numberControlState(
   state: PropControlState,

@@ -221,7 +221,9 @@ function run(start: number, length: number): readonly number[] {
 // The shape shared/page/classNames.ts reads classes in: what the suggestions can
 // hold is what the fields can create. Written out here because Studio's vendored
 // tree has this file and not that one, and both panels ship in Studio.
-const CLASS_NAME = /^-?[A-Za-z_][\w-]*$/;
+// A CSS identifier: non-ASCII letters are as valid as `a-z`, and `.café` as a class
+// was accepted until this check arrived. A leading `--` stays out: it reads as a variable.
+const CLASS_NAME = /^-?[A-Za-z_\u0080-\uFFFF][\w\u0080-\uFFFF-]*$/;
 
 /** Whether `text` is one plain class name, with no selector syntax in it. */
 export function isClassName(text: string): boolean {

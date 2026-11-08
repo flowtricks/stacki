@@ -2,6 +2,7 @@
 // to start over, and why a thing cannot be shown.
 import type { NotShownReason } from './pageChange';
 import type { StorageState } from './store';
+import { DEMO_NOTICE_EVENT, DEMO_NOTICE_READY_EVENT } from '../src/features/notifications/demoNotice';
 
 const STORAGE_NOTES: Readonly<Record<StorageState, string>> = {
   saving: 'Edits stay in this browser.',
@@ -9,7 +10,11 @@ const STORAGE_NOTES: Readonly<Record<StorageState, string>> = {
   full: 'Browser storage is full, so new edits last until you leave.',
 };
 
-const NOTE_MS = 6_000;
+// demo.js and studio.js are separate bundles, so a window event carries the notice to
+// Studio's own toast stack (useNotifications.ts); the demo draws no toast of its own.
+function sendDemoNotice(message: string): void {
+  window.dispatchEvent(new CustomEvent(DEMO_NOTICE_EVENT, { detail: message }));
+}
 
 export interface DemoChrome {
   readonly storage: (state: StorageState) => void;
@@ -32,17 +37,16 @@ export function installDemoChrome(actions: { readonly reset: () => Promise<void>
   reset.className = 'demo-reset';
   reset.textContent = 'Reset';
   reset.addEventListener('click', () => void actions.reset());
-  const note = document.createElement('p');
-  note.className = 'demo-note';
-  note.hidden = true;
   bar.append(storage, reset);
-  document.body.append(bar, note);
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  document.body.append(bar);
+  // The reason the page cannot show right now. It is told once per change, not per
+  // render, and told again if the editor's toasts mount after it was first found.
   let lasting = '';
-  const show = (text: string) => {
-    note.textContent = text;
-    note.hidden = text.length === 0;
-  };
+  window.addEventListener(DEMO_NOTICE_READY_EVENT, () => {
+    if (lasting.length > 0) {
+      sendDemoNotice(lasting);
+    }
+  });
   return {
     storage: (state) => {
       storage.textContent = STORAGE_NOTES[state];
@@ -52,18 +56,12 @@ export function installDemoChrome(actions: { readonly reset: () => Promise<void>
       bar.hidden = !present;
     },
     notShown: (reasons) => {
-      lasting = reasons[0] === undefined ? '' : `Not shown on the page: ${reasons[0]}`;
-      if (timer === undefined) {
-        show(lasting);
+      const next = reasons[0] === undefined ? '' : `Not shown on the page: ${reasons[0]}`;
+      if (next !== lasting && next.length > 0) {
+        sendDemoNotice(next);
       }
+      lasting = next;
     },
-    note: (reason) => {
-      clearTimeout(timer);
-      show(reason);
-      timer = setTimeout(() => {
-        timer = undefined;
-        show(lasting);
-      }, NOTE_MS);
-    },
+    note: sendDemoNotice,
   };
 }

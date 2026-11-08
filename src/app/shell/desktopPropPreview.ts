@@ -16,6 +16,8 @@ import type { PropPreview } from '../../features/props/propPreviewContext';
 import { tellCanvas } from '../../editor/canvasQuery';
 
 export const DESKTOP_PROP_PREVIEW_DEBOUNCE_MS = 40;
+/** How long after the last live value (a nudge) its preview gives way to the written rendering. */
+export const DESKTOP_PROP_LIVE_SETTLE_MS = 1_200;
 
 /** Which instance a preview renders: the component's project-relative file and the instance's marker path. */
 export interface PropPreviewInstance {
@@ -57,14 +59,20 @@ export function createDesktopPropPreview(
 ): PropPreview & { readonly dispose: () => void } {
   let prop: string | undefined;
   let pending: (() => void) | undefined;
+  let settling: (() => void) | undefined;
   // Whether the canvas may be showing a preview, so a cancel is sent only when one can be undone.
   let shown = false;
   const stopPending = () => {
     pending?.();
     pending = undefined;
   };
+  const stopSettling = () => {
+    settling?.();
+    settling = undefined;
+  };
   const cancel = () => {
     stopPending();
+    stopSettling();
     if (shown) {
       shown = false;
       io.send({ type: VARIANT_MESSAGE_TYPES.cancel });
@@ -91,8 +99,31 @@ export function createDesktopPropPreview(
       });
     },
     cancel,
+    // A write takes a save and an Astro render before the canvas shows it, and a run of
+    // arrow keys queues behind itself: a heading's maxWidth nudged down from 17 to 6
+    // reached the canvas two seconds after the first press. The canvas renders the
+    // value through the hover preview's override at once instead (tens of ms), and any
+    // pull the page makes meanwhile keeps it (morphVariant.ts). Once the edits pause,
+    // the preview is cancelled: the canvas pulls the written page, which by then says
+    // the same thing, and an undo in between is never hidden behind a stale override.
+    live: (name, value) => {
+      stopPending();
+      stopSettling();
+      const override: VariantOverride | undefined = parseVariantOverride({ ...instance, prop: name, value });
+      if (override === undefined) {
+        return; // A prop the preview cannot carry: its write still shows it.
+      }
+      assert(override.prop === name, 'desktop prop preview: a live value previews its own prop');
+      shown = true;
+      io.send({ type: VARIANT_MESSAGE_TYPES.show, override });
+      settling = io.schedule(DESKTOP_PROP_LIVE_SETTLE_MS, () => {
+        settling = undefined;
+        cancel();
+      });
+    },
     commit: () => {
       stopPending();
+      stopSettling();
       if (shown) {
         shown = false;
         io.send({ type: VARIANT_MESSAGE_TYPES.commit });

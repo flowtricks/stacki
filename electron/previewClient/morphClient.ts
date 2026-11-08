@@ -49,10 +49,17 @@ if (host === 'browser') {
   stripPreviewInstrumentation(document);
 }
 
+// Desktop's prop hover preview (morphVariant.ts): a rendering of the page with
+// one prop changed is painted like any other, and cancel pulls the real one.
+// Made before fetchDocument can run: the page's first pull, at load, asks it for
+// headers, and a const declared below that pull would not exist yet.
+const variantPreview = createVariantPreview({ paint: paintRendering, restore: () => void update() });
+
 function fetchDocument(initialHTML?: string, signal?: AbortSignal): Promise<FetchedDocument> {
   const rendering =
     initialHTML === undefined
-      ? fetch(location.href, { cache: 'no-store', ...(signal ? { signal } : {}) }).then((response) => {
+      ? // A hover preview on show stays on show through a pull (morphVariant.ts).
+        fetch(location.href, { cache: 'no-store', headers: variantPreview.headers(), ...(signal ? { signal } : {}) }).then((response) => {
           // Studio edits authored 404 pages too. Reject transport/server failures,
           // but retain Astro's intentional 404 status for an HTML page rendering.
           const html404 = response.status === 404 && response.headers.get('content-type')?.includes('text/html');
@@ -186,9 +193,6 @@ document.addEventListener('studio:render-html', (event) => {
   }
   paintRendering(event.detail);
 });
-// Desktop's prop hover preview (morphVariant.ts): a rendering of the page with
-// one prop changed is painted like any other, and cancel pulls the real one.
-const variantPreview = createVariantPreview({ paint: paintRendering, restore: () => void update() });
 document.addEventListener('studio:render-fallback', () => {
   clearFallback();
   void update();

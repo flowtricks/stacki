@@ -175,6 +175,11 @@ const PAGES = {
     'html, body { height: 100%; overflow: hidden; } main { height: 100%; overflow-y: auto; }',
     `<main id="scroller">${SCROLLING_CONTENT}</main>`,
   ),
+  // A short scrolling panel far below the first screen, with the box already in view inside it.
+  panelBelowFold: rootPage(
+    '.panel { height: 300px; overflow-y: auto; } .fill { height: 1000px; }',
+    `<div class="content"></div><div class="panel" id="panel"><!--avb-s:0--><section class="box" id="box"></section><!--avb-e:0--><div class="fill"></div></div><div class="content"></div>`,
+  ),
 };
 
 const hostPage = (frameFile) => `<!doctype html><meta charset=utf-8>
@@ -448,7 +453,10 @@ const HOST_HELPERS = `
        const bodyScroller = await scrollerCases('bodyScroller', 'body');
        const innerScroller = await scrollerCases('innerScroller', '#scroller');
 
-       console.log(JSON.stringify({ wrapped, bleeding, below, again, cases, gone, pinned, bodyScroller, innerScroller }));
+       await open('panelBelowFold', ${JSON.stringify(ROOT_PAGE_PATHS)});
+       const panelBelowFold = await reveal({ nodePath: '0', id: 'box', expected: 'moves', scrollerId: '#panel' });
+
+       console.log(JSON.stringify({ wrapped, bleeding, below, again, cases, gone, pinned, bodyScroller, innerScroller, panelBelowFold }));
        app.quit();
      });`,
   );
@@ -475,7 +483,7 @@ const HOST_HELPERS = `
   if (!line) {
     check('the browser probe ran', false, (run.stderr || run.stdout || '').slice(0, 800));
   } else {
-    const { wrapped, bleeding, below, again, cases, gone, pinned, bodyScroller, innerScroller } = JSON.parse(line);
+    const { wrapped, bleeding, below, again, cases, gone, pinned, bodyScroller, innerScroller, panelBelowFold } = JSON.parse(line);
     const allZero = (lefts) => lefts.every((left) => left === 0);
 
     check('a video overflowing a clipped wrapper does not scroll the window sideways', wrapped.scrollX === 0, JSON.stringify(wrapped));
@@ -651,6 +659,10 @@ const HOST_HELPERS = `
     scrollerStays('<body> does not move a scrolling wrapper', innerScroller.body);
     scrollerStays('nor does <html>', innerScroller.html);
     scrollerStays('nor a box partly in view inside it', innerScroller.cut);
+    // "In view" of its panel is not in view: the panel itself is a screen below the frame.
+    check('a box in a panel below the fold moves the page to it', panelBelowFold.scrollY > 0, JSON.stringify(panelBelowFold));
+    check('and ends up on screen', panelBelowFold.top >= 0 && panelBelowFold.bottom <= panelBelowFold.height, JSON.stringify(panelBelowFold));
+    check('without moving the panel it was already showing in', panelBelowFold.scroller === 0, JSON.stringify(panelBelowFold));
   }
 
   if (failures.length) {

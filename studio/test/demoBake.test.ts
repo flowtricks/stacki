@@ -13,6 +13,8 @@ import { bakePage } from '../src/features/bake/bakeHtml';
 import { BAKE_PROTOCOL, BAKE_RUNTIME_DIRECTORY, BAKE_SNAPSHOT_FILE, sectionFences, splitStyleSections } from '../src/features/bake/bakeProtocol';
 import { BAKE_LIMITS, parseBakeSnapshot } from '../src/features/bake/bakeSnapshot';
 import { bakeSite, planComponentProbes } from '../src/features/bake/bakeSite';
+import { DEMO_NOTICE_CHARS_MAX, parseDemoNotice } from '../src/features/notifications/demoNotice';
+import { BUILD_HEAP_LIMITS, buildExitMessage, buildHeapMb } from '../src/features/bake/bakeBuild';
 import { renderBaselineScript } from '../src/features/preview/renderBaseline';
 import { withRenderBaseline } from '../src/features/preview/previewMiddleware';
 import { flatten, nodesOf } from '../src/features/source/source';
@@ -232,4 +234,31 @@ test('a probe plan that throws is reported, never taken for a site with no compo
   }
   const planned = await planComponentProbes('/project', (root) => Promise.resolve(root.length));
   assert.deepEqual(planned, { planned: 8, failure: undefined });
+});
+
+// Regression: stacki.build's deploy ran the probed build on an 8 GB runner, where Node's
+// default heap is about 2 GB; the child died out of memory, the bake fell back to a plain
+// build, and the demo shipped with no component templates at all.
+test('the build child gets a heap sized from the machine, within its bounds', () => {
+  const gigabyte = 2 ** 30;
+  // An 8 GB runner gets well past the 2 GB that ran out.
+  assert.equal(buildHeapMb(8 * gigabyte), 4915);
+  assert.ok(buildHeapMb(7 * gigabyte) >= 4_096);
+  assert.equal(buildHeapMb(2 * gigabyte), BUILD_HEAP_LIMITS.mbMin);
+  assert.equal(buildHeapMb(64 * gigabyte), BUILD_HEAP_LIMITS.mbMax);
+  assert.throws(() => buildHeapMb(0), /Machine memory is positive/);
+  assert.throws(() => buildHeapMb(1.5), /whole number of bytes/);
+});
+
+test('a build child killed by a signal says so, not just exit null', () => {
+  assert.match(buildExitMessage(null, 'SIGABRT'), /ended by SIGABRT .*out of memory/);
+  assert.equal(buildExitMessage(1, null), 'astro build ended without an answer (exit 1)');
+});
+
+test('a demo notice is a bounded, non-empty string before it reaches the toasts', () => {
+  assert.equal(parseDemoNotice('Not shown on the page: reason'), 'Not shown on the page: reason');
+  assert.equal(parseDemoNotice(''), undefined);
+  assert.equal(parseDemoNotice('x'.repeat(DEMO_NOTICE_CHARS_MAX + 1)), undefined);
+  assert.equal(parseDemoNotice(7), undefined);
+  assert.equal(parseDemoNotice(undefined), undefined);
 });

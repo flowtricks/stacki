@@ -87,7 +87,7 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   const { classRows, classRowStep, classRowMatch, isClassName, typedDraft } = bundle;
 
   // 1. The list.
-  for (const name of ['content', 'hero_content', '_x', '-x', 'a1', 'block--mod']) {
+  for (const name of ['content', 'hero_content', '_x', '-x', 'a1', 'block--mod', 'über', 'café-card', '日本']) {
     check(`${name} is a class name`, isClassName(name));
   }
   for (const name of ['', '-', '-1', '1col', 'a b', '.a', 'a.b', 'md:flex', 'w-1/2', 'foo$']) {

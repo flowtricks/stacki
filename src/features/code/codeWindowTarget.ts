@@ -1,6 +1,7 @@
 import { assert } from '../../../shared/core/assert';
 import type { EditorNode } from '../../editor/pageView';
-import type { CodeExtent } from '../../ui/codeIndentView';
+import type { CodeEditorIndentation } from '../../ui/CodeEditor';
+import { codeIndentStyleFor } from '../../ui/codeEditorIndent';
 
 export interface CodeWindowState {
   readonly kind?: 'file';
@@ -9,8 +10,9 @@ export interface CodeWindowState {
   readonly rel?: string;
   readonly title: string;
   readonly language: string;
-  /** How the editor shows it: the inside of a tag is a block, anything else a document. */
-  readonly indentation?: CodeExtent;
+  /** How the editor shows it: the inside of a tag is a block, a file that forbids tabs is
+   *  spaces, anything else a document. */
+  readonly indentation?: CodeEditorIndentation;
   readonly revealLine?: number;
 }
 
@@ -49,3 +51,10 @@ const RAW_CODE_LANGUAGES: Readonly<Record<string, string>> = {
   script: 'javascript',
   style: 'css',
 };
+
+/** The indentation a project file's window edits with: YAML forbids tabs, and a Tab
+ *  pressed in a flat file there would write one. */
+export function fileWindowIndentation(path: string): Pick<CodeWindowState, 'indentation'> {
+  assert(path.length > 0, 'fileWindowIndentation: a file window has a path');
+  return codeIndentStyleFor(path) === 'spaces' ? { indentation: 'spaces' } : {};
+}

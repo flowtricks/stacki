@@ -29,7 +29,7 @@ fs.writeFileSync(
     `export { default as PropsPanel } from ${JSON.stringify(repoPath('src/features/props/PropsPanel.tsx'))};`,
     `export { PropPreviewContext } from ${JSON.stringify(repoPath('src/features/props/propPreviewContext.ts'))};`,
     `export { numberTyped, numberCommitted, numberStepped } from ${JSON.stringify(repoPath('src/features/props/propFieldModel.ts'))};`,
-    `export { createDesktopPropPreview, propPreviewInstance, DESKTOP_PROP_PREVIEW_DEBOUNCE_MS } from ${JSON.stringify(repoPath('src/app/shell/desktopPropPreview.ts'))};`,
+    `export { createDesktopPropPreview, propPreviewInstance, DESKTOP_PROP_PREVIEW_DEBOUNCE_MS, DESKTOP_PROP_LIVE_SETTLE_MS } from ${JSON.stringify(repoPath('src/app/shell/desktopPropPreview.ts'))};`,
   ].join('\n'),
 );
 const output = path.join(directory, 'bundle.cjs');
@@ -311,4 +311,49 @@ test('a preview always cleans up, and an instance outside the project has none',
     component: 'src/components/Card.astro',
     target: 'src/pages/x.astro|2',
   });
+});
+
+// A nudged number showed on the canvas only after its save and render, about two seconds
+// into a run of arrow keys. Each value now shows at once, and the preview ends when the
+// edits pause, so an undo is never hidden behind an override.
+test('a live value shows at once, replaces the last, and settles after a pause', () => {
+  const sent = [];
+  const timers = [];
+  const preview = ux.createDesktopPropPreview(
+    { component: 'src/components/Heading.astro', target: '0.1' },
+    {
+      send: (message) => sent.push(message),
+      schedule: (delayMs, run) => {
+        const timer = { delayMs, run, live: true };
+        timers.push(timer);
+        return () => {
+          timer.live = false;
+        };
+      },
+    },
+  );
+  preview.live('maxWidth', 6);
+  preview.live('maxWidth', 5);
+  assert.deepEqual(
+    sent.map((message) => message.override.value),
+    [6, 5],
+  );
+  const running = timers.filter((timer) => timer.live);
+  assert.equal(running.length, 1, 'only the last value waits to settle');
+  assert.equal(running[0].delayMs, ux.DESKTOP_PROP_LIVE_SETTLE_MS);
+  running[0].run();
+  assert.deepEqual(sent.at(-1), { type: 'avb:variant-cancel' });
+});
+
+// A panel can be replaced with its list open, and no close runs then.
+test('a list that goes away while previewing puts the canvas back', async () => {
+  const { preview, sent, tick } = previewHarness();
+  mount([VARIANT], { variant: { type: 'string', value: 'h2' } }, preview);
+  await act(async () => field('variant').querySelector('.dd-trigger').click());
+  await hover('h1');
+  tick();
+  assert.equal(sent.at(-1).override.value, 'h1');
+  unmount();
+  assert.deepEqual(sent.at(-1), { type: 'avb:variant-cancel' });
+  preview.dispose();
 });

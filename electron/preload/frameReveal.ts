@@ -67,17 +67,27 @@ export const revealPath = (nodePath: string, occurrence: number): void => {
   }
   const anchor = anchorOf(nodePath, occurrence);
   const scroller = anchor === undefined ? undefined : nearestScroller(anchor);
-  const scrollport = scroller === undefined ? PAGE_SCROLLPORT : elementScrollport(scroller);
-  const measure = (): Landing | undefined => landingOf(scrollport, boxOf(nodePath, occurrence)?.rect);
-  const first = measure();
-  if (first === undefined) {
-    return;
+  // Innermost first: a box in a scroller is brought into that scroller, then the page
+  // is moved if the scroller itself is out of view, since a box "in view" of a panel
+  // below the fold is still nowhere the person can see. Both are instant, so the page
+  // measures the box where the scroller left it. Only the outermost move is watched:
+  // a smooth-scroll library fights the page, never a panel inside it.
+  const scrollports = scroller === undefined ? [PAGE_SCROLLPORT] : [elementScrollport(scroller), PAGE_SCROLLPORT];
+  let watched: Scrollport | undefined;
+  for (const scrollport of scrollports) {
+    const landing = landingOf(scrollport, boxOf(nodePath, occurrence)?.rect);
+    if (landing === undefined) {
+      return;
+    }
+    if (!landing.showing) {
+      scrollport.scrollTo(landing.top);
+      watched = scrollport;
+    }
   }
-  if (first.showing) {
-    return;
+  if (watched !== undefined) {
+    const moved = watched;
+    watchReveal(moved, () => landingOf(moved, boxOf(nodePath, occurrence)?.rect));
   }
-  scrollport.scrollTo(first.top);
-  watchReveal(scrollport, measure);
 };
 
 // Ends the reveal in progress, if any. Every new reveal does this first, and a

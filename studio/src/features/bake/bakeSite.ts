@@ -141,6 +141,9 @@ async function buildWithProbes(options: BakeOptions, initial: BuildProbes | unde
       return built;
     }
     failure = built.error.message;
+    // Said out loud: a bake that quietly loses its probes ships a demo that refuses
+    // every component prop edit, and the site's build log is the one place to see why.
+    console.error(`[stacki bake] the build with component probes failed: ${failure}`);
     probes = withoutFailedPage(probes, built.error.message);
     await rm(outDir, { recursive: true, force: true });
   }

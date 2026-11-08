@@ -1,6 +1,5 @@
 /* Only the demo's own controls. The editor's styles are studio.css, unchanged. */
-.demo-bar,
-.demo-note {
+.demo-bar {
   position: fixed;
   z-index: 2147483000;
   left: 50%;
@@ -28,13 +27,10 @@
   display: none;
 }
 /* Studio's toasts and the demo's bar share the bottom centre of the window. While the
-   bar (and the note above it) shows, the toasts rise above them rather than cover
-   Reset; the offsets are the bar's and the note's own, plus a gap. */
+   bar shows, the toasts rise above it rather than cover Reset; the offset is the bar's
+   own, plus a gap. */
 body:has(.demo-bar:not([hidden])) .toast-stack {
   bottom: 56px;
-}
-body:has(.demo-note:not([hidden])) .toast-stack {
-  bottom: 104px;
 }
 .demo-reset {
   flex: none;
@@ -49,16 +45,6 @@ body:has(.demo-note:not([hidden])) .toast-stack {
 }
 .demo-reset:hover {
   background: #4a454e;
-}
-.demo-note {
-  bottom: 56px;
-  box-sizing: border-box;
-  width: max-content;
-  max-width: min(520px, calc(100vw - 32px));
-  padding: 8px 12px;
-}
-.demo-note[hidden] {
-  display: none;
 }
 [data-demo-hidden] {
   display: none !important;

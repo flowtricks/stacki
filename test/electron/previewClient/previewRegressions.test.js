@@ -84,6 +84,19 @@ test('script identity cannot collide with separators inside source text', () => 
   assert.equal(morph.addedScripts(before, after), undefined);
 });
 
+// stacki.build's BaseHead spreads the page's props onto its JSON-LD <script>, so the
+// page's stamp (data-avb-d, the checksum of the file's bytes) rides on a script. Every
+// save changes the stamp; a signature that counted it reloaded the canvas on every prop
+// edit. Only the marker attributes are ignored: a real attribute or text change still
+// cannot be patched in.
+test('a script whose marker attributes alone changed is the same script', () => {
+  const json = (stamp, text) => `<script type="application/ld+json" data-avb-p="0.1 0" data-avb-d="avb-d:${stamp}:src/pages/index.astro">${text}</script>`;
+  assert.deepEqual(morph.addedScripts(tree(json('aaa', '{"a":1}')), tree(json('bbb', '{"a":1}'))), []);
+  assert.equal(morph.addedScripts(tree(json('aaa', '{"a":1}')), tree(json('bbb', '{"a":2}'))), undefined, 'new text still reloads');
+  const module = (nonce) => `<script type="module" src="/a.js" data-avb-d="avb-d:x" nonce="${nonce}"></script>`;
+  assert.equal(morph.addedScripts(tree(module('one')), tree(module('two'))), undefined, 'a real attribute still counts');
+});
+
 test('instrumentation remains only in the Stacki design frame', () => {
   assert.equal(morph.previewHost('#avb-design'), 'stacki');
   assert.equal(morph.previewHost(''), 'browser');

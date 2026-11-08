@@ -19,7 +19,9 @@ export const CLASS_SOURCE_CHARS_MAX = 2_000_000;
 /** One file names at most this many classes for suggestions. */
 export const CLASS_NAMES_PER_SOURCE_MAX = 10_000;
 
-const CLASS_NAME = /^-?[A-Za-z_][\w-]*$/;
+// A CSS identifier: non-ASCII letters are as valid as `a-z`, and `.café` as a class
+// was accepted until this check arrived. A leading `--` stays out: it reads as a variable.
+const CLASS_NAME = /^-?[A-Za-z_\u0080-\uFFFF][\w\u0080-\uFFFF-]*$/;
 
 /** The kind of a file by its extension, or undefined for one that holds no classes. */
 export function classSourceKind(file: string): ClassSourceKind | undefined {

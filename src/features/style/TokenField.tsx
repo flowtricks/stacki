@@ -269,8 +269,11 @@ export function jumpCaretPastChip(root: HTMLElement, direction: 'left' | 'right'
     return false;
   }
   const { startContainer: node, startOffset: off } = selection.getRangeAt(0);
-  const before = chip.previousSibling;
-  const after = chip.nextSibling;
+  // The text a caret beside the chip sits in. A neighbour may be a coloured run, or
+  // the `.cx-space` element a gap is drawn in, whose text node holds the caret: the
+  // element itself never does.
+  const before = edgeTextNode(chip.previousSibling ?? undefined, 'end');
+  const after = edgeTextNode(chip.nextSibling ?? undefined, 'start');
   const place = (target: Node, offset: number) => {
     const range = document.createRange();
     range.setStart(target, offset);
@@ -292,6 +295,20 @@ export function jumpCaretPastChip(root: HTMLElement, direction: 'left' | 'right'
     return true;
   }
   return false;
+}
+
+// The innermost node at one end of `node`: itself when it holds nothing further in.
+// Bounded by the depth the field's markup is read to (TOKEN_FIELD_LIMITS).
+function edgeTextNode(node: ChildNode | undefined, end: 'start' | 'end'): ChildNode | undefined {
+  let current = node;
+  for (let depth = 0; current !== undefined && depth < TOKEN_FIELD_LIMITS.nestingDepthMax; depth += 1) {
+    const inner = end === 'start' ? current.firstChild : current.lastChild;
+    if (inner === null) {
+      return current;
+    }
+    current = inner;
+  }
+  return current;
 }
 
 // The keys bracket-matching cares about (see the handler below).

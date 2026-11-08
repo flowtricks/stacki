@@ -34,7 +34,7 @@ import {
   runNativeEdit,
 } from '../../ipc/appBridge';
 import { newId, routeToPath } from '../model/nodeFactory';
-import { previewNeedsPath, previewPageFor } from '../model/previewPage';
+import { previewNeedsPath, previewPageFor, previewPathOfPage } from '../model/previewPage';
 import { astroAssetGesture, insertedNode } from '../model/pageGestures';
 import { type AppKeys, handleAppKeyDown, copySelectionTrail, inEditable, type MenuEdits, menuCopy, menuPaste } from '../model/appKeys';
 import { useCoreState } from './appLifecycle';
@@ -301,7 +301,7 @@ export function useMenuShortcuts(
 // The interactive preview mode.
 export function useInteractivePreview(coreState: ReturnType<typeof useCoreState>, navigation: ReturnType<typeof useNavigation>) {
   const { devUrl, inPreview, inPreviewRef, livePathRef, pageStateRef, previewIframeRef } = coreState;
-  const { currentPage, previewPathRef, scan, setInPreview, setPreviewSource, trailingSlash } = coreState;
+  const { currentPage, dynamicIndex, dynamicPaths, editStack, previewPathRef, scan, setInPreview, setPreviewSource, trailingSlash } = coreState;
   const { selectPage } = navigation;
 
   // ----------------------------------------------------------------
@@ -338,16 +338,21 @@ export function useInteractivePreview(coreState: ReturnType<typeof useCoreState>
   // The switcher drives the preview: a page opened while previewing loads in it,
   // unless the preview is already there (it opened the page itself, below).
   const openPath = currentPage?.path;
+  // The page the canvas renders, as canvasRouteOf reads it: a component shows its page.
+  const canvasRoute = (editStack[0] ?? currentPage)?.route;
+  // A dynamic page's entries arrive after the page opens, and name where it loads.
+  const entryRoute = dynamicPaths[dynamicIndex]?.route;
   useEffect(() => {
     if (!inPreview || !devUrl) {
       return;
     }
-    const path = canvasPath();
+    const page = canvasRoute === undefined ? undefined : { route: canvasRoute, path: routeToPath(canvasRoute, trailingSlash) };
+    const path = previewPathOfPage(page, canvasPath());
     if (previewNeedsPath(previewPathRef.current, path)) {
       previewPathRef.current = path;
       setPreviewSource(devUrl + path);
     }
-  }, [inPreview, devUrl, openPath, canvasPath, previewPathRef, setPreviewSource]);
+  }, [inPreview, devUrl, openPath, canvasRoute, entryRoute, canvasPath, previewPathRef, setPreviewSource, trailingSlash]);
 
   // The preview drives the switcher: the preload posts avb:navigated from every
   // loaded frame and after each client-side navigation, and the page it names opens.

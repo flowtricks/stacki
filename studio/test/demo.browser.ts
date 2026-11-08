@@ -175,7 +175,7 @@ async function checkComponentOpen(page: Page, frame: FrameLocator): Promise<void
   await frame.locator('article.card').evaluate(() => window.parent.postMessage({ type: 'studio:open', id: '0.1.0.4', occurrence: 0 }, '*'));
   await page.locator('.titlebar.component-open').waitFor();
   assert.match((await page.locator('.titlebar').textContent()) ?? '', /Card\.astro/, 'The Card component is open');
-  assert.equal(await page.locator('.demo-note').filter({ hasText: 'full Stacki app' }).count(), 0, 'Nothing says it needs the full app');
+  assert.equal(await page.locator('.toast').filter({ hasText: 'full Stacki app' }).count(), 0, 'Nothing says it needs the full app');
   await page
     .locator('.titlebar')
     .getByRole('button', { name: /Card\.astro/ })
@@ -488,20 +488,13 @@ async function checkPhone(): Promise<void> {
     if (bar !== null) {
       bar.hidden = false;
     }
-    const note = document.querySelector<HTMLElement>('.demo-note');
-    if (note !== null) {
-      note.hidden = false;
-      note.textContent = 'Components change on every page that uses them, so they open in the full Stacki app.';
-    }
   });
   const widths = await page.evaluate(() => ({
     page: document.documentElement.scrollWidth,
     bar: document.querySelector('.demo-bar')?.getBoundingClientRect().right ?? 0,
-    note: document.querySelector('.demo-note')?.getBoundingClientRect().right ?? 0,
   }));
   assert.ok(widths.page <= 375, `The page never scrolls sideways (${widths.page}px)`);
   assert.ok(widths.bar <= 375, `The storage bar fits a phone (${widths.bar}px)`);
-  assert.ok(widths.note <= 375, `A note fits a phone (${widths.note}px)`);
   await context.close();
 }
 

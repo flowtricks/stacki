@@ -172,6 +172,8 @@ function PopulatedCell(props: PopulatedCellProps) {
 }
 function CellView({ state }: { readonly state: CellState }) {
   const { cell, fluidOf, custom, value, alwaysOwn, openCustom } = state;
+  // The arrow key last pressed in the cell, read when it is released.
+  const arrowDown = useRef<React.KeyboardEvent | undefined>(undefined);
   return (
     <div
       className="var-cell"
@@ -195,8 +197,16 @@ function CellView({ state }: { readonly state: CellState }) {
       }}
       // A held arrow nudges the draft, and the canvas follows each step live;
       // letting go is the moment the value is written, while the caret stays.
+      // An arrow the variable chooser took (it stops the key on its way down) moved
+      // the marked row, not the value: the draft is a half-typed `var(--sp`, and
+      // writing it on the key's release put that into the file.
       onKeyUpCapture={(event) => {
         if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+          return;
+        }
+        const pressed = arrowDown.current;
+        arrowDown.current = undefined;
+        if (pressed?.isPropagationStopped() === true) {
           return;
         }
         if (state.draft !== undefined && state.draft !== cell.value) {
@@ -204,6 +214,10 @@ function CellView({ state }: { readonly state: CellState }) {
         }
       }}
       onKeyDownCapture={(event) => {
+        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+          // Read on release: the chooser below decides whether it takes this key.
+          arrowDown.current = event;
+        }
         // The same shortcut, wherever the caret is — the token editor holds it
         // as often as the input does.
         if (event.key !== '=' || custom) {

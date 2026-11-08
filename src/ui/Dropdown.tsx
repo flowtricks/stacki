@@ -191,6 +191,19 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
     }
   }, []);
   useEffect(() => () => cancelHover(), [cancelHover]);
+  // A panel can go while its list is open (a new selection, a remount). No close runs
+  // then, so a preview on the canvas would outlive the control that could end it.
+  const cancelPreview = useRef(onCancelPreview);
+  cancelPreview.current = onCancelPreview;
+  useEffect(
+    () => () => {
+      if (previewed.current !== undefined) {
+        previewed.current = undefined;
+        cancelPreview.current?.();
+      }
+    },
+    [previewed],
+  );
   const previewOption = (option: DropdownOption<T>): void => {
     if (option.disabled === true) {
       return;

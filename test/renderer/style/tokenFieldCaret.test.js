@@ -35,7 +35,7 @@ const check = (what, condition, detail) => {
   const entry = path.join(buildDirectory, 'token-field-caret.entry.jsx');
   fs.writeFileSync(
     entry,
-    `export { buildTokenHtml, serializeTokens, tokenFieldPress } from ${JSON.stringify(repoPath('src/features/style/TokenField.tsx'))};\n` +
+    `export { buildTokenHtml, jumpCaretPastChip, serializeTokens, tokenFieldPress } from ${JSON.stringify(repoPath('src/features/style/TokenField.tsx'))};\n` +
       `export { caretPlacementAt, CARET_SLOT } from ${JSON.stringify(repoPath('src/features/style/tokenFieldCaret.ts'))};\n`,
   );
   const out = path.join(buildDirectory, 'token-field-caret.bundle.js');
@@ -57,7 +57,7 @@ const check = (what, condition, detail) => {
   global.document = dom.window.document;
   global.Node = dom.window.Node;
   global.HTMLElement = dom.window.HTMLElement;
-  const { buildTokenHtml, serializeTokens, tokenFieldPress, caretPlacementAt, CARET_SLOT } = require(out);
+  const { buildTokenHtml, jumpCaretPastChip, serializeTokens, tokenFieldPress, caretPlacementAt, CARET_SLOT } = require(out);
 
   // --- layout -----------------------------------------------------------------
   //
@@ -198,6 +198,23 @@ const check = (what, condition, detail) => {
   field.innerHTML = '';
   layout(field);
   check('an empty field is the browser’s to focus', !press(50).prevented);
+
+  // --- arrowing across a chip with a coloured gap beside it --------------------
+  //
+  // In a code field a space is drawn in an element of its own (`.cx-space`), so the
+  // caret beside the chip sits in that element's text, never in the element.
+  field.innerHTML = buildTokenHtml(`${binding} !important`, chips, true);
+  const space = chip().nextSibling;
+  check('the gap after the chip is its own element', space.nodeType === 1, space.nodeName);
+  document.getSelection().collapse(space.firstChild, 0);
+  check('← from just after the chip is handled', jumpCaretPastChip(field, 'left') === true);
+  check('and lands in front of it', side() === 'before', `caret in ${caret().node.nodeName} at ${caret().offset}`);
+  check('→ from just before the chip is handled', jumpCaretPastChip(field, 'right') === true);
+  check(
+    'and lands behind it, in the gap’s own text',
+    caret().node === space.firstChild && caret().offset === 0,
+    `caret in ${caret().node.nodeName} at ${caret().offset}`,
+  );
 
   // --- the assertions that pin the inputs -------------------------------------
   let message = '';
