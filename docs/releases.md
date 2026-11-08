@@ -40,6 +40,17 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.17 the 1.0.16 changes, with a Studio bundle that installs
+
+- The same app as 1.0.16, which never became public. Its Studio bundle shipped
+  `scripts/buildDemoAssets.ts`, which imports from `demo/`, a folder a release leaves out, so
+  installing it failed Studio's type check and kept the old version. Installing the packed
+  `create-stacki` into a test site caught it before anything was published; both 1.0.16 workflows
+  were cancelled and the tag stays where it is.
+- The release collector now leaves that script out (`RELEASE_EXCLUDED_FILES`), and the demo-release
+  test allows a file to import `demo/` only when the release really leaves it out.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.17.
+
 ## 1.0.16 the editor on stacki.build, instant reorders, touch and rem
 
 - stacki.build opens every page in the Studio demo, starting in preview: docs entries through
