@@ -15,6 +15,7 @@ import {
 } from '../../../vendor/stacki/electron/preload/frameInteraction';
 import { freezeViewportHeight, report as reportPageHeight } from '../../../vendor/stacki/electron/preload/frameViewport';
 import { receiveLiveNumericStyles, applyLiveNumericStyles } from './liveNumericStyles';
+import { receiveLiveRule } from './liveRules';
 import { receiveLiveText, applyLiveText } from './liveTextClient';
 import { installCursorPresence } from '../collaboration/cursorClient';
 import { receiveRenderPush } from './renderPushClient';
@@ -235,6 +236,9 @@ window.addEventListener('message', (event) => {
   }
   receiveLiveText(data);
   receiveLiveNumericStyles(data);
+  if (receiveLiveRule(data)) {
+    return;
+  }
   cursorPresence.receive(data);
   columnGuide.receive(data);
   if (data.type === 'studio:collaborators' && 'paths' in data && Array.isArray(data.paths)) {
