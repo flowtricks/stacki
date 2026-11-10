@@ -15,7 +15,8 @@ import { PreviewOverlays } from '../../../vendor/stacki/src/features/preview/Pre
 import { GuideOverlay } from '../../../vendor/stacki/src/features/preview/GuideOverlay';
 import { useColumnGuide, type ShownGuide } from '../../../vendor/stacki/src/features/preview/guideSettings';
 import { outlineInfo, outlineNode } from './outlineInfo';
-import { useMemo, useRef, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
+import { liveRuleBus } from './liveRuleBus';
 import { PreviewToolbar, type PreviewDevice, type PreviewInspectorActions } from '../../../vendor/stacki/src/features/preview/PreviewToolbar';
 import CanvasView from '../../../vendor/stacki/src/features/preview/CanvasView';
 import { usePreviewSizing } from '../../../vendor/stacki/src/features/preview/usePreviewSizing';
@@ -65,6 +66,9 @@ export function PreviewCanvas(props: Props) {
     pages: props.sitePages,
   });
   const sizing = usePreviewSizing(props.device, props.dimensions, props.onDevice);
+  // The style panel's edits reach the canvas before the save does (liveRules.ts).
+  const send = props.preview.send;
+  useEffect(() => liveRuleBus.listen((rule) => send({ type: 'studio:live-rule', ...rule })), [send]);
   useCursorScale(props.preview, sizing.viewport.scale);
   useCursorChatShortcut({
     preview: props.preview,

@@ -170,6 +170,7 @@ export function usePropEdits(splitForEditHook: ReturnType<typeof useSplitForEdit
   // commit would double-add. Update-or-add on set; remove every match on clear.
   const onSetProp = useCallback(
     (rule: ParsedRule, prop: string, value: string, important: boolean) => {
+      previewOnCanvas(rule, { prop, value, important });
       void applyEdit(rule, () => {
         const { rule: editRule } = splitForEdit(rule);
         if (isPaddingProperty(prop)) {
@@ -249,6 +250,7 @@ export function useLiveEdits(
         if (!embedDocument) {
           continue;
         }
+        previewOnCanvas(rule, { prop, value, important });
         const matches = declsFor(rule, prop);
         const target = matches[matches.length - 1];
         if (!liveOriginRef.current.has(prop)) {
@@ -447,4 +449,9 @@ export function useElementTokens(scanState: ReturnType<typeof useScanState>) {
   // and opening or leaving a component rescans, so it is the memo's whole input.
   const instanceClasses = useMemo(() => selectedInstanceClasses(snapshot?.classList ?? []), [snapshot]);
   return { instanceClasses, model, scan, selectorSuggestions, snapshot, tokens };
+}
+
+// The canvas shows the edit before the save and re-render land (host.previewRule).
+function previewOnCanvas(rule: ParsedRule, declaration: { readonly prop: string; readonly value: string; readonly important: boolean }): void {
+  getHost().previewRule?.({ selector: rule.selectorText, atContext: rule.atContext, ...declaration });
 }
