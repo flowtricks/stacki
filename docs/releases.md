@@ -40,6 +40,26 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.23 media hosting, instant style previews, a live component grid
+
+- Assets: connect Cloudflare R2, Bunny Storage or any S3-compatible host beside the project's own
+  files. The panel heading switches source; hosts can be browsed, uploaded to, renamed, reordered
+  and deleted, and every asset picker can choose from them. Font files preview as "Aa", every file
+  type can be selected, and Replace and Copy link are on each tile's menu. Keys stay in the main
+  process, or on the Studio server.
+- Style panel edits show on the canvas before the save lands, on Desktop and in Studio. This
+  rewrites #77: previews keep Astro scoping, skip grouped rules and are undone if a save fails.
+- Search: the Components tab is a grid of live previews that render each component with its
+  `.stacki` defaults, filtered by component folder. This rewrites #76's screenshots. The other
+  tabs use the list again, tabs slide, and the last tab and folder are remembered.
+- Style selectors: lock a stylesheet or a whole folder so cleanup never removes from it.
+- Git panel: optional commit types (`feat`, `fix`, `content`, …), app dropdowns in place of the
+  browser's, and "Version history".
+- Editing: inserted HTML lines up with its siblings, the Navigator and canvas show `.class` labels,
+  dropdowns preview on hover only where the canvas previews, and arrow keys step a value with the
+  caret after its unit.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.23.
+
 ## 1.0.22 live component props and regression fixes
 
 - Hovering an enum prop option previews it on the canvas and survives a page pull; number props
