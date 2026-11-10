@@ -179,7 +179,11 @@ test('connections are kept encrypted, listed without keys, and read back in main
     const saved = store.save('/site', draft);
     const onDisk = fs.readFileSync(path.join(folder, 'media-connections.json'), 'utf8');
     assert.doesNotMatch(onDisk, /very-secret/);
-    assert.equal(fs.statSync(path.join(folder, 'media-connections.json')).mode & 0o777, 0o600);
+    // Windows has no POSIX permission bits: it reports 0o666 for any writable file, so owner-only
+    // mode is only checkable elsewhere. The keys are encrypted on every platform (above).
+    if (process.platform !== 'win32') {
+      assert.equal(fs.statSync(path.join(folder, 'media-connections.json')).mode & 0o777, 0o600);
+    }
     assert.equal(JSON.stringify(store.list('/site')).includes('very-secret'), false);
     assert.deepEqual(store.connection('/site', saved.id)?.secret, secret);
     store.save('/site', { ...draft, label: 'Again' });
