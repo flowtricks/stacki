@@ -161,6 +161,11 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     await render();
     assert.equal(document.querySelector('h2').textContent, 'Git');
     assert.equal(document.querySelector('.history-body').firstElementChild.className, 'git-panel-controls');
+    // The graph's section reads as designers name it, with its chevron at the row's end.
+    const graphHead = document.querySelector('.history-section-head');
+    assert.equal(graphHead.querySelector('.history-section-title').textContent, 'Version history');
+    assert.ok(graphHead.lastElementChild.classList.contains('history-section-chevron'));
+    assert.equal(document.body.textContent.includes('Source Control Graph'), false);
     assert.equal(document.querySelector('.git-chip') === null, true);
     assert.equal(document.querySelector('.dropdown') === null, true);
     assert.equal(document.querySelector('[aria-label="main, current branch"]').disabled, true);
@@ -251,12 +256,35 @@ test('Git controls stay open in the panel and preserve repository actions', asyn
     await click(button('Pull from GitHub'));
     assert.ok(requests.some(([kind, text]) => kind === 'toast' && /Network unavailable/.test(text)));
     assert.equal(button('Pull from GitHub').disabled, false);
-    await act(async () => {
-      const select = document.querySelector('[aria-label="Filter commits by branch"]');
-      select.value = 'current';
-      select.dispatchEvent(new window.Event('change', { bubbles: true }));
-    });
+    // The branch filter is the app's Dropdown, not a native select: it opens its
+    // own menu, marks the chosen row at its end, and filters the graph on pick.
+    const filter = document.querySelector('[aria-label="Filter commits by branch"]');
+    assert.equal(filter.tagName, 'BUTTON');
+    assert.ok(filter.classList.contains('dd-trigger'));
+    assert.equal(filter.textContent, 'All branches');
+    assert.equal(document.querySelector('.git-panel-controls select, .history-graph-toolbar select') === null, true);
+    await click(filter);
+    const filterRows = [...document.querySelectorAll('.dd-popup .dd-option')];
+    assert.deepEqual(
+      filterRows.map((row) => row.querySelector('.dd-option-label').textContent),
+      ['All branches', 'Current branch'],
+    );
+    assert.ok(filterRows[0].lastElementChild.classList.contains('dd-check'));
+    assert.ok(filterRows[0].querySelector('.dd-check svg'));
+    const logsBeforeHover = requests.filter(([kind]) => kind === 'log').length;
+    await act(async () => filterRows[1].dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true })));
+    assert.equal(requests.filter(([kind]) => kind === 'log').length, logsBeforeHover, 'Hovering a filter row previews nothing');
+    await click(filterRows[1]);
+    assert.equal(document.querySelector('.dd-popup') === null, true);
+    assert.equal(filter.textContent, 'Current branch');
+    assert.equal(filter.closest('.history-graph-filter').title, 'Showing commits on main');
     assert.equal(requests.filter(([kind]) => kind === 'log').at(-1)[1].ref, 'HEAD');
+    // Keyboard: the arrows move, Enter picks, Escape closes without changing the filter.
+    await act(async () => filter.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })));
+    assert.ok(document.querySelector('.dd-popup'));
+    await act(async () => document.activeElement.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    assert.equal(document.querySelector('.dd-popup') === null, true);
+    assert.equal(filter.textContent, 'Current branch');
     assert.equal(checkouts().length, 0);
     await click(document.querySelector('[title="Merge feature into main"]'));
     assert.match(document.querySelector('.modal').textContent, /Merge “feature” into “main”/);

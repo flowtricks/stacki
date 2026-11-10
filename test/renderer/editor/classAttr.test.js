@@ -168,7 +168,7 @@ const { class: className } = Astro.props;
   check(
     'and a refused class cancels the rule before it is written',
     /if \(outcome\.tag !== 'refused'\) \{\s*return true;\s*\}[\s\S]{0,300}?return false;/.test(embed) &&
-      new RegExp('if \\(!\\(await passesClassGate\\(rule\\)\\)\\) \\{\\s*return;\\s*\\}' + '[\\s\\S]{0,1600}?writeEmbedDocument\\(embedDocument\\)').test(
+      new RegExp('if \\(!\\(await passesClassGate\\(rule\\)\\)\\) \\{\\s*return false;\\s*\\}' + '[\\s\\S]{0,1600}?writeEmbedDocument\\(embedDocument\\)').test(
         embed,
       ),
     'the rule is still written after the page refused the class',

@@ -150,7 +150,9 @@ function labelOf(element: Element): { readonly label: string; readonly kind: str
     const name = owner.slice(owner.lastIndexOf('/') + 1).replace(/\.astro$/, '');
     return { label: name, kind: 'component' };
   }
-  return { label: element.classList[0] ?? element.localName, kind: 'text' };
+  // A class keeps its dot, as the canvas tag and the navigator spell it.
+  const firstClass = element.classList[0];
+  return { label: firstClass === undefined ? element.localName : `.${firstClass}`, kind: 'text' };
 }
 
 // Where each accepted target's text renders: the element holding it, found

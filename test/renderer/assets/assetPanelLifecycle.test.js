@@ -44,6 +44,8 @@ test('asset listings ignore stale projects and coalesce watcher bursts', async (
   const reads = [];
   let watcher = () => {};
   dom.window.avb = {
+    // No media hosts connected: the panel shows the project alone.
+    mediaConnections: async () => ({ encryption: 'available', connections: [] }),
     listAssets: (projectPath) => {
       const request = deferred();
       reads.push({ projectPath, request });

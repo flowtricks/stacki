@@ -11,6 +11,8 @@ import type {
   RemoteResult,
 } from '../properties/cmsRemote';
 import type { LinkPreview } from '../properties/linkPreview';
+import type { MediaAccountChoices } from '../properties/mediaAccounts';
+import type { MediaConnectionList, MediaListing, MediaResult, MediaSaveResult } from '../properties/mediaHosting';
 import type { DataSample, PageTemplatePlan } from '../properties/pageTemplate';
 import type { AstroRemoteEditAnswer, AstroRemoteReadAnswer } from '../properties/astroContent';
 import type { RepositoryResult } from '../ipc/publishRepository';
@@ -483,6 +485,21 @@ export interface IpcResults {
   readonly 'cmsRemote:references': RemoteResult<readonly RemoteReferenceOption[]>;
   readonly 'cmsRemote:upload': RemoteResult<RemoteAsset | undefined>;
   readonly 'cmsRemote:linkPreview': RemoteResult<LinkPreview | undefined>;
+  readonly 'mediaHosting:connections': MediaConnectionList;
+  readonly 'mediaHosting:save': MediaSaveResult;
+  readonly 'mediaHosting:remove': MediaConnectionList;
+  readonly 'mediaHosting:discover': MediaResult<MediaAccountChoices>;
+  readonly 'mediaHosting:connectAccount': MediaSaveResult;
+  readonly 'mediaHosting:list': MediaResult<MediaListing>;
+  readonly 'mediaHosting:pickUpload': MediaResult<MediaListing | undefined>;
+  readonly 'mediaHosting:upload': MediaResult<MediaListing>;
+  readonly 'mediaHosting:createFolder': MediaResult<MediaListing>;
+  readonly 'mediaHosting:rename': MediaResult<MediaListing>;
+  readonly 'mediaHosting:delete': MediaResult<MediaListing>;
+  readonly 'mediaHosting:reorder': MediaResult<MediaListing>;
+  readonly 'mediaHosting:replace': MediaResult<MediaListing | undefined>;
+  /** Whether a file was chosen and written over the asset; a refusal says why. */
+  readonly 'assets:replace': MediaResult<boolean>;
   readonly 'git:publish': {
     readonly ok: true;
     readonly url: undefined | string;
@@ -699,14 +716,6 @@ export interface IpcResults {
     readonly trailingSlash: string;
     readonly lengthUnit: LengthUnit;
   };
-  readonly 'componentShots:list': {
-    readonly shots: ReadonlyArray<{
-      readonly component: string;
-      readonly width: number;
-      readonly height: number;
-    }>;
-  };
-  readonly 'componentShots:read': undefined | string;
   readonly 'recents:add': {
     readonly ok: true;
   };

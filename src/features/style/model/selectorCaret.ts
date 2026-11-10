@@ -14,6 +14,68 @@ export type ChipPart = { readonly kind: 'class'; readonly name: string } | { rea
 
 export type CaretKey = 'Backspace' | 'Delete';
 
+/** The window events a press is read from, and its timers. */
+export type PressWatchTarget = Pick<Window, 'addEventListener' | 'removeEventListener' | 'setTimeout' | 'clearTimeout'>;
+
+export interface PressWatch {
+  /** Runs `work` now, or just after the press under way has delivered its click. */
+  readonly whenPressEnds: (work: () => void) => void;
+  readonly cancel: () => void;
+  readonly dispose: () => void;
+}
+
+/**
+ * Holds a layout change until the press that caused it is over. A press elsewhere
+ * blurs the field on mouse down; collapsing the field then moved everything below it
+ * up, so the mouse came up over something else and the browser delivered no click.
+ * The timeout is what puts the work after the click, which follows mouse up directly.
+ */
+export function createPressWatch(target: PressWatchTarget): PressWatch {
+  let pressed = false;
+  let work: (() => void) | undefined;
+  let timer: number | undefined;
+  const flush = (): void => {
+    timer = undefined;
+    const held = work;
+    work = undefined;
+    held?.();
+  };
+  const onPress = (): void => {
+    pressed = true;
+  };
+  const onRelease = (): void => {
+    pressed = false;
+    if (work !== undefined) {
+      target.clearTimeout(timer);
+      timer = target.setTimeout(flush, 0);
+    }
+  };
+  const cancel = (): void => {
+    work = undefined;
+    target.clearTimeout(timer);
+    timer = undefined;
+  };
+  const options = { capture: true } as const;
+  const releases = ['mouseup', 'dragend', 'blur'] as const;
+  target.addEventListener('mousedown', onPress, options);
+  releases.forEach((type) => target.addEventListener(type, onRelease, options));
+  return {
+    whenPressEnds: (next) => {
+      if (pressed) {
+        work = next;
+      } else {
+        next();
+      }
+    },
+    cancel,
+    dispose: () => {
+      cancel();
+      target.removeEventListener('mousedown', onPress, options);
+      releases.forEach((type) => target.removeEventListener(type, onRelease, options));
+    },
+  };
+}
+
 /** The chip Backspace (the one before the caret) or Delete (after) takes off, if any. */
 export function chipAtCaret(caret: number, chipCount: number, key: CaretKey): number | undefined {
   const gap = clampCaret(caret, chipCount);

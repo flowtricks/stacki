@@ -9,6 +9,9 @@ import { checkoutGitBranch, commitGitChanges, initializeGit, pullGitBranch, read
 import { BranchIcon } from '../../ui/Icons';
 import type { Conflict, ConflictChoices } from './gitConflictModel';
 import GitChipView from './GitChipView';
+import { buildCommitSubject } from './commitType';
+import { commitTypeConvention, useCommitType, type CommitTypeControl } from './CommitTypePicker';
+import type { CommitConvention } from './commitType';
 import MergeConflictModal from './MergeConflictModal';
 import SwitchBranchModal from './SwitchBranchModal';
 
@@ -166,8 +169,10 @@ function InitializeGitChip({
 function RepositoryGitChip(props: RepositoryProps) {
   const state = useRepositoryState();
   useChangedFiles(props, state);
-  const actions = useRepositoryActions(props, state);
-  const commit = useCommitAction(props, state);
+  const commitType = useCommitType(props.project);
+  const actions = useRepositoryActions(props, state, commitType);
+  const commit = useCommitAction(props, state, commitType);
+  const subject = commitType.state.kind === 'ready' ? buildCommitSubject(state.commitMessage, commitType.state.convention, COMMIT_MESSAGE_FALLBACK) : undefined;
   return (
     <>
       <GitChipView
@@ -175,6 +180,8 @@ function RepositoryGitChip(props: RepositoryProps) {
         busy={props.busy}
         error={props.error}
         commitMessage={state.commitMessage}
+        commitType={commitType}
+        commitSubject={subject}
         newBranch={state.newBranch}
         picking={state.picking}
         picked={state.picked}
@@ -201,6 +208,7 @@ function RepositoryGitChip(props: RepositoryProps) {
         setConflict={state.setConflict}
         parkThenSwitch={actions.parkThenSwitch}
         commitThenSwitch={actions.commitThenSwitch}
+        switchConvention={commitTypeConvention(commitType)}
       />
     </>
   );
@@ -296,7 +304,7 @@ interface ActionState {
   readonly setNewBranch: React.Dispatch<React.SetStateAction<string>>;
 }
 
-function useRepositoryActions(props: RepositoryProps, state: ActionState) {
+function useRepositoryActions(props: RepositoryProps, state: ActionState, commitType: CommitTypeControl) {
   const requestSwitch = (branch: string): void => {
     if (branch === props.info.branch) {
       return;
@@ -331,7 +339,8 @@ function useRepositoryActions(props: RepositoryProps, state: ActionState) {
     deleteBranch,
     createBranch: (branch: string) => createNamedBranch(props, state, branch),
     parkThenSwitch: (branch: string) => parkAndSwitch(props, branch),
-    commitThenSwitch: (branch: string, message: string) => commitAndSwitch(props, branch, message),
+    commitThenSwitch: (branch: string, message: string) =>
+      commitAndSwitch(props, branch, buildCommitSubject(message, commitTypeConvention(commitType), message)),
   } as const;
 }
 
@@ -409,9 +418,17 @@ interface CommitState {
   readonly setPicking: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-function useCommitAction(props: RepositoryProps, state: CommitState): () => void {
+// What a commit says when the message is left empty. A picked type still
+// applies to it, so `feat` with no message commits `feat: Update from Stacki`.
+const COMMIT_MESSAGE_FALLBACK = 'Update from Stacki';
+
+function useCommitAction(props: RepositoryProps, state: CommitState, commitType: CommitTypeControl): () => void {
   return () => {
-    const message = state.commitMessage.trim() || 'Update from Stacki';
+    if (commitType.state.kind === 'invalid') {
+      // The scope field already says what is wrong; Commit is disabled until it is fixed.
+      return;
+    }
+    const message = buildCommitSubject(state.commitMessage, commitType.state.convention, COMMIT_MESSAGE_FALLBACK);
     // Explicit selections stay explicit even when they include every visible file;
     // files arriving after selection must not be silently added to the commit.
     const paths = state.picking ? state.picked : undefined;
@@ -429,6 +446,7 @@ function useCommitAction(props: RepositoryProps, state: CommitState): () => void
       .then((done) => {
         if (done) {
           state.setCommitMessage('');
+          commitType.resetForNextCommit();
           state.setPicked(undefined);
           state.setPicking(false);
         }
@@ -443,6 +461,7 @@ interface ModalProps extends RepositoryProps {
   readonly setConflict: React.Dispatch<React.SetStateAction<PendingConflict | undefined>>;
   readonly parkThenSwitch: (branch: string) => Promise<boolean>;
   readonly commitThenSwitch: (branch: string, message: string) => Promise<boolean>;
+  readonly switchConvention: CommitConvention;
 }
 
 function GitModals(props: ModalProps) {
@@ -500,6 +519,7 @@ function CheckoutModal(props: ModalProps & { readonly switchTo: SwitchTarget }) 
       to={props.switchTo.branch}
       files={props.switchTo.files}
       busy={props.busy}
+      convention={props.switchConvention}
       onCancel={() => props.setSwitchTo(undefined)}
       onLeaveHere={() => {
         // runAction reports its own failures and resolves false; it never rejects.

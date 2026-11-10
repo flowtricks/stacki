@@ -8,7 +8,6 @@ import {
   ChevronRightIcon,
   ChevronLeftIcon,
   AstroIcon,
-  CheckIcon,
   CmsIcon,
   ElementComponentIcon,
   CodeIcon,
@@ -16,7 +15,6 @@ import {
   FieldNumberIcon,
   FieldSwitchIcon,
   GearIcon,
-  SearchIcon,
   PencilIcon,
   RepeatIcon,
   TextIcon,
@@ -35,6 +33,7 @@ import {
   type DataOrigin,
   type EntryPages,
 } from './dataPickerModel';
+import { DataSearch, DataTreeRow, ItemNavigation, PreviewValue, dataRowIndentPx, type ItemPosition } from '../../ui/DataTree';
 import type { PropSettingsOffer } from './newPropModel';
 
 // The data behind the page, as something you can look through rather than
@@ -56,11 +55,6 @@ function ancestorsOf(path: string | undefined): string[] {
   const steps = pathSteps(pathText) ?? [];
   return steps.slice(0, -1).map((step) => pathText.slice(0, step.end));
 }
-
-// How far a nested field steps in: the width of a chevron and the gap after
-// it. A nested field with nothing beneath it drops its empty chevron slot, so
-// its name lines up under its parent's name, just past the parent's chevron.
-const DEPTH_INDENT_PX = 18;
 
 function flatten(nodes: readonly PickerNode[]): PickerNode[] {
   const pending = nodes.map((node) => ({ node, depth: 0 })).reverse();
@@ -132,10 +126,7 @@ function withCurrent(tree: readonly PickerNode[], current: string | undefined) {
   return graft(tree || [], 0);
 }
 
-interface Navigation {
-  readonly index: number;
-  readonly count: number;
-}
+type Navigation = ItemPosition;
 interface Entries extends Navigation {
   readonly label: string;
   readonly onStep: (step: -1 | 1) => void;
@@ -197,10 +188,7 @@ export default function DataPicker(props: DataPickerProps) {
           stepping through them previews the page against other content and
           re-reads this list against it at the same time. */}
         {entries && entries.count > 1 && <EntryNavigation entries={entries} />}
-        <div className="dp-search">
-          <SearchIcon size={12} />
-          <input ref={searchRef} value={query} placeholder="Search data…" spellCheck={false} autoFocus onChange={(event) => setQuery(event.target.value)} />
-        </div>
+        <DataSearch value={query} label="Search data" inputRef={searchRef} onChange={setQuery} />
         <DataPickerResults state={state} origin={origin} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
         {/* Above "Write an expression…", because it is about the thing already
           bound rather than about replacing it. Only ever rendered for a picker
@@ -403,59 +391,40 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
   const isCurrent = node.path === current;
   return (
     <React.Fragment key={node.path}>
-      <div
-        ref={isCurrent ? selectedRef : undefined}
-        className={`dp-row ${isCurrent ? 'selected' : ''} ${node.pickable === false ? 'path-only' : ''} ${node.missing ? 'missing' : ''}`}
-        style={{ paddingLeft: 6 + depth * DEPTH_INDENT_PX }}
+      <DataTreeRow
+        depth={depth}
+        label={showPath ? node.path : node.key}
         title={`${node.path}${node.kind ? ` — ${node.kind}` : ''}`}
-        onMouseDown={(event) => event.preventDefault()}
+        expandable={expandable === true}
+        open={isOpen}
+        selected={isCurrent}
+        tone={node.missing ? 'missing' : node.pickable === false ? 'path-only' : 'plain'}
+        check="selected-only"
+        rowRef={isCurrent ? selectedRef : undefined}
+        lead={<DataRowLead node={node} depth={depth} />}
+        // A loop hands its item one entry of a list, and the list has more
+        // than one. These say which one is being read, and move it — so the
+        // fields below are this service's, not always the first one's. The
+        // row itself still picks the item, so the arrows stop the click.
+        // They take the right edge in place of the item's field count,
+        // which the open rows beneath already show.
+        value={
+          node.nav && onStepItem ? (
+            <ItemNavigation path={node.path} nav={node.nav} onStepItem={onStepItem} />
+          ) : page !== undefined ? (
+            <ItemNavigation path={node.path} nav={page} onStepItem={(_path, step) => stepEntry(node, step)} />
+          ) : (
+            <PreviewValue preview={node.preview} kind={node.kind} image={node.image} />
+          )
+        }
+        end={state.keyOf !== undefined && <PropSettingsSlot propKey={settingsKeyOf(node, state.keyOf)} onOpen={state.openSettings} />}
+        onToggle={() => toggle(node)}
         // The root carries what has to happen before this path means
         // anything — a collection the page doesn't read yet needs its query
-        // written first.
-        onClick={() =>
-          // A row kept only so a list beneath it can be reached opens
-          // instead of being chosen — there is no looping over an object.
-          node.pickable === false ? toggle(node) : onPick(node.path, from.query || undefined)
-        }
-      >
-        <span
-          className={`dp-twist ${expandable ? '' : depth > 0 ? 'absent' : 'hidden'} ${isOpen ? 'open' : ''}`}
-          onClick={
-            expandable
-              ? (event) => {
-                  event.stopPropagation();
-                  toggle(node);
-                }
-              : undefined
-          }
-        >
-          <ChevronRightIcon size={10} />
-        </span>
-        {depth === 0 && node.section === 'props' && <PropKindIcon kind={node.kind} />}
-        {/* A collection is a CMS collection to the person reading the list: the
-            CMS mark, as in the left rail. Its section heading carries Astro's. */}
-        {depth === 0 && node.section === 'collections' && (
-          <span className="dp-kind-icon" title="Content collection">
-            <CmsIcon size={12} />
-          </span>
-        )}
-        <span className="dp-key">{showPath ? node.path : node.key}</span>
-        {isCurrent && <CheckIcon size={11} className="dp-check" />}
-        {/* A loop hands its item one entry of a list, and the list has more
-              than one. These say which one is being read, and move it — so the
-              fields below are this service's, not always the first one's. The
-              row itself still picks the item, so the arrows stop the click.
-              They take the right edge in place of the item's field count,
-              which the open rows beneath already show. */}
-        {node.nav && onStepItem ? (
-          <ItemNavigation path={node.path} nav={node.nav} onStepItem={onStepItem} />
-        ) : page !== undefined ? (
-          <ItemNavigation path={node.path} nav={page} onStepItem={(_path, step) => stepEntry(node, step)} />
-        ) : (
-          <PreviewValue preview={node.preview} kind={node.kind} image={node.image} />
-        )}
-        {state.keyOf !== undefined && <PropSettingsSlot propKey={settingsKeyOf(node, state.keyOf)} onOpen={state.openSettings} />}
-      </div>
+        // written first. A row kept only so a list beneath it can be reached
+        // opens instead of being chosen — there is no looping over an object.
+        onPick={() => (node.pickable === false ? toggle(node) : onPick(node.path, from.query || undefined))}
+      />
       {isOpen &&
         (shown !== undefined ? (
           <>
@@ -463,7 +432,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
               <DataRow key={child.path} node={child} depth={depth + 1} showPath={false} root={from} state={state} onPick={onPick} onStepItem={onStepItem} />
             ))}
             {shown.unread && (
-              <div className="dp-loading" style={{ paddingLeft: 6 + (depth + 1) * DEPTH_INDENT_PX }}>
+              <div className="dp-loading" style={{ paddingLeft: dataRowIndentPx(depth + 1) }}>
                 Reading one entry…
               </div>
             )}
@@ -473,13 +442,33 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
             <DataRow key={child.path} node={child} depth={depth + 1} showPath={false} root={from} state={state} onPick={onPick} onStepItem={onStepItem} />
           ))
         ) : node.lazy ? (
-          <div className="dp-loading" style={{ paddingLeft: 6 + (depth + 1) * DEPTH_INDENT_PX }}>
+          <div className="dp-loading" style={{ paddingLeft: dataRowIndentPx(depth + 1) }}>
             Reading one entry…
           </div>
         ) : undefined)}
     </React.Fragment>
   );
 }
+// What a root row leads with: a prop's kind, or the CMS mark on a collection —
+// a collection is a CMS collection to the person reading the list, as in the
+// left rail. Its section heading carries Astro's.
+function DataRowLead({ node, depth }: { readonly node: PickerNode; readonly depth: number }) {
+  if (depth > 0) {
+    return undefined;
+  }
+  if (node.section === 'props') {
+    return <PropKindIcon kind={node.kind} />;
+  }
+  if (node.section === 'collections') {
+    return (
+      <span className="dp-kind-icon" title="Content collection">
+        <CmsIcon size={12} />
+      </span>
+    );
+  }
+  return undefined;
+}
+
 // The end of every row of a picker that can open settings, filled only on a
 // prop's: the slot is there either way, so showing the gear moves nothing and
 // the column of values beside it stays one column.
@@ -503,41 +492,6 @@ function PropSettingsSlot({ propKey, onOpen }: { readonly propKey: string | unde
           <GearIcon size={12} />
         </button>
       )}
-    </span>
-  );
-}
-function ItemNavigation({
-  path,
-  nav,
-  onStepItem,
-}: {
-  readonly path: string;
-  readonly nav: Navigation;
-  readonly onStepItem: (path: string, step: -1 | 1, count: number) => void;
-}) {
-  return (
-    <span className="dp-item-nav" onClick={(event) => event.stopPropagation()}>
-      <button
-        type="button"
-        className="dp-step"
-        title="Previous item"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => onStepItem(path, -1, nav.count)}
-      >
-        <ChevronLeftIcon size={11} />
-      </button>
-      <span className="dp-item-count">
-        {nav.index + 1}/{nav.count}
-      </span>
-      <button
-        type="button"
-        className="dp-step"
-        title="Next item"
-        onMouseDown={(event) => event.preventDefault()}
-        onClick={() => onStepItem(path, 1, nav.count)}
-      >
-        <ChevronRightIcon size={11} />
-      </button>
     </span>
   );
 }
@@ -603,44 +557,6 @@ function EntryNavigation({ entries }: { readonly entries: Entries }) {
       </button>
     </div>
   );
-}
-
-// What a field holds, as a person reads it: words without the quotes a sample
-// writes around them, a link without its scheme, and an image as the image.
-function PreviewValue(props: { readonly preview: string; readonly kind: string; readonly image: string | undefined }) {
-  if (props.image) {
-    return (
-      <span className="dp-val" title={props.image}>
-        <img className="dp-thumb" src={props.image} alt="" loading="lazy" />
-      </span>
-    );
-  }
-  if (!props.preview) {
-    return <span className="dp-val kind">{props.kind}</span>;
-  }
-  const words = unquoted(props.preview);
-  return words === undefined ? (
-    <span className="dp-val">{props.preview}</span>
-  ) : (
-    <span className="dp-val text" title={words}>
-      {words.replace(/^https?:\/\//, '')}
-    </span>
-  );
-}
-
-// The words of a quoted string preview, or undefined for any other value. A
-// long one is clipped with an ellipsis where its closing quote was.
-function unquoted(preview: string): string | undefined {
-  if (!preview.startsWith('"')) {
-    return undefined;
-  }
-  if (preview.endsWith('…')) {
-    return preview.slice(1);
-  }
-  if (preview.length < 2 || !preview.endsWith('"')) {
-    return undefined;
-  }
-  return preview.slice(1, -1);
 }
 
 // What a component prop holds, as the icon its row leads with: words, a

@@ -90,7 +90,7 @@ const check = (what, condition, detail) => {
     },
   ];
   FILES.push(
-    ...['arrow.svg', 'type.woff2'].map((name) => ({
+    ...['arrow.svg', 'type.woff2', 'clip.mp4'].map((name) => ({
       rel: 'public/' + name,
       name,
       parent: 'public',
@@ -125,6 +125,8 @@ const check = (what, condition, detail) => {
     moveAsset: async () => ({ ok: true }),
     assetThumb: async () => ({ dataUrl: undefined }),
     getFilePath: () => '',
+    // No media hosts connected: the panel shows the project alone.
+    mediaConnections: async () => ({ encryption: 'available', connections: [] }),
   };
 
   const React = require('react');
@@ -157,7 +159,9 @@ const check = (what, condition, detail) => {
     });
   };
   await render({});
-  // The panel opens above the roots, where there are only folders. Step into
+  // The panel opens on the project, its trail starting with the source picker.
+  check('the heading is the project source', container.querySelector('.panel-header [aria-label="Switch source"]')?.textContent.trim() === 'Project');
+  // The project opens above the roots, where there are only folders. Step into
   // the one holding the files.
   await act(async () => {
     container.querySelector('.asset-folder')?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
@@ -182,7 +186,7 @@ const check = (what, condition, detail) => {
   };
 
   // --- the tile has one, and only one thing in it ---------------------------------
-  check('the assets are on screen', tiles().length === 4, String(tiles().length));
+  check('the assets are on screen', tiles().length === 5, String(tiles().length));
   check(
     'every tile has a menu button',
     tiles().every((tile) => tile.querySelector('.asset-tile-menu')),
@@ -193,7 +197,7 @@ const check = (what, condition, detail) => {
   await press(menuButton(0), 'a menu button on the first tile');
   check('pressing it opens a menu', rows().length > 0, container.innerHTML.slice(0, 160));
   check('with Delete in it', rows().includes('Delete'), rows().join());
-  check('and compression in one dialog', rows().join('|') === 'Compress…|Delete', rows().join());
+  check('with link, compression and replacement before it', rows().join('|') === 'Copy link|Compress…|Replace…|Delete', rows().join());
 
   // --- it asks before it does it ---------------------------------------------------
   //
@@ -227,23 +231,32 @@ const check = (what, condition, detail) => {
   await answer('delete');
   check('saying yes deletes the file it was opened on', deleted.join() === 'public/photo.jpg', deleted.join());
 
-  // Selection uses the whole tile and excludes files the encoder cannot handle.
-  await answer('select assets');
+  // Selection uses the whole tile and takes every kind of file: Delete applies
+  // to all of them. Compress takes the images it can re-encode and says what it skips.
+  await answer('select');
+  const byName = (name) => tiles().find((tile) => tile.querySelector('.asset-name')?.textContent === name);
   check(
-    'text, SVG and font assets cannot be selected',
-    tiles()
-      .slice(1)
-      .every((tile) => tile.querySelector('input').disabled),
+    'no tile is disabled or dimmed',
+    tiles().every((tile) => !tile.querySelector('input').disabled && !tile.classList.contains('is-disabled')),
   );
-  await press(tiles()[1]);
-  check('clicking a disabled tile leaves it unchecked', !tiles()[1].querySelector('input').checked);
-  await press(tiles()[0].querySelector('.asset-name'));
-  check('clicking the name selects the entire image tile', tiles()[0].querySelector('input').checked);
-  await press(tiles()[0].querySelector('input'));
-  check('clicking the checkbox toggles only once', !tiles()[0].querySelector('input').checked);
+  for (const name of ['arrow.svg', 'type.woff2', 'clip.mp4']) {
+    await press(byName(name)?.querySelector('.asset-name'), `the ${name} tile`);
+    check(`${name} can be selected`, byName(name)?.querySelector('input').checked === true);
+  }
+  await press(byName('photo.jpg')?.querySelector('.asset-name'));
+  check('clicking the name selects the entire image tile', byName('photo.jpg')?.querySelector('input').checked === true);
+  await press(byName('photo.jpg')?.querySelector('input'));
+  check('clicking the checkbox toggles only once', !byName('photo.jpg')?.querySelector('input').checked);
+  const compressButton = () => container.querySelector('[aria-label="Compress selected assets"]');
+  check('Compress is off with no image selected', compressButton()?.disabled === true);
+  check('and says why', /only PNG, JPEG, WebP, AVIF and TIFF/.test(compressButton()?.title ?? ''), compressButton()?.title);
   await press(container.querySelector('.asset-select-all'));
-  check('select all includes only eligible images', tiles()[0].querySelector('input').checked && !tiles()[1].querySelector('input').checked);
-  await press(container.querySelector('[aria-label="Compress selected assets"]'));
+  check(
+    'select all takes every file',
+    tiles().every((tile) => tile.querySelector('input').checked),
+  );
+  check('Compress now names what it skips', /Compress 1 image; 4 other files are skipped/.test(compressButton()?.title ?? ''), compressButton()?.title);
+  await press(compressButton());
   const compression = () => document.querySelector('.asset-compression-dialog');
   check('compression opens one format dialog', !!compression());
   check('AVIF is selected by default', compression().querySelector('[value=avif]').checked);
@@ -255,10 +268,27 @@ const check = (what, condition, detail) => {
   await press(compression().querySelector('[value=webp]'));
   await press(compression().querySelector('button.primary'));
   check(
-    'compress converts exactly the eligible selection in the chosen format',
+    'compress converts only the image, skipping SVG, text, font and video',
     converted.length === 1 && converted[0].rel === 'public/photo.jpg' && converted[0].format === 'webp',
   );
   check('compression closes its dialog without a second confirmation', !compression() && !dialog());
+  // Delete takes the rest, whatever their kind.
+  deleted.length = 0;
+  for (const name of ['arrow.svg', 'type.woff2', 'clip.mp4', 'notes.txt']) {
+    if (!byName(name)?.querySelector('input').checked) {
+      await press(byName(name)?.querySelector('.asset-name'), `the ${name} tile`);
+    }
+  }
+  await press(container.querySelector('[aria-label="Delete selected assets"]'));
+  await answer('delete');
+  await act(async () => {
+    await settle(60);
+  });
+  check(
+    'Delete removes SVG, font, video and text files',
+    ['public/arrow.svg', 'public/type.woff2', 'public/clip.mp4', 'public/notes.txt'].every((rel) => deleted.includes(rel)),
+    deleted.join(),
+  );
   await answer('cancel');
 
   // --- and never while an asset is being picked -------------------------------------

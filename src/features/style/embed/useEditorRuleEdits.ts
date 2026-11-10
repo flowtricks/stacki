@@ -10,6 +10,8 @@ import { addDeclaration, appendDecl, directDecls, removeRule, removeRuleIfEmpty,
 import { parseSelectorList } from '../model/selectors';
 import { clearPaddingSides, isPaddingProperty, setPaddingDeclaration } from '../model/spacingShorthand';
 import { getHost, type ClassOutcome } from '../model/host';
+import { liveRules, liveRuleTargetOf, type LiveRulePreview } from '../model/liveRuleEdits';
+import type { LiveRuleEdit, LiveRuleTarget } from '../../../../shared/properties/liveRules';
 import { selectedInstanceClasses } from '../model/webflowElement';
 import { type EmbedDocument, navigateToEmbed, writeEmbedDocument } from '../model/webflow';
 import type { ParsedDeclaration, ParsedRule } from '../model/styleTypes';
@@ -120,15 +122,17 @@ export function useApplyEdit(
   );
 
   // Run a synchronous AST mutation, refresh the model, then persist the embed.
+  // Resolves whether the write landed, so a canvas preview of the edit knows to
+  // wait for the page or to put the page's own value back.
   const applyEdit = useCallback(
-    async (rule: ParsedRule, mutate: () => boolean | void) => {
+    async (rule: ParsedRule, mutate: () => boolean | void): Promise<boolean> => {
       const embedDocument = documentByKey.get(rule.embedKey);
       if (!embedDocument) {
         setStatus('Lost track of the source embed — try Rescan.');
-        return;
+        return false;
       }
       if (!(await passesClassGate(rule))) {
-        return;
+        return false;
       }
       setBusyBoth(true);
       setStatus('Saving…');
@@ -138,7 +142,7 @@ export function useApplyEdit(
         const result = mutate();
         if (result === false) {
           setStatus('Nothing to save.');
-          return;
+          return false;
         }
         // Persist FIRST, then rebuild the panel's own model. The write is what the canvas
         // sees, and refreshDerived re-resolves every rule against the element — running it
@@ -147,22 +151,48 @@ export function useApplyEdit(
         const writeResult = await writeEmbedDocument(embedDocument);
         await refreshDerived();
         if (!settleEmbedWrite(embedDocument, writeResult, 'rule')) {
-          return;
+          return false;
         }
         setStatus(rule.fromComponent ? 'Saved. This embed is shared by every instance of ' + `${rule.componentName ?? 'the component'}.` : 'Saved to embed.');
+        return true;
       } finally {
         setBusyBoth(false);
       }
     },
     [documentByKey, passesClassGate, refreshDerived, setBusyBoth, settleEmbedWrite, setStatus],
   );
-  return { applyEdit, classGatesRef };
+  // The declaration the canvas can preview for an edit of `rule`, or undefined when it can't.
+  const liveTargetOf = useCallback(
+    (rule: ParsedRule, prop: string): LiveRuleTarget | undefined => {
+      const embedDocument = documentByKey.get(rule.embedKey);
+      if (!embedDocument) {
+        return undefined;
+      }
+      return liveRuleTargetOf(rule, embedDocument.source, prop, getHost().projectPath);
+    },
+    [documentByKey],
+  );
+  return { applyEdit, classGatesRef, liveTargetOf };
 }
 
 // Set and clear a property on an embed rule.
 export function usePropEdits(splitForEditHook: ReturnType<typeof useSplitForEdit>, applyEditHook: ReturnType<typeof useApplyEdit>) {
-  const { splitForEdit } = splitForEditHook;
-  const { applyEdit } = applyEditHook;
+  const { isGroupedSplittable, splitForEdit } = splitForEditHook;
+  const { applyEdit, liveTargetOf } = applyEditHook;
+
+  // The canvas shows an edit before its save lands (model/liveRuleEdits.ts). A grouped
+  // rule's member is split out of its group by the save, so its edit is not previewed:
+  // on the canvas the group's other selectors would change with it.
+  const previewEdit = useCallback(
+    (rule: ParsedRule, prop: string, edit: LiveRuleEdit): LiveRulePreview | undefined => {
+      if (isGroupedSplittable(rule)) {
+        return undefined;
+      }
+      const target = liveTargetOf(rule, prop);
+      return target === undefined ? undefined : liveRules.show(target, edit);
+    },
+    [isGroupedSplittable, liveTargetOf],
+  );
 
   // Property-addressed writes for always-rendered controls. We look up nodes in
   // the live postcss AST (not rule.declarations) so these stay correct after a
@@ -170,8 +200,9 @@ export function usePropEdits(splitForEditHook: ReturnType<typeof useSplitForEdit
   // commit would double-add. Update-or-add on set; remove every match on clear.
   const onSetProp = useCallback(
     (rule: ParsedRule, prop: string, value: string, important: boolean) => {
-      previewOnCanvas(rule, { prop, value, important });
-      void applyEdit(rule, () => {
+      const edit: LiveRuleEdit = { kind: 'value', value, important };
+      const preview = previewEdit(rule, prop, edit);
+      const saving = applyEdit(rule, () => {
         const { rule: editRule } = splitForEdit(rule);
         if (isPaddingProperty(prop)) {
           setPaddingDeclaration(editRule.node, prop, { value, important });
@@ -185,13 +216,18 @@ export function usePropEdits(splitForEditHook: ReturnType<typeof useSplitForEdit
         }
         return addDeclaration(editRule, prop, { value, important });
       });
+      settlePreviews(saving, preview === undefined ? [] : [{ preview, edit }]);
     },
-    [applyEdit, splitForEdit],
+    [applyEdit, previewEdit, splitForEdit],
   );
   const onClearProp = useCallback(
     (rule: ParsedRule, prop: string | string[]) => {
       const props = Array.isArray(prop) ? prop : [prop];
-      void applyEdit(rule, () => {
+      // A padding side grouped into a shorthand is rewritten, not removed, so only a
+      // property's own declaration is previewed.
+      const removed: LiveRuleEdit = { kind: 'removed' };
+      const previews = props.filter((name) => !isPaddingProperty(name)).map((name) => previewEdit(rule, name, removed));
+      const saving = applyEdit(rule, () => {
         const { rule: editRule } = splitForEdit(rule);
         // A side grouped into `padding` or an axis has no declaration of its own.
         const clearedPadding = clearPaddingSides(editRule.node, props);
@@ -208,8 +244,12 @@ export function usePropEdits(splitForEditHook: ReturnType<typeof useSplitForEdit
         removeRuleIfEmpty(editRule);
         return;
       });
+      settlePreviews(
+        saving,
+        previews.filter((preview) => preview !== undefined).map((preview) => ({ preview, edit: removed })),
+      );
     },
-    [applyEdit, splitForEdit],
+    [applyEdit, previewEdit, splitForEdit],
   );
   return { onClearProp, onSetProp };
 }
@@ -240,7 +280,7 @@ export function useLiveEdits(
         readonly important: boolean;
       }[],
     ) => {
-      const documents = new Set<EmbedDocument>();
+      const documents = new Map<EmbedDocument, { preview: LiveRulePreview; edit: LiveRuleEdit }[]>();
       for (const { rule, prop, value, important } of writes) {
         // Defer grouped-splittable edits to the blur commit (onSetProp splits first).
         if (isGroupedSplittable(rule)) {
@@ -250,26 +290,33 @@ export function useLiveEdits(
         if (!embedDocument) {
           continue;
         }
-        previewOnCanvas(rule, { prop, value, important });
-        const matches = declsFor(rule, prop);
-        const target = matches[matches.length - 1];
-        if (!liveOriginRef.current.has(prop)) {
-          liveOriginRef.current.set(prop, target ? { value: target.value, important: !!target.important } : undefined);
+        const edit: LiveRuleEdit = { kind: 'value', value, important };
+        const target = liveRuleTargetOf(rule, embedDocument.source, prop, getHost().projectPath);
+        const previews = documents.get(embedDocument) ?? [];
+        if (target !== undefined) {
+          previews.push({ preview: liveRules.show(target, edit), edit });
         }
-        if (target) {
-          target.value = value;
-          target.important = important;
+        const matches = declsFor(rule, prop);
+        const last = matches[matches.length - 1];
+        if (!liveOriginRef.current.has(prop)) {
+          liveOriginRef.current.set(prop, last ? { value: last.value, important: !!last.important } : undefined);
+        }
+        if (last) {
+          last.value = value;
+          last.important = important;
         } else {
           appendDecl(rule.node, prop, { value, important });
         }
-        documents.add(embedDocument);
+        documents.set(embedDocument, previews);
       }
-      for (const embedDocument of documents) {
-        void writeEmbedDocument(embedDocument, true).then((result) => {
+      for (const [embedDocument, previews] of documents) {
+        const saving = writeEmbedDocument(embedDocument, true).then((result) => {
           if (!result.ok && inComponentRef.current && !embedDocument.source.fromComponent) {
             markPending(embedDocument.source.key);
           }
+          return result.ok;
         });
+        settlePreviews(saving, previews);
       }
     },
     [documentByKey, markPending, isGroupedSplittable, inComponentRef],
@@ -307,23 +354,29 @@ export function useRuleActions(
       if (!embedDocument) {
         return;
       }
+      // The canvas shows the reverted value at once, as it showed the live writes.
+      const edit: LiveRuleEdit = origin ? { kind: 'value', value: origin.value, important: origin.important } : { kind: 'removed' };
+      const liveTarget = liveRuleTargetOf(rule, embedDocument.source, prop, getHost().projectPath);
+      const preview = liveTarget === undefined ? undefined : liveRules.show(liveTarget, edit);
       const matches = declsFor(rule, prop);
-      const target = matches[matches.length - 1];
+      const last = matches[matches.length - 1];
       if (origin) {
-        if (target) {
-          target.value = origin.value;
-          target.important = origin.important;
+        if (last) {
+          last.value = origin.value;
+          last.important = origin.important;
         } else {
           appendDecl(rule.node, prop, { value: origin.value, important: origin.important });
         }
-      } else if (target) {
-        target.remove();
+      } else if (last) {
+        last.remove();
       }
-      void writeEmbedDocument(embedDocument, true).then((result) => {
+      const saving = writeEmbedDocument(embedDocument, true).then((result) => {
         if (!result.ok && inComponentRef.current && !embedDocument.source.fromComponent) {
           markPending(embedDocument.source.key);
         }
+        return result.ok;
       });
+      settlePreviews(saving, preview === undefined ? [] : [{ preview, edit }]);
     },
     [documentByKey, markPending, inComponentRef, liveOriginRef],
   );
@@ -451,7 +504,26 @@ export function useElementTokens(scanState: ReturnType<typeof useScanState>) {
   return { instanceClasses, model, scan, selectorSuggestions, snapshot, tokens };
 }
 
-// The canvas shows the edit before the save and re-render land (host.previewRule).
-function previewOnCanvas(rule: ParsedRule, declaration: { readonly prop: string; readonly value: string; readonly important: boolean }): void {
-  getHost().previewRule?.({ selector: rule.selectorText, atContext: rule.atContext, ...declaration });
+// Report a save's outcome to the canvas previews it carried: kept until the page holds
+// the edit when it landed, put back now when it did not. A save that throws is reported
+// as not landed and still rejects, so the error stays as loud as before.
+function settlePreviews(saving: Promise<boolean>, previews: readonly { readonly preview: LiveRulePreview; readonly edit: LiveRuleEdit }[]): void {
+  if (previews.length === 0) {
+    void saving;
+    return;
+  }
+  let landed = false;
+  void saving
+    .then((outcome) => {
+      landed = outcome;
+    })
+    .finally(() => {
+      for (const { preview, edit } of previews) {
+        if (landed) {
+          liveRules.landed(preview, edit);
+        } else {
+          liveRules.failed(preview);
+        }
+      }
+    });
 }

@@ -7,7 +7,7 @@ import { assert } from '../../../../shared/core/assert';
 import { CODE_INDENT_UNIT, indentUnitOf } from '../../../../shared/core/indent';
 import type { StyleRegion } from './styleTypes';
 import { selectorKey } from './resolved';
-import { isPaddingProperty, setPaddingDeclaration } from './spacingShorthand';
+import { fillTrailingBlankLine, isPaddingProperty, setPaddingDeclaration } from './spacingShorthand';
 
 /** A declaration's value and whether it is `!important` — the two always travel together. */
 export type DeclarationValue = { readonly value: string; readonly important: boolean };
@@ -57,6 +57,7 @@ export function setDeclOnRule(rule: Rule, prop: string, declared: DeclarationVal
     last.important = declared.important;
   } else {
     rule.append({ prop, value: declared.value, important: declared.important });
+    fillTrailingBlankLine(rule);
   }
   terminateDeclarations(rule);
 }
@@ -177,6 +178,7 @@ export function appendDecl(node: Rule | AtRule, prop: string, declared: Declarat
     node.insertBefore(firstNested, decl);
   } else {
     node.append(decl);
+    fillTrailingBlankLine(node);
   }
   placeChild(node, decl);
   terminateDeclarations(node);

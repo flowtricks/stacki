@@ -68,6 +68,7 @@ export function isPaddingProperty(prop: string): boolean {
 export function setPaddingDeclaration(node: Rule | AtRule, prop: string, declared: Declared): void {
   const key = prop.trim().toLowerCase();
   assert(isPaddingProperty(key), 'setPaddingDeclaration: the property is a padding property');
+  const paddingFirst = paddingDeclarations(node).length === 0;
   for (const declaration of paddingDeclarations(node)) {
     if (declaration.prop.toLowerCase() === key) {
       declaration.remove();
@@ -80,10 +81,29 @@ export function setPaddingDeclaration(node: Rule | AtRule, prop: string, declare
     node.insertBefore(firstNested, added);
   } else {
     node.append(added);
+    // An edit of padding already there adds no line, so it leaves the blank one.
+    if (paddingFirst) {
+      fillTrailingBlankLine(node);
+    }
   }
   node.assign({ raws: { ...node.raws, semicolon: true } });
   assert(paddingDeclarations(node).includes(added), 'setPaddingDeclaration: the edit is written');
   compactPadding(node);
+}
+
+/**
+ * Takes the blank line before a block's closing brace, for a declaration just
+ * appended at the block's end: the new line fills it, as typing there would.
+ * Left in, the declaration landed above the line and the blank line stayed.
+ */
+export function fillTrailingBlankLine(node: Rule | AtRule): void {
+  const after = node.raws.after;
+  if (after === undefined) {
+    return;
+  }
+  const filled = after.replace(/^[ \t]*(\r?\n)[ \t]*\r?\n/, '$1');
+  assert(filled.length <= after.length, 'fillTrailingBlankLine: whitespace is only removed');
+  node.assign({ raws: { ...node.raws, after: filled } });
 }
 
 /** Reset the padding sides among `props` on `node`, also when an earlier edit

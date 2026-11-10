@@ -7,6 +7,7 @@
 // nesting to track, so a regex tokeniser and the browser's own caret are
 // enough, and the field stays a contentEditable that chips can live inside.
 
+import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
 
 /** One coloured run of the value. `text` is raw (unescaped) source. */
@@ -169,8 +170,9 @@ export function stepNumberAt(
     const start = match.index;
     const end = start + match[0].length;
     // Touching counts: the caret sits at an edge as often as inside, and after
-    // typing a number it is always at its right edge.
-    if (caret >= start && caret <= end) {
+    // typing a number it is always at its right edge. The unit is part of the
+    // number here, so the caret at the end of `1rem` still steps it.
+    if (caret >= start && caret <= unitEndAt(text, start, end)) {
       hit = { start, end, text: match[0] };
       break;
     }
@@ -195,10 +197,26 @@ export function stepNumberAt(
     .toFixed(precisionOf(hit.text, delta))
     .replace(/^(-?)0\./, '$1.')
     .replace(/\.$/, '');
+  // A caret in the unit stays at the same place in the unit.
+  const unitOffset = Math.max(0, caret - hit.end);
   return {
     text: text.slice(0, start) + shown + text.slice(hit.end),
-    caret: start + shown.length,
+    caret: start + shown.length + unitOffset,
   };
+}
+
+// One past the unit glued to the number at `start`..`end`; `end` when it has none.
+// Digits glued to a name or a hex colour on their left (`#3366ff`, `translate3d`)
+// have no unit: the letters after them are not one.
+function unitEndAt(text: string, start: number, end: number): number {
+  assert(start < end, 'unitEndAt: a number has characters');
+  if (start > 0 && /[\w#]/.test(text.charAt(start - 1))) {
+    return end;
+  }
+  const unit = /^[a-zA-Z%]*/.exec(text.slice(end))?.[0] ?? '';
+  const unitEnd = end + unit.length;
+  assert(unitEnd <= text.length, 'unitEndAt: the unit is inside the text');
+  return unitEnd;
 }
 
 // ───────────────────────────── Caret in a rich field ─────────────────────────

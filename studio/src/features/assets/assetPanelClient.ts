@@ -44,3 +44,29 @@ export async function chooseUploads(destination: string) {
   });
   return uploadFiles(destination, files);
 }
+
+/** Asks for a file and writes it over the asset, keeping its path; false when cancelled. */
+export async function chooseReplacement(rel: string): Promise<boolean> {
+  const [file] = await new Promise<readonly File[]>((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.hidden = true;
+    const finish = (files: readonly File[]) => {
+      input.remove();
+      resolve(files);
+    };
+    input.addEventListener('change', () => finish([...(input.files ?? [])]), { once: true });
+    input.addEventListener('cancel', () => finish([]), { once: true });
+    document.body.append(input);
+    input.click();
+  });
+  if (file === undefined) {
+    return false;
+  }
+  try {
+    await request(`/studio/api/upload?${new URLSearchParams({ file: rel, replacement: file.name })}`, { method: 'POST', body: file });
+  } finally {
+    window.dispatchEvent(new Event('studio:assets-changed'));
+  }
+  return true;
+}

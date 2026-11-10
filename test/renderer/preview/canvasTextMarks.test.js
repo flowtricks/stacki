@@ -117,10 +117,10 @@ test('hovering and clicking report the text the way the app names elements', () 
   assert.equal(layer().children.length, 1, 'the hovered text leaves its dash to the app');
   click(40, 220);
   const picked = posted.at(-1).picked;
-  assert.deepEqual([picked.label, picked.kind], ['button_main_text', 'text'], 'a plain element');
+  assert.deepEqual([picked.label, picked.kind], ['.button_main_text', 'text'], 'a plain element');
   move(700, 380);
   assert.equal(posted.at(-1).hover, undefined, 'off the text, nothing is hovered');
-  assert.equal(posted.at(-1).picked.label, 'button_main_text', 'the pick stays');
+  assert.equal(posted.at(-1).picked.label, '.button_main_text', 'the pick stays');
   click(700, 380);
   assert.equal(posted.at(-1).picked, undefined, 'a click elsewhere drops it');
 });

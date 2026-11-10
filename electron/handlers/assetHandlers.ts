@@ -8,7 +8,8 @@ import type { AssetEntry } from '../lib/mainTypes';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { MainHost } from './mainHost';
-import { publicDirectoryOf, rootOfRel, assetAbs, uniqueTarget, imageSizeOf, listAssetTree } from '../project/assetFiles';
+import { replacementRefusal } from '../../shared/properties/mediaHosting';
+import { MEDIA_EXT, publicDirectoryOf, rootOfRel, assetAbs, uniqueTarget, imageSizeOf, listAssetTree } from '../project/assetFiles';
 
 export function registerAssetHandlers(host: Pick<MainHost, 'assertInProject' | 'ipcMain' | 'noteAppWrite' | 'send' | 'shell' | 'showOpenDialog'>): void {
   registerAssetsListHandlers(host);
@@ -65,7 +66,13 @@ function registerAssetsListHandlers({
   });
 }
 
-function registerAssetsMoveHandlers({ ipcMain, noteAppWrite, send, shell }: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell'>): void {
+function registerAssetsMoveHandlers({
+  ipcMain,
+  noteAppWrite,
+  send,
+  shell,
+  showOpenDialog,
+}: Pick<MainHost, 'ipcMain' | 'noteAppWrite' | 'send' | 'shell' | 'showOpenDialog'>): void {
   ipcMain.handle('assets:move', async (_event, { projectPath, fromRel, toDirRel: toDirectoryRel }) => {
     const from = assetAbs(projectPath, fromRel);
     const toDirectory = assetAbs(projectPath, toDirectoryRel);
@@ -114,6 +121,38 @@ function registerAssetsMoveHandlers({ ipcMain, noteAppWrite, send, shell }: Pick
     fs.renameSync(from, target);
     send('assets:changed', {});
     return { ok: true as const };
+  });
+
+  // Swaps a file's bytes in place: the name and path stay, so every page,
+  // import and CMS entry pointing at it keeps working. The person picks the
+  // new file; one of another media type is refused, since the old name would
+  // then lie about what it holds. A cancel is no replacement, not a failure.
+  ipcMain.handle('assets:replace', async (_event, { projectPath, rel }) => {
+    const target = assetAbs(projectPath, rel);
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
+      return { ok: false as const, message: `${path.basename(rel)} is no longer there.` };
+    }
+    // Under src/ only media is an asset; everything else there is code (pages,
+    // components, stylesheets) that only the document actors write, so a raw
+    // byte copy must never reach it (test/electron/documents/singleWriter.test.ts).
+    if (rootOfRel(rel) === 'src') {
+      if (!MEDIA_EXT.test(target)) {
+        return { ok: false as const, message: `${path.basename(rel)} is source code, not an asset; edit it in the project instead.` };
+      }
+    }
+    const picked = await showOpenDialog({ title: `Replace ${path.basename(rel)}`, properties: ['openFile'] });
+    const source = picked.filePaths[0];
+    if (picked.canceled || source === undefined) {
+      return { ok: true as const, value: false };
+    }
+    const refusal = replacementRefusal(path.basename(target), path.basename(source));
+    if (refusal !== undefined) {
+      return { ok: false as const, message: refusal };
+    }
+    noteAppWrite();
+    fs.copyFileSync(source, target);
+    send('assets:changed', {});
+    return { ok: true as const, value: true };
   });
 
   // To the system's bin, not to nothing. An asset is somebody's photograph as

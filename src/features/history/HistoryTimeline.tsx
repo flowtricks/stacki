@@ -10,6 +10,7 @@ import HistoryCommitFiles from './HistoryCommitFiles';
 import { createCoalescedRun } from '../../lib/coalescedRun';
 import { onWindowReturn } from '../../lib/windowReturn';
 import MoreMenu from '../../ui/MoreMenu';
+import Dropdown from '../../ui/Dropdown';
 import Tooltip from '../../ui/Tooltip';
 import HistoryGraphLane, { HISTORY_ROW_HEIGHT, historyGraphWidth } from './HistoryGraphLane';
 import { buildHistoryGraph, HISTORY_COMMITS_MAX } from './historyGraph';
@@ -112,18 +113,30 @@ function HistoryScope({
 }) {
   return (
     <div className="history-graph-toolbar">
-      <label className="history-graph-filter">
+      {/* The branch name stays out of the label, where the narrow menu would cut it
+          off, and is named in the tooltip instead. */}
+      <div className="history-graph-filter" title={scope === 'current' ? `Showing commits on ${branch ?? 'HEAD'}` : undefined}>
         <span>Filter commits</span>
-        <select aria-label="Filter commits by branch" value={scope} onChange={(event) => setScope(parseHistoryScope(event.target.value))}>
-          <option value="all">All branches</option>
-          <option value="current">Current branch ({branch ?? 'HEAD'})</option>
-        </select>
-      </label>
+        {/* The app's own menu rather than a native select, so it looks and behaves
+            like every other menu: a check at the row's end and no hover preview. */}
+        <Dropdown<HistoryScopeName>
+          ariaLabel="Filter commits by branch"
+          value={scope}
+          options={[
+            { value: 'all', label: 'All branches' },
+            { value: 'current', label: 'Current branch' },
+          ]}
+          livePreview={false}
+          onChange={(value) => setScope(parseHistoryScope(value))}
+        />
+      </div>
     </div>
   );
 }
 
-function parseHistoryScope(value: string): 'all' | 'current' {
+type HistoryScopeName = 'all' | 'current';
+
+function parseHistoryScope(value: string): HistoryScopeName {
   if (value === 'all') {
     return value;
   }

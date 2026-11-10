@@ -2761,7 +2761,7 @@
 
 /* The add-property row keeps its own cancel + prop + value + add layout. */
 .embed-editor_decl.is-add {
-  grid-template-columns: auto minmax(0, 0.9fr) minmax(0, 1.3fr) auto;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) auto;
 }
 
 /* Rows whose value is an inline control (e.g. the display segmented buttons) use
@@ -2823,29 +2823,6 @@
 
 .embed-editor_prop-input {
   color: var(--color-info);
-}
-
-/* Value field — a textarea that behaves as one scrollable line, then expands to
-   a full-width, auto-height field (set inline via JS) when its content wraps. */
-.embed-editor_value-input {
-  resize: none;
-}
-textarea.embed-editor_value-input.is-collapsed {
-  height: var(--size-input);
-  line-height: var(--size-input);
-  white-space: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-}
-textarea.embed-editor_value-input.is-expanded {
-  grid-column: 1 / -1;
-  width: 100%;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  overflow: hidden;
-  line-height: var(--line-height-normal);
-  padding-top: var(--space-2);
-  padding-bottom: var(--space-2);
 }
 
 /* Display control — a segmented picker (Block / Flex / Grid + a None/inline
@@ -3181,12 +3158,6 @@ textarea.embed-editor_value-input.is-expanded {
    as the Position dropdown above it — not the full panel like the Spacing box. */
 .embed-editor_position > .embed-editor_spacing {
   margin-left: calc(var(--embed-editor_size-label-w) + var(--space-3));
-}
-
-.embed-editor_decls-empty {
-  margin: 0;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
 }
 
 .embed-editor_decl.is-add .embed-editor_prop-input,

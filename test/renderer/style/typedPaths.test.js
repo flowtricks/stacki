@@ -32,6 +32,27 @@ assert.equal(paths.size, 32, 'bounded: the oldest go');
 assert.equal(takeTypedPath(paths, '.c0::after', ''), undefined);
 assert.ok(takeTypedPath(paths, '.c39::after', '') !== undefined);
 
+// A nested selector with no rule yet keeps the text it was typed as on its chip.
+{
+  const { pendingActiveChip, withTypedLabel } = load('src/features/style/embed/editorModel.ts');
+  const typed = 'section.send {.layout}';
+  const nested = parseNestedInput(typed);
+  assert.equal(nested.selector, 'section.send .layout');
+  const inputs = { activeSelector: nested.selector, selectedSelectorText: nested.selector, tokens: [] };
+  const labels = withTypedLabel(new Map(), nested.selector, ` ${typed} `);
+  const chip = pendingActiveChip([], { ...inputs, typedLabels: labels });
+  assert.equal(chip.display, typed);
+  assert.equal(chip.text, nested.selector, 'matching still uses the resolved selector');
+  assert.equal(pendingActiveChip([], inputs).display, undefined, 'a flat selector has no label');
+  let bounded = labels;
+  for (let index = 0; index < 40; index++) {
+    bounded = withTypedLabel(bounded, `.a${index} .b`, `.a${index} {.b}`);
+  }
+  assert.equal(bounded.size, 32, 'bounded: the oldest go');
+  assert.throws(() => withTypedLabel(new Map(), ' ', typed), /a label belongs to a selector/);
+  assert.throws(() => withTypedLabel(new Map(), '.a', ' '), /a label has text/);
+}
+
 // The write lands inside the existing rule, not as a flat rule beside it.
 const css = '\n    .faq_summary {\n      cursor: pointer;\n    }\n    ';
 const region = { start: 0, end: css.length, css, root: postcss.parse(css) };

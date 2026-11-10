@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { CSSProperties, MutableRefObject, ReactNode, RefObject } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
+import { segmentIndicatorStyle, useSegmentIndicator } from '../../../ui/segmentIndicator';
 
 function tooltipStyle(style: CSSProperties, arrowLeft: number): CSSProperties & { readonly '--tip-arrow-left': string } {
   return { ...style, '--tip-arrow-left': `${arrowLeft}px` };
@@ -47,11 +48,10 @@ export default function SegmentedControl<T extends string>({ options, value, onC
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonsRef = useRef<Array<HTMLButtonElement | undefined>>([]);
   const { indicator, animated } = useSegmentIndicator({
-    rootRef,
+    trackRef: rootRef,
     buttonsRef,
     selectedIndex,
-    optionCount: options.length,
-    widthMode,
+    layoutKey: `${options.length}:${widthMode}`,
   });
   const { hovered, startHover, endHover } = useSegmentHover(options);
   const hoveredButton = hovered !== undefined ? buttonsRef.current[hovered] : undefined;
@@ -65,11 +65,7 @@ export default function SegmentedControl<T extends string>({ options, value, onC
       aria-label={ariaLabel}
       aria-disabled={disabled || undefined}
     >
-      <span
-        className={`u-segmented-indicator${animated ? ' is-animated' : ''}`}
-        aria-hidden="true"
-        style={indicator ? { transform: `translateX(${indicator.x}px)`, width: `${indicator.width}px` } : { opacity: 0 }}
-      />
+      <span className={`u-segmented-indicator${animated ? ' is-animated' : ''}`} aria-hidden="true" style={segmentIndicatorStyle(indicator)} />
       {options.map((option, index) => (
         <button
           key={option.value}
@@ -108,49 +104,6 @@ function segmentedClass({
   readonly className: string | undefined;
 }): string {
   return ['u-segmented', widthMode === 'hug' ? 'is-hug' : '', disabled ? 'is-disabled' : '', className].filter(Boolean).join(' ');
-}
-
-type IndicatorInput = {
-  readonly rootRef: RefObject<HTMLDivElement>;
-  readonly buttonsRef: MutableRefObject<Array<HTMLButtonElement | undefined>>;
-  readonly selectedIndex: number;
-  readonly optionCount: number;
-  readonly widthMode: 'fill' | 'hug';
-};
-
-// Measure the active button and park the indicator over it. Re-runs on selection
-// change and observes both the track and the button so it keeps up with layout
-// shifts (container resize, font load, label change).
-function useSegmentIndicator({ rootRef, buttonsRef, selectedIndex, optionCount, widthMode }: IndicatorInput) {
-  const [indicator, setIndicator] = useState<{ x: number; width: number } | undefined>(undefined);
-  const [animated, setAnimated] = useState(false);
-  useLayoutEffect(() => {
-    const root = rootRef.current;
-    const button = selectedIndex >= 0 ? buttonsRef.current[selectedIndex] : undefined;
-    if (!root || !button) {
-      setIndicator(undefined);
-      return;
-    }
-    // Use layout offsets (offsetLeft/Width), not getBoundingClientRect: under a CSS
-    // `zoom` ancestor, rects come back in scaled coords but the inline px styles below
-    // are re-zoomed, which double-scales the indicator. offsets are zoom-independent.
-    const measure = () => {
-      setIndicator({ x: button.offsetLeft, width: button.offsetWidth });
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(root);
-    observer.observe(button);
-    return () => observer.disconnect();
-  }, [rootRef, buttonsRef, selectedIndex, optionCount, widthMode]);
-
-  // Enable the slide transition only after the first placement, so the indicator
-  // doesn't fly in from the origin on mount.
-  useEffect(() => {
-    const id = window.requestAnimationFrame(() => setAnimated(true));
-    return () => window.cancelAnimationFrame(id);
-  }, []);
-  return { indicator, animated };
 }
 
 // Delayed hover tooltip: after TOOLTIP_DELAY_MS on a segment that has one, show it

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { segmentIndicatorStyle, useSegmentIndicator } from '../../ui/segmentIndicator';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
@@ -6,11 +7,12 @@ import { HTML_TAGS } from '../../editor/elementSchemas';
 import type { TrailingSlash } from '../../editor/pageState';
 import { rankInsertItems, tagSearchText } from './insertRank';
 import { ASTRO_ASSETS } from './astroAssets';
-import { indexByName, insertGroupOf, type InsertGroup } from './insertGroups';
-import { insertResultsMax, insertView, moveHighlight, previewFramesMax, type GridMove, type InsertTab } from './insertGrid';
+import { insertFolderOf, type InsertFolderKey } from './insertFolders';
+import { insertResultsMax, insertView, mountedFrameKeys, moveHighlight, previewFramesMax, type GridMove, type InsertTab } from './insertGrid';
 import type { InsertItem } from './insertItem';
-import { useShotCatalog, type ComponentShotSource, type ShotAccess } from './componentShotSource';
-import { InsertCard, InsertEnlarged, InsertHints, InsertPills, InsertTile, type EnlargeHint, type InsertPreviewHost } from './InsertCards';
+import { InsertCard, InsertHints, InsertPills, InsertRow, type InsertPreviewHost } from './InsertCards';
+import { loadInsertFolder, loadInsertTab, saveInsertFolder, saveInsertTab } from './insertPreferences';
+import { usePaletteResize } from './paletteResize';
 import {
   elementIcon,
   ElementComponentIcon,
@@ -33,60 +35,54 @@ const TABS: ReadonlyArray<{ readonly key: InsertTab; readonly label: string }> =
   { key: 'other', label: 'Other' },
 ];
 
-/** One frame is kept free for the large view, so the cards and the large view never exceed the limit together. */
-const cardFramesMax = previewFramesMax - 1;
+/** Rows the list tabs show, as before the grid: a row is cheap to scroll past, and typing narrows the rest. */
+const listResultsMax = 60;
 
 const GRID_KEYS: Readonly<Record<string, GridMove>> = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' };
 
-type EnlargeState = { readonly kind: 'closed' } | { readonly kind: 'open'; readonly item: InsertItem };
-
 // Quick-insert palette (⌘F / ⌘E / ⌘K): fuzzy-searches components, HTML tags, and
 // special node types; Enter or click inserts at the current selection. Components are
-// cards with a picture of the component, sorted into sections and blocks; see insertGroups.ts.
-export interface InsertComponent extends Pick<ScanComponent, 'name' | 'origin' | 'instances' | 'renderTag' | 'rootComponent' | 'isLayout'> {
+// cards with a live picture of the component, filtered by the project's component folders (insertFolders.ts).
+// Each card is the Components panel's hover preview: the component with its insertion recipe (InsertPreview.tsx).
+export interface InsertComponent extends Pick<ScanComponent, 'name' | 'origin' | 'instances' | 'isLayout'> {
   readonly path?: string;
   readonly folder?: string;
 }
 interface InsertSearchProps {
+  /** Tells projects apart for the remembered folder pill (a path or a workspace id); without it the pill is not remembered. */
+  readonly projectKey?: string | undefined;
   readonly components?: readonly InsertComponent[];
   readonly allowSlot?: boolean;
   /** The project's dev server; without it the cards say there is no preview. */
   readonly devUrl?: string | undefined;
   readonly trailingSlash?: TrailingSlash;
   readonly resolvePreviewURL?: (url: string) => Promise<string>;
-  /** Photographs of components on their pages; without it every card shows the live preview. */
-  readonly shots?: ComponentShotSource | undefined;
   readonly onInsert: (item: InsertItem) => void;
   readonly onClose: () => void;
 }
 export default function InsertSearch(props: InsertSearchProps) {
   const { onInsert, onClose } = props;
   const state = useInsertSearch(props);
-  const { query, setQuery, tab, setTab, setPill, highlight, setHighlight, listRef, view, enlarged, setEnlarged } = state;
-  const shotAccess = state.shotAccess;
+  const { query, setQuery, tab, setTab, pickFolder, highlight, setHighlight, listRef, view } = state;
   const host: InsertPreviewHost = {
     devURL: props.devUrl,
     trailingSlash: props.trailingSlash ?? 'ignore',
     resolvePreviewURL: props.resolvePreviewURL,
-    shots: shotAccess,
   };
-  const highlighted = view.shown[highlight];
+  // Only Components is a grid of live previews; the other tabs are the plain list, which reads faster for tags and names.
+  const grid = tab === 'components';
+  const paletteRef = useRef<HTMLDivElement>(null);
+  usePaletteResize(paletteRef, grid ? 'grid' : 'list');
   return (
     <div className="insert-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="insert-palette" onKeyDown={(event) => insertKey(event, state, props, onInsert, onClose)}>
+      <div ref={paletteRef} className={`insert-palette ${grid ? 'insert-palette-grid' : ''}`} onKeyDown={(event) => insertKey(event, state, onInsert, onClose)}>
         <div className="insert-search-row">
           <SearchIcon size={14} />
           <input autoFocus value={query} placeholder="Search components, elements…" spellCheck={false} onChange={(event) => setQuery(event.target.value)} />
         </div>
-        <div className="insert-tabs">
-          {TABS.map((tabEntry) => (
-            <button key={tabEntry.key} className={`insert-tab ${tab === tabEntry.key ? 'on' : ''}`} onClick={() => setTab(tabEntry.key)}>
-              {tabEntry.label}
-            </button>
-          ))}
-        </div>
-        {view.counts !== undefined && view.pill !== undefined && <InsertPills counts={view.counts} pill={view.pill} onPick={setPill} />}
-        <div className="insert-results" ref={listRef}>
+        <InsertTabs tab={tab} onPick={setTab} />
+        {view.folders !== undefined && <InsertPills pills={view.folders.pills} selected={view.folders.selected} onPick={pickFolder} />}
+        <div className={`insert-results ${grid ? 'insert-results-grid' : ''}`} ref={listRef}>
           {view.shown.map((item, i) => {
             const key = insertItemKey(item);
             const select = () => onInsert(item);
@@ -94,8 +90,8 @@ export default function InsertSearch(props: InsertSearchProps) {
               state.noteMove('pointer');
               setHighlight(i);
             };
-            return item.group === undefined ? (
-              <InsertTile key={key} item={item} highlighted={i === highlight} onHover={hover} onInsert={select} />
+            return !grid || item.card === undefined ? (
+              <InsertRow key={key} item={item} highlighted={i === highlight} onHover={hover} onInsert={select} />
             ) : (
               <InsertCard
                 key={key}
@@ -103,10 +99,10 @@ export default function InsertSearch(props: InsertSearchProps) {
                 itemKey={key}
                 highlighted={i === highlight}
                 mounted={state.mountedKeys.has(key)}
-                visible={state.visibleKeys.has(key)}
                 host={host}
                 scrollRoot={listRef}
                 onVisible={state.reportVisible}
+                onSettled={state.reportSettled}
                 onHover={hover}
                 onInsert={select}
               />
@@ -114,9 +110,39 @@ export default function InsertSearch(props: InsertSearchProps) {
           })}
           {view.shown.length === 0 && <div className="props-empty">No matches.</div>}
         </div>
-        <InsertHints enlarge={enlargeHint(highlighted, { devUrl: props.devUrl, shots: shotAccess }, query)} />
-        {enlarged.kind === 'open' && <InsertEnlarged item={enlarged.item} host={host} onClose={() => setEnlarged({ kind: 'closed' })} />}
+        {grid && <InsertHints />}
       </div>
+    </div>
+  );
+}
+
+// The tab row: plain labels, and one pill behind the active tab that slides and resizes to the next
+// one (the shared segment indicator, src/ui/segmentIndicator.ts), whatever changed the tab: a click,
+// the Tab key, or the preference the palette reopened on.
+function InsertTabs({ tab, onPick }: { readonly tab: InsertTab; readonly onPick: (tab: InsertTab) => void }) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const buttonsRef = useRef<Array<HTMLButtonElement | undefined>>([]);
+  const selectedIndex = TABS.findIndex((entry) => entry.key === tab);
+  assert(selectedIndex >= 0, 'InsertSearch: the tab is one of the tabs');
+  const { indicator, animated } = useSegmentIndicator({ trackRef, buttonsRef, selectedIndex, layoutKey: String(TABS.length) });
+  return (
+    <div ref={trackRef} className="insert-tabs" role="tablist" aria-label="Insert results">
+      <span className={`insert-tab-indicator${animated ? ' is-animated' : ''}`} aria-hidden="true" style={segmentIndicatorStyle(indicator)} />
+      {TABS.map((entry, index) => (
+        <button
+          key={entry.key}
+          ref={(element) => {
+            buttonsRef.current[index] = element ?? undefined;
+          }}
+          type="button"
+          role="tab"
+          aria-selected={tab === entry.key}
+          className={`insert-tab ${tab === entry.key ? 'on' : ''}`}
+          onClick={() => onPick(entry.key)}
+        >
+          {entry.label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -129,55 +155,53 @@ function insertItemKey(item: InsertItem): string {
   return JSON.stringify([item.type, item.label]);
 }
 
-/** Whether the large view has anything to show for this item. */
-function canEnlarge(
-  item: InsertItem | undefined,
-  { devUrl, shots }: { readonly devUrl: string | undefined; readonly shots: ShotAccess | undefined },
-): item is InsertItem & { readonly group: InsertGroup } {
-  if (item === undefined || item.group === undefined || item.preview === undefined) {
-    return false;
-  }
-  // A photograph needs no dev server to be shown large.
-  return devUrl !== undefined || shots?.has(item.preview.path) === true;
-}
-
-function enlargeHint(
-  item: InsertItem | undefined,
-  via: { readonly devUrl: string | undefined; readonly shots: ShotAccess | undefined },
-  query: string,
-): EnlargeHint {
-  if (!canEnlarge(item, via)) {
-    return 'none';
-  }
-  // In a search a space means "word finished" (insertRank.ts), so only the shifted key opens the view.
-  return query === '' ? 'space' : 'shift-space';
-}
-
-function useInsertSearch({ components, allowSlot, shots }: InsertSearchProps) {
-  const { access: shotAccess, settled: shotsSettled } = useShotCatalog(shots);
+function useInsertSearch({ components, allowSlot, projectKey }: InsertSearchProps) {
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<InsertTab>('components');
-  const [pill, setPill] = useState<InsertGroup>('sections');
+  // The tab the palette was last left on, for this person in every project (insertPreferences.ts).
+  const [tab, setTabState] = useState<InsertTab>(loadInsertTab);
+  const setTab = useCallback((next: InsertTab) => {
+    setTabState(next);
+    saveInsertTab(next);
+  }, []);
+  // The folder pill this project last had selected (insertPreferences.ts); none shows every card.
+  const [folder, setFolder] = useState<InsertFolderKey | undefined>(() => loadInsertFolder(projectKey));
+  const pickFolder = useCallback(
+    (picked: InsertFolderKey) => {
+      setFolder((current) => {
+        const next = current === picked ? undefined : picked;
+        saveInsertFolder(projectKey, next);
+        return next;
+      });
+    },
+    [projectKey],
+  );
   const [highlight, setHighlight] = useState(0);
-  const [enlarged, setEnlarged] = useState<EnlargeState>({ kind: 'closed' });
   const [visibleKeys, setVisibleKeys] = useState<ReadonlySet<string>>(() => new Set<string>());
+  // Cards whose frame has answered (or given up) since they last came into view; they no longer count as loading.
+  const [settledKeys, setSettledKeys] = useState<ReadonlySet<string>>(() => new Set<string>());
   const listRef = useRef<HTMLDivElement>(null);
   // What last moved the highlight. Only the keyboard scrolls the list to it: a pointer resting on a cut-off
   // card must not make the list slide under the pointer.
   const movedBy = useRef<'keyboard' | 'pointer'>('keyboard');
 
   const allItems = useMemo(() => insertItems(components ?? [], { allowSlot }), [components, allowSlot]);
+  // Every folder the project's cards fill, whatever the search hits, so the pills do not come and go while typing.
+  const folders = useMemo(() => allItems.flatMap((item) => (item.card?.folder === undefined ? [] : [item.card.folder])), [allItems]);
   // The words, and where they land: see src/features/palette/insertRank.ts. The trailing space
   // is meaningful, so the query is not trimmed on the way in.
   const view = useMemo(() => {
     const items = allItems.filter((i) => tab === 'all' || i.cat === tab);
-    return insertView(rankInsertItems(items, query), tab, pill);
-  }, [allItems, query, tab, pill]);
+    const ranked = rankInsertItems(items, query);
+    if (tab === 'components') {
+      return insertView(ranked, tab, { chosen: folder, present: folders });
+    }
+    return { shown: ranked.slice(0, listResultsMax), folders: undefined };
+  }, [allItems, folders, query, tab, folder]);
 
   useEffect(() => {
     movedBy.current = 'keyboard';
     setHighlight(0);
-  }, [query, tab, view.pill]);
+  }, [query, tab, view.folders?.selected]);
 
   // Keep the highlighted card scrolled into view.
   useEffect(() => {
@@ -201,44 +225,50 @@ function useInsertSearch({ components, allowSlot, shots }: InsertSearchProps) {
       assert(next.size <= insertResultsMax, 'Only shown cards can be visible');
       return next;
     });
+    if (!visible) {
+      // A card that leaves the view loses its frame; when it comes back its page loads again, and counts as loading.
+      setSettledKeys((current) => {
+        if (!current.has(key)) {
+          return current;
+        }
+        const next = new Set(current);
+        next.delete(key);
+        return next;
+      });
+    }
+  }, []);
+
+  const reportSettled = useCallback((key: string) => {
+    setSettledKeys((current) => {
+      if (current.has(key)) {
+        return current;
+      }
+      assert(current.size < insertResultsMax, 'Only shown cards can settle');
+      return new Set([...current, key]);
+    });
   }, []);
 
   // The visible cards that get a frame: the first ones in grid order, so a very tall window cannot
-  // push the number of running pages past the limit.
-  const mountedKeys = useMemo(() => {
-    const keys = new Set<string>();
-    // Until the photograph catalog has answered no card knows whether it needs a frame.
-    if (!shotsSettled) {
-      return keys;
-    }
-    for (const item of view.shown) {
-      const key = insertItemKey(item);
-      // A card with a photograph has no frame to run, so it takes no share of the limit.
-      const photographed = item.preview !== undefined && shotAccess?.has(item.preview.path) === true;
-      if (keys.size < cardFramesMax && visibleKeys.has(key) && !photographed) {
-        keys.add(key);
-      }
-    }
-    return keys;
-  }, [view.shown, visibleKeys, shotAccess, shotsSettled]);
+  // push the number of running pages past the limit, and only a few loading at once (insertGrid.ts).
+  const mountedKeys = useMemo((): ReadonlySet<string> => {
+    // Only a card with something to preview takes a frame: Astro's own components have no file, and would hold a loading place forever.
+    const cardKeys = view.shown.filter((item) => item.card !== undefined && item.preview !== undefined).map(insertItemKey);
+    return mountedFrameKeys(cardKeys, { visible: visibleKeys, settled: settledKeys, framesMax: previewFramesMax });
+  }, [view.shown, visibleKeys, settledKeys]);
 
   return {
     query,
     setQuery,
     tab,
     setTab,
-    pill,
-    setPill,
+    pickFolder,
     highlight,
     setHighlight,
     listRef,
     view,
-    enlarged,
-    setEnlarged,
     mountedKeys,
-    visibleKeys,
     reportVisible,
-    shotAccess,
+    reportSettled,
     noteMove: (by: 'keyboard' | 'pointer') => {
       movedBy.current = by;
     },
@@ -247,35 +277,22 @@ function useInsertSearch({ components, allowSlot, shots }: InsertSearchProps) {
 
 type InsertState = ReturnType<typeof useInsertSearch>;
 
-function insertKey(
-  event: React.KeyboardEvent,
-  state: InsertState,
-  props: Pick<InsertSearchProps, 'devUrl'>,
-  onInsert: (item: InsertItem) => void,
-  onClose: () => void,
-): void {
-  if (state.enlarged.kind === 'open') {
-    enlargedKey(event, state);
-    return;
+function insertKey(event: React.KeyboardEvent, state: InsertState, onInsert: (item: InsertItem) => void, onClose: () => void): void {
+  if (event.target instanceof HTMLElement && event.target.closest('.insert-pill, .insert-tab') !== null) {
+    // A focused pill or tab is a button: Enter and Space press it, as on any button, instead of inserting.
+    if (event.key === 'Enter' || event.key === ' ') {
+      return;
+    }
   }
-  const { view, highlight, tab, setTab, query } = state;
+  const { view, highlight, tab, setTab } = state;
   const item = view.shown[highlight];
   if (event.key === 'Escape') {
     event.preventDefault();
     onClose();
-  } else if (Object.hasOwn(GRID_KEYS, event.key)) {
+  } else if (tab !== 'components' && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+    listKey(event, state);
+  } else if (tab === 'components' && Object.hasOwn(GRID_KEYS, event.key)) {
     gridKey(event, state);
-  } else if (event.key === ' ') {
-    // Plain space belongs to the search once there is text. With none, it opens the large view.
-    if (query === '' || event.shiftKey) {
-      if (canEnlarge(item, { devUrl: props.devUrl, shots: state.shotAccess })) {
-        event.preventDefault();
-        state.setEnlarged({ kind: 'open', item });
-      } else if (query === '') {
-        // No leading space: it would turn the arrow keys into cursor keys.
-        event.preventDefault();
-      }
-    }
   } else if (event.key === 'Enter') {
     event.preventDefault();
     if (item) {
@@ -287,6 +304,18 @@ function insertKey(
     const next = TABS[(index + (event.shiftKey ? TABS.length - 1 : 1)) % TABS.length];
     assert(next !== undefined, 'InsertSearch: next tab exists');
     setTab(next.key);
+  }
+}
+
+// The list moves one row at a time and stops at both ends; left and right stay the text cursor's.
+function listKey(event: React.KeyboardEvent, state: InsertState): void {
+  assert(event.key === 'ArrowDown' || event.key === 'ArrowUp', 'InsertSearch: a list key is up or down');
+  event.preventDefault();
+  state.noteMove('keyboard');
+  const last = state.view.shown.length - 1;
+  if (last >= 0) {
+    const current = Math.min(state.highlight, last);
+    state.setHighlight(event.key === 'ArrowDown' ? Math.min(current + 1, last) : Math.max(current - 1, 0));
   }
 }
 
@@ -304,19 +333,6 @@ function gridKey(event: React.KeyboardEvent, state: InsertState): void {
   if (count > 0) {
     const current = Math.min(state.highlight, count - 1);
     state.setHighlight(moveHighlight(current, count, move));
-  }
-}
-
-// While the large view is open it owns the keyboard: the field below must not change under it.
-function enlargedKey(event: React.KeyboardEvent, state: InsertState): void {
-  if (event.metaKey || event.ctrlKey) {
-    return;
-  }
-  event.preventDefault();
-  if (event.key === 'Escape' || event.key === ' ') {
-    // Only the layer closes; the palette stays.
-    event.stopPropagation();
-    state.setEnlarged({ kind: 'closed' });
   }
 }
 
@@ -339,7 +355,6 @@ function previewSource(component: InsertComponent): ScanComponent | undefined {
   return { ...component, path: component.path, folder: component.folder ?? '' };
 }
 function insertComponents(components: readonly InsertComponent[]): InsertItem[] {
-  const byName = indexByName(components);
   return components.map((component): InsertItem => {
     const preview = previewSource(component);
     return {
@@ -350,7 +365,7 @@ function insertComponents(components: readonly InsertComponent[]): InsertItem[] 
       sub: component.folder || 'component',
       cat: 'components',
       icon: component.isLayout ? <LayoutIcon size={15} style={{ color: '#79e09c' }} /> : <ElementComponentIcon size={15} style={{ color: '#79e09c' }} />,
-      group: insertGroupOf(component, byName),
+      card: { folder: insertFolderOf(component.folder ?? '') },
       ...(component.instances === undefined ? {} : { instances: component.instances }),
       ...(preview === undefined ? {} : { preview }),
     };
@@ -365,8 +380,8 @@ function insertAssets(): InsertItem[] {
     search: `${asset.name} astro assets image picture optimised responsive`,
     cat: 'components',
     icon: astroAssetIcon(asset.name, 15),
-    // Astro's own components have no file of the project's to preview.
-    group: 'blocks',
+    // Astro's own components have no file of the project's to preview, and no project folder, so no pill.
+    card: { folder: undefined },
   }));
 }
 function insertTags({ allowSlot }: { readonly allowSlot: boolean | undefined }): InsertItem[] {

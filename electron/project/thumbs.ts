@@ -133,7 +133,7 @@ function forget(userDataPath: string, projectPath: string): void {
 // The window the page is rendered in. No preload, no node, nothing of the app:
 // this is a browser showing a website, and it should behave like one — the page
 // is the real page, not the marked-up one the canvas edits.
-function makeWindow(size: { readonly width: number; readonly height: number } = VIEWPORT): BrowserWindow {
+function makeWindow(): BrowserWindow {
   // The untyped original carried paintWhenInitiallyHidden inside
   // webPreferences; Electron reads that option from the window options, so
   // this placement is inert. Preserved exactly — changing when the page paints
@@ -150,8 +150,8 @@ function makeWindow(size: { readonly width: number; readonly height: number } = 
   };
   return new BrowserWindow({
     show: false,
-    width: size.width,
-    height: size.height,
+    width: VIEWPORT.width,
+    height: VIEWPORT.height,
     useContentSize: true,
     backgroundColor: '#ffffff',
     webPreferences,
@@ -174,12 +174,8 @@ async function within<T>(promise: Promise<T>, ms: number, message: string): Prom
   }
 }
 
-// The whole window by default; the component shots ask for the part they want.
-type CaptureRect = { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
-const WHOLE_VIEWPORT: CaptureRect = { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height };
-
-async function captureImage(contents: WebContents, rect: CaptureRect = WHOLE_VIEWPORT): Promise<Result<NativeImage, string>> {
-  const first = await captureImageAttempt(contents, rect);
+async function captureImage(contents: WebContents): Promise<Result<NativeImage, string>> {
+  const first = await captureImageAttempt(contents);
   if (first.ok) {
     return first;
   }
@@ -189,12 +185,12 @@ async function captureImage(contents: WebContents, rect: CaptureRect = WHOLE_VIE
   // A cold compositor can reject its first copy even after load and animation frames.
   // Retry only that transient error, once, without reloading or showing the window.
   await wait(CAPTURE_RETRY_MS);
-  return captureImageAttempt(contents, rect);
+  return captureImageAttempt(contents);
 }
 
-function captureImageAttempt(contents: WebContents, rect: CaptureRect): Promise<Result<NativeImage, string>> {
+function captureImageAttempt(contents: WebContents): Promise<Result<NativeImage, string>> {
   return within(
-    contents.capturePage({ x: rect.x, y: rect.y, width: rect.width, height: rect.height }, { stayHidden: false, stayAwake: false }),
+    contents.capturePage({ x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height }, { stayHidden: false, stayAwake: false }),
     CAPTURE_TIMEOUT_MS,
     'the page capture did not finish',
   ).then(ok, (error: unknown) => err(error instanceof Error ? error.message : String(error)));
@@ -283,4 +279,4 @@ async function capture(userDataPath: string, projectPath: string, url: string): 
   }
 }
 
-export { capture, captureImage, fingerprint, isStale, keyFor, makeWindow, readMeta, readThumb, forget, thumbPathFor, wait, within, VIEWPORT };
+export { capture, fingerprint, isStale, readMeta, readThumb, forget, thumbPathFor, VIEWPORT };

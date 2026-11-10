@@ -388,12 +388,7 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
           }
         >
           {SECTION_CONTROLS[group.def.id]?.(section)}
-          <FallThroughRows
-            props={fallThroughProps(group.def.id, group.props)}
-            emptyNote={isControlSection(group.def.id) ? undefined : EMPTY_CUSTOM_NOTE}
-            resolved={resolved}
-            section={section}
-          />
+          <FallThroughRows props={fallThroughProps(group.def.id, group.props)} resolved={resolved} section={section} />
         </SectionBlock>
       ))}
     </div>
@@ -401,8 +396,6 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
 }
 
 export const SECTION_ORDER = ['flex-child', 'layout', 'position', 'spacing', 'size', 'typography', 'backgrounds', 'borders', 'effects', 'other'] as const;
-
-export const EMPTY_CUSTOM_NOTE = 'No custom properties — add one below.';
 
 // Each section's dedicated controls, by section id. A section without an entry (the
 // custom properties) is only its fall-through rows. The sections whose live writes
@@ -552,22 +545,8 @@ export function fallThroughProps(id: string, props: readonly string[]): readonly
 }
 
 // Generic property rows. Every row's name came from `resolved.props.keys()`, so a miss
-// is a broken grouping, not an absent property. With no rows, `emptyNote` (if given)
-// says so.
-export function FallThroughRows({
-  props,
-  emptyNote,
-  resolved,
-  section,
-}: {
-  props: readonly string[];
-  emptyNote: string | undefined;
-  resolved: ResolvedStyle;
-  section: SectionCard;
-}) {
-  if (!props.length) {
-    return emptyNote === undefined ? undefined : <p className="embed-editor_decls-empty">{emptyNote}</p>;
-  }
+// is a broken grouping, not an absent property.
+export function FallThroughRows({ props, resolved, section }: { props: readonly string[]; resolved: ResolvedStyle; section: SectionCard }) {
   return props.map((prop) => {
     const found = resolved.props.get(prop);
     assert(found !== undefined, `Grouped property ${prop} is resolved`);

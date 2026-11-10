@@ -493,10 +493,12 @@ export function useSelectorChips(
   activeSelectorHook: ReturnType<typeof useActiveSelector>,
   styleContextsHook: ReturnType<typeof useStyleContexts>,
   pendingWrites: ReturnType<typeof usePendingWrites>,
+  selectorPick: ReturnType<typeof useSelectorPick>,
 ) {
   const { removedClasses } = scanState;
   const { documentByKey } = pendingWrites;
   const { selectedSelectorText } = selectionState;
+  const { typedLabels } = selectorPick;
   const { nativeModel } = nativeState;
   const { instanceClasses, model, snapshot, tokens } = elementTokens;
   const { activeSelector } = activeSelectorHook;
@@ -520,8 +522,9 @@ export function useSelectorChips(
         removedClasses,
         pseudo,
         instanceClasses,
+        typedLabels,
       }),
-    [model, nativeModel, currentContext, activeSelector, selectedSelectorText, tokens, snapshot, removedClasses, pseudo, instanceClasses],
+    [model, nativeModel, currentContext, activeSelector, selectedSelectorText, tokens, snapshot, removedClasses, pseudo, instanceClasses, typedLabels],
   );
 
   // Per-context dropdown info: embed hasStyles/combos (for the dot + auto-highlight)

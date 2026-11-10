@@ -3,7 +3,7 @@ import type { Parser } from '../../../shared/core/boundary';
 import type { Result } from '../../../shared/core/result';
 import type { WireAssetEntry } from '../../../shared/ipc/ipcResults';
 import { BOUNDARY_LIMITS, boolean, count, list, pathText, record, text } from '../../../shared/core/boundary';
-import { assetOperation, chooseUploads, uploadFiles } from '../../../../../src/features/assets/assetPanelClient';
+import { assetOperation, chooseReplacement, chooseUploads, uploadFiles } from '../../../../../src/features/assets/assetPanelClient';
 import { request as studioRequest } from '../../../../../src/features/project/projectClient';
 
 import { cleanError } from '../../lib/cleanError';
@@ -64,6 +64,10 @@ export function renameAsset(_projectPath: string, rel: string, newName: string) 
 }
 export function deleteAsset(_projectPath: string, rel: string) {
   return request(parseOutcome, () => assetOperation({ kind: 'delete', rel: parseAssetRelativePath(rel) }));
+}
+/** Asks for a file in the browser and writes it over the asset, keeping its path; false when cancelled. */
+export function replaceAsset(_projectPath: string, rel: string): Promise<Result<boolean, string>> {
+  return request(boolean, () => chooseReplacement(parseAssetRelativePath(rel)));
 }
 export function makeAssetDirectory(_projectPath: string, parentRel: string, name: string) {
   return request(parseSuccess, () =>

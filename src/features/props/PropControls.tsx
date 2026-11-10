@@ -160,6 +160,7 @@ export function ClassControl({ state }: { readonly state: PropControlState }) {
   );
 }
 export function SlotControl({ state }: { readonly state: PropControlState }) {
+  const hoverPreview = useContext(PropHoverPreviewContext);
   const { value, slotOptions, onChange, label } = state;
   assert(slotOptions?.length, 'Slot control: slots exist');
 
@@ -176,6 +177,8 @@ export function SlotControl({ state }: { readonly state: PropControlState }) {
       {label}
       <Dropdown
         value={raw && raw !== 'default' ? raw : ''}
+        // Moving the element between slots shows on the canvas as the pointer crosses them.
+        livePreview={hoverPreview}
         options={choices}
         onChange={(next) => (next === '' ? onChange(undefined, true) : onChange({ type: 'string', value: next }, true))}
       />

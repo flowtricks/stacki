@@ -1,5 +1,4 @@
 import { spacingHover } from '../preview/spacingHover';
-import { liveRuleBus } from '../preview/liveRuleBus';
 import { LockedSettings } from './LockedSettings';
 import { useEffect, useMemo } from 'react';
 import StylePanel from '../../../vendor/stacki/src/features/style/StylePanel';
@@ -80,7 +79,6 @@ export function StyleSettings({
           }
         }}
         onSpacingHover={spacingHover.set}
-        onPreviewRule={liveRuleBus.emit}
         onRecordUndo={(command) => document.recordCommand(command)}
       />
     </PanelBoundary>

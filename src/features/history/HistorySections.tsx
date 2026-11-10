@@ -17,9 +17,13 @@ export function HistorySection({
   return (
     <div className={`history-section ${open ? 'open' : ''}`}>
       <button className="history-section-head" onClick={onToggle} aria-expanded={open}>
-        {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
         <span className="history-section-title">{title}</span>
         {count !== undefined && <span className="history-section-count">{count}</span>}
+        {/* The chevron ends the row, as the Style panel's section headers place it,
+            so every collapsible header in the app opens and closes from the same edge. */}
+        <span className="history-section-chevron" aria-hidden="true">
+          {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+        </span>
       </button>
       {open && children}
     </div>

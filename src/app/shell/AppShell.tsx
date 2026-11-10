@@ -38,8 +38,7 @@ import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel } from '../appPanel
 import { canvasPageOf } from '../../editor/pageState';
 import { projectRelative, type VariablePlace } from '../../editor/variablePlace';
 import { prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
-import { useEffect, useMemo } from 'react';
-import { desktopComponentShots } from '../../features/palette/desktopShots';
+import { useEffect } from 'react';
 import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay, pickPseudo } from './AppPanes';
 import { selectedPseudo } from '../model/selectionStructure';
 import type { AppView, ShellView } from '../App';
@@ -126,8 +125,6 @@ function cmsCovering(app: ShellView): boolean {
 // What floats over the editor: the terminal, the code window, the insert palette,
 // the conflict notice, the busy overlay and the toast.
 export function AppOverlays({ app }: { readonly app: ShellView }) {
-  const projectPath = app.project.path;
-  const shots = useMemo(() => desktopComponentShots(projectPath), [projectPath]);
   return (
     <>
       {/* Below `.main`, so it spans the full window rather than being boxed in
@@ -139,11 +136,11 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
       <CanvasTextFormatBar />
       {app.insertOpen && (
         <InsertSearch
+          projectKey={app.project.path}
           components={app.insertables}
           allowSlot={app.currentPage?.kind === 'component'}
           devUrl={app.devUrl}
           trailingSlash={app.trailingSlash}
-          shots={shots}
           onInsert={app.insertItem}
           onClose={() => app.setInsertOpen(false)}
         />

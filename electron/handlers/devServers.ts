@@ -17,7 +17,7 @@ import { createKeyedQueue } from '../lib/serialQueue';
 import type { DevServer } from '../lib/mainTypes';
 import { SHORT_COMMAND, errorMessage, isWin, parseOptionalString, parseRecord, readJson, toPosix } from '../lib/mainHelpers';
 import { findFreePort, nodeCliCommand, resolveNodeBin, run, spawnAstroServer, stopProcessTree } from '../lib/nodeTools';
-import { renderComponentPreviewPage } from '../previewServer/componentPreview';
+import { PREVIEW_RECIPE_FILE, renderComponentPreviewPage, renderComponentPreviewRecipe } from '../previewServer/componentPreview';
 import { probeUrl } from '../preview/devProbe';
 import { readDevServerLog } from '../preview/devServerLog';
 import {
@@ -294,6 +294,8 @@ export class DevServers {
       const configPath = path.join(directory, 'astro.config.mjs');
       fs.writeFileSync(configPath, config);
       fs.writeFileSync(path.join(directory, 'preview.astro'), renderComponentPreviewPage());
+      // The page imports the recipe node component from beside it (componentPreviewRecipe.ts).
+      fs.writeFileSync(path.join(directory, PREVIEW_RECIPE_FILE), renderComponentPreviewRecipe());
       fs.writeFileSync(path.join(directory, 'paths.js'), PATHS_ENDPOINT);
       fs.writeFileSync(path.join(directory, 'data.js'), DATA_ENDPOINT);
       fs.writeFileSync(path.join(directory, 'value.js'), VALUE_ENDPOINT);

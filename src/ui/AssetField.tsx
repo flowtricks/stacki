@@ -235,6 +235,11 @@ function useAssetField({
         justPicked.current = true;
         answerPick({ pickedRel, picked, onPickEntry, onChange, baseDirectory });
       },
+      // A hosted file is written as its public URL, whatever the host's own pick handler does with project files.
+      onPickURL: (url) => {
+        justPicked.current = true;
+        onChange(url, true);
+      },
     });
   return { current, isFallback, external, mode, setMode, dims, entry, target, noteDims, choose };
 }

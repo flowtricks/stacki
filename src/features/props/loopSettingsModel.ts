@@ -429,3 +429,31 @@ export function customSortProblem(code: string): string | undefined {
   }
   return undefined;
 }
+
+// ---------------------------------------------------------------------------
+// A section's reset: what its blue title's Reset menu writes (LoopRows.tsx).
+// ---------------------------------------------------------------------------
+
+/** The query with no filters, matching all again: the match mode is the filters' own. */
+export function filtersReset(query: LoopQuery): LoopQuery {
+  const next: LoopQuery = { ...query, conditions: [], match: 'all' };
+  assert(next.conditions.length === 0, 'A filters reset leaves no condition');
+  assert(next.sorts === query.sorts, 'A filters reset leaves the sort alone');
+  return next;
+}
+
+/** The query in its source's own order: no sort keys, no shuffle, no comparator. */
+export function sortReset(query: LoopQuery): LoopQuery {
+  const next: LoopQuery = { ...query, sorts: [], random: false, customSort: undefined };
+  assert(next.customSort === undefined, 'A sort reset leaves no custom sort');
+  assert(next.conditions === query.conditions, 'A sort reset leaves the filters alone');
+  return next;
+}
+
+/** The query showing every item from the first, as the Limit switch turned off writes it. */
+export function limitReset(query: LoopQuery): LoopQuery {
+  const next: LoopQuery = { ...query, limit: undefined, offset: 0 };
+  assert(next.offset === 0, 'A limit reset skips nothing');
+  assert(next.sorts === query.sorts, 'A limit reset leaves the sort alone');
+  return next;
+}

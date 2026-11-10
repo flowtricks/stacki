@@ -1,19 +1,33 @@
-// A sample's structure: search, the arrows that step through its items, and a
-// row per field with nested ones under a chevron. It looks and moves as the data
-// picker does, and is its own component because the picker's rows are bindings
-// into a page's scope, which a template being created does not have yet. The
-// field list and the page address both draw it, so they cannot drift apart.
+// A sample's structure, drawn as the Settings panel's data picker draws data: a
+// search, the item's row with the arrows that step through the list, and a row
+// per field with nested ones under a chevron. The rows themselves are the
+// picker's (ui/DataTree.tsx); this decides only what a row means, because
+// the picker's rows are bindings into a page's scope, which a template being
+// created does not have yet. The field list and the page address both draw it,
+// so they cannot drift apart.
 
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { assert } from '../../../shared/core/assert';
 import type { SampleList, TemplateField } from '../../../shared/properties/pageTemplate';
+import { DataSearch, DataTreeRow, ItemNavigation, PreviewValue } from '../../ui/DataTree';
 import { popupBox } from '../../ui/Dropdown';
-import { CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } from '../../ui/Icons';
+import { ChevronDownIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
-import { addressOptions, allFieldsChosen, isFieldChosen, sampleTreeRows, steppedItem, type SampleTreeRow } from './pageTemplateForm';
+import {
+  addressOptions,
+  allFieldsChosen,
+  isFieldChosen,
+  sampleItemCount,
+  sampleRowPreview,
+  sampleTreeRows,
+  steppedItem,
+  type SampleTreeRow,
+} from './pageTemplateForm';
 
 const POPOVER_WIDTH = 380;
 const POPOVER_HEIGHT = 340;
-const INDENT_PX = 14;
+/** The item's own row, which holds every field: not a path any field can have. */
+const ITEM_ROW = '';
 
 export type SampleTreeMode =
   | {
@@ -34,10 +48,17 @@ export type SampleTreeMode =
 
 export function SampleTree({ list, mode }: { readonly list: SampleList; readonly mode: SampleTreeMode }) {
   const [query, setQuery] = useState('');
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  // The item's row starts open, so the popover opens on fields rather than on one closed row.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set([ITEM_ROW]));
   const [item, setItem] = useState(0);
-  const rows = sampleTreeRows(list, expanded, query);
-  const items = Math.max(0, ...list.fields.map((field) => field.examples?.length ?? 0));
+  const searching = query.trim().length > 0;
+  const itemOpen = expanded.has(ITEM_ROW);
+  const rows = searching || itemOpen ? sampleTreeRows(list, expanded, query) : [];
+  const items = sampleItemCount(list);
+  // A refetch can bring back fewer items than were stepped through: show the last one there is.
+  const shown = Math.min(item, Math.max(0, items - 1));
+  assert(shown >= 0, 'SampleTree: the item shown is not negative');
+  assert(items === 0 || shown < items, 'SampleTree: the item shown is one of the sample');
   const toggleOpen = (path: string): void => {
     setExpanded((previous) => {
       const next = new Set(previous);
@@ -47,101 +68,136 @@ export function SampleTree({ list, mode }: { readonly list: SampleList; readonly
       return next;
     });
   };
+  const action =
+    mode.kind === 'fields' ? (
+      <button type="button" className="ghost dp-search-action" onClick={allFieldsChosen(mode.chosen, list) ? mode.deselectAll : mode.selectAll}>
+        {allFieldsChosen(mode.chosen, list) ? 'Deselect all' : 'Select all'}
+      </button>
+    ) : undefined;
   return (
-    <>
-      <input value={query} placeholder="Search" spellCheck={false} aria-label="Search the data" onChange={(event) => setQuery(event.currentTarget.value)} />
-      <div className="page-template-tree-head">
-        {items > 1 && (
-          <span className="page-template-tree-items">
-            <button className="ghost" title="Previous item" onClick={() => setItem((index) => steppedItem(index, items, -1))}>
-              <ChevronLeftIcon size={11} />
-            </button>
-            <span>
-              Item {item + 1} of {items}
-            </span>
-            <button className="ghost" title="Next item" onClick={() => setItem((index) => steppedItem(index, items, 1))}>
-              <ChevronRightIcon size={11} />
-            </button>
-          </span>
+    <div className="data-picker page-template-sample">
+      <DataSearch value={query} label="Search the data" action={action} onChange={setQuery} />
+      <div className="dp-list">
+        {mode.kind === 'address' && mode.extra !== undefined && !searching && (
+          <AddressExtraRow extra={mode.extra} chosen={mode.value === mode.extra.value} pick={mode.pick} />
         )}
-        {mode.kind === 'fields' && (
-          <button className="ghost page-template-add" onClick={allFieldsChosen(mode.chosen, list) ? mode.deselectAll : mode.selectAll}>
-            {allFieldsChosen(mode.chosen, list) ? 'Deselect all' : 'Select all'}
-          </button>
-        )}
-      </div>
-      <div className="page-template-tree">
-        {mode.kind === 'address' && mode.extra !== undefined && query.trim().length === 0 && (
-          <button className="page-template-tree-row" onClick={() => mode.extra !== undefined && mode.pick(mode.extra.value)}>
-            <span className="page-template-tree-key">{mode.extra.label}</span>
-            <span className="page-template-tree-check">{mode.value === mode.extra.value && <CheckIcon size={11} />}</span>
-          </button>
+        {/* As the picker shows a loop's item: one row for the item, its arrows
+            choosing which one the values beneath are read from. A search lists
+            matches by their whole path instead, as the picker's does. */}
+        {!searching && (
+          <DataTreeRow
+            depth={0}
+            label="item"
+            title={`Each of the ${list.count} items`}
+            expandable={list.fields.length > 0}
+            open={itemOpen}
+            selected={false}
+            tone="path-only"
+            check={mode.kind === 'fields' ? 'column' : 'selected-only'}
+            value={
+              items > 1 ? (
+                <ItemNavigation
+                  path={ITEM_ROW}
+                  nav={{ index: shown, count: items }}
+                  onStepItem={(_path, step, count) => setItem(steppedItem(shown, count, step))}
+                />
+              ) : (
+                <PreviewValue preview={`${list.fields.length} ${list.fields.length === 1 ? 'field' : 'fields'}`} kind="object" image={undefined} />
+              )
+            }
+            onToggle={() => toggleOpen(ITEM_ROW)}
+            onPick={() => toggleOpen(ITEM_ROW)}
+          />
         )}
         {rows.map((row) => (
-          <SampleRow key={row.path} row={row} list={list} mode={mode} item={item} toggleOpen={toggleOpen} />
+          <SampleRow key={row.path} row={row} depth={searching ? 0 : row.depth + 1} list={list} mode={mode} item={shown} toggleOpen={toggleOpen} />
         ))}
-        {rows.length === 0 && <p className="hint-text">Nothing matches.</p>}
+        {searching && rows.length === 0 && <div className="dp-empty">Nothing matches</div>}
       </div>
-    </>
+    </div>
+  );
+}
+
+function AddressExtraRow({
+  extra,
+  chosen,
+  pick,
+}: {
+  readonly extra: { readonly value: string; readonly label: string };
+  readonly chosen: boolean;
+  readonly pick: (path: string) => void;
+}) {
+  return (
+    <DataTreeRow
+      depth={0}
+      label={extra.label}
+      title={extra.label}
+      expandable={false}
+      open={false}
+      selected={chosen}
+      tone="plain"
+      check="selected-only"
+      // An empty value keeps the check at the end of the row, where every other row has it.
+      value={<span className="dp-val" />}
+      onToggle={() => undefined}
+      onPick={() => pick(extra.value)}
+    />
   );
 }
 
 function SampleRow({
   row,
+  depth,
   list,
   mode,
   item,
   toggleOpen,
 }: {
   readonly row: SampleTreeRow;
+  readonly depth: number;
   readonly list: SampleList;
   readonly mode: SampleTreeMode;
   readonly item: number;
   readonly toggleOpen: (path: string) => void;
 }) {
-  const field = list.fields.find((candidate) => candidate.path === row.path);
-  const value = field?.examples?.[item] ?? field?.example ?? '';
-  const style = { paddingLeft: row.depth * INDENT_PX };
-  const chevron = row.expandable ? (
-    <button
-      className={`ghost page-template-tree-chevron ${row.expanded ? 'is-open' : ''}`}
-      title={row.expanded ? 'Close' : 'Open'}
-      onClick={() => toggleOpen(row.path)}
-    >
-      <ChevronRightIcon size={10} />
-    </button>
-  ) : (
-    <span className="page-template-tree-chevron" />
-  );
+  const value = <PreviewValue preview={sampleRowPreview(list, row.path, item)} kind={row.kind} image={undefined} />;
+  const shared = {
+    depth,
+    label: row.label,
+    expandable: row.expandable,
+    open: row.expanded,
+    value,
+    onToggle: () => toggleOpen(row.path),
+  };
   if (mode.kind === 'fields') {
+    // Every field is a choice: choosing an object keeps it whole, and clearing
+    // it clears its fields with it (toggledFields).
     return (
-      <div className="page-template-tree-row page-template-tree-field" style={style}>
-        <input type="checkbox" aria-label={row.path} checked={isFieldChosen(mode.chosen, row.path)} onChange={() => mode.toggle(row.path)} />
-        {chevron}
-        <span className="page-template-tree-key">{row.label}</span>
-        <span className="page-template-example">{value}</span>
-      </div>
+      <DataTreeRow
+        {...shared}
+        title={row.path}
+        selected={isFieldChosen(mode.chosen, row.path)}
+        tone="plain"
+        check="column"
+        onPick={() => mode.toggle(row.path)}
+      />
     );
   }
   const option = addressOptions(list.fields, mode.route).find((candidate) => candidate.value === row.path);
   if (option === undefined) {
     // An object or list has no address of its own, but may hold fields that do.
-    return (
-      <div className="page-template-tree-row is-group" style={style}>
-        {chevron}
-        <span className="page-template-tree-key">{row.label}</span>
-      </div>
-    );
+    return <DataTreeRow {...shared} title={row.path} selected={false} tone="path-only" check="selected-only" onPick={() => toggleOpen(row.path)} />;
   }
   return (
-    <button className="page-template-tree-row" style={style} disabled={option.disabled === true} onClick={() => mode.pick(row.path)}>
-      <span className="page-template-tree-copy">
-        <span className="page-template-tree-key">{row.label}</span>
-        {option.description !== undefined && <span className="page-template-tree-note">{option.description}</span>}
-      </span>
-      <span className="page-template-example">{value}</span>
-      <span className="page-template-tree-check">{mode.value === row.path && <CheckIcon size={11} />}</span>
-    </button>
+    <DataTreeRow
+      {...shared}
+      title={option.description ?? row.path}
+      selected={mode.value === row.path}
+      tone={option.disabled === true ? 'disabled' : 'plain'}
+      check="selected-only"
+      detail={option.description}
+      onPick={() => mode.pick(row.path)}
+    />
   );
 }
 

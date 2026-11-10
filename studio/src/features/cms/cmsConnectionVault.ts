@@ -67,7 +67,8 @@ export async function sealCmsSecret(vault: Pick<Vault, 'sessionSecret'>, secret:
 }
 
 // A key that no longer opens — the session secret changed — must be added again.
-async function unsealCmsSecret(vault: Vault, sealed: string): Promise<string> {
+// Media hosting keys are sealed the same way (src/cloudflare/mediaConnectionRoutes.ts).
+export async function unsealCmsSecret(vault: Vault, sealed: string): Promise<string> {
   const bytes = Uint8Array.from(atob(sealed), (char) => char.charCodeAt(0));
   try {
     const plain = await crypto.subtle.decrypt(

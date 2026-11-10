@@ -1,5 +1,6 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
+import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import RepositoryPicker from '../../ui/RepositoryPicker';
 import { parseGitHubRepository } from '../../../shared/ipc/githubRepository';
 import { useEffect, useRef, useState } from 'react';
@@ -142,22 +143,26 @@ function PublishDone({
     </>
   );
 }
+// The app's own menu rather than a native select, so the dialog matches every other menu.
+const DESTINATION_OPTIONS: readonly DropdownOption<'new' | 'existing'>[] = [
+  { value: 'new', label: 'Create a new repository' },
+  { value: 'existing', label: 'Use an existing repository' },
+];
 function PublishFields({ form }: { readonly form: Form }) {
   const publishing = form.state.kind === 'publishing';
   return (
     <>
-      <select
-        aria-label="Repository destination"
+      <Dropdown<'new' | 'existing'>
+        ariaLabel="Repository destination"
         value={form.kind}
         disabled={publishing}
-        onChange={(event) => {
-          form.setKind(event.target.value === 'existing' ? 'existing' : 'new');
+        options={DESTINATION_OPTIONS}
+        livePreview={false}
+        onChange={(kind) => {
+          form.setKind(kind);
           form.setName('');
         }}
-      >
-        <option value="new">Create a new repository</option>
-        <option value="existing">Use an existing repository</option>
-      </select>
+      />
       {form.kind === 'existing' ? (
         <RepositoryPicker value={form.name} onChange={form.setName} disabled={publishing} />
       ) : (

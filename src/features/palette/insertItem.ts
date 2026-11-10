@@ -1,6 +1,10 @@
 import type { ReactNode } from 'react';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
-import type { InsertGroup } from './insertGroups';
+import type { InsertFolderKey } from './insertFolders';
+
+export interface InsertCardPlace {
+  readonly folder: InsertFolderKey | undefined;
+}
 
 // What the insert palette lists and hands to `onInsert`. Kept apart from the component so the
 // grid's cards can name the type without importing the palette that renders them.
@@ -18,8 +22,11 @@ export type InsertItem = InsertChoice & {
   readonly search?: string;
   readonly cat: 'components' | 'elements' | 'other';
   readonly icon: ReactNode;
-  /** Present on every item that is a card: components and `astro:assets` components. */
-  readonly group?: InsertGroup;
+  /**
+   * Present on every item that is a card: components and `astro:assets` components. Its folder is the
+   * pill it belongs to; Astro's own components are in no project folder.
+   */
+  readonly card?: InsertCardPlace;
   /** How often the project uses it; shown as `10×` when above zero. */
   readonly instances?: number;
   /** What the preview route needs to render it; absent when the component has no file to address. */

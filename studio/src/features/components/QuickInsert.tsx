@@ -9,6 +9,7 @@ import { parsePage, type TreeAction } from '../source/source';
 import { componentImport } from '../source/imports';
 import { parseInsertContent } from '../source/insertContentContract';
 import { dropTarget } from '../navigator/dropTarget';
+import { resolvePreviewURL } from './ComponentsPanel';
 
 export function QuickInsert({
   model,
@@ -30,6 +31,7 @@ export function QuickInsert({
   }
   return (
     <InsertSearch
+      projectKey={project.workspaceId ?? project.name}
       components={project.components.map((component) => ({
         name: component.name,
         path: component.file,
@@ -41,6 +43,9 @@ export function QuickInsert({
         isLayout: component.file.startsWith('src/layouts/'),
       }))}
       allowSlot={!isCanvasPage(document.file)}
+      devUrl={location.origin}
+      resolvePreviewURL={resolvePreviewURL}
+      trailingSlash="ignore"
       onInsert={(item) => {
         setOpen(false);
         void insertChoice(model, project, item).catch(report);

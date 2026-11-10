@@ -170,11 +170,13 @@ test('graph inspection, filters, paging and stale responses', async () => {
     assert.equal(document.querySelectorAll('.history-graph-drawing').length, 4);
     assert.equal(document.querySelector('.history-more') === null, true);
 
-    await act(async () => {
-      const select = document.querySelector('select');
-      select.value = 'current';
-      select.dispatchEvent(new window.Event('change', { bubbles: true }));
-    });
+    // The branch filter is the app's own Dropdown: open it, then pick the row.
+    await click(document.querySelector('[aria-label="Filter commits by branch"]'));
+    const currentBranch = [...document.querySelectorAll('.dd-option')].find((option) => option.textContent.trim() === 'Current branch');
+    assert.ok(currentBranch, 'the filter offers the current branch');
+    await click(currentBranch);
+    assert.equal(document.querySelector('[aria-label="Filter commits by branch"]').textContent.trim(), 'Current branch');
+    assert.match(document.querySelector('.history-graph-filter').getAttribute('title'), /^Showing commits on /);
     assert.equal(requests[2].payload.ref, 'HEAD');
     assert.equal(requests[2].payload.skip, 0);
     await render({ ...props, projectPath: '/another-project' });

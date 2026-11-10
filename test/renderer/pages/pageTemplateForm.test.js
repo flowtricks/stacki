@@ -235,6 +235,9 @@ const typeInto = (dom, input, value) =>
     input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
   });
 const settled = () => act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+// A sample tree draws the data picker's rows (ui/DataTree.tsx): a row by the name it shows.
+const row = (label) => [...document.querySelectorAll('.page-template-popover .dp-row')].find((item) => item.querySelector('.dp-key').textContent === label);
+const shownValue = (label) => row(label).querySelector('.dp-val').textContent;
 
 test('+ opens a menu with both kinds, and Create page keeps today’s flow', async (context) => {
   const { root } = fixture(context);
@@ -315,12 +318,12 @@ test('the address select disables what cannot work and shows what a slugified on
   await click(byText('.more-menu [role="menuitem"]', 'Create page template'));
   await settled();
   await click(byText('.page-template-trigger', 'Entry id'));
-  const row = (label) =>
-    [...document.querySelectorAll('.page-template-tree-row')].find((item) => item.querySelector('.page-template-tree-key').textContent === label);
-  assert.ok(row('Entry id').querySelector('.page-template-tree-check svg'), 'the choice has its check at the right');
+  assert.ok(row('Entry id').lastElementChild.matches('.dp-check'), 'the choice has its check at the right end');
   assert.match(row('Number').textContent, /Cleaned up: \/blog\/25/);
-  assert.equal(row('Heading').disabled, true);
+  assert.equal(row('Heading').getAttribute('aria-disabled'), 'true');
   assert.match(row('Heading').textContent, /would share the address uptime/);
+  await click(row('Heading'));
+  assert.ok(row('Entry id').classList.contains('selected'), 'a choice that cannot work is not taken');
   await click(row('Number'));
   await settled();
   assert.deepEqual(calls.plan.at(-1).draft.source.slug, { kind: 'field', name: 'Number', treatment: 'slugified' });
@@ -525,6 +528,26 @@ test('a project without collections leads with a new one, and stays quiet until 
   assert.match(document.querySelector('.page-template-problem').textContent, /starts with a letter/);
 });
 
+test('each collection carries the CMS icon, and the new row keeps its plus', async (context) => {
+  const { root } = fixture(context);
+  await act(async () => root.render(React.createElement(form.PagesPanel, panelProps())));
+  await click(document.querySelector('button[title="New page"]'));
+  await click(byText('.more-menu [role="menuitem"]', 'Create page template'));
+  await settled();
+  await click([...document.querySelectorAll('.modal button')].find((button) => button.textContent.includes('Content collection')));
+  const cms = byText('.dd-option', 'Data from a link').querySelector('.dd-icon svg').outerHTML;
+  await click([...document.querySelectorAll('.modal button')].find((button) => button.textContent.includes('Content collection')));
+  await click([...document.querySelectorAll('.modal button')].find((button) => button.textContent.trim() === 'blog'));
+  const options = [...document.querySelectorAll('.dd-option')];
+  assert.deepEqual(
+    options.map((option) => option.textContent.trim()),
+    ['blog', 'New collection…'],
+  );
+  assert.equal(options[0].querySelector('.dd-icon svg').outerHTML, cms, 'a collection shows the CMS icon');
+  assert.notEqual(options[1].querySelector('.dd-icon svg').outerHTML, cms, 'the new row does not');
+  assert.ok(options[1].querySelector('.dd-icon svg'), 'and keeps its plus');
+});
+
 test('the first collection fills the form, and leaves a choice or typed route alone', () => {
   const opened = form.withFirstCollection(form.EMPTY_TEMPLATE_FORM, ['stats', 'blog']);
   assert.equal(opened.collection, 'stats');
@@ -720,6 +743,13 @@ test('a sample shows its structure, and a search shows matches by their whole pa
   assert.deepEqual(paths(form.sampleTreeRows(treeList, new Set(), 'bo')), [['author.name', 0]], 'a later item’s value matches too');
   assert.equal(form.steppedItem(0, 3, -1), 2);
   assert.equal(form.steppedItem(2, 3, 1), 0);
+  assert.equal(form.sampleItemCount(treeList), 3);
+  assert.equal(form.sampleItemCount({ ...treeList, fields: [] }), 0, 'a sample with no fields has nothing to step through');
+  assert.equal(form.sampleRowPreview(treeList, 'author', 0), '2 fields', 'an object reads as the picker’s object rows do');
+  assert.equal(form.sampleRowPreview(treeList, 'author.name', 2), 'Cy');
+  assert.equal(form.sampleRowPreview({ ...treeList, fields: [{ path: 'meta', kind: 'object', example: 'object' }] }, 'meta', 0), '{}');
+  assert.equal(form.sampleRowPreview(treeList, 'missing', 0), '');
+  assert.throws(() => form.sampleRowPreview(treeList, 'title', -1), /an item is not negative/);
 });
 
 test('a field is kept by itself or inside its object, and unticking part keeps the rest', () => {
@@ -748,7 +778,7 @@ test('a field is kept by itself or inside its object, and unticking part keeps t
   assert.deepEqual(form.fieldsAfterDeselect(treeList, 'author.name'), [{ path: 'author.name', kind: 'string' }], 'the address field stays');
 });
 
-test('the fields popover searches, steps through items, and selects all or all but the address', async (context) => {
+test('the fields popover searches, steps through items on the item row, and selects all or all but the address', async (context) => {
   const { dom, root, calls } = fixture(context, {
     sampleDataSource: async (input) => ({ ok: true, value: { kind: 'lists', lists: input.request.kind === 'http-json' ? [treeList] : [] } }),
   });
@@ -757,23 +787,76 @@ test('the fields popover searches, steps through items, and selects all or all b
   await debounced();
   await settled();
   await click(byText('.page-template-trigger', '2 fields · 3 items'));
-  const value = (label) =>
-    [...document.querySelectorAll('.page-template-tree-row')]
-      .find((row) => row.querySelector('.page-template-tree-key').textContent === label)
-      .querySelector('.page-template-example').textContent;
-  assert.equal(value('title'), 'One');
-  await click(document.querySelector('button[title="Next item"]'));
-  assert.equal(value('title'), 'Two', 'the arrows show the next item’s values');
-  await click(document.querySelector('button[title="Open"]'));
-  assert.equal(value('name'), 'Bo', 'nested fields open under their object');
+  assert.ok(document.querySelector('.page-template-popover .data-picker .dp-search input[placeholder="Search data…"]'), 'the data picker’s search');
+  assert.equal(row('item').querySelector('.dp-item-count').textContent, '1/3', 'the stepper sits on the item’s row');
+  assert.equal(shownValue('title'), 'One');
+  await click(row('item').querySelector('button[title="Next item"]'));
+  assert.equal(shownValue('title'), 'Two', 'the arrows show the next item’s values');
+  assert.equal(row('item').querySelector('.dp-item-count').textContent, '2/3');
+  await click(row('author').querySelector('.dp-twist[title="Open"]'));
+  assert.equal(shownValue('name'), 'Bo', 'nested fields open under their object');
   await click(byText('.page-template-popover button', 'Deselect all'));
   await settled();
   assert.deepEqual(calls.plan.at(-1).draft.source.fields, [{ path: 'title', kind: 'string' }], 'the address field stays');
   await click(byText('.page-template-popover button', 'Select all'));
   await settled();
   assert.equal(calls.plan.at(-1).draft.source.fields.length, 2);
+  await typeInto(dom, document.querySelector('.page-template-popover input[aria-label="Search the data"]'), 'NAME');
+  assert.deepEqual(
+    [...document.querySelectorAll('.page-template-popover .dp-row .dp-key')].map((key) => key.textContent),
+    ['author.name'],
+    'a search lists matches by their whole path, as the data picker’s does',
+  );
   await typeInto(dom, document.querySelector('.page-template-popover input[aria-label="Search the data"]'), 'zzz');
-  assert.match(document.querySelector('.page-template-tree').textContent, /Nothing matches/);
+  assert.match(document.querySelector('.page-template-popover .dp-list').textContent, /Nothing matches/);
+});
+
+test('a nested object shows indented and collapsible, and choosing its fields is what the dialog sends', async (context) => {
+  const { dom, root, calls } = fixture(context, {
+    sampleDataSource: async (input) => ({ ok: true, value: { kind: 'lists', lists: input.request.kind === 'http-json' ? [treeList] : [] } }),
+  });
+  await openJSON(root);
+  await typeInto(dom, urlInput(), 'https://api.example.com/books');
+  await debounced();
+  await settled();
+  await click(byText('.page-template-trigger', '2 fields · 3 items'));
+  const indent = (label) => Number.parseFloat(row(label).style.paddingLeft);
+  assert.equal(shownValue('author'), '2 fields', 'an object says how many fields it holds');
+  assert.equal(row('name'), undefined, 'an object starts closed');
+  await click(row('author').querySelector('.dp-twist'));
+  assert.ok(row('author').querySelector('.dp-twist').classList.contains('open'));
+  assert.ok(indent('name') > indent('author'), 'a nested field steps in under its object');
+  assert.equal(indent('title'), indent('author'), 'siblings line up');
+  assert.ok(indent('author') > indent('item'), 'the item’s fields sit under the item’s row');
+  assert.ok(row('name').classList.contains('selected'), 'a field inside a kept object is kept');
+  assert.ok(row('name').querySelector('.dp-check-slot').nextElementSibling === null, 'the check ends the row');
+  assert.equal(row('title').querySelector('.dp-check-slot svg') !== null, true);
+  await click(row('age'));
+  await settled();
+  assert.deepEqual(
+    calls.plan.at(-1).draft.source.fields,
+    [
+      { path: 'title', kind: 'string' },
+      { path: 'author.name', kind: 'string' },
+    ],
+    'clearing one field of a kept object keeps the rest',
+  );
+  assert.equal(row('author').classList.contains('selected'), false);
+  await click(row('author'));
+  await settled();
+  assert.deepEqual(calls.plan.at(-1).draft.source.fields, [
+    { path: 'title', kind: 'string' },
+    { path: 'author', kind: 'object' },
+  ]);
+  assert.ok(row('age').classList.contains('selected'), 'choosing an object chooses its fields');
+  await click(row('author'));
+  await settled();
+  assert.deepEqual(calls.plan.at(-1).draft.source.fields, [{ path: 'title', kind: 'string' }], 'clearing an object clears its fields');
+  assert.equal(row('name').classList.contains('selected'), false);
+  await click(row('author').querySelector('.dp-twist'));
+  assert.equal(row('name'), undefined, 'the object closes again');
+  await click(row('item').querySelector('.dp-twist'));
+  assert.equal(row('title'), undefined, 'the item’s row closes its fields');
 });
 
 test('a nested field can address the pages', async (context) => {
@@ -792,9 +875,9 @@ test('a nested field can address the pages', async (context) => {
   await settled();
   assert.equal(calls.plan.at(-1).draft.source.slugPath, 'author.name', 'the default reaches inside objects');
   await click(byText('.page-template-trigger', 'author.name'));
-  await click(document.querySelector('button[title="Open"]'));
-  const row = [...document.querySelectorAll('.page-template-tree-row')].find((item) => item.textContent.includes('name'));
-  assert.ok(row.querySelector('.page-template-tree-check svg'));
+  await click(row('author').querySelector('.dp-twist[title="Open"]'));
+  assert.ok(row('name').classList.contains('selected'));
+  assert.ok(row('name').lastElementChild.matches('.dp-check'));
 });
 
 test('what the form sends passes the real boundary, with a hidden layout and nested fields', () => {

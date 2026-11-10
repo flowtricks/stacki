@@ -60,6 +60,7 @@ const CLIENT_HOSTS_ALLOWED: Readonly<Record<string, string>> = {
   'avatars.githubusercontent.com': "Signed-in collaborators' GitHub profile pictures.",
   'cms.example.com': 'Placeholder text in the CMS connection form.',
   'creativecommons.org': 'A licence notice on bundled icons.',
+  'dash.bunny.net': "Opens Bunny's dashboard for the user to copy an API key; Studio never fetches it.",
   'dash.cloudflare.com': 'Validates Cloudflare sign-in links; Studio never fetches it.',
   'developer.mozilla.org': "A link in the TypeScript compiler's diagnostic text.",
   'evilmartians.com': "A link in PostCSS's deprecation warning.",

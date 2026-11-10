@@ -93,6 +93,7 @@ const check = (what, condition, detail) => {
     // rule.
     check('a value drawn wider than its field does not fit', doesNotFit(fieldWith(100, 240), 'short'), 'measured overflow missed');
     check('one that fits, fits', !doesNotFit(fieldWith(240, 240), 'short'));
+    check('an overflowing placeholder is not a value', !doesNotFit(fieldWith(100, 240), ''));
     // A pixel of slack, so a value that exactly fills its field is not treated
     // as overflowing by a rounding error.
     check('a hair over is still a fit', !doesNotFit(fieldWith(240, 241), 'short'));

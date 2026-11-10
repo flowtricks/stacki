@@ -23,5 +23,5 @@ test('the generated page reads the mode, marks the head, and keeps the popup fit
   assert.ok(page.includes("=== 'page'"));
   assert.ok(page.includes('Math.min(1, aw / box.w, ah / box.h)'), 'the popup fit is unchanged');
   assert.ok(page.includes('width: 1200px'), 'the popup stage keeps its width');
-  assert.ok(page.includes('unfix();') && page.includes("reportStatus('empty')") && page.includes("reportStatus('ready')"));
+  assert.ok(page.includes('unfix();') && page.includes("reportStatus('empty', ") && page.includes("reportStatus('ready')"));
 });

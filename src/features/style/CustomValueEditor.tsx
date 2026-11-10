@@ -21,6 +21,11 @@ const isLong = (value: string) => String(value).length > LONG_VALUE || String(va
 
 /** Is the value wider than the field showing it? */
 function doesNotFit(container: Element, value: string) {
+  // Nothing typed, nothing to fit: what overflows then is the placeholder, which
+  // the field's scrollWidth counts the same as a value.
+  if (value === '') {
+    return false;
+  }
   // The token editor first, and only then the plain input: with a code field
   // the input is always in the DOM, hidden behind the editor, and a selector
   // that took either would have measured the invisible one.

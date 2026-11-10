@@ -317,6 +317,33 @@ export function sampleTreeRows(list: SampleList, expanded: ReadonlySet<string>, 
   return rows;
 }
 
+/** How many items a sample can be stepped through: as many as its fields hold values for. */
+export function sampleItemCount(list: SampleList): number {
+  const count = Math.max(0, ...list.fields.map((field) => field.examples?.length ?? 0));
+  assert(Number.isSafeInteger(count), 'sampleItemCount: a count is a whole number');
+  assert(count <= PAGE_TEMPLATE_LIMITS.itemsPreviewMax, 'sampleItemCount: items are bounded by the sample');
+  return count;
+}
+
+/**
+ * What a row shows down the right, read from item `item`: an object says how
+ * many fields it holds, as the data picker's object rows do, and anything else
+ * its value in that item.
+ */
+export function sampleRowPreview(list: SampleList, path: string, item: number): string {
+  assert(Number.isSafeInteger(item), 'sampleRowPreview: an item is a whole number');
+  assert(item >= 0, 'sampleRowPreview: an item is not negative');
+  const field = list.fields.find((candidate) => candidate.path === path);
+  if (field === undefined) {
+    return '';
+  }
+  if (field.kind === 'object') {
+    const count = list.fields.filter((candidate) => parentOf(candidate.path) === path).length;
+    return count === 0 ? '{}' : `${count} ${count === 1 ? 'field' : 'fields'}`;
+  }
+  return field.examples?.[item] ?? field.example;
+}
+
 /** The item `step` away from `index`, wrapping at both ends as the data picker's arrows do. */
 export function steppedItem(index: number, count: number, step: -1 | 1): number {
   assert(count > 0, 'steppedItem: there is an item to step to');

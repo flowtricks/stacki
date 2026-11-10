@@ -72,6 +72,10 @@ export const STRING_PROPS = new Set([
   'transform-style',
   'will-change',
 ]);
+// Values that can hold a gradient, whose stops take colours and lengths side by
+// side, so neither kind of variable can be left out of their picker.
+const GRADIENT_PROPS: ReadonlySet<string> = new Set(['background', 'background-image', 'border-image', 'border-image-source', 'mask', 'mask-image']);
+
 export function varTypeAllowed(prop: string | undefined, type: string): boolean {
   if (!prop) {
     return true;
@@ -87,6 +91,9 @@ export function varTypeAllowed(prop: string | undefined, type: string): boolean 
   // left those fields with an empty picker.
   if (STRING_PROPS.has(property)) {
     return type === 'FontFamily' || type === 'String';
+  }
+  if (GRADIENT_PROPS.has(property)) {
+    return type !== 'FontFamily';
   }
   return type !== 'Color' && type !== 'FontFamily';
 }

@@ -13,7 +13,8 @@ interface Props {
 }
 export function AssetsPanel({ refresh, error, pick }: Props) {
   const recordUndo = useAssetHistory(error);
-  const showToast = useCallback((message: string) => error(new Error(message)), [error]);
+  // A failure is an error toast; anything else (a copied link) is a notice.
+  const showToast = useCallback((message: string, kind: 'error' | 'success') => error(kind === 'error' ? new Error(message) : message), [error]);
   useEffect(() => {
     window.addEventListener('studio:assets-changed', refresh);
     return () => window.removeEventListener('studio:assets-changed', refresh);
@@ -31,6 +32,14 @@ export function AssetsPanel({ refresh, error, pick }: Props) {
               pick.onPick(file, entry);
               clearAssetRequest();
             },
+            ...(pick.onPickURL === undefined
+              ? {}
+              : {
+                  onPickURL: (url: string) => {
+                    pick.onPickURL?.(url);
+                    clearAssetRequest();
+                  },
+                }),
           }
         }
         onPickCancel={clearAssetRequest}

@@ -748,10 +748,16 @@ restore the previous order and offer a reload in a toast. Reads and drag payload
 bounded parser. Desktop retains move-into-folder drops on folder rows. Pages and Navigator
 use `src/ui/TreeDragDrop` for gap targets, row feedback, and drag cancellation.
 
-`.stacki/styles.json` contains `{ version: 1, keep: [...] }` (`shared/properties/styleKeepList.ts`).
-`keep` lists class or id names, `*` matching any run of characters, that the unused-selector
-clean-up never removes. The style selectors panel writes it through `project:writeMetadata`
-against the bytes it read. A `trustedScripts` key from an earlier version is read and dropped.
+`.stacki/styles.json` contains `{ version: 1, keep: [...], lockedStylesheets?: [...] }`
+(`shared/properties/styleKeepList.ts`). `keep` lists class or id names, `*` matching any run of
+characters, that the unused-selector clean-up never removes. `lockedStylesheets` lists
+project-relative stylesheets (`src/styles/patterns.css`) and folders ending in `/`
+(`src/styles/`), `/`-separated with no `.`/`..` steps, at most 500; a folder covers every file
+under it, including files added later. The check reports a would-be `unused` selector in a
+locked file as `kept`, so the panel's clean-up, the delete offer, `style:removeSelectors` (which
+re-runs the check) and `check-project` all leave it. The key is written only when non-empty. The
+style selectors panel writes the file through `project:writeMetadata` against the bytes it read.
+A `trustedScripts` key from an earlier version is read and dropped.
 
 The unused-selector check (`electron/properties/selector*.ts`) reports through
 `style:selectorUsage` as a `SelectorReport` (`shared/properties/selectorUsage.ts`). A verdict
@@ -1023,6 +1029,24 @@ are shared by all editors. History exposes branch commits but excludes parked dr
 Bundles are bounded at 96 MiB, branch lists at 64, and cloud checkpoints/draft namespaces at
 128. Old unreferenced checkpoints and document namespaces expire after a 30-minute grace
 period. Interrupted checkpoint acknowledgement blocks edits until startup recovers storage.
+
+## Live style previews
+
+Two parsed `shared/properties` contracts let a canvas show a style edit before its file holds
+it, with one frame half each in `electron/preload/` that Desktop's preload and Studio's preview
+client both run. The parent sends both through `tellCanvas` (`src/editor/canvasQuery.ts`).
+`avb:live-variable` (`liveVariables.ts`, `frameLiveVariables.ts`) overrides a custom property;
+`avb:live-rule` (`liveRules.ts`, `frameLiveRules.ts`) sets one declaration of a Style panel rule.
+A rule preview names its source file project-relative, its condition at-rules, its selector as
+written and the property; the frame patches only the stylesheets compiled from that file
+(`data-vite-dev-id`, or a link's path), sets aside only that sheet's own Astro scope when it
+compares selectors, and records each rule's own value. `set` shows an edit (`value` with a
+boolean `important`, or `removed`); `drop` without `until` restores the recorded values at once
+(a refused, failed or held save, an abandoned edit); `drop` with `until` keeps the preview until
+the page's own sheet holds that edit, at most `settleFramesMax` frames, then restores. Bounds
+live in `LIVE_RULE_LIMITS`; a sheet over `sheetRulesMax` rules is refused with a
+`rules-over-cap` problem rather than searched in part. Rules nested in other style rules and
+members of a grouped rule the save splits are not previewed; their saves show them.
 
 ## Canvas interaction mode
 

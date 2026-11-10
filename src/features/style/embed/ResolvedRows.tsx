@@ -13,7 +13,6 @@ import { useAnchoredPosition } from '../components/provenancePosition';
 export { useAnchoredPosition } from '../components/provenancePosition';
 import { useHighlight } from '../model/computedStyle';
 import ProvenanceList from '../ProvenanceList';
-import VariableConnect from '../VariableConnect';
 import { type ResolvedProp } from '../model/resolved';
 import { splitTopLevelSpaces } from '../model/background';
 import { type LiveSetProp } from './EditorBasics';
@@ -165,24 +164,18 @@ export function ResolvedRow({
       {isDisplay ? (
         <DisplayControl value={display.value} important={display.important} busy={busy} onCommit={(value, important) => setProp(prop, value, important)} />
       ) : (
-        <VariableConnect
-          ariaLabel={`Connect ${prop} to a variable`}
-          disabled={busy}
+        <ValueField
           prop={prop}
+          value={display.value}
+          important={display.important}
+          busy={busy}
+          onCommit={(value, important) => setProp(prop, value, important)}
+          onLiveCommit={(value, important) => liveSetProp(prop, value, important)}
           onPick={(binding) => {
             const kept = keepImportant(binding, display);
             setProp(prop, kept.value, kept.important);
           }}
-        >
-          <ValueField
-            value={display.value}
-            important={display.important}
-            busy={busy}
-            dataProp={prop}
-            onCommit={(value, important) => setProp(prop, value, important)}
-            onLiveCommit={(value, important) => liveSetProp(prop, value, important)}
-          />
-        </VariableConnect>
+        />
       )}
     </div>
   );

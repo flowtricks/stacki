@@ -67,6 +67,11 @@ function keptByAnyTag(attr: string): boolean {
 /** The attributes an element or instance gives up when it becomes `<tag>`: a
  * component's props were its API, and an element's own tag attributes the new
  * tag does not take mean nothing there (loading="eager" on img → div). */
+/** Whether a `<style>` or `<script>` node already holds exactly `contents`. */
+export function rawContentsMatch(node: EditorNode, contents: string): boolean {
+  return node.kind === 'raw' && node.inner === contents;
+}
+
 export function droppedForElement(node: Pick<EditorNode, 'kind' | 'name' | 'props'>, tag: string): readonly string[] {
   assert(/^[a-z][a-z0-9-]*$/.test(tag), 'droppedForElement: an element tag is lowercase');
   const wasComponent = node.kind !== 'element';

@@ -2,7 +2,9 @@
 // stylesheets, which ones nothing can match any more, and a clean-up that
 // removes exactly those. A selector the check cannot prove unused is listed
 // under "Can't tell" with its reason and is never removed; the lock adds its
-// names to `.stacki/styles.json` so no later clean-up touches them.
+// names to `.stacki/styles.json` so no later clean-up touches them. A lock on
+// a stylesheet's heading, or a folder's, keeps that whole library the same way
+// (`lockedStylesheets` in the same file).
 //
 // The list stays quiet on purpose: one line per selector, with only the class
 // names that make a rule removable tinted.
@@ -13,10 +15,12 @@ import { usePanelData } from '../../lib/usePanelData';
 import { onPropertyFilesChanged, onVariablesChanged } from '../../ipc/editorEnvironment';
 import { SearchIcon, TrashIcon } from '../../ui/Icons';
 import { verdictNames, type SelectorEntry, type SelectorReport } from '../../../shared/properties/selectorUsage';
+import { folderLock, stylesheetLock, stylesheetLockMatcher, type StyleKeepList } from '../../../shared/properties/styleKeepList';
 import { LockIcon, SweepIcon } from './SelectorIcons';
 import {
   exactPatterns,
   firstRows,
+  folderGroups,
   initialFilter,
   LIST_PAGE_ROWS,
   matchesFilter,
@@ -24,10 +28,11 @@ import {
   selectorGroups,
   selectorSegments,
   SELECTOR_FILTERS,
+  sheetGroups,
   unknownReasons,
   unusedEntries,
   type SelectorFilter,
-  type SelectorGroup,
+  type SheetGroup,
 } from './selectorList';
 import {
   readKeepList,
@@ -135,6 +140,11 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
     const reason = entry.verdict.kind === 'unknown' ? entry.verdict.reason : undefined;
     transitions.run(entry, reason, () => keep.toggle(entry).then(refresh));
   };
+  // A stylesheet or folder lock changes verdicts in the main process, so the
+  // report is read again once the file is written.
+  const sheetLocks: SheetLocks | undefined =
+    keep.stored === undefined || busy ? undefined : { keepList: keep.stored.keepList, onToggle: (target) => void keep.toggleSheet(target).then(refresh) };
+  const lockedSheet = keep.stored === undefined ? () => false : stylesheetLockMatcher(keep.stored.keepList);
 
   if (confirming && report !== undefined) {
     return (
@@ -190,7 +200,9 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
               />
             ) : (
               <SelectorGroups
-                groups={selectorGroups(report, filter, search, new Set(transitions.rows.keys()))}
+                report={report}
+                sheets={sheetGroups(report, filter, selectorGroups(report, filter, search, new Set(transitions.rows.keys())), search, lockedSheet)}
+                locks={sheetLocks}
                 limit={limit}
                 onMore={more}
                 empty={emptyText(report, filter)}
@@ -401,13 +413,29 @@ function useKeepList(projectPath: string, showToast: SelectorsPanelProps['showTo
     try {
       // Re-read first: another window or an editor may have changed the file.
       const current = await readKeepList(projectPath);
-      const change = entry.verdict.kind === 'kept' ? { add: [], remove: exactPatterns(current.keepList, names) } : { add: names, remove: [] };
+      const change =
+        entry.verdict.kind === 'kept'
+          ? { add: [], remove: exactPatterns(current.keepList, names), lock: [], unlock: [] }
+          : { add: names, remove: [], lock: [], unlock: [] };
       setStored(await updateKeepList(projectPath, current, change));
     } catch (error: unknown) {
       showToast(error instanceof Error ? error.message : String(error), 'error');
     }
   };
-  return { stored, toggle };
+  // `target` is a stylesheet or a folder ending in `/`; only its own entry is
+  // toggled, so a sheet locked through its folder is unlocked at the folder.
+  const toggleSheet = async (target: string): Promise<void> => {
+    try {
+      const current = await readKeepList(projectPath);
+      const change = current.keepList.lockedStylesheets.includes(target)
+        ? { add: [], remove: [], lock: [], unlock: [target] }
+        : { add: [], remove: [], lock: [target], unlock: [] };
+      setStored(await updateKeepList(projectPath, current, change));
+    } catch (error: unknown) {
+      showToast(error instanceof Error ? error.message : String(error), 'error');
+    }
+  };
+  return { stored, toggle, toggleSheet };
 }
 
 function emptyText(report: SelectorReport, filter: SelectorFilter): string {
@@ -418,7 +446,7 @@ function emptyText(report: SelectorReport, filter: SelectorFilter): string {
     case 'unused':
       return 'No unused styles. Every style is used, locked, or might be in use.';
     case 'kept':
-      return 'No locked styles. Lock a style from its row to keep it through every clean-up.';
+      return 'No locked styles. Lock a style from its row, or a stylesheet from its heading, to keep it through every clean-up.';
     case 'unknown':
     case 'all':
       return 'No selectors match.';
@@ -444,8 +472,17 @@ interface Paging {
   readonly onMore: () => void;
 }
 
+/** Locking whole stylesheets and folders from a group's heading; undefined where headings have no lock. */
+interface SheetLocks {
+  readonly keepList: StyleKeepList;
+  /** Locks or unlocks a stylesheet, or a folder ending in `/`. */
+  readonly onToggle: (target: string) => void;
+}
+
 function SelectorGroups({
-  groups: all,
+  report,
+  sheets: all,
+  locks,
   limit,
   onMore,
   empty,
@@ -454,22 +491,38 @@ function SelectorGroups({
   onToggleKeep,
   hover,
   onRemove,
-}: { readonly groups: readonly SelectorGroup[]; readonly empty: string } & RowActions & Paging) {
+}: {
+  /** Undefined where the list is not the project's (the cleanup confirmation): no folder headings. */
+  readonly report: SelectorReport | undefined;
+  readonly sheets: readonly SheetGroup[];
+  readonly locks: SheetLocks | undefined;
+  readonly empty: string;
+} & RowActions &
+  Paging) {
   if (all.length === 0) {
     return <p className="selectors-empty">{empty}</p>;
   }
-  const { groups, total } = firstRows(all, limit);
+  const { groups: sheets, total } = firstRows(all, limit);
+  const folders = report === undefined ? [{ folder: undefined, sheets }] : folderGroups(report, sheets);
   return (
     <>
-      {groups.map((group) => (
-        <section key={group.rel} className="selectors-group">
-          <h3 className="selectors-file" title={group.rel}>
-            {group.rel.slice(group.rel.lastIndexOf('/') + 1)}
-          </h3>
-          {group.entries.map((entry) => (
-            <SelectorRow
-              key={entry.id}
-              entry={entry}
+      {folders.map((group) => (
+        <React.Fragment key={group.folder ?? ''}>
+          {group.folder !== undefined && (
+            <div className="selectors-heading selectors-folder">
+              <h3 className="selectors-heading-name" title={group.folder === '' ? 'Project root' : group.folder}>
+                {group.folder === '' ? 'Project root' : group.folder}
+              </h3>
+              {locks !== undefined && group.folder !== '' && (
+                <SheetLock target={group.folder} name={group.folder} covering={folderLock(locks.keepList, group.folder)} onToggle={locks.onToggle} />
+              )}
+            </div>
+          )}
+          {group.sheets.map((sheet) => (
+            <SheetSection
+              key={sheet.rel}
+              sheet={sheet}
+              locks={locks}
               keepList={keepList}
               transitions={transitions}
               onToggleKeep={onToggleKeep}
@@ -477,10 +530,64 @@ function SelectorGroups({
               onRemove={onRemove}
             />
           ))}
-        </section>
+        </React.Fragment>
       ))}
       {limit < total && <MoreRows onMore={onMore} />}
     </>
+  );
+}
+
+function SheetSection({ sheet, locks, ...actions }: { readonly sheet: SheetGroup; readonly locks: SheetLocks | undefined } & RowActions) {
+  const name = sheet.rel.slice(sheet.rel.lastIndexOf('/') + 1);
+  const covering = locks === undefined ? undefined : stylesheetLock(locks.keepList, sheet.rel);
+  return (
+    <section className={`selectors-group ${covering === undefined ? '' : 'is-locked'}`}>
+      <div className="selectors-heading">
+        <h3 className="selectors-heading-name selectors-file" title={sheet.rel}>
+          {name}
+        </h3>
+        {locks !== undefined && <SheetLock target={sheet.rel} name={name} covering={covering} onToggle={locks.onToggle} />}
+      </div>
+      {sheet.lockedKept > 0 && (
+        <p className="selectors-locked-note">Locked: {sheet.lockedKept === 1 ? '1 unused style kept' : `${sheet.lockedKept} unused styles kept`}</p>
+      )}
+      {sheet.entries.map((entry) => (
+        <SelectorRow key={entry.id} entry={entry} sheetLocked={covering !== undefined} {...actions} />
+      ))}
+    </section>
+  );
+}
+
+// The heading's lock: shown on hover, always shown when locked. A sheet
+// locked through its folder shows the lock closed but leaves the toggle to the
+// folder, which is the entry that holds it.
+function SheetLock({
+  target,
+  name,
+  covering,
+  onToggle,
+}: {
+  readonly target: string;
+  readonly name: string;
+  readonly covering: string | undefined;
+  readonly onToggle: (target: string) => void;
+}) {
+  const own = covering === target;
+  const inherited = covering !== undefined && !own;
+  const label = own ? `Unlock ${name}` : inherited ? `Locked with ${covering}` : `Lock ${name} from cleanup`;
+  const tip = own ? 'Unlock' : label;
+  return (
+    <span className="tip-anchor selectors-sheet-lock-anchor" title={tip}>
+      <button
+        className={`ghost selectors-sheet-lock ${covering === undefined ? '' : 'on'}`}
+        aria-label={label}
+        aria-pressed={covering !== undefined}
+        disabled={inherited}
+        onClick={() => onToggle(target)}
+      >
+        <LockIcon size={12} open={covering === undefined} />
+      </button>
+    </span>
   );
 }
 
@@ -565,11 +672,22 @@ function sentence(text: string): string {
 
 const NO_ROWS: RowTransitions = new Map();
 
-function SelectorRow({ entry, keepList, transitions, onToggleKeep, hover, onRemove }: { readonly entry: SelectorEntry } & RowActions) {
+function SelectorRow({
+  entry,
+  sheetLocked,
+  keepList,
+  transitions,
+  onToggleKeep,
+  hover,
+  onRemove,
+}: { readonly entry: SelectorEntry; readonly sheetLocked?: boolean } & RowActions) {
   const { verdict } = entry;
   const names = verdictNames(verdict);
   const locked = verdict.kind === 'kept';
-  const lockable = names.length > 0 && keepList !== undefined && verdict.kind !== 'checking';
+  // In a locked stylesheet the heading's lock holds the row; a row lock shows
+  // only where the row's own names are also kept, so it can be unlocked.
+  const heldBySheet = sheetLocked === true && locked && keepList !== undefined && exactPatterns(keepList.keepList, names).length === 0;
+  const lockable = names.length > 0 && keepList !== undefined && verdict.kind !== 'checking' && !heldBySheet;
   const transition: RowTransition | undefined = transitions?.rows.get(entry.id);
   // While the keep list is written the lock already shows where the click is going.
   const closed = lockShownClosed(transition, verdict.kind);
@@ -662,7 +780,9 @@ function CleanupConfirm({
           {shown === 1 ? 'it' : 'them'} back.
         </p>
         <SelectorGroups
-          groups={[...files].map(([rel, list]) => ({ rel, entries: list }))}
+          report={undefined}
+          sheets={[...files].map(([rel, list]) => ({ rel, entries: list, lockedKept: 0 }))}
+          locks={undefined}
           limit={shown}
           onMore={() => undefined}
           empty=""

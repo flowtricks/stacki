@@ -26,7 +26,7 @@ export default function HistoryPanel(props: HistoryPanelProps) {
           </button>
         )}
         {props.gitInfo?.isRepo && (
-          <HistorySection title="Source Control Graph" open={timelineOpen} onToggle={() => setTimelineOpen((value) => !value)}>
+          <HistorySection title="Version history" open={timelineOpen} onToggle={() => setTimelineOpen((value) => !value)}>
             <HistoryTimeline
               projectPath={props.project.path}
               branch={branch}

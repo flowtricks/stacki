@@ -161,8 +161,46 @@ test('the keep list protects names, and patterns match whole names', async () =>
   assert.throws(() => parseStyleKeepList({ version: 1, keep: ['a b'] }), /whitespace/);
   assert.throws(() => parseStyleKeepList({ version: 2 }), /version/);
   // A file from before scripts stopped mattering still reads, and loses the key on save.
-  assert.deepEqual(parseStyleKeepList({ version: 1, keep: ['a'], trustedScripts: ['https://x.com/'] }), { version: 1, keep: ['a'] });
+  assert.deepEqual(parseStyleKeepList({ version: 1, keep: ['a'], trustedScripts: ['https://x.com/'] }), { version: 1, keep: ['a'], lockedStylesheets: [] });
   assert.equal(serializeStyleKeepList(keepList), '{\n  "version": 1,\n  "keep": [\n    "hero-badge",\n    "is-*"\n  ]\n}\n');
+});
+
+test('a locked stylesheet or folder keeps its unused selectors out of every cleanup until unlocked', async () => {
+  const root = project({
+    'src/styles/patterns.css': '.pattern-a { a: b }\n.pattern-b { a: b }\n',
+    'src/styles/global.css': '.gone { a: b }\n.hero { a: b }\n',
+    'src/lumos/utilities.css': '.u-hidden { a: b }\n',
+    'src/pages/index.astro': page('<h1 class="hero">x</h1>'),
+  });
+  const locks = parseStyleKeepList({ version: 1, keep: [], lockedStylesheets: ['src/styles/patterns.css', 'src/lumos/'] });
+  const locked = await checkSelectorUsage(root, locks);
+  assert.deepEqual(kinds(locked.report), {
+    '.pattern-a': 'kept',
+    '.pattern-b': 'kept',
+    '.gone': 'unused',
+    '.hero': 'used',
+    '.u-hidden': 'kept',
+  });
+  assert.deepEqual(verdictOf(locked.report, '.u-hidden'), { kind: 'kept', names: ['u-hidden'] });
+  // A request naming a locked selector is refused: the main process re-runs the check.
+  const lockedIds = locked.report.entries.filter((entry) => entry.rel !== 'src/styles/global.css').map((entry) => entry.id);
+  const refused = await removeUnusedSelectors(root, locks, { ids: lockedIds, files: locked.report.files });
+  assert.equal(refused.ok ? 'ok' : refused.error.code, 'changed');
+  assert.equal(fs.readFileSync(path.join(root, 'src/styles/patterns.css'), 'utf8'), '.pattern-a { a: b }\n.pattern-b { a: b }\n');
+
+  // A stylesheet added under a locked folder later is locked too.
+  fs.mkdirSync(path.join(root, 'src/lumos/more'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'src/lumos/more/later.css'), '.later { a: b }\n');
+  assert.equal(verdictOf(await report(root, locks), '.later').kind, 'kept');
+
+  // Unlocking restores the plain verdicts, and the cleanup removes them again.
+  const unlocked = await checkSelectorUsage(root, EMPTY_KEEP_LIST);
+  assert.equal(verdictOf(unlocked.report, '.pattern-a').kind, 'unused');
+  assert.equal(verdictOf(unlocked.report, '.later').kind, 'unused');
+  const ids = unlocked.report.entries.filter((entry) => entry.rel === 'src/styles/patterns.css').map((entry) => entry.id);
+  const removed = await removeUnusedSelectors(root, EMPTY_KEEP_LIST, { ids, files: unlocked.report.files });
+  assert.ok(removed.ok, JSON.stringify(removed));
+  assert.equal(fs.readFileSync(path.join(root, 'src/styles/patterns.css'), 'utf8'), '');
 });
 
 test('only top-level names are requirements; keyframes, comments and other languages are left alone', async () => {

@@ -17,7 +17,17 @@ import {
 } from '../../editor/loopQuery';
 import { CodeIcon } from '../../ui/Icons';
 import { type CatalogField, type LoopCatalog } from './loopCatalog';
-import { conditionOf, conditionParts, customFilterProblem, draftFor, draftOf, fieldNamed, operatorLabel, type ConditionDraft } from './loopSettingsModel';
+import {
+  conditionOf,
+  conditionParts,
+  customFilterProblem,
+  draftFor,
+  draftOf,
+  fieldNamed,
+  filtersReset,
+  operatorLabel,
+  type ConditionDraft,
+} from './loopSettingsModel';
 import { CodeBox, EditorRow, ListRow, SectionHeader } from './LoopRows';
 import { useCollectionSample, useReferenceChoices } from './loopSettingsData';
 import { FieldPicker } from './LoopFieldPicker';
@@ -116,6 +126,7 @@ function FilterEditor(props: FilterSectionProps) {
         label={props.label}
         dot={<SettingDot setting="filter" binding={props.binding} draft={filterDraft(props)} />}
         toggle={props.toggle}
+        reset={{ applied: query.conditions.length > 0, onReset: () => props.onChange(filtersReset(query)) }}
         addable={!full && (filterable.length > 0 || props.operatorSet === 'code')}
         extra={query.conditions.length > 1 ? <MatchMenu query={query} onChange={props.onChange} /> : undefined}
         onAdd={() => setOpen('new')}

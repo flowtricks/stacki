@@ -1,6 +1,7 @@
 // First: the preview's link listeners go on before any other module's (previewLinks.ts).
 import './previewLinks';
 import { receiveLiveVariables } from '../../../vendor/stacki/electron/preload/frameLiveVariables';
+import { receiveLiveRules } from '../../../vendor/stacki/electron/preload/frameLiveRules';
 import { installCanvasText } from '../../../vendor/stacki/electron/preload/frameText';
 import { parseCanvasInteraction, parseCanvasSitePages, type CanvasInteraction } from '../../../vendor/stacki/shared/properties/canvasInteraction';
 import {
@@ -15,7 +16,6 @@ import {
 } from '../../../vendor/stacki/electron/preload/frameInteraction';
 import { freezeViewportHeight, report as reportPageHeight } from '../../../vendor/stacki/electron/preload/frameViewport';
 import { receiveLiveNumericStyles, applyLiveNumericStyles } from './liveNumericStyles';
-import { receiveLiveRule } from './liveRules';
 import { receiveLiveText, applyLiveText } from './liveTextClient';
 import { installCursorPresence } from '../collaboration/cursorClient';
 import { receiveRenderPush } from './renderPushClient';
@@ -234,11 +234,11 @@ window.addEventListener('message', (event) => {
   if (receiveLiveVariables(data)) {
     return;
   }
-  receiveLiveText(data);
-  receiveLiveNumericStyles(data);
-  if (receiveLiveRule(data)) {
+  if (receiveLiveRules(data)) {
     return;
   }
+  receiveLiveText(data);
+  receiveLiveNumericStyles(data);
   cursorPresence.receive(data);
   columnGuide.receive(data);
   if (data.type === 'studio:collaborators' && 'paths' in data && Array.isArray(data.paths)) {

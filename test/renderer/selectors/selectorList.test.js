@@ -1,6 +1,7 @@
 // Goal: the style selectors panel shows the entries a filter and search ask
 // for, counts each verdict once, offers only `unused` entries for clean-up,
-// and the delete prompt reads exactly the class and id names a deleted subtree
+// folds locked stylesheets into one line in the Unused view, heads sheets by
+// folder only when there is more than one, and the delete prompt reads exactly the class and id names a deleted subtree
 // wrote down.
 // Method: run the panel's pure model and the delete prompt's name reader
 // through the renderer bundler, over a hand-built report and node trees that
@@ -10,8 +11,19 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const loadRenderer = require('../../helpers/rendererModule.js');
 
-const { firstRows, selectorCounts, selectorGroups, selectorSegments, unusedEntries, exactPatterns, unknownReasons, initialFilter } =
-  loadRenderer('src/features/selectors/selectorList.ts');
+const {
+  firstRows,
+  selectorCounts,
+  selectorGroups,
+  selectorSegments,
+  unusedEntries,
+  exactPatterns,
+  unknownReasons,
+  initialFilter,
+  sheetGroups,
+  folderGroups,
+  folderOf,
+} = loadRenderer('src/features/selectors/selectorList.ts');
 const { namesInSubtree, DELETE_CLEANUP_LIMITS } = loadRenderer('src/features/selectors/deleteCleanup.ts');
 
 const entry = (id, rel, selector, verdict) => ({ id, rel, line: 1, selector, scope: 'global', verdict });
@@ -160,4 +172,66 @@ test('an oversized subtree offers nothing rather than a partial list', () => {
     node = { children: [node] };
   }
   assert.deepEqual(namesInSubtree(node), []);
+});
+
+test('the Unused view folds a locked stylesheet into one line; other views list its rows', () => {
+  const locks = {
+    entries: [
+      entry('p|0|0|0', 'src/styles/patterns.css', '.pattern-a', { kind: 'kept', names: ['pattern-a'] }),
+      entry('p|0|5|0', 'src/styles/patterns.css', '.pattern-b', { kind: 'kept', names: ['pattern-b'] }),
+      entry('g|0|0|0', 'src/styles/global.css', '.gone', { kind: 'unused', names: ['gone'] }),
+      entry('g|0|5|0', 'src/styles/global.css', '.kept-name', { kind: 'kept', names: ['kept-name'] }),
+      entry('c|0|0|0', 'src/components/Card.astro', '.title', { kind: 'unused', names: ['title'] }),
+    ],
+    notes: [],
+    files: [],
+  };
+  const locked = (rel) => rel === 'src/styles/patterns.css';
+  const shown = (filter, search = '') => sheetGroups(locks, filter, selectorGroups(locks, filter, search), search, locked);
+  // The Unused count is what a cleanup removes; locked rows are counted under Locked.
+  assert.equal(selectorCounts(locks).unused, 2);
+  assert.equal(selectorCounts(locks).kept, 3);
+  assert.deepEqual(
+    shown('unused').map((sheet) => [sheet.rel, sheet.entries.length, sheet.lockedKept]),
+    [
+      ['src/styles/patterns.css', 0, 2],
+      ['src/styles/global.css', 1, 0],
+      ['src/components/Card.astro', 1, 0],
+    ],
+  );
+  // A name kept by the keep list in an unlocked sheet is not a sheet lock.
+  assert.equal(shown('unused').find((sheet) => sheet.rel === 'src/styles/global.css').lockedKept, 0);
+  // Search narrows the note's count as it narrows rows.
+  assert.deepEqual(
+    shown('unused', 'pattern-b').map((sheet) => [sheet.rel, sheet.lockedKept]),
+    [['src/styles/patterns.css', 1]],
+  );
+  assert.deepEqual(
+    shown('kept').map((sheet) => [sheet.rel, sheet.entries.length, sheet.lockedKept]),
+    [
+      ['src/styles/patterns.css', 2, 0],
+      ['src/styles/global.css', 1, 0],
+    ],
+  );
+  // Unlocked, the sheet's rows are back in the view and nothing is folded.
+  assert.ok(sheetGroups(locks, 'unused', selectorGroups(locks, 'unused', ''), '', () => false).every((sheet) => sheet.lockedKept === 0));
+
+  // Two folders: sheets are headed by folder, in report order.
+  assert.deepEqual(
+    folderGroups(locks, shown('all')).map((group) => [group.folder, group.sheets.map((sheet) => sheet.rel)]),
+    [
+      ['src/styles/', ['src/styles/patterns.css', 'src/styles/global.css']],
+      ['src/components/', ['src/components/Card.astro']],
+    ],
+  );
+  // One folder: no folder headings.
+  const single = { ...locks, entries: locks.entries.filter((candidate) => candidate.rel.startsWith('src/styles/')) };
+  assert.deepEqual(
+    folderGroups(single, sheetGroups(single, 'all', selectorGroups(single, 'all', ''), '', locked)).map((group) => group.folder),
+    [undefined],
+  );
+  assert.deepEqual(folderGroups(single, []), []);
+  assert.equal(folderOf('src/styles/a.css'), 'src/styles/');
+  assert.equal(folderOf('root.css'), '');
+  assert.throws(() => folderOf('src/styles/'), /a stylesheet is a file/);
 });

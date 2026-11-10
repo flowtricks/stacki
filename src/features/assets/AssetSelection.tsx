@@ -3,12 +3,14 @@ import { IMAGE_BATCH_MAX } from '../../../shared/ipc/assetConversion';
 import { canConvertAssets } from '../../ipc/editorEnvironment';
 import AssetThumb from '../../ui/AssetThumb';
 import { TrashIcon } from '../../ui/Icons';
-import { selectableAsset, type AssetBatch } from './AssetBatchTools';
+import { convertible, selectableAsset, type AssetBatch } from './AssetBatchTools';
 import type { AssetFile } from './assetPaths';
 
 export function AssetSelectionToolbar({ batch, files }: { readonly batch: AssetBatch; readonly files: readonly AssetFile[] }) {
   const eligible = files.filter(selectableAsset);
   const selected = eligible.filter((file) => batch.selected.has(file.rel));
+  const compressible = selected.filter(convertible);
+  const skipped = selected.length - compressible.length;
   const busy = batch.progress !== undefined;
   if (!batch.selecting) {
     return undefined;
@@ -24,10 +26,10 @@ export function AssetSelectionToolbar({ batch, files }: { readonly batch: AssetB
         {canConvertAssets && (
           <button
             className="ghost"
-            title="Compress selected assets"
+            title={compressTitle(selected.length, compressible.length, skipped)}
             aria-label="Compress selected assets"
-            disabled={busy || selected.length === 0}
-            onClick={() => batch.setCompression(selected)}
+            disabled={busy || compressible.length === 0}
+            onClick={() => batch.setCompression(compressible)}
           >
             <CompressIcon />
           </button>
@@ -67,30 +69,44 @@ function SelectAllAssets({ batch, files, count }: { readonly batch: AssetBatch; 
       ref={inputRef}
       type="checkbox"
       className="asset-select-all"
-      aria-label="Select all eligible assets"
+      aria-label="Select all assets"
       checked={count > 0 && count === files.length}
       disabled={batch.progress !== undefined || files.length === 0 || files.length > IMAGE_BATCH_MAX}
-      title={files.length > IMAGE_BATCH_MAX ? 'Select up to 100 images at a time' : 'Select all'}
+      title={files.length > IMAGE_BATCH_MAX ? `Select up to ${IMAGE_BATCH_MAX} files at a time` : 'Select all'}
       onChange={() => batch.setSelected(new Set(count === files.length ? [] : files.map((file) => file.rel)))}
     />
   );
 }
 
+// Why Compress is off, or what it will skip: only PNG, JPEG, WebP, AVIF and TIFF are re-encoded.
+function compressTitle(selected: number, compressible: number, skipped: number): string {
+  if (selected === 0) {
+    return 'Compress selected images';
+  }
+  if (compressible === 0) {
+    return 'None of the selected files can be compressed: only PNG, JPEG, WebP, AVIF and TIFF images can.';
+  }
+  if (skipped > 0) {
+    return `Compress ${compressible} ${compressible === 1 ? 'image' : 'images'}; ${skipped} other ${skipped === 1 ? 'file is' : 'files are'} skipped (only PNG, JPEG, WebP, AVIF and TIFF can be compressed)`;
+  }
+  return 'Compress selected images';
+}
+
 export function SelectableAssetTile({ file, batch }: { readonly file: AssetFile; readonly batch: AssetBatch }) {
-  const eligible = selectableAsset(file);
   const checked = batch.selected.has(file.rel);
-  const disabled = !eligible || batch.progress !== undefined;
+  // Only a batch in progress makes a tile unavailable, and the tile says so.
+  const busy = batch.progress !== undefined;
   return (
     <label
-      className={`asset-tile asset-selectable ${checked ? 'selected' : ''} ${disabled ? 'is-disabled' : ''}`}
-      title={eligible ? file.name : 'This asset type cannot be compressed'}
+      className={`asset-tile asset-selectable ${checked ? 'selected' : ''} ${busy ? 'is-disabled' : ''}`}
+      title={busy ? 'Wait for the current batch to finish' : file.name}
     >
       <input
         type="checkbox"
         className="asset-select"
         aria-label={`Select ${file.name}`}
         checked={checked}
-        disabled={disabled}
+        disabled={busy}
         onChange={() => batch.toggle(file.rel)}
       />
       <AssetThumb file={file} />

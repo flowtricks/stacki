@@ -104,8 +104,13 @@ export type AssetBatch = ReturnType<typeof useAssetBatch>;
 export function convertible(file: AssetFile): boolean {
   return canConvertAssets && /\.(png|jpe?g|webp|avif|tiff?)$/i.test(file.name);
 }
-export function selectableAsset(file: AssetFile): boolean {
-  return canConvertAssets ? convertible(file) : true;
+/**
+ * Every file can be selected: Delete applies to all of them. Compress applies
+ * only to the raster images the encoder reads, and skips the rest of a
+ * selection (the toolbar says so) rather than making them unselectable.
+ */
+export function selectableAsset(_file: AssetFile): boolean {
+  return true;
 }
 
 export function AssetBatchTools({ batch, files }: { readonly batch: AssetBatch; readonly files: readonly AssetFile[] }) {

@@ -62,7 +62,7 @@ export function GitPanel({
           </p>
         )}
         {info?.isRepo && (
-          <HistorySection title="Source Control Graph" open={open} onToggle={() => setOpen(!open)}>
+          <HistorySection title="Version history" open={open} onToggle={() => setOpen(!open)}>
             <HistoryTimeline
               projectPath={key}
               branch={info.branch}

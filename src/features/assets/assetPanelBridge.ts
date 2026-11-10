@@ -7,6 +7,7 @@ import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { toProjectPath } from '../../../shared/core/brand';
 import { cleanError } from '../../lib/cleanError';
 import { parseAssetEntry } from '../../ipc/assetBridge';
+import { parseMediaResult } from '../../../shared/properties/mediaHosting';
 
 export type AssetRoot = 'public' | 'src';
 export type AssetPanelEntry = WireAssetEntry & { readonly root: AssetRoot };
@@ -81,6 +82,22 @@ export function deleteAsset(projectPath: string, rel: string) {
     rel: parseAssetRelativePath(rel),
   });
   return request(parseOutcome, () => window.avb.deleteAsset(payload));
+}
+
+/** Asks for a file in the system dialog and writes it over the asset, keeping its path; false when cancelled. */
+export async function replaceAsset(projectPath: string, rel: string): Promise<Result<boolean, string>> {
+  const payload = parseIpcPayload('assets:replace', {
+    projectPath: toProjectPath(projectPath),
+    rel: parseAssetRelativePath(rel),
+  });
+  const answer = await request(
+    (input) => parseMediaResult(input, boolean),
+    () => window.avb.replaceAsset(payload),
+  );
+  if (!answer.ok) {
+    return answer;
+  }
+  return answer.value.ok ? { ok: true, value: answer.value.value } : { ok: false, error: answer.value.message };
 }
 
 export function makeAssetDirectory(projectPath: string, parentRel: string, name: string) {

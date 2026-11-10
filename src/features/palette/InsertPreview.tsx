@@ -1,33 +1,24 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useCallback, useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import type { TrailingSlash } from '../../editor/pageState';
-import { componentPreviewURL, type ComponentPreviewMessage, type PreviewLayout } from './paletteModel';
-import { useShotImage, type ShotAccess } from './componentShotSource';
-import { usePreviewMessages, useResolvedPreviewURL } from './previewSource';
+import { ComponentPreviewFrame } from './ComponentPreviewPopup';
+import { componentPreviewURL } from './paletteModel';
 
-// The picture of a component in the insert grid. Where the desktop app has photographed the component
-// on one of the project's pages (componentShotSource.ts) that photograph is shown. Otherwise, and while
-// it is unreadable, the card falls back to the project's own preview route, rendered at the width the
-// component is built for and scaled down to the card: a section renders 1440 logical pixels wide, a
-// block 640. Either way it is a picture, not a control: no pointer, no focus, hidden from assistive technology.
+// The picture of a component in the insert grid: the same live rendering the Components panel's
+// hover card shows, through the same preview route and frame (ComponentPreviewPopup.tsx). The
+// route renders the component with the project's insertion recipe from `.stacki/components.json`
+// where it has one, and with its own prop defaults where it does not
+// (electron/previewServer/componentPreviewRecipe.ts), then fits it into the frame.
 
-/**
- * Every live frame uses the route's page layout. A block is rendered in a 640 px frame, so "as wide as the
- * frame, top left, unscaled" puts it at the top of the card instead of centred on the popup's 1200 px stage.
- */
-export const CARD_PREVIEW_LAYOUT: PreviewLayout = 'page';
+type FrameState = { readonly kind: 'loading' } | { readonly kind: 'ready' } | { readonly kind: 'empty'; readonly reason: string };
 
-/** Logical width a section renders at before it is scaled to its card. */
-export const SECTION_PREVIEW_WIDTH = 1440;
-/** Logical width a block renders at before it is scaled to its card. */
-export const BLOCK_PREVIEW_WIDTH = 640;
-
-type SurfaceScale = { readonly kind: 'unmeasured' } | { readonly kind: 'measured'; readonly scale: number };
-
-type FrameState = { readonly kind: 'loading' } | { readonly kind: 'ready' } | { readonly kind: 'empty' };
-
-type SurfaceStyle = CSSProperties & { '--surface-width': string; '--surface-scale'?: number };
+/** Why a card has no preview, shown on hover; the route's own reason wins when it gives one. */
+export const PREVIEW_REASONS = {
+  noServer: 'The project dev server is not running.',
+  noFile: 'This component has no file the preview can load.',
+  rendered: 'The component rendered nothing.',
+} as const satisfies Record<string, string>;
 
 export interface InsertPreviewSource {
   /** Undefined when the component has no file the preview route can address. */
@@ -36,147 +27,95 @@ export interface InsertPreviewSource {
   readonly devURL: string | undefined;
   readonly trailingSlash: TrailingSlash;
   readonly resolvePreviewURL?: ((url: string) => Promise<string>) | undefined;
-  /** Photographs of components on their pages; absent where the host takes none (the Studio in a browser). */
-  readonly shots?: ShotAccess | undefined;
+}
+
+/** The address a card loads: exactly the hover card's, so both show the same rendering. */
+export function insertPreviewURL(source: InsertPreviewSource): string | undefined {
+  const { component, devURL } = source;
+  if (component === undefined) {
+    return undefined;
+  }
+  if (devURL === undefined) {
+    return undefined;
+  }
+  const url = componentPreviewURL(devURL, component, source.trailingSlash);
+  assert(url.startsWith(devURL.replace(/\/+$/, '')), 'A card preview is served by the project dev server');
+  return url;
 }
 
 export function InsertPreviewSurface({
   source,
-  width,
   mounted,
-  visible,
-  shotFit,
   icon,
-  size,
+  onSettled,
 }: {
   readonly source: InsertPreviewSource;
-  readonly width: number;
-  /** Whether the grid has room for this card's frame right now. */
+  /** Whether the grid has given this card one of its frames right now. */
   readonly mounted: boolean;
-  /** Whether the card is on screen; a photograph is only fetched for what is seen. */
-  readonly visible: boolean;
-  /**
-   * How a photograph is drawn. A section always fills the card, whatever width it was photographed at (1440,
-   * or 1200 when the desktop width hid it); a block keeps its width in proportion to the card.
-   */
-  readonly shotFit: 'fill' | 'scale';
   readonly icon: ReactNode;
-  readonly size: 'card' | 'large';
+  /** The frame has answered: the grid may start the next one. */
+  readonly onSettled?: (() => void) | undefined;
 }) {
-  assert(width > 0, 'A preview renders at a positive width');
-  const surfaceRef = useRef<HTMLDivElement>(null);
-  const scale = useSurfaceScale(surfaceRef, width);
-  const style: SurfaceStyle = { '--surface-width': `${width}px` };
-  if (scale.kind === 'measured') {
-    style['--surface-scale'] = scale.scale;
-  }
-  const { component, devURL } = source;
-  const photo = useShotImage(source.shots, component?.path, { wanted: visible });
+  const url = insertPreviewURL(source);
   let content: ReactNode;
-  if (photo.kind === 'ready') {
-    // A photograph of the component on its page, drawn at the card's scale like the live preview: a
-    // section fills the card, a narrower block keeps its proportion to it. Never wider than the card,
-    // top aligned, cut off at the bottom.
-    const shotWidth = component === undefined || shotFit === 'fill' ? undefined : source.shots?.width(component.path);
-    const shotStyle: CSSProperties & { '--shot-width'?: number } = shotWidth === undefined ? {} : { '--shot-width': shotWidth };
-    content = (
-      <img
-        className="insert-shot"
-        src={photo.url}
-        alt=""
-        draggable={false}
-        tabIndex={-1}
-        aria-hidden="true"
-        style={shotStyle}
-        // A file that is there but cannot be drawn is as good as none: the live preview takes over.
-        onError={() => component !== undefined && source.shots?.fail(component.path)}
-      />
-    );
-  } else if (photo.kind === 'loading') {
-    content = <PreviewNote icon={icon} reason="loading" />;
-  } else if (component === undefined || devURL === undefined) {
-    content = <PreviewNote icon={icon} reason="empty" />;
-  } else if (mounted && scale.kind === 'measured') {
-    const url = componentPreviewURL(devURL, component, source.trailingSlash, { layout: CARD_PREVIEW_LAYOUT });
-    content = <InsertPreviewFrame key={url} url={url} name={component.name} icon={icon} resolvePreviewURL={source.resolvePreviewURL} />;
+  if (url === undefined) {
+    content = <PreviewNote icon={icon} state={{ kind: 'empty', reason: source.component === undefined ? PREVIEW_REASONS.noFile : PREVIEW_REASONS.noServer }} />;
+  } else if (mounted) {
+    assert(source.component !== undefined, 'A card URL names a component');
+    content = <CardFrame key={url} url={url} name={source.component.name} icon={icon} resolvePreviewURL={source.resolvePreviewURL} onSettled={onSettled} />;
   } else {
-    content = <PreviewNote icon={icon} reason="loading" />;
+    content = <PreviewNote icon={icon} state={{ kind: 'loading' }} />;
   }
-  return (
-    <div ref={surfaceRef} className={`insert-surface insert-surface-${size} ${photo.kind === 'ready' ? 'insert-surface-photo' : ''}`} style={style}>
-      {content}
-    </div>
-  );
+  return <div className="insert-surface insert-surface-card">{content}</div>;
 }
 
-function InsertPreviewFrame({
+function CardFrame({
   url,
   name,
   icon,
   resolvePreviewURL,
+  onSettled,
 }: {
   readonly url: string;
   readonly name: string;
   readonly icon: ReactNode;
   readonly resolvePreviewURL: ((url: string) => Promise<string>) | undefined;
+  readonly onSettled: (() => void) | undefined;
 }) {
-  const frameRef = useRef<HTMLIFrameElement>(null);
-  const resolved = useResolvedPreviewURL(url, resolvePreviewURL);
-  const [reported, setReported] = useState<FrameState>({ kind: 'loading' });
-  const receive = useCallback((message: ComponentPreviewMessage): void => {
-    setReported({ kind: message.status });
-  }, []);
-  usePreviewMessages(frameRef, receive);
-  const state: FrameState = resolved.kind === 'empty' ? { kind: 'empty' } : reported;
+  const [state, setState] = useState<FrameState>({ kind: 'loading' });
+  const receive = useCallback(
+    (reportedURL: string, status: 'ready' | 'empty', reason?: string): void => {
+      assert(reportedURL === url, 'A card frame reports its own URL');
+      onSettled?.();
+      setState(status === 'ready' ? { kind: 'ready' } : { kind: 'empty', reason: reason ?? PREVIEW_REASONS.rendered });
+    },
+    [url, onSettled],
+  );
   return (
     <>
-      {resolved.kind === 'ready' && (
-        <iframe
-          ref={frameRef}
-          className="insert-frame"
-          src={resolved.url}
-          title={`${name} preview`}
-          tabIndex={-1}
-          aria-hidden="true"
-          style={{ opacity: state.kind === 'ready' ? 1 : 0 }}
-        />
-      )}
-      {state.kind !== 'ready' && <PreviewNote icon={icon} reason={state.kind} />}
+      <ComponentPreviewFrame url={url} name={name} visible={state.kind === 'ready'} surface="card" resolvePreviewURL={resolvePreviewURL} onStatus={receive} />
+      {state.kind !== 'ready' && <PreviewNote icon={icon} state={state} />}
     </>
   );
 }
 
-function PreviewNote({ icon, reason }: { readonly icon: ReactNode; readonly reason: 'loading' | 'empty' }) {
+function PreviewNote({ icon, state }: { readonly icon: ReactNode; readonly state: Exclude<FrameState, { readonly kind: 'ready' }> }) {
+  if (state.kind === 'loading') {
+    return (
+      <div className="insert-surface-note" role="status">
+        <span className="insert-surface-note-icon">{icon}</span>
+        <span className="panel-loading-label">Loading preview…</span>
+      </div>
+    );
+  }
+  assert(state.reason.length > 0, 'An empty preview says why');
+  // The reason is the hover text: the card stays one short line, and the cause is a pointer away.
   return (
-    <div className="insert-surface-note" role={reason === 'loading' ? 'status' : undefined}>
+    <div className="insert-surface-note" title={state.reason}>
       <span className="insert-surface-note-icon">{icon}</span>
-      {reason === 'loading' ? <span className="panel-loading-label">Loading preview…</span> : <span>No preview available</span>}
+      <span>No preview available</span>
     </div>
   );
-}
-
-/**
- * The factor that fits `width` logical pixels into the surface. Unmeasured until the browser reports
- * a size, which is also all it ever is where there is no ResizeObserver: nothing loads then, and
- * nothing throws.
- */
-function useSurfaceScale(surfaceRef: RefObject<HTMLElement>, width: number): SurfaceScale {
-  const [scale, setScale] = useState<SurfaceScale>({ kind: 'unmeasured' });
-  useEffect(() => {
-    const surface = surfaceRef.current;
-    if (surface === null || typeof ResizeObserver === 'undefined') {
-      return;
-    }
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry !== undefined && entry.contentRect.width > 0) {
-        setScale({ kind: 'measured', scale: entry.contentRect.width / width });
-      }
-    });
-    observer.observe(surface);
-    return () => observer.disconnect();
-  }, [surfaceRef, width]);
-  return scale;
 }
 
 /**

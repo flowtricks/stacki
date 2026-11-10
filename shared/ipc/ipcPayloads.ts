@@ -15,6 +15,15 @@ import {
   parseRemoteRevisionId,
 } from '../properties/cmsRemote';
 import { parseVideoLinkURL } from '../properties/linkPreview';
+import { parseMediaAccountConnect, parseMediaAccountKey } from '../properties/mediaAccounts';
+import {
+  MEDIA_HOSTING_LIMITS,
+  parseMediaConnectionDraft,
+  parseMediaConnectionId,
+  parseMediaFolder,
+  parseMediaName,
+  parseMediaOrder,
+} from '../properties/mediaHosting';
 import { parseConnectionKeyCopy, parseDataSampleRequest, parseEnvPayloadName, parsePageTemplateDraft, parseSecretValue } from '../properties/pageTemplate';
 import { parseAstroRemoteEdit, parseAstroRemoteRead } from '../properties/astroContent';
 import { parseRepositoryRequest } from '../ipc/publishRepository';
@@ -114,6 +123,22 @@ const componentImport = object({
 const strings = list(text);
 const project = { projectPath: pathText };
 const relative = { ...project, rel: pathText };
+// A folder of one saved media hosting connection (mediaHosting.ts).
+const mediaFolder = { ...project, connectionId: parseMediaConnectionId, folder: parseMediaFolder };
+function mediaEntry(input: unknown): 'file' | 'folder' {
+  if (input === 'file' || input === 'folder') {
+    return input;
+  }
+  throw new Error('Expected a media entry kind');
+}
+// Files dropped from the system onto a hosted folder, a bounded batch.
+function uploadPaths(input: unknown): string[] {
+  const paths = list(pathText)(input);
+  if (paths.length === 0 || paths.length > MEDIA_HOSTING_LIMITS.uploadFilesMax) {
+    throw new Error('Expected 1 to ' + String(MEDIA_HOSTING_LIMITS.uploadFilesMax) + ' files to upload');
+  }
+  return paths;
+}
 const source = { ...project, fromFile: pathText, spec: text };
 const named = { ...project, name: text };
 const reference = { ...project, ref: text };
@@ -171,6 +196,7 @@ export const IPC_PAYLOADS = {
   'assets:readText': object({ ...relative }),
   'assets:convert': object({ ...project, rel: parseImagePath, format: parseImageFormat }),
   'assets:rename': object({ ...relative, newName: text }),
+  'assets:replace': object({ ...relative }),
   'assets:upload': object({ ...project, destRel: pathText, filePaths: optional(list(pathText)) }),
   'assets:writeText': object({ ...relative, text }),
   'cms:assetRef': object({ ...relative, assetRel: pathText }),
@@ -357,6 +383,19 @@ export const IPC_PAYLOADS = {
     kind: parseRemoteAssetKind,
   }),
   'cmsRemote:linkPreview': object({ url: parseVideoLinkURL }),
+  'mediaHosting:connections': object({ ...project }),
+  'mediaHosting:save': object({ ...project, draft: parseMediaConnectionDraft }),
+  'mediaHosting:remove': object({ ...project, id: parseMediaConnectionId }),
+  'mediaHosting:discover': object({ ...project, key: parseMediaAccountKey }),
+  'mediaHosting:connectAccount': object({ ...project, connect: parseMediaAccountConnect }),
+  'mediaHosting:list': object({ ...mediaFolder }),
+  'mediaHosting:pickUpload': object({ ...mediaFolder }),
+  'mediaHosting:upload': object({ ...mediaFolder, filePaths: uploadPaths }),
+  'mediaHosting:createFolder': object({ ...mediaFolder, name: parseMediaName }),
+  'mediaHosting:rename': object({ ...mediaFolder, entry: mediaEntry, from: parseMediaName, to: parseMediaName }),
+  'mediaHosting:delete': object({ ...mediaFolder, entry: mediaEntry, name: parseMediaName }),
+  'mediaHosting:reorder': object({ ...mediaFolder, order: parseMediaOrder }),
+  'mediaHosting:replace': object({ ...mediaFolder, name: parseMediaName }),
   'git:publish': object({ ...project, repoName: text, isPrivate: boolean }),
   'git:push': object({ ...branch }),
   'git:pull': object({ ...branch }),
@@ -433,8 +472,6 @@ export const IPC_PAYLOADS = {
   'project:pending': nothing,
   'project:resolveImport': object({ ...source }),
   'project:scan': pathText,
-  'componentShots:list': pathText,
-  'componentShots:read': object({ ...project, component: pathText }),
   'recents:add': pathText,
   'recents:list': nothing,
   'recents:refreshThumb': pathText,

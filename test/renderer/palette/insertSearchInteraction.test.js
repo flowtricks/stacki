@@ -56,7 +56,7 @@ test('duplicate component names cannot leave stale highlighted search results', 
         }),
       );
     });
-    // The palette opens on Components; this test wants the element list beside them.
+    // A first use opens on All results; the click keeps this test independent of what storage holds.
     await React.act(async () => {
       Simulate.click(container.querySelector('.insert-tab'));
     });

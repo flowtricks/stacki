@@ -330,3 +330,20 @@ test('the padding writer refuses a property that is not padding', () => {
   addDeclaration({ node: rule }, 'padding-right', { value: '0.59em', important: false });
   assert.equal(root.toString(), 'code {\n  border-width: 1px;\n  padding: 0.2em 0.59em;\n  border-radius: 4px;\n}');
 }
+// A new declaration fills the blank line before the closing brace instead of
+// landing above it; one blank line is taken, and only at the block's end.
+{
+  const postcss = require('postcss');
+  const { addDeclaration } = require('../../helpers/rendererModule')('src/features/style/model/css.ts');
+  const add = (css, prop) => {
+    const root = postcss.parse(css);
+    addDeclaration({ node: root.last }, prop, { value: '1rem', important: false });
+    return root.toString();
+  };
+  const before = '.a {\n  top: 0;\n}\n';
+  assert.equal(add(`${before}.section {\n  \n}`, 'color'), `${before}.section {\n  color: 1rem;\n}`);
+  assert.equal(add(`${before}.section {\n  \n}`, 'padding-left'), `${before}.section {\n  padding-left: 1rem;\n}`);
+  assert.equal(add(`${before}.section {\n  top: 0;\n\n}`, 'color'), `${before}.section {\n  top: 0;\n  color: 1rem;\n}`);
+  assert.equal(add(`${before}.section {\n  top: 0;\n}`, 'color'), `${before}.section {\n  top: 0;\n  color: 1rem;\n}`);
+  assert.equal(add(`${before}.section {\n\n\n}`, 'color'), `${before}.section {\n  color: 1rem;\n\n}`);
+}

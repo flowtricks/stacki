@@ -1,4 +1,5 @@
 import { receiveLiveVariables } from './frameLiveVariables';
+import { receiveLiveRules } from './frameLiveRules';
 import { parseCanvasInteraction, parseCanvasSitePages } from '../../shared/properties/canvasInteraction';
 import { hidePendingDelete, settlePendingDeletes } from './framePendingDelete';
 import { listenForCanvasMoves, revertCanvasMoves, showCanvasMove } from './frameMove';
@@ -8,7 +9,8 @@ import { setCanvasInteraction, setCanvasSitePages } from './frameInteraction';
 // it tracks, scrolling a node into view and the viewport height to freeze; and
 // starting the frame once the document is ready.
 
-import { PROBE_ATTR, isElement, isText } from './frameBasics';
+import { isElement, isText } from './frameBasics';
+import { computeValues } from './frameColorProbe';
 import { queryAuthoredStyles } from './frameStyleSources';
 import { list, pathText, text } from '../../shared/core/boundary';
 import { LIMITS } from '../../shared/core/limits';
@@ -136,6 +138,9 @@ export function listenForQueries(): void {
       return;
     }
     if (receiveLiveVariables(data)) {
+      return;
+    }
+    if (receiveLiveRules(data)) {
       return;
     }
     if (data['type'] === 'avb:query' && typeof data['id'] === 'number') {
@@ -348,35 +353,6 @@ function answerQueryTextParent(path: string, input: unknown): Element | undefine
   }
   return elementsWithPath(parent)[0];
 }
-
-// What a value actually resolves to ON THIS ELEMENT. `var(--background)`
-// means nothing in the app's own document — the panel painted it there
-// and got transparent — and it can mean different things on two elements
-// of the same page (a theme class, a container query, a colour scheme).
-// Only the page can say, so it is asked: a throwaway span in the element
-// inherits its custom properties, takes the value as a colour, and the
-// engine hands back the computed one.
-const computeValues = (host: Element, wanted: string[]): Record<string, string | undefined> => {
-  const computed: Record<string, string | undefined> = {};
-  const probe = document.createElement('span');
-  probe.setAttribute(PROBE_ATTR, ''); // The canvas's own: no page walk (mutationKind).
-  probe.setAttribute('style', 'position:absolute;width:0;height:0;visibility:hidden');
-  host.appendChild(probe);
-  for (const value of wanted) {
-    try {
-      // A sentinel first: assigning a value the engine rejects leaves the
-      // previous one in place, and reading that back would report a
-      // colour the value never had.
-      probe.style.color = 'rgb(1, 2, 3)';
-      probe.style.color = value;
-      computed[value] = probe.style.color === 'rgb(1, 2, 3)' ? undefined : getComputedStyle(probe).color;
-    } catch {
-      computed[value] = undefined;
-    }
-  }
-  probe.remove();
-  return computed;
-};
 
 // What the element's style ACTUALLY is for a property nothing in the panel
 // sets — inherited from a parent, painted by a `*` rule the panel can't see

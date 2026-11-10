@@ -93,9 +93,18 @@ const check = (what, condition, detail) => {
 
   const { spawnSync } = require('child_process');
   const scriptPath = path.join(buildDirectory, 'computed-color.probe.js');
+  const probeBundle = await esbuild.build({
+    entryPoints: [repoPath('electron/preload/frameColorProbe.ts')],
+    bundle: true,
+    write: false,
+    format: 'iife',
+    globalName: 'colorProbe',
+    logLevel: 'silent',
+  });
   fs.writeFileSync(
     scriptPath,
     `const { app, BrowserWindow } = require('electron');
+     const probeSource = ${JSON.stringify(probeBundle.outputFiles[0].text)};
      app.on('window-all-closed', () => app.quit());
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 400, height: 300 });
@@ -107,7 +116,9 @@ const check = (what, condition, detail) => {
          </style>
          <div id="light"><span id="a">light</span></div>
          <div id="dark" class="theme-dark"><span>dark</span></div>
+         <label><textarea id="area" style="--own: rgb(4, 5, 6); color: rgb(7, 8, 9)"></textarea></label>
        \`));
+       await win.webContents.executeJavaScript(probeSource + ';0');
        // The same probe the preload runs, on two elements that theme the same
        // variable differently.
        const compute = (selector, value) => \`(() => {
@@ -136,6 +147,18 @@ const check = (what, condition, detail) => {
            compute(':root', 'color-mix(in srgb, var(--brand), white 80%)'),
          ),
          nonsense: await win.webContents.executeJavaScript(compute('#light', 'not-a-color')),
+         // A child of a <textarea> is never rendered, so this is the page's own
+         // reason for the fallback the real probe takes below.
+         childOfArea: await win.webContents.executeJavaScript(compute('#area', 'var(--brand)')),
+         area: await win.webContents.executeJavaScript(
+           "colorProbe.computeValues(document.querySelector('#area'), ['var(--brand)', 'var(--own)', 'currentcolor', 'not-a-color'])",
+         ),
+         areaClean: await win.webContents.executeJavaScript(
+           "document.querySelectorAll('[data-avb-probe]').length + document.querySelector('#area').childElementCount + document.querySelector('label').childElementCount",
+         ),
+         plain: await win.webContents.executeJavaScript(
+           "colorProbe.computeValues(document.querySelector('#dark'), ['var(--background)'])",
+         ),
          leftClean: await win.webContents.executeJavaScript(
            "document.querySelectorAll('span').length",
          ),
@@ -159,6 +182,13 @@ const check = (what, condition, detail) => {
     check('a mix resolves against the page root, with nothing selected', /^(?:rgb|rgba|color)\(/.test(out.atRoot || ''), out.atRoot);
     check('a value that is not a colour reports nothing', out.nonsense === null, JSON.stringify(out.nonsense));
     check('the probe leaves no trace in the page', out.leftClean === 2, `${out.leftClean} spans`);
+    check('a child of a textarea computes nothing', out.childOfArea === '', JSON.stringify(out.childOfArea));
+    check('a textarea resolves a page variable', out.area['var(--brand)'] === 'rgb(198, 251, 80)', JSON.stringify(out.area));
+    check('and a variable it declares itself', out.area['var(--own)'] === 'rgb(4, 5, 6)', JSON.stringify(out.area));
+    check('and its own currentcolor', out.area.currentcolor === 'rgb(7, 8, 9)', JSON.stringify(out.area));
+    check('and reports nothing for a non-colour', out.area['not-a-color'] === undefined, JSON.stringify(out.area));
+    check('the stand-in leaves no trace', out.areaClean === 1, `${out.areaClean} nodes`);
+    check('an ordinary element still probes inside itself', out.plain['var(--background)'] === 'rgb(31, 29, 30)', JSON.stringify(out.plain));
   }
 
   if (failures.length) {

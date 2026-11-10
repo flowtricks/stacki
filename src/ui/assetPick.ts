@@ -13,6 +13,12 @@ export interface AssetRequest {
   readonly current: string;
   readonly onPick: (rel: string, entry?: WireAssetEntry) => void;
   /**
+   * A file picked from a connected media host (Cloudflare R2, Bunny, any S3
+   * host) answers with its public URL. A request without this offers project
+   * files only, so a field that cannot hold a URL is never handed one.
+   */
+  readonly onPickURL?: ((url: string) => void) | undefined;
+  /**
    * Where the Assets panel answers: in the side panel (the default), or in a
    * pop-up over the page, for a field that must stay open meanwhile.
    */

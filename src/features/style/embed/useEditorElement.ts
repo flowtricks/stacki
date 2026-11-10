@@ -21,6 +21,8 @@ import {
   pseudoPickFor,
   readPseudoTarget,
   rememberTypedPath,
+  withTypedLabel,
+  type TypedLabels,
   type TypedPaths,
   usePseudoTarget,
 } from './editorModel';
@@ -262,6 +264,7 @@ export function useSelectorPick(
   // The nesting paths of typed selectors (`.hero { @container { .title } }`), so each
   // one's first edit writes NESTED source into the embed rather than a flat selector.
   const typedPathsRef = useRef<TypedPaths>(new Map());
+  const [typedLabels, setTypedLabels] = useState<TypedLabels>(new Map());
   const selectActiveSelector = useCallback(
     (text: string) => {
       const trimmed = text.trim();
@@ -286,7 +289,7 @@ export function useSelectorPick(
   // context, and remember the path so the first edit writes NESTED source, not a flat
   // rule.
   const selectNested = useCallback(
-    (parsed: NestedInput) => {
+    (parsed: NestedInput, typed: string) => {
       // The typed path is remembered under the query chain (what the first write
       // looks it up by), while the panel selects the PLACE it writes into: a query
       // typed inside `.hero { }` is the nested `.hero` row, not the top-level one.
@@ -301,11 +304,12 @@ export function useSelectorPick(
       selectActiveSelector(parsed.selector);
       if (parsed.path.length >= 2) {
         rememberTypedPath(typedPathsRef.current, parsed.selector, atContextKey, parsed.path);
+        setTypedLabels((previous) => withTypedLabel(previous, parsed.selector, typed));
       }
     },
     [selectActiveSelector, setContext],
   );
-  return { selectActiveSelector, selectNested, setTypedContexts, typedContexts, typedPathsRef };
+  return { selectActiveSelector, selectNested, setTypedContexts, typedContexts, typedLabels, typedPathsRef };
 }
 
 // Add a typed selector, or deselect.
@@ -329,7 +333,7 @@ export function useTypedSelector(
       if (trimmed.includes('{')) {
         const parsed = parseNestedInput(trimmed);
         if (parsed) {
-          selectNested(parsed);
+          selectNested(parsed, trimmed);
           return;
         }
       }
@@ -393,9 +397,17 @@ export function useFocusProp(editorRefs: ReturnType<typeof useEditorRefs>, selec
     // Wait a frame so the re-picked selector's fields have rendered, then focus.
     const raf = requestAnimationFrame(() => {
       const field = rootRef.current?.querySelector<HTMLElement>(`[data-prop="${focusProp}"]`);
-      field?.focus();
-      if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
-        field.select();
+      // A code field's input sits invisibly behind its rich editor: focus there
+      // would send typing somewhere nobody can see.
+      const editor = field?.parentElement?.querySelector<HTMLElement>(':scope > .embed-editor_varconnect-editor');
+      if (editor) {
+        editor.focus();
+        editor.ownerDocument.getSelection()?.selectAllChildren(editor);
+      } else {
+        field?.focus();
+        if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) {
+          field.select();
+        }
       }
       setFocusProp(undefined);
     });

@@ -137,6 +137,14 @@ export function useAssetPick(coreState: ReturnType<typeof useCoreState>) {
           request.onPick(rel, entry);
           endAssetPick(true);
         },
+        ...(request.onPickURL === undefined
+          ? {}
+          : {
+              onPickURL: (url: string) => {
+                request.onPickURL?.(url);
+                endAssetPick(true);
+              },
+            }),
       });
       // An overlay pick leaves the panels as they are: the pop-up answers it.
       if (request.presentation === 'overlay') {

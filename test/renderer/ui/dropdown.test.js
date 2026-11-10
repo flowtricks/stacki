@@ -9,6 +9,13 @@
 // which are easy to break by accident — the filter box narrowing the list, the
 // keyboard still landing on the right option once it has, and the classes the
 // colour hangs off.
+//
+// It then checks hover preview, which is opt-in: a dropdown previews only when
+// its caller asks (a component prop previewing live on the canvas). Without
+// that, hovering or arrowing moves the highlight and the field keeps showing the
+// committed value; Enter commits and Escape closes without a change. With a
+// preview handler, a hover calls it and Escape restores the committed value.
+// Each case renders the real component in jsdom and drives it with DOM events.
 
 const fs = require('fs');
 const path = require('path');
@@ -186,8 +193,9 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // --- What a hover costs -------------------------------------------------------
   //
-  // Hovering an option applies it, so the canvas shows the variant you are
-  // pointing at. Applying is not free: the app writes the page, the dev server
+  // A dropdown that opts into preview by writing (`livePreview`, as a Settings
+  // panel prop does) applies the hovered option, so the canvas shows the variant
+  // you are pointing at. Applying is not free: the app writes the page, the dev server
   // renders it, the canvas fetches the rendering. On a big page that is most of
   // a second — so the one thing this must not do is ask for the same value
   // twice, which is exactly what picking the option you had just hovered did.
@@ -222,6 +230,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
           React.createElement(Dropdown, {
             value,
             options: OPTIONS,
+            livePreview: true,
             onChange: (value) => applied.push(value),
           }),
         );
@@ -321,6 +330,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
       return React.createElement(Dropdown, {
         value,
         options: OPTIONS,
+        livePreview: true,
         onChange: (next) => {
           previewChanges.push(next);
           setValue(next);
@@ -361,6 +371,91 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
     check('outside click restores the committed option', find('.dd-label')?.textContent === 'main');
     check('outside click reverts once', previewChanges.join() === 'play,main,pause,main');
     await act(async () => root2.unmount());
+
+    // --- No preview unless asked ------------------------------------------------
+    //
+    // A dialog's dropdown (a media host, a layout) must not change its value, or
+    // the form below it, while the pointer crosses the menu.
+    const formChanges = [];
+    const root3 = createRoot(container);
+    function FormDropdown() {
+      const [value, setValue] = React.useState('main');
+      return React.createElement(Dropdown, {
+        value,
+        options: OPTIONS,
+        onChange: (next) => {
+          formChanges.push(next);
+          setValue(next);
+        },
+      });
+    }
+    const key = (name) =>
+      act(async () => {
+        find('.dd-trigger').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: name, bubbles: true }));
+        await settle(20);
+      });
+    await act(async () => {
+      root3.render(React.createElement(FormDropdown));
+      await settle(20);
+    });
+    await act(async () => {
+      find('.dd-trigger').click();
+      await settle(20);
+    });
+    await hover('pause');
+    check('without a preview, a hover highlights the row', option('pause')?.classList.contains('highlight') === true);
+    check('without a preview, a hover leaves the shown value', find('.dd-label')?.textContent === 'main', find('.dd-label')?.textContent);
+    check('without a preview, a hover changes nothing', formChanges.length === 0, formChanges.join());
+    await key('ArrowUp');
+    check('arrowing moves the highlight', option('play')?.classList.contains('highlight') === true);
+    check('arrowing leaves the shown value', find('.dd-label')?.textContent === 'main', find('.dd-label')?.textContent);
+    check('arrowing changes nothing', formChanges.length === 0, formChanges.join());
+    await key('Escape');
+    check('Escape closes the menu', !find('.dd-popup'));
+    check('Escape keeps the committed value', find('.dd-label')?.textContent === 'main');
+    check('Escape changes nothing', formChanges.length === 0, formChanges.join());
+    await key('ArrowDown');
+    await key('ArrowDown');
+    check('arrowing in a reopened menu changes nothing', formChanges.length === 0, formChanges.join());
+    await key('Enter');
+    check('Enter commits the highlighted option', formChanges.join() === 'play', formChanges.join());
+    check('and the field shows it', find('.dd-label')?.textContent === 'play');
+    await act(async () => root3.unmount());
+
+    // --- A preview handler is called on hover -----------------------------------
+    const previews = [];
+    const committed = [];
+    let cancels = 0;
+    const root4 = createRoot(container);
+    await act(async () => {
+      root4.render(
+        React.createElement(Dropdown, {
+          value: 'main',
+          options: OPTIONS,
+          onPreview: (next) => previews.push(next),
+          onCancelPreview: () => {
+            cancels++;
+          },
+          onChange: (next) => committed.push(next),
+        }),
+      );
+      await settle(20);
+    });
+    await act(async () => {
+      find('.dd-trigger').click();
+      await settle(20);
+    });
+    await hover('pause');
+    check('a preview handler is called on hover', previews.join() === 'pause', previews.join());
+    check('a preview does not commit', committed.length === 0, committed.join());
+    check('the field still shows the committed value', find('.dd-label')?.textContent === 'main');
+    await key('ArrowUp');
+    check('arrowing previews too', previews.join() === 'pause,play', previews.join());
+    await key('Escape');
+    check('Escape restores the committed value', cancels === 1, `${cancels} cancels`);
+    check('Escape commits nothing', committed.length === 0, committed.join());
+    check('Escape closes the previewing menu', !find('.dd-popup'));
+    await act(async () => root4.unmount());
   }
 
   if (failures.length) {

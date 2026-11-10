@@ -1,0 +1,104 @@
+/* The Assets panel's sources (the project and connected media hosts) and a
+   host's browser. Background fills, never borders. The heading is the source
+   switcher, one shared Dropdown trigger (icon or logo, name, chevron) in the
+   heading's type, pulled left by its padding so its icon sits where the
+   heading's text did, with a hover and focus fill of its own. */
+.panel-header h2.asset-source-heading {
+  display: flex;
+  min-width: 0;
+  margin-left: -6px;
+}
+.panel-header .dd-trigger.asset-source-switch {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  gap: 5px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: transparent;
+  font: inherit;
+  color: var(--text);
+}
+.panel-header .dd-trigger.asset-source-switch .dd-icon {
+  display: flex;
+  color: var(--text-faint);
+}
+.panel-header .dd-trigger.asset-source-switch:hover,
+.panel-header .dd-trigger.asset-source-switch:focus-visible,
+.panel-header .dd-trigger.asset-source-switch[aria-expanded='true'] {
+  background: var(--bg-hover);
+  border-color: transparent;
+}
+/* The hosts' own colours, so a source is known at a glance. */
+.hosted-logo.is-r2 {
+  color: #f38020;
+}
+.hosted-logo.is-bunny {
+  color: #ff7854;
+}
+
+.hosted-folder .hosted-row-menu {
+  opacity: 0;
+}
+.hosted-folder:hover .hosted-row-menu {
+  opacity: 1;
+}
+/* Where a dragged file lands: before this tile, shown as a fill behind it. */
+.hosted-tile.drop-before {
+  background: var(--accent-soft);
+  border-radius: 10px;
+}
+
+.hosted-preview {
+  width: min(720px, 90vw);
+}
+.hosted-preview-body {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  justify-items: center;
+}
+.hosted-preview-media {
+  max-width: 100%;
+  max-height: 60vh;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.hosted-preview-audio {
+  width: 100%;
+}
+.hosted-preview-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 160px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text-faint);
+}
+.hosted-preview-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+/* The connect dialog: the account route and the manual keys sit inside the
+   dialog's own field grid, so they take its gap but not its padding again. */
+.publish-settings .publish-fields.hosted-account,
+.publish-settings .publish-fields.hosted-manual {
+  padding: 0;
+}
+.hosted-account > button:not(.primary) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+}
+.hosted-advanced-toggle {
+  justify-self: start;
+  padding: 2px 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.hosted-advanced-toggle:hover {
+  color: var(--text);
+}

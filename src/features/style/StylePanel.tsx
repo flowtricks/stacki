@@ -28,7 +28,6 @@ interface StylePanelProps {
   readonly onRemoveClass?: HostState['removeClass'] | undefined;
   readonly onRemoveAttribute?: HostState['removeAttribute'] | undefined;
   readonly onSpacingHover?: HostState['onSpacingHover'];
-  readonly onPreviewRule?: HostState['previewRule'];
   readonly renderedClasses?: readonly string[] | undefined;
   readonly projectClasses?: readonly string[] | undefined;
   readonly historyTick?: number;
@@ -103,7 +102,6 @@ function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleF
     removeClass: props.onRemoveClass,
     removeAttribute: props.onRemoveAttribute,
     onSpacingHover: props.onSpacingHover,
-    previewRule: props.onPreviewRule,
     renderedClasses: [...(props.renderedClasses ?? [])],
     projectClasses: [...(props.projectClasses ?? [])],
     historyTick: props.historyTick ?? 0,

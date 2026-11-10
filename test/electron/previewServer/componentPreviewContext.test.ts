@@ -225,7 +225,11 @@ test('the Vite plugin samples instances from a cached index and watches what it 
     'export default {"props":{"text":"Choose a campus","variant":"primary","link":"/campuses","count":2,"wide":true},"missing":[],"slot":{"kind":"none"}};';
   const first = watcher();
   assert.equal(plugin.load.call(first, propsID), expected);
-  assert.deepEqual(first.watched, [path.join(root, 'src/pages/index.astro')], 'editing the sampled page reloads the inputs');
+  assert.deepEqual(
+    first.watched,
+    [path.join(root, '.stacki/components.json'), path.join(root, 'src/pages/index.astro')],
+    'saving a recipe or editing the sampled page reloads the inputs',
+  );
 
   // The second open reads no page: removing every page leaves the cached sample in place.
   fs.rmSync(path.join(root, 'src/pages'), { recursive: true });

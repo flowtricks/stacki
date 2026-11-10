@@ -7,6 +7,7 @@ import BranchCreate from './BranchCreate';
 import BranchActions from './BranchActions';
 import type FileBrowser from './FileBrowser';
 import CommitFilePicker from './CommitFilePicker';
+import { CommitSubjectPreview, CommitTypeDetails, CommitTypeScopeError, CommitTypeSelect, type CommitTypeControl } from './CommitTypePicker';
 import { BranchIcon } from '../../ui/Icons';
 import Tooltip from '../../ui/Tooltip';
 
@@ -17,6 +18,9 @@ interface GitChipViewProps {
   readonly busy: string | undefined;
   readonly error: string | undefined;
   readonly commitMessage: string;
+  readonly commitType: CommitTypeControl;
+  /** The subject a commit would carry now; undefined while the scope is invalid. */
+  readonly commitSubject: string | undefined;
   readonly newBranch: string;
   readonly picking: boolean;
   readonly picked: readonly string[] | undefined;
@@ -55,6 +59,8 @@ interface CommitProps {
   readonly dirty: boolean;
   readonly working: boolean;
   readonly message: string;
+  readonly commitType: CommitTypeControl;
+  readonly subject: string | undefined;
   readonly picking: boolean;
   readonly picked: readonly string[] | undefined;
   readonly changed: ChangedFiles;
@@ -124,6 +130,8 @@ function CommitControls({
   dirty,
   working,
   message,
+  commitType,
+  subject,
   picking,
   picked,
   changed,
@@ -135,6 +143,7 @@ function CommitControls({
   error,
 }: CommitProps) {
   const pickedCount = picked?.length ?? 0;
+  const blocked = commitType.state.kind === 'invalid';
   const label = !dirty ? 'Nothing to commit' : !picking ? 'Commit all changes' : `Commit ${pickedCount} file${pickedCount === 1 ? '' : 's'}`;
   return (
     <>
@@ -154,13 +163,20 @@ function CommitControls({
           value={message}
           onChange={(event) => onMessage(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter' && dirty && !working) {
+            if (event.key === 'Enter' && dirty && !working && !blocked) {
               onCommit();
             }
           }}
         />
+        {/* The message keeps the full width; the optional type and its scope share the row beneath. */}
+        <div className="git-commit-type-row">
+          <CommitTypeSelect control={commitType} disabled={working} />
+          <CommitTypeDetails control={commitType} disabled={working} />
+        </div>
+        <CommitTypeScopeError control={commitType} />
+        <CommitSubjectPreview subject={subject} convention={commitType.state.kind === 'ready' ? commitType.state.convention : undefined} />
         <div className="git-commit-action-row">
-          <button className="primary" disabled={working || !dirty || (picking && pickedCount === 0)} onClick={onCommit}>
+          <button className="primary" disabled={working || blocked || !dirty || (picking && pickedCount === 0)} onClick={onCommit}>
             {label}
           </button>
           {dirty && (
@@ -212,6 +228,8 @@ export default function GitChipView(props: GitChipViewProps) {
         dirty={props.info.dirty}
         working={working}
         message={props.commitMessage}
+        commitType={props.commitType}
+        subject={props.commitSubject}
         picking={props.picking}
         picked={props.picked}
         changed={props.changed}

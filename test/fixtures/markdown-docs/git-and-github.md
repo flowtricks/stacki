@@ -156,7 +156,7 @@ markup by the editor.
 
 ## History
 
-The `Source Control Graph` section below the controls is the commit log, with a
+The `Version history` section below the controls is the commit log, with a
 lane per branch and a filter for `All branches` or just the current one. Each
 commit shows how many files it added, deleted and updated, and opens them for a
 per-file diff.

@@ -15,6 +15,7 @@ import type { Completion } from '@codemirror/autocomplete';
 import ExprInput from '../../ui/ExprInput';
 import { useCodeAccess } from '../../ui/CodeAccess';
 import { BracesIcon } from '../../ui/Icons';
+import { AppliedLabel } from './LoopRows';
 import type { LoopSection, LoopSections } from '../../editor/loopSections';
 
 /** What a list's sections need to be edited as code. */
@@ -95,7 +96,16 @@ export function useSectionCode(section: LoopSection, context: SectionCodeContext
       <div className="loop-settings-section">
         <div className="loop-settings-header">
           <span className="loop-settings-label">
-            <span className="prop-label">{SECTION_TITLES[section]}</span>
+            {/* Reset clears the section's code as typing it away and leaving the box would. */}
+            <AppliedLabel
+              title={SECTION_TITLES[section]}
+              reset={{
+                applied: code.trim() !== '',
+                onReset: () => {
+                  commit('');
+                },
+              }}
+            />
             {toggle}
           </span>
         </div>

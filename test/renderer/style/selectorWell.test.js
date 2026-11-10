@@ -410,6 +410,26 @@ const contrastRatio = (first, second) => {
   cssCodeToggle()?.click();
   await wait(30);
 
+  // --- a nested selector keeps the text it was typed as ----------------------
+  {
+    const well = panel.querySelector('.embed-editor_selector-well');
+    well.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    await wait(30);
+    const field = panel.querySelector('.embed-editor_selector-add');
+    check('the well opens its add field', field !== null);
+    field.focus();
+    await wait(30);
+    Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, 'value').set.call(field, 'section.send {.list}');
+    field.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    await wait(30);
+    field.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+    await wait(60);
+    const typedChips = panelChips().map((chip) => chip.textContent);
+    check('a typed nested selector stays as typed on its chip', typedChips.includes('section.send {.list}'), typedChips.join(' | '));
+    field.blur();
+    await wait(30);
+  }
+
   // --- and on the next element, with the stylesheets already read -----------
   //
   // Source-known classes can show from the scanned CSS while the canvas is

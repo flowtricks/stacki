@@ -245,7 +245,16 @@ function useEditorResolution(
     nativeTarget,
     componentSource,
   );
-  const selectorChipsHook = useSelectorChips(scanState, selectionState, nativeState, elementTokens, activeSelectorHook, styleContextsHook, pendingWrites);
+  const selectorChipsHook = useSelectorChips(
+    scanState,
+    selectionState,
+    nativeState,
+    elementTokens,
+    activeSelectorHook,
+    styleContextsHook,
+    pendingWrites,
+    selectorPick,
+  );
   const contextChange = useContextChange(selectionState, nativeState, elementTokens, activeSelectorHook, selectorPick, styleContextsHook);
   useDefaultUpgrade(selectionState, nativeState, elementTokens, tokenDefault, selectorPick, styleContextsHook);
   return { contextChange, resolvedHook, selectorChipsHook };

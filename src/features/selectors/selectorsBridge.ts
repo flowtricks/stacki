@@ -1,6 +1,8 @@
 // The style selectors panel's way to the main process: check the project,
-// remove selectors, undo or redo a removal, and edit the keep list. Every
+// remove selectors, undo or redo a removal, and edit the keep list (names and
+// locked stylesheets). Every
 // answer is parsed before the panel sees it.
+import { assert } from '../../../shared/core/assert';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import type { Result } from '../../../shared/core/result';
 import {
@@ -89,15 +91,36 @@ export async function readKeepList(projectPath: string): Promise<StoredKeepList>
   return { keepList: parseStyleKeepList(input), source: stored.source };
 }
 
-/** Add or remove names against the file as it was read; a concurrent edit is refused. */
-export async function updateKeepList(
-  projectPath: string,
-  stored: StoredKeepList,
-  change: { readonly add: readonly string[]; readonly remove: readonly string[] },
-): Promise<StoredKeepList> {
+/** Names and stylesheet paths to add to or drop from the keep list. */
+export interface KeepListChange {
+  readonly add: readonly string[];
+  readonly remove: readonly string[];
+  readonly lock: readonly string[];
+  readonly unlock: readonly string[];
+}
+
+/** The keep list with `change` applied; the parser re-checks every bound. */
+export function changedKeepList(keepList: StyleKeepList, change: KeepListChange): StyleKeepList {
   const removed = new Set(change.remove);
-  const keep = [...stored.keepList.keep.filter((pattern) => !removed.has(pattern)), ...change.add];
-  const keepList = parseStyleKeepList({ version: 1, keep });
+  const unlocked = new Set(change.unlock);
+  const keep = [...keepList.keep.filter((pattern) => !removed.has(pattern)), ...change.add];
+  const lockedStylesheets = [...keepList.lockedStylesheets.filter((entry) => !unlocked.has(entry)), ...change.lock];
+  const next = parseStyleKeepList({ version: 1, keep, lockedStylesheets });
+  // Postconditions: what was asked to go is gone, whatever else was there stays.
+  assert(
+    change.unlock.every((entry) => !next.lockedStylesheets.includes(entry) || change.lock.includes(entry)),
+    'changedKeepList: unlocked paths are gone',
+  );
+  assert(
+    keepList.lockedStylesheets.every((entry) => unlocked.has(entry) || next.lockedStylesheets.includes(entry)),
+    'changedKeepList: other locks are kept',
+  );
+  return next;
+}
+
+/** Change names or locks against the file as it was read; a concurrent edit is refused. */
+export async function updateKeepList(projectPath: string, stored: StoredKeepList, change: KeepListChange): Promise<StoredKeepList> {
+  const keepList = changedKeepList(stored.keepList, change);
   const source = serializeStyleKeepList(keepList);
   const saved = await writeMetadata(projectPath, stored.source === undefined ? { kind: 'styles', source } : { kind: 'styles', source, base: stored.source });
   return { keepList, source: saved.source ?? source };

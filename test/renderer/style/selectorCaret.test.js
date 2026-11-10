@@ -102,6 +102,44 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   const bundle = require(bundlePath);
   const { caretAtPoint, caretStep, clampCaret, chipAtCaret, chipPart, attributeChipName } = bundle;
 
+  // 0. A press that blurs the field: the collapse waits for the click to land.
+  {
+    const { createPressWatch } = bundle;
+    const fire = (type) => dom.window.dispatchEvent(new dom.window.Event(type));
+    const tick = () => new Promise((resolve) => dom.window.setTimeout(resolve, 5));
+    const watch = createPressWatch(dom.window);
+    let runs = 0;
+    const work = () => {
+      runs += 1;
+    };
+    watch.whenPressEnds(work);
+    check('with no press under way the work runs at once', runs === 1, String(runs));
+    fire('mousedown');
+    watch.whenPressEnds(work);
+    check('during a press it waits', runs === 1, String(runs));
+    fire('mouseup');
+    check('and still waits at mouse up, for the click that follows', runs === 1, String(runs));
+    await tick();
+    check('then runs once the click is delivered', runs === 2, String(runs));
+    fire('mousedown');
+    watch.whenPressEnds(work);
+    watch.cancel();
+    fire('mouseup');
+    await tick();
+    check('coming back to the field cancels it', runs === 2, String(runs));
+    fire('mousedown');
+    watch.whenPressEnds(work);
+    fire('blur');
+    await tick();
+    check('a press the window never sees end still finishes', runs === 3, String(runs));
+    fire('mousedown');
+    watch.whenPressEnds(work);
+    watch.dispose();
+    fire('mouseup');
+    await tick();
+    check('nothing runs after unmount', runs === 3, String(runs));
+  }
+
   // 1a. Gaps from a click. Two rows: chips 0–2 on the first (y 0–20), 3–4 on the second (y 30–50).
   const box = (left, right, top) => ({ left, right, top, bottom: top + 20 });
   const rows = [box(0, 40, 0), box(50, 90, 0), box(100, 140, 0), box(0, 40, 30), box(50, 90, 30)];

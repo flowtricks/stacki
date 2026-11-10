@@ -1,6 +1,8 @@
 import { registerPublishHandlers } from './handlers/publishHandlers';
 import { registerCmsConnectionHandlers } from './handlers/cmsConnectionHandlers';
 import { CmsConnectionStore } from './content/cmsConnectionStore';
+import { MediaConnectionStore } from './content/media/mediaConnectionStore';
+import { registerMediaHostingHandlers } from './handlers/mediaHostingHandlers';
 import { SanityLogin } from './content/sanityLogin';
 import { cmsPreviewEnvironment } from './content/cmsPreviewEnvironment';
 import { registerProjectMetadataHandlers } from './handlers/projectMetadataHandlers';
@@ -56,7 +58,7 @@ import { stopAllPreviews } from './preview/previewServers';
 import type { MainHost } from './handlers/mainHost';
 import { DevServers, registerDevServerHandlers } from './handlers/devServers';
 import { Thumbnails, registerThumbnailHandlers } from './handlers/thumbnails';
-import { ComponentShots, componentShotsHost, registerComponentShotHandlers } from './handlers/componentShots';
+import { removeLegacyComponentShots } from './project/legacyComponentShots';
 import { registerAssetHandlers } from './handlers/assetHandlers';
 import { registerCmsHandlers } from './handlers/cmsHandlers';
 import { registerComponentHandlers } from './handlers/componentHandlers';
@@ -87,18 +89,20 @@ const cmsConnections = new CmsConnectionStore(
   },
   () => app.getPath('userData'),
 );
+// Media hosting keys are kept the same way (content/media/mediaConnectionStore.ts).
+const mediaConnections = new MediaConnectionStore(
+  {
+    available: () => safeStorage.isEncryptionAvailable(),
+    encrypt: (text) => safeStorage.encryptString(text),
+    decrypt: (data) => safeStorage.decryptString(data),
+  },
+  () => app.getPath('userData'),
+);
 const devServers = new DevServers({ send }, (projectRoot) => cmsPreviewEnvironment(cmsConnections, projectRoot));
 const thumbnails = new Thumbnails({
   devServers,
   userDataPath: () => app.getPath('userData'),
 });
-const componentShots = new ComponentShots(
-  componentShotsHost({
-    devServers,
-    userDataPath: () => app.getPath('userData'),
-    send,
-  }),
-);
 const autoUpdates = new AutoUpdates({
   app,
   autoUpdater,
@@ -173,7 +177,9 @@ function assertInProject(filePath: string) {
 protocol.registerSchemesAsPrivileged([
   {
     scheme: ASSET_SCHEME,
-    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true },
+    // corsEnabled lets the renderer's FontFace loads (CORS-checked, unlike
+    // <img>) reach this scheme; serveFile adds the allow-origin header.
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
   },
 ]);
 
@@ -498,6 +504,17 @@ app.whenReady().then(
     createWindow();
     autoUpdates.start();
     void showUsageNotice();
+    // Version 1.0.22 kept photographs of components in userData; the palette now shows live frames.
+    removeLegacyComponentShots(app.getPath('userData')).then(
+      (removed) => {
+        if (removed !== undefined) {
+          console.info(
+            `[component-shots] removed the old photograph cache: ${removed.filesRemoved} files, ${removed.foldersRemoved} folders; ${removed.foldersKept} folders kept`,
+          );
+        }
+      },
+      (error: unknown) => console.warn('[component-shots] the old photograph cache was not removed:', error instanceof Error ? error.message : String(error)),
+    );
     app.on('browser-window-focus', () => {
       if (watcher) {
         noteUsageActivity();
@@ -894,7 +911,6 @@ function stopWatchingProject() {
   pageChangeTimer = undefined;
   pageChangeExternal = false;
   thumbnails.stop();
-  componentShots.stop();
   documents.clear();
 }
 
@@ -964,10 +980,10 @@ registerProjectHandlers(host);
 registerProjectMetadataHandlers(host);
 registerPublishHandlers(host);
 registerCmsConnectionHandlers(host, cmsConnections, new SanityLogin(cmsConnections));
+registerMediaHostingHandlers(host, mediaConnections);
 registerStudioHandlers(host, app.isPackaged ? { kind: 'packaged' } : { kind: 'development', appPath: app.getAppPath() }, () => app.getVersion());
 registerProjectScanHandlers(host);
 registerStyleSourceHandlers(host);
 registerSelectorHandlers(host);
 registerDevServerHandlers({ ipcMain, devServers, thumbnails });
 registerThumbnailHandlers({ ipcMain, thumbnails, userDataPath: () => app.getPath('userData') });
-registerComponentShotHandlers({ ipcMain, componentShots });

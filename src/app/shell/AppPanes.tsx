@@ -27,6 +27,7 @@ import type { LoopApplyResult } from '../../features/props/LoopSettings';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
 import type { PropDeclaration } from '../../editor/propDeclaration';
 import { canvasPageOf, findEditorNodeById as findNodeById } from '../../editor/pageState';
+import { rawContentsMatch } from '../model/pageModelGestures';
 import { type EditorNode } from '../../editor/pageView';
 import { useLiveValue } from '../../ui/liveValue';
 import { PropsPanel, StylePanel, CodeWindow, CmsView, ContentView, VariablesView } from '../appPanels';
@@ -416,8 +417,14 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
           return false;
         }
         const state = app.pageStateRef.current.pageState;
-        if (!state?.editable || !findNodeById(state.model.nodes, nodeId)) {
+        const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
+        if (node === undefined) {
           return false;
+        }
+        // A pick commits what its hover preview may already have saved. Main refuses an
+        // edit that changes nothing, and that refusal read as an editor error.
+        if (rawContentsMatch(node, css)) {
+          return true;
         }
         app.setNodeText(nodeId, css, undefined, immediate || 'live');
         return true;

@@ -6,6 +6,7 @@ import { useCallback, useLayoutEffect, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import Popup from '../../ui/Popup';
 import ExprInput from '../../ui/ExprInput';
+import { ResetLabel } from '../../ui/ResetLabel';
 import { dataPickerPosition } from './dataPickerPosition';
 import type { FieldPosition } from './bindingTypes';
 import {
@@ -115,6 +116,21 @@ export function RowPopup(props: {
   );
 }
 
+/** Whether a section narrows or orders the list, and how its title's Reset menu clears it. */
+export interface SectionReset {
+  readonly applied: boolean;
+  readonly onReset: () => void;
+}
+
+/**
+ * A loop section's title: blue while the section is applied, and then, as a set
+ * property's label is, a button whose Reset menu clears that section alone.
+ * The shared ResetLabel, so the menu, ⌥-click and keyboard match every other set label.
+ */
+export function AppliedLabel(props: { readonly title: string; readonly reset: SectionReset }) {
+  return <ResetLabel label={props.title} active={props.reset.applied} onReset={props.reset.onReset} />;
+}
+
 export function SectionHeader(props: {
   readonly title: string;
   readonly addable: boolean;
@@ -125,12 +141,15 @@ export function SectionHeader(props: {
   readonly label?: ReactNode;
   /** The `{}` that shows the section as code (LoopSectionCode.tsx). */
   readonly toggle?: ReactNode;
+  /** Whether the section narrows or orders the list, which its title then shows in blue, and its reset. */
+  readonly reset?: SectionReset;
   readonly onAdd: () => void;
 }) {
   return (
     <div className="loop-settings-header">
       <span className="loop-settings-label">
-        {props.label ?? <span className="prop-label">{props.title}</span>}
+        {props.label ??
+          (props.reset === undefined ? <span className="prop-label">{props.title}</span> : <AppliedLabel title={props.title} reset={props.reset} />)}
         {props.dot}
         {props.toggle}
       </span>

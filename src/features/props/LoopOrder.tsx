@@ -19,8 +19,8 @@ import {
 import { type CatalogField, type LoopCatalog } from './loopCatalog';
 import { FieldPicker, type FieldExtra } from './LoopFieldPicker';
 import { useCollectionSample } from './loopSettingsData';
-import { customSortProblem, fieldNamed, orderLabels, sortParts, wholeNumberOf } from './loopSettingsModel';
-import { CodeBox, EditorRow, ListRow, SectionHeader } from './LoopRows';
+import { customSortProblem, fieldNamed, limitReset, orderLabels, sortParts, sortReset, wholeNumberOf } from './loopSettingsModel';
+import { AppliedLabel, CodeBox, EditorRow, ListRow, SectionHeader } from './LoopRows';
 import type { SectionProps } from './LoopFilters';
 import { SettingDot, type BindingContext, type DraftEditor } from './LoopBinding';
 import { moved, staysPut } from './LoopItems';
@@ -130,6 +130,7 @@ function SortEditor(props: SortSectionProps) {
         label={props.label}
         dot={<SettingDot setting="sort" binding={props.binding} draft={sortDraft(props)} />}
         toggle={props.toggle}
+        reset={{ applied: query.random || query.sorts.length > 0 || custom !== undefined, onReset: () => props.onChange(sortReset(query)) }}
         addable={addable}
         onAdd={add}
       />
@@ -318,13 +319,16 @@ export function LimitSection(props: Omit<SectionProps, 'fields'> & { readonly bi
   const linked = props.binding?.settings.limit.kind === 'prop' || props.binding?.settings.offset.kind === 'prop';
   const on = linked || query.limit !== undefined || query.offset > 0;
   const toggle = (): void => {
-    props.onChange(on ? { ...query, limit: undefined, offset: 0 } : { ...query, limit: LIMIT_DEFAULT });
+    props.onChange(on ? limitReset(query) : { ...query, limit: LIMIT_DEFAULT });
   };
   return (
     <div className="loop-settings-section">
       <div className="loop-settings-header">
         <span className="loop-settings-label">
-          <span className="prop-label">Limit items</span>
+          <AppliedLabel
+            title="Limit items"
+            reset={{ applied: query.limit !== undefined || query.offset > 0, onReset: () => props.onChange(limitReset(query)) }}
+          />
           {props.toggle}
         </span>
         <button type="button" role="switch" aria-checked={on} aria-label="Limit items" className={`cms-toggle ${on ? 'on' : ''}`} onClick={toggle}>

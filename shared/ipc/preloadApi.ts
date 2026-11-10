@@ -61,8 +61,6 @@ interface InvokeChannels {
   readonly contentRemoteRead: 'content:remoteRead';
   readonly contentRemoteEdit: 'content:remoteEdit';
   readonly setCmsMeta: 'cms:setMeta';
-  readonly listComponentShots: 'componentShots:list';
-  readonly readComponentShot: 'componentShots:read';
   readonly listRecents: 'recents:list';
   readonly addRecent: 'recents:add';
   readonly removeRecent: 'recents:remove';
@@ -156,6 +154,20 @@ interface InvokeChannels {
   readonly createRemoteDocument: 'cmsRemote:create';
   readonly deleteRemoteDocuments: 'cmsRemote:delete';
   readonly moveRemoteDocument: 'cmsRemote:move';
+  readonly mediaConnections: 'mediaHosting:connections';
+  readonly saveMediaConnection: 'mediaHosting:save';
+  readonly removeMediaConnection: 'mediaHosting:remove';
+  readonly discoverMediaAccounts: 'mediaHosting:discover';
+  readonly connectMediaAccount: 'mediaHosting:connectAccount';
+  readonly listHostedMedia: 'mediaHosting:list';
+  readonly pickUploadHostedMedia: 'mediaHosting:pickUpload';
+  readonly uploadHostedMedia: 'mediaHosting:upload';
+  readonly createHostedFolder: 'mediaHosting:createFolder';
+  readonly renameHostedMedia: 'mediaHosting:rename';
+  readonly deleteHostedMedia: 'mediaHosting:delete';
+  readonly reorderHostedMedia: 'mediaHosting:reorder';
+  readonly replaceHostedMedia: 'mediaHosting:replace';
+  readonly replaceAsset: 'assets:replace';
   readonly gitPublish: 'git:publish';
   readonly openExternal: 'shell:openExternal';
   readonly pendingProject: 'project:pending';
@@ -188,7 +200,6 @@ export type PreloadBridge = InvokeSurface & {
   readonly onAssetsChanged: (callback: () => void) => () => void;
   readonly onCssChanged: (callback: () => void) => () => void;
   readonly onCmsChanged: (callback: () => void) => () => void;
-  readonly onComponentShotsChanged: (callback: () => void) => () => void;
   readonly onPageMaybeChanged: (callback: (data: unknown) => void) => () => void;
   readonly onTerminalData: (callback: (data: unknown) => void) => () => void;
   readonly onTerminalExit: (callback: (data: unknown) => void) => () => void;

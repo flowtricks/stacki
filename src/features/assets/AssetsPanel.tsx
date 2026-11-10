@@ -16,9 +16,12 @@ import {
   pickUploadAssets,
   readAssetListing,
   renameAsset,
+  replaceAsset,
   uploadAssets,
 } from './assetPanelBridge';
-import { ChevronRightIcon, FolderIcon, FolderPlusIcon, TrashIcon, UploadCloudIcon } from '../../ui/Icons';
+import { ChevronRightIcon, CopyIcon, FolderIcon, FolderPlusIcon, TrashIcon, UploadCloudIcon, UploadIcon } from '../../ui/Icons';
+import { AssetSources, type SourceNavigation } from './AssetSources';
+import { copyLink, localAssetLink } from './assetLinks';
 import AssetThumb, { TEXT_EXT, preloadFontPreviews } from '../../ui/AssetThumb';
 import MoreMenu from '../../ui/MoreMenu';
 import { confirmDialog } from '../../ui/ConfirmDialog';
@@ -26,7 +29,7 @@ import { allowDragEffect } from '../../editor/dragState';
 import { PICK_HOME, type AssetFile, kindMatches, pickPrompt, buildCrumbs, parentOf, basename, isInPickHome, assetTitle } from './assetPaths';
 
 const FILE_DROP_COUNT_MAX = assetDropLimit;
-type Toast = (message: string, kind: 'error') => void;
+type Toast = (message: string, kind: 'error' | 'success') => void;
 
 export interface AssetUndo {
   readonly label: string;
@@ -60,13 +63,25 @@ interface AssetPanelState {
 }
 
 export default function AssetsPanel(props: AssetsPanelProps) {
-  return <ProjectAssets key={props.project.path} {...props} />;
+  return (
+    <AssetSources
+      key={props.project.path}
+      projectPath={props.project.path}
+      pick={props.pick}
+      onPickCancel={props.onPickCancel}
+      showToast={props.showToast}
+      renderProject={(navigation) => <ProjectAssets {...props} navigation={navigation} />}
+    />
+  );
 }
-function ProjectAssets(props: AssetsPanelProps) {
+/** The source switcher that is the panel's heading (AssetSources.tsx). */
+type Navigation = SourceNavigation;
+
+function ProjectAssets(props: AssetsPanelProps & { readonly navigation: Navigation }) {
   const state = useAssetPanelState(props);
   const actions = useAssetActions(props, state);
   if (state.missing && state.entries.length === 0) {
-    return <MissingAssets onUpload={() => void actions.pickUpload('')} />;
+    return <MissingAssets navigation={props.navigation} onUpload={() => void actions.pickUpload('')} />;
   }
   return <AssetPanelBody props={props} state={state} actions={actions} />;
 }
@@ -183,6 +198,7 @@ interface AssetActions {
   readonly makeDirectory: (name: string) => Promise<void>;
   readonly commitRename: (entry: AssetPanelEntry, value: string) => void;
   readonly remove: (file: AssetFile) => void;
+  readonly replace: (file: AssetFile) => void;
   readonly dropInto: (destinationRel: string) => React.DragEventHandler<HTMLElement>;
   readonly dragOverInto: (destinationRel: string) => React.DragEventHandler<HTMLElement>;
 }
@@ -214,7 +230,19 @@ function useAssetActions(props: AssetsPanelProps, state: AssetPanelState): Asset
   );
   const dropInto = useDropInto(project.path, showToast, setDragTarget, move);
   const dragOverInto = useDragOverInto(setDragTarget);
-  return { pickUpload, makeDirectory, commitRename, remove, dropInto, dragOverInto };
+  const replace = useCallback(
+    (file: AssetFile): void => {
+      void replaceAsset(project.path, file.rel).then((result) => {
+        if (!result.ok) {
+          showToast(result.error, 'error');
+        } else if (result.value) {
+          showToast(`Replaced ${file.name}.`, 'success');
+        }
+      });
+    },
+    [project.path, showToast],
+  );
+  return { pickUpload, makeDirectory, commitRename, remove, replace, dropInto, dragOverInto };
 }
 
 function useAssetMove(props: AssetsPanelProps) {
@@ -399,14 +427,24 @@ function reportResult<Value>(result: Result<Value, string>, showToast: Toast): b
   return true;
 }
 
-function AssetPanelBody({ props, state, actions }: { readonly props: AssetsPanelProps; readonly state: AssetPanelState; readonly actions: AssetActions }) {
+function AssetPanelBody({
+  props,
+  state,
+  actions,
+}: {
+  readonly props: AssetsPanelProps & { readonly navigation: Navigation };
+  readonly state: AssetPanelState;
+  readonly actions: AssetActions;
+}) {
   const folders = state.entries.filter((entry) => entry.isDir && entry.parent === state.cwd);
   const files = state.entries.filter(
     (entry): entry is AssetFile => !entry.isDir && entry.parent === state.cwd && (!props.pick || kindMatches(props.pick.mediaKind, entry.name)),
   );
   return (
-    <div className="panel-section grow">
-      {(props.pick || !state.batch.selecting) && <AssetHeader cwd={state.cwd} actions={actions} state={state} picking={Boolean(props.pick)} />}
+    <div className="panel-section grow" role="region" aria-label="Assets">
+      {(props.pick || !state.batch.selecting) && (
+        <AssetHeader cwd={state.cwd} actions={actions} state={state} picking={Boolean(props.pick)} source={props.navigation.picker} />
+      )}
       <PickBanner {...(props.pick === undefined ? {} : { pick: props.pick })} {...(props.onPickCancel === undefined ? {} : { onCancel: props.onPickCancel })} />
       {!props.pick && <AssetBatchTools batch={state.batch} files={files} />}
       <AssetBreadcrumbs state={state} actions={actions} />
@@ -420,25 +458,30 @@ function AssetHeader({
   actions,
   state,
   picking,
+  source,
 }: {
   readonly cwd: string;
   readonly actions: AssetActions;
   readonly state: AssetPanelState;
   readonly picking: boolean;
+  /** The source switcher, which is the heading (AssetSources.tsx). */
+  readonly source: React.ReactNode;
 }) {
   return (
     <div className="panel-header">
-      <h2>Assets</h2>
+      {source}
       <div style={{ display: 'flex', gap: 2 }}>
         {!picking && (
           <button
             className="asset-select-link"
+            aria-label="Select"
+            title="Select assets to compress or delete together"
             onClick={() => {
               state.batch.setSelected(new Set());
               state.batch.setSelecting(true);
             }}
           >
-            Select assets
+            Select
           </button>
         )}
         <button
@@ -479,6 +522,8 @@ function PickBanner({ pick, onCancel }: { readonly pick?: AssetRequest | undefin
 }
 
 function AssetBreadcrumbs({ state, actions }: { readonly state: AssetPanelState; readonly actions: AssetActions }) {
+  // The trail starts at "Assets", the source's top (for the project, where
+  // public/ and src/ sit): Assets › src › assets, or just Assets at the top.
   const crumbs = useMemo(() => buildCrumbs(state.cwd), [state.cwd]);
   return (
     <div className="asset-crumbs">
@@ -641,7 +686,9 @@ function AssetTile({
           className="asset-tile-menu"
           title={`Options for ${file.name}`}
           items={[
+            { label: 'Copy link', icon: <CopyIcon size={13} />, onSelect: () => void copyLink(localAssetLink(file.rel), props.showToast) },
             ...(convertible(file) ? conversionMenu(file, state.batch) : []),
+            { label: 'Replace…', icon: <UploadIcon size={13} />, onSelect: () => actions.replace(file) },
             {
               label: 'Delete',
               icon: <TrashIcon size={13} />,
@@ -655,12 +702,10 @@ function AssetTile({
   );
 }
 
-function MissingAssets({ onUpload }: { readonly onUpload: () => void }) {
+function MissingAssets({ navigation, onUpload }: { readonly navigation: Navigation; readonly onUpload: () => void }) {
   return (
-    <div className="panel-section grow">
-      <div className="panel-header">
-        <h2>Assets</h2>
-      </div>
+    <div className="panel-section grow" role="region" aria-label="Assets">
+      <div className="panel-header">{navigation.picker}</div>
       <div className="props-empty">
         This project has no <code>public/</code> folder yet.
         <div style={{ marginTop: 10 }}>

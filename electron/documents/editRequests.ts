@@ -33,7 +33,7 @@ import { err, ok, type Result } from '../../shared/core/result';
 import type { Snapshot } from '../../shared/page/snapshot';
 import { byteStringsEqual, decodeUtf8, encodeUtf8, spansAscending, toByteSpan, toByteString } from '../../shared/core/span';
 import { parsePage, serializeNodes, serializePage } from '../parse/astroParser';
-import { indentUnitOf } from '../../shared/core/indent';
+import { indentUnitBelow, indentUnitOf } from '../../shared/core/indent';
 import { frontmatterSlot, pageFormat, placedHunks, resolveRef, shiftedHunks, type Authored } from './editAnchors';
 import { markdownEditDraft, markdownPageNodes } from './markdownEdits';
 
@@ -186,7 +186,6 @@ function withAnchor(authored: Authored, ref: NodeRef, next: (anchor: AnchorRef) 
 // to where the planner lands them; a copy is the source node's own bytes.
 function insertDraft(authored: Authored, anchor: AnchorRef, edit: Extract<Edit, { tag: 'insert-node' }>): Result<IntentDraft, RejectionReason> {
   const eol = authored.text.includes('\r\n') ? '\r\n' : '\n';
-  const unit = indentUnitOf(authored.text);
   const content = edit.content;
   if (content.tag === 'copy') {
     return withAnchor(authored, content.source, (source) => {
@@ -206,7 +205,9 @@ function insertDraft(authored: Authored, anchor: AnchorRef, edit: Extract<Edit, 
   const landing = nodeAtPath(authored.projection, anchor.path);
   assert(landing !== undefined, 'A checked anchor names a projected node');
   const indent = insertedIndent(authored.snapshot.bytes, authored.projection, landing, edit.placement);
-  const printed = serializeNodes(content.nodes, unit).replace(/\r?\n$/, '');
+  // Nested lines step in as the landing line does: a file that mixes tabs and
+  // spaces gets each new line in the style of the lines around it.
+  const printed = serializeNodes(content.nodes, indentUnitBelow(authored.text, indent)).replace(/\r?\n$/, '');
   const text = indentedFragment(printed, indent, eol);
   const operation: Operation = { tag: 'insert-node', placement: edit.placement, source: text };
   return ok({ anchor, operation });

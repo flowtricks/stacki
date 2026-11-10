@@ -39,7 +39,6 @@ const pathPayload = new Set([
   'recents:add',
   'recents:remove',
   'recents:refreshThumb',
-  'componentShots:list',
   'project:scan',
   'project:classes',
   'watch:start',
@@ -74,7 +73,6 @@ const fields = {
   fromPagePath: '/site/src/pages/index.astro',
   toPagePath: '/site/src/pages/about.astro',
   targetPath: '/site/src/components/Card.astro',
-  component: '/site/src/components/Card.astro',
   rel: 'src/assets/hero.svg',
   destRel: 'public',
   fromRel: 'public/hero.svg',
@@ -240,6 +238,39 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     id: 'abc',
     revision: 'tx-123',
   },
+  'mediaHosting:connections': { projectPath: '/site' },
+  'mediaHosting:save': {
+    projectPath: '/site',
+    draft: {
+      kind: 'bunny',
+      label: 'CDN',
+      storageZone: 'site-zone',
+      region: 'de',
+      publicBaseUrl: 'https://site.b-cdn.net',
+      secret: { kind: 'accessKey', accessKey: 'zone-password' },
+    },
+  },
+  'mediaHosting:remove': { projectPath: '/site', id: '00000000-0000-4000-8000-000000000000' },
+  'mediaHosting:discover': { projectPath: '/site', key: { provider: 'r2', token: 'cf-token' } },
+  'mediaHosting:connectAccount': {
+    projectPath: '/site',
+    connect: { provider: 'bunny', apiKey: 'account-key', label: 'CDN', storageZone: 'site-zone', publicBaseUrl: 'https://site.b-cdn.net' },
+  },
+  'mediaHosting:list': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: '' },
+  'mediaHosting:pickUpload': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images' },
+  'mediaHosting:upload': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images', filePaths: ['/tmp/a.png'] },
+  'mediaHosting:createFolder': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: '', name: 'images' },
+  'mediaHosting:rename': {
+    projectPath: '/site',
+    connectionId: '00000000-0000-4000-8000-000000000000',
+    folder: 'images',
+    entry: 'file',
+    from: 'a.png',
+    to: 'b.png',
+  },
+  'mediaHosting:delete': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images', entry: 'folder', name: 'old' },
+  'mediaHosting:reorder': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images', order: ['b.png', 'a.png'] },
+  'mediaHosting:replace': { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images', name: 'a.png' },
   'cmsConnections:list': { projectPath: '/site' },
   'cmsConnections:save': {
     projectPath: '/site',
@@ -510,4 +541,24 @@ test('a sampled value names its source: an import call or the render’s own sco
   assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'call', spec: '../data' } }), /Expected string/);
   assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'scope', sinceMs: -1 } }), /nonnegative/);
   assert.throws(() => parseIpcPayload('content:sampleValue', { ...page, source: { kind: 'scope', sinceMs: 1.5 } }), /safe integer/);
+});
+
+test('media hosting payloads refuse traversal, unknown entries, unbounded uploads and keys in the wrong place', () => {
+  const target = { projectPath: '/site', connectionId: '00000000-0000-4000-8000-000000000000', folder: 'images' };
+  assert.throws(() => parseIpcPayload('mediaHosting:list', { ...target, folder: '../secrets' }), /reserved/);
+  assert.throws(() => parseIpcPayload('mediaHosting:list', { ...target, connectionId: 'abc' }), /connection id/);
+  assert.throws(() => parseIpcPayload('mediaHosting:rename', { ...target, entry: 'bucket', from: 'a', to: 'b' }), /entry kind/);
+  assert.throws(() => parseIpcPayload('mediaHosting:rename', { ...target, entry: 'file', from: 'a', to: 'x/y' }), /slash/);
+  assert.throws(() => parseIpcPayload('mediaHosting:upload', { ...target, filePaths: [] }), /files to upload/);
+  assert.throws(() => parseIpcPayload('mediaHosting:upload', { ...target, filePaths: Array.from({ length: 101 }, () => '/a') }), /files to upload/);
+  assert.throws(() => parseIpcPayload('mediaHosting:reorder', { ...target, order: ['a', 'a'] }), /once/);
+  assert.throws(
+    () =>
+      parseIpcPayload('mediaHosting:save', {
+        projectPath: '/site',
+        draft: { kind: 'r2', label: 'R', accountId: 'a'.repeat(32), bucket: 'media', publicBaseUrl: 'https://c.dev' },
+      }),
+    /Expected object/,
+  );
+  assert.throws(() => parseIpcPayload('assets:replace', { projectPath: '/site' }), /Expected string/);
 });

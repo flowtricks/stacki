@@ -21,7 +21,7 @@ import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
 import { planPageTemplate, sampleDataSource, setProjectEnv } from '../../ipc/pageTemplateBridge';
 import { CodeBlock } from '../../ui/CodeBlock';
 import Dropdown from '../../ui/Dropdown';
-import { BracesIcon, CmsIcon, CollectionIcon, PlusIcon, RefreshIcon, SanityIcon, TrashIcon } from '../../ui/Icons';
+import { AstroIcon, BracesIcon, CmsIcon, PlusIcon, RefreshIcon, SanityIcon, TrashIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
 import {
   EMPTY_TEMPLATE_FORM,
@@ -321,7 +321,7 @@ function SourceKindField({ form, set }: { readonly form: TemplateForm; readonly 
         livePreview={false}
         value={form.kind}
         options={[
-          { value: 'content-collection', label: 'Content collection', icon: <CollectionIcon size={13} /> },
+          { value: 'content-collection', label: 'Content collection', icon: <AstroIcon size={13} /> },
           { value: 'sanity', label: 'Sanity', icon: <SanityIcon size={13} /> },
           { value: 'http-json', label: 'Data from a link', icon: <CmsIcon size={13} /> },
         ]}
@@ -432,9 +432,10 @@ function ContentFields({
 }
 
 // A project with collections lists them first; with none, a new one is the only way forward, so it leads.
+// Each collection carries the CMS icon and the new row its plus, so the icons line up down the left edge.
 function collectionOptions(collections: readonly AppCollection[]) {
   const created = { value: NEW_COLLECTION, label: 'New collection…', icon: <PlusIcon size={13} /> };
-  return collections.length === 0 ? [created] : [...collections.map((item) => ({ value: item.name, label: item.name })), created];
+  return collections.length === 0 ? [created] : [...collections.map((item) => ({ value: item.name, label: item.name, icon: <CmsIcon size={13} /> })), created];
 }
 
 function SanityFields({

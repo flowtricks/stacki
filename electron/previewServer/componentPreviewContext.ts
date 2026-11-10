@@ -34,6 +34,12 @@ export type PreviewSlot = { readonly kind: 'name' } | { readonly kind: 'none' } 
 export interface PreviewSample {
   readonly props: Readonly<Record<string, PreviewSampleValue>>;
   readonly slot: PreviewSlot;
+  /**
+   * The instance's children as written, when they are more than plain HTML (components, named
+   * slots, expressions). componentPreviewRecipe.ts turns them into nodes the route can render;
+   * `slot` stays the placeholder for when it cannot.
+   */
+  readonly markup?: string;
 }
 
 export interface PreviewDocumentAttributes {
@@ -220,7 +226,9 @@ export function componentPreviewInstance(source: string, name: string): PreviewS
     if (close < 0) {
       return { props, slot: { kind: 'name' } };
     }
-    return { props, slot: plainSlot(template.slice(tag.end, close), name) };
+    const children = template.slice(tag.end, close);
+    const slot = plainSlot(children, name);
+    return slot.kind === 'name' ? { props, slot, markup: children } : { props, slot };
   }
   return undefined;
 }
@@ -241,7 +249,8 @@ function plainSlot(children: string, name: string): PreviewSlot {
   return { kind: 'html', html };
 }
 
-function literalProps(attributes: string): Readonly<Record<string, PreviewSampleValue>> {
+/** The literal props of a tag's attribute text: strings, bare flags and literal expressions. Directives and `slot` are left out. */
+export function literalProps(attributes: string): Readonly<Record<string, PreviewSampleValue>> {
   const props: Record<string, PreviewSampleValue> = {};
   let count = 0;
   // The attribute scanner does not read template literals; blank them so their

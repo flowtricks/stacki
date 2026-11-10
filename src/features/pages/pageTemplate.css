@@ -47,91 +47,15 @@
 .page-template-popover .hint-text {
   margin: 0;
 }
-.page-template-tree-head {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 20px;
-  color: var(--text-dim);
-  font-size: 11px;
-}
-.page-template-tree-items {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  font-variant-numeric: tabular-nums;
-}
-.page-template-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  max-height: 240px;
-}
-.page-template-tree-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 14px;
-  gap: 10px;
-  align-items: start;
-  width: 100%;
-  padding: 4px 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text);
-  font-size: 11.5px;
-  text-align: left;
-}
-button.page-template-tree-row:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.07);
-}
-button.page-template-tree-row:disabled {
-  opacity: 0.55;
-}
-.page-template-tree-row.is-group {
-  grid-template-columns: 14px minmax(0, 1fr);
-}
-.page-template-tree-row.page-template-tree-field {
-  grid-template-columns: 14px 14px minmax(0, 1fr) minmax(0, 1.4fr);
-}
-.page-template-tree-chevron {
-  display: inline-flex;
+/* A popover holding a sample tree is the data picker's box: the picker's rows
+   run to its edges, as they do in the Settings panel. */
+.page-template-popover:has(> .page-template-sample) {
+  gap: 0;
   padding: 0;
-  transition: transform 0.1s;
 }
-.page-template-tree-chevron.is-open {
-  transform: rotate(90deg);
-}
-.page-template-tree-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.page-template-tree-key {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-.page-template-tree-note {
-  color: var(--text-faint);
-  font-size: 10.5px;
-}
-.page-template-tree-check {
-  display: inline-flex;
-  justify-content: flex-end;
-}
-.page-template-popover .page-template-example {
-  display: -webkit-box;
-  overflow: hidden;
-  max-width: none;
-  margin: 0;
-  color: var(--text-faint);
-  white-space: normal;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+.page-template-sample .dp-list {
+  flex: 1;
+  min-height: 0;
 }
 .page-template-refresh.is-loading svg {
   animation: page-template-spin 0.9s linear infinite;
@@ -188,14 +112,6 @@ button.page-template-tree-row:disabled {
   padding: 3px 6px;
   color: var(--text-dim);
   font-size: 11px;
-}
-.page-template-example {
-  margin-left: auto;
-  overflow: hidden;
-  max-width: 55%;
-  color: var(--text-faint);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .page-template-problem {
   margin: 0;

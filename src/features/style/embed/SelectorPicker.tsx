@@ -27,7 +27,7 @@ import {
   type ClassRow,
   type ClassRowList,
 } from '../../../lib/fuzzyRank';
-import { chipAtCaret, chipPart } from '../model/selectorCaret';
+import { chipAtCaret, chipPart, createPressWatch, type PressWatch } from '../model/selectorCaret';
 import { PLACEMENT_END } from '../../../editor/classAttr';
 import {
   type SelectorSuggestion,
@@ -222,6 +222,13 @@ export function useAddSelectorField({
   // The selector that was active when the add input took focus — restored on blur
   // if no new selector was added (cleared once one is, or a chip is clicked instead).
   const restoreRef = useRef<string | undefined>(undefined);
+  const pressWatch = useRef<PressWatch | undefined>(undefined);
+
+  useEffect(() => {
+    const watch = createPressWatch(window);
+    pressWatch.current = watch;
+    return watch.dispose;
+  }, []);
 
   // The add input stays hidden until you click into the well (like Webflow's Style
   // selector) — including while selectors are still loading, so the empty box shows
@@ -287,6 +294,7 @@ export function useAddSelectorField({
     setHighlight(-1);
   };
   const onFocus = () => {
+    pressWatch.current?.cancel();
     restoreRef.current = activeSelector || undefined;
     onDeselect();
     setOpen(true);
@@ -295,7 +303,9 @@ export function useAddSelectorField({
     setOpen(false);
     setDraft('');
     setHighlight(-1);
-    setInputOpen(false);
+    // Taking the input's row away moves the panel under the pointer, so it waits
+    // for the click that caused this blur to land on what was pressed.
+    pressWatch.current?.whenPressEnds(() => setInputOpen(false));
     if (restoreRef.current) {
       onSelect(restoreRef.current);
       restoreRef.current = undefined;

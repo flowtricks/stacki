@@ -165,7 +165,7 @@ async function checkFragment(syntax) {
     assert.match(row(fragment).title, /inline group/i, 'Fragment explains that its contents are an inline group');
     assert.match(row(fragment).title, /no separate (?:component )?file/i, 'Fragment explains why double-click cannot open a file');
     assert.equal(row(modal).classList.contains('is-component'), true, 'real components retain their distinct styling');
-    assert.equal(label(shell), 'sermon-search_wrap');
+    assert.equal(label(shell), '.sermon-search_wrap');
     assert.equal(label(modal), 'Modal');
     for (const node of [textarea, button, status, results]) {
       await click(row(node));

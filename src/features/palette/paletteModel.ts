@@ -15,7 +15,12 @@ export type ComponentUsageResult =
 
 export interface ComponentPreviewMessage {
   readonly status: 'empty' | 'ready';
+  /** Why an empty preview is empty, in the route's words (missing data, nothing rendered). */
+  readonly reason?: string;
 }
+
+/** The longest reason a preview page may give; a longer one is cut, never trusted to fit. */
+export const previewReasonCharsMax = 500;
 
 export function parseComponentPreviewMessage(input: unknown): ComponentPreviewMessage | undefined {
   if (typeof input !== 'object' || input === null) {
@@ -27,8 +32,12 @@ export function parseComponentPreviewMessage(input: unknown): ComponentPreviewMe
   if (!('status' in input)) {
     return undefined;
   }
-  if (input.status === 'empty' || input.status === 'ready') {
+  if (input.status === 'ready') {
     return { status: input.status };
+  }
+  if (input.status === 'empty') {
+    const reason = 'reason' in input && typeof input.reason === 'string' ? input.reason.trim().slice(0, previewReasonCharsMax) : '';
+    return reason === '' ? { status: 'empty' } : { status: 'empty', reason };
   }
   return undefined;
 }

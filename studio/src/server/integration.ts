@@ -5,6 +5,7 @@ import { METADATA_FILES } from '../../vendor/stacki/shared/properties/projectMet
 import { isDefaultsCanvas } from '../../vendor/stacki/shared/properties/defaultsCanvas';
 import { instrumentVariant } from '../features/preview/variantRuntime';
 import { mutateAsset } from '../features/assets/assetOperations';
+import { replacementRefusal } from '../../vendor/stacki/shared/properties/mediaHosting';
 import { configureRenderPush } from '../features/preview/renderPushServer';
 import { managedAsset, MEDIA_EXT } from '../features/assets/assetStateTypes';
 import { readAssetState, saveAssetState } from '../features/assets/assetState';
@@ -20,7 +21,12 @@ import { STUDIO_STATE_DIRECTORY } from '../../vendor/stacki/shared/properties/st
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { markSourceFile } from '../../vendor/stacki/electron/previewServer/previewMarkers';
-import { componentPreviewPlugin, renderComponentPreviewPage } from '../../vendor/stacki/electron/previewServer/componentPreview';
+import {
+  componentPreviewPlugin,
+  PREVIEW_RECIPE_FILE,
+  renderComponentPreviewPage,
+  renderComponentPreviewRecipe,
+} from '../../vendor/stacki/electron/previewServer/componentPreview';
 import { createRooms } from '../features/collaboration/rooms';
 import { safePath, preparePath, readSource } from '../features/project/projectServer';
 import { filePath, sourcePath, string, record, MAX_SOURCE } from '../shared/validation';
@@ -56,6 +62,8 @@ export default function studio(options: Options): AstroIntegration {
           await mkdir(path.join(options.root, STUDIO_STATE_DIRECTORY), { recursive: true });
           const entrypoint = path.join(options.root, '.stacki/studio/state/component-preview.astro');
           await writeFile(entrypoint, renderComponentPreviewPage());
+          // The page imports the recipe node component from beside it (componentPreviewRecipe.ts).
+          await writeFile(path.join(path.dirname(entrypoint), PREVIEW_RECIPE_FILE), renderComponentPreviewRecipe());
           injectRoute({ pattern: '/__avb/preview', entrypoint });
         }
         addMiddleware({
@@ -367,6 +375,15 @@ async function createFile(request: IncomingMessage, response: ServerResponse, op
 async function uploadAsset(request: IncomingMessage, response: ServerResponse, options: Options, rooms: ReturnType<typeof createRooms>, url: URL) {
   const file = filePath(url.searchParams.get('file'));
   managedAsset(file);
+  // A replacement (`replacement` names the chosen file) overwrites the asset in
+  // place so every reference keeps working; Desktop's assets:replace holds the same rule.
+  const replacement = url.searchParams.get('replacement');
+  if (replacement !== null) {
+    const refusal = replacementRefusal(path.posix.basename(file), path.posix.basename(replacement));
+    if (refusal !== undefined) {
+      throw new Error(refusal);
+    }
+  }
   const bytes = await bodyBytes(request, 20_000_000);
   await rooms.coordinator.run(async () => {
     let exists = false;
@@ -378,8 +395,11 @@ async function uploadAsset(request: IncomingMessage, response: ServerResponse, o
         throw error;
       }
     }
-    if (exists) {
+    if (replacement === null && exists) {
       throw new Error('An asset with this name already exists');
+    }
+    if (replacement !== null && !exists) {
+      throw new Error(`${path.posix.basename(file)} is no longer there.`);
     }
     await saveAsset(options.root, file, bytes);
     const state = await readAssetState(options.root);

@@ -2,42 +2,44 @@
 // combobox, suggestions, custom properties and the new value's input
 // (EmbedEditor.tsx).
 
-import { forwardRef, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Popup from '../../../ui/Popup';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import useScrub from '../components/useScrub';
-import { handleArrowStep } from '../model/numberStep';
-import { filterCssProperties } from '../model/cssProperties';
+import { filterCssProperties, isNonNegative } from '../model/cssProperties';
 import { panelSpan } from '../model/panelBox';
-import { useSharedVars } from '../VariableConnect';
+import VariableConnect, { useSharedVars } from '../VariableConnect';
 import { useExternalDraft } from '../model/fieldHooks';
 import { parseImportant, withImportant } from '../model/styleDisplay';
 
 // ─────────────────────────── Declaration row ───────────────────────────
 
-// The value reads as a single scrollable line when idle. Once focused, it
-// expands to a full-width, auto-height field the moment its content is too long
-// to sit on one line — so long values wrap and grow tall instead of scrolling.
-export const ValueField = forwardRef<
-  HTMLTextAreaElement,
-  {
-    value: string;
-    important: boolean;
-    busy: boolean;
-    /** Marks the field with [data-prop] so it can be focused programmatically. */
-    dataProp?: string;
-    onCommit: (value: string, important: boolean) => void;
-    /** Fires (debounced) on every keystroke/step to push the value to the embed live. */
-    onLiveCommit: (value: string, important: boolean) => void;
-  }
->(function ValueField({ value, important, busy, dataProp, onCommit, onLiveCommit }, forwardedRef) {
+// A raw declaration's value, in the code field every other CSS value uses: colouring,
+// arrow-key stepping, variable chips and the big editor for a long value. The
+// textarea is the field the rich editor stands in for; it must be VariableConnect's
+// direct child, because that is whose change and blur handlers the editor calls.
+export function ValueField({
+  prop,
+  value,
+  important,
+  busy,
+  onCommit,
+  onLiveCommit,
+  onPick,
+}: {
+  /** The CSS property: filters the variables offered, and marks the field for focusing. */
+  prop: string;
+  value: string;
+  important: boolean;
+  busy: boolean;
+  onCommit: (value: string, important: boolean) => void;
+  /** Fires (debounced) on every keystroke/step to push the value to the embed live. */
+  onLiveCommit: (value: string, important: boolean) => void;
+  onPick: (binding: string) => void;
+}) {
   const external = withImportant({ value, important });
   // Mirror external edits, but never clobber what the user is typing.
   const { draft, setDraft, focused } = useExternalDraft(external);
-  const ref = useRef<HTMLTextAreaElement>(null);
-  // Keep the local ref (used for sizing/caret work) and hand the same node to
-  // whoever wrapped us.
-  const attachRef = mergedRef(ref, forwardedRef);
 
   // Undelayed live write for the scrub, which throttles its own — see useScrub.
   const liveNow = (text: string) => {
@@ -49,7 +51,6 @@ export const ValueField = forwardRef<
   // Push the current draft to the embed as you type/scrub — debounced so the
   // canvas updates in near-real-time without a write per keystroke.
   const { scheduleLive, cancelLive } = useLiveTimer(liveNow);
-  const { expanded, setExpanded, maybeExpand } = useAutoExpand({ ref, focused, draft });
 
   const commit = (text = draft) => {
     const parsed = parseImportant(text);
@@ -68,57 +69,41 @@ export const ValueField = forwardRef<
     onInput: liveNow,
     onCommit: commitScrub,
   });
-  const edited = (text: string) => {
-    setDraft(text);
-    maybeExpand();
-    scheduleLive(text);
-  };
 
   return (
-    <textarea
-      {...scrub.input}
-      ref={attachRef}
-      data-prop={dataProp}
-      className={`u-input embed-editor_value-input ${expanded ? 'is-expanded' : 'is-collapsed'}`}
-      rows={1}
-      value={draft}
-      onChange={(event) => edited(event.target.value)}
-      onFocus={() => {
-        focused.current = true;
-        maybeExpand();
-      }}
-      // Blur is the authoritative commit — cancel any pending live write first.
-      onBlur={() => {
-        focused.current = false;
-        setExpanded(false);
-        cancelLive();
-        commit();
-      }}
-      // Enter commits — a CSS value is one line, so we never insert a hard break.
-      // Up/Down scrub the number under the caret (Shift = ×10, Alt = per-px).
-      onKeyDown={(event) => {
-        const stepped = stepValueField(event);
-        if (stepped !== undefined) {
-          edited(stepped);
-        }
-      }}
+    <VariableConnect
+      code
+      {...(isNonNegative(prop) ? { stepMin: 0 } : {})}
+      ariaLabel={`Connect ${prop} to a variable`}
       disabled={busy}
-      spellCheck={false}
-      aria-label="Value"
-    />
+      prop={prop}
+      onPick={onPick}
+    >
+      <textarea
+        {...scrub.input}
+        data-prop={prop}
+        className="u-input embed-editor_value-input"
+        rows={1}
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          scheduleLive(event.target.value);
+        }}
+        onFocus={() => {
+          focused.current = true;
+        }}
+        // Blur is the authoritative commit — cancel any pending live write first.
+        onBlur={() => {
+          focused.current = false;
+          cancelLive();
+          commit();
+        }}
+        disabled={busy}
+        spellCheck={false}
+        aria-label="Value"
+      />
+    </VariableConnect>
   );
-});
-
-// One ref callback that sets both a local ref and whatever ref the caller forwarded.
-export function mergedRef<T>(localRef: React.RefObject<T>, forwardedRef: React.ForwardedRef<T>): React.RefCallback<T> {
-  return (node) => {
-    Reflect.set(localRef, 'current', node);
-    if (typeof forwardedRef === 'function') {
-      forwardedRef(node);
-    } else if (forwardedRef) {
-      Reflect.set(forwardedRef, 'current', node);
-    }
-  };
 }
 
 // Debounces live writes while typing: the text reaches `liveNow` 100ms after the last
@@ -140,53 +125,6 @@ export function useLiveTimer(liveNow: (text: string) => void) {
   };
   useEffect(() => cancelLive, []);
   return { scheduleLive, cancelLive };
-}
-
-// The value field's expansion: it expands the instant the collapsed single line can no
-// longer hold the content, and grows to fit it (no inner scroll); collapsing resets it.
-export function useAutoExpand({ ref, focused, draft }: { ref: React.RefObject<HTMLTextAreaElement>; focused: React.MutableRefObject<boolean>; draft: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const maybeExpand = () => {
-    const field = ref.current;
-    if (!field || !focused.current || expanded) {
-      return;
-    }
-    if (field.scrollWidth > field.clientWidth + 1) {
-      setExpanded(true);
-    }
-  };
-  useLayoutEffect(() => {
-    const field = ref.current;
-    if (!field) {
-      return;
-    }
-    if (expanded) {
-      field.style.height = 'auto';
-      field.style.height = `${field.scrollHeight}px`;
-    } else {
-      field.style.height = '';
-    }
-  }, [expanded, draft, ref]);
-  return { expanded, setExpanded, maybeExpand };
-}
-
-// Enter blurs (the commit); ↑/↓ step the number under the caret in place. Returns the
-// stepped text, or undefined when the key did not step.
-export function stepValueField(event: React.KeyboardEvent<HTMLTextAreaElement>): string | undefined {
-  const field = event.currentTarget;
-  if (event.key === 'Enter') {
-    event.preventDefault();
-    field.blur();
-    return undefined;
-  }
-  const stepped = handleArrowStep(event);
-  if (!stepped) {
-    return undefined;
-  }
-  event.preventDefault();
-  field.value = stepped.text;
-  field.setSelectionRange(stepped.caret, stepped.caret);
-  return stepped.text;
 }
 
 // ─────────────────────────── Add-property row ───────────────────────────
@@ -426,7 +364,7 @@ export function comboKeyDown(
 
 export function AddPropertyRow({ busy, onAdd }: { busy: boolean; onAdd: (prop: string, value: string, important: boolean) => void }) {
   const row = useAddProperty(onAdd);
-  const { expanded, prop, setProp, value, setValue, valueRef, ready, cancel, submit } = row;
+  const { expanded, prop, setProp, value, setValue, valueRef, cancel, submit } = row;
   // The project's own custom properties are properties here too — this row is
   // where one gets set, and `--brand-500` is not in any list of standard CSS.
   // Only asked for while the row is open.
@@ -439,7 +377,6 @@ export function AddPropertyRow({ busy, onAdd }: { busy: boolean; onAdd: (prop: s
 
   return (
     <div className="embed-editor_decl is-add">
-      <CancelAddButton onCancel={cancel} />
       <PropertyCombobox
         value={prop}
         custom={custom}
@@ -453,9 +390,7 @@ export function AddPropertyRow({ busy, onAdd }: { busy: boolean; onAdd: (prop: s
         onEscape={cancel}
       />
       <NewValueInput valueRef={valueRef} value={value} setValue={setValue} submit={submit} cancel={cancel} />
-      <button className="embed-editor_icon-btn" type="button" onClick={submit} disabled={busy || !ready} title="Add property" aria-label="Add property">
-        +
-      </button>
+      <CancelAddButton onCancel={cancel} />
     </div>
   );
 }

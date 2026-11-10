@@ -44,6 +44,10 @@ export interface DropdownOption<T = string> {
   readonly dim?: boolean;
   /** Listed but not choosable; its `description` says why. */
   readonly disabled?: boolean;
+  /** Extra words a search matches (the description, synonyms) without showing them twice. */
+  readonly keywords?: string;
+  /** Listed whatever the search says, so a way out (a "None" row) is never filtered away. */
+  readonly pinned?: boolean;
 }
 export interface DropdownProps<T = string> {
   readonly disabled?: boolean;
@@ -58,6 +62,14 @@ export interface DropdownProps<T = string> {
   /** `stacked` draws each option's description beneath its label; the trigger still shows the label alone. */
   readonly optionLayout?: 'line' | 'stacked';
   readonly placeholder?: string;
+  /**
+   * Whether hovering or arrowing to an option previews it before it is picked.
+   * Preview is opt-in and reserved for live canvas previews of a component prop:
+   * everywhere else (dialogs, settings forms) a hover only highlights the row, and
+   * the field keeps showing the committed value until a click or Enter.
+   * It defaults to on exactly when `onPreview` is passed. Set it without `onPreview`
+   * to preview by writing through `onChange`, reverted on close.
+   */
   readonly livePreview?: boolean;
   readonly onPrepare?: () => void;
   readonly onPreview?: (value: T) => void;
@@ -98,8 +110,9 @@ type PopupPosition = ReturnType<typeof popupBox> & {
   readonly width: number;
 };
 
-// Hover previews remain distinct from committed choices: closing reverts, while
-// selecting an already-previewed row avoids writing the same value twice.
+// Hover previews are opt-in (see `livePreview`) and remain distinct from committed
+// choices: closing reverts, while selecting an already-previewed row avoids writing
+// the same value twice. Without a preview, hovering and arrowing move the highlight only.
 export default function Dropdown<T>(props: DropdownProps<T>) {
   const state = useDropdownSelection(props);
   const actions = useDropdownActions(props, state);
@@ -158,7 +171,10 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
   const queryText = query.trim().toLowerCase();
   const visible =
     props.searchable && queryText
-      ? props.options.filter((option) => `${option.label} ${option.hint || ''} ${option.group || ''}`.toLowerCase().includes(queryText))
+      ? props.options.filter(
+          (option) =>
+            option.pinned === true || `${option.label} ${option.hint || ''} ${option.group || ''} ${option.keywords || ''}`.toLowerCase().includes(queryText),
+        )
       : props.options;
   return {
     open,
@@ -182,7 +198,9 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
 // Waiting longer makes the canvas feel stale as the pointer crosses options.
 function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Actions<T> {
   const { setOpen, setHighlight, committed, previewed, visible } = state;
-  const { value, options, onChange, onPreview, onPrepare, onCancelPreview, livePreview = true } = props;
+  const { value, options, onChange, onPreview, onPrepare, onCancelPreview } = props;
+  // No handler, no preview: a stray hover must never change a form's value.
+  const livePreview = props.livePreview ?? onPreview !== undefined;
   const hoverFrame = useRef<number | undefined>(undefined);
   const cancelHover = useCallback((): void => {
     if (hoverFrame.current !== undefined) {
@@ -478,7 +496,8 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
             <DropdownRow option={option} index={index} control={control} />
           </Fragment>
         ))}
-        {!control.visible.length && <div className="dd-empty">Nothing matches</div>}
+        {/* A pinned row is not a match, so the list still says nothing matched beside it. */}
+        {!control.visible.some((option) => option.pinned !== true) && <div className="dd-empty">Nothing matches</div>}
       </div>
     </Popup>
   );

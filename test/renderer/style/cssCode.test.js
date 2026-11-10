@@ -194,6 +194,14 @@ const same = (what, got, want) => check(what, JSON.stringify(got) === JSON.strin
     text: 'calc(100% - 3px)',
     caret: 13,
   });
+  // The caret ends up after the unit whenever a value is typed or clicked at its end.
+  same('the caret after the unit', stepNumberAt('1rem', 4, -1, 0), { text: '0rem', caret: 4 });
+  same('the caret inside the unit stays there', stepNumberAt('12px', 3, 1), { text: '13px', caret: 3 });
+  same('a percent is a unit', stepNumberAt('50%', 3, 1), { text: '51%', caret: 3 });
+  same('the floor holds', stepNumberAt('0rem', 4, -1, 0), { text: '0rem', caret: 4 });
+  same('past the unit is not the number', stepNumberAt('1rem solid', 5, 1), undefined);
+  same('hex letters are not a unit', stepNumberAt('#3366ff', 7, 1), undefined);
+  same('a name ending in letters is not a unit', stepNumberAt('translate3d', 11, 1), undefined);
   same('nothing to step', stepNumberAt('none', 2, 1), undefined);
   same('nothing to step in an empty field', stepNumberAt('', 0, 1), undefined);
 

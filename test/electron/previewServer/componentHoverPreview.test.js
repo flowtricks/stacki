@@ -175,10 +175,10 @@ test('generated Astro route keeps its default slot and loads the selected source
   assert.match(template, /<C \{\.\.\.props\}>\{name\}<\/C>/);
   assert.match(template, /<C \{\.\.\.props\}><Fragment set:html=\{slot\.html\} \/><\/C>/, 'sampled plain children fill the slot');
   assert.match(template, /<C \{\.\.\.props\} \/>/, 'a self-closing instance renders without slot content');
-  assert.match(template, /<html \{\.\.\.htmlAttributes\}>/);
+  assert.match(template, /<html \{\.\.\.htmlAttributes\} class=\{\[htmlAttributes\.class, 'stacki-designer'\]/, "the page is in the project's design mode");
   assert.match(template, /<body \{\.\.\.bodyAttributes\}>\s*\{contextStyles\.map/, 'site-wide styles follow the project stylesheets');
   assert.match(template, /avb:component-preview/);
-  assert.match(template, /reportStatus\('empty'\)/);
+  assert.match(template, /reportStatus\('empty', /, 'an empty preview says why');
   assert.match(template, /reportStatus\('ready'\)/);
   assert.doesNotMatch(template, /__STACKI_PREVIEW_/);
   assert.doesNotMatch(template, /require\(|componentPreview\.js|node:/, 'edge-rendered pages cannot import the app CommonJS or Node helpers');
@@ -213,9 +213,10 @@ test('generated Astro route keeps its default slot and loads the selected source
     .replace("import 'virtual:stacki-component-preview-styles';", '')
     .replace("import { contextStyles, htmlAttributes, bodyAttributes } from 'virtual:stacki-component-preview-context';", '')
     .replace("import { packageModules, packageInputs } from 'virtual:stacki-package-components';", '')
+    .replace("import RecipeNode from './stacki-preview-recipe.astro';", '')
     .replaceAll('import.meta.glob', 'glob');
   assert.doesNotMatch(frontmatter, /import /, 'every virtual import is removed before the frontmatter runs');
-  const run = vm.runInNewContext(`(async () => { ${frontmatter}; return { name, C, props, slot }; })`, {
+  const run = vm.runInNewContext(`(async () => { ${frontmatter}; return { name, C, props, slot, recipeModules }; })`, {
     Astro: { url: new URL('http://localhost/__avb/preview?p=' + selected) },
     packageModules: {},
     packageInputs: {},
@@ -226,6 +227,15 @@ test('generated Astro route keeps its default slot and loads the selected source
   assert.deepEqual({ ...result.props }, { heading: 'Card' });
   assert.equal(result.slot.kind, 'name');
   assert.deepEqual(loaded, [selected + '?raw&stacki-preview-props', selected]);
+
+  // A recipe's nested components load before rendering, keyed as the recipe names them.
+  loaded.length = 0;
+  const nested = 'src/components/One/Card.astro';
+  sources[selected] = async () => ({ props: {}, missing: [], slot: { kind: 'recipe', node: {}, files: ['src/components/Two/Card.astro', nested] } });
+  const recipe = await run();
+  assert.equal(recipe.slot.kind, 'recipe');
+  assert.deepEqual(Object.keys(recipe.recipeModules), ['src/components/Two/Card.astro', nested]);
+  assert.deepEqual(loaded, [selected, '/' + nested], 'the owner loads once as the component, then the nested one');
 
   loaded.length = 0;
   sources[selected] = async () => componentPreviewInputs('---\ninterface Props { data: PageData; }\n---\n<div />', 'Overview');

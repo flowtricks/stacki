@@ -4,7 +4,8 @@ import { parsePreviewTarget } from '../preview/usePreview';
 import { useComponentCounts } from './useComponentCounts';
 import { flatten, type ParserNode } from '../source/source';
 
-async function resolvePreviewURL(url: string): Promise<string> {
+/** A dev-server address as the preview origin serves it; the palette's hover cards and the insert grid share it. */
+export async function resolvePreviewURL(url: string): Promise<string> {
   const parsed = new URL(url);
   const page = parsed.pathname + parsed.search;
   return parsePreviewTarget(await request('/studio/api/preview-url?page=' + encodeURIComponent(page))).url;

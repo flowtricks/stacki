@@ -2,12 +2,16 @@ import Popup from '../../ui/Popup';
 import React, { useState } from 'react';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { assert } from '../../../shared/core/assert';
+import { buildCommitSubject, COMMIT_CONVENTION_NONE, type CommitConvention } from './commitType';
+import { CommitSubjectPreview } from './CommitTypePicker';
 
 export interface SwitchBranchProps {
   readonly from: string;
   readonly to: string;
   readonly files: readonly string[];
   readonly busy: string | undefined;
+  /** The Git panel's commit type, applied to "Commit first"; none when the panel has none picked. */
+  readonly convention?: CommitConvention;
   readonly onCancel: () => void;
   readonly onLeaveHere: () => void;
   readonly onCommitFirst: (message: string) => void;
@@ -26,6 +30,7 @@ function SwitchBranchBody({
   to,
   files,
   busy,
+  convention = COMMIT_CONVENTION_NONE,
   onCancel,
   onLeaveHere,
   onCommitFirst,
@@ -65,6 +70,7 @@ function SwitchBranchBody({
                   }
                 }}
               />
+              <CommitSubjectPreview convention={convention} subject={buildCommitSubject(message, convention, `Update ${from}`)} />
             </div>
 
             {working && (

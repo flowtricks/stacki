@@ -1577,8 +1577,8 @@ html[data-platform='win32'] .titlebar {
 }
 .insert-palette {
   position: relative;
-  width: min(1180px, calc(100vw - 80px));
-  height: 80vh;
+  width: min(640px, calc(100vw - 80px));
+  max-height: 66vh;
   display: flex;
   flex-direction: column;
   background: #222222;
@@ -1586,6 +1586,12 @@ html[data-platform='win32'] .titlebar {
   border-radius: 14px;
   box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
   overflow: hidden;
+}
+/* The Components tab's grid of live previews needs the room; the list tabs keep the plain list's size. */
+.insert-palette.insert-palette-grid {
+  width: min(1180px, calc(100vw - 80px));
+  height: 80vh;
+  max-height: none;
 }
 .insert-search-row {
   display: flex;
@@ -1605,43 +1611,101 @@ html[data-platform='win32'] .titlebar {
   background: transparent;
   border: none;
 }
+/* The tab row: plain labels, and one pill (.insert-tab-indicator) behind the active tab that slides
+   and resizes to the next one. Its transform and width are set inline from the active tab's layout
+   offsets (src/ui/segmentIndicator.ts), the same indicator the Style panel's segmented control uses. */
 .insert-tabs {
+  --insert-tabs-pad: 6px;
+  position: relative;
   display: flex;
-  gap: 18px;
-  padding: 0 18px;
-  border-bottom: 1px solid var(--border);
+  gap: 2px;
+  padding: var(--insert-tabs-pad) 12px;
+}
+.insert-tab-indicator {
+  position: absolute;
+  z-index: 0;
+  top: var(--insert-tabs-pad);
+  bottom: var(--insert-tabs-pad);
+  left: 0;
+  width: 0;
+  border-radius: 7px;
+  background: var(--bg-active);
+  pointer-events: none;
+}
+.insert-tab-indicator.is-animated {
+  transition:
+    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .insert-tab {
+  position: relative;
+  z-index: 1;
   background: none;
   border: none;
-  border-radius: 0;
-  padding: 8px 0 10px;
+  border-radius: 7px;
+  padding: 5px 10px;
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-faint);
-  position: relative;
+  transition: color 120ms ease-out;
 }
+/* The pill behind is the selected tab's background, so hover changes the text only: the app's blanket
+   button:hover fill would paint over the pill. */
 .insert-tab:hover:not(:disabled) {
   background: none;
   color: var(--text-dim);
 }
-.insert-tab.on {
+.insert-tab.on,
+.insert-tab.on:hover:not(:disabled) {
   color: var(--text);
 }
-.insert-tab.on::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  background: var(--text);
-  border-radius: 2px;
+.insert-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-border-focus, var(--accent));
+}
+/* The palette moving between the list and the grid (paletteResize.ts): its size is set inline and
+   transitions; the content is laid out once at the final width, centred and clipped, and fades in. */
+.insert-palette.is-resizing {
+  max-height: none;
+}
+.insert-palette.is-resizing-run {
+  transition:
+    width var(--insert-palette-resize-ms, 240ms) cubic-bezier(0.2, 0.8, 0.2, 1),
+    height var(--insert-palette-resize-ms, 240ms) cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.insert-palette.is-resizing > * {
+  flex-shrink: 0;
+  align-self: center;
+  width: var(--insert-palette-content-width);
+  animation: insert-palette-content-in var(--insert-palette-resize-ms, 240ms) ease-out;
+}
+.insert-palette.is-resizing > .insert-results {
+  flex-shrink: 1;
+}
+@keyframes insert-palette-content-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .insert-tab-indicator.is-animated,
+  .insert-palette.is-resizing-run {
+    transition: none;
+  }
+  .insert-palette.is-resizing > * {
+    animation: none;
+  }
 }
 .insert-results {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  padding: 6px;
+}
+.insert-results.insert-results-grid {
   padding: 12px;
   /* Three columns: INSERT_COLUMNS in insertGrid.ts, which the arrow keys count with. */
   display: grid;
@@ -1650,13 +1714,23 @@ html[data-platform='win32'] .titlebar {
   align-content: start;
   align-items: start;
 }
-.insert-results > .props-empty {
+.insert-results-grid > .props-empty {
   grid-column: 1 / -1;
 }
 .insert-pills {
   display: flex;
+  /* A project with many folders wraps its pills onto more rows instead of widening the palette. */
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 10px 12px 0;
+  max-height: 72px;
+  overflow-y: auto;
+  /* The bottom pad matches the visible gap above the pills (the tab row's 6px pad plus this 10px top pad),
+     so the grid scrolls under a clean edge instead of flush against the pills. */
+  padding: 10px 12px var(--space-6, 16px); /* The token lives in the style panel's sheet: hold the gap without it. */
+}
+/* The pills' bottom pad already spaces the first card row; the grid's own top pad would double it. */
+.insert-pills + .insert-results-grid {
+  padding-top: 0;
 }
 .insert-pill {
   box-sizing: border-box;
@@ -1709,9 +1783,6 @@ html[data-platform='win32'] .titlebar {
   font-size: 11.5px;
   color: var(--text-faint);
 }
-.insert-item.insert-tile {
-  border: 1px solid var(--border);
-}
 .insert-item.insert-card {
   flex-direction: column;
   align-items: stretch;
@@ -1744,9 +1815,8 @@ html[data-platform='win32'] .titlebar {
 .insert-item.insert-card.highlight .insert-item-label {
   color: var(--text);
 }
-/* The picture: a page rendered at --surface-width and scaled by --surface-scale to fit the card.
-   The scale is the card's width over the logical width, so it never crops the sides; the bottom
-   is cut off where the card ends. */
+/* The picture: the Components panel's hover preview (ComponentPreviewFrame), which fits the component
+   into the frame itself, so the frame just fills the card. */
 .insert-surface {
   position: relative;
   overflow: hidden;
@@ -1762,30 +1832,14 @@ html[data-platform='win32'] .titlebar {
 }
 .insert-frame {
   position: absolute;
-  top: 0;
-  left: 0;
+  inset: 0;
   display: block;
-  width: var(--surface-width);
-  height: calc(100% / var(--surface-scale, 1));
+  width: 100%;
+  height: 100%;
   border: none;
   background: #f2f2f2;
-  transform: scale(var(--surface-scale, 1));
-  transform-origin: 0 0;
+  /* The card's click inserts; the frame is a picture inside it. */
   pointer-events: none;
-}
-.insert-shot {
-  display: block;
-  width: min(100%, calc(var(--shot-width, 100000) * var(--surface-scale, 1) * 1px));
-  margin-inline: auto;
-  height: auto;
-  user-select: none;
-  pointer-events: none;
-  -webkit-user-drag: none;
-}
-/* Taller than the large view is: the photograph scrolls, and never crops the sides. */
-.insert-surface-large.insert-surface-photo {
-  overflow-x: hidden;
-  overflow-y: auto;
 }
 .insert-surface-note {
   position: absolute;
@@ -1811,42 +1865,15 @@ html[data-platform='win32'] .titlebar {
   font-family: inherit;
   color: var(--text-dim);
 }
-/* The large view covers the palette, not the window: Esc closes it and nothing else. */
-.insert-enlarged {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  background: #222222;
-}
-.insert-enlarged-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 44px;
-  padding: 0 18px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-}
-.insert-enlarged-close {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--text-faint);
-}
-.insert-surface-large {
-  flex: 1;
-  min-height: 0;
-  border: none;
-  border-radius: 0;
-}
-
 /* Assets panel (public/) */
+/* The panel's contents share the heading's 12px left edge. A crumb and a
+   folder row keep their hover fill, so each row is pulled left by its own
+   padding and only the fill reaches past the edge. */
 .asset-crumbs {
   display: flex;
   align-items: center;
   gap: 1px;
-  padding: 0 12px 6px;
+  padding: 0 12px 6px 6px;
   flex-shrink: 0;
   min-width: 0;
   flex-wrap: wrap;
@@ -1862,12 +1889,16 @@ html[data-platform='win32'] .titlebar {
   border-radius: 10px;
   background: rgba(0, 153, 255, 0.05);
 }
+.panel-body.asset-body {
+  padding-left: 12px;
+}
 .asset-folder {
   display: flex;
   align-items: center;
   gap: 8px;
   height: 30px;
   padding: 0 8px;
+  margin: 0 -8px;
   border-radius: 6px;
   cursor: pointer;
   color: var(--text-dim);
@@ -1905,7 +1936,7 @@ html[data-platform='win32'] .titlebar {
   /* Keep empty tracks so a sparse folder retains the same compact thumbnail size. */
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 100px), 1fr));
   gap: 10px;
-  padding: 8px 2px;
+  padding: 8px 0;
 }
 .asset-tile {
   cursor: grab;
@@ -2009,7 +2040,11 @@ html[data-platform='win32'] .titlebar {
   font-weight: 700;
   letter-spacing: 0.05em;
 }
-/* Font files preview as "Aa" set in the font itself. */
+/* Font files preview as "Aa" set in the font itself, on a plain tile: the
+   checkerboard is for images that may be transparent. */
+.asset-thumb.is-font {
+  background: var(--bg-hover);
+}
 .asset-font {
   font-size: 38px;
   line-height: 1;
@@ -3106,6 +3141,47 @@ body > .embed-editor_provenance {
   flex-shrink: 0;
   color: var(--collection-purple);
 }
+/* A picker of many choices keeps the check's place on every row, so the
+   values beside it stay in one column whether or not a row is chosen. */
+.dp-check-slot {
+  display: inline-flex;
+  flex: 0 0 11px;
+  justify-content: flex-end;
+  margin-left: 4px;
+}
+/* A name with a short reason under it: why a choice reads as it does. */
+.dp-key-stack {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  max-width: 60%;
+  padding: 4px 0;
+}
+.dp-key-stack .dp-key {
+  max-width: none;
+}
+.dp-note {
+  overflow-wrap: anywhere;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+/* A choice that cannot work here: still read, never picked. */
+.dp-row.disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.dp-row.disabled:hover {
+  background: transparent;
+}
+/* A control at the end of the search row, such as Select all. */
+.dp-search-action {
+  flex: none;
+  padding: 2px 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
 /* A row's way to its prop's settings, always there and muted until it is
    reached for. The slot ends every row of a picker that has one, so a row with
    no gear keeps its values in line with the rows that have one. */
@@ -3857,8 +3933,12 @@ body > .embed-editor_provenance {
 }
 .dd-search {
   flex-shrink: 0;
+  /* The global field rule sets width: 100%, which with side margins pushed the
+     box past the menu's right edge and made the inset uneven. Auto lets the
+     column's stretch fit it between the margins, so both sides are inset. */
+  width: auto;
   height: 30px;
-  margin: 4px 4px 2px;
+  margin: 6px 6px 0;
   padding: 0 8px;
   font-size: 12px;
   background: var(--bg-input);
@@ -3874,7 +3954,8 @@ body > .embed-editor_provenance {
   overflow-y: auto;
   /* As the data picker's list: the scrollbar never moves the rows. */
   scrollbar-gutter: stable;
-  padding: 2px 4px 4px;
+  /* The same 6px inset as the search box above, with a gap under it before the first row. */
+  padding: 6px 6px 6px;
 }
 .dd-empty {
   padding: 8px;
@@ -8097,6 +8178,15 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   padding: 1px 6px;
   border-radius: 999px;
 }
+/* At the row's right end, as the Style panel's section chevrons sit. */
+.history-section-chevron {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-faint);
+}
+.history-section-head:hover .history-section-chevron {
+  color: var(--text-dim);
+}
 
 .history-graph-toolbar {
   display: flex;
@@ -8116,6 +8206,10 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 .history-graph-filter > span {
   flex-shrink: 0;
   color: var(--text-faint);
+}
+.history-graph-filter > .dd-trigger {
+  flex: 1;
+  min-width: 0;
 }
 .history-graph-toolbar select {
   flex: 1;
@@ -9770,6 +9864,46 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   gap: 5px;
   width: auto;
   flex: none;
+}
+
+/* The optional commit type sits under the full-width message, with its scope
+   and breaking toggle beside it once a type is picked. With no type the picker
+   fills the row; with one it stays narrow so the scope has room. */
+.git-commit-type-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.git-commit-type-row > .git-commit-type {
+  flex: 1;
+  min-width: 0;
+}
+.git-commit-type-row > .git-commit-type:not(:only-child) {
+  flex: none;
+  width: 92px;
+}
+.git-commit-type-row > .git-commit-scope {
+  flex: 1;
+  min-width: 0;
+}
+.git-commit-type-row > .check-row {
+  flex: none;
+  margin: 0;
+}
+.git-commit-scope-error {
+  color: var(--red);
+  margin: 0;
+}
+/* What will be committed, quiet beside the fields that set it. */
+.git-commit-preview {
+  display: block;
+  width: 100%;
+  opacity: 0.7;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .page-rename-error {

@@ -56,6 +56,27 @@ export function indentUnitOf(text: string): string {
   return unit;
 }
 
+/**
+ * The unit that indents code one level below a line indented `base`, in `text`.
+ * A line indented with tabs nests with a tab and one indented with spaces nests
+ * with the text's space step, so code added to a file that mixes the two takes
+ * the style of the lines around it rather than the file's majority: four spaces
+ * followed by a tab would line up in no editor. A top-level line, or one whose
+ * indent mixes both, takes the text's own unit.
+ */
+export function indentUnitBelow(text: string, base: string): string {
+  assert(base.trim().length === 0, 'indentUnitBelow: a base indent is only whitespace');
+  assert(!base.includes('\n'), 'indentUnitBelow: a base indent is one line');
+  let unit = indentUnitOf(text);
+  if (/^\t+$/.test(base)) {
+    unit = CODE_INDENT_UNIT;
+  } else if (/^ +$/.test(base)) {
+    unit = ' '.repeat(measuredIndent(text.split('\n')).unitWidth);
+  }
+  assert(unit.length > 0, 'indentUnitBelow: a unit is never empty');
+  return unit;
+}
+
 /** Tab-indented text, with each leading tab rewritten as `unit`. */
 export function withIndentUnit(text: string, unit: string): string {
   assert(unit.length > 0, 'withIndentUnit: a unit is never empty');

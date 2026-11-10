@@ -32,16 +32,24 @@ try {
   await search.fill('no-such-element-xyz');
   await palette.getByText('No matches.', { exact: true }).waitFor();
   await search.fill('');
-  // The palette opens on Components; Tab walks All results, Components, Elements, Other.
+  // A first use opens on All results, the plain list; only Components is the grid of live previews.
+  assert.equal(await palette.locator('.insert-tab.on').innerText(), 'All results');
+  assert.equal(await palette.locator('.insert-results-grid').count(), 0);
+  await search.press('Tab');
   assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Components');
+  await palette.locator('.insert-results-grid').waitFor();
   await search.press('Tab');
   assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Elements');
   await search.press('Tab');
   assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Other');
   await search.press('Shift+Tab');
   assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Elements');
-  await search.press('Shift+Tab');
-  assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Components');
+  await search.press('Escape');
+  await palette.waitFor({ state: 'detached' });
+  // The palette reopens on the tab it was left on.
+  await page.keyboard.press('Meta+e');
+  await search.waitFor();
+  assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Elements');
   await search.press('Escape');
   await palette.waitFor({ state: 'detached' });
   for (const shortcut of ['Meta+f', 'Meta+e', 'Control+f', 'Control+e']) {
@@ -54,9 +62,9 @@ try {
   await page.keyboard.press('Meta+e');
   await palette.getByRole('button', { name: 'Elements', exact: true }).click();
   await search.fill('h');
-  // Elements are tiles in a three-column grid: Down moves one row, which is three tiles.
+  // Elements are the plain list: Down moves one row.
   await search.press('ArrowDown');
-  assert.equal(await palette.locator('.insert-item.highlight .insert-item-label').innerText(), '<h4>');
+  assert.equal(await palette.locator('.insert-item.highlight .insert-item-label').innerText(), '<h2>');
   await search.press('ArrowUp');
   assert.equal(await palette.locator('.insert-item.highlight .insert-item-label').innerText(), '<h1>');
   await search.fill('mark');
@@ -71,6 +79,7 @@ try {
     .filter({ has: page.locator('.label', { hasText: /^ContentWrapper$/ }) })
     .click();
   await page.keyboard.press('Meta+f');
+  await palette.getByRole('button', { name: 'All results', exact: true }).click();
   await search.fill('Paragraph');
   await palette
     .locator('.insert-item')

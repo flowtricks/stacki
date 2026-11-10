@@ -45,6 +45,20 @@ function cmsBridge() {
     createRemoteDocument: invoke('cmsRemote:create'),
     deleteRemoteDocuments: invoke('cmsRemote:delete'),
     moveRemoteDocument: invoke('cmsRemote:move'),
+    mediaConnections: invoke('mediaHosting:connections'),
+    saveMediaConnection: invoke('mediaHosting:save'),
+    removeMediaConnection: invoke('mediaHosting:remove'),
+    discoverMediaAccounts: invoke('mediaHosting:discover'),
+    connectMediaAccount: invoke('mediaHosting:connectAccount'),
+    listHostedMedia: invoke('mediaHosting:list'),
+    pickUploadHostedMedia: invoke('mediaHosting:pickUpload'),
+    uploadHostedMedia: invoke('mediaHosting:upload'),
+    createHostedFolder: invoke('mediaHosting:createFolder'),
+    renameHostedMedia: invoke('mediaHosting:rename'),
+    deleteHostedMedia: invoke('mediaHosting:delete'),
+    reorderHostedMedia: invoke('mediaHosting:reorder'),
+    replaceHostedMedia: invoke('mediaHosting:replace'),
+    replaceAsset: invoke('assets:replace'),
   };
 }
 
@@ -159,14 +173,6 @@ function dataBridge() {
       const listener = () => callback();
       ipcRenderer.on('cms:changed', listener);
       return () => ipcRenderer.removeListener('cms:changed', listener);
-    },
-
-    listComponentShots: invoke('componentShots:list'),
-    readComponentShot: invoke('componentShots:read'),
-    onComponentShotsChanged: (callback: () => void) => {
-      const listener = () => callback();
-      ipcRenderer.on('componentShots:changed', listener);
-      return () => ipcRenderer.removeListener('componentShots:changed', listener);
     },
 
     // Recent projects:

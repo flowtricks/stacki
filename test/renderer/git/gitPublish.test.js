@@ -117,6 +117,16 @@ test('publish dialog passes its project to preflight and ignores old replies', a
     await act(async () => reads[0].resolve({ installed: false, authed: false }));
     assert.match(document.body.textContent, /current-user/);
     assert.equal(document.querySelector('.modal-footer .primary').disabled, false);
+    // The destination is the app's Dropdown, not a native select, and picking a row switches the form.
+    assert.equal(document.querySelector('.modal select') === null, true);
+    const destination = document.querySelector('[aria-label="Repository destination"]');
+    assert.ok(destination.classList.contains('dd-trigger'));
+    assert.equal(destination.textContent, 'Create a new repository');
+    await act(async () => destination.click());
+    const existing = [...document.querySelectorAll('.dd-option')].find((row) => row.textContent === 'Use an existing repository');
+    await act(async () => existing.click());
+    assert.equal(destination.textContent, 'Use an existing repository');
+    assert.equal(document.body.textContent.includes('Repository name'), false);
     await show('/third');
     await act(async () => reads[2].reject(new Error('cannot inspect CLI')));
     assert.match(toastMessages(), /cannot inspect CLI/);

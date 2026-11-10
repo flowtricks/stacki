@@ -32,7 +32,7 @@ export interface CodeToken {
 /** A line of tokens. Joining a line's texts gives the source line, without its break. */
 export type CodeLine = readonly CodeToken[];
 
-export type CodeLanguage = 'astro' | 'css' | 'html' | 'javascript' | 'json' | 'markdown' | 'shell' | 'typescript';
+export type CodeLanguage = 'astro' | 'commit' | 'css' | 'html' | 'javascript' | 'json' | 'markdown' | 'shell' | 'typescript';
 
 export const CODE_TOKEN_RULES: readonly { readonly tag: Tag | readonly Tag[]; readonly style: CodeTokenStyle }[] = [
   { tag: [t.keyword, t.modifier], style: { color: '#c792ea' } },
@@ -122,7 +122,7 @@ export function codeTokenLines(text: string, language: Exclude<CodeLanguage, 'as
   if (text.length > LIMITS.syntaxHighlightCharsMax) {
     return plainCodeLines(text);
   }
-  const tokens = language === 'shell' ? shellTokens(text) : grammarTokens(text, language);
+  const tokens = language === 'shell' ? shellTokens(text) : language === 'commit' ? commitTokens(text) : grammarTokens(text, language);
   const lines = tokensByLine(tokens);
   assert(lines.length === text.split('\n').length, 'Coloured code keeps every line of its source');
   return lines;
@@ -142,7 +142,7 @@ function ruleStyle(classes: string): CodeTokenStyle {
   }, {});
 }
 
-function grammarTokens(text: string, language: Exclude<CodeLanguage, 'astro' | 'shell'>): readonly CodeToken[] {
+function grammarTokens(text: string, language: Exclude<CodeLanguage, 'astro' | 'commit' | 'shell'>): readonly CodeToken[] {
   // A JSON document on its own reads as a block statement, which is a syntax
   // error by the first colon. In parentheses it is the object literal it looks
   // like, so the parse is of the wrapped text and the offsets step back by one.
@@ -171,7 +171,7 @@ function grammarTokens(text: string, language: Exclude<CodeLanguage, 'astro' | '
   return tokens;
 }
 
-function grammarFor(language: Exclude<CodeLanguage, 'astro' | 'shell'>) {
+function grammarFor(language: Exclude<CodeLanguage, 'astro' | 'commit' | 'shell'>) {
   switch (language) {
     case 'css':
       return cssLanguage;
@@ -283,4 +283,30 @@ function shellTokenOf(rest: string, place: { readonly commandNext: boolean; read
 function tagStyle(tag: Tag): CodeTokenStyle | undefined {
   const classes = ruleHighlighter.style([tag]);
   return classes === null ? undefined : ruleStyle(classes);
+}
+
+// A commit subject in the Conventional Commits shape, `type(scope)!: message`.
+// Only the prefix is coloured: the type reads as a keyword, the scope as a
+// label, a breaking `!` in the warm colour values take, and the message stays
+// plain because it is prose. A subject without the prefix is plain throughout.
+const COMMIT_PREFIX = /^([A-Za-z]+)(?:(\()([^()\s:]*)(\)))?(!)?(:)/;
+
+function commitTokens(text: string): readonly CodeToken[] {
+  const match = COMMIT_PREFIX.exec(text);
+  if (match === null) {
+    return [{ text }];
+  }
+  const [prefix, type = '', open, scope, close, breaking, colon = ''] = match;
+  const parts: readonly (readonly [string | undefined, Tag | undefined])[] = [
+    [type, t.keyword],
+    [open, t.punctuation],
+    [scope, t.labelName],
+    [close, t.punctuation],
+    [breaking, t.atom],
+    [colon, t.punctuation],
+    [text.slice(prefix.length), undefined],
+  ];
+  const tokens = parts.flatMap(([value, tag]) => (value ? [{ text: value, style: tag === undefined ? undefined : tagStyle(tag) }] : []));
+  assert(tokens.map((token) => token.text).join('') === text, 'Commit tokens cover the whole subject');
+  return tokens;
 }

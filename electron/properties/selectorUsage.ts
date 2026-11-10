@@ -17,7 +17,7 @@
 import { createHash } from 'node:crypto';
 import { assert } from '../../shared/core/assert';
 import { toDigest } from '../../shared/core/brand';
-import { keepMatcher, type StyleKeepList } from '../../shared/properties/styleKeepList';
+import { keepMatcher, stylesheetLockMatcher, type StyleKeepList } from '../../shared/properties/styleKeepList';
 import {
   SELECTOR_USAGE_LIMITS,
   selectorEntryId,
@@ -97,6 +97,7 @@ export async function analyzeSelectorUsage(input: UsageInput, scanPackages: (int
     : await scanPackages(remainingInterest(interest, scans.foreign));
   const taint = taintOf(input, packages);
   const keep = keepMatcher(input.keepList);
+  const locked = stylesheetLockMatcher(input.keepList);
   const entries: SelectorEntry[] = [];
   const selectors = new Map<string, RuleSelector>();
   // Merged once per scope, not once per selector: a site has thousands of
@@ -108,7 +109,7 @@ export async function analyzeSelectorUsage(input: UsageInput, scanPackages: (int
     const hits = hitsByScope.get(scopeKey) ?? hitsFor(rule.region, sheet, scans, packages);
     hitsByScope.set(scopeKey, hits);
     const unanswered = packages.kind === 'pending' ? packages.unanswered : undefined;
-    const verdict = verdictOf(rule, hits, taintFor(rule.region, sheet, taint), unanswered, keep);
+    const verdict = lockedVerdict(verdictOf(rule, hits, taintFor(rule.region, sheet, taint), unanswered, keep), { locked: locked(rule.region.rel) });
     const id = selectorEntryId({ rel: rule.region.rel, block: rule.region.block, offset: rule.ruleStart, index: rule.index });
     assert(!selectors.has(id), 'analyzeSelectorUsage: entry ids are unique');
     selectors.set(id, rule);
@@ -184,6 +185,22 @@ function hitsFor(region: StyleRegion, sheet: AstroSheet | undefined, scans: Proj
     mergeHits(hits, packages.hits);
   }
   return hits;
+}
+
+// A locked stylesheet (or one in a locked folder) is a library meant to sit
+// unused until needed: a selector the proof finds unused there is `kept`, so
+// every cleanup — the panel's, the delete offer and `style:removeSelectors`
+// itself, which re-runs this check — leaves it alone. Other verdicts stand:
+// "used" and "can't tell" are never removed anyway.
+function lockedVerdict(verdict: SelectorVerdict, sheet: { readonly locked: boolean }): SelectorVerdict {
+  if (sheet.locked) {
+    if (verdict.kind === 'unused') {
+      assert(verdict.names.length > 0, 'lockedVerdict: an unused selector names what is missing');
+      return { kind: 'kept', names: verdict.names };
+    }
+    return verdict;
+  }
+  return verdict;
 }
 
 function verdictOf(

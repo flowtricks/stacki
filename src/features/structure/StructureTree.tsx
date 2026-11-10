@@ -5,7 +5,7 @@ import type { NavigatorNode, DropLocation, DropTarget } from './structureModel';
 import { canContainTag } from '../../editor/elementSchemas';
 import { isDataBound } from '../../editor/bindings';
 import { allowDragEffect, clearDrag, getDrag, setDrag } from '../../editor/dragState';
-import { elementLabel } from '../../editor/classNames';
+import { classLabel, elementLabel } from '../../editor/classNames';
 import { hidesChildRows, noteText } from '../../editor/treeSelection';
 import {
   BranchIcon,
@@ -532,16 +532,22 @@ function describeNode(node: NavigatorNode, live: readonly string[] | undefined):
 }
 
 function describeElement(node: PairedNode, live?: readonly string[]) {
+  return { icon: elementIcon(node.name), label: truncate(labelWithLive(node, live), 40) };
+}
+
+// The source's label, or the class the page rendered with when the source only has a tag.
+function labelWithLive(node: PairedNode, live: readonly string[] | undefined): string {
   const source = elementLabel(node);
-  const label = source === node.name ? (live?.[0] ?? source) : source;
-  return { icon: elementIcon(node.name), label: truncate(label, 40) };
+  const rendered = live?.[0];
+  if (source !== node.name) {
+    return source;
+  }
+  return rendered === undefined ? source : classLabel(rendered);
 }
 
 function describeComponent(node: PairedNode, live?: readonly string[]) {
   if (node.dynamicTag) {
-    const source = elementLabel(node);
-    const label = source === node.name ? (live?.[0] ?? source) : source;
-    return { icon: <CustomElementIcon size={12} />, label: truncate(label, 40) };
+    return { icon: <CustomElementIcon size={12} />, label: truncate(labelWithLive(node, live), 40) };
   }
   if (node.astroAsset) {
     return { icon: astroAssetIcon(node.name, 14), label: node.name };

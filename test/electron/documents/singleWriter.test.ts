@@ -63,6 +63,10 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
     writeFileSync: { count: 1, reason: 'encrypted CMS connection keys in userData, never a page' },
     renameSync: { count: 1, reason: 'puts that connection file in place whole (atomic save)' },
   },
+  'electron/content/media/mediaConnectionStore.ts': {
+    writeFileSync: { count: 1, reason: 'encrypted media hosting keys in userData (media-connections.json), never a page' },
+    renameSync: { count: 1, reason: 'puts that connection file in place whole (atomic save)' },
+  },
   'electron/content/contentConfig.ts': {
     writeFileSync: { count: 2, reason: 'runner scripts in the app work directory' },
   },
@@ -74,13 +78,17 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   },
   'electron/handlers/assetHandlers.ts': {
     cpSync: { count: 1, reason: 'copies an asset in under a fresh unique name; never replaces' },
+    copyFileSync: {
+      count: 1,
+      reason: 'replaces the bytes of a public/ file or a src/ media file (assets:replace); src/ code is refused before the copy',
+    },
     renameSync: { count: 2, reason: 'asset and asset folder moves; a move writes no bytes' },
   },
   'electron/handlers/cmsHandlers.ts': {
     writeFileSync: { count: 2, reason: '.stacki/cms.json metadata' },
   },
   'electron/handlers/devServers.ts': {
-    writeFileSync: { count: 5, reason: 'the generated preview harness in node_modules/.avb' },
+    writeFileSync: { count: 6, reason: 'the generated preview harness in node_modules/.avb, with the component preview recipe' },
   },
   'electron/project/pageRenameWrite.ts': {
     renameSync: { count: 1, reason: 'a page or folder move; text changes use the host writer' },
@@ -132,10 +140,6 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
       count: 3,
       reason: 'staged Studio release files and the ignore rules of .stacki/studio and its updates',
     },
-  },
-  'electron/project/componentShotStore.ts': {
-    writeFileSync: { count: 2, reason: 'component photographs and their meta in userData, the meta written beside and renamed over' },
-    renameSync: { count: 1, reason: 'the meta replaces the previous one whole' },
   },
   'electron/project/imageConversion.ts': {
     writeFileSync: {

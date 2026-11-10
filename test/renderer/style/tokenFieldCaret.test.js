@@ -15,6 +15,7 @@
 // an element-level caret a browser cannot type at. Run it alone with
 // `node test/renderer/style/tokenFieldCaret.test.js`.
 
+const assert = require('assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
@@ -35,7 +36,7 @@ const check = (what, condition, detail) => {
   const entry = path.join(buildDirectory, 'token-field-caret.entry.jsx');
   fs.writeFileSync(
     entry,
-    `export { buildTokenHtml, jumpCaretPastChip, serializeTokens, tokenFieldPress } from ${JSON.stringify(repoPath('src/features/style/TokenField.tsx'))};\n` +
+    `export { bracketEdit, buildTokenHtml, jumpCaretPastChip, serializeTokens, tokenFieldPress } from ${JSON.stringify(repoPath('src/features/style/TokenField.tsx'))};\n` +
       `export { caretPlacementAt, CARET_SLOT } from ${JSON.stringify(repoPath('src/features/style/tokenFieldCaret.ts'))};\n`,
   );
   const out = path.join(buildDirectory, 'token-field-caret.bundle.js');
@@ -57,7 +58,17 @@ const check = (what, condition, detail) => {
   global.document = dom.window.document;
   global.Node = dom.window.Node;
   global.HTMLElement = dom.window.HTMLElement;
-  const { buildTokenHtml, jumpCaretPastChip, serializeTokens, tokenFieldPress, caretPlacementAt, CARET_SLOT } = require(out);
+  const { bracketEdit, buildTokenHtml, jumpCaretPastChip, serializeTokens, tokenFieldPress, caretPlacementAt, CARET_SLOT } = require(out);
+
+  // --- the opening bracket ----------------------------------------------------
+  //
+  // Typed before a number it wraps the number and its unit; anywhere else it pairs.
+  assert.deepEqual(bracketEdit('calc32px', 4, '('), { text: 'calc(32px)', caret: 5 });
+  assert.deepEqual(bracketEdit('calc32px)', 4, '('), { text: 'calc(32px))', caret: 5 });
+  assert.deepEqual(bracketEdit('calc-1.5rem 4px', 4, '('), { text: 'calc(-1.5rem) 4px', caret: 5 });
+  assert.deepEqual(bracketEdit('calc50%', 4, '('), { text: 'calc(50%)', caret: 5 });
+  assert.deepEqual(bracketEdit('calc', 4, '('), { text: 'calc()', caret: 5 });
+  assert.deepEqual(bracketEdit('calc var(--a)', 4, '('), { text: 'calc() var(--a)', caret: 5 });
 
   // --- layout -----------------------------------------------------------------
   //

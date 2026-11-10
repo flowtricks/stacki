@@ -1,9 +1,12 @@
-// Goal: the insert palette shows components as cards with a live, scaled, inert picture, sorted into
-// sections and blocks, and every key and bound in that contract holds.
+// Goal: the insert palette shows the plain list on All results, Elements and Other, and on Components a grid
+// of cards, each the Components panel's hover preview of the component (the same /__avb/preview route, which
+// renders the project's insertion recipe), filtered by optional folder pills remembered per project; it reopens on the tab it was
+// left on; frames load lazily, a few at a time, under a stated cap; there is no large view and Space is
+// only ever typed; every key and bound holds.
 // Methodology: mount the real palette in jsdom with fake IntersectionObserver and ResizeObserver
-// so the test decides what is visible and how wide a card is. Drive it with the keys a person
-// presses, and read the DOM: cards, pills, frames, the large view, the hints. What a pixel looks
-// like is not measured here; the scale each surface asks for is.
+// so the test decides what is visible, and jsdom's local storage (or one that throws). Drive it with the
+// keys a person presses, post the messages a loaded page posts, and read the DOM: rows, cards, pills,
+// frames, the hints. What a pixel looks like is not measured here; the URL each frame asks for is.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -82,6 +85,18 @@ async function setup(options = {}) {
   global.document = dom.window.document;
   global.HTMLElement = dom.window.HTMLElement;
   global.IS_REACT_ACT_ENVIRONMENT = true;
+  // The palette remembers its tab in local storage. Most tests are about the grid, so they start on Components;
+  // `tab: undefined` leaves storage empty, which is a first use.
+  global.localStorage = dom.window.localStorage;
+  const startTab = 'tab' in options ? options.tab : 'components';
+  if (options.storage !== undefined) {
+    for (const [key, value] of Object.entries(options.storage)) {
+      dom.window.localStorage.setItem(key, value);
+    }
+  } else if (startTab !== undefined) {
+    dom.window.localStorage.setItem('stacki.insertPalette.tab', startTab);
+  }
+  options.beforeRender?.(dom);
   const scrolled = [];
   dom.window.HTMLElement.prototype.scrollIntoView = function () {
     scrolled.push(this);
@@ -115,7 +130,7 @@ async function setup(options = {}) {
       React.createElement(InsertSearch, {
         components: options.components,
         devUrl: 'devUrl' in options ? options.devUrl : DEV_URL,
-        shots: options.shots,
+        projectKey: 'projectKey' in options ? options.projectKey : '/p',
         trailingSlash: 'never',
         onInsert: (item) => events.inserted.push(item),
         onClose: () => {
@@ -125,8 +140,7 @@ async function setup(options = {}) {
     );
   });
   const act = (work) => React.act(async () => work());
-  const labels = () =>
-    [...container.querySelectorAll('.insert-item-label')].filter((element) => !element.closest('.insert-enlarged')).map((element) => element.textContent);
+  const labels = () => [...container.querySelectorAll('.insert-item-label')].map((element) => element.textContent);
   const input = () => container.querySelector('.insert-search-row input');
   const press = async (key, data = {}) => {
     const calls = { prevented: false };
@@ -151,36 +165,42 @@ async function setup(options = {}) {
     dom.window.close();
     delete global.IntersectionObserver;
     delete global.ResizeObserver;
+    delete global.localStorage;
   };
-  return { scrolled, Simulate, dom, container, events, act, labels, input, press, type, cards, frames, pills, reveal, observers, finish };
-}
-
-const JPEG = (name) => `data:image/jpeg;base64,${name}`;
-
-/** A fake of the desktop's photographs: which components have one, what reading costs, and a way to say new ones arrived. */
-function fakeShots(components, images = {}, widths = {}) {
-  const state = { components: [...components], reads: [], listeners: new Set() };
+  /** Answer every mounted frame with `ready`, the way a loaded page does, until no new frame starts. */
+  const settleFrames = async () => {
+    for (let round = 0; round < 20; round++) {
+      const answered = frames().filter((frame) => !frame.dataset.answered);
+      if (answered.length === 0) {
+        return;
+      }
+      for (const frame of answered) {
+        frame.dataset.answered = 'yes';
+        const data = { type: 'avb:component-preview', status: 'ready' };
+        await act(() => window.dispatchEvent(new dom.window.MessageEvent('message', { source: frame.contentWindow, data })));
+      }
+    }
+  };
   return {
-    state,
-    source: {
-      list: async () => state.components.map((component) => ({ component, width: widths[component] ?? 1440, height: 800 })),
-      read: async (component) => {
-        state.reads.push(component);
-        return images[component];
-      },
-      onChanged: (listener) => {
-        state.listeners.add(listener);
-        return () => state.listeners.delete(listener);
-      },
-    },
-    announce: () => state.listeners.forEach((listener) => listener()),
+    settleFrames,
+    scrolled,
+    Simulate,
+    dom,
+    container,
+    events,
+    act,
+    labels,
+    input,
+    press,
+    type,
+    cards,
+    frames,
+    pills,
+    reveal,
+    observers,
+    finish,
   };
 }
-
-const settle = async (view) => {
-  await view.act(async () => {});
-  await view.act(async () => {});
-};
 
 const mixed = () => [
   section('Hero', { instances: 10 }),
@@ -190,23 +210,24 @@ const mixed = () => [
   block('Tag'),
 ];
 
-test('the palette opens on Components with the Sections pill and the first card marked', async () => {
+test('on Components every folder has a pill, none is selected, every card shows, and the first is marked', async () => {
   const view = await setup({ components: mixed() });
   try {
     assert.equal(view.container.querySelector('.insert-tab.on').textContent, 'Components');
+    assert.ok(view.container.querySelector('.insert-palette').classList.contains('insert-palette-grid'));
+    assert.ok(view.container.querySelector('.insert-results').classList.contains('insert-results-grid'));
     assert.deepEqual(
       view.pills().map((pill) => pill.textContent),
-      ['Sections3', 'Blocks4'],
-      'each pill names its group and its hits; the blocks include the two astro:assets components',
+      ['Section3', 'Ui2'],
+      "each pill names its folder and its hits; Astro's own components are in no folder, so they have none",
     );
     assert.deepEqual(
-      view.pills().map((pill) => pill.classList.contains('on')),
-      [true, false],
+      view.pills().map((pill) => pill.getAttribute('aria-pressed')),
+      ['false', 'false'],
     );
-    assert.deepEqual(view.labels(), ['Hero', 'Pricing', 'Faq']);
+    assert.deepEqual(view.labels(), ['Hero', 'Pricing', 'Faq', 'Button', 'Tag', '<Image>', '<Picture>']);
     assert.equal(view.container.querySelectorAll('.insert-item.highlight').length, 1);
     assert.ok(view.cards()[0].classList.contains('highlight'));
-    assert.equal(view.container.querySelector('.insert-palette') !== null, true);
   } finally {
     await view.finish();
   }
@@ -216,70 +237,95 @@ test('a card shows how often a component is used, and nothing when it is not', a
   const view = await setup({ components: mixed() });
   try {
     const uses = view.cards().map((card) => card.querySelector('.insert-item-uses')?.textContent);
-    assert.deepEqual(uses, ['10×', undefined, '3×']);
+    assert.deepEqual(uses.slice(0, 5), ['10×', undefined, '3×', '25×', undefined]);
   } finally {
     await view.finish();
   }
 });
 
-test('sections that reach <section> through another component are sections', async () => {
+test('nested folders count toward their top-level folder, and root components share the components pill', async () => {
   const components = [
-    section('Section'),
-    { name: 'Hero', folder: 'Section', path: '/p/src/components/Section/Hero.astro', rootComponent: 'Section' },
-    block('Button'),
+    section('Hero'),
+    { name: 'Deep', folder: 'Section/hero', path: '/p/src/components/Section/hero/Deep.astro' },
+    { name: 'Loose', folder: '', path: '/p/src/components/Loose.astro' },
   ];
   const view = await setup({ components });
   try {
-    assert.deepEqual(view.labels(), ['Section', 'Hero']);
+    assert.deepEqual(
+      view.pills().map((pill) => pill.textContent),
+      ['components1', 'Section2'],
+      'the root first, then folders A to Z, as the Components panel lists them',
+    );
+    await view.act(() => view.pills()[1].click());
+    assert.deepEqual(view.labels(), ['Hero', 'Deep']);
   } finally {
     await view.finish();
   }
 });
 
-test('Blocks pill and Sections pill switch the grid; an empty pill yields to the other one', async () => {
+test('a pill filters, a second click clears it, another switches; one at most, remembered per project', async () => {
   const view = await setup({ components: mixed() });
+  const pressed = () => view.pills().map((pill) => pill.getAttribute('aria-pressed'));
   try {
     await view.act(() => view.pills()[1].click());
-    assert.deepEqual(view.labels().slice(0, 2), ['Button', 'Tag'], 'project blocks first, then the astro:assets ones');
-    assert.ok(view.labels().includes('<Image>'));
-    assert.deepEqual(
-      view.pills().map((pill) => pill.classList.contains('on')),
-      [false, true],
-    );
+    assert.deepEqual(view.labels(), ['Button', 'Tag']);
+    assert.deepEqual(pressed(), ['false', 'true']);
+    assert.ok(view.pills()[1].classList.contains('on'), 'the selected pill keeps the active style');
+    await view.act(() => view.pills()[0].click());
+    assert.deepEqual(view.labels(), ['Hero', 'Pricing', 'Faq'], 'another pill switches');
+    assert.deepEqual(pressed(), ['true', 'false']);
+    await view.act(() => view.pills()[0].click());
+    assert.equal(view.labels().length, 7, 'a second click clears the filter');
+    assert.deepEqual(pressed(), ['false', 'false']);
+    await view.act(() => view.pills()[1].click());
+    // A focused pill is a button: Enter presses it, it does not insert the marked card.
+    const enter = { prevented: false };
+    await view.act(() => view.Simulate.keyDown(view.pills()[1], { key: 'Enter', preventDefault: () => (enter.prevented = true) }));
+    assert.equal(enter.prevented, false);
+    assert.equal(view.events.inserted.length, 0);
   } finally {
     await view.finish();
   }
-  const blocksOnly = await setup({ components: [block('Button'), block('Tag')] });
+  const stored = { 'stacki.insertPalette.tab': 'components', 'stacki.insertPalette.folders': JSON.stringify([['/p', 'folder:Ui']]) };
+  const reopened = await setup({ components: mixed(), storage: stored });
   try {
-    assert.deepEqual(
-      blocksOnly.pills().map((pill) => pill.classList.contains('on')),
-      [false, true],
-      'no sections, so the blocks pill is the marked one',
-    );
-    assert.equal(blocksOnly.pills()[0].disabled, true);
+    assert.deepEqual(reopened.labels(), ['Button', 'Tag'], 'the project reopens on its pill');
   } finally {
-    await blocksOnly.finish();
+    await reopened.finish();
+  }
+  const other = await setup({ components: mixed(), storage: stored, projectKey: '/q' });
+  try {
+    assert.equal(other.labels().length, 7, 'another project keeps its own choice');
+  } finally {
+    await other.finish();
+  }
+  const vanished = await setup({
+    components: mixed(),
+    storage: { 'stacki.insertPalette.tab': 'components', 'stacki.insertPalette.folders': JSON.stringify([['/p', 'folder:Gone']]) },
+  });
+  try {
+    assert.equal(vanished.labels().length, 7, 'a remembered folder the project no longer has selects nothing');
+    assert.ok(vanished.pills().every((pill) => pill.getAttribute('aria-pressed') === 'false'));
+  } finally {
+    await vanished.finish();
   }
 });
 
-test('a search covers both groups and shows the one that has hits, with the counts of the hits', async () => {
+test('a search counts its hits on every pill and keeps the pills in place', async () => {
   const view = await setup({ components: mixed() });
   try {
     await view.type('button');
     assert.deepEqual(view.labels(), ['Button']);
     assert.deepEqual(
       view.pills().map((pill) => pill.textContent),
-      ['Sections0', 'Blocks1'],
+      ['Section0', 'Ui1'],
     );
-    assert.deepEqual(
-      view.pills().map((pill) => pill.classList.contains('on')),
-      [false, true],
-    );
+    assert.equal(view.pills()[0].disabled, true, 'a pill with no hits cannot be picked');
+    await view.act(() => view.pills()[1].click());
     await view.type('hero');
-    assert.deepEqual(
-      view.pills().map((pill) => pill.textContent),
-      ['Sections1', 'Blocks0'],
-    );
+    assert.deepEqual(view.labels(), [], 'the selected folder has no hit');
+    assert.equal(view.pills()[1].disabled, false, 'the selected pill stays clearable');
+    await view.act(() => view.pills()[1].click());
     assert.deepEqual(view.labels(), ['Hero']);
     await view.type('zzzz');
     assert.deepEqual(view.labels(), []);
@@ -289,36 +335,102 @@ test('a search covers both groups and shows the one that has hits, with the coun
   }
 });
 
-test('All results lists sections, then blocks as cards, then elements and other as tiles', async () => {
-  const view = await setup({ components: mixed() });
+test('the first use opens on All results, the plain list: rows, no cards, no pills, no hints', async () => {
+  const view = await setup({ components: mixed(), tab: undefined });
   try {
-    await view.act(() => view.container.querySelectorAll('.insert-tab')[0].click());
-    assert.equal(view.container.querySelector('.insert-pills') ?? undefined, undefined, 'no pills on All results');
-    const items = [...view.container.querySelectorAll('.insert-results > .insert-item')];
-    const kinds = items.map((item) => (item.classList.contains('insert-card') ? 'card' : 'tile'));
-    const firstTile = kinds.indexOf('tile');
-    assert.ok(firstTile > 0);
-    assert.ok(kinds.slice(0, firstTile).every((kind) => kind === 'card'));
-    assert.ok(kinds.slice(firstTile).every((kind) => kind === 'tile'));
+    assert.equal(view.container.querySelector('.insert-tab.on').textContent, 'All results');
+    assert.equal(view.container.querySelector('.insert-palette').classList.contains('insert-palette-grid'), false);
+    assert.equal(view.container.querySelector('.insert-results').classList.contains('insert-results-grid'), false);
+    assert.equal(view.container.querySelector('.insert-pills') ?? undefined, undefined, 'no pills on the list');
+    assert.equal(view.container.querySelector('.insert-footer') ?? undefined, undefined, 'no grid hints on the list');
+    assert.equal(view.cards().length, 0);
+    assert.equal(view.container.querySelector('.insert-surface') ?? undefined, undefined, 'rows have no picture area');
+    const rows = [...view.container.querySelectorAll('.insert-results > .insert-item')];
+    assert.ok(rows.length > 10);
+    assert.equal(rows.length <= 60, true, 'the list keeps its old length');
     const names = view.labels();
-    assert.deepEqual(names.slice(0, 5), ['Hero', 'Pricing', 'Faq', 'Button', 'Tag']);
-    assert.ok(names.includes('<Image>'), 'astro:assets components are blocks');
-    assert.equal(items.find((item) => item.textContent.includes('<Image>')).classList.contains('insert-card'), true);
-    assert.ok(names.includes('<div>') && names.includes('Loop'));
-    assert.equal(view.container.querySelector('.insert-tile .insert-surface') ?? undefined, undefined, 'tiles have no picture area');
+    assert.ok(names.includes('Hero') && names.includes('<Image>') && names.includes('<div>'));
+    assert.equal(rows[0].querySelector('.insert-item-sub')?.textContent, 'Section', 'a row says where the component lives');
+    await view.reveal();
+    assert.equal(view.frames().length, 0, 'the list loads no pages');
   } finally {
     await view.finish();
   }
 });
 
-test('Elements and Other are tiles', async () => {
-  const view = await setup({ components: mixed() });
+test('the palette reopens on the tab it was left on; an unknown stored tab, or storage that throws, is All results', async () => {
+  const first = await setup({ components: mixed(), tab: undefined });
+  let stored;
   try {
-    await view.act(() => view.container.querySelectorAll('.insert-tab')[2].click());
-    assert.ok(view.container.querySelectorAll('.insert-tile').length > 10);
+    await first.act(() => first.container.querySelectorAll('.insert-tab')[2].click());
+    stored = first.dom.window.localStorage.getItem('stacki.insertPalette.tab');
+    assert.equal(stored, 'elements');
+    await first.press('Tab');
+    assert.equal(first.dom.window.localStorage.getItem('stacki.insertPalette.tab'), 'other', 'keyboard tab changes are kept too');
+  } finally {
+    await first.finish();
+  }
+  const reopened = await setup({ components: mixed(), storage: { 'stacki.insertPalette.tab': 'other' } });
+  try {
+    assert.equal(reopened.container.querySelector('.insert-tab.on').textContent, 'Other');
+  } finally {
+    await reopened.finish();
+  }
+  const components = await setup({ components: mixed(), storage: { 'stacki.insertPalette.tab': 'components' } });
+  try {
+    assert.equal(components.container.querySelector('.insert-tab.on').textContent, 'Components');
+    assert.ok(components.cards().length > 0, 'the grid comes back with its tab');
+  } finally {
+    await components.finish();
+  }
+  const unknown = await setup({ components: mixed(), storage: { 'stacki.insertPalette.tab': 'photos' } });
+  try {
+    assert.equal(unknown.container.querySelector('.insert-tab.on').textContent, 'All results');
+  } finally {
+    await unknown.finish();
+  }
+  const broken = await setup({
+    components: mixed(),
+    tab: undefined,
+    beforeRender: () => {
+      // Storage that refuses every call, as a locked-down browser profile does.
+      const denied = () => {
+        throw new Error('denied');
+      };
+      global.localStorage = { getItem: denied, setItem: denied };
+    },
+  });
+  try {
+    assert.equal(broken.container.querySelector('.insert-tab.on').textContent, 'All results');
+    await broken.act(() => broken.container.querySelectorAll('.insert-tab')[3].click());
+    assert.equal(broken.container.querySelector('.insert-tab.on').textContent, 'Other', 'a tab that cannot be saved still switches');
+  } finally {
+    await broken.finish();
+  }
+});
+
+test('Elements and Other are the plain list, and up and down move one row at a time', async () => {
+  const view = await setup({ components: mixed(), tab: 'elements' });
+  try {
+    assert.ok(view.container.querySelectorAll('.insert-results > .insert-item').length > 10);
     assert.equal(view.container.querySelectorAll('.insert-card').length, 0);
+    await view.type('h');
+    const marked = () => [...view.container.querySelectorAll('.insert-results > .insert-item')].findIndex((row) => row.classList.contains('highlight'));
+    assert.equal(marked(), 0);
+    assert.equal((await view.press('ArrowDown')).prevented, true);
+    assert.equal(marked(), 1, 'one row, not one grid row of three');
+    assert.equal((await view.press('ArrowRight')).prevented, false, 'left and right are the text cursor');
+    await view.press('ArrowUp');
+    await view.press('ArrowUp');
+    assert.equal(marked(), 0, 'the list stops at the top');
+    const space = await view.press(' ');
+    assert.equal(space.prevented, false, 'a space is typed into the search');
+    await view.press('Enter');
+    assert.equal(view.events.inserted[0].type, 'element');
+    await view.type('');
     await view.act(() => view.container.querySelectorAll('.insert-tab')[3].click());
     assert.deepEqual(view.labels().slice(0, 2), ['Loop', 'Condition']);
+    assert.equal(view.container.querySelectorAll('.insert-card').length, 0);
   } finally {
     await view.finish();
   }
@@ -383,8 +495,10 @@ test('no observers: no frame loads, nothing throws, the card says it is loading'
   const view = await setup({ components: mixed(), observers: false });
   try {
     assert.equal(view.frames().length, 0);
-    assert.equal(view.cards().length, 3);
-    assert.ok([...view.container.querySelectorAll('.insert-surface-note')].every((note) => note.textContent.includes('Loading preview…')));
+    assert.equal(view.cards().length, 7);
+    const notes = view.cards().map((card) => card.querySelector('.insert-surface-note').textContent);
+    assert.ok(notes.slice(0, 5).every((note) => note.includes('Loading preview…')));
+    assert.deepEqual(notes.slice(5), ['No preview available', 'No preview available'], "Astro's own components have no file to preview");
   } finally {
     await view.finish();
   }
@@ -397,6 +511,7 @@ test('without a dev server the card says there is no preview, and the card still
     assert.equal(view.frames().length, 0);
     const note = view.cards()[0].querySelector('.insert-surface-note');
     assert.equal(note.textContent, 'No preview available');
+    assert.equal(note.getAttribute('title'), 'The project dev server is not running.', 'the reason is on hover');
     assert.ok(note.querySelector('.insert-surface-note-icon svg'), 'the component icon sits in it');
     await view.act(() => view.cards()[1].click());
     assert.equal(view.events.inserted[0].name, 'Pricing');
@@ -411,12 +526,13 @@ test('a component without a file has no preview either', async () => {
     await view.reveal();
     assert.equal(view.frames().length, 0);
     assert.equal(view.cards()[0].querySelector('.insert-surface-note').textContent, 'No preview available');
+    assert.equal(view.cards()[0].querySelector('.insert-surface-note').getAttribute('title'), 'This component has no file the preview can load.');
   } finally {
     await view.finish();
   }
 });
 
-test('a visible, measured card loads the real route in an inert frame at the width its group is built for', async () => {
+test('a visible card loads the hover preview route, recipe defaults and all, in an inert frame', async () => {
   const view = await setup({ components: mixed() });
   try {
     assert.equal(view.frames().length, 0, 'nothing loads before a card is seen');
@@ -427,19 +543,18 @@ test('a visible, measured card loads the real route in an inert frame at the wid
     const url = new URL(first.getAttribute('src'));
     assert.equal(url.origin + url.pathname, `${DEV_URL}/__avb/preview`);
     assert.equal(url.searchParams.get('c'), 'Hero');
-    assert.equal(url.searchParams.get('layout'), 'page', 'a section is laid out at the frame width');
     assert.equal(url.searchParams.get('p'), 'src/components/Section/Hero.astro');
+    // The route reads the recipe from .stacki/components.json itself, so the card asks exactly what the
+    // Components panel's hover card asks: no layout of its own, no page, no isolate hash.
+    assert.equal(url.searchParams.has('layout'), false, 'the hover card layout, which fits the component into the frame');
+    assert.equal(url.hash, '');
+    assert.deepEqual([...url.searchParams.keys()].sort(), ['c', 'p']);
     assert.equal(first.getAttribute('aria-hidden'), 'true');
     assert.equal(first.getAttribute('tabindex'), '-1');
-    const surface = view.cards()[0].querySelector('.insert-surface');
-    assert.equal(surface.style.getPropertyValue('--surface-width'), '1440px');
-    assert.equal(Number(surface.style.getPropertyValue('--surface-scale')), 360 / 1440);
+    assert.equal(first.hasAttribute('sandbox'), false, 'a live component, as in the hover card');
     await view.act(() => view.pills()[1].click());
     await view.reveal(360);
-    const blockSurface = view.cards()[0].querySelector('.insert-surface');
-    assert.equal(new URL(view.frames()[0].getAttribute('src')).searchParams.get('layout'), 'page', 'a block is laid out at its frame width too, top left');
-    assert.equal(blockSurface.style.getPropertyValue('--surface-width'), '640px');
-    assert.equal(Number(blockSurface.style.getPropertyValue('--surface-scale')), 360 / 640);
+    assert.equal(new URL(view.frames()[0].getAttribute('src')).searchParams.get('c'), 'Button', 'a block loads the same route');
   } finally {
     await view.finish();
   }
@@ -457,10 +572,45 @@ test('the card shows its loading reason until the frame reports, then the page; 
     await send(first.contentWindow, 'ready');
     assert.equal(view.frames()[0].style.opacity, '1');
     assert.equal(view.cards()[0].querySelector('.insert-surface-note') ?? undefined, undefined);
-    await send(second.contentWindow, 'empty');
-    assert.equal(view.cards()[1].querySelector('.insert-surface-note').textContent, 'No preview available');
+    await view.act(() =>
+      window.dispatchEvent(
+        new view.dom.window.MessageEvent('message', {
+          source: second.contentWindow,
+          data: { type: 'avb:component-preview', status: 'empty', reason: 'Preview needs data for: items.' },
+        }),
+      ),
+    );
+    const note = view.cards()[1].querySelector('.insert-surface-note');
+    assert.equal(note.textContent, 'No preview available');
+    assert.equal(note.getAttribute('title'), 'Preview needs data for: items.', "the route's reason is on hover");
     await send(view.dom.window, 'ready');
     assert.equal(view.cards()[2].querySelector('.insert-frame').style.opacity, '0', 'a message from another window changes nothing');
+  } finally {
+    await view.finish();
+  }
+});
+
+test('a page that loads and never reports is given up on, with the reason on hover', async () => {
+  const view = await setup({ components: mixed() });
+  try {
+    await view.reveal();
+    const [first, second] = view.frames();
+    // A page that reports is never given up on; one that loads and stays silent threw before its script ran.
+    await view.act(() =>
+      window.dispatchEvent(
+        new view.dom.window.MessageEvent('message', { source: first.contentWindow, data: { type: 'avb:component-preview', status: 'ready' } }),
+      ),
+    );
+    await view.act(() => {
+      first.dispatchEvent(new view.dom.window.Event('load'));
+      second.dispatchEvent(new view.dom.window.Event('load'));
+    });
+    assert.ok(view.cards()[1].textContent.includes('Loading preview…'), 'silence is not failure yet');
+    await view.act(() => new Promise((resolve) => setTimeout(resolve, 3100)));
+    assert.equal(view.frames()[0].style.opacity, '1', 'the page that answered stays');
+    const note = view.cards()[1].querySelector('.insert-surface-note');
+    assert.equal(note.textContent, 'No preview available');
+    assert.match(note.getAttribute('title'), /did not render the component; it may have thrown an error/);
   } finally {
     await view.finish();
   }
@@ -472,122 +622,45 @@ test('a card scrolled out of view loses its frame, and gets a new one when it re
     await view.reveal();
     assert.equal(view.frames().length, 3);
     await view.act(() => view.observers.show(view.cards()[0], false));
-    assert.equal(view.frames().length, 2);
     assert.equal(view.cards()[0].querySelector('iframe') ?? undefined, undefined);
+    assert.equal(view.frames().length, 3, 'the next visible card takes the place');
     await view.act(() => view.observers.show(view.cards()[0], true));
+    assert.ok(view.cards()[0].querySelector('iframe'), 'grid order wins the place back');
     assert.equal(view.frames().length, 3);
   } finally {
     await view.finish();
   }
 });
 
-test('never more frames than the limit, large view included', async () => {
+test('never more frames than the limit', async () => {
   const components = Array.from({ length: 40 }, (_, at) => section(`S${String(at).padStart(2, '0')}`));
   const view = await setup({ components });
   try {
     await view.reveal();
-    assert.equal(view.cards().length, 40);
-    assert.equal(view.frames().length, 11, 'one frame stays free for the large view');
+    assert.equal(view.cards().length, 42, "the forty sections and Astro's two components");
+    assert.equal(view.frames().length, 3, 'only a few pages load at once');
+    await view.settleFrames();
+    assert.equal(view.frames().length, 12, 'the limit, and no more');
     assert.equal(view.frames()[0].getAttribute('src').includes('c=S00'), true, 'the first cards in grid order get them');
-    await view.press(' ');
-    const layer = view.container.querySelector('.insert-enlarged');
-    assert.ok(layer);
-    await view.act(() => view.observers.size(layer.querySelector('.insert-surface'), 1100));
-    assert.equal(view.frames().length, 12);
   } finally {
     await view.finish();
   }
 });
 
-test('Space opens the large view on an empty search, Escape closes only that layer', async () => {
+test('there is no large view: Space does nothing on the grid, and the footer only says Enter inserts', async () => {
   const view = await setup({ components: mixed() });
   try {
     await view.reveal();
-    assert.equal(view.container.querySelector('.insert-footer').textContent, 'Space to enlarge↵ insert');
-    const opened = await view.press(' ');
-    assert.equal(opened.prevented, true);
-    const layer = view.container.querySelector('.insert-enlarged');
-    assert.ok(layer);
-    assert.equal(layer.querySelector('.insert-enlarged-head').textContent.startsWith('Hero'), true);
-    await view.act(() => view.observers.size(layer.querySelector('.insert-surface'), 1100));
-    const surface = layer.querySelector('.insert-surface');
-    assert.equal(surface.style.getPropertyValue('--surface-width'), '1440px');
-    assert.equal(Number(surface.style.getPropertyValue('--surface-scale')), 1100 / 1440);
-    assert.ok(layer.querySelector('iframe'), 'the large view renders the same route');
-    await view.press('Escape');
-    assert.equal(view.container.querySelector('.insert-enlarged') ?? undefined, undefined);
-    assert.equal(view.events.closed, 0, 'the palette stays');
-    await view.press(' ');
-    assert.ok(view.container.querySelector('.insert-enlarged'));
-    await view.press(' ');
-    assert.equal(view.container.querySelector('.insert-enlarged') ?? undefined, undefined, 'the same key closes it');
-    assert.equal(view.events.closed, 0);
-    await view.press('Escape');
-    assert.equal(view.events.closed, 1);
-  } finally {
-    await view.finish();
-  }
-});
-
-test('while the large view is open the keys do not reach the grid or the search', async () => {
-  const view = await setup({ components: mixed() });
-  try {
-    await view.press(' ');
-    const before = view.cards().findIndex((card) => card.classList.contains('highlight'));
-    const arrow = await view.press('ArrowRight');
-    assert.equal(arrow.prevented, true);
-    const letter = await view.press('x');
-    assert.equal(letter.prevented, true, 'typing is held back');
-    const enter = await view.press('Enter');
-    assert.equal(enter.prevented, true);
-    assert.equal(view.events.inserted.length, 0);
-    await view.press('Escape');
-    assert.equal(
-      view.cards().findIndex((card) => card.classList.contains('highlight')),
-      before,
-    );
-  } finally {
-    await view.finish();
-  }
-});
-
-test('with a search typed a plain space is the search, and only Shift Space opens the large view', async () => {
-  const view = await setup({ components: mixed() });
-  try {
-    await view.type('hero');
-    assert.equal(view.container.querySelector('.insert-footer').textContent, '⇧ Space to enlarge↵ insert');
-    const plain = await view.press(' ');
-    assert.equal(plain.prevented, false, 'the space is typed');
-    assert.equal(view.container.querySelector('.insert-enlarged') ?? undefined, undefined);
+    const space = await view.press(' ');
+    assert.equal(space.prevented, false, 'Space is left to the search field');
     const shifted = await view.press(' ', { shiftKey: true });
-    assert.equal(shifted.prevented, true);
-    assert.ok(view.container.querySelector('.insert-enlarged'));
-    await view.press(' ', { shiftKey: true });
-    assert.equal(view.container.querySelector('.insert-enlarged') ?? undefined, undefined);
+    assert.equal(shifted.prevented, false);
+    assert.equal(view.container.querySelector('[role="dialog"]') ?? undefined, undefined);
+    assert.equal(view.frames().length, 3, 'no extra frame opens');
+    assert.equal(view.container.querySelector('.insert-footer').textContent, '↵ insert');
+    assert.equal(view.events.inserted.length, 0);
   } finally {
     await view.finish();
-  }
-});
-
-test('Space on something with no picture does nothing, and gives no hint', async () => {
-  const noServer = await setup({ components: mixed(), devUrl: undefined });
-  try {
-    assert.equal(noServer.container.querySelector('.insert-footer').textContent, '↵ insert');
-    const space = await noServer.press(' ');
-    assert.equal(space.prevented, true, 'an empty search never takes a leading space');
-    assert.equal(noServer.container.querySelector('.insert-enlarged') ?? undefined, undefined);
-    assert.equal(noServer.input().value, '');
-  } finally {
-    await noServer.finish();
-  }
-  const tiles = await setup({ components: mixed() });
-  try {
-    await tiles.act(() => tiles.container.querySelectorAll('.insert-tab')[2].click());
-    assert.equal(tiles.container.querySelector('.insert-footer').textContent, '↵ insert');
-    await tiles.press(' ');
-    assert.equal(tiles.container.querySelector('.insert-enlarged') ?? undefined, undefined);
-  } finally {
-    await tiles.finish();
   }
 });
 
@@ -596,7 +669,7 @@ test('the grid is capped at the named limit, and the pills still count every hit
   const view = await setup({ components });
   try {
     assert.equal(view.cards().length, 200);
-    assert.equal(view.pills()[0].textContent, 'Sections230');
+    assert.equal(view.pills()[0].textContent, 'Section230');
   } finally {
     await view.finish();
   }
@@ -610,186 +683,6 @@ test('cards keep the classes that existing tests and browser checks find them by
     assert.ok(card.classList.contains('highlight'));
     assert.ok(card.querySelector('.insert-item-label'));
     assert.ok(view.container.querySelector('.insert-palette'));
-  } finally {
-    await view.finish();
-  }
-});
-
-const HERO_FILE = '/p/src/components/Section/Hero.astro';
-
-test('a card with a photograph shows it, inert and top aligned, instead of loading the live route', async () => {
-  const shots = fakeShots([HERO_FILE], { [HERO_FILE]: JPEG('HERO') });
-  const view = await setup({ components: mixed(), shots: shots.source });
-  try {
-    await settle(view);
-    assert.deepEqual(shots.state.reads, [], 'nothing is fetched before a card is seen');
-    await view.reveal();
-    await settle(view);
-    const image = view.cards()[0].querySelector('img.insert-shot');
-    assert.ok(image);
-    assert.equal(image.getAttribute('src'), JPEG('HERO'));
-    assert.equal(image.getAttribute('alt'), '');
-    assert.equal(image.getAttribute('draggable'), 'false');
-    assert.equal(image.getAttribute('tabindex'), '-1');
-    assert.equal(image.getAttribute('aria-hidden'), 'true');
-    assert.ok(view.cards()[0].querySelector('.insert-surface').classList.contains('insert-surface-photo'));
-    assert.equal(view.cards()[0].querySelector('iframe') ?? undefined, undefined, 'the live route is not loaded for a photographed card');
-    assert.equal(view.frames().length, 2, 'the others still use the live route');
-    assert.deepEqual(shots.state.reads, [HERO_FILE], 'only the photographed, seen card is read');
-  } finally {
-    await view.finish();
-  }
-});
-
-test('while the photograph is on its way the card says so and does not start the live route', async () => {
-  const slow = fakeShots([HERO_FILE]);
-  let release = () => {};
-  slow.source.read = () => new Promise((resolve) => (release = () => resolve(JPEG('LATE'))));
-  const view = await setup({ components: mixed(), shots: slow.source });
-  try {
-    await settle(view);
-    await view.reveal();
-    await settle(view);
-    assert.ok(view.cards()[0].textContent.includes('Loading preview…'));
-    assert.equal(view.cards()[0].querySelector('iframe') ?? undefined, undefined);
-    await view.act(async () => release());
-    await settle(view);
-    assert.equal(view.cards()[0].querySelector('img.insert-shot').getAttribute('src'), JPEG('LATE'));
-  } finally {
-    await view.finish();
-  }
-});
-
-test('a photograph that cannot be read falls back to the live route', async () => {
-  const shots = fakeShots([HERO_FILE], {});
-  const view = await setup({ components: mixed(), shots: shots.source });
-  try {
-    await settle(view);
-    await view.reveal();
-    await settle(view);
-    assert.equal(view.cards()[0].querySelector('img') ?? undefined, undefined);
-    assert.ok(view.cards()[0].querySelector('iframe'));
-  } finally {
-    await view.finish();
-  }
-});
-
-test('a component with no photograph, no source and a failing catalog all use the live route', async () => {
-  const none = fakeShots([]);
-  const view = await setup({ components: mixed(), shots: none.source });
-  try {
-    await settle(view);
-    await view.reveal();
-    assert.equal(view.container.querySelectorAll('img.insert-shot').length, 0);
-    assert.equal(view.frames().length, 3);
-  } finally {
-    await view.finish();
-  }
-  const broken = fakeShots([HERO_FILE]);
-  broken.source.list = async () => {
-    throw new Error('no main process');
-  };
-  const failing = await setup({ components: mixed(), shots: broken.source });
-  try {
-    await settle(failing);
-    await failing.reveal();
-    assert.equal(failing.frames().length, 3);
-  } finally {
-    await failing.finish();
-  }
-});
-
-test('photographs do not count against the frame limit', async () => {
-  const components = Array.from({ length: 40 }, (_, at) => section(`S${String(at).padStart(2, '0')}`));
-  const photographed = components.slice(0, 20).map((component) => component.path);
-  const images = Object.fromEntries(photographed.map((file) => [file, JPEG('X')]));
-  const shots = fakeShots(photographed, images);
-  const view = await setup({ components, shots: shots.source });
-  try {
-    await settle(view);
-    await view.reveal();
-    await settle(view);
-    assert.equal(view.container.querySelectorAll('img.insert-shot').length, 20);
-    assert.equal(view.frames().length, 11, 'the frames go to the cards without a photograph');
-    assert.ok(view.frames()[0].getAttribute('src').includes('c=S20'));
-  } finally {
-    await view.finish();
-  }
-});
-
-test('new photographs announced by the main process replace the fallback, and the listener is released', async () => {
-  const shots = fakeShots([], { [HERO_FILE]: JPEG('NEW') });
-  const view = await setup({ components: mixed(), shots: shots.source });
-  try {
-    await settle(view);
-    await view.reveal();
-    assert.ok(view.cards()[0].querySelector('iframe'));
-    shots.state.components.push(HERO_FILE);
-    await view.act(async () => shots.announce());
-    await settle(view);
-    await view.reveal();
-    await settle(view);
-    assert.equal(view.cards()[0].querySelector('img.insert-shot')?.getAttribute('src'), JPEG('NEW'));
-    assert.equal(view.cards()[0].querySelector('iframe') ?? undefined, undefined);
-    assert.equal(shots.state.listeners.size, 1);
-  } finally {
-    await view.finish();
-  }
-  assert.equal(shots.state.listeners.size, 0);
-});
-
-test('the large view shows the same photograph, and scrolls instead of cropping', async () => {
-  const shots = fakeShots([HERO_FILE], { [HERO_FILE]: JPEG('HERO') });
-  const view = await setup({ components: mixed(), shots: shots.source });
-  try {
-    await settle(view);
-    await view.reveal();
-    await settle(view);
-    await view.press(' ');
-    await settle(view);
-    const layer = view.container.querySelector('.insert-enlarged');
-    assert.ok(layer);
-    assert.equal(layer.querySelector('img.insert-shot')?.getAttribute('src'), JPEG('HERO'));
-    assert.ok(layer.querySelector('.insert-surface-large.insert-surface-photo'));
-    assert.equal(layer.querySelector('iframe') ?? undefined, undefined);
-  } finally {
-    await view.finish();
-  }
-});
-
-test('a photograph that cannot be drawn gives way to the live route', async () => {
-  const shots = fakeShots([HERO_FILE], { [HERO_FILE]: JPEG('BROKEN') });
-  const view = await setup({ components: mixed(), shots: shots.source });
-  try {
-    await settle(view);
-    await view.reveal();
-    await settle(view);
-    const image = view.cards()[0].querySelector('img.insert-shot');
-    assert.ok(image);
-    await view.act(() => view.Simulate.error(image));
-    await settle(view);
-    await view.reveal();
-    assert.equal(view.cards()[0].querySelector('img') ?? undefined, undefined);
-    assert.ok(view.cards()[0].querySelector('iframe'), 'the card takes a frame again');
-  } finally {
-    await view.finish();
-  }
-});
-
-test('the large view opens on a photograph without a dev server', async () => {
-  const shots = fakeShots([HERO_FILE], { [HERO_FILE]: JPEG('HERO') });
-  const view = await setup({ components: mixed(), devUrl: undefined, shots: shots.source });
-  try {
-    await settle(view);
-    await view.reveal();
-    await settle(view);
-    assert.equal(view.container.querySelector('.insert-footer').textContent, 'Space to enlarge↵ insert');
-    await view.press(' ');
-    await settle(view);
-    assert.equal(view.container.querySelector('.insert-enlarged img.insert-shot')?.getAttribute('src'), JPEG('HERO'));
-    await view.press('Escape');
-    await view.press('ArrowRight');
-    assert.equal(view.container.querySelector('.insert-footer').textContent, '↵ insert', 'the next card has no photograph and no server');
   } finally {
     await view.finish();
   }
@@ -811,79 +704,6 @@ test('hovering a card does not scroll the list; the arrow keys do', async () => 
   }
 });
 
-test('a section photographed narrower still fills the card; a block keeps its width in proportion', async () => {
-  const BUTTON_FILE = '/p/src/components/Ui/Button.astro';
-  const shots = fakeShots([HERO_FILE, BUTTON_FILE], { [HERO_FILE]: JPEG('HERO'), [BUTTON_FILE]: JPEG('BUTTON') }, { [HERO_FILE]: 1200, [BUTTON_FILE]: 300 });
-  const view = await setup({ components: mixed(), shots: shots.source });
-  try {
-    await settle(view);
-    await view.reveal();
-    await settle(view);
-    const sectionShot = view.cards()[0].querySelector('img.insert-shot');
-    assert.equal(sectionShot.style.getPropertyValue('--shot-width'), '', 'no width of its own: the CSS gives it the card’s width');
-    await view.act(() => view.pills()[1].click());
-    await view.reveal();
-    await settle(view);
-    const blockShot = view.cards()[0].querySelector('img.insert-shot');
-    assert.equal(blockShot.style.getPropertyValue('--shot-width'), '300');
-    await view.press(' ');
-    await settle(view);
-    assert.equal(view.container.querySelector('.insert-enlarged img.insert-shot').style.getPropertyValue('--shot-width'), '300');
-  } finally {
-    await view.finish();
-  }
-});
-
-test('no live frame starts before the photograph catalog has answered, and an unanswerable catalog is an empty one', async () => {
-  const pending = fakeShots([HERO_FILE]);
-  let answer = () => {};
-  pending.source.list = () => new Promise((resolve) => (answer = () => resolve([])));
-  const view = await setup({ components: mixed(), shots: pending.source });
-  try {
-    await view.reveal();
-    assert.equal(view.frames().length, 0, 'the catalog has not answered');
-    await view.act(async () => answer());
-    await settle(view);
-    await view.reveal();
-    assert.equal(view.frames().length, 3, 'now the cards know they have no photograph');
-  } finally {
-    await view.finish();
-  }
-  const failing = fakeShots([HERO_FILE]);
-  failing.source.list = async () => {
-    throw new Error('no main process');
-  };
-  const fallback = await setup({ components: mixed(), shots: failing.source });
-  try {
-    await settle(fallback);
-    await fallback.reveal();
-    assert.equal(fallback.frames().length, 3, 'a failed first read leaves the live route to work');
-  } finally {
-    await fallback.finish();
-  }
-});
-
-test('a catalog refresh keeps the photograph on screen until its replacement is read', async () => {
-  const shots = fakeShots([HERO_FILE], { [HERO_FILE]: JPEG('OLD') });
-  const view = await setup({ components: mixed(), shots: shots.source });
-  try {
-    await settle(view);
-    await view.reveal();
-    await settle(view);
-    assert.equal(view.cards()[0].querySelector('img.insert-shot')?.getAttribute('src'), JPEG('OLD'));
-    let release = () => {};
-    shots.source.read = () => new Promise((resolve) => (release = () => resolve(JPEG('NEW'))));
-    await view.act(async () => shots.announce());
-    await settle(view);
-    assert.equal(view.cards()[0].querySelector('img.insert-shot')?.getAttribute('src'), JPEG('OLD'), 'the old photograph stays while the new one loads');
-    await view.act(async () => release());
-    await settle(view);
-    assert.equal(view.cards()[0].querySelector('img.insert-shot')?.getAttribute('src'), JPEG('NEW'));
-  } finally {
-    await view.finish();
-  }
-});
-
 test('a pointer at rest does not take the highlight from the keyboard, and one that moves does', async () => {
   const components = Array.from({ length: 6 }, (_, at) => section(`S${at}`));
   const view = await setup({ components });
@@ -895,6 +715,35 @@ test('a pointer at rest does not take the highlight from the keyboard, and one t
     assert.equal(marked(), 1, 'entering a card under a resting pointer changes nothing');
     await view.act(() => view.Simulate.mouseMove(view.cards()[3]));
     assert.equal(marked(), 3, 'moving the pointer over a card marks it');
+  } finally {
+    await view.finish();
+  }
+});
+
+/** A fake plan source: the instances it answers with, or a failure, and whether it has answered yet. */
+test('frames load a few at a time in grid order, and the next start as earlier ones answer', async () => {
+  const components = Array.from({ length: 9 }, (_, at) => section(`S${at}`));
+  const view = await setup({ components });
+  try {
+    await view.reveal();
+    // The nine project cards; Astro's two follow them and never load a frame.
+    const loaded = () =>
+      view
+        .cards()
+        .slice(0, 9)
+        .map((card) => card.querySelector('iframe') !== null);
+    assert.deepEqual(loaded(), [true, true, true, false, false, false, false, false, false]);
+    const first = view.frames()[0];
+    await view.act(() =>
+      window.dispatchEvent(
+        new view.dom.window.MessageEvent('message', { source: first.contentWindow, data: { type: 'avb:component-preview', status: 'ready' } }),
+      ),
+    );
+    assert.deepEqual(loaded(), [true, true, true, true, false, false, false, false, false], 'an answer frees a loading place');
+    await view.act(() => view.press('ArrowDown'));
+    assert.equal(view.cards()[0].querySelector('iframe') !== null, true, 'moving the highlight takes no frame away');
+    await view.settleFrames();
+    assert.equal(view.frames().length, 9);
   } finally {
     await view.finish();
   }

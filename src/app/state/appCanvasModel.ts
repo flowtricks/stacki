@@ -9,7 +9,7 @@ import { isDataBound } from '../../editor/bindings';
 import { thenBranch } from '../../editor/branches';
 import { canvasEventSelectsSource, type CanvasEventRequest } from '../../editor/canvasClick';
 import { nodeAtPath } from '../../editor/editorTree';
-import { elementLabel } from '../../editor/classNames';
+import { classLabel, elementLabel } from '../../editor/classNames';
 import type { OverlayInfo } from '../../features/preview/PreviewOverlays';
 import type { PreviewCrumb } from '../../features/preview/PreviewToolbar';
 import type { SpacingHover } from '../../features/preview/PreviewOverlays';
@@ -174,8 +174,8 @@ export function useCanvasNotices(
     if (fromSource && fromSource !== node.name) {
       return fromSource;
     }
-    const live = liveClassesById?.get(node.id);
-    return live?.[0] ?? fromSource;
+    const live = liveClassesById?.get(node.id)?.[0];
+    return live === undefined ? fromSource : classLabel(live);
   };
   return { editedRel, liveClassesById, liveLabel, onPreviewReload, onStaleEvent };
 }

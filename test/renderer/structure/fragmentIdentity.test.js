@@ -175,7 +175,7 @@ const check = (what, condition, detail) => {
   const labelOf = (id) => container.querySelector(`.structure-node[data-node-id="${id}"] .label`)?.textContent?.trim() || '';
   check('the Fragment says what it is', labelOf('frag') === 'Fragment', labelOf('frag'));
   check('the component it holds says what IT is', labelOf('img') === 'FeatureImage', labelOf('img'));
-  check('and an element still wears the class the page says it rendered with', labelOf('listed') === 'card_wrap', labelOf('listed'));
+  check('and an element still wears the class the page says it rendered with', labelOf('listed') === '.card_wrap', labelOf('listed'));
 
   if (failures.length) {
     console.error(`\nfragment-identity: ${failures.length} failed, ${checked - failures.length} passed\n`);

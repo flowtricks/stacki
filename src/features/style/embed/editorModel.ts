@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { type RuleModel } from '../model/cascade';
 import { snapshotTokens, tokensToSelector } from '../model/elementTokens';
-import { chipLayer, selectorsMatch, stateForSelector, STATES, type MatchedSelector, type PanelLayer, type StyleContext } from '../model/resolved';
+import { chipLayer, selectorKey, selectorsMatch, stateForSelector, STATES, type MatchedSelector, type PanelLayer, type StyleContext } from '../model/resolved';
 import type { Declaration } from 'postcss';
 import {
   directDecls,
@@ -183,6 +183,8 @@ export interface ChipInputs {
   /** Classes the instance passed to the component open on the canvas, offered as
    *  chips of their own (model/instanceClasses.ts). Empty outside a component. */
   instanceClasses?: readonly string[] | undefined;
+  /** Nested selectors as they were typed, for chips with no rule yet (withTypedLabel). */
+  typedLabels?: TypedLabels | undefined;
 }
 
 /** A pseudo-element the navigator shows as a layer of its own. */
@@ -254,7 +256,7 @@ export function chipsFor(inputs: ChipInputs): MatchedSelector[] {
 // so the pending chip disappears on its own when you move on without adding styles.
 export function pendingActiveChip(
   list: MatchedSelector[],
-  inputs: Pick<ChipInputs, 'activeSelector' | 'selectedSelectorText' | 'tokens'>,
+  inputs: Pick<ChipInputs, 'activeSelector' | 'selectedSelectorText' | 'tokens' | 'typedLabels'>,
 ): MatchedSelector | undefined {
   const { activeSelector } = inputs;
   if (!activeSelector || list.some((entry) => selectorsMatch(entry.text, activeSelector))) {
@@ -266,8 +268,12 @@ export function pendingActiveChip(
   if (own && inputs.selectedSelectorText === undefined) {
     return undefined;
   }
+  // No rule means no nesting to read back yet, so the typed text is the only
+  // record of it; without this the chip showed the flattened `.a .b`.
+  const typedLabel = inputs.typedLabels?.get(selectorKey(activeSelector));
   return {
     text: activeSelector,
+    ...(typedLabel === undefined ? {} : { display: typedLabel }),
     // Ranked like any chip in the well (wellOrder), by what its text weighs.
     specificity: selectorSpecificity(activeSelector),
     state: stateForSelector(activeSelector),
@@ -607,6 +613,21 @@ export function takeTypedPath(paths: TypedPaths, selector: string, context: stri
   paths.delete(key);
   return path;
 }
+
+/** The text each nested selector was typed as, by the selector it resolves to. */
+export type TypedLabels = ReadonlyMap<string, string>;
+
+/** `labels` with `typed` recorded for `selector`, the oldest going past the bound. */
+export function withTypedLabel(labels: TypedLabels, selector: string, typed: string): TypedLabels {
+  assert(selector.trim() !== '', 'withTypedLabel: a label belongs to a selector');
+  assert(typed.trim() !== '', 'withTypedLabel: a label has text');
+  const key = selectorKey(selector);
+  const entries = [...labels].filter(([existing]) => existing !== key);
+  const next = new Map([...entries, [key, typed.trim()] as const].slice(-TYPED_PATHS_MAX));
+  assert(next.size <= TYPED_PATHS_MAX, 'withTypedLabel: labels are bounded');
+  return next;
+}
+
 export type CanvasAnswer = Awaited<ReturnType<typeof askCanvasAbout>>;
 
 // A forced rescan re-walks the component tree for embeds; otherwise the cached

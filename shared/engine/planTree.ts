@@ -17,7 +17,7 @@
 //
 // Every rejection is decided in the three plan functions; the helpers compute.
 import { assert } from '../core/assert';
-import { indentUnitOf } from '../core/indent';
+import { indentUnitBelow } from '../core/indent';
 import { HTML_INLINE_REPLACED_TAGS, HTML_PHRASING_TAGS, HTML_TEXT_ONLY_PARENTS, HTML_VOID_TAGS, HTML_WHITESPACE_TAGS } from '../page/htmlTags';
 import type { Operation, Placement, RejectionReason } from './intent';
 import { labelsNode } from '../page/leadingNote';
@@ -607,11 +607,96 @@ function insertionBeside(
   if (lined !== undefined) {
     return { ...lined, anchorPath };
   }
+  const edge = insertionAtTextEdge(bytes, projection, anchor, side, written.text);
+  if (edge !== undefined) {
+    return { ...edge, anchorPath };
+  }
   const separator = written.origin === 'new' ? separatorBeside(bytes, projection, anchor, written.text) : separatorBefore(bytes, projection, anchor);
   if (side === 'after') {
-    return { range: point(anchor.span.end), text: `${separator}${written.text}`, anchorPath };
+    const closing = written.origin === 'new' ? closingLineAfter(bytes, projection, anchor, separator, written.text) : '';
+    return { range: point(anchor.span.end), text: `${separator}${written.text}${closing}`, anchorPath };
   }
   return { range: point(anchor.span.start), text: `${written.text}${separator}`, anchorPath };
+}
+
+// Beside words written on lines of their own. A text node's span holds the
+// whitespace around its words, so its edge sits on the line of the parent's
+// closing tag, or of the sibling after it, at that line's indentation; a node
+// placed there landed on that line. Instead the node takes a line of its own
+// inside the whitespace: after the words, at the start of the line the closing
+// tag or next sibling stands on; before them, just after the line break above
+// them. The line break is already in the file, so the page renders as before.
+function insertionAtTextEdge(
+  bytes: ByteString,
+  projection: ValidProjection,
+  anchor: ProjectedNode,
+  side: 'before' | 'after',
+  text: string,
+): Pick<Insertion, 'range' | 'text'> | undefined {
+  if (anchor.kind !== 'text') {
+    return undefined;
+  }
+  const parent = tagParent(projection, anchor);
+  if (parent === undefined) {
+    return undefined; // A root's words, a loop's or a branch's: copied as ever.
+  }
+  if (parentFlow(bytes, projection, parent) === 'whitespace') {
+    return undefined;
+  }
+  const words = toByteSpan(contentStart(bytes, anchor), contentEnd(bytes, anchor));
+  const edge = side === 'after' ? toByteSpan(words.end, anchor.span.end) : toByteSpan(anchor.span.start, words.start);
+  const breaks = bytes.subarray(edge.start, edge.end);
+  const at = side === 'after' ? breaks.lastIndexOf(NEWLINE) : breaks.indexOf(NEWLINE);
+  if (at < 0) {
+    return undefined; // The words touch their neighbour: no line to take.
+  }
+  const lineStart = edge.start + at + 1;
+  assert(lineStart <= anchor.span.end, 'A line inside a text node starts inside it');
+  assert(lineStart === 0 || bytes[lineStart - 1] === NEWLINE, 'The new line starts after a line break');
+  return { range: point(lineStart), text: `${insertedIndent(bytes, projection, anchor, side)}${text}${eolOf(bytes)}` };
+}
+
+// Where a node's own content ends: a text node's before the whitespace it closes
+// with, any other node at its last byte.
+function contentEnd(bytes: ByteString, node: ProjectedNode): number {
+  const start = contentStart(bytes, node);
+  let end = node.span.end;
+  if (node.kind === 'text') {
+    while (end > start) {
+      if (!ASCII_WHITESPACE.has(bytes[end - 1] ?? 0)) {
+        break;
+      }
+      end--;
+    }
+  }
+  assert(start <= end, 'contentEnd: a node ends after its content starts');
+  return end;
+}
+
+// A new last child on a line of its own, after a sibling the parent's closing tag
+// shares a line with: the closing tag would follow the new node on its last line,
+// one level too deep. The line break before it gives the tag back its own line at
+// the parent's indentation, where rule 1 says the break renders nothing. Empty
+// when the closing tag is not right after the anchor, or the break could show.
+function closingLineAfter(bytes: ByteString, projection: ValidProjection, anchor: ProjectedNode, separator: string, text: string): string {
+  assert(separator.trim() === '', 'closingLineAfter: a separator is whitespace');
+  if (!separator.includes('\n')) {
+    return ''; // A one-line run stays one line.
+  }
+  const parent = tagParent(projection, anchor);
+  if (parent === undefined) {
+    return '';
+  }
+  if (neighboursOf(bytes, projection, anchor).next !== undefined) {
+    return '';
+  }
+  if (contentOf(bytes, projection, anchor).end !== anchor.span.end) {
+    return ''; // Whitespace, or a line break, already stands before the closing tag.
+  }
+  if (!standsOnOwnLine(bytes, projection, parent, text)) {
+    return '';
+  }
+  return `${eolOf(bytes)}${lineIndent(bytes, parent.span.start)}`;
 }
 
 // Beside a Markdown block or item, or inside a quote, an item or a list next
@@ -731,7 +816,7 @@ function insertionIntoEmptyTag(bytes: ByteString, projection: ValidProjection, p
     return { range: point(gap.start), text, anchorPath };
   }
   const eol = eolOf(bytes);
-  const indent = `${lineIndent(bytes, parent.span.start)}${indentUnit(bytes)}`;
+  const indent = nestedIndent(bytes, lineIndent(bytes, parent.span.start));
   if (containsNewline(bytes, gap)) {
     return { range: point(gap.start), text: `${eol}${indent}${text}`, anchorPath };
   }
@@ -751,7 +836,7 @@ function insertionIntoSelfClosingTag(bytes: ByteString, projection: ValidProject
   const range = toByteSpan(selfClosingTailStart(bytes, slash), openEnd);
   const eol = eolOf(bytes);
   const outer = lineIndent(bytes, parent.span.start);
-  const body = standsOnOwnLine(bytes, projection, parent, text) ? `${eol}${outer}${indentUnit(bytes)}${text}${eol}${outer}` : text;
+  const body = standsOnOwnLine(bytes, projection, parent, text) ? `${eol}${nestedIndent(bytes, outer)}${text}${eol}${outer}` : text;
   return {
     range,
     text: `>${body}</${name}>`,
@@ -915,6 +1000,9 @@ type FlowLevel = 'block' | 'inline' | 'opaque' | 'text';
 /** What a parent's content is. */
 type ParentFlow = 'flow' | 'opaque' | 'phrasing' | 'whitespace';
 
+/** Space, tab, line feed and carriage return: the whitespace a line break is made of. */
+const ASCII_WHITESPACE: ReadonlySet<number> = new Set([0x20, 0x09, 0x0a, 0x0d]);
+
 const TAG_NAME_AT_START = /^<([A-Za-z][^\s/>]*)/;
 
 /** A comment at the start of a fragment, with something written after it. */
@@ -933,7 +1021,8 @@ export function insertedIndent(bytes: ByteString, projection: ValidProjection, a
   if (parent === undefined) {
     return lineIndent(bytes, anchor.span.start);
   }
-  return startsLine(bytes, anchor.span.start) ? lineIndent(bytes, anchor.span.start) : childIndent(bytes, projection, parent);
+  const start = contentStart(bytes, anchor);
+  return startsLine(bytes, start) ? lineIndent(bytes, start) : childIndent(bytes, projection, parent);
 }
 
 /** Whether a new tag around `first` may stand on lines of its own: the same rule,
@@ -1161,13 +1250,38 @@ function tagParent(projection: ValidProjection, node: ProjectedNode): ProjectedN
 }
 
 // Where a parent's children stand: as one that starts a line does, else a level in.
+// Words count from their first character: a text node's span opens with the line
+// break before them, so the node itself never starts a line.
 function childIndent(bytes: ByteString, projection: ValidProjection, parent: ProjectedNode): string {
-  const lined = childrenOf(projection, parent).find((child) => !blankText(bytes, child) && startsLine(bytes, child.span.start));
-  return lined === undefined ? `${lineIndent(bytes, parent.span.start)}${indentUnit(bytes)}` : lineIndent(bytes, lined.span.start);
+  const lined = childrenOf(projection, parent)
+    .filter((child) => !blankText(bytes, child))
+    .map((child) => contentStart(bytes, child))
+    .find((start) => startsLine(bytes, start));
+  return lined === undefined ? nestedIndent(bytes, lineIndent(bytes, parent.span.start)) : lineIndent(bytes, lined);
 }
 
-function indentUnit(bytes: ByteString): string {
-  return indentUnitOf(textOf(bytes, toByteSpan(0, bytes.length)));
+// Where a node's own content starts: a text node's after the whitespace it opens
+// with, any other node at its first byte.
+function contentStart(bytes: ByteString, node: ProjectedNode): number {
+  if (node.kind !== 'text') {
+    return node.span.start;
+  }
+  let start = node.span.start;
+  while (start < node.span.end) {
+    if (!ASCII_WHITESPACE.has(bytes[start] ?? 0)) {
+      break;
+    }
+    start++;
+  }
+  assert(start <= node.span.end, 'contentStart: the content starts inside the node');
+  return start;
+}
+
+// One level below a line indented `outer`, in the style of that line (indent.ts).
+function nestedIndent(bytes: ByteString, outer: string): string {
+  const unit = indentUnitBelow(textOf(bytes, toByteSpan(0, bytes.length)), outer);
+  assert(unit.trim().length === 0, 'nestedIndent: a unit is only whitespace');
+  return `${outer}${unit}`;
 }
 
 function eolOf(bytes: ByteString): '\n' | '\r\n' {

@@ -151,6 +151,8 @@ function GapInput({
   return (
     <VariableConnect
       code
+      // A gap has no negative side to step onto.
+      {...(isNonNegative(field.prop) ? { stepMin: 0 } : {})}
       className="is-fill"
       ariaLabel={`Connect ${ariaLabel} to a variable`}
       disabled={field.busy}

@@ -263,10 +263,12 @@ const { posts = [] } = Astro.props;`;
   {
     // The row draws them, and the app moves the index they show.
     const picker = fs.readFileSync(repoPath('src/features/props/DataPicker.tsx'), 'utf8');
+    // The arrows themselves live with the rows every data tree shares.
+    const tree = fs.readFileSync(repoPath('src/ui/DataTree.tsx'), 'utf8');
     check('the row draws the arrows when the item has somewhere to go', /node\.nav && onStepItem/.test(picker), 'no arrows on the row');
     check(
       'and a press on one does not also pick the row',
-      /className="dp-item-nav" onClick=\{\(event\) => event\.stopPropagation\(\)\}/.test(picker),
+      /className="dp-item-nav" onClick=\{\(event\) => event\.stopPropagation\(\)\}/.test(tree),
       'stepping would choose the item as the binding',
     );
     // The app shell and the modules it was split into (src/app).

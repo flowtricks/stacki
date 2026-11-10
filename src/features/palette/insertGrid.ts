@@ -1,5 +1,5 @@
 import { assert } from '../../../shared/core/assert';
-import { INSERT_GROUPS, type InsertGroup } from './insertGroups';
+import { insertFolderKeys, type InsertFolderKey } from './insertFolders';
 
 // The insert grid's arithmetic: which items it shows, and where the arrow keys go. Pure, so the
 // palette component only has to hold state and render.
@@ -10,67 +10,108 @@ export const INSERT_COLUMNS = 3;
 /**
  * Most items one grid shows. The old list stopped at 60 because a row is cheap to scroll past;
  * a card is not, and a preview that is never scrolled to is never loaded. Matches beyond this
- * are counted on the pills and reached by typing more.
+ * are counted on the pills and reached by typing more or picking a folder.
  */
 export const insertResultsMax = 200;
 
 /**
- * Most preview frames mounted at once, the large view included. A frame runs a whole page
- * of the project; the grid keeps the visible ones and drops the rest.
+ * Most preview frames mounted at once. A frame runs a whole render
+ * of a component on the dev server; the grid keeps the visible ones and drops the rest.
  */
 export const previewFramesMax = 12;
 
+/**
+ * Most card frames loading at once. Each one is a full render of a page by the dev server the canvas
+ * also uses, so a palette opening on nine visible cards asks for three pages, then the next three as
+ * those answer, instead of nine at once. A frame that has answered keeps its place without counting.
+ */
+export const frameLoadsMax = 3;
+
+/**
+ * The cards that get a frame now: visible ones in grid order, up to `framesMax`, of which at most
+ * `frameLoadsMax` are still loading. Grid order and not highlight order, so moving the highlight never
+ * takes a frame away from a card that is half loaded.
+ */
+export function mountedFrameKeys(
+  orderedKeys: readonly string[],
+  { visible, settled, framesMax }: { readonly visible: ReadonlySet<string>; readonly settled: ReadonlySet<string>; readonly framesMax: number },
+): ReadonlySet<string> {
+  assert(framesMax >= 0, 'The frame limit is not negative');
+  assert(orderedKeys.length <= insertResultsMax, 'Only shown cards are ordered');
+  const keys = new Set<string>();
+  let loading = 0;
+  for (const key of orderedKeys) {
+    if (keys.size >= framesMax) {
+      break;
+    }
+    if (!visible.has(key)) {
+      continue;
+    }
+    if (settled.has(key)) {
+      keys.add(key);
+    } else if (loading < frameLoadsMax) {
+      keys.add(key);
+      loading += 1;
+    }
+  }
+  assert(loading <= frameLoadsMax, 'Never more frames loading than the limit');
+  return keys;
+}
+
 export interface ViewItem {
   readonly cat?: string;
-  readonly group?: InsertGroup | undefined;
+  /** Where a card sits; absent on everything that is not a card. */
+  readonly card?: { readonly folder: InsertFolderKey | undefined } | undefined;
 }
 
 export type InsertTab = 'all' | 'components' | 'elements' | 'other';
 
+export interface InsertPill {
+  readonly key: InsertFolderKey;
+  /** Hits in this folder for the current search, whichever pill is selected. */
+  readonly count: number;
+}
+
+/** The Components tab's folder filter: every folder the project's cards fill, and the one selected, if any. */
+export interface InsertFolderFilter {
+  readonly pills: readonly InsertPill[];
+  readonly selected: InsertFolderKey | undefined;
+}
+
 export interface InsertView<T> {
   readonly shown: readonly T[];
-  /** Hits per group among components, whatever the pill; absent outside the Components tab. */
-  readonly counts: Readonly<Record<InsertGroup, number>> | undefined;
-  /** The group the grid shows on the Components tab. */
-  readonly pill: InsertGroup | undefined;
+  /** Absent outside the Components tab. */
+  readonly folders: InsertFolderFilter | undefined;
 }
 
 /**
  * What the grid shows for the ranked hits of one tab. `ranked` is already filtered to the tab and
- * ordered by relevance. On the Components tab the chosen pill filters; when it has no hits and the
- * other group has, the other is shown instead, so a search never lands on an empty grid next to a
- * full one. On All results the sections come first, then the blocks, then everything else.
+ * ordered by relevance. On the Components tab every folder the project has gets a pill (`present`,
+ * whatever the search hits), counting the hits in it; with none selected the grid shows every card,
+ * and with one selected only its cards. A remembered folder the project no longer has selects nothing.
  */
-export function insertView<T extends ViewItem>(ranked: readonly T[], tab: InsertTab, chosen: InsertGroup): InsertView<T> {
+export function insertView<T extends ViewItem>(
+  ranked: readonly T[],
+  tab: InsertTab,
+  { chosen, present }: { readonly chosen: InsertFolderKey | undefined; readonly present: readonly InsertFolderKey[] },
+): InsertView<T> {
   assert(Number.isSafeInteger(ranked.length), 'Ranked hits form a list');
-  if (tab === 'components') {
-    const counts = countGroups(ranked);
-    const other = otherGroup(chosen);
-    const pill = counts[chosen] === 0 && counts[other] > 0 ? other : chosen;
-    return { shown: ranked.filter((item) => item.group === pill).slice(0, insertResultsMax), counts, pill };
+  if (tab !== 'components') {
+    return { shown: ranked.slice(0, insertResultsMax), folders: undefined };
   }
-  if (tab === 'all') {
-    const sections = ranked.filter((item) => item.group === 'sections');
-    const blocks = ranked.filter((item) => item.group === 'blocks');
-    const rest = ranked.filter((item) => item.group === undefined);
-    return { shown: [...sections, ...blocks, ...rest].slice(0, insertResultsMax), counts: undefined, pill: undefined };
-  }
-  return { shown: ranked.slice(0, insertResultsMax), counts: undefined, pill: undefined };
-}
-
-function countGroups(items: readonly ViewItem[]): Record<InsertGroup, number> {
-  const counts: Record<InsertGroup, number> = { sections: 0, blocks: 0 };
-  for (const item of items) {
-    if (item.group !== undefined) {
-      counts[item.group] += 1;
+  const keys = insertFolderKeys(present);
+  const counts = new Map<InsertFolderKey, number>(keys.map((key) => [key, 0]));
+  for (const item of ranked) {
+    const folder = item.card?.folder;
+    if (folder !== undefined) {
+      counts.set(folder, (counts.get(folder) ?? 0) + 1);
     }
   }
-  return counts;
-}
-
-function otherGroup(group: InsertGroup): InsertGroup {
-  const [first, second] = INSERT_GROUPS;
-  return group === first ? second : first;
+  const selected = chosen !== undefined && keys.includes(chosen) ? chosen : undefined;
+  const pills = keys.map((key) => ({ key, count: counts.get(key) ?? 0 }));
+  const shown = selected === undefined ? ranked : ranked.filter((item) => item.card?.folder === selected);
+  assert(pills.length === keys.length, 'Every folder has one pill');
+  return { shown: shown.slice(0, insertResultsMax), folders: { pills, selected } };
 }
 
 export type GridMove = 'left' | 'right' | 'up' | 'down';

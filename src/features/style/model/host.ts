@@ -145,18 +145,6 @@ export type HostState = {
    *  One project-level setting from the scan (shared/properties/lengthUnit.ts),
    *  read through model/lengthUnit.ts so no control decides it for itself. */
   lengthUnit: LengthUnit;
-  /** Show an edited declaration on the canvas right away, before the source is saved
-   *  and the page re-renders (emdash-stacki's fork). Absent where the host can't. */
-  previewRule: ((change: LiveRuleChange) => void) | undefined;
-};
-
-/** An edited declaration, for a canvas that can show it before the source is saved. */
-export type LiveRuleChange = {
-  readonly selector: string;
-  readonly atContext: readonly string[];
-  readonly prop: string;
-  readonly value: string;
-  readonly important: boolean;
 };
 
 export type PseudoRequest = { readonly nodeId: string; readonly pseudo: 'before' | 'after'; readonly serial: number };
@@ -194,7 +182,6 @@ const state: HostState = {
   pseudoRows: false,
   lengthUnit: PX_LENGTHS,
   onSpacingHover: undefined,
-  previewRule: undefined,
 };
 
 const listeners = new Set<() => void>();

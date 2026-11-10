@@ -53,6 +53,40 @@ export const PayloadIcon = (props: IconProps) => (
   </I24>
 );
 
+// Media hosts in the Assets panel's sources. Simplified marks drawn here, never
+// loaded from the hosts: the cloud for Cloudflare R2, the rabbit for Bunny, and a
+// plain bucket for any other S3-compatible host.
+export const CloudflareIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <path fill="currentColor" d="M16.9 18.5H6.6a4.1 4.1 0 0 1-.7-8.15 5.9 5.9 0 0 1 11.2-1.6 4.9 4.9 0 0 1-.2 9.75Z" />
+  </I24>
+);
+
+export const BunnyIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <g fill="currentColor">
+      <ellipse cx="8.8" cy="6.6" rx="2" ry="4.9" transform="rotate(-12 8.8 6.6)" />
+      <ellipse cx="15.2" cy="6.6" rx="2" ry="4.9" transform="rotate(12 15.2 6.6)" />
+      <circle cx="12" cy="15.4" r="6.1" />
+    </g>
+  </I24>
+);
+
+export const BucketIcon = (props: IconProps) => (
+  <I {...props}>
+    <ellipse cx="8" cy="4.5" rx="5.5" ry="1.8" />
+    <path d="M2.5 4.5 3.9 12.6c.2 1 2 1.9 4.1 1.9s3.9-.9 4.1-1.9L13.5 4.5" />
+  </I>
+);
+
+export const AudioFileIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M6 12.2V3.6l6.5-1.4v8.5" />
+    <circle cx="4.4" cy="12.2" r="1.6" />
+    <circle cx="10.9" cy="10.7" r="1.6" />
+  </I>
+);
+
 // Brand marks inherit the label colour to stay legible on both white and dark buttons.
 export const LumosIcon = ({ size = 16, className, style }: IconProps) => (
   <svg

@@ -131,6 +131,69 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A stylesheet's or folder's heading: its name, and a lock that keeps the
+   whole library through every clean-up. The lock shows on hover, and always
+   once locked — that is the heading's state, as on a locked row. */
+.selectors-heading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 20px;
+  margin: 0 0 2px;
+  padding: 0 0 0 4px;
+}
+.selectors-heading .selectors-heading-name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.selectors-folder {
+  margin: 4px 0 6px;
+  border-radius: 5px;
+  background: var(--bg-input);
+}
+.selectors-folder .selectors-heading-name {
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.selectors-sheet-lock-anchor {
+  display: inline-flex;
+  opacity: 0;
+}
+/* The row lock's look, without its row tints or shackle motion: a heading
+   lock is grey until it is on, then the locked blue. */
+.selectors-sheet-lock {
+  flex-shrink: 0;
+  padding: 3px;
+  color: var(--text-faint);
+  transition: color 200ms ease;
+}
+.selectors-sheet-lock.on {
+  color: var(--selectors-kept);
+}
+.selectors-heading:hover .selectors-sheet-lock-anchor,
+.selectors-sheet-lock-anchor:focus-within,
+.selectors-sheet-lock-anchor:has(.selectors-sheet-lock.on) {
+  opacity: 1;
+}
+.selectors-group.is-locked .selectors-file {
+  color: var(--selectors-kept);
+}
+/* What a locked stylesheet keeps out of the Unused view, said once. */
+.selectors-locked-note {
+  margin: 0;
+  padding: 4px;
+  border-radius: 5px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+}
 .selectors-reason {
   margin: 0 4px 4px;
   color: var(--text-dim);

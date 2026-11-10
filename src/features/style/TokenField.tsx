@@ -624,10 +624,15 @@ export function codeKeyEdit(
   return 'unhandled';
 }
 
+const NUMBER_WITH_UNIT = /^[-+]?(?:\d+\.?\d*|\.\d+)[a-zA-Z%]*/;
+
 // The bracket pairing for one key at caret `at`, or undefined when it doesn't apply.
 export function bracketEdit(text: string, at: number, key: string): { text: string; caret: number } | undefined {
   if (key === '(') {
-    return { text: `${text.slice(0, at)}()${text.slice(at)}`, caret: at + 1 };
+    // `calc|32px` is a value being wrapped, so the closing bracket goes after it.
+    const wrapped = NUMBER_WITH_UNIT.exec(text.slice(at))?.[0] ?? '';
+    const closeAt = at + wrapped.length;
+    return { text: `${text.slice(0, at)}(${wrapped})${text.slice(closeAt)}`, caret: at + 1 };
   }
   if (key === ')' && text[at] === ')') {
     return { text, caret: at + 1 };
