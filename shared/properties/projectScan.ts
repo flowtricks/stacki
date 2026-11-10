@@ -36,6 +36,8 @@ export interface ScanComponent {
   readonly slots?: readonly string[];
   readonly slotText?: boolean;
   readonly renderTag?: RenderTag | undefined;
+  /** The component the template opens with (`Section` for `<Section>…`), when the root is one. */
+  readonly rootComponent?: string | undefined;
   readonly hasRest?: boolean;
 }
 
@@ -141,6 +143,16 @@ function parseComponent(input: unknown, where: string): ScanComponent {
       fail(where, 'renderTag.prop: expected string');
     }
     out['renderTag'] = { tag, prop };
+  }
+  if (record['rootComponent'] !== undefined) {
+    const rootComponent = asString(record['rootComponent'], `${where}.rootComponent`);
+    if (rootComponent.length === 0) {
+      fail(where, 'rootComponent: expected non-empty string');
+    }
+    if (rootComponent.length > LIMITS.tagNameCharsMax) {
+      fail(where, `rootComponent: exceeds ${LIMITS.tagNameCharsMax} chars`);
+    }
+    out['rootComponent'] = rootComponent;
   }
   if (record['slots'] !== undefined) {
     const slots = asArray(record['slots'], `${where}.slots`, LIMITS.propOptionsMax);

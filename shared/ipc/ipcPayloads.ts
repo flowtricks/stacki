@@ -433,6 +433,8 @@ export const IPC_PAYLOADS = {
   'project:pending': nothing,
   'project:resolveImport': object({ ...source }),
   'project:scan': pathText,
+  'componentShots:list': pathText,
+  'componentShots:read': object({ ...project, component: pathText }),
   'recents:add': pathText,
   'recents:list': nothing,
   'recents:refreshThumb': pathText,

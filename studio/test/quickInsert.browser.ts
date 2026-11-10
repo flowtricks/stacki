@@ -32,9 +32,13 @@ try {
   await search.fill('no-such-element-xyz');
   await palette.getByText('No matches.', { exact: true }).waitFor();
   await search.fill('');
-  await search.press('Tab');
+  // The palette opens on Components; Tab walks All results, Components, Elements, Other.
   assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Components');
   await search.press('Tab');
+  assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Elements');
+  await search.press('Tab');
+  assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Other');
+  await search.press('Shift+Tab');
   assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Elements');
   await search.press('Shift+Tab');
   assert.equal(await palette.locator('.insert-tab.on').innerText(), 'Components');
@@ -50,8 +54,9 @@ try {
   await page.keyboard.press('Meta+e');
   await palette.getByRole('button', { name: 'Elements', exact: true }).click();
   await search.fill('h');
+  // Elements are tiles in a three-column grid: Down moves one row, which is three tiles.
   await search.press('ArrowDown');
-  assert.equal(await palette.locator('.insert-item.highlight .insert-item-label').innerText(), '<h2>');
+  assert.equal(await palette.locator('.insert-item.highlight .insert-item-label').innerText(), '<h4>');
   await search.press('ArrowUp');
   assert.equal(await palette.locator('.insert-item.highlight .insert-item-label').innerText(), '<h1>');
   await search.fill('mark');

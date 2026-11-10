@@ -663,6 +663,7 @@ export interface IpcResults {
         | {
             readonly options: ReadonlyArray<string>;
           };
+      readonly rootComponent: undefined | string;
       readonly hasRest: boolean;
       readonly path: string;
       readonly name: string;
@@ -687,6 +688,7 @@ export interface IpcResults {
         | {
             readonly options: ReadonlyArray<string>;
           };
+      readonly rootComponent: undefined | string;
       readonly hasRest: boolean;
       readonly path: string;
       readonly name: string;
@@ -697,6 +699,14 @@ export interface IpcResults {
     readonly trailingSlash: string;
     readonly lengthUnit: LengthUnit;
   };
+  readonly 'componentShots:list': {
+    readonly shots: ReadonlyArray<{
+      readonly component: string;
+      readonly width: number;
+      readonly height: number;
+    }>;
+  };
+  readonly 'componentShots:read': undefined | string;
   readonly 'recents:add': {
     readonly ok: true;
   };

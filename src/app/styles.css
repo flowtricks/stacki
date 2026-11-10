@@ -1576,8 +1576,9 @@ html[data-platform='win32'] .titlebar {
   padding-top: 9vh;
 }
 .insert-palette {
-  width: min(640px, calc(100vw - 80px));
-  max-height: 66vh;
+  position: relative;
+  width: min(1180px, calc(100vw - 80px));
+  height: 80vh;
   display: flex;
   flex-direction: column;
   background: #222222;
@@ -1641,7 +1642,43 @@ html[data-platform='win32'] .titlebar {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 6px;
+  padding: 12px;
+  /* Three columns: INSERT_COLUMNS in insertGrid.ts, which the arrow keys count with. */
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-content: start;
+  align-items: start;
+}
+.insert-results > .props-empty {
+  grid-column: 1 / -1;
+}
+.insert-pills {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px 0;
+}
+.insert-pill {
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 12px;
+  gap: 6px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+.insert-pill.on {
+  background: var(--bg-active);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.insert-pill-count {
+  color: var(--text-faint);
+  font-weight: 500;
 }
 .insert-item {
   display: flex;
@@ -1671,6 +1708,137 @@ html[data-platform='win32'] .titlebar {
 .insert-item-sub {
   font-size: 11.5px;
   color: var(--text-faint);
+}
+.insert-item.insert-tile {
+  border: 1px solid var(--border);
+}
+.insert-item.insert-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  height: auto;
+  padding: 0;
+  border-radius: 0;
+}
+.insert-item.insert-card.highlight {
+  background: none;
+}
+.insert-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  min-width: 0;
+}
+.insert-card-foot .insert-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.insert-item-uses {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.insert-item.insert-card.highlight .insert-item-label {
+  color: var(--text);
+}
+/* The picture: a page rendered at --surface-width and scaled by --surface-scale to fit the card.
+   The scale is the card's width over the logical width, so it never crops the sides; the bottom
+   is cut off where the card ends. */
+.insert-surface {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.insert-surface-card {
+  aspect-ratio: 16 / 10;
+}
+.insert-item.insert-card.highlight .insert-surface {
+  box-shadow: 0 0 0 2px var(--text);
+}
+.insert-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: var(--surface-width);
+  height: calc(100% / var(--surface-scale, 1));
+  border: none;
+  background: #f2f2f2;
+  transform: scale(var(--surface-scale, 1));
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+.insert-shot {
+  display: block;
+  width: min(100%, calc(var(--shot-width, 100000) * var(--surface-scale, 1) * 1px));
+  margin-inline: auto;
+  height: auto;
+  user-select: none;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+/* Taller than the large view is: the photograph scrolls, and never crops the sides. */
+.insert-surface-large.insert-surface-photo {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+.insert-surface-note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+.insert-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 8px 18px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.insert-footer kbd {
+  font-family: inherit;
+  color: var(--text-dim);
+}
+/* The large view covers the palette, not the window: Esc closes it and nothing else. */
+.insert-enlarged {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  background: #222222;
+}
+.insert-enlarged-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.insert-enlarged-close {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.insert-surface-large {
+  flex: 1;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
 }
 
 /* Assets panel (public/) */

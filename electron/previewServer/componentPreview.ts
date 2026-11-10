@@ -93,6 +93,19 @@ export function componentPreviewPath(paths: readonly string[], requestedPath: un
   return undefined;
 }
 
+/**
+ * How the route lays the component out. `popup` fits a fixed 1200 px stage into the hover card,
+ * centred and scaled to its height. `page` gives the stage the width of the frame, anchored top
+ * left at scale 1 and cut off at the bottom, so the host can scale the whole frame instead.
+ */
+export type ComponentPreviewLayout = 'popup' | 'page';
+
+export function componentPreviewLayout(requested: unknown): ComponentPreviewLayout {
+  // Emitted into the Astro page like componentPreviewPath: self-contained, no outside names.
+  // Anything but the exact word keeps the popup layout the route always had.
+  return requested === 'page' ? 'page' : 'popup';
+}
+
 export function componentPreviewPlugin(projectDirectories: readonly string[], packages: (root: string) => readonly PackagePreviewSource[] = () => []) {
   assert(projectDirectories.length > 0, 'Preview plugin requires a project root');
   assert(projectDirectories.length <= PREVIEW_LIMITS.rootsMax, 'Preview root count exceeds limit');
@@ -183,7 +196,7 @@ function addWatchFile(context: unknown, file: string): void {
 }
 
 export function renderComponentPreviewPage(): string {
-  return PREVIEW_PAGE.replace('__STACKI_PREVIEW_PATH__', () => componentPreviewPath.toString());
+  return PREVIEW_PAGE.replace('__STACKI_PREVIEW_PATH__', () => componentPreviewPath.toString() + '\n' + componentPreviewLayout.toString());
 }
 
 interface PackagePreviewSource {
@@ -241,6 +254,7 @@ const inputs = { ...import.meta.glob(['/src/components/**/*.astro', '/src/layout
 const selected = componentPreviewPath(
   Object.keys(mods), Astro.url.searchParams.get('p') || '', Astro.url.searchParams.get('c') || '',
 );
+const layout = componentPreviewLayout(Astro.url.searchParams.get('layout'));
 const name = selected ? selected.split('/').pop().replace(/\\.astro$/, '') : '';
 let C = null;
 let props = {};
@@ -256,6 +270,7 @@ if (selected) {
 {DefaultCanvas ? <DefaultCanvas /> : <html {...htmlAttributes}>
   <head>
     <meta charset="utf-8" />
+    <meta name="avb-layout" content={layout} />
     <style>
       /* Keep authored backgrounds paired with the project's text colors. */
       html, body { margin: 0; height: 100%; overflow: hidden; }
@@ -324,6 +339,10 @@ if (selected) {
         }
         function fit() {
           scheduled = false;
+          var layoutMeta = document.querySelector('meta[name="avb-layout"]');
+          var page = !!layoutMeta && layoutMeta.getAttribute('content') === 'page';
+          // Measure at the width it will be shown at: the frame's in the page layout, else the CSS 1200 px.
+          stage.style.width = page ? window.innerWidth + 'px' : '';
           stage.style.transform = 'none';
           unfix();
           var box = bbox(stage);
@@ -334,6 +353,12 @@ if (selected) {
             return;
           }
           document.body.classList.remove('avb-is-empty');
+          if (page) {
+            // The page layout: top left, unscaled, cut off at the bottom.
+            stage.style.visibility = 'visible';
+            reportStatus('ready');
+            return;
+          }
           var aw = window.innerWidth - PAD * 2;
           var ah = window.innerHeight - PAD * 2;
           var s = Math.min(1, aw / box.w, ah / box.h);

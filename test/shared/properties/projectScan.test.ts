@@ -55,6 +55,30 @@ test('a component without an extended or root tag carries undefined, never null'
   assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...bare, renderTag: jsonNull }] }), /renderTag: expected object/);
 });
 
+// The component a template opens with: the palette follows these names to find sections.
+test('a root component passes, and every wrong shape of it fails', () => {
+  const base = { path: '/x', name: 'Hero', folder: '' };
+  const parsed = parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: 'Section' }, { ...base, rootComponent: undefined }, base] });
+  assert.equal(parsed.components[0]?.rootComponent, 'Section');
+  assert.equal(parsed.components[1]?.rootComponent, undefined);
+  assert.equal(parsed.components[2]?.rootComponent, undefined);
+  assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: jsonNull }] }), /rootComponent: expected string/);
+  assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: 7 }] }), /rootComponent: expected string/);
+  assert.throws(() => parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: '' }] }), /rootComponent: expected non-empty string/);
+  assert.throws(
+    () => parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: 'S'.repeat(LIMITS.tagNameCharsMax + 1) }] }),
+    /rootComponent: exceeds 128 chars/,
+  );
+  assert.equal(
+    parseScanResult({ ...goodScan, components: [{ ...base, rootComponent: 'S'.repeat(LIMITS.tagNameCharsMax) }] }).components[0]?.rootComponent?.length,
+    LIMITS.tagNameCharsMax,
+  );
+  assert.throws(
+    () => parseScanResult({ ...goodScan, layouts: [{ ...goodScan.layouts[0], rootComponent: [] }] }),
+    /layouts\[0\]\.rootComponent: expected string/,
+  );
+});
+
 test('negative space: wrong entry shapes fail with pinned messages', () => {
   assert.throws(() => parseScanResult(jsonNull), /expected object/);
   assert.throws(() => parseScanResult({ ...goodScan, pages: {} }), /pages: expected array/);

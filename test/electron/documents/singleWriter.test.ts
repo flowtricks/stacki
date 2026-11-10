@@ -133,6 +133,10 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
       reason: 'staged Studio release files and the ignore rules of .stacki/studio and its updates',
     },
   },
+  'electron/project/componentShotStore.ts': {
+    writeFileSync: { count: 2, reason: 'component photographs and their meta in userData, the meta written beside and renamed over' },
+    renameSync: { count: 1, reason: 'the meta replaces the previous one whole' },
+  },
   'electron/project/imageConversion.ts': {
     writeFileSync: {
       count: 1,

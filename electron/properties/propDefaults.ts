@@ -6,7 +6,7 @@ import { readSource } from '../lib/mainLimits';
 import type { SchemaField } from '../parse/astroParserTypes';
 import * as path from 'path';
 import * as fs from 'fs';
-import { parsePropSchema, parseExtendsTag, parseSlots, defaultSlotInline, rootTag } from '../parse/astroParser';
+import { parsePropSchema, parseExtendsTag, parseSlots, defaultSlotInline, rootTag, rootComponent } from '../parse/astroParser';
 import { forwardsRest } from '../parse/astroComponentApi';
 import { capture } from '../lib/mainHelpers';
 import { resolveImportPath } from './importPaths';
@@ -131,6 +131,9 @@ export function safeSchema(filePath: string, projectPath: string) {
       // The HTML tag it renders as, so nesting rules apply through a
       // component the same way they do through a plain element.
       renderTag: rootTag(source) ?? undefined,
+      // The component the template opens with, so the insert palette can tell a
+      // section that reaches <section> through another component from a block.
+      rootComponent: rootComponent(source),
       // A `...rest` spread on Astro.props means the component forwards
       // arbitrary attributes — the UI offers a free-form Attributes section.
       // Studio reads it with the same rule (astroComponentApi.ts).
@@ -143,6 +146,7 @@ export function safeSchema(filePath: string, projectPath: string) {
       slots: [],
       slotText: false,
       renderTag: undefined,
+      rootComponent: undefined,
       hasRest: false,
     };
   }
