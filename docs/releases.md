@@ -40,6 +40,15 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.0.24 the 1.0.23 changes, through the Windows build
+
+- The same app as 1.0.23, which never became public: its Windows build failed one test. It
+  checked that the media-hosting keys file is owner-only (`0600`), but Windows has no POSIX
+  permission bits and reports `0666` for any file. The check now runs off Windows only, as the
+  Studio key tests already do; the keys are checked to be encrypted everywhere. No app code changed.
+- `create-stacki` 1.0.23 was never published; npm goes from 1.0.22 to 1.0.24.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.24.
+
 ## 1.0.23 media hosting, instant style previews, a live component grid
 
 - Assets: connect Cloudflare R2, Bunny Storage or any S3-compatible host beside the project's own
@@ -58,7 +67,7 @@ include later changes.
 - Editing: inserted HTML lines up with its siblings, the Navigator and canvas show `.class` labels,
   dropdowns preview on hover only where the canvas previews, and arrow keys step a value with the
   caret after its unit.
-- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.0.23.
+- Desktop 1.0.23 never became public; 1.0.24 is the same app. See above.
 
 ## 1.0.22 live component props and regression fixes
 
