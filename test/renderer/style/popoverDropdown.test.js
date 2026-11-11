@@ -143,8 +143,22 @@ const check = (what, condition, detail) => {
          "(inside)' : ' (OUTSIDE)')), true); window.addEventListener('scroll', " +
          "(e) => window.__why.push('scroll from ' + String(e.target.className || " +
          "e.target.nodeName).slice(0, 30)), true); true");
-       await clickAt(trigger.x, trigger.y);
+       // A hidden window on GitHub's older Linux runner can drop the first press while it
+       // is still settling; press again until the list opens, a bounded number of times.
+       for (let attempt = 0; attempt < 20; attempt += 1) {
+         await clickAt(trigger.x, trigger.y);
+         await new Promise((r) => setTimeout(r, 100));
+         if (await js("!!document.querySelector('.u-select-list')")) {
+           break;
+         }
+       }
        out.opened = await js("!!document.querySelector('.u-select-list')");
+       if (!out.opened) {
+         // Report at once rather than throwing below and leaving the probe to time out.
+         console.log(JSON.stringify(out));
+         app.quit();
+         return;
+       }
        out.dropUp = await js("!!document.querySelector('.u-select-list.is-up')");
        out.menu = await js("(() => { const l = document.querySelector('.u-select-list'); " +
          "const b = document.querySelector('.embed-editor_layer-popover-box'); " +
@@ -190,6 +204,11 @@ const check = (what, condition, detail) => {
     check('the popover does not clip by default', out.box.overflow === 'visible', out.box.overflow);
     check('and is not marked as scrolling', out.box.scrollingClass === false);
     check('the menu opens', out.opened === true);
+    if (out.opened !== true) {
+      // The probe stopped at the first failure; the checks below need an open menu.
+      console.error(`popover-dropdown: the menu never opened\n${failures.join('\n')}`);
+      process.exit(1);
+    }
     check('upward, having no room below', out.dropUp === true);
     check('so it hangs outside the popover box', out.menu?.above === true, JSON.stringify(out.menu));
     check('and the option is what is at the option', out.hit.isTheOption === true, out.hit.hit);

@@ -40,6 +40,16 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.1.2 the 1.1.0 changes, through Windows and older Linux
+
+- The same app as 1.1.0. 1.1.1 never became public: on Windows one batch of Studio suites never
+  exited (the batches now run with `--test-force-exit`, and a failed batch names its suites), and
+  on Ubuntu 22.04 the popover dropdown probe missed its first press (it now presses again, within
+  a bound) and one kit popup was read mid-scale (heights now match within a pixel). No app code
+  changed.
+- `create-stacki` 1.1.1 was published; 1.1.2 carries the same Studio at the new version.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.1.2.
+
 ## 1.1.1 the 1.1.0 changes, through every platform's build
 
 - The same app as 1.1.0, which never became public: GitHub's runners failed three checks.
@@ -48,7 +58,7 @@ include later changes.
   new apps UI probes need pointer input and motion that Linux's hidden xvfb window never
   delivers (those checks run on macOS and Windows). No app code changed.
 - `create-stacki` 1.1.0 was published; 1.1.1 carries the same Studio at the new version.
-- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.1.1.
+- Desktop, the Studio source bundle and `create-stacki` were aligned at 1.1.1.
 
 ## 1.1.0 apps platform, Audits, Instructions and an AI panel
 
