@@ -40,12 +40,18 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
-## 1.1.6 the 1.1.0 changes, public
+## 1.1.7 the 1.1.0 changes and Central icons, public
+
+- Everything in 1.1.0, plus Central icons across the editor: selectors, locks, elements, style,
+  layout, typography, variables, cursors and clip paths.
+- 1.1.6 was never tagged on GitHub; its macOS test fix ships here.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.1.7.
+
+## 1.1.6 the 1.1.0 changes
 
 - The same app as 1.1.0. 1.1.5's macOS job failed the apps tab test again: GitHub's macOS
   runner never runs a hidden window's animation frames, so the pill's slide never turns on.
   The slide checks now run locally and on Windows. No app code changed.
-- `create-stacki` stays at 1.1.3, whose Studio code is identical; the next release realigns it.
 
 ## 1.1.5 the 1.1.0 changes
 

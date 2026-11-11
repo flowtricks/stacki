@@ -79,8 +79,8 @@ import {
   unlink as centralUnlink,
   upload as centralUpload,
   variables as centralVariables,
-  wand as centralWand,
   warning as centralWarning,
+  documentSparkle as centralDocumentSparkle,
 } from './central/centralGeometry';
 import { type IconProps, ASTRO_ASSET_ACCENT, I, I24 } from './IconBase';
 import * as paths from './iconPaths';
@@ -190,8 +190,8 @@ export const FileIcon = centralIcon(centralFile);
 // A document with text lines: the Instructions panel holds the project's Markdown files.
 export const InstructionsIcon = centralIcon(centralFileText);
 
-// A wand: a skill, the know-how an agent picks up when a task calls for it.
-export const SkillIcon = centralIcon(centralWand);
+// A document with a sparkle: a skill is a written playbook an agent picks up when a task calls for it.
+export const SkillIcon = centralIcon(centralDocumentSparkle);
 
 // An easing curve: what the editor behind it edits.
 export const EaseIcon = centralIcon(centralEase);
