@@ -60,7 +60,14 @@ function harness() {
     postMessage: (message: Record<string, unknown>) => posted.push(message),
   } as unknown as MessageEventSource;
   const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
-  return { rendered, posted, variants, frame, settle };
+  // Until `count` renders are recorded: a fixed pause is too short on a slow runner
+  // (GitHub's Windows runner rendered two of three in 20 ms). Bounded at 5 seconds.
+  const rendersReach = async (count: number) => {
+    for (let attempt = 0; attempt < 250 && rendered.length < count; attempt += 1) {
+      await settle();
+    }
+  };
+  return { rendered, posted, variants, frame, settle, rendersReach };
 }
 
 test('an option is written into a copy of the text as the attribute an instance carries', () => {
@@ -73,8 +80,9 @@ test('an option is written into a copy of the text as the attribute an instance 
 });
 
 test('a request renders the baseline first, then every option, and posts each back', async () => {
-  const { rendered, posted, variants, frame, settle } = harness();
+  const { rendered, posted, variants, frame, settle, rendersReach } = harness();
   assert.equal(variants.receive(frame, request(['h1', 'display'])), true);
+  await rendersReach(3);
   await settle();
   assert.equal(rendered[0], undefined, 'the page as it is comes first');
   assert.equal(rendered.length, 3);
