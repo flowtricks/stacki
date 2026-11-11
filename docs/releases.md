@@ -40,6 +40,29 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.1.0 apps platform, Audits, Instructions and an AI panel
+
+- Apps: apps can read canvas layers and node references, watch edits as they happen, highlight
+  canvas elements, outline deeply and drag to insert. The UI kit adds a confirm dialog, tooltips
+  and dropdowns with icons. An app can require a minimum Stacki version (`"stacki": ">=1.1.0"`),
+  and the marketplace shows it. A bug that re-read the marketplace index is fixed.
+- Roles: pins are ordered per role, roles can be duplicated and deleted, and each app has its own
+  access switch.
+- Audits panel: accessibility, SEO, launch checks, design tokens, style blocks, placeholders,
+  find and replace, and Speed, configured under Settings → Audits and saved in
+  `.stacki/audits.json`.
+- Instructions panel: edit the project's `.md` instructions in a CMS-style editor, listed in
+  `.stacki/instructions.json`.
+- AI panel: chat with Claude or Codex through ACP, with guided install and sign-in, model and
+  effort pickers in the composer, and keep or undo for each change.
+- Editing: conditional values and class lists, spread attributes, and an inline-styles chip whose
+  branches are editable, one declaration per line. Prop settings share SeoProps editing and save
+  automatically. The data picker offers instance values in collapsible sources.
+- Interface: three rail icon sets (Stacki, Phosphor, Custom), no flicker when switching panels,
+  a canvas that follows a resize live, and a smaller welcome split button.
+- Vercel: the connection installs the CLI and signs in, says why a step failed, and refreshes.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.1.0.
+
 ## 1.0.24 the 1.0.23 changes, through the Windows build
 
 - The same app as 1.0.23, which never became public: its Windows build failed one test. It
