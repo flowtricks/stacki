@@ -40,14 +40,20 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
-## 1.1.5 the 1.1.0 changes, public
+## 1.1.6 the 1.1.0 changes, public
+
+- The same app as 1.1.0. 1.1.5's macOS job failed the apps tab test again: GitHub's macOS
+  runner never runs a hidden window's animation frames, so the pill's slide never turns on.
+  The slide checks now run locally and on Windows. No app code changed.
+- `create-stacki` stays at 1.1.3, whose Studio code is identical; the next release realigns it.
+
+## 1.1.5 the 1.1.0 changes
 
 - The same app as 1.1.0. 1.1.4's Linux job passed every test, then failed to install its own
   .deb: the runner's package index named archive files that were gone. The release now refreshes
   the index first and retries once. `renderer/app/pageNavigation` hung the 1.1.0 and 1.1.3 jobs
   for hours; it now exits after its tests, and the gate kills any test process after ten minutes.
   No app code changed.
-- `create-stacki` stays at 1.1.3, whose Studio code is identical; the next release realigns it.
 
 ## 1.1.4 the 1.1.0 changes
 

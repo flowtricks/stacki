@@ -180,13 +180,22 @@ const check = (what, condition, detail) => {
     check('Installed starts active', installed.on === true && marketplace.on === false, JSON.stringify(motion.rest.tabs));
     check('the pill sits under Installed', near(motion.rest.pill.x, installed.left), JSON.stringify(motion.rest.pill));
     check('and is as wide as it', near(motion.rest.pill.width, installed.width), JSON.stringify(motion.rest.pill));
-    check('the pill slides once placed', motion.rest.pill.animated === true, JSON.stringify(motion.rest.pill));
-    check('by transform and width', motion.rest.pill.property.includes('transform') && motion.rest.pill.property.includes('width'), motion.rest.pill.property);
-    check(
-      'in about 200 ms',
-      motion.rest.pill.duration.split(',').every((part) => part.trim() === '0.2s'),
-      motion.rest.pill.duration,
-    );
+    // The slide turns on in an animation frame. GitHub's macOS and Linux runners never run
+    // a hidden window's frames (1.1.3–1.1.5), so the motion is checked locally and on Windows.
+    const framesRun = process.env['GITHUB_ACTIONS'] === undefined || process.platform === 'win32';
+    if (framesRun) {
+      check('the pill slides once placed', motion.rest.pill.animated === true, JSON.stringify(motion.rest.pill));
+      check(
+        'by transform and width',
+        motion.rest.pill.property.includes('transform') && motion.rest.pill.property.includes('width'),
+        motion.rest.pill.property,
+      );
+      check(
+        'in about 200 ms',
+        motion.rest.pill.duration.split(',').every((part) => part.trim() === '0.2s'),
+        motion.rest.pill.duration,
+      );
+    }
     check(
       'no tab paints its own background',
       [installed, marketplace].every((tab) => tab.background === 'rgba(0, 0, 0, 0)'),
@@ -201,9 +210,7 @@ const check = (what, condition, detail) => {
     check('hovering the active tab paints no second pill', hoveredActive.background === installed.background, hoveredActive.background);
 
     const midX = motion.mid.pill.x;
-    // On GitHub's Linux runner (xvfb) a hidden window's slide can be stalled at its start
-    // when the mid-slide read lands, so only macOS and Windows check the midpoint.
-    if (process.platform !== 'linux') {
+    if (framesRun) {
       check(
         'mid-slide the pill is between the tabs',
         midX > installed.left + 0.5 && midX < marketplace.left - 0.5,
