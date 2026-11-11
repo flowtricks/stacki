@@ -34,6 +34,12 @@ export const POOL_LIMITS = {
   jobsMax: 16,
   /** Output kept per command; a failure's cause is almost always at the end. */
   outputBytesMax: 4 * 1024 * 1024,
+  /**
+   * The longest one test process may run. A suite that never exits (a failed assertion
+   * skipping its cleanup, leaving a timer alive) hung GitHub's release jobs for hours in
+   * 1.1.0 and 1.1.3; at the bound it is killed and reported failed, with its output.
+   */
+  commandMsMax: 10 * 60 * 1000,
 } as const satisfies Record<string, number>;
 
 const running = new Set<ReturnType<typeof spawn>>();
@@ -96,9 +102,14 @@ export function runTestCommand(command: TestCommand, options: PoolOptions): Prom
         ? spawn(command.command, [], { ...spawnOptions, shell: true })
         : spawn(command.command, [...command.argumentsList], spawnOptions);
     running.add(child);
+    const timer = setTimeout(() => {
+      output.push(Buffer.from(`\nKilled after ${POOL_LIMITS.commandMsMax / 1000} s without exiting.\n`));
+      child.kill('SIGKILL');
+    }, POOL_LIMITS.commandMsMax);
     child.stdout.on('data', (chunk: Buffer) => output.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => output.push(chunk));
     const finish = (ending: { readonly passed: boolean; readonly note: string }): void => {
+      clearTimeout(timer);
       running.delete(child);
       if (ending.note !== '') {
         output.push(Buffer.from(`\n${ending.note}\n`));

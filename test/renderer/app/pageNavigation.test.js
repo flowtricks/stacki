@@ -58,6 +58,13 @@ function applyEdit(file, text, edit) {
   return { text: written, inverse: inverseEdits(planned.value.splices) };
 }
 
+// A failed assertion skips the unmount at the end, leaving the App's timers alive, and
+// the process would never exit (it hung GitHub's release jobs). Once the tests are
+// done, exit within two seconds; unref'd, so a clean run still exits at once.
+test.after(() => {
+  setTimeout(() => process.exit(), 2000).unref();
+});
+
 test('out-of-order page reads and external reads cannot replace the current edit', async () => {
   const directory = repoPath('node_modules/.stacki-test/page-navigation');
   fs.mkdirSync(directory, { recursive: true });
