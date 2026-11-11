@@ -40,6 +40,18 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.1.8 the 1.1.7 changes, through Windows and macOS
+
+- The same app as 1.1.7, which never became public: its Linux job lost DNS during the .deb install
+  (the runner's mirror, as in 1.1.4), and its Windows and macOS jobs failed tests. Windows
+  checked paths and messages with `\` where the app writes `/` (shared-property messages now use
+  `/`, the Vercel prefix and shortcut tests compare with the platform's separator), the AI fakes
+  were named without `.cmd`, which Windows needs to find a CLI, and four apps UI probes need input and motion
+  Windows's hidden window never delivers (they run on macOS only, as the slide check runs locally only).
+  macOS's theme test now waits, within a bound, for the click's re-render.
+- Only shared-property messages changed in the app; everything else is test code.
+- `create-stacki` 1.1.8 follows when npm publishing is approved; npm can trail Desktop.
+
 ## 1.1.7 the 1.1.0 changes and Central icons, public
 
 - Everything in 1.1.0, plus Central icons across the editor: selectors, locks, elements, style,

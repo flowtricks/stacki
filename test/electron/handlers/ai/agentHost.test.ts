@@ -49,7 +49,8 @@ function fakeHost() {
   const root = fs.realpathSync(temporary('project'));
   const userData = temporary('user');
   const bin = temporary('bin');
-  fs.writeFileSync(path.join(bin, 'codex'), '#!/bin/sh\n', { mode: 0o755 });
+  // Windows finds a CLI by its .cmd or .exe name, so the stand-in carries the extension there.
+  fs.writeFileSync(path.join(bin, process.platform === 'win32' ? 'codex.cmd' : 'codex'), '#!/bin/sh\n', { mode: 0o755 });
   fs.writeFileSync(path.join(root, 'notes.txt'), 'line one\nline two\n');
   const store = new ChatStore(path.join(userData, 'ai'));
   const pushes: ChatEvent[] = [];

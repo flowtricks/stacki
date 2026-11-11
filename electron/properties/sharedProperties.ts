@@ -31,6 +31,7 @@ import type {
   PropertyShareDefault,
 } from '../../shared/properties/propertyEditing';
 import { literalOptions } from '../../shared/properties/propertyOptions';
+import { toPosix } from '../lib/mainHelpers';
 import { sameFilesystemPath } from '../lib/platform';
 import { resolveImportPath } from './importPaths';
 import { projectSources, readBoundedSource, readPropertyConsumers } from './propertyConsumers';
@@ -138,7 +139,7 @@ export function planSharedPropertyChange(location: SharedLocation, source: strin
     case 'remove':
       return err({
         code: 'shared',
-        message: `${name} is declared in ${type.typeName} (${path.relative(location.projectPath, type.file)}). Delete it there in source.`,
+        message: `${name} is declared in ${type.typeName} (${toPosix(path.relative(location.projectPath, type.file))}). Delete it there in source.`,
       });
     case 'options':
     case 'save':
@@ -316,7 +317,7 @@ function sharedNameCollision(projectPath: string, type: SharedType, users: reado
   }
   for (const user of users) {
     if (localMemberNames(readPropertySyntax(user.source).syntax).includes(name)) {
-      return `${path.relative(projectPath, user.file)} already declares a prop named ${name}.`;
+      return `${toPosix(path.relative(projectPath, user.file))} already declares a prop named ${name}.`;
     }
   }
   return undefined;
@@ -339,7 +340,7 @@ function planSharedRename(
     }
     const renamed = renameSharedUser(text.value, rename, forwarded.get(user.file) ?? new Set());
     if (!renamed.ok) {
-      return err({ code: renamed.error.code, message: `${path.relative(projectPath, user.file)}: ${renamed.error.message}` });
+      return err({ code: renamed.error.code, message: `${toPosix(path.relative(projectPath, user.file))}: ${renamed.error.message}` });
     }
     setText(texts, user.file, renamed.value);
   }
@@ -359,7 +360,7 @@ function planSharedRename(
       const spreads = [...forwarded.entries()].find(([file]) => sameFilesystemPath(file, consumer.file))?.[1] ?? new Set<string>();
       const renamed = renameComponentReferences(text.value, consumer.names, rename, 'consumer', spreads);
       if (!renamed.ok) {
-        return err({ code: renamed.error.code, message: `${path.relative(projectPath, consumer.file)}: ${renamed.error.message}` });
+        return err({ code: renamed.error.code, message: `${toPosix(path.relative(projectPath, consumer.file))}: ${renamed.error.message}` });
       }
       setText(texts, consumer.file, renamed.value);
     }
@@ -499,7 +500,7 @@ function planSharedOptionRenames(
       }
       const renamed = renameComponentOptionValues(text.value, consumer.names, property.name, renames);
       if (!renamed.ok) {
-        return err({ code: renamed.error.code, message: `${path.relative(projectPath, consumer.file)}: ${renamed.error.message}` });
+        return err({ code: renamed.error.code, message: `${toPosix(path.relative(projectPath, consumer.file))}: ${renamed.error.message}` });
       }
       setText(texts, consumer.file, renamed.value);
     }

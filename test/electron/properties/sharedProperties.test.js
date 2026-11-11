@@ -100,7 +100,7 @@ function edit(root, file, change) {
       batches.push({
         files: changes
           .filter((entry) => entry.before !== entry.after)
-          .map((entry) => path.relative(root, entry.file))
+          .map((entry) => path.relative(root, entry.file).split(path.sep).join('/'))
           .sort(),
         token: store.record(inverseBatch(changes)),
       }),

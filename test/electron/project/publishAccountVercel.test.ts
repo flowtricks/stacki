@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { once } from 'node:events';
+import path from 'node:path';
 import { PublishingAccount, vercelInstallArguments, vercelSignInURL } from '#dist/electron/project/publishAccount.js';
 import { setToolPathHome } from '#dist/electron/lib/nodeTools.js';
 import { parseSignInURL } from '#dist/shared/ipc/publishAccount.js';
@@ -95,6 +96,6 @@ test('only Vercel device pages are opened', () => {
 });
 
 test('the Vercel CLI installs per user, never with sudo', () => {
-  assert.deepEqual(vercelInstallArguments('/Users/designer', 'darwin'), ['install', '--global', '--prefix', '/Users/designer/.local', 'vercel']);
+  assert.deepEqual(vercelInstallArguments('/Users/designer', 'darwin'), ['install', '--global', '--prefix', path.join('/Users/designer', '.local'), 'vercel']);
   assert.deepEqual(vercelInstallArguments('C:\\Users\\designer', 'win32'), ['install', '--global', 'vercel']);
 });

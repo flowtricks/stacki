@@ -336,14 +336,10 @@ const check = (what, condition, detail) => {
     check('a click presses it once, firing change', pressed.after === 'true' && pressed.property === true && pressed.changes === 1, JSON.stringify(pressed));
     check('a pressed button takes the accent soft fill', pressed.fill === 'rgba(0, 153, 255, 0.16)', JSON.stringify(pressed));
     check('a menu opened at the right edge stays inside the window', aligned.inside === true, JSON.stringify(aligned));
-    // On GitHub's Linux runner (xvfb) a hidden window never ticks the opening motion, so
-    // the popup stays mid-scale there; macOS and Windows check the settled edge.
-    if (process.platform !== 'linux') {
-      // On GitHub's Linux runner (xvfb) the hidden window's popup stays mid-scale, so only
-      // macOS and Windows check the settled edge.
-      if (process.platform !== 'linux') {
-        check('and lines its right edge up with the button', aligned.rightEdge === true, JSON.stringify(aligned));
-      }
+    // On GitHub's Linux and Windows runners a hidden window never ticks the opening motion, so
+    // the popup stays mid-scale there; only macOS checks the settled edge.
+    if (process.platform === 'darwin') {
+      check('and lines its right edge up with the button', aligned.rightEdge === true, JSON.stringify(aligned));
     }
     check('a heading row shows', aligned.heading === 'Signed in as ada@example.test', JSON.stringify(aligned));
     check('a separator shows between rows', aligned.separators === 1 && aligned.rows === 2, JSON.stringify(aligned));

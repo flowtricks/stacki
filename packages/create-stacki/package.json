@@ -1,6 +1,6 @@
 {
   "name": "create-stacki",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Add Stacki Studio to an existing Astro project",
   "type": "module",
   "bin": {

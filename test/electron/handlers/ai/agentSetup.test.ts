@@ -65,7 +65,7 @@ function fakeCli(script: (process: FakeProcess) => void) {
     home: bin,
     platform: 'darwin',
   });
-  const install = (name: string) => fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n', { mode: 0o755 });
+  const install = (name: string) => fs.writeFileSync(path.join(bin, process.platform === 'win32' ? `${name}.cmd` : name), '#!/bin/sh\n', { mode: 0o755 });
   return { bin, setup, started, states, opened, install };
 }
 

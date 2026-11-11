@@ -10,7 +10,7 @@
 // Desktop's and Studio's canvas frames are read to hold that both forward it.
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { test } from 'node:test';
 import {
   APP_FORWARDED_KEYS,
@@ -274,7 +274,14 @@ test('no Stacki, menu, browser or OS shortcut is in the reserved app range', () 
   const files = [...sourceFiles(join(ROOT, 'src')), ...sourceFiles(join(ROOT, 'studio/src')), ...sourceFiles(join(ROOT, 'electron/preload'))];
   const digitHandlers = files.filter((file) => /(?:code\s*===\s*'Digit\d|key\s*===\s*'\d'|\/\^Digit)/.test(readFileSync(file, 'utf8')));
   assert.deepEqual(
-    digitHandlers.map((file) => file.slice(ROOT.length + 1)).sort(),
+    digitHandlers
+      .map((file) =>
+        file
+          .slice(ROOT.length + 1)
+          .split(sep)
+          .join('/'),
+      )
+      .sort(),
     ['electron/preload/frameDesign.ts', 'src/ui/richTextCommands.ts'],
     'a new digit shortcut is checked against the range here first',
   );

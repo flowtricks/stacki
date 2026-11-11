@@ -27,6 +27,13 @@ const app = (id) => ({
 const session = (id) => ({ app: app(id), subscriptions: new Set(), ...rpc.inFlightCounter() });
 const context = (role = roles.ADMIN_VIEW) => ({ host: {}, role: () => role, setOverlay: () => undefined });
 const settle = () => new Promise((resolve) => setTimeout(resolve, 5));
+// A click's state update lands a frame later; on a slow runner 5 ms is too short, so the
+// checks wait, within a bound of two seconds, for what they measure instead of a fixed sleep.
+async function waitUntil(condition) {
+  for (let attempt = 0; attempt < 400 && !condition(); attempt += 1) {
+    await settle();
+  }
+}
 
 test('ui.theme answers the theme and every token, as the kit has them', async () => {
   const answer = await rpc.answerAppMessage(session('pins'), { stacki: 'app', v: 1, id: 1, method: 'ui.theme' }, context());
@@ -113,7 +120,7 @@ async function runPage(window, one, deliver) {
   let changes = 0;
   window.document.querySelector('stacki-switch').addEventListener('change', () => (changes += 1));
   toggle.click();
-  await settle();
+  await waitUntil(() => toggle.getAttribute('aria-checked') === 'false');
   assert.equal(toggle.getAttribute('aria-checked'), 'false');
   assert.equal(changes, 1);
 
@@ -122,7 +129,7 @@ async function runPage(window, one, deliver) {
   const [first, second] = tabs.querySelectorAll('.ui-tab');
   assert.equal(second.getAttribute('aria-selected'), 'true');
   first.click();
-  await settle();
+  await waitUntil(() => tabs.value === 'a' && first.classList.contains('on'));
   assert.equal(tabs.value, 'a');
   assert.ok(first.classList.contains('on'));
 
