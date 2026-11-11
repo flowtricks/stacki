@@ -40,6 +40,15 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.1.3 the 1.1.0 changes, past two slow-runner tests
+
+- The same app as 1.1.0. 1.1.2 never became public: on Windows a demo test gave three renders
+  only 20 ms, and on macOS the apps tab test read the pill a frame before its slide turned on.
+  Both now wait, within a bound, for what they measure. Linux's install check also lost DNS
+  for a moment. No app code changed.
+- `create-stacki` goes from 1.1.1 to 1.1.3; 1.1.2 was never published.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.1.3.
+
 ## 1.1.2 the 1.1.0 changes, through Windows and older Linux
 
 - The same app as 1.1.0. 1.1.1 never became public: on Windows one batch of Studio suites never
@@ -47,8 +56,7 @@ include later changes.
   on Ubuntu 22.04 the popover dropdown probe missed its first press (it now presses again, within
   a bound) and one kit popup was read mid-scale (heights now match within a pixel). No app code
   changed.
-- `create-stacki` 1.1.1 was published; 1.1.2 carries the same Studio at the new version.
-- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.1.2.
+- `create-stacki` 1.1.2 was never published.
 
 ## 1.1.1 the 1.1.0 changes, through every platform's build
 

@@ -116,6 +116,14 @@ const check = (what, condition, detail) => {
          await win.loadFile(path.join(__dirname, 'index.html'));
        }
        await wait(400);
+       // The pill turns on its slide a frame after it is placed; a hidden window on a slow
+       // runner can take longer than the pause, so wait for it, within a bound.
+       for (let attempt = 0; attempt < 50 && !reduced; attempt += 1) {
+         if (await win.webContents.executeJavaScript("!!document.querySelector('.apps-view-tab-indicator.is-animated')")) {
+           break;
+         }
+         await wait(100);
+       }
        const js = (code) => win.webContents.executeJavaScript(code);
        const move = async (x, y) => {
          win.webContents.sendInputEvent({ type: 'mouseMove', x, y });
