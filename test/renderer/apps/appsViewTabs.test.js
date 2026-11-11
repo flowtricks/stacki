@@ -155,9 +155,11 @@ const check = (what, condition, detail) => {
      app.whenReady().then(async () => {
        // A page error would otherwise leave the probe waiting until the outer timeout.
        try {
-         const full = new BrowserWindow({ show: false, width: 400, height: 300 });
+         // No background throttling: GitHub's macOS runner never ran a hidden window's frames,
+         // so the pill's slide, turned on a frame after placement, never turned on there.
+         const full = new BrowserWindow({ show: false, width: 400, height: 300, webPreferences: { backgroundThrottling: false } });
          const motion = await session(full, false);
-         const quiet = new BrowserWindow({ show: false, width: 400, height: 300 });
+         const quiet = new BrowserWindow({ show: false, width: 400, height: 300, webPreferences: { backgroundThrottling: false } });
          const reduced = await session(quiet, true);
          console.log(JSON.stringify({ motion, reduced }));
        } catch (error) {

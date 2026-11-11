@@ -40,6 +40,13 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.1.4 the 1.1.0 changes, public
+
+- The same app as 1.1.0. 1.1.3 never became public: GitHub's macOS runner never ran the hidden
+  window's frames in the apps tab test, so its pill never turned its slide on. The test's windows
+  now run without background throttling. No app code changed.
+- `create-stacki` stays at 1.1.3, whose Studio code is identical; the next release realigns it.
+
 ## 1.1.3 the 1.1.0 changes, past two slow-runner tests
 
 - The same app as 1.1.0. 1.1.2 never became public: on Windows a demo test gave three renders
