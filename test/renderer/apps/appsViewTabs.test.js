@@ -107,7 +107,9 @@ const check = (what, condition, detail) => {
        await win.loadFile(path.join(__dirname, 'index.html'));
        if (reduced) {
          // The protocol needs a loaded page to attach to; the reload then mounts under the emulated preference.
-         win.webContents.debugger.attach('1.3');
+         if (!win.webContents.debugger.isAttached()) {
+           win.webContents.debugger.attach('1.3');
+         }
          await win.webContents.debugger.sendCommand('Emulation.setEmulatedMedia', {
            features: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
          });
@@ -137,6 +139,8 @@ const check = (what, condition, detail) => {
        await wait(70);
        out.mid = await js(read);
        await wait(400);
+       // Measure once the pill's slide has finished; slowed motion outlasts the sleep. Bounded.
+       await js("Promise.race([Promise.all(document.getAnimations().map((animation) => animation.finished)), new Promise((resolve) => setTimeout(resolve, 5000))]).then(() => true)");
        out.after = await js(read);
        return out;
      }

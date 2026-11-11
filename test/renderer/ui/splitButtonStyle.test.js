@@ -131,7 +131,10 @@ async function measure(page) {
   const win = new BrowserWindow({ show: false, width: 800, height: 600 });
   await win.loadFile(page);
   const cdp = win.webContents.debugger;
-  cdp.attach('1.3');
+  // The Linux preflight's slow-motion profile may already hold the protocol; share it.
+  if (!cdp.isAttached()) {
+    cdp.attach('1.3');
+  }
   await cdp.sendCommand('DOM.enable');
   await cdp.sendCommand('CSS.enable');
   const { root } = await cdp.sendCommand('DOM.getDocument', { depth: -1 });

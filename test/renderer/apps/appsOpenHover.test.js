@@ -137,7 +137,10 @@ async function measure(page) {
   // The details popup opens its dialog after a frame; wait for it.
   await win.webContents.executeJavaScript('new Promise((resolve) => { const tick = () => document.querySelector(".apps-details-header .apps-open") ? resolve() : requestAnimationFrame(tick); tick(); })');
   const cdp = win.webContents.debugger;
-  cdp.attach('1.3');
+  // The Linux preflight's slow-motion profile may already hold the protocol; share it.
+  if (!cdp.isAttached()) {
+    cdp.attach('1.3');
+  }
   await cdp.sendCommand('DOM.enable');
   await cdp.sendCommand('CSS.enable');
   const { root } = await cdp.sendCommand('DOM.getDocument', { depth: -1 });

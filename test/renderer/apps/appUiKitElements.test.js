@@ -194,8 +194,20 @@ const check = (what, condition, detail) => {
 
        const right = document.getElementById('right');
        right.querySelector('.stacki-kit-menu-button').click();
-       await settle(); // After the opening motion, which scales the popup.
+       await settle();
        const popup = document.querySelector('.stacki-kit-menu');
+       // Measure after the opening motion, which scales the popup: a fixed sleep is too
+       // short when the Linux preflight slows motion, so wait until the popup's box holds
+       // still across two reads. Bounded so a popup that never settles still fails.
+       let previous = '';
+       for (let attempt = 0; attempt < 50; attempt += 1) {
+         const current = JSON.stringify(popup.getBoundingClientRect());
+         if (current === previous) {
+           break;
+         }
+         previous = current;
+         await new Promise((resolve) => setTimeout(resolve, 100));
+       }
        const box = popup.getBoundingClientRect();
        const trigger = right.querySelector('.stacki-kit-menu-button').getBoundingClientRect();
        const aligned = {

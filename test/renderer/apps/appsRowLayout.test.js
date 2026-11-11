@@ -162,12 +162,20 @@ const summary = (id, name, description, update) => ({
          };
        });
      })()\`;
-     const settle = () => new Promise((resolve) => setTimeout(resolve, 300));
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 600, height: 600 });
+       // A short pause for the hover to land, then until the row's fades finish: slowed
+       // motion outlasts any fixed sleep. Bounded so a stuck animation still fails.
+       const settle = async () => {
+         await new Promise((resolve) => setTimeout(resolve, 300));
+         await win.webContents.executeJavaScript("Promise.race([Promise.all(document.getAnimations().map((animation) => animation.finished)), new Promise((resolve) => setTimeout(resolve, 5000))]).then(() => true)");
+       };
        await win.loadFile(path.join(__dirname, 'index.html'));
        const cdp = win.webContents.debugger;
-       cdp.attach('1.3');
+       // The Linux preflight's slow-motion profile may already hold the protocol; share it.
+       if (!cdp.isAttached()) {
+         cdp.attach('1.3');
+       }
        const move = (x, y) => cdp.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
        await move(590, 590);
        await settle();
