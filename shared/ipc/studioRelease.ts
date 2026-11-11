@@ -1,7 +1,9 @@
 import { record, string } from './studioValidation';
 
 export const RELEASE_BYTES_MAX = 32_000_000;
-export const RELEASE_FILES_MAX = 1500;
+// 1.1.0's Studio carries about 1,700 files once the shared Desktop sources it vendors are
+// counted; 3,000 leaves room to grow while the 32 MB byte bound still caps the release.
+export const RELEASE_FILES_MAX = 3000;
 export interface StudioRelease {
   readonly format: 1;
   readonly version: string;

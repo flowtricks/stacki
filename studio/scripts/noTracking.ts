@@ -77,6 +77,7 @@ const CLIENT_HOSTS_ALLOWED: Readonly<Record<string, string>> = {
   'reactjs.org': "React's error decoder link, shown only in error text.",
   'stacki.build':
     "Stacki's own first-party site: reviewed marketplace app icons, loaded only while someone browses the marketplace, and the Submit an app link opened in the browser; the index itself is fetched by Studio's server.",
+  'vercel.com': "Validates the Vercel CLI's device sign-in link before it is opened in the browser (publishAccount.ts); Studio never fetches it.",
   'vimeo.com': 'oEmbed endpoint, fetched only to preview a linked Vimeo video.',
   'www.apache.org': 'A licence notice on bundled TypeScript code.',
   'www.dailymotion.com': 'oEmbed endpoint, fetched only to preview a linked Dailymotion video.',
