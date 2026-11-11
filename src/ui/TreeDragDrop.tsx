@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useRef } from 'react';
-import { ChevronDownIcon, ChevronRightIcon, DragIcon } from './Icons';
+import { ChevronDownIcon, ChevronRightIcon } from './Icons';
 import { DropLine } from './DropLine';
 
 export interface TreeDropBehavior {
@@ -49,7 +49,13 @@ export function TreeDropGap({
       className={`nav-gap ${layout === 'overlay' ? 'nav-gap-overlay' : ''}`}
       data-drop-parent={parent ?? ''}
       data-drop-index={index}
-      style={{ marginLeft: depth * 16, pointerEvents: interactive ? undefined : 'none' }}
+      style={{
+        marginLeft: `calc(${depth} * var(--navigator-indent, 16px))`,
+        // Where subtrees end, overlay gaps of several levels share one edge: the
+        // deeper one sits on top, so the pointer's x position picks the level.
+        ...(layout === 'overlay' ? { zIndex: 1 + depth } : {}),
+        pointerEvents: interactive ? undefined : 'none',
+      }}
       {...treeDropHandlers(behavior)}
     >
       {behavior.active && <DropLine />}
@@ -57,21 +63,22 @@ export function TreeDropGap({
   );
 }
 
+// Only a node with children carries a collapse chevron. A leaf keeps the empty
+// slot so its icon lines up with its siblings' icons; the whole row is draggable.
 export function TreeDragHandle({ expansion }: { readonly expansion?: { readonly collapsed: boolean; readonly toggle: () => void } }) {
+  if (expansion === undefined) {
+    return <span className="drag-handle is-empty" aria-hidden="true" />;
+  }
   return (
     <span
       className="drag-handle"
-      style={expansion ? { cursor: 'pointer', opacity: 1 } : undefined}
-      onClick={
-        expansion
-          ? (event) => {
-              event.stopPropagation();
-              expansion.toggle();
-            }
-          : undefined
-      }
+      style={{ cursor: 'pointer', opacity: 1 }}
+      onClick={(event) => {
+        event.stopPropagation();
+        expansion.toggle();
+      }}
     >
-      {expansion ? expansion.collapsed ? <ChevronRightIcon size={10} /> : <ChevronDownIcon size={10} /> : <DragIcon size={11} />}
+      {expansion.collapsed ? <ChevronRightIcon size={12} /> : <ChevronDownIcon size={12} />}
     </span>
   );
 }

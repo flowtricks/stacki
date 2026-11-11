@@ -150,7 +150,9 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
       .filter((row) => !row.classList.contains('frontmatter-node'))
       .map((row) => ({
         label: row.querySelector('.label')?.textContent || '',
-        indent: parseInt(row.style.paddingLeft, 10) || 0,
+        // The indent step is a CSS knob (--navigator-indent), so rows are
+        // compared by nesting level, which each row carries as data-depth.
+        indent: Number(row.getAttribute('data-depth')),
         node: row.getAttribute('data-node-id'),
       }));
   const rowFor = (id) => container.querySelector(`.structure-node[data-node-id="${id}"]`);
@@ -223,8 +225,8 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
   check('the branch it holds is not', !at('and-then'), labels.join(' | '));
   check(
     'so what is inside sits one level in, not two',
-    at('hero-command').indent - at('if-and').indent === 16,
-    `${at('hero-command').indent - at('if-and').indent}px`,
+    at('hero-command').indent - at('if-and').indent === 1,
+    `${at('hero-command').indent - at('if-and').indent} levels`,
   );
 
   // The one with an else draws that else, and nothing for the then: what the
@@ -233,11 +235,11 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
   check('and still nothing for the then', !at('t-then'), labels.join(' | '));
   check(
     'the markup it renders sits one level into the condition',
-    at('signed-in').indent - at('if-ternary').indent === 16,
-    `${at('signed-in').indent - at('if-ternary').indent}px`,
+    at('signed-in').indent - at('if-ternary').indent === 1,
+    `${at('signed-in').indent - at('if-ternary').indent} levels`,
   );
   check('the else sits beside it, at the same level', at('t-else').indent === at('signed-in').indent, `${at('t-else').indent} vs ${at('signed-in').indent}`);
-  check('with its own markup under it', at('signed-out').indent - at('t-else').indent === 16);
+  check('with its own markup under it', at('signed-out').indent - at('t-else').indent === 1);
   check('and no row anywhere says "then"', labels.filter((label) => label === 'then').length === 0, labels.join(' | '));
 
   // An else that renders a value has to draw it. There is no Content field on a
@@ -247,8 +249,8 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
   check('an else holding a value is not empty', !!at('v-heading'), labels.join(' | '));
   check(
     'the value sits under the else',
-    at('v-heading') && at('v-heading').indent - at('v-else').indent === 16,
-    at('v-heading') ? `${at('v-heading').indent - at('v-else').indent}px` : 'no row for it',
+    at('v-heading') && at('v-heading').indent - at('v-else').indent === 1,
+    at('v-heading') ? `${at('v-heading').indent - at('v-else').indent} levels` : 'no row for it',
   );
   // Where there IS a Content field, the words stay in it: showing them twice is
   // the noise this rule exists to avoid.

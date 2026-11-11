@@ -6,7 +6,7 @@ import type { PseudoKind, PseudoNodeIds, StructureTreeContext } from './Structur
 import type { ContextPosition } from './StructureContextMenu';
 import { ElementContextMenu } from './ElementContextMenu';
 import type { WrapperTag } from '../../editor/wrapRules';
-import { CollapseVerticalIcon, CodeIcon, DragIcon, ExpandVerticalIcon } from '../../ui/Icons';
+import { CollapseVerticalIcon, CodeIcon, ExpandVerticalIcon } from '../../ui/Icons';
 import { hidesChildRows } from '../../editor/treeSelection';
 import { navigatorArrowTarget } from './navigatorArrows';
 import {
@@ -150,7 +150,7 @@ function EditableStructurePanel(props: EditableProps) {
   const state = useTreeState(props);
   const treeContext = treeContextOf(props, state);
   return (
-    <div className="panel-section grow">
+    <div className="panel-section grow navigator">
       <NavigatorHeader state={state} nodes={props.pageState.model.nodes} />
       <NavigatorBody props={props} state={state} treeContext={treeContext} />
       {state.contextMenu && (
@@ -497,10 +497,15 @@ function NavigatorBody({
   readonly treeContext: StructureTreeContext;
 }) {
   const nodes = props.pageState.model.nodes;
+  // Drop gaps overlap the row edges instead of taking room between rows, so
+  // they catch the pointer only while a drag is over the navigator. Otherwise
+  // a click on a row's edge would land on a gap and select nothing.
+  const [bodyDrag, setBodyDrag] = useState<BodyDrag>('idle');
   return (
     <div
-      className="panel-body"
+      className={bodyDrag === 'dragging' ? 'panel-body is-drag-over' : 'panel-body'}
       ref={state.bodyRef}
+      onDragEnter={() => setBodyDrag('dragging')}
       onDragOver={() => state.setDropTarget(undefined)}
       onDragLeave={(event) => {
         if (event.relatedTarget instanceof Node) {
@@ -508,8 +513,11 @@ function NavigatorBody({
             return;
           }
         }
+        setBodyDrag('idle');
         state.setDropTarget(undefined);
       }}
+      onDropCapture={() => setBodyDrag('idle')}
+      onDragEnd={() => setBodyDrag('idle')}
     >
       {!props.clientMode && !props.editRootId && <FrontmatterRow props={props} />}
       <NodeList nodes={nodes} parentId={undefined} depth={0} {...treeContext} />
@@ -517,6 +525,8 @@ function NavigatorBody({
     </div>
   );
 }
+
+type BodyDrag = 'idle' | 'dragging';
 
 function FrontmatterRow({ props }: { readonly props: EditableProps }) {
   const importCount = props.pageState.model.imports.length;
@@ -528,9 +538,6 @@ function FrontmatterRow({ props }: { readonly props: EditableProps }) {
       onClick={() => props.onSelect('frontmatter')}
       onDoubleClick={() => props.onOpenCode?.('frontmatter')}
     >
-      <span className="drag-handle" style={{ visibility: 'hidden' }}>
-        <DragIcon size={11} />
-      </span>
       <span className="icon">
         <CodeIcon size={12} />
       </span>

@@ -110,6 +110,7 @@ function Gap(props: GapProps) {
   }
   return (
     <TreeDropGap
+      layout="overlay"
       depth={depth}
       parent={parentId}
       index={index}
@@ -170,15 +171,20 @@ function TreeNode(props: TreeNodeProps) {
         onSelect={props.onSelectPseudo ?? ((id) => props.onSelect(id))}
       />
     ) : undefined;
+  const rowSelected = selected && props.selectedPseudo === undefined;
   return (
     <>
-      <TreeRow {...props} {...view} selected={selected && props.selectedPseudo === undefined} rowRef={rowRef} />
+      <TreeRow {...props} {...view} selected={rowSelected} rowRef={rowRef} />
       {showChildren && !view.collapsed && (
-        <>
+        // The selected row's subtree sits in a tinted block under the row, so the
+        // selection reads as one container. The tint follows the row's own colour.
+        <div className={subtreeClassName({ rowSelected, component: view.component })}>
+          {/* The guide drops from the parent's chevron; CSS shows it while the pointer is over the tree. */}
+          <span className="structure-guide" aria-hidden="true" style={{ left: navigatorGuideLeft(depth) }} />
           {pseudoRow('before')}
           {listsChildren && <NodeList {...context} nodes={children} parentId={host.id} depth={depth + 1} />}
           {pseudoRow('after')}
-        </>
+        </div>
       )}
     </>
   );
@@ -214,7 +220,8 @@ function PseudoRow(props: {
       className={`structure-node is-pseudo${props.selected ? ' selected' : ''}`}
       data-pseudo-of={props.nodeId}
       data-pseudo={props.pseudo}
-      style={{ paddingLeft: 6 + props.depth * 16 }}
+      data-depth={props.depth}
+      style={{ paddingLeft: navigatorIndent(props.depth) }}
       onMouseEnter={() => props.onHover(props.nodeId, props.pseudo)}
       onMouseLeave={props.onLeave}
       onClick={(event) => {
@@ -222,7 +229,7 @@ function PseudoRow(props: {
         props.onSelect(props.nodeId, props.pseudo);
       }}
     >
-      <span className="drag-handle" />
+      <span className="drag-handle is-empty" aria-hidden="true" />
       <span className="icon">
         <PseudoElementIcon size={12} />
       </span>
@@ -319,7 +326,8 @@ function TreeRow(props: TreeRowProps) {
       aria-disabled={!props.canEdit(node.id)}
       title={props.fragment ? fragmentTitle : undefined}
       className={rowClassName(props)}
-      style={{ paddingLeft: 6 + props.depth * 16 }}
+      data-depth={props.depth}
+      style={{ paddingLeft: navigatorIndent(props.depth) }}
       dropBehavior={treeRowDropBehavior(props)}
       draggable={
         props.canEdit(node.id) &&
@@ -491,3 +499,23 @@ function nodeIsDataBound(node: NavigatorNode): boolean {
 const fragmentTitle = 'Inline group in this file. Expand it to edit its children; there is no separate file to open.';
 
 export { defaultCollapsed };
+
+// Only the selected row's subtree is tinted; a component's block takes the component colour.
+function subtreeClassName(row: { readonly rowSelected: boolean; readonly component: boolean }): string {
+  if (row.rowSelected) {
+    return row.component ? 'structure-children structure-subtree is-component' : 'structure-children structure-subtree';
+  }
+  return 'structure-children';
+}
+
+// The indent step lives in CSS (`--navigator-indent` in styles.css), so the
+// navigator's density is tuned in one stylesheet, not in TSX.
+function navigatorIndent(depth: number): string {
+  return `calc(var(--navigator-row-padding) + ${depth} * var(--navigator-indent))`;
+}
+
+// The guide runs under the centre of the parent row's chevron: the row's left
+// padding, its 1px border, then half the 18px handle less its -4px margin.
+function navigatorGuideLeft(depth: number): string {
+  return `calc(${navigatorIndent(depth)} + 6px)`;
+}
