@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { microphone as centralMicrophone } from '../../ui/central/centralGeometry';
 // Where the person writes to the agent: the prompt, its attachments (images
 // pasted, dropped or picked; project files dropped from Finder or the Assets
 // panel), dictation, the `/` command menu from the agent's advertised commands
@@ -255,20 +257,4 @@ async function attachmentFor(file: File, projectPath: string): Promise<DraftAtta
   throw new Error('Attach images, or files from this project.');
 }
 
-function MicGlyph() {
-  return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M9 5a3 3 0 0 1 6 0v7a3 3 0 0 1-6 0V5Zm-3 6v1a6 6 0 0 0 12 0v-1m-6 7v4m-3 0h6" />
-    </svg>
-  );
-}
+const MicGlyph = centralIcon(centralMicrophone);

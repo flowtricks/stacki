@@ -1,6 +1,14 @@
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { chevronDown as centralChevronDown, help as centralHelp, more as centralMore } from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
 // The clip-path editor's view: its class tags, presets and source menu, fit
 // mode and scale variables, shortcut help, and the canvas (ClipPath.tsx).
+
+const HelpGlyph = centralIcon(centralHelp, 12);
+
+const ChevronDownGlyph = centralIcon(centralChevronDown, 12);
+
+const MoreGlyph = centralIcon(centralMore, 12);
 
 import { createPortal } from 'react-dom';
 import { CodeEditor } from '../components/CssCodeEditor';
@@ -121,10 +129,7 @@ export function ClipPathLabel({ editor }: EditorProps) {
       {isClipPathLabelMenuOpen && clipPathStyleOrigin === 'current' ? (
         <Popup mode="popover" portal={false} onClose={() => editor.setIsClipPathLabelMenuOpen(false)} className="clip-path_label-menu" role="menu">
           <button type="button" className="clip-path_label-menu-item" role="menuitem" onClick={() => void resetCurrentBreakpointClipPath()}>
-            <svg className="clip-path_label-menu-icon" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M5.2 5.2H2.2V2.2" />
-              <path d="M2.6 5.2A5.5 5.5 0 1 1 4 12.2" />
-            </svg>
+            <MoreGlyph className="clip-path_label-menu-icon" />
             <span>Reset</span>
             <span className="clip-path_label-menu-shortcut">Option + click</span>
           </button>
@@ -195,9 +200,7 @@ export function PresetDropdown({ editor }: EditorProps) {
           <PresetIcon shape={selectedPresetShape} />
           <span className="clip-path_preset-name">{activePreset}</span>
         </span>
-        <svg className="clip-path_preset-chevron" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M4.2 6.2 8 10l3.8-3.8" />
-        </svg>
+        <ChevronDownGlyph className="clip-path_preset-chevron" />
       </button>
 
       {isPresetOpen ? <PresetList editor={editor} /> : undefined}
@@ -274,11 +277,7 @@ export function ShapeFitControl({ editor }: EditorProps) {
       </div>
       {shapeFitMode === 'contain' ? (
         <p className="clip-path_control-help">
-          <svg className="clip-path_control-help-icon" viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="8" cy="8" r="6" />
-            <path d="M6.5 6.2a2 2 0 0 1 3.8.9c0 1.8-2.2 1.6-2.2 3" />
-            <path d="M8 12.2h.01" />
-          </svg>
+          <HelpGlyph className="clip-path_control-help-icon" />
           <span>Apply container-type: size; to the parent</span>
         </p>
       ) : undefined}
@@ -295,11 +294,7 @@ export function ShapeVariableLabel({ id, text, tip }: { id: string; text: string
       </label>
       <span className="clip-path_label-help">
         <button type="button" className="clip-path_label-help-button" aria-label={tip}>
-          <svg className="clip-path_label-help-icon" viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="8" cy="8" r="6" />
-            <path d="M6.5 6.2a2 2 0 0 1 3.8.9c0 1.8-2.2 1.6-2.2 3" />
-            <path d="M8 12.2h.01" />
-          </svg>
+          <HelpGlyph className="clip-path_label-help-icon" />
         </button>
         <span className="clip-path_label-help-tip" aria-hidden="true">
           {tip}

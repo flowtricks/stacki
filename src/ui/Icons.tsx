@@ -1,3 +1,85 @@
+import { centralIcon, centralIconSize } from './central/CentralIcon';
+import { ElementComponentIcon } from './ElementIcons';
+import {
+  add as centralAdd,
+  arrowDown as centralArrowDown,
+  audio as centralAudio,
+  braces as centralBraces,
+  branch as centralBranch,
+  bucket as centralBucket,
+  calendar as centralCalendar,
+  canvas as centralCanvas,
+  check as centralCheck,
+  chevronDown as centralChevronDown,
+  chevronLeft as centralChevronLeft,
+  chevronRight as centralChevronRight,
+  clock as centralClock,
+  close as centralClose,
+  code as centralCode,
+  collapse as centralCollapse,
+  collapseVertical as centralCollapseVertical,
+  collection as centralCollection,
+  comment as centralComment,
+  component as centralComponent,
+  componentAdd as centralComponentAdd,
+  componentEdit as centralComponentEdit,
+  copy as centralCopy,
+  corner as centralCorner,
+  cursor as centralCursor,
+  database as centralDatabase,
+  desktop as centralDesktop,
+  drag as centralDrag,
+  droplet as centralDroplet,
+  ease as centralEase,
+  edit as centralEdit,
+  expand as centralExpand,
+  expandVertical as centralExpandVertical,
+  external as centralExternal,
+  eye as centralEye,
+  eyeOff as centralEyeOff,
+  file as centralFile,
+  filter as centralFilter,
+  folder as centralFolder,
+  folderAdd as centralFolderAdd,
+  folderOpen as centralFolderOpen,
+  guide as centralGuide,
+  help as centralHelp,
+  history as centralHistory,
+  image as centralImage,
+  layers as centralLayers,
+  layout as centralLayout,
+  mail as centralMail,
+  mapPin as centralMapPin,
+  merge as centralMerge,
+  more as centralMore,
+  number as centralNumber,
+  panelRight as centralPanelRight,
+  paperclip as centralPaperclip,
+  paragraph as centralParagraph,
+  phone as centralPhone,
+  phoneCall as centralPhoneCall,
+  pin as centralPin,
+  properties as centralProperties,
+  refresh as centralRefresh,
+  repeat as centralRepeat,
+  search as centralSearch,
+  settings as centralSettings,
+  sort as centralSort,
+  sparkle as centralSparkle,
+  sync as centralSync,
+  tablet as centralTablet,
+  terminal as centralTerminal,
+  text as centralText,
+  textSize as centralTextSize,
+  toggle as centralToggle,
+  trash as centralTrash,
+  undo as centralUndo,
+  unlink as centralUnlink,
+  upload as centralUpload,
+  variables as centralVariables,
+  wand as centralWand,
+  warning as centralWarning,
+} from './central/centralGeometry';
 import { type IconProps, ASTRO_ASSET_ACCENT, I, I24 } from './IconBase';
 import * as paths from './iconPaths';
 export {
@@ -28,12 +110,7 @@ export {
 
 export { type IconProps, ASTRO_ASSET_ACCENT } from './IconBase';
 
-export const ComponentEditIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.componentEditIconPath} />
-    <path d="M9 13H9.70711L14.3536 8.35359L13.6464 7.64648L9 12.2929V13Z" />
-  </I>
-);
+export const ComponentEditIcon = centralIcon(centralComponentEdit);
 
 export const GitHubIcon = (props: IconProps) => (
   <I24 {...props}>
@@ -72,20 +149,9 @@ export const BunnyIcon = (props: IconProps) => (
   </I24>
 );
 
-export const BucketIcon = (props: IconProps) => (
-  <I {...props}>
-    <ellipse cx="8" cy="4.5" rx="5.5" ry="1.8" />
-    <path d="M2.5 4.5 3.9 12.6c.2 1 2 1.9 4.1 1.9s3.9-.9 4.1-1.9L13.5 4.5" />
-  </I>
-);
+export const BucketIcon = centralIcon(centralBucket);
 
-export const AudioFileIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M6 12.2V3.6l6.5-1.4v8.5" />
-    <circle cx="4.4" cy="12.2" r="1.6" />
-    <circle cx="10.9" cy="10.7" r="1.6" />
-  </I>
-);
+export const AudioFileIcon = centralIcon(centralAudio);
 
 // Brand marks inherit the label colour to stay legible on both white and dark buttons.
 export const LumosIcon = ({ size = 16, className, style }: IconProps) => (
@@ -117,84 +183,36 @@ export const AstroIcon = ({ size = 16, className, style }: IconProps) => (
   </svg>
 );
 
-export const FileIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={fileIconPath1} />
-    <path d="M8.9 1.9v3h3" />
-  </I>
-);
+export const FileIcon = centralIcon(centralFile);
 
 // An open book: the Instructions panel, the project's Markdown for agents and people.
 export const InstructionsIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2 3.4c2-.8 4-.7 6 .8 2-1.5 4-1.6 6-.8v9.2c-2-.8-4-.7-6 .8-2-1.5-4-1.6-6-.8Z" />
-    <path d="M8 4.2v9.2" />
+  <I {...props} size={centralIconSize(props.size ?? 16)} strokeWidth={0.85}>
+    <path d="M2 3.4c2-.8 4-.7 6 .8 2-1.5 4-1.6 6-.8v9.2c-2-.8-4-.7-6 .8-2-1.5-4-1.6-6-.8ZM8 4.2v9.2" />
   </I>
 );
 
 // A wand: a skill, the know-how an agent picks up when a task calls for it.
-export const SkillIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m2.5 13.5 7.8-7.8" />
-    <path d="m9.2 4.6 2.2 2.2" />
-    <path d="M12 1.8v2M13 2.8h-2M13.6 7.4v1.4M14.3 8.1h-1.4M6.4 1.6v1.4M7.1 2.3H5.7" />
-  </I>
-);
+export const SkillIcon = centralIcon(centralWand);
 
 // An easing curve: what the editor behind it edits.
-export const EaseIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2 13c5.5 0 5-10 12-10" />
-  </I>
-);
+export const EaseIcon = centralIcon(centralEase);
 
-export const ComponentIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="5.2" y="5.2" width="5.6" height="5.6" rx="0.8" transform="rotate(45 8 8)" />
-  </I>
-);
+export const ComponentIcon = centralIcon(centralComponent);
 
 // Three tall columns represent the preview's column guide.
-export const GuideIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="1" y="2" width="2" height="12" rx="0.5" />
-    <rect x="7" y="2" width="2" height="12" rx="0.5" />
-    <rect x="13" y="2" width="2" height="12" rx="0.5" />
-  </I>
-);
+export const GuideIcon = centralIcon(centralGuide);
 
-export const LayoutIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
-    <path d="M2 6h12M6 6v7.5" />
-  </I>
-);
+export const LayoutIcon = centralIcon(centralLayout);
 
 // A window with its right-hand column marked: the Style and Settings panel.
-export const PanelRightIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
-    <path d="M10 2.5v11M11.75 5.5h0.5M11.75 7.5h0.5" />
-  </I>
-);
+export const PanelRightIcon = centralIcon(centralPanelRight);
 
-export const TextIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M3.5 4.5V3.5h9v1M8 3.5v9M6.3 12.5h3.4" />
-  </I>
-);
+export const TextIcon = centralIcon(centralText);
 
-export const CommentIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={commentIconPath1} />
-  </I>
-);
+export const CommentIcon = centralIcon(centralComment);
 
-export const CodeIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m5.5 5-3 3 3 3M10.5 5l3 3-3 3" />
-  </I>
-);
+export const CodeIcon = centralIcon(centralCode);
 
 // A ::before / ::after layer: the two colons that name a pseudo-element.
 export const PseudoElementIcon = (props: IconProps) => (
@@ -203,358 +221,109 @@ export const PseudoElementIcon = (props: IconProps) => (
   </I>
 );
 
-export const PencilIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M11.2 2.6a1.3 1.3 0 0 1 1.85 1.85L5.6 11.9l-2.45.6.6-2.45Z" />
-    <path d="m10.1 3.7 2.2 2.2" />
-  </I>
-);
+export const PencilIcon = centralIcon(centralEdit);
 
-export const TagIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m6 3.5-4 4.5 4 4.5M10 3.5l4 4.5-4 4.5" />
-  </I>
-);
+export const TagIcon = centralIcon(centralCode);
 
-export const ChevronLeftIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m10 4-4 4 4 4" />
-  </I>
-);
+export const ChevronLeftIcon = centralIcon(centralChevronLeft);
 
-export const ChevronRightIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m6 4 4 4-4 4" />
-  </I>
-);
+export const ChevronRightIcon = centralIcon(centralChevronRight);
 
 /** A pushpin: what a table pins as its columns. */
-export const PinIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M10 2.5 13.5 6l-1.5.5-2.5 2.5.3 2.7-1 1L4.3 8.2l1-1 2.7.3 2.5-2.5z" />
-    <path d="m6.5 9.5-4 4" />
-  </I>
-);
+export const PinIcon = centralIcon(centralPin);
 
-export const ChevronDownIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m4 6 4 4 4-4" />
-  </I>
-);
+export const ChevronDownIcon = centralIcon(centralChevronDown);
 
-export const PlusIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 3v10M3 8h10" />
-  </I>
-);
+export const PlusIcon = centralIcon(centralAdd);
 
-export const RefreshIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M13 8a5 5 0 1 1-1.47-3.54" />
-    <path d="M13.2 2.6v2.6h-2.6" />
-  </I>
-);
+export const RefreshIcon = centralIcon(centralRefresh);
 
 // Two arrows chasing each other: a field kept in step with another.
-export const SyncIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M12.75 6.5A5 5 0 0 0 3.6 5.1" />
-    <path d="M3.25 9.5a5 5 0 0 0 9.15 1.4" />
-    <path d="M3.4 2.6v2.6H6M12.6 13.4v-2.6H10" />
-  </I>
-);
+export const SyncIcon = centralIcon(centralSync);
 
-export const CloseIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m4 4 8 8M12 4l-8 8" />
-  </I>
-);
+export const CloseIcon = centralIcon(centralClose);
 
-export const ComponentPropertiesIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={componentPropertiesIconPath1} />
-  </I>
-);
+export const ComponentPropertiesIcon = centralIcon(centralProperties);
 
-export const VariableTextSizeIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d="M5 5H2V4H9V5H6V12H5V5Z" />
-    <path fillRule="evenodd" clipRule="evenodd" d="M11 8H9V7H14V8H12V12H11V8Z" />
-  </I>
-);
+export const VariableTextSizeIcon = centralIcon(centralTextSize);
 
-export const FieldNumberIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.fieldNumberIconPath1} />
-  </I>
-);
+export const FieldNumberIcon = centralIcon(centralNumber);
 
 // Make a component out of what's selected — the component cube with a plus.
-export const ComponentPlusIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.componentPlusIconPath1} />
-    <path d="M13 10.9999H15V11.9999H13V13.9999H12V11.9999H10V10.9999H12V8.99988H13V10.9999Z" />
-  </I>
-);
+export const ComponentPlusIcon = centralIcon(centralComponentAdd);
 
-export const ExpandVerticalIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d={paths.expandVerticalIconPath1} />
-    <path d={paths.expandVerticalIconPath2} />
-  </I>
-);
+export const ExpandVerticalIcon = centralIcon(centralExpandVertical);
 
-export const CollapseVerticalIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.collapseVerticalIconPath1} />
-  </I>
-);
+export const CollapseVerticalIcon = centralIcon(centralCollapseVertical);
 
-export const RepeatIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M3 6.5V6a2.5 2.5 0 0 1 2.5-2.5H13" />
-    <path d="m11 1.5 2 2-2 2" />
-    <path d="M13 9.5v.5a2.5 2.5 0 0 1-2.5 2.5H3" />
-    <path d="m5 10.5-2 2 2 2" />
-  </I>
-);
+export const RepeatIcon = centralIcon(centralRepeat);
 
-export const PreviewIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.previewIconPath1} />
-  </I>
-);
+export const PreviewIcon = centralIcon(centralEye);
 
-export const FolderIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={paths.folderIconPath1} />
-  </I>
-);
+export const FolderIcon = centralIcon(centralFolder);
 
-// Webflow's folder glyph — a filled evenodd path, so it opts into `filled`
-// rather than the stroked default the other icons use.
-export const FolderDefaultIcon = (props: IconProps) => (
-  <I filled {...props}>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.folderDefaultIconPath1} />
-  </I>
-);
+export const FolderDefaultIcon = centralIcon(centralFolder);
 
-// Webflow's CMS glyph — a page Astro generates from a collection entry rather
-// than one someone wrote. Filled evenodd, like the rest of the Webflow set.
-export const CollectionIcon = (props: IconProps) => (
-  <I filled {...props}>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.collectionIconPath1} />
-  </I>
-);
+export const CollectionIcon = centralIcon(centralCollection);
 
-export const FolderPlusIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={paths.folderPlusIconPath1} />
-    <path d="M8 6.8v3.4M6.3 8.5h3.4" />
-  </I>
-);
+export const FolderPlusIcon = centralIcon(centralFolderAdd);
 
-export const UploadCloudIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 10.5V4M4.8 7.2 8 4l3.2 3.2" />
-    <path d="M2.5 13h11" />
-  </I>
-);
+export const UploadCloudIcon = centralIcon(centralUpload);
 
-export const BracesIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d={paths.bracesIconPath1} />
-    <path d={paths.bracesIconPath2} />
-  </I>
-);
+export const BracesIcon = centralIcon(centralBraces);
 
-export const ResetIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M6.5 3.5 3.5 6.5l3 3" />
-    <path d="M3.5 6.5h5.25a3.75 3.75 0 0 1 3.75 3.75v2.25" />
-  </I>
-);
+export const ResetIcon = centralIcon(centralUndo);
 
-export const DragIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <circle cx="6" cy="4" r="1" />
-    <circle cx="10" cy="4" r="1" />
-    <circle cx="6" cy="8" r="1" />
-    <circle cx="10" cy="8" r="1" />
-    <circle cx="6" cy="12" r="1" />
-    <circle cx="10" cy="12" r="1" />
-  </I>
-);
+export const DragIcon = centralIcon(centralDrag);
 
-// Struck-through eye: this node put nothing on the page. Filled paths, so it
-// takes `filled` rather than the stroked default the rest of the set uses.
-export const HideIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.hideIconPath1} />
-    <path d={paths.hideIconPath2} />
-  </I>
-);
+// An eye with a slash distinguishes hidden nodes in the Navigator.
+export const HideIcon = centralIcon(centralEyeOff);
 
-// Struck-through pointer: this node is drawn but takes no clicks
-// (`pointer-events: none`). Filled, like the eye above it.
-export const PointerEventsNoneIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.pointerEventsNoneIconPath1} />
-    <path d={paths.pointerEventsNoneIconPath2} />
-  </I>
-);
+// A pointer distinguishes nodes that do not take clicks.
+export const PointerEventsNoneIcon = centralIcon(centralCursor);
 
-export const CheckIcon = (props: IconProps) => (
-  <I {...props} strokeWidth={1.6}>
-    <path d="m3.5 8.5 3 3 6-7" />
-  </I>
-);
+export const CheckIcon = centralIcon(centralCheck);
 
 // The "goes here" elbow: one side of a condition, in the navigator.
-export const CornerIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M4.5 3v6.5a1 1 0 0 0 1 1h6" />
-    <path d="m9.3 8.2 2.4 2.3-2.4 2.3" />
-  </I>
-);
+export const CornerIcon = centralIcon(centralCorner);
 
-export const BranchIcon = (props: IconProps) => (
-  <I {...props}>
-    <circle cx="4.5" cy="3.5" r="1.6" />
-    <circle cx="4.5" cy="12.5" r="1.6" />
-    <circle cx="11.5" cy="5" r="1.6" />
-    <path d="M4.5 5.1v5.8" />
-    <path d="M11.5 6.6c0 2.6-3.2 2.8-5.2 3.6" />
-  </I>
-);
+export const BranchIcon = centralIcon(centralBranch);
 
 // The reverse of BranchIcon: a side branch curving back into the trunk. The
 // arrowhead is what tells the two apart at 12px — without it a merge and a
 // branch are the same three dots and a curve.
 // A clock turned back — the panel is about what the project looked like
 // before, and a plain clock would read as "scheduled".
-export const HistoryIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2.6 7.2a5.6 5.6 0 1 1 .9 3.9" />
-    <path d="M2.2 4.3v2.9h2.9" />
-    <path d="M8 5.1v3.1l2.2 1.3" />
-  </I>
-);
+export const HistoryIcon = centralIcon(centralHistory);
 
-export const MergeIcon = (props: IconProps) => (
-  <I {...props}>
-    <circle cx="4.5" cy="3.5" r="1.6" />
-    <circle cx="4.5" cy="12.5" r="1.6" />
-    <circle cx="11.5" cy="3.5" r="1.6" />
-    <path d="M4.5 5.1v5.8" />
-    <path d="M11.5 5.1c0 2.6-2.6 3.4-5.4 4.1" />
-    <path d="M8.2 9.8 6.1 9.2l1.6-1.5" />
-  </I>
-);
+export const MergeIcon = centralIcon(centralMerge);
 
-export const ExternalIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M12.5 9.5v3.5a.5.5 0 0 1-.5.5H3.5a.5.5 0 0 1-.5-.5V4.5a.5.5 0 0 1 .5-.5H7" />
-    <path d="M9.5 2.5h4v4M13.2 2.8 7.8 8.2" />
-  </I>
-);
+export const ExternalIcon = centralIcon(centralExternal);
 
-export const MaximizeIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2.5 5.5v-3h3M13.5 5.5v-3h-3M2.5 10.5v3h3M13.5 10.5v3h-3" />
-  </I>
-);
+export const MaximizeIcon = centralIcon(centralExpand);
 
-export const MinimizeIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M5.5 2.5v3h-3M10.5 2.5v3h3M5.5 13.5v-3h-3M10.5 13.5v-3h3" />
-  </I>
-);
+export const MinimizeIcon = centralIcon(centralCollapse);
 
-export const DesktopIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="2" y="3" width="12" height="8.5" rx="1.2" />
-    <path d="M6 14h4M8 11.5V14" />
-  </I>
-);
+export const DesktopIcon = centralIcon(centralDesktop);
 
-export const TabletIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="3.5" y="2" width="9" height="12" rx="1.5" />
-    <path d="M7 12h2" />
-  </I>
-);
+export const TabletIcon = centralIcon(centralTablet);
 
-export const PhoneIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="4.5" y="1.75" width="7" height="12.5" rx="1.5" />
-    <path d="M7 12.25h2" />
-  </I>
-);
+export const PhoneIcon = centralIcon(centralPhone);
 
-export const AssetManagerIcon = (props: IconProps) => (
-  <I24 {...props}>
-    <path d={paths.assetManagerIconPath1} fill="currentColor" />
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.assetManagerIconPath2} fill="currentColor" />
-    <g opacity="0.4">
-      <path d={paths.assetManagerIconPath3} fill="currentColor" />
-      <path d={paths.assetManagerIconPath4} fill="currentColor" />
-      <path d="M12.5 18.9999H8L11.6464 15.3535C11.9614 15.0385 12.5 15.2616 12.5 15.707V18.9999Z" fill="currentColor" />
-    </g>
-  </I24>
-);
+export const AssetManagerIcon = centralIcon(centralImage, 20);
 
 // Webflow's CMS icon, drawn on a 16px grid — scaled up for the rail.
-export const CmsIcon = ({ size = 24, className, style }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 16 16"
-    fill="none"
-    className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.cmsIconPath1} fill="currentColor" />
-  </svg>
-);
+export const CmsIcon = centralIcon(centralDatabase, 20);
 
 // The Apps rail icon: three rounded squares and a plus.
-export const AppsIcon = ({ size = 24, className, style }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path
-      opacity="0.4"
-      d="M6 7.79289V6.5C6 6.22386 6.22386 6 6.5 6H7.79289C8.23835 6 8.46143 6.53857 8.14645 6.85355L6.85355 8.14645C6.53857 8.46143 6 8.23835 6 7.79289Z"
-      fill="currentColor"
-    />
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M11 5.5C11 4.67157 10.3284 4 9.5 4H5.5C4.67157 4 4 4.67157 4 5.5V9.5C4 10.3284 4.67157 11 5.5 11H9.5C10.3284 11 11 10.3284 11 9.5V5.5ZM9.5 5C9.77614 5 10 5.22386 10 5.5V9.5C10 9.77614 9.77614 10 9.5 10H5.5C5.22386 10 5 9.77614 5 9.5V5.5C5 5.22386 5.22386 5 5.5 5H9.5Z"
-      fill="currentColor"
-    />
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M19 5.5C19 4.67157 18.3284 4 17.5 4H13.5C12.6716 4 12 4.67157 12 5.5V9.5C12 10.3284 12.6716 11 13.5 11H17.5C18.3284 11 19 10.3284 19 9.5V5.5ZM17.5 5C17.7761 5 18 5.22386 18 5.5V9.5C18 9.77614 17.7761 10 17.5 10H13.5C13.2239 10 13 9.77614 13 9.5V5.5C13 5.22386 13.2239 5 13.5 5H17.5Z"
-      fill="currentColor"
-    />
-    <path
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M5.5 12C4.67157 12 4 12.6716 4 13.5V17.5C4 18.3284 4.67157 19 5.5 19H9.5C10.3284 19 11 18.3284 11 17.5V13.5C11 12.6716 10.3284 12 9.5 12H5.5ZM5 13.5C5 13.2239 5.22386 13 5.5 13H9.5C9.77614 13 10 13.2239 10 13.5V17.5C10 17.7761 9.77614 18 9.5 18H5.5C5.22386 18 5 17.7761 5 17.5V13.5Z"
-      fill="currentColor"
-    />
-    <path d="M15 15H12V16H15V19H16V16H19V15H16V12H15V15Z" fill="currentColor" />
-  </svg>
+// The plus keeps Apps distinct from the Layout and grid controls.
+export const AppsIcon = (props: IconProps) => (
+  <I {...props} size={centralIconSize(props.size ?? 20)} strokeWidth={0.85}>
+    <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1.2" />
+    <rect x="9" y="2.5" width="4.5" height="4.5" rx="1.2" />
+    <rect x="2.5" y="9" width="4.5" height="4.5" rx="1.2" />
+    <path d="M11.25 9v4.5M9 11.25h4.5" />
+  </I>
 );
 
 // The Stacki mark from the wordmark (welcome/StackiLogo.tsx), in `currentColor`
@@ -573,311 +342,91 @@ export const StackiMarkIcon = ({ size = 16, className, style }: IconProps) => (
   </svg>
 );
 
-export const PagePanelIcon = (props: IconProps) => (
-  <I24 {...props}>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.pagePanelIconPath1} fill="currentColor" />
-    <path opacity="0.4" d={paths.pagePanelIconPath2} fill="currentColor" />
-  </I24>
-);
+export const PagePanelIcon = centralIcon(centralFile, 20);
 
+// Indented rows distinguish the Navigator from Git's branch and merge symbols.
 export const NavigatorIcon = (props: IconProps) => (
-  <I24 {...props}>
-    <path d="M2 7H17V6H2V7Z" fill="currentColor" />
-    <path d="M22 12H7V11H22V12Z" fill="currentColor" />
-    <path d="M22 17H7V16H22V17Z" fill="currentColor" />
-  </I24>
-);
-
-export const ComponentFillIcon = (props: IconProps) => (
-  <I24 {...props}>
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.componentFillIconPath1} fill="currentColor" />
-    <g opacity="0.4">
-      <path d={paths.componentFillIconPath2} fill="currentColor" />
-      <path d={paths.componentFillIconPath3} fill="currentColor" />
-    </g>
-  </I24>
-);
-
-export const LayersIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m8 1.8 6 3.2-6 3.2-6-3.2 6-3.2Z" />
-    <path d="m2.5 8.2 5.5 3 5.5-3" />
-    <path d="m2.5 11.2 5.5 3 5.5-3" />
+  <I {...props} size={centralIconSize(props.size ?? 20)} strokeWidth={0.85}>
+    <path d="M2 4.5h9.5M5 8h9M5 11.5h9" />
   </I>
 );
 
-export const CanvasIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="1.75" y="3" width="7" height="10" rx="1" />
-    <rect x="10.75" y="4.75" width="3.5" height="6.5" rx="0.8" />
-  </I>
-);
+export const ComponentFillIcon = (props: IconProps) => <ElementComponentIcon {...props} size={props.size ?? 20} />;
+
+export const LayersIcon = centralIcon(centralLayers);
+
+export const CanvasIcon = centralIcon(centralCanvas);
 
 // Three dots: the row's own menu, shown on hover.
-export const MoreIcon = (props: IconProps) => (
-  <svg viewBox="0 0 16 16" width={props?.size || 14} height={props?.size || 14} fill="currentColor" aria-hidden="true">
-    <circle cx="3.5" cy="8" r="1.3" />
-    <circle cx="8" cy="8" r="1.3" />
-    <circle cx="12.5" cy="8" r="1.3" />
-  </svg>
-);
+export const MoreIcon = centralIcon(centralMore);
 
-export const CopyIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="5.75" y="5.75" width="8.5" height="8.5" rx="1.5" />
-    <path d={paths.copyIconPath1} />
-  </I>
-);
+export const CopyIcon = centralIcon(centralCopy);
 
 // --- CMS field types -------------------------------------------------------
 
-export const ParagraphIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2.5 3.5h11M2.5 6.5h11M2.5 9.5h11M2.5 12.5h7" />
-  </I>
-);
+export const ParagraphIcon = centralIcon(centralParagraph);
 
-export const SwitchIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="1.75" y="4.75" width="12.5" height="6.5" rx="3.25" />
-    <circle cx="11" cy="8" r="1.6" fill="currentColor" stroke="none" />
-  </I>
-);
+export const SwitchIcon = centralIcon(centralToggle);
 
-export const CalendarIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="2.25" y="3.25" width="11.5" height="10.5" rx="1.5" />
-    <path d="M2.25 6.5h11.5M5.5 1.75v2.5M10.5 1.75v2.5" />
-  </I>
-);
+export const CalendarIcon = centralIcon(centralCalendar);
 
 // A time of day: the picker's time tab.
-export const ClockIcon = (props: IconProps) => (
-  <I {...props}>
-    <circle cx="8" cy="8" r="6.25" />
-    <path d="M8 4.75V8l2.25 1.5" />
-  </I>
-);
+export const ClockIcon = centralIcon(centralClock);
 
 // A place on a map: a CMS location field.
-export const MapPinIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 14.25S12.25 10.35 12.25 7a4.25 4.25 0 0 0-8.5 0c0 3.35 4.25 7.25 4.25 7.25" />
-    <circle cx="8" cy="7" r="1.5" />
-  </I>
-);
+export const MapPinIcon = centralIcon(centralMapPin);
 
 // An attached file: a CMS file field.
-export const PaperclipIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m13 7.5-5.2 5.2a3 3 0 0 1-4.25-4.25l5.3-5.3a2 2 0 0 1 2.85 2.85" />
-    <path d="M11.7 6 6.4 11.3a1 1 0 0 1-1.4-1.4l4.6-4.6" />
-  </I>
-);
+export const PaperclipIcon = centralIcon(centralPaperclip);
 
-export const MailIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="1.75" y="3.75" width="12.5" height="8.5" rx="1.5" />
-    <path d="m2.5 5 5.5 4 5.5-4" />
-  </I>
-);
+export const MailIcon = centralIcon(centralMail);
 
-export const PhoneCallIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={paths.phoneCallIconPath1} />
-  </I>
-);
+export const PhoneCallIcon = centralIcon(centralPhoneCall);
 
-export const DropletIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 2.2s4 4 4 6.6a4 4 0 0 1-8 0C4 6.2 8 2.2 8 2.2Z" />
-  </I>
-);
+export const DropletIcon = centralIcon(centralDroplet);
 
-export const HelpCircleIcon = ({ size = 16, className, style }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 16 16"
-    fill="none"
-    className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path d={paths.helpCircleIconPath1} fill="currentColor" />
-    <path d={paths.helpCircleIconPath2} fill="currentColor" />
-    <path opacity="0.4" fillRule="evenodd" clipRule="evenodd" d={paths.helpCircleIconPath3} fill="currentColor" />
-  </svg>
-);
+export const HelpCircleIcon = centralIcon(centralHelp);
 
 // A warning: a triangle with an exclamation mark, the triangle at 40% so the mark reads first.
-export const WarningTriangleIcon = ({ size = 16, className, style }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 16 16"
-    fill="none"
-    className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path d="M8 5V9H9V5H8Z" fill="currentColor" />
-    <path
-      d="M8.5 12C9.05228 12 9.5 11.5523 9.5 11C9.5 10.4477 9.05228 10 8.5 10C7.94772 10 7.5 10.4477 7.5 11C7.5 11.5523 7.94772 12 8.5 12Z"
-      fill="currentColor"
-    />
-    <path
-      opacity="0.4"
-      fillRule="evenodd"
-      clipRule="evenodd"
-      d="M7.63392 2C8.01883 1.33333 8.98107 1.33333 9.36597 2L15.4282 12.5C15.8131 13.1667 15.3319 14 14.5621 14H2.43777C1.66797 14 1.18685 13.1667 1.57175 12.5L7.63392 2ZM8.49995 2.5L2.43777 13L14.5621 13L8.49995 2.5Z"
-      fill="currentColor"
-    />
-  </svg>
-);
+export const WarningTriangleIcon = centralIcon(centralWarning);
 
-export const GearIcon = (props: IconProps) => (
-  <I {...props}>
-    <circle cx="8" cy="8" r="2.15" />
-    <path d={paths.gearIconPath1} />
-  </I>
-);
+export const GearIcon = centralIcon(centralSettings);
 
-export const TrashIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M3 4.5h10M6.5 2.5h3M5.5 4.5l.5 9h4l.5-9" />
-  </I>
-);
+export const TrashIcon = centralIcon(centralTrash);
 
-export const FolderOpenIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2 12.5V3.8a.8.8 0 0 1 .8-.8h3.4l1.5 1.8h5.5a.8.8 0 0 1 .8.8v1" />
-    <path d="M2 12.5 3.8 7h10.7l-1.8 5.5H2Z" />
-  </I>
-);
+export const FolderOpenIcon = centralIcon(centralFolderOpen);
 
-export const SparkleIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d={paths.sparkleIconPath1} />
-  </I>
-);
+export const SparkleIcon = centralIcon(centralSparkle);
 
-export const UploadIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 10.5V3M4.8 6.2 8 3l3.2 3.2" />
-    <path d="M2.5 13h11" />
-  </I>
-);
+export const UploadIcon = centralIcon(centralUpload);
 
-export const SearchIcon = (props: IconProps) => (
-  <I {...props}>
-    <circle cx="7" cy="7" r="4.5" />
-    <path d="m10.5 10.5 3 3" />
-  </I>
-);
+export const SearchIcon = centralIcon(centralSearch);
 
 // A list's filters: a funnel, as a builder's collection list settings draw them.
-export const FilterIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M2.5 3h11l-4.25 5.25V13l-2.5-1.25V8.25L2.5 3Z" />
-  </I>
-);
+export const FilterIcon = centralIcon(centralFilter);
 
 // A list's sort: an up-and-down arrow beside the lines it orders.
-export const SortIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M4.5 3v10M2.5 5l2-2 2 2M2.5 11l2 2 2-2M9 4.5h4.5M9 8h4.5M9 11.5h4.5" />
-  </I>
-);
+export const SortIcon = centralIcon(centralSort);
 
 // Disconnecting a setting from a property: a chain link broken in two.
 // A link broken in two: what disconnecting a value from what it was bound to does.
-export const UnlinkIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d="M5.85355 4.14526L3.85477 2.14648L3.14767 2.85359L5.14645 4.85237L5.85355 4.14526Z" />
-    <path d="M11.5 10.5H14V9.50004H11.5V10.5Z" />
-    <path d="M2 5.49885H4.5V6.49885H2V5.49885Z" />
-    <path d="M10.1464 11.8536L12.1464 13.8536L12.8536 13.1465L10.8536 11.1465L10.1464 11.8536Z" />
-    <path d="M5.85355 7.85384L4.85355 8.85384C4.22039 9.487 4.22039 10.5136 4.85355 11.1467C5.48672 11.7799 6.51328 11.7799 7.14644 11.1467L8.14645 10.1467L8.85355 10.8538L7.85355 11.8538C6.82986 12.8775 5.17014 12.8775 4.14645 11.8538C3.12276 10.8301 3.12276 9.17042 4.14645 8.14673L5.14645 7.14673L5.85355 7.85384Z" />
-    <path d="M11.8536 4.14673C10.8299 3.12304 9.17014 3.12304 8.14645 4.14673L7.14645 5.14673L7.85355 5.85384L8.85355 4.85383C9.48672 4.22067 10.5133 4.22067 11.1464 4.85384C11.7796 5.487 11.7796 6.51356 11.1464 7.14673L10.1464 8.14673L10.8536 8.85384L11.8536 7.85383C12.8772 6.83014 12.8772 5.17042 11.8536 4.14673Z" />
-  </I>
-);
+export const UnlinkIcon = centralIcon(centralUnlink);
 
-export const TerminalIcon = (props: IconProps) => (
-  <I {...props}>
-    <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
-    <path d="m4.75 6.5 2 1.75-2 1.75M8.5 10.25h3" />
-  </I>
-);
+export const TerminalIcon = centralIcon(centralTerminal);
 
-export const ArrowDownIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="M8 3v10M4.25 9.25 8 13l3.75-3.75" />
-  </I>
-);
+export const ArrowDownIcon = centralIcon(centralArrowDown);
 
-// astro:assets <Image> / <Picture>. The glyph is the element they render, so
-// the row still reads as an image, tinted with Astro's accent and carrying a
-// small mark — a plain <img> is grey, a project component is green, and this
-// is neither.
-export function astroAssetIcon(name: unknown, size = 14, className?: string) {
-  const stack = name === 'Picture';
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      aria-hidden="true"
-      className={className}
-      style={{ display: 'block', flexShrink: 0, color: ASTRO_ASSET_ACCENT }}
-    >
-      {/* A second frame behind the first says "more than one source". */}
-      {stack && (
-        <path d="M4.5 3.5H2.75A.75.75 0 0 0 2 4.25v8a.75.75 0 0 0 .75.75H10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.55" />
-      )}
-      <rect x={stack ? 5 : 2.6} y={stack ? 2 : 3} width={stack ? 9 : 10.8} height={stack ? 9 : 10} rx="1.1" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx={stack ? 7.6 : 5.6} cy={stack ? 4.7 : 5.9} r="1" fill="currentColor" />
-      <path d={stack ? 'M5.4 10.2 8.2 7.6l5.2 4.6' : 'M3 12.2l3.4-3.2 6.6 5.5'} stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-    </svg>
-  );
+const AstroImageIcon = centralIcon(centralImage);
+const AstroPictureIcon = centralIcon(centralLayers);
+
+// Astro's accent distinguishes optimized images from plain HTML images.
+export function astroAssetIcon(name: unknown, size = 16, className?: string) {
+  const Icon = name === 'Picture' ? AstroPictureIcon : AstroImageIcon;
+  return <Icon size={size} className={className} style={{ color: ASTRO_ASSET_ACCENT }} />;
 }
 
 // Boolean prop — a switch, matching the True/False control the field renders.
-export const FieldSwitchIcon = (props: IconProps) => (
-  <I {...props} filled>
-    <path d={paths.fieldSwitchIconPath1} />
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.fieldSwitchIconPath2} />
-  </I>
-);
+export const FieldSwitchIcon = centralIcon(centralToggle);
 
 // Variables — the panel that reads a project's CSS custom properties.
-export const VariableIcon = ({ size = 24, className, style }: IconProps) => (
-  <svg
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    className={className}
-    style={{ display: 'block', flexShrink: 0, ...style }}
-    aria-hidden="true"
-  >
-    <path opacity="0.4" d={paths.variableIconPath1} fill="currentColor" />
-    <path d={paths.variableIconPath2} fill="currentColor" />
-    <path fillRule="evenodd" clipRule="evenodd" d={paths.variableIconPath3} fill="currentColor" />
-  </svg>
-);
-
-// Original vector paths, split only for source readability.
-const fileIconPath1 = 'M4.5 1.75h4.4l3.1 3.1v9.15a.5.5 0 0 1-.5.5h-7a.5.5 0 0 1-.5-.5V2.25a.5.5 0 ' + '0 1 .5-.5Z';
-
-const commentIconPath1 = 'M13.5 7.6c0 2.8-2.5 5-5.5 5-.7 0-1.4-.1-2-.35L2.8 13l.6-2.5A4.7 4.7 0 0 1 2' + '.5 7.6c0-2.8 2.5-5 5.5-5s5.5 2.2 5.5 5Z';
-
-const componentPropertiesIconPath1 =
-  'M8.47885 1.69162C8.18037 1.52882 7.81963 1.52882 7.52115 1.69162L2.52115 4.' +
-  '4189C2.19989 4.59413 2 4.93085 2 5.29679V10.7032C2 11.0691 2.19989 11.4058 ' +
-  '2.52115 11.5811L7.52115 14.3083C7.81963 14.4711 8.18037 14.4711 8.47885 14.' +
-  '3083L13.4789 11.5811C13.8001 11.4058 14 11.0691 14 10.7032V5.29679C14 4.930' +
-  '85 13.8001 4.59413 13.4789 4.4189L8.47885 1.69162ZM3.54416 4.99998L8 2.5695' +
-  '2L12.4558 4.99998L8 7.43043L3.54416 4.99998ZM3 5.84225L3 10.7032L7.5 13.157' +
-  '7V8.29679L3 5.84225Z';
+export const VariableIcon = centralIcon(centralVariables, 20);

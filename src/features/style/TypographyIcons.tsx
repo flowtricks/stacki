@@ -1,71 +1,32 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import {
+  alignCenter as centralAlignCenter,
+  alignJustify as centralAlignJustify,
+  alignLeft as centralAlignLeft,
+  alignRight as centralAlignRight,
+  clearFormat as centralClearFormat,
+  italic as centralItalic,
+  strike as centralStrike,
+  text as centralText,
+  underline as centralUnderline,
+} from '../../ui/central/centralGeometry';
 // The typography section's glyphs: alignment, decoration, font style,
 // capitalization and direction (TypographySection.tsx).
 
 // ─────────────────────────── Icons ───────────────────────────
 
-export function AlignLeftIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M1 3H15V4H1V3Z" fill="currentColor" />
-      <path d="M1 7H9V8H1V7Z" fill="currentColor" />
-      <path d="M11 11H1V12H11V11Z" fill="currentColor" />
-    </svg>
-  );
-}
-export function AlignCenterIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M1 3H15V4H1V3Z" fill="currentColor" />
-      <path d="M4 7H12V8H4V7Z" fill="currentColor" />
-      <path d="M13 11H3V12H13V11Z" fill="currentColor" />
-    </svg>
-  );
-}
-export function AlignRightIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M1 3H15V4H1V3Z" fill="currentColor" />
-      <path d="M7 7H15V8H7V7Z" fill="currentColor" />
-      <path d="M15 11H5V12H15V11Z" fill="currentColor" />
-    </svg>
-  );
-}
-export function AlignJustifyIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M1 3H15V4H1V3Z" fill="currentColor" />
-      <path d="M1 7H15V8H1V7Z" fill="currentColor" />
-      <path d="M15 11H1V12H15V11Z" fill="currentColor" />
-    </svg>
-  );
-}
+export const AlignLeftIcon = centralIcon(centralAlignLeft);
+export const AlignCenterIcon = centralIcon(centralAlignCenter);
+export const AlignRightIcon = centralIcon(centralAlignRight);
+export const AlignJustifyIcon = centralIcon(centralAlignJustify);
 export const DECORATION_NONE_ICON_PATH =
   'M8.70708 8.00004L12.3535 4.35359L11.6464 3.64648L7.99998 7.29293' +
   'L4.35353 3.64648L3.64642 4.35359L7.29287 8.00004L3.64642 11.6465L4.35353 12.3536' +
   'L7.99998 8.70714L11.6464 12.3536L12.3535 11.6465L8.70708 8.00004Z';
 
-export function DecorNoneIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path fillRule="evenodd" clipRule="evenodd" d={DECORATION_NONE_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
-export function DecorStrikeIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M9 12H8V9H9V12Z" fill="currentColor" />
-      <path d="M12 5H9V7H14V8H3V7H8V5H5V4H12V5Z" fill="currentColor" />
-    </svg>
-  );
-}
-export function DecorUnderlineIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M5 4.5H8.5M8.5 4.5H12M8.5 4.5V12M3 14.5H14" stroke="currentColor" />
-    </svg>
-  );
-}
+export const DecorNoneIcon = centralIcon(centralClearFormat);
+export const DecorStrikeIcon = centralIcon(centralStrike);
+export const DecorUnderlineIcon = centralIcon(centralUnderline);
 export function DecorOverlineIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -75,20 +36,8 @@ export function DecorOverlineIcon() {
   );
 }
 // Italicize (font-style)
-export function FontStyleRegularIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M10.5 4H9V12H10.5V13H6.5V12H8V4H6.5V3H10.5V4Z" fill="currentColor" />
-    </svg>
-  );
-}
-export function FontStyleItalicIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M8.80629 4H7V3H12V4H9.86038L7.19371 12H9V13H4V12H6.13962L8.80629 4Z" fill="currentColor" />
-    </svg>
-  );
-}
+export const FontStyleRegularIcon = centralIcon(centralText);
+export const FontStyleItalicIcon = centralIcon(centralItalic);
 export const TRANSFORM_CAPS_ICON_PATH =
   'M4.12583 4H5.87413L8.00003 11.2279L10.1258 4H11.8741L14.2271 12H13.1848' +
   'L12.5965 9.99994H9.40354L8.8153 12H7.18477L6.5965 9.99994H3.40354L2.8153 12' +

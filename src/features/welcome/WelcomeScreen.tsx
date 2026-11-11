@@ -214,7 +214,7 @@ function WelcomeHero({
           <WelcomeSplitButton
             className={hasRecents ? 'primary' : ''}
             label="Open from folder"
-            icon={<FolderIcon size={15} />}
+            icon={<FolderIcon size={12} />}
             menuLabel="Open from GitHub"
             menuIcon={<GitHubIcon size={15} />}
             menuTitle="More ways to open a project"

@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { add as centralAdd, filter as centralFilter, more as centralMore } from '../../ui/central/centralGeometry';
 // Layered 2D and 3D transforms — move, scale, rotate, skew — each axis a
 // number with a unit, and the filters row beside them (EffectsSection.tsx).
 
@@ -41,24 +43,10 @@ export const TRANSFORM_TYPES: ReadonlyArray<SegmentedOption<TransformType>> = [
   { value: 'skew', label: 'Skew' },
 ];
 
-export const MoreIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <circle cx="4" cy="8" r="1.15" fill="currentColor" />
-    <circle cx="8" cy="8" r="1.15" fill="currentColor" />
-    <circle cx="12" cy="8" r="1.15" fill="currentColor" />
-  </svg>
-);
-export const TransformPlusIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-  </svg>
-);
+export const MoreIcon = centralIcon(centralMore);
+export const TransformPlusIcon = centralIcon(centralAdd);
 
-export const FilterGlyph = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="embed-editor_bg-glyph">
-    <path d="M2.5 4h11l-4.2 5v3.5L6.7 14V9L2.5 4Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-  </svg>
-);
+export const FilterGlyph = centralIcon(centralFilter);
 
 // The Filters / Backdrop filters row: a stack of filter functions (blur/brightness/…/
 // drop-shadow) edited as one CSS `filter` value. Mirrors TransformsRow.
@@ -412,7 +400,7 @@ export function ScaleLock({ locked, busy, onToggle }: { locked: boolean; busy: b
       title={locked ? 'Unlink X & Y' : 'Link X & Y'}
       aria-label={locked ? 'Unlink X and Y' : 'Link X and Y'}
     >
-      {locked ? LockIcon : UnlockIcon}
+      {locked ? <LockIcon /> : <UnlockIcon />}
     </button>
   );
 }

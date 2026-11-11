@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { drag as centralDrag, eye as centralEye, eyeOff as centralEyeOff, trash as centralTrash } from '../../ui/central/centralGeometry';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -6,46 +8,10 @@ import type { ReactNode } from 'react';
 // action. The grip/trash only show on row hover. Rendering of a row's preview + label
 // is delegated via `renderRow`; the owner keeps the data model.
 
-const GripIcon = () => (
-  <svg viewBox="0 0 16 16" aria-hidden="true" className="embed-editor_bg-glyph">
-    <circle cx="6" cy="4" r="1" />
-    <circle cx="10" cy="4" r="1" />
-    <circle cx="6" cy="8" r="1" />
-    <circle cx="10" cy="8" r="1" />
-    <circle cx="6" cy="12" r="1" />
-    <circle cx="10" cy="12" r="1" />
-  </svg>
-);
-const EyeIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="embed-editor_bg-glyph">
-    <path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-    <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
-  </svg>
-);
-const EyeOffIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="embed-editor_bg-glyph">
-    <path
-      d="M1.5 8S4 3.5 8 3.5c1.2 0 2.3.4 3.2 1M14.5 8s-2.5 4.5-6.5 4.5c-1.2 0-2.3-.4-3.2-1"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <path d="M6.6 6.6a2 2 0 0 0 2.8 2.8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    <path d="m2.5 2.5 11 11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-  </svg>
-);
-const TrashIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="embed-editor_bg-glyph">
-    <path
-      d="M3 4h10M6.5 4V3h3v1M5 4l.5 8.5a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1L11 4"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  </svg>
-);
+const GripIcon = centralIcon(centralDrag);
+const EyeIcon = centralIcon(centralEye);
+const EyeOffIcon = centralIcon(centralEyeOff);
+const TrashIcon = centralIcon(centralTrash);
 
 export type LayerListProps = {
   /** Number of rows (top layer first). */

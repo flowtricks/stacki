@@ -128,8 +128,11 @@ jobs:
           EP_PRE_RELEASE: false
           EP_DRAFT: true
       - name: Install and test Debian package
+        # Refresh the package index first: the runner image's index named archive files that
+        # were gone, and the install failed to fetch them (1.1.2, 1.1.4). Retries ride out DNS.
         run: |
-          sudo apt-get install --yes ./release/*.deb
+          sudo apt-get update || { sleep 15; sudo apt-get update; }
+          sudo apt-get install --yes ./release/*.deb || { sleep 15; sudo apt-get update && sudo apt-get install --yes ./release/*.deb; }
           test "$(stat -c '%u:%g:%a' /opt/Stacki/chrome-sandbox)" = '0:0:4755'
           test "$(cat /opt/Stacki/resources/package-type)" = deb
           xvfb-run --auto-servernum node dist/scripts/release/linuxSmoke.js /opt/Stacki/stacki
@@ -169,6 +172,7 @@ jobs:
       # No global sysctl changes or sandbox-disabling launch flags are needed.
       - name: Install and launch on Ubuntu 24.04
         run: |
+          sudo apt-get update || { sleep 15; sudo apt-get update; }
           sudo apt-get install --yes ./release/*.deb
           test "$(stat -c '%u:%g:%a' /opt/Stacki/chrome-sandbox)" = '0:0:4755'
           xvfb-run --auto-servernum node dist/scripts/release/linuxSmoke.js /opt/Stacki/stacki

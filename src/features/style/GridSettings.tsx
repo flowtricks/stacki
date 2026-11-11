@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { braces as centralBraces } from '../../ui/central/centralGeometry';
 import { useEffect, useRef, useState } from 'react';
 import VariableConnect from './VariableConnect';
 import { GroupLabel } from './TypographySection';
@@ -38,17 +40,8 @@ import { withImportant } from './model/styleDisplay';
 // minmax(min, max) pair) — plus the auto-generated track sizes and (read-only for now)
 // the areas. Resolved-model API; writes an explicit space-separated grid-template.
 
-const BRACES_ICON_PATH =
-  'M6.4 2.5c-1.2 0-1.7.6-1.7 1.7v1.9c0 1-.3 1.4-1.2 1.4v1c.9 0 1.2.4 1.2 1.4v1.9' +
-  'c0 1.1.5 1.7 1.7 1.7M9.6 2.5c1.2 0 1.7.6 1.7 1.7v1.9c0 1 .3 1.4 1.2 1.4v1' +
-  'c-.9 0-1.2.4-1.2 1.4v1.9c0 1.1-.5 1.7-1.7 1.7';
-
 // The expression toggle's glyph: the braces you write one in.
-const BracesIcon = () => (
-  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-    <path d={BRACES_ICON_PATH} stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
+const BracesIcon = centralIcon(centralBraces);
 
 // The whole track list as one field, for a value the list cannot hold: a
 // variable standing in for every track (`var(--columns)`), an !important, a

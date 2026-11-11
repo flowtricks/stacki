@@ -1,6 +1,10 @@
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
 // What a Select draws: the trigger, the list and its rows, each row's action
 // (Select.tsx).
+
+const ChevronDownGlyph = centralIcon(centralChevronDown, 12);
 
 import { useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from 'react';
 import { assert } from '../../../../shared/core/assert';
@@ -129,11 +133,7 @@ function OptionTag({ tag }: { readonly tag: SelectTag }) {
   );
 }
 
-export const CHEVRON = (
-  <svg className="u-select-chevron" viewBox="0 0 16 16" aria-hidden="true">
-    <path d="M4.2 6.2 8 10l3.8-3.8" />
-  </svg>
-);
+export const CHEVRON = <ChevronDownGlyph className="u-select-chevron" />;
 
 export function SelectTrigger<T extends string>({
   props,

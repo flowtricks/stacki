@@ -1,3 +1,10 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import {
+  arrowDown as centralArrowDown,
+  arrowLeft as centralArrowLeft,
+  arrowRight as centralArrowRight,
+  arrowUp as centralArrowUp,
+} from '../../ui/central/centralGeometry';
 import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -15,46 +22,10 @@ import { parseImportant, withImportant } from './model/styleDisplay';
 
 // ─────────────────────────── Icons (from Webflow) ───────────────────────────
 
-const ARROW_RIGHT_ICON_PATH =
-  'M12.2929 7.00001L9.14645 3.85356L9.85355 3.14645L14.2071 7.50001L9.85355 11.8536' + 'L9.14645 11.1465L12.2929 8.00001H3V7.00001H12.2929Z';
-
-function ArrowRightIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d={ARROW_RIGHT_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
-const ARROW_DOWN_ICON_PATH =
-  'M8.00004 12.2929L4.85359 9.14645L4.14648 9.85355L8.50004 14.2071L12.8536 9.85355' + 'L12.1465 9.14645L9.00004 12.2929L9.00004 3H8.00004L8.00004 12.2929Z';
-
-function ArrowDownIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d={ARROW_DOWN_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
-const ARROW_LEFT_ICON_PATH =
-  'M3.70718 7.00001L6.85363 3.85356L6.14652 3.14645L1.79297 7.50001L6.14652 11.8536' + 'L6.85363 11.1465L3.70718 8.00001H13.0001V7.00001H3.70718Z';
-
-function ArrowLeftIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d={ARROW_LEFT_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
-const ARROW_UP_ICON_PATH =
-  'M9.00007 3.70714L12.1465 6.85355L12.8536 6.14645L8.50004 1.79289L4.14648 6.14645' + 'L4.85359 6.85355L8.00007 3.70707L8.00007 13H9.00007L9.00007 3.70714Z';
-
-function ArrowUpIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d={ARROW_UP_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
+const ArrowRightIcon = centralIcon(centralArrowRight);
+const ArrowDownIcon = centralIcon(centralArrowDown);
+const ArrowLeftIcon = centralIcon(centralArrowLeft);
+const ArrowUpIcon = centralIcon(centralArrowUp);
 const ROW_WRAP_ICON_FIRST_PATH =
   'M14.207 11.5L10.8535 14.8535L10.1465 14.1465L12.293 12H3V11H12.293L10.1465 8.85352' + 'L10.8535 8.14648L14.207 11.5ZM11 4H3V3H11V4Z';
 

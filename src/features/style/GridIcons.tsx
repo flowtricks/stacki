@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { chevronDown as centralChevronDown, chevronUp as centralChevronUp, properties as centralProperties } from '../../ui/central/centralGeometry';
 // The grid controls' glyphs and value lists: flow and density icons, the
 // alignment and content-distribution icons, and their labels
 // (GridControls.tsx).
@@ -258,16 +260,8 @@ export const contentOptions = ({ vertical }: { readonly vertical: boolean }): Re
 };
 
 // Icons.
-export const ChevUp = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="12" height="12">
-    <path d="M4.6 9.4 8 6l3.4 3.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-export const ChevDown = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="12" height="12">
-    <path d="M4.6 6.6 8 10l3.4-3.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
+export const ChevUp = centralIcon(centralChevronUp, 12);
+export const ChevDown = centralIcon(centralChevronDown, 12);
 export const DENSE_ICON_FIRST_PATH =
   'M14.8535 11.1465 14.1465 11.8535 12.5 10.207V14H11.5v-3.793' + 'L9.85352 11.8535 9.14648 11.1465 12 8.29297 14.8535 11.1465Z';
 export const DENSE_ICON_SECOND_PATH =
@@ -304,8 +298,4 @@ export const CUSTOMIZE_ICON_PATH =
 // The "customize track sizes" toggle (Webflow's grid gear) — swaps the count
 // steppers for raw grid-template fields so non-uniform tracks (200px 1fr auto…) can
 // be typed instead of only N equal 1fr tracks.
-export const CustomizeIcon = () => (
-  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-    <path fillRule="evenodd" clipRule="evenodd" d={CUSTOMIZE_ICON_PATH} fill="currentColor" />
-  </svg>
-);
+export const CustomizeIcon = centralIcon(centralProperties);

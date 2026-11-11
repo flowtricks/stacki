@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { cursorClick as centralCursorClick } from '../../ui/central/centralGeometry';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IconProps } from '../../ui/Icons';
 import { CanvasIcon, ChevronRightIcon, DesktopIcon, PanelRightIcon, PhoneIcon, TabletIcon } from '../../ui/Icons';
@@ -5,6 +7,8 @@ import { PreviewSizeControls } from './PreviewSizeControls';
 import { GuideMenu, type GuideMenuProps } from './GuideMenu';
 import type { PreviewSizeControlsProps } from './PreviewSizeControls';
 import { ToolbarOverflow, type ToolbarItem } from './ToolbarOverflow';
+
+const InteractIcon = centralIcon(centralCursorClick);
 
 export type PreviewDevice = 'desktop' | 'tablet' | 'phone' | 'canvas' | 'custom';
 type FixedDevice = Exclude<PreviewDevice, 'custom'>;
@@ -254,19 +258,7 @@ function interactionItems(interaction: PreviewToolbarProps['interaction']): read
         disabled={!interaction.available}
         onClick={interaction.toggle}
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d={
-              'M9 12V4.5a1.5 1.5 0 0 1 3 0V9a1.5 1.5 0 0 1 3 0v1' +
-              'a1.5 1.5 0 0 1 3 0v1a1.5 1.5 0 0 1 3 0v4c0 4-2 6-6 6h-2' +
-              'c-2 0-3-1-4-2l-5-6a1.5 1.5 0 0 1 2.2-2L9 14zM12 9v3m3-2v3m3-2v3'
-            }
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <InteractIcon />
       </button>
     </div>
   );

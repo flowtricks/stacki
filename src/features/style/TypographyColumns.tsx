@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { close as centralClose } from '../../ui/central/centralGeometry';
 import Popup from '../../ui/Popup';
 // Text columns and their advanced options: count and width, the rule's style,
 // width and colour, the gap and span, in the popover the row opens
@@ -282,13 +284,7 @@ export function SpanRow({
   );
 }
 
-export function CloseIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
+export const CloseIcon = centralIcon(centralClose);
 
 // A "…" trigger button that toggles an anchored options popover. The popover is
 // absolutely positioned (left/right:0) against the nearest positioned ancestor —

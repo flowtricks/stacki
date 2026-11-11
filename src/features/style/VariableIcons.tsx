@@ -1,26 +1,25 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import {
+  add as centralAdd,
+  check as centralCheck,
+  chevronRight as centralChevronRight,
+  droplet as centralDroplet,
+  font as centralFont,
+  number as centralNumber,
+  percent as centralPercent,
+  scale as centralScale,
+} from '../../ui/central/centralGeometry';
 // The glyphs the variable picker draws: a check, a plus, a chevron, and an
 // icon per variable type (VariableConnect.tsx).
 
-export function CheckIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
-      <path d="M3.5 8.5 6.5 11.5 12.5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+export const CheckIcon = centralIcon(centralCheck);
 
 // The "connect to variable" affordance (Webflow's): a dot in the input's top-left
 // corner, revealed on hover of the input. Hovering the dot grows it into a purple
 // "+"; clicking opens a searchable, grouped variable picker. Picking one calls
 // onPick with the `var(--…)` binding to write.
 
-export function PlusIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M8 4v8M4 8h8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-    </svg>
-  );
-}
+export const PlusIcon = centralIcon(centralAdd);
 
 export const COLOR_TYPE_ICON_PATH =
   'M8 12C6.61929 12 5.5 10.8807 5.5 9.50002C5.5 9.04673 5.62524 8.59624 5.85694 8.21178' +
@@ -31,13 +30,7 @@ export const COLOR_TYPE_ICON_PATH =
 
 // Per-type variable glyphs (Webflow's), keyed by the variable's `type`; any other type
 // (Size included) uses the Size glyph.
-export function ColorTypeIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path fillRule="evenodd" clipRule="evenodd" d={COLOR_TYPE_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
+export const ColorTypeIcon = centralIcon(centralDroplet);
 export const NUMBER_TYPE_ICON_PATH =
   'M11.846 3.13226L11.0637 6.0007H13V7.0007H10.791L10.2455 9.0007H12V10.0007' +
   'H9.9728L9.11873 13.1323L8.15397 12.8691L8.93627 10.0007H5.9728L5.11873 13.1323' +
@@ -45,13 +38,7 @@ export const NUMBER_TYPE_ICON_PATH =
   'H6.02718L6.88124 2.86914L7.84601 3.13226L7.0637 6.0007H10.0272L10.8812 2.86914' +
   'L11.846 3.13226ZM6.24552 9.0007H9.209L9.75446 7.0007H6.79098L6.24552 9.0007Z';
 
-export function NumberTypeIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path fillRule="evenodd" clipRule="evenodd" d={NUMBER_TYPE_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
+export const NumberTypeIcon = centralIcon(centralNumber);
 export const PERCENTAGE_TYPE_ICON_PATH =
   'M12.8538 3.85249L3.85377 12.8525C3.75995 12.9463 3.63271 12.999 3.50002 12.999C3.36734 ' +
   '12.999 3.24009 12.9463 3.14627 12.8525C3.05245 12.7587 2.99975 12.6314 2.99975 12.4987' +
@@ -83,13 +70,7 @@ export const PERCENTAGE_TYPE_ICON_PATH =
   'C12.2502 12.018 12.3425 11.8802 12.4054 11.7285' +
   'C12.4683 11.5768 12.5004 11.4142 12.5 11.25Z';
 
-export function PercentageTypeIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d={PERCENTAGE_TYPE_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
+export const PercentageTypeIcon = centralIcon(centralPercent);
 export const FONT_FAMILY_TYPE_ICON_PATH =
   'M8.49945 3.49902L8.50043 3.49805V2.99902L8.88422 3L8.98285 3.37012L10.4116 8.7041' +
   'C11.6626 9.16833 12.7329 9.8024 13.4955 10.5137L12.8139 11.2451C12.2954 10.7615 11.5854 ' +
@@ -105,20 +86,8 @@ export const FONT_FAMILY_TYPE_ICON_PATH =
   'C4.66552 11.6081 4.90132 11.265 5.01898 10.8262L5.51117 8.98828ZM6.8227 7.95605' +
   'C7.60256 7.99297 8.43418 8.12006 9.27973 8.34473L8.11664 3.99902H7.88324L6.8227 7.95605Z';
 
-export function FontFamilyTypeIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path fillRule="evenodd" clipRule="evenodd" d={FONT_FAMILY_TYPE_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
-export function SizeTypeIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M12 4.70711L4.70711 12H7.5V13H3V8.5H4V11.2929L11.2929 4H8.5V3H13V7.5H12V4.70711Z" fill="currentColor" />
-    </svg>
-  );
-}
+export const FontFamilyTypeIcon = centralIcon(centralFont);
+export const SizeTypeIcon = centralIcon(centralScale);
 export function VariableTypeIcon({ type }: { type: string }) {
   switch (type) {
     case 'Color':
@@ -133,10 +102,4 @@ export function VariableTypeIcon({ type }: { type: string }) {
       return <SizeTypeIcon />;
   }
 }
-export function ChevronRightIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
-      <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+export const ChevronRightIcon = centralIcon(centralChevronRight);

@@ -1,8 +1,12 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { more as centralMore } from '../../ui/central/centralGeometry';
 import Popup from '../../ui/Popup';
 // The popover that edits one side of the spacing box: its draft, its live and
 // committed writes, the reset button, focus on open, arrow-key steps, and
 // closing on a press outside unless it lands in a popup of its own
 // (SpacingBox.tsx).
+
+const MoreGlyph = centralIcon(centralMore, 12);
 
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -125,10 +129,7 @@ export function SpacingResetButton({ onReset }: { onReset: () => void }) {
         onReset();
       }}
     >
-      <svg className="u-field-label-menu-icon" viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M5.2 5.2H2.2V2.2" />
-        <path d="M2.6 5.2A5.5 5.5 0 1 1 4 12.2" />
-      </svg>
+      <MoreGlyph className="u-field-label-menu-icon" />
       <span>Reset</span>
       <span className="u-field-label-menu-shortcut">Option + click</span>
     </button>

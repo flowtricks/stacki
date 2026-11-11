@@ -1,9 +1,13 @@
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 import type { InlineChip, InlineCodeView } from './useInlineTarget';
 import { InlineBranchEditor, InlineBranchPicker } from './InlineBranchEditor';
 import { CodeBlock } from '../../../ui/CodeBlock';
 import Popup from '../../../ui/Popup';
 // Media and container queries — picking one, adding and editing it — and the
 // style card's CSS code view (EmbedEditor.tsx).
+
+const ChevronDownGlyph = centralIcon(centralChevronDown, 12);
 
 import type { ClassPlacement } from '../../../editor/classAttr';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -504,9 +508,7 @@ export function CssCodeHeader({ open, sourceLabel, onToggle }: { readonly open: 
         </span>
       ) : undefined}
       <span className="embed-editor_css-code-chevron" aria-hidden="true">
-        <svg className="embed-editor_section-chevron" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M4.2 6.2 8 10l3.8-3.8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <ChevronDownGlyph className="embed-editor_section-chevron" />
       </span>
     </button>
   );

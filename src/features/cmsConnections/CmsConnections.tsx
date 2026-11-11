@@ -1,3 +1,4 @@
+import { ChevronDownIcon } from '../../ui/Icons';
 // The project's CMS connections, in Settings: which hosted CMS its content comes
 // from, and the key Stacki saves drafts with. Shown the same in Desktop and in
 // Stacki Studio; only the bridge underneath differs (src/ipc/cmsConnectionsBridge.ts).
@@ -109,9 +110,7 @@ function SanityConnect({ onOpen }: { readonly onOpen: (dialog: Dialog) => void }
           Log in with Sanity
         </button>
         <button type="button" className="cms-connect-arrow" aria-label="More ways to connect Sanity" aria-expanded={open} onClick={() => setOpen(!open)}>
-          <svg width="6" height="4" viewBox="0 0 10 6" aria-hidden="true">
-            <path d="M0 0h10L5 6z" fill="currentColor" />
-          </svg>
+          <ChevronDownIcon size={12} />
         </button>
       </div>
       <Popup

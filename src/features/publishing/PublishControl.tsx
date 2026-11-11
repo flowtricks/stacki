@@ -1,3 +1,4 @@
+import { ChevronDownIcon } from '../../ui/Icons';
 import { useEffect, useRef, useState } from 'react';
 import type { PublishConfig, PublishTarget } from '../../../shared/properties/publishConfig';
 import { parsePublishConfig, parsePublishSource } from '../../../shared/properties/publishConfig';
@@ -155,9 +156,7 @@ function PublishButtons(props: {
         disabled={props.busy || props.checking}
         onClick={props.toggle}
       >
-        <svg width="6" height="4" viewBox="0 0 10 6" aria-hidden="true">
-          <path d="M0 0h10L5 6z" fill="currentColor" />
-        </svg>
+        <ChevronDownIcon size={12} />
       </button>
     </div>
   );

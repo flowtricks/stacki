@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { lock as centralLock, unlock as centralUnlock } from '../../ui/central/centralGeometry';
 import type { ReactNode } from 'react';
 import type { TransformType } from './model/transform';
 
@@ -173,25 +175,7 @@ export function transformTypeIcon(type: TransformType): ReactNode {
   return TYPE_ICONS[type];
 }
 
-const LOCK_ICON_PATH =
-  'M5 6V4.5a3 3 0 0 1 6 0V6h.5A1.5 1.5 0 0 1 13 7.5v5A1.5 1.5 0 0 1 11.5 14h-7' +
-  'A1.5 1.5 0 0 1 3 12.5v-5A1.5 1.5 0 0 1 4.5 6H5Zm1 0h4V4.5a2 2 0 1 0-4 0V6' +
-  'ZM4.5 7a.5.5 0 0 0-.5.5v5a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5v-5a.5.5 0 0 0-.5-.5h-7Z';
-
 /** Padlock — locked (X & Y linked). */
-export const LockIcon = (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path fillRule="evenodd" clipRule="evenodd" d={LOCK_ICON_PATH} fill="currentColor" />
-  </svg>
-);
-const UNLOCK_ICON_PATH =
-  'M5 6V4.5a3 3 0 0 1 5.83-1l-.9.44A2 2 0 0 0 6 4.5V6h5.5A1.5 1.5 0 0 1 13 7.5v5' +
-  'A1.5 1.5 0 0 1 11.5 14h-7A1.5 1.5 0 0 1 3 12.5v-5A1.5 1.5 0 0 1 4.5 6H5' +
-  'Zm-.5 1a.5.5 0 0 0-.5.5v5a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5v-5a.5.5 0 0 0-.5-.5h-7Z';
-
+export const LockIcon = centralIcon(centralLock);
 /** Open padlock — unlocked (X & Y independent). */
-export const UnlockIcon = (
-  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path fillRule="evenodd" clipRule="evenodd" d={UNLOCK_ICON_PATH} fill="currentColor" />
-  </svg>
-);
+export const UnlockIcon = centralIcon(centralUnlock);

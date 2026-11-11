@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { checkCircle as centralCheckCircle, close as centralClose, info as centralInfo } from '../../ui/central/centralGeometry';
 import { createPortal } from 'react-dom';
 import { useToastHost } from './useToastHost';
 import { runToastRecovery } from '../../ui/errorNotices';
@@ -6,6 +8,10 @@ import { useToastInteraction } from './useToastInteraction';
 import { TOAST_LIMIT, type ToastNotice } from './useToastStack';
 import { useToastLayout } from './useToastLayout';
 import './toasts.css';
+
+const CloseIcon = centralIcon(centralClose);
+const SuccessIcon = centralIcon(centralCheckCircle, 20);
+const InfoIcon = centralIcon(centralInfo, 20);
 
 interface ToastStackProps<Notice extends ToastNotice> {
   readonly notices: readonly Notice[];
@@ -126,9 +132,7 @@ function ToastCard({
 function ToastClose({ close }: { readonly close: () => void }) {
   return (
     <button type="button" className="toast-close" aria-label="Dismiss notification" onClick={close}>
-      <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-        <path d="m4 4 8 8m0-8-8 8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
+      <CloseIcon />
     </button>
   );
 }
@@ -136,10 +140,7 @@ function ToastClose({ close }: { readonly close: () => void }) {
 function ToastIcon({ kind }: { readonly kind: ToastNotice['kind'] }) {
   return (
     <span className="toast-icon" aria-hidden="true">
-      <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="10" cy="10" r="7.25" />
-        {kind === 'success' ? <path d="m6.5 10 2.25 2.25 4.75-4.5" /> : <path d="M10 9v4m0-6.5v.1" />}
-      </svg>
+      {kind === 'success' ? <SuccessIcon /> : <InfoIcon />}
     </span>
   );
 }

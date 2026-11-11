@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { add as centralAdd } from '../../ui/central/centralGeometry';
 // Text stroke (-webkit-text-stroke) and layered text shadows, each with its
 // own editor (TypographySection.tsx).
 
@@ -135,11 +137,7 @@ export function StrokeCaption({
 
 // ─────────────── Text shadows (layered text-shadow) ───────────────
 
-export const ShadowPlusIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-  </svg>
-);
+export const ShadowPlusIcon = centralIcon(centralAdd);
 
 export type ShadowPatch = { x?: string; y?: string; blur?: string; color?: string };
 

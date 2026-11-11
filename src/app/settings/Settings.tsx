@@ -22,9 +22,7 @@ import { SETTINGS_TABS, loadSettingsTab, saveSettingsTab, settingsTabAfterKey, t
 import { RolesSettings } from './RolesSettings';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { canSettingsTab } from '../../lib/roleAccess';
-import { FeatureIcon, RAIL_ICONS } from '../featureIcons';
-import Dropdown from '../../ui/Dropdown';
-import { RAIL_ICON_SETS, RAIL_ICON_SET_LABELS, saveRailIconSet, useRailIconSet } from '../railIconSet';
+import { FeatureIcon } from '../featureIcons';
 import { SettingsEmpty, SettingsIntro, SettingsRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 
 interface Props {
@@ -317,7 +315,6 @@ function Preferences() {
           disabled={!value || busy}
           onToggle={() => void change({ setting: 'sound', enabled: !value?.sound })}
         />
-        <RailIconsSetting />
       </SettingsSection>
       <SettingsSection title="AI">
         <PreferenceToggle
@@ -368,26 +365,6 @@ function Preferences() {
       )}
       {error && <ErrorToast message={error} />}
     </section>
-  );
-}
-
-// The rail's icon set, kept on this computer (railIconSet.ts) rather than in the
-// preferences file: it is a comparison while the sets are tested, and it applies
-// as it is picked, so it needs no save indicator.
-function RailIconsSetting() {
-  const set = useRailIconSet();
-  return (
-    <SettingsRow label="Rail icons" description="Which icons the left rail draws. Stacki is the current set; Phosphor and Custom are being tested.">
-      <Dropdown
-        ariaLabel="Rail icons"
-        value={set}
-        options={RAIL_ICON_SETS.map((item) => {
-          const Icon = RAIL_ICONS[item].components;
-          return { value: item, label: RAIL_ICON_SET_LABELS[item], icon: <Icon size={16} /> };
-        })}
-        onChange={saveRailIconSet}
-      />
-    </SettingsRow>
   );
 }
 

@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { clock as centralClock } from '../../ui/central/centralGeometry';
 // Layered transitions: the property, duration and easing of each, with the
 // curve drawn (EffectsSection.tsx).
 
@@ -25,12 +27,7 @@ import { type Props, type WriteOptions, writeValue, useLayerRows, EffLabel } fro
 
 // ─────────────────────────── Transitions ───────────────────────────
 
-export const ClockIcon = () => (
-  <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
-    <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
-    <path d="M8 5v3l2 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
+export const ClockIcon = centralIcon(centralClock);
 export function EaseCurveIcon({ timing }: { timing: string }) {
   const bezier = easingToBezier(timing || 'ease');
   const size = 16;

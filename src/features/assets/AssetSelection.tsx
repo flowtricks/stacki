@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { collapse as centralCollapse } from '../../ui/central/centralGeometry';
 import { useEffect, useRef } from 'react';
 import { IMAGE_BATCH_MAX } from '../../../shared/ipc/assetConversion';
 import { canConvertAssets } from '../../ipc/editorEnvironment';
@@ -116,12 +118,4 @@ export function SelectableAssetTile({ file, batch }: { readonly file: AssetFile;
 }
 
 // The supplied compression glyph points inward toward the reduced dimension.
-function CompressIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M15 8H2V7h13v1Z" fill="currentColor" />
-      <path d="m8 10.707-2.146 2.147-.708-.708L8.5 8.793l3.354 3.353-.708.708L9 10.707V15H8v-4.293Z" fill="currentColor" />
-      <path d="M8 4.293 5.854 2.146l-.708.708L8.5 6.207l3.354-3.353-.708-.708L9 4.293V0H8v4.293Z" fill="currentColor" />
-    </svg>
-  );
-}
+const CompressIcon = centralIcon(centralCollapse);

@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { lock as centralLock, unlock as centralUnlock } from '../../ui/central/centralGeometry';
 import { useEffect, useRef, useState } from 'react';
 import { GroupLabel, PropLabel } from './TypographySection';
 import { displayOf, parseImportant, withImportant } from './model/styleDisplay';
@@ -104,22 +106,8 @@ function rawEffective(resolved: ResolvedProp | undefined): { value: string; impo
   return { value: effective.value, important: effective.important };
 }
 
-function LockedIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="3.5" y="7" width="9" height="6" rx="1.5" fill="currentColor" />
-      <path d="M5.5 7V5.2a2.5 2.5 0 0 1 5 0V7" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" />
-    </svg>
-  );
-}
-function UnlockedIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="3.5" y="7" width="9" height="6" rx="1.5" fill="currentColor" />
-      <path d="M5.5 7V5.2a2.5 2.5 0 0 1 4.9-.6" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" />
-    </svg>
-  );
-}
+const LockedIcon = centralIcon(centralLock);
+const UnlockedIcon = centralIcon(centralUnlock);
 
 // A length field: live-as-you-type updates, commit on blur, ↑/↓ number stepping.
 // Which axes a field is responsible for: the linked field is both, the split

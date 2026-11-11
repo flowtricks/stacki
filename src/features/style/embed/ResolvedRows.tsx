@@ -1,6 +1,10 @@
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 // How a resolved property is shown: the section block, the provenance
 // popover, a resolved row with its label and value, and the display and
 // vertical-align rows (EmbedEditor.tsx).
+
+const ChevronDownGlyph = centralIcon(centralChevronDown, 12);
 
 import { useRef } from 'react';
 import Popup from '../../../ui/Popup';
@@ -68,9 +72,7 @@ export function SectionBlock({
           aria-label={`${open ? 'Collapse' : 'Expand'} ${label}`}
           onClick={onToggle}
         >
-          <svg className="embed-editor_section-chevron" viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M4.2 6.2 8 10l3.8-3.8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          <ChevronDownGlyph className="embed-editor_section-chevron" />
         </button>
       </div>
       {open ? <div className="embed-editor_section-body">{children}</div> : undefined}

@@ -93,7 +93,7 @@ export default function SplitButton(props: SplitButtonProps) {
           }
         }}
       >
-        <ChevronDownIcon size={13} />
+        <ChevronDownIcon size={12} />
       </button>
       <Popup
         mode="popover"

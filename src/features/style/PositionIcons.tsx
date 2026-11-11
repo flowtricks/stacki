@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { close as centralClose } from '../../ui/central/centralGeometry';
 // The position section's glyphs, drawn after Webflow's: the position modes,
 // float and clear (PositionSection.tsx).
 
@@ -8,13 +10,7 @@ export const CLOSE_ICON_PATH =
   'L3.64642 4.35359L7.29287 8.00004L3.64642 11.6465L4.35353 12.3536L7.99998 8.70714' +
   'L11.6464 12.3536L12.3535 11.6465L8.70708 8.00004Z';
 
-export function CloseIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path fillRule="evenodd" clipRule="evenodd" d={CLOSE_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
+export const CloseIcon = centralIcon(centralClose);
 export const RELATIVE_ICON_PATH =
   'M11 2H9V3H11V8H12V3H14V2H11ZM3 9H2V14H3V12H8V11H3V9ZM14 10C14 9.44772 13.5523 9 13 9H10' +
   'C9.44772 9 9 9.44772 9 10V13C9 13.5523 9.44772 14 10 14H13C13.5523 14 14 13.5523 14 13V10Z';

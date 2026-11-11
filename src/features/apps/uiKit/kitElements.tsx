@@ -102,7 +102,7 @@ const KIT_ICONS = {
   warning: WarningTriangleIcon,
   filter: FilterIcon,
 } as const;
-const KIT_ICON_PX = 13;
+const KIT_ICON_PX = 16;
 
 /** The longest icon value an option takes: a kit icon's name, `component` or `tag:<tag>`. */
 const OPTION_ICON_CHARS_MAX = 64;

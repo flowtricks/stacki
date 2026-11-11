@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { more as centralMore } from '../../ui/central/centralGeometry';
 import Popup from '../../ui/Popup';
 // The field kit the style panel's sections are drawn with — first written for
 // typography, now shared: the property and group labels, the live text input
@@ -552,12 +554,4 @@ export function useSegCustomFocus({ customMode, busy }: { customMode: boolean; b
   };
 }
 
-export function MoreIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <circle cx="3" cy="8" r="1.35" fill="currentColor" />
-      <circle cx="8" cy="8" r="1.35" fill="currentColor" />
-      <circle cx="13" cy="8" r="1.35" fill="currentColor" />
-    </svg>
-  );
-}
+export const MoreIcon = centralIcon(centralMore);

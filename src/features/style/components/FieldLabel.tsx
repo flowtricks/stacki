@@ -1,3 +1,5 @@
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { more as centralMore } from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode, RefObject } from 'react';
@@ -6,6 +8,8 @@ import InheritedPropertyLabel from './InheritedPropertyLabel';
 import { panelBounds } from '../model/panelBox';
 import { useHoverTip } from './CssPropertyTip';
 import type { ScrubHandlers } from './useScrub';
+
+const MoreGlyph = centralIcon(centralMore, 12);
 
 type Props = {
   children: ReactNode;
@@ -250,10 +254,7 @@ function FieldLabelMenu({
           onReset();
         }}
       >
-        <svg className="u-field-label-menu-icon" viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M5.2 5.2H2.2V2.2" />
-          <path d="M2.6 5.2A5.5 5.5 0 1 1 4 12.2" />
-        </svg>
+        <MoreGlyph className="u-field-label-menu-icon" />
         <span>{resetLabel}</span>
         <span className="u-field-label-menu-shortcut">Option + click</span>
       </button>

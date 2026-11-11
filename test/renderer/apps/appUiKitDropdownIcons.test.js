@@ -7,13 +7,13 @@
 // the Navigator's icon for that tag (ElementIcons.tsx `elementIcon`), and a kit
 // icon's name that icon; a value none of these knows draws no icon and throws
 // nothing. The icon shows in each option row and in the closed trigger for the
-// selected value, at Desktop's dropdown option icon size (13px). Icons come from
+// selected value, at Desktop's dropdown option icon size (16px). Icons come from
 // `<option icon>` children and from the `options` property alike; a non-string
 // or overlong icon set as data throws.
 //
 // Method: one page in Electron's Chromium, built from the shared module's
 // `ui.css` and `ui.js` exactly as an app serves them. Each icon is identified by
-// its SVG path, compared with the editor's own path data (src/ui/iconPaths.ts).
+// its named Central glyph or Stacki's component cube path.
 // The page reports what it saw as JSON, which the test checks.
 const fs = require('fs');
 const path = require('path');
@@ -42,7 +42,6 @@ const check = (what, condition, detail) => {
     return;
   }
   const kit = load('shared/properties/appUiKit.ts');
-  const paths = load('src/ui/iconPaths.ts');
   const pageDirectory = repoPath('node_modules/.stacki-test/app-ui-kit-dropdown-icons');
   fs.mkdirSync(pageDirectory, { recursive: true });
   fs.writeFileSync(path.join(pageDirectory, 'ui.css'), kit.appHostAsset('__stacki/ui.css').body);
@@ -77,6 +76,7 @@ const check = (what, condition, detail) => {
          const slot = row && row.querySelector('.dd-icon');
          const svg = slot && slot.querySelector('svg');
          return {
+           glyph: svg?.dataset.centralIcon,
            path: svg ? [...svg.querySelectorAll('path')].map((part) => part.getAttribute('d')).join(' ') : undefined,
            size: svg ? Math.round(svg.getBoundingClientRect().width) : 0,
            first: Boolean(slot && row.firstElementChild === slot),
@@ -145,24 +145,22 @@ const check = (what, condition, detail) => {
       const seen = (value) => JSON.stringify(value);
       // An icon is identified by its own path among the SVG's paths (a heading icon shares its H with the others).
       const has = (drawn, expected) => typeof drawn === 'string' && drawn.split(' M').some((part, index) => (index === 0 ? part : `M${part}`) === expected);
-      const component = paths.elementComponentIconPath1;
-      const link = paths.elementLinkIconPath1;
-      const heading2 = paths.elementHeading2IconPath1;
+      const component = 'M8 2 13.5 5v6L8 14 2.5 11V5Zm-5.5 3L8 8l5.5-3M8 8v6';
       const { trigger, childRows, triggerAfter, triggerUnknown, dataTrigger, dataRows, readBack, refused } = result;
       check("the trigger shows the selected option's component cube", has(trigger.path, component), seen(trigger));
-      check("at Desktop's option icon size, before the label", trigger.size === 13 && trigger.first, seen(trigger));
+      check("at Desktop's option icon size, before the label", trigger.size === 16 && trigger.first, seen(trigger));
       check("a component row draws the Navigator's component cube", childRows[0] && has(childRows[0].path, component), seen(childRows));
-      check("a tag:a row draws the Navigator's link icon", childRows[1] && has(childRows[1].path, link), seen(childRows));
-      check('rows draw their icon first, at 13px', childRows[0].first && childRows[0].size === 13 && childRows[1].size === 13, seen(childRows));
+      check("a tag:a row draws the Navigator's link icon", childRows[1] && childRows[1].glyph === 'link', seen(childRows));
+      check('rows draw their icon first, at 16px', childRows[0].first && childRows[0].size === 16 && childRows[1].size === 16, seen(childRows));
       check('an unknown icon draws none', childRows[2] && childRows[2].path === undefined && childRows[2].label === 'Odd', seen(childRows));
       check('an option with no icon draws none', childRows[3] && childRows[3].path === undefined, seen(childRows));
-      check('choosing another value moves its icon to the trigger', has(triggerAfter.path, link), seen(triggerAfter));
+      check('choosing another value moves its icon to the trigger', triggerAfter.glyph === 'link', seen(triggerAfter));
       check('a selected option with an unknown icon leaves the trigger without one', triggerUnknown.path === undefined, seen(triggerUnknown));
-      check('options set as data draw a tag icon in the trigger', has(dataTrigger.path, heading2), seen(dataTrigger));
+      check('options set as data draw a tag icon in the trigger', dataTrigger.glyph === 'h2', seen(dataTrigger));
       check(
         'and in their rows: a tag, a kit icon, nothing for a malformed tag or an unknown name',
         dataRows.length === 4 &&
-          has(dataRows[0].path, heading2) &&
+          dataRows[0].glyph === 'h2' &&
           typeof dataRows[1].path === 'string' &&
           dataRows[2].path === undefined &&
           dataRows[3].path === undefined,

@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { more as centralMore } from '../../ui/central/centralGeometry';
 // How an image fills its box: object-fit, with Custom asking for the caret
 // only when it was picked, and object-position as a grid, two offsets and a
 // modal editor (SizeSection.tsx).
@@ -45,15 +47,7 @@ export function objectPositionAxis(token: string): number {
   return -1;
 }
 
-export function DotsIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <circle cx="3.5" cy="8" r="1.35" />
-      <circle cx="8" cy="8" r="1.35" />
-      <circle cx="12.5" cy="8" r="1.35" />
-    </svg>
-  );
-}
+export const DotsIcon = centralIcon(centralMore);
 
 // A position offset field. The same field the rest of the panel uses — it was its
 // own smaller control with a bordered box and an inline "%" chip, which made this

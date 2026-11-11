@@ -73,7 +73,7 @@ if (record(parent)['name'] === 'stacki' && development) {
   await writeFile(path.join(studio, 'src/shared/release.json'), JSON.stringify({ version }, null, 2) + '\n');
   await writeFile(
     path.join(studio, 'vendor/stacki/PROVENANCE.md'),
-    `# Stacki shared source\n\nGenerated from the Stacki ${version} source tree (MIT).\n` +
+    `# Stacki shared source\n\nGenerated from the Stacki ${version} source tree. See docs/central-icons.md for separately licensed icon assets.\n` +
       'Edit the canonical Stacki source or studio/adapters, then run npm run assemble.\n' +
       'scripts/shared-source.json records the included files and host adapter boundaries.\n',
   );

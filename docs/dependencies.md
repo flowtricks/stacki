@@ -223,12 +223,9 @@ are retained; Mac packages exclude architecture-specific sharp binaries.
 
 Copied source with no entry in `package.json`, so nothing is installed or updated by npm.
 
-**Phosphor Icons** (MIT, Copyright (c) 2023 Phosphor Icons, https://phosphoricons.com/,
-https://github.com/phosphor-icons/core). **Does:** twelve Regular-weight icon paths from
-`@phosphor-icons/core` 2.1.1 (`assets/regular/*.svg`), one of the left rail's icon sets under test
-(`src/ui/railIcons.tsx`, chosen in Settings → Editor → Rail icons). **Why not the package:** the
-rail needs twelve paths; the package ships thousands of SVGs in six weights. **Cost:** none at run
-time; a newer Phosphor drawing is a hand copy, and the file's header keeps the licence and source.
+**Central Icon System v1.35** by Iconists supplies rounded outline glyphs. Stacki includes only
+the drawings it renders, as local SVG geometry, so the editor can use its own theme colors and
+work offline without loading a whole icon library. See [asset terms](central-icons.md).
 
 ## Evaluated, not adopted
 
