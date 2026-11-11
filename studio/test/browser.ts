@@ -3,6 +3,7 @@
 import { chromium } from 'playwright';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
+import { openSettingsGroup } from './settingsGroup';
 import { checkInteractivePreview, checkPreviewNavigation, checkPreviewOverflow } from './interactivePreview.browser';
 import { TOUCH_TREE } from '../src/features/navigator/useTouchTree';
 
@@ -116,7 +117,7 @@ try {
     .locator('.structure-node')
     .filter({ has: first.locator('.label', { hasText: /^Heading$/ }) })
     .click();
-  await first.locator('.props-group-head').filter({ hasText: 'Settings' }).click();
+  await openSettingsGroup(first);
   await first.locator('.class-input-field').fill('margin');
   await first.locator('.class-suggest').waitFor();
   await mkdir('test-results', { recursive: true });

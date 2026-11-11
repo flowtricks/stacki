@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium, type Locator } from 'playwright';
+import { openSettingsGroup } from './settingsGroup';
 import { record, string } from '../src/shared/validation';
 
 const browser = await chromium.launch({
@@ -21,7 +22,7 @@ try {
     .locator('.structure-node')
     .filter({ has: page.locator('.label', { hasText: /^Heading$/ }) })
     .click();
-  await page.locator('.props-group-head').filter({ hasText: 'Settings' }).click();
+  await openSettingsGroup(page);
   const input = page.locator('.class-input-field');
   await input.fill('margin');
   await moveFieldToBottom(input);

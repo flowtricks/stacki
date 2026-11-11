@@ -1,4 +1,5 @@
 import { PARAGRAPH_TEXT } from '../src/features/source/instanceDefaults';
+import { openSettingsGroup } from './settingsGroup';
 import { chromium, type Page } from 'playwright';
 import assert from 'node:assert/strict';
 import { record, string } from '../src/shared/validation';
@@ -51,10 +52,7 @@ try {
 }
 
 async function checkSlots(original: string) {
-  await page
-    .locator('.props-group-head')
-    .filter({ hasText: /^Settings/ })
-    .click();
+  await openSettingsGroup(page);
   const slot = page.locator('.props-field').filter({ has: page.locator('.prop-label', { hasText: /^slot$/ }) });
   await slot.locator('.dd-trigger').click();
   await page

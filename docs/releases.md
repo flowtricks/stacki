@@ -40,6 +40,17 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.1.9 the 1.1.7 changes, through Studio's browser test
+
+- The same app as 1.1.8, which never became public: Linux, Windows and macOS passed, but Studio's
+  browser test failed. Since 1.1.0 the element panel's Settings group is open by default and
+  remembered, and the test clicked its header to open it, which closed it, so `.class-input-field`
+  never appeared. The browser tests now open the group only when it is collapsed
+  (`studio/test/settingsGroup.ts`). `npm run test:browser` reproduced the failure on a copy of
+  the fixture site and passes after the fix. No app code changed.
+- Run `npm run test:browser` before tagging, as above: the Desktop gate does not run it.
+- `create-stacki` 1.1.9 follows when npm publishing is approved.
+
 ## 1.1.8 the 1.1.7 changes, through Windows and macOS
 
 - The same app as 1.1.7, which never became public: its Linux job lost DNS during the .deb install
