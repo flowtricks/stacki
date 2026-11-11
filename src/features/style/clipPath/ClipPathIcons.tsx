@@ -1,57 +1,29 @@
 // The clip-path editor's small glyphs: one per breakpoint, and a preset's
 // shape drawn as its own icon (ClipPath.tsx).
 
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { studioDisplay as centralStudioDisplay, phone as centralPhone, tablet as centralTablet } from '../../../ui/central/centralGeometry';
 import type { BreakpointId } from './webflowDesigner';
 import { type ClipShape } from './clipPathTypes';
 import { CORNERS, DEFAULT_SHAPE_PATH_DATA } from './clipPathConstants';
 
-export const MEDIUM_BREAKPOINT_ICON_PATH =
-  'M3 3C3 2.44772 3.44772 2 4 2H12C12.5523 2 13 2.44772 13 3V13' + 'C13 13.5523 12.5523 14 12 14H4C3.44772 14 3 13.5523 3 13V3ZM4 3H12V13H4V3Z';
-export const SMALL_BREAKPOINT_ICON_PATH =
-  'M4 12C2.89543 12 2 11.1046 2 10L2 6C2 4.89543 2.89543 4 4 4L12 4C13.1046 4 14 4.89543 14 6' +
-  'V10C14 11.1046 13.1046 12 12 12H4ZM3 10L3 6C3 5.44772 3.44772 5 4 5L12 5C12.5523 ' +
-  '5 13 5.44772 13 6V10C13 10.5523 12.5523 11 12 11L4 11C3.44772 11 3 10.5523 3 10Z';
-export const TINY_BREAKPOINT_ICON_PATH =
-  'M4 4C4 2.89543 4.89543 2 6 2H10C11.1046 2 12 2.89543 12 4V12C12 13.1046 11.1046 ' +
-  '14 10 14H6C4.89543 14 4 13.1046 4 12V4ZM6 3H10C10.5523 3 11 3.44772 11 4V12' +
-  'C11 12.5523 10.5523 13 10 13H6C5.44772 13 5 12.5523 5 12V4C5 3.44772 5.44772 3 6 3Z';
-export const DESKTOP_BREAKPOINT_ICON_PATH =
-  'M12 5.36602L10.1519 6.43301L9.65192 5.56699L11.5 4.5L9.65193 3.43301' +
-  'L10.1519 2.56699L12 3.63397V1.5H13V3.63397L14.8481 2.56699L15.3481 3.43301' +
-  'L13.5 4.5L15.3481 5.56699L14.8481 6.43301L13 5.36602V7.5H12V5.36602Z';
+// Landscape is the portrait phone turned a quarter, so every breakpoint comes from Central.
+const DesktopIcon = centralIcon(centralStudioDisplay);
+const PhoneIcon = centralIcon(centralPhone);
+const TabletIcon = centralIcon(centralTablet);
 
 export function BreakpointIcon({ breakpoint }: { breakpoint: BreakpointId }) {
   if (breakpoint === 'medium') {
-    return (
-      <svg className="clip-path_source-icon" viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M9.5 11H6.5V12H9.5V11Z" />
-        <path fillRule="evenodd" clipRule="evenodd" d={MEDIUM_BREAKPOINT_ICON_PATH} />
-      </svg>
-    );
+    return <TabletIcon className="clip-path_source-icon" />;
   }
   if (breakpoint === 'small') {
-    return (
-      <svg className="clip-path_source-icon" viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M12 9V7H11V9H12Z" />
-        <path fillRule="evenodd" clipRule="evenodd" d={SMALL_BREAKPOINT_ICON_PATH} />
-      </svg>
-    );
+    return <PhoneIcon className="clip-path_source-icon" style={{ transform: 'rotate(90deg)' }} />;
   }
   if (breakpoint === 'tiny') {
-    return (
-      <svg className="clip-path_source-icon" viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M7 12H9V11H7V12Z" />
-        <path fillRule="evenodd" clipRule="evenodd" d={TINY_BREAKPOINT_ICON_PATH} />
-      </svg>
-    );
+    return <PhoneIcon className="clip-path_source-icon" />;
   }
   // Desktop (main) and all larger breakpoints (large / xl / xxl).
-  return (
-    <svg className="clip-path_source-icon" viewBox="0 0 16 16" aria-hidden="true">
-      <path d={DESKTOP_BREAKPOINT_ICON_PATH} />
-      <path d="M3 4H8V5H3V12H13V9H14V12H16V13H0V12H2V5C2 4.44772 2.44772 4 3 4Z" />
-    </svg>
-  );
+  return <DesktopIcon className="clip-path_source-icon" />;
 }
 
 export function PresetIcon({ shape }: { shape: ClipShape }) {

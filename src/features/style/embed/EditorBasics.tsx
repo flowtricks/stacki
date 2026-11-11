@@ -4,7 +4,7 @@ import {
   circle as centralCircle,
   code as centralCode,
   component as centralComponent,
-  desktop as centralDesktop,
+  studioDisplay as centralStudioDisplay,
   edit as centralEdit,
   phone as centralPhone,
   spinner as centralSpinner,
@@ -198,37 +198,15 @@ export function SaveIndicator({ busy, error, pending }: { busy: boolean; error: 
   );
 }
 
-export const TABLET_BREAKPOINT_ICON_SECOND_PATH =
-  'M3 3C3 2.44772 3.44772 2 4 2H12C12.5523 2 13 2.44772 13 3V13C13 13.5523 12.5523 14 12 14H4' + 'C3.44772 14 3 13.5523 3 13V3ZM4 3H12V13H4V3Z';
-
 // Webflow's native breakpoint glyphs (tablet / mobile-landscape / mobile),
 // shown beside the responsive contexts in the style-context dropdown.
 export const TabletBreakpointIcon = centralIcon(centralTablet);
-export const MOBILE_LANDSCAPE_BREAKPOINT_ICON_SECOND_PATH =
-  'M4 12C2.89543 12 2 11.1046 2 10L2 6C2 4.89543 2.89543 4 4 4L12 4C13.1046 4 14 4.89543 14 6' +
-  'V10C14 11.1046 13.1046 12 12 12H4ZM3 10L3 6C3 5.44772 3.44772 5 4 5L12 5' +
-  'C12.5523 5 13 5.44772 13 6V10C13 10.5523 12.5523 11 12 11L4 11C3.44772 11 3 10.5523 3 10Z';
-
-export function MobileLandscapeBreakpointIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M12 9V7H11V9H12Z" fill="currentColor" />
-      <path fillRule="evenodd" clipRule="evenodd" d={MOBILE_LANDSCAPE_BREAKPOINT_ICON_SECOND_PATH} fill="currentColor" />
-    </svg>
-  );
-}
-export const MOBILE_BREAKPOINT_ICON_SECOND_PATH =
-  'M4 4C4 2.89543 4.89543 2 6 2H10C11.1046 2 12 2.89543 12 4V12C12 13.1046 11.1046 14 10 14H6' +
-  'C4.89543 14 4 13.1046 4 12V4ZM6 3H10C10.5523 3 11 3.44772 11 4V12' +
-  'C11 12.5523 10.5523 13 10 13H6C5.44772 13 5 12.5523 5 12V4C5 3.44772 5.44772 3 6 3Z';
-
+// Landscape is the portrait phone turned a quarter, so both come from the one Central glyph.
 export const MobileBreakpointIcon = centralIcon(centralPhone);
-export const DESKTOP_BREAKPOINT_ICON_FIRST_PATH =
-  'M12 5.36602L10.1519 6.43301L9.65192 5.56699L11.5 4.5L9.65193 3.43301L10.1519 2.56699' +
-  'L12 3.63397V1.5H13V3.63397L14.8481 2.56699L15.3481 3.43301L13.5 4.5L15.3481 5.56699' +
-  'L14.8481 6.43301L13 5.36602V7.5H12V5.36602Z';
-
-export const DesktopBreakpointIcon = centralIcon(centralDesktop);
+export function MobileLandscapeBreakpointIcon() {
+  return <MobileBreakpointIcon style={{ transform: 'rotate(90deg)' }} />;
+}
+export const DesktopBreakpointIcon = centralIcon(centralStudioDisplay);
 export function breakpointIcon(id: BreakpointId | undefined): ReactNode {
   switch (id) {
     case 'main':

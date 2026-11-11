@@ -1,3 +1,5 @@
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { chevronRight as centralChevronRight } from '../../../ui/central/centralGeometry';
 // The layout section's rows: which properties each section owns, direction
 // and alignment, and the sections a display mode brings (EmbedEditor.tsx).
 
@@ -146,11 +148,7 @@ export function AlignRow({
   );
 }
 
-export const ChevronRightIcon = () => (
-  <svg viewBox="0 0 16 16" width="14" height="14" fill="none" aria-hidden="true">
-    <path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
+export const ChevronRightIcon = centralIcon(centralChevronRight);
 
 // Which layout-mode disclosure a Display value implies. `grid` wins over `inline` for
 // `inline-grid`, `flex` over `inline` for `inline-flex`; a custom value (e.g.

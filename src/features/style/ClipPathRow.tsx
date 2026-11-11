@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { edit as centralEdit } from '../../ui/central/centralGeometry';
 // Clip path: the row's glyph for the shape in use, and the modal the shape
 // editor opens in, loaded only when it is (EffectsSection.tsx).
 
@@ -15,11 +17,7 @@ import { type Props, EffLabel } from './EffectsKit';
 // and writes `clip-path` to its native class style itself — no props).
 export const ClipPathEditor = lazy(() => import('./clipPath/ClipPath'));
 
-export const ClipEditIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M10.5 2.5 13.5 5.5 6 13l-3.5.5L3 10l7.5-7.5Z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-  </svg>
-);
+export const ClipEditIcon = centralIcon(centralEdit);
 
 export const CLIP_GLYPH_SHAPE_PATH = 'M8 .5c.4 4.3 2.8 6.8 7.5 7.5-4.7.7-7.1 3.2-7.5 7.5-.4-4.3-2.8-6.8-7.5-7.5' + 'C5.2 7.3 7.6 4.8 8 .5Z';
 

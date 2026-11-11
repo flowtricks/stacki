@@ -1,8 +1,8 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
-import { droplet as centralDroplet, font as centralFont, number as centralNumber, scale as centralScale } from '../../ui/central/centralGeometry';
+import { droplet as centralDroplet, font as centralFont, number as centralNumber, ruler as centralRuler } from '../../ui/central/centralGeometry';
 import type { IconProps } from '../../ui/IconBase';
 
-const sizeType = { Icon: centralIcon(centralScale), label: 'Size' };
+const sizeType = { Icon: centralIcon(centralRuler), label: 'Size' };
 const TYPES: ReadonlyMap<string, typeof sizeType> = new Map([
   ['color', { Icon: centralIcon(centralDroplet), label: 'Colour' }],
   ['number', { Icon: centralIcon(centralNumber), label: 'Number' }],

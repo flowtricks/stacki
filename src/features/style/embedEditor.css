@@ -4051,11 +4051,6 @@
   flex: none;
   width: 11px;
   height: 11px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 /* The chip's `⋯`: a quiet fill of the same amber, so it reads as the chip's own. */
 .embed-editor_inline-chip-more {
@@ -4245,13 +4240,6 @@
   width: 11px;
   height: 11px;
   flex: none;
-}
-.embed-editor_provenance-embed-icon path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 .embed-editor_provenance-embed-label {
   overflow: hidden;

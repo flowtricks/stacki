@@ -2,7 +2,7 @@ import { centralIcon } from '../../ui/central/CentralIcon';
 import { cursorClick as centralCursorClick } from '../../ui/central/centralGeometry';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { IconProps } from '../../ui/Icons';
-import { CanvasIcon, ChevronRightIcon, DesktopIcon, PanelRightIcon, PhoneIcon, TabletIcon } from '../../ui/Icons';
+import { AllBreakpointsIcon, ChevronRightIcon, DesktopIcon, PanelRightIcon, PhoneIcon, TabletIcon } from '../../ui/Icons';
 import { PreviewSizeControls } from './PreviewSizeControls';
 import { GuideMenu, type GuideMenuProps } from './GuideMenu';
 import type { PreviewSizeControlsProps } from './PreviewSizeControls';
@@ -26,7 +26,7 @@ export const DEVICES: readonly DeviceDefinition[] = [
   { key: 'desktop', Icon: DesktopIcon, title: 'Desktop — 1', width: undefined, from: 1024 },
   { key: 'tablet', Icon: TabletIcon, title: 'Tablet (768px) — 2', width: 768, from: 768 },
   { key: 'phone', Icon: PhoneIcon, title: 'Phone (375px) — 3', width: 375, from: 0 },
-  { key: 'canvas', Icon: CanvasIcon, title: 'Canvas — all breakpoints — 4', width: undefined },
+  { key: 'canvas', Icon: AllBreakpointsIcon, title: 'Canvas — all breakpoints — 4', width: undefined },
 ];
 
 export interface PreviewCrumb {

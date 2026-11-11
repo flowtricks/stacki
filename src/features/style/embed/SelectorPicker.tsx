@@ -1,3 +1,5 @@
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { add as centralAdd } from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
 // The selector well: the chips a selection is styled by, picking and adding
 // one, and filtering global selectors (EmbedEditor.tsx).
@@ -892,13 +894,7 @@ export function asQuery(raw: string): string {
 // context key is '' or an `@…` / `bp:…` string, so this can't collide.
 export const ADD_QUERY = '\0add-query';
 
-export function PlusIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-      <path d="M8 3.5v9M3.5 8h9" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
+export const PlusIcon = centralIcon(centralAdd, 12);
 
 export const QUERY_MODES: SegmentedOption<'wrap' | 'nest'>[] = [
   { value: 'wrap', label: 'Wrap', tooltip: 'New block — @query { selector { … } }' },

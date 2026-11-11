@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { code as centralCode } from '../../ui/central/centralGeometry';
 import { createContext, useContext } from 'react';
 import type { Contributor } from './model/resolved';
 import { withImportant } from './model/styleDisplay';
@@ -12,13 +14,7 @@ export type EmbedNav = {
 export const ProvenanceEmbedNav = createContext<EmbedNav | undefined>(undefined);
 
 // A little `</>` glyph, echoing the embed chip in the source dropdown.
-function EmbedGlyph() {
-  return (
-    <svg className="embed-editor_provenance-embed-icon" viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M6 5.5 3.5 8 6 10.5M10 5.5 12.5 8 10 10.5" />
-    </svg>
-  );
-}
+const EmbedGlyph = centralIcon(centralCode, 12);
 
 // The shared "which selectors set this property and which one won" list — the body
 // of the orange provenance popover, reused inside the Spacing editor and every
@@ -117,7 +113,7 @@ function ProvenanceOrigin({ contributor, nav }: { contributor: Contributor; nav:
         nav.open(embedKey);
       }}
     >
-      <EmbedGlyph />
+      <EmbedGlyph className="embed-editor_provenance-embed-icon" />
       <span className="embed-editor_provenance-embed-label">{embedName}</span>
     </span>
   );

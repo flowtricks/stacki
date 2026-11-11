@@ -35,6 +35,7 @@ import {
   BranchIcon,
   TextIcon,
   CommentIcon,
+  BracesIcon,
   CodeIcon,
   SearchIcon,
   astroAssetIcon,
@@ -533,13 +534,19 @@ function insertAssets(): InsertItem[] {
     card: { folder: undefined },
   }));
 }
+// Tags Astro itself understands: Fragment groups children, Content renders a Markdown or collection entry.
+const ASTRO_TAGS = ['Fragment', 'Content'] as const;
 function insertTags({ allowSlot }: { readonly allowSlot: boolean | undefined }): InsertItem[] {
-  return (allowSlot ? [...HTML_TAGS, 'slot'].sort() : HTML_TAGS).map((tag): InsertItem => ({
+  // Astro's own tags are not HTML, so HTML_TAGS cannot hold them, but they are inserted the same way.
+  const tags = [...HTML_TAGS, ...ASTRO_TAGS, ...(allowSlot ? ['slot'] : [])].sort();
+  return tags.map((tag): InsertItem => ({
     type: 'element',
     tag,
     label: `<${tag}>`,
     search: tagSearchText(tag),
     ...(tag === 'slot' ? { sub: 'what the caller passes in' } : {}),
+    ...(tag === 'Fragment' ? { sub: 'group without a wrapper element' } : {}),
+    ...(tag === 'Content' ? { sub: 'rendered Markdown entry' } : {}),
     cat: 'elements',
     icon: elementIcon(tag, 14),
   }));
@@ -569,7 +576,7 @@ export const OTHER_ITEMS: readonly InsertItem[] = [
     label: 'Code Expression',
     sub: '{ }',
     cat: 'other',
-    icon: <CodeIcon size={14} />,
+    icon: <BracesIcon size={14} />,
   },
   {
     type: 'doctype',
@@ -577,14 +584,14 @@ export const OTHER_ITEMS: readonly InsertItem[] = [
     sub: '<!doctype html>',
     search: 'doctype html',
     cat: 'other',
-    icon: <CodeIcon size={14} />,
+    icon: elementIcon('html', 14),
   },
   {
     type: 'style',
     label: 'Style Block',
     sub: '<style>',
     cat: 'other',
-    icon: <CodeIcon size={14} />,
+    icon: elementIcon('style', 14),
   },
   {
     type: 'script',

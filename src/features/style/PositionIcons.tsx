@@ -5,11 +5,6 @@ import { close as centralClose } from '../../ui/central/centralGeometry';
 
 // ─────────────────────────── Icons (from Webflow) ───────────────────────────
 
-export const CLOSE_ICON_PATH =
-  'M8.70708 8.00004L12.3535 4.35359L11.6464 3.64648L7.99998 7.29293L4.35353 3.64648' +
-  'L3.64642 4.35359L7.29287 8.00004L3.64642 11.6465L4.35353 12.3536L7.99998 8.70714' +
-  'L11.6464 12.3536L12.3535 11.6465L8.70708 8.00004Z';
-
 export const CloseIcon = centralIcon(centralClose);
 export const RELATIVE_ICON_PATH =
   'M11 2H9V3H11V8H12V3H14V2H11ZM3 9H2V14H3V12H8V11H3V9ZM14 10C14 9.44772 13.5523 9 13 9H10' +

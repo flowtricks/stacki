@@ -420,10 +420,6 @@
   height: var(--size-icon-md);
 }
 
-.clip-path_source-icon path {
-  fill: currentColor;
-}
-
 .clip-path_source-class {
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-sm);

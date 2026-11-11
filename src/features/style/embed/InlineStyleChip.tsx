@@ -1,3 +1,5 @@
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { braces as centralBraces, edit as centralEdit } from '../../../ui/central/centralGeometry';
 // The "Inline styles" chip: the last in the selector well, standing for the selected
 // element's `style` attribute (useInlineTarget.ts). Amber in every state, so it never
 // reads as a selector: it is not one, and it outranks them all. Clicking it makes the
@@ -52,7 +54,7 @@ export function InlineStyleChip({ chip, busy }: { readonly chip: InlineChip; rea
           openAt(new DOMRect(event.clientX, event.clientY, 0, 0));
         }}
       >
-        {chip.state === 'code' ? <CodeGlyph /> : <StyleGlyph />}
+        {chip.state === 'code' ? <CodeGlyph className="embed-editor_inline-chip-icon" /> : <StyleGlyph className="embed-editor_inline-chip-icon" />}
         <span className="embed-editor_selector-chip-text">{INLINE_STYLE_LABEL}</span>
       </button>
       {items.length > 0 ? (
@@ -108,20 +110,7 @@ function inlineChipLabel(chip: Pick<InlineChip, 'state'>): string {
 }
 
 // A brush: styles written on the element itself.
-function StyleGlyph(): ReactNode {
-  return (
-    <svg className="embed-editor_inline-chip-icon" viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M10.5 2.5 13.5 5.5 8 11 5 8Z" />
-      <path d="M5 8 3.5 9.5C2.5 10.5 3 12.5 2.5 13.5 3.5 13 5.5 13.5 6.5 12.5L8 11" />
-    </svg>
-  );
-}
+const StyleGlyph = centralIcon(centralEdit, 12);
 
 // Braces: an attribute written as code.
-function CodeGlyph(): ReactNode {
-  return (
-    <svg className="embed-editor_inline-chip-icon" viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M6 3C4.5 3 4.5 4 4.5 5.5S4 8 3 8c1 0 1.5 1 1.5 2.5S4.5 13 6 13M10 3c1.5 0 1.5 1 1.5 2.5S12 8 13 8c-1 0-1.5 1-1.5 2.5S11.5 13 10 13" />
-    </svg>
-  );
-}
+const CodeGlyph = centralIcon(centralBraces, 12);

@@ -1,5 +1,5 @@
-import { centralIcon, centralIconSize } from '../ui/central/CentralIcon';
-import { roles as centralRoles } from '../ui/central/centralGeometry';
+import { centralIcon } from '../ui/central/CentralIcon';
+import { gauge as centralGauge, roles as centralRoles, codeBrackets as centralCodeBrackets } from '../ui/central/centralGeometry';
 // One icon per access feature (shared/properties/projectRoles.ts), so a panel
 // looks the same wherever Stacki names it: its left-rail button, the Settings
 // tab list and the Roles permission grid. A panel's icon is the one its rail
@@ -7,7 +7,7 @@ import { roles as centralRoles } from '../ui/central/centralGeometry';
 // src/ui/Icons.tsx. The record is total over the features, so adding a feature
 // is a compile error here until it has an icon.
 import type { ComponentType } from 'react';
-import { I, type IconProps } from '../ui/IconBase';
+import type { IconProps } from '../ui/IconBase';
 import {
   AppsIcon,
   AssetManagerIcon,
@@ -43,20 +43,12 @@ export type FeatureIconComponent = ComponentType<Pick<IconProps, 'size'>>;
 // Two people: the Roles tab and the roles feature.
 const RolesIcon = centralIcon(centralRoles);
 
-// A clipboard with a check: the Audits panel's findings and fixes.
-export const AuditsIcon = (props: IconProps) => (
-  <I {...props} size={centralIconSize(props.size ?? 16)} strokeWidth={0.85}>
-    <path d="M5.5 3.2H4.7a1.7 1.7 0 0 0-1.7 1.7v7a1.7 1.7 0 0 0 1.7 1.7h6.6a1.7 1.7 0 0 0 1.7-1.7v-7a1.7 1.7 0 0 0-1.7-1.7h-.8" />
-    <rect x="5.5" y="2" width="5" height="2.5" rx="0.8" />
-    <path d="m5.7 9 1.5 1.5 3.1-3.2" />
-  </I>
-);
+// A check in a circle: the Audits panel's findings and fixes. Central has no clipboard-with-check glyph yet.
+// A gauge: audits score a page, and a plain check circle read like a done marker.
+export const AuditsIcon = centralIcon(centralGauge, 20);
 
-const RailCodeIcon = (props: IconProps) => (
-  <I {...props} size={centralIconSize(props.size ?? 20)} strokeWidth={0.85}>
-    <path d="M5.2 4.9 2.2 8l3 3.1M10.8 4.9l3 3.1-3 3.1M9.3 3.7l-2.6 8.6" />
-  </I>
-);
+// Code brackets with a slash: the Code panel shows source, and the bare chevrons read like every tag.
+const RailCodeIcon = centralIcon(centralCodeBrackets, 20);
 
 export const FEATURE_ICONS: Readonly<Record<StaticAccessFeature, FeatureIconComponent>> = {
   // The left rail's buttons (LeftRail.tsx, and Studio's EditorRail.tsx).

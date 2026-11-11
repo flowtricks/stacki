@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { GearIcon } from '../../ui/Icons';
 import PanelSheet from './components/PanelSheet';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { easingToBezier, bezierToEasing, isEasing } from './model/transition';
@@ -130,17 +131,6 @@ function presetName(bezier: Bezier): string {
   }
   return 'Custom';
 }
-const GearIcon = () => (
-  <svg viewBox="0 0 16 16" width="15" height="15" fill="none" aria-hidden="true">
-    <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
-    <path
-      d="M8 1.5v1.5M8 13v1.5M2.4 4.6l1.3.75M12.3 10.65l1.3.75M2.4 11.4l1.3-.75M12.3 5.35l1.3-.75"
-      stroke="currentColor"
-      strokeWidth="1.2"
-      strokeLinecap="round"
-    />
-  </svg>
-);
 const PlayIcon = () => (
   <svg viewBox="0 0 16 16" width="16" height="16" fill="none" aria-hidden="true">
     <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2" />
@@ -406,7 +396,7 @@ function EasingHeader({ onClose }: { onClose: () => void }) {
   return (
     <header className="embed-editor_ease-head" data-floating-drag-handle="">
       <span className="embed-editor_ease-title">
-        <GearIcon /> Easing Editor
+        <GearIcon size={16} /> Easing Editor
       </span>
       <button type="button" className="embed-editor_icon-btn" onClick={onClose} aria-label="Close">
         <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">

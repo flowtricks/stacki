@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { help as centralHelp } from '../../ui/central/centralGeometry';
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import SegmentedControl, { type SegmentedOption } from './components/SegmentedControl';
@@ -89,11 +91,7 @@ function Heading({
       {note ? (
         <>
           <span className="embed-editor_tsettings-help" ref={help.ref} {...help.hoverProps} aria-label={note} role="img">
-            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" width="14" height="14">
-              <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
-              <path d="M6.4 6.2a1.7 1.7 0 1 1 1.9 1.7v1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-              <circle cx="8.3" cy="11.2" r=".7" fill="currentColor" />
-            </svg>
+            <HelpIcon />
           </span>
           {help.tip}
         </>
@@ -273,6 +271,8 @@ function stepDistanceKey(event: KeyboardEvent<HTMLInputElement>): string | undef
 // The explanatory notes under the two perspective headings.
 const SELF_PERSPECTIVE_NOTE = "Depth for this element's own transform — written as perspective() at the front of " + 'the transform list.';
 const CHILDREN_PERSPECTIVE_NOTE = "Depth for this element's CHILDREN, so they share one viewpoint. It does nothing to " + 'the element itself.';
+
+const HelpIcon = centralIcon(centralHelp);
 
 export default function TransformSettings({
   read,

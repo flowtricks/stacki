@@ -2,15 +2,17 @@
 import { centralIcon, centralIconSize } from './central/CentralIcon';
 import {
   bulletList as centralBulletList,
-  button as centralButton,
   code as centralCode,
   headingOne as centralH1,
   headingTwo as centralH2,
   headingThree as centralH3,
   home as centralHome,
+  homeRoundDoor as centralHomeRoundDoor,
   image as centralImage,
   input as centralInput,
+  info as centralInfo,
   link as centralLink,
+  search as centralSearch,
   select as centralSelect,
   slot as centralSlot,
   square as centralSquare,
@@ -20,12 +22,14 @@ import {
   bold as centralBold,
   book as centralBook,
   bookmark as centralBookmark,
+  chainLink as centralChainLink,
   caption as centralCaption,
   check as centralCheck,
   chevronDown as centralChevronDown,
   circle as centralCircle,
   clock as centralClock,
   collection as centralCollection,
+  cube as centralCube,
   columns as centralColumns,
   comment as centralComment,
   divider as centralDivider,
@@ -47,7 +51,10 @@ import {
   number as centralNumber,
   numberList as centralNumberList,
   panelRight as centralPanelRight,
+  paragraph as centralParagraph,
+  pointerHand as centralPointerHand,
   quote as centralQuote,
+  rewrite as centralRewrite,
   sectionRows as centralSectionRows,
   strike as centralStrike,
   styles as centralStyles,
@@ -68,11 +75,7 @@ import { type IconProps, I } from './IconBase';
 import { elementHeading4IconPath1, elementHeading5IconPath1, elementHeading6IconPath1 } from './iconPaths';
 
 // Astro components keep their cube so they stand apart from HTML elements.
-export const ElementComponentIcon = (props: IconProps) => (
-  <I {...props} size={centralIconSize(props.size ?? 16)} strokeWidth={0.9}>
-    <path d="M8 2 13.5 5v6L8 14 2.5 11V5Zm-5.5 3L8 8l5.5-3M8 8v6" />
-  </I>
-);
+export const ElementComponentIcon = centralIcon(centralCube);
 
 export const ElementSlotIcon = centralIcon(centralSlot);
 
@@ -82,19 +85,18 @@ export const ElementDivIcon = centralIcon(centralSquare);
 
 export const ElementImageIcon = centralIcon(centralImage);
 
-// Horizontal bands distinguish a section from a generic container.
-export const ElementSectionIcon = (props: IconProps) => (
-  <I {...props} size={centralIconSize(props.size ?? 16)} strokeWidth={0.9}>
-    <rect x="2.5" y="2.5" width="11" height="11" rx="1.2" />
-    <path d="M2.5 5h11m-11 6h11" />
-  </I>
-);
+export const ElementSectionIcon = centralIcon(centralSectionRows);
 
 export const ElementListDefaultIcon = centralIcon(centralBulletList);
 
 export const ElementListItemIcon = centralIcon(centralBulletList);
 
 export const ElementLinkIcon = centralIcon(centralLink);
+
+// A different chain from <a>'s link, so the head's <link> reads apart from anchors.
+const ElementStylesheetLinkIcon = centralIcon(centralChainLink);
+const InfoIcon = centralIcon(centralInfo);
+const SearchIcon = centralIcon(centralSearch);
 
 export const ElementHeading1Icon = centralIcon(centralH1);
 
@@ -123,12 +125,7 @@ export const ElementHeading6Icon = (props: IconProps) => (
   </I>
 );
 
-// A lowercase p reads as the HTML tag at the Navigator's compact size.
-export const ElementParagraphIcon = (props: IconProps) => (
-  <I {...props} size={centralIconSize(props.size ?? 16)} strokeWidth={1}>
-    <path d="M5 14V4.5m0 3.3a3.25 3.25 0 1 1 6.5 0 3.25 3.25 0 0 1-6.5 0" />
-  </I>
-);
+export const ElementParagraphIcon = centralIcon(centralParagraph);
 
 export const ElementVideoIcon = centralIcon(centralVideo);
 
@@ -138,9 +135,16 @@ export const ElementInputIcon = centralIcon(centralInput);
 
 export const ElementSelectIcon = centralIcon(centralSelect);
 
-export const ElementButtonIcon = centralIcon(centralButton);
+// The pointing hand says "press me"; the plain pill outline looked like a toggle or a generic shape.
+export const ElementButtonIcon = centralIcon(centralPointerHand);
 
 export const HomeIcon = centralIcon(centralHome);
+
+// Text with edit arrows: a textarea is a field people rewrite text in, apart from static text blocks.
+const RewriteIcon = centralIcon(centralRewrite);
+
+// A home with a round door: <nav> holds the site's way around.
+const NavIcon = centralIcon(centralHomeRoundDoor);
 
 const AsideIcon = centralIcon(centralPanelRight);
 const AudioIcon = centralIcon(centralAudio);
@@ -264,7 +268,7 @@ const HTML_ICONS = {
   mark: HighlightIcon,
   menu: MenuIcon,
   meter: MeterIcon,
-  nav: MenuIcon,
+  nav: NavIcon,
   noscript: CodeDisabledIcon,
   object: WindowIcon,
   ol: NumberedListIcon,
@@ -292,7 +296,7 @@ const HTML_ICONS = {
   tbody: TableIcon,
   td: CellIcon,
   template: TemplateIcon,
-  textarea: TextBlockIcon,
+  textarea: RewriteIcon,
   tfoot: FooterIcon,
   th: BoldIcon,
   thead: HeaderIcon,
@@ -304,35 +308,41 @@ const HTML_ICONS = {
   var: VariableIcon,
   video: ElementVideoIcon,
   wbr: LineBreakIcon,
+  area: CellIcon,
+  base: ElementLinkIcon,
+  body: WindowIcon,
+  head: HeaderIcon,
+  html: GlobeIcon,
+  meta: InfoIcon,
+  script: CustomElementIcon,
+  style: StyleIcon,
+  title: TextIcon,
+  link: ElementStylesheetLinkIcon,
+  map: LocationIcon,
+  rp: TextSizeIcon,
+  rt: TextSizeIcon,
+  search: SearchIcon,
 } satisfies Readonly<Record<(typeof HTML_TAGS)[number], ElementIcon>>;
 
 // Existing pages also contain document-level and inline SVG elements.
 const EXTRA_ICONS = {
-  area: CellIcon,
-  base: ElementLinkIcon,
-  body: WindowIcon,
+  content: ArticleIcon,
+  fragment: CodeDisabledIcon,
   circle: CircleIcon,
   defs: TemplateIcon,
   ellipse: CircleIcon,
   g: LayersIcon,
-  head: HeaderIcon,
-  html: GlobeIcon,
   line: DividerIcon,
-  link: ElementLinkIcon,
   math: DataIcon,
-  meta: LabelIcon,
   param: ElementInputIcon,
   path: VectorIcon,
   polygon: VectorIcon,
   polyline: VectorIcon,
   rect: ElementDivIcon,
-  script: CustomElementIcon,
   slot: ElementSlotIcon,
-  style: StyleIcon,
   svg: VectorIcon,
   symbol: TemplateIcon,
   text: TextIcon,
-  title: TextIcon,
   tspan: TextIcon,
   use: ElementLinkIcon,
 };

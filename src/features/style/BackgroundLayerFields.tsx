@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { close as centralClose } from '../../ui/central/centralGeometry';
 // The fields one background layer is edited with: its longhands, type, size,
 // position, tiling, image and colour, and the icons they show
 // (BackgroundSection.tsx).
@@ -443,11 +445,7 @@ export const TileYIcon = () => (
     <rect x="5.5" y="11" width="5" height="4" rx="1" />
   </svg>
 );
-export const TileNoneIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-  </svg>
-);
+export const TileNoneIcon = centralIcon(centralClose);
 export const TILE_OPTIONS: ReadonlyArray<SegmentedOption<string>> = [
   { value: 'repeat', label: <TileAllIcon />, ariaLabel: 'Tile', tooltip: 'Tile' },
   { value: 'repeat-x', label: <TileXIcon />, ariaLabel: 'Tile horizontally', tooltip: 'Tile X' },

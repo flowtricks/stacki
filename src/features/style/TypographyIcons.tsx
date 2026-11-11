@@ -19,11 +19,6 @@ export const AlignLeftIcon = centralIcon(centralAlignLeft);
 export const AlignCenterIcon = centralIcon(centralAlignCenter);
 export const AlignRightIcon = centralIcon(centralAlignRight);
 export const AlignJustifyIcon = centralIcon(centralAlignJustify);
-export const DECORATION_NONE_ICON_PATH =
-  'M8.70708 8.00004L12.3535 4.35359L11.6464 3.64648L7.99998 7.29293' +
-  'L4.35353 3.64648L3.64642 4.35359L7.29287 8.00004L3.64642 11.6465L4.35353 12.3536' +
-  'L7.99998 8.70714L11.6464 12.3536L12.3535 11.6465L8.70708 8.00004Z';
-
 export const DecorNoneIcon = centralIcon(centralClearFormat);
 export const DecorStrikeIcon = centralIcon(centralStrike);
 export const DecorUnderlineIcon = centralIcon(centralUnderline);

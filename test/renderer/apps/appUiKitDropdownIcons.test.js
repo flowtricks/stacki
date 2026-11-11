@@ -13,7 +13,7 @@
 //
 // Method: one page in Electron's Chromium, built from the shared module's
 // `ui.css` and `ui.js` exactly as an app serves them. Each icon is identified by
-// its named Central glyph or Stacki's component cube path.
+// its named Central glyph or Central's component cube path.
 // The page reports what it saw as JSON, which the test checks.
 const fs = require('fs');
 const path = require('path');
@@ -145,11 +145,13 @@ const check = (what, condition, detail) => {
       const seen = (value) => JSON.stringify(value);
       // An icon is identified by its own path among the SVG's paths (a heading icon shares its H with the others).
       const has = (drawn, expected) => typeof drawn === 'string' && drawn.split(' M').some((part, index) => (index === 0 ? part : `M${part}`) === expected);
-      const component = 'M8 2 13.5 5v6L8 14 2.5 11V5Zm-5.5 3L8 8l5.5-3M8 8v6';
+      // The start of Central's cube, which the Navigator draws for components.
+      const component = 'M10.3998 2.67375C10.9827 2.33722';
+      const startsWithCube = (drawn) => typeof drawn === 'string' && drawn.startsWith(component);
       const { trigger, childRows, triggerAfter, triggerUnknown, dataTrigger, dataRows, readBack, refused } = result;
-      check("the trigger shows the selected option's component cube", has(trigger.path, component), seen(trigger));
+      check("the trigger shows the selected option's component cube", startsWithCube(trigger.path), seen(trigger));
       check("at Desktop's option icon size, before the label", trigger.size === 16 && trigger.first, seen(trigger));
-      check("a component row draws the Navigator's component cube", childRows[0] && has(childRows[0].path, component), seen(childRows));
+      check("a component row draws the Navigator's component cube", childRows[0] && startsWithCube(childRows[0].path), seen(childRows));
       check("a tag:a row draws the Navigator's link icon", childRows[1] && childRows[1].glyph === 'link', seen(childRows));
       check('rows draw their icon first, at 16px', childRows[0].first && childRows[0].size === 16 && childRows[1].size === 16, seen(childRows));
       check('an unknown icon draws none', childRows[2] && childRows[2].path === undefined && childRows[2].label === 'Odd', seen(childRows));

@@ -1,5 +1,5 @@
 import { centralIcon } from '../../../ui/central/CentralIcon';
-import { chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
+import { check as centralCheck, chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
 // What a Select draws: the trigger, the list and its rows, each row's action
 // (Select.tsx).
@@ -361,11 +361,8 @@ export function SelectRow<T extends string>({
   );
 }
 
-export const CHECK = (
-  <svg viewBox="0 0 16 16" width="14" height="14" fill="none">
-    <path d="M13.5 4.5 6.5 11.5 3 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
+const CheckIcon = centralIcon(centralCheck);
+export const CHECK = <CheckIcon />;
 
 export function RowAction({ action, onCancel }: { action: NonNullable<SelectOption<string>['action']>; onCancel: () => void }) {
   return (

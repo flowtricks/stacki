@@ -1,5 +1,4 @@
 import { centralIcon, centralIconSize } from './central/CentralIcon';
-import { ElementComponentIcon } from './ElementIcons';
 import {
   add as centralAdd,
   arrowDown as centralArrowDown,
@@ -9,6 +8,7 @@ import {
   bucket as centralBucket,
   calendar as centralCalendar,
   canvas as centralCanvas,
+  devices as centralDevices,
   check as centralCheck,
   chevronDown as centralChevronDown,
   chevronLeft as centralChevronLeft,
@@ -20,14 +20,14 @@ import {
   collapseVertical as centralCollapseVertical,
   collection as centralCollection,
   comment as centralComment,
-  component as centralComponent,
+  cube as centralCube,
+  marketplace as centralMarketplace,
   componentAdd as centralComponentAdd,
   componentEdit as centralComponentEdit,
   copy as centralCopy,
   corner as centralCorner,
-  cursor as centralCursor,
   database as centralDatabase,
-  desktop as centralDesktop,
+  studioDisplay as centralStudioDisplay,
   drag as centralDrag,
   droplet as centralDroplet,
   ease as centralEase,
@@ -48,6 +48,7 @@ import {
   image as centralImage,
   layers as centralLayers,
   layout as centralLayout,
+  barsThree as centralBarsThree,
   mail as centralMail,
   mapPin as centralMapPin,
   merge as centralMerge,
@@ -56,6 +57,7 @@ import {
   panelRight as centralPanelRight,
   paperclip as centralPaperclip,
   paragraph as centralParagraph,
+  fileText as centralFileText,
   phone as centralPhone,
   phoneCall as centralPhoneCall,
   pin as centralPin,
@@ -185,12 +187,8 @@ export const AstroIcon = ({ size = 16, className, style }: IconProps) => (
 
 export const FileIcon = centralIcon(centralFile);
 
-// An open book: the Instructions panel, the project's Markdown for agents and people.
-export const InstructionsIcon = (props: IconProps) => (
-  <I {...props} size={centralIconSize(props.size ?? 16)} strokeWidth={0.85}>
-    <path d="M2 3.4c2-.8 4-.7 6 .8 2-1.5 4-1.6 6-.8v9.2c-2-.8-4-.7-6 .8-2-1.5-4-1.6-6-.8ZM8 4.2v9.2" />
-  </I>
-);
+// A document with text lines: the Instructions panel holds the project's Markdown files.
+export const InstructionsIcon = centralIcon(centralFileText);
 
 // A wand: a skill, the know-how an agent picks up when a task calls for it.
 export const SkillIcon = centralIcon(centralWand);
@@ -198,7 +196,7 @@ export const SkillIcon = centralIcon(centralWand);
 // An easing curve: what the editor behind it edits.
 export const EaseIcon = centralIcon(centralEase);
 
-export const ComponentIcon = centralIcon(centralComponent);
+export const ComponentIcon = centralIcon(centralCube);
 
 // Three tall columns represent the preview's column guide.
 export const GuideIcon = centralIcon(centralGuide);
@@ -279,8 +277,12 @@ export const DragIcon = centralIcon(centralDrag);
 // An eye with a slash distinguishes hidden nodes in the Navigator.
 export const HideIcon = centralIcon(centralEyeOff);
 
-// A pointer distinguishes nodes that do not take clicks.
-export const PointerEventsNoneIcon = centralIcon(centralCursor);
+// The slash crosses the cursor with gaps so both shapes read at Navigator size.
+export const PointerEventsNoneIcon = (props: IconProps) => (
+  <I {...props} size={centralIconSize(props.size ?? 16)} strokeWidth={1}>
+    <path d="M8.6 5.3 3 3l2.3 5.6m5.5-2.4 2.7 1.1-4.8 1.4-1.4 4.8-1.1-2.7M2.5 13.5l11-11" />
+  </I>
+);
 
 export const CheckIcon = centralIcon(centralCheck);
 
@@ -304,7 +306,7 @@ export const MaximizeIcon = centralIcon(centralExpand);
 
 export const MinimizeIcon = centralIcon(centralCollapse);
 
-export const DesktopIcon = centralIcon(centralDesktop);
+export const DesktopIcon = centralIcon(centralStudioDisplay);
 
 export const TabletIcon = centralIcon(centralTablet);
 
@@ -315,16 +317,9 @@ export const AssetManagerIcon = centralIcon(centralImage, 20);
 // Webflow's CMS icon, drawn on a 16px grid — scaled up for the rail.
 export const CmsIcon = centralIcon(centralDatabase, 20);
 
-// The Apps rail icon: three rounded squares and a plus.
-// The plus keeps Apps distinct from the Layout and grid controls.
-export const AppsIcon = (props: IconProps) => (
-  <I {...props} size={centralIconSize(props.size ?? 20)} strokeWidth={0.85}>
-    <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1.2" />
-    <rect x="9" y="2.5" width="4.5" height="4.5" rx="1.2" />
-    <rect x="2.5" y="9" width="4.5" height="4.5" rx="1.2" />
-    <path d="M11.25 9v4.5M9 11.25h4.5" />
-  </I>
-);
+// The Apps rail icon. Central has no grid-with-plus glyph, so the collection stack stands in until it does.
+// A storefront: apps are installed from the marketplace, and the grid it replaced read as a table.
+export const AppsIcon = centralIcon(centralMarketplace, 20);
 
 // The Stacki mark from the wordmark (welcome/StackiLogo.tsx), in `currentColor`
 // so it takes the colour of the row it sits in.
@@ -344,18 +339,17 @@ export const StackiMarkIcon = ({ size = 16, className, style }: IconProps) => (
 
 export const PagePanelIcon = centralIcon(centralFile, 20);
 
-// Indented rows distinguish the Navigator from Git's branch and merge symbols.
-export const NavigatorIcon = (props: IconProps) => (
-  <I {...props} size={centralIconSize(props.size ?? 20)} strokeWidth={0.85}>
-    <path d="M2 4.5h9.5M5 8h9M5 11.5h9" />
-  </I>
-);
+// Indented menu rows: the Navigator's tree, apart from Git's branch and merge symbols.
+export const NavigatorIcon = centralIcon(centralBarsThree, 20);
 
-export const ComponentFillIcon = (props: IconProps) => <ElementComponentIcon {...props} size={props.size ?? 20} />;
+export const ComponentFillIcon = centralIcon(centralCube, 20);
 
 export const LayersIcon = centralIcon(centralLayers);
 
 export const CanvasIcon = centralIcon(centralCanvas);
+
+// A laptop with a phone: the canvas that shows every breakpoint at once.
+export const AllBreakpointsIcon = centralIcon(centralDevices);
 
 // Three dots: the row's own menu, shown on hover.
 export const MoreIcon = centralIcon(centralMore);

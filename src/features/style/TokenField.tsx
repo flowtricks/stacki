@@ -3,6 +3,9 @@
 // stepping over whole chips (VariableConnect.tsx).
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { droplet as centralDroplet, font as centralFont, number as centralNumber, ruler as centralRuler } from '../../ui/central/centralGeometry';
 import type { MutableRefObject, RefObject } from 'react';
 import { caretOffset, highlightCss, setCaretOffset, stepNumberAt, stepSize } from './model/cssCode';
 import { isHTMLElementInDocument } from './model/dom';
@@ -21,46 +24,24 @@ import { EMPTY_FIELD_HISTORY, type FieldHistory, type FieldSnapshot, recordEdit,
 
 // Per-type glyphs as HTML strings (contentEditable can't take React children). Size
 // covers most length fields; Color covers colour props. Others fall back to Size.
-export const TOKEN_GLYPH: Record<string, string> = {
-  Color:
-    '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path fill-rule="evenodd" ' +
-    'clip-rule="evenodd" d="M8 12C6.61929 12 5.5 10.8807 5.5 9.50002C5.5 9.04673 5.62524 ' +
-    '8.59624 5.85694 8.21178L5.86179 8.20374L8.00001 4.50006L10.1434 8.21244C10.3748 ' +
-    '8.59673 10.5 9.04697 10.5 9.50002C10.5 10.8807 9.38071 12 8 12ZM4.5 9.50002' +
-    'C4.5 11.433 6.067 13 8 13C9.933 13 11.5 11.433 11.5 9.50002C11.5 8.86769 11.3267 ' +
-    '8.24048 11.0025 7.70059L8.86604 4.00006C8.48114 3.3334 7.51889 3.33339 7.13398 4.00006' +
-    'L4.99795 7.69979C4.67349 8.2399 4.5 8.86738 4.5 9.50002Z" fill="currentColor"/></svg>',
-  Size:
-    '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M12 4.70711L4.70711 12' +
-    'H7.5V13H3V8.5H4V11.2929L11.2929 4H8.5V3H13V7.5H12V4.70711Z" fill="currentColor"/></svg>',
-  Number:
-    '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path fill-rule="evenodd" ' +
-    'clip-rule="evenodd" d="M11.846 3.13226L11.0637 6.0007H13V7.0007H10.791L10.2455 9.0007' +
-    'H12V10.0007H9.9728L9.11873 13.1323L8.15397 12.8691L8.93627 10.0007H5.9728L5.11873 ' +
-    '13.1323L4.15397 12.8691L4.93627 10.0007H3V9.0007H5.209L5.75445 7.0007' +
-    'H4V6.0007H6.02718L6.88124 2.86914L7.84601 3.13226L7.0637 6.0007' +
-    'H10.0272L10.8812 2.86914L11.846 3.13226ZM6.24552 9.0007H9.209' +
-    'L9.75446 7.0007H6.79098L6.24552 9.0007Z" fill="currentColor"/></svg>',
-  FontFamily:
-    '<svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path fill-rule="evenodd" ' +
-    'clip-rule="evenodd" d="M8.49945 3.49902L8.50043 3.49805V2.99902L8.88422 3L8.98285 ' +
-    '3.37012L10.4116 8.7041C11.6626 9.16833 12.7329 9.8024 13.4955 10.5137L12.8139 11.2451' +
-    'C12.2954 10.7615 11.5854 10.3001 10.7368 9.91699L11.2954 12H10.2602L9.58344 9.47559' +
-    'C9.40836 9.41951 9.22889 9.3663 9.04633 9.31738C8.17518 9.084 7.32862 8.96439 ' +
-    '6.55707 8.94629L5.98481 11.085C5.81653 11.7126 5.4687 12.2493 5.01996 12.6016' +
-    'C4.57106 12.9537 3.99165 13.1394 3.4057 12.9824C2.81995 12.8253 2.41134 12.375 ' +
-    '2.19867 11.8457C1.98617 11.3163 1.95342 10.6775 2.12152 10.0498C2.31581 9.32507 ' +
-    '2.87878 8.80593 3.58344 8.47266C4.19709 8.18251 4.95456 8.01274 5.78656 7.96094' +
-    'L7.01703 3.36914L7.11664 2.99902H8.50043L8.49945 3.49902ZM5.51117 8.98828C4.91768 ' +
-    '9.0534 4.40905 9.1879 4.01117 9.37598C3.46964 9.63206 3.18054 9.96113 3.08734 10.3086' +
-    'C2.96987 10.7474 3.00204 11.1626 3.12641 11.4727C3.25078 11.7822 3.45071 11.9592 ' +
-    '3.66449 12.0166C3.87841 12.0739 4.14016 12.0205 4.40277 11.8145' +
-    'C4.66552 11.6081 4.90132 11.265 5.01898 10.8262L5.51117 8.98828' +
-    'ZM6.8227 7.95605C7.60256 7.99297 8.43418 8.12006 9.27973 8.34473' +
-    'L8.11664 3.99902H7.88324L6.8227 7.95605Z" fill="currentColor"/></svg>',
-};
+const TOKEN_GLYPH_ICONS = {
+  Color: centralIcon(centralDroplet),
+  FontFamily: centralIcon(centralFont),
+  Number: centralIcon(centralNumber),
+  Size: centralIcon(centralRuler),
+} as const;
+const tokenGlyphCache = new Map<string, string>();
+
 export function tokenGlyph(type: string): string {
-  return TOKEN_GLYPH[type] ?? TOKEN_GLYPH['Size'] ?? '';
+  const cached = tokenGlyphCache.get(type);
+  if (cached !== undefined) {
+    return cached;
+  }
+  // Unknown types fall back to the Size glyph, as the chips always did.
+  const Icon = type === 'Color' || type === 'FontFamily' || type === 'Number' ? TOKEN_GLYPH_ICONS[type] : TOKEN_GLYPH_ICONS.Size;
+  const markup = renderToStaticMarkup(<Icon size={12} />);
+  tokenGlyphCache.set(type, markup);
+  return markup;
 }
 
 export function escapeHtml(text: string): string {

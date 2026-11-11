@@ -1,3 +1,5 @@
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { add as centralAdd, chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 // The parts every dropdown in the style panel is built from: the chevron, the
 // plus glyph, a radio menu item, dismissing an open menu, and the tooltip
 // arrow's offset. Each section carried an identical copy of these.
@@ -5,19 +7,9 @@
 import { useEffect } from 'react';
 import type { CSSProperties, RefObject } from 'react';
 
-export function ChevronIcon() {
-  return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M4.2 6.2 8 10l3.8-3.8" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+export const ChevronIcon = centralIcon(centralChevronDown);
 
-export const PlusIcon = () => (
-  <svg viewBox="0 0 16 16" fill="none" aria-hidden="true" className="embed-editor_bg-glyph">
-    <path d="M8 3.5v9M3.5 8h9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-  </svg>
-);
+export const PlusIcon = centralIcon(centralAdd);
 
 export function MenuItem({ label, selected, onClick }: { label: string; selected: boolean; onClick: () => void }) {
   return (

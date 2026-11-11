@@ -1,3 +1,5 @@
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { chevronDown as centralChevronDown, close as centralClose, more as centralMore } from '../../ui/central/centralGeometry';
 import Popup from '../../ui/Popup';
 import { useRef, useState } from 'react';
 import { SegBar, StackedField, LiveInput, PropLabel, GroupLabel, type Props, type Seg } from './TypographySection';
@@ -56,38 +58,9 @@ function FlexNoneIcon() {
     </svg>
   );
 }
-const CLOSE_ICON_PATH =
-  'M8.70708 8.00004L12.3535 4.35359L11.6464 3.64648L7.99998 7.29293L4.35353 3.64648' +
-  'L3.64642 4.35359L7.29287 8.00004L3.64642 11.6465L4.35353 12.3536L7.99998 8.70714' +
-  'L11.6464 12.3536L12.3535 11.6465L8.70708 8.00004Z';
-
-function CloseIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path fillRule="evenodd" clipRule="evenodd" d={CLOSE_ICON_PATH} fill="currentColor" />
-    </svg>
-  );
-}
-const MORE_DOTS_ICON_FIRST_PATH = 'M3 8C3 7.44772 3.44772 7 4 7C4.55228 7 5 7.44772 5 8C5 8.55228 4.55228 9 4 9' + 'C3.44772 9 3 8.55228 3 8Z';
-const MORE_DOTS_ICON_SECOND_PATH = 'M7 8C7 7.44772 7.44772 7 8 7C8.55228 7 9 7.44772 9 8C9 8.55228 8.55228 9 8 9' + 'C7.44772 9 7 8.55228 7 8Z';
-const MORE_DOTS_ICON_THIRD_PATH = 'M11 8C11 7.44772 11.4477 7 12 7C12.5523 7 13 7.44772 13 8C13 8.55228 12.5523 9 12 9' + 'C11.4477 9 11 8.55228 11 8Z';
-
-function MoreDotsIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d={MORE_DOTS_ICON_FIRST_PATH} fill="currentColor" />
-      <path d={MORE_DOTS_ICON_SECOND_PATH} fill="currentColor" />
-      <path d={MORE_DOTS_ICON_THIRD_PATH} fill="currentColor" />
-    </svg>
-  );
-}
-function ChevronIcon() {
-  return (
-    <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+const CloseIcon = centralIcon(centralClose);
+const MoreDotsIcon = centralIcon(centralMore);
+const ChevronIcon = centralIcon(centralChevronDown);
 function MenuItem({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button type="button" role="menuitem" className="embed-editor_display-menu-item" onClick={onClick}>
