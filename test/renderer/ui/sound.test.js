@@ -576,7 +576,10 @@ function fakeAudio() {
   check('settings opens from the menu', /label: 'Settings…'/.test(main));
   const preferences = fs.readFileSync(repoPath('src/app/settings/Settings.tsx'), 'utf8');
   check('sound is in settings', /Interface sounds/.test(preferences));
-  check('an accessible switch controls sound', /role="switch"/.test(preferences));
+  // The row draws the app's one switch component (src/ui/Switch.tsx), which carries the role.
+  const switchSource = fs.readFileSync(repoPath('src/ui/Switch.tsx'), 'utf8');
+  check('an accessible switch controls sound', /<Switch\b/.test(preferences));
+  check('and that switch carries the switch role', /role="switch"/.test(switchSource));
   check('off unless it has been turned on', /SETTINGS_DEFAULTS = \{\s*sound: false,/.test(main));
   check('and remembered across launches', /writeSettings\(\)/.test(main) && /settings:get/.test(main));
 

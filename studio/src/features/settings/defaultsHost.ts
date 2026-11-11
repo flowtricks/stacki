@@ -1,4 +1,5 @@
-import { getEditorRole } from '../roles/roleStore';
+import { getStudioRole } from '../roles/roleStore';
+import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { parseDefaultsSource, type DefaultsSnapshot, type DefaultComponent } from '../../../vendor/stacki/shared/properties/componentDefaults';
 import { starterDefaults } from '../../../vendor/stacki/shared/properties/componentStarterDefaults';
 import { loadProject } from '../project/projectClient';
@@ -29,8 +30,8 @@ export const studioDefaultsHost = {
     return { source: stored.source, config: parsed.value, catalog };
   },
   save: async (snapshot: DefaultsSnapshot): Promise<DefaultsSnapshot> => {
-    if (getEditorRole() === 'client') {
-      throw new Error('Component defaults are only editable in Developer mode.');
+    if (!can(getStudioRole(), 'component:edit')) {
+      throw new Error('Component defaults are only editable by a role that can edit components.');
     }
     const stored = await writeMetadata('', {
       kind: 'components',

@@ -1,5 +1,6 @@
 import React, { forwardRef, useEffect, useRef } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, DragIcon } from './Icons';
+import { DropLine } from './DropLine';
 
 export interface TreeDropBehavior {
   readonly active: boolean;
@@ -51,7 +52,7 @@ export function TreeDropGap({
       style={{ marginLeft: depth * 16, pointerEvents: interactive ? undefined : 'none' }}
       {...treeDropHandlers(behavior)}
     >
-      {behavior.active && <div className="drop-indicator" />}
+      {behavior.active && <DropLine />}
     </div>
   );
 }

@@ -7,13 +7,21 @@ import { object, optional, record, text, boolean } from '../core/boundary';
 import { parseComponentDefaults, DEFAULT_LIMITS } from './componentDefaults';
 import type { Result } from '../core/result';
 import { parseStyleKeepList } from './styleKeepList';
+import { PROJECT_FOLDERS_FILE, parseProjectFolders } from './projectFolders';
+import { ROLES_FILE, parseProjectRolesSource } from './projectRoles';
+import { INSTRUCTIONS_FILE, parseInstructionSettings } from './instructions';
+import { AUDIT_IGNORES_FILE, parseAuditIgnores } from './auditIgnores';
 
 export const METADATA_FILES = {
+  audits: AUDIT_IGNORES_FILE,
   componentSources: COMPONENT_SOURCE_FILE,
   components: '.stacki/components.json',
+  folders: PROJECT_FOLDERS_FILE,
   guide: '.stacki/guide.json',
+  instructions: INSTRUCTIONS_FILE,
   pages: '.stacki/pages.json',
   publish: '.stacki/publish.json',
+  roles: ROLES_FILE,
   styles: '.stacki/styles.json',
 } as const;
 export type MetadataKind = keyof typeof METADATA_FILES;
@@ -24,7 +32,17 @@ export function metadataKind(input: unknown): MetadataKind {
   if (input === 'componentSources') {
     return input;
   }
-  if (input === 'components' || input === 'guide' || input === 'publish' || input === 'pages' || input === 'styles') {
+  if (
+    input === 'components' ||
+    input === 'guide' ||
+    input === 'publish' ||
+    input === 'pages' ||
+    input === 'styles' ||
+    input === 'folders' ||
+    input === 'roles' ||
+    input === 'instructions' ||
+    input === 'audits'
+  ) {
     return input;
   }
   throw new Error('Unknown project metadata file');
@@ -56,6 +74,10 @@ export function validateMetadata(kind: MetadataKind, source: string): void {
     parsePublishSource(source);
     return;
   }
+  if (kind === 'roles') {
+    parseProjectRolesSource(source);
+    return;
+  }
   const input: unknown = JSON.parse(source);
   if (kind === 'componentSources') {
     parseComponentSources(input);
@@ -67,6 +89,18 @@ export function validateMetadata(kind: MetadataKind, source: string): void {
   }
   if (kind === 'styles') {
     parseStyleKeepList(input);
+    return;
+  }
+  if (kind === 'folders') {
+    parseProjectFolders(input);
+    return;
+  }
+  if (kind === 'instructions') {
+    parseInstructionSettings(input);
+    return;
+  }
+  if (kind === 'audits') {
+    parseAuditIgnores(input);
     return;
   }
   if (kind === 'components') {

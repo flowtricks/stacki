@@ -19,8 +19,7 @@ const documentation = load('src/editor/propDocumentation.ts');
 const model = load('src/features/props/newPropModel.ts');
 
 const NONE = { min: undefined, max: undefined, decimals: undefined };
-const SWITCH = { onLabel: 'On', offLabel: 'Off' };
-const declare = (fields) => ({ tooltip: '', defaultText: '', options: [], number: NONE, switch: SWITCH, attributes: [], tag: '', ...fields });
+const declare = (fields) => ({ tooltip: '', defaultText: '', options: [], number: NONE, attributes: [], tag: '', ...fields });
 const declared = (frontmatter, fields, taken = []) => declaration.declaredProp(frontmatter, declare(fields), new Set(taken));
 
 // ── Text, number, switch and option props ───────────────────────────────────
@@ -105,14 +104,15 @@ test('number settings read back bounded, and a typed number is held to them', ()
   assert.equal(documentation.withoutSettingTags('Shown in the badge @min 0 @max 10'), 'Shown in the badge');
 });
 
-test('switch labels are JSDoc tags with On and Off left out, and the default is true or false', () => {
-  const out = declared('', { key: 'shown', kind: 'boolean', switch: { onLabel: 'Visible', offLabel: 'Off' }, defaultText: 'true' });
+test('a switch writes no label tags, and its default is true or false', () => {
+  const out = declared('', { key: 'shown', kind: 'boolean', defaultText: 'true' });
   assert.ok(out.ok);
-  assert.match(out.value.frontmatter, /\/\*\* @onLabel Visible \*\/\n\tshown\?: boolean;\n\}\nconst \{ shown = true \}/);
-  assert.deepEqual(documentation.readPropDocumentation('@onLabel Visible').switch, { onLabel: 'Visible', offLabel: 'Off' });
-  assert.equal(documentation.statedSwitchLabels('Just words'), undefined, 'a doc without labels keeps the field’s words');
+  assert.match(out.value.frontmatter, /\tshown\?: boolean;\n\}\nconst \{ shown = true \}/);
+  assert.doesNotMatch(out.value.frontmatter, /@onLabel|@offLabel/);
+  // An old doc's labels are ignored: no switch settings are read from it.
+  assert.equal('switch' in documentation.readPropDocumentation('@onLabel Visible'), false);
+  assert.equal(documentation.readPropDocumentation('Shown. @onLabel Visible').tooltip, 'Shown.');
   assert.equal(declared('', { key: 'shown', kind: 'boolean', defaultText: 'yes' }).error, 'The default is on or off.');
-  assert.equal(declared('', { key: 'shown', kind: 'boolean', switch: { onLabel: 'a@b', offLabel: 'Off' } }).error, 'A label is one line of words.');
 });
 
 test('an option prop is a union of its words, and its default is one of them', () => {

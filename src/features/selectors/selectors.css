@@ -122,6 +122,11 @@
 .selectors-group {
   margin-bottom: 12px;
 }
+/* The group's heading and rows, in one grid item so the group can close and
+   open as one (see the slots below). */
+.selectors-group-body {
+  min-width: 0;
+}
 .selectors-file {
   margin: 0 4px 2px;
   overflow: hidden;
@@ -133,14 +138,16 @@
 }
 /* A stylesheet's or folder's heading: its name, and a lock that keeps the
    whole library through every clean-up. The lock shows on hover, and always
-   once locked — that is the heading's state, as on a locked row. */
+   once locked — that is the heading's state, as on a locked row. The 4px on
+   the right is the row actions' own, so a heading's lock sits in the same
+   column as the locks of the rows below it. */
 .selectors-heading {
   display: flex;
   align-items: center;
   gap: 4px;
   min-height: 20px;
   margin: 0 0 2px;
-  padding: 0 0 0 4px;
+  padding: 0 4px;
 }
 .selectors-heading .selectors-heading-name {
   flex: 1;
@@ -148,9 +155,13 @@
   margin: 0;
 }
 .selectors-folder {
-  margin: 4px 0 6px;
+  margin: 0;
   border-radius: 5px;
   background: var(--bg-input);
+}
+/* The folder heading's spacing lives on its slot, so it closes with it. */
+.selectors-folder-slot {
+  margin: 4px 0 6px;
 }
 .selectors-folder .selectors-heading-name {
   overflow: hidden;
@@ -183,16 +194,6 @@
 }
 .selectors-group.is-locked .selectors-file {
   color: var(--selectors-kept);
-}
-/* What a locked stylesheet keeps out of the Unused view, said once. */
-.selectors-locked-note {
-  margin: 0;
-  padding: 4px;
-  border-radius: 5px;
-  background: var(--bg-hover);
-  color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1.45;
 }
 .selectors-reason {
   margin: 0 4px 4px;
@@ -298,6 +299,10 @@
   opacity: 1;
   pointer-events: auto;
 }
+/* A locked row always shows its lock; its trash still waits for hover. */
+.selectors-row.is-kept:not(:hover) .selectors-remove-one:not(:focus-visible) {
+  display: none;
+}
 .selectors-lock,
 .selectors-remove-one {
   flex-shrink: 0;
@@ -340,8 +345,13 @@
 
 /* A row leaving the open tab closes after its lock and colour have changed:
    the slot's one grid track shrinks from the row's height to nothing, so the
-   rows below slide up into its place. */
-.selectors-row-slot {
+   rows below slide up into its place. A row arriving opens the same way in
+   reverse, from `@starting-style`, as it is first drawn. A stylesheet, folder
+   or reason whose rows all leave or all arrive closes or opens with them, its
+   spacing included, so its heading never pops. */
+.selectors-row-slot,
+.selectors-group,
+.selectors-folder-slot {
   display: grid;
   /* A grid item is as wide as its content unless its track says otherwise:
      minmax(0, 1fr) keeps a long selector's row to the list's width, so the
@@ -350,23 +360,42 @@
   grid-template-rows: 1fr;
   transition:
     grid-template-rows 200ms ease,
-    opacity 200ms ease;
+    opacity 200ms ease,
+    margin 200ms ease;
 }
-.selectors-row-slot.is-collapsing {
+.selectors-row-slot.is-collapsing,
+.selectors-group.is-collapsing,
+.selectors-folder-slot.is-collapsing {
   grid-template-rows: 0fr;
+  margin-top: 0;
+  margin-bottom: 0;
   opacity: 0;
   pointer-events: none;
 }
-.selectors-row-slot.is-collapsing > .selectors-row {
+.selectors-row-slot:is(.is-collapsing, .is-entering) > .selectors-row,
+.selectors-group:is(.is-collapsing, .is-entering) > .selectors-group-body,
+.selectors-folder-slot:is(.is-collapsing, .is-entering) > .selectors-folder {
   min-height: 0;
   overflow: hidden;
+}
+@starting-style {
+  .selectors-row-slot.is-entering,
+  .selectors-group.is-entering,
+  .selectors-folder-slot.is-entering {
+    grid-template-rows: 0fr;
+    margin-top: 0;
+    margin-bottom: 0;
+    opacity: 0;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .selectors-flag,
   .selectors-lock,
   .selectors-shackle,
   .selectors-lock-icon.is-open .selectors-shackle,
-  .selectors-row-slot {
+  .selectors-row-slot,
+  .selectors-group,
+  .selectors-folder-slot {
     transition: none;
   }
 }

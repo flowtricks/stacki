@@ -47,7 +47,11 @@ export function shortcutAction(press: KeyPress): RichTextAction | undefined {
   }
   const key = press.key.toLowerCase();
   if (press.alt) {
-    // ⌥⌘0 to ⌥⌘6, as in Google Docs: a paragraph, or a heading of that level.
+    // ⌥⌘0 to ⌥⌘6, as in Google Docs: a paragraph, or a heading of that level. With Shift
+    // it is the app command range (shared/properties/appShortcuts.ts), never a heading.
+    if (press.shift) {
+      return undefined;
+    }
     const digit = /^Digit([0-6])$/.exec(press.code)?.[1];
     if (digit === undefined) {
       return undefined;

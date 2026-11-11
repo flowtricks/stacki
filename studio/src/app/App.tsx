@@ -7,6 +7,7 @@ import { BootScreen } from './BootScreen';
 import { Editor } from './Editor';
 import { useEditorView } from './useEditorView';
 import { useSession } from '../features/auth/useSession';
+import { useStudioRoles } from '../features/roles/useStudioRoles';
 import { Toast } from '../features/notifications/Toast';
 import { useNotifications } from '../features/notifications/useNotifications';
 
@@ -23,6 +24,7 @@ export function App() {
   }, [project]);
   useAstroFileNotifications(report, refresh, reconcile);
   const session = useSession(report);
+  useStudioRoles(session, revision, report);
   return (
     <>
       {project ? (

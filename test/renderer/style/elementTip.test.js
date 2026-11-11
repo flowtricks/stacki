@@ -7,7 +7,8 @@
 // attributes. Resting the pointer on it shows the whole element as chips, the
 // tag and id grey, classes blue, attributes purple: the tag, each class, the id,
 // then every attribute the author wrote, without
-// the `class`/`id` duplicates or the attributes Astro stamps on rendered markup.
+// the `class`/`id` duplicates, the attributes Astro stamps on rendered markup or
+// Stacki's own `data-stacki-key`.
 //
 // Method: the pure part lists case by case (elementParts, elementTipParts),
 // then the real ElementTokenPicker mounted in JSDOM with fake timers: nothing
@@ -80,6 +81,8 @@ const texts = (parts) => parts.map((part) => part.text);
       'aria-label': 'Questions',
       hidden: '',
       'data-astro-cid-abc123': '',
+      // An app's durable node key: Stacki's own, so neither the line nor the tip names it.
+      'data-stacki-key': 'k1kkgbiyvxd6l',
     },
   };
   check(
@@ -100,6 +103,7 @@ const texts = (parts) => parts.map((part) => part.text);
     ),
   );
   check('the tip leaves out what Astro stamps on the markup', !elementTipParts(snapshot).some((part) => part.text.includes('astro')));
+  check('the tip leaves out the node key Stacki writes for apps', !elementTipParts(snapshot).some((part) => part.text.includes('data-stacki-key')));
   const bare = { ...snapshot, id: undefined, classes: [], classList: [], attributes: {} };
   check('a bare element is its tag alone', same(elementTipParts(bare), [{ kind: 'tag', text: 'h2' }]));
   check('no element, no parts', same(elementTipParts(undefined), []));

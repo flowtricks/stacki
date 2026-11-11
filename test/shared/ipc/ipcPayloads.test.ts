@@ -24,6 +24,7 @@ const noPayload = new Set([
   'native:undo',
   'native:redo',
   'settings:get',
+  'apps:hostVersion',
   'recents:list',
   'git:repositories',
   'project:openDialog',
@@ -141,7 +142,23 @@ const fields = {
   enabled: true,
 };
 
+const aiChat = { projectPath: '/site', chat: `c${'a'.repeat(24)}` };
 const metadataSamples: Readonly<Record<string, unknown>> = {
+  // The AI chat panel's channels (shared/ipc/aiChat.ts; their bad shapes are in aiChatContract.test.ts).
+  'ai:agents': { projectPath: '/site' },
+  'ai:installAgent': { projectPath: '/site', agent: 'claude' },
+  'ai:trust': { projectPath: '/site' },
+  'ai:chats': { projectPath: '/site' },
+  'ai:chatCreate': { projectPath: '/site', agent: 'codex' },
+  'ai:chatUpdate': { ...aiChat, title: 'Hero copy' },
+  'ai:chatDelete': aiChat,
+  'ai:chatRead': aiChat,
+  'ai:prompt': { ...aiChat, text: 'Tighten the hero copy', attachments: [] },
+  'ai:cancel': aiChat,
+  'ai:permission': { ...aiChat, request: 'p1', answer: { kind: 'cancel' } },
+  'ai:setOption': { ...aiChat, option: 'model', value: 'large' },
+  'ai:setup': { projectPath: '/site', agent: 'claude', action: { kind: 'detect' } },
+  'ai:review': { ...aiChat, turn: `t${'1'.repeat(16)}`, path: 'src/pages/index.astro', action: { kind: 'keep' } },
   'style:selectorUsage': { projectPath: '/site' },
   'style:removeSelectors': {
     projectPath: '/site',
@@ -238,6 +255,60 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     id: 'abc',
     revision: 'tx-123',
   },
+  // Stacki Apps: install from a file or a GitHub release, then commit; update and remove by id.
+  'apps:list': { projectPath: '/site' },
+  'apps:pickFile': { projectPath: '/site' },
+  'apps:stageGitHub': { projectPath: '/site', source: { owner: 'octocat', repository: 'heat-map', asset: 'heat-map.zip', account: 'octocat' }, tag: 'v1.0.0' },
+  'apps:githubRepositories': { projectPath: '/site', account: 'octocat' },
+  'apps:githubReleases': { projectPath: '/site', source: { owner: 'octocat', repository: 'heat-map', asset: 'app.zip' } },
+  'apps:commit': { projectPath: '/site', token: 'a'.repeat(32) },
+  'apps:discard': { projectPath: '/site', token: 'a'.repeat(32) },
+  'apps:uninstall': { projectPath: '/site', id: 'heat-map' },
+  'apps:checkUpdates': { projectPath: '/site', force: true },
+  'apps:applyUpdate': { projectPath: '/site', id: 'heat-map' },
+  // Apps added as a folder: the folders that do not read as an app, and showing one.
+  'apps:folders': { projectPath: '/site' },
+  'apps:revealFolder': { projectPath: '/site', folder: 'My App' },
+  'apps:marketplace': { projectPath: '/site', refresh: true },
+  'apps:installMarketplace': { projectPath: '/site', id: 'heat-map', version: '1.1.0' },
+  'apps:setAutoUpdate': { projectPath: '/site', id: 'heat-map', autoUpdate: false },
+  'apps:repositoryVisibility': { projectPath: '/site', id: 'heat-map' },
+  // Sharing and publishing apps, and app settings.
+  'apps:scanSecrets': { projectPath: '/site', target: { kind: 'installed', id: 'heat-map' } },
+  'apps:repositoryStatus': { projectPath: '/site', repository: { owner: 'octocat', repository: 'heat-map', account: 'octocat' } },
+  'apps:makePublic': { projectPath: '/site', repository: { owner: 'octocat', repository: 'heat-map', account: 'octocat' } },
+  'apps:addLicense': { projectPath: '/site', repository: { owner: 'octocat', repository: 'heat-map', account: 'octocat' } },
+  'apps:share': {
+    projectPath: '/site',
+    share: { id: 'heat-map', account: 'octocat', owner: 'acme', ownerKind: 'organization', name: 'heat-map', visibility: 'private' },
+  },
+  'apps:switchSource': {
+    projectPath: '/site',
+    id: 'heat-map',
+    source: { kind: 'github', owner: 'acme', repository: 'heat-map', asset: 'heat-map.zip', account: 'octocat', tag: 'v1.0.0' },
+  },
+  'apps:checkMarketplace': { projectPath: '/site', repository: { owner: 'octocat', repository: 'heat-map', account: 'octocat' } },
+  'apps:submitMarketplace': { projectPath: '/site', submission: { owner: 'octocat', repository: 'heat-map', account: 'octocat', acceptedTerms: true } },
+  'apps:readSettings': { projectPath: '/site', id: 'heat-map' },
+  'apps:writeSettings': { projectPath: '/site', id: 'heat-map', values: { 'api-key': 'value' } },
+  // The pages and components an app's page index stamps in one batch.
+  'apps:fileStamps': { projectPath: '/site', rels: ['src/pages/index.astro', 'src/components/Card.astro'] },
+  // App storage and the person.
+  'apps:storageGet': { projectPath: '/site', id: 'heat-map', scope: 'project', key: 'pins/hero' },
+  'apps:storageSet': { projectPath: '/site', id: 'heat-map', scope: 'local', key: 'pins/hero', value: '{}', writer: 'desktop-0a1b' },
+  'apps:storageKeys': { projectPath: '/site', id: 'heat-map', scope: 'project' },
+  'apps:storageWatch': { projectPath: '/site' },
+  'apps:person': { projectPath: '/site' },
+  'apps:people': { projectPath: '/site' },
+  // A region of the editor window (window CSS pixels) the renderer measured for `canvas.snapshot`.
+  'apps:canvasSnapshot': { rect: { x: 10, y: 20, width: 300, height: 200 }, widthMax: 320 },
+  // Project files and sign-ins.
+  'apps:files': { projectPath: '/site', id: 'heat-map', operation: { kind: 'write', path: 'src/data/heat.json', content: '{}', encoding: 'utf8' } },
+  'apps:authConnect': { projectPath: '/site', id: 'heat-map', provider: 'google' },
+  'apps:authStatus': { projectPath: '/site', id: 'heat-map' },
+  'apps:authToken': { projectPath: '/site', id: 'heat-map', provider: 'google' },
+  'apps:authDisconnect': { projectPath: '/site', id: 'heat-map', provider: 'google' },
+  'apps:netFetch': { projectPath: '/site', id: 'heat-map', request: { url: 'https://api.example.test/v1/report', method: 'POST', body: '{}', auth: 'google' } },
   'mediaHosting:connections': { projectPath: '/site' },
   'mediaHosting:save': {
     projectPath: '/site',
@@ -297,6 +368,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   },
   'project:metadata': { projectPath: '/site', kind: 'publish' },
   'project:writeMetadata': { projectPath: '/site', write: { kind: 'publish', source: '{}' } },
+  'project:pickFolder': { projectPath: '/site' },
   'project:createDefaultsCanvas': {
     projectPath: '/site',
     canvas: {
@@ -310,6 +382,18 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     projectPath: '/site',
     file: '.stacki/canvas/00000000-0000-4000-8000-000000000000.astro',
   },
+  // The Instructions panel: Markdown paths inside the project, and a folder for rules.
+  'instructions:create': { projectPath: '/site', file: '.claude/rules/testing.md', source: '# Testing\n' },
+  'instructions:createFolder': { projectPath: '/site', folder: '.claude/rules/frontend' },
+  'instructions:read': { projectPath: '/site', file: 'AGENTS.md' },
+  'instructions:write': { projectPath: '/site', file: 'AGENTS.md', source: '# B\n', base: '# A\n' },
+  // The history panel's author pictures: full commit hashes with their authors' emails.
+  'git:avatars': { projectPath: '/site', commits: [{ hash: 'a'.repeat(40), email: 'designer@example.com' }] },
+  // The Roles tab's member picker: the typed start of a GitHub username.
+  'github:searchUsers': { projectPath: '/site', query: 'octo-' },
+  // The Audits panel's rendered pass: a route of the loopback dev server.
+  'audit:render': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/about' },
+  'audit:measure': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/' },
   // A page's value: one import called (`call`), or its last render's values (`scope`).
   'content:sampleValue': {
     projectPath: '/site',

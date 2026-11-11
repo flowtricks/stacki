@@ -369,7 +369,7 @@ test('Cloudflare shows account names through loading and failed refreshes', asyn
   assert.equal(account().textContent, 'Church International');
   await act(async () => refresh().click());
   assert.equal(account().textContent, 'Church International');
-  await act(async () => discovery.at(-1).resolve({ kind: 'failed', message: 'Offline' }));
+  await act(async () => discovery.at(-1).resolve({ kind: 'failed', reason: 'network', message: 'Offline' }));
   assert.equal(account().textContent, 'Church International');
   await act(async () => account().click());
   assert.equal(document.querySelector('.dd-option-label').textContent, 'Church International');

@@ -1,15 +1,16 @@
 // The attributes prop in the Properties panel: a `{ }` row after the declared
-// props, and its settings. The tooltip is the `@attributes` tag above
-// `interface Props` (written through the panel's own save, as a frontmatter
-// change); the defaults are the attributes before the spread on each
-// connected element (attributesBinding.ts), written through the page editor
-// so the canvas and undo see them; Connections lists the elements that spread
-// it, and picking one selects it on the canvas.
+// props, and its settings. A rest prop has no JSDoc an editor would show, so it
+// has no tooltip here. Its defaults are the attributes before the spread on each
+// connected element (attributesBinding.ts), shown only when there are some and
+// written through the page editor as each row is left, so the canvas and undo
+// see each change; Connections lists the elements that spread it, and picking
+// one selects it on the canvas. Nothing waits for a Save button.
 
 import { useState } from 'react';
 import type { ComponentProperties, PropertyChange } from '../../../shared/properties/propertyEditing';
 import { boundAttributes } from '../../editor/attributesBinding';
-import { attributeDefaultsProblem, withRestTooltip, type AttributeDefault } from '../../editor/propDeclaration';
+import { attributeDefaultsProblem, type AttributeDefault } from '../../editor/propDeclaration';
+import { CodeInline } from '../../ui/CodeBlock';
 import Popup from '../../ui/Popup';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { BracesIcon, PlusIcon, TrashIcon, elementIcon } from '../../ui/Icons';
@@ -61,40 +62,31 @@ interface EditorProps extends AttributesHost {
   readonly onClose: () => void;
 }
 
-/** The attributes prop's settings: name, tooltip, default attributes and connections. */
+/** The attributes prop's settings: its name, its connections, and its defaults when it has any. */
 export function AttributesPropertyEditor(props: EditorProps) {
   const { attributes } = props;
   const first = attributes.connections[0];
-  const [tooltip, setTooltip] = useState(attributes.tooltip);
   const [rows, setRows] = useState<readonly AttributeDefault[]>(first?.defaults ?? []);
   const [problem, setProblem] = useState('');
   const editableDefaults = props.onReplaceProps !== undefined && first !== undefined;
-  const submit = async (): Promise<void> => {
-    const defaults = rows.filter((row) => row.name.trim() !== '' || row.value !== '').map((row) => ({ name: row.name.trim(), value: row.value }));
+  // Each change lands as it is made: a row when it is left, a removal at once.
+  const commit = (next: readonly AttributeDefault[]): void => {
+    const defaults = next.filter((row) => row.name.trim() !== '' || row.value !== '').map((row) => ({ name: row.name.trim(), value: row.value }));
     const defaultsProblem = attributeDefaultsProblem(defaults);
     if (defaultsProblem !== undefined) {
       setProblem(defaultsProblem);
       return;
     }
-    if (tooltip.trim() !== attributes.tooltip) {
-      const next = withRestTooltip(props.data.frontmatter, tooltip);
-      if (!next.ok) {
-        setProblem(next.error);
-        return;
-      }
-      if (!(await props.save({ kind: 'source', frontmatter: next.value }))) {
-        return;
+    setProblem('');
+    if (!editableDefaults || props.onReplaceProps === undefined) {
+      return;
+    }
+    for (const connection of attributes.connections) {
+      // An element whose defaults already match keeps its source as written.
+      if (!sameDefaults(connection.defaults, defaults)) {
+        props.onReplaceProps(connection.id, boundAttributes(connection.props, attributes.local, defaults));
       }
     }
-    if (editableDefaults && props.onReplaceProps !== undefined) {
-      for (const connection of attributes.connections) {
-        // An element whose defaults already match keeps its source as written.
-        if (!sameDefaults(connection.defaults, defaults)) {
-          props.onReplaceProps(connection.id, boundAttributes(connection.props, attributes.local, defaults));
-        }
-      }
-    }
-    props.onClose();
   };
   return (
     <Popup mode="popover" portal={false} className="property-editor property-attributes-editor" onClose={props.onClose} dismissible={!props.busy}>
@@ -117,40 +109,26 @@ export function AttributesPropertyEditor(props: EditorProps) {
               </span>
             </div>
             <p className="property-help">
-              Instances add their own attributes through {attributes.local}. Each element's own attributes, after the spread, still win.
+              Passes any other attributes through <CodeInline text={`{...${attributes.local}}`} language="typescript" />.
             </p>
-            <label>
-              Tooltip
-              <textarea
-                value={tooltip}
-                rows={3}
-                aria-label="Tooltip"
-                placeholder="Describe the attributes an instance may add…"
-                onChange={(event) => {
-                  setTooltip(event.target.value);
-                  setProblem('');
-                }}
-              />
-            </label>
-            <AttributeDefaultRows
-              rows={rows}
-              editable={{ allowed: editableDefaults }}
-              onChange={(next) => {
-                setRows(next);
-                setProblem('');
-              }}
-            />
-            {!defaultsAgree(attributes.connections) && (
-              <p className="property-help">The connected elements have different defaults; saving gives every one of them these.</p>
-            )}
             <AttributeConnections attributes={attributes} onSelectNode={props.onSelectNode} />
+            {rows.length > 0 && (
+              <AttributeDefaultRows
+                rows={rows}
+                editable={{ allowed: editableDefaults }}
+                onChange={(next, pace) => {
+                  setRows(next);
+                  if (pace === 'at-once') {
+                    commit(next);
+                  }
+                }}
+                onLeave={() => commit(rows)}
+              />
+            )}
+            {rows.length > 0 && !defaultsAgree(attributes.connections) && (
+              <p className="property-help">The connected elements have different defaults; editing one gives every one of them these.</p>
+            )}
             {problem && <ErrorToast message={problem} />}
-            <div className="property-actions">
-              <span />
-              <button className="primary" onClick={() => void submit()}>
-                Save property
-              </button>
-            </div>
           </fieldset>
         </>
       )}
@@ -162,12 +140,19 @@ function AttributeDefaultRows({
   rows,
   editable,
   onChange,
+  onLeave,
 }: {
   readonly rows: readonly AttributeDefault[];
   readonly editable: { readonly allowed: boolean };
-  readonly onChange: (rows: readonly AttributeDefault[]) => void;
+  readonly onChange: (rows: readonly AttributeDefault[], pace: 'typing' | 'at-once') => void;
+  /** A row was left: what was typed in it is written. */
+  readonly onLeave: () => void;
 }) {
-  const edit = (index: number, entry: AttributeDefault): void => onChange(rows.map((row, at) => (at === index ? entry : row)));
+  const edit = (index: number, entry: AttributeDefault): void =>
+    onChange(
+      rows.map((row, at) => (at === index ? entry : row)),
+      'typing',
+    );
   return (
     <div className="property-attribute-defaults" role="group" aria-label="Default attributes">
       <div className="property-attribute-defaults-title">
@@ -178,13 +163,12 @@ function AttributeDefaultRows({
             className="ghost"
             aria-label="Add default attribute"
             title="Add default attribute"
-            onClick={() => onChange([...rows, { name: '', value: '' }])}
+            onClick={() => onChange([...rows, { name: '', value: '' }], 'typing')}
           >
             <PlusIcon size={12} />
           </button>
         )}
       </div>
-      {rows.length === 0 && <p className="property-help">None. An instance's attributes are all its own.</p>}
       {rows.map((row, index) => (
         <div className="property-attribute-default" key={index}>
           <input
@@ -193,6 +177,7 @@ function AttributeDefaultRows({
             value={row.name}
             readOnly={!editable.allowed}
             spellCheck={false}
+            onBlur={onLeave}
             onChange={(event) => edit(index, { ...row, name: event.target.value })}
           />
           <input
@@ -200,6 +185,7 @@ function AttributeDefaultRows({
             placeholder="value"
             value={row.value}
             readOnly={!editable.allowed}
+            onBlur={onLeave}
             onChange={(event) => edit(index, { ...row, value: event.target.value })}
           />
           {editable.allowed && (
@@ -208,7 +194,12 @@ function AttributeDefaultRows({
               className="ghost"
               aria-label={`Remove default attribute ${row.name || index + 1}`}
               title="Remove"
-              onClick={() => onChange(rows.filter((_, at) => at !== index))}
+              onClick={() =>
+                onChange(
+                  rows.filter((_, at) => at !== index),
+                  'at-once',
+                )
+              }
             >
               <TrashIcon size={12} />
             </button>

@@ -649,12 +649,76 @@ build (`test/legacy-parity.bench.js`) was retired at step 10 with the
   parses its own output; `propModelSchema.ts` projects it onto `PropField`, and the Properties
   panel's list comes from the same model, so the panels cannot disagree. No IPC channel carries
   the model yet; the scan still carries its `PropField` projection.
-- `propTags.ts` reads a prop's JSDoc tags (`@min @max @step @decimals @int @onLabel @offLabel
-  @format @group @deprecated`) for every reader: the model in main and the renderer's
-  `propDocumentation.ts`.
+- `propTags.ts` reads a prop's JSDoc tags (`@min @max @step @decimals @int @format @group
+  @deprecated`) for every reader: the model in main and the renderer's
+  `propDocumentation.ts`. Legacy `@onLabel`/`@offLabel` switch labels are ignored (kept out of
+  the tooltip, never written); a switch control shows True and False.
 - `frontmatter.ts` validates import members and source slots.
 - `boundary.ts` supplies bounded primitive, list, dictionary, and data parsers.
 - `result.ts` defines the expected-failure channel.
+
+## Project roles
+
+`.stacki/roles.json` says which parts of Stacki each person may use in a project, for Desktop and
+Studio alike. `shared/properties/projectRoles.ts` is the contract: the `AccessFeature` union, the
+bounded parser (`ROLE_LIMITS` beside it), resolution and `can(role, feature)`. The file is a
+project metadata kind (`roles`), so both hosts read and write it through the witnessed metadata
+transport (`project:metadata` / `project:writeMetadata`, `/studio/api/metadata`).
+
+```json
+{ "version": 1, "defaultRole": "admin",
+  "roles": [
+    { "id": "admin", "name": "Admin", "members": ["owner"] },
+    { "id": "client", "name": "Client", "members": ["acme-marketing"], "access": ["panel:pages", "publish"] },
+    { "id": "writer", "name": "Writer", "members": ["sam"], "access": ["panel:cms", "panel:apps", "app:seo"] } ] }
+```
+
+- Built-in `admin` and `client` are always present, admin first. Admin has every feature, stores no
+  `access`, and must name at least one member: the parser refuses a file that would leave no admin,
+  and the Roles tab refuses a save that would make the person saving it non-admin. `developer`
+  (Studio's old label) and `designer` (its old stored value) read as admin.
+- `client` without `access` gets `CLIENT_DEFAULT_ACCESS`, Studio's former Client mode: Pages,
+  Navigator, Components, Assets, CMS, Git and the Settings panel; creating, renaming and deleting
+  pages; publishing; Editor settings. It lacks `page:layout`, so its edits stay inside the page layout.
+- Custom role ids are lowercase slugs; names are 1 to 60 characters. A name is for display only:
+  grants, `defaultRole` and both hosts' checks use the id. Client's name may change like a custom
+  role's (a file without one reads "Client"); admin is always named "Admin". The Roles tab keeps
+  names unique, ignoring case; the parser accepts duplicates written by older versions. Members are GitHub usernames,
+  matched case-insensitively; a person is in at most one role. At most 32 roles, 200 members a role,
+  256 grants a role, 256 KiB a file.
+- Apps: `panel:apps` shows the Apps panel and `app:<appId>` allows one app (`app:*` every app).
+  `can(role, 'app:x')` needs both. `settings:roles` is never grantable: only admin edits roles.
+- App permissions: a non-admin role may hold `appPermissions: { "<appId>": { "<permissionId>": true | false } }`
+  for the switches apps declare in their manifest (`permissions`, `shared/properties/appPermissions.ts`).
+  `appPermissionsFor(role, appId, declarations)` resolves them: admin has every one, a role that may
+  not use the app has none, any other role has the stored value, else the manifest's `default`. At
+  most 64 apps a role and 24 values an app; ids no installed manifest declares are kept (reinstalling
+  restores them) and ignored. The key is written only when non-empty, so older files read unchanged.
+  Stacki never enforces them: apps read them through `role.get` / `role.can` and enforce them themselves.
+- Rail pins: any role, admin included, may hold `pinnedApps: ["<appId>", …]`, at most 12 app ids in pin
+  order (a repeat is read once), written only when non-empty. The left rail (Desktop's `LeftRail.tsx`,
+  Studio's `EditorRail.tsx`, through `src/app/railApps.tsx`) draws each pinned app the role may use and
+  has installed as its own button below the panels; other ids are kept and ignored. The Roles tab pins
+  only apps the role may use. `RoleView.pinnedApps` carries them, so "View as" shows another role's pins;
+  admin resolves to the file's admin role (`roleViewOf(roles, 'admin')`) for the same reason.
+- No file means everyone is admin, exactly as before. Studio gives a signed-in GitHub user the role
+  naming them, else `defaultRole` (admin unless set). A local Studio, with no sign-in, is admin.
+  Desktop resolves the GitHub account it publishes with (the project's `githubAccount` when signed
+  in on this machine, else `gh`'s active account, via `roles:identity`); nobody signed in, or a
+  person named in no role, is admin there, because the local user owns the files anyway.
+
+Enforcement: the renderer hides what `can()` refuses (rail buttons and their shortcuts, right
+tabs, Settings tabs, the publish button, the terminal and code window, page create, rename and
+delete, component creation). Main refuses the matching IPC writes before their handlers run
+(`electron/handlers/channelAccess.ts`, through the registrar's gate in `ipcRegistrar.ts`); a broken
+file is admin on Desktop so it can be fixed. The Studio server refuses write routes the sender's
+role lacks with 403 (`studio/src/features/roles/serverAccess.ts`), trusting the login only from the
+worker's authenticated `x-studio-user`; a broken file fails closed to the client role there.
+Document edits over the collaboration socket stay UI-gated, as Client mode was.
+
+"View as" (Settings → Roles on Desktop, the account menu in Studio) lets an admin preview another
+role's UI. It changes only the renderer's active role (`src/lib/currentRole.ts`: `currentRole()` and
+`onRoleChange()`), never the file or what main and the server allow. Studio keeps the choice for the tab in sessionStorage (`studio-role`).
 
 ## Required gate
 
@@ -755,7 +819,11 @@ project-relative stylesheets (`src/styles/patterns.css`) and folders ending in `
 (`src/styles/`), `/`-separated with no `.`/`..` steps, at most 500; a folder covers every file
 under it, including files added later. The check reports a would-be `unused` selector in a
 locked file as `kept`, so the panel's clean-up, the delete offer, `style:removeSelectors` (which
-re-runs the check) and `check-project` all leave it. The key is written only when non-empty. The
+re-runs the check) and `check-project` all leave it. `style:removeSelectors` with `reach: 'chosen'`
+(one row's own trash) runs that check as if no stylesheet were locked, so a hand deletion goes
+through while name locks still hold. Unlocking one row under a sheet lock removes that lock and
+writes every other selector it held as a name lock, one write and one undo step, refused past the
+1,000-name bound; locking a sheet drops name locks only its selectors use. The key is written only when non-empty. The
 style selectors panel writes the file through `project:writeMetadata` against the bytes it read.
 A `trustedScripts` key from an earlier version is read and dropped.
 
@@ -779,6 +847,66 @@ writes through the document actors, and returns each file's before and after tex
 `style:restoreSelectors` writes one side back, refusing a file that no longer holds the other.
 `astro-studio check-project` prints the same report.
 
+`.stacki/folders.json` contains `{ version: 1, folders: { components?, layouts?, assets?, styles?, variables? } }`
+(`shared/properties/projectFolders.ts`): for each panel, the project-relative folders it reads.
+A missing file, an invalid one, or a missing key reads that panel's defaults — `src/components`,
+`src/layouts`, `public` + `src` for assets, `src` + `public` + `styles` for both stylesheets (`styles`:
+the style panel, the selectors panel and the unused-selector check) and variables (`variables`: the
+variables panel, on Desktop and in Studio) — so an
+unconfigured project behaves as before and nothing is written until a folder changes. Folders are
+`/`-separated, at most 16 per panel, 200 characters and 8 levels deep, with no empty, `.`, `..`,
+hidden, `node_modules` or `dist` segment, absolute path or drive letter; one panel's folders never
+repeat or nest. Components and layouts live under `src/` and outside `src/pages`; assets under
+`public/` (served, every file) or `src/` (imported, media only); styles and variables under `src/`,
+`public/` or `styles/`. A file written before `variables` existed has only `styles`, which chose the
+variables panel's folders too: it reads as `variables` equal to `styles`, and the next save writes both.
+So that rule never applies to a new file, a save that writes `styles` always writes `variables` too,
+at the defaults when the variables panel has no choice of its own. A list equal to its defaults is not
+a change to the Folders tab: its title stays plain, without the blue reset label.
+A file in a layout folder is a layout even when a component folder covers it. Pages
+are fixed at `src/pages` (Astro's routing root) and content collections follow the content config.
+Keys and panels this version does not know (written by a newer Stacki) are ignored for reading and
+written back unchanged; a known panel with a bad folder makes the whole file invalid. A host that
+predates the `folders` kind refuses it with "Unknown project metadata file"; the Folders tab then
+shows the defaults read-only with "Restart Stacki to edit folders." (Studio: its own note). Older
+readers only open the metadata kinds they name, so the file's presence changes nothing for them.
+
+The same file's `cms` key (`{ files?, hiddenCollections?, pickerExcluded?, …unknown keys kept }`) chooses what the CMS
+panel lists. `files` (at most 64, project-relative under `src/`, `.cjs .cts .js .jsx .mjs .mts .ts .tsx
+.json .astro`, not `.d.ts`, no repeats) replaces automatic detection: `cms:list` then reads exactly
+those files, single values included, on Desktop and in Studio (whose CMS stage carries the file).
+`.astro` files are never data files: every page, layout and component stays a source whatever
+`files` says (the open one is always included), the Folders tab neither lists nor accepts them, and
+a saved `.astro` entry parses but is ignored. Without it, detection is unchanged (Desktop: every data module under `src/` except `src/assets`,
+single values only from `src/data/` and root consts files; Studio: single values from every module).
+`hiddenCollections` (at most 256 names) leaves content collections out of the CMS panel only;
+`content:collections` and every other reader still see them. The Folders tab seeds a first add or
+remove from the detected files, and "Reset to default" removes `files`; an empty `cms` is not written.
+`pickerExcluded` (at most 512 entries, no repeats) leaves project data out of the binding picker
+only, never out of the CMS panel: a data file (`src/consts.ts`, same rules as `files` but not `.astro`),
+one of its exports (`src/consts.ts#SITE`, an identifier or `default` for a JSON file's data), or a
+content collection (`blog`, no `/`). An export is also left out with its whole file. No key, or an
+empty list (never written), shows everything (`isPickerShown`).
+
+Pages are shown, not configured: `project:scan` reports `pagesFolder` (`<srcDir>/pages`, `srcDir` read
+from the first `astro.config.*` Astro loads, as a string literal only; the config never runs) and
+`astroConfig`. Everything else still assumes `src/pages`: the scan's page list and `routeForPage`,
+page create/rename/delete (`pageHandlers.ts`, `pageRequests.ts`, `pageRename*.ts`), page templates
+(`pageTemplatePlan.ts`), `.stacki/pages.json` keys, preview markers (`previewMarkers.ts`,
+`markerConfig.ts`'s page glob, `componentPreviewContext.ts`), `defaultsCanvas.ts`, the components
+folder rules, and Studio's paths (`shared/validation.ts` accepts only `src/` and `public/`), its
+page list and route helpers. A project with another `srcDir` is shown its real pages folder but not
+yet edited there. Every scanner asks `foldersFor(kind, config)`: Desktop's project scan,
+component creation and undo, the component preview route's globs (written at dev server start),
+the assets panel listing and every asset write (`assetAbs`), the style panel, the variables panel,
+the unused-selector check, and Studio's scan, asset catalog and writes, style list and variable
+snapshot. Studio lists every `.astro` outside `src/pages` as a component until components or
+layouts are configured. Under `src/` an asset write — replace, rename on either side, upload —
+still refuses anything that is not media, whichever folders are listed. Settings → Folders edits
+the file through `project:writeMetadata`; `project:pickFolder` opens the system folder dialog on the
+project and answers `picked` (project-relative, links resolved) or `outside`. A saved change, or
+an outside edit of the file, sends `fs:changed`, `assets:changed` and `css:changed`.
+
 `project:metadata` and `project:writeMetadata` accept only registered metadata kinds.
 Desktop confines them to the open project and writes through the document actors against
 the supplied base. Studio exposes the same records through `/studio/api/metadata`, its
@@ -791,7 +919,8 @@ These files participate in Studio publishing and GitHub sync. The legacy local `
 Git exclusion is narrowed to `.stacki/preview/` and `.stacki/canvas/`; user-authored ignore rules are untouched.
 
 Component defaults are opened from the last component context-menu action, “Set component
-defaults”, in Desktop and Studio. Client mode disables the action and cannot save defaults.
+defaults”, in Desktop and Studio. A role without `component:edit` (the built-in client role
+by default) has no such action and cannot save defaults.
 A bounded temporary page `.stacki/canvas/<uuid>.astro` copies the current source context and
 replaces only the selected instance with its resolved default props, text, and children.
 Module imports are rebased for the temporary location. Surrounding navigator rows are dimmed
@@ -823,6 +952,48 @@ metadata references too. The installed Studio CLI's
 `check-project` command validates component references and guide settings for CI/refactors.
 
 
+## Instructions panel
+
+`shared/properties/instructions.ts` is the contract for the Instructions rail panel
+(`panel:instructions`; writes need `instructions:edit`, the hidden-paths list
+`settings:instructions` or `instructions:edit`).
+
+- **Sections by path alone.** `classifyInstruction` puts `…/skills/<name>/SKILL.md` in
+  Skills, AGENTS.md, CLAUDE.md, GEMINI.md and the like (any depth) and everything in the
+  root rule folders (`.claude/rules/`, `.cursor/rules/`, `.github/instructions/`, …) in
+  Rules, and every other `.md` in Docs. `.mdc` is listed only in a rule folder.
+  `parseInstructionListing` refuses an entry in the wrong section, or skill frontmatter
+  on a file that is not a skill.
+- **Channels.** `instructions:list` (`{ files: [{ path, section, sizeBytes, skill }],
+  folders, truncated }`), `instructions:read`, `instructions:write` (`{ file, source,
+  base }`: refused with `conflict` unless the disk still holds `base`),
+  `instructions:create` (never overwrites), `instructions:createFolder`,
+  `instructions:reveal`. Main resolves every path inside the project once links are
+  followed, refuses links and the skipped folders, and writes through the document
+  actors (`documents.writeText` witnessed by `base`, `documents.create`). The event
+  `instructions:changed` `{ files }` comes from `electron/project/instructionsWatcher.ts`
+  (recursive on macOS and Windows; the root and the agents' folders elsewhere); an
+  empty list means "list again". The app's own writes are not echoed.
+- **Bounds.** `INSTRUCTION_LIMITS`: 2,000 files and 500 rule folders per listing, 20,000
+  directories and 200,000 entries walked, depth 24, 2 MiB per file, 64 KiB of
+  frontmatter, skill names 64 and descriptions 1,024 characters, 200 hidden paths of
+  256 characters. Past a walk bound the listing says `truncated`.
+- **Skipped folders.** node_modules, .git, .stacki, dist, build, out, .astro, .output,
+  .next, .nuxt, .svelte-kit, .vercel, .netlify, .wrangler, .turbo, .cache, coverage,
+  .pnpm-store, .yarn — wherever they are.
+- **Hidden paths.** `.stacki/instructions.json` is a project metadata kind
+  (`instructions`): `{ "version": 1, "hidden": ["docs/archive", "**/CHANGELOG.md"] }`.
+  Paths are anchored at the project root; a match hides everything below it; `*` stays
+  within a name, `**/` spans folders, `?` is one character. `parseInstructionSettings`
+  refuses absolute, `..`, backslash and duplicate entries. Main applies them during the
+  walk.
+- **Editing fidelity.** The view edits the body with `MarkdownField` and
+  `extensions: 'gfm'` (`src/ui/markdownBlocks.ts`): GitHub tables and task items are
+  shown as tables and boxes, everything else as before; untouched blocks, table rows and
+  list items keep their bytes, and a rewritten block keeps the gap and line endings of
+  the block it replaces. The CMS still reads CommonMark. Frontmatter is spliced line by
+  line (`src/features/instructions/frontmatterFields.ts`).
+
 ## Historical file diffs
 
 `git:commitDiff` accepts a project path, a full SHA-1/SHA-256 commit hash, a repository-relative
@@ -834,6 +1005,39 @@ Git reads the selected commit against its first parent (or the empty tree for a 
 using literal pathspecs and disabling external diff/text conversion programs. The working tree
 is untouched. Patches exceeding 500,000 characters or 10,000 lines return an explicit error;
 smaller patches retain binary/rename metadata and validated hunk line numbers for inspection.
+
+## Commit author pictures
+
+`git:avatars` (Studio: `POST /studio/api/history/avatars`) takes a project path and at most 100
+full commit hashes with their author emails, parsed by `shared/ipc/commitAvatars.ts`. The reply
+lists `{ hash, url }` only for commits with a picture; its URLs must be `https:` on
+`avatars.githubusercontent.com` or `github.com`, without credentials or ports. GitHub noreply
+emails name their picture with no request, in the renderer and in main alike. Any other commit
+is looked up by `electron/git/commitAvatars.ts` with one GraphQL query per page, only when
+origin is a github.com repository and the existing GitHub CLI credential (Studio: the
+repository connection) is available; the credential never leaves main or the Studio server.
+Answers are cached by commit and email (2,000 entries each). A 403, 429, GraphQL rate limit,
+refusal or failure silences that repository until GitHub's reset time (else 15 minutes) and
+the rows keep their initials.
+
+## Role member suggestions
+
+`github:searchUsers` (Studio: `GET /studio/api/github/users?q=`) takes a project path and the
+typed start of a GitHub username (`parseGitHubLoginQuery` in `shared/properties/projectRoles.ts`:
+1 to 39 characters, the login rules, a trailing hyphen allowed). Main gates it to `settings:roles`
+(`channelAccess.ts`); the Studio route refuses anyone without it with 403. The reply, parsed by
+`shared/ipc/githubUserSearch.ts`, is `{ users, github }`: at most 8 users, one per login
+(case-insensitive), each `{ login, name?, avatarURL?, source }` with `source` one of
+`collaborator`, `author` or `search` and pictures on the commit-avatar hosts only; `github` is
+`searched` or `unavailable`. `electron/git/githubUserSearch.ts` (shared by main and the Studio
+server) ranks the repository's collaborators (one cached page of 100), then recent commit authors
+whose noreply email names a login (Desktop reads 200 commits; Studio none), then
+`api.github.com/search/users?q=<query>+in:login`, which receives the typed query and nothing else.
+The credential is the publishing GitHub CLI account on Desktop and the repository connection's
+installation token in Studio; it never reaches the renderer. Answers are cached per query (256,
+10 minutes); a 403, 429, failure or malformed body silences the search until GitHub's reset time
+(else one minute), and the picker shows its local matches and "Can't search GitHub right now".
+Typing a username and pressing Add never depends on the search.
 
 ## Project publishing
 
@@ -1245,3 +1449,271 @@ bindings remain protected; the editor never guesses a record from its displayed 
 before applying a source-preserving, actor-witnessed write. Studio uses its coordinated CMS
 transaction and source versions. A stale snapshot fails without replacing a newer field value.
 CMS notifications refresh the catalog, allowing subsequent edits to use the newly saved data.
+
+
+## AI panel
+
+The AI chat panel (`src/features/ai/`, rail button at the foot of the left rail, docked or popped out
+in a `DockableWindow`) drives the person's own Claude and Codex through the Agent Client Protocol
+(ACP v1, JSON-RPC 2.0 over stdio). Stacki never shows a login form and never reads a token: an
+agent that needs signing in is signed in by the person in Stacki's terminal (`claude` then `/login`,
+or `codex login`), opened by the panel's "Open terminal to sign in".
+
+**Contracts.** `shared/properties/ai/` holds the agent ids (`agentIds.ts`), the bounds (`aiLimits.ts`,
+beside the code, since `shared/core/limits.ts` is a gate file), the ACP parsers (`acpWire.ts`: every
+message and session update as a discriminated union; an update kind it does not know is kept as
+`unknown-update` and shown as a quiet row; a malformed line from an adapter is a `Result` failure,
+never a crash) and the chat model (`chatModel.ts`: branded `ChatId`, `TurnId`, `PermissionRequestId`,
+the `ChatSummary`, and the `ChatEvent` union a transcript is made of). `shared/ipc/aiChat.ts` holds the
+channels' payload parsers (spread into `IPC_PAYLOADS`), result types (extended by `IpcResults`) and
+the renderer's reply and push parsers.
+
+**Channels.** `ai:agents`, `ai:installAgent`, `ai:trust`, `ai:chats`, `ai:chatCreate`,
+`ai:chatUpdate` (rename, pin), `ai:chatDelete`, `ai:chatRead`, `ai:prompt`, `ai:cancel`,
+`ai:permission`, `ai:setOption` (an agent's session setting: model, mode, effort), `ai:review` (keep,
+undo or resolve one file's change). Pushes: `ai:events` (batched `ChatEvent`s with their character
+count) and `ai:agentStatus`. One-way: `ai:ack` (`{ chars }`, parsed before use, registered by main.ts
+beside the terminal's sends). Every project path must be the open project. Every write channel is
+gated on `code:edit` (an agent edits and runs anything, as the terminal does); the panel shows for
+roles with `panel:ai` and `code:edit`.
+
+**Main process** (`electron/handlers/ai/`, in the `handlers` area so it may use `lib`, `documents` and
+`git`). `agentRegistry.ts` pins each adapter (`@agentclientprotocol/claude-agent-acp`,
+`@agentclientprotocol/codex-acp`; docs/dependencies.md) and finds the person's CLI on the shell PATH
+(`lib/shellEnvironment.ts`, shared with the terminal). `agentInstaller.ts` installs on request into
+`userData/agents/<agent>-<version>/`: staged, `npm ci --omit=optional --ignore-scripts` against the
+shipped lockfile (its SHA-256 pinned), the entry's SHA-256 checked, then renamed into place; the
+digest is checked again at every start. `agentHost.ts` runs one adapter per agent per project as
+Electron-as-Node, with the person's shell environment minus Stacki's and any host agent session's
+variables; it starts on the first prompt, stops after `idleMsMax`, restarts after a crash with
+doubling delays at most `restartsMax` times, and stops on project close and quit. A chat is one ACP
+session: resumed (`session/resume`), else loaded (`session/load`, replay ignored), else started
+anew with a notice. Nothing starts before the person trusts the project (`ai:trust`, remembered in
+the chat index); each new session is put in the agent's asking mode (Claude `default`, Codex
+`read-only`). `acpConnection.ts` frames lines (at most `lineBytesMax`, past which the connection
+closes) and bounds pending requests (`pendingRequestsMax`, each with a timeout).
+`permissionBroker.ts` holds requests until answered (bounded; a stopped turn answers `cancelled`).
+`eventPump.ts` batches events every `eventBatchMs`, joins streamed text, appends each chat's batch in
+one write and sends one push; above `flowHighWatermark` unacknowledged characters it stops reading
+every adapter until acks bring it under `flowLowWatermark` (the terminal's scheme).
+
+**Changes.** Edits apply when the agent makes them; each turn's changes are offered for Keep or Undo
+per file (`changeLedger.ts`). The spike found that neither adapter writes through the client's
+`fs/write_text_file` (Claude's CLI and Codex write files themselves, Codex often with a shell
+command), so the ledger reads each file a tool call names before the call changes it, and in a git
+repository takes a tree snapshot at each end of the turn (`treeSnapshot.ts`: `git add --all` and
+`write-tree` against a temporary copy of the index, never touching the person's index, branches or
+stash) to catch edits no call named. Undo writes the earlier text through the document actors,
+witnessed by the agent's version; when the file changed since, the undo becomes a three-way merge
+(base: the agent's version, ours: the file now, theirs: before the turn) shown in the existing merge
+editor, and `resolve` writes the person's answer. Text files only; a binary file is not offered.
+
+**Storage.** Chats are private to the computer and never committed:
+`userData/ai/projects/<sha256(realpath)>/index.json` (chat list, trust, each chat's session id;
+replaced whole), `chats/<id>.jsonl` (append-only, every line parsed on read, a torn or bad line
+skipped), `reviews/<id>.json` (pending reviews, settled entries keep no content). Bounded by
+`chatsMax`, `chatEventsMax`, `chatBytesMax`, `ledgerFilesMax`, `ledgerBytesMax`, `ledgerTurnsMax`.
+
+**Starting a chat.** The new-chat row is the provider (a Dropdown whose rows carry the official
+Claude and OpenAI marks, `src/ui/agentLogos.tsx`, sources noted there), then the settings the agent
+offers before a session exists — its models and, where it has one, its effort — each remembered per
+provider in the renderer, then New chat. `ai:agents` returns each agent's settings as it last reported them (main keeps them in
+`userData/ai/agent-options.json`). In a trusted project, an agent that has never reported them is
+probed once in the background: a throwaway `session/new`, its config options read, then
+`session/delete`, and the result pushed on `ai:agentStatus`. So the row lists exactly what the
+person's installed Claude Code or Codex offers, with its own names, and effort is a segmented row
+(`EffortControl.tsx`). Before any report there is a documented fallback (`FALLBACK_OPTIONS` in
+agentRegistry.ts). The
+choices ride on `ai:chatCreate` (`settings`) and are applied with `session/set_config_option` once
+the chat's session exists, after the asking mode; a setting the agent no longer offers is skipped.
+The AI channels accept the open project's root itself (`MainHost.openProject`, compared through
+links), never a folder inside it or elsewhere.
+
+**Guided setup** (`ai:setup`, push `ai:setupState`; `agentSetup.ts`). Buttons that run the agent's
+own CLI, so no one needs a terminal. Install: Claude's native installer
+(`curl -fsSL https://claude.ai/install.sh | bash`, PowerShell `install.ps1` on Windows) and Codex's
+npm package (`npm install --global --prefix ~/.local @openai/codex`); neither needs sudo, and a step
+that would ask for a password fails with "Copy details" rather than asking in Stacki. Status:
+`claude auth status`, `codex login status`. Sign in: `claude auth login --claudeai`, `codex login`,
+in a hidden pseudo-terminal: the first https page the CLI prints on the provider's own hosts is opened
+in the browser, a paste-back prompt shows a code field whose line is typed into the CLI, and the
+sign-in ends ready, failed (with the CLI's output), cancelled or timed out. Sign out: `claude auth
+logout`, `codex logout`. The CLI stores the credentials; Stacki reads only what the status command
+prints, shows the account's name and plan, and the email only inside the account menu (held in
+memory, never stored or logged). Setup is detected again each time a chat opens and after each step.
+
+**Trust and opening.** Opening the panel in a project allows agents there and is remembered, unless
+Settings → AI "Ask before allowing agents in a new project" is on (then the trust card asks first).
+Every new chat still starts in the agent's asking mode. An agent starting in a project also runs that
+project's own agent hooks and `.mcp.json` servers. Opening the panel goes straight to a chat (the last
+one open in the project, else the newest, else a new one with Claude, the default provider) with the
+composer focused; the list is behind the back chevron. The composer's toolbar holds the provider,
+model and effort: before a chat's first message they apply to that chat (another provider replaces
+the empty chat); after it, another provider opens a new chat and the model or effort applies to the
+next message.
+
+**Renderer.** `aiBridge.ts` parses every reply and push; `aiStore.ts` keeps the state outside React
+(so chats stream while the panel is closed, and a hand-off works without it) and acknowledges each
+push after folding it; `chatReducer.ts` is the pure fold from events to the transcript view,
+property-tested. "Fix with AI" (`src/lib/agentTasks.ts`) reaches the panel first
+(`aiAgentTask.ts`, priority 20, above the terminal's 10): a new chat with the task's prompt, sent at
+once when the project is trusted and the agent ready, otherwise left in the composer.
+
+Proofs: `test/shared/properties/ai/acpWire.test.ts` (recorded adapter lines, each bad shape, bounds,
+unknown variants), `test/shared/ipc/aiChatContract.test.ts`, `test/electron/handlers/ai/agentHost.test.ts`
+(a stand-in adapter process through whole turns; connection bounds; pump flow control; store
+round-trip and bounds; ledger keep, undo, drift and snapshots), `test/renderer/ai/chatReducer.test.js`
+(properties over seeded random streams) and `test/renderer/ai/aiPanel.test.js` (the panel in jsdom).
+
+## Audits
+
+`.stacki/audits.json` (`shared/properties/auditIgnores.ts`) is the tracked audit configuration:
+`{ "version": 2, "ignored": [{ "id", "reason" }], "checks"?, "tokens"?, "placeholders"? }`. One file
+holds both ignores and settings, rather than a second `.stacki/lint.json`: both are "how this
+project audits itself", edited from the same panel and Settings tab, and one file is one write
+witnessed against one set of bytes. Version 1 (ignores only) still reads and is written back as
+version 2; settings at their defaults are left out of the file.
+
+- `checks`: by check id (`^[a-z0-9-]{1,40}$`, at most 100), `{ "enabled"?: boolean, "priority"?: "high" | "medium" | "low" }`.
+- `tokens`: `properties` (names, `padding*` matching a prefix), `colors`, `px`, `remOutsideVariables`
+  (booleans), `allowed` (raw values, compared lower-cased).
+- `placeholders`: phrases; one word must be the whole text, several may be part of it.
+- Lists hold at most 200 items of at most 120 characters; ignores at most 2,000 entries, ids at
+  most 1,024 and reasons at most 500 characters. Unknown fields, blank reasons, a repeated id and
+  settings under version 1 are refused.
+
+It travels as the `audits` metadata kind through `project:metadata` / `project:writeMetadata`
+(writes need `panel:audits` or `settings:audits`). An id is `findingId`
+(`shared/page/auditFindings.ts`): check, file, structural path and detail.
+
+`audit:measure` loads one route of the loopback dev server in a hidden, sandboxed window with its
+own session and answers `{ ok: true, measurement }` or `{ ok: false, message }`. The measurement is
+unparsed data; `shared/page/auditPerformance.ts` parses it with bounds (200 images, 500 resources,
+50 shifts, 100 fonts, 2,048 characters per string) before anything reads it. A page has 30 seconds.
+
+`audit:render` asks main for one route of the project's dev server for the rendered checks. The
+payload's `devUrl` must be a loopback `http:` origin and `route` a site-relative path; main
+fetches with a 15-second timeout and refuses HTML over 4,000,000 characters, answering
+`{ ok: true, status, html }` or `{ ok: false, message }`. The renderer parses the HTML itself
+(`src/features/audits/renderedDom.ts`) into the plain tree `shared/page/auditRendered.ts` checks,
+reading source locations from the dev server's `avb-s:` markers.
+
+A fix is a plan of attribute patches and appended elements on nodes named by path; the renderer
+turns it into `propsGesture` / `insertGesture` gestures, so it reaches disk as ordinary edit
+requests (`src/features/audits/auditFixes.ts`). An agent hand-off is an `AgentTask`
+(`shared/properties/agentTask.ts`), bounded where it is built.
+
+## Stacki Apps
+
+`shared/properties/apps.ts` is the contract for installed apps: the bundle manifest
+(`stacki-app.json`: id, name, version, description, icon, entry, window, `author.github`, GitHub
+source, and the `stacki` minimum version, `">=1.1.0"`, parsed as `stackiVersionMin` by
+`parseStackiRange`; `stackiVersionProblem` is the one check, run by `appService.ts` on every stage and
+install and on each update found, with the host's version passed as `stackiVersion`), the lockfile `.stacki/apps/apps.json` (version, SHA-256, install source and tag, an
+available update), bundle paths and file types, the GitHub chooser's repositories and releases
+(`releaseAssetChoice`, `orderReleases`), and the IPC values. `shared/properties/appBundle.ts` reads a
+zip with the platform's raw inflate (no dependency), refusing zip64, encryption, symlinks, unsafe
+paths, unknown file types, CRC mismatches and anything past `APP_LIMITS`, and checks the icon
+(square, 256 KB, 512 px). `electron/project/appStore.ts`, `appGitHub.ts` and `appService.ts` are the
+one install, update and GitHub flow, shared by Desktop's main process and the Studio server
+(`studio/src/features/apps/appsServer.ts`): a bundle is staged in memory, installed only by
+`apps:commit`, written to a staging folder and renamed into `.stacki/apps/<id>/`. Updates are
+recorded as available and `apps:applyUpdate` installs only bytes whose SHA-256 equals the checked
+ones. A private repository is read with the publish flow's GitHub account token, sent only to
+`api.github.com`. Installing, updating, removing and reading the account's repositories are
+admin-only in main (`electron/handlers/channelAccess.ts`) and on the Studio server.
+
+The folder is what is installed (`shared/properties/appFolders.ts`, `electron/project/appScan.ts`):
+every `.stacki/apps/<folder>/` whose files read as a bundle (`appBundle.ts` `bundleFromFiles`, the
+same checks and bounds as a zip) and whose manifest `id` is the folder's name is an installed app,
+with its lock entry, or with a `source: { kind: "local" }` entry built from the folder (its digest,
+no updates) that is never written. `apps:list` returns them; `apps:folders` returns the folders that
+do not read as an app, as `{ folder, message }` rows (`parseAppFoldersBroken`); the file route serves
+only folders that read as their app. Every lockfile write drops entries whose folder is gone. The
+project watcher (`electron/project/appsWatcher.ts`) compares folder stamps after events settle and
+sends `apps:foldersChanged` (`parseAppFoldersChange`); Studio's editor polls `/studio/api/apps/stamps`
+(`parseAppFolderStamps`) instead. `apps:revealFolder` takes a `parseAppFolderName` and shows the folder
+in the file manager.
+
+The official marketplace's index is `shared/properties/appMarketplace.ts` (`parseMarketplaceIndex`:
+bounded entries, versions, categories and strings; icons only under `https://stacki.build/api/marketplace/icons/`;
+a version's optional `stacki` range, parsed as `stackiVersionMin`). The parsed index parses again (`iconURL`,
+`stackiVersionMin`), because the renderer re-checks the IPC reply with the same parser.
+`electron/project/appMarketplace.ts` fetches it (a constant address on stacki.build; a development build may override
+it with `STACKI_MARKETPLACE_INDEX_URL`) and downloads approved versions as public, refusing any whose
+SHA-256 differs from the index. `apps:marketplace` needs `marketplace:view` and
+`apps:installMarketplace` needs `marketplace:install`, in main and on the Studio server; the lockfile
+records such installs as `source: { kind: "marketplace", id, version }`. Each lock entry carries
+`autoUpdate` (absent reads as `false`), switched by `apps:setAutoUpdate` (admin-only); an update check
+installs nothing unless it is on (docs/apps.md, "Update policy").
+
+Where an installed app lives is `shared/properties/appPlace.ts`: the row's pills ("Local", "GitHub ·
+Private" or "GitHub · Public", "Marketplace"), the marketplace match by id and repository, and
+`parseAppRepositoryPlaceReply`. `apps:repositoryVisibility` (`panel:apps`; Studio's
+`/studio/api/apps/visibility`) takes an installed app's id and answers its GitHub repository and
+visibility (`electron/project/appRepositoryPlace.ts`: the install's account token on Desktop, anonymous
+in Studio, cached ten minutes for at most 100 repositories). A failed lookup answers no visibility,
+never an error.
+
+Sharing and publishing apps is `shared/properties/appPublish.ts` (share requests and outcomes, a
+repository's marketplace status, visibility refusals, the submission and the marketplace's
+pre-submission check), with `shared/properties/appSecrets.ts` (the bounded secret scan, its
+`secretsAllowlist`) and `shared/properties/appSettings.ts` (the manifest's `settings`, their values
+and `.stacki/apps/settings.json`). `electron/project/appPublishService.ts` and `appGitHubWrite.ts`
+make every GitHub write in main with the publishing account's token: `apps:share` and
+`apps:switchSource` need `apps:share`; `apps:makePublic`, `apps:addLicense`, `apps:checkMarketplace`
+and `apps:submitMarketplace` need `marketplace:publish`; `apps:scanSecrets` and
+`apps:repositoryStatus` need either. Each of making public, sharing and submitting scans the bundle
+again in main and refuses unless clean. `apps:share` reports its steps as `apps:shareProgress`
+events. `apps:readSettings` and `apps:writeSettings` (`panel:apps`) check values against the app's
+declarations; secrets go to a vault outside the project (`electron/project/appSettingsStore.ts`:
+Electron `safeStorage` on Desktop, AES-GCM in the user's home folder in a local Studio), never under
+`.stacki/`. Apps read their settings with the RPC's `settings.get`.
+
+App storage is `shared/properties/appStorage.ts` (scopes, the key grammar, every bound, the file
+format and the change notice) over `electron/project/appStorageStore.ts`, which Desktop's main and
+the Studio server share. `apps:storageGet`, `apps:storageSet` (`panel:apps`; the renderer also checks
+`app:<id>`), `apps:storageKeys` and `apps:storageWatch` keep project values in
+`.stacki/app-data/<id>.json` and local ones under the user data folder; main pushes
+`apps:storageChanged` with the writer token a write carried, or none for an outside change.
+`apps:person` (`panel:apps`) answers `AppPerson` (`shared/properties/appsRpc.ts`, made by
+`electron/project/appPerson.ts`), the id only while the `appsPersonHidden` preference is on, and main
+pushes `apps:personChanged` when it flips. `apps:hostVersion` answers the version `app.info` reports.
+`apps:canvasSnapshot` `{ rect, widthMax }` photographs that region of the sender's own window
+(`capturePage`; whole pixels within 16384, `widthMax` 1–800) and answers a PNG data URL of at most
+200 KiB, halving its width until it fits, for `canvas.snapshot`.
+The `stacki-app:` scheme is registered `corsEnabled` and serves bundle files with
+`Access-Control-Allow-Origin: *`, so an app's opaque-origin frame can fetch its own files.
+
+Apps run in sandboxed frames without `allow-same-origin`, served from `stacki-app://<id>/` on Desktop
+and `/studio/api/apps/files/<id>/` in Studio under a `sandbox` content security policy
+(`shared/properties/appSdk.ts`), with the SDK at `stacki-sdk.js`. The preload installs nothing in a
+`stacki-app:` frame, and main keeps an app frame on its own origin
+(`electron/app/appFrameNavigation.ts`). `shared/properties/appsRpc.ts` is the RPC: every message is
+parsed and bounded, every method is every app's (apps are first-party), and the role gates an app
+as a whole (`app:<id>`) and the panels it can open. `src/features/apps/appRpcHost.ts` dispatches to
+`AppHostCommands`, which Desktop (`src/app/shell/desktopAppHost.ts`) and Studio
+(`studio/src/features/apps/StudioApps.tsx`) implement with the UI's own setters and gestures.
+Overlays are declarative items drawn in the canvas overlay layer from the outlines' measurements;
+their anchors are added to the paths the canvas measures, as are the elements `node.measure` waits
+on (`src/features/apps/overlayMeasure.ts`). Canvas click capture goes through
+`src/ui/canvasClickSlot.ts`: the canvas frames add the pointer (`x`, `y`) and the clicked copy's box
+to `avb:click-node` (Desktop) and `studio:select` (Studio), parsed with `canvasClickBox` and
+`coordinateOf` before use, and the editor tells a frame its cursor with `avb:app-cursor`
+(`electron/preload/frameAppCursor.ts`): a name, or an app's image as a PNG or SVG `data:` URL the
+editor read from the bundle and checked (`src/features/apps/appCursorImage.ts`), which the frame
+checks again. An overlay drag (`src/features/apps/overlayDrag.ts`) asks the frame what is under a
+point with `avb:point-query` `{ id, x, y }`; the frame answers `avb:point-result` `{ id, path,
+occurrence, box, layers }` by its click's hit test (`electron/preload/framePointQuery.ts`), and
+`src/ui/canvasPointQuery.ts` checks the reply before use. `layers` (at most 32 `{ path, occurrence,
+copy }`, innermost first) are every file's marked node under the point (`electron/preload/frameLayers.ts`);
+a query sending `chain` (1–32 `{ path, copy }`, outermost first) instead of a point asks which copy a
+node ref names, answered in the same shape. `src/features/apps/nodeRefs.ts` names layers in their
+files and reads refs back; `parseNodeRef` (`shared/properties/appsRpc.ts`) parses an app's ref. `canvas.scrollTo` sends `avb:app-scroll`
+`{ space, x, y, w, h, block }` (`electron/preload/frameAppScroll.ts`) for a point or a `start`
+alignment. `apps:fileStamps` answers each named project file's
+modification time and size (at most `APP_FILE_STAMPS_MAX`, 2000, each confined to the project), and
+Studio's `/studio/api/file-stamps` (`panel:pages`) the same; `src/features/apps/appPageIndex.ts`
+caches other pages' trees by them for `page.getTree` and `page.findByAttribute`. `node.key` writes
+`data-stacki-key` through the app's attribute edit (`src/features/apps/nodeKeys.ts`). The "Build an app" prompt is generated
+from `docs/apps-prompt.md` (`scripts/build/appsPrompt.mts`); `docs/apps.md` is the full guide.

@@ -307,6 +307,22 @@
 .studio-project-settings {
   padding: 0;
 }
+/* In Settings: the tab's opening sentence, then the install card on a fill. */
+.studio-project-settings-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.studio-project-settings .studio-project-settings-intro {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.studio-project-settings .studio-install-actions {
+  padding: 16px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+}
 .studio-project-settings h2 {
   font-size: 14px;
   margin: 0 0 24px;

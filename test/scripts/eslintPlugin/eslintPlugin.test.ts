@@ -261,6 +261,31 @@ tester.run('no-enum', rules['no-enum'], {
   invalid: [{ code: 'enum Status { Draft }', errors: [{ messageId: 'enum' }] }],
 });
 
+// The custom dropdown is a component, so its name and its props are untouched;
+// only the intrinsic element and a created select element are native ones.
+tester.run('no-native-select', rules['no-native-select'], {
+  valid: [
+    'const view = <Dropdown value="a" options={[]} onChange={(value: string) => value} />;',
+    'const view = <option value="a">A</option>;',
+    'const view = <Select />;',
+    'const view = <ui.select />;',
+    'document.createElement("div");',
+    'document.createElement(tag);',
+    'document.createElement(`${tag}`);',
+    'document.querySelector("select");',
+    'createElement();',
+  ],
+  invalid: [
+    { code: 'const view = <select value="a" onChange={() => undefined} />;', errors: [{ messageId: 'nativeSelect' }] },
+    { code: 'const view = <select><option>A</option></select>;', errors: [{ messageId: 'nativeSelect' }] },
+    { code: 'document.createElement("select");', errors: [{ messageId: 'nativeSelect' }] },
+    { code: "document.createElement('SELECT');", errors: [{ messageId: 'nativeSelect' }] },
+    { code: 'document.createElement(`select`);', errors: [{ messageId: 'nativeSelect' }] },
+    { code: 'React.createElement("select", { value: "a" });', errors: [{ messageId: 'nativeSelect' }] },
+    { code: 'createElement("select");', errors: [{ messageId: 'nativeSelect' }] },
+  ],
+});
+
 tester.run('no-partial-parameter', rules['no-partial-parameter'], {
   valid: ['function update(fields: Pick<Project, "title">) {}', 'type Draft = Partial<Project>;'],
   invalid: [

@@ -1061,14 +1061,6 @@
 .attrs-bound-chip[aria-expanded='true'] {
   background: rgba(146, 116, 255, 0.38);
 }
-.attrs-bound-note {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  color: var(--text-dim);
-  font-size: 11px;
-}
 
 /* The sections both places a prop is edited share (PropertySections.tsx): the
    Required and Readonly flags, and the Code type disclosure, the exact type
@@ -1093,20 +1085,23 @@
 .property-flags input {
   width: auto;
 }
-.property-code-toggle {
-  display: inline-flex;
-  align-self: flex-start;
+/* A section label with its `{}` toggle after it (CodeTypeToggle): Options,
+   Kind, or Code type on its own in the new-prop form. */
+.property-code-heading,
+.property-options-heading {
+  display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px 2px 2px;
-  border-radius: 4px;
-  background: transparent;
+  gap: 2px;
   color: var(--text-dim);
-  font-size: 11px;
 }
-.property-code-toggle:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
+.property-code-heading .prop-expr-toggle,
+.property-options-heading .prop-expr-toggle,
+.property-type-heading .prop-expr-toggle {
+  margin-left: 2px;
+}
+.property-options:hover .prop-expr-toggle:not(.on),
+.new-prop-code-type:hover .prop-expr-toggle:not(.on) {
+  color: var(--text-dim);
 }
 .new-prop-code-type {
   display: flex;

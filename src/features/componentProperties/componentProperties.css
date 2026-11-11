@@ -317,3 +317,59 @@
 .property-connection:disabled {
   color: var(--text-dim);
 }
+/* A shared type's props, and what an edit of one reaches (PropertyShareNotice.tsx). */
+.property-shared-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.property-shared-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.property-shared-file,
+.property-share-file {
+  padding: 0;
+  background: none;
+  color: var(--accent);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  text-align: left;
+  cursor: pointer;
+}
+.property-share,
+.property-share-warning {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--component-green-soft);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.property-share-summary {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+.property-share-files,
+.property-share-defaults {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-dim);
+}
+.property-share ul,
+.property-rename-files {
+  margin: 2px 0 0;
+  padding-left: 16px;
+}

@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import type { TrailingSlash } from '../../editor/pageState';
-import { componentPreviewURL, prettyComponentName, type ComponentPreviewMessage } from './paletteModel';
-import { useResolvedPreviewURL, usePreviewMessages } from './previewSource';
+import { componentPreviewURL, prettyComponentName, type ComponentPreviewGesture, type ComponentPreviewMessage } from './paletteModel';
+import { useResolvedPreviewURL, usePreviewGestures, usePreviewMessages } from './previewSource';
 
 interface PreviewTarget {
   readonly url: string;
@@ -118,8 +118,10 @@ function usePreviewCache(target: PreviewTarget) {
 /**
  * One live rendering of a component through the project's preview route: the Components panel's
  * hover card and the insert palette's cards both draw it, so the two show the same thing. In a
- * card it is a picture inside a control: never focused, hidden from assistive technology, and
- * the card's own click inserts (the card's CSS keeps the pointer off the frame).
+ * card it is a live picture inside a control: the pointer reaches it, so hover states show as on
+ * the real page, but the page refuses every press and click and reports them (`onGesture`) for the
+ * card to act on. It is never focused, hidden from assistive technology, and sandboxed so nothing
+ * inside can navigate, submit or open a window.
  */
 export function ComponentPreviewFrame({
   url,
@@ -128,6 +130,7 @@ export function ComponentPreviewFrame({
   surface,
   resolvePreviewURL,
   onStatus,
+  onGesture,
 }: {
   readonly url: string;
   readonly name: string;
@@ -136,8 +139,11 @@ export function ComponentPreviewFrame({
   readonly resolvePreviewURL?: ((url: string) => Promise<string>) | undefined;
   /** Stable across renders: the frame reports through it from effects. */
   readonly onStatus: PreviewStatusHandler;
+  /** The pointer came into the page, or clicked it; only a card listens. Stable across renders. */
+  readonly onGesture?: ((gesture: ComponentPreviewGesture) => void) | undefined;
 }) {
   assert(url.length > 0, 'A preview frame has a URL');
+  assert(onGesture === undefined || surface === 'card', 'Only a card frame reports gestures');
   const frameRef = useRef<HTMLIFrameElement>(null);
   const resolvedURL = useResolvedPreviewURL(url, resolvePreviewURL);
   // Whether the page has said anything; a loaded page that has not is given up on after previewSilenceMs.
@@ -151,6 +157,7 @@ export function ComponentPreviewFrame({
     [url, onStatus],
   );
   usePreviewMessages(frameRef, receive);
+  usePreviewGestures(frameRef, onGesture);
   useEffect(() => {
     if (resolvedURL.kind === 'empty') {
       onStatus(url, 'empty', PREVIEW_UNRESOLVED_REASON);
@@ -177,6 +184,8 @@ export function ComponentPreviewFrame({
       src={resolvedURL.url}
       title={`${name} preview`}
       tabIndex={surface === 'card' ? -1 : undefined}
+      // Scripts run and the dev server's modules load (same origin); forms, popups and top navigation do not.
+      sandbox={surface === 'card' ? 'allow-scripts allow-same-origin' : undefined}
       style={{ opacity: visible ? 1 : 0 }}
       aria-hidden={surface === 'card' ? true : !visible}
       onLoad={() => setPageLoaded(true)}

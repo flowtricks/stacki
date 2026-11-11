@@ -1,3 +1,5 @@
+import { assert } from '../../vendor/stacki/shared/core/assert';
+import { can } from '../../vendor/stacki/shared/properties/projectRoles';
 import { dockedWidthPx, isMobileEditor, useEditorLayout, useEditorLayoutSync, useMobileEditor } from './mobileEditor';
 import { CanvasContextMenu } from '../features/navigator/CanvasContextMenu';
 import { pathFor } from '../features/project/previewSelection';
@@ -11,7 +13,8 @@ import type { FollowTarget } from '../features/collaboration/useCollaborators';
 import type { PreviewDevice } from '../../vendor/stacki/src/features/preview/PreviewToolbar';
 import { StyleSettings } from '../features/settings/StyleSettings';
 import { useIdleSession } from '../features/session/useIdleSession';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { prefetchPanels } from '../../vendor/stacki/src/app/shell/panelPrefetch';
 import { routeFor } from '../features/project/projectClient';
 import { pageForRoute } from '../features/pages/templateRoutes';
 import { canvasRouteFor, chooseTemplateEntry } from '../features/pages/templateEntryStore';
@@ -37,6 +40,7 @@ import { getHost, setHost } from '../../vendor/stacki/src/features/style/model/h
 import { PreviewWorkspace, useInteractivePreview } from '../features/preview/InteractivePreview';
 import { usePanelResize, usePanelWidths } from '../../vendor/stacki/src/app/shell/ResizablePanel';
 import { PanelCloseButton } from './PanelCloseButton';
+import { StudioAppsHost } from '../features/apps/StudioApps';
 export interface EditorProps {
   readonly session: Session | undefined;
   readonly view: ReturnType<typeof useEditorView>;
@@ -53,6 +57,7 @@ export interface EditorProps {
 
 export function Editor(props: EditorProps) {
   const interactivePreview = useInteractivePreview(props);
+  usePanelPrefetch(props.project.workspaceId ?? props.project.name);
   const { panel, setPanel } = props.view;
   const componentOpen = props.file.endsWith('.astro') && !isCanvasPage(props.file);
   useComponentPanel(componentOpen, setPanel);
@@ -66,7 +71,8 @@ export function Editor(props: EditorProps) {
     () => {
       // Phone panels cover the canvas. Selection must not open an overlay.
       if (!isMobileEditor()) {
-        setPanel((current) => (current === 'code' ? current : 'navigator'));
+        // Code and Apps keep their panel: a running app reads the selection while visible.
+        setPanel((current) => (current === 'code' || current === 'apps' ? current : 'navigator'));
       }
     },
     !session.paused,
@@ -86,7 +92,7 @@ export function Editor(props: EditorProps) {
     return <PausedEditor resume={session.resume} />;
   }
   return (
-    <CodeAccess.Provider value={props.view.role !== 'client'}>
+    <CodeAccess.Provider value={can(props.view.studioRole, 'code:edit')}>
       <div className="app studio-app" data-editor-layout={layout} onKeyDown={interactivePreview.active ? (event) => event.stopPropagation() : undefined}>
         <EditorHeader
           closeDefaults={() => void defaultsCanvas.run('done')}
@@ -102,6 +108,7 @@ export function Editor(props: EditorProps) {
         <PreviewWorkspace preview={interactivePreview}>
           <EditorRail
             componentOpen={componentOpen}
+            projectPath={props.project.name}
             panel={panel}
             toggle={(next) => {
               setPanel(next);
@@ -110,6 +117,7 @@ export function Editor(props: EditorProps) {
           />
           <Sidebar props={titledProps} model={scopedModel} defaultsCanvas={defaultsCanvas} />
           <EditorContent props={titledProps} model={scopedModel} mobileSettings={mobileSettings} setMobileSettings={setMobileSettings} />
+          <StudioAppsHost props={titledProps} model={scopedModel} />
         </PreviewWorkspace>
       </div>
     </CodeAccess.Provider>
@@ -176,6 +184,16 @@ function useStudioLayout(panel: EditorProps['view']['panel'], inspector: boolean
   return layout;
 }
 
+// Readies the panels after a project opens, as Desktop's shell does (panelPrefetch.ts): the
+// Astro grammar and the variables, assets and CMS reads, under the key Studio's panels read
+// the project by. Studio's panels are in its main bundle, so there are no chunks to fetch.
+function usePanelPrefetch(projectKey: string) {
+  useEffect(() => {
+    assert(projectKey.length > 0, 'Editor: an open project has a key');
+    return prefetchPanels({ projectPath: 'studio', preloadChunks: undefined, hostReads: [] });
+  }, [projectKey]);
+}
+
 function useComponentPanel(componentOpen: boolean, setPanel: EditorProps['view']['setPanel']) {
   useEffect(() => {
     if (!componentOpen) {
@@ -213,11 +231,12 @@ function EditorContent({
     }
   };
   useStyleProject();
+  const browseApps = useCallback(() => setPanel('apps'), [setPanel]);
   return (
     <div className="studio-editor-content">
       <PreviewCanvas
         {...model}
-        openComponent={props.view.role === 'client' ? undefined : model.openComponent}
+        openComponent={can(props.view.studioRole, 'component:edit') ? model.openComponent : undefined}
         focusPath={props.focus?.path}
         device={device}
         onDevice={setDevice}
@@ -242,13 +261,14 @@ function EditorContent({
         close={() => setMobileSettings(false)}
       />
       <CmsWorkspace props={props} document={model.document} />
-      {props.view.role !== 'client' && <VariablesWorkspace props={props} document={model.document} />}
-      {props.view.role !== 'client' && <CodePopup editor={model.codeWindow} />}
+      {can(props.view.studioRole, 'panel:variables') && <VariablesWorkspace props={props} document={model.document} />}
+      {can(props.view.studioRole, 'code:edit') && <CodePopup editor={model.codeWindow} />}
       <QuickInsert
         key={props.file}
         model={model}
         project={props.project}
         enabled={!model.collection && !(props.view.panel === 'collections' && props.view.cms) && props.view.panel !== 'variables' && !props.view.pick}
+        browseApps={browseApps}
         report={props.report}
       />
     </div>
@@ -270,11 +290,15 @@ function Inspector({
   close: () => void;
 }) {
   const { tab, setTab } = props.view;
-  const client = props.view.role === 'client';
+  // Without the Style panel the inspector shows Settings alone, as Client mode did.
+  const client = !can(props.view.studioRole, 'panel:style');
   // Desktop's resize handle and stored width. Collapsed, the inspector floats at that width.
   const resize = usePanelResize('right');
   const mobile = useMobileEditor();
   if (model.collection) {
+    return null;
+  }
+  if (client && !can(props.view.studioRole, 'panel:settings')) {
     return null;
   }
   return (

@@ -1,6 +1,8 @@
 // Exercise attribute literal parsing, real paste events, and expanded value editing.
 // The object field must preserve rows and reject bounds; the value editor must open
-// from a press and provide enough width to read a JavaScript expression.
+// from a press and provide enough width to read a JavaScript expression. An app's
+// `data-stacki-key` is never a row, and every edit to the rows around it (value,
+// rename, delete, bulk paste) leaves it on the node with its value.
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const fs = require('node:fs');
@@ -96,6 +98,68 @@ const paste = async (text) => {
   await act(async () => input.dispatchEvent(event));
   await render();
 };
+// The Attributes list over a node that carries an app's node key: the props
+// live here and every callback writes into them, as the page model would.
+const internalAttributeKept = async () => {
+  const key = { type: 'string', value: 'k1kkgbiyvxd6l' };
+  let props = { id: { type: 'string', value: 'hero' }, 'data-stacki-key': key, title: { type: 'string', value: 'Title' } };
+  const renderKeyed = () =>
+    act(async () =>
+      root.render(
+        React.createElement(AttributesSection, {
+          node: { id: 'keyed', props },
+          names: Object.keys(props),
+          onSetProp: (name, value) => {
+            const next = { ...props };
+            if (value === undefined) {
+              delete next[name];
+            } else {
+              next[name] = value;
+            }
+            props = next;
+          },
+          onSetProps: (_nodeId, patch) => {
+            props = { ...props, ...patch };
+          },
+          onRenameProp: (previous, next) => {
+            props = Object.fromEntries(Object.entries(props).map(([name, value]) => [name === previous ? next : name, value]));
+          },
+        }),
+      ),
+    );
+  const pasteKeyed = async (text) => {
+    const event = new dom.window.Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'clipboardData', { value: { getData: () => text } });
+    const input = document.querySelector('.attr-editor input');
+    assert.ok(input);
+    await act(async () => input.dispatchEvent(event));
+    await renderKeyed();
+  };
+  const rowNames = () => [...document.querySelectorAll('.attr-row .attr-name')].map((element) => element.textContent);
+  await renderKeyed();
+  assert.deepEqual(rowNames(), ['id', 'title'], 'the node key is not an attribute row');
+  assert.doesNotMatch(document.body.textContent, /data-stacki-key|k1kkgbiyvxd6l/, 'neither its name nor its value shows');
+  // Delete one attribute from its row.
+  await act(async () => document.querySelectorAll('.attr-row .row-action')[1].dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  await renderKeyed();
+  assert.deepEqual(Object.keys(props), ['id', 'data-stacki-key'], 'deleting another attribute keeps the key');
+  // Rename and re-value the other through the editor's paste.
+  await act(async () => document.querySelector('.attr-row').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  await renderKeyed();
+  await pasteKeyed('data-id="lead"');
+  assert.deepEqual(props['data-stacki-key'], key, 'renaming another attribute keeps the key and its value');
+  assert.deepEqual(props['data-id'], { type: 'string', value: 'lead' });
+  // Several pairs pasted at once write one patch beside the key.
+  await act(async () => document.querySelector('button[title="Add attribute"]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  await renderKeyed();
+  await pasteKeyed('role="button" tabindex={0}');
+  assert.deepEqual(props['data-stacki-key'], key, 'a bulk paste keeps the key and its value');
+  assert.deepEqual(
+    rowNames(),
+    Object.keys(props).filter((name) => name !== 'data-stacki-key'),
+    'the rows are every other attribute',
+  );
+};
 (async () => {
   await render();
   await press(document.querySelector('.attr-row'));
@@ -126,7 +190,8 @@ const paste = async (text) => {
         node: {
           id: 'section',
           props: {
-            'class:list': { type: 'expr', value: '["icon", variant]' },
+            // An object in the list is code the class-list editor does not draw, so it stays code here.
+            'class:list': { type: 'expr', value: '["icon", { [variant]: true }]' },
             '...rest': { type: 'spread', value: 'rest' },
           },
         },
@@ -160,13 +225,14 @@ const paste = async (text) => {
   assert.equal(spreadRow.querySelector('.attr-name').textContent, '{...rest}');
   assert.ok(spreadRow.querySelector('.attr-eq') === null);
   assert.ok(spreadRow.querySelector('.attr-value') === null);
+  // A spread is code, never a name and a value: its row opens the editor on that code.
+  assert.ok(spreadRow.querySelector('.attr-name code'), 'the spread is drawn as code');
   await act(async () => spreadRow.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
-  const spreadEditor = document.querySelector('.attr-editor');
-  const spreadName = spreadEditor.querySelector('input');
-  assert.equal(spreadName.value, '{...rest}');
-  assert.equal(spreadName.readOnly, true);
-  assert.equal(spreadEditor.querySelectorAll('.attr-editor-row').length, 1);
-  assert.doesNotMatch(spreadEditor.textContent, /Value/);
+  const spreadEditor = document.querySelector('.attr-editor:not(.var-src)');
+  assert.equal(spreadEditor.querySelector('input').value, '{...rest}', 'its Name is the spread');
+  assert.doesNotMatch(spreadEditor.textContent, /Value/, 'with no value');
+  assert.match(spreadEditor.textContent, /Spread: passes every property of rest/);
+  await internalAttributeKept();
   await act(async () => root.unmount());
   dom.window.close();
   console.log('prop-attributes: parse bounds, single/bulk object pastes and row preservation passed');

@@ -1,0 +1,256 @@
+/* Canvas tools for Stacki Apps (AppOverlayLayer.tsx): the count bubble crowded
+   labels collapse into, the list it opens, and the chip that says an app is
+   capturing canvas clicks. Fills, never borders, like the rest of Stacki. */
+.app-overlay-cluster {
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.app-overlay-cluster-count {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 20px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.app-overlay-cluster-list {
+  position: absolute;
+  top: 14px;
+  left: -10px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  pointer-events: auto;
+}
+.app-overlay-cluster-member,
+.app-overlay-cluster-more {
+  padding: 1px 5px;
+  border: 0;
+  border-radius: 3px;
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+button.app-overlay-cluster-member {
+  cursor: pointer;
+}
+.app-overlay-cluster-more {
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+}
+.app-capture-chip {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: rgba(17, 17, 17, 0.85);
+  color: #fff;
+  font-size: 11.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* The overlay's root covers the layer and takes no pointer itself: only what an
+   item makes interactive or draggable does, and a wheel there is handed to the
+   canvas frame (AppOverlayLayer.tsx forwardOverlayWheel). It stacks above the
+   editor's outlines, tags and spacing bands, and stays under its popups: the
+   canvas layer scale in previewViewport.css says why. */
+.app-overlay-root {
+  position: absolute;
+  inset: 0;
+  z-index: var(--canvas-layer-app);
+  pointer-events: none;
+}
+/* A label takes the pointer on its pill only, never across the element it is
+   anchored to: a label on a whole section would otherwise cover the section,
+   and every click there would be the label's instead of the canvas's. Three
+   classes, so this wins over `.interactive` and `.draggable` wherever the
+   sheets load. */
+.app-overlay-item.app-overlay-text.interactive,
+.app-overlay-item.app-overlay-text.draggable,
+.app-overlay-item.app-overlay-pin.interactive,
+.app-overlay-item.app-overlay-pin.draggable {
+  pointer-events: none;
+}
+/* The hit area of a pin: at least 24px square around the pill (or a small
+   box), centred on it, even when it is drawn smaller, so a pin is as easy to
+   click as to see. */
+.app-overlay-item.interactive > .app-overlay-label::before,
+.app-overlay-item.draggable > .app-overlay-label::before,
+.app-overlay-box.interactive::before,
+.app-overlay-box.draggable::before,
+.app-overlay-cluster-count::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, 24px);
+  height: max(100%, 24px);
+  transform: translate(-50%, -50%);
+}
+.app-overlay-item.interactive > .app-overlay-label,
+.app-overlay-item.interactive > .app-overlay-pin-badge {
+  cursor: pointer;
+}
+/* While an app captures canvas clicks the frame shows its cursor; an item a
+   click goes to shows the pointer, so it reads as the item's, not a new pin. */
+.app-overlay-root.capturing .app-overlay-item.interactive:not(.dragging),
+.app-overlay-root.capturing .app-overlay-item.interactive:not(.dragging) > .app-overlay-label,
+.app-overlay-root.capturing .app-overlay-item.interactive:not(.dragging) > .app-overlay-pin-badge {
+  cursor: pointer;
+}
+/* Dragging (overlayDrag.ts): a draggable item shows a grab cursor and takes
+   touch as a drag rather than a scroll. Its label takes the pointer too, since
+   a label on a point has no box of its own to press. While a press or a drag
+   holds an item, the surface covers the layer and keeps the pointer from the
+   canvas frame. */
+.app-overlay-item.interactive > .app-overlay-label,
+.app-overlay-item.draggable > .app-overlay-label,
+.app-overlay-item.interactive > .app-overlay-pin-badge,
+.app-overlay-item.draggable > .app-overlay-pin-badge {
+  pointer-events: auto;
+}
+/* Three classes, so grab wins over an interactive item's pointer wherever the sheets load. */
+.app-overlay-item.interactive.draggable,
+.app-overlay-item.draggable,
+.app-overlay-item.draggable > .app-overlay-label,
+.app-overlay-item.draggable > .app-overlay-pin-badge {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.app-overlay-item.draggable.dragging,
+.app-overlay-item.draggable.dragging > .app-overlay-label,
+.app-overlay-item.draggable.dragging > .app-overlay-pin-badge {
+  cursor: grabbing;
+}
+.app-overlay-item.draggable {
+  pointer-events: auto;
+}
+.app-overlay-drag-surface {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: grab;
+}
+.app-overlay-drag-surface.dragging {
+  cursor: grabbing;
+}
+/* Pins (docs/apps.md, "Pins"): a 24px round badge whose square bottom-left
+   corner is the tail, its tip on the anchor point, like a design tool's comment
+   pin. Filled in a tone from the editor's tokens (fallbacks for a page without
+   them), white text. Hovering grows it a little from the tip and shows the
+   avatar in it; `active` draws a ring in the tone. */
+.tone-accent {
+  --app-pin-tone: var(--accent, #0099ff);
+}
+.tone-success {
+  --app-pin-tone: var(--green, #30c158);
+}
+.tone-muted {
+  --app-pin-tone: color-mix(in srgb, var(--text-faint, #989898), #000 35%);
+}
+.tone-danger {
+  --app-pin-tone: var(--red, #ff453a);
+}
+.app-overlay-cluster-count.tone-accent,
+.app-overlay-cluster-count.tone-success,
+.app-overlay-cluster-count.tone-muted,
+.app-overlay-cluster-count.tone-danger,
+.app-overlay-cluster-member.tone-accent,
+.app-overlay-cluster-member.tone-success,
+.app-overlay-cluster-member.tone-muted,
+.app-overlay-cluster-member.tone-danger {
+  background: var(--app-pin-tone);
+  color: #fff;
+}
+.app-overlay-item.app-overlay-pin {
+  width: 0;
+  height: 0;
+}
+.app-overlay-pin-badge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  border-radius: 12px 12px 12px 0;
+  background: var(--app-pin-tone);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 24px;
+  white-space: nowrap;
+  transform-origin: bottom left;
+  transition: transform 120ms ease;
+  pointer-events: none;
+  user-select: none;
+}
+.app-overlay-pin-badge.active {
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px var(--app-pin-tone);
+}
+.app-overlay-pin-avatar {
+  display: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.app-overlay-pin-badge:hover {
+  transform: scale(1.12);
+}
+.app-overlay-pin-badge:hover > .app-overlay-pin-avatar {
+  display: block;
+}
+/* Drag to insert (insertDrag.ts): where the drop lands, in the editor's accent as its own drop
+   lines are. Before and after are a 2px bar on the element's edge; inside fills the element with
+   a wash of the accent. Both are backgrounds, never borders, and take no pointer. */
+.app-insert-drop {
+  position: absolute;
+  pointer-events: none;
+}
+.app-insert-drop.before,
+.app-insert-drop.after {
+  height: 2px !important;
+  margin-top: -1px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+.app-insert-drop.inside {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-radius: 2px;
+}
+.app-insert-chip {
+  position: absolute;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 11.5px;
+  line-height: 18px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.app-insert-chip.refused {
+  background: rgba(17, 17, 17, 0.85);
+}

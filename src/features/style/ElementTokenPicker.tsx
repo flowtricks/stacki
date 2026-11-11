@@ -4,6 +4,7 @@ import type { ElementSnapshot } from './model/styleTypes';
 import { isAstroGeneratedAttribute, snapshotTokens } from './model/elementTokens';
 import { TOOLTIP_DELAY_MS } from '../../ui/delayedTooltip';
 import { assert } from '../../../shared/core/assert';
+import { isInternalAttribute } from '../../../shared/core/internalAttributes';
 
 /**
  * A read-only, monospace rendering of the selected element's identity as a CSS
@@ -88,7 +89,7 @@ export function elementTipParts(snapshot: ElementSnapshot | undefined): readonly
     .map((token): TipPart => (token.kind === 'tag' ? { kind: 'tag', text: token.label ?? '' } : { kind: 'class', text: `.${token.label ?? ''}` }));
   const id: TipPart[] = snapshot.id === undefined || snapshot.id === '' ? [] : [{ kind: 'id', text: `#${snapshot.id}` }];
   const attributes = Object.keys(snapshot.attributes)
-    .filter((name) => name !== '' && name !== 'class' && name !== 'id' && !isAstroGeneratedAttribute(name))
+    .filter((name) => name !== '' && name !== 'class' && name !== 'id' && !isAstroGeneratedAttribute(name) && !isInternalAttribute(name))
     .sort()
     .map((name): TipPart => {
       const value = snapshot.attributes[name] ?? '';

@@ -47,16 +47,6 @@
 .page-template-popover .hint-text {
   margin: 0;
 }
-/* A popover holding a sample tree is the data picker's box: the picker's rows
-   run to its edges, as they do in the Settings panel. */
-.page-template-popover:has(> .page-template-sample) {
-  gap: 0;
-  padding: 0;
-}
-.page-template-sample .dp-list {
-  flex: 1;
-  min-height: 0;
-}
 .page-template-refresh.is-loading svg {
   animation: page-template-spin 0.9s linear infinite;
 }

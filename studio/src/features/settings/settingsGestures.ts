@@ -44,20 +44,20 @@ const NOW = { coalesceKey: undefined, urgency: true } as const;
 /** A new node's id, in the grammar Desktop's gestures make (nodeFactory.ts, newId). */
 const newId = (): string => `g${crypto.randomUUID().replace(/-/g, '')}`;
 
-/** Whether a component is a layout: Desktop's scan reads those from src/layouts. */
-export function isLayoutFile(file: string): boolean {
-  return /^src\/layouts\/.+\.astro$/.test(file);
+/** Whether a component is a layout: the scan marks those in the project's layout folders, by default src/layouts. */
+export function isLayoutComponent(component: Pick<Component, 'isLayout'>): boolean {
+  return component.isLayout === true;
 }
 
 /** What the Tag field offers on this page: tags, the project's components and layouts, Astro's own, and the page's imports. */
 export function tagOptions(project: Pick<Project, 'components'>, source: string): readonly TagOption[] {
-  const components = project.components.map((component) => ({ name: component.name, isLayout: isLayoutFile(component.file) }));
+  const components = project.components.map((component) => ({ name: component.name, isLayout: isLayoutComponent(component) }));
   return tagOptionsOf(components, modelOf(source).imports);
 }
 
 /** What the layout picker offers: the project's layouts, by name. */
 export function layoutOptions(project: Pick<Project, 'components'>): readonly TagOption[] {
-  return project.components.filter((component) => isLayoutFile(component.file)).map((component) => ({ name: component.name, kind: 'layout' }));
+  return project.components.filter((component) => isLayoutComponent(component)).map((component) => ({ name: component.name, kind: 'layout' }));
 }
 
 /** Node `id` renamed to `tag`: an element by its tag, an instance by a component
@@ -105,7 +105,7 @@ export function changedLayout(source: string, file: string, name: string, projec
   if (name === '') {
     return wrapper === undefined ? source : writeGesture(source, withImportsGesture(model, unwrapGesture('layout'), withPrunedImports));
   }
-  const layout = project.components.find((component) => component.name === name && isLayoutFile(component.file));
+  const layout = project.components.find((component) => component.name === name && isLayoutComponent(component));
   if (layout === undefined) {
     throw new Error(`There is no layout named ${name}.`);
   }

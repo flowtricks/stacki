@@ -43,7 +43,7 @@ export function CanvasContextMenu({
               }
             : {}),
         },
-        props.view.role === 'client' ? 'client' : 'designer',
+        props.view.role === 'client' ? 'client' : 'admin',
       )}
       nodes={nodes}
       position={{ ...position, nodeId }}

@@ -29,7 +29,12 @@ export const IMPORTED_VALUE_LIMITS = {
  * One import's value as its module declares it: the literal source text of
  * the export (`"1.0.12"`, `{ github: "…" }`), or a JSON module's parsed data.
  */
-export type ImportedValue = { readonly kind: 'literal'; readonly text: string } | { readonly kind: 'data'; readonly value: unknown };
+export type ImportedValue =
+  | { readonly kind: 'literal'; readonly text: string }
+  | { readonly kind: 'data'; readonly value: unknown }
+  // A function the module declares (`export function slotContent(…)`, an arrow
+  // const): something to call, not a value to bind, so the picker says so.
+  | { readonly kind: 'function' };
 
 /** One module to read, and the imports it answers: local name, and the export it names. */
 export interface ImportedModuleRequest {
@@ -134,15 +139,41 @@ export function scriptExport(code: string, name: string): ImportedValue | undefi
     }
     const start = head.index + head[0].length;
     const text = code.slice(start, scanValue(code, start)).trim();
-    const local = /^[A-Za-z_$][\w$]*$/.test(text) ? declarationValue(code, text, { exported: false }) : text;
-    return literalOf(local);
+    if (/^[A-Za-z_$][\w$]*$/.test(text)) {
+      return localExport(code, text);
+    }
+    return FUNCTION_VALUE.test(text) ? FUNCTION : literalOf(text);
+  }
+  if (declaresFunction(code, name, { exported: true })) {
+    return FUNCTION;
   }
   const direct = declarationValue(code, name, { exported: true });
   if (direct !== undefined) {
-    return literalOf(direct);
+    return FUNCTION_VALUE.test(direct) ? FUNCTION : literalOf(direct);
   }
   const local = exportListLocal(code, name);
-  return local === undefined ? undefined : literalOf(declarationValue(code, local, { exported: false }));
+  return local === undefined ? undefined : localExport(code, local);
+}
+
+const FUNCTION: ImportedValue = { kind: 'function' };
+// A value that is a function: `function …`, `async (…) =>`, `x =>`.
+const FUNCTION_VALUE = /^(?:async\s+)?(?:function\b|\([^()]*\)\s*(?::[^=]*)?=>|[A-Za-z_$][\w$]*\s*=>)/;
+
+// What a top-level declaration a module exports by another name holds: a
+// function, a literal, or undefined for anything computed.
+function localExport(code: string, local: string): ImportedValue | undefined {
+  if (declaresFunction(code, local, { exported: false })) {
+    return FUNCTION;
+  }
+  const text = declarationValue(code, local, { exported: false });
+  return text !== undefined && FUNCTION_VALUE.test(text) ? FUNCTION : literalOf(text);
+}
+
+// Whether the module declares `function name(…)` at the top level (async and generators too).
+function declaresFunction(code: string, name: string, options: { readonly exported: boolean }): boolean {
+  const escaped = name.replace(/\$/g, '\\$');
+  const lead = options.exported ? 'export\\s+(?:default\\s+)?' : '(?:export\\s+)?';
+  return new RegExp(`(?:^|\\n)[ \\t]*${lead}(?:async\\s+)?function\\s*\\*?\\s*${escaped}\\s*[<(]`).test(code);
 }
 
 // The value text of a top-level `const|let|var NAME = …`, with an optional

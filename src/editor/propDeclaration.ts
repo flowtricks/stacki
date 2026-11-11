@@ -8,8 +8,8 @@
 // TypeScript's tooling show on hover, and what Stacki already reads back as a
 // prop's documentation (PropTip). A prop's settings are JSDoc tags on the same
 // comment, so they round-trip through the file and the editor reads them back
-// (propDocumentation.ts): `@min`, `@max` and `@decimals` for a number, `@onLabel` and
-// `@offLabel` for a switch. A file with no `interface Props` gets one, and a
+// (propDocumentation.ts): `@min`, `@max` and `@decimals` for a number. A switch
+// has none: Astro gives a boolean no side names, so none are written. A file with no `interface Props` gets one, and a
 // file with no destructure gets one.
 //
 // An attributes prop is Astro's rest props: `...rest` at the end of the
@@ -40,7 +40,7 @@ import { LIMITS } from '../../shared/core/limits';
 import { err, ok, type Result } from '../../shared/core/result';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { destructureEnd, freeLocal, propNamed, propsInterfaceBody, propsInterfaceEnd, propsPattern, readPropsDestructure } from './loopProps';
-import { NUMBER_DECIMALS_MAX, type NumberSettings, type SwitchSettings } from './propDocumentation';
+import { NUMBER_DECIMALS_MAX, type NumberSettings } from './propDocumentation';
 import { isListType, listDefaultCode, listFieldsOfType, listSettingsProblem, listTypeText, type ItemFieldDeclaration, type ListSettings } from './listPropType';
 import { IMAGE_TYPE, imageDefaultOf, imageTypeText, type ImageDefault } from './imagePropDefault';
 
@@ -64,8 +64,6 @@ export interface PropDeclaration {
   readonly options: readonly string[];
   /** A number prop's range and precision. */
   readonly number: NumberSettings;
-  /** A switch prop's labels. */
-  readonly switch: SwitchSettings;
   /** An attributes prop's defaults, written on the element. Empty for every other kind. */
   readonly attributes: readonly AttributeDefault[];
   /** The tag of the element an attributes prop is first connected to. Empty for every other kind. */
@@ -124,7 +122,6 @@ export const DECLARATION_LIMITS = {
   tooltipCharsMax: 500,
   optionsMax: 64,
   optionCharsMax: 256,
-  labelCharsMax: 40,
   attributesMax: LIMITS.attrsPerNodeMax,
 } as const satisfies Record<string, number>;
 
@@ -391,19 +388,6 @@ export function numberSettingsProblem(settings: NumberSettings): string | undefi
   return undefined;
 }
 
-/** Why switch labels cannot be written, or undefined when they can. */
-export function switchSettingsProblem(settings: SwitchSettings): string | undefined {
-  for (const label of [settings.onLabel, settings.offLabel]) {
-    if (label.length > DECLARATION_LIMITS.labelCharsMax) {
-      return 'A label is too long.';
-    }
-    if (/[\n@*]/.test(label)) {
-      return 'A label is one line of words.';
-    }
-  }
-  return undefined;
-}
-
 /** Why an attribute default cannot be written on an element, or undefined when every one can. */
 export function attributeDefaultsProblem(defaults: readonly AttributeDefault[]): string | undefined {
   if (defaults.length > DECLARATION_LIMITS.attributesMax) {
@@ -546,14 +530,13 @@ function kindSettingsProblem(declaration: PropDeclaration, rest: RestBinding | u
       return attributeDefaultsProblem(declaration.attributes);
     case 'number':
       return numberSettingsProblem(declaration.number);
-    case 'boolean':
-      return switchSettingsProblem(declaration.switch);
     case 'list':
       return listSettingsProblem(declaration.list);
     case 'image': {
       const image = imageDefaultOf(declaration.image);
       return image.ok ? undefined : image.error;
     }
+    case 'boolean':
     case 'string':
     case 'option':
       return undefined;
@@ -594,11 +577,6 @@ function settingTags(declaration: PropDeclaration): readonly string[] {
   if (declaration.kind === 'number') {
     const { min, max, decimals } = declaration.number;
     return [min === undefined ? '' : `@min ${min}`, max === undefined ? '' : `@max ${max}`, decimals === undefined ? '' : `@decimals ${decimals}`];
-  }
-  if (declaration.kind === 'boolean') {
-    const onLabel = declaration.switch.onLabel.trim();
-    const offLabel = declaration.switch.offLabel.trim();
-    return [onLabel === '' || onLabel === 'On' ? '' : `@onLabel ${onLabel}`, offLabel === '' || offLabel === 'Off' ? '' : `@offLabel ${offLabel}`];
   }
   return [];
 }

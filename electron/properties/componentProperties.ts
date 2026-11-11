@@ -21,6 +21,7 @@ import { digestOf } from '../documents/atomicWrite';
 import type { DocumentActors, WriteReport } from '../documents/documentActors';
 import { editPropertyDefinition, readComponentProperties } from './propertyDefinitions';
 import { renameComponentOptionValues, renameComponentReferences } from './propertyRename';
+import { planSharedPropertyChange, withSharedProperties } from './sharedProperties';
 
 interface PropertyLocation {
   readonly projectPath: string;
@@ -117,7 +118,7 @@ export function loadComponentProperties(location: PropertyLocation): Result<Comp
   if (!source.ok) {
     return source;
   }
-  return ok(readComponentProperties(source.value));
+  return withSharedProperties(target.value, readComponentProperties(source.value));
 }
 
 export function updateComponentProperties(request: PropertyEditRequest, writer: PropertyWriter): Result<ComponentProperties> {
@@ -135,11 +136,7 @@ export function updateComponentProperties(request: PropertyEditRequest, writer: 
       message: 'This component changed on disk. Reload before saving.',
     });
   }
-  const changed = editPropertyDefinition(source.value, request.change);
-  if (!changed.ok) {
-    return changed;
-  }
-  const plan = planPropertyChanges({ ...request, ...target.value }, changed.value);
+  const plan = planComponentPropertyChanges({ ...request, ...target.value }, source.value);
   if (!plan.ok) {
     return plan;
   }
@@ -150,7 +147,21 @@ export function updateComponentProperties(request: PropertyEditRequest, writer: 
   writer.onCommitted?.(plan.value);
   const updated = plan.value.find((entry) => sameFilesystemPath(entry.file, target.value.file));
   assert(updated !== undefined, 'Property transaction includes the component');
-  return ok(readComponentProperties(updated.after));
+  return withSharedProperties(target.value, readComponentProperties(updated.after));
+}
+
+// A prop a shared type declares writes that type's file and its users
+// (sharedProperties.ts); every other change is the component's own.
+function planComponentPropertyChanges(request: PropertyEditRequest, source: string): Result<readonly FileChange[]> {
+  const shared = planSharedPropertyChange(request, source, request.change);
+  if (shared !== undefined) {
+    return shared;
+  }
+  const changed = editPropertyDefinition(source, request.change);
+  if (!changed.ok) {
+    return changed;
+  }
+  return planPropertyChanges(request, changed.value);
 }
 
 function validateLocation(location: PropertyLocation): Result<PropertyLocation> {

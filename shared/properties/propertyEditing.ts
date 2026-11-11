@@ -24,9 +24,35 @@ export interface ComponentProperty {
   readonly origin?: PropertyOrigin;
   readonly editing?: PropertyEditing;
   readonly conditions?: readonly string[];
+  /** Declared by a type another file owns (`type Props = SeoProps & {…}`): edits write that file. */
+  readonly shared?: PropertyShare;
 }
+/**
+ * Editable, overridable here, or source-only. An editable prop may carry a
+ * warning: its options live in an alias other declarations use too, so an
+ * edit changes all of them.
+ */
 export type PropertyEditing =
-  { readonly kind: 'editable' } | { readonly kind: 'override'; readonly reason: string } | { readonly kind: 'restricted'; readonly reason: string };
+  | { readonly kind: 'editable'; readonly warning?: string }
+  | { readonly kind: 'override'; readonly reason: string }
+  | { readonly kind: 'restricted'; readonly reason: string };
+/**
+ * Where a shared prop is declared and who else reads it. Paths are
+ * project-relative. `users` are the components whose Props use the type;
+ * `instances` the files that place one of those components; `defaults` the
+ * fallbacks each user's destructure gives the prop.
+ */
+export interface PropertyShare {
+  readonly typeName: string;
+  readonly path: string;
+  readonly users: readonly string[];
+  readonly instances: readonly string[];
+  readonly defaults: readonly PropertyShareDefault[];
+}
+export interface PropertyShareDefault {
+  readonly path: string;
+  readonly expression: string;
+}
 export interface PropertySource {
   readonly label: string;
   readonly expression: string;
@@ -93,13 +119,37 @@ export function parseComponentProperty(input: unknown): ComponentProperty {
     origin: optional(parsePropertyOrigin),
     editing: optional(parsePropertyEditing),
     conditions: optional((value) => propertyList(value, propertyText)),
+    shared: optional(parsePropertyShare),
   })(input);
+}
+
+function parsePropertyShare(input: unknown): PropertyShare {
+  const share = object({
+    typeName: propertyName,
+    path: propertyLabel,
+    users: (value) => propertyPaths(value),
+    instances: (value) => propertyPaths(value),
+    defaults: (value) => propertyList(value, object({ path: propertyLabel, expression: propertyText })),
+  })(input);
+  if (share.path.startsWith('/') || share.path.split('/').includes('..')) {
+    throw new Error('Shared property path must be project-relative');
+  }
+  return share;
+}
+
+function propertyPaths(input: unknown): readonly string[] {
+  const values = list(propertyLabel)(input);
+  if (values.length > PROPERTY_LIMITS.filesMax) {
+    throw new Error('Too many shared property files');
+  }
+  return values;
 }
 
 function parsePropertyEditing(input: unknown): PropertyEditing {
   const value = toRecord(input);
   if (value?.['kind'] === 'editable') {
-    return { kind: 'editable' };
+    const warning = optional(propertyText)(value['warning']);
+    return warning === undefined || warning.trim() === '' ? { kind: 'editable' } : { kind: 'editable', warning };
   }
   if (value?.['kind'] === 'override' || value?.['kind'] === 'restricted') {
     const reason = propertyText(value['reason']);

@@ -497,6 +497,19 @@ const markerPath = (node: Node, kind: 's' | 'e'): string | undefined => {
   return undefined;
 };
 
+// The document order of the start marker that opened each run, counted up
+// across passes: two runs holding exactly the same nodes (a component's root
+// inside the marker pair of the instance that renders it) are told apart by
+// it, the later start being the inner run. The markers themselves are gone
+// once collected, so this is the one place that order is kept. Runs from an
+// earlier pass have lower numbers than this pass's, which reads them as
+// outer: right for the page-script survivors pruneRegions keeps.
+const runOrders = new WeakMap<readonly Node[], number>();
+let runOrderNext = 0;
+
+/** Where the marker that opened `run` stood in document order; undefined for a run no marker opened. */
+export const runOrder = (run: readonly Node[]): number | undefined => runOrders.get(run);
+
 export const collectRegions = () => {
   forgetHollowRegions();
   pruneRegions();
@@ -513,6 +526,9 @@ export const collectRegions = () => {
       continue;
     } // a start marker always carries a path
     const run = runAfter(start, nodePath);
+    runOrders.set(run, runOrderNext);
+    runOrderNext += 1;
+    assert(Number.isSafeInteger(runOrderNext), 'collectRegions: run order stays a safe integer');
     let set = collected.get(nodePath);
     if (!set) {
       set = new Set();

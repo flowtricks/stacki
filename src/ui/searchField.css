@@ -1,0 +1,27 @@
+/* A search field: the glass inside the field, on the left, and no border. The
+   Apps panel's searches draw with it (SearchField.tsx), and the app UI kit's
+   `<stacki-search>` is the same component under this same file. */
+.ui-search {
+  position: relative;
+  display: block;
+}
+.ui-search-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.ui-search input {
+  width: 100%;
+  box-sizing: border-box;
+  height: 28px;
+  padding: 0 8px 0 28px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}

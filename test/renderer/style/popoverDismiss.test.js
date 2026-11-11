@@ -33,8 +33,7 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   await esbuild.build({
     stdin: {
       contents:
-        `export { default as LayerPopover } from './src/features/style/LayerPopover';` +
-        `export { registerPopupLayer } from './src/features/style/model/popupLayer';`,
+        `export { default as LayerPopover } from './src/features/style/LayerPopover';` + `export { registerPopupLayer } from './src/ui/popupOwnership';`,
       resolveDir: ROOT,
       loader: 'tsx',
     },

@@ -21,7 +21,15 @@ import {
   parseNestedInput,
   type NestStep,
 } from '../model/css';
-import { canonicalCompound, compareSpecificity, normalizePseudoElement, selectorListLayers, selectorSpecificity } from '../model/selectors';
+import {
+  canonicalCompound,
+  compareSpecificity,
+  isGlobalSelector,
+  normalizePseudoElement,
+  selectorDependsOnAncestor,
+  selectorListLayers,
+  selectorSpecificity,
+} from '../model/selectors';
 import { findNode, getHost, onHostChange, propText, type HostNode } from '../model/host';
 import {
   dedupeByKey,
@@ -41,6 +49,7 @@ import type { ElementSnapshot, NativeModel, ParsedRule } from '../model/styleTyp
 import { type ScanState, type PropWrite, EMPTY_RULE_MODEL, type Placeholder, computePlaceholders } from './EditorBasics';
 import { selectorOrder, styledSelectorsFor } from './editorSignatures';
 import { withInstanceChips, writableRegion } from '../model/instanceClasses';
+import { writtenInMarkup, type ComponentMarkup } from '../model/componentMarkup';
 export {
   BG_REFRESH_THROTTLE_MS,
   sheetSignature,
@@ -183,6 +192,9 @@ export interface ChipInputs {
   /** Classes the instance passed to the component open on the canvas, offered as
    *  chips of their own (model/instanceClasses.ts). Empty outside a component. */
   instanceClasses?: readonly string[] | undefined;
+  /** What the element's node writes in the open component file, which makes a chip
+   *  green (model/componentMarkup.ts). Undefined on a page: nothing is green there. */
+  componentMarkup?: ComponentMarkup | undefined;
   /** Nested selectors as they were typed, for chips with no rule yet (withTypedLabel). */
   typedLabels?: TypedLabels | undefined;
 }
@@ -235,10 +247,14 @@ export function chipsFor(inputs: ChipInputs): MatchedSelector[] {
   // on the element's row is the exception: it is the target, so its chip stays.
   const layered = pseudoLayerChips(list, inputs.pseudo ?? '');
   const typed = list.filter((entry) => chipLayer(entry) !== '' && !layered.includes(entry) && selectorsMatch(entry.text, inputs.activeSelector));
-  const shown = [...layered, ...typed];
-  // The styled tag first, then least specific to most (wellOrder); a tie keeps the
-  // readable order: tag → base class + pseudos → applied combo chain + pseudos →
-  // standalone/global classes → data attributes → complex selectors.
+  // A chip is the component's (green) when the markup writes what it needs; an
+  // instance's class is never written there, so its chip is not.
+  const shown = [...layered, ...typed].map((entry) => (writtenInMarkup(entry.text, inputs.componentMarkup) ? { ...entry, inComponentMarkup: true } : entry));
+  // The well reads broadest first (wellOrder): the styled tag, the global chips
+  // (`:target`, `*`), the component's chips together, then the element's classes and
+  // the nested selectors, each group least specific first. A specificity tie keeps the
+  // readable order (inChipOrder): base class + pseudos → applied combo chain + pseudos
+  // → other classes → data attributes → complex selectors.
   return wellOrder(inChipOrder(shown, inputs.classList, { byOrder: true })).map((selector) =>
     // In a query context, show the display with an `@` at the query position;
     // on Base / other contexts show the plain nested display.
@@ -286,20 +302,62 @@ export function pendingActiveChip(
 }
 
 /**
- * The well's order: the element's tag first when a rule styles it, then every other
- * chip from least specific to most. Read left to right, the list builds up the way
- * the cascade does: each chip can override the ones before it, so the chip whose
- * values win sits last. The tag leads because it names what the element is, the
- * way the Style header (`h2.heading`) does; an unstyled tag (a pending chip) has no
- * values to show, so it takes its place by specificity like any other.
+ * The well's order, broadest first, in four groups:
+ *
+ * 1. The element's tag, when a rule styles it. It names what the element is, the way
+ *    the Style header (`h2.heading`) does; an unstyled tag (a pending chip) has no
+ *    values to show, so it takes its place in the groups below like any other.
+ * 2. The global chips (`:target`, `:focus-visible`, `*`: no class, id or
+ *    attribute and no ancestor; the grey `is-global` chips, LayoutRows.tsx). They
+ *    match any element, so they are broader than anything naming this one.
+ * 3. The component's chips (the green ones: what they need is written in the open
+ *    component's markup, inComponentMarkup), kept together: the component's classes
+ *    are the base the page's own build on, and a green chip scattered among blue
+ *    ones hid which classes come with the component.
+ * 4. Every other chip: the element's classes, attributes, then compound and nested
+ *    selectors, which specificity puts last on its own.
+ *
+ * Inside each group chips run from least specific to most, so the group builds up
+ * the way the cascade does and its winning chip is read last. Across groups the
+ * grouping comes first; a chip of an earlier group may outweigh a later one.
  */
-export function wellOrder<Chip extends Pick<MatchedSelector, 'specificity' | 'text' | 'pending'>>(chips: readonly Chip[]): Chip[] {
+export function wellOrder<Chip extends Pick<MatchedSelector, 'specificity' | 'text' | 'pending' | 'inComponentMarkup'>>(chips: readonly Chip[]): Chip[] {
   const sorted = bySpecificity(chips);
   const tag = sorted.find((chip) => chip.pending !== true && isBareTagSelector(chip.text));
-  const ordered = tag === undefined ? sorted : [tag, ...sorted.filter((chip) => chip !== tag)];
-  assert(ordered.length === chips.length, 'wellOrder: every chip is kept');
-  assert(tag === undefined || ordered[0] === tag, 'wellOrder: a styled tag leads');
-  return ordered;
+  // Both sorts are stable, so a group keeps the specificity order bySpecificity gave it.
+  const ranked = sorted.map((chip) => ({ chip, group: wellGroup(chip, tag) }));
+  const ordered = [...ranked].sort((left, right) => left.group - right.group);
+  for (let index = 1; index < ordered.length; index += 1) {
+    const previous = ordered[index - 1];
+    const current = ordered[index];
+    assert(previous !== undefined, 'wellOrder: the previous chip is in range');
+    assert(current !== undefined, 'wellOrder: the current chip is in range');
+    if (previous.group === current.group) {
+      assert(compareSpecificity(previous.chip.specificity, current.chip.specificity) <= 0, 'wellOrder: a group runs least specific first');
+    } else {
+      assert(previous.group < current.group, 'wellOrder: the groups come in order');
+    }
+  }
+  const result = ordered.map((entry) => entry.chip);
+  assert(result.length === chips.length, 'wellOrder: every chip is kept');
+  assert(tag === undefined || result[0] === tag, 'wellOrder: a styled tag leads');
+  return result;
+}
+
+/** Which of wellOrder's groups a chip reads in: tag 0, global 1, component 2, other 3. */
+function wellGroup(chip: Pick<MatchedSelector, 'text' | 'inComponentMarkup'>, tag: unknown): number {
+  if (chip === tag) {
+    return 0;
+  }
+  if (chip.inComponentMarkup === true) {
+    return 2;
+  }
+  return isWellGlobal(chip.text) ? 1 : 3;
+}
+
+/** Whether a chip is global in the well's sense: the grey `is-global` chip (classifySelector). */
+function isWellGlobal(text: string): boolean {
+  return isGlobalSelector(text) && !selectorDependsOnAncestor(text);
 }
 
 /** Whether a selector is the element's tag alone (`h2`): no class, attribute or pseudo. */

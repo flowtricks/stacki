@@ -12,6 +12,8 @@ import { countTreePages } from './pageTree';
 import { pageDisplayName, pageFolderDisplayName } from '../../lib/pageName';
 import { CollectionIcon, FileIcon, FolderIcon, FolderOpenIcon, TrashIcon } from '../../ui/Icons';
 import { allowDragEffect } from '../../editor/dragState';
+import { can } from '../../../shared/properties/projectRoles';
+import { useCurrentRole } from '../../lib/useCurrentRole';
 
 export type PageEditing = { readonly kind: 'page'; readonly key: string } | { readonly kind: 'folder'; readonly key: string } | { readonly kind: 'none' };
 
@@ -63,6 +65,10 @@ export function PageTreeView(props: PageTreeViewProps) {
 function PageRow({ page, props }: { readonly page: PageTreePage; readonly props: PageTreeViewProps }) {
   const editing = props.editing.kind === 'page' && props.editing.key === page.path;
   const collection = isCollectionRoute(page.name);
+  // Rename and delete appear only for a role that may do them (shared/properties/projectRoles.ts).
+  const role = useCurrentRole();
+  const renamable = can(role, 'page:rename');
+  const deletable = can(role, 'page:delete');
   return (
     <TreeDragRow
       className={`list-item ${collection ? 'collection' : ''} ${props.currentPage?.path === page.path ? 'active' : ''}`}
@@ -82,7 +88,9 @@ function PageRow({ page, props }: { readonly page: PageTreePage; readonly props:
       }}
       onDoubleClick={(event) => {
         event.stopPropagation();
-        props.actions.setEditing({ kind: 'page', key: page.path });
+        if (renamable) {
+          props.actions.setEditing({ kind: 'page', key: page.path });
+        }
       }}
     >
       <span className="icon">{collection ? <CollectionIcon size={13} /> : <FileIcon size={13} />}</span>
@@ -90,17 +98,19 @@ function PageRow({ page, props }: { readonly page: PageTreePage; readonly props:
         <span className="label">{pageDisplayName(page)}</span>
         <span className="sub">{page.route}</span>
       </span>
-      <PageRenameButton kind="page" rename={() => props.actions.setEditing({ kind: 'page', key: page.path })} />
-      <button
-        className="row-action"
-        title="Delete page"
-        onClick={(event) => {
-          event.stopPropagation();
-          props.actions.removePage(page);
-        }}
-      >
-        <TrashIcon size={12} />
-      </button>
+      {renamable && <PageRenameButton kind="page" rename={() => props.actions.setEditing({ kind: 'page', key: page.path })} />}
+      {deletable && (
+        <button
+          className="row-action"
+          title="Delete page"
+          onClick={(event) => {
+            event.stopPropagation();
+            props.actions.removePage(page);
+          }}
+        >
+          <TrashIcon size={12} />
+        </button>
+      )}
     </TreeDragRow>
   );
 }
@@ -142,6 +152,9 @@ function FolderRow({
   readonly editing: boolean;
   readonly props: PageTreeViewProps;
 }) {
+  const role = useCurrentRole();
+  const renamable = can(role, 'page:rename');
+  const deletable = can(role, 'page:delete');
   return (
     <TreeDragRow
       className="list-item folder"
@@ -153,7 +166,9 @@ function FolderRow({
       }}
       onDoubleClick={(event) => {
         event.stopPropagation();
-        props.actions.setEditing({ kind: 'folder', key: rel });
+        if (renamable) {
+          props.actions.setEditing({ kind: 'folder', key: rel });
+        }
       }}
       draggable={!editing && props.reorder.enabled}
       onDragStart={(event) => props.reorder.start(event, rel + '/')}
@@ -171,17 +186,19 @@ function FolderRow({
           {count} page{count === 1 ? '' : 's'}
         </span>
       )}
-      <PageRenameButton kind="folder" rename={() => props.actions.setEditing({ kind: 'folder', key: rel })} />
-      <button
-        className="row-action"
-        title="Delete folder"
-        onClick={(event) => {
-          event.stopPropagation();
-          props.actions.removeFolder(rel, count);
-        }}
-      >
-        <TrashIcon size={12} />
-      </button>
+      {renamable && <PageRenameButton kind="folder" rename={() => props.actions.setEditing({ kind: 'folder', key: rel })} />}
+      {deletable && (
+        <button
+          className="row-action"
+          title="Delete folder"
+          onClick={(event) => {
+            event.stopPropagation();
+            props.actions.removeFolder(rel, count);
+          }}
+        >
+          <TrashIcon size={12} />
+        </button>
+      )}
     </TreeDragRow>
   );
 }

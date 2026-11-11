@@ -2,11 +2,17 @@ import DateField from '../../../vendor/stacki/src/ui/DateField';
 import HtmlField from '../../../vendor/stacki/src/ui/HtmlField';
 import { calendarValue } from '../../../vendor/stacki/src/ui/dateFieldModel';
 import { containsHTML } from '../../../vendor/stacki/src/ui/htmlFieldModel';
+import Dropdown, { type DropdownOption } from '../../../vendor/stacki/src/ui/Dropdown';
 import { useId } from 'react';
 import { DndContext, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { record } from '../validation';
+
+const BOOLEAN_OPTIONS: readonly DropdownOption<boolean>[] = [
+  { value: true, label: 'True' },
+  { value: false, label: 'False' },
+];
 
 interface Props {
   readonly value: unknown;
@@ -38,12 +44,7 @@ export function ValueFields({ value, change, label, depth = 0, template }: Props
     );
   }
   if (typeof value === 'boolean') {
-    return (
-      <select aria-label={label} value={String(value)} onChange={(event) => change(event.target.value === 'true')}>
-        <option value="true">True</option>
-        <option value="false">False</option>
-      </select>
-    );
+    return <Dropdown ariaLabel={label} value={value} options={BOOLEAN_OPTIONS} livePreview={false} onChange={change} />;
   }
   if (typeof value === 'number') {
     return (

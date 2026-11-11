@@ -280,7 +280,7 @@ function primitiveControl(node: ts.TypeNode): PropControl | undefined {
     return { kind: 'number', min: undefined, max: undefined, minExclusive: false, maxExclusive: false, step: undefined, decimals: undefined };
   }
   if (node.kind === ts.SyntaxKind.BooleanKeyword) {
-    return { kind: 'switch', onLabel: undefined, offLabel: undefined };
+    return { kind: 'switch' };
   }
   return undefined;
 }
@@ -505,7 +505,7 @@ function literalChoice(parts: readonly TypePart[]): PropControl | undefined {
   if (strings === 0) {
     // `true | false` is just a boolean.
     if (choices.every((option) => option.value === 'true' || option.value === 'false')) {
-      return { kind: 'switch', onLabel: undefined, offLabel: undefined };
+      return { kind: 'switch' };
     }
     if (choices.every((option) => NUMBER_LITERAL_RE.test(option.value))) {
       return { kind: 'choice', options: choices, numeric: true };

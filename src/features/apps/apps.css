@@ -1,0 +1,895 @@
+/* The Apps panel, floating app windows and app overlays. Background fills, no
+   borders or dividers, like every Stacki panel. */
+.apps-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.apps-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.apps-icon-button,
+.apps-panel .more-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.apps-icon-button:hover,
+.apps-panel .more-menu-button:hover,
+.apps-panel .more-menu-button.is-open {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+/* The panel's searches are the shared search field (src/ui/SearchField.tsx), set into the panel's gutter. */
+.apps-search {
+  margin: 0 12px 10px;
+}
+.apps-body {
+  padding-bottom: 12px;
+}
+.apps-section-title {
+  padding: 2px 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+/* The list's 2px plus a row's 10px padding puts the tiles on the search field's 12px edge,
+   while a row's hover fill still reaches past it. */
+.apps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 2px;
+}
+.apps-row {
+  border-radius: 8px;
+}
+.apps-row + .apps-row {
+  margin-top: 4px;
+}
+.apps-row.open {
+  background: var(--bg-active);
+}
+/* A row is a three-column grid: the tile, the text column (name, then
+   description) that takes the remaining space, and one slot for the meta
+   (version and avatar) and the actions (Open and ⋯, plus whatever a row's state
+   adds, such as Update). Both sit in that slot's single grid cell, so the slot
+   is as wide as the wider of the two at rest and on hover: the text column never
+   changes width, the description truncates only against the space it really
+   has, and the actions replace the meta instead of being drawn over it. The
+   select button spans every column through `subgrid`, so its tile, text and meta
+   share the row's tracks while the actions stay outside it (a button inside a
+   button is invalid HTML). */
+.apps-row-main {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 18px;
+  padding: 10px;
+  border-radius: 8px;
+}
+.apps-row-main:hover {
+  background: var(--bg-hover);
+}
+.apps-row-select {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+/* The row's fill is the hover state; the base button rule would paint a second
+   one inside it. */
+.apps-row-select:hover:not(:disabled) {
+  background: transparent;
+}
+/* The whole row, padding included, selects the app: the button's hit area
+   stretches over the row, below the actions. The focus ring follows it, so it
+   wraps the row rather than the inner content. */
+.apps-row-select::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+}
+.apps-row-select:focus-visible {
+  outline: none;
+}
+.apps-row-select:focus-visible::before {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.apps-row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.apps-row-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.apps-row-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.apps-row-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+/* Where the app lives (appPlaces.tsx): small muted pills under the description,
+   filled rather than outlined, on one line that never wraps the row taller. */
+.apps-row-version {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.apps-row-places {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+.apps-place-pill {
+  white-space: nowrap;
+  cursor: default;
+}
+.apps-row-byline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.apps-row-byline .apps-row-description {
+  flex: 1;
+  min-width: 0;
+}
+.apps-row-avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.apps-row-meta {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition:
+    opacity 0.12s,
+    visibility 0.12s;
+}
+/* The actions share the meta's cell but leave the layout while hidden, so at rest
+   the slot is only as wide as the pills and the description gets the room; on hover
+   they take the slot and the description truncates against them. Hidden actions are
+   out of the tab order; focusing the row's button shows them, so Tab moves on into
+   Open and ⋯. */
+.apps-row-actions {
+  grid-column: 3;
+  grid-row: 1;
+  justify-self: end;
+  position: relative;
+  z-index: 1;
+  display: none;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s,
+    visibility 0.12s;
+}
+.apps-row-main:is(:hover, :focus-within, :has(.more-menu-button.is-open)) .apps-row-meta {
+  opacity: 0;
+  visibility: hidden;
+}
+.apps-row-main:is(:hover, :focus-within, :has(.more-menu-button.is-open)) .apps-row-actions {
+  display: flex;
+  opacity: 1;
+  visibility: visible;
+}
+.apps-open {
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--accent);
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+/* Open is the row's primary action: hovering brightens the accent and never
+   greys it. Spelled out here (and the button carries `.primary`, which the base
+   `button:hover` wash skips) so neither stylesheet order nor the base rule can
+   swap the fill. */
+.apps-open:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.apps-badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 15px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.apps-tile {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  object-fit: cover;
+  background: var(--bg-input);
+}
+.apps-tile.lettered {
+  color: #fff;
+  font-weight: 600;
+  line-height: 1;
+}
+.apps-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+}
+.apps-skeleton-tile {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  animation: apps-pulse 1.2s ease-in-out infinite;
+}
+.apps-skeleton-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.apps-skeleton-lines span {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  animation: apps-pulse 1.2s ease-in-out infinite;
+}
+.apps-skeleton-lines span:first-child {
+  width: 55%;
+}
+.apps-skeleton-lines span:last-child {
+  width: 80%;
+}
+@keyframes apps-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+.apps-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 14px;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: left;
+}
+.apps-message p {
+  margin: 0;
+  max-width: 240px;
+}
+.apps-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 16px 14px 12px;
+  text-align: left;
+}
+.apps-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.apps-empty > p {
+  margin: 12px 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+/* The hint under the sentence: where adding an app lives now (the header's +). */
+.apps-empty > p.apps-note {
+  margin: -6px 0 0;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.apps-details {
+  padding: 2px 12px 12px 50px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.apps-capabilities {
+  margin: 4px 0;
+  padding-left: 16px;
+  line-height: 1.5;
+}
+.apps-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 10px;
+}
+.apps-button {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.apps-button:hover:not(:disabled) {
+  background: var(--bg-active);
+}
+.apps-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.apps-button.primary {
+  background: var(--accent);
+  color: #fff;
+}
+.apps-button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.apps-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.apps-error {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--red);
+}
+.apps-card {
+  margin: 0 12px 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-panel-2, var(--bg-input));
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.apps-card p {
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+.apps-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.apps-card-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text);
+}
+.apps-card-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.apps-card-title strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.apps-card-title span {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.apps-card-label {
+  color: var(--text);
+  font-weight: 500;
+}
+.apps-field {
+  display: block;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.apps-field input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  height: 28px;
+  margin-top: 4px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.apps-initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 9px;
+  font-weight: 600;
+}
+.apps-running-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* Every app's window (AppWindows.tsx) is the Variables window (dockableWindow.css).
+   The layer adds no box, so a popup keeps the window's own stacking. Docked, the
+   window covers the Apps panel's slot, whose rectangle the layer measures; it sits
+   below the panel's resize handle (z-index 20), so the handle stays reachable. */
+.apps-windows {
+  display: contents;
+}
+.apps-window[data-window-mode='docked'] {
+  position: fixed;
+  inset: auto;
+  left: var(--apps-dock-left, 0);
+  top: var(--apps-dock-top, 0);
+  width: var(--apps-dock-width, 0);
+  height: var(--apps-dock-height, 0);
+  background: var(--bg-panel);
+}
+.apps-window .apps-running-title h2 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.apps-window .apps-folder-error {
+  flex: none;
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text);
+  background: color-mix(in srgb, var(--orange) 16%, var(--bg));
+  overflow-wrap: anywhere;
+}
+.apps-window .apps-frame {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--bg);
+}
+.apps-dock-slot {
+  flex: 1;
+  min-height: 0;
+}
+
+/* App overlays, drawn in the canvas's overlay layer beside the selection outlines. */
+.app-overlay-item {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.app-overlay-item.interactive {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.app-overlay-label {
+  position: absolute;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  line-height: 15px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.app-overlay-heat {
+  display: grid;
+}
+.app-overlay-frame {
+  position: absolute;
+  border: 0;
+  background: transparent;
+}
+
+/* The Load App From GitHub popup: a fixed title, a body that takes the height
+   the title and footer leave, and a fixed footer. The popup's height is capped,
+   so a long repository list scrolls inside its own region (.apps-connect-scroll)
+   while the field above it stays in view. The release step has no inner region,
+   so the body itself scrolls there. */
+.apps-connect {
+  --apps-connect-fade: 24px;
+  display: flex;
+  flex-direction: column;
+  width: min(460px, calc(100vw - 48px));
+  max-height: min(640px, calc(100vh - 48px));
+}
+.apps-connect-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+.apps-connect-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.apps-connect .apps-connect-footer {
+  flex: none;
+}
+/* The field and the list, with the body's own field-to-content spacing between them. */
+.apps-connect-chooser {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+/* One field: the account chip at its left, the search filling the rest, on one fill. */
+.apps-connect-field {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+.apps-connect-field:focus-within {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.apps-connect-field-icon {
+  flex: none;
+  margin: 0 2px 0 4px;
+  color: var(--text-faint);
+}
+.apps-connect-field input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 6px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.apps-connect-field .dd-trigger.apps-connect-account {
+  flex: none;
+  width: auto;
+  max-width: 45%;
+  height: 24px;
+  gap: 6px;
+  padding: 0 6px 0 4px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  font-size: 12px;
+  font-weight: 500;
+}
+.apps-connect-field .dd-trigger.apps-connect-account:hover {
+  background: var(--bg-active);
+}
+.apps-connect-field .apps-connect-account .dd-icon {
+  display: inline-flex;
+  flex: none;
+}
+/* The fade is a mask, as in Settings: each end fades only while there is more
+   past it (useScrollEdges), so a row is never cut flat against the field. */
+.apps-connect-scroll {
+  --apps-connect-fade-top: 0px;
+  --apps-connect-fade-bottom: 0px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--apps-connect-fade-top),
+    #000 calc(100% - var(--apps-connect-fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--apps-connect-fade-top), #000 calc(100% - var(--apps-connect-fade-bottom)), transparent 100%);
+}
+.apps-connect-scroll[data-edge-top='fade'] {
+  --apps-connect-fade-top: var(--apps-connect-fade);
+}
+.apps-connect-scroll[data-edge-bottom='fade'] {
+  --apps-connect-fade-bottom: var(--apps-connect-fade);
+}
+.apps-connect-section:not(:first-child) {
+  margin-top: 8px;
+}
+.apps-connect-notice {
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.apps-connect-notice code {
+  font-size: 11px;
+  color: var(--text);
+}
+.apps-connect-notice a {
+  color: var(--accent);
+}
+.apps-connect-hint {
+  margin: 0;
+  padding: 4px 2px;
+}
+/* The list area's empty and failure states: the Apps panel's pattern (a muted
+   icon on a soft fill, a title, a muted explanation, an action), never bare red text. */
+.apps-connect-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 16px 8px 8px;
+  text-align: left;
+}
+.apps-connect-empty .apps-empty-icon {
+  margin-bottom: 12px;
+}
+.apps-connect-empty-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.apps-connect-empty-detail {
+  margin: 4px 0 12px;
+  max-width: 340px;
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.apps-connect-empty-link {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 500;
+}
+.apps-connect-empty-hint {
+  margin: 8px 0 0;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.apps-connect-skeleton {
+  padding: 7px 8px;
+}
+.apps-connect-skeleton .apps-skeleton-tile {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+.apps-connect-signin p {
+  margin: 0 0 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.apps-choice-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.apps-choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  justify-content: flex-start;
+}
+.apps-choice:hover:not(:disabled),
+.apps-choice.on {
+  background: var(--bg-hover);
+}
+.apps-choice-avatar {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.apps-choice-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.apps-choice-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+}
+.apps-choice-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.apps-badge.muted {
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.apps-link {
+  align-self: flex-start;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+}
+.apps-link:hover:not(:disabled) {
+  background: transparent;
+  text-decoration: underline;
+}
+.apps-connect-found {
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+/* An app's own count (`app.badge`, appBadges.tsx): on the rail's Apps button, every app's summed,
+   and on each app's row its own. A filled pill, so it reads without a border. */
+.apps-rail-count {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 7px;
+  background: var(--accent);
+  color: white;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+/* With a count in the corner, a waiting update's dot moves below it. */
+.apps-rail-count + .apps-rail-badge {
+  top: auto;
+  bottom: 5px;
+}
+.apps-row-count {
+  flex: none;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* A folder in .stacki/apps that does not read as an app (AppFolderRows.tsx): a warning tile in place of the app's own. */
+.apps-tile-broken {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
+  color: var(--amber);
+}
+.apps-row-broken .apps-row-description {
+  white-space: normal;
+}
+
+/* What an app reaches outside Stacki (AppConnections.tsx): an amber fill when it calls external services, muted when it works offline. */
+.apps-network-note {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 16px;
+}
+.apps-network-note.external {
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+  color: var(--amber);
+}
+.apps-network-note.external svg {
+  flex: none;
+  margin-top: 2px;
+}
+.apps-network-note.offline {
+  background: color-mix(in srgb, currentColor 6%, transparent);
+  opacity: 0.8;
+}
+.apps-connections-problem {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, #ff6161 14%, transparent);
+  color: #ff6161;
+  font-size: 11px;
+}
+.apps-connections-note,
+.apps-connections-advanced {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 16px;
+  opacity: 0.8;
+}
+.apps-connections-advanced summary {
+  cursor: pointer;
+}
+.apps-connections-advanced p {
+  margin: 4px 0 0;
+}

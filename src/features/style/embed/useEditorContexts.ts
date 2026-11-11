@@ -2,6 +2,7 @@
 // the native target, a component's own source, the resolved properties, the
 // selector chips and changing context (EmbedEditor.tsx).
 
+import { chipStyleOf, inlineResolveInput, inlineTargetOf, type InlineState } from './useInlineTarget';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { resolveStyle, selectorsMatch, type ContextInfo, type ContextKey, type MatchedSelector, type SourceKey, type StyleContext } from '../model/resolved';
 import { breakpointForAtContext, breakpointTier, buildStyleContexts, nativeContribsFor, nativeHasValues, selectedNativeIndexFor } from '../model/nativeStyles';
@@ -20,7 +21,11 @@ import {
 } from '../model/queryWrapper';
 import { reachOfWrapper, wrapperOnLayer, type WrapperReach } from '../model/queryReach';
 import { canvasWidthForQuery } from '../model/queryWidth';
-import type { MatchTarget } from '../model/selectors';
+import { isGlobalSelector, type MatchTarget } from '../model/selectors';
+import { selectedInstanceMarkup, selectedInstanceMarkupPending } from '../model/webflowElement';
+import { componentSource, componentSourcePending } from '../model/componentSourceCache';
+import { assert } from '../../../../shared/core/assert';
+import { useComponentSourceTick } from './useComponentSourceTick';
 import { nativeStylingAvailable, rebuildRules } from '../model/webflow';
 import { indexQueriesByClass, orderContexts, relativeContexts, relativesOf } from '../model/contextOrder';
 import { getHost, onHostChange } from '../model/host';
@@ -28,7 +33,6 @@ import { instanceSourceKey, type InstanceStyleDocument } from '../model/instance
 import { contextAfterDevice, deviceTargetOf } from '../model/deviceContext';
 import { EMPTY_RULE_MODEL } from './EditorBasics';
 import { chipsFor, pseudoLayerChips, readPanelLayer, styledSelectorsFor, usePanelLayer, usePseudoTarget } from './editorModel';
-import { isGlobalSelector } from './LayoutRows';
 import { useEditorRefs, useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { useElementTokens } from './useEditorRuleEdits';
 import { useTokenDefault, useActiveSelector, useSelectorPick, useSourceDocument, useContextKeys } from './useEditorElement';
@@ -354,6 +358,7 @@ export function useResolved(
   styleContextsHook: ReturnType<typeof useStyleContexts>,
   nativeTarget: ReturnType<typeof useNativeTarget>,
   componentSource: ReturnType<typeof useComponentSource>,
+  inlineState: InlineState,
 ) {
   const { stateKey } = selectionState;
   const { nativeModel, setSourceSelection, sourceSelectionRef } = nativeState;
@@ -383,18 +388,37 @@ export function useResolved(
 
   // Native contributions for the current context + state, folded into the model.
   const nativeContribs = useMemo(() => nativeContribsFor(nativeModel, currentContext, stateKey), [nativeModel, currentContext, stateKey]);
+  // The style attribute, above every rule; selected when its chip is the target.
+  // An instance's style is read from its component file once held: the tick says it landed.
+  const componentSourceTick = useComponentSourceTick();
+  const { snapshot } = elementTokens;
+  const inlineStyle = chipStyleOf(inlineState, snapshot);
+  const inlineActive = inlineTargetOf(inlineState, inlineStyle).active;
+  const { branchKey } = inlineState;
+  // Read afresh each render (the component file may have landed, componentSourceTick);
+  // kept as one object while it says the same, so the resolved style is not redone.
+  const inlineNow = inlineResolveInput({ style: inlineStyle, active: inlineActive, branchKey });
+  const inlineKey = `${componentSourceTick}:${inlineNow === undefined ? '' : JSON.stringify(inlineNow)}`;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- inlineKey stands for inlineNow's contents
+  const inline = useMemo(() => inlineNow, [inlineKey]);
 
   const resolved = useMemo(
     () =>
-      resolveStyle(modelForContext(model ?? EMPTY_RULE_MODEL, currentContext), currentContext.embedAtContext ?? ' native-only', activeSelector, {
-        source: effectiveSource,
-        contribs: nativeContribs,
-        selectedIndex: selectedNativeIndex,
-        selectedEmbedKey,
-        ...(currentContext.breakpoint ? { currentTier: breakpointTier(currentContext.breakpoint) } : {}),
-        pseudoLayer,
-      }),
-    [model, currentContext, activeSelector, effectiveSource, nativeContribs, selectedNativeIndex, selectedEmbedKey, pseudoLayer],
+      resolveStyle(
+        modelForContext(model ?? EMPTY_RULE_MODEL, currentContext),
+        currentContext.embedAtContext ?? ' native-only',
+        activeSelector,
+        {
+          source: effectiveSource,
+          contribs: nativeContribs,
+          selectedIndex: selectedNativeIndex,
+          selectedEmbedKey,
+          ...(currentContext.breakpoint ? { currentTier: breakpointTier(currentContext.breakpoint) } : {}),
+          pseudoLayer,
+        },
+        inline,
+      ),
+    [model, currentContext, activeSelector, effectiveSource, nativeContribs, selectedNativeIndex, selectedEmbedKey, pseudoLayer, inline],
   );
 
   // The stylesheet the active selector's rule already lives in. resolveStyle
@@ -501,6 +525,23 @@ export function useSelectorChips(
   const { typedLabels } = selectorPick;
   const { nativeModel } = nativeState;
   const { instanceClasses, model, snapshot, tokens } = elementTokens;
+  // The open component's node, or, for an instance selected on a page, the root its
+  // component writes, read from the component source already loaded for its styles.
+  // A component without global styles is read once into the component source cache;
+  // its arrival, or a change to the file, bumps the version and recomputes this.
+  const componentSourceTick = useComponentSourceTick();
+  const componentMarkup = useMemo(
+    () => elementTokens.componentMarkup ?? (snapshot === undefined ? undefined : selectedInstanceMarkup(documentByKey.values(), componentSource)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the tick stands for the cache's contents
+    [elementTokens.componentMarkup, snapshot, documentByKey, componentSourceTick],
+  );
+  // While the instance's component file is still being read, its chips' colour is unknown.
+  const provenancePending = useMemo(
+    () =>
+      elementTokens.componentMarkup === undefined && snapshot !== undefined && selectedInstanceMarkupPending(documentByKey.values(), componentSourcePending),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the tick stands for the cache's contents
+    [elementTokens.componentMarkup, snapshot, documentByKey, componentSourceTick],
+  );
   const { activeSelector } = activeSelectorHook;
   const { currentContext, styleContexts } = styleContextsHook;
   const pseudo = usePanelLayer();
@@ -511,20 +552,38 @@ export function useSelectorChips(
   // pick/typed one) so it shows as selected while you add its first property.
   const selectorChips = useMemo<MatchedSelector[]>(
     () =>
-      chipsFor({
-        model: model === undefined ? undefined : modelForContext(model, currentContext),
-        nativeModel,
-        currentContext,
-        activeSelector,
-        selectedSelectorText,
-        tokens,
-        classList: snapshot?.classList ?? [],
-        removedClasses,
-        pseudo,
-        instanceClasses,
-        typedLabels,
-      }),
-    [model, nativeModel, currentContext, activeSelector, selectedSelectorText, tokens, snapshot, removedClasses, pseudo, instanceClasses, typedLabels],
+      withProvenancePending(
+        chipsFor({
+          model: model === undefined ? undefined : modelForContext(model, currentContext),
+          nativeModel,
+          currentContext,
+          activeSelector,
+          selectedSelectorText,
+          tokens,
+          classList: snapshot?.classList ?? [],
+          removedClasses,
+          pseudo,
+          instanceClasses,
+          componentMarkup,
+          typedLabels,
+        }),
+        { pending: provenancePending },
+      ),
+    [
+      provenancePending,
+      model,
+      nativeModel,
+      currentContext,
+      activeSelector,
+      selectedSelectorText,
+      tokens,
+      snapshot,
+      removedClasses,
+      pseudo,
+      instanceClasses,
+      componentMarkup,
+      typedLabels,
+    ],
   );
 
   // Per-context dropdown info: embed hasStyles/combos (for the dot + auto-highlight)
@@ -572,6 +631,16 @@ export function useSelectorChips(
     return orderContexts(styleContexts, own, relatives);
   }, [contextInfos, queryIndex, styleContexts]);
   return { contextInfos, orderedContexts, selectorChips };
+}
+
+/** The chips with their colour marked unknown while the component file is read; a pending chip has no colour to wait on. */
+export function withProvenancePending(chips: MatchedSelector[], provenance: { readonly pending: boolean }): MatchedSelector[] {
+  if (!provenance.pending) {
+    return chips;
+  }
+  const marked = chips.map((chip) => (chip.pending === true ? chip : { ...chip, provenancePending: true }));
+  assert(marked.length === chips.length, 'withProvenancePending: every chip is kept');
+  return marked;
 }
 
 // The canvas page's root font size, for a `rem` query width. The canvas query

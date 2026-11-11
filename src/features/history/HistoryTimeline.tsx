@@ -7,6 +7,8 @@ import { readHistoryLog } from './historyBridge';
 import { commitAuthor, relativeTime } from './historyModel';
 import { BranchIcon, PreviewIcon } from '../../ui/Icons';
 import HistoryCommitFiles from './HistoryCommitFiles';
+import CommitAvatar from './CommitAvatar';
+import { useCommitAvatars } from './commitAvatars';
 import { createCoalescedRun } from '../../lib/coalescedRun';
 import { onWindowReturn } from '../../lib/windowReturn';
 import MoreMenu from '../../ui/MoreMenu';
@@ -16,10 +18,7 @@ import HistoryGraphLane, { HISTORY_ROW_HEIGHT, historyGraphWidth } from './Histo
 import { buildHistoryGraph, HISTORY_COMMITS_MAX } from './historyGraph';
 import type { HistoryGraphRow } from './historyGraph';
 import { gitBranchColors, gitBranchColor, gitRefColor } from '../../lib/gitBranchColors';
-import { createPanelCache } from '../../lib/usePanelData';
-import type { HistoryLog } from './historyBridge';
-
-const timelineCache = createPanelCache<HistoryLog>();
+import { timelineCache, timelineKey } from './timelineCache';
 
 function initialTimeline(key: string): TimelineState {
   const cached = timelineCache.get(key);
@@ -69,6 +68,8 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
   );
   const graph = useMemo(() => buildHistoryGraph(timeline.state.commits, props.trunk ?? 'main', colors), [timeline.state.commits, props.trunk, colors]);
   const [expanded, setExpanded] = useState<string | undefined>(undefined);
+  // Pictures arrive in the background; rows render with initials until then.
+  const avatars = useCommitAvatars(props.projectPath, timeline.state.commits);
   useEffect(() => {
     setExpanded((hash) => (hash && timeline.state.commits.some((commit) => commit.hash === hash) ? hash : undefined));
   }, [timeline.state.commits]);
@@ -86,6 +87,7 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
           row={row}
           colors={colors}
           width={graph.width}
+          avatar={avatars.get(row.commit.hash)}
           expanded={expanded === row.commit.hash}
           previewing={props.previewRef === row.commit.hash}
           toggle={() => setExpanded(expanded === row.commit.hash ? undefined : row.commit.hash)}
@@ -145,7 +147,7 @@ function parseHistoryScope(value: string): HistoryScopeName {
 }
 
 function useTimeline({ projectPath, branch, head }: HistoryTimelineProps, reference: string | undefined) {
-  const key = JSON.stringify([projectPath, branch, head, reference]);
+  const key = timelineKey(projectPath, branch, head, reference);
   const [state, setState] = useState<TimelineState>(() => initialTimeline(key));
   const requestRef = useRef(0);
   useEffect(() => {
@@ -244,6 +246,7 @@ interface CommitRowProps extends HistoryTimelineProps {
   readonly colors: ReadonlyMap<string, number>;
   readonly commit: HistoryCommit;
   readonly row: HistoryGraphRow;
+  readonly avatar: string | undefined;
   readonly width: number;
   readonly expanded: boolean;
   readonly previewing: boolean;
@@ -265,9 +268,14 @@ function CommitRow(props: CommitRowProps) {
             <Tooltip className="history-subject" text={commit.subject} />
           </span>
           <span className="history-meta">
-            {commitAuthor(commit, props.userEmail)} · {relativeTime(commit.when)} ·{' '}
-            <span className="history-row-hash" title={commit.hash}>
-              {commit.shortHash}
+            {/* At the start of the meta line, not in the lane, so the graph and HEAD marker stay clear. */}
+            <CommitAvatar name={commit.author} email={commit.email} url={props.avatar} />
+            {/* The text is its own box: a flex row cannot ellipsize bare text. */}
+            <span className="history-meta-text">
+              {commitAuthor(commit, props.userEmail)} · {relativeTime(commit.when)} ·{' '}
+              <span className="history-row-hash" title={commit.hash}>
+                {commit.shortHash}
+              </span>
             </span>
           </span>
         </span>

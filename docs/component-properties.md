@@ -28,9 +28,35 @@ switches to a plain input for custom types such as `typeof theme` or imported
 aliases. Switching modes preserves the current type and union options; hovering
 a menu choice never changes the prop. Unsupported types open in input mode.
 Common fields in composite `Props` contracts stay editable when their declaration
-is local and shared by the public and runtime types. Variant-dependent fields show
-their conditions and explain why source editing is needed. Imported, generic, and
-ambiguous declarations remain restricted. Add and reorder operations on composite
+is local and shared by the public and runtime types. An imported or other named
+type in the intersection (`type Props = SeoProps & { theme?: … }`) only adds
+fields, so the local members beside it stay editable. Variant-dependent fields show
+their conditions and explain why source editing is needed. A member whose own type
+is imported, a local generic, or computed (mapped, conditional, indexed, `typeof`,
+`keyof`) stays read-only with the note "depends on a shared or computed type", as do
+ambiguous declarations and computed parts of the contract. Options kept in a
+same-file alias (`theme?: Theme`) are edited in the alias; when other declarations
+use it too, or it is exported, the form warns that the edit changes all of them.
+
+Members of an imported props type (`SeoProps` from `src/types.ts`, through the
+tsconfig `@/` alias) are listed under "From SeoProps · src/types.ts", with a link to
+the file, and use the same editors. Their name, type, options, Required and tooltip
+are written to the shared file; the form says so first ("Shared: edits SeoProps in
+src/types.ts, used by N components … and their instances", which expands to the
+list). A default is each component's own destructure, so it is written in the
+component edited when that component destructures the prop, and the other users'
+defaults are shown. A rename rewrites the type, every user's destructure,
+`Astro.props.x` and rest `seo.x` reads, and every instance, listed before it is
+applied, as one undo step; a computed read or another use of the rest variable
+refuses only the rename. Deleting a shared member is done in its file.
+
+Readonly is not offered: TypeScript's `readonly` has no effect on Astro props, and
+an existing modifier is kept as written. A Switch has no On/Off labels; legacy
+`@onLabel`/`@offLabel` tags are ignored, kept out of the tooltip, and the tooltip
+field offers to remove them once it is edited. Nothing in property settings has a
+Save button: an existing prop saves as it changes, and a new one is created when
+its name is committed (or as the form closes) and then saves itself. The `{}`
+toggle beside Options (or Kind) switches to the code type. Add and reorder operations on composite
 contracts still require source editing. Declaration locations appear in an information
 tooltip, not as runtime binding chips. Clicking a prop never opens the full source editor.
 Renames also update indexed and picked references to local contract types.

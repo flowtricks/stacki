@@ -1,4 +1,6 @@
 import { PageTreeRenameDialog } from './PageTreeRenameDialog';
+import { can } from '../../../shared/properties/projectRoles';
+import { useCurrentRole } from '../../lib/useCurrentRole';
 import type { PageRename } from '../../../shared/properties/pageRename';
 import { useTreeDragCleanup } from '../../ui/TreeDragDrop';
 import { useProjectPageOrder } from './pageOrderPersistence';
@@ -362,15 +364,19 @@ function PagesHeader({
   readonly createPage: () => void;
   readonly createTemplate: () => void;
 }) {
+  // Creating pages and folders appears only for a role that may (shared/properties/projectRoles.ts).
+  const creatable = can(useCurrentRole(), 'page:create');
   return (
     <div className="panel-header">
       <h2>Pages</h2>
-      <div style={{ display: 'flex', gap: 2 }}>
-        <button className="ghost" title="New folder" onClick={createFolder}>
-          <FolderPlusIcon size={13} />
-        </button>
-        <MoreMenu className="ghost" title="New page" icon={<PlusIcon size={13} />} width={190} items={pageCreateMenuItems({ createPage, createTemplate })} />
-      </div>
+      {creatable && (
+        <div style={{ display: 'flex', gap: 2 }}>
+          <button className="ghost" title="New folder" onClick={createFolder}>
+            <FolderPlusIcon size={13} />
+          </button>
+          <MoreMenu className="ghost" title="New page" icon={<PlusIcon size={13} />} width={190} items={pageCreateMenuItems({ createPage, createTemplate })} />
+        </div>
+      )}
     </div>
   );
 }

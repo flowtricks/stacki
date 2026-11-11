@@ -1,3 +1,4 @@
+import { assert } from '../../shared/core/assert';
 import { findWithParent } from './treeSelection';
 import type { TreeView } from './treeView';
 import { LIMITS } from '../../shared/core/limits';
@@ -134,4 +135,56 @@ export function insertTargetFor(
     }
   }
   return { parentId: undefined, index: model.nodes.length };
+}
+
+/** Where an insert asked for a place of its own goes: beside or inside an anchor, or in a node's place. */
+export interface AnchoredInsert {
+  readonly position: 'before' | 'after' | 'inside' | 'replace';
+  readonly anchorId: string;
+  /** A child index, inside only: undefined puts the node last. */
+  readonly index: number | undefined;
+}
+
+/**
+ * The place an anchored insert names (Stacki Apps' `node.insert`), checked as the
+ * palette's rule checks a selection: the parent must be able to hold the new node's
+ * tag. Unlike the palette, nothing is climbed out of: the caller named the place, so a
+ * place that cannot take the node is refused with the reason, never moved.
+ * A replacement goes where the replaced node stands, before it.
+ */
+export function anchoredInsertTarget(
+  model: { readonly nodes: readonly TreeView[] },
+  insert: AnchoredInsert,
+  item: InsertItem,
+  insertables: readonly Insertable[] | undefined,
+): { readonly kind: 'placed'; readonly target: InsertTarget } | { readonly kind: 'refused'; readonly reason: string } {
+  assert(insert.index === undefined || insert.position === 'inside', 'Only an insert inside its anchor takes an index');
+  const childTag = item.type === 'element' ? item.tag : tagOfComponent((insertables ?? []).find((candidate) => candidate.name === item.name));
+  const found = insert.anchorId === 'frontmatter' ? undefined : findWithParent(model.nodes, insert.anchorId);
+  if (found === undefined) {
+    return { kind: 'refused', reason: 'No element has that id on the open page' };
+  }
+  if (insert.position === 'inside') {
+    if (!acceptsChildren(found.node, childTag, insertables)) {
+      return { kind: 'refused', reason: `That ${found.node.kind} cannot hold ${childTag === undefined ? 'this node' : `a <${childTag}>`}` };
+    }
+    const count = found.node.children?.length ?? 0;
+    const index = insert.index ?? count;
+    if (index <= count) {
+      return { kind: 'placed', target: { parentId: found.node.id, index } };
+    }
+    return { kind: 'refused', reason: `index is past the anchor's ${count} children` };
+  }
+  // The layout wraps the whole page, and a branch or a frontmatter section is part of the code around it: none is a node to stand beside or replace.
+  if (found.node.id === 'layout' || found.node.kind === 'branch' || found.node.kind === 'chunk-group') {
+    return { kind: 'refused', reason: `A new node cannot go ${insert.position === 'replace' ? 'in place of' : insert.position} that ${found.node.kind}` };
+  }
+  if (found.parent !== undefined) {
+    if (!acceptsChildren(found.parent, childTag, insertables)) {
+      return { kind: 'refused', reason: `The anchor's parent cannot hold ${childTag === undefined ? 'this node' : `a <${childTag}>`}` };
+    }
+  }
+  const index = insert.position === 'after' ? found.index + 1 : found.index;
+  assert(index <= found.siblings.length, 'A place beside the anchor is within its list');
+  return { kind: 'placed', target: { parentId: found.parent?.id, index } };
 }

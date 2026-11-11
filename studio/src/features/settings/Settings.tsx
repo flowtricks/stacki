@@ -1,4 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { assert } from '../../../vendor/stacki/shared/core/assert';
+import type { ImportNeed } from '../../../vendor/stacki/src/editor/dataSample';
+import { collectionQueryEdit, dataImportEdit, type AddedSource } from './frontmatterAdditionEdit';
 import { isDefaultsCanvas } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { VariantPreview } from './VariantPreview';
 import { LockedSettings } from './LockedSettings';
@@ -35,14 +38,28 @@ export function Settings(props: Props) {
   const current = settingsNode(selected, node);
   const structure = useStructureSettings({ document, selected, component, project, source, error: props.error });
   // On a component's own file, the binding picker can connect to its props and make new ones (Desktop's newPropHostOf).
-  const bindContext = { ...useBindContext(document.file, source, nodes, selected), newProp: structure.newProp };
+  const scope = useBindContext(document.file, source, nodes, selected);
   const page = useMemo(() => loopPage(source), [source]);
+  // What a pick writes before it binds (a collection's query, a data file's
+  // import) is held for the field's own change and applied first in it, so
+  // the page changes once: one undo step, as Desktop's holdForNextEdit.
+  const held = useRef<((text: string) => string) | undefined>(undefined);
   const change = (edit: (source: string) => string) => {
+    const addition = held.current;
+    held.current = undefined;
     try {
-      document.replaceSource(edit(document.text.toString()));
+      const text = document.text.toString();
+      document.replaceSource(edit(addition === undefined ? text : addition(text)));
     } catch (error) {
       props.error(error);
     }
+  };
+  const additions = client ? undefined : frontmatterAdditions(document, held, change, props.error);
+  // Client mode edits content, never a page's frontmatter: it binds to what is in scope only.
+  const bindContext = {
+    ...scope,
+    ...(additions === undefined ? { collections: [], projectSources: [] } : additions),
+    newProp: structure.newProp,
   };
   const handlers = settingsHandlers(props, change);
   const notice = document.selectionNotice;
@@ -72,7 +89,13 @@ export function Settings(props: Props) {
           sectionIds: flatten(nodes).flatMap((node) => (node.props?.['id']?.type === 'string' ? [node.props['id'].value] : [])),
           projectPath: 'studio',
         }}
-        onSetAssetProp={(id, name, picked) => change((source) => assetProp(source, id, document.file, name, picked.rel))}
+        // `also` (an app pick's alt text) goes in the same source change, so one undo step.
+        onSetAssetProp={(id, name, picked, _reference, also) =>
+          change((source) => {
+            const withAsset = assetProp(source, id, document.file, name, picked.rel);
+            return also === undefined ? withAsset : writeAttributes(withAsset, id, also);
+          })
+        }
         {...(props.openCode && !client ? { onOpenCode: props.openCode } : {})}
         {...(client
           ? {}
@@ -86,6 +109,43 @@ export function Settings(props: Props) {
     </VariantPreview>
   );
 }
+// The picker's ensureQuery and ensureImport: each answers with the name the
+// binding reads now and holds the frontmatter change for the field's edit. A
+// field that makes no edit leaves it to go in alone once the click is done.
+function frontmatterAdditions(
+  document: SharedDocument,
+  held: { current: ((text: string) => string) | undefined },
+  change: (edit: (source: string) => string) => void,
+  report: (error: unknown) => void,
+): { readonly ensureQuery: (collection: string) => string | undefined; readonly ensureImport: (need: ImportNeed) => string | undefined } {
+  const hold = (addition: (text: string) => string): void => {
+    assert(held.current === undefined, 'One frontmatter addition is held at a time');
+    held.current = addition;
+    window.setTimeout(() => {
+      if (held.current === addition) {
+        change((text) => text);
+      }
+    }, 0);
+  };
+  const ensure = (write: (text: string) => AddedSource): string | undefined => {
+    try {
+      const text = document.text.toString();
+      const now = write(text);
+      if (now.source !== text) {
+        hold((later) => write(later).source);
+      }
+      return now.name;
+    } catch (error) {
+      report(error);
+      return undefined;
+    }
+  };
+  return {
+    ensureQuery: (collection) => ensure((text) => collectionQueryEdit(text, collection)),
+    ensureImport: (need) => ensure((text) => dataImportEdit(text, need)),
+  };
+}
+
 function settingsHandlers(
   props: Props,
   change: (edit: (source: string) => string) => void,

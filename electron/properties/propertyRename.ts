@@ -50,14 +50,20 @@ type PropertyReferenceEdit =
       readonly local: string;
     };
 
+/**
+ * `forwarded` names the spreads (`<BaseHead {...seo} />`) known to carry a
+ * shared props type whose member is being renamed: the spread renames itself
+ * with the type, so it needs no edit and is not refused as dynamic.
+ */
 export function renameComponentReferences(
   source: string,
   names: ReadonlySet<string>,
   rename: PropertyRename,
   owner: 'definition' | 'consumer',
+  forwarded: ReadonlySet<string> = new Set(),
 ): Result<string> {
   const typeNames = owner === 'definition' ? readPropertyContracts(readPropertySyntax(source)).names : new Set<string>();
-  return editComponentReferences(source, names, { kind: 'rename', ...rename, typeNames: new Set(['Props', ...typeNames]) }, owner);
+  return editComponentReferences(source, names, { kind: 'rename', ...rename, typeNames: new Set(['Props', ...typeNames]) }, owner, forwarded);
 }
 
 /**
@@ -337,7 +343,13 @@ export function bindComponentDefault(source: string, name: string, binding: stri
   );
 }
 
-function editComponentReferences(source: string, names: ReadonlySet<string>, rename: PropertyReferenceEdit, owner: 'definition' | 'consumer'): Result<string> {
+function editComponentReferences(
+  source: string,
+  names: ReadonlySet<string>,
+  rename: PropertyReferenceEdit,
+  owner: 'definition' | 'consumer',
+  forwarded: ReadonlySet<string> = new Set(),
+): Result<string> {
   let root: Node;
   try {
     const result = parse(source, { position: true });
@@ -358,7 +370,7 @@ function editComponentReferences(source: string, names: ReadonlySet<string>, ren
     }
     edits.push(...result.value);
   }
-  const nodes = editAstroNodes(source, root, names, rename, owner);
+  const nodes = editAstroNodes(source, root, names, rename, { owner, forwarded });
   if (!nodes.ok) {
     return nodes;
   }
@@ -385,7 +397,7 @@ function editAstroNodes(
   root: Node,
   names: ReadonlySet<string>,
   rename: PropertyReferenceEdit,
-  owner: 'definition' | 'consumer',
+  { owner, forwarded }: { readonly owner: 'definition' | 'consumer'; readonly forwarded: ReadonlySet<string> },
 ): Result<readonly SourceEdit[]> {
   const edits: SourceEdit[] = [];
   const pending: { readonly node: Node; readonly expression: boolean }[] = [{ node: root, expression: false }];
@@ -395,6 +407,7 @@ function editAstroNodes(
     assert(entry !== undefined, 'Queued Astro node exists');
     const result = renameNode(source, entry.node, names, rename, {
       owner,
+      forwarded,
       expression: entry.expression,
     });
     if (!result.ok) {
@@ -421,7 +434,7 @@ function renameNode(
   node: Node,
   names: ReadonlySet<string>,
   rename: PropertyReferenceEdit,
-  { owner, expression }: { readonly owner: 'definition' | 'consumer'; readonly expression: boolean },
+  { owner, forwarded, expression }: { readonly owner: 'definition' | 'consumer'; readonly forwarded: ReadonlySet<string>; readonly expression: boolean },
 ): Result<readonly SourceEdit[]> {
   const edits: SourceEdit[] = [];
   if ('attributes' in node) {
@@ -434,7 +447,7 @@ function renameNode(
     }
     for (const attribute of node.attributes) {
       if (target && rename.kind === 'rename') {
-        const result = renameAttribute(source, attribute, rename);
+        const result = attribute.kind === 'spread' && forwarded.has(attribute.name.trim()) ? ok([]) : renameAttribute(source, attribute, rename);
         if (!result.ok) {
           return result;
         }

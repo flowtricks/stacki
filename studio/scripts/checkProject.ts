@@ -5,6 +5,7 @@ import { defaultsIssues } from '../vendor/stacki/shared/properties/componentDefa
 import { validateMetadata } from '../vendor/stacki/shared/properties/projectMetadata';
 import { EMPTY_KEEP_LIST, parseStyleKeepList } from '../vendor/stacki/shared/properties/styleKeepList';
 import { checkSelectorUsage } from '../vendor/stacki/electron/properties/selectorUsageFiles';
+import { configOf, foldersFor, readProjectFoldersSource } from '../vendor/stacki/shared/properties/projectFolders';
 
 export async function checkProject(root: string): Promise<void> {
   const sources = await readMetadataSource(root, 'componentSources');
@@ -29,20 +30,24 @@ export async function checkProject(root: string): Promise<void> {
   if (styles.source !== undefined) {
     validateMetadata('styles', styles.source);
   }
+  const folders = await readMetadataSource(root, 'folders');
+  if (folders.source !== undefined) {
+    validateMetadata('folders', folders.source);
+  }
   if (issues.length > 0) {
     throw new Error(issues.join('\n'));
   }
-  console.log('Project component defaults, guide, page order, publish and styles settings are valid.');
-  await reportUnusedSelectors(root, styles.source);
+  console.log('Project component defaults, guide, page order, publish, styles and folder settings are valid.');
+  await reportUnusedSelectors(root, styles.source, foldersFor('styles', configOf(readProjectFoldersSource(folders.source))));
 }
 
 // Unused selectors are reported, not failed: a leftover rule costs bytes, and
 // the decision to delete it belongs to whoever reads the report. Only proven
 // unused selectors are listed; the panel's "Can't tell" ones are counted.
-async function reportUnusedSelectors(root: string, keepSource: string | undefined): Promise<void> {
+async function reportUnusedSelectors(root: string, keepSource: string | undefined, styleFolders: readonly string[]): Promise<void> {
   const parsed: unknown = keepSource === undefined ? undefined : JSON.parse(keepSource);
   const keepList = parsed === undefined ? EMPTY_KEEP_LIST : parseStyleKeepList(parsed);
-  const { report } = await checkSelectorUsage(root, keepList);
+  const { report } = await checkSelectorUsage(root, keepList, 'search', styleFolders);
   const unused = report.entries.filter((entry) => entry.verdict.kind === 'unused');
   const unknown = report.entries.filter((entry) => entry.verdict.kind === 'unknown').length;
   for (const entry of unused) {

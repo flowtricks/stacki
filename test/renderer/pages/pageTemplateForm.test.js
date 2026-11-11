@@ -236,7 +236,7 @@ const typeInto = (dom, input, value) =>
   });
 const settled = () => act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
 // A sample tree draws the data picker's rows (ui/DataTree.tsx): a row by the name it shows.
-const row = (label) => [...document.querySelectorAll('.page-template-popover .dp-row')].find((item) => item.querySelector('.dp-key').textContent === label);
+const row = (label) => [...document.querySelectorAll('.page-template-data .dp-row')].find((item) => item.querySelector('.dp-key').textContent === label);
 const shownValue = (label) => row(label).querySelector('.dp-val').textContent;
 
 test('+ opens a menu with both kinds, and Create page keeps today’s flow', async (context) => {
@@ -787,28 +787,53 @@ test('the fields popover searches, steps through items on the item row, and sele
   await debounced();
   await settled();
   await click(byText('.page-template-trigger', '2 fields · 3 items'));
-  assert.ok(document.querySelector('.page-template-popover .data-picker .dp-search input[placeholder="Search data…"]'), 'the data picker’s search');
+  assert.ok(document.querySelector('.page-template-data.bind-menu .data-picker .dp-search input[placeholder="Search data…"]'), 'the data picker’s search');
+  assert.equal(document.querySelector('.page-template-data').style.width, '320px', 'as wide as the data picker');
+  assert.equal(document.querySelector('.page-template-data .dp-search button') ?? undefined, undefined, 'the search row is only a search');
+  assert.equal(
+    document.querySelector('.page-template-data .dp-section .dp-section-heading').textContent,
+    'Fields',
+    'a heading on a fill, as the picker’s groups',
+  );
   assert.equal(row('item').querySelector('.dp-item-count').textContent, '1/3', 'the stepper sits on the item’s row');
   assert.equal(shownValue('title'), 'One');
   await click(row('item').querySelector('button[title="Next item"]'));
   assert.equal(shownValue('title'), 'Two', 'the arrows show the next item’s values');
   assert.equal(row('item').querySelector('.dp-item-count').textContent, '2/3');
+  await click(row('item').querySelector('button[title="Previous item"]'));
+  await click(row('item').querySelector('button[title="Previous item"]'));
+  assert.equal(row('item').querySelector('.dp-item-count').textContent, '3/3', 'stepping back from the first item wraps to the last');
+  assert.equal(shownValue('title'), 'Three');
+  await click(row('item').querySelector('button[title="Next item"]'));
+  await click(row('item').querySelector('button[title="Next item"]'));
   await click(row('author').querySelector('.dp-twist[title="Open"]'));
   assert.equal(shownValue('name'), 'Bo', 'nested fields open under their object');
-  await click(byText('.page-template-popover button', 'Deselect all'));
+  await click(byText('.page-template-data .dp-section-action', 'Deselect all'));
   await settled();
   assert.deepEqual(calls.plan.at(-1).draft.source.fields, [{ path: 'title', kind: 'string' }], 'the address field stays');
-  await click(byText('.page-template-popover button', 'Select all'));
+  assert.equal(row('name').classList.contains('selected'), false, 'a cleared field is not lit');
+  assert.equal(row('title').classList.contains('selected'), true);
+  await click(byText('.page-template-data .dp-section-action', 'Select all'));
   await settled();
   assert.equal(calls.plan.at(-1).draft.source.fields.length, 2);
-  await typeInto(dom, document.querySelector('.page-template-popover input[aria-label="Search the data"]'), 'NAME');
+  assert.equal(row('name').classList.contains('selected'), true, 'every field is lit again');
+  assert.equal(document.querySelector('.page-template-data .dp-section-action').textContent, 'Deselect all', 'the heading offers the opposite');
+  await click(row('title'));
+  await settled();
+  assert.equal(row('title').classList.contains('selected'), false, 'a row press unticks its field');
+  assert.equal(document.querySelector('.page-template-data .dp-section-action').textContent, 'Select all', 'one field off offers Select all');
+  await click(row('title'));
+  await settled();
+  assert.equal(row('title').classList.contains('selected'), true, 'and a second press ticks it again');
+  await typeInto(dom, document.querySelector('.page-template-data input[aria-label="Search data"]'), 'NAME');
   assert.deepEqual(
-    [...document.querySelectorAll('.page-template-popover .dp-row .dp-key')].map((key) => key.textContent),
+    [...document.querySelectorAll('.page-template-data .dp-row .dp-key')].map((key) => key.textContent),
     ['author.name'],
     'a search lists matches by their whole path, as the data picker’s does',
   );
-  await typeInto(dom, document.querySelector('.page-template-popover input[aria-label="Search the data"]'), 'zzz');
-  assert.match(document.querySelector('.page-template-popover .dp-list').textContent, /Nothing matches/);
+  await typeInto(dom, document.querySelector('.page-template-data input[aria-label="Search data"]'), 'zzz');
+  assert.match(document.querySelector('.page-template-data .dp-list').textContent, /Nothing matches/);
+  assert.equal(document.querySelector('.page-template-data .dp-section') ?? undefined, undefined, 'a search lists matches without headings');
 });
 
 test('a nested object shows indented and collapsible, and choosing its fields is what the dialog sends', async (context) => {

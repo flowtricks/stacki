@@ -12,7 +12,7 @@ const INSERT_TAB_KEY = 'stacki.insertPalette.tab';
 /** The tab a first-time palette opens on. */
 export const INSERT_TAB_DEFAULT: InsertTab = 'all';
 
-const INSERT_TABS: readonly InsertTab[] = ['all', 'components', 'elements', 'other'];
+const INSERT_TABS: readonly InsertTab[] = ['all', 'components', 'elements', 'other', 'apps'];
 
 /** A stored tab, or the default: storage is shared with every earlier build, so what it holds is parsed like any input. */
 export function parseStoredInsertTab(raw: unknown): InsertTab {

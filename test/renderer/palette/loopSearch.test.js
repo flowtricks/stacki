@@ -5,7 +5,7 @@
 const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 const { OTHER_ITEMS } = load('src/features/palette/InsertSearch.tsx');
-const { rankInsertItems } = load('src/features/palette/insertRank.ts');
+const { rankInsertItems } = load('src/lib/insertRank.ts');
 
 const loop = OTHER_ITEMS.find((item) => item.type === 'map');
 assert.ok(loop, 'the palette offers a Loop');

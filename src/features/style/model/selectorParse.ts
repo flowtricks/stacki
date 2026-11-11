@@ -263,6 +263,43 @@ export function selectorDependsOnAncestor(selectorText: string): boolean {
   return selectors.some((selector) => selector.combinators.some((combinator) => combinator === ' ' || combinator === '>'));
 }
 
+/**
+ * What a selector is built from, for the well's colour. `class`: a class, id or
+ * attribute in any compound, including inside `:is()`, `:where()`, `:not()` and
+ * `:has()`; the chip is blue, because it names this element's identity. `plain`:
+ * only tags, `*` and pseudos; the chip is grey, because it describes a project-wide
+ * group. Text that does not parse falls back to looking for `.`, `#` or `[`.
+ */
+export type SelectorKind = 'class' | 'plain';
+
+export function selectorKind(text: string): SelectorKind {
+  assert(typeof text === 'string', 'selectorKind: the selector is text');
+  let root: selectorParser.Root;
+  try {
+    root = selectorParser().astSync(text);
+  } catch {
+    return /[.#[]/.test(text) ? 'class' : 'plain';
+  }
+  let named = false;
+  root.walk((node) => {
+    if (node.type === 'class' || node.type === 'id' || node.type === 'attribute') {
+      named = true;
+      return false;
+    }
+    return undefined;
+  });
+  const kind: SelectorKind = named ? 'class' : 'plain';
+  assert(kind === 'class' || !/^[.#[]/.test(text.trim()), 'selectorKind: a selector led by a class, id or attribute is a class chip');
+  return kind;
+}
+
+// A selector made only from tags, universal selectors, and pseudos describes a
+// project-wide group rather than this element's identity (selectorKind). The well
+// colours these chips grey and reads them before the element's classes (wellOrder).
+export function isGlobalSelector(text: string): boolean {
+  return selectorKind(text) === 'plain';
+}
+
 /** Normalize a pseudo-element to its `::name` form (handles legacy `:before`), or ''. */
 export function normalizePseudoElement(pseudoElement: string | undefined): string {
   if (!pseudoElement) {

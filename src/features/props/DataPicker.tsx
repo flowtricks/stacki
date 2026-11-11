@@ -10,6 +10,7 @@ import {
   AstroIcon,
   CmsIcon,
   ElementComponentIcon,
+  FileIcon,
   CodeIcon,
   ElementImageIcon,
   FieldNumberIcon,
@@ -23,18 +24,21 @@ import { pathSteps } from '../../editor/dataSample';
 import {
   entryPageOf,
   entryPath,
+  dataFileOfSection,
   isComponentSection,
+  sectionHeads,
   missingLabel,
   pagesOfPath,
-  sectionHeading,
   settingsKeyOf,
   shownEntryRows,
   steppedEntryIndex,
   type DataOrigin,
   type EntryPages,
 } from './dataPickerModel';
-import { DataSearch, DataTreeRow, ItemNavigation, PreviewValue, dataRowIndentPx, type ItemPosition } from '../../ui/DataTree';
+import { DataSearch, DataSection, DataSubsection, DataTreeRow, ItemNavigation, PreviewValue, dataRowIndentPx, type ItemPosition } from '../../ui/DataTree';
 import type { PropSettingsOffer } from './newPropModel';
+import type { ImportNeed } from '../../editor/dataSample';
+import type { PickNeed } from '../../editor/bindings';
 
 // The data behind the page, as something you can look through rather than
 // something you have to already know. Every row is a value that is in scope
@@ -75,6 +79,40 @@ function flatten(nodes: readonly PickerNode[]): PickerNode[] {
     }
   }
   return out;
+}
+
+/**
+ * The rows a search shows, flat, in tree order: every node whose path or value
+ * holds `needle` (lower case). Each keeps its root, so a field found inside a
+ * collection or a data file still writes that source's query or import when
+ * it is picked.
+ */
+export function searchMatches(tree: readonly PickerNode[], needle: string): { readonly node: PickerNode; readonly root: PickerNode }[] {
+  assert(needle === needle.toLowerCase(), 'searchMatches: the needle is lower case');
+  return withRoots(tree).filter(({ node }) => node.path.toLowerCase().includes(needle) || String(node.preview).toLowerCase().includes(needle));
+}
+
+// Every node with the root it hangs from, roots included, in the order the
+// tree lists them: search shows them flat and still needs each one's source.
+function withRoots(tree: readonly PickerNode[]): { readonly node: PickerNode; readonly root: PickerNode }[] {
+  const out = tree.flatMap((root) => flatten([root]).map((node) => ({ node, root })));
+  assert(out.length <= LIMITS.treeNodesMax * Math.max(tree.length, 1), 'DataPicker: node limit exceeded');
+  return out;
+}
+
+/**
+ * What picking under `root` has to write first, or undefined for data already
+ * in scope. resolvePick checks the picked path against the need's name; the
+ * Source picker addresses its roots its own way and reads only the path.
+ */
+export function needOf(root: Pick<PickerNode, 'query' | 'importNeed'>): PickNeed | undefined {
+  if (root.query !== undefined) {
+    return { kind: 'collection', collection: root.query.collection, name: root.query.name };
+  }
+  if (root.importNeed !== undefined) {
+    return { kind: 'import', import: root.importNeed, name: root.importNeed.name };
+  }
+  return undefined;
 }
 
 // A field can be bound to something the tree doesn't hold — an optional
@@ -141,6 +179,11 @@ export interface PickerNode {
   readonly nav?: Navigation;
   readonly entryCount?: number;
   readonly query?: { readonly collection: string; readonly name: string };
+  readonly importNeed?: ImportNeed;
+  /** Why the row cannot be bound (an imported function): it is drawn dimmed, says why, and picks nothing. */
+  readonly unbindable?: string;
+  /** A muted word in place of a value: a prop the instance does not pass and has no default reads "not set". */
+  readonly note?: string;
   readonly lazy?: boolean;
   readonly pickable?: boolean;
   readonly missing?: boolean;
@@ -151,7 +194,8 @@ export interface DataPickerProps {
   readonly current?: string | undefined;
   readonly entries?: Entries | undefined;
   readonly onStepItem?: (path: string, step: -1 | 1, count: number) => void;
-  readonly onPick: (path: string, query: PickerNode['query'] | undefined) => void;
+  /** `need` is what the file has to read first: a collection's query, or a data file's import. */
+  readonly onPick: (path: string, need: PickNeed | undefined) => void;
   /**
    * A row needs data the app has not read: a collection opened for the first
    * time (`index` undefined), or the entry its pager stepped to.
@@ -167,6 +211,13 @@ export interface DataPickerProps {
   readonly lead?: ReactNode;
   /** Opens a prop's settings from its row. A host without it shows no gear. */
   readonly propSettings?: PropSettingsOffer | undefined;
+  /**
+   * Whether a group of data the file does not read yet (a project data file,
+   * the content collections) starts folded under its heading: `folded`, the
+   * default, in a binding picker where it sits below what is in scope; `open`
+   * where those groups are all there is to choose from (the loop's Source).
+   */
+  readonly sources?: 'folded' | 'open';
 }
 
 export default function DataPicker(props: DataPickerProps) {
@@ -189,7 +240,7 @@ export default function DataPicker(props: DataPickerProps) {
           re-reads this list against it at the same time. */}
         {entries && entries.count > 1 && <EntryNavigation entries={entries} />}
         <DataSearch value={query} label="Search data" inputRef={searchRef} onChange={setQuery} />
-        <DataPickerResults state={state} origin={origin} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
+        <DataPickerResults state={state} origin={origin} folding={props.sources ?? 'folded'} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
         {/* Above "Write an expression…", because it is about the thing already
           bound rather than about replacing it. Only ever rendered for a picker
           opened on a specific chip — the field's own handle opens this on
@@ -215,12 +266,14 @@ export default function DataPicker(props: DataPickerProps) {
 function DataPickerResults({
   state,
   origin,
+  folding,
   onPick,
   onStepItem,
   listRef,
 }: {
   readonly state: PickerState;
   readonly origin: DataOrigin | undefined;
+  readonly folding: 'folded' | 'open';
   readonly onPick: DataPickerProps['onPick'];
   readonly onStepItem: DataPickerProps['onStepItem'];
   readonly listRef: React.RefObject<HTMLDivElement>;
@@ -230,9 +283,11 @@ function DataPickerResults({
     <div className="dp-list" ref={listRef}>
       {/* Search uses full paths because the flattened rows lose their parents. */}
       {matches ? (
-        matches.map((node) => <DataRow key={node.path} node={node} depth={0} showPath root={undefined} state={state} onPick={onPick} onStepItem={onStepItem} />)
+        matches.map((match) => (
+          <DataRow key={match.node.path} node={match.node} depth={0} showPath root={match.root} state={state} onPick={onPick} onStepItem={onStepItem} />
+        ))
       ) : (
-        <DataRoots nodes={tree} origin={origin} state={state} onPick={onPick} onStepItem={onStepItem} />
+        <DataRoots nodes={tree} origin={origin} folding={folding} state={state} onPick={onPick} onStepItem={onStepItem} />
       )}
       {((matches && !matches.length) || (!matches && !tree.length)) && (
         <div className="dp-empty">{matches ? 'Nothing matches' : 'No data in scope here — add a prop to this file, or a const to its frontmatter.'}</div>
@@ -242,6 +297,9 @@ function DataPickerResults({
 }
 
 function useDataPicker({ tree: rawTree, current, onExpand, propSettings }: DataPickerProps) {
+  // Which folded source groups are open, by section, for as long as the picker is.
+  // A group holding the current binding starts open, so the picker opens ON it.
+  const [sections, setSections] = useState<ReadonlySet<string>>(() => sectionsHolding(rawTree ?? [], current));
   const [query, setQuery] = useState('');
   const [settingsKey, setSettingsKey] = useState<string | undefined>(undefined);
   const tree = useMemo(() => withCurrent(rawTree ?? [], current), [rawTree, current]);
@@ -254,7 +312,8 @@ function useDataPicker({ tree: rawTree, current, onExpand, propSettings }: DataP
     // collection: it is a whole list of entries, the page does not read it
     // yet, and opened it buried the data that is in scope under its rows.
     if (!start.size) {
-      const first = (tree || []).find((node) => node.children?.length && node.section !== 'collections');
+      // Nor a data file the file does not import: it is not this file's data yet either.
+      const first = (tree || []).find((node) => node.children?.length && node.section !== 'collections' && needOf(node) === undefined);
       if (first) {
         start.add(first.path);
         const page = entryPageOf(first, pages);
@@ -292,7 +351,7 @@ function useDataPicker({ tree: rawTree, current, onExpand, propSettings }: DataP
     if (!needle) {
       return undefined;
     }
-    return flatten(tree || []).filter((node) => node.path.toLowerCase().includes(needle) || String(node.preview).toLowerCase().includes(needle));
+    return searchMatches(tree, needle);
   }, [needle, tree]);
 
   // A paged list opened, or stepped, onto an entry the app has not read asks
@@ -348,9 +407,23 @@ function useDataPicker({ tree: rawTree, current, onExpand, propSettings }: DataP
     searchRef.current?.focus();
   };
 
+  const toggleSection = (section: string): void => {
+    setSections((previous) => {
+      const next = new Set(previous);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  };
+
   return {
     query,
     setQuery,
+    sections,
+    toggleSection,
     tree,
     open,
     pages,
@@ -394,11 +467,11 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
       <DataTreeRow
         depth={depth}
         label={showPath ? node.path : node.key}
-        title={`${node.path}${node.kind ? ` — ${node.kind}` : ''}`}
+        title={`${node.path} — ${node.unbindable ?? node.kind}`}
         expandable={expandable === true}
         open={isOpen}
         selected={isCurrent}
-        tone={node.missing ? 'missing' : node.pickable === false ? 'path-only' : 'plain'}
+        tone={node.missing ? 'missing' : node.unbindable !== undefined ? 'disabled' : node.pickable === false ? 'path-only' : 'plain'}
         check="selected-only"
         rowRef={isCurrent ? selectedRef : undefined}
         lead={<DataRowLead node={node} depth={depth} />}
@@ -413,6 +486,8 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
             <ItemNavigation path={node.path} nav={node.nav} onStepItem={onStepItem} />
           ) : page !== undefined ? (
             <ItemNavigation path={node.path} nav={page} onStepItem={(_path, step) => stepEntry(node, step)} />
+          ) : node.note !== undefined ? (
+            <span className="dp-val kind">{node.note}</span>
           ) : (
             <PreviewValue preview={node.preview} kind={node.kind} image={node.image} />
           )
@@ -423,7 +498,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
         // anything — a collection the page doesn't read yet needs its query
         // written first. A row kept only so a list beneath it can be reached
         // opens instead of being chosen — there is no looping over an object.
-        onPick={() => (node.pickable === false ? toggle(node) : onPick(node.path, from.query || undefined))}
+        onPick={() => (node.pickable === false ? toggle(node) : onPick(node.path, needOf(from)))}
       />
       {isOpen &&
         (shown !== undefined ? (
@@ -501,41 +576,82 @@ function PropSettingsSlot({ propKey, onOpen }: { readonly propKey: string | unde
 function DataRoots({
   nodes,
   origin,
+  folding,
   state,
   onPick,
   onStepItem,
 }: {
   readonly nodes: readonly PickerNode[];
   readonly origin: DataOrigin | undefined;
+  readonly folding: 'folded' | 'open';
   readonly state: PickerState;
   readonly onPick: DataPickerProps['onPick'];
   readonly onStepItem: DataPickerProps['onStepItem'];
 }) {
   let section: string | undefined;
   return (nodes || []).map((node) => {
-    const head = node.section && node.section !== section ? sectionHeading(node.section, origin) : undefined;
+    const heads = node.section && node.section !== section ? sectionHeads(node.section, section, origin) : [];
     section = node.section || section;
+    const folds = folding === 'folded' && isSourceSection(section);
+    // A folded group's rows are not drawn at all, so nothing in it can be reached until it is opened.
+    const shown = !folds || (section !== undefined && state.sections.has(section));
+    const key = section;
     return (
       <React.Fragment key={`s:${node.path}`}>
-        {head && (
-          <div className={isComponentSection(node.section, origin) ? 'dp-section component' : 'dp-section'}>
-            <SectionIcon section={node.section} />
-            {head}
-          </div>
+        {heads.map((head) =>
+          head.kind === 'part' ? (
+            <DataSubsection key={`h:${head.heading}`} heading={head.heading} />
+          ) : (
+            <DataSection
+              key={`h:${head.heading}`}
+              heading={head.heading}
+              tone={isComponentSection(head.section, origin) ? 'component' : 'source'}
+              icon={<SectionIcon section={head.section} />}
+              collapse={folds && key !== undefined ? { open: shown, onToggle: () => state.toggleSection(key) } : undefined}
+            />
+          ),
         )}
-        {<DataRow node={node} depth={0} showPath={false} root={undefined} state={state} onPick={onPick} onStepItem={onStepItem} />}
+        {shown && <DataRow node={node} depth={0} showPath={false} root={undefined} state={state} onPick={onPick} onStepItem={onStepItem} />}
       </React.Fragment>
     );
   });
 }
+
+/** Whether a group holds data the file does not read yet: a project data file, or the content collections. */
+export function isSourceSection(section: string | undefined): boolean {
+  if (section === 'collections') {
+    return true;
+  }
+  return dataFileOfSection(section) !== undefined;
+}
+
+// The source groups that hold the binding the picker opens on: its root's group.
+function sectionsHolding(tree: readonly PickerNode[], current: string | undefined): ReadonlySet<string> {
+  const steps = current === undefined ? [] : [...ancestorsOf(current), current];
+  const sections = new Set<string>();
+  for (const node of tree) {
+    if (node.section !== undefined && isSourceSection(node.section) && steps.includes(node.path)) {
+      sections.add(node.section);
+    }
+  }
+  assert(sections.size <= tree.length, 'sectionsHolding: one group per root at most');
+  return sections;
+}
+
 // Where a section's data comes from, as a mark beside its heading: the
-// component whose props these are, or Astro for its content collections.
+// component whose props these are, Astro for its content collections, or a
+// file for a project data file.
 function SectionIcon({ section }: { readonly section: string | undefined }) {
   if (section === 'props' || section === 'loop-component') {
     return <ElementComponentIcon size={11} className="dp-section-icon" />;
   }
   if (section === 'collections') {
     return <AstroIcon size={11} className="dp-section-icon" />;
+  }
+  // A project data file is a file, marked as the Pages panel marks one; the
+  // CMS mark stays with what the CMS holds (the collections' rows).
+  if (dataFileOfSection(section) !== undefined) {
+    return <FileIcon size={11} className="dp-section-icon" />;
   }
   return undefined;
 }

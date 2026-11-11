@@ -1,8 +1,10 @@
 // The Kind picker: a designer chooses what a prop holds (Text, Number,
 // Switch, Choice, Link, Image, List, Group…) and the panel writes the native
 // type for it (propertyKinds.ts). TypeScript's own words sit under Advanced,
-// and the "Code type" disclosure shows the exact type expression, editable,
-// for anything the kinds do not describe.
+// and the `{}` toggle shows the exact type expression, editable, for anything
+// the kinds do not describe. A prop with options has the toggle beside its
+// Options instead (PropertyOptions.tsx), where it swaps the list for the code;
+// the host owns the one switch both read (PropertyEditor.tsx).
 
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -28,7 +30,7 @@ import {
 } from '../../ui/Icons';
 import { CODE_TYPE_CHOICES, KIND_CHOICES, carriedDefault, propertyKind, withKind, type PropertyKind } from './propertyKinds';
 import { withTag } from './settingTags';
-import { CodeTypeField, type EditPace } from '../props/propBindings';
+import { CodeTypeEditor, CodeTypeToggle, type EditPace } from '../props/propBindings';
 
 /** What a kind pick changes on the property. */
 export type KindChange = Pick<ComponentProperty, 'type' | 'description' | 'defaultValue'>;
@@ -36,16 +38,31 @@ export type KindChange = Pick<ComponentProperty, 'type' | 'description' | 'defau
 interface PropertyTypeProps {
   readonly property: ComponentProperty;
   readonly frontmatter: string;
+  /** Whether the code type is being edited, and how to switch it. */
+  readonly code: CodeMode;
+  /** The Options section holds the `{}` toggle and the code field, so Kind does not. */
+  readonly optionsHoldCode: boolean;
   readonly onChange: (change: KindChange, pace: EditPace) => void;
+}
+
+/** The code type switch the Kind and the Options share. */
+export interface CodeMode {
+  readonly open: boolean;
+  readonly setOpen: (open: boolean) => void;
+}
+
+/** Whether a property opens on its code type: one no kind or listed code type names. */
+export function opensOnCode(property: Pick<ComponentProperty, 'type' | 'description'>): boolean {
+  const codeChoice = CODE_TYPE_CHOICES.some((choice) => choice.type === property.type);
+  return propertyKind(property) === 'code' && !codeChoice;
 }
 
 const CODE_PREFIX = 'code:';
 
-export function PropertyType({ property, frontmatter, onChange }: PropertyTypeProps) {
+export function PropertyType({ property, frontmatter, code, optionsHoldCode, onChange }: PropertyTypeProps) {
   const kind = propertyKind(property);
   const codeChoice = CODE_TYPE_CHOICES.some((choice) => choice.type === property.type);
-  // A type no kind or listed code type names opens with its expression shown.
-  const [codeOpen, setCodeOpen] = useState(kind === 'code' && !codeChoice);
+  const optionsOwnToggle = optionsHoldCode;
   const [note, setNote] = useState('');
   const pick = (value: string): void => {
     setNote('');
@@ -59,7 +76,7 @@ export function PropertyType({ property, frontmatter, onChange }: PropertyTypePr
       return;
     }
     if (chosen.kind === 'code') {
-      setCodeOpen(true);
+      code.setOpen(true);
       return;
     }
     if (chosen.kind === 'attributes') {
@@ -77,6 +94,7 @@ export function PropertyType({ property, frontmatter, onChange }: PropertyTypePr
     <div className="property-type" role="group" aria-label="Kind">
       <div className="property-type-heading">
         <span>Kind</span>
+        {!optionsOwnToggle && <CodeTypeToggle open={code.open} onToggle={() => code.setOpen(!code.open)} />}
       </div>
       <Dropdown
         ariaLabel="Kind"
@@ -88,14 +106,14 @@ export function PropertyType({ property, frontmatter, onChange }: PropertyTypePr
         searchPlaceholder="Search kinds…"
       />
       {note && <p className="property-help">{note}</p>}
-      {/* The same Code type the Settings panel's Property settings has (PropertySections.tsx). */}
-      <CodeTypeField
-        type={property.type}
-        placeholder=""
-        open={codeOpen}
-        onToggle={() => setCodeOpen(!codeOpen)}
-        onChange={(type) => onChange({ type, description: property.description, defaultValue: property.defaultValue }, 'typing')}
-      />
+      {/* The same code field the Settings panel's Property settings has (PropertySections.tsx). */}
+      {!optionsOwnToggle && code.open && (
+        <CodeTypeEditor
+          type={property.type}
+          placeholder=""
+          onChange={(type) => onChange({ type, description: property.description, defaultValue: property.defaultValue }, 'typing')}
+        />
+      )}
     </div>
   );
 }

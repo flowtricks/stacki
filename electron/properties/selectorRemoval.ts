@@ -11,6 +11,7 @@ import type { StyleKeepList } from '../../shared/properties/styleKeepList';
 import { writeProjectText } from '../documents/documentWrites';
 import { planSelectorRemoval } from './selectorCleanup';
 import { checkSelectorUsage } from './selectorUsageFiles';
+import { DEFAULT_PROJECT_FOLDERS } from '../../shared/properties/projectFolders';
 
 export { checkSelectorUsage };
 
@@ -18,8 +19,10 @@ export async function removeUnusedSelectors(
   root: string,
   keepList: StyleKeepList,
   request: { readonly ids: readonly string[]; readonly files: readonly SelectorFileDigest[] },
+  // The project's style folders, read by the caller, so the re-run check matches the panel's.
+  styleFolders: readonly string[] = DEFAULT_PROJECT_FOLDERS.styles,
 ): Promise<Result<SelectorRemoval>> {
-  const analysis = await checkSelectorUsage(root, keepList);
+  const analysis = await checkSelectorUsage(root, keepList, 'search', styleFolders);
   const planned = planSelectorRemoval(analysis, request.ids, request.files);
   if (!planned.ok) {
     return planned;

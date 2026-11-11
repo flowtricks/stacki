@@ -1,5 +1,5 @@
 import { useEffect, useState, type RefObject } from 'react';
-import { parseComponentPreviewMessage, type ComponentPreviewMessage } from './paletteModel';
+import { parseComponentPreviewGesture, parseComponentPreviewMessage, type ComponentPreviewGesture, type ComponentPreviewMessage } from './paletteModel';
 
 // What both the hover popup and the insert grid need from a preview route: the URL to load
 // (resolved through a draft session when the host asks for one) and the status the page
@@ -48,4 +48,24 @@ export function usePreviewMessages(frameRef: RefObject<HTMLIFrameElement>, onMes
     window.addEventListener('message', receive);
     return () => window.removeEventListener('message', receive);
   }, [frameRef, onMessage]);
+}
+
+/** Delivers the pointer gestures of the page inside `frameRef` (none without `onGesture`), and ignores every other window. */
+export function usePreviewGestures(frameRef: RefObject<HTMLIFrameElement>, onGesture: ((gesture: ComponentPreviewGesture) => void) | undefined): void {
+  useEffect(() => {
+    if (onGesture === undefined) {
+      return;
+    }
+    const receive = (event: MessageEvent<unknown>): void => {
+      if (event.source !== frameRef.current?.contentWindow) {
+        return;
+      }
+      const gesture = parseComponentPreviewGesture(event.data);
+      if (gesture !== undefined) {
+        onGesture(gesture);
+      }
+    };
+    window.addEventListener('message', receive);
+    return () => window.removeEventListener('message', receive);
+  }, [frameRef, onGesture]);
 }

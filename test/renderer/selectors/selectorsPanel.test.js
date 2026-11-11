@@ -1,7 +1,9 @@
 // Goal: the style selectors panel shows what the check found, locks a name into
 // .stacki/styles.json, and cleans up only unused selectors with a working undo.
 // A stylesheet or folder locked from its heading is written to the same file,
-// leaves the Unused count and the cleanup, and comes back when unlocked.
+// leaves the Unused tab and the cleanup, shows its rows locked under Locked,
+// keeps each row's own lock (which splits the sheet lock) and trash, and
+// comes back when unlocked.
 // Method: render the real panel in JSDOM with its bridge wired to the real
 // main-process functions over a temporary project on disk, click through
 // lock, clean-up and undo, and compare the files' bytes after each step.
@@ -40,7 +42,12 @@ function keepList(root) {
 function bridge(root) {
   return {
     selectorUsage: async () => ({ ok: true, value: (await checkSelectorUsage(root, keepList(root))).report }),
-    removeSelectors: async (input) => removeUnusedSelectors(root, keepList(root), { ids: input.ids, files: input.files }),
+    // As electron/handlers/selectorHandlers.ts: a row's own trash (`chosen`) is checked as if no stylesheet were locked.
+    removeSelectors: async (input) =>
+      removeUnusedSelectors(root, input.reach === 'chosen' ? { ...keepList(root), lockedStylesheets: [] } : keepList(root), {
+        ids: input.ids,
+        files: input.files,
+      }),
     restoreSelectors: async (input) => restoreSelectorFiles(root, input.changes, input.to),
     projectMetadata: async (input) => readProjectMetadata(root, input.kind),
     writeProjectMetadata: async (input) => writeProjectMetadata(root, input.write),
@@ -185,29 +192,42 @@ async function mountPanel(root, bundle) {
   const SelectorsPanel = require(bundle).default;
   const container = document.getElementById('root');
   const reactRoot = createRoot(container);
+  const undos = [];
+  const toasts = [];
   await act(async () => {
-    reactRoot.render(React.createElement(SelectorsPanel, { project: { path: root }, showToast: () => undefined, onRecordUndo: () => undefined }));
+    reactRoot.render(
+      React.createElement(SelectorsPanel, {
+        project: { path: root },
+        showToast: (message, kind) => toasts.push([message, kind]),
+        onRecordUndo: (command) => undos.push(command),
+      }),
+    );
     await settle(120);
   });
   const waitFor = async (check) => {
     for (let attempt = 0; attempt < 50 && !check(); attempt += 1) {
       await act(async () => settle(40));
     }
-    assert.ok(check(), container.innerHTML.slice(0, 2000));
+    assert.ok(check(), container.innerHTML.slice(0, 3000));
   };
   const click = async (element) =>
     act(async () => {
       element.click();
       await settle(80);
     });
+  const run = async (step) =>
+    act(async () => {
+      await step();
+      await settle(80);
+    });
   const close = async () => {
     await act(async () => reactRoot.unmount());
     dom.window.close();
   };
-  return { container, waitFor, click, close };
+  return { container, waitFor, click, run, undos, toasts, close };
 }
 
-test('a stylesheet or folder locked from its heading is kept out of the Unused count and the cleanup', async () => {
+test('a stylesheet or folder locked from its heading leaves the Unused tab and the cleanup, and its rows stay lockable and deletable', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-selectors-locks-'));
   const files = {
     'src/styles/patterns.css': '.pattern-a { a: b }\n.pattern-b { a: b }\n',
@@ -220,53 +240,96 @@ test('a stylesheet or folder locked from its heading is kept out of the Unused c
     fs.writeFileSync(path.join(root, rel), text);
   }
   const panel = await mountPanel(root, await load());
-  const { container, waitFor, click } = panel;
-  const unusedCount = () => container.querySelector('[data-tab="unused"] .selectors-tab-count')?.textContent;
-  const lockedTabCount = () => container.querySelector('[data-tab="kept"] .selectors-tab-count')?.textContent;
+  const { container, waitFor, click, run, undos } = panel;
+  const count = (tab) => container.querySelector(`[data-tab="${tab}"] .selectors-tab-count`)?.textContent;
   const button = (label) => container.querySelector(`[aria-label="${label}"]`);
-  const lockedSheets = () => keepList(root).lockedStylesheets;
+  const tab = (name) => [...container.querySelectorAll('.selectors-tab')].find((candidate) => candidate.textContent.startsWith(name));
+  const rows = () =>
+    [...container.querySelectorAll('.selectors-row')].map((row) => {
+      const lock = row.querySelector('.selectors-lock');
+      const state = lock === null ? '' : lock.classList.contains('on') ? ':locked' : ':open';
+      return `${row.querySelector('.selectors-selector').textContent}:${/is-(\w+)/.exec(row.className)[1]}${state}`;
+    });
+  const rowOf = (selector) =>
+    [...container.querySelectorAll('.selectors-row')].find((row) => row.querySelector('.selectors-selector').textContent === selector);
+  const stored = () => keepList(root);
+  const patterns = () => fs.readFileSync(path.join(root, 'src/styles/patterns.css'), 'utf8');
   try {
-    await waitFor(() => unusedCount() === '4');
-    // Two folders, so each has a heading with its own lock; the root files have none.
+    await waitFor(() => count('unused') === '4');
+    // Two folders, so each has a heading with its own lock.
     assert.deepEqual([...container.querySelectorAll('.selectors-folder .selectors-heading-name')].map((heading) => heading.textContent).sort(), [
       'src/components/',
       'src/styles/',
     ]);
-    assert.ok(button('Lock src/styles/ from cleanup'));
     const lock = button('Lock patterns.css from cleanup');
     assert.equal(lock.closest('[title]').getAttribute('title'), 'Lock patterns.css from cleanup');
 
-    // Lock the file: persisted, folded into a note, out of the Unused count.
+    // Lock the file: persisted, gone from Unused (no group, no note), counted under Locked.
+    // Its rows turn blue in place, then the group closes and is removed.
     await click(lock);
-    assert.deepEqual(lockedSheets(), ['src/styles/patterns.css']);
-    await waitFor(() => unusedCount() === '2');
-    assert.equal(lockedTabCount(), '2');
-    assert.match(container.textContent, /Locked: 2 unused styles kept/);
-    assert.equal(button('Unlock patterns.css').closest('[title]').getAttribute('title'), 'Unlock');
-    assert.equal(button('Unlock patterns.css').getAttribute('aria-pressed'), 'true');
+    assert.deepEqual(stored().lockedStylesheets, ['src/styles/patterns.css']);
+    await waitFor(() => count('unused') === '2');
+    assert.equal(count('kept'), '2');
+    await waitFor(() => !/patterns\.css/.test(container.textContent));
+    assert.ok(container.querySelector('[aria-label="Unlock patterns.css"]') === null, 'the Unused tab does not list the locked sheet');
+    assert.doesNotMatch(container.textContent, /patterns\.css|Locked:/);
 
     // The cleanup lists only what it will remove.
     await click(button('Clean up unused styles'));
     assert.deepEqual([...container.querySelectorAll('.selectors-selector')].map((selector) => selector.textContent).sort(), ['.gone', '.title']);
     await click([...container.querySelectorAll('button')].find((candidate) => candidate.textContent === 'Cancel'));
 
-    // Lock the folder: every sheet under it, the file's own lock held by the folder.
+    // Under Locked, every row of the locked sheet is blue with its lock closed.
+    await click(tab('Locked'));
+    await waitFor(() => rows().length === 2);
+    assert.deepEqual(rows(), ['.pattern-a:kept:locked', '.pattern-b:kept:locked']);
+    assert.equal(button('Unlock patterns.css').closest('[title]').getAttribute('title'), 'Unlock');
+    assert.equal(button('Unlock patterns.css').getAttribute('aria-pressed'), 'true');
+
+    // Hover actions: the row's trash deletes that one selector though its sheet is locked.
+    const trash = rowOf('.pattern-b').querySelector('.selectors-remove-one');
+    assert.ok(trash, 'a sheet-locked row has a trash button');
+    await click(trash);
+    assert.equal(patterns(), '.pattern-a { a: b }\n');
+    await waitFor(() => rows().length === 1);
+    await run(() => undos.at(-1).undo());
+    assert.equal(patterns(), files['src/styles/patterns.css']);
+    await waitFor(() => rows().length === 2);
+
+    // Hover actions: the row's lock unlocks it alone, splitting the sheet lock in one write and one undo step.
+    const undoCount = undos.length;
+    await click(rowOf('.pattern-a').querySelector('.selectors-lock'));
+    assert.deepEqual(stored().lockedStylesheets, []);
+    assert.deepEqual(stored().keep, ['pattern-b']);
+    assert.equal(undos.length, undoCount + 1);
+    await click(tab('All'));
+    await waitFor(() => rows().includes('.pattern-a:unused:open'));
+    assert.ok(rows().includes('.pattern-b:kept:locked'));
+    assert.ok(button('Lock patterns.css from cleanup'), 'the heading shows the sheet unlocked');
+    assert.equal(count('unused'), '3');
+    await run(() => undos.at(-1).undo());
+    assert.deepEqual(stored().lockedStylesheets, ['src/styles/patterns.css']);
+    assert.deepEqual(stored().keep, []);
+    await run(() => undos.at(-1).redo());
+    assert.deepEqual(stored().keep, ['pattern-b']);
+
+    // Relocking the sheet folds the name lock back into the sheet lock.
+    await click(button('Lock patterns.css from cleanup'));
+    assert.deepEqual(stored(), { version: 1, keep: [], lockedStylesheets: ['src/styles/patterns.css'] });
+
+    // A folder lock covers every sheet under it; a sheet inside shows it, toggled at the folder.
     await click(button('Lock src/styles/ from cleanup'));
-    assert.deepEqual(lockedSheets(), ['src/styles/', 'src/styles/patterns.css']);
-    await waitFor(() => unusedCount() === '1');
-    // global.css is locked through the folder: shown locked, toggled at the folder.
+    assert.deepEqual(stored().lockedStylesheets, ['src/styles/', 'src/styles/patterns.css']);
+    await waitFor(() => count('unused') === '1');
     assert.equal(button('Locked with src/styles/').disabled, true);
-    assert.match(container.textContent, /Locked: 1 unused style kept/);
-    // patterns.css keeps its own entry, so it can still be unlocked on its own.
-    assert.ok(button('Unlock patterns.css'));
+    assert.ok(rows().includes('.gone:kept:locked'));
 
     // Unlock both: normal behaviour returns.
     await click(button('Unlock src/styles/'));
     await click(button('Unlock patterns.css'));
-    assert.deepEqual(lockedSheets(), []);
-    await waitFor(() => unusedCount() === '4');
-    assert.doesNotMatch(container.textContent, /Locked:/);
-    assert.equal(fs.readFileSync(path.join(root, 'src/styles/patterns.css'), 'utf8'), files['src/styles/patterns.css']);
+    assert.deepEqual(stored().lockedStylesheets, []);
+    await waitFor(() => count('unused') === '4');
+    assert.equal(patterns(), files['src/styles/patterns.css']);
   } finally {
     await panel.close();
   }

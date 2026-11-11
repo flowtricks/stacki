@@ -587,6 +587,14 @@ Anywhere the UI shows code, it is syntax highlighted: read-only through `CodeBlo
 `CodeInline` (`src/ui/CodeBlock.tsx`), editable through a CodeMirror editor. Shell commands
 are code; logs and a name in a sentence are not.
 
+## Dropdowns
+
+A choice from a list is always the custom dropdown, `Dropdown` (`src/ui/Dropdown.tsx`),
+never a native `<select>`, in Desktop, Studio and the demo alike. Why: a native select draws
+the operating system's menu, which cannot be styled or themed, so it looks and behaves unlike
+every other menu; one component keeps the look, the keyboard and the check at the end of the
+row the same everywhere. `stacki/no-native-select` rejects `<select>` and `createElement('select')`.
+
 ## Project editor metadata
 
 Project insertion defaults live in `.stacki/components.json`; column guide preferences

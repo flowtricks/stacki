@@ -115,7 +115,7 @@ function unsupportedConsumer(file: string, reason: string): Result<never> {
   });
 }
 
-function projectSources(projectPath: string): Result<readonly string[]> {
+export function projectSources(projectPath: string): Result<readonly string[]> {
   const pending = [path.join(projectPath, 'src')];
   const files: string[] = [];
   for (let index = 0; index < pending.length; index += 1) {

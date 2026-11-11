@@ -6,11 +6,13 @@ import { canvasDragged, canvasInert, canvasSelects, holdLinkClick, replayingLink
 import { inlineTextPathAt } from './inlineText';
 import { isElement } from './frameBasics';
 import { PATH_ATTR, announceMapped, collectRegions, inFocus, inScope, pathsOf, regions, renderToken, runsOf, taggedAncestor } from './frameRegions';
-import { thinAt } from './frameMeasure';
+import { rectsForPath, thinAt } from './frameMeasure';
 import { forgetPseudoBoxes, pseudoTargetAt } from './framePseudoTarget';
 import { forgetUnionBoxes, unionTargetAt } from './frameUnionTarget';
 import { type PseudoLayer } from '../../shared/page/pseudoPath';
+import type { FramePointHit } from './framePointQuery';
 import { LOOK_EVERY, mutationKind, occurrenceOf, queueRects, remeasure, remeasureStyles, watchMotion } from './frameReports';
+import { deepHoverAt } from './frameOutlineMode';
 
 // The app tracks a node, so the frame is the canvas: clicks select.
 export function enterDesignMode(): void {
@@ -166,9 +168,28 @@ const targetAt = (event: MouseEvent): Node | undefined =>
   (event.clientX || event.clientY ? document.elementFromPoint(event.clientX, event.clientY) : undefined) ||
   (event.target instanceof window.Node ? event.target : undefined);
 
+// The element under the pointer, for the deep hover's layers.
+const targetElementOf = (event: MouseEvent): Element | undefined => {
+  const target = targetAt(event);
+  return target instanceof Element ? target : (target?.parentElement ?? undefined);
+};
+
 // Same resolution for hover, click and dblclick, so what lights up under the
 // cursor is exactly what a click selects.
 const nodeAtEvent = (event: MouseEvent) => (event.clientX || event.clientY ? nodeAt(targetAt(event), event.clientX, event.clientY) : nodeAt(targetAt(event)));
+
+/**
+ * The node under a viewport point, by the click's own resolution, for an app
+ * dragging an overlay item (framePointQuery.ts): the box is the copy's, as a
+ * click reports it. Undefined over markup no node owns.
+ */
+export function nodeAtPoint(x: number, y: number): FramePointHit | undefined {
+  const { path: nodePath, occurrence } = nodeAt(document.elementFromPoint(x, y) ?? undefined, x, y);
+  if (!nodePath) {
+    return undefined;
+  }
+  return { path: nodePath, occurrence, box: rectsForPath(nodePath)?.[occurrence] };
+}
 
 export const startOutlines = () => {
   // A page edit now patches the document instead of reloading it, so the
@@ -251,10 +272,14 @@ const lookForMotion = () => {
 // Hover, double-click and click, each resolved to the node under the pointer.
 const listenForPointer = () => {
   document.addEventListener('mousemove', (event) => {
-    const { path: nodePath, occurrence, pseudo } = nodeAtEvent(event);
+    // In deep outline mode a hover inside a closed component names the element there (frameOutlineMode.ts); a click never does.
+    const scoped = nodeAtEvent(event);
+    const deep = deepHoverAt(targetElementOf(event), scoped.path);
+    const { path: nodePath, occurrence, pseudo } = deep === undefined ? scoped : { ...deep, pseudo: undefined };
     if (lastHover === undefined || nodePath !== lastHover.path || occurrence !== lastHover.occurrence || pseudo !== lastHover.pseudo) {
       lastHover = { path: nodePath, occurrence, pseudo };
-      postLocated('avb:hover-node', { path: nodePath, occurrence, ...pseudoField(pseudo) });
+      // A deep hover says how to label its node, which the editor's tree of the open file cannot.
+      postLocated('avb:hover-node', { path: nodePath, occurrence, ...pseudoField(pseudo), ...(deep === undefined ? {} : { deep: deep.node }) });
     }
   });
   document.documentElement.addEventListener('mouseleave', startOutlinesClearHover);
@@ -311,6 +336,11 @@ const listenForPointer = () => {
         path: nodePath || undefined,
         occurrence,
         outside: !!outside,
+        // Where the pointer was, and the box of the copy it hit: an app capturing canvas
+        // clicks hears the point within the element (src/features/apps/canvasCapture.ts).
+        x: event.clientX,
+        y: event.clientY,
+        box: nodePath ? rectsForPath(nodePath)?.[occurrence] : undefined,
         ...pseudoField(pseudo),
       });
       if (canvasInert()) {

@@ -9,6 +9,7 @@ import type { DataOrigin } from './dataPickerModel';
 import type { NewPropHost } from './newPropModel';
 import { dataTree } from '../../editor/dataSuggest';
 import type { DataContext } from '../../editor/dataSuggest';
+import type { ImportNeed } from '../../editor/dataSample';
 import { resolvePick } from '../../editor/bindings';
 import { deleteChipAtCaret } from './chipKeys';
 import { insertAtRange } from './fieldFocus';
@@ -27,6 +28,8 @@ export interface RichContext extends DataContext {
   /** The file being bound, and the page it is shown on, for the picker's group headings. */
   readonly origin?: DataOrigin | undefined;
   readonly ensureQuery?: (collection: string) => string | undefined;
+  /** Imports a data file's export the file does not read yet, and answers with the name it is read by. */
+  readonly ensureImport?: (need: ImportNeed) => string | undefined;
   /** The open component, when the file being bound is one: its picker offers new props. */
   readonly newProp?: NewPropHost | undefined;
 }
@@ -343,7 +346,7 @@ function RichChipMenu({
         current={chipMenu.current}
         entries={bindContext?.entryNav ?? undefined}
         {...(bindContext?.onStepItem ? { onStepItem: bindContext.onStepItem } : {})}
-        onPick={(path, query) => pickExpr(resolvePick(path, query ?? undefined, bindContext ?? undefined))}
+        onPick={(path, need) => pickExpr(resolvePick(path, need, bindContext ?? undefined))}
         onExpand={(node, index) => node.query && bindContext?.onNeedSample?.(node.query.collection, index)}
         origin={bindContext?.origin}
         footer={false}

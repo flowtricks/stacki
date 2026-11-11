@@ -18,13 +18,15 @@ export interface MainHost {
   readonly documents: DocumentActors;
   /** The app changed a project file; the canvas may need to hear of it. */
   readonly noteAppWrite: () => void;
+  /** The root of the project the app has open, or undefined when none is. */
+  readonly openProject: () => string | undefined;
   /** The project the app has open, which file access is scoped to. */
   readonly noteProjectRoot: (projectPath: string) => void;
   /** The trailing-slash mode the project's dev server serves. */
   readonly readTrailingSlash: (projectPath: string) => string;
   /** Sends to the renderer, when its window is open. */
   readonly send: (channel: string, payload?: unknown) => void;
-  /** Moves deleted files to the bin, where they can be got back from. */
-  readonly shell: Pick<Electron.Shell, 'trashItem'>;
+  /** Moves deleted files to the bin, where they can be got back from, shows a file in the file manager, and opens a web page. */
+  readonly shell: Pick<Electron.Shell, 'trashItem' | 'showItemInFolder' | 'openExternal'>;
   readonly showOpenDialog: (options: OpenDialogOptions) => Promise<OpenDialogReturnValue>;
 }

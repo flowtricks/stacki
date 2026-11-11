@@ -194,135 +194,6 @@
   flex-direction: column;
   background: #202020;
 }
-.canvas-toolbar {
-  height: 42px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-panel);
-}
-.viewport-tools {
-  display: flex;
-  gap: 2px;
-}
-.viewport-tools button {
-  padding: 5px 7px;
-  background: transparent;
-  color: var(--text-dim);
-}
-.viewport-tools button.active {
-  background: var(--bg-active);
-  color: white;
-}
-.preview-url {
-  color: var(--text-faint);
-  font-size: 11px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.canvas-stage {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  justify-content: center;
-  overflow: hidden;
-  padding: 20px;
-}
-.canvas-stage iframe {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  background: white;
-  box-shadow: 0 8px 30px #0003;
-}
-.canvas-stage.phone iframe {
-  max-width: 390px;
-}
-.canvas-stage.tablet iframe {
-  max-width: 768px;
-}
-.canvas-footer {
-  height: 28px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--text-faint);
-  font-size: 10px;
-  border-top: 1px solid var(--border);
-}
-.canvas-footer span {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-}
-.drop-mode {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  color: var(--text-faint);
-  font-size: 10px;
-}
-.drop-mode select {
-  font-size: 10px;
-  padding: 3px 6px;
-  width: auto;
-  background: transparent;
-}
-.studio-tree {
-  padding: 4px 0;
-}
-.studio-tree-row {
-  min-height: 31px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding-right: 8px;
-  cursor: pointer;
-}
-.studio-tree-row:hover {
-  background: var(--bg-hover);
-}
-.studio-tree-row.selected {
-  background: var(--accent-soft);
-  color: #8ecbff;
-}
-.studio-tree-row.component {
-  color: var(--component-green);
-}
-.studio-tree-row.component.selected {
-  background: var(--component-green-soft);
-}
-.tree-toggle {
-  padding: 0;
-  width: 12px;
-  height: 22px;
-  background: transparent;
-}
-.tree-label {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-}
-.drag-grip {
-  padding: 0 3px;
-  height: 25px;
-  background: transparent;
-  color: var(--text-faint);
-  touch-action: none;
-  cursor: grab;
-}
-.studio-fields {
-  padding: 8px 14px;
-}
 .studio-field {
   position: relative;
   display: flex;
@@ -352,7 +223,7 @@
   color: var(--accent);
 }
 .studio-field input,
-.studio-field select {
+.studio-field .dd-trigger {
   min-height: 29px;
 }
 .inapplicable {
@@ -547,9 +418,6 @@
   margin: 8px 12px 4px 0;
 }
 @media (max-width: 1000px) {
-  .canvas-stage {
-    padding: 10px;
-  }
   .project-name {
     display: none;
   }
@@ -586,28 +454,8 @@
   .studio-app[data-editor-layout='collapsed'] .studio-left > .panel-close {
     top: 15px;
   }
-  .studio-tree-row {
-    min-height: 44px;
-  }
-  .drag-grip {
-    min-width: 36px;
-    min-height: 40px;
-    font-size: 20px;
-  }
-  .canvas-stage {
-    padding: 0;
-  }
-  .canvas-toolbar {
-    padding: 0 8px;
-  }
-  .preview-url {
-    max-width: 80px;
-  }
-  .canvas-footer {
-    min-height: 38px;
-  }
   .studio-field input,
-  .studio-field select,
+  .studio-field .dd-trigger,
   .studio-field textarea {
     font-size: 16px;
     min-height: 40px;
@@ -812,7 +660,7 @@
   outline: 2px solid #009dff;
   outline-offset: -2px;
   pointer-events: none;
-  z-index: 6;
+  z-index: var(--canvas-layer-collaborator);
 }
 .collaborator-outline-tag {
   position: absolute;

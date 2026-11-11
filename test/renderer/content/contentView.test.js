@@ -136,17 +136,35 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   const find = (selector) => container.querySelector(selector);
   const all = (selector) => [...container.querySelectorAll(selector)];
   const labelled = (label) => all('.cms-field').find((node) => node.querySelector('label')?.textContent.replace('*', '').trim() === label);
+  // A picker is the app's dropdown: its options are drawn only while it is open,
+  // in a popup outside the panel, so they are read from the document and it is closed again.
+  const optionLabels = async (trigger) => {
+    if (!trigger) {
+      return [];
+    }
+    await act(async () => {
+      trigger.click();
+      await settle(10);
+    });
+    const labels = [...dom.window.document.querySelectorAll('.dd-option-label')].map((option) => option.textContent);
+    await act(async () => {
+      trigger.click();
+      await settle(10);
+    });
+    return labels;
+  };
 
   // --- a markdown collection --------------------------------------------------
   await mount('blog');
   check('blog: entries are listed', all('.cms-item').length === 7, `${all('.cms-item').length} shown`);
   check('blog: the first entry opens', !!find('.cms-detail-title')?.textContent);
   check('blog: required fields are drawn', !!labelled('Title'));
-  check('blog: a reference field is a picker', !!labelled('Author')?.querySelector('select'));
+  check('blog: a reference field is a picker', !!labelled('Author')?.querySelector('.dd-trigger'));
+  const authors = await optionLabels(labelled('Author')?.querySelector('.dd-trigger'));
   check(
     'blog: the picker offers real entries',
-    [...(labelled('Author')?.querySelectorAll('option') || [])].some((option) => /Avery Chen/.test(option.textContent)),
-    labelled('Author')?.textContent,
+    authors.some((label) => /Avery Chen/.test(label)),
+    authors.join(', '),
   );
   check('blog: tags are chips', (labelled('Tags')?.querySelectorAll('.content-chip') || []).length > 0);
   check('blog: the body is editable', !!find('textarea') && /Body/.test(text()));
@@ -194,8 +212,8 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // --- an entry-level union ----------------------------------------------------
   await mount('siteSettings');
-  check('siteSettings: the kind is a switcher', !!find('.content-union-head select'));
-  check('siteSettings: with every kind offered', (find('.content-union-head select')?.querySelectorAll('option') || []).length === 5);
+  check('siteSettings: the kind is a switcher', !!find('.content-union-head .dd-trigger'));
+  check('siteSettings: with every kind offered', (await optionLabels(find('.content-union-head .dd-trigger'))).length === 5);
 
   // --- read-only collections ---------------------------------------------------
   await mount('releases');

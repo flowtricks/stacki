@@ -61,7 +61,7 @@ export type PropControl =
       readonly step: number | undefined;
       readonly decimals: number | undefined;
     }
-  | { readonly kind: 'switch'; readonly onLabel: string | undefined; readonly offLabel: string | undefined }
+  | { readonly kind: 'switch' }
   | { readonly kind: 'choice'; readonly options: readonly ChoiceOption[]; readonly numeric: boolean }
   // Element attributes: `HTMLAttributes<"a">`, `astroHTML.*`, a `Record`, or an untyped `{…}` default.
   | { readonly kind: 'attributes'; readonly tag: string | undefined }
@@ -201,7 +201,8 @@ function parseControl(input: unknown, where: string, depth: number): PropControl
     case 'number':
       return parseNumberControl(value, where);
     case 'switch':
-      return { kind, onLabel: optionalText(value['onLabel'], `${where}.onLabel`), offLabel: optionalText(value['offLabel'], `${where}.offLabel`) };
+      // A switch shows True and False; an old model's labels are ignored.
+      return { kind };
     case 'choice': {
       const options = modelArray(value['options'], `${where}.options`, PROP_MODEL_LIMITS.optionsMax).map((option, index) =>
         parseOption(option, `${where}.options[${index}]`),

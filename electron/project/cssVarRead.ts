@@ -6,6 +6,7 @@ import path from 'path';
 import postcss from 'postcss';
 import type { Declaration, Rule as PostcssRule } from 'postcss';
 import { commentLabel } from '../../shared/page/commentLabel';
+import { PROJECT_FOLDERS_FILE, configOf, foldersFor, readProjectFoldersSource } from '../../shared/properties/projectFolders';
 
 // Folders deeper than the stylesheet bound are not where a project keeps its CSS; the rename walk
 // covers the whole project, where a config or a helper module can sit two levels deeper. A
@@ -23,7 +24,8 @@ export const toPosix = (filePath: string): string => filePath.split(path.sep).jo
 // --- reading ---------------------------------------------------------------
 
 export function findStylesheets(projectPath: string): string[] {
-  const roots = ['src', 'public', 'styles'].map((folder) => path.join(projectPath, folder));
+  // The variables panel's folders (.stacki/folders.json), else src/, public/ and styles/.
+  const roots = variableFolders(projectPath).map((folder) => path.join(projectPath, ...folder.split('/')));
   const found: string[] = [];
   const walk = (directory: string, depth: number): void => {
     if (depth > CSS_VARIABLE_LIMITS.stylesheetDepthMax) {
@@ -51,6 +53,23 @@ export function findStylesheets(projectPath: string): string[] {
     walk(root, 0);
   }
   return [...new Set(found)].sort();
+}
+
+/**
+ * The variables panel's folders (`variables` in .stacki/folders.json), read
+ * through the same file access as the stylesheets: on
+ * Desktop that is the disk, in Studio the request's draft snapshot, which holds
+ * the folder settings beside the sources (variableServer.ts). A missing or
+ * unreadable file reads the defaults.
+ */
+function variableFolders(projectPath: string): readonly string[] {
+  let source: string | undefined;
+  try {
+    source = fs.readFileSync(path.join(projectPath, PROJECT_FOLDERS_FILE), 'utf8');
+  } catch {
+    source = undefined;
+  }
+  return foldersFor('variables', configOf(readProjectFoldersSource(source)));
 }
 
 export interface VarEntry {

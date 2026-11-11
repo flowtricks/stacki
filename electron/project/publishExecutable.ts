@@ -1,7 +1,9 @@
 import { createRequire } from 'node:module';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
+import { assert } from '../../shared/core/assert';
 import { record, text } from '../../shared/core/boundary';
+import { mergeToolPaths, pathEnvironmentValue, setPathEnvironment } from '../lib/platform';
 import type { PublishCommand } from '../../shared/properties/publishCommands';
 import type { PackageManager } from '../../shared/properties/packageManager';
 
@@ -18,6 +20,50 @@ export function projectHasWrangler(root: string): boolean {
     }
     throw error;
   }
+}
+
+/**
+ * Whether a publishing CLI can run for this site: in the site, beside Desktop or Studio, or on
+ * PATH. Call after ensureToolPath(), so a GUI launch searches the person's shell PATH too.
+ */
+export function publishToolInstalled(root: string, executable: 'wrangler' | 'vercel'): boolean {
+  if (existsSync(path.join(root, 'node_modules', '.bin', executable))) {
+    return true;
+  }
+  if (installedPublishTool(root, executable) !== undefined) {
+    return true;
+  }
+  return pathTool(executable, pathEnvironmentValue(process.env)) !== undefined;
+}
+
+/** Where a global install without sudo puts the Vercel CLI: npm's prefix under ~/.local. */
+export function vercelInstallPrefix(home: string): string {
+  assert(path.isAbsolute(home), 'The install prefix starts from an absolute home');
+  return path.join(home, '.local');
+}
+
+/** Adds the directory a fresh global install wrote to, so this process finds the CLI at once. */
+export function addPublishToolDirectory(home: string): void {
+  const directory = process.platform === 'win32' ? '' : path.join(vercelInstallPrefix(home), 'bin');
+  if (directory) {
+    setPathEnvironment(process.env, mergeToolPaths(pathEnvironmentValue(process.env), [directory]));
+  }
+  assert(directory === '' || pathEnvironmentValue(process.env).includes(directory), 'The install directory is on PATH');
+}
+
+function pathTool(executable: string, pathValue: string): string | undefined {
+  const names = process.platform === 'win32' ? [`${executable}.cmd`, `${executable}.exe`] : [executable];
+  const directories = pathValue.split(path.delimiter).filter((directory) => directory.length > 0);
+  assert(directories.length <= 4096, 'A PATH is bounded');
+  for (const directory of directories) {
+    for (const name of names) {
+      const candidate = path.join(directory, name);
+      if (existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
+  return undefined;
 }
 
 // A publish command, or a package manager installing a publishing tool.

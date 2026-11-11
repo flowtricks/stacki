@@ -40,6 +40,8 @@ import { pastedInScope, broughtMessage } from '../model/appKeys';
 import { prunedAfterRemoval } from '../model/pageQueries';
 import { structuralSelection } from '../model/selectionStructure';
 import { loadComponentInstance, componentInstancePlacement } from '../model/componentInstances';
+import { appShortcutRoute } from '../../features/apps/appsRuntime';
+import { runShortcutCommand } from '../../features/apps/appCommands';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import {
@@ -669,7 +671,12 @@ export function useCanvasMessages(coreState: ReturnType<typeof useCoreState>, in
         setInsertOpen(true);
       }
     };
-    const offMenu = window.avb.onMenu('insert', openIfEditable);
+    // ⌘E from the menu while an app that keeps the palette shortcut has focus is the app's.
+    const offMenu = window.avb.onMenu('insert', () => {
+      if (appShortcutRoute('Mod+E', document.activeElement ?? undefined) !== 'app') {
+        openIfEditable();
+      }
+    });
     const onMessage = (event: MessageEvent<unknown>): void => {
       // Retained pages are only a visual placeholder during navigation; their
       // queued shortcuts must not act on the newly opened editor document.
@@ -702,6 +709,10 @@ export function useCanvasMessages(coreState: ReturnType<typeof useCoreState>, in
         // handled here so they go through the same guards as a keypress in the
         // app — one definition of what those keys do, and the handler's own
         // "am I typing in a field" check still sees a non-field target.
+        // An app command's key from the canvas runs it, as it does from the editor (appCommands.ts).
+        case 'appCommand':
+          runShortcutCommand(message.shortcut);
+          return;
         case 'key':
           document.dispatchEvent(
             new KeyboardEvent('keydown', {

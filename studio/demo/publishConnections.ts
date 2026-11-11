@@ -27,7 +27,8 @@ export function publishDiscovery(body: unknown): unknown {
         ],
       };
     case 'vercel':
-      return { kind: 'failed', message: CONNECTIONS_REASON };
+      // Not a connection fault: the reason only selects Refresh rather than a sign-in the demo lacks.
+      return { kind: 'failed', reason: 'unknown', message: CONNECTIONS_REASON };
     default: {
       const exhaustive: never = request.provider;
       return exhaustive;

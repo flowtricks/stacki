@@ -4,16 +4,15 @@
 //   @min 0          the least a number prop takes
 //   @max 10         the most
 //   @decimals 0     how many decimals it keeps (0 is a whole number)
-//   @onLabel Shown  what a switch prop's on side is called
-//   @offLabel Hidden
 //   @format color   what a text prop holds (a colour, a link); the Kind picker writes it
 //
 // `@deprecated` is the author's, not a setting: the instance field shows a
 // "Deprecated" tag with its text in the tooltip.
 //
-// A tag left out is the setting's default: no bound, any precision, On and
-// Off. The text before the first tag is the tooltip. The doc arrives as the
-// schema read it from the file, so every value is checked before use.
+// A tag left out is the setting's default: no bound, any precision. A switch
+// has no settings; old `@onLabel`/`@offLabel` tags are ignored (propTags.ts).
+// The text before the first tag is the tooltip. The doc arrives as the schema
+// read it from the file, so every value is checked before use.
 //
 // The tags are read by shared/properties/propTags.ts, the one tag reader the
 // main process's prop model reads them with too, so a setting this form
@@ -31,17 +30,10 @@ export interface NumberSettings {
   readonly decimals: number | undefined;
 }
 
-/** What a switch prop's two sides are called. */
-export interface SwitchSettings {
-  readonly onLabel: string;
-  readonly offLabel: string;
-}
-
 /** A doc comment read as a tooltip and settings. */
 export interface PropDocumentation {
   readonly tooltip: string;
   readonly number: NumberSettings;
-  readonly switch: SwitchSettings;
   // The `@format` word (`color`, `uri`), or undefined when the doc states none.
   readonly format: string | undefined;
   // The `@deprecated` text ('' for the bare tag), or undefined when the prop is not deprecated.
@@ -49,7 +41,6 @@ export interface PropDocumentation {
 }
 
 export const NUMBER_DECIMALS_MAX = PROP_TAG_LIMITS.decimalsMax;
-export const SWITCH_LABELS = { onLabel: 'On', offLabel: 'Off' } as const;
 
 /** The tooltip and settings a doc comment states; tags that are not valid settings are ignored. */
 export function readPropDocumentation(documentation: string | undefined): PropDocumentation {
@@ -57,7 +48,6 @@ export function readPropDocumentation(documentation: string | undefined): PropDo
   const result: PropDocumentation = {
     tooltip: tags.tooltip,
     number: { min: tags.min, max: tags.max, decimals: tags.decimals },
-    switch: { onLabel: tags.onLabel ?? SWITCH_LABELS.onLabel, offLabel: tags.offLabel ?? SWITCH_LABELS.offLabel },
     format: tags.format,
     deprecated: tags.deprecated,
   };
@@ -122,13 +112,4 @@ export function fieldTooltip(documentation: string | undefined, deprecated: stri
   const out = words === '' ? notice : `${notice}\n${words}`;
   assert(out.startsWith('Deprecated'), 'fieldTooltip: a deprecation leads the tooltip');
   return out;
-}
-
-/** A switch prop's labels, when its doc names them; undefined keeps the field's own words. */
-export function statedSwitchLabels(documentation: string | undefined): SwitchSettings | undefined {
-  const text = documentation ?? '';
-  if (!/@(onLabel|offLabel)\b/.test(text)) {
-    return undefined;
-  }
-  return readPropDocumentation(text).switch;
 }

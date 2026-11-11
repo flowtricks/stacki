@@ -8,7 +8,7 @@ import { usePreviewDimensions, usePreviewSizing, type CanvasWidthRequest } from 
 import { PREVIEW_WIDTH_LIMITS } from './previewViewport';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
-import type { OverlayInfo, SpacingHover } from './PreviewOverlays';
+import type { OverlayInfo, RectMap, SpacingHover } from './PreviewOverlays';
 import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
@@ -75,6 +75,10 @@ interface PreviewPaneProps {
   readonly canvasWidthRequest?: CanvasWidthRequest | undefined;
   /** The open project: the column guide's settings are kept per project. */
   readonly projectPath?: string | undefined;
+  /** More paths for the canvas to measure (the elements app overlays anchor to). */
+  readonly extraTrackPaths?: readonly string[] | undefined;
+  /** Draws over the canvas, above the outlines, from the same measurements (Stacki Apps' overlays). */
+  readonly overlayLayer?: ((frame: { readonly rects: RectMap; readonly scale: number }) => React.ReactNode) | undefined;
 }
 
 export default function PreviewPane(props: PreviewPaneProps) {
@@ -206,12 +210,13 @@ function DesignPreview({
       <div
         ref={sizing.frameRef}
         className={`frame-sized ${width ? '' : 'full'} ${sizing.resizing || sizing.panelSettling ? 'resizing' : ''}`}
-        style={{
-          width: sizing.viewport.width,
-          height: sizing.viewport.height,
-          bottom: 'auto',
-          transform: `translateX(-50%) scale(${scale})`,
-        }}
+        // A fluid frame fills the canvas by CSS, so it follows a side-panel drag each frame
+        // without a render (usePreviewSizing puts off its measure until release).
+        style={
+          width
+            ? { width: sizing.viewport.width, height: sizing.viewport.height, bottom: 'auto', transform: `translateX(-50%) scale(${scale})` }
+            : { width: '100%', height: '100%', bottom: 'auto', transform: 'translateX(-50%)' }
+        }
       >
         <div className="frame-clip">
           <PreviewFrame
@@ -230,11 +235,11 @@ function DesignPreview({
       </div>
       <div
         className={`preview-overlay-layer ${width ? '' : 'full'}`}
-        style={{
-          width: sizing.viewport.width * scale,
-          height: sizing.viewport.height * scale,
-          borderRadius: width ? 10 * scale : 0,
-        }}
+        style={
+          width
+            ? { width: sizing.viewport.width * scale, height: sizing.viewport.height * scale, borderRadius: 10 * scale }
+            : { width: '100%', height: '100%', borderRadius: 0 }
+        }
       >
         {/* First in the layer, so the outlines and spacing bands paint over it. */}
         {shownGuide && <GuideOverlay {...shownGuide} scale={scale} />}
@@ -249,7 +254,9 @@ function DesignPreview({
           focusWhole={props.focusWhole ?? false}
           {...(props.overlayInfo === undefined ? {} : { overlayInfo: props.overlayInfo })}
           onOpenComponent={props.onOpenPath}
+          pathScope={props.pathScope ?? ''}
         />
+        {props.overlayLayer?.({ rects: runtime.rects, scale })}
       </div>
     </>
   );

@@ -7,6 +7,7 @@ import Popup from '../../../vendor/stacki/src/ui/Popup';
 import { CommentIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { RoleMenu } from '../roles/RoleMenu';
 import { SoundToggle } from '../settings/SoundToggle';
+import { AppsPrivacyToggle } from '../apps/AppsPrivacyToggle';
 import './accountMenu.css';
 
 interface AccountMenuProps {
@@ -37,6 +38,7 @@ export function AccountMenu(props: AccountMenuProps) {
           <>
             <RoleMenu saved={props.saved} close={actions.close} />
             <SoundToggle />
+            <AppsPrivacyToggle />
             <button
               className="account-action"
               type="button"

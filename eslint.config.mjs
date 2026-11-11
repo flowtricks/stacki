@@ -475,8 +475,11 @@ export default [
     },
   },
   {
+    // AGENTS.md "Dropdowns": the renderer chooses from lists with src/ui/Dropdown.tsx,
+    // never a native <select>. Studio's config (studio/eslint.config.ts) holds
+    // studio/src and the demo to the same rule.
     files: ['src/**/*.{ts,tsx}'],
-    rules: { 'stacki/source-layers': ['error', SOURCE_LAYERS] },
+    rules: { 'stacki/source-layers': ['error', SOURCE_LAYERS], 'stacki/no-native-select': 'error' },
   },
   {
     files: ['electron/**/*.ts'],

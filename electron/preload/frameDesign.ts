@@ -174,6 +174,20 @@ function forwardShortcut(event: KeyboardEvent): void {
     }
     return;
   }
+  // The app command range (shared/properties/appShortcuts.ts APP_RESERVED_SHORTCUTS,
+  // held to this list by test/shared/properties/appShortcuts.test.ts): an app's
+  // command runs from the canvas too, in the editor and the live preview alike.
+  // The preload imports nothing, so the range is written out here.
+  const commandDigit = /^Digit([1-9])$/.exec(event.code)?.[1];
+  if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.altKey && commandDigit !== undefined) {
+    event.preventDefault();
+    try {
+      window.parent.postMessage({ type: 'avb:shortcut', name: 'appCommand', shortcut: `Mod+Alt+Shift+${commandDigit}` }, '*');
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
   if (!canvasSelects()) {
     return;
   }

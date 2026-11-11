@@ -22,6 +22,8 @@ import {
   TextControl,
 } from './PropControls';
 import { PropFieldPill, PropFieldMenu, PropFieldLabelRow, PropFieldPicker, PropFieldNote } from './PropFieldLabel';
+import { ConditionalField } from './ConditionalValue';
+import { conditionalOfAttr, valueLanguageOf } from './conditionalModel';
 
 export { type AssetContext, type PropFieldProps, assetImportOf } from './propFieldModel';
 
@@ -58,6 +60,23 @@ function propFieldControl(view: PropControlState) {
   const codeRow = codeRowKind(field, value);
   if (codeRow === 'action') {
     return <CodeControl state={view} />;
+  }
+  // A conditional the Value conditions editor can draw is drawn by it, until
+  // "Write an expression" asks for the code; any other code stays code.
+  const conditional = view.custom ? undefined : conditionalOfAttr(value);
+  if (conditional !== undefined) {
+    return (
+      <div className="props-field">
+        {view.label}
+        <ConditionalField
+          model={conditional}
+          value={value}
+          bindContext={view.bindContext}
+          language={valueLanguageOf(type === 'style' ? 'style' : name)}
+          onApply={(next) => view.onChange(next, true)}
+        />
+      </div>
+    );
   }
   if (showExpr) {
     return <BindingControl state={view} />;

@@ -2,7 +2,9 @@
 // filtered tab the row stays through the change (lock and colour) and the
 // collapse, then is removed; in the All tab it stays and only its lock and
 // colour change; a double click writes once and neither duplicates nor loses
-// a row; unmounting mid-animation leaves no timer behind.
+// a row; unmounting mid-animation leaves no timer behind. A stylesheet lock
+// moves its rows the same way: rows leaving the tab change colour, then close
+// with their group; rows arriving open in.
 // Method: render the real panel in JSDOM over an in-memory bridge (the report
 // is recomputed from the keep list each read, as the main process does), with
 // Node's mock timers standing in for setTimeout so each phase can be stepped
@@ -25,9 +27,9 @@ const ENTRIES = [
   ['src/a.css|0|4|0', '.maybe', ['maybe'], 'unknown'],
 ];
 
-function report(keep) {
+function report(keep, sheets) {
   const entries = ENTRIES.map(([id, selector, names, base]) => {
-    const locked = base !== 'used' && names.every((name) => keep.includes(name));
+    const locked = base !== 'used' && (sheets.includes('src/a.css') || names.every((name) => keep.includes(name)));
     const verdict = locked
       ? { kind: 'kept', names }
       : base === 'used'
@@ -42,8 +44,9 @@ function report(keep) {
 
 function bridge(store) {
   const keep = () => (store.source === undefined ? [] : JSON.parse(store.source).keep);
+  const sheets = () => (store.source === undefined ? [] : (JSON.parse(store.source).lockedStylesheets ?? []));
   return {
-    selectorUsage: async () => ({ ok: true, value: report(keep()) }),
+    selectorUsage: async () => ({ ok: true, value: report(keep(), sheets()) }),
     projectMetadata: async () => ({ ok: true, value: store.source === undefined ? {} : { source: store.source } }),
     writeProjectMetadata: async (input) => {
       store.writes += 1;
@@ -106,7 +109,7 @@ test('a lock click keeps its row through the change and the collapse', async () 
   const rows = () =>
     [...container.querySelectorAll('.selectors-row-slot')].map((slot) => {
       const row = slot.querySelector('.selectors-row');
-      const phase = slot.classList.contains('is-collapsing') ? 'collapsing' : 'shown';
+      const phase = slot.classList.contains('is-collapsing') ? 'collapsing' : slot.classList.contains('is-entering') ? 'entering' : 'shown';
       return `${row.querySelector('.selectors-selector').textContent}:${/is-(\w+)/.exec(row.className)[1]}:${phase}`;
     });
   const rowOf = (selector) =>
@@ -195,6 +198,62 @@ test('a lock click keeps its row through the change and the collapse', async () 
     assert.equal(container.querySelector('.selectors-reason').textContent, 'Built from pieces.');
     await tick(320);
     assert.deepEqual(rows(), []);
+
+    // A stylesheet lock from Unused: its row turns blue in place, then the row and its group close together.
+    const sheetLock = (label) => act(async () => container.querySelector(`[aria-label="${label}"]`).click());
+    const group = () => container.querySelector('.selectors-group');
+    await openTab('Unused');
+    assert.deepEqual(rows(), ['.is-open:unused:shown']);
+    await sheetLock('Lock a.css from cleanup');
+    await flush();
+    assert.deepEqual(rows(), ['.is-open:kept:shown'], 'the row stays, now blue, while it changes');
+    assert.equal(group().classList.contains('is-collapsing'), false);
+    await tick(200);
+    assert.deepEqual(rows(), ['.is-open:kept:collapsing']);
+    assert.equal(group().classList.contains('is-collapsing'), true, 'a group whose rows all leave closes with them');
+    await tick(320);
+    assert.deepEqual(rows(), []);
+    assert.equal(group() ?? undefined, undefined, 'and the group with it');
+
+    // The sheet lock took in the name locks, so unlocking it from Locked moves every row out, and the group closes with them.
+    await openTab('Locked');
+    assert.deepEqual(rows(), ['.ghost:kept:shown', '.is-open:kept:shown', '.tail:kept:shown', '.maybe:kept:shown']);
+    await sheetLock('Unlock a.css');
+    await flush();
+    assert.deepEqual(rows(), ['.ghost:unused:shown', '.is-open:unused:shown', '.tail:unused:shown', '.maybe:unknown:shown']);
+    await tick(200);
+    assert.deepEqual(rows(), ['.ghost:unused:collapsing', '.is-open:unused:collapsing', '.tail:unused:collapsing', '.maybe:unknown:collapsing']);
+    assert.equal(group().classList.contains('is-collapsing'), true);
+    await tick(320);
+    assert.deepEqual(rows(), []);
+
+    // Locking it from Locked with one row already there: the rows it brings in open; the one there does not.
+    const lockInAll = async (selector) => {
+      await act(async () => lockOf(selector).click());
+      await flush();
+      await tick(600);
+    };
+    await openTab('All');
+    await lockInAll('.ghost');
+    await openTab('Locked');
+    assert.deepEqual(rows(), ['.ghost:kept:shown']);
+    await sheetLock('Lock a.css from cleanup');
+    await flush();
+    assert.deepEqual(rows(), ['.ghost:kept:shown', '.is-open:kept:entering', '.tail:kept:entering', '.maybe:kept:entering']);
+    assert.equal(group().classList.contains('is-entering'), false, 'a group that was already there does not open again');
+    await tick(520);
+    await sheetLock('Unlock a.css');
+    await flush();
+    await tick(200);
+    await tick(320);
+    assert.deepEqual(rows(), []);
+    assert.deepEqual(JSON.parse(store.source).lockedStylesheets ?? [], []);
+    // Back to the names locked before the sheet.
+    await openTab('All');
+    for (const selector of ['.ghost', '.tail', '.maybe']) {
+      await lockInAll(selector);
+    }
+    assert.deepEqual(JSON.parse(store.source).keep, ['ghost', 'maybe', 'tail']);
 
     // Leaving a tab mid-animation drops its held rows; the new tab lists by verdict alone.
     await openTab('Locked');

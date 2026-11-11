@@ -1,0 +1,40 @@
+/* An app's custom frame (AppCustomFrames.tsx): the asset pop-up's surface, sized by
+   the app, under Stacki's own header. */
+.app-custom-frame {
+  margin: auto;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  border-radius: 12px;
+  background: var(--bg, #1b1b1b);
+  color: var(--text, #e8e8e8);
+  box-shadow: 0 24px 90px #0008;
+  overflow: hidden;
+}
+.app-custom-frame.is-popup {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  z-index: 900;
+}
+.app-custom-frame-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.app-custom-frame-header h2 {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+}
+.app-custom-frame-page {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--bg, #1b1b1b);
+}

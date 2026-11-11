@@ -17,6 +17,10 @@ export interface Component {
   readonly renderTag?: { readonly tag?: string; readonly prop?: string };
   readonly file: string;
   readonly name: string;
+  /** In one of the project's layout folders (.stacki/folders.json; by default src/layouts). */
+  readonly isLayout?: true;
+  /** The Components panel group, when the project chose its component folders. */
+  readonly folder?: string;
   readonly fields: PropField[];
   readonly slots: string[];
   readonly slotText?: boolean;
@@ -114,6 +118,8 @@ export function parseProject(input: unknown): Project {
       origin: parseComponentOrigin(item['origin']),
       ...(item['importPath'] === undefined ? {} : { importPath: string(item['importPath'], 500) }),
       name: string(item['name']),
+      ...parseLayoutFlag(item['isLayout']),
+      ...(item['folder'] === undefined ? {} : { folder: string(item['folder'], 500) }),
       fields: item['fields'].map((field) => parseField(field, 'component')),
       slots: strings(item['slots']),
       numericStyles: parseNumericBindings(item['numericStyles']),
@@ -135,6 +141,15 @@ export function parseProject(input: unknown): Project {
     components,
     ...(data['lengthUnit'] === undefined ? {} : { lengthUnit: parseLengthUnit(data['lengthUnit']) }),
   };
+}
+function parseLayoutFlag(input: unknown): Pick<Component, 'isLayout'> {
+  if (input === undefined) {
+    return {};
+  }
+  if (input !== true) {
+    throw new Error('Invalid layout flag');
+  }
+  return { isLayout: true };
 }
 function parseRenderTag(input: unknown): Pick<Component, 'renderTag'> {
   if (input === undefined) {

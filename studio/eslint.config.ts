@@ -1,5 +1,9 @@
 import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
+// AGENTS.md "Dropdowns", the same rule the Desktop config runs. The rule file is
+// vendored with the shared source (scripts/shared-source.json) and imports types
+// only, so it loads here on its own.
+import { noNativeSelect } from './vendor/stacki/scripts/eslintPlugin/noNativeSelect.mts';
 export default tseslint.config(
   {
     ignores: ['vendor/**', 'test/fixtures/**', '.studio/**', 'dist/**', 'node_modules/**', '**/test-results/**', '**/.wrangler/**'],
@@ -18,6 +22,13 @@ export default tseslint.config(
       curly: ['error', 'all'],
       'no-restricted-syntax': ['error', { selector: 'TSEnumDeclaration', message: 'Use a literal union.' }],
     },
+  },
+  {
+    // The editor and the stacki.build demo choose from lists with the custom
+    // dropdown (vendor/stacki/src/ui/Dropdown.tsx), never a native <select>.
+    files: ['src/**/*.{ts,tsx}', 'demo/**/*.{ts,tsx}'],
+    plugins: { stacki: { rules: { 'no-native-select': noNativeSelect } } },
+    rules: { 'stacki/no-native-select': 'error' },
   },
   {
     files: ['src/**/*.ts', 'src/**/*.tsx', 'scripts/**/*.ts', 'test/**/*.ts'],

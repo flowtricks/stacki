@@ -41,6 +41,10 @@ const firstSettings = {
   pages: { version: 1, entries: ['about/', 'index.astro'] },
   componentSources: { version: 1, sources: [] },
   styles: { version: 1, keep: ['is-*'] },
+  folders: { version: 1, folders: { components: ['src/ui'], assets: ['public', 'src/assets'] } },
+  instructions: { version: 1, hidden: ['docs/archive'] },
+  audits: { version: 1, ignored: [{ id: 'img-alt|src/pages/index.astro|0.1|src="/a.png"', reason: 'Decorative hero' }] },
+  roles: { version: 1, defaultRole: 'admin', roles: [{ id: 'admin', name: 'Admin', members: ['owner'] }] },
   publish: {
     ...DEFAULT_PUBLISH_CONFIG,
     defaultTarget: 'hosting',

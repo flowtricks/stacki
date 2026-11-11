@@ -22,7 +22,7 @@ import {
   takeTypedPath,
 } from './editorModel';
 import { EMBED_ONLY_PROPS } from './ResolvedRows';
-import { isGlobalSelector } from './LayoutRows';
+import { isGlobalSelector } from '../model/selectors';
 import { asQuery } from './SelectorPicker';
 import { useEditorRefs, useBusyState, useScanState, useSelectionState, useNativeState, usePendingWrites } from './useEditorFoundation';
 import { useRefresh, useRefreshDerived } from './useEditorScanning';
@@ -445,8 +445,11 @@ export function useAddQuery(
       return 'embed';
     }
     const resolvedProp = resolved?.props.get(prop);
-    if (resolvedProp?.source === 'selected' && resolvedProp.selectedOrigin) {
-      return resolvedProp.selectedOrigin;
+    const origin = resolvedProp?.source === 'selected' ? resolvedProp.selectedOrigin : undefined;
+    // The style attribute is not a layer: its own writes never come here
+    // (useInlineTarget.ts), and anything else picks a layer as for a new property.
+    if (origin === 'embed' || origin === 'native') {
+      return origin;
     }
     return canNative ? 'native' : 'embed';
   };

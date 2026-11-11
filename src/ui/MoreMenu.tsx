@@ -18,6 +18,10 @@ export interface MenuItem {
   readonly icon?: React.ReactNode;
   readonly danger?: boolean;
   readonly disabled?: boolean;
+  /** A key that does the same, muted at the end of the row (the rail's More menu shows each panel's). */
+  readonly shortcut?: string;
+  /** The row is what is open now (the rail's active panel); it keeps a fill. */
+  readonly current?: boolean;
   readonly onSelect?: () => void;
 }
 interface MoreMenuProps {
@@ -27,8 +31,13 @@ interface MoreMenuProps {
   readonly width?: number;
   /** What the button shows, when the menu is not the usual `⋯`. */
   readonly icon?: React.ReactNode;
+  /**
+   * Where the menu opens: `below` the button, its right edges aligned (the default), or
+   * to its `right`, its bottom edges aligned, for a button on the window's left edge (the rail).
+   */
+  readonly side?: 'below' | 'right';
 }
-export default function MoreMenu({ items, title = 'Options', className = '', width = 150, icon }: MoreMenuProps) {
+export default function MoreMenu({ items, title = 'Options', className = '', width = 150, icon, side = 'below' }: MoreMenuProps) {
   const [open, setOpen] = useState(false);
   const [box, setBox] = useState<CSSProperties | undefined>(undefined);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -46,11 +55,8 @@ export default function MoreMenu({ items, title = 'Options', className = '', wid
     if (!rect) {
       return;
     }
-    const place = popupBox(rect, rows.length * 30 + 12, window.innerHeight);
-    setBox({
-      left: Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8)),
-      ...place,
-    });
+    const wantedPx = rows.length * MENU_ROW_PX + MENU_PADDING_PX;
+    setBox(side === 'right' ? besideBox(rect, wantedPx) : belowBox(rect, wantedPx, width));
     setOpen(true);
   };
 
@@ -85,7 +91,35 @@ export default function MoreMenu({ items, title = 'Options', className = '', wid
   );
 }
 
-interface MenuSurfaceProps {
+/** A row's height and the menu's padding, for placing it before it is drawn (styles.css `.more-menu`). */
+const MENU_ROW_PX = 30;
+const MENU_PADDING_PX = 12;
+const MENU_EDGE_PX = 8;
+
+/** Where a menu of `rowCount` rows opens under an anchor (or a pointer) at `rect`,
+ *  for a menu opened from something other than this button (a right-click). */
+export function menuBoxBelow(rect: DOMRect, rowCount: number, width: number): CSSProperties {
+  assert(rowCount > 0, 'menuBoxBelow: a menu has rows');
+  return belowBox(rect, rowCount * MENU_ROW_PX + MENU_PADDING_PX, width);
+}
+
+function belowBox(rect: DOMRect, wantedPx: number, width: number): CSSProperties {
+  assert(wantedPx > 0, 'MoreMenu: a menu has height');
+  const left = Math.max(MENU_EDGE_PX, Math.min(rect.right - width, window.innerWidth - width - MENU_EDGE_PX));
+  return { left, ...popupBox(rect, wantedPx, window.innerHeight) };
+}
+
+// Beside the button, ending level with its bottom so a menu opened from the foot
+// of a column grows up, and kept inside the window both ways.
+function besideBox(rect: DOMRect, wantedPx: number): CSSProperties {
+  assert(wantedPx > 0, 'MoreMenu: a menu has height');
+  const roomPx = window.innerHeight - 2 * MENU_EDGE_PX;
+  const heightPx = Math.min(wantedPx, roomPx);
+  const top = Math.max(MENU_EDGE_PX, Math.min(rect.bottom - heightPx, window.innerHeight - heightPx - MENU_EDGE_PX));
+  return { left: rect.right + MENU_EDGE_PX, top, ...(wantedPx > roomPx ? { maxHeight: roomPx, overflowY: 'auto' } : {}) };
+}
+
+export interface MenuSurfaceProps {
   readonly open: boolean;
   readonly anchor: HTMLElement | undefined;
   readonly rows: readonly MenuItem[];
@@ -94,7 +128,7 @@ interface MenuSurfaceProps {
   readonly menuRef: RefObject<HTMLDivElement>;
   readonly close: () => void;
 }
-function MenuSurface({ rows, box, width, menuRef, close, open, anchor }: MenuSurfaceProps) {
+export function MenuSurface({ rows, box, width, menuRef, close, open, anchor }: MenuSurfaceProps) {
   return (
     <Popup
       mode="popover"
@@ -113,7 +147,8 @@ function MenuSurface({ rows, box, width, menuRef, close, open, anchor }: MenuSur
             key={item.label}
             type="button"
             role="menuitem"
-            className={`more-menu-item ${item.danger ? 'is-danger' : ''}`}
+            className={`more-menu-item ${item.danger ? 'is-danger' : ''} ${item.current ? 'is-current' : ''}`}
+            aria-current={item.current ? 'true' : undefined}
             disabled={item.disabled}
             onClick={(event) => {
               event.stopPropagation();
@@ -125,6 +160,7 @@ function MenuSurface({ rows, box, width, menuRef, close, open, anchor }: MenuSur
           >
             {item.icon}
             {item.label}
+            {item.shortcut !== undefined && <span className="more-menu-shortcut">{item.shortcut}</span>}
           </button>
         ))
       }

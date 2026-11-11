@@ -218,3 +218,57 @@ Mac apps. **Why not the platform:** a native codec binary cannot run on another
 CPU architecture. **Cost:** a bundled WASM codec and its runtime; slower than
 native encoding but bounded by the same conversion limits. Bundled licenses
 are retained; Mac packages exclude architecture-specific sharp binaries.
+
+## Vendored paths, no package
+
+Copied source with no entry in `package.json`, so nothing is installed or updated by npm.
+
+**Phosphor Icons** (MIT, Copyright (c) 2023 Phosphor Icons, https://phosphoricons.com/,
+https://github.com/phosphor-icons/core). **Does:** twelve Regular-weight icon paths from
+`@phosphor-icons/core` 2.1.1 (`assets/regular/*.svg`), one of the left rail's icon sets under test
+(`src/ui/railIcons.tsx`, chosen in Settings → Editor → Rail icons). **Why not the package:** the
+rail needs twelve paths; the package ships thousands of SVGs in six weights. **Cost:** none at run
+time; a newer Phosphor drawing is a hand copy, and the file's header keeps the licence and source.
+
+## Evaluated, not adopted
+
+These were weighed and declined; the paragraph says why, so the question is not reopened without new facts.
+
+**axe-core** (MPL-2.0), for the Audits panel's rendered accessibility checks. **Would do:** run its
+rule set over the rendered page. **Why not:** it must run inside the audited document with its
+scripts, which means executing the page's code in a frame the editor owns; its results name CSS
+selectors, which do not map back to the `.astro` source element or to a deterministic fix, so
+every result would need a second, hand-written mapping anyway; and most of its rules repeat checks
+the static pass already makes on the source with a source location and a fix. The rendered checks
+Stacki needs (computed contrast, the final heading outline, names that arrive through slots,
+page-wide duplicate ids, the final head) are small, pure functions over a plain tree
+(`shared/page/auditRendered.ts`, `shared/page/auditContrast.ts`), tested like the rest of
+`shared/`, with no runtime dependency and no third-party code in the renderer. **Cost of
+declining:** fewer rule families (for example ARIA attribute-value checks beyond role names);
+those can be added as hand-rolled checks one at a time.
+
+## Installed on demand, outside `package.json`
+
+These are not dependencies of Stacki's build: nothing installs them until a person asks the AI chat
+panel to connect an agent, and then only into `userData/agents/<agent>-<version>/`. They are recorded
+here (as bold entries, not `###` headings, which the gate holds to `package.json`) because they are
+third-party code Stacki runs. `electron/handlers/ai/agentRegistry.ts` pins each one: an exact
+version, the lockfile Stacki ships in `resources/agents/` with its SHA-256, and the SHA-256 of the
+installed entry file. `npm ci --omit=optional --ignore-scripts` verifies every tarball against the
+lockfile's integrity; install scripts never run.
+
+**`@agentclientprotocol/claude-agent-acp` 0.105.0.** **Does:** speaks the Agent Client Protocol on
+stdio for Claude, by driving the Claude Agent SDK, which runs the person's own `claude` binary
+(`CLAUDE_CODE_EXECUTABLE`) with their own sign-in. **Why not the platform:** the agent's session
+handling, tools, permissions and streaming live in Anthropic's SDK; reimplementing them would mean
+reimplementing Claude Code. Stacki's side, the ACP client, is hand-written (`shared/properties/ai/acpWire.ts`).
+**Cost:** about 75 MB on disk once connected (the SDK's own platform binary is left out); a new
+version is a deliberate pin bump. Runs as Electron-as-Node, so no Node install is needed.
+
+**`@agentclientprotocol/codex-acp` 2.6.0.** **Does:** the same for Codex, driving the person's own
+`codex` CLI (`CODEX_PATH`, signed in with `codex login`). **Why not the platform:** as above, for
+OpenAI's app server protocol. **Cost:** about 21 MB on disk; the bundled Codex binary is left out.
+
+`@agentclientprotocol/sdk` (the protocol's reference library) is not used at run time. Its
+`schema.json` was the reference for the hand-written parsers and the recorded fixtures in
+`test/fixtures/ai/acpTrace.jsonl`.

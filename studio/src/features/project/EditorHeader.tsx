@@ -11,7 +11,7 @@ import { presenceColor } from '../collaboration/presenceColors';
 import PageSwitcher from '../../../vendor/stacki/src/features/pages/PageSwitcher';
 import { useComponentBack } from './useComponentBack';
 import { TemplateEntryPicker } from '../pages/TemplateEntryPicker';
-import { useEditorRole } from '../roles/useEditorRole';
+import { useStudioRole } from '../roles/useEditorRole';
 import { projectPages } from './pageLabels';
 import { PreviewButton, type InteractivePreviewState } from '../preview/InteractivePreview';
 interface HeaderProps {
@@ -43,7 +43,7 @@ export function EditorHeader({
   closeDefaults,
   defaultsMode,
 }: HeaderProps) {
-  const role = useEditorRole();
+  const studioRole = useStudioRole();
   const direct = session?.kind === 'local' && session.editing === 'source';
   const pages = projectPages(project);
   const componentOpen = !isCanvasPage(file) && file.endsWith('.astro');
@@ -64,7 +64,7 @@ export function EditorHeader({
         <span className="save-state" role="status" data-saved={document?.status === 'Saved' ? '' : undefined}>
           {document?.status ?? 'Connecting'}
         </span>
-        {role === 'client' && <span className="client-role-badge">Client</span>}
+        {!studioRole.isAdmin && <span className="client-role-badge">{studioRole.name}</span>}
         {componentOpen && switcher}
       </div>
       <div className="studio-titlebar-center">

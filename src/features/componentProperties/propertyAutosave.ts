@@ -322,6 +322,24 @@ export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHo
     }
   };
 
+  // A new prop the host has just created: from here it is an existing prop,
+  // saved through `target`. What changed while it was being created is the
+  // difference from what was created, and saves now.
+  const adopt = useCallback(
+    (created: ComponentProperty, target: PropertySaveHost): void => {
+      assert(hostRef.current === undefined, 'adopt: only a new prop is adopted');
+      assert(created.name !== '', 'adopt: the created prop has a name');
+      const own = state.current;
+      own.saved = created;
+      hostRef.current = target;
+      if (own.mounted) {
+        setStatus((previous) => ({ ...previous, error: '', nameError: '', savedName: created.name }));
+      }
+      void pump();
+    },
+    [pump],
+  );
+
   return {
     draft,
     nameText,
@@ -329,6 +347,7 @@ export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHo
     change,
     setName,
     commitName,
+    adopt,
     close,
     report,
     /** Whether a field is part-way through something it cannot write; it says why itself. */

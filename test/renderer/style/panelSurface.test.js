@@ -87,6 +87,10 @@ const check = (what, condition, detail) => {
     path.join(pageDirectory, 'app.css'),
     [
       'src/features/style/tokens.css',
+      // The sheets styles.css imports first (its @import is not followed in a concatenation).
+      'src/ui/controls.css',
+      'src/ui/dropdown.css',
+      'src/ui/resetLabel.css',
       'src/app/styles.css',
       'src/ui/popup.css',
       'src/features/style/utilities.css',

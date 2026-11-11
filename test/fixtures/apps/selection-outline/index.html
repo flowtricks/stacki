@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Selection outline</title>
+    <!-- Stacki's UI kit (docs/apps.md, "Look and feel"): Stacki's own components, served by Stacki, never shipped in the bundle. -->
+    <link rel="stylesheet" href="__stacki/ui.css" />
+    <script src="stacki-sdk.js"></script>
+    <script src="__stacki/ui.js"></script>
+    <style>
+      body { margin: 0; padding: var(--stacki-space-3) var(--stacki-space-4); background: var(--stacki-bg-panel); color: var(--stacki-text); font: var(--stacki-font-size) var(--stacki-font); }
+      .row { display: flex; align-items: center; justify-content: space-between; gap: var(--stacki-space-3); margin-bottom: var(--stacki-space-3); }
+      #changes { color: var(--stacki-text-faint); }
+    </style>
+  </head>
+  <body>
+    <stacki-tabs value="selection" label="Show">
+      <button value="selection">Selection</button>
+      <button value="changes">Changes</button>
+    </stacki-tabs>
+    <p class="row"><span id="selected">Nothing selected</span> <stacki-switch label="Outline it" checked></stacki-switch></p>
+    <p class="row" id="changes">0 project changes</p>
+    <div class="stacki-ui"><button class="primary" type="button">Outline again</button></div>
+    <script src="app.js"></script>
+  </body>
+</html>

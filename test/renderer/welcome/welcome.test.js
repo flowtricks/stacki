@@ -158,7 +158,8 @@ const PIXEL = 'data:image/png;base64,' + 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAA
   const arrows = all('.welcome-split-arrow');
   await act(async () => arrows[0].click());
   check('the open menu reveals GitHub', all('[role=menuitem]')[0]?.textContent === 'Open from GitHub');
-  check('opening the menu focuses its action', document.activeElement === all('[role=menuitem]')[0]);
+  // A click with no pointer behind it (detail 0) is Enter or Space on the chevron.
+  check('opening the menu from the keyboard focuses its action', document.activeElement === all('[role=menuitem]')[0]);
   await act(async () => {
     document.activeElement.dispatchEvent(
       new dom.window.KeyboardEvent('keydown', {
@@ -168,6 +169,20 @@ const PIXEL = 'data:image/png;base64,' + 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAA
     );
   });
   check('Escape closes the menu and restores its trigger', all('[role=menuitem]').length === 0 && document.activeElement === arrows[0]);
+  // A pointer open leaves focus where it was: focusing the first row drew its
+  // focus ring at once, for someone who never touched the keyboard.
+  const pointerClick = (element) => element.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
+  await act(async () => pointerClick(arrows[0]));
+  check('a pointer opens the menu', all('[role=menuitem]').length === 1);
+  check('opening the menu by pointer does not focus a row', !all('[role=menuitem]').includes(document.activeElement));
+  await act(async () => {
+    arrows[0].dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  });
+  check('ArrowDown then steps into the open menu', document.activeElement === all('[role=menuitem]')[0]);
+  await act(async () => {
+    document.activeElement.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  });
+  check('and Escape closes it again', all('[role=menuitem]').length === 0);
   await act(async () => arrows[1].click());
   check('the starter menu reveals the empty project option', all('[role=menuitem]')[0]?.textContent === 'Start from Astro');
   let emptyRequests = 0;

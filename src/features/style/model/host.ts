@@ -48,6 +48,9 @@ export type StyleNodeTarget = {
   readonly filePath: string | undefined;
 };
 
+/** A `style` attribute as the panel writes it: a declaration string, or an expression (`style={…}`). */
+export type InlineStyleAttr = { readonly type: 'string' | 'expr'; readonly value: string };
+
 export type ClassOutcome = { readonly tag: 'applied' } | { readonly tag: 'refused'; readonly message: string };
 
 export type HostState = {
@@ -73,6 +76,10 @@ export type HostState = {
    *  that page's scoped `<style>` that the user wrote `:global(…)` reach the
    *  component's markup, so they are in its cascade. */
   contextPagePath: string | undefined;
+  /** The component file a selected instance renders, resolved through the page's
+   *  import (or the one component of its name), for its markup (componentMarkup.ts).
+   *  Undefined when the selection is not an instance or the file is not known. */
+  selectedComponentPath: string | undefined;
   /**
    * Bumped by the app whenever undo or redo runs. The panel reads its rules
    * from files and from the page model, and an undo rewrites both behind its
@@ -117,6 +124,17 @@ export type HostState = {
    *  (the host shows it). One page edit, so one undo step. */
   removeClass: ((className: string) => Promise<ClassOutcome>) | undefined;
   removeAttribute: ((attributeName: string) => Promise<ClassOutcome>) | undefined;
+  /** Write the selected element's `style` attribute: its whole next text, or
+   *  undefined to remove it. One page edit, the Settings style field's own, so
+   *  one undo step (model/inlineTarget.ts makes the text). Absent where the host
+   *  cannot edit attributes; the panel then offers no "Inline styles" chip. */
+  setInlineStyle: ((nodeId: string, style: InlineStyleAttr | undefined) => void) | undefined;
+  /** The files of the components the open page uses (componentReference.ts), read
+   *  as the page loads so an instance's chips are first drawn in their settled colours. */
+  pageComponentPaths: readonly string[];
+  /** Whether renderedClasses is the canvas's answer for the selected node, rather
+   *  than not yet reported. An instance's green waits on it (selectedInstanceMarkupPending). */
+  renderedClassesKnown: boolean;
   /** What the spacing box is pointing at, for the canvas to draw over the
    *  selected element: hovering `padding-top` lights the strip of the page that
    *  padding-top holds open. Undefined when the pointer leaves it. */
@@ -169,6 +187,7 @@ const state: HostState = {
   openFilePath: undefined,
   openFileKind: undefined,
   contextPagePath: undefined,
+  selectedComponentPath: undefined,
   renderedClasses: [],
   projectClasses: [],
   writeStyleNode: undefined,
@@ -178,6 +197,9 @@ const state: HostState = {
   addClass: undefined,
   removeClass: undefined,
   removeAttribute: undefined,
+  setInlineStyle: undefined,
+  pageComponentPaths: [],
+  renderedClassesKnown: true,
   pseudoRequest: undefined,
   pseudoRows: false,
   lengthUnit: PX_LENGTHS,

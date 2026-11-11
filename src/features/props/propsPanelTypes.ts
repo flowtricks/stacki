@@ -47,7 +47,8 @@ export interface PropsPanelProps {
   readonly onSetProps?: SetProps;
   /** Writes an element's whole attribute list in a new order: an attributes prop's spread and the defaults before it. */
   readonly onReplaceProps?: ((nodeId: string, props: Readonly<Record<string, Attr>>) => void) | undefined;
-  readonly onSetAssetProp?: (nodeId: string, name: string, picked: PickedAsset, reference: AssetReference) => void;
+  /** `also` are props written in the same edit (one undo step): the alt text an app's pick came with. */
+  readonly onSetAssetProp?: (nodeId: string, name: string, picked: PickedAsset, reference: AssetReference, also?: PropValues) => void;
   readonly onRenameProp: (previous: string, next: string) => void;
   readonly onChangeTag?: TagFieldProps['onChangeTag'];
   readonly onSetText: SetText;

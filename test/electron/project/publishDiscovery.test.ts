@@ -239,3 +239,67 @@ test('Cloudflare combines Pages and Workers across accounts', async (context) =>
     }
   }
 });
+
+// Connection failures carry a reason, never the CLI's output, so settings can offer the right
+// next step: install the CLI, sign in, sign in again, or refresh.
+test('Vercel failures report why: no CLI, signed out, expired or offline', async (context) => {
+  const root = await fixture(context);
+  const cases = [
+    ['missing-cli', /not installed/],
+    ['signed-out', /not signed in to Vercel/],
+    ['expired', /expired or was revoked/],
+    ['network', /Could not reach Vercel/],
+  ] as const;
+  for (const [reason, message] of cases) {
+    context.mock.restoreAll();
+    context.mock.method(command, 'discoveryCommand', async () => {
+      throw new command.DiscoveryCommandError(reason, 'vercel');
+    });
+    const result = await discoverPublishing(root, { provider: 'vercel', account: '' });
+    assert.equal(result.kind, 'failed');
+    if (result.kind === 'failed') {
+      assert.equal(result.reason, reason);
+      assert.match(result.message, message);
+    }
+  }
+});
+
+test('a linked Vercel project with an expired login still asks to sign in again', async (context) => {
+  const root = await fixture(context);
+  await mkdir(path.join(root, '.vercel'));
+  await writeFile(path.join(root, '.vercel/project.json'), JSON.stringify({ orgId: 'team_123', projectId: 'prj_123' }));
+  context.mock.method(command, 'discoveryCommand', async () => {
+    throw new command.DiscoveryCommandError('expired', 'vercel');
+  });
+  const result = await discoverPublishing(root, { provider: 'vercel', account: '' });
+  assert.equal(result.kind, 'ready');
+  if (result.kind === 'ready') {
+    assert.equal(result.projects.length, 1);
+    assert.equal(result.notice?.reason, 'expired');
+  }
+});
+
+test('CLI failures are classified from the exit and the printed text', () => {
+  const classify = command.classifyCommandFailure;
+  assert.equal(classify({ code: 'ENOENT' }, ''), 'missing-cli');
+  assert.equal(classify({ code: 1, killed: true }, ''), 'network');
+  assert.equal(classify({ code: 1 }, 'Error: No existing credentials found. Please run `vercel login` or pass "--token"'), 'signed-out');
+  assert.equal(classify({ code: 1 }, 'Error: The specified token is not valid. Use `vercel login` to generate a new token.'), 'expired');
+  assert.equal(classify({ code: 1 }, 'Error: The token provided via VERCEL_TOKEN environment variable is not valid.'), 'expired');
+  assert.equal(classify({ code: 1 }, 'Error: The hostname api.vercel.com could not be resolved.'), 'network');
+  assert.equal(classify({ code: 1 }, 'Error: something else'), 'unknown');
+});
+
+test('the discovery runner reports a missing Vercel CLI as missing-cli', async (context) => {
+  const root = await fixture(context);
+  const previous = process.env['PATH'];
+  context.after(() => {
+    process.env['PATH'] = previous;
+  });
+  process.env['PATH'] = root;
+  await assert.rejects(command.discoveryCommand(root, 'vercel', ['api', '/v2/teams']), (error: unknown) => {
+    assert.ok(error instanceof command.DiscoveryCommandError);
+    assert.equal(error.reason, 'missing-cli');
+    return true;
+  });
+});

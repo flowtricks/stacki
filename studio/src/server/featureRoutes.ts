@@ -3,6 +3,7 @@ import { gitWorkspaceRoutes } from '../features/history/gitWorkspaceRoutes';
 import { availabilityRoutes } from '../features/publishing/availabilityRoutes';
 import { siteRoute } from '../features/publishing/siteRoutes';
 import { historyRoutes } from '../features/history/historyRoutes';
+import { githubUserSearchRoute } from '../features/roles/githubUserSearchServer';
 import { accountRoute } from '../features/publishing/accountRoutes';
 import { repositoryRoute } from '../features/publishing/repositoryRoutes';
 import { discoveryRoute } from '../features/publishing/discoveryRoutes';
@@ -10,6 +11,7 @@ import { metadataRoute } from '../features/settings/projectMetadata';
 import { cmsRoutes } from '../features/cms/cmsServer';
 import { cmsRemoteRoutes } from '../features/cms/cmsRemoteServer';
 import { mediaHostingRoutes } from '../features/assets/mediaHostingServer';
+import { appsRoutes } from '../features/apps/appsServer';
 import { aiRoute } from '../features/ai/aiRoutes';
 import { publishRoute } from '../features/publishing/publishRoutes';
 import { componentUsageRoute } from '../features/components/componentUsageServer';
@@ -29,10 +31,12 @@ import { record, string } from '../shared/validation';
 export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms>) {
   const repository = githubFromEnvironment(root);
   const history = historyRoutes(root, repository);
+  const githubUsers = githubUserSearchRoute(root, repository);
   const availability = availabilityRoutes(root, repository);
   const cms = cmsRoutes(root, rooms);
   const cmsRemote = cmsRemoteRoutes(root);
   const mediaHosting = mediaHostingRoutes(root);
+  const apps = appsRoutes(root);
   const variables = variableRoutes(root, rooms);
   const properties = propertyRoutes(root, rooms);
   const { cleanup, publisher, synchronization, proposals } = featureServices(root, rooms);
@@ -44,6 +48,7 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
       (await siteRoute(root, request, response, pathname)) ||
       (await availability(request, response, pathname)) ||
       (await history(request, response, pathname, readBody)) ||
+      (await githubUsers(request, response, pathname)) ||
       (await defaultsCanvasRoute(root, rooms, request, response, pathname, readBody)) ||
       (await metadataRoute(root, rooms, request, response, pathname, readBody)) ||
       (await discoveryRoute(root, request, response, pathname, readBody)) ||
@@ -53,6 +58,7 @@ export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms
       (await cms(request, response, pathname, readBody)) ||
       (await cmsRemote(request, response, pathname, readBody)) ||
       (await mediaHosting(request, response, pathname, readBody)) ||
+      (await apps(request, response, pathname, readBody)) ||
       (await variables(request, response, pathname, readBody)) ||
       (await properties(request, response, pathname, readBody)) ||
       (await storageRoute(cleanup, request, response, pathname, readBody))

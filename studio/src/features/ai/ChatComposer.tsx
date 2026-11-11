@@ -1,4 +1,5 @@
 import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
+import Dropdown from '../../../vendor/stacki/src/ui/Dropdown';
 import { useRef, useState } from 'react';
 import { ChatIcon } from './ChatIcon';
 import { useChatAttachments } from './useChatAttachments';
@@ -165,22 +166,20 @@ function ComposerTools({ chat, config, voice, loading, attach }: ToolsProps) {
 
 function ModelPicker({ chat, config }: Pick<ToolsProps, 'chat' | 'config'>) {
   return (
-    <label className="chat-model">
-      <select
-        aria-label="Choose model"
+    <div className="chat-model">
+      <Dropdown
+        ariaLabel="Choose model"
+        className="chat-model-trigger"
         value={chat.model}
         disabled={chat.status !== 'idle' || !config.models.length}
-        onChange={(event) => updateChat(chat.id, (thread) => ({ ...thread, model: event.target.value }))}
-      >
-        {!config.models.includes(chat.model) && <option value={chat.model}>{chat.model || 'No model connected'}</option>}
-        {config.models.map((model) => (
-          <option key={model} value={model}>
-            {model}
-          </option>
-        ))}
-      </select>
-      <ChatIcon name="chevron" />
-    </label>
+        options={[
+          ...(config.models.includes(chat.model) ? [] : [{ value: chat.model, label: chat.model || 'No model connected', dim: true }]),
+          ...config.models.map((model) => ({ value: model, label: model })),
+        ]}
+        livePreview={false}
+        onChange={(model) => updateChat(chat.id, (thread) => ({ ...thread, model }))}
+      />
+    </div>
   );
 }
 

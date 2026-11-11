@@ -206,6 +206,17 @@ export function samplePreview(sample: unknown): string {
 
 export const TREE_DEPTH_MAX = 6;
 
+/**
+ * An import a pick writes before its path means anything: `exported` from the
+ * module `spec`, read here as `name` (`import { SITE } from '@/consts'`). A
+ * JSON file's data is its `default` export.
+ */
+export interface ImportNeed {
+  readonly spec: string;
+  readonly exported: string;
+  readonly name: string;
+}
+
 export interface TreeNode {
   path: string;
   key: string;
@@ -222,6 +233,18 @@ export interface TreeNode {
    */
   entryCount?: number;
   query?: { collection: string; name: string };
+  /**
+   * What picking anything under this node has to import first: an export of
+   * a project data file the file does not import yet (projectDataSources.ts).
+   */
+  importNeed?: ImportNeed;
+  /**
+   * Why this row cannot be bound, when it cannot: an imported function is
+   * something to call, and a binding to it would print the function itself.
+   */
+  unbindable?: string;
+  /** A muted word in the value column where there is no value to show: "not set". */
+  note?: string;
   lazy?: boolean;
   /** The whole address of an image the value names: the preview is clipped. */
   image?: string;

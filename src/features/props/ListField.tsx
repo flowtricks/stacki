@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
 import type { Item, ItemField } from './arrayValue';
 import { assert } from '../../../shared/core/assert';
@@ -280,11 +280,12 @@ type Drag =
 export default function ListField(props: ListFieldProps) {
   const state = useListField(props);
   const note = state.fallback ? '' : emptyNote(props.placeholder);
+  const { itemsRef, scrolls } = useItemsScroll(state.items.length);
   return (
     <div className={`list-field ${state.fallback ? 'is-fallback' : ''}`} onDragOver={(event) => event.preventDefault()} onDrop={state.drop}>
       {state.items.length === 0 && note ? <div className="list-field-empty">{note}</div> : undefined}
       {state.items.length > 0 && (
-        <div className="list-field-items" onScroll={() => closeListRowEditor(state)}>
+        <div ref={itemsRef} className={`list-field-items${scrolls ? ' is-scrolling' : ''}`} onScroll={() => closeListRowEditor(state)}>
           {state.items.map((item, index) => (
             <ListRow key={index} item={item} index={index} state={state} />
           ))}
@@ -308,6 +309,30 @@ export default function ListField(props: ListFieldProps) {
       <ListEditor state={state} />
     </div>
   );
+}
+
+// Whether the rows overflow their box (a host caps its height, as Options does),
+// so Add item can sit over the last visible row and show that the list scrolls.
+// Measured after each layout and on resize; a list that fits is drawn as before.
+function useItemsScroll(count: number) {
+  const itemsRef = useRef<HTMLDivElement>(null);
+  const [scrolls, setScrolls] = useState(false);
+  useLayoutEffect(() => {
+    const element = itemsRef.current;
+    if (element === null) {
+      setScrolls(false);
+      return undefined;
+    }
+    const measure = (): void => setScrolls(element.scrollHeight > element.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [count]);
+  return { itemsRef, scrolls };
 }
 
 function useListField(props: ListFieldProps) {

@@ -6,6 +6,7 @@ import PanelBoundary from '../../../vendor/stacki/src/ui/PanelBoundary';
 import { parsePageTree } from '../../../vendor/stacki/shared/page/pageNode';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { nodeTextEdit } from './settingsEdits';
+import { attributeEdit } from '../source/source';
 import { addStyleClass } from './styleClassEdit';
 import type { ParserNode } from '../source/source';
 import type { OutlineState } from '../preview/outlineState';
@@ -76,6 +77,14 @@ export function StyleSettings({
             return { tag: 'applied' };
           } catch (error) {
             return { tag: 'refused', message: String(error) };
+          }
+        }}
+        onSetInlineStyle={(nodeId, style) => {
+          // Desktop's own write: the attribute's whole next text, or removed (inlineTarget.ts).
+          try {
+            document.edit(attributeEdit(document.text.toString(), nodeId, 'style', style?.value, style?.type === 'expr'));
+          } catch (error) {
+            report(error);
           }
         }}
         onSpacingHover={spacingHover.set}

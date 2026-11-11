@@ -11,7 +11,7 @@ const ENTRIES_MAX = 32;
 const LIFETIME_MS = 60_000;
 const entries = new Map<string, Entry>();
 
-export function invalidatePublishingAccounts(projectPath: string, provider: 'github' | 'cloudflare' = 'github'): void {
+export function invalidatePublishingAccounts(projectPath: string, provider: 'github' | 'cloudflare' | 'vercel' = 'github'): void {
   // A sign-in can finish while an older inventory is loading; it must not hide the new account.
   entries.delete(JSON.stringify([projectPath, provider, '']));
 }

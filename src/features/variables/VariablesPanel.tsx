@@ -1,12 +1,14 @@
 import { PanelReadStatus } from '../../ui/PanelReadStatus';
-import { createPanelCache, usePanelData } from '../../lib/usePanelData';
+import { usePanelData } from '../../lib/usePanelData';
+import { variableCache } from './variableCache';
 import { readCSSVariables } from '../../ipc/variablesBridge';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onVariablesChanged } from '../../ipc/editorEnvironment';
-import type { VariableFile, VariableGroup, VariableSelection, VariablesSnapshot } from '../../ipc/variablesBridge';
+import type { VariableFile, VariableGroup, VariableSelection } from '../../ipc/variablesBridge';
 import { ChevronLeftIcon, ChevronRightIcon, VariableIcon, FileIcon } from '../../ui/Icons';
 import { VariableScopeBadge } from './VariableScopeBadge';
 import { variableFileListed, type VariablePlace } from '../../editor/variablePlace';
+import { assert } from '../../../shared/core/assert';
 
 export interface VariablesPanelProps {
   readonly project: { readonly path: string };
@@ -16,7 +18,6 @@ export interface VariablesPanelProps {
   readonly onSelect: (selection: VariableSelection | undefined) => void;
 }
 
-const variableCache = createPanelCache<VariablesSnapshot>();
 const EMPTY_FILES: readonly VariableFile[] = [];
 // Files preserve the author's stylesheet boundaries; groups preserve the rules inside them.
 export default function VariablesPanel(props: VariablesPanelProps) {
@@ -27,17 +28,22 @@ export default function VariablesPanel(props: VariablesPanelProps) {
 function VariableFilesPanel(props: VariablesPanelProps) {
   const { selected, onSelect, project, place } = props;
   const { state, refresh, files } = useVariableFiles(project.path, place);
-  const [openFile, setOpenFile] = useState<string | undefined>(undefined);
+  // The first frame opens the file the selection (or the default one) is in: opening
+  // it from an effect drew the file list for a frame and then swapped in the
+  // file's groups, on every open of the panel.
+  const [openFile, setOpenFile] = useState<string | undefined>(() => fileToOpen(files, selected));
   useDefaultVariableSelection(files, selected, onSelect);
   useEffect(() => {
-    if (!selected || openFile) {
+    if (openFile) {
       return;
     }
-    const file = files.find((entry) => entry.rel === selected.file);
-    if (!file || onlyGroup(file)) {
-      return;
+    // Files that arrive after the first frame (nothing was cached) open the same way.
+    if (selected) {
+      const rel = fileToOpen(files, selected);
+      if (rel !== undefined) {
+        setOpenFile(rel);
+      }
     }
-    setOpenFile(selected.file);
   }, [selected, openFile, files]);
   const open = openFile ? files.find((file) => file.rel === openFile) : undefined;
   return (
@@ -171,6 +177,22 @@ function VariableGroupRow({ group, file, index, selected, onSelect }: GroupRowPr
       </span>
     </div>
   );
+}
+/**
+ * The file whose groups the panel opens on: the selection's, or with nothing
+ * selected the project's only file (useDefaultVariableSelection selects its first
+ * group). A file with one group is never opened: its row is the group.
+ */
+export function fileToOpen(files: readonly VariableFile[], selected: VariableSelection | undefined): string | undefined {
+  const file = selected === undefined ? (files.length === 1 ? files[0] : undefined) : files.find((entry) => entry.rel === selected.file);
+  if (file === undefined) {
+    return undefined;
+  }
+  if (file.groups.length > 1) {
+    return file.rel;
+  }
+  assert(onlyGroup(file) || file.groups.length === 0, 'fileToOpen: a file not opened has at most one group');
+  return undefined;
 }
 function onlyGroup(file: VariableFile): boolean {
   return file.groups.length === 1;

@@ -20,6 +20,7 @@ export function exposeBridge(): void {
     ...dataBridge(),
     ...pageBridge(),
     ...terminalBridge(),
+    ...aiBridge(),
     ...eventBridge(),
   } satisfies PreloadBridge);
 }
@@ -45,6 +46,47 @@ function cmsBridge() {
     createRemoteDocument: invoke('cmsRemote:create'),
     deleteRemoteDocuments: invoke('cmsRemote:delete'),
     moveRemoteDocument: invoke('cmsRemote:move'),
+    listApps: invoke('apps:list'),
+    pickAppFile: invoke('apps:pickFile'),
+    stageGitHubApp: invoke('apps:stageGitHub'),
+    appRepositories: invoke('apps:githubRepositories'),
+    appReleases: invoke('apps:githubReleases'),
+    commitApp: invoke('apps:commit'),
+    discardApp: invoke('apps:discard'),
+    uninstallApp: invoke('apps:uninstall'),
+    checkAppUpdates: invoke('apps:checkUpdates'),
+    applyAppUpdate: invoke('apps:applyUpdate'),
+    appFolders: invoke('apps:folders'),
+    revealAppFolder: invoke('apps:revealFolder'),
+    appMarketplace: invoke('apps:marketplace'),
+    installMarketplaceApp: invoke('apps:installMarketplace'),
+    setAppAutoUpdate: invoke('apps:setAutoUpdate'),
+    appRepositoryVisibility: invoke('apps:repositoryVisibility'),
+    scanAppSecrets: invoke('apps:scanSecrets'),
+    appRepositoryStatus: invoke('apps:repositoryStatus'),
+    makeAppRepositoryPublic: invoke('apps:makePublic'),
+    addAppLicense: invoke('apps:addLicense'),
+    shareApp: invoke('apps:share'),
+    switchAppSource: invoke('apps:switchSource'),
+    checkMarketplaceApp: invoke('apps:checkMarketplace'),
+    submitMarketplaceApp: invoke('apps:submitMarketplace'),
+    readAppSettings: invoke('apps:readSettings'),
+    writeAppSettings: invoke('apps:writeSettings'),
+    appFileStamps: invoke('apps:fileStamps'),
+    appStorageGet: invoke('apps:storageGet'),
+    appStorageSet: invoke('apps:storageSet'),
+    appStorageKeys: invoke('apps:storageKeys'),
+    watchAppStorage: invoke('apps:storageWatch'),
+    appPerson: invoke('apps:person'),
+    appPeople: invoke('apps:people'),
+    appHostVersion: invoke('apps:hostVersion'),
+    appCanvasSnapshot: invoke('apps:canvasSnapshot'),
+    appFiles: invoke('apps:files'),
+    connectAppAuth: invoke('apps:authConnect'),
+    appAuthStatus: invoke('apps:authStatus'),
+    appAuthToken: invoke('apps:authToken'),
+    disconnectAppAuth: invoke('apps:authDisconnect'),
+    appNetFetch: invoke('apps:netFetch'),
     mediaConnections: invoke('mediaHosting:connections'),
     saveMediaConnection: invoke('mediaHosting:save'),
     removeMediaConnection: invoke('mediaHosting:remove'),
@@ -76,8 +118,17 @@ function projectBridge() {
     publishingRepositories: invoke('publish:repository'),
     discoverPublishing: invoke('publish:discover'),
     publishingAccount: invoke('publish:account'),
+    listInstructions: invoke('instructions:list'),
+    readInstruction: invoke('instructions:read'),
+    writeInstruction: invoke('instructions:write'),
+    createInstruction: invoke('instructions:create'),
+    createInstructionFolder: invoke('instructions:createFolder'),
+    revealInstruction: invoke('instructions:reveal'),
     projectMetadata: invoke('project:metadata'),
     writeProjectMetadata: invoke('project:writeMetadata'),
+    pickProjectFolder: invoke('project:pickFolder'),
+    rolesIdentity: invoke('roles:identity'),
+    githubSearchUsers: invoke('github:searchUsers'),
     studioStatus: invoke('studio:status'),
     installStudio: invoke('studio:install'),
 
@@ -214,6 +265,8 @@ function pageBridge() {
     injectedRoutes: invoke('project:injectedRoutes'),
     sampleEntry: invoke('content:sampleEntry'),
     sampleValue: invoke('content:sampleValue'),
+    renderAuditPage: invoke('audit:render'),
+    measureAuditPage: invoke('audit:measure'),
 
     // Dev server:
     startDevServer: invoke('dev:start'),
@@ -240,6 +293,7 @@ function pageBridge() {
     checkPreview: invoke('preview:check'),
     gitLog: invoke('git:log'),
     gitCommitDiff: invoke('git:commitDiff'),
+    gitAvatars: invoke('git:avatars'),
     gitAllFiles: invoke('git:allFiles'),
     gitStatus: invoke('git:status'),
     gitWorktrees: invoke('git:worktrees'),
@@ -297,8 +351,70 @@ function terminalBridge() {
 }
 
 // What main pushes to the app, and its preferences and menu.
+// The AI chat panel. Acks are `send`: they are frequent, one-way flow-control
+// signals, as the terminal's are.
+function aiBridge() {
+  return {
+    aiAgents: invoke('ai:agents'),
+    aiInstallAgent: invoke('ai:installAgent'),
+    aiTrust: invoke('ai:trust'),
+    aiChats: invoke('ai:chats'),
+    aiChatCreate: invoke('ai:chatCreate'),
+    aiChatUpdate: invoke('ai:chatUpdate'),
+    aiChatDelete: invoke('ai:chatDelete'),
+    aiChatRead: invoke('ai:chatRead'),
+    aiPrompt: invoke('ai:prompt'),
+    aiCancel: invoke('ai:cancel'),
+    aiPermission: invoke('ai:permission'),
+    aiSetOption: invoke('ai:setOption'),
+    aiReview: invoke('ai:review'),
+    aiSetup: invoke('ai:setup'),
+    onAiSetup: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('ai:setupState', listener);
+      return () => ipcRenderer.removeListener('ai:setupState', listener);
+    },
+    aiAck: (chars: number) => ipcRenderer.send('ai:ack', { chars }),
+    onAiEvents: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('ai:events', listener);
+      return () => ipcRenderer.removeListener('ai:events', listener);
+    },
+    onAiAgentStatus: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('ai:agentStatus', listener);
+      return () => ipcRenderer.removeListener('ai:agentStatus', listener);
+    },
+  };
+}
+
 function eventBridge() {
   return {
+    onAppShareProgress: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('apps:shareProgress', listener);
+      return () => ipcRenderer.removeListener('apps:shareProgress', listener);
+    },
+    onAppFoldersChanged: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('apps:foldersChanged', listener);
+      return () => ipcRenderer.removeListener('apps:foldersChanged', listener);
+    },
+    onAppStorageChanged: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('apps:storageChanged', listener);
+      return () => ipcRenderer.removeListener('apps:storageChanged', listener);
+    },
+    onAppAuthChanged: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('apps:authChanged', listener);
+      return () => ipcRenderer.removeListener('apps:authChanged', listener);
+    },
+    onAppPersonChanged: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('apps:personChanged', listener);
+      return () => ipcRenderer.removeListener('apps:personChanged', listener);
+    },
     onStudioProgress: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);
       ipcRenderer.on('studio:progress', listener);
@@ -340,6 +456,11 @@ function eventBridge() {
       const listener = (_event: unknown, data: unknown) => callback(data);
       ipcRenderer.on('fs:changed', listener);
       return () => ipcRenderer.removeListener('fs:changed', listener);
+    },
+    onInstructionsChanged: (callback: (data: unknown) => void) => {
+      const listener = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('instructions:changed', listener);
+      return () => ipcRenderer.removeListener('instructions:changed', listener);
     },
 
     // App preferences — read once on load; the menu pushes changes as they happen.

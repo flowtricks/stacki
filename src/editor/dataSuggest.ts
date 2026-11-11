@@ -185,7 +185,13 @@ function shapeChildren(field: SchemaField | undefined, base: string): TreeNode[]
 
 // 1. This file's own props. Real values when the canvas is showing an entry
 //    that carries them; the declared type otherwise.
-function buildPropNodes(destructures: readonly Destructure[], schema: readonly SchemaField[], sample: unknown, seen: Set<string>): TreeNode[] {
+function buildPropNodes(
+  destructures: readonly Destructure[],
+  schema: readonly SchemaField[],
+  values: { readonly sample: unknown; readonly instance: DataContext['propsInstance'] },
+  seen: Set<string>,
+): TreeNode[] {
+  const { sample, instance } = values;
   const props: TreeNode[] = [];
   const sampleRecord = toRecord(sample);
   const known = (name: string): boolean => sampleRecord !== undefined && Object.prototype.hasOwnProperty.call(sample, name);
@@ -208,17 +214,15 @@ function buildPropNodes(destructures: readonly Destructure[], schema: readonly S
     }
     const field = schema.find((field) => field.name === prop);
     const shape = shapeChildren(field, destructure.name);
-    addUnique(
-      props,
-      {
-        path: destructure.name,
-        key: destructure.name,
-        kind: shape && field?.shapeIsList ? 'list' : destructure.kind === 'rest' ? 'rest props' : field?.type || destructure.kind || 'prop',
-        preview: field?.default !== undefined ? String(field.default) : '',
-        children: shape,
-      },
-      seen,
-    );
+    const node: TreeNode = {
+      path: destructure.name,
+      key: destructure.name,
+      kind: shape && field?.shapeIsList ? 'list' : destructure.kind === 'rest' ? 'rest props' : field?.type || destructure.kind || 'prop',
+      preview: '',
+      children: shape,
+    };
+    // Rest props are whatever else the instance passes: no one value or default.
+    addUnique(props, destructure.kind === 'rest' ? node : withPropValue(node, prop, { field, defaultText: destructure.defaultText, instance }), seen);
   }
   // A prop the file declares but destructures elsewhere (or reads off
   // Astro.props directly) is still a prop of this file.
@@ -230,17 +234,49 @@ function buildPropNodes(destructures: readonly Destructure[], schema: readonly S
       props,
       known(field.name) && sampleRecord
         ? sampleNode(field.name, field.name, sampleRecord[field.name], 0)
-        : {
-            path: field.name,
-            key: field.name,
-            kind: field.shape && field.shapeIsList ? 'list' : field.type || 'prop',
-            preview: field.default !== undefined ? String(field.default) : '',
-            children: shapeChildren(field, field.name),
-          },
+        : withPropValue(
+            {
+              path: field.name,
+              key: field.name,
+              kind: field.shape && field.shapeIsList ? 'list' : field.type || 'prop',
+              preview: '',
+              children: shapeChildren(field, field.name),
+            },
+            field.name,
+            { field, defaultText: undefined, instance },
+          ),
       seen,
     );
   }
   return props;
+}
+
+// What a prop with no known value shows in the value column. Its default
+// (the schema's, else the pattern's literal `= 40`) when it has one. Else,
+// edited from an instance that does not pass it, a muted "not set": the
+// instance gives it nothing. Else (no instance, or one that passes a value
+// this cannot work out) the type word stays, as the kind with no preview.
+function withPropValue(
+  node: TreeNode,
+  prop: string,
+  from: { readonly field: SchemaField | undefined; readonly defaultText: string | undefined; readonly instance: DataContext['propsInstance'] },
+): TreeNode {
+  assert(node.preview === '', 'withPropValue: the prop has no value of its own yet');
+  const passed = from.instance?.passed.includes(prop) ?? false;
+  if (passed) {
+    return node;
+  }
+  const fieldDefault = from.field?.default;
+  if (fieldDefault !== undefined) {
+    return { ...node, preview: typeof fieldDefault === 'string' ? JSON.stringify(fieldDefault) : String(fieldDefault) };
+  }
+  const literal = from.defaultText === undefined ? '' : literalNode(node.path, node.key, from.defaultText, 0).preview;
+  if (literal !== '') {
+    // Words read as a sampled value does (`"h2"`), whichever quotes the source used.
+    const words = /^(['`])([\s\S]*)\1$/.exec(literal);
+    return { ...node, preview: words === null ? literal : `"${words[2] ?? ''}"` };
+  }
+  return from.instance === undefined ? node : { ...node, note: 'not set' };
 }
 
 // A reference followed through the data: `getEntry(post.data.author)` is this
@@ -413,11 +449,32 @@ function importNode(name: string, imp: ImportLike, declared: ImportedValue | und
   if (sampled !== undefined && sampled !== null) {
     return sampleNode(name, name, sampled, 0);
   }
-  if (declared !== undefined) {
-    const node = declared.kind === 'data' ? sampleNode(name, name, declared.value, 0) : literalNode(name, name, declared.text, 0);
-    return node.kind === 'value' ? { ...node, kind: 'imported', preview: '' } : node;
+  // Where it comes from says more than "imported": the module, as the file names it.
+  const from = `from ${path}`;
+  if (declared === undefined) {
+    return { path: name, key: name, kind: 'imported', preview: path === '' ? '' : from, children: undefined };
   }
-  return { path: name, key: name, kind: 'imported', preview: '', children: undefined };
+  switch (declared.kind) {
+    case 'function':
+      return {
+        path: name,
+        key: name,
+        kind: 'function',
+        preview: path === '' ? 'function' : `function · ${path}`,
+        children: undefined,
+        unbindable: `${name} is a function: call it in the frontmatter (const value = ${name}(…)) and bind to what it returns`,
+      };
+    case 'data':
+      return sampleNode(name, name, declared.value, 0);
+    case 'literal': {
+      const node = literalNode(name, name, declared.text, 0);
+      return node.kind === 'value' ? { ...node, kind: 'imported', preview: from } : node;
+    }
+    default: {
+      const exhaustive: never = declared;
+      return exhaustive;
+    }
+  }
 }
 
 // A value that is another value narrowed — `headings.filter(…)` — gets that
@@ -712,7 +769,7 @@ export function dataTree(context: DataContext | undefined): TreeNode[] {
 
   const derived = withDerivedShapes(
     decls,
-    buildPropNodes(destructures, schema, sample, seen),
+    buildPropNodes(destructures, schema, { sample, instance: context?.propsInstance }, seen),
     buildValueNodes(
       decls,
       destructures,
@@ -724,6 +781,12 @@ export function dataTree(context: DataContext | undefined): TreeNode[] {
   );
   const props = derived.props;
   const values = [...derived.values, ...buildCollectionNodes(context?.collections ?? [], fm, imports, samples, seen)];
+  // Data files last: each root already carries its own section and the name
+  // the import will read it as; one whose name another root took is left out.
+  for (const node of context?.projectSources ?? []) {
+    assert(node.importNeed !== undefined, 'A project source carries the import it needs');
+    addUnique(values, node, seen);
+  }
   const loops = buildLoopNodes(context?.ancestorHeads ?? [], props, values, context?.itemIndex, seen);
 
   // The loop item leads: inside a loop, it is what the markup is FOR — every

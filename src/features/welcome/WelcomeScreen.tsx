@@ -13,6 +13,8 @@ import {
 import { AstroIcon, CloseIcon, FolderIcon, GitHubIcon, LayersIcon, LumosIcon } from '../../ui/Icons';
 import StackiLogo from './StackiLogo';
 import WelcomeShaderBackground from './WelcomeShaderBackground';
+import { railScrollbarFor, watchRailEdges } from './recentRail';
+import { currentDesktopPlatform } from '../../lib/shortcutLabel';
 import { NewProjectWizard, StarterWizard } from './WelcomeWizards';
 
 interface WelcomeScreenProps {
@@ -252,7 +254,7 @@ function RecentRail({
   }
   return (
     <div className="recents">
-      <div className="recent-rail">
+      <RecentRailScroller>
         {projects.map((project) => (
           <div key={project.path} className="recent-card" title={project.path} onClick={() => open(project.path)}>
             <button
@@ -272,7 +274,25 @@ function RecentRail({
             <div className="recent-path">{project.path}</div>
           </div>
         ))}
-      </div>
+      </RecentRailScroller>
+    </div>
+  );
+}
+
+// The scrolling row itself. It is its own component so the rail element exists
+// for exactly as long as the edge watcher that reads it.
+function RecentRailScroller({ children }: { readonly children: React.ReactNode }) {
+  const railRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const rail = railRef.current;
+    if (rail === null) {
+      return undefined;
+    }
+    return watchRailEdges(rail, { scrollbar: railScrollbarFor(currentDesktopPlatform()) });
+  }, []);
+  return (
+    <div ref={railRef} className="recent-rail">
+      {children}
     </div>
   );
 }

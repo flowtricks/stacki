@@ -3,6 +3,7 @@ import { usePreviewSource } from './usePreviewSource';
 import { PreviewFrame } from './PreviewFrame';
 import { parsePreviewMessage } from './previewMessages';
 import { usePointerDrag } from '../../ui/usePointerDrag';
+import { panelDragPhase, subscribePanelDragPhase } from '../../ui/panelDragPhase';
 
 const BREAKPOINTS = [
   { key: 'desktop', label: 'Desktop', width: 1_440, viewportHeight: 900 },
@@ -226,13 +227,32 @@ function useCanvasFit(
       return;
     }
     fit();
+    // A side-panel drag resizes the canvas each frame; the zoom to fit (a render of every
+    // frame on the canvas) runs once, on release, instead of at each step.
+    let pending = false;
     const observer = new ResizeObserver(() => {
-      if (!userMovedRef.current) {
+      if (userMovedRef.current) {
+        return;
+      }
+      if (panelDragPhase() === 'dragging') {
+        pending = true;
+      } else {
         fit();
       }
     });
     observer.observe(element);
-    return () => observer.disconnect();
+    const stopPhase = subscribePanelDragPhase(() => {
+      if (pending && panelDragPhase() === 'idle') {
+        pending = false;
+        if (!userMovedRef.current) {
+          fit();
+        }
+      }
+    });
+    return () => {
+      stopPhase();
+      observer.disconnect();
+    };
   }, [fit, userMovedRef, wrapRef]);
   React.useEffect(() => {
     if (!userMovedRef.current) {

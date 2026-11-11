@@ -8,6 +8,7 @@ import { usePointerDrag } from '../../ui/usePointerDrag';
 import { closeTerminal, onTerminalProcess } from './terminalBridge';
 import type { TerminalPaneHandle } from './TerminalPane';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
+import { TERMINAL_LAUNCH_MODE_KEY, onTerminalTabRequest, parseLaunchMode, type LaunchMode } from './terminalAgent';
 
 const TerminalPane = lazy(() => import('./TerminalPane'));
 
@@ -20,16 +21,16 @@ const CUSTOM_COMMAND_CHARS_MAX = 4_096;
 const LABEL_CHARS_MAX = 22;
 
 const HEIGHT_KEY = 'stacki.terminal.height';
-const MODE_KEY = 'stacki.terminal.autoLaunch';
+const MODE_KEY = TERMINAL_LAUNCH_MODE_KEY;
 const CUSTOM_KEY = 'stacki.terminal.autoLaunchCustom';
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/g;
-
-type LaunchMode = 'none' | 'claude' | 'codex' | 'custom';
 
 interface TerminalTab {
   readonly id: string;
   readonly oscTitle: string;
   readonly processName: string;
+  /** A command this tab starts with in place of the dock's auto-launch: an agent handed a task (terminalAgent.ts). */
+  readonly launch?: string;
 }
 
 interface TerminalDockProps {
@@ -88,7 +89,7 @@ export default function TerminalDock(props: TerminalDockProps) {
                 ref={(pane) => terminals.setPaneRef(tab.id, pane ?? undefined)}
                 terminalId={tab.id}
                 projectPath={props.projectPath}
-                autoLaunch={autoLaunch}
+                autoLaunch={tab.launch ?? autoLaunch}
                 onTitleChange={(title) => terminals.setTabTitle(tab.id, title)}
               />
             </Suspense>
@@ -137,15 +138,28 @@ function useTerminalTabs(projectPath: string, dock: { readonly open: boolean }):
   const nextNumber = useRef(1);
   const seeded = useRef(false);
   tabsRef.current = tabs;
-  const createTab = useCallback(() => {
-    if (tabsRef.current.length >= TERMINAL_TABS_MAX) {
-      return;
-    }
-    const id = `${projectPath}:term-${nextNumber.current}`;
-    nextNumber.current += 1;
-    setTabs((previous) => [...previous, { id, oscTitle: '', processName: '' }]);
-    setActiveId(id);
-  }, [projectPath]);
+  const createTab = useCallback(
+    (launch?: string) => {
+      if (tabsRef.current.length >= TERMINAL_TABS_MAX) {
+        return;
+      }
+      const id = `${projectPath}:term-${nextNumber.current}`;
+      nextNumber.current += 1;
+      const tab: TerminalTab = launch === undefined ? { id, oscTitle: '', processName: '' } : { id, oscTitle: '', processName: '', launch };
+      setTabs((previous) => [...previous, tab]);
+      setActiveId(id);
+    },
+    [projectPath],
+  );
+  // A hand-off to the agent opens its own tab; it counts as the dock's first, so opening adds no idle shell beside it.
+  useEffect(
+    () =>
+      onTerminalTabRequest((command) => {
+        seeded.current = true;
+        createTab(command);
+      }),
+    [createTab],
+  );
   const closeTab = useCallback((id: string) => {
     void closeTerminal(id);
     paneRefs.current.delete(id);
@@ -282,7 +296,7 @@ function TerminalBar(props: TerminalBarProps) {
             )}
           </button>
         ))}
-        <button className="ghost term-add" title="New terminal" onClick={props.createTab} disabled={props.tabs.length >= TERMINAL_TABS_MAX}>
+        <button className="ghost term-add" title="New terminal" onClick={() => props.createTab()} disabled={props.tabs.length >= TERMINAL_TABS_MAX}>
           <PlusIcon size={13} />
         </button>
       </div>
@@ -397,18 +411,6 @@ function launchCommand(mode: LaunchMode, custom: string): string {
       return custom;
     case 'none':
       return '';
-  }
-}
-
-function parseLaunchMode(value: string): LaunchMode {
-  switch (value) {
-    case 'claude':
-    case 'codex':
-    case 'custom':
-    case 'none':
-      return value;
-    default:
-      return 'none';
   }
 }
 

@@ -70,7 +70,40 @@ test('the complete channel inventory matches real main and terminal registration
   // restoring what a removal changed. A gesture's several edits are written as
   // one (page:editBatch), so the dev server never renders the page between them.
   // Undo of creating a component takes its file back (component:discard).
-  assert.equal(harness.handlers.size, 175);
+  // Settings → Folders picks a project folder in the system dialog (project:pickFolder).
+  // The history panel's author pictures add one (git:avatars), answered in main so the
+  // GitHub credential never reaches the renderer.
+  // Project roles add one (roles:identity): the GitHub login roles resolve for.
+  // The Roles tab's member suggestions add one (github:searchUsers), answered in main so the
+  // GitHub credential never reaches the renderer.
+  // Stacki Apps add ten: list, the file pick, the GitHub stage, the account's repositories and a
+  // repository's releases (answered in main so the account's token never reaches the renderer),
+  // commit, discard, uninstall, the update check and applying an update.
+  // The official marketplace adds three: reading its index and installing an approved version
+  // (answered in main, which downloads and checks the digest), and each app's auto-update switch.
+  // Sharing and publishing apps add eight, answered in main so the publishing account's token never
+  // reaches the renderer: the secret scan, a repository's status, making it public, adding its MIT
+  // license, the share, switching an app to its release, the marketplace's check and the submission.
+  // App settings add two: reading and writing them, so secrets stay in main's vault.
+  // App storage and the person add six: a stored value's read, write and keys, watching the project's
+  // data folder, the person (main applies the privacy preference) and the host's version for app.info.
+  // An app's page index adds one (apps:fileStamps): the stamps it caches other pages' trees by.
+  // Apps added as a folder add two: the folders that do not read as an app, and showing one in the
+  // file manager.
+  // App project files and sign-ins add five: the file call (main checks each path and the role's
+  // code:edit), and connecting, reading, handing out and forgetting a sign-in, so tokens stay in main.
+  // Where an installed app lives adds one (apps:repositoryVisibility): its GitHub repository's
+  // visibility, read in main with the publishing account's token.
+  // Requests through the host add one (apps:netFetch): main calls an app's declared hosts for it,
+  // signed with its sign-in, so services without CORS work and the token stays in main.
+  // The people an app may mention add one (apps:people): role members and commit authors, read in
+  // main, which applies the privacy preference.
+  // An element's snapshot adds one (apps:canvasSnapshot): main photographs the region of the
+  // sender's own window the renderer measured, the one capture API the renderer lacks.
+  // The AI chat panel adds fourteen (shared/ipc/aiChat.ts): agents and their install, trusting the
+  // project, the chat list and one chat's create, update, delete and read, a prompt, stopping it,
+  // a permission answer, a setting, keeping or undoing one file’s change, and the guided setup.
+  assert.equal(harness.handlers.size, 242);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name
@@ -80,6 +113,13 @@ test('the complete channel inventory matches real main and terminal registration
   for (const channel of sendChannels) {
     assert.match(terminal, new RegExp(`parseSendPayload\\('${channel}'`), `${channel} is parsed`);
   }
+  // The AI panel's one acknowledgement is registered beside the terminal's, with its own parser.
+  const ai = fs.readFileSync(path.resolve('dist/electron/handlers/ai/aiHandlers.js'), 'utf8');
+  assert.deepEqual(
+    [...ai.matchAll(/ipcMain\.on\(['"]([^'"]+)['"]/g)].map((match) => match[1]),
+    ['ai:ack'],
+  );
+  assert.match(ai, /parseSendPayload\('ai:ack'/, 'ai:ack is parsed');
 });
 
 test('malformed writes fail before altering disk; valid writes still work', async (context) => {
@@ -141,7 +181,13 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
     sound: true,
     usageCountsEnabled: true,
     usageNoticeVersion: 0,
+    appsPersonHidden: false,
+    aiAskBeforeTrust: false,
   });
+  assert.equal(parseSettings({ sound: true, appsPersonHidden: true }).appsPersonHidden, true);
+  assert.equal(parseSettings({ sound: true, aiAskBeforeTrust: true }).aiAskBeforeTrust, true);
+  assert.throws(() => parseSettings({ sound: true, aiAskBeforeTrust: 'yes' }), /boolean/);
+  assert.throws(() => parseSettings({ sound: true, appsPersonHidden: 'yes' }), /boolean/);
   assert.throws(() => parseSettings({ sound: 'yes' }), /boolean/);
   assert.deepEqual(
     parseSettings({
@@ -155,6 +201,8 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
       usageCountsEnabled: false,
       usageNoticeVersion: 1,
       usageLastAttemptDay: '2026-10-08',
+      appsPersonHidden: false,
+      aiAskBeforeTrust: false,
     },
   );
   assert.throws(() => parseSettings({ sound: false, usageCountsEnabled: 'no' }), /boolean/);

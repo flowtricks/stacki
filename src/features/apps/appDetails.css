@@ -1,0 +1,430 @@
+/* An app's details popup (AppDetails.tsx): a fixed header with a one-line meta
+   under the name, then a body that scrolls under it, short sections of one-line
+   rows on filled blocks, and a quiet Uninstall at the foot. The header and the
+   foot are set off by a 1px line, like every Stacki header; everything else is
+   told apart by fills, never borders. The form rows (App settings, Connections)
+   copy Settings' grid (src/app/settings/settings.css) so the two read alike. */
+.apps-details-popup {
+  --apps-details-fade: 24px;
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100vw - 48px));
+  max-height: min(680px, calc(100dvh - 48px));
+}
+.apps-details-popup .apps-details-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.apps-details-heading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.apps-details-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The meta line: version, author, repository, a dot between each, one line cut short at the end. */
+.apps-details-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+/* Each item after the first is a flex box, so its own gap spaces the dot from its content. */
+.apps-details-meta > * + *::before {
+  content: '·';
+  color: var(--text-faint);
+}
+.apps-details-version {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.apps-details-meta .apps-details-author {
+  flex: none;
+  color: var(--text-dim);
+}
+.apps-details-meta .apps-details-repository {
+  min-width: 0;
+}
+.apps-details-meta .apps-details-repository > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.apps-details-header-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+.apps-details-header-actions .apps-open {
+  height: 28px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+.apps-details-header-actions .more-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.apps-details-header-actions .more-menu-button:is(:hover, .is-open) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+/* The body takes the height the header leaves and scrolls on its own; its ends
+   fade while there is more past them (useScrollEdges), as Settings' do. */
+.apps-details-popup .apps-details-body {
+  --apps-details-fade-top: 0px;
+  --apps-details-fade-bottom: 0px;
+  --apps-details-section-gap: 20px;
+  flex: 1 1 auto;
+  gap: var(--apps-details-section-gap);
+  min-height: 0;
+  /* The first section sits as far below the header's line as each section
+     sits below the one before it: the top padding is the sections' gap. */
+  padding: var(--apps-details-section-gap) 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--apps-details-fade-top),
+    #000 calc(100% - var(--apps-details-fade-bottom)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--apps-details-fade-top), #000 calc(100% - var(--apps-details-fade-bottom)), transparent 100%);
+}
+.apps-details-body[data-edge-top='fade'] {
+  --apps-details-fade-top: var(--apps-details-fade);
+}
+.apps-details-body[data-edge-bottom='fade'] {
+  --apps-details-fade-bottom: var(--apps-details-fade);
+}
+/* The description: three lines, then More. */
+.apps-details-about {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.apps-details-about-text {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.apps-details-about-text:not([data-expanded='true']) {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.apps-details-about .apps-details-more {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+}
+.apps-details-about .apps-details-more:hover {
+  text-decoration: underline;
+}
+
+.apps-details-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.apps-details-section-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+.apps-details-section-header h4 {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* A dense list on one filled block: one line per row, the label on the left, its
+   value or a content-width control on the right. */
+.apps-details-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 4px 0;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  list-style: none;
+}
+.apps-details-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 36px;
+  box-sizing: border-box;
+  padding: 4px 12px;
+  font-size: 12.5px;
+}
+.apps-details-item-label {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text-dim);
+}
+.apps-details-item-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.apps-details-item-value {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  max-width: 60%;
+  color: var(--text);
+  text-align: right;
+}
+.apps-details-item-value > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.apps-details-item-value .apps-button {
+  height: 26px;
+}
+/* The amber dot: a key in use by another app, or a service the app reaches. */
+.apps-details-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+.apps-details-muted {
+  color: var(--text-faint);
+}
+.apps-details-shortcut {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.apps-details-place {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.apps-details-item-value > .apps-details-place {
+  overflow: visible;
+}
+/* A shortcut recorder in a list row is as wide as its key, not a dropdown's width;
+   a refused press's hint sits under it, right-aligned, on one line. */
+.apps-details-item .shortcut-recorder {
+  align-items: flex-end;
+  width: auto;
+}
+.apps-details-item .shortcut-recorder-field {
+  flex: none;
+  min-width: 64px;
+  height: 26px;
+  text-align: center;
+}
+.apps-details-item .shortcut-recorder-hint {
+  white-space: nowrap;
+}
+
+/* The ? beside a label or a heading, and the sentence it holds. The sentence is
+   always in the document, as the button's description, but only shown in the tip. */
+.apps-details-hint {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: help;
+}
+.apps-details-hint:hover,
+.apps-details-hint:focus-visible {
+  outline: none;
+  background: var(--bg-active);
+  color: var(--text);
+}
+.apps-details-hint-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+.rail-tooltip.apps-details-tip {
+  max-width: 280px;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+/* Uninstall: one quiet red text button, under a line at the foot of the body. */
+.apps-details-danger {
+  display: flex;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.apps-details-danger .apps-details-uninstall {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  margin-left: -8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--red);
+  font-size: 12.5px;
+}
+.apps-details-danger .apps-details-uninstall:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+}
+.apps-details-danger .apps-details-uninstall:disabled {
+  opacity: 0.5;
+}
+
+/* A row: label and description in the first column, the control in a second
+   column of its own, so controls line up down the popup however long the text. */
+.apps-details-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 24px;
+  min-height: 44px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.apps-details-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.apps-details-row-label {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.apps-details-row-description {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.apps-details-row-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+/* Every control in the column has one width, so a dropdown and a text field line up. */
+.apps-details-row-control > .dd-trigger,
+.apps-details-row-control > .apps-setting-input {
+  width: 200px;
+}
+.apps-details-value {
+  max-width: 260px;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.apps-details-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.apps-details-row-control .apps-button {
+  height: 28px;
+}
+.apps-details-section-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.apps-details-section-footer .apps-note {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .apps-details-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .apps-details-row-control {
+    justify-content: flex-start;
+  }
+}
+.apps-details-section .apps-settings-form {
+  gap: 6px;
+}
+.apps-details-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.apps-details-link:hover {
+  text-decoration: underline;
+}
+.apps-details-repository {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* A section's slot (AppDetails.tsx) marks where it is, for a request to open
+   the details at it, and draws no box: the body lays the sections out as before. */
+.apps-details-slot {
+  display: contents;
+}

@@ -58,11 +58,28 @@
   /* The frame and overlay must move in the same paint when changing devices. */
   transition: none;
 }
+/* The canvas chrome's stacking order, bottom to top. One scale, so a new layer
+   is placed by name against the others rather than by a number picked to beat
+   one of them. The layer is its own stacking context (`isolation`), so these
+   values order the chrome only among itself: the layer as a whole stays under
+   every popup, menu, dialog and tooltip of the editor, which open above the
+   canvas in the shell's own z-index terms. App overlays (AppOverlayLayer.tsx)
+   are on top of Stacki's outlines, tags and bands: an app draws a pin or a
+   label to be read and clicked, and a selection outline or name tag over it
+   would hide it. Only an app's drawn parts take the pointer, so an outline's
+   controls stay usable wherever no app item is drawn (appCanvasTools.css).
+   Studio adds its collaborators' outlines (studio.css) between the two. */
 .preview-overlay-layer {
+  --canvas-layer-focus: 3;
+  --canvas-layer-spacing: 3;
+  --canvas-layer-outline: 4;
+  --canvas-layer-collaborator: 6;
+  --canvas-layer-app: 8;
   position: absolute;
   top: 16px;
   left: 50%;
   transform: translateX(-50%);
+  isolation: isolate;
   overflow: hidden;
   pointer-events: none;
 }

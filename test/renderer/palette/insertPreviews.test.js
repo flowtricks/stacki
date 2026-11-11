@@ -6,7 +6,8 @@
 // Methodology: mount the real palette in jsdom with fake IntersectionObserver and ResizeObserver
 // so the test decides what is visible, and jsdom's local storage (or one that throws). Drive it with the
 // keys a person presses, post the messages a loaded page posts, and read the DOM: rows, cards, pills,
-// frames, the hints. What a pixel looks like is not measured here; the URL each frame asks for is.
+// frames, the hints. What a pixel looks like is not measured here; the URL each frame asks for is. The
+// pointer gestures a live preview page posts (it came in, it clicked) are posted the same way.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -350,7 +351,7 @@ test('the first use opens on All results, the plain list: rows, no cards, no pil
     assert.equal(rows.length <= 60, true, 'the list keeps its old length');
     const names = view.labels();
     assert.ok(names.includes('Hero') && names.includes('<Image>') && names.includes('<div>'));
-    assert.equal(rows[0].querySelector('.insert-item-sub')?.textContent, 'Section', 'a row says where the component lives');
+    assert.equal(rows[0].querySelector('.insert-item-sub')?.textContent, 'Section', 'a row says where the component lives, by its pill name');
     await view.reveal();
     assert.equal(view.frames().length, 0, 'the list loads no pages');
   } finally {
@@ -551,7 +552,9 @@ test('a visible card loads the hover preview route, recipe defaults and all, in 
     assert.deepEqual([...url.searchParams.keys()].sort(), ['c', 'p']);
     assert.equal(first.getAttribute('aria-hidden'), 'true');
     assert.equal(first.getAttribute('tabindex'), '-1');
-    assert.equal(first.hasAttribute('sandbox'), false, 'a live component, as in the hover card');
+    // A live component that runs its scripts and loads the dev server's modules, but cannot submit a form,
+    // open a window or navigate the editor.
+    assert.equal(first.getAttribute('sandbox'), 'allow-scripts allow-same-origin');
     await view.act(() => view.pills()[1].click());
     await view.reveal(360);
     assert.equal(new URL(view.frames()[0].getAttribute('src')).searchParams.get('c'), 'Button', 'a block loads the same route');
@@ -747,4 +750,59 @@ test('frames load a few at a time in grid order, and the next start as earlier o
   } finally {
     await view.finish();
   }
+});
+
+test('the pointer inside a live preview highlights its card, a click there inserts, and other windows are ignored', async () => {
+  const view = await setup({ components: mixed() });
+  try {
+    await view.reveal(360);
+    const gesture = (frame, data) => view.act(() => window.dispatchEvent(new view.dom.window.MessageEvent('message', { source: frame.contentWindow, data })));
+    const [, second] = view.frames();
+    await gesture(second, { type: 'avb:component-preview-gesture', gesture: 'pointer' });
+    assert.ok(view.cards()[1].classList.contains('highlight'), 'the pointer coming into the preview marks its card');
+    assert.deepEqual(view.events.inserted, []);
+    await view.act(() =>
+      window.dispatchEvent(new view.dom.window.MessageEvent('message', { source: window, data: { type: 'avb:component-preview-gesture', gesture: 'click' } })),
+    );
+    assert.deepEqual(view.events.inserted, [], 'a message from another window is not a click on the card');
+    await gesture(second, { type: 'avb:component-preview-gesture', gesture: 'drag' });
+    await gesture(second, { type: 'avb:component-preview-gesture' });
+    assert.deepEqual(view.events.inserted, [], 'an unknown gesture does nothing');
+    await gesture(second, { type: 'avb:component-preview-gesture', gesture: 'click' });
+    assert.deepEqual(
+      view.events.inserted.map((item) => item.name),
+      ['Pricing'],
+      'a click in the preview inserts its card',
+    );
+  } finally {
+    await view.finish();
+  }
+});
+
+test('a card names its folder pill beside its label, except while a pill filters the grid', async () => {
+  const components = [section('Hero', { instances: 52 }), { name: 'Loose', folder: '', path: '/p/src/components/Loose.astro' }];
+  const view = await setup({ components });
+  try {
+    const folders = () => view.cards().map((card) => card.querySelector('.insert-card-folder')?.textContent);
+    assert.deepEqual(folders(), ['· Section', '· components', undefined, undefined], "the pill's own name; Astro's components have none");
+    const foot = view.cards()[0].querySelector('.insert-card-foot');
+    assert.deepEqual(
+      [...foot.children].map((child) => child.className),
+      ['insert-item-icon', 'insert-item-label', 'insert-card-folder', 'insert-item-uses'],
+      'label, folder, then the count at the end',
+    );
+    await view.act(() => view.pills()[1].click());
+    assert.deepEqual(folders(), [undefined], 'the selected pill already says the folder');
+  } finally {
+    await view.finish();
+  }
+});
+
+test('the highlight ring is drawn inside the card, so the scrolling grid cannot clip it on any edge', () => {
+  const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
+  const ring = css.match(/\.insert-item\.insert-card\.highlight \.insert-surface::after \{([^}]*)\}/)?.[1];
+  assert.ok(ring, 'the ring is a layer of the surface, above its frame');
+  assert.match(ring, /box-shadow: inset 0 0 0 2px/);
+  assert.match(ring, /pointer-events: none/, 'the ring never takes the pointer from the live preview');
+  assert.doesNotMatch(css, /\.insert-item\.insert-card\.highlight \.insert-surface \{[^}]*box-shadow: 0 0 0/, 'no outer ring to be clipped');
 });

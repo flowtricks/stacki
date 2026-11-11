@@ -1,0 +1,73 @@
+/* The app's switch (Switch.tsx). The track's colour says the state and nothing
+   else: off is a soft fill, on is the accent. Hover lifts the whole switch a
+   little with a filter and never repaints the track, because the base
+   `button:hover` fill (styles.css) used to paint an "on" switch grey. */
+.ui-switch {
+  --ui-switch-track: rgba(255, 255, 255, 0.16);
+  position: relative;
+  flex: none;
+  display: inline-block;
+  width: 32px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ui-switch-track);
+  transition:
+    background-color 120ms ease,
+    filter 120ms ease;
+}
+.ui-switch[aria-checked='true'] {
+  --ui-switch-track: var(--accent);
+}
+/* Written as `button.ui-switch` so it outweighs `button:hover:not(:disabled)`,
+   which would otherwise replace the track with the grey hover fill. */
+button.ui-switch:hover:not(:disabled) {
+  background: var(--ui-switch-track);
+  filter: brightness(1.15);
+}
+button.ui-switch:disabled {
+  opacity: 0.45;
+}
+.ui-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ui-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: transform 120ms ease;
+}
+.ui-switch[aria-checked='true'] .ui-switch-thumb {
+  transform: translateX(14px);
+}
+/* A switch with its label beside it (SwitchRow): the label first, the switch at
+   the end of the row, at the height and type size of Settings' role toggles
+   (roles.css `.app-role-toggle`). */
+.ui-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 12px;
+}
+.ui-switch-row-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-switch,
+  .ui-switch-thumb {
+    transition: none;
+  }
+}

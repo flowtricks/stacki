@@ -7,7 +7,6 @@ import InstallProgress from './InstallProgress';
 import LocalStep from './LocalStep';
 import CloudStep from './CloudStep';
 import './studioSetup.css';
-import { InfoLabel } from '../../ui/InfoLabel';
 import InstallCommand from './InstallCommand';
 
 interface Props {
@@ -25,16 +24,10 @@ export default function StudioSetup(props: Props) {
   return (
     <section className="studio-project-settings" aria-label="Stacki Studio">
       <div className="studio-project-settings-card">
-        <h3>
-          <InfoLabel
-            label="Stacki Studio"
-            description={
-              'Add browser-based editing and collaboration to this project. Setup installs ' +
-              'Studio locally and guides you through cloud deployment. Already installed? ' +
-              'Open setup to continue configuring it.'
-            }
-          />
-        </h3>
+        <p className="studio-project-settings-intro">
+          Add browser-based editing and collaboration to this project. Setup installs Studio locally and guides you through cloud deployment. Already installed?
+          Open setup to continue configuring it.
+        </p>
         <div className="studio-install-actions">
           <div className="studio-install-option">
             <p className="studio-install-status" data-state={setup.status?.kind} role="status">

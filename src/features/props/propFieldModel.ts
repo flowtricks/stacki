@@ -11,13 +11,14 @@ import type { FieldDefinition, PropValues } from './propRules';
 import type { RichContext } from './RichContent';
 import type { SourceContext, ValueChange, FieldPosition, FieldPickerAt, InsertAPI } from './propBindings';
 import type { AssetDimensions } from '../../ui/AssetThumb';
-import type { PickedAsset } from '../../ui/AssetField';
+import type { AltPick, PickedAsset } from '../../ui/AssetField';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { findImportOf } from '../../editor/dataSuggest';
 import { isHrefName, isMediaName } from '../../editor/fieldNames';
 import { arrayItems, objectFields } from './arrayValue';
 import { optionAttr } from './propKinds';
+import { reportCodeCleared } from './codeCleared';
 import { deprecationOf, readPropDocumentation } from '../../editor/propDocumentation';
 import LinkField from './LinkField';
 
@@ -34,6 +35,13 @@ export interface AssetContext {
   readonly onPickAsset?: ((name: string, picked: PickedAsset) => void) | false | undefined;
   readonly onPickDimensions?: ((name: string, dimensions: AssetDimensions) => void) | undefined;
   readonly onSrcDimensions?: ((dimensions: AssetDimensions) => void) | undefined;
+  /** The element the fields edit, which an app answering an asset pick is told. */
+  readonly nodeId?: string | undefined;
+  /**
+   * Writes a pick into the field `name` and the element's alt text as one edit (one undo
+   * step), when an app's image picker answers with alt text and the element has an alt.
+   */
+  readonly onPickWithAlt?: ((name: string, pick: AltPick, alt: string) => void) | undefined;
 }
 export interface AssetBinding {
   readonly ident: string;
@@ -204,20 +212,12 @@ export function usePropFieldModel(props: PropFieldProps) {
   const { name, type } = field;
   const isSet = value !== undefined;
   const [menuPosition, setMenuPosition] = useState<FieldPosition | undefined>(undefined);
-  const [custom, setCustomState] = useState(false);
-  // Why the field stayed on its code after "use the control" was asked for:
-  // code the control cannot show is kept as written rather than dropped.
-  const [customProblem, setCustomProblem] = useState<string | undefined>(undefined);
-  const setCustom = (next: boolean): void => {
-    setCustomState(next);
-    setCustomProblem(undefined);
-  };
+  const [custom, setCustom] = useState(false);
   const [insertAt, setInsertAt] = useState<FieldPickerAt | undefined>(undefined);
   // A ref prop: BindField fills it with its caret API while it is mounted.
   const bindApiRef = useRef<InsertAPI | undefined>(undefined);
   useEffect(() => {
-    setCustomState(false);
-    setCustomProblem(undefined);
+    setCustom(false);
   }, [nodeKey, name]);
   // An action is set in code only; there is nothing a binding could give it.
   const bindable = type !== 'attrs' && name !== 'slot' && field.codeKind !== 'function';
@@ -255,8 +255,6 @@ export function usePropFieldModel(props: PropFieldProps) {
     setMenuPosition,
     custom,
     setCustom,
-    customProblem,
-    setCustomProblem,
     insertAt,
     setInsertAt,
     bindApiRef,
@@ -343,7 +341,7 @@ export function isColorField(field: FieldDefinition): boolean {
   return typeof field.default === 'string' && isColorText(field.default);
 }
 export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
-  const { setMenuPosition, onChange, setCustom, setCustomProblem, value, field, isSet, showExpr } = state;
+  const { setMenuPosition, onChange, setCustom, value, field, isSet, showExpr } = state;
   const reset = () => {
     setMenuPosition(undefined);
     onChange(undefined, true);
@@ -356,9 +354,16 @@ export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
     }
     const back = valueFromExpr(field, value.value);
     if (back === undefined && value.value.trim() !== '') {
-      // The control cannot hold this code: going back to it used to drop the
-      // value. It stays as code, and the field says why.
-      setCustomProblem(`The ${controlWord(field)} cannot show this code, so it stays as code. Change it to a value the ${controlWord(field)} can hold first.`);
+      // The control cannot hold this code, and asking for the control means
+      // wanting it: the field is cleared, as one undo step, and a notice says
+      // so with a way to bring the code back where there is no undo (a form).
+      const code = value;
+      setCustom(false);
+      onChange(undefined, true);
+      reportCodeCleared(() => {
+        setCustom(true);
+        onChange(code, true);
+      });
       return;
     }
     setCustom(false);

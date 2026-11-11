@@ -22,6 +22,7 @@ import { componentUsage } from '../properties/componentUsage';
 import { toPosix } from '../lib/mainHelpers';
 import { selectionTrail } from '../documents/pageRequests';
 import type { MainHost } from './mainHost';
+import { projectFoldersFor } from '../lib/projectFolders';
 import { componentSpecifier } from '../properties/componentImports';
 
 // Step 6: every applied property batch leaves its inverse here, and the reply
@@ -39,7 +40,7 @@ function registerComponentCreateHandlers({ ipcMain, documents, noteAppWrite }: P
   // The checksum is what Undo hands back to `component:discard`: the file goes
   // only while it still holds these bytes.
   ipcMain.handle('component:create', async (_event, options) => {
-    const { path: target, rel, text } = componentFile(options);
+    const { path: target, rel, text } = componentFile({ ...options, componentFolders: projectFoldersFor(options.projectPath, 'components') });
     fs.mkdirSync(path.dirname(target), { recursive: true });
     const checksum = createProjectText(target, text);
     return { path: target, rel, name: options.name, checksum };
@@ -48,7 +49,15 @@ function registerComponentCreateHandlers({ ipcMain, documents, noteAppWrite }: P
   // Undo of creating a component: one step with the page edit that placed it.
   ipcMain.handle('component:discard', async (_event, { projectPath, path: target, checksum, force }) => {
     noteAppWrite();
-    return { outcome: discardComponentFile({ projectPath, path: target, checksum, force: force === true }) };
+    return {
+      outcome: discardComponentFile({
+        projectPath,
+        path: target,
+        checksum,
+        force: force === true,
+        componentFolders: projectFoldersFor(projectPath, 'components'),
+      }),
+    };
   });
 
   // Component property edits validate their revision before updating project sources.

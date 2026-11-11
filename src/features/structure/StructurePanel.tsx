@@ -24,6 +24,7 @@ import { NodeList } from './StructureTree';
 import { clearDrag } from '../../editor/dragState';
 import { parseNavigatorDrop } from './navigatorDrop';
 import { type LiveValue } from '../../ui/liveValue';
+import { assert } from '../../../shared/core/assert';
 
 interface StructurePanelProps {
   readonly clientMode?: boolean;
@@ -176,7 +177,12 @@ interface TreeState {
 
 function useTreeState(props: EditableProps): TreeState {
   const [dropTarget, setDropTarget] = useState<DropTarget | undefined>(undefined);
-  const [toggled, setToggled] = useState(() => initialCollapseMap(props.pageState.model.nodes));
+  // The first frame already has the selected row's ancestors open: opening them in
+  // an effect drew the tree folded for a frame, then pushed every row below the
+  // selection down, on each open of the Navigator.
+  const [toggled, setToggled] = useState(() =>
+    selectionExpanded(initialCollapseMap(props.pageState.model.nodes), props.pageState.model.nodes, props.selectedId, props.selectedPseudo),
+  );
   const [allExpanded, setAllExpanded] = useState(false);
   const [contextMenu, setContextMenu] = useState<ContextPosition | undefined>(undefined);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -296,19 +302,34 @@ function parseArrowKey(event: KeyboardEvent): ArrowKey | undefined {
 
 function useSelectionExpansion(props: EditableProps, setToggled: React.Dispatch<React.SetStateAction<ReadonlyMap<string, boolean>>>): void {
   useEffect(() => {
-    if (!props.selectedId || props.selectedId === 'frontmatter') {
-      return;
-    }
-    const ancestors = navigatorAncestors(props.pageState.model.nodes, props.selectedId);
-    // A picked ::before or ::after is a row inside its element, so the element
-    // opens too (a canvas click on one left it shut, the row out of sight).
-    const own = props.selectedPseudo === undefined ? undefined : findVisibleNode(props.pageState.model.nodes, props.selectedId)?.node;
-    const opened = own === undefined ? ancestors : [...ancestors, own];
-    if (opened.length === 0) {
-      return;
-    }
-    setToggled((previous) => expandAncestors(previous, opened));
+    setToggled((previous) => selectionExpanded(previous, props.pageState.model.nodes, props.selectedId, props.selectedPseudo));
   }, [props.pageState.model.nodes, props.selectedId, props.selectedPseudo, setToggled]);
+}
+
+/** `toggled` with the selected row's ancestors open (and its element, for a picked ::before or ::after); `toggled` itself when nothing changes. */
+export function selectionExpanded(
+  toggled: ReadonlyMap<string, boolean>,
+  nodes: readonly NavigatorNode[],
+  selectedId: string | undefined,
+  selectedPseudo: PseudoKind | undefined,
+): ReadonlyMap<string, boolean> {
+  if (selectedId === undefined || selectedId === 'frontmatter') {
+    return toggled;
+  }
+  const ancestors = navigatorAncestors(nodes, selectedId);
+  // A picked ::before or ::after is a row inside its element, so the element
+  // opens too (a canvas click on one left it shut, the row out of sight).
+  const own = selectedPseudo === undefined ? undefined : findVisibleNode(nodes, selectedId)?.node;
+  const opened = own === undefined ? ancestors : [...ancestors, own];
+  if (opened.length === 0) {
+    return toggled;
+  }
+  const next = expandAncestors(toggled, opened);
+  assert(
+    opened.every((node) => !collapsedState(node, next)),
+    'selectionExpanded: every opened row is open',
+  );
+  return next;
 }
 
 function expandAncestors(previous: ReadonlyMap<string, boolean>, ancestors: readonly NavigatorNode[]): ReadonlyMap<string, boolean> {

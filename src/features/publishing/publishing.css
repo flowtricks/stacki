@@ -282,6 +282,12 @@
   gap: 16px;
   padding-top: 16px;
 }
+/* The message and its one next step (install, sign in, refresh) sit together under the field. */
+.publish-settings .publish-connection-recovery {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+}
 .publish-settings .publish-connection-help summary {
   font-size: 11px;
 }

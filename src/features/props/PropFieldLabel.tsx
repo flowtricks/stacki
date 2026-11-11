@@ -1,19 +1,22 @@
 // A prop field's label row: its pill, its menu, the picker it opens, and the
 // reset menu (PropField.tsx).
 
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { dataPickerPosition } from './dataPickerPosition';
 import { ResetMenu } from '../../ui/ResetLabel';
 import { valueFromParts } from '../../editor/bindings';
 import { BindHandle, FieldDataPicker } from './propBindings';
 import PropTip from './PropTip';
-import { FieldNumberIcon, ComponentPropertiesIcon, FieldSwitchIcon, BracesIcon, CodeIcon, ElementSlotIcon, VariableTextSizeIcon } from '../../ui/Icons';
+import { BracesIcon } from '../../ui/Icons';
+import { FieldTypeIcon } from './FieldTypeIcon';
 import { controlWord, type PropState } from './propFieldModel';
 import { fitOfFieldType, literalOf, type NewPropSeed } from './newPropModel';
 import { fieldTooltip } from '../../editor/propDocumentation';
 import { isMediaName } from '../../editor/fieldNames';
 import { arrayItems } from './arrayValue';
 import { itemShapeOf } from './listItemShape';
+import { ConditionalEditor, useConditionCatalog } from './ConditionalValue';
+import { startingConditional, valueLanguageOf } from './conditionalModel';
 
 export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
 export function PropFieldPill({ state }: { readonly state: PropState }) {
@@ -29,13 +32,7 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
       onClick={onLabelClick}
       onContextMenu={onLabelContextMenu}
     >
-      {type === 'number' && <FieldNumberIcon size={12} className="prop-label-icon" />}
-      {type === 'boolean' && <FieldSwitchIcon size={12} className="prop-label-icon" />}
-      {type === 'enum' && <ComponentPropertiesIcon size={12} className="prop-label-icon" />}
-      {type === 'attrs' && <BracesIcon size={12} className="prop-label-icon" />}
-      {(type === 'code' || type === 'style') && <CodeIcon size={12} className="prop-label-icon" />}
-      {(type === 'slot' || name === 'slot') && <ElementSlotIcon size={12} className="prop-label-icon" />}
-      {(type === 'string' || type === 'other') && name !== 'slot' && <VariableTextSizeIcon size={12} className="prop-label-icon" />}
+      <FieldTypeIcon type={type} name={name} />
       {name}
       {required && (
         <span
@@ -51,13 +48,6 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
 
 // The line under a field that names what it is missing (PropField.tsx).
 export function PropFieldNote({ state }: { readonly state: PropState }) {
-  if (state.customProblem !== undefined) {
-    return (
-      <div className="prop-field-note problem" role="alert">
-        {state.customProblem}
-      </div>
-    );
-  }
   if (!state.missingRequired) {
     return undefined;
   }
@@ -153,38 +143,71 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
 }
 export function PropFieldPicker({ state }: { readonly state: PropState }) {
   const { field, value, bindContext, onChange, type, setCustom, insertAt, setInsertAt, bindApiRef } = state;
+  // The Value conditions editor, opened from the picker's "Create conditional"
+  // and placed under the label row this sits beside.
+  const [conditional, setConditional] = useState(false);
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const catalog = useConditionCatalog(bindContext);
+  const seed = seedOf(field, value);
+  // Words only: a branch gives text or a prop, which a number or a switch field cannot hold as typed.
+  const wordy = seed?.fit === 'text' || seed?.fit === 'content';
+  const start = bindContext?.newProp !== undefined && wordy ? startingConditional(value, catalog) : undefined;
 
   return (
-    insertAt && (
-      <FieldDataPicker
-        pos={insertAt}
-        bindContext={bindContext}
-        seed={seedOf(field, value)}
-        // A prop made for this field is the whole of its value, as a builder binds one.
-        onBindNew={(path) => {
-          setInsertAt(undefined);
-          setCustom(true);
-          const numeric = !!(type === 'number' || type === 'boolean' || (type === 'enum' && field.numeric));
-          onChange(valueFromParts([{ expr: path }], { numeric }), true);
-        }}
-        onPick={(path) => {
-          setInsertAt(undefined);
-          // Into the value field's caret while it is being typed — so a chip
-          // lands beside the words around it (fieldFocus.ts).
-          if (insertAt.focus.kind === 'focused' && bindApiRef.current?.insert) {
-            bindApiRef.current.insert(path);
-            return;
+    <>
+      {/* Only while the editor is open, so the field's layout is untouched otherwise. */}
+      {conditional && <span ref={anchorRef} className="conditional-anchor" />}
+      {conditional && start !== undefined && (
+        <ConditionalEditor
+          anchorRef={anchorRef}
+          start={start}
+          model={undefined}
+          value={value}
+          bindContext={bindContext}
+          language={valueLanguageOf(type === 'style' ? 'style' : field.name)}
+          onApply={(next) => onChange(next, true)}
+          onClose={() => setConditional(false)}
+        />
+      )}
+      {insertAt && (
+        <FieldDataPicker
+          pos={insertAt}
+          bindContext={bindContext}
+          seed={seed}
+          // A prop made for this field is the whole of its value, as a builder binds one.
+          onBindNew={(path) => {
+            setInsertAt(undefined);
+            setCustom(true);
+            const numeric = !!(type === 'number' || type === 'boolean' || (type === 'enum' && field.numeric));
+            onChange(valueFromParts([{ expr: path }], { numeric }), true);
+          }}
+          onPick={(path) => {
+            setInsertAt(undefined);
+            // Into the value field's caret while it is being typed — so a chip
+            // lands beside the words around it (fieldFocus.ts).
+            if (insertAt.focus.kind === 'focused' && bindApiRef.current?.insert) {
+              bindApiRef.current.insert(path);
+              return;
+            }
+            // The dot pressed outside the field connects the whole of it, as the
+            // Content field's does: the chip is the value, and choosing one is
+            // what turns a control into a value.
+            setCustom(true);
+            const numeric = !!(type === 'number' || type === 'boolean' || (type === 'enum' && field.numeric));
+            onChange(valueFromParts([{ expr: path }], { numeric }), true);
+          }}
+          onConditional={
+            start === undefined
+              ? undefined
+              : () => {
+                  setInsertAt(undefined);
+                  setConditional(true);
+                }
           }
-          // The dot pressed outside the field connects the whole of it, as the
-          // Content field's does: the chip is the value, and choosing one is
-          // what turns a control into a value.
-          setCustom(true);
-          const numeric = !!(type === 'number' || type === 'boolean' || (type === 'enum' && field.numeric));
-          onChange(valueFromParts([{ expr: path }], { numeric }), true);
-        }}
-        onClose={() => setInsertAt(undefined)}
-      />
-    )
+          onClose={() => setInsertAt(undefined)}
+        />
+      )}
+    </>
   );
 }
 

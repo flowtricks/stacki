@@ -19,6 +19,8 @@ export interface PropertySaver {
   readonly changePhase: (phase: 'idle' | 'saving' | 'autosaving') => void;
   readonly recordUndo: (token: string) => void;
   readonly completeSave: () => Promise<void>;
+  /** Opens a project file, named project-relative: a shared prop's declaration and users. */
+  readonly openFile?: ((path: string) => void) | undefined;
 }
 
 /** A property as the form opens on it, with the source a save is checked against. */

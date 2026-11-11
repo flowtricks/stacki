@@ -5,6 +5,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { err, ok, type Result } from '../../shared/core/result';
 import { METADATA_FILES } from '../../shared/properties/projectMetadata';
+import { projectFoldersFor } from '../lib/projectFolders';
 import { EMPTY_KEEP_LIST, parseStyleKeepList, type StyleKeepList } from '../../shared/properties/styleKeepList';
 import { readProjectMetadata } from '../project/projectMetadata';
 import { checkSelectorUsage, removeUnusedSelectors, restoreSelectorFiles } from '../properties/selectorRemoval';
@@ -24,7 +25,7 @@ export function registerSelectorHandlers(host: Pick<MainHost, 'ipcMain' | 'asser
     if (!keepList.ok) {
       return keepList;
     }
-    return ok((await checkSelectorUsage(project, keepList.value, input.packages ?? 'search')).report);
+    return ok((await checkSelectorUsage(project, keepList.value, input.packages ?? 'search', projectFoldersFor(project, 'styles'))).report);
   });
   host.ipcMain.handle('style:removeSelectors', async (_event, input) => {
     const project = root(input.projectPath);
@@ -35,7 +36,11 @@ export function registerSelectorHandlers(host: Pick<MainHost, 'ipcMain' | 'asser
     if (!keepList.ok) {
       return keepList;
     }
-    return removeUnusedSelectors(project, keepList.value, { ids: input.ids, files: input.files });
+    // A selector deleted by hand is checked as if no stylesheet were locked,
+    // so it must still be proven unused; only the cleanups honour sheet locks.
+    const reach = input.reach ?? 'cleanup';
+    const honoured = reach === 'chosen' ? { ...keepList.value, lockedStylesheets: [] } : keepList.value;
+    return removeUnusedSelectors(project, honoured, { ids: input.ids, files: input.files }, projectFoldersFor(project, 'styles'));
   });
   host.ipcMain.handle('style:restoreSelectors', (_event, input) => {
     const project = root(input.projectPath);

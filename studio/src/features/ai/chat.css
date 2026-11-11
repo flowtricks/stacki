@@ -17,7 +17,6 @@
   font-size: 0.8125rem;
   line-height: 1.55;
   button,
-  select,
   textarea {
     font: inherit;
   }
@@ -29,7 +28,6 @@
     opacity: 0.4;
   }
   button:focus-visible,
-  select:focus-visible,
   summary:focus-visible {
     outline: 0.0625rem solid var(--text-dim);
     outline-offset: 0.125rem;
@@ -447,28 +445,11 @@
   align-items: center;
   min-width: 0;
   flex: 1;
-  position: relative;
-  select {
-    appearance: none;
-    border: 0;
+  .chat-model-trigger {
     background: transparent;
     color: var(--text-dim);
     font-size: 0.6875rem;
-    width: 100%;
-    padding: 0.25rem 1rem 0.25rem 0.125rem;
-    cursor: pointer;
-    text-overflow: ellipsis;
-  }
-  svg {
-    pointer-events: none;
-    position: absolute;
-    right: 0;
-    width: 0.875rem;
-    color: var(--text-dim);
-  }
-  option {
-    background: var(--bg-panel);
-    color: var(--text);
+    padding: 0.25rem 0.125rem;
   }
 }
 .chat-panel .chat-send {

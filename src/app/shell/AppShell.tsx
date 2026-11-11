@@ -22,7 +22,7 @@ import { ConfirmHost, confirmDialog } from '../../ui/ConfirmDialog';
 import LeftRail from '../LeftRail';
 import PageSwitcher from '../../features/pages/PageSwitcher';
 import DynamicPicker from '../DynamicPicker';
-import InsertSearch from '../../features/palette/InsertSearch';
+import { DesktopInsertSearch } from './DesktopInsertSearch';
 import AssetsPanel from '../../features/assets/AssetsPanel';
 import TerminalDock from '../../features/terminal/TerminalDock';
 import { cleanError } from '../../lib/cleanError';
@@ -34,14 +34,26 @@ import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
 import { type LeftTab } from '../appTypes';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
-import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel } from '../appPanels';
+import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel, InstructionsPanel, preloadPanels } from '../appPanels';
 import { canvasPageOf } from '../../editor/pageState';
 import { projectRelative, type VariablePlace } from '../../editor/variablePlace';
-import { prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
+import { prewarmKeepList, prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
+import { prewarmInstructionsListing } from '../../features/instructions/instructionsListingCache';
+import { prewarmInstalledApps } from '../../features/apps/installedAppsCache';
+import { prewarmPageOrder } from '../../features/pages/pageOrderPersistence';
 import { useEffect } from 'react';
+import { prefetchPanels, prefetchTimeline } from './panelPrefetch';
 import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay, pickPseudo } from './AppPanes';
 import { selectedPseudo } from '../model/selectionStructure';
 import type { AppView, ShellView } from '../App';
+import { useCurrentRole } from '../../lib/useCurrentRole';
+import { canPanel } from '../../lib/roleAccess';
+import { can } from '../../../shared/properties/projectRoles';
+import { ViewAsChip } from '../roles/ViewAsChip';
+import { AppsTab, DesktopAppsHost } from './DesktopApps';
+import { AuditsHost, AuditsTab } from './DesktopAudits';
+import { AiHost, AiTab, useAiRailButton } from './DesktopAi';
+import { selectFromPanel } from './panelSelection';
 
 // The start screen, before a project is open.
 export function WelcomeView({ app }: { readonly app: AppView }) {
@@ -67,6 +79,17 @@ export function AppShell({ app }: { readonly app: ShellView }) {
   // The style selectors check reads every project file and installed package;
   // done once in the background, opening its panel shows a finished report.
   useEffect(() => prewarmSelectorReport(projectPath), [projectPath]);
+  // The other panels' chunks and first reads, so each opens on its content the first time.
+  useEffect(() => prefetchPanels({ projectPath, preloadChunks: preloadPanels, hostReads: desktopPanelReads(projectPath) }), [projectPath]);
+  const gitRepository = app.gitInfo?.isRepo ? app.gitInfo : undefined;
+  const gitBranch = gitRepository?.branch;
+  const gitHead = gitRepository?.head;
+  const gitTracked = gitRepository !== undefined;
+  useEffect(() => (gitTracked ? prefetchTimeline(projectPath, gitBranch, gitHead) : undefined), [projectPath, gitTracked, gitBranch, gitHead]);
+  // A panel the role hides closes, including one open when "View as" switched roles.
+  const role = useCurrentRole();
+  const leftTab = app.leftTab !== undefined && canPanel(role, app.leftTab) ? app.leftTab : undefined;
+  const aiButton = useAiRailButton(app);
   return (
     <div className="app">
       {app.propertySave.phase === 'saving' && (
@@ -77,8 +100,14 @@ export function AppShell({ app }: { readonly app: ShellView }) {
       <TitleBar app={app} />
       <DefaultsCanvasBar canvas={app.defaultsCanvas} />
       <div className="main">
-        <LeftRail active={app.leftTab} componentOpen={app.componentPropertiesOpen} onSelect={(id) => app.setLeftTab((tab) => (tab === id ? undefined : id))} />
-        {app.leftTab && <LeftPanel app={app} tab={app.leftTab} />}
+        <LeftRail
+          active={leftTab === 'ai' ? undefined : leftTab}
+          componentOpen={app.componentPropertiesOpen}
+          projectPath={projectPath}
+          onSelect={(id) => app.setLeftTab((tab) => (tab === id ? undefined : id))}
+          aiButton={aiButton}
+        />
+        {leftTab && <LeftPanel app={app} tab={leftTab} />}
         <div className="center">
           <CanvasPane app={app} />
           <CanvasCovers app={app} />
@@ -110,8 +139,21 @@ export function AppShell({ app }: { readonly app: ShellView }) {
         )}
       </div>
       <AppOverlays app={app} />
+      <AuditsHost app={app} />
+      <AiHost app={app} />
     </div>
   );
+}
+
+// The first reads of the panels Desktop has and Studio's prefetch does not cover,
+// each into the cache its panel opens on (panelPrefetch.ts).
+function desktopPanelReads(projectPath: string): ReadonlyArray<() => Promise<void>> {
+  return [
+    () => prewarmPageOrder(projectPath),
+    () => prewarmInstalledApps(projectPath),
+    () => prewarmKeepList(projectPath),
+    () => prewarmInstructionsListing(projectPath),
+  ];
 }
 
 /** Whether a CMS collection or item covers the canvas (CanvasCovers). */
@@ -125,32 +167,24 @@ function cmsCovering(app: ShellView): boolean {
 // What floats over the editor: the terminal, the code window, the insert palette,
 // the conflict notice, the busy overlay and the toast.
 export function AppOverlays({ app }: { readonly app: ShellView }) {
+  const canCode = can(useCurrentRole(), 'code:edit');
   return (
     <>
       {/* Below `.main`, so it spans the full window rather than being boxed in
           by the panels. Always mounted but inert until opened: it spawns no
           shell until then, and once open it hides rather than unmounting, so
           toggling it doesn't discard the scrollback — see TerminalDock. */}
-      <TerminalDock projectPath={app.project.path} open={app.termOpen} onClose={() => app.setTermOpen(false)} />
+      <TerminalDock projectPath={app.project.path} open={app.termOpen && canCode} onClose={() => app.setTermOpen(false)} />
       <CodeWindowHost app={app} />
       <CanvasTextFormatBar />
-      {app.insertOpen && (
-        <InsertSearch
-          projectKey={app.project.path}
-          components={app.insertables}
-          allowSlot={app.currentPage?.kind === 'component'}
-          devUrl={app.devUrl}
-          trailingSlash={app.trailingSlash}
-          onInsert={app.insertItem}
-          onClose={() => app.setInsertOpen(false)}
-        />
-      )}
+      {app.insertOpen && <DesktopInsertSearch app={app} />}
       <ConflictNotice app={app} />
       <ErrorToast
         message={app.pageState?.save.tag === 'failed' ? `${app.currentPage?.name ?? 'This file'} has not been saved. ` + app.pageState.save.message : undefined}
         recovery={[{ label: 'Retry save', run: app.flushSave }]}
       />
       {app.busy && <BusyOverlay message={app.busy} />}
+      <DesktopAppsHost app={app} />
       <ToastStack notices={app.notices} dismiss={app.dismissToast} />
       <ConfirmHost />
     </>
@@ -158,6 +192,7 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
 }
 
 export function TitleBar({ app }: { readonly app: ShellView }) {
+  const canPublish = can(useCurrentRole(), 'publish');
   return (
     <div className="titlebar">
       <button
@@ -205,14 +240,17 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
       )}
       <UrlGroup app={app} />
       <span className="spacer" />
+      <ViewAsChip />
       <TitleActions app={app} />
-      <DesktopPublishButton
-        projectPath={app.project.path}
-        flushSave={app.flushSave}
-        refresh={app.refreshGit}
-        saveState={app.pageState?.save}
-        repository={app.gitInfo}
-      />
+      {canPublish && (
+        <DesktopPublishButton
+          projectPath={app.project.path}
+          flushSave={app.flushSave}
+          refresh={app.refreshGit}
+          saveState={app.pageState?.save}
+          repository={app.gitInfo}
+        />
+      )}
     </div>
   );
 }
@@ -304,15 +342,19 @@ function SettingsButton() {
 // Terminal and interactive preview controls.
 export function TitleActions({ app }: { readonly app: ShellView }) {
   const terminalKey = shortcutLabel('J', 'primary', currentDesktopPlatform());
+  // The terminal runs anything in the project: it belongs to code editing.
+  const canCode = can(useCurrentRole(), 'code:edit');
   return (
     <div className="titlebar-actions">
-      <button
-        className={`titlebar-btn ${app.termOpen ? 'on' : ''}`}
-        title={`${app.termOpen ? 'Hide' : 'Show'} terminal (${terminalKey})`}
-        onClick={() => app.setTermOpen((open) => !open)}
-      >
-        <TerminalIcon size={14} />
-      </button>
+      {canCode && (
+        <button
+          className={`titlebar-btn ${app.termOpen ? 'on' : ''}`}
+          title={`${app.termOpen ? 'Hide' : 'Show'} terminal (${terminalKey})`}
+          onClick={() => app.setTermOpen((open) => !open)}
+        >
+          <TerminalIcon size={14} />
+        </button>
+      )}
       {/* Two things put the canvas into a state you are looking at rather
           than working in — the interactive preview, and an older version —
           and this button is where both of them end. Lit for either, so it
@@ -384,6 +426,16 @@ function variablePlace(app: ShellView): VariablePlace {
   };
 }
 
+// Only the open tab is mounted. Keeping visited tabs mounted and hidden (as
+// KeptTabPanel does for the two inspector tabs) would keep their effects live
+// while hidden, and React 18 has no way to pause them: the Navigator's arrow keys
+// listen on the window and would move the selection from behind another panel,
+// and every hidden panel would re-render on each hover and selection change and
+// re-read its data on every file change. Each panel instead opens on what it
+// showed last (per-project caches, filled ahead by panelPrefetch.ts) and on
+// view state derived in its first render, then refreshes in place, which costs a
+// few lists of data rather than a few thousand DOM nodes per panel
+// (test/renderer/app/panelSwitch.test.js holds this).
 export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab: LeftTabName }) {
   return (
     <ResizablePanel kind={tab === 'code' ? 'code' : 'left'}>
@@ -396,6 +448,10 @@ export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab:
       {tab === 'selectors' && <SelectorsPanel project={app.project} showToast={app.showToast} onRecordUndo={app.pushCommand} />}
       {tab === 'code' && <CodeTab app={app} />}
       {tab === 'history' && <HistoryTab app={app} />}
+      {tab === 'apps' && <AppsTab app={app} />}
+      {tab === 'instructions' && <InstructionsPanel projectPath={app.project.path} showToast={app.showToast} />}
+      {tab === 'audits' && <AuditsTab app={app} />}
+      {tab === 'ai' && <AiTab app={app} />}
       {tab === 'assets' && (
         <AssetsPanel
           project={app.project}
@@ -430,6 +486,7 @@ export function PropertiesTab({ app }: { readonly app: ShellView }) {
       nodes={app.model?.nodes}
       onSelectNode={app.setSelectedId}
       onReplaceProps={app.replaceProps}
+      onOpenFile={(rel) => void app.openProjectFile(rel)}
     />
   );
 }
@@ -468,11 +525,7 @@ export function PagesTab({ app }: { readonly app: ShellView }) {
 
 export function NavigatorTab({ app }: { readonly app: ShellView }) {
   const page = app.currentPage;
-  const selectNavigatorNode = (id: string | undefined): void => {
-    app.setNavigatorSelectionTick((tick) => tick + 1);
-    app.setPseudoPick(undefined);
-    app.setSelectedId(id);
-  };
+  const selectNavigatorNode = (id: string | undefined): void => selectFromPanel(app, id);
   // A ::before or ::after row selects its element, and asks the Style panel
   // for that pseudo-element's selector (the count makes a repeat a new ask).
   const selectPseudo = (id: string, pseudo: 'before' | 'after'): void => {

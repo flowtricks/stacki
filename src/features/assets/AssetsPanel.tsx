@@ -1,4 +1,5 @@
 import { createPanelCache, usePanelData, type PanelData } from '../../lib/usePanelData';
+import { assetCache } from './assetListingCache';
 import { PanelReadStatus } from '../../ui/PanelReadStatus';
 import { SelectableAssetTile } from './AssetSelection';
 import { AssetBatchTools, useAssetBatch, convertible, type AssetBatch } from './AssetBatchTools';
@@ -125,10 +126,6 @@ function useAssetPanelState(props: AssetsPanelProps): AssetPanelState {
   };
 }
 
-const assetCache = createPanelCache<{
-  readonly entries: readonly AssetPanelEntry[];
-  readonly missing: boolean;
-}>();
 const EMPTY_ENTRIES: readonly AssetPanelEntry[] = [];
 const assetDirectories = createPanelCache<string>();
 const ASSET_IMAGES = `${PICK_HOME}/images`;

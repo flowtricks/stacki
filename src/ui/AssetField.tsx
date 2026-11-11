@@ -2,10 +2,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ElementImageIcon } from './Icons';
 import { listAssetEntries, onAssetEntriesChanged } from '../ipc/assetBridge';
 import type { WireAssetEntry } from '../../shared/ipc/ipcResults';
-import type { AssetRequest } from './assetPick';
+import type { AssetAltPick, AssetPickTarget, AssetRequest } from './assetPick';
 import type { AssetDimensions } from './AssetThumb';
 import AssetThumb from './AssetThumb';
-import { requestAsset } from './assetPick';
+import { chooseAsset } from './assetPick';
+import { useAppOverrideOwner } from './appOverrideSlot';
+import { OverrideNote, overrideTitle } from './OverrideNote';
 import { assetRelCandidates, assetValueFor, isExternalAsset } from './assetPath';
 import { classifyRemoteMedia, remotePosterSource, type RemoteMediaHint } from './remoteMedia';
 
@@ -113,6 +115,8 @@ export interface PickedAsset {
 // How a picked src/ asset is written into a prop: `hero.src`, the built URL,
 // or `hero`, the imported ImageMetadata object.
 export type AssetReference = 'url' | 'module';
+/** An app's pick as the field writes it with alt text: a value for the field, or a project file for its host's own pick handler. */
+export type AltPick = { readonly kind: 'value'; readonly value: string } | { readonly kind: 'entry'; readonly entry: PickedAsset };
 export interface AssetFieldProps {
   readonly value?: string | undefined;
   readonly fallbackValue?: string | undefined;
@@ -131,6 +135,10 @@ export interface AssetFieldProps {
   readonly posterValue?: string | undefined;
   /** Where the Assets panel opens to choose (assetPick.ts); the side panel by default. */
   readonly pickPresentation?: AssetRequest['presentation'];
+  /** The element field this edits, which an app answering the pick is told (docs/apps.md, "Overrides"). */
+  readonly pickTarget?: AssetPickTarget | undefined;
+  /** Writes a pick and an image's alt text as one edit, when an app's picker answers with alt text. */
+  readonly onPickWithAlt?: ((pick: AltPick, alt: string) => void) | undefined;
 }
 
 export default function AssetField(props: AssetFieldProps) {
@@ -138,6 +146,7 @@ export default function AssetField(props: AssetFieldProps) {
   const state = useAssetField(props);
   const toggle = showModeToggle && <AssetMode mode={state.mode} onMode={state.setMode} plainLabel={plainLabel} />;
   const remoteCard = state.external && <RemoteCard state={state} mediaKind={mediaKind} posterValue={props.posterValue} />;
+  const owner = useAppOverrideOwner('assets.pick');
   if (state.mode === 'url') {
     return (
       <div className="asset-field">
@@ -156,9 +165,10 @@ export default function AssetField(props: AssetFieldProps) {
     <div className="asset-field">
       {toggle}
       {remoteCard || <LocalCard state={state} srcRel={props.srcRel} />}
-      <button className="af-choose" onClick={state.choose}>
+      <button className="af-choose" onClick={state.choose} title={owner === undefined ? undefined : overrideTitle(owner)}>
         Choose {kindLabel[mediaKind]}…
       </button>
+      <OverrideNote point="assets.pick" />
     </div>
   );
 }
@@ -177,6 +187,8 @@ function useAssetField({
   baseDir: baseDirectory,
   onCurrentDimensions,
   pickPresentation,
+  pickTarget,
+  onPickWithAlt,
 }: AssetFieldProps) {
   // Preview the effective asset without writing the component's fallback into the page.
   // An explicit empty string still overrides the fallback, just as it does in Astro.
@@ -226,21 +238,31 @@ function useAssetField({
     }
   };
 
-  const choose = (): void =>
-    requestAsset({
-      mediaKind,
-      ...(pickPresentation === undefined ? {} : { presentation: pickPresentation }),
-      current: entry?.rel || target || '',
-      onPick: (pickedRel, picked) => {
-        justPicked.current = true;
-        answerPick({ pickedRel, picked, onPickEntry, onChange, baseDirectory });
-      },
-      // A hosted file is written as its public URL, whatever the host's own pick handler does with project files.
-      onPickURL: (url) => {
-        justPicked.current = true;
-        onChange(url, true);
-      },
-    });
+  // Alt-click skips any app that answers picks: Stacki's own picker opens.
+  const choose = (event: React.MouseEvent): void => {
+    void chooseAsset(pickRequest(), { bypass: event.altKey, target: pickTarget });
+  };
+  const pickRequest = (): AssetRequest => ({
+    mediaKind,
+    ...(pickPresentation === undefined ? {} : { presentation: pickPresentation }),
+    onPickWithAlt:
+      onPickWithAlt === undefined
+        ? undefined
+        : (pick: AssetAltPick, alt: string) => {
+            justPicked.current = true;
+            onPickWithAlt(altPickFor({ pick, onPickEntry, baseDirectory }), alt);
+          },
+    current: entry?.rel || target || '',
+    onPick: (pickedRel, picked) => {
+      justPicked.current = true;
+      answerPick({ pickedRel, picked, onPickEntry, onChange, baseDirectory });
+    },
+    // A hosted file is written as its public URL, whatever the host's own pick handler does with project files.
+    onPickURL: (url) => {
+      justPicked.current = true;
+      onChange(url, true);
+    },
+  });
   return { current, isFallback, external, mode, setMode, dims, entry, target, noteDims, choose };
 }
 
@@ -258,6 +280,29 @@ function answerPick(answer: {
     return;
   }
   answer.onChange(assetValueFor(pickedRel, answer.baseDirectory), true);
+}
+
+// An app's pick with alt text, in the form answerPick would write it: the host's own
+// handler takes a project file when it has one, else the field takes a value.
+function altPickFor(answer: {
+  readonly pick: AssetAltPick;
+  readonly onPickEntry: AssetFieldProps['onPickEntry'];
+  readonly baseDirectory: string | undefined;
+}): AltPick {
+  const { pick } = answer;
+  switch (pick.kind) {
+    case 'url':
+      return { kind: 'value', value: pick.url };
+    case 'file':
+      if (answer.onPickEntry) {
+        return { kind: 'entry', entry: { rel: pick.rel, root: pick.rel.split('/')[0] ?? '' } };
+      }
+      return { kind: 'value', value: assetValueFor(pick.rel, answer.baseDirectory) };
+    default: {
+      const exhaustive: never = pick;
+      return exhaustive;
+    }
+  }
 }
 
 type AssetFieldState = ReturnType<typeof useAssetField>;

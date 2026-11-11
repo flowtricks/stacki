@@ -1,0 +1,121 @@
+/* The editor's base controls: buttons, text fields and the focus ring. Shared: the editor imports it from src/app/styles.css and the app UI kit
+   (scripts/build/appUiKit.mts) builds apps' controls from this same file. */
+button {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+/* Not inside the style panel: that panel styles its own controls, and this
+   rule was quietly winning over them. It is more specific than a panel rule
+   like `.u-select-button:hover` (a type selector's worth more), and it sets the
+   background shorthand — so a dropdown's own opaque colour was thrown away on
+   hover and replaced by a faint white wash over the panel *behind* it, which
+   lands darker than the control. Hovering made things dimmer.
+   `:where()` keeps the exclusion from changing what this rule beats elsewhere.
+   Nor on a primary button: its hover is the brighter accent (`button.primary`
+   below), and a component class on it (`.apps-open.primary`) must never lose its
+   fill to this grey wash, whichever stylesheet the bundle puts first. */
+button:hover:not(:disabled):where(:not(.primary, .style-panel-host *, .style-panel-surface *)) {
+  background: var(--bg-active);
+}
+button:disabled {
+  opacity: 0.4;
+}
+/* Disabled controls keep the same cursor over labels and icons, even when
+   individual features supply their own cursor styles. */
+button:is(:disabled, [aria-disabled='true']),
+button:is(:disabled, [aria-disabled='true']) * {
+  cursor: not-allowed !important;
+}
+/* A selected option is already in effect, rather than an unavailable action. */
+button:is(:disabled, [aria-disabled='true']):is([aria-current]:not([aria-current='false']), [aria-selected='true'], [aria-pressed='true'], .active, .on),
+button:is(:disabled, [aria-disabled='true']):is([aria-current]:not([aria-current='false']), [aria-selected='true'], [aria-pressed='true'], .active, .on) * {
+  cursor: default !important;
+}
+button.primary {
+  background: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+button.ghost {
+  background: transparent;
+  color: var(--text-dim);
+  padding: 4px;
+  border-radius: 6px;
+}
+button.ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+button.danger {
+  color: var(--red);
+}
+
+input,
+textarea {
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  outline: none;
+  width: 100%;
+  transition:
+    border-color 0.1s,
+    background 0.1s;
+}
+/* No hover on a field. A button lights up because pressing it does something;
+   a field just sits there holding a value, and lighting it under the pointer
+   made the panel twitch on the way past. Focus is where a field changes — see
+   below. (This used to paint every input, the style panel's included, which is
+   why the panel's fields flickered on the way to a control.) */
+input:focus,
+textarea:focus {
+  border-color: var(--accent);
+  background: var(--bg-input);
+}
+input[type='checkbox'] {
+  width: auto;
+  accent-color: var(--accent);
+}
+
+/* Focus, in this app's colour.
+   Left to the browser, the ring is drawn in whatever Chromium takes from the
+   system — which is not this interface's blue, and here came out orange on
+   every row, button and field that took focus. Replaced rather than removed:
+   the ring is how anyone working from the keyboard knows where they are, and a
+   window with no focus indicator is a window you can get lost in. Controls that
+   draw their own ring (the style panel's fields, which use an inset shadow so
+   the ring hugs the control) still do — they set `outline: none` themselves and
+   are more specific than this. */
+/* …except a field, which already says it: `input:focus` above turns its border the
+   same accent and darkens its fill. An outline on top of that is a second ring
+   around the first, which is what the attribute editor's value box was drawing.
+   `:where()` keeps this at the same weight, so anything that opts out still wins. */
+:focus-visible:where(:not(input):not(textarea)) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+textarea {
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: none;
+}

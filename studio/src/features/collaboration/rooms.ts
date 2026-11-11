@@ -26,6 +26,13 @@ import { BatchedWriter } from '../storage/batchedWriter';
 import { DraftStorage } from '../storage/draftStorage';
 import { SerialQueue } from '../../shared/serialQueue';
 import { readSource, preparePath } from '../project/projectServer';
+import { ADMIN_VIEW, type RoleView } from '../../../vendor/stacki/shared/properties/projectRoles';
+import { assertDocumentActionAllowed, assertDocumentChangeAllowed } from '../roles/documentAccess';
+
+/** Resolves the role a connection edits as; the server derives it from the signed-in GitHub user. */
+export type ConnectionRole = () => Promise<RoleView>;
+/** Rooms opened without an identity (tests, a single local editor) edit as admin, as a local Studio does. */
+const ADMIN_CONNECTION: ConnectionRole = () => Promise.resolve(ADMIN_VIEW);
 
 interface LivePresence {
   readonly written?: (file: string, mode: SourceRenderMode) => void;
@@ -45,6 +52,8 @@ export class Room {
   readonly document = new Y.Doc();
   readonly text = this.document.getText('source');
   readonly clients = new Map<WebSocket, Peer>();
+  // Kept apart from `clients`: peers are broadcast as presence, roles are not.
+  private readonly roles = new Map<WebSocket, ConnectionRole>();
   readonly cursors: CursorRelay;
   private readonly colors: PresenceColors;
   private queue = Promise.resolve();
@@ -95,7 +104,7 @@ export class Room {
     // restart can seed identical text with new IDs and duplicate it on reconnection.
     await this.persist();
   }
-  attach(socket: WebSocket, identity?: GitHubProfile, authorize?: () => Promise<boolean>, participant?: string) {
+  attach(socket: WebSocket, identity?: GitHubProfile, authorize?: () => Promise<boolean>, participant?: string, role: ConnectionRole = ADMIN_CONNECTION) {
     if (this.clients.size >= 30) {
       socket.close(1013, 'Room is full');
       return;
@@ -113,6 +122,7 @@ export class Room {
       updatedAt: Date.now(),
       ...(identity ? { githubId: identity.id } : {}),
     });
+    this.roles.set(socket, role);
     maintainConnection(socket, identity ? (authorize ?? (async () => false)) : undefined);
     this.synchronize(socket);
     this.presence();
@@ -160,6 +170,7 @@ export class Room {
     this.cursors.remove(socket);
     this.colors.release(key);
     this.clients.delete(socket);
+    this.roles.delete(socket);
     this.presence();
   }
   private async handle(socket: WebSocket, message: Record<string, unknown>) {
@@ -185,9 +196,12 @@ export class Room {
       throw new Error('The draft was reset. Reload the studio before editing.');
     }
     const save = parseSaveSequence(message['save']);
+    // Edits are checked against the sender's role here, not only in its browser:
+    // a client that skips its own Client-mode check is still refused.
+    const role = await this.roleOf(socket);
     const before = Y.encodeStateVector(this.document);
     if (message['type'] === 'update') {
-      if (!this.applyUpdate(message, socket)) {
+      if (!this.applyUpdate(message, socket, role)) {
         // A replay can already exist in memory after a failed disk or durable write.
         // CRDT deduplication proves convergence, not persistence.
         if (this.text.toString() !== this.saved) {
@@ -202,7 +216,7 @@ export class Room {
         return;
       }
     } else if (message['type'] === 'action') {
-      await this.applyAction(socket, message);
+      await this.applyAction(socket, message, role);
     } else {
       throw new Error('Unknown collaboration message');
     }
@@ -237,11 +251,21 @@ export class Room {
         }),
     );
   }
-  private async applyAction(socket: WebSocket, message: Record<string, unknown>) {
+  private async roleOf(socket: WebSocket): Promise<RoleView> {
+    const resolve = this.roles.get(socket);
+    if (resolve === undefined) {
+      throw new Error('This connection has closed. Reconnect before editing.');
+    }
+    const role = await resolve();
+    assert(role.id.length > 0, 'A connection edits as a named role');
+    return role;
+  }
+  private async applyAction(socket: WebSocket, message: Record<string, unknown>, role: RoleView) {
     if (message['checksum'] !== checksum(this.text.toString())) {
       throw new Error('Another edit arrived. Please repeat the drag or action.');
     }
     const action = parseAction(message['action']);
+    assertDocumentActionAllowed(role, this.file, this.text.toString(), action);
     const client = this.clients.get(socket);
     const owner = selectionOwner(this.clients.values(), client?.id ?? '', this.file, 'node' in action ? action.node : '');
     if (owner) {
@@ -254,7 +278,13 @@ export class Room {
     const edits =
       action.kind === 'paste' ? pasteEdits(this.text.toString(), this.file, action) : structuralEdits(this.text.toString(), action, this.file, settings);
     const source = this.text.toString();
-    const select = actionSelection(source, applyEdits(source, edits), edits, action);
+    const result = applyEdits(source, edits);
+    // The action was allowed by its shape; its result is checked too, so an
+    // operation that reaches past what the action named is still refused.
+    if (result !== source) {
+      assertDocumentChangeAllowed(role, this.file, source, result);
+    }
+    const select = actionSelection(source, result, edits, action);
     this.document.transact(() => {
       for (const edit of edits.sort((a, b) => b.start - a.start)) {
         this.text.delete(edit.start, edit.end - edit.start);
@@ -377,7 +407,7 @@ export class Room {
       })
       .catch((error: unknown) => this.broadcast({ type: 'error', message: String(error) }));
   }
-  private validateUpdate(message: Record<string, unknown>, socket: WebSocket) {
+  private validateUpdate(message: Record<string, unknown>, socket: WebSocket, role: RoleView) {
     const update = Buffer.from(string(message['update'], 2_000_000), 'base64');
     const probe = new Y.Doc();
     try {
@@ -394,13 +424,17 @@ export class Room {
       if (probe.getText('source').length > MAX_SOURCE || Y.encodeStateAsUpdate(probe).length > 8_000_000) {
         throw new Error('Document exceeds collaboration limits');
       }
+      const after = probe.getText('source').toString();
+      if (after !== this.text.toString()) {
+        assertDocumentChangeAllowed(role, this.file, this.text.toString(), after);
+      }
     } finally {
       probe.destroy();
     }
     return update;
   }
-  private applyUpdate(message: Record<string, unknown>, socket: WebSocket) {
-    const update = this.validateUpdate(message, socket);
+  private applyUpdate(message: Record<string, unknown>, socket: WebSocket, role: RoleView) {
+    const update = this.validateUpdate(message, socket, role);
     const restoreSelections = captureSelectionPositions(this.document, this.clients.values());
     let changed = false;
     const markChanged = () => {

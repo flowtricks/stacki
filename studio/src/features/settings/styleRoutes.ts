@@ -2,13 +2,20 @@ import { stat } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import { walk, safePath, readSource } from '../project/projectServer';
 import type { createRooms } from '../collaboration/rooms';
+import { projectFoldersFor } from '../../../vendor/stacki/electron/lib/projectFolders';
+import { folderHolding } from '../../../vendor/stacki/shared/properties/projectFolders';
 import { record, sourcePath, string } from '../../shared/validation';
 
 export async function styleFiles(root: string, astro: boolean) {
   const files = [];
+  const folders = projectFoldersFor(root, 'styles');
   const paths = [...(await walk(root, 'src')), ...(astro ? [] : await walk(root, 'public'))];
   for (const file of paths) {
     if (!(astro ? /\.astro$/i.test(file) : /\.(css|scss|sass|less)$/i.test(file))) {
+      continue;
+    }
+    // Stylesheets come from the project's style folders (.stacki/folders.json), as on Desktop.
+    if (!astro && folderHolding(folders, file) === undefined) {
       continue;
     }
     const size = (await stat(await safePath(root, file))).size;

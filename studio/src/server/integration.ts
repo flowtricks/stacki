@@ -2,12 +2,15 @@ import { withGitWorkspaceLease, isGitWorkspaceRead } from '../features/history/g
 import { createAstroNotifications } from '../features/notifications/astroNotificationServer';
 import { readPackagePreviews } from '../../vendor/stacki/electron/lib/componentSources';
 import { METADATA_FILES } from '../../vendor/stacki/shared/properties/projectMetadata';
+import { readProjectFolders } from '../../vendor/stacki/electron/lib/projectFolders';
+import { configOf } from '../../vendor/stacki/shared/properties/projectFolders';
 import { isDefaultsCanvas } from '../../vendor/stacki/shared/properties/defaultsCanvas';
 import { instrumentVariant } from '../features/preview/variantRuntime';
 import { mutateAsset } from '../features/assets/assetOperations';
 import { replacementRefusal } from '../../vendor/stacki/shared/properties/mediaHosting';
 import { configureRenderPush } from '../features/preview/renderPushServer';
 import { managedAsset, MEDIA_EXT } from '../features/assets/assetStateTypes';
+import { assetFolderPath } from '../features/assets/assetFolders';
 import { readAssetState, saveAssetState } from '../features/assets/assetState';
 import { reauthorizeConnection } from '../features/collaboration/connectionLease';
 import { projectCatalogs } from '../features/project/projectCatalogs';
@@ -31,8 +34,10 @@ import { createRooms } from '../features/collaboration/rooms';
 import { safePath, preparePath, readSource } from '../features/project/projectServer';
 import { filePath, sourcePath, string, record, MAX_SOURCE } from '../shared/validation';
 import { featureRoutes } from './featureRoutes';
+import { fileStamps, parseFileStampRequest } from '../features/apps/pageFileStamps';
 import { saveAsset } from '../features/storage/assetStorage';
 import { interceptBrowserReloads } from '../features/preview/browserReloads';
+import { assertRouteAllowed, connectionRole, requestRole, RoleRefusal, routeRule } from '../features/roles/serverAccess';
 
 interface Options {
   readonly root: string;
@@ -61,7 +66,8 @@ export default function studio(options: Options): AstroIntegration {
           prepareStudioLocal(options.root);
           await mkdir(path.join(options.root, STUDIO_STATE_DIRECTORY), { recursive: true });
           const entrypoint = path.join(options.root, '.stacki/studio/state/component-preview.astro');
-          await writeFile(entrypoint, renderComponentPreviewPage());
+          // The route's globs follow the project's component folders (.stacki/folders.json) at start.
+          await writeFile(entrypoint, renderComponentPreviewPage(configOf(readProjectFolders(options.root))));
           // The page imports the recipe node component from beside it (componentPreviewRecipe.ts).
           await writeFile(path.join(path.dirname(entrypoint), PREVIEW_RECIPE_FILE), renderComponentPreviewRecipe());
           injectRoute({ pattern: '/__avb/preview', entrypoint });
@@ -171,7 +177,13 @@ async function handleRequestInWorkspace(
     json(response, 200, { kind: 'local', editing: options.editing ?? 'draft' });
     return;
   }
-  if (await features(request, response, url.pathname, () => body(request))) {
+  // Project roles: a write the sender's role does not allow is refused before any handler runs.
+  let received: Promise<string> | undefined;
+  const readBody = () => (received ??= body(request));
+  if (!(await roleAllows(request, response, options.root, url.pathname, readBody))) {
+    return;
+  }
+  if (await features(request, response, url.pathname, readBody)) {
     return;
   }
   if (url.pathname === '/studio/api/preview-url' && request.method === 'GET') {
@@ -202,6 +214,11 @@ async function handleRequestInWorkspace(
     await createFile(request, response, options, rooms, url);
     return;
   }
+  // The modification stamps a Stacki app's page index keys its cache by (pageFileStamps.ts).
+  if (url.pathname === '/studio/api/file-stamps' && request.method === 'POST') {
+    json(response, 200, await fileStamps(options.root, parseFileStampRequest(JSON.parse(await readBody()))));
+    return;
+  }
   if (url.pathname === '/studio/api/upload' && request.method === 'POST') {
     await uploadAsset(request, response, options, rooms, url);
     return;
@@ -213,6 +230,28 @@ async function handleRequestInWorkspace(
   }
   response.setHeader('Content-Type', mime(name));
   response.end(await readFile(path.join(options.assets, name)));
+}
+async function roleAllows(
+  request: IncomingMessage,
+  response: ServerResponse,
+  root: string,
+  pathname: string,
+  readBody: () => Promise<string>,
+): Promise<boolean> {
+  const rule = routeRule(request.method, pathname);
+  if (rule === undefined) {
+    return true;
+  }
+  try {
+    assertRouteAllowed(await requestRole(root, request), rule, rule.kind === 'metadata' ? await readBody() : '');
+    return true;
+  } catch (error) {
+    if (error instanceof RoleRefusal) {
+      json(response, 403, { error: error.message });
+      return false;
+    }
+    throw error;
+  }
 }
 function mime(file: string): string {
   const extension = path.extname(file).slice(1);
@@ -303,6 +342,8 @@ function configureStudioServer(
               : undefined,
             reauthorizeConnection(request),
             url.searchParams.get('participant') ?? undefined,
+            // Edits over the socket answer to the same roles as the HTTP write routes.
+            connectionRole(options.root, request),
           ),
         );
       })
@@ -375,6 +416,7 @@ async function createFile(request: IncomingMessage, response: ServerResponse, op
 async function uploadAsset(request: IncomingMessage, response: ServerResponse, options: Options, rooms: ReturnType<typeof createRooms>, url: URL) {
   const file = filePath(url.searchParams.get('file'));
   managedAsset(file);
+  assetFolderPath(options.root, file);
   // A replacement (`replacement` names the chosen file) overwrites the asset in
   // place so every reference keeps working; Desktop's assets:replace holds the same rule.
   const replacement = url.searchParams.get('replacement');

@@ -1,0 +1,491 @@
+// The Apps platform's install and update flow, for one host process: Desktop's
+// main process (electron/handlers/appsHandlers.ts) and the Studio server
+// (studio/src/features/apps/appsServer.ts) both build one. Network, clock,
+// tokens and inflate are passed in, so tests drive it with a fake GitHub.
+//
+// Install is two steps. `stage*` reads and checks a bundle and holds it in
+// memory under a token; nothing is written. The admin sees its name, icon and
+// version, and `commit` installs exactly those bytes. An update check records a
+// newer release as available; `applyUpdate` installs it from bytes whose
+// SHA-256 must equal the one that was checked.
+//
+// Update policy (docs/apps.md): nothing installs code unless a person chose it
+// (`commit`, `installMarketplace`, `applyUpdate`) or an admin switched on that
+// app's auto-update. With it on, a check installs a GitHub app's newer release
+// (its SHA-256 recorded as it was checked) or a marketplace app's newest
+// approved version (only bytes whose SHA-256 the index approved).
+import { randomBytes } from 'node:crypto';
+import { inflateRawSync } from 'node:zlib';
+import { assert } from '../../shared/core/assert';
+import {
+  APP_LIMITS,
+  appsFailureMessage,
+  compareAppVersions,
+  stackiVersionProblem,
+  type AppGitHubSource,
+  type AppInstallSource,
+  type AppLockEntry,
+  type AppManifest,
+  type AppRelease,
+  type AppRepository,
+  type AppStaged,
+  type AppSummary,
+  type AppUpdateOutcome,
+  type AppsResult,
+} from '../../shared/properties/apps';
+import { readAppBundle, type AppBundle, type InflateRaw } from '../../shared/properties/appBundle';
+import {
+  MARKETPLACE_INDEX_URL,
+  approvedUpdate,
+  approvedVersion,
+  marketplaceApp,
+  type MarketplaceApp,
+  type MarketplaceIndex,
+  type MarketplaceVersion,
+} from '../../shared/properties/appMarketplace';
+import { downloadReleaseAsset, listReleases, listRepositories, releaseAsset, sha256Hex, type GitHubFetch } from './appGitHub';
+import { downloadApprovedVersion, fetchMarketplaceIndex } from './appMarketplace';
+import { installAppBundle, listInstalledApps, listInstalledFolders, readAppsLock, uninstallApp, updateLockEntry } from './appStore';
+import type { AppFolderBroken } from '../../shared/properties/appFolders';
+
+export const APP_SERVICE_LIMITS = {
+  /** Bundles held for confirmation at once; the oldest is dropped past this. */
+  stagedMax: 4,
+  /** How long a staged bundle waits for confirmation. */
+  stagedMsMax: 10 * 60_000,
+  /** Automatic update checks of one project are at least this far apart. */
+  updateCheckMsMin: 10 * 60_000,
+  /** How long a browsed marketplace index is reused; installs and update checks always read it afresh. */
+  marketplaceCacheMsMax: 10 * 60_000,
+} as const satisfies Record<string, number>;
+
+export interface AppServiceOptions {
+  readonly fetch: GitHubFetch;
+  readonly now: () => number;
+  /** The GitHub token of a signed-in account, for private repositories; undefined reads them as public. */
+  readonly tokenFor?: (account: string) => Promise<string>;
+  readonly inflateRaw?: InflateRaw;
+  /** The marketplace index address (electron/project/appMarketplace.ts `marketplaceIndexURL`); absent is the official one. */
+  readonly marketplaceIndexURL?: string;
+  /**
+   * The running Stacki's version: a bundle whose manifest needs a newer one (`"stacki": ">=1.1.0"`)
+   * is refused on install and update. Passed explicitly by every host, so no host forgets the check.
+   */
+  readonly stackiVersion: string;
+}
+
+/** How fresh a marketplace index must be: browsing may reuse a recent one; installing never does. */
+export type IndexFreshness = 'cached' | 'fresh';
+
+interface Staged {
+  readonly projectRoot: string;
+  readonly bundle: AppBundle;
+  readonly staged: AppStaged;
+  readonly expiresAtMs: number;
+}
+
+export type AppService = ReturnType<typeof createAppService>;
+
+/** Node's raw inflate, refusing output past the size the archive states. */
+export const nodeInflateRaw: InflateRaw = (data, sizeBytesMax) => new Uint8Array(inflateRawSync(data, { maxOutputLength: Math.max(1, sizeBytesMax) }));
+
+export function createAppService(options: AppServiceOptions) {
+  const inflate = options.inflateRaw ?? nodeInflateRaw;
+  const staged = new Map<string, Staged>();
+  const lastCheckMs = new Map<string, number>();
+  let checking: Promise<readonly AppUpdateOutcome[]> | undefined;
+  // One index at a time, whatever the project: the index is the same for every one.
+  let marketplaceCache: { readonly index: MarketplaceIndex; readonly fetchedAtMs: number } | undefined;
+  const indexURL = options.marketplaceIndexURL ?? MARKETPLACE_INDEX_URL;
+
+  const token = async (account: string | undefined): Promise<string | undefined> => {
+    if (account === undefined || options.tokenFor === undefined) {
+      return undefined;
+    }
+    return options.tokenFor(account);
+  };
+
+  const dropExpired = (): void => {
+    const now = options.now();
+    for (const [key, entry] of staged) {
+      if (entry.expiresAtMs <= now) {
+        staged.delete(key);
+      }
+    }
+  };
+
+  // Refuses a bundle this Stacki is too old to run, before it is held or written (docs/apps.md).
+  const requireStackiVersion = (manifest: AppManifest): void => {
+    const problem = stackiVersionProblem(manifest.stackiVersionMin, options.stackiVersion);
+    if (problem !== undefined) {
+      throw new Error(`${manifest.name} ${manifest.version}: ${problem}`);
+    }
+  };
+
+  const hold = (projectRoot: string, archive: Uint8Array, source: AppInstallSource, sha256: string): AppStaged => {
+    const bundle = readAppBundle(archive, inflate);
+    requireStackiVersion(bundle.manifest);
+    const lock = readAppsLock(projectRoot);
+    const installed = lock.apps.find((app) => app.id === bundle.manifest.id);
+    if (installed === undefined && lock.apps.length >= APP_LIMITS.appsMax) {
+      throw new Error(`A project has at most ${APP_LIMITS.appsMax} apps`);
+    }
+    const key = randomBytes(16).toString('hex');
+    const info: AppStaged = { token: key, manifest: bundle.manifest, sha256, sizeBytes: archive.byteLength, source, replaces: installed?.version };
+    dropExpired();
+    if (staged.size >= APP_SERVICE_LIMITS.stagedMax) {
+      const oldest = staged.keys().next().value;
+      if (oldest !== undefined) {
+        staged.delete(oldest);
+      }
+    }
+    staged.set(key, { projectRoot, bundle, staged: info, expiresAtMs: options.now() + APP_SERVICE_LIMITS.stagedMsMax });
+    assert(staged.size <= APP_SERVICE_LIMITS.stagedMax, 'Staged bundles are bounded');
+    return info;
+  };
+
+  const install = (
+    projectRoot: string,
+    bundle: AppBundle,
+    source: AppInstallSource,
+    sha256: string,
+    autoUpdate: { readonly autoUpdate: boolean },
+  ): AppSummary => {
+    // Every install path ends here (commit, update, auto-update, marketplace), so none skips the check.
+    requireStackiVersion(bundle.manifest);
+    return installAppBundle(projectRoot, bundle, {
+      id: bundle.manifest.id,
+      version: bundle.manifest.version,
+      sha256,
+      installedAt: new Date(options.now()).toISOString(),
+      source,
+      update: undefined,
+      autoUpdate: autoUpdate.autoUpdate,
+    });
+  };
+
+  const loadIndex = async (freshness: IndexFreshness): Promise<MarketplaceIndex> => {
+    const cached = marketplaceCache;
+    if (freshness === 'cached' && cached !== undefined && options.now() - cached.fetchedAtMs < APP_SERVICE_LIMITS.marketplaceCacheMsMax) {
+      return cached.index;
+    }
+    const index = await fetchMarketplaceIndex(options.fetch, indexURL);
+    marketplaceCache = { index, fetchedAtMs: options.now() };
+    return index;
+  };
+
+  // An approved version's bundle: downloaded as public, its digest the index's, its manifest the entry's.
+  const approvedBundle = async (app: MarketplaceApp, approved: MarketplaceVersion): Promise<{ readonly bundle: AppBundle; readonly sha256: string }> => {
+    const downloaded = await downloadApprovedVersion(options.fetch, app, approved);
+    const bundle = readAppBundle(downloaded.bytes, inflate);
+    if (bundle.manifest.id !== app.id) {
+      throw new Error(`The approved release holds the app "${bundle.manifest.id}", not "${app.id}".`);
+    }
+    if (bundle.manifest.version !== approved.version) {
+      throw new Error(`The approved release of ${app.name} is version ${bundle.manifest.version}, not ${approved.version}.`);
+    }
+    assert(downloaded.sha256 === approved.sha256, 'A marketplace bundle carries the approved digest');
+    return { bundle, sha256: downloaded.sha256 };
+  };
+
+  const checkMarketplace = async (projectRoot: string, lock: AppLockEntry, index: MarketplaceIndex): Promise<AppUpdateOutcome> => {
+    const id = lock.id;
+    const app = marketplaceApp(index, id);
+    if (app === undefined) {
+      return { kind: 'failed', id, message: 'This app is no longer listed in the marketplace.' };
+    }
+    const next = approvedUpdate(app, lock.version);
+    if (next === undefined) {
+      return { kind: 'current', id };
+    }
+    // The index says which Stacki the version needs, so an update this Stacki cannot run is never offered.
+    const tooOld = stackiVersionProblem(next.stackiVersionMin, options.stackiVersion);
+    if (tooOld !== undefined) {
+      return { kind: 'failed', id, message: `${app.name} ${next.version}: ${tooOld}` };
+    }
+    if (lock.autoUpdate) {
+      const { bundle, sha256 } = await approvedBundle(app, next);
+      install(projectRoot, bundle, { kind: 'marketplace', id, version: next.version }, sha256, { autoUpdate: true });
+      return { kind: 'updated', id, version: next.version };
+    }
+    // The index carries the version and digest, so recording an update downloads nothing.
+    updateLockEntry(projectRoot, id, (entry) => ({ ...entry, update: { version: next.version, tag: next.tag, sha256: next.sha256 } }));
+    return { kind: 'available', id, version: next.version };
+  };
+
+  const checkGitHub = async (projectRoot: string, lock: AppLockEntry, source: AppGitHubSource & { readonly tag: string }): Promise<AppUpdateOutcome> => {
+    const id = lock.id;
+    const auth = await token(source.account);
+    const latest = await releaseAsset(options.fetch, source, { token: auth });
+    if (latest.tag === source.tag) {
+      return { kind: 'current', id };
+    }
+    if (!lock.autoUpdate && lock.update?.tag === latest.tag) {
+      return { kind: 'available', id, version: lock.update.version };
+    }
+    const downloaded = await downloadReleaseAsset(options.fetch, latest, auth);
+    const bundle = readAppBundle(downloaded.bytes, inflate);
+    if (bundle.manifest.id !== id) {
+      throw new Error(`The release holds the app "${bundle.manifest.id}", not "${id}".`);
+    }
+    if (compareAppVersions(bundle.manifest.version, lock.version) <= 0) {
+      return { kind: 'current', id };
+    }
+    const tooOld = stackiVersionProblem(bundle.manifest.stackiVersionMin, options.stackiVersion);
+    if (tooOld !== undefined) {
+      return { kind: 'failed', id, message: `${bundle.manifest.name} ${bundle.manifest.version}: ${tooOld}` };
+    }
+    if (lock.autoUpdate) {
+      // The bytes this check downloaded and digested are the ones installed.
+      install(projectRoot, bundle, { ...source, tag: latest.tag }, downloaded.sha256, { autoUpdate: true });
+      return { kind: 'updated', id, version: bundle.manifest.version };
+    }
+    updateLockEntry(projectRoot, id, (entry) => ({ ...entry, update: { version: bundle.manifest.version, tag: latest.tag, sha256: downloaded.sha256 } }));
+    return { kind: 'available', id, version: bundle.manifest.version };
+  };
+
+  // Every source kind is handled here, so a new kind is a compile error until it is.
+  const checkOne = async (projectRoot: string, summary: AppSummary, marketplace: () => Promise<MarketplaceIndex>): Promise<AppUpdateOutcome> => {
+    const { lock } = summary;
+    const source = lock.source;
+    switch (source.kind) {
+      case 'file':
+      case 'local':
+        return { kind: 'current', id: lock.id };
+      case 'github':
+        return checkGitHub(projectRoot, lock, source);
+      case 'marketplace':
+        return checkMarketplace(projectRoot, lock, await marketplace());
+      default: {
+        const exhaustive: never = source;
+        return exhaustive;
+      }
+    }
+  };
+
+  return {
+    list: (projectRoot: string): AppsResult<readonly AppSummary[]> => attemptSync(() => listInstalledApps(projectRoot)),
+
+    /** The folders under `.stacki/apps/` that do not read as an app, each with the reason (docs/apps.md). */
+    folders: (projectRoot: string): AppsResult<readonly AppFolderBroken[]> => attemptSync(() => listInstalledFolders(projectRoot).broken),
+
+    /** Checks an uploaded zip and holds it for confirmation. */
+    stageFile: (projectRoot: string, archive: Uint8Array, fileName: string): AppsResult<AppStaged> =>
+      attemptSync(() => {
+        if (archive.byteLength > APP_LIMITS.archiveBytesMax) {
+          throw new Error(`The app file exceeds ${APP_LIMITS.archiveBytesMax} bytes`);
+        }
+        const name = fileName.replace(/^.*[\\/]/, '').slice(0, APP_LIMITS.assetNameCharsMax) || 'app.zip';
+        return hold(projectRoot, archive, { kind: 'file', fileName: name }, sha256Hex(archive));
+      }),
+
+    /** Downloads a release asset (the latest release, or `tag`) and holds it for confirmation. */
+    stageGitHub: (projectRoot: string, source: AppGitHubSource, tag: string | undefined): Promise<AppsResult<AppStaged>> =>
+      attempt(async () => {
+        const auth = await token(source.account);
+        const asset = await releaseAsset(options.fetch, source, { tag, token: auth });
+        const downloaded = await downloadReleaseAsset(options.fetch, asset, auth);
+        return hold(projectRoot, downloaded.bytes, { ...source, tag: asset.tag }, downloaded.sha256);
+      }),
+
+    /** The repositories a signed-in account can read, for the chooser. */
+    repositories: (account: string): Promise<AppsResult<readonly AppRepository[]>> =>
+      attempt(async () => {
+        const auth = await token(account);
+        if (auth === undefined) {
+          throw new Error('Sign in with GitHub to list your repositories.');
+        }
+        return listRepositories(options.fetch, auth, account);
+      }),
+
+    /** A repository's releases, for the chooser. */
+    releases: (owner: string, repository: string, account: string | undefined): Promise<AppsResult<readonly AppRelease[]>> =>
+      attempt(async () => listReleases(options.fetch, owner, repository, await token(account))),
+
+    /** Installs a staged bundle once an admin confirmed it. */
+    commit: (projectRoot: string, key: string): AppsResult<AppSummary> =>
+      attemptSync(() => {
+        dropExpired();
+        const entry = staged.get(key);
+        if (entry === undefined || entry.projectRoot !== projectRoot) {
+          throw new Error('That app is no longer waiting to be installed. Choose it again.');
+        }
+        staged.delete(key);
+        const previous = readAppsLock(projectRoot).apps.find((app) => app.id === entry.staged.manifest.id);
+        return install(projectRoot, entry.bundle, entry.staged.source, entry.staged.sha256, { autoUpdate: carriedAutoUpdate(previous, entry.staged.source) });
+      }),
+
+    discard: (key: string): void => {
+      staged.delete(key);
+    },
+
+    uninstall: (projectRoot: string, id: string): AppsResult<readonly AppSummary[]> =>
+      attemptSync(() => {
+        uninstallApp(projectRoot, id);
+        return listInstalledApps(projectRoot);
+      }),
+
+    /** Checks every GitHub app once; `force` skips the interval between automatic checks. */
+    checkUpdates: (projectRoot: string, force: boolean | undefined): Promise<AppsResult<readonly AppUpdateOutcome[]>> =>
+      attempt(async () => {
+        const last = lastCheckMs.get(projectRoot);
+        if (force !== true && last !== undefined && options.now() - last < APP_SERVICE_LIMITS.updateCheckMsMin) {
+          return [];
+        }
+        // One check at a time: a second caller waits for the first's answer.
+        if (checking !== undefined) {
+          return checking;
+        }
+        lastCheckMs.set(projectRoot, options.now());
+        const run = async (): Promise<readonly AppUpdateOutcome[]> => {
+          const outcomes: AppUpdateOutcome[] = [];
+          // Read once per check, and only when a marketplace app is installed; always afresh, so a withdrawn approval counts.
+          let index: Promise<MarketplaceIndex> | undefined;
+          const marketplace = (): Promise<MarketplaceIndex> => {
+            index ??= loadIndex('fresh');
+            return index;
+          };
+          for (const summary of listInstalledApps(projectRoot)) {
+            try {
+              outcomes.push(await checkOne(projectRoot, summary, marketplace));
+            } catch (error: unknown) {
+              outcomes.push({ kind: 'failed', id: summary.lock.id, message: appsFailureMessage(error) });
+            }
+          }
+          return outcomes;
+        };
+        checking = run();
+        try {
+          return await checking;
+        } finally {
+          checking = undefined;
+        }
+      }),
+
+    /** Installs the available update an admin chose, from the bytes that were checked. */
+    applyUpdate: (projectRoot: string, id: string): Promise<AppsResult<AppSummary>> =>
+      attempt(async () => {
+        const entry = readAppsLock(projectRoot).apps.find((app) => app.id === id);
+        if (entry?.update === undefined) {
+          throw new Error('That app has no update waiting.');
+        }
+        const update = entry.update;
+        const source = entry.source;
+        if (source.kind === 'marketplace') {
+          // The approval is read again: a version withdrawn since the check installs nothing.
+          const app = marketplaceApp(await loadIndex('fresh'), id);
+          if (app === undefined) {
+            throw new Error('This app is no longer listed in the marketplace; nothing was installed.');
+          }
+          const approved = approvedVersion(app, update.version);
+          if (approved === undefined) {
+            throw new Error('The marketplace no longer approves this version; nothing was installed.');
+          }
+          if (approved.sha256 !== update.sha256) {
+            throw new Error('The approved release changed since it was checked; nothing was installed.');
+          }
+          const { bundle, sha256 } = await approvedBundle(app, approved);
+          return install(projectRoot, bundle, { kind: 'marketplace', id, version: approved.version }, sha256, { autoUpdate: entry.autoUpdate });
+        }
+        if (source.kind !== 'github') {
+          throw new Error('An uploaded app has no updates; upload the new file instead.');
+        }
+        const auth = await token(source.account);
+        const asset = await releaseAsset(options.fetch, source, { tag: update.tag, token: auth });
+        const downloaded = await downloadReleaseAsset(options.fetch, asset, auth);
+        if (downloaded.sha256 !== update.sha256) {
+          throw new Error('The release changed since it was checked; nothing was installed.');
+        }
+        const bundle = readAppBundle(downloaded.bytes, inflate);
+        assert(bundle.manifest.id === id, 'An update is for its own app');
+        return install(projectRoot, bundle, { ...source, tag: asset.tag }, downloaded.sha256, { autoUpdate: entry.autoUpdate });
+      }),
+
+    /** The marketplace index, for browsing: `cached` may reuse a recent copy, `fresh` reads it again. */
+    marketplace: (freshness: IndexFreshness): Promise<AppsResult<MarketplaceIndex>> => attempt(() => loadIndex(freshness)),
+
+    /** Installs an approved marketplace version: only if its SHA-256 matches the index read just now. */
+    installMarketplace: (projectRoot: string, id: string, version: string): Promise<AppsResult<AppSummary>> =>
+      attempt(async () => {
+        const app = marketplaceApp(await loadIndex('fresh'), id);
+        if (app === undefined) {
+          throw new Error(`The marketplace does not list "${id}".`);
+        }
+        const approved = approvedVersion(app, version);
+        if (approved === undefined) {
+          throw new Error(`${app.name} ${version} is not an approved version.`);
+        }
+        // Refused before the download: the index says which Stacki the version needs.
+        const tooOld = stackiVersionProblem(approved.stackiVersionMin, options.stackiVersion);
+        if (tooOld !== undefined) {
+          throw new Error(`${app.name} ${version}: ${tooOld}`);
+        }
+        const previous = readAppsLock(projectRoot).apps.find((entry) => entry.id === id);
+        if (previous !== undefined && previous.source.kind !== 'marketplace') {
+          throw new Error(`An app with the id "${id}" is already installed from elsewhere. Remove it first.`);
+        }
+        if (previous?.version === version) {
+          throw new Error(`${app.name} ${version} is already installed.`);
+        }
+        const { bundle, sha256 } = await approvedBundle(app, approved);
+        // A new install starts with auto-update off; reinstalling keeps the admin's choice.
+        return install(projectRoot, bundle, { kind: 'marketplace', id, version }, sha256, { autoUpdate: previous?.autoUpdate ?? false });
+      }),
+
+    /** Switches one app's auto-update; an uploaded app has nothing to update from. */
+    setAutoUpdate: (projectRoot: string, id: string, policy: { readonly autoUpdate: boolean }): AppsResult<readonly AppSummary[]> =>
+      attemptSync(() => {
+        const next = updateLockEntry(projectRoot, id, (entry) => {
+          if (entry.source.kind === 'file' || entry.source.kind === 'local') {
+            throw new Error('An uploaded app has no updates to install.');
+          }
+          return { ...entry, autoUpdate: policy.autoUpdate };
+        });
+        assert(next.autoUpdate === policy.autoUpdate, 'The switch is recorded as chosen');
+        return listInstalledApps(projectRoot);
+      }),
+  };
+}
+
+/**
+ * Whether a reinstall keeps auto-update: only when it comes from the same kind of
+ * source as before, so a switch an admin turned on for GitHub releases never
+ * starts applying to a different source. An uploaded file never auto-updates.
+ */
+export function carriedAutoUpdate(previous: AppLockEntry | undefined, source: AppInstallSource): boolean {
+  if (previous === undefined) {
+    return false;
+  }
+  if (source.kind === 'file' || source.kind === 'local') {
+    return false;
+  }
+  const carried = previous.source.kind === source.kind && previous.autoUpdate;
+  assert(!carried || previous.autoUpdate, 'Only a switch that was on is carried');
+  return carried;
+}
+
+/** Runs `run`, its expected failures a message (shared with appPublishService.ts). */
+export function attemptSync<T>(run: () => T): AppsResult<T> {
+  try {
+    return { ok: true, value: run() };
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
+
+/** Runs `run`, its expected failures a message (shared with appPublishService.ts). */
+export async function attempt<T>(run: () => Promise<T>): Promise<AppsResult<T>> {
+  try {
+    return { ok: true, value: await run() };
+  } catch (error: unknown) {
+    return failure(error);
+  }
+}
+
+// Expected failures become a message; a broken invariant still crashes (AGENTS.md §3).
+function failure(error: unknown): { readonly ok: false; readonly message: string } {
+  if (error instanceof Error && error.message.startsWith('Assertion failed')) {
+    throw error;
+  }
+  return { ok: false, message: appsFailureMessage(error) };
+}

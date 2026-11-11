@@ -19,6 +19,9 @@ import type { MainHost } from './mainHost';
 import { packageComponentFiles, packageComponentImport } from '../lib/componentSources';
 import { packageOf } from '../lib/installedPackages';
 import { readLengthUnit } from '../project/lengthUnitMarkers';
+import { readProjectFolders } from '../lib/projectFolders';
+import { readAstroPages, type AstroPages } from '../lib/astroConfig';
+import { componentGroup, configOf, foldersFor } from '../../shared/properties/projectFolders';
 
 export function registerProjectScanHandlers(host: Pick<MainHost, 'ipcMain' | 'noteProjectRoot' | 'readTrailingSlash'>): void {
   registerProjectScanHandler(host);
@@ -37,8 +40,11 @@ function registerProjectScanHandler({
     ensureExcluded(projectPath);
     const sourceDirectory = path.join(projectPath, 'src');
     const pagesDirectory = path.join(sourceDirectory, 'pages');
-    const layoutsDirectory = path.join(sourceDirectory, 'layouts');
-    const componentsDirectory = path.join(sourceDirectory, 'components');
+    // Which folders hold components and layouts is the project's choice
+    // (.stacki/folders.json); without one, src/components and src/layouts.
+    const folders = configOf(readProjectFolders(projectPath));
+    const layoutFolders = foldersFor('layouts', folders);
+    const componentFolders = foldersFor('components', folders);
 
     const pages = listAstroFiles(pagesDirectory).map((filePath) => ({
       path: filePath,
@@ -50,10 +56,12 @@ function registerProjectScanHandler({
 
     // `folder` groups these in the components panel. Layouts are relative to
     // src, so they read as the folder they're actually in ("layouts", or
-    // "layouts/marketing"); components are relative to src/components, whose
-    // own root is the ungrouped case.
-    const layouts = listAstroFiles(layoutsDirectory).map((filePath) => ({
+    // "layouts/marketing"); components are relative to their component folder,
+    // whose own root is the ungrouped case (componentGroup in projectFolders.ts).
+    const layoutFiles = filesUnder(projectPath, layoutFolders);
+    const layouts = layoutFiles.map((filePath) => ({
       path: filePath,
+      file: toPosix(path.relative(projectPath, filePath)),
       name: path.basename(filePath, '.astro'),
       folder: toPosix(path.relative(sourceDirectory, path.dirname(filePath))),
       instances: 0,
@@ -61,16 +69,33 @@ function registerProjectScanHandler({
       ...safeSchema(filePath, projectPath),
     }));
 
-    const components = [...listAstroFiles(componentsDirectory), ...packageComponentFiles(projectPath).map((file) => path.join(projectPath, file))].map(
-      (filePath) => ({
+    // A file in a layout folder is a layout, even when a component folder also covers it.
+    const isLayoutFile = new Set(layoutFiles);
+    const ownComponents = filesUnder(projectPath, componentFolders)
+      .filter((filePath) => !isLayoutFile.has(filePath))
+      .map((filePath) => {
+        const file = toPosix(path.relative(projectPath, filePath));
+        return {
+          path: filePath,
+          file,
+          name: path.basename(filePath, '.astro'),
+          folder: componentGroup(componentFolders, file),
+          instances: 0,
+          ...safeSchema(filePath, projectPath),
+        };
+      });
+    const packageComponents = packageComponentFiles(projectPath)
+      .map((file) => path.join(projectPath, file))
+      .map((filePath) => ({
         path: filePath,
         name: path.basename(filePath, '.astro'),
-        folder: toPosix(path.relative(componentsDirectory, path.dirname(filePath))),
+        // Relative to src/components, as a package component always has been.
+        folder: toPosix(path.relative(path.join(sourceDirectory, 'components'), path.dirname(filePath))),
         instances: 0,
         ...safeSchema(filePath, projectPath),
         ...scanComponentOrigin(projectPath, filePath),
-      }),
-    );
+      }));
+    const components = [...ownComponents, ...packageComponents];
 
     // Instance counts: how often each component is used across every .astro
     // file in src (pages, layouts, and other components).
@@ -106,6 +131,8 @@ function registerProjectScanHandler({
       pageFolders,
       trailingSlash: readTrailingSlash(projectPath),
       lengthUnit: readLengthUnit(projectPath),
+      // Shown in Settings → Folders; the scan itself still reads src/pages (docs/contracts.md).
+      ...astroPagesFields(readAstroPages(projectPath)),
     };
   });
 }
@@ -184,6 +211,22 @@ function registerProjectClassesHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): 
   });
 }
 
+// The .astro files under each project-relative folder, once each, in folder order.
+function filesUnder(projectPath: string, folders: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const files: string[] = [];
+  for (const folder of folders) {
+    for (const file of listAstroFiles(path.join(projectPath, ...folder.split('/')))) {
+      if (!seen.has(file)) {
+        seen.add(file);
+        files.push(file);
+      }
+    }
+  }
+  assert(files.length === seen.size, 'filesUnder: each file is listed once');
+  return files;
+}
+
 // Folders under src/pages (including empty ones) for the pages tree.
 function listPageFolders(pagesDirectory: string): string[] {
   const pageFolders: string[] = [];
@@ -209,4 +252,8 @@ function listPageFolders(pagesDirectory: string): string[] {
     walkDirectories(pagesDirectory, 0);
   }
   return pageFolders;
+}
+
+function astroPagesFields(pages: AstroPages) {
+  return { pagesFolder: pages.pagesFolder, ...(pages.configFile === undefined ? {} : { astroConfig: pages.configFile }) };
 }

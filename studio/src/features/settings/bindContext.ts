@@ -2,6 +2,10 @@
 // the item of each loop around the selection, and what the file's calls to its
 // imports return — a CMS query's entries, sampled by the project's dev server
 // (valueSampler.ts). The desktop app assembles the same context (src/app/App.tsx).
+// Below what is in scope, the project's collections and data file exports the
+// file does not read yet, less what Settings → Folders leaves out of the picker
+// (vendor src/app/state/projectSources.ts); Settings.tsx writes what a pick from
+// them needs.
 
 import { useEffect, useMemo, useState } from 'react';
 import type { RichContext } from '../../../vendor/stacki/src/features/props/RichContent';
@@ -12,6 +16,7 @@ import { parsePage, type ParserNode } from '../source/source';
 import { request } from '../project/projectClient';
 import { record } from '../../shared/validation';
 import { useTemplateEntryProps } from '../pages/templateEntryStore';
+import { shownPickerCollections, useFileCollections, useProjectSources } from '../../../vendor/stacki/src/app/state/projectSources';
 
 // Loops around one node at most: deeper nesting is not a page anyone edits.
 const LOOP_DEPTH_MAX = 32;
@@ -24,7 +29,13 @@ export function useBindContext(file: string, source: string, nodes: readonly Par
   const [itemIndex, setItemIndex] = useState<Record<string, number>>({});
   // A template page's data is the shown entry's props: `doc` and every field it holds.
   const propsSample = useTemplateEntryProps(file);
+  const sources = useProjectSources({ projectPath: 'studio', file, frontmatter, imports, resolveSpec: (spec) => resolveImport(file, spec) });
+  const files = useFileCollections('studio');
   return {
+    collections: shownPickerCollections(files.collections, sources.config),
+    collectionSamples: files.samples,
+    onNeedSample: files.requestSample,
+    projectSources: sources.nodes,
     ...(propsSample === undefined ? {} : { propsSample }),
     frontmatter,
     imports,
@@ -127,6 +138,12 @@ function useImportedValues(file: string, imports: ReturnType<typeof importsOf>):
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `key` stands for the file and its imports' names and modules; the imports array is new on every parse.
   }, [key]);
   return answer !== undefined && answer.key === key ? answer.values : {};
+}
+
+// Where `spec` lands from `file`, as the page's own bundle resolves it: the
+// alias probe for an import the picker writes (`@/consts`).
+async function resolveImport(file: string, spec: string): Promise<string | undefined> {
+  return (await askImportSource(file, spec))?.file;
 }
 
 async function askImportSource(file: string, spec: string): Promise<{ readonly file: string; readonly text: string } | undefined> {

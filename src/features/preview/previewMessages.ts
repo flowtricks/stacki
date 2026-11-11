@@ -1,4 +1,7 @@
+import { parseDeepHoverNode, type DeepHoverNode } from '../../../shared/properties/deepOutline';
+import { isReservedShortcut, type AppReservedShortcut } from '../../../shared/properties/appShortcuts';
 import { parseContextPoint, type ContextPoint } from './contextPosition';
+import { canvasClickBox, coordinateOf, type CanvasClickBox } from '../../ui/canvasClickSlot';
 import type { Box } from './outlineBoxes';
 import type { Spacing } from './spacingBands';
 import { boolean, count, dictionary, digest, list, optional, pathText, record } from '../../../shared/core/boundary';
@@ -29,8 +32,17 @@ export type PreviewMessage =
     }
   | { readonly kind: 'modifiers'; readonly shiftKey: boolean; readonly altKey: boolean }
   /** `pseudo` names the ::before or ::after the pointer is on, when it is on one. */
-  | ({ readonly kind: 'hover-node'; readonly pseudo: PseudoLayer | undefined } & LocatedEvent)
-  | ({ readonly kind: 'click-node'; readonly outside: boolean; readonly pseudo: PseudoLayer | undefined } & LocatedEvent)
+  /** `deep` labels a deep hover's node inside a closed component (shared/properties/deepOutline.ts). */
+  | ({ readonly kind: 'hover-node'; readonly pseudo: PseudoLayer | undefined; readonly deep: DeepHoverNode | undefined } & LocatedEvent)
+  | ({
+      readonly kind: 'click-node';
+      readonly outside: boolean;
+      readonly pseudo: PseudoLayer | undefined;
+      /** Where the pointer was and the box of the copy it hit, for an app capturing clicks; undefined from an older frame. */
+      readonly x: number | undefined;
+      readonly y: number | undefined;
+      readonly box: CanvasClickBox | undefined;
+    } & LocatedEvent)
   | ({ readonly kind: 'open-node' } & LocatedEvent)
   | ({ readonly kind: 'context-node'; readonly outside: boolean; readonly pseudo: PseudoLayer | undefined } & LocatedEvent & ContextPoint)
   | { readonly kind: 'canvas-ready' }
@@ -41,6 +53,8 @@ export type PreviewMessage =
   /** The canvas reloaded instead of patching, and why (step 7). */
   | { readonly kind: 'preview-reload'; readonly reason: PreviewReloadReason }
   | { readonly kind: 'query-result'; readonly input: unknown }
+  /** What is under a point, for an app dragging an overlay item (src/ui/canvasPointQuery.ts parses it). */
+  | { readonly kind: 'point-result'; readonly input: unknown }
   | {
       readonly kind: 'text-marks';
       readonly hover: TextMarkBox | undefined;
@@ -94,7 +108,9 @@ export type ShortcutMessage =
   | { readonly name: 'insert' }
   | { readonly name: 'preview' }
   | { readonly name: 'arrow'; readonly key: string }
-  | { readonly name: 'key'; readonly key: string; readonly meta: boolean };
+  | { readonly name: 'key'; readonly key: string; readonly meta: boolean }
+  /** A key in the app command range (shared/properties/appShortcuts.ts), which runs an app's command. */
+  | { readonly name: 'appCommand'; readonly shortcut: AppReservedShortcut };
 
 // A KeyboardEvent key is one character or a short name ("ArrowDown").
 const SHORTCUT_KEY_CHARS_MAX = 32;
@@ -126,6 +142,10 @@ export function parseShortcutMessage(input: unknown): ShortcutMessage | undefine
         return { name: 'arrow', key: shortcutKey(value['key']) };
       case 'key':
         return { name: 'key', key: shortcutKey(value['key']), meta: value['meta'] === true };
+      case 'appCommand': {
+        const shortcut = shortcutKey(value['shortcut']);
+        return isReservedShortcut(shortcut) ? { name: 'appCommand', shortcut } : undefined;
+      }
       default:
         return undefined;
     }
@@ -177,13 +197,16 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         altKey: boolean(value['altKey']),
       };
     case 'avb:hover-node':
-      return { kind: 'hover-node', ...parseLocatedMessage(value), pseudo: parseLocatedPseudo(value) };
+      return { kind: 'hover-node', ...parseLocatedMessage(value), pseudo: parseLocatedPseudo(value), deep: parseDeepHoverNode(value['deep']) };
     case 'avb:click-node':
       return {
         kind: 'click-node',
         ...parseLocatedMessage(value),
         outside: boolean(value['outside']),
         pseudo: parseLocatedPseudo(value),
+        x: coordinateOf(value['x']),
+        y: coordinateOf(value['y']),
+        box: canvasClickBox(value['box']),
       };
     case 'avb:context-node':
       return {
@@ -205,6 +228,8 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
       return { kind: 'preview-reload', reason: parseReloadReason(value['reason']) };
     case 'avb:query-result':
       return { kind: 'query-result', input: value };
+    case 'avb:point-result':
+      return { kind: 'point-result', input: value };
     case 'avb:text-marks':
       return {
         kind: 'text-marks',

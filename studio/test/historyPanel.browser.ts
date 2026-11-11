@@ -50,6 +50,11 @@ try {
         releaseGraph.push(resolve);
       });
     }
+    if (url.pathname.endsWith('/avatars')) {
+      // Author pictures are decoration; with none known the rows keep their initials.
+      await route.fulfill({ contentType: 'application/json', body: '[]' });
+      return;
+    }
     if (url.pathname.endsWith('/commit')) {
       details++;
       await route.fulfill({

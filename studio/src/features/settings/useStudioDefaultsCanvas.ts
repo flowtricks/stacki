@@ -1,6 +1,7 @@
 import { useDefaultsKeyboard } from '../../../vendor/stacki/src/features/componentDefaults/useDefaultsKeyboard';
 import { canvasNodeAt } from '../../../vendor/stacki/src/features/componentDefaults/defaultsCanvasModel';
-import { getEditorRole } from '../roles/roleStore';
+import { getStudioRole } from '../roles/roleStore';
+import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { pathFor } from '../project/previewSelection';
 import { isDefaultsCanvas } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { useEffect, useRef } from 'react';
@@ -78,7 +79,7 @@ export function useStudioDefaultsCanvas(props: EditorProps, model: ReturnType<ty
 }
 
 async function startForNode(props: EditorProps, model: ReturnType<typeof useEditor>, canvas: ReturnType<typeof useDefaultsCanvas>, id: string) {
-  if (getEditorRole() === 'client' || !model.document) {
+  if (!can(getStudioRole(), 'component:edit') || !model.document) {
     return;
   }
   await model.document.whenSaved();

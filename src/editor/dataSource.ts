@@ -415,6 +415,8 @@ export interface Destructure {
   readonly prop: string;
   readonly from: string;
   readonly kind: string;
+  /** The default the pattern gives it, as written: `40` in `{ maxWidth = 40 }`. */
+  readonly defaultText?: string;
 }
 
 /**
@@ -486,7 +488,8 @@ export function parseDestructures(code: unknown): Destructure[] {
         continue;
       }
       const key = colon === -1 ? local : entry.slice(0, colon).trim();
-      out.push({ name: local, prop: /^[A-Za-z_$][\w$]*$/.test(key) ? key : local, from, kind: kindOf(defaultText) });
+      const prop = /^[A-Za-z_$][\w$]*$/.test(key) ? key : local;
+      out.push({ name: local, prop, from, kind: kindOf(defaultText), ...(defaultText === '' ? {} : { defaultText }) });
     }
   }
   return out;

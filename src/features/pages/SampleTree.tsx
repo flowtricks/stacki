@@ -1,7 +1,7 @@
 // A sample's structure, drawn as the Settings panel's data picker draws data: a
-// search, the item's row with the arrows that step through the list, and a row
-// per field with nested ones under a chevron. The rows themselves are the
-// picker's (ui/DataTree.tsx); this decides only what a row means, because
+// search, a group's heading, the item's row with the arrows that step through
+// the list, and a row per field with nested ones under a chevron. The popup,
+// its width and every row are the picker's (ui/DataTree.tsx, `bind-menu`); this decides only what a row means, because
 // the picker's rows are bindings into a page's scope, which a template being
 // created does not have yet. The field list and the page address both draw it,
 // so they cannot drift apart.
@@ -9,7 +9,7 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { SampleList, TemplateField } from '../../../shared/properties/pageTemplate';
-import { DataSearch, DataTreeRow, ItemNavigation, PreviewValue } from '../../ui/DataTree';
+import { DATA_TREE_HEIGHT_PX_MAX, DATA_TREE_WIDTH_PX_MIN, DataSearch, DataSection, DataTreeRow, ItemNavigation, PreviewValue } from '../../ui/DataTree';
 import { popupBox } from '../../ui/Dropdown';
 import { ChevronDownIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
@@ -24,8 +24,7 @@ import {
   type SampleTreeRow,
 } from './pageTemplateForm';
 
-const POPOVER_WIDTH = 380;
-const POPOVER_HEIGHT = 340;
+const POPOVER_GUTTER_PX = 8;
 /** The item's own row, which holds every field: not a path any field can have. */
 const ITEM_ROW = '';
 
@@ -68,16 +67,13 @@ export function SampleTree({ list, mode }: { readonly list: SampleList; readonly
       return next;
     });
   };
-  const action =
-    mode.kind === 'fields' ? (
-      <button type="button" className="ghost dp-search-action" onClick={allFieldsChosen(mode.chosen, list) ? mode.deselectAll : mode.selectAll}>
-        {allFieldsChosen(mode.chosen, list) ? 'Deselect all' : 'Select all'}
-      </button>
-    ) : undefined;
   return (
-    <div className="data-picker page-template-sample">
-      <DataSearch value={query} label="Search the data" action={action} onChange={setQuery} />
+    <div className="data-picker">
+      <DataSearch value={query} label="Search data" onChange={setQuery} />
       <div className="dp-list">
+        {/* As the picker heads each group of rows; a search lists matches by
+            their whole path instead, without headings, as the picker's does. */}
+        {!searching && <DataSection heading={mode.kind === 'fields' ? 'Fields' : 'Web address'} tone="source" action={sectionAction(mode, list)} />}
         {mode.kind === 'address' && mode.extra !== undefined && !searching && (
           <AddressExtraRow extra={mode.extra} chosen={mode.value === mode.extra.value} pick={mode.pick} />
         )}
@@ -116,6 +112,15 @@ export function SampleTree({ list, mode }: { readonly list: SampleList; readonly
       </div>
     </div>
   );
+}
+
+// Select all, or Deselect all once every field is chosen: one control at the
+// end of the heading, in place of a choice the search row would otherwise carry.
+function sectionAction(mode: SampleTreeMode, list: SampleList): { readonly label: string; readonly onClick: () => void } | undefined {
+  if (mode.kind === 'address') {
+    return undefined;
+  }
+  return allFieldsChosen(mode.chosen, list) ? { label: 'Deselect all', onClick: mode.deselectAll } : { label: 'Select all', onClick: mode.selectAll };
 }
 
 function AddressExtraRow({
@@ -201,24 +206,41 @@ function SampleRow({
   );
 }
 
+/**
+ * What a popover holds: a short form (request headers, a content entry's
+ * address), or a sample tree, which opens in the data picker's own popup at
+ * its width so the two read as one thing.
+ */
+export type DetailSurface = 'form' | 'data';
+
+const SURFACES = {
+  form: { className: 'page-template-popover', widthPx: 380, heightPx: 340 },
+  data: { className: 'dd-popup bind-menu page-template-data', widthPx: DATA_TREE_WIDTH_PX_MIN, heightPx: DATA_TREE_HEIGHT_PX_MAX },
+} as const satisfies Record<DetailSurface, { readonly className: string; readonly widthPx: number; readonly heightPx: number }>;
+
 // Detail most templates never need, kept off the form until it is asked for, so
 // the dialog stays one short column.
 export function DetailPopover({
   label,
   title,
+  surface,
   children,
 }: {
   readonly label: string;
   readonly title: string;
+  readonly surface: DetailSurface;
   readonly children: ReactNode | ((close: () => void) => ReactNode);
 }) {
   const [open, setOpen] = useState(false);
   const [box, setBox] = useState<CSSProperties | undefined>(undefined);
   const button = useRef<HTMLButtonElement>(null);
+  const { className, widthPx, heightPx } = SURFACES[surface];
+  assert(widthPx > 0, 'DetailPopover: the popover has a width');
   const show = (): void => {
     const rect = button.current?.getBoundingClientRect();
     if (rect !== undefined) {
-      setBox({ left: Math.max(8, Math.min(rect.left, window.innerWidth - POPOVER_WIDTH - 8)), ...popupBox(rect, POPOVER_HEIGHT, window.innerHeight) });
+      const leftPxMax = window.innerWidth - widthPx - POPOVER_GUTTER_PX;
+      setBox({ left: Math.max(POPOVER_GUTTER_PX, Math.min(rect.left, leftPxMax)), ...popupBox(rect, heightPx, window.innerHeight) });
       setOpen(true);
     }
   };
@@ -234,10 +256,10 @@ export function DetailPopover({
           open={open}
           anchor={button.current ?? undefined}
           onClose={() => setOpen(false)}
-          className="page-template-popover"
+          className={className}
           role="dialog"
           label={title}
-          style={{ position: 'fixed', ...box, width: POPOVER_WIDTH }}
+          style={{ position: 'fixed', ...box, width: widthPx }}
         >
           {typeof children === 'function' ? children(() => setOpen(false)) : children}
         </Popup>

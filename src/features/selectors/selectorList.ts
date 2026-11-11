@@ -1,8 +1,8 @@
 // What the style selectors panel shows: the report's entries filtered by
 // verdict and search text, grouped by file in the report's order. Pure, so the
-// panel's rendering holds no decisions of its own. Locked stylesheets are
-// folded into one line in the Unused view, and folders head their sheets when
-// the project has more than one.
+// panel's rendering holds no decisions of its own. Folders head their sheets
+// when the project has more than one. A locked stylesheet's selectors are
+// `kept`, so the Unused view never lists them: they are under Locked and All.
 import { assert } from '../../../shared/core/assert';
 import type { SelectorEntry, SelectorReport, SelectorVerdictKind } from '../../../shared/properties/selectorUsage';
 import type { StyleKeepList } from '../../../shared/properties/styleKeepList';
@@ -91,16 +91,10 @@ export function selectorGroups(
   return [...groups].map(([rel, entries]) => ({ rel, entries }));
 }
 
-/** A stylesheet's group as the panel draws it, with what a lock hides from the Unused view. */
-export interface SheetGroup extends SelectorGroup {
-  /** Locked selectors in this sheet that the Unused view leaves out, shown as one line. */
-  readonly lockedKept: number;
-}
-
 /** The stylesheets of one folder, under its heading; `folder` is undefined when the project has one folder. */
 export interface FolderGroup {
   readonly folder: string | undefined;
-  readonly sheets: readonly SheetGroup[];
+  readonly sheets: readonly SelectorGroup[];
 }
 
 /** The folder a stylesheet sits in, as a locked folder path (`src/styles/`); `''` at the project root. */
@@ -110,52 +104,15 @@ export function folderOf(rel: string): string {
   return rel.slice(0, rel.lastIndexOf('/') + 1);
 }
 
-// The Unused view hides locked selectors, since no cleanup removes them; each
-// locked sheet that holds some is listed as one line saying how many it keeps,
-// so the tab's count is exactly what a cleanup removes and nothing seems lost.
-// Other views list locked rows themselves.
-export function sheetGroups(
-  report: SelectorReport,
-  filter: SelectorFilter,
-  groups: readonly SelectorGroup[],
-  search: string,
-  locked: (rel: string) => boolean,
-): readonly SheetGroup[] {
-  if (filter !== 'unused') {
-    return groups.map((group) => ({ ...group, lockedKept: 0 }));
-  }
-  const query = search.trim().toLowerCase();
-  const kept = new Map<string, number>();
-  for (const entry of listedEntries(report)) {
-    if (entry.verdict.kind === 'kept' && locked(entry.rel)) {
-      if (query === '' || entry.selector.toLowerCase().includes(query)) {
-        kept.set(entry.rel, (kept.get(entry.rel) ?? 0) + 1);
-      }
-    }
-  }
-  const byRel = new Map(groups.map((group) => [group.rel, group]));
-  const out: SheetGroup[] = [];
-  // Report order, so a locked sheet's line sits where its rows would.
-  for (const rel of new Set(listedEntries(report).map((entry) => entry.rel))) {
-    const group = byRel.get(rel);
-    const lockedKept = kept.get(rel) ?? 0;
-    if (group !== undefined || lockedKept > 0) {
-      out.push({ rel, entries: group?.entries ?? [], lockedKept });
-    }
-  }
-  assert(out.filter((sheet) => sheet.entries.length > 0).length === groups.length, 'sheetGroups: every listed group is kept');
-  return out;
-}
-
 // Folder headings appear only when the project's stylesheets sit in more than
 // one folder; with one, a file lock says everything a folder lock would.
 // Folders keep the order their first stylesheet has in the report.
-export function folderGroups(report: SelectorReport, sheets: readonly SheetGroup[]): readonly FolderGroup[] {
+export function folderGroups(report: SelectorReport, sheets: readonly SelectorGroup[]): readonly FolderGroup[] {
   const folders = new Set(listedEntries(report).map((entry) => folderOf(entry.rel)));
   if (folders.size <= 1) {
     return sheets.length === 0 ? [] : [{ folder: undefined, sheets }];
   }
-  const grouped = new Map<string, SheetGroup[]>();
+  const grouped = new Map<string, SelectorGroup[]>();
   for (const sheet of sheets) {
     const folder = folderOf(sheet.rel);
     const list = grouped.get(folder) ?? [];

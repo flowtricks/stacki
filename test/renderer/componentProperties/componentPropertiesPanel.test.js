@@ -272,8 +272,14 @@ test('component properties lifecycle and controls', async () => {
     await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
     await settle();
   };
-  const save = [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property');
-  await act(async () => save.click());
+  // A new prop has no Save button: it is created when its name is committed, and a name that cannot be one says why.
+  assert.equal(
+    [...document.querySelectorAll('button')].find((button) => button.textContent === 'Save property'),
+    undefined,
+  );
+  const nameInput = document.querySelector('.property-editor input');
+  await setValue(nameInput, '1 bad');
+  await act(async () => nameInput.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
   assert.match(toastMessages(), /Use a name/);
   assert.equal(edits.length, 1);
   await act(async () => document.querySelector('[aria-label="Close property settings"]').click());
@@ -409,6 +415,7 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
   };
   await notify();
   await act(async () => document.querySelector('.property-row-main').click());
+  assert.match(document.querySelector('.property-share-warning').textContent, /ContainerGap is used 2 times in this file/);
   assert.ok(document.querySelector('[aria-label="Component TypeScript source"]') === null);
   assert.equal(optionValues()[0], 'small');
   const pressDown = async (element) => act(async () => element.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true })));
@@ -457,11 +464,13 @@ const { gap = 'small', other = 'large', ...rest } = Astro.props;
     edits.flatMap((edit) => edit.change.optionRenames ?? []),
     [{ from: "'small'", to: '"compact"' }],
   );
+  // The options live in the alias both props use, so the edit is written there (the form warned it changes both).
+  assert.match(data.source, /spacing: ContainerGap/);
   assert.match(data.source, /other\?: ContainerGap/);
   assert.match(data.source, /Props extends HTMLAttributes<'section'>/);
-  assert.match(data.source, /type ContainerGap = 'small' \| 'medium' \| 'large'/);
-  // The Kind picker reuses the searchable dropdown; the Code type disclosure
-  // shows the exact expression. Browsing kinds does not replace the current union.
+  assert.match(data.source, /type ContainerGap = 'large' \| "compact" \| 'medium'/);
+  // The Kind picker reuses the searchable dropdown; the `{}` toggle beside
+  // Options (or Kind, for a prop without options) shows the exact expression. Browsing kinds does not replace the current union.
   await act(async () => document.querySelector('.property-row-main').click());
   assert.match(document.querySelector('.property-type .dd-trigger').textContent, /Choice/);
   const codeInput = () => document.querySelector('[aria-label="Code type"]');

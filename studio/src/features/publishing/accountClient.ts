@@ -2,7 +2,7 @@ import {
   parseAccountRequest,
   GITHUB_DEVICE_URL,
   parseAccountState,
-  parseCloudflareSignInURL,
+  parseSignInURL,
   type AccountRequest,
   type AccountState,
 } from '../../../vendor/stacki/shared/ipc/publishAccount';
@@ -24,7 +24,7 @@ export async function publishingAccount(_project: string, input: AccountRequest)
 }
 
 export function openAccountSignIn(url: string = GITHUB_DEVICE_URL): Promise<void> {
-  const target = url === GITHUB_DEVICE_URL ? url : parseCloudflareSignInURL(url);
+  const target = url === GITHUB_DEVICE_URL ? url : parseSignInURL(url);
   window.open(target, '_blank', 'noopener,noreferrer');
   return Promise.resolve();
 }

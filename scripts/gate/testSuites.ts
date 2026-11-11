@@ -38,6 +38,12 @@ export const TEST_SUITES: Readonly<Record<string, SuiteOptions>> = {
   // its timing assumptions hold.
   'test/renderer/style/selectorWell.test.js': { phase: 'alone' },
   'test/electron/project/thumbs.test.js': { phase: 'alone', runner: 'electron' },
+  // Loads an app page over the real `stacki-app:` scheme, which only Electron has.
+  'test/electron/handlers/appFrameFetch.test.js': { runner: 'electron' },
+  // Loads the UI kit inside an app frame over the real `stacki-app:` scheme, which only Electron has.
+  'test/electron/handlers/appUiKitServe.test.js': { runner: 'electron' },
+  // Samples pixels around an overlay frame composited by real Chromium, which only Electron has.
+  'test/electron/handlers/appFrameTransparency.test.js': { runner: 'electron' },
   'test/scripts/build/buildLayout.test.ts': { build: 'renderer' },
   'test/renderer/app/viteModules.test.ts': { nodeArguments: ['--experimental-vm-modules'] },
   'test/renderer/content/contentFields.test.js': { nodeArguments: QUIET_TYPELESS },

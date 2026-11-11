@@ -10,11 +10,13 @@
 //   @step 0.5          the step a number field moves by
 //   @decimals 0        how many decimals it keeps (0 is a whole number)
 //   @int / @integer    a whole number
-//   @onLabel Shown     what a switch prop's on side is called
-//   @offLabel Hidden
 //   @format color      what a text prop holds (a colour, a link)
 //   @group Layout      the section a prop is listed under
 //   @deprecated text   the author's notice that the prop is on its way out
+//
+// `@onLabel` and `@offLabel` (a switch's side names) were once written here.
+// Astro has no such thing for a boolean, so nothing reads their values now; they
+// are still recognized as setting tags only so an old doc's tooltip stays clean.
 //
 // The text before the first tag is the tooltip. The doc arrives as source text
 // someone wrote, so every value is checked before it is returned; a tag whose
@@ -31,8 +33,6 @@ export interface PropTags {
   readonly step: number | undefined;
   readonly decimals: number | undefined;
   readonly integer: boolean;
-  readonly onLabel: string | undefined;
-  readonly offLabel: string | undefined;
   readonly format: string | undefined;
   readonly group: string | undefined;
   // The `@deprecated` text ('' for the bare tag), or undefined when the prop is not deprecated.
@@ -45,7 +45,6 @@ export const PROP_TAG_LIMITS = {
   // A doc comment is prose about one prop; four attributes' worth is past any.
   docCharsMax: LIMITS.attrCharsMax * 4,
   decimalsMax: 10,
-  labelCharsMax: 40,
   groupCharsMax: 80,
 } as const;
 
@@ -74,8 +73,6 @@ export function readPropTags(documentation: string | undefined): PropTags {
     step: stepStated !== undefined && stepStated > 0 ? stepStated : undefined,
     decimals,
     integer: /@(?:int|integer)\b/i.test(text),
-    onLabel: labelTag(text, 'onLabel', PROP_TAG_LIMITS.labelCharsMax),
-    offLabel: labelTag(text, 'offLabel', PROP_TAG_LIMITS.labelCharsMax),
     format: formatTag(text),
     group: labelTag(text, 'group', PROP_TAG_LIMITS.groupCharsMax),
     deprecated: deprecationOf(text),

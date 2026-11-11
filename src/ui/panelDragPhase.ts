@@ -1,9 +1,9 @@
 import { useSyncExternalStore } from 'react';
 import { assert } from '../../shared/core/assert';
 
-// Whether an editor side panel is being dragged to a new width. The canvas reads it to
-// hold the page's layout width for the length of the drag: a page that re-measures on
-// every width change (text split into lines, for one) would otherwise re-lay out each frame.
+// Whether an editor side panel is being dragged to a new width. The canvas follows the
+// panel live by CSS; it reads the phase to skip its width transition and to put off
+// measures that render React (the fluid frame's size) until release, then run them once.
 export type PanelDragPhase = 'idle' | 'dragging';
 
 // One listener per mounted canvas; a handful at most. The cap catches a leaked subscription.
@@ -30,7 +30,7 @@ export function usePanelDragPhase(): PanelDragPhase {
   return useSyncExternalStore(subscribePanelDragPhase, panelDragPhase, panelDragPhase);
 }
 
-function subscribePanelDragPhase(listener: () => void): () => void {
+export function subscribePanelDragPhase(listener: () => void): () => void {
   assert(listeners.size < LISTENERS_MAX, 'Too many panel drag listeners');
   listeners.add(listener);
   return () => {

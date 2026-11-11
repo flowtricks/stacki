@@ -8,7 +8,7 @@
 // changed it. These check that the wait shows as a wait: a spinner while the scan
 // is running and there is nothing to show yet, and nothing extra once there is
 // (or once the scan is done and the answer really is none). It also verifies
-// that component-authored selector provenance reaches the chip's visual class.
+// that a chip whose class is written in the component's markup gets the green class.
 //
 // In two halves, because the first version of this only had the first one and the
 // spinner still never appeared in the app: the well rendered it correctly, and was
@@ -124,8 +124,9 @@ const contrastRatio = (first, second) => {
   const { SelectorPicker, listMatchedSelectors, selectorDependsOnAncestor } = require(bundlePath);
 
   const CHIPS = [
-    { key: 'a', text: 'html.theme-dark', fromComponent: true },
-    { key: 'b', text: '.theme-dark', fromComponent: false },
+    { key: 'a', text: 'html.theme-dark', fromComponent: true, inComponentMarkup: true },
+    // CSS in a component, class not written in its markup: not the component's.
+    { key: 'b', text: '.theme-dark', fromComponent: true },
   ];
   const reactRoot = createRoot(document.getElementById('root'));
   const show = async (props) =>
@@ -164,7 +165,7 @@ const contrastRatio = (first, second) => {
   const renderedChips = [...document.querySelectorAll('.embed-editor_selector-chip')];
   check('a component selector receives the green component class', renderedChips[0]?.classList.contains('is-component') === true, renderedChips[0]?.className);
   check(
-    'a non-component selector keeps the standard class treatment',
+    'a chip whose CSS is in a component but whose class is not in its markup is not green',
     renderedChips[1]?.classList.contains('is-component') === false,
     renderedChips[1]?.className,
   );
@@ -201,10 +202,10 @@ const contrastRatio = (first, second) => {
   check('a sibling selector is not described as a parent relationship', selectorDependsOnAncestor('.eyebrow + .heading') === false);
 
   const CATEGORY_CHIPS = [
-    { key: 'direct', text: '.heading:has(+ .text)', fromComponent: true },
+    { key: 'direct', text: '.heading:has(+ .text)', fromComponent: true, inComponentMarkup: true },
     { key: 'tag', text: 'h1', fromComponent: false },
     { key: 'state', text: ':focus-visible', fromComponent: false },
-    { key: 'parent', text: '.hero .heading', fromComponent: true },
+    { key: 'parent', text: '.hero .heading', fromComponent: true, inComponentMarkup: true },
   ];
   let visibleSelectors = [];
   await show({
@@ -237,6 +238,8 @@ const contrastRatio = (first, second) => {
     visibleSelectors.join('|'),
   );
   check('a tag selector receives the global grey class', globalChips.find((chip) => chip.textContent === 'h1')?.classList.contains('is-global') === true);
+  check('a tag selector is a plain chip', globalChips.find((chip) => chip.textContent === 'h1')?.classList.contains('is-plain') === true);
+  check('a bare pseudo is a plain chip', globalChips.find((chip) => chip.textContent === ':focus-visible')?.classList.contains('is-plain') === true);
   check(
     'a global selector is named for assistive technology',
     globalChips.find((chip) => chip.textContent === 'h1')?.getAttribute('aria-label') === 'h1, global selector',
@@ -245,9 +248,10 @@ const contrastRatio = (first, second) => {
   await act(async () => filterLabel('global')?.querySelector('input')?.click());
   await act(async () => filterLabel('inherited')?.querySelector('input')?.click());
   const inheritedChip = [...document.querySelectorAll('.embed-editor_selector-chip')].find((chip) => chip.textContent === '.hero .heading');
+  check('an ancestor-qualified selector receives the inherited class', inheritedChip?.classList.contains('is-inherited') === true, inheritedChip?.className);
   check(
-    'an ancestor-qualified selector receives the inherited grey class',
-    inheritedChip?.classList.contains('is-inherited') === true,
+    'an inherited selector with a class is a class chip, not a plain one',
+    inheritedChip?.classList.contains('is-class') === true,
     inheritedChip?.className,
   );
   check(
@@ -257,7 +261,8 @@ const contrastRatio = (first, second) => {
   );
 
   // The same selector may be authored globally and inside a component. The chip is
-  // deduplicated, but it remains component-colored if any matching source is one.
+  // deduplicated, but it keeps its component source if any matching source is one
+  // (where an edit is saved; the colour follows the markup, componentMarkup.ts).
   const matchedRule = (text, fromComponent, order) => ({
     rule: {
       declarations: [{ prop: 'color' }],
@@ -548,8 +553,8 @@ const contrastRatio = (first, second) => {
     );
     const componentChip = css.slice(css.indexOf('.embed-editor_selector-chip.is-component'));
     check(
-      'the component chip class uses the component green tokens',
-      /--color-component-tag-bg/.test(componentChip.slice(0, 800)) && /--color-component-tag\)/.test(componentChip.slice(0, 800)),
+      'the component chip class uses the component green fill with white text',
+      /--color-component-tag-bg/.test(componentChip.slice(0, 800)) && /color: #fff/.test(componentChip.slice(0, 800)),
       componentChip.slice(0, 800),
     );
     check(
@@ -585,9 +590,9 @@ const contrastRatio = (first, second) => {
     // Never disabled: the choice is remembered before there is anything to hide,
     // and a greyed-out box read as broken.
     check('neither filter checkbox is ever disabled', !/disabled=/.test(check_.slice(0, check_.indexOf('</>'))), 'a filter checkbox is disabled');
-    const contextualChip = css.slice(css.indexOf('.embed-editor_selector-chip:is(.is-global, .is-inherited)'));
+    const contextualChip = css.slice(css.indexOf('.embed-editor_selector-chip.is-plain'));
     check(
-      'global and inherited chips use the neutral grey ramp',
+      'plain chips (tags, `*`, pseudos) use the neutral grey ramp',
       /--color-selector-context-bg/.test(contextualChip.slice(0, 1000)) &&
         /--color-selector-context-bg-hover/.test(contextualChip.slice(0, 1000)) &&
         /--color-selector-context-bg-active/.test(contextualChip.slice(0, 1000)),

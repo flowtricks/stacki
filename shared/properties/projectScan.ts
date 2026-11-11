@@ -26,6 +26,8 @@ export interface RenderTag {
 export interface ScanComponent {
   readonly origin?: ComponentOrigin;
   readonly path: string;
+  /** Project-relative, `/`-separated (`src/ui/Card.astro`). Absent for a package component and from an older host. */
+  readonly file?: string;
   readonly name: string;
   readonly folder: string;
   readonly isLayout?: boolean;
@@ -49,6 +51,10 @@ export interface ScanResult {
   readonly trailingSlash?: string;
   /** What the style panel writes lengths in (lengthUnit.ts). Absent from an older host → px. */
   readonly lengthUnit?: LengthUnit;
+  /** Where Astro reads pages: `<srcDir>/pages` from astro.config. Absent from an older host → src/pages. */
+  readonly pagesFolder?: string;
+  /** The astro.config file Astro loads, project-relative; absent when there is none. */
+  readonly astroConfig?: string;
 }
 
 function fail(where: string, what: string): never {
@@ -114,6 +120,13 @@ function parseComponent(input: unknown, where: string): ScanComponent {
     name: asString(record['name'], `${where}.name`),
     folder: asString(record['folder'], `${where}.folder`),
   };
+  if (record['file'] !== undefined) {
+    const file = asString(record['file'], `${where}.file`);
+    if (file.length === 0 || file.startsWith('/') || file.split('/').includes('..')) {
+      fail(where, 'file: expected a project-relative path');
+    }
+    out['file'] = file;
+  }
   if (record['isLayout'] !== undefined) {
     if (record['isLayout'] !== true) {
       fail(where, 'isLayout: only true is ever written');
@@ -189,6 +202,15 @@ export function parseScanResult(input: unknown): ScanResult {
   }
   if (record['lengthUnit'] !== undefined) {
     result['lengthUnit'] = parseLengthUnit(record['lengthUnit']);
+  }
+  for (const key of ['pagesFolder', 'astroConfig'] as const) {
+    if (record[key] !== undefined) {
+      const value = asString(record[key], key);
+      if (value.length === 0 || value.startsWith('/') || value.split('/').includes('..')) {
+        fail(key, 'expected a project-relative path');
+      }
+      result[key] = value;
+    }
   }
   return result as unknown as ScanResult;
 }

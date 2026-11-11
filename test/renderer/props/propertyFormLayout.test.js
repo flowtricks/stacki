@@ -92,6 +92,10 @@ const check = (what, condition, detail) => {
     path.join(pageDirectory, 'app.css'),
     [
       'src/features/style/tokens.css',
+      // The sheets styles.css imports first (its @import is not followed in a concatenation).
+      'src/ui/controls.css',
+      'src/ui/dropdown.css',
+      'src/ui/resetLabel.css',
       'src/app/styles.css',
       'src/ui/popup.css',
       'src/features/componentProperties/componentProperties.css',
@@ -287,7 +291,7 @@ const check = (what, condition, detail) => {
       }
     }
     // Letting the field's label out of the form's column must leave the rest in it.
-    check('the Required and Readonly flags stay rows', listView.panel.flagLabel.flexDirection === 'row', JSON.stringify(listView.panel.flagLabel));
+    check('the Required flag stays a row', listView.panel.flagLabel.flexDirection === 'row', JSON.stringify(listView.panel.flagLabel));
     // The list itself is the instance's own, line for line.
     for (const name of ['panel', 'popup']) {
       check(

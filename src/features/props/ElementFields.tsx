@@ -344,6 +344,7 @@ export function ElementAttributes({ state }: { readonly state: ElementState }) {
           tag={element ? String(node.name) : undefined}
           reservedNames={node.kind === 'component' ? schema.map((field) => field.name) : undefined}
           onReplaceProps={onReplaceProps === undefined || !element ? undefined : (props) => onReplaceProps(node.id, props)}
+          onReplaceAttributes={onReplaceProps === undefined ? undefined : (props) => onReplaceProps(node.id, props)}
           onSetFrontmatter={onSetFrontmatter}
           projectPath={projectPath}
           bindContext={bindContext || loopContext}

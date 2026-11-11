@@ -1,0 +1,379 @@
+/* Settings → Roles: one card per role on a soft fill, its members as chips and
+   its access as switches grouped by area. Cards and rows are separated by space
+   and fills, never lines; a chip is a fill, not an outline. */
+.app-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.app-roles-notice {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--text-dim);
+  font-size: 12px;
+}
+/* "View as" and "People in no role" are Settings rows (SettingsRow); their
+   pickers share one fixed width so the two line up. */
+.app-roles .app-roles-dropdown {
+  width: 180px;
+}
+.app-role {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.app-role-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-role-heading h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.app-role-name {
+  flex: 1 1 auto;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: #ffffff10;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+.app-role-badge {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+}
+.app-role-icon {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+/* Delete turns red on hover, as the editor's other destructive buttons do. */
+.app-role-icon.is-danger:hover:not(:disabled) {
+  background: rgba(255, 90, 90, 0.16);
+  color: #ff9b9b;
+}
+/* Duplicate and Delete sit together at the end of the heading. */
+.app-role-icon + .app-role-icon {
+  margin-left: 0;
+}
+.app-role-icon:hover:not(:disabled) {
+  background: #ffffff14;
+  color: var(--text);
+}
+.app-role-members ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-role-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 4px 0 8px;
+  border-radius: 6px;
+  background: #ffffff10;
+  font-size: 12px;
+}
+.app-role-chip:not(:has(button)) {
+  padding-right: 8px;
+}
+.app-role-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.app-role-chip button:hover {
+  background: #ffffff14;
+  color: var(--text);
+}
+.app-role-none {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.app-role-add {
+  display: flex;
+  justify-content: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+}
+.app-role-add input {
+  flex: 0 1 220px;
+  min-height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: #ffffff10;
+  color: var(--text);
+  font-size: 12px;
+}
+.app-role-add button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: #ffffff10;
+  color: var(--text);
+  font-size: 12px;
+}
+.app-role-add button:hover:not(:disabled) {
+  background: #ffffff1a;
+}
+.app-role-add button:disabled {
+  opacity: 0.45;
+}
+/* The permission grid: one group under another, each a heading over its
+   switches in two even columns, so every group reads the same way down the
+   card instead of groups of different heights packed side by side. */
+.app-role-access {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.app-role-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+.app-role-group > :not(.app-role-toggle) {
+  grid-column: 1 / -1;
+}
+/* The group's heading row: its name, then its "All" switch at the right. */
+.app-role-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 28px;
+  margin-bottom: 4px;
+}
+.app-role-group-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.app-role-group h4 {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* A permission: its feature's icon in a fixed column, the label, then the switch. */
+.app-role-toggle {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 12px;
+}
+.app-role-toggle-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+}
+.app-role-toggle-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An app's own permissions (RoleAppPermissions.tsx): the app's icon and name as
+   the heading, then rows of a label over a muted description, then the switch. */
+.app-role-app-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.app-role-app-heading > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-app-permission {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 4px 0;
+}
+.app-role-app-permission-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.app-role-app-permission-description {
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.35;
+}
+/* A role's name, renamed in place: it reads as a heading until clicked. */
+.app-role-name-button {
+  min-height: 26px;
+  margin: 0 0 0 -6px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: text;
+}
+button.app-role-name-button:hover:not(:disabled) {
+  background: #ffffff10;
+}
+@media (max-width: 560px) {
+  .app-role-group {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.app-role button:focus-visible,
+.app-role input:focus-visible,
+.app-roles-new button:focus-visible,
+.app-roles-new input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* "Pinned to sidebar" (RolePinnedApps.tsx): on every card under its members, the role's
+   pins as rows in rail order on fills, each with a grip, its tile and name and a remove
+   button, then the "Add app" dropdown. Fills, never lines. */
+.app-role-pins {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.app-role-pin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-role-pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: #ffffff10;
+  font-size: 12px;
+  cursor: grab;
+}
+.app-role-pin:focus-visible {
+  outline: none;
+  background: #ffffff1a;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.app-role-pin.is-ignored .app-role-pin-name,
+.app-role-pin.is-ignored .app-role-app-icon {
+  opacity: 0.5;
+}
+/* While dragging, the row being moved fades; where it would land is the Navigator's
+   drop line (src/ui/DropLine.tsx), drawn in the 2px gap between rows. */
+.app-role-pin.is-dragging {
+  opacity: 0.4;
+}
+.app-role-pin-gap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.app-role-pin-gap.is-before {
+  top: -1px;
+}
+.app-role-pin-gap.is-after {
+  bottom: -1px;
+}
+.app-role-pin-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-pin-reason {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.app-role-pin-grip,
+.app-role-pin-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+}
+.app-role-pin-grip {
+  cursor: grab;
+}
+.app-role-pin-remove:hover {
+  background: #ffffff14;
+  color: var(--text);
+}
+.app-role-pins-dropdown {
+  width: 220px;
+}
+.app-role-pins-empty {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+/* An app the role may not use: its section reads muted, its permission switches read
+   off while keeping their saved values (RoleAppPermissions.tsx). The access switch in
+   the heading stays at full strength, since it is the one that turns the app on. */
+.app-role-app-group.is-off .app-role-app-heading,
+.app-role-app-group.is-off .app-role-app-permission {
+  opacity: 0.5;
+}

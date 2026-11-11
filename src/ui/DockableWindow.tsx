@@ -14,9 +14,13 @@ interface DockableWindowProps {
   readonly onModeChange: (mode: WindowMode) => void;
   readonly label: string;
   readonly header: ReactNode;
+  /** Controls after the dock toggle, at the header's far right (an app window's close). */
+  readonly trailing?: ReactNode;
   readonly children: ReactNode;
   readonly minimumSize: WindowSize;
   readonly storageKey?: string;
+  /** The floating size before the user has moved or resized it; centered in the viewport. */
+  readonly initialSize?: WindowSize;
   readonly hidden?: boolean;
   readonly className?: string;
 }
@@ -24,7 +28,7 @@ interface DockableWindowProps {
 // The dock is owned by the caller, so the same frame can later wrap either sidebar.
 // Keep one DOM tree through mode changes: editors retain focus, drafts and scroll position.
 export default function DockableWindow(props: DockableWindowProps) {
-  const windowState = useWindowRectangle(props.minimumSize, props.storageKey);
+  const windowState = useWindowRectangle(props.minimumSize, props.storageKey, props.initialSize);
   const { rectangle } = windowState;
   const floating = props.mode === 'floating';
   const surface = useRef<HTMLDivElement>(null);
@@ -66,6 +70,7 @@ export default function DockableWindow(props: DockableWindowProps) {
           >
             {floating ? <MaximizeIcon size={14} /> : <MinimizeIcon size={14} />}
           </button>
+          {props.trailing}
         </div>
         <div className="dockable-window-body">{props.children}</div>
         {floating && <WindowResizeHandles windowState={windowState} />}

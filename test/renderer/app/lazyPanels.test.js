@@ -54,6 +54,10 @@ const LAZY_PANELS = [
   'VariablesView',
   'SelectorsPanel',
   'CodePanel',
+  'InstructionsPanel',
+  'InstructionsDocument',
+  'AuditsPanel',
+  'AiPanel',
 ];
 const LAZY_IMPORT = /lazyPanel\(\(\) => import\('([^']+)'\)\)/g;
 const REAL_PREVIEW = new Set(['PreviewPane', 'CanvasView', 'DevOffline', 'PreviewOverlays', 'PreviewToolbar', 'PreviewSizeControls']);
@@ -90,12 +94,16 @@ test('all optional editors load without hiding the app or replacing its preview'
     await checkCMS(context);
     await checkCodePanel(context);
     await checkCodeWindow(context);
+    await checkInstructions(context);
+    await checkAudits(context);
+    await checkAi(context);
     assert.equal(gates.requested.size, LAZY_PANELS.length, 'Every lazy editor was exercised');
   } finally {
     await act(() => root.unmount());
     dom.window.close();
     delete global.__loadTestPanel;
     delete global.__lazyPanels;
+    delete global.__selectInstruction;
   }
 });
 
@@ -187,6 +195,41 @@ async function checkCodeWindow(context) {
   context.stable();
 }
 
+// Option+I opens Instructions; a file chosen in it opens over the canvas. The
+// stub panel hands the test the real selection store (see buildApp).
+async function checkInstructions(context) {
+  await context.act(() => pressOption('KeyI'));
+  assertPending(context, 'InstructionsPanel');
+  await releasePanel(context, 'InstructionsPanel');
+  assert.equal(__lazyPanels.InstructionsPanel.projectPath, '/project');
+  await context.act(() => globalThis.__selectInstruction({ projectPath: '/project', file: 'AGENTS.md' }));
+  assertPending(context, 'InstructionsDocument');
+  await releasePanel(context, 'InstructionsDocument');
+  assert.equal(__lazyPanels.InstructionsDocument.file, 'AGENTS.md');
+  await context.act(() => __lazyPanels.InstructionsDocument.onClose());
+}
+
+async function checkAudits(context) {
+  await context.act(() => pressOption('KeyA'));
+  assertPending(context, 'AuditsPanel');
+  await releasePanel(context, 'AuditsPanel');
+  assert.equal(__lazyPanels.AuditsPanel.project.path, '/project');
+}
+
+// The AI button sits at the foot of the rail, outside the numbered tabs.
+async function checkAi(context) {
+  const button = document.querySelector('.rail-btn[aria-label="AI chat"]');
+  assert.ok(button, 'The AI chat button is on the rail');
+  await context.act(() => button.click());
+  assertPending(context, 'AiPanel');
+  await releasePanel(context, 'AiPanel');
+  assert.equal(__lazyPanels.AiPanel.projectPath, '/project');
+}
+
+function pressOption(code) {
+  window.dispatchEvent(new window.KeyboardEvent('keydown', { code, key: code.slice(-1).toLowerCase(), altKey: true, bubbles: true }));
+}
+
 function assertPending(context, name) {
   assert.ok(context.gates.requested.has(name), `${name} requested its first chunk`);
   assert.ok(document.querySelector(`[data-test-panel="${name}"]`) === null);
@@ -234,7 +277,7 @@ function createImportGates() {
       assert.ok(LAZY_PANELS.includes(name), `Unexpected lazy module: ${name}`);
       assert.equal(requested.has(name), false, `${name} should request its module once`);
       requested.add(name);
-      // Nine fixed entries bound the queue, and release owns its only mutation.
+      // The fixed LAZY_PANELS entries bound the queue, and release owns its only mutation.
       return new Promise((resolve) => pending.set(name, () => resolve(load())));
     },
     release(name) {
@@ -276,6 +319,24 @@ async function buildApp() {
         },
         'src/features/code/CodeWindow.tsx': () => ({
           contents: panelStub('CodeWindow'),
+          loader: 'tsx',
+        }),
+        // The newer panels are not among the shared panel stubs; the Instructions
+        // stub also exposes the real selection store, which opens its document.
+        'src/features/instructions/InstructionsPanel.tsx': () => ({
+          contents: `import { selectInstruction } from './instructionSelection';\nglobalThis.__selectInstruction = selectInstruction;\n${panelStub('InstructionsPanel')}`,
+          loader: 'tsx',
+        }),
+        'src/app/shell/InstructionsDocument.tsx': () => ({
+          contents: panelStub('InstructionsDocument'),
+          loader: 'tsx',
+        }),
+        'src/features/audits/AuditsPanel.tsx': () => ({
+          contents: panelStub('AuditsPanel'),
+          loader: 'tsx',
+        }),
+        'src/features/ai/AiPanel.tsx': () => ({
+          contents: panelStub('AiPanel'),
           loader: 'tsx',
         }),
       }),

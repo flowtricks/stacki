@@ -92,6 +92,10 @@ function ProvenanceOrigin({ contributor, nav }: { contributor: Contributor; nav:
   if (contributor.origin === 'native') {
     return <span className="embed-editor_provenance-origin">Webflow</span>;
   }
+  if (contributor.origin === 'inline') {
+    // The element's own style attribute: no stylesheet to open.
+    return <span className="embed-editor_provenance-origin">Style attribute</span>;
+  }
   const embedKey = contributor.embedKey;
   if (!embedKey || !nav) {
     return undefined;

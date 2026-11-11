@@ -42,6 +42,28 @@ export function parseComponentPreviewMessage(input: unknown): ComponentPreviewMe
   return undefined;
 }
 
+/**
+ * What the pointer did inside a card's live preview (the route's page posts it, componentPreview.ts):
+ * it came in, or it clicked. The page itself never acts on either, so the card does.
+ */
+export type ComponentPreviewGesture = 'pointer' | 'click';
+
+export function parseComponentPreviewGesture(input: unknown): ComponentPreviewGesture | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  if (!('type' in input) || input.type !== 'avb:component-preview-gesture') {
+    return undefined;
+  }
+  if (!('gesture' in input)) {
+    return undefined;
+  }
+  if (input.gesture === 'pointer' || input.gesture === 'click') {
+    return input.gesture;
+  }
+  return undefined;
+}
+
 export function parseComponentUsage(input: unknown): ComponentUsageResult {
   const value = record(input);
   const error = optional(text)(value['error']);
@@ -108,9 +130,13 @@ export function componentPreviewURL(
 ): string {
   // A basename cannot distinguish components in different folders or a layout
   // from a component. Match the scan's folder convention without exposing an absolute path.
+  // The scan names the file itself when the host knows it (configured component folders,
+  // .stacki/folders.json); an older host leaves it out and the folder convention rebuilds it.
   const base = component.isLayout ? 'src' : 'src/components';
   const file =
-    component.origin?.kind === 'package' ? packagePreviewPath(component) : [base, component.folder, `${component.name}.astro`].filter(Boolean).join('/');
+    component.origin?.kind === 'package'
+      ? packagePreviewPath(component)
+      : (component.file ?? [base, component.folder, `${component.name}.astro`].filter(Boolean).join('/'));
   const query = new URLSearchParams({ c: component.name, p: file });
   // The popup layout is the route's default, so its URL stays exactly as it was.
   if (options.layout === 'page') {

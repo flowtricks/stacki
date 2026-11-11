@@ -1,6 +1,5 @@
 // The application shell's own types: history, toasts, tabs, the project and
 // what the shell keeps about it. A page's state is src/editor/pageState.ts.
-import type { CSSProperties } from 'react';
 import type { Data } from '../../shared/core/boundary';
 import type { IpcResults, WireGitInfo, WireInjectedRoute } from '../../shared/ipc/ipcResults';
 import type { ScanResult } from '../../shared/properties/projectScan';
@@ -30,6 +29,8 @@ export interface UndoCommand {
 export interface EditsEntry {
   readonly kind: 'edits';
   readonly record: EditsRecord;
+  /** The step's name when an app named it (docs/apps.md, "Undo labels"); shown when it is undone or redone. */
+  label?: string;
   /** Files the same step made, such as a component created from the selection
    *  (src/app/model/componentCreation.ts): one ⌘Z takes back both. */
   readonly files?: StepFiles;
@@ -53,7 +54,22 @@ export interface AppHistory {
 }
 
 export type ToastKind = 'info' | 'success' | 'warning' | 'error';
-export type LeftTab = 'pages' | 'navigator' | 'properties' | 'components' | 'assets' | 'cms' | 'variables' | 'selectors' | 'code' | 'history' | undefined;
+export type LeftTab =
+  | 'pages'
+  | 'navigator'
+  | 'properties'
+  | 'components'
+  | 'assets'
+  | 'cms'
+  | 'variables'
+  | 'selectors'
+  | 'code'
+  | 'history'
+  | 'apps'
+  | 'instructions'
+  | 'audits'
+  | 'ai'
+  | undefined;
 export type RightTab = 'style' | 'settings';
 export type DevStatus = 'off' | 'starting' | 'on';
 
@@ -92,7 +108,6 @@ export type GitInfo = IpcResults['git:info'];
 export type RepositoryInfo = WireGitInfo;
 export type InjectedRoute = WireInjectedRoute;
 export type VariablesGroup = VariableSelection;
-export type RightTabIndicator = Pick<CSSProperties, 'left' | 'width'>;
 export type AssetPick = AssetRequest;
 
 /** The open project's scans: one in flight, at most one waiting. */

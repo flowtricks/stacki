@@ -1,6 +1,8 @@
 import { createAstroFileMonitor } from './astroFileMonitor';
 import fs from 'fs';
 import path from 'path';
+import { PROJECT_FOLDERS_FILE } from '../../shared/properties/projectFolders';
+import { watchAppFolders } from './appsWatcher';
 
 interface WatchProjectDeps {
   readonly projectPath: string;
@@ -30,9 +32,11 @@ function watchProject({
   const watchers: fs.FSWatcher[] = [];
   const notifier = createNotifier(send);
   const astroFiles = createAstroFileMonitor(projectPath, (astroChanges) => send('fs:changed', { files: [], astroChanges }));
+  let appFolders: { readonly close: () => void } | undefined;
   const close = (): void => {
     notifier.close();
     astroFiles.close();
+    appFolders?.close();
     for (const watcher of watchers) {
       watcher.close();
     }
@@ -91,6 +95,12 @@ function watchProject({
     if (publicWatcher !== undefined) {
       watchers.push(publicWatcher);
     }
+    const settingsWatcher = watchFolderSettings({ projectPath, watch }, notifier);
+    if (settingsWatcher !== undefined) {
+      watchers.push(settingsWatcher);
+    }
+    // `.stacki/apps/`: the Installed list follows the folder (appsWatcher.ts).
+    appFolders = watchAppFolders({ projectPath, send, watch });
   } catch (error: unknown) {
     close();
     throw error;
@@ -179,5 +189,30 @@ function watchPublicFiles(
       return;
     }
     notifier.debounce('assets:changed');
+  });
+}
+
+// `.stacki/folders.json` decides which folders the components, layouts, assets
+// and style panels read, so any change to it, an outside edit or Git checkout
+// included, refreshes all of them. Self writes are not skipped: the Folders tab
+// saving is exactly the change the panels must show. A project without `.stacki`
+// yet is watched from its first save, which announces itself
+// (projectMetadataHandlers.ts) and the next watch:start arms this.
+function watchFolderSettings({ projectPath, watch = fs.watch }: Pick<WatchProjectDeps, 'projectPath' | 'watch'>, notifier: Notifier): fs.FSWatcher | undefined {
+  const directory = path.join(projectPath, '.stacki');
+  if (!fs.existsSync(directory)) {
+    return undefined;
+  }
+  const name = path.basename(PROJECT_FOLDERS_FILE);
+  return watch(directory, { recursive: false }, (_event, filename) => {
+    if (notifier.isClosed()) {
+      return;
+    }
+    if (filename && String(filename) !== name) {
+      return;
+    }
+    notifier.debounce('fs:changed', 150);
+    notifier.debounce('assets:changed');
+    notifier.debounce('css:changed');
   });
 }

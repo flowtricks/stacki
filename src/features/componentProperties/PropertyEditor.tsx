@@ -3,8 +3,9 @@ import PropertyReadOnlyFields from './PropertyReadOnlyFields';
 import { PropertyConditions, PropertyDeclarationInfo } from './PropertyDeclarationInfo';
 import { TrashIcon } from '../../ui/Icons';
 import { PropertyOptions } from './PropertyOptions';
+import { PropertyShareNotice, shareRenameFiles } from './PropertyShareNotice';
 import type { PropertyOptionChange } from './PropertyOptions';
-import { PropertyType } from './PropertyType';
+import { PropertyType, opensOnCode, type CodeMode } from './PropertyType';
 import { PropertyDefault, propertyDefaultText } from './PropertyDefault';
 import { PropertyDefaultNote, PropertyKindSettings, PropertyTooltip } from './PropertySettings';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
@@ -27,10 +28,16 @@ interface PropertyEditorProps {
   readonly frontmatter: string;
   readonly access: 'editable' | 'readonly' | 'saving';
   readonly onClose: () => void;
-  /** Creates a new prop, or deletes this one; both close the form. */
-  readonly onSave: (change: PropertyChange) => Promise<void>;
+  /**
+   * Creates a new prop, or deletes this one, and says whether it was done. A
+   * deletion closes the form; a creation goes on to `after`: the form stays
+   * open on the new prop, which saves itself from then on, or it closes.
+   */
+  readonly onSave: (change: PropertyChange, after: 'edit' | 'close') => Promise<boolean>;
   /** Where an existing prop's edits save themselves. */
   readonly saveHost: PropertySaveHost;
+  /** Opens a project file, named project-relative: a shared prop's declaration and users. */
+  readonly onOpenFile?: ((path: string) => void) | undefined;
 }
 // Types loose enough that a list setting's own type only says more.
 const LOOSE_TYPES = new Set(['', 'unknown', 'any', 'object', 'Record<string, unknown>']);
@@ -64,6 +71,10 @@ export function PropertyEditor(props: PropertyEditorProps) {
       ref={editorRef}
       onClose={() => {
         draft.close();
+        // A new prop with a name that can be written is created as the form closes, as an existing one saves.
+        if (props.originalName === '' && draft.ready()) {
+          draft.submit('close');
+        }
         props.onClose();
       }}
       dismissible={props.access !== 'saving'}
@@ -72,7 +83,7 @@ export function PropertyEditor(props: PropertyEditorProps) {
         <>
           <header>
             <div className="property-editor-title">
-              <strong>{props.originalName ? 'Property settings' : 'New property'}</strong>
+              <strong>{draft.exists ? 'Property settings' : 'New property'}</strong>
               <PropertyDeclarationInfo property={props.property} />
             </div>
             <button aria-label="Close property settings" disabled={props.access === 'saving'} onClick={close}>
@@ -80,25 +91,26 @@ export function PropertyEditor(props: PropertyEditorProps) {
             </button>
           </header>
           <PropertyConditions property={props.property} />
+          <PropertyShareNotice property={props.property} onOpenFile={props.onOpenFile} />
           {props.property.editing?.kind === 'override' && <p className="property-help">{props.property.editing.reason}</p>}
           {props.access === 'readonly' ? (
             <PropertyReadOnlyFields property={draft.property} />
           ) : (
             <PropertyEditorFields
               form={draft}
-              creating={props.originalName === ''}
+              creating={!draft.exists}
               frontmatter={props.frontmatter}
               access={props.access}
               projectPath={undefined}
               actions={
                 <PropertyActions
-                  name={props.originalName === '' ? '' : draft.savedName}
-                  removable={props.property.editing?.kind !== 'override'}
+                  name={draft.exists ? draft.savedName : ''}
+                  // A shared prop is deleted from its type's file, in source.
+                  removable={props.property.editing?.kind !== 'override' && props.property.shared === undefined}
                   onRemove={(name) => {
                     draft.discard();
-                    void props.onSave({ kind: 'remove', name });
+                    void props.onSave({ kind: 'remove', name }, 'close');
                   }}
-                  submit={draft.submit}
                 />
               }
             />
@@ -120,14 +132,18 @@ export function PropertySettingsFields(props: {
   readonly saveHost: PropertySaveHost;
 }) {
   const { property, frontmatter, projectPath, saveHost } = props;
-  const draft = usePropertyEditorDraft({ property, originalName: property.name, frontmatter, onSave: async () => undefined, saveHost });
+  const draft = usePropertyEditorDraft({ property, originalName: property.name, frontmatter, onSave: async () => false, saveHost });
+  // An existing prop has nothing to create.
+  assert(property.name !== '', 'PropertySettingsFields: the prop exists');
   return <PropertyEditorFields form={draft} creating={false} frontmatter={frontmatter} access="editable" projectPath={projectPath} actions={undefined} />;
 }
 
 function usePropertyEditorDraft(props: Pick<PropertyEditorProps, 'property' | 'originalName' | 'frontmatter' | 'onSave' | 'saveHost'>) {
   // The list setting's own type is written with the first save, not on opening.
   const [initial] = useState(() => ({ property: withListSettingType(props.property, listPropsOf(props.frontmatter)), optionRenames: [] }));
-  const autosave = usePropertyAutosave(initial, props.originalName === '' ? undefined : props.saveHost);
+  // A new prop saves nothing itself until it exists (submit, below).
+  const [exists, setExists] = useState(props.originalName !== '');
+  const autosave = usePropertyAutosave(initial, exists ? props.saveHost : undefined);
   const { change, report } = autosave;
   const property = autosave.draft.property;
   const edit = (pace: EditPace, next: (current: ComponentProperty) => ComponentProperty): void => {
@@ -140,14 +156,37 @@ function usePropertyEditorDraft(props: Pick<PropertyEditorProps, 'property' | 'o
       optionRenames: key === 'type' ? [] : current.optionRenames,
     }));
   };
-  // A new prop is written by its Save button; an existing one has none.
-  const submit = (): void => {
+  // A new prop is created once its name is committed and can be written (or as
+  // the form closes); after that it is an existing prop, which saves itself.
+  // There is no Save button.
+  // Enter and the blur after it would both create it; the first one does.
+  const creating = useRef<'new' | 'sending' | 'created'>(props.originalName === '' ? 'new' : 'created');
+  const ready = (): boolean => creating.current === 'new' && property.name.trim() !== '' && propertyProblem(property) === undefined;
+  const submit = (after: 'edit' | 'close'): void => {
+    assert(props.originalName === '', 'submit: only a new prop is created');
+    if (creating.current !== 'new') {
+      return;
+    }
     const problem = propertyProblem(property);
     if (problem !== undefined) {
       report({ error: problem, notice: '' });
       return;
     }
-    void props.onSave({ kind: 'save', originalName: props.originalName, property });
+    creating.current = 'sending';
+    const sent = property;
+    void props.onSave({ kind: 'save', originalName: '', property: sent }, after).then((done) => {
+      if (!done) {
+        // A refused create can be tried again.
+        creating.current = 'new';
+        return;
+      }
+      creating.current = 'created';
+      if (after === 'edit') {
+        // The form stays where it is, so nothing typed meanwhile is lost; it saves itself from here.
+        setExists(true);
+        autosave.adopt({ ...sent, editing: { kind: 'editable' } }, props.saveHost);
+      }
+    });
   };
   const changeOptions = (optionChange: PropertyOptionChange): void => {
     const rename = optionChange.kind === 'draft' ? optionChange.rename : undefined;
@@ -157,7 +196,7 @@ function usePropertyEditorDraft(props: Pick<PropertyEditorProps, 'property' | 'o
       optionRenames: changePropertyOptionRenames(current.optionRenames, optionChange),
     }));
   };
-  return { ...autosave, property, edit, update, submit, changeOptions };
+  return { ...autosave, property, exists, edit, update, ready, submit, changeOptions };
 }
 
 type PropertyForm = ReturnType<typeof usePropertyEditorDraft>;
@@ -177,12 +216,15 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
   const { property, update, error, notice } = form;
   const inherited = property.editing?.kind === 'override';
   const listFields = usePropertyListFields(property, frontmatter);
+  const code = usePropertyCodeMode(property);
   return (
     <fieldset disabled={access === 'saving'}>
       <PropertyIdentity form={form} creating={creating} inherited={inherited} />
       <PropertyType
         property={property}
         frontmatter={frontmatter}
+        code={code.mode}
+        optionsHoldCode={code.optionsHoldCode}
         onChange={(change, pace) => {
           // Picking the kind it already is changes nothing, and keeps pending option renames.
           if (change.type === property.type) {
@@ -192,10 +234,18 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
           }
         }}
       />
-      <PropertyOptions type={property.type} disabled={access === 'saving'} onChange={form.changeOptions} />
+      {code.optionsHoldCode && (
+        <PropertyOptions
+          type={property.type}
+          disabled={access === 'saving'}
+          code={code.mode}
+          onChange={form.changeOptions}
+          onTypeChange={(type) => form.change('typing', (current) => ({ property: { ...current.property, type }, optionRenames: [] }))}
+        />
+      )}
       <PropertyKindSettings key={`${property.type} settings`} property={property} onChange={(description) => update('description', description)} />
       {listFields !== undefined && <PropertyItemFields form={form} frontmatter={frontmatter} fields={listFields} />}
-      {/* The same Required and Readonly the Settings panel's Property settings has (PropertySections.tsx). */}
+      {/* The same Required the Settings panel's Property settings has (PropertySections.tsx); readonly is kept as read. */}
       <PropertyFlagsFields
         required={property.required}
         readonly={property.readonly}
@@ -231,30 +281,27 @@ function PropertyEditorFields({ form, creating, frontmatter, access, projectPath
   );
 }
 
-// What closes the form: Delete for a prop that has one to lose, and Save for a
-// new one, which has nothing on disk yet. An existing prop saves itself.
-function PropertyActions({
-  name,
-  removable,
-  onRemove,
-  submit,
-}: {
-  readonly name: string;
-  readonly removable: boolean;
-  readonly onRemove: (name: string) => void;
-  readonly submit: () => void;
-}) {
-  if (name === '') {
-    return (
-      <div className="property-actions">
-        <span />
-        <button className="primary" onClick={submit}>
-          Save property
-        </button>
-      </div>
-    );
-  }
-  if (!removable) {
+// The one `{}` switch between the type's controls and its code. It sits beside
+// Options for a prop that has them, else beside Kind; while the code is open it
+// stays where it was opened, so typing a union that stops being options does
+// not move the field from under the cursor.
+function usePropertyCodeMode(property: ComponentProperty): { readonly mode: CodeMode; readonly optionsHoldCode: boolean } {
+  const [state, setState] = useState(() => ({ open: opensOnCode(property), place: placeOf(property.type) }));
+  const optionsHoldCode = state.open ? state.place === 'options' : placeOf(property.type) === 'options';
+  return {
+    mode: { open: state.open, setOpen: (open) => setState({ open, place: placeOf(property.type) }) },
+    optionsHoldCode,
+  };
+}
+
+function placeOf(type: string): 'kind' | 'options' {
+  return literalOptions(type) === undefined ? 'kind' : 'options';
+}
+
+// Delete, for a prop that has one to lose. Nothing here saves: an existing prop
+// saves itself, and a new one is created when its name is committed.
+function PropertyActions({ name, removable, onRemove }: { readonly name: string; readonly removable: boolean; readonly onRemove: (name: string) => void }) {
+  if (name === '' || !removable) {
     return undefined;
   }
   return (
@@ -277,11 +324,11 @@ function PropertyIdentity({ form, creating, inherited }: { readonly form: Proper
           autoFocus={!inherited}
           disabled={inherited}
           onChange={(event) => form.setName(event.target.value)}
-          onBlur={form.commitName}
+          onBlur={() => commit(form, { creating })}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
-              form.commitName();
+              commit(form, { creating });
             }
           }}
         />
@@ -291,12 +338,41 @@ function PropertyIdentity({ form, creating, inherited }: { readonly form: Proper
           {form.nameError}
         </p>
       )}
-      {!creating && form.nameError === '' && form.savedName !== form.nameText && (
-        <p className="property-help">Renaming updates this component’s prop, the variable that reads it, and its instances across the website.</p>
-      )}
+      {!creating && form.nameError === '' && form.savedName !== form.nameText && <RenameHelp property={form.property} />}
     </>
   );
 }
+// Committing the name: a new prop is created with it, when it can be written;
+// an existing one renames.
+function commit(form: PropertyForm, { creating }: { readonly creating: boolean }): void {
+  if (!creating) {
+    form.commitName();
+    return;
+  }
+  if (form.property.name.trim() === '') {
+    return;
+  }
+  form.submit('edit');
+}
+
+// What a rename rewrites. A shared prop's reaches every file its type does, so they are listed before it is applied.
+function RenameHelp({ property }: { readonly property: ComponentProperty }) {
+  const share = property.shared;
+  if (share === undefined) {
+    return <p className="property-help">Renaming updates this component’s prop, the variable that reads it, and its instances across the website.</p>;
+  }
+  return (
+    <div className="property-help" role="status">
+      Renaming rewrites {share.typeName} and every read of it, in these files:
+      <ul className="property-rename-files">
+        {shareRenameFiles(share).map((file) => (
+          <li key={file}>{file}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** A List's item fields as the editor shows them, and the type they were last read from or written as. */
 interface ListFieldsDraft {
   readonly type: string;

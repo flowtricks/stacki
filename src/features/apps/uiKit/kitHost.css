@@ -1,0 +1,119 @@
+/* The kit's custom elements themselves, outside the scope of the editor's
+   sheets: what an element holds as data (a dropdown's options, the tabs' labels)
+   is never drawn, and each element's mount takes no box of its own, so the
+   component sits in the app's layout as it sits in the editor's. */
+stacki-dropdown > option,
+stacki-dropdown > optgroup,
+stacki-tabs > button,
+stacki-menu > button,
+stacki-menu > hr,
+stacki-menu > header,
+stacki-confirm,
+.stacki-kit-content {
+  display: none;
+}
+stacki-dropdown,
+stacki-tabs,
+stacki-search,
+stacki-input,
+stacki-textarea {
+  display: block;
+}
+stacki-switch,
+stacki-button,
+stacki-menu,
+stacki-popover,
+stacki-reset-label,
+stacki-tooltip {
+  display: inline-block;
+}
+.stacki-kit-mount {
+  display: contents;
+}
+/* A switch with its label shown is a row: the label first, the switch at the end. */
+stacki-switch[label]:not([label=''], [label-hidden]) {
+  display: block;
+}
+/* An icon button (`<stacki-button icon>` with no text) and the menu's ⋯ button:
+   square, the icon centred, as the editor's icon buttons draw. Two classes, so
+   they outweigh the scoped `button.ghost` padding. */
+.stacki-kit-mount button.stacki-kit-icon-button,
+.stacki-kit-mount button.stacki-kit-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+/* The row the keyboard or pointer is on is the dropdown's highlighted row
+   (KitMenu.tsx adds `.highlight`), so it needs no focus outline of its own. */
+.stacki-kit-menu .dd-option:focus {
+  outline: none;
+}
+/* A toggle button that is on (`<stacki-button pressed>`): the accent's soft fill
+   and the accent, as the editor's pressed tool buttons draw (richText.css
+   `.html-tool[aria-pressed='true']`). Two classes' weight, to outweigh the
+   scoped button fills. */
+.stacki-kit-mount button[aria-pressed='true'][aria-pressed='true'] {
+  background: var(--stacki-accent-soft);
+  color: var(--stacki-accent);
+}
+/* A popover's body is the app's own markup: hidden in its element while the
+   popover is closed, and padded inside the popup while it is open. */
+stacki-popover > .stacki-kit-popover-body {
+  display: none;
+}
+.stacki-kit-popover .stacki-kit-popover-body {
+  padding: 8px;
+}
+/* A question (`<stacki-confirm>`, KitConfirm.tsx): small and calm, a popover
+   fill and shadow with no border, as Stacki's surfaces draw. Centred in the
+   frame by the editor's dialog (popup.css), or fixed beside its anchor. */
+.stacki-kit-confirm {
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  padding: 16px;
+  background: var(--stacki-bg-popover);
+  border-radius: 10px;
+  box-shadow: var(--stacki-shadow-popover);
+  color: var(--stacki-text);
+}
+.stacki-kit-confirm.stacki-kit-confirm-anchored {
+  position: fixed;
+  z-index: 400;
+  width: auto;
+  max-width: 320px;
+  padding: 12px;
+}
+.stacki-kit-confirm-heading {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.stacki-kit-confirm-heading + .stacki-kit-confirm-message {
+  margin-top: 6px;
+}
+.stacki-kit-confirm-message {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--stacki-text-muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.stacki-kit-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+/* The destructive answer is the editor's red. Four classes' weight, to outweigh
+   the scoped `button.primary:hover:not(:disabled)` accent fill. */
+.stacki-kit-confirm .stacki-kit-confirm-actions button.stacki-kit-confirm-danger.stacki-kit-confirm-danger {
+  background: var(--stacki-danger);
+  color: #fff;
+}
+.stacki-kit-confirm .stacki-kit-confirm-actions button.stacki-kit-confirm-danger.stacki-kit-confirm-danger:hover:not(:disabled) {
+  background: var(--stacki-danger);
+  filter: brightness(1.08);
+}

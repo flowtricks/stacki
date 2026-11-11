@@ -1,0 +1,70 @@
+/* A choice of several in one field (MultiSelect.tsx): an input's box holding
+   the chosen values as chips, a box to type in, a clear-all and a chevron.
+   The menu is Dropdown's (.dd-popup, .dd-option). */
+.multi-select {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 3px 4px 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--bg-input);
+  cursor: text;
+}
+.multi-select:focus-within {
+  border-color: var(--accent);
+}
+.multi-select-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 3px 0 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.multi-select-input {
+  flex: 1 1 40px;
+  min-width: 40px;
+  height: 20px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+.multi-select-input:focus {
+  border: none;
+  background: transparent;
+}
+.multi-select-chip > button,
+.multi-select-clear,
+.multi-select-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.multi-select-chip > button:hover:not(:disabled),
+.multi-select-clear:hover:not(:disabled),
+.multi-select-chevron:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.multi-select-clear {
+  margin-left: auto;
+}

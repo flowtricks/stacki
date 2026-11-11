@@ -13,10 +13,6 @@ export default function PropertyReadOnlyFields({ property }: { readonly property
           <input type="checkbox" checked={property.required} disabled />
           Required
         </label>
-        <label>
-          <input type="checkbox" checked={property.readonly} disabled />
-          Readonly
-        </label>
       </div>
       <ReadOnlyCode label="Default value" value={property.defaultValue} />
       <ReadOnlyField label="Tooltip" value={property.description} />

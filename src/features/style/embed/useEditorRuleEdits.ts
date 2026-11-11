@@ -12,7 +12,7 @@ import { clearPaddingSides, isPaddingProperty, setPaddingDeclaration } from '../
 import { getHost, type ClassOutcome } from '../model/host';
 import { liveRules, liveRuleTargetOf, type LiveRulePreview } from '../model/liveRuleEdits';
 import type { LiveRuleEdit, LiveRuleTarget } from '../../../../shared/properties/liveRules';
-import { selectedInstanceClasses } from '../model/webflowElement';
+import { selectedComponentMarkup, selectedInstanceClasses } from '../model/webflowElement';
 import { type EmbedDocument, navigateToEmbed, writeEmbedDocument } from '../model/webflow';
 import type { ParsedDeclaration, ParsedRule } from '../model/styleTypes';
 import { declsFor, lastDeclFor, editorSession, withoutClasses } from './editorModel';
@@ -501,7 +501,11 @@ export function useElementTokens(scanState: ReturnType<typeof useScanState>) {
   // The snapshot is rebuilt on every selection and every class the canvas reports,
   // and opening or leaving a component rescans, so it is the memo's whole input.
   const instanceClasses = useMemo(() => selectedInstanceClasses(snapshot?.classList ?? []), [snapshot]);
-  return { instanceClasses, model, scan, selectorSuggestions, snapshot, tokens };
+  // What the element's node writes in the open component, which makes a chip green
+  // (model/componentMarkup.ts). Read on the same rebuilds as the instance classes:
+  // a class written into the markup changes the snapshot too.
+  const componentMarkup = useMemo(() => (snapshot === undefined ? undefined : selectedComponentMarkup()), [snapshot]);
+  return { componentMarkup, instanceClasses, model, scan, selectorSuggestions, snapshot, tokens };
 }
 
 // Report a save's outcome to the canvas previews it carried: kept until the page holds

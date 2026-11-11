@@ -7,7 +7,8 @@ import SegmentedControl, { type SegmentedOption } from './components/SegmentedCo
 import useScrub from './components/useScrub';
 import { colorOverlayImage, colorOverlayOf, serializeLayers, splitTopLevelSpaces, type BgLayer, type LayerKind } from './model/background';
 import VariableConnect from './VariableConnect';
-import { requestAsset } from '../../ui/assetPick';
+import { chooseAsset } from '../../ui/assetPick';
+import { OverrideNote } from '../../ui/OverrideNote';
 import { assetValueFor } from '../../ui/assetPath';
 import { sourceCandidates } from '../../ui/AssetThumb';
 import { getHost } from './model/host';
@@ -564,16 +565,21 @@ export function LayerImageField({
         type="button"
         className="u-button is-small embed-editor_bg-choose"
         disabled={busy}
-        onClick={() =>
-          requestAsset({
-            mediaKind: 'image',
-            current: url ?? '',
-            onPick: (pickedRel: string) => pick(assetValueFor(pickedRel)),
-          })
+        // Alt-click skips any app that answers picks (docs/apps.md, "Overrides").
+        onClick={(event) =>
+          void chooseAsset(
+            {
+              mediaKind: 'image',
+              current: url ?? '',
+              onPick: (pickedRel: string) => pick(assetValueFor(pickedRel)),
+            },
+            { bypass: event.altKey, target: undefined },
+          )
         }
       >
         {url ? 'Replace image…' : 'Choose image…'}
       </button>
+      <OverrideNote point="assets.pick" />
     </div>
   );
 }

@@ -200,6 +200,9 @@ export type SelectListProps<T extends string> = {
   props: Props<T>;
   listRef: RefObject<HTMLDivElement>;
   searchRef: RefObject<HTMLInputElement>;
+  /** The button that opened the list. A press on it is not an outside press: its own
+   *  click closes the list, so the press must not close it first and the click reopen it. */
+  trigger: HTMLElement | undefined;
   dropUp: boolean;
   baseId: string;
   displayed: SelectOption<T>[];
@@ -226,6 +229,7 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
     <Popup
       mode="popover"
       portal={false}
+      anchor={list.trigger}
       onClose={list.onCancel}
       ref={list.listRef}
       className={['u-select-list', list.dropUp ? 'is-up' : ''].filter(Boolean).join(' ')}

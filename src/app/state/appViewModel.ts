@@ -5,7 +5,7 @@ import { componentReference } from '../model/componentReference';
 // the page operations (App.tsx).
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { readPage, readSymbol } from '../../ipc/bridge';
+import { readPage, readSymbol, readText } from '../../ipc/bridge';
 import { tagOptionsOf } from '../model/pageModelGestures';
 import { ancestorChain, nodeAtPath } from '../../editor/editorTree';
 import { resolveInstanceProps } from '../../editor/instanceProps';
@@ -115,19 +115,22 @@ export function useScopeContext(
   // says: it is in the file this one was opened from, at the focused path, and
   // the page's own scope is what its expressions come to.
   const [instanceProps, setInstanceProps] = useState<Readonly<Record<string, unknown>> | undefined>(undefined);
+  // The props that instance passes, by name, resolved or not; undefined when no instance is known.
+  const [instancePassed, setInstancePassed] = useState<readonly string[] | undefined>(undefined);
   const focusOf = currentPage?.kind === 'component' ? currentPage.focusPath : undefined;
   const hostFile = editStack.length > 1 ? editStack[0] : undefined;
-  return { focusOf, hostFile, instanceProps, loopContext, setInstanceProps, slotOptions };
+  return { focusOf, hostFile, instancePassed, instanceProps, loopContext, setInstancePassed, setInstanceProps, slotOptions };
 }
 
 // What the instance being edited is given.
 export function useInstanceProps(scopeContext: ReturnType<typeof useScopeContext>, coreState: ReturnType<typeof useCoreState>) {
-  const { focusOf, hostFile, setInstanceProps } = scopeContext;
+  const { focusOf, hostFile, setInstancePassed, setInstanceProps } = scopeContext;
   const { collectionSamples, collections, scan } = coreState;
 
   useEffect(() => {
     if (!focusOf || !hostFile?.path) {
       setInstanceProps(undefined);
+      setInstancePassed(undefined);
       return undefined;
     }
     let dropped = false;
@@ -143,8 +146,11 @@ export function useInstanceProps(scopeContext: ReturnType<typeof useScopeContext
         const instance = nodeAtPath(hostModel.nodes, trail);
         if (!instance) {
           setInstanceProps(undefined);
+          setInstancePassed(undefined);
           return;
         }
+        // `class:list` reaches the component as its `class` prop.
+        setInstancePassed([...new Set(Object.keys(instance.props ?? {}).map((name) => (name.startsWith('class:') ? 'class' : name)))]);
         // The scope at the instance: the file's frontmatter, and the loops
         // around it — `project` inside `projects.map(…)` is what its props are
         // written against.
@@ -164,13 +170,14 @@ export function useInstanceProps(scopeContext: ReturnType<typeof useScopeContext
       } catch {
         if (!dropped) {
           setInstanceProps(undefined);
+          setInstancePassed(undefined);
         }
       }
     })();
     return () => {
       dropped = true;
     };
-  }, [focusOf, hostFile?.path, collectionSamples, collections, scan, setInstanceProps]);
+  }, [focusOf, hostFile?.path, collectionSamples, collections, scan, setInstanceProps, setInstancePassed]);
 }
 
 // Link targets and the Tag field’s options.
@@ -325,5 +332,29 @@ export function useSymbolFile(coreState: ReturnType<typeof useCoreState>, pageOp
     },
     [frontmatterCode, currentPage, showToast, editStackRef, projectRef, setCodeWin, setFileText],
   );
-  return { openSymbolFile };
+  // Opens one project file, named project-relative, in the code panel: Settings → Folders
+  // opens astro.config and the content config this way.
+  const openProjectFile = useCallback(
+    async (rel: string) => {
+      const projectPath = projectRef.current?.path;
+      if (!projectPath) {
+        return;
+      }
+      try {
+        setFileText(await readText(projectPath, rel));
+        setCodeWin({
+          kind: 'file',
+          area: 'src',
+          rel,
+          title: rel,
+          language: /\.css$/i.test(rel) ? 'css' : 'javascript',
+          ...fileWindowIndentation(rel),
+        });
+      } catch (error: unknown) {
+        showToast(cleanError(error), 'error');
+      }
+    },
+    [showToast, projectRef, setCodeWin, setFileText],
+  );
+  return { openSymbolFile, openProjectFile };
 }

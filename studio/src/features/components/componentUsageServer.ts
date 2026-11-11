@@ -6,8 +6,11 @@ import type { ComponentUsageFile } from '../../../vendor/stacki/src/features/pal
 import { walk, readSource } from '../project/projectServer';
 import { packageComponentFiles } from '../../../vendor/stacki/electron/lib/componentSources';
 import { componentFile } from '../../../vendor/stacki/shared/properties/componentDefaults';
+import { readProjectFolders } from '../../../vendor/stacki/electron/lib/projectFolders';
+import { configOf, folderHolding, foldersFor, type ProjectFolders } from '../../../vendor/stacki/shared/properties/projectFolders';
 
 export async function scanComponentUsage(root: string, selected?: string) {
+  const folders = configOf(readProjectFolders(root));
   const paths = (await walk(root, 'src')).filter((file) => file.endsWith('.astro') || /^src\/pages\/.+\.mdx?$/.test(file));
   const targets = [...packageComponentFiles(root), ...paths.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/'))];
   if (selected && !targets.includes(selected)) {
@@ -47,7 +50,7 @@ export async function scanComponentUsage(root: string, selected?: string) {
         counts,
       });
       if (count) {
-        files.push({ rel: file, path: file, kind: usageKind(file), count });
+        files.push({ rel: file, path: file, kind: usageKind(folders, file), count });
       }
     }
     files.sort((left, right) => right.count - left.count || left.rel.localeCompare(right.rel));
@@ -55,14 +58,15 @@ export async function scanComponentUsage(root: string, selected?: string) {
   });
 }
 
-function usageKind(file: string): ComponentUsageFile['kind'] {
+// What a using file is, by the project's folders (.stacki/folders.json; by default src/layouts and src/components).
+function usageKind(folders: ProjectFolders | undefined, file: string): ComponentUsageFile['kind'] {
   if (file.startsWith('src/pages/')) {
     return 'page';
   }
-  if (file.startsWith('src/layouts/')) {
+  if (folderHolding(foldersFor('layouts', folders), file) !== undefined) {
     return 'layout';
   }
-  if (file.startsWith('src/components/')) {
+  if (folderHolding(foldersFor('components', folders), file) !== undefined) {
     return 'component';
   }
   return 'file';

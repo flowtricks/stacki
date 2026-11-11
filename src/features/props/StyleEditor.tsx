@@ -4,8 +4,9 @@ import { EditorView, keymap, highlightSpecialChars, drawSelection, placeholder a
 import { EditorState, Transaction } from '@codemirror/state';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import { StreamLanguage } from '@codemirror/language';
-import type { StringStream } from '@codemirror/language';
+import { StreamLanguage, StringStream } from '@codemirror/language';
+import type { Tag } from '@lezer/highlight';
+import { CODE_TOKEN_RULES, type CodeLine, type CodeToken } from '../../ui/codeHighlight';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
 import { tags as t } from '@lezer/highlight';
 import { appTheme, appHighlight } from '../../ui/CodeEditor';
@@ -26,6 +27,18 @@ interface StyleStep extends StyleState {
   readonly style: string | undefined;
 }
 
+// What each token of the mode is, in the tags the app's highlight style colours.
+const DECLARATION_TAGS: Readonly<Record<string, Tag>> = {
+  prop: t.propertyName,
+  val: t.variableName,
+  num: t.number,
+  str: t.string,
+  fn: t.function(t.variableName),
+  punct: t.punctuation,
+  important: t.modifier,
+  comment: t.comment,
+};
+
 const styleMode = StreamLanguage.define<{ inValue: boolean; depth: number }>({
   name: 'css-declarations',
   startState: () => ({ inValue: false, depth: 0 }),
@@ -40,17 +53,41 @@ const styleMode = StreamLanguage.define<{ inValue: boolean; depth: number }>({
     // eslint-disable-next-line stacki/no-null -- StreamParser spells "no style" as null.
     return step.style ?? null;
   },
-  tokenTable: {
-    prop: t.propertyName,
-    val: t.variableName,
-    num: t.number,
-    str: t.string,
-    fn: t.function(t.variableName),
-    punct: t.punctuation,
-    important: t.modifier,
-    comment: t.comment,
-  },
+  tokenTable: DECLARATION_TAGS,
 });
+
+/** The style attribute's declaration language, for another field that edits declarations (a conditional's branch value). */
+export const styleDeclarations = styleMode;
+
+/**
+ * A line of declarations as highlighted tokens, coloured exactly as this
+ * editor colours them, for text shown rather than edited (a summary line).
+ */
+export function declarationTokens(text: string): CodeLine {
+  assert(text.length <= LIMITS.attrCharsMax, 'declarationTokens: style value limit exceeded');
+  const tokens: CodeToken[] = [];
+  const stream = new StringStream(text, 2, 2);
+  let state: StyleState = { inValue: false, depth: 0 };
+  for (let round = 0; round <= text.length && stream.pos < text.length; round += 1) {
+    stream.start = stream.pos;
+    const step = styleStep(stream, state);
+    assert(stream.pos > stream.start, 'declarationTokens: every token moves forward');
+    state = step;
+    const tag = step.style === undefined ? undefined : DECLARATION_TAGS[step.style];
+    const style = tag === undefined ? undefined : CODE_TOKEN_RULES.find((rule) => tagsOf(rule.tag).includes(tag))?.style;
+    tokens.push(style === undefined ? { text: stream.current() } : { text: stream.current(), style });
+  }
+  assert(tokens.map((token) => token.text).join('') === text, 'declarationTokens: the tokens are the text');
+  return tokens;
+}
+
+function tagsOf(tag: Tag | readonly Tag[]): readonly Tag[] {
+  return isTagList(tag) ? tag : [tag];
+}
+
+function isTagList(tag: Tag | readonly Tag[]): tag is readonly Tag[] {
+  return Array.isArray(tag);
+}
 
 // One token of a declaration list, and the state after it.
 function styleStep(stream: StringStream, state: StyleState): StyleStep {

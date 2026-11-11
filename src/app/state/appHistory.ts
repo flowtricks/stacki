@@ -11,6 +11,7 @@ import { LIMITS } from '../../../shared/core/limits';
 import { assert } from '../../../shared/core/assert';
 import { scanContainsFile } from '../../editor/pagePersistence';
 import { createCoalescedRun } from '../../lib/coalescedRun';
+import { editStepPlacement } from '../model/editSteps';
 import { type AppliedEdit, type EditGesture, type EditsRecord } from '../../editor/pageEdits';
 import { sequence } from '../../editor/editGestures';
 import { saveStateAccepted, saveStateBase, saveStateEdited, saveStateNeedsWrite, saveStateRefused } from '../../editor/saveState';
@@ -60,9 +61,10 @@ export function useHistoryPush(coreState: ReturnType<typeof useCoreState>, lifec
   // The undo step of an edit of the open page (step 9: undo is inverse
   // splices only): its record collects each applied write's inverse.
   // Consecutive edits with the same coalesceKey within 800 ms share one step
-  // (typing bursts, dropdown hover-scrubs); structural edits (no key) always
-  // get their own. A step that made files beside its page writes carries them
-  // (StepFiles, appTypes.ts), and is never folded into another.
+  // (typing bursts, dropdown hover-scrubs; editStepPlacement in editSteps.ts);
+  // structural edits (no key) always get their own. A step that made files
+  // beside its page writes carries them (StepFiles, appTypes.ts), and is never
+  // folded into another.
   const pushEditHistory = useCallback(
     (coalesceKey: string | undefined, files: StepFiles | undefined = undefined): EditsRecord => {
       assert(files === undefined || coalesceKey === undefined, 'A step that made files is a step of its own');
@@ -74,11 +76,12 @@ export function useHistoryPush(coreState: ReturnType<typeof useCoreState>, lifec
       const history = historyRef.current;
       const now = Date.now();
       const previous = history.past[history.past.length - 1];
-      const coalesce = coalesceKey !== undefined && coalesceKey === history.lastKey && now - history.lastPush < 800;
+      const placement = editStepPlacement(history, coalesceKey, files, now);
       history.future = [];
       history.lastKey = coalesceKey;
       history.lastPush = now;
-      if (coalesce && previous?.kind === 'edits') {
+      if (placement === 'continue') {
+        assert(previous?.kind === 'edits', 'An edit continues a page edit step');
         return previous.record;
       }
       history.past.push(files === undefined ? { kind: 'edits', record } : { kind: 'edits', record, files });
@@ -355,6 +358,7 @@ export function useUndoRedo(
       return;
     }
     await stepEdits(entry, 'undo');
+    noteNamedStep(entry, 'Undid', showToast);
     // Again now that the undo has landed. The tick above is read at once by the
     // Style panel, which re-read the CSS before the undo had changed it and kept
     // showing the old value (a background's Type, its layer row) until its next
@@ -385,6 +389,7 @@ export function useUndoRedo(
       return;
     }
     await stepEdits(entry, 'redo');
+    noteNamedStep(entry, 'Redid', showToast);
     // Again now that the redo has landed. The tick above is read at once by the
     // Style panel, which re-read the CSS before the redo had changed it and kept
     // showing the old value (a background's Type, its layer row) until its next
@@ -392,6 +397,16 @@ export function useUndoRedo(
     setHistoryTick((count) => count + 1);
   }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick]);
   return { redo, undo };
+}
+
+// A step an app named (docs/apps.md, "Undo labels") says which one went, as
+// History would: the app's own words, not "an attribute edit".
+function noteNamedStep(entry: EditsEntry, verb: 'Undid' | 'Redid', showToast: (message: string, kind: 'info') => void): void {
+  if (entry.label === undefined) {
+    return;
+  }
+  assert(entry.label.length > 0, 'A step label has words');
+  showToast(`${verb} ${entry.label}`, 'info');
 }
 
 // Scheduling saves, and reviewing a conflict in code.

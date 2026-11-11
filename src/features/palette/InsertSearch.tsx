@@ -5,14 +5,28 @@ import { LIMITS } from '../../../shared/core/limits';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { HTML_TAGS } from '../../editor/elementSchemas';
 import type { TrailingSlash } from '../../editor/pageState';
-import { rankInsertItems, tagSearchText } from './insertRank';
+import { rankInsertItems, tagSearchText } from '../../lib/insertRank';
 import { ASTRO_ASSETS } from './astroAssets';
 import { insertFolderOf, type InsertFolderKey } from './insertFolders';
 import { insertResultsMax, insertView, mountedFrameKeys, moveHighlight, previewFramesMax, type GridMove, type InsertTab } from './insertGrid';
 import type { InsertItem } from './insertItem';
 import { InsertCard, InsertHints, InsertPills, InsertRow, type InsertPreviewHost } from './InsertCards';
-import { loadInsertFolder, loadInsertTab, saveInsertFolder, saveInsertTab } from './insertPreferences';
+import { INSERT_TAB_DEFAULT, loadInsertFolder, loadInsertTab, saveInsertFolder, saveInsertTab } from './insertPreferences';
+import type { AppsEmpty } from './InsertAppRows';
 import { usePaletteResize } from './paletteResize';
+import {
+  canSeePaletteApps,
+  paletteAppItems,
+  paletteAppsActions,
+  paletteMarketplaceItems,
+  visiblePaletteApps,
+  type PaletteAppItem,
+  type PaletteAppsAction,
+  type PaletteMarketplaceItem,
+  type PaletteAppsSource,
+} from './paletteApps';
+import { InsertAppRow, InsertAppsEmpty, InsertMarketplaceRow } from './InsertAppRows';
+import { useCurrentRole } from '../../lib/useCurrentRole';
 import {
   elementIcon,
   ElementComponentIcon,
@@ -28,12 +42,20 @@ import {
 
 export type { InsertChoice, InsertItem } from './insertItem';
 
-const TABS: ReadonlyArray<{ readonly key: InsertTab; readonly label: string }> = [
+type TabEntry = { readonly key: InsertTab; readonly label: string };
+
+const TABS: ReadonlyArray<TabEntry> = [
   { key: 'all', label: 'All results' },
   { key: 'components', label: 'Components' },
   { key: 'elements', label: 'Elements' },
   { key: 'other', label: 'Other' },
 ];
+
+/** The tabs with Apps, for a host that lists apps and a role that sees the Apps panel. */
+const TABS_WITH_APPS: ReadonlyArray<TabEntry> = [...TABS, { key: 'apps', label: 'Apps' }];
+
+/** What the palette lists: something to insert, an app to open, or a marketplace app to show in the Apps panel. */
+type PaletteEntry = InsertItem | PaletteAppItem | PaletteMarketplaceItem;
 
 /** Rows the list tabs show, as before the grid: a row is cheap to scroll past, and typing narrows the rest. */
 const listResultsMax = 60;
@@ -57,13 +79,27 @@ interface InsertSearchProps {
   readonly devUrl?: string | undefined;
   readonly trailingSlash?: TrailingSlash;
   readonly resolvePreviewURL?: (url: string) => Promise<string>;
+  /** The installed apps, for the Apps tab; without it (or for a role without the Apps panel) there is no Apps tab. */
+  readonly apps?: PaletteAppsSource | undefined;
   readonly onInsert: (item: InsertItem) => void;
   readonly onClose: () => void;
 }
 export default function InsertSearch(props: InsertSearchProps) {
-  const { onInsert, onClose } = props;
+  const { onClose } = props;
   const state = useInsertSearch(props);
   const { query, setQuery, tab, setTab, pickFolder, highlight, setHighlight, listRef, view } = state;
+  // An app opens rather than inserts; either way the palette's work is done.
+  const choose = (entry: PaletteEntry): void => {
+    if (entry.type === 'app') {
+      onClose();
+      entry.app.open();
+    } else if (entry.type === 'marketplace') {
+      onClose();
+      entry.app.open();
+    } else {
+      props.onInsert(entry);
+    }
+  };
   const host: InsertPreviewHost = {
     devURL: props.devUrl,
     trailingSlash: props.trailingSlash ?? 'ignore',
@@ -75,21 +111,34 @@ export default function InsertSearch(props: InsertSearchProps) {
   usePaletteResize(paletteRef, grid ? 'grid' : 'list');
   return (
     <div className="insert-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div ref={paletteRef} className={`insert-palette ${grid ? 'insert-palette-grid' : ''}`} onKeyDown={(event) => insertKey(event, state, onInsert, onClose)}>
+      <div ref={paletteRef} className={`insert-palette ${grid ? 'insert-palette-grid' : ''}`} onKeyDown={(event) => insertKey(event, state, choose, onClose)}>
         <div className="insert-search-row">
           <SearchIcon size={14} />
-          <input autoFocus value={query} placeholder="Search components, elements…" spellCheck={false} onChange={(event) => setQuery(event.target.value)} />
+          <input
+            autoFocus
+            value={query}
+            placeholder={state.tabs === TABS ? 'Search components, elements…' : 'Search components, elements, apps…'}
+            spellCheck={false}
+            onChange={(event) => setQuery(event.target.value)}
+          />
         </div>
-        <InsertTabs tab={tab} onPick={setTab} />
+        <InsertTabs tabs={state.tabs} tab={tab} onPick={setTab} />
         {view.folders !== undefined && <InsertPills pills={view.folders.pills} selected={view.folders.selected} onPick={pickFolder} />}
         <div className={`insert-results ${grid ? 'insert-results-grid' : ''}`} ref={listRef}>
           {view.shown.map((item, i) => {
             const key = insertItemKey(item);
-            const select = () => onInsert(item);
+            const select = () => choose(item);
             const hover = () => {
               state.noteMove('pointer');
               setHighlight(i);
             };
+            if (item.type === 'app') {
+              return <InsertAppRow key={key} app={item.app} highlighted={i === highlight} onHover={hover} onOpen={select} />;
+            }
+            if (item.type === 'marketplace') {
+              const first = view.shown[i - 1]?.type !== 'marketplace';
+              return <InsertMarketplaceRow key={key} app={item.app} first={first} highlighted={i === highlight} onHover={hover} onOpen={select} />;
+            }
             return !grid || item.card === undefined ? (
               <InsertRow key={key} item={item} highlighted={i === highlight} onHover={hover} onInsert={select} />
             ) : (
@@ -103,12 +152,13 @@ export default function InsertSearch(props: InsertSearchProps) {
                 scrollRoot={listRef}
                 onVisible={state.reportVisible}
                 onSettled={state.reportSettled}
+                showFolder={view.folders?.selected === undefined}
                 onHover={hover}
                 onInsert={select}
               />
             );
           })}
-          {view.shown.length === 0 && <div className="props-empty">No matches.</div>}
+          {view.shown.length === 0 && <InsertEmpty state={state} onClose={onClose} />}
         </div>
         {grid && <InsertHints />}
       </div>
@@ -116,19 +166,46 @@ export default function InsertSearch(props: InsertSearchProps) {
   );
 }
 
+// Nothing to list. On the Apps tab with no app to open, a short section on what apps are and the ways to
+// get one, as rows the keys move through and Enter runs; while the apps load or when they failed to, the reason.
+function InsertEmpty({ state, onClose }: { readonly state: InsertState; readonly onClose: () => void }) {
+  const empty = state.appsEmpty;
+  if (empty === undefined) {
+    return <div className="props-empty">No matches.</div>;
+  }
+  return (
+    <InsertAppsEmpty
+      empty={empty}
+      actions={state.emptyActions}
+      highlight={state.highlight}
+      onHover={(index) => {
+        state.noteMove('pointer');
+        state.setHighlight(index);
+      }}
+      onRun={(action) => runEmptyAction(action, onClose)}
+    />
+  );
+}
+
+/** An empty-state row hands the work to the Apps panel, so the palette closes first, as for an app. */
+function runEmptyAction(action: PaletteAppsAction, onClose: () => void): void {
+  onClose();
+  action.run();
+}
+
 // The tab row: plain labels, and one pill behind the active tab that slides and resizes to the next
 // one (the shared segment indicator, src/ui/segmentIndicator.ts), whatever changed the tab: a click,
 // the Tab key, or the preference the palette reopened on.
-function InsertTabs({ tab, onPick }: { readonly tab: InsertTab; readonly onPick: (tab: InsertTab) => void }) {
+function InsertTabs({ tabs, tab, onPick }: { readonly tabs: ReadonlyArray<TabEntry>; readonly tab: InsertTab; readonly onPick: (tab: InsertTab) => void }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const buttonsRef = useRef<Array<HTMLButtonElement | undefined>>([]);
-  const selectedIndex = TABS.findIndex((entry) => entry.key === tab);
+  const selectedIndex = tabs.findIndex((entry) => entry.key === tab);
   assert(selectedIndex >= 0, 'InsertSearch: the tab is one of the tabs');
-  const { indicator, animated } = useSegmentIndicator({ trackRef, buttonsRef, selectedIndex, layoutKey: String(TABS.length) });
+  const { indicator, animated } = useSegmentIndicator({ trackRef, buttonsRef, selectedIndex, layoutKey: String(tabs.length) });
   return (
     <div ref={trackRef} className="insert-tabs" role="tablist" aria-label="Insert results">
       <span className={`insert-tab-indicator${animated ? ' is-animated' : ''}`} aria-hidden="true" style={segmentIndicatorStyle(indicator)} />
-      {TABS.map((entry, index) => (
+      {tabs.map((entry, index) => (
         <button
           key={entry.key}
           ref={(element) => {
@@ -147,7 +224,21 @@ function InsertTabs({ tab, onPick }: { readonly tab: InsertTab; readonly onPick:
   );
 }
 
-function insertItemKey(item: InsertItem): string {
+/** Whether an entry inserts something: apps and marketplace apps open instead. */
+function isInsertItem(entry: PaletteEntry): entry is InsertItem {
+  if (entry.type === 'app') {
+    return false;
+  }
+  return entry.type !== 'marketplace';
+}
+
+function insertItemKey(item: PaletteEntry): string {
+  if (item.type === 'app') {
+    return JSON.stringify([item.type, item.app.id]);
+  }
+  if (item.type === 'marketplace') {
+    return JSON.stringify([item.type, item.app.id]);
+  }
   // Component names can repeat across folders; their files identify distinct insertion targets.
   if (item.type === 'component') {
     return JSON.stringify([item.type, item.path ?? item.sub, item.name]);
@@ -155,10 +246,15 @@ function insertItemKey(item: InsertItem): string {
   return JSON.stringify([item.type, item.label]);
 }
 
-function useInsertSearch({ components, allowSlot, projectKey }: InsertSearchProps) {
+function useInsertSearch({ components, allowSlot, projectKey, apps }: InsertSearchProps) {
   const [query, setQuery] = useState('');
+  const role = useCurrentRole();
+  const appsShown = apps !== undefined && canSeePaletteApps(role);
+  const tabs = appsShown ? TABS_WITH_APPS : TABS;
   // The tab the palette was last left on, for this person in every project (insertPreferences.ts).
-  const [tab, setTabState] = useState<InsertTab>(loadInsertTab);
+  // A remembered Apps tab the host or role no longer offers shows All results, and stays remembered.
+  const [storedTab, setTabState] = useState<InsertTab>(loadInsertTab);
+  const tab = tabs.some((entry) => entry.key === storedTab) ? storedTab : INSERT_TAB_DEFAULT;
   const setTab = useCallback((next: InsertTab) => {
     setTabState(next);
     saveInsertTab(next);
@@ -185,18 +281,35 @@ function useInsertSearch({ components, allowSlot, projectKey }: InsertSearchProp
   const movedBy = useRef<'keyboard' | 'pointer'>('keyboard');
 
   const allItems = useMemo(() => insertItems(components ?? [], { allowSlot }), [components, allowSlot]);
+  const appList = apps?.list;
+  // The apps this role may open, as search rows; none while they load, or when the role has no Apps panel.
+  const appItems = useMemo(
+    () => (appsShown && appList?.kind === 'ready' ? paletteAppItems(visiblePaletteApps(appList.apps, role)) : []),
+    [appsShown, appList, role],
+  );
+  // Marketplace results follow the installed apps on the Apps tab, and only for a search: browsing is the Apps panel's.
+  const marketplaceApps = apps?.marketplace;
+  const marketplaceItems = useMemo(
+    () => (appsShown && marketplaceApps !== undefined ? paletteMarketplaceItems(marketplaceApps, role) : []),
+    [appsShown, marketplaceApps, role],
+  );
   // Every folder the project's cards fill, whatever the search hits, so the pills do not come and go while typing.
   const folders = useMemo(() => allItems.flatMap((item) => (item.card?.folder === undefined ? [] : [item.card.folder])), [allItems]);
-  // The words, and where they land: see src/features/palette/insertRank.ts. The trailing space
+  // The words, and where they land: see src/lib/insertRank.ts. The trailing space
   // is meaningful, so the query is not trimmed on the way in.
   const view = useMemo(() => {
-    const items = allItems.filter((i) => tab === 'all' || i.cat === tab);
+    const entries: readonly PaletteEntry[] = [...allItems, ...appItems];
+    const items = entries.filter((i) => tab === 'all' || i.cat === tab);
     const ranked = rankInsertItems(items, query);
     if (tab === 'components') {
       return insertView(ranked, tab, { chosen: folder, present: folders });
     }
-    return { shown: ranked.slice(0, listResultsMax), folders: undefined };
-  }, [allItems, folders, query, tab, folder]);
+    const market = tab === 'apps' && /\S/.test(query) ? rankInsertItems(marketplaceItems, query) : [];
+    const shown: readonly PaletteEntry[] = [...ranked, ...market].slice(0, listResultsMax);
+    return { shown, folders: undefined };
+  }, [allItems, appItems, marketplaceItems, folders, query, tab, folder]);
+  const appsEmpty = tab === 'apps' ? appsEmptyState(appList, appItems.length) : undefined;
+  const emptyActions = useMemo(() => (appsEmpty?.kind === 'none' && apps !== undefined ? paletteAppsActions(apps, role) : []), [appsEmpty?.kind, apps, role]);
 
   useEffect(() => {
     movedBy.current = 'keyboard';
@@ -252,15 +365,21 @@ function useInsertSearch({ components, allowSlot, projectKey }: InsertSearchProp
   // push the number of running pages past the limit, and only a few loading at once (insertGrid.ts).
   const mountedKeys = useMemo((): ReadonlySet<string> => {
     // Only a card with something to preview takes a frame: Astro's own components have no file, and would hold a loading place forever.
-    const cardKeys = view.shown.filter((item) => item.card !== undefined && item.preview !== undefined).map(insertItemKey);
+    const cardKeys = view.shown
+      .filter(isInsertItem)
+      .filter((item) => item.card !== undefined && item.preview !== undefined)
+      .map(insertItemKey);
     return mountedFrameKeys(cardKeys, { visible: visibleKeys, settled: settledKeys, framesMax: previewFramesMax });
   }, [view.shown, visibleKeys, settledKeys]);
 
   return {
     query,
     setQuery,
+    tabs,
     tab,
     setTab,
+    appsEmpty,
+    emptyActions,
     pickFolder,
     highlight,
     setHighlight,
@@ -277,7 +396,28 @@ function useInsertSearch({ components, allowSlot, projectKey }: InsertSearchProp
 
 type InsertState = ReturnType<typeof useInsertSearch>;
 
-function insertKey(event: React.KeyboardEvent, state: InsertState, onInsert: (item: InsertItem) => void, onClose: () => void): void {
+/** Why the Apps tab lists nothing, before a search can be the reason: loading, failed, or no app to open. */
+function appsEmptyState(list: PaletteAppsSource['list'] | undefined, visibleCount: number): AppsEmpty | undefined {
+  assert(visibleCount >= 0, 'InsertSearch: a count is never negative');
+  if (list === undefined) {
+    return undefined;
+  }
+  switch (list.kind) {
+    case 'loading':
+      return { kind: 'loading' };
+    case 'failed':
+      return { kind: 'failed', message: list.message };
+    case 'ready':
+      // Apps that a search hides are "No matches."; only a tab with no app at all offers Browse Apps.
+      return visibleCount === 0 ? { kind: 'none' } : undefined;
+    default: {
+      const exhaustive: never = list;
+      return exhaustive;
+    }
+  }
+}
+
+function insertKey(event: React.KeyboardEvent, state: InsertState, onInsert: (item: PaletteEntry) => void, onClose: () => void): void {
   if (event.target instanceof HTMLElement && event.target.closest('.insert-pill, .insert-tab') !== null) {
     // A focused pill or tab is a button: Enter and Space press it, as on any button, instead of inserting.
     if (event.key === 'Enter' || event.key === ' ') {
@@ -297,11 +437,18 @@ function insertKey(event: React.KeyboardEvent, state: InsertState, onInsert: (it
     event.preventDefault();
     if (item) {
       onInsert(item);
+    } else {
+      // The empty Apps tab's rows are what Enter runs, the highlighted one as with any row.
+      const action = state.emptyActions[highlight];
+      if (action !== undefined) {
+        runEmptyAction(action, onClose);
+      }
     }
   } else if (event.key === 'Tab') {
     event.preventDefault();
-    const index = TABS.findIndex((tabEntry) => tabEntry.key === tab);
-    const next = TABS[(index + (event.shiftKey ? TABS.length - 1 : 1)) % TABS.length];
+    const tabs = state.tabs;
+    const index = tabs.findIndex((tabEntry) => tabEntry.key === tab);
+    const next = tabs[(index + (event.shiftKey ? tabs.length - 1 : 1)) % tabs.length];
     assert(next !== undefined, 'InsertSearch: next tab exists');
     setTab(next.key);
   }
@@ -312,7 +459,9 @@ function listKey(event: React.KeyboardEvent, state: InsertState): void {
   assert(event.key === 'ArrowDown' || event.key === 'ArrowUp', 'InsertSearch: a list key is up or down');
   event.preventDefault();
   state.noteMove('keyboard');
-  const last = state.view.shown.length - 1;
+  // The empty Apps tab's action rows stand in for results, so the keys move through them the same way.
+  const rows = state.view.shown.length > 0 ? state.view.shown.length : state.emptyActions.length;
+  const last = rows - 1;
   if (last >= 0) {
     const current = Math.min(state.highlight, last);
     state.setHighlight(event.key === 'ArrowDown' ? Math.min(current + 1, last) : Math.max(current - 1, 0));

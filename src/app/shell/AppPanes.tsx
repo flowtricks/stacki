@@ -1,6 +1,12 @@
 import { desktopCanvasText } from './desktopCanvasText';
 import { RemoteCmsView } from '../../features/cms/RemoteCmsView';
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type React from 'react';
+import { pageComponentFiles } from '../model/componentReference';
+import { COMPONENT_SOURCES_MAX } from '../../features/style/model/componentSourceCache';
+import { useCurrentRole } from '../../lib/useCurrentRole';
+import { canPanel } from '../../lib/roleAccess';
+import { can } from '../../../shared/properties/projectRoles';
 import { ResizablePanel } from './ResizablePanel';
 import { ElementContextMenu } from '../../features/structure/ElementContextMenu';
 import type { ContextPosition } from '../../features/structure/StructureContextMenu';
@@ -14,6 +20,7 @@ import { desktopElementActions } from './desktopElementActions';
 import type { Attr } from '../../../shared/page/pageNode';
 import { noteText } from '../../editor/treeSelection';
 import { canvasClickAction } from '../../editor/canvasClick';
+import { leftTabAfterCanvasSelection } from '../model/canvasSelectionTab';
 import PreviewPane from '../../features/preview/PreviewPane';
 import { relativeTime } from '../../features/history/HistoryPanel';
 import SaveConflictNotice from '../SaveConflictNotice';
@@ -30,7 +37,8 @@ import { canvasPageOf, findEditorNodeById as findNodeById } from '../../editor/p
 import { rawContentsMatch } from '../model/pageModelGestures';
 import { type EditorNode } from '../../editor/pageView';
 import { useLiveValue } from '../../ui/liveValue';
-import { PropsPanel, StylePanel, CodeWindow, CmsView, ContentView, VariablesView } from '../appPanels';
+import { PropsPanel, StylePanel, CodeWindow, CmsView, ContentView, VariablesView, InstructionsView } from '../appPanels';
+import { selectInstruction, useInstructionSelection } from '../../features/instructions/instructionSelection';
 import { holdsInlineText, commentAbove, trailOf } from '../model/pageGestures';
 import type { ShellView } from '../App';
 import { editLoopProperty, type LoopPropertyEdit } from '../state/loopPropertyEdit';
@@ -41,14 +49,18 @@ import { PropPreviewContext } from '../../features/props/propPreviewContext';
 import { propPreviewInstance, useDesktopPropPreview } from './desktopPropPreview';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { selectedPseudo } from '../model/selectionStructure';
+import { appOverlayLayer, useAppOverlayPaths } from './DesktopApps';
 
 export function CanvasPane({ app }: { readonly app: ShellView }) {
   const hoverNodeId = useLiveValue(app.hoverNode);
   const hoverPseudo = useLiveValue(app.hoverPseudo);
   const context = useCanvasContextMenu(app);
+  const appOverlayPaths = useAppOverlayPaths(app);
   return (
     <>
       <PreviewPane
+        extraTrackPaths={appOverlayPaths}
+        overlayLayer={appOverlayLayer(app)}
         textDocument={desktopCanvasText(app)}
         spacingHover={app.spacingHover}
         devUrl={app.devUrl}
@@ -183,10 +195,9 @@ export function selectCanvasPath(
     } else {
       pickPseudo(app, node.id, info.pseudo);
     }
-    // Code and canvas are two views of the same selection. Keep
-    // code open when it is already in use; every other panel gives
-    // way to the navigator so the selected row is visible.
-    app.setLeftTab((tab) => (tab === 'code' ? tab : 'navigator'));
+    // Code and Apps stay open (see leftTabAfterCanvasSelection); every
+    // other panel gives way to the navigator so the selected row is visible.
+    app.setLeftTab(leftTabAfterCanvasSelection);
     app.setRevealTick((count) => count + 1);
   };
   const { kind } = canvasClickAction({
@@ -268,6 +279,7 @@ export function openCanvasPath(app: ShellView, path: string | undefined, occurre
 export function CanvasCovers({ app }: { readonly app: ShellView }) {
   return (
     <>
+      <InstructionsCover app={app} />
       {app.varsGroup && (
         <VariablesView
           key={app.project.path}
@@ -320,6 +332,26 @@ export function CanvasCovers({ app }: { readonly app: ShellView }) {
   );
 }
 
+// The Instructions panel's open file, over the canvas. Hidden, not unmounted, while
+// another panel is shown, so unsaved typing and the caret survive a look elsewhere.
+function InstructionsCover({ app }: { readonly app: ShellView }) {
+  const file = useInstructionSelection(app.project.path);
+  const role = useCurrentRole();
+  if (file === undefined || !canPanel(role, 'instructions')) {
+    return undefined;
+  }
+  return (
+    <InstructionsView
+      key={file}
+      projectPath={app.project.path}
+      file={file}
+      editable={can(role, 'instructions:edit')}
+      hidden={app.leftTab !== 'instructions'}
+      onClose={() => selectInstruction(undefined)}
+    />
+  );
+}
+
 // An old version covers the canvas rather than replacing what it points at. The
 // editing canvas draws outlines from the model, and the model is read from the files
 // on disk — which are the CURRENT ones. Pointed at an old server it would draw this
@@ -347,11 +379,29 @@ export function OldVersionCover({ app }: { readonly app: ShellView }) {
   );
 }
 
+const RIGHT_TABS = [
+  { id: 'style', label: 'Style' },
+  { id: 'settings', label: 'Settings' },
+] as const;
+
 export function RightPanel({ app }: { readonly app: ShellView }) {
   // Hovering a component prop's option previews it on the canvas without writing.
   const propPreview = useDesktopPropPreview(
     propPreviewInstance(app.selectedComponent?.path, app.project.path ?? undefined, app.selectedId ? app.pathFor(app.selectedId) : undefined),
   );
+  // A tab the project's role hides moves the panel to the one it shows; with neither, no panel.
+  const role = useCurrentRole();
+  const visible = RIGHT_TABS.filter((tab) => canPanel(role, tab.id));
+  const fallback = visible.some((tab) => tab.id === app.rightTab) ? undefined : visible[0]?.id;
+  const { setRightTab } = app;
+  useEffect(() => {
+    if (fallback !== undefined) {
+      setRightTab(fallback);
+    }
+  }, [fallback, setRightTab]);
+  if (visible.length === 0) {
+    return undefined;
+  }
   return (
     <ResizablePanel kind="right">
       <RightTabs app={app} />
@@ -372,24 +422,15 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
 }
 
 export function RightTabs({ app }: { readonly app: ShellView }) {
-  const tabs = [
-    { id: 'style', label: 'Style' },
-    { id: 'settings', label: 'Settings' },
-  ] as const;
-  const { rightTabRefs } = app;
+  const role = useCurrentRole();
+  const tabs = RIGHT_TABS.filter((tab) => canPanel(role, tab.id));
+  const stripRef = useRef<HTMLDivElement>(null);
+  const indicator = useTabIndicator(stripRef, app.rightTab, tabs.length);
   return (
-    <div className="right-tabs">
-      {app.rightTabInd && <span className="right-tabs-indicator" style={app.rightTabInd} />}
+    <div className="right-tabs" ref={stripRef}>
+      {indicator && <span className="right-tabs-indicator" style={indicator} />}
       {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          ref={(button) => {
-            // React hands a detached button back as null.
-            rightTabRefs.current[tab.id] = button ?? undefined;
-          }}
-          className={app.rightTab === tab.id ? 'on' : ''}
-          onClick={() => app.setRightTab(tab.id)}
-        >
+        <button key={tab.id} data-right-tab={tab.id} className={app.rightTab === tab.id ? 'on' : ''} onClick={() => app.setRightTab(tab.id)}>
           {tab.label}
         </button>
       ))}
@@ -397,8 +438,55 @@ export function RightTabs({ app }: { readonly app: ShellView }) {
   );
 }
 
+type TabIndicator = { readonly left: number; readonly width: number };
+
+// Positions the Style/Settings highlight: on tab change, when the strip first appears,
+// and whenever the strip's width changes. The state is local to the strip, so a resize
+// of the inspector (a measure each frame of the drag) re-renders the strip alone, not
+// the editor; an unchanged measure keeps the previous object and renders nothing.
+function useTabIndicator(stripRef: React.RefObject<HTMLDivElement>, tab: string, tabCount: number): TabIndicator | undefined {
+  const [indicator, setIndicator] = useState<TabIndicator | undefined>(undefined);
+  useLayoutEffect(() => {
+    const strip = stripRef.current;
+    assert(strip !== null, 'The tab strip is mounted before it is measured');
+    const measure = (): void => {
+      const button = [...strip.querySelectorAll<HTMLElement>('[data-right-tab]')].find((candidate) => candidate.dataset['rightTab'] === tab);
+      const next = button === undefined ? undefined : { left: button.offsetLeft, width: button.offsetWidth };
+      setIndicator((previous) => (sameIndicator(previous, next) ? previous : next));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(strip);
+    return () => observer.disconnect();
+  }, [stripRef, tab, tabCount]);
+  return indicator;
+}
+
+function sameIndicator(previous: TabIndicator | undefined, next: TabIndicator | undefined): boolean {
+  if (previous === undefined || next === undefined) {
+    return previous === next;
+  }
+  return previous.left === next.left && previous.width === next.width;
+}
+
 export function StyleTab({ app }: { readonly app: ShellView }) {
   const { selectedId } = app;
+  const pageFile = app.editStack[app.editStack.length - 1]?.path || app.currentPage?.path || undefined;
+  // Each component the page uses, read as it loads (StylePanel): the first instance
+  // picked is then drawn in its settled chip colours rather than blue, then green.
+  const renderedClassesKnown = useRenderedClassesKnown(selectedId, { reported: app.classesForRef.current === selectedId });
+  const pageComponentPaths = useMemo(
+    () =>
+      pageComponentFiles(
+        app.model?.nodes ?? [],
+        { project: app.project.path, file: pageFile, imports: app.model?.imports ?? [], components: app.insertables },
+        COMPONENT_SOURCES_MAX,
+      ),
+    [app.model, app.project.path, pageFile, app.insertables],
+  );
   return (
     <StylePanel
       project={app.project}
@@ -443,9 +531,16 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       onRemoveAttribute={(name) =>
         selectedId ? app.removeAttributeFromNode(selectedId, name) : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
       }
+      onSetInlineStyle={(nodeId, style) => {
+        // The Settings style field's own write (desktopAppHost.ts setStyle): one
+        // declaration edit when the attribute stays a plain string.
+        app.setProp(nodeId, 'style', style, true);
+      }}
+      pageComponentPaths={pageComponentPaths}
       onSpacingHover={app.setSpacingHover}
       pathOf={app.pathFor}
       renderedClasses={app.classesForRef.current === selectedId ? app.selectedClasses : []}
+      renderedClassesKnown={renderedClassesKnown}
       projectClasses={app.projectClasses}
       historyTick={app.historyTick}
       pseudoRequest={app.pseudoPick}
@@ -454,8 +549,31 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       openFilePath={app.openEditableFile?.path ?? undefined}
       openFileKind={app.openEditableFile?.kind ?? undefined}
       contextPagePath={canvasPageOf(app.editStack)}
+      selectedComponentPath={app.selectedComponentFile}
     />
   );
+}
+
+// How long the chips wait, neutral, for the canvas to report what the selection
+// renders. Matches the app's own fallback to no classes (appPageOps.ts): an element
+// the page does not render never reports, and its chips settle when this runs out.
+const RENDERED_CLASSES_WAIT_MS = 600;
+
+// Whether the selection's rendered classes are known: reported, or waited for long enough.
+function useRenderedClassesKnown(selectedId: string | undefined, report: { readonly reported: boolean }): boolean {
+  const { reported } = report;
+  const [gaveUpFor, setGaveUpFor] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (reported) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setGaveUpFor(selectedId), RENDERED_CLASSES_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [selectedId, reported]);
+  if (reported) {
+    return true;
+  }
+  return gaveUpFor === selectedId;
 }
 
 // What the Settings tab shows about the selection.
@@ -532,8 +650,8 @@ export function settingsHandlers(app: ShellView) {
     },
     onSetProps: (nodeId: string, patch: PropValues) => app.setProps(nodeId, patch, true, app.pathFor(nodeId)),
     onReplaceProps: (nodeId: string, props: Readonly<Record<string, Attr>>) => app.replaceProps(nodeId, props),
-    onSetAssetProp: (nodeId: string, propName: string, picked: PickedAsset, reference: AssetReference) => {
-      void app.setAssetProp(nodeId, propName, picked, reference).catch(app.reportFailure);
+    onSetAssetProp: (nodeId: string, propName: string, picked: PickedAsset, reference: AssetReference, also?: PropValues) => {
+      void app.setAssetProp(nodeId, propName, picked, reference, also).catch(app.reportFailure);
     },
     onRenameProp: (oldName: string, newName: string) => {
       if (selectedId) {
@@ -599,7 +717,9 @@ export function settingsTextHandlers(app: ShellView) {
 // file.
 export function CodeWindowHost({ app }: { readonly app: ShellView }) {
   const { codeWin, codeWinValue, isFileWin } = app;
-  if (!codeWin || codeWinValue === undefined) {
+  // Raw source is code editing: a role without it never sees the code window.
+  const canCode = can(useCurrentRole(), 'code:edit');
+  if (!codeWin || codeWinValue === undefined || !canCode) {
     return undefined;
   }
   const targetId = codeWin.targetId;

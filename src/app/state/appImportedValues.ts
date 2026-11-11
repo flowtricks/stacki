@@ -6,7 +6,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
-import { readSymbol } from '../../ipc/bridge';
+import { readSymbol, resolvePath } from '../../ipc/bridge';
+import { projectRelativePath } from '../../lib/projectPath';
+import { useProjectSources, type ProjectSources } from './projectSources';
 import { importedModuleRequests, readImportedValues, type ImportedValue } from '../../editor/importedValues';
 import type { ImportLike } from '../../editor/dataSource';
 import type { useCoreState } from './appLifecycle';
@@ -59,3 +61,29 @@ function importsKey(projectPath: string | undefined, filePath: string | undefine
   assert(parts.length === requests.length, 'importsKey: one part per module');
   return JSON.stringify([projectPath ?? '', filePath ?? '', parts]);
 }
+
+// The project's data files and collections the picker offers beyond the open
+// file's scope (projectSources.ts), read for the open project and file. An
+// import is resolved from the file over IPC (src:resolvePath), which follows
+// the project's tsconfig aliases, so `@/` is written only where it resolves.
+export function useDesktopProjectSources(coreState: ReturnType<typeof useCoreState>, routes: ReturnType<typeof useRoutes>): ProjectSources {
+  const projectPath = coreState.project?.path;
+  const filePath = coreState.currentPage?.path;
+  const model = routes.model;
+  const file = projectPath === undefined || filePath === undefined ? undefined : projectRelativePath(projectPath, filePath, window.avb.platform);
+  return useProjectSources({
+    projectPath,
+    file,
+    frontmatter: model?.extraFrontmatter ?? '',
+    imports: model?.imports ?? NO_IMPORTS,
+    resolveSpec: async (spec) => {
+      if (projectPath === undefined || filePath === undefined) {
+        return undefined;
+      }
+      const resolved = await resolvePath(projectPath, filePath, spec);
+      return resolved.ok ? resolved.rel.replace(/\\/g, '/') : undefined;
+    },
+  });
+}
+
+const NO_IMPORTS: readonly ImportLike[] = [];

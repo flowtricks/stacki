@@ -1,6 +1,6 @@
 import type { WindowMode } from './DockableWindow';
 import { toRecord } from '../../shared/core/record';
-import { fitWindowRectangle, initialWindowRectangle, type WindowRectangle, type WindowSize } from './windowGeometry';
+import { centeredWindowRectangle, fitWindowRectangle, initialWindowRectangle, type WindowRectangle, type WindowSize } from './windowGeometry';
 
 const STORED_VALUE_CHARS_MAX = 256;
 const COORDINATE_PX_MAX = 100_000;
@@ -26,8 +26,9 @@ export function storeWindowMode(key: string, mode: WindowMode): void {
   }
 }
 
-// Stored geometry is only a preference: corrupt or unavailable storage falls back to the center.
-export function readWindowRectangle(key: string | undefined, viewport: WindowSize, minimum: WindowSize): WindowRectangle {
+// Stored geometry is only a preference: corrupt or unavailable storage falls back to the center,
+// at the window's own first size when it names one.
+export function readWindowRectangle(key: string | undefined, viewport: WindowSize, minimum: WindowSize, initial?: WindowSize): WindowRectangle {
   let stored: WindowRectangle | undefined;
   if (key) {
     try {
@@ -36,7 +37,10 @@ export function readWindowRectangle(key: string | undefined, viewport: WindowSiz
       // Privacy modes can deny storage; the tool must remain usable.
     }
   }
-  return stored ? fitWindowRectangle(stored, viewport, minimum) : initialWindowRectangle(viewport, minimum);
+  if (stored) {
+    return fitWindowRectangle(stored, viewport, minimum);
+  }
+  return initial ? centeredWindowRectangle(viewport, initial, minimum) : initialWindowRectangle(viewport, minimum);
 }
 
 export function storeWindowRectangle(key: string | undefined, rectangle: WindowRectangle): void {

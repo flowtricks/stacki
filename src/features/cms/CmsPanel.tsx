@@ -1,12 +1,13 @@
-import { createPanelCache, usePanelData, type PanelData } from '../../lib/usePanelData';
+import { usePanelData, type PanelData } from '../../lib/usePanelData';
 import { PanelReadStatus } from '../../ui/PanelReadStatus';
-import type { Result } from '../../../shared/core/result';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Collection } from './cmsSchema';
 import type { CmsPanelContent, CmsPanelFile } from './cmsPanelBridge';
 import { collectionHasContent, collectionOf } from './cmsSchema';
-import { createCmsCollection, readCmsFiles, readContentCollections } from './cmsPanelBridge';
+import { createCmsCollection } from './cmsPanelBridge';
+import { cmsCache, keptCmsConnections, readCmsCatalog } from './cmsCatalog';
+import { assert } from '../../../shared/core/assert';
 import { ChevronLeftIcon, ChevronRightIcon, CmsIcon, FileIcon, FolderDefaultIcon, GearIcon, PlusIcon } from '../../ui/Icons';
 import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
 import type { CmsConnection } from '../../../shared/properties/cmsConnections';
@@ -92,8 +93,10 @@ function LocalCmsPanel(
 ) {
   const { files, content, refresh, state } = useCmsPanelData(props.project.path, props.refreshKey);
   const [creating, setCreating] = useState(false);
-  const [openKey, setOpenKey] = useState<string | undefined>(undefined);
   const collections = useMemo(() => visibleCollections(files, content), [files, content]);
+  // The first frame opens the group the selected collection is in: opening it from
+  // an effect drew the group list for a frame and then swapped in the group.
+  const [openKey, setOpenKey] = useState<string | undefined>(() => selectedGroupKey(props.selectedRel, collections));
   const groups = useMemo(() => collectionGroups(collections, props.currentFile), [collections, props.currentFile]);
   useSelectedGroup(props.selectedRel, openKey, collections, setOpenKey);
   const open = openKey === undefined ? undefined : groups.find((group) => group.key === openKey);
@@ -118,11 +121,6 @@ function LocalCmsPanel(
 }
 
 const EMPTY_FILES: readonly CmsPanelFile[] = [];
-interface CmsCatalog {
-  readonly files: readonly CmsPanelFile[];
-  readonly content: CmsPanelContent;
-}
-const cmsCache = createPanelCache<CmsCatalog>();
 function useCmsPanelData(projectPath: string, refreshKey: string | number): CmsPanelData {
   const read = useCallback(() => readCmsCatalog(projectPath), [projectPath]);
   const { state, refresh } = usePanelData(cmsCache, projectPath, read, cmsTransport.onCmsChanged);
@@ -141,17 +139,6 @@ function useCmsPanelData(projectPath: string, refreshKey: string | number): CmsP
     refresh,
   };
 }
-async function readCmsCatalog(projectPath: string): Promise<Result<CmsCatalog, string>> {
-  const [files, content] = await Promise.all([readCmsFiles(projectPath), readContentCollections(projectPath)]);
-  if (!files.ok) {
-    return files;
-  }
-  if (!content.ok) {
-    return content;
-  }
-  return { ok: true, value: { files: files.value, content: content.value } };
-}
-
 function useCreateCollection(
   props: CmsPanelProps,
   setCreating: React.Dispatch<React.SetStateAction<boolean>>,
@@ -184,20 +171,30 @@ function useSelectedGroup(
   setOpenKey: React.Dispatch<React.SetStateAction<string | undefined>>,
 ): void {
   useEffect(() => {
-    if (selectedRel === undefined || openKey !== undefined) {
+    if (openKey !== undefined) {
       return;
     }
-    const selected = collections.find((collection) => collection.rel === selectedRel);
-    if (!selected) {
-      return;
-    }
-    const key = groupIdentity(selected.rel, selected.dir).key;
-    // A group with this one collection is not opened: its row already opened it.
-    const siblings = collections.filter((collection) => groupIdentity(collection.rel, collection.dir).key === key);
-    if (siblings.length > 1) {
+    // Collections that arrive after the first frame (nothing was cached) open the same way.
+    const key = selectedGroupKey(selectedRel, collections);
+    if (key !== undefined) {
       setOpenKey(key);
     }
   }, [collections, openKey, selectedRel, setOpenKey]);
+}
+
+/** The group to open for the selected collection; undefined when it is alone in its group, whose row already opened it. */
+export function selectedGroupKey(selectedRel: string | undefined, collections: readonly Collection[]): string | undefined {
+  if (selectedRel === undefined) {
+    return undefined;
+  }
+  const selected = collections.find((collection) => collection.rel === selectedRel);
+  if (!selected) {
+    return undefined;
+  }
+  const key = groupIdentity(selected.rel, selected.dir).key;
+  const siblings = collections.filter((collection) => groupIdentity(collection.rel, collection.dir).key === key);
+  assert(siblings.includes(selected), 'selectedGroupKey: the selected collection is in its own group');
+  return siblings.length > 1 ? key : undefined;
 }
 
 function visibleCollections(files: readonly CmsPanelFile[], content: CmsPanelContent): readonly Collection[] {
@@ -296,13 +293,14 @@ function closeGroup(props: Pick<CmsPanelProps, 'onSelect' | 'onSelectContent'>, 
 
 // The project's connected CMSs (Settings → CMS connections), read with the panel.
 // A failure leaves them out rather than hiding the project's own collections.
-// The last list read shows at once on the next open, and each Sanity connection's
-// collections and their items are read ahead, so opening one shows them at once.
-const KEPT_CONNECTIONS = createPanelCache<readonly CmsConnection[]>();
+// The last list read (or the app's prefetch, cmsCatalog.ts) shows at once on the
+// next open, so the connection rows never push the collections down after the
+// first frame; and each Sanity connection's collections and their items are read
+// ahead, so opening one shows them at once.
 
 function useCmsConnections(projectPath: string, refreshKey: string | number) {
   const [connections, setConnections] = useState<readonly CmsConnection[]>(() => {
-    const kept = KEPT_CONNECTIONS.get(projectPath);
+    const kept = keptCmsConnections.get(projectPath);
     return kept?.kind === 'ready' ? kept.value : [];
   });
   useEffect(() => {
@@ -317,7 +315,7 @@ function useCmsConnections(projectPath: string, refreshKey: string | number) {
     window.addEventListener('online', readAhead);
     listCmsConnections(projectPath).then(
       (list) => {
-        KEPT_CONNECTIONS.set(projectPath, list.connections);
+        keptCmsConnections.set(projectPath, list.connections);
         sanity = list.connections.filter((connection) => connection.kind === 'sanity');
         readAhead();
         // The content collections are read ahead too: their config loads in a child process.

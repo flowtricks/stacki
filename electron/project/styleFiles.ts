@@ -8,16 +8,19 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { toPosix } from '../lib/mainHelpers';
 import { isStudioDirectory } from '../lib/studioDirectory';
+import { projectFoldersFor } from '../lib/projectFolders';
+import { folderHolding, isAboveFolder } from '../../shared/properties/projectFolders';
 
 export const CSS_SKIP_DIRECTORIES = new Set(['node_modules', 'dist', '.git', '.astro', 'release', '.avb']);
 
-// The top-level folders a site's stylesheets live in, matching the variables
-// panel (cssVarRead.ts). The project root also holds whatever else its owner
-// keeps there: a 1.7 GB backup folder beside the site made this synchronous
-// walk stall the main process, dev server start included (issue #67).
-export const CSS_ROOT_DIRECTORIES = new Set(['src', 'public', 'styles']);
-
+// The folders a site's stylesheets live in: the project's style folders
+// (`styles` in .stacki/folders.json), by default src/, public/ and styles/.
+// The variables panel has folders of its own (`variables`, cssVarRead.ts). The walk enters only those and the folders
+// above them, because the project root also holds whatever else its owner keeps
+// there: a 1.7 GB backup folder beside the site made this synchronous walk
+// stall the main process, dev server start included (issue #67).
 export function listCssFiles(root: string) {
+  const folders = projectFoldersFor(root, 'styles');
   const out: StyleFile[] = [];
   const checkDirectory = directoryBudget(root);
   const walk = (directory: string, rel: string, depth: number): void => {
@@ -39,8 +42,8 @@ export function listCssFiles(root: string) {
         if (CSS_SKIP_DIRECTORIES.has(entry.name)) {
           continue;
         }
-        if (depth === 0) {
-          if (!CSS_ROOT_DIRECTORIES.has(entry.name)) {
+        if (folderHolding(folders, toPosix(relPath)) === undefined) {
+          if (!isAboveFolder(folders, toPosix(relPath))) {
             continue;
           }
         }
@@ -49,6 +52,12 @@ export function listCssFiles(root: string) {
         }
         walk(full, relPath, depth + 1);
       } else if (/\.(css|scss|sass|less)$/i.test(entry.name)) {
+        // A stylesheet at the project root is listed as it always was; deeper ones only inside a style folder.
+        if (depth > 0) {
+          if (folderHolding(folders, toPosix(relPath)) === undefined) {
+            continue;
+          }
+        }
         let size = 0;
         try {
           size = fs.statSync(full).size;

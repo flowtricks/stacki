@@ -14,4 +14,11 @@ export const historyTransport = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }),
+  // The server answers with GitHub avatar URLs only; the installation token stays there.
+  avatars: (payload: Parameters<PreloadBridge['gitAvatars']>[0]) =>
+    request('/studio/api/history/avatars', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commits: payload.commits }),
+    }),
 };

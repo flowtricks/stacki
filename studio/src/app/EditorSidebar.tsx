@@ -9,6 +9,7 @@ import { PagesPanel } from '../features/pages/PagesPanel';
 import { AssetsPanel } from '../features/assets/AssetsPanel';
 import { ComponentsPanel } from '../features/components/ComponentsPanel';
 import { ChatPanel } from '../features/ai/ChatPanel';
+import { StudioAppsPanel } from '../features/apps/StudioApps';
 import type { EditorProps } from './Editor';
 import type { useEditor } from '../features/project/useEditor';
 import type { Panel } from './EditorRail';
@@ -66,6 +67,7 @@ export function EditorSidebar({ panel, close, props, model, openCode, showNaviga
       {panel === 'variables' && <VariableNavigation view={props.view} file={file} />}
       {panel === 'history' && <HistorySidebar props={props} model={model} />}
       {panel === 'ai' && <ChatPanel file={file} refresh={refresh} error={report} />}
+      {panel === 'apps' && <StudioAppsPanel props={props} />}
       {!mobile && resize.handle}
     </aside>
   );

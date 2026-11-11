@@ -5,6 +5,7 @@ import { POPUP_MOTION_MS, usePopupLifecycle } from './popupLifecycle';
 import { usePopupDismiss, popupIsTop } from './popupDismiss';
 import './popup.css';
 import { PopupScopeContext, usePopupScope } from './popupScope';
+import { popupLayer } from './popupLayer';
 
 export interface PopupActions {
   readonly close: () => void;
@@ -49,6 +50,7 @@ const Popup = forwardRef<HTMLDivElement, PopupProps>(function Popup(props, forwa
   // motion (Escape, then straight to another control) belongs to what it lands on.
   const dismissing = lifecycle.phase === 'opening' || lifecycle.phase === 'open';
   usePopupDismiss(surface, { ...props, active: dismissing, mode }, lifecycle);
+  useStackAboveAnchor(surface, { active, anchor: props.anchor });
   const content = typeof props.children === 'function' ? props.children(lifecycle) : props.children;
   if (!active) {
     return undefined;
@@ -111,6 +113,58 @@ const Popup = forwardRef<HTMLDivElement, PopupProps>(function Popup(props, forwa
 });
 export default Popup;
 
+// The most ancestors a popup's anchor is searched through for the layer it sits in.
+const ANCHOR_DEPTH_MAX = 64;
+
+/**
+ * A popover drawn above whatever it was opened from. Its stylesheet gives it a
+ * place among the app's layers (a menu at 400, a row's pop-up at 390), but one
+ * opened from inside a higher layer (the attribute editor, at 450) would land
+ * beneath the panel it came from. So the popup reads the highest layer its
+ * anchor sits in and, only when that is at or above its own, steps one above
+ * it: popups stack by who opened whom, with no number written for the pair.
+ */
+function useStackAboveAnchor(
+  surface: RefObject<HTMLDivElement>,
+  { active, anchor }: { readonly active: boolean; readonly anchor: HTMLElement | undefined },
+): void {
+  useLayoutEffect(() => {
+    const element = surface.current ?? undefined;
+    if (!active || element === undefined || anchor === undefined) {
+      return;
+    }
+    const owner = anchorLayer(anchor);
+    const own = layerOf(element);
+    if (owner !== undefined && (own === undefined || owner >= own)) {
+      element.style.zIndex = String(owner + 1);
+    }
+  }, [active, anchor, surface]);
+}
+
+// The highest z-index among the positioned elements `anchor` sits in.
+function anchorLayer(anchor: HTMLElement): number | undefined {
+  let highest: number | undefined;
+  let element: HTMLElement | undefined = anchor;
+  for (let depth = 0; element !== undefined && depth < ANCHOR_DEPTH_MAX; depth += 1) {
+    const layer = layerOf(element);
+    if (layer !== undefined && (highest === undefined || layer > highest)) {
+      highest = layer;
+    }
+    element = element.parentElement ?? undefined;
+  }
+  return highest;
+}
+
+function layerOf(element: HTMLElement): number | undefined {
+  // Read through the element's own window: a popup can render in a frame's document.
+  const style = element.ownerDocument.defaultView?.getComputedStyle(element);
+  if (style === undefined || style.position === 'static') {
+    return undefined;
+  }
+  const value = Number.parseInt(style.zIndex, 10);
+  return Number.isFinite(value) ? value : undefined;
+}
+
 function assignPopupRef(ref: ForwardedRef<HTMLDivElement>, element: Parameters<RefCallback<HTMLDivElement>>[0]): void {
   if (typeof ref === 'function') {
     ref(element);
@@ -128,7 +182,7 @@ function popupContainer(mode: 'modal' | 'popover'): HTMLElement {
       return modal;
     }
   }
-  return document.body;
+  return popupLayer();
 }
 
 function usePopupFocus(

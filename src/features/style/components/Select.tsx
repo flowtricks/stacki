@@ -36,6 +36,7 @@ export default function Select<T extends string>(props: Props<T>) {
           props={props}
           listRef={refs.list}
           searchRef={refs.search}
+          trigger={refs.button.current ?? undefined}
           dropUp={select.dropUp}
           baseId={select.baseId}
           displayed={select.displayed}

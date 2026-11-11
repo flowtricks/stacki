@@ -19,3 +19,7 @@ package-lock.json
 
 # Studio runs its own strict checks through the combined gate.
 studio/
+
+# Pinned adapter lockfiles: their SHA-256 is pinned in electron/handlers/ai/agentRegistry.ts,
+# so a reformat would make every install refuse them.
+resources/agents/*.lock.json

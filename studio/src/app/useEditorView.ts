@@ -1,7 +1,8 @@
 import { isMobileEditor } from './mobileEditor';
 import type { CmsSelection } from '../features/cms/CmsWorkspace';
-import { useEditorRole } from '../features/roles/useEditorRole';
-import { clientPanel } from '../features/roles/roleStore';
+import { useStudioRole } from '../features/roles/useEditorRole';
+import { canStudioPanel } from '../features/roles/roleStore';
+import { can } from '../../vendor/stacki/shared/properties/projectRoles';
 import { useEffect, useRef, useState } from 'react';
 import { onAssetRequest, type AssetRequest } from '../../vendor/stacki/src/ui/assetPick';
 import type { PreviewDevice } from '../../vendor/stacki/src/features/preview/PreviewToolbar';
@@ -11,7 +12,9 @@ import type { VariableSelection } from '../../vendor/stacki/src/ipc/variablesBri
 
 // Editor chrome belongs to the app; source document connections switch independently.
 export function useEditorView() {
-  const role = useEditorRole();
+  const studioRole = useStudioRole();
+  // The editing mode the editor's other parts read: Client mode without `page:layout`.
+  const role = can(studioRole, 'page:layout') ? ('admin' as const) : ('client' as const);
   const [cms, setCms] = useState<CmsSelection>();
   const dimensions = usePreviewDimensions();
   const [device, setDevice] = useState<PreviewDevice>('desktop');
@@ -45,17 +48,18 @@ export function useEditorView() {
   );
   return {
     role,
+    studioRole,
     device,
     setDevice,
-    panel: role === 'client' && !clientPanel(panel) ? ('navigator' as const) : panel,
+    panel: canStudioPanel(studioRole, panel) ? panel : ('navigator' as const),
     setPanel,
-    tab: role === 'client' ? ('settings' as const) : tab,
+    tab: can(studioRole, 'panel:style') ? tab : ('settings' as const),
     setTab,
     pick,
     dimensions,
     cms,
     setCms,
-    variable: role === 'client' ? undefined : variable,
+    variable: can(studioRole, 'panel:variables') ? variable : undefined,
     setVariable,
   };
 }

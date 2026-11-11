@@ -3,6 +3,7 @@
 
 import { parseDeclarations, type ImportLike, parseDestructures, looksCallable, collectionCallIn } from './dataSource';
 import type { ImportedValue } from './importedValues';
+import type { TreeNode } from './dataSample';
 
 // Numbered names tried for a collection's entries before settling on `…X`: a
 // page reads a handful of collections, never dozens under one name.
@@ -97,6 +98,13 @@ export interface DataContext {
   readonly imports?: readonly ImportLike[];
   readonly ancestorHeads?: readonly string[];
   readonly propsSample?: unknown;
+  /**
+   * The component is being edited from one instance of it on a page, and
+   * these are the props that instance passes (resolved or not). A prop it
+   * does not pass reads its default there, or nothing: the picker says so
+   * rather than naming the prop's type.
+   */
+  readonly propsInstance?: { readonly passed: readonly string[] };
   readonly propsSchema?: readonly SchemaField[];
   readonly collectionSamples?: Record<string, unknown>;
   readonly collections?: readonly { readonly name: string; readonly count?: number }[];
@@ -116,6 +124,12 @@ export interface DataContext {
   readonly importedValues?: Readonly<Record<string, ImportedValue>>;
   /** How a value the file computes reads a collection (collectionReader.ts), when the app can tell. */
   readonly collectionReader?: CollectionReader;
+  /**
+   * The project's data file exports the file does not import yet, as roots
+   * that carry the import a pick writes (projectDataSources.ts). Listed last,
+   * after the project's collections.
+   */
+  readonly projectSources?: readonly TreeNode[];
 }
 
 /**
@@ -136,6 +150,8 @@ export interface CollectionReader {
 export interface SchemaField {
   readonly name: string;
   readonly type?: string;
+  /** The values a choice prop (`type: 'enum'`) takes, as its schema lists them. */
+  readonly options?: readonly string[];
   readonly default?: unknown;
   readonly shape?: readonly { readonly name: string; readonly type?: string }[];
   readonly shapeIsList?: boolean;

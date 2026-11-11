@@ -10,6 +10,8 @@ import { packageComponentFiles, readPackageSource, packageComponentImport } from
 import { componentSpecifier } from '../../../vendor/stacki/electron/properties/componentImports';
 import { packageOf } from '../../../vendor/stacki/electron/lib/installedPackages';
 import { readLengthUnit } from '../../../vendor/stacki/electron/project/lengthUnitMarkers';
+import { readProjectFolders } from '../../../vendor/stacki/electron/lib/projectFolders';
+import { componentGroup, configOf, folderHolding, foldersFor, isCustomized } from '../../../vendor/stacki/shared/properties/projectFolders';
 
 export async function safePath(root: string, relative: string): Promise<string> {
   filePath(relative);
@@ -99,7 +101,14 @@ export async function walk(root: string, directory: string): Promise<string[]> {
 }
 export async function scanProject(root: string, analysis = new ComponentAnalysis()) {
   const files = [...(await walk(root, 'src')), ...(await walk(root, 'public'))];
-  const componentFiles = [...packageComponentFiles(root), ...files.filter((file) => file.endsWith('.astro') && !file.startsWith('src/pages/'))];
+  // Component and layout folders are the project's choice (.stacki/folders.json). Until it
+  // makes one, Studio lists every .astro file outside src/pages, as it always has.
+  const folders = configOf(readProjectFolders(root));
+  const layoutFolders = foldersFor('layouts', folders);
+  const componentFolders = foldersFor('components', folders);
+  const chosen = isCustomized('components', folders) || isCustomized('layouts', folders);
+  const ownComponent = (file: string) => (chosen ? folderHolding([...componentFolders, ...layoutFolders], file) !== undefined : !file.startsWith('src/pages/'));
+  const componentFiles = [...packageComponentFiles(root), ...files.filter((file) => file.endsWith('.astro') && ownComponent(file))];
   const classes = new Set<string>();
   const components = await Promise.all(
     componentFiles.map(async (file) => {
@@ -112,9 +121,13 @@ export async function scanProject(root: string, analysis = new ComponentAnalysis
       }
       const importPath = componentSpecifier(root, file);
       const owner = packageOf(file);
+      const isLayout = folderHolding(layoutFolders, file) !== undefined;
       return {
         file,
         name: path.basename(file, '.astro'),
+        ...(isLayout ? { isLayout: true as const } : {}),
+        // The panel's group, as Desktop's scan makes it; without settings the panel derives it from the path.
+        ...(chosen && !isLayout && folderHolding(componentFolders, file) !== undefined ? { folder: componentGroup(componentFolders, file) } : {}),
         ...(importPath === undefined ? {} : { importPath }),
         ...(owner === undefined
           ? {}

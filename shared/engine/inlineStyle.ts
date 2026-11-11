@@ -38,6 +38,34 @@ interface Declaration {
   readonly end: number;
 }
 
+/** One declaration as the style panel reads it: its property, its value without
+ * the `!important` flag, and whether the flag was there. */
+export interface InlineDeclaration {
+  readonly property: string;
+  readonly value: string;
+  readonly important: boolean;
+}
+
+const IMPORTANT_FLAG = /\s*!\s*important\s*$/i;
+
+/** The declarations of a style value, in source order, or undefined when the text
+ * is not a plain declaration list (the same reading editInlineStyle edits by, so
+ * what the panel shows is exactly what it can write back). */
+export function readInlineStyle(text: string): readonly InlineDeclaration[] | undefined {
+  assert(text.length <= LIMITS.attrCharsMax, 'A style value is inside the attribute bound');
+  const declarations = scanDeclarations(text);
+  if (declarations === undefined) {
+    return undefined;
+  }
+  const read = declarations.map((found): InlineDeclaration => {
+    const raw = text.slice(found.valueStart, found.valueEnd);
+    const important = IMPORTANT_FLAG.test(raw);
+    return { property: found.property, value: important ? raw.replace(IMPORTANT_FLAG, '') : raw, important };
+  });
+  assert(read.length === declarations.length, 'readInlineStyle: one reading per declaration');
+  return read;
+}
+
 /** Set or remove one property. Removing an absent property changes nothing. */
 export function editInlineStyle(text: string, property: string, declaration: StyleDeclaration): StyleEditResult {
   assert(text.length <= LIMITS.attrCharsMax, 'A style value is inside the attribute bound');

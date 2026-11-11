@@ -615,11 +615,8 @@ test('ambiguous common declarations remain restricted without flattening their c
     'type Props = Base; type Base = Props & { eyebrow?: string };',
     'type Base<T> = { eyebrow?: T }; type Props = Base<string>;',
     'export type Base = { eyebrow?: string }; type Props = Base;',
-    'import type { Shared } from "./shared"; type Props = Shared & { eyebrow?: string };',
-    'import type { HTMLAttributes } from "./shared"; ' + 'type Props = HTMLAttributes & { eyebrow?: string };',
-    'import type { Omit } from "./shared"; ' +
-      'import type { HTMLAttributes } from "astro/types"; ' +
-      'type Props = Omit<HTMLAttributes<"div">, "eyebrow"> & { eyebrow?: string };',
+    'type Props = { [Key in "eyebrow" | "other"]?: string } & { eyebrow?: string };',
+    'import type { Theme } from "./shared"; type Props = { a?: string } & { eyebrow?: Theme };',
     'type Props = { eyebrow?: string }; type AllProps = { eyebrow?: string };',
   ]) {
     const assertion = declaration.includes('type AllProps') ? ' as AllProps' : '';

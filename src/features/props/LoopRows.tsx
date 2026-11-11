@@ -85,6 +85,8 @@ const ROW_POPUP_HEIGHT_PX_MAX = 220;
 export function RowPopup(props: {
   readonly anchor: HTMLElement | undefined;
   readonly heightPxMax?: number;
+  /** The least width, for a pop-up wider than the row it opens from; it slides left to stay on screen. */
+  readonly widthPxMin?: number;
   readonly label?: string;
   readonly onClose: () => void;
   readonly children: ReactNode;
@@ -92,11 +94,13 @@ export function RowPopup(props: {
   const [placed, setPlaced] = useState<{ readonly anchor: HTMLElement; readonly position: FieldPosition } | undefined>(undefined);
   const { anchor } = props;
   const heightPxMax = props.heightPxMax ?? ROW_POPUP_HEIGHT_PX_MAX;
+  const { widthPxMin } = props;
   useLayoutEffect(() => {
     if (anchor !== undefined) {
-      setPlaced({ anchor, position: dataPickerPosition(anchor.getBoundingClientRect(), { heightPxMax }) });
+      const rectangle = anchor.getBoundingClientRect();
+      setPlaced({ anchor, position: dataPickerPosition(rectangle, widthPxMin === undefined ? { heightPxMax } : { heightPxMax, widthPxMin }) });
     }
-  }, [anchor, heightPxMax]);
+  }, [anchor, heightPxMax, widthPxMin]);
   if (placed === undefined) {
     return undefined;
   }

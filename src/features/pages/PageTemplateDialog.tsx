@@ -408,7 +408,7 @@ function ContentFields({
       {form.collection !== NEW_COLLECTION && (
         <div>
           <label>Each page’s web address uses</label>
-          <DetailPopover label={form.contentSlug === ENTRY_ID ? 'Entry id' : form.contentSlug} title="Each page’s web address uses">
+          <DetailPopover label={form.contentSlug === ENTRY_ID ? 'Entry id' : form.contentSlug} title="Each page’s web address uses" surface="data">
             {(close) => (
               <SampleTree
                 list={{ path: '', count: sampled.length, fields: sampled }}
@@ -776,7 +776,7 @@ function HttpFields({
         {sampling.kind === 'failed' && <p className="page-template-problem">{sampling.message}</p>}
       </div>
       <div className="page-template-triggers">
-        <DetailPopover label={`Headers (${named})`} title="Request headers">
+        <DetailPopover label={`Headers (${named})`} title="Request headers" surface="form">
           <p className="hint-text">Only needed if your link requires a key.</p>
           {form.headers.map((row, index) => (
             <HeaderFields
@@ -899,7 +899,7 @@ function AddressField({ list, form, set }: { readonly list: SampleList; readonly
   return (
     <div>
       <label>Each page’s web address uses</label>
-      <DetailPopover label={form.slugPath.length > 0 ? form.slugPath : 'Choose what makes it unique'} title="Each page’s web address uses">
+      <DetailPopover label={form.slugPath.length > 0 ? form.slugPath : 'Choose what makes it unique'} title="Each page’s web address uses" surface="data">
         {(close) => (
           <SampleTree
             list={list}
@@ -921,7 +921,7 @@ function AddressField({ list, form, set }: { readonly list: SampleList; readonly
 
 function FieldsPopover({ list, form, set }: { readonly list: SampleList; readonly form: TemplateForm; readonly set: SetForm }) {
   return (
-    <DetailPopover label={fieldsSummary(form.fields.length, list.count)} title="Fields for the template">
+    <DetailPopover label={fieldsSummary(form.fields.length, list.count)} title="Fields for the template" surface="data">
       <SampleTree
         list={list}
         mode={{

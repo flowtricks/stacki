@@ -29,6 +29,8 @@ import {
   readCmsJson,
 } from './cmsFiles';
 import type { MainHost } from './mainHost';
+import { readProjectFolders } from '../lib/projectFolders';
+import { cmsFilesFor, configOf, isAstroSource } from '../../shared/properties/projectFolders';
 
 export function registerCmsHandlers(host: Pick<MainHost, 'ipcMain' | 'send' | 'shell'>): void {
   registerCmsListHandler(host);
@@ -49,7 +51,7 @@ function registerCmsListHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
       return { files };
     }
     const checkDirectory = directoryBudget(root);
-    const walk = (directory: string, rel: string, depth: number): void => {
+    const walk = (directory: string, rel: string, depth: number, only: { readonly astroOnly: boolean } = { astroOnly: false }): void => {
       let entries = [];
       try {
         entries = fs.readdirSync(directory, { withFileTypes: true });
@@ -67,28 +69,57 @@ function registerCmsListHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
         if (entry.isDirectory()) {
           // src/assets holds files the site imports (images, Lottie JSON), not content.
           if (entryRel !== 'assets') {
-            walk(full, entryRel, depth + 1);
+            walk(full, entryRel, depth + 1, only);
           }
-        } else if (/\.(cjs|cts|js|jsx|mjs|mts|ts|tsx)$/i.test(entry.name)) {
-          if (!/\.d\.[cm]?ts$/i.test(entry.name)) {
-            files.push(
-              ...readCmsSource(full, entryRel, {
-                page: false,
-                includeGeneralOnly: cmsIncludesGeneral(entryRel),
-              }),
-            );
-          }
-        } else if (/\.astro$/i.test(entry.name)) {
-          files.push(...readCmsSource(full, entryRel, { page: true }));
-        } else if (/\.json$/i.test(entry.name) && !CMS_SKIP.test(entry.name)) {
-          files.push(readCmsJson(full, entryRel, rel, entry.name));
+        } else if (!only.astroOnly || isAstroSource(entry.name)) {
+          files.push(...cmsEntriesOf(full, entryRel, { includeGeneral: cmsIncludesGeneral(entryRel) }));
         }
       }
     };
-    walk(root, '', 0);
+    // The project may name its data files (.stacki/folders.json, `cms.files`):
+    // then exactly those are read, each with its single values, and nothing is
+    // detected. Without the key the walk below finds them, as it always has.
+    const folders = configOf(readProjectFolders(projectPath));
+    const chosen = cmsFilesFor(folders);
+    if (chosen === undefined) {
+      walk(root, '', 0);
+    } else {
+      // Astro files are sources whatever the list says (the open one is always
+      // included), so the walk still finds every one of them; the list names only the
+      // other data files, and an Astro file it names (saved before that rule) is ignored.
+      walk(root, '', 0, { astroOnly: true });
+      for (const file of chosen.filter((other) => !isAstroSource(other))) {
+        assert(file.startsWith('src/'), 'cms:list: a chosen data file is under src/');
+        const full = path.join(projectPath, ...file.split('/'));
+        if (fs.existsSync(full) && fs.statSync(full).isFile()) {
+          files.push(...cmsEntriesOf(full, file.slice('src/'.length), { includeGeneral: true }));
+        }
+      }
+    }
     files.sort((left, right) => left.rel.localeCompare(right.rel));
     return { files };
   });
+}
+
+// What one file under src/ adds to the CMS panel, by its type: a data module's
+// exported collections (and its single values when `includeGeneral`), a page's
+// frontmatter data, a JSON file. Anything else adds nothing.
+function cmsEntriesOf(full: string, entryRel: string, options: { readonly includeGeneral: boolean }): CmsFile[] {
+  const name = path.basename(full);
+  if (/\.(cjs|cts|js|jsx|mjs|mts|ts|tsx)$/i.test(name)) {
+    if (/\.d\.[cm]?ts$/i.test(name)) {
+      return [];
+    }
+    return readCmsSource(full, entryRel, { page: false, includeGeneralOnly: options.includeGeneral });
+  }
+  if (/\.astro$/i.test(name)) {
+    return readCmsSource(full, entryRel, { page: true });
+  }
+  if (/\.json$/i.test(name) && !CMS_SKIP.test(name)) {
+    const directory = entryRel.includes('/') ? entryRel.slice(0, entryRel.lastIndexOf('/')) : '';
+    return [readCmsJson(full, entryRel, directory, name)];
+  }
+  return [];
 }
 
 function registerCmsReadHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {

@@ -84,18 +84,33 @@ for (const match of bridgeText.matchAll(/^\s+([A-Za-z_$][\w$]*)\s*:/gm)) {
 }
 
 // --- what the main process handles ------------------------------------------
-const main = fs.readFileSync(repoPath('dist/electron/main.js'), 'utf8');
 const handled = new Set();
 // A handler counts wherever it is registered, as long as the main process
 // loads the module that registers it — the terminal keeps its own (and its
-// pty bookkeeping) in electron/terminal/terminal.ts rather than in main.js.
-const mainSide = [main];
-// Modules live in area folders (`./terminal/terminal`), so a match spans folders.
-for (const match of main.matchAll(/require\(\s*['"]\.\/([\w./-]+?)(?:\.js)?['"]\s*\)/g)) {
-  try {
-    mainSide.push(fs.readFileSync(path.join(root, 'dist', 'electron', `${match[1]}.js`), 'utf8'));
-  } catch {
-    /* not a file of ours */
+// pty bookkeeping) in electron/terminal/terminal.ts rather than in main.js,
+// and a feature's handlers may be registered by another handler module
+// (git:avatars and github:searchUsers through gitHandlers). So the walk
+// follows the main process's own relative requires, transitively, from main.js.
+// The main process is a few hundred modules; more is a resolver loop, not a build.
+const MAIN_MODULE_LIMITS = { modulesMax: 2048 };
+const mainSide = [];
+const mainEntry = repoPath('dist/electron/main.js');
+const visited = new Set([mainEntry]);
+const pending = [mainEntry];
+while (pending.length > 0) {
+  assert.ok(visited.size <= MAIN_MODULE_LIMITS.modulesMax, 'main module walk: module limit');
+  const file = pending.pop();
+  const text = fs.readFileSync(file, 'utf8');
+  mainSide.push(text);
+  // Modules live in area folders (`./terminal/terminal`, `../lib/nodeTools`), so a
+  // match spans folders in either direction.
+  for (const match of text.matchAll(/require\(\s*['"](\.{1,2}\/[\w./-]+?)(?:\.js)?['"]\s*\)/g)) {
+    const target = path.resolve(path.dirname(file), `${match[1]}.js`);
+    if (visited.has(target) || !fs.existsSync(target)) {
+      continue; // Already read, or not a file of ours.
+    }
+    visited.add(target);
+    pending.push(target);
   }
 }
 for (const text of mainSide) {

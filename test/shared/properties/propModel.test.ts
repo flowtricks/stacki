@@ -55,7 +55,7 @@ const goodModel = () => ({
       { presence: 'required', documentation: 'The heading. @deprecated Use label.', tooltip: 'The heading.', deprecated: 'Use label.' },
     ),
     prop('count', NUMBER, { fallback: { kind: 'literal', value: 3, source: 'destructure' } }),
-    prop('open', { kind: 'switch', onLabel: 'Shown', offLabel: undefined }, { fallback: { kind: 'literal', value: true, source: 'doc' } }),
+    prop('open', { kind: 'switch' }, { fallback: { kind: 'literal', value: true, source: 'doc' } }),
     prop(
       'size',
       {
@@ -219,8 +219,11 @@ test('the bounds hold: nesting depth, variants, options, text and counts', () =>
 test('the tag reader: every tag the panels write, read the same everywhere', () => {
   const tags = readPropTags('How many columns. @min 1 @max 6 @decimals 0 @group Layout');
   assert.deepEqual([tags.tooltip, tags.min, tags.max, tags.decimals, tags.group, tagStep(tags)], ['How many columns.', 1, 6, 0, 'Layout', 1]);
+  // Legacy switch labels are not settings any more: ignored, and kept out of the tooltip.
   const labels = readPropTags('Show it. @onLabel Shown @offLabel Hidden');
-  assert.deepEqual([labels.onLabel, labels.offLabel], ['Shown', 'Hidden']);
+  assert.equal(labels.tooltip, 'Show it.');
+  assert.equal('onLabel' in labels, false);
+  assert.equal(withoutSettingTags('Show it. @onLabel Shown @offLabel Hidden'), 'Show it.');
   assert.equal(readPropTags('@format Color').format, 'color');
   assert.equal(readPropTags('Old. @deprecated Use `label` instead.').deprecated, 'Use `label` instead.');
   assert.equal(readPropTags('@deprecated').deprecated, '');
@@ -233,7 +236,6 @@ test('the tag reader: every tag the panels write, read the same everywhere', () 
   assert.equal(readPropTags('@step 0').step, undefined);
   assert.equal(readPropTags('@min ten').min, undefined);
   assert.equal(readPropTags('@MIN 3').min, 3, 'number tags ignore case');
-  assert.equal(readPropTags(`@onLabel ${'x'.repeat(PROP_TAG_LIMITS.labelCharsMax + 1)}`).onLabel, undefined);
   assert.equal(readPropTags('the minimum, not a tag: @minimal 3').min, undefined);
   assert.equal(withoutSettingTags('Count. @min 0 @max 9 @group Layout @deprecated Gone.'), 'Count. @deprecated Gone.');
   assert.throws(() => readPropTags('x'.repeat(PROP_TAG_LIMITS.docCharsMax + 1)), /readPropTags: doc text is bounded/);

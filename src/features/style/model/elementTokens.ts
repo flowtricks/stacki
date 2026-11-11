@@ -5,6 +5,7 @@
 import type { ClassToken } from '../components/ClassPicker';
 import type { ElementSnapshot } from './styleTypes';
 import { webflowClassToCss } from './webflow';
+import { isInternalAttribute } from '../../../../shared/core/internalAttributes';
 
 /** Build ordered tokens (tag → classes → data attributes) from a snapshot. */
 export function snapshotTokens(snapshot: ElementSnapshot | undefined): ClassToken[] {
@@ -42,6 +43,7 @@ export function snapshotTokens(snapshot: ElementSnapshot | undefined): ClassToke
   Object.keys(snapshot.attributes)
     .filter((key) => key.startsWith('data-'))
     .filter((key) => !isAstroGeneratedAttribute(key))
+    .filter((key) => !isInternalAttribute(key))
     .sort()
     .forEach((key) => tokens.push({ name: `attr:${key}`, label: key, kind: 'attribute' }));
 

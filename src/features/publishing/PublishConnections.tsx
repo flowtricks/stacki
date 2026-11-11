@@ -6,7 +6,7 @@ import { RefreshIcon } from '../../ui/Icons';
 import Dropdown from '../../ui/Dropdown';
 import { HostingChoice, hostingKey } from './PublishHosting';
 import { cachedPublishingDiscovery, invalidatePublishingAccounts } from './publishDiscoveryCache';
-import type { PublishAccount, PublishDiscovery } from '../../../shared/properties/publishDiscovery';
+import { connectionFailureMessage, type ConnectionProblem, type PublishAccount, type PublishDiscovery } from '../../../shared/properties/publishDiscovery';
 import type { Hosting } from '../../../shared/properties/publishConfig';
 
 type Props = { readonly projectPath: string } & (
@@ -41,7 +41,8 @@ export function PublishConnections(props: Props) {
       })
       .catch(() => {
         if (active) {
-          setState({ kind: 'failed', message: 'Connection unavailable.' });
+          // The request itself failed (the bridge, not the provider): say so, and offer refresh.
+          setState({ kind: 'failed', reason: 'unknown', message: connectionFailureMessage(PROVIDER_LABELS[provider], 'unknown') });
         }
       });
     return () => {
@@ -53,21 +54,92 @@ export function PublishConnections(props: Props) {
   const projects = displayed?.kind === 'ready' ? displayed.projects : [];
   const busy = state.kind === 'loading';
   const selected = props.provider === 'github' ? props.value : hostingKey(props.value);
+  const refresh = () => setAttempt(attempt + 1);
+  const problem = displayed?.kind === 'failed' ? displayed : displayed?.kind === 'ready' ? displayed.notice : undefined;
   return (
     <div className="publish-connections" aria-busy={busy} data-loading={busy && !selected && !displayed}>
       {props.provider === 'github' ? (
-        <GitHubChoice {...props} accounts={accounts} busy={busy} refresh={() => setAttempt(attempt + 1)} />
+        <GitHubChoice {...props} accounts={accounts} busy={busy} refresh={refresh} />
       ) : (
-        <HostingChoice {...props} accounts={accounts} projects={projects} busy={busy} refresh={() => setAttempt(attempt + 1)} />
+        <HostingChoice {...props} accounts={accounts} projects={projects} busy={busy} refresh={refresh} />
       )}
-      {displayed?.kind === 'failed' && (
-        <ErrorToast
-          message="Connection unavailable. Refresh or check sign-in."
-          recovery={[{ label: 'Refresh connection', run: () => setAttempt(attempt + 1) }]}
+      {problem && (
+        <ConnectionRecovery
+          key={attempt}
+          projectPath={projectPath}
+          provider={provider}
+          problem={problem}
+          toast={displayed?.kind === 'failed'}
+          busy={busy}
+          refresh={refresh}
         />
       )}
-      {displayed?.kind === 'ready' && displayed.notice && <p className="hint-text">{displayed.notice}</p>}
       {displayed?.kind === 'failed' && <ConnectionHelp provider={provider} />}
+    </div>
+  );
+}
+
+const PROVIDER_LABELS: Readonly<Record<Props['provider'], string>> = { github: 'GitHub', cloudflare: 'Cloudflare', vercel: 'Vercel' };
+
+type Recovery = { readonly kind: 'sign-in'; readonly label: string } | { readonly kind: 'refresh'; readonly label: string };
+
+/** The one next step for a connection problem: install and sign in, sign in again, or re-check. */
+export function connectionRecovery(provider: Props['provider'], problem: Pick<ConnectionProblem, 'reason'>): Recovery {
+  const label = PROVIDER_LABELS[provider];
+  switch (problem.reason) {
+    case 'missing-cli':
+      // Cloudflare and Vercel sign-in install their CLI first; Stacki never installs gh.
+      if (provider === 'github') {
+        return { kind: 'refresh', label: 'Refresh connection' };
+      }
+      return { kind: 'sign-in', label: provider === 'vercel' ? 'Install Vercel' : `Connect ${label}` };
+    case 'signed-out':
+      return { kind: 'sign-in', label: `Sign in to ${label}` };
+    case 'expired':
+      return { kind: 'sign-in', label: 'Sign in again' };
+    case 'network':
+    case 'unknown':
+      return { kind: 'refresh', label: 'Refresh connection' };
+    default: {
+      const exhaustive: never = problem.reason;
+      return exhaustive;
+    }
+  }
+}
+
+// Remounted for each check (keyed by attempt), so a refresh that fails again reports again: the
+// toast leaves while the check runs and returns with the reason it found.
+function ConnectionRecovery(props: {
+  readonly projectPath: string;
+  readonly provider: Props['provider'];
+  readonly problem: ConnectionProblem;
+  readonly toast: boolean;
+  readonly busy: boolean;
+  readonly refresh: () => void;
+}) {
+  const [signingIn, setSigningIn] = useState(false);
+  const recovery = connectionRecovery(props.provider, props.problem);
+  const run = recovery.kind === 'sign-in' ? () => setSigningIn(true) : props.refresh;
+  return (
+    <div className="publish-connection-recovery">
+      <p className="hint-text">{props.problem.message}</p>
+      <button type="button" className={recovery.kind === 'sign-in' ? 'primary' : ''} disabled={props.busy} onClick={run}>
+        {props.busy ? 'Checking connection…' : recovery.label}
+      </button>
+      {props.toast && !props.busy && <ErrorToast message={props.problem.message} recovery={[{ label: recovery.label, run }]} />}
+      {signingIn && (
+        <AddPublishAccount
+          projectPath={props.projectPath}
+          provider={props.provider}
+          purpose="sign-in"
+          close={() => setSigningIn(false)}
+          connected={() => {
+            setSigningIn(false);
+            invalidatePublishingAccounts(props.projectPath, props.provider);
+            props.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

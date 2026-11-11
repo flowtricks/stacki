@@ -1,50 +1,67 @@
-import { PropertiesIcon } from '../features/componentProperties/PropertiesIcon';
 import type { MouseEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { StyleSelectorsIcon } from '../features/selectors/SelectorIcons';
-import { PagePanelIcon, NavigatorIcon, ComponentFillIcon, AssetManagerIcon, CmsIcon, VariableIcon, CodeIcon, HistoryIcon } from '../ui/Icons';
+import type { AppSummary } from '../../shared/properties/apps';
+import { useCurrentRole } from '../lib/useCurrentRole';
+import { canPanel } from '../lib/roleAccess';
+import { FEATURE_ICONS } from './featureIcons';
+import { AppsRailBadge } from '../features/apps/appUpdates';
+import { AppTile } from '../features/apps/AppTile';
+import { RailAppFace, openPinnedApp, railAppId, usePinnedRailApps, useShownPinnedApp } from './railApps';
+import { RailMore, type RailMoreItem } from './RailMore';
+import { useRailOverflow, type RailOverflowItem } from './railOverflow';
 
+// Each button draws its access feature's icon (featureIcons.tsx), the same one the
+// Roles permission grid shows, so the two cannot drift apart.
 const TABS = [
-  { id: 'pages', title: 'Pages', shortcut: 'P', Icon: PagePanelIcon },
-  { id: 'navigator', title: 'Navigator', shortcut: 'Z', Icon: NavigatorIcon },
-  { id: 'properties', title: 'Properties', shortcut: 'K', Icon: PropertiesIcon },
-  { id: 'components', title: 'Components', shortcut: '⇧A', Icon: ComponentFillIcon },
-  { id: 'assets', title: 'Assets', shortcut: 'J', Icon: AssetManagerIcon },
-  { id: 'cms', title: 'CMS', shortcut: '⌥C', Icon: CmsIcon },
-  { id: 'variables', title: 'Variables', shortcut: '⌥V', Icon: VariableIcon },
-  { id: 'selectors', title: 'Style selectors', shortcut: 'G', Icon: StyleSelectorsIcon },
-  { id: 'code', title: 'Code', shortcut: 'C', Icon: CodeIcon },
-  { id: 'history', title: 'Git', shortcut: '⌥H', Icon: HistoryIcon },
+  { id: 'pages', title: 'Pages', shortcut: 'P', Icon: FEATURE_ICONS['panel:pages'] },
+  { id: 'navigator', title: 'Navigator', shortcut: 'Z', Icon: FEATURE_ICONS['panel:navigator'] },
+  { id: 'properties', title: 'Properties', shortcut: 'K', Icon: FEATURE_ICONS['panel:properties'] },
+  { id: 'components', title: 'Components', shortcut: '⇧A', Icon: FEATURE_ICONS['panel:components'] },
+  { id: 'assets', title: 'Assets', shortcut: 'J', Icon: FEATURE_ICONS['panel:assets'] },
+  { id: 'cms', title: 'CMS', shortcut: '⌥C', Icon: FEATURE_ICONS['panel:cms'] },
+  { id: 'variables', title: 'Variables', shortcut: '⌥V', Icon: FEATURE_ICONS['panel:variables'] },
+  { id: 'selectors', title: 'Style selectors', shortcut: 'G', Icon: FEATURE_ICONS['panel:selectors'] },
+  { id: 'code', title: 'Code', shortcut: 'C', Icon: FEATURE_ICONS['panel:code'] },
+  { id: 'history', title: 'Git', shortcut: '⌥H', Icon: FEATURE_ICONS['panel:history'] },
+  { id: 'apps', title: 'Apps', shortcut: 'E', Icon: FEATURE_ICONS['panel:apps'] },
+  { id: 'instructions', title: 'Instructions', shortcut: '⌥I', Icon: FEATURE_ICONS['panel:instructions'] },
+  { id: 'audits', title: 'Audits', shortcut: '⌥A', Icon: FEATURE_ICONS['panel:audits'] },
 ] as const;
 export type RailTab = (typeof TABS)[number]['id'];
 
 const TOOLTIP_DELAY = 500;
+const AiRailIcon = FEATURE_ICONS['panel:ai'];
 
 // Webflow-style icon rail. Clicking the active tab collapses the panel.
 // Hovering a button for a moment shows a tooltip with its keyboard shortcut.
+// Below the panels, after a line, come the apps the role pinned (railApps.tsx).
+// Buttons a short window has no room for move into a More menu at the foot
+// (railOverflow.ts); their shortcuts keep working, because the keys never ask
+// what is drawn.
 export default function LeftRail({
   active,
   onSelect,
   componentOpen = false,
+  projectPath,
+  aiButton,
 }: {
   readonly componentOpen?: boolean;
   readonly active?: RailTab | undefined;
+  /** The open project, whose installed apps the role's pins name. */
+  readonly projectPath?: string | undefined;
   readonly onSelect: (tab: RailTab) => void;
+  /** The AI chat button at the rail's foot; absent for a role without the panel. */
+  readonly aiButton?: { readonly active: boolean; readonly onSelect: () => void } | undefined;
 }) {
-  const [tip, setTip] = useState<
-    | {
-        readonly id: RailTab;
-        readonly left: number;
-        readonly top: number;
-      }
-    | undefined
-  >(undefined); // {id, left, top}
+  const [tip, setTip] = useState<{ readonly label: string; readonly left: number; readonly top: number } | undefined>(undefined);
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const railRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
 
-  const showSoon = (id: RailTab) => (event: MouseEvent<HTMLButtonElement>) => {
+  const showSoon = (label: string) => (event: MouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => setTip({ id, left: rect.right + 10, top: rect.top + rect.height / 2 }), TOOLTIP_DELAY);
+    timerRef.current = setTimeout(() => setTip({ label, left: rect.right + 10, top: rect.top + rect.height / 2 }), TOOLTIP_DELAY);
   };
 
   const hide = () => {
@@ -54,20 +71,61 @@ export default function LeftRail({
 
   useEffect(() => () => clearTimeout(timerRef.current), []);
 
-  useRailKeys({ componentOpen }, onSelect);
-  const tabs = TABS.filter((tab) => tab.id !== 'properties' || componentOpen);
+  // A panel the project's role hides has no button and no shortcut (roles/roleAccess.ts).
+  const role = useCurrentRole();
+  useRailKeys({ componentOpen }, (tab) => {
+    if (canPanel(role, tab)) {
+      onSelect(tab);
+    }
+  });
+  const tabs = TABS.filter((tab) => tab.id !== 'properties' || componentOpen).filter((tab) => canPanel(role, tab.id));
+  const pinned = usePinnedRailApps(projectPath, role, active);
+  // A pinned app the open Apps panel shows is the active button, in place of Apps itself.
+  const shownApp = useShownPinnedApp(role, active === 'apps' ? 'open' : 'closed');
+  const activeApp = pinned.find((app) => app.manifest.id === shownApp);
+  const activeId = activeApp === undefined ? active : railAppId(activeApp.manifest.id);
+  const items: readonly RailOverflowItem[] = [
+    ...tabs.map((tab): RailOverflowItem => ({ id: tab.id, group: 'panel' })),
+    ...pinned.map((app): RailOverflowItem => ({ id: railAppId(app.manifest.id), group: 'app' })),
+  ];
+  const layout = useRailOverflow(railRef, aiButton === undefined ? undefined : anchorRef, items, activeId);
+  const shown = new Set(layout.visible);
+  const shownTabs = tabs.filter((tab) => shown.has(tab.id));
+  const shownApps = pinned.filter((app) => shown.has(railAppId(app.manifest.id)));
 
-  const tipTab = tip && tabs.find((tab) => tab.id === tip.id);
+  const selectApp = (app: AppSummary) => {
+    hide();
+    if (app === activeApp) {
+      // Like the active panel's button, the shown app's collapses the panel.
+      onSelect('apps');
+    } else if (projectPath !== undefined) {
+      openPinnedApp(projectPath, app);
+    }
+  };
+  const moreItems: readonly RailMoreItem[] = [
+    ...tabs
+      .filter((tab) => !shown.has(tab.id))
+      .map(({ id, title, shortcut, Icon }): RailMoreItem => ({ id, label: title, icon: <Icon size={16} />, shortcut, select: () => onSelect(id) })),
+    ...pinned
+      .filter((app) => !shown.has(railAppId(app.manifest.id)))
+      .map((app): RailMoreItem => ({
+        id: railAppId(app.manifest.id),
+        label: app.manifest.name,
+        icon: <AppTile manifest={app.manifest} size={16} />,
+        shortcut: undefined,
+        select: () => selectApp(app),
+      })),
+  ];
 
   return (
-    <div className="rail">
-      {tabs.map(({ id, Icon, title, shortcut }) => (
+    <div className="rail" ref={railRef}>
+      {shownTabs.map(({ id, Icon, title, shortcut }) => (
         <button
           key={id}
           aria-label={shortcut ? `${title} (${shortcut})` : title}
-          aria-pressed={active === id}
-          className={`rail-btn ${active === id ? 'on' : ''}`}
-          onMouseEnter={showSoon(id)}
+          aria-pressed={activeId === id}
+          className={`rail-btn ${activeId === id ? 'on' : ''}`}
+          onMouseEnter={showSoon(shortcut ? `${title} (${shortcut})` : title)}
           onMouseLeave={hide}
           onClick={() => {
             hide();
@@ -75,12 +133,48 @@ export default function LeftRail({
           }}
         >
           <Icon size={20} />
+          {id === 'apps' && <AppsRailBadge admin={role.isAdmin} />}
         </button>
       ))}
-      {tipTab && tip && (
+      {shownTabs.length > 0 && shownApps.length > 0 && <div className="rail-separator" role="separator" />}
+      {shownApps.map((app) => {
+        const id = railAppId(app.manifest.id);
+        return (
+          <button
+            key={id}
+            aria-label={app.manifest.name}
+            aria-pressed={activeId === id}
+            className={`rail-btn rail-app ${activeId === id ? 'on' : ''}`}
+            onMouseEnter={showSoon(app.manifest.name)}
+            onMouseLeave={hide}
+            onClick={() => selectApp(app)}
+          >
+            <RailAppFace app={app} />
+          </button>
+        );
+      })}
+      {moreItems.length > 0 && <RailMore items={moreItems} active={activeId} />}
+      {aiButton !== undefined && (
+        // Anchored at the foot like Studio's AI button: it never moves into More (railOverflow.ts).
+        <div className="rail-anchor" ref={anchorRef}>
+          <button
+            aria-label="AI chat"
+            aria-pressed={aiButton.active}
+            className={`rail-btn ${aiButton.active ? 'on' : ''}`}
+            onMouseEnter={showSoon('AI chat')}
+            onMouseLeave={hide}
+            onClick={() => {
+              hide();
+              aiButton.onSelect();
+            }}
+          >
+            <AiRailIcon size={20} />
+          </button>
+        </div>
+      )}
+      {tip && (
         <div className="rail-tooltip" style={{ left: tip.left, top: tip.top }}>
-          {tipTab.title}
-          {tipTab.shortcut ? ` (${tipTab.shortcut})` : ''}
+          {tip.label}
         </div>
       )}
     </div>
@@ -88,7 +182,7 @@ export default function LeftRail({
 }
 
 function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onSelect: (tab: RailTab) => void): void {
-  // P / Z / ⇧A / J / G / ⌥C / ⌥V / ⌥H toggle the panels (ignored while typing in a field).
+  // P / Z / ⇧A / J / G / E / ⌥C / ⌥V / ⌥H / ⌥I toggle the panels (ignored while typing in a field).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey) {
@@ -113,6 +207,12 @@ function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onS
         } else if (event.code === 'KeyH') {
           event.preventDefault();
           onSelect('history');
+        } else if (event.code === 'KeyI') {
+          event.preventDefault();
+          onSelect('instructions');
+        } else if (event.code === 'KeyA') {
+          event.preventDefault();
+          onSelect('audits');
         }
         return;
       }
@@ -132,6 +232,9 @@ function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onS
         id = 'code';
       } else if (key === 'g' && !event.shiftKey) {
         id = 'selectors';
+      } else if (key === 'e' && !event.shiftKey) {
+        // E alone: ⌘E is the insert palette's (appKeys.ts) and is skipped above.
+        id = 'apps';
       }
       if (id) {
         event.preventDefault();

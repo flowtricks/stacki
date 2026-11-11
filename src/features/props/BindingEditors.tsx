@@ -16,18 +16,19 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { definedFields } from '../../../shared/core/boundary';
 import { dataTree, findDeclaration, findImportOf, scopeChips, scopeCompletions } from '../../editor/dataSuggest';
-import { resolvePick } from '../../editor/bindings';
+import { resolvePick, type PickNeed } from '../../editor/bindings';
 import { checkStatement } from './jsCheck';
 import { sourceFileLabel, type SourceFileLabel } from './sourceFileLabel';
 import { statementRename, type StatementRename } from '../../../shared/engine/variableRename';
 import { FIELD_UNFOCUSED, fieldFocusOf, fieldOfHandle, type FieldFocus } from './fieldFocus';
 import DataPicker from './DataPicker';
+import { BindOverrideWaiting, pickerPaths, useBindOverride } from './bindOverride';
 import NewPropForm from './NewPropForm';
 // The "New … property" row is drawn here, so its styles load with it.
 import './loopSettings.css';
 import { boundPath, fittingTree, newPropTitle, type NewPropHost, type NewPropSeed } from './newPropModel';
 import ExprInput from '../../ui/ExprInput';
-import { CodeIcon, CloseIcon, ElementComponentIcon, FileIcon, PencilIcon, PlusIcon } from '../../ui/Icons';
+import { BranchIcon, CodeIcon, CloseIcon, ElementComponentIcon, FileIcon, PencilIcon, PlusIcon } from '../../ui/Icons';
 import {
   type FieldPosition,
   type SourceContext,
@@ -290,20 +291,39 @@ export function BindHandle({ active, onOpen }: BindHandleProps) {
   );
 }
 
-export function FieldDataPicker({ pos: position, bindContext, current, tree, seed, onPick, onBindNew, onWrite, onClose }: FieldDataPickerProps) {
+export function FieldDataPicker({ pos: position, bindContext, current, tree, seed, onPick, onBindNew, onWrite, onConditional, onClose }: FieldDataPickerProps) {
   // In a component, the field's own props come first and a new one can be
   // made for it; on a page there is no component to give a prop to, and the
   // picker is as it always was.
   const host = bindContext?.newProp;
   const offer = host !== undefined && seed !== undefined ? { host, seed } : undefined;
   // An imported image picked for a field that takes a URL is read by its `.src`.
-  const pick = (path: string, query: PickerNode['query'] | undefined) => {
+  const pick = (path: string, need: PickNeed | undefined) => {
     const image = offer?.host.imageProps?.get(path);
     const bound = image === undefined ? path : boundPath(path, image, offer?.seed.reference);
-    onPick(resolvePick(bound, query ?? undefined, bindContext ?? undefined));
+    onPick(resolvePick(bound, need, bindContext ?? undefined));
   };
   const [creating, setCreating] = useState(false);
   const fullTree: readonly PickerNode[] = tree || dataTree(bindContext || {});
+  // A running app that answers `cms.bind` is asked first; its path is picked as a row click would be.
+  const override = useBindOverride({
+    ask: () => ({ purpose: 'field', current: current ?? undefined, paths: pickerPaths(fullTree) }),
+    onPicked: (path) => pick(path, undefined),
+    onCancel: onClose,
+  });
+  if (override.kind === 'waiting') {
+    return (
+      <Popup
+        mode="popover"
+        portal={false}
+        onClose={onClose}
+        className="dd-popup bind-menu"
+        style={{ left: position.left, top: position.top, width: position.width }}
+      >
+        <BindOverrideWaiting owner={override.owner} onStacki={override.useStacki} />
+      </Popup>
+    );
+  }
   return (
     <Popup
       mode="popover"
@@ -330,7 +350,14 @@ export function FieldDataPicker({ pos: position, bindContext, current, tree, see
           origin={bindContext?.origin}
           {...definedFields({ onWrite })}
           footer={!!onWrite}
-          lead={offer === undefined ? undefined : <NewPropRow host={offer.host} seed={offer.seed} onOpen={() => setCreating(true)} />}
+          lead={
+            offer === undefined ? undefined : (
+              <>
+                <NewPropRow host={offer.host} seed={offer.seed} onOpen={() => setCreating(true)} />
+                {onConditional !== undefined && <ConditionalRow onOpen={onConditional} />}
+              </>
+            )
+          }
           propSettings={host?.propSettings}
         />
       )}
@@ -351,6 +378,17 @@ function NewPropRow({ host, seed, onOpen }: { readonly host: NewPropHost; readon
       </button>
       {blocked && <div className="dp-new-prop-reason">A component passes its other attributes on once, as {host.restLocal}.</div>}
     </>
+  );
+}
+
+// "Create conditional": under the new property, in a component only, for a
+// field whose value can be one of several depending on the component's props.
+function ConditionalRow({ onOpen }: { readonly onOpen: () => void }) {
+  return (
+    <button type="button" className="dp-new-prop" onMouseDown={(event) => event.preventDefault()} onClick={onOpen}>
+      <BranchIcon size={11} />
+      Create conditional
+    </button>
   );
 }
 

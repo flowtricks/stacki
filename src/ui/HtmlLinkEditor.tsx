@@ -87,7 +87,7 @@ function LinkForm(props: {
           }
         }}
       />
-      <button type="submit" className="html-link-apply" disabled={address === undefined}>
+      <button type="submit" className="html-link-apply primary" disabled={address === undefined}>
         Apply
       </button>
       {props.href !== '' && (

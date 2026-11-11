@@ -2,7 +2,9 @@
 // "@/consts.ts"` makes APP_VERSION a pickable row with its value as the preview, and LINKS an
 // object whose fields are rows of their own, so a chip bound to either never shows up as a
 // field "not in this entry". An import whose module cannot be read (a package, a computed
-// value) is still listed, as "imported" with no preview. "not in this entry" stays reserved
+// value) is still listed, as "imported", with where it comes from ("from @/consts.ts") as its
+// preview; an imported function says it is one and where it is from, and cannot be bound.
+// "not in this entry" stays reserved
 // for a field a collection entry left unset.
 // Method: module sources are read by the pure core (importedValues.ts) exactly as the hosts
 // hand them over, through a fake readModule keyed by specifier; the resulting values go into
@@ -71,10 +73,10 @@ test('an imported object shows its fields as rows', async () => {
   );
 });
 
-test('an unresolved package import is listed as imported, with no preview', async () => {
+test('an unresolved import is listed as imported, saying where it is from', async () => {
   const tree = await pageTree();
   const tag = tree.find((node) => node.path === 'VERSION_TAG');
-  assert.deepEqual([tag?.kind, tag?.preview, tag?.children], ['imported', '', undefined]);
+  assert.deepEqual([tag?.kind, tag?.preview, tag?.children], ['imported', `from ${PAGE_IMPORTS.find((imp) => imp.name === 'VERSION_TAG').path}`, undefined]);
   assert.equal(
     tree.find((node) => node.path === 'Layout'),
     undefined,
@@ -88,9 +90,29 @@ test('an unresolved package import is listed as imported, with no preview', asyn
   const computed = await pageTree([{ name: 'BUILT_AT', path: '@/consts.ts', named: true }]);
   assert.deepEqual(
     computed.map((node) => [node.path, node.kind, node.preview]).filter(([path]) => path === 'BUILT_AT'),
-    [['BUILT_AT', 'imported', '']],
+    [['BUILT_AT', 'imported', 'from @/consts.ts']],
     'a computed export is imported, never previewed as code',
   );
+});
+
+test('an imported function says what it is and where it is from, and cannot be bound', () => {
+  assert.deepEqual(scriptExport('export function slotContent(slots) { return slots; }', 'slotContent'), { kind: 'function' });
+  assert.deepEqual(scriptExport('export async function load() {}', 'load'), { kind: 'function' });
+  assert.deepEqual(scriptExport('export const pick = (items: string[]) => items[0];', 'pick'), { kind: 'function' });
+  assert.deepEqual(scriptExport('export const twice = x => x * 2;', 'twice'), { kind: 'function' });
+  assert.deepEqual(scriptExport('function helper() {}\nexport { helper as slotHelper };', 'slotHelper'), { kind: 'function' });
+  assert.deepEqual(scriptExport('export default function render() {}', 'default'), { kind: 'function' });
+  assert.deepEqual(scriptExport('export const title = "Home";', 'title'), { kind: 'literal', text: '"Home"' }, 'a literal is still a value');
+  assert.equal(scriptExport('export const now = Date.now();', 'now'), undefined, 'a computed value is neither');
+  const tree = dataTree({
+    frontmatter: '',
+    imports: [{ name: 'slotContent', path: '@/utils/slots.ts', named: true, imported: 'slotContent' }],
+    importedValues: { slotContent: { kind: 'function' } },
+  });
+  const row = tree.find((node) => node.path === 'slotContent');
+  assert.equal(row.kind, 'function');
+  assert.equal(row.preview, 'function · @/utils/slots.ts');
+  assert.match(row.unbindable, /slotContent is a function: call it in the frontmatter/);
 });
 
 test('a module is read without running it: literals, export lists, defaults and JSON', () => {

@@ -28,7 +28,30 @@ import { createServer, type ViteDevServer } from 'vite';
 // The project scan's length unit (lengthUnit), rem in a Lumos project: one more.
 // Media hosting: the IPC payloads validate saved connections, folders and uploads
 // (mediaHosting) and a provider account's key and connect request (mediaAccounts): two more.
-const MODULES_MAX = 65;
+// Project metadata validates the panels' folder settings (projectFolders): one more.
+// The history panel's author pictures validate their request and reply (commitAvatars): one more.
+// Project metadata validates the roles file (projectRoles): one more.
+// The Stacki Apps IPC payloads validate app ids, capabilities, staged tokens and GitHub
+// sources before invoke, as docs/contracts.md asks of every channel (apps): one more.
+// The apps manifest parser validates app commands and shortcut claims, whose
+// shortcut grammar and reserved range live in their own contract (appShortcuts): one more.
+// Sharing and publishing apps add four: the payloads validate shares, repositories and submissions
+// (appPublish, which names the marketplace's one license from appMarketplace), and the manifest
+// parser reads each app's settings (appSettings) and its secret-scan allowlist (appSecrets).
+// App storage's payloads validate keys, scopes, values and writer tokens before invoke (appStorage):
+// one more.
+// Apps added as a folder: the payloads validate a folder's name before invoke (appFolders): one more.
+// App project files and sign-ins: the payloads validate file operations (appFiles) and provider ids,
+// and the manifest parser reads each app's `network` and `auth` (appAuth): two more.
+// App permissions: the manifest parser and the roles file read each app's `permissions`
+// (appPermissions): one more.
+// Stacki connections and requests through the host: the manifest parser reads the connections registry
+// (appConnections), and the payloads validate a request an app asks the host to make (appNet): two more.
+// The Instructions panel's payloads validate its listing and files (instructions), and project
+// metadata reads the Audits panel's ignore list (auditIgnores): two more.
+// The AI chat's payloads validate chats, prompts and agent events (aiChat), over the chat model
+// (chatModel), the agent ids (agentIds) and the chat's bounds (aiLimits): four more.
+const MODULES_MAX = 87;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

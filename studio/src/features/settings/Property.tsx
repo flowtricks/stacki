@@ -1,4 +1,5 @@
 import Popup from '../../../vendor/stacki/src/ui/Popup';
+import Dropdown, { type DropdownOption } from '../../../vendor/stacki/src/ui/Dropdown';
 import { useState } from 'react';
 import JSON5 from 'json5';
 import { ValueFields } from '../../shared/ui/ValueFields';
@@ -107,18 +108,21 @@ function PropertyControl({
       />
     )
   ) : !mode && field.type === 'boolean' ? (
-    <select aria-label={field.name} value={value ?? ''} onChange={(event) => change(event.target.value || undefined, true)}>
-      <option value="">Default{fallback !== undefined ? ` (${fallback})` : ''}</option>
-      <option value="true">True</option>
-      <option value="false">False</option>
-    </select>
+    <Dropdown
+      ariaLabel={field.name}
+      value={value ?? ''}
+      options={[defaultOption(fallback), { value: 'true', label: 'True' }, { value: 'false', label: 'False' }]}
+      livePreview={false}
+      onChange={(next) => change(next || undefined, true)}
+    />
   ) : !mode && options?.length ? (
-    <select aria-label={field.name} value={shown} onChange={(event) => change(event.target.value || undefined, !!field.numeric)}>
-      <option value="">Default{fallback !== undefined ? ` (${fallback})` : ''}</option>
-      {options.map((option) => (
-        <option key={option}>{option}</option>
-      ))}
-    </select>
+    <Dropdown
+      ariaLabel={field.name}
+      value={shown}
+      options={[defaultOption(fallback), ...options.map((option) => ({ value: option, label: option }))]}
+      livePreview={false}
+      onChange={(next) => change(next || undefined, !!field.numeric)}
+    />
   ) : (
     <input
       aria-label={field.name}
@@ -172,4 +176,9 @@ function decode(value: string) {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&amp;/g, '&');
+}
+
+// The empty value leaves the property unset, so the component's own default applies.
+function defaultOption(fallback: PropertyProps['fallback']): DropdownOption {
+  return { value: '', label: `Default${fallback !== undefined ? ` (${fallback})` : ''}`, dim: true };
 }

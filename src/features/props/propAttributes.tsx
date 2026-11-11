@@ -14,10 +14,27 @@ import AssetField from '../../ui/AssetField';
 import { looksLikeAssetPath, mediaKindFor } from '../../ui/AssetThumb';
 import { BindField, BindHandle, FieldDataPicker, ValueCodeEditor } from './propBindings';
 import { BracesIcon, PlusIcon, TrashIcon, ElementImageIcon, MaximizeIcon } from '../../ui/Icons';
-import { AttributesPropControl, AttributesPropNote } from './AttributesPropBinding';
-import { readAttributesBinding, spreadKey } from '../../editor/attributesBinding';
-import { attributeNameNote } from '../../editor/htmlAttributes';
-import { type AttributePair, type ObjectEntry, decodeAttr, attributeDisplayName, encodeAttr, parseAttrPaste, decodeRaw, encodeRaw } from './attributeText';
+import { AttributesPropControl } from './AttributesPropBinding';
+import { CodeInline } from '../../ui/CodeBlock';
+import { ConditionalBadge, ConditionalEditor, ConditionalField, useConditionCatalog } from './ConditionalValue';
+import { classListOfAttr, conditionalOfAttr, startingConditional, valueLanguageOf } from './conditionalModel';
+import { ClassListField } from './ClassListValue';
+import { isReferencePath } from '../../editor/conditionalValue';
+import { readAttributesBinding } from '../../editor/attributesBinding';
+import { attributeNameNote, type AttributeNameContext } from '../../editor/htmlAttributes';
+import { visibleAttributeNames } from '../../../shared/core/internalAttributes';
+import {
+  type AttributePair,
+  type ObjectEntry,
+  type SpreadName,
+  decodeAttr,
+  encodeAttr,
+  parseAttrPaste,
+  decodeRaw,
+  encodeRaw,
+  spreadOfName,
+  typedAttributeName,
+} from './attributeText';
 export { parseAttrPaste, parseObjectLiteral, serializeObjectLiteral } from './attributeText';
 
 interface AttributeNode {
@@ -48,6 +65,12 @@ interface AttributesSectionProps extends ContextProps {
   readonly reservedNames?: readonly string[] | undefined;
   /** Writes the whole attribute list in order, for connecting it to an attributes prop. */
   readonly onReplaceProps?: ((props: Readonly<Record<string, Attr>>) => void) | undefined;
+  /**
+   * Writes the whole attribute list in order, for removing a spread: the
+   * engine edits a spread only as part of its tag (planner.ts), so taking one
+   * out is the tag rewritten without it, one undo step.
+   */
+  readonly onReplaceAttributes?: ((props: Readonly<Record<string, Attr>>) => void) | undefined;
   readonly onSetFrontmatter?: ((source: string) => void) | undefined;
 }
 interface AttrEditorProps extends ContextProps {
@@ -57,13 +80,22 @@ interface AttrEditorProps extends ContextProps {
   readonly triggerRootRef: RefObject<HTMLElement>;
   readonly name: string;
   readonly value: string;
-  readonly syntax: 'pair' | 'spread';
   readonly isNew: boolean;
+  /** The names the element's other attributes have, which a new or renamed one would duplicate. */
+  readonly takenNames: readonly string[];
   readonly dataContext?: SourceContext | undefined;
   readonly onCommitName: (name: string) => void;
+  /** Adds a spread of `path` typed into a new attribute's Name; absent where a spread cannot be written. */
+  readonly onCommitSpread?: ((path: string) => void) | undefined;
+  /** What the spread being edited passes (`rest`), when the attribute is a spread. */
+  readonly spreadPath?: string | undefined;
+  /** Points the spread being edited at `path`, in its place; absent where a spread cannot be written. */
+  readonly onRenameSpread?: ((path: string) => void) | undefined;
   readonly onCommitPair: (name: string, value: string) => void;
   readonly onCommitMany: (pairs: readonly AttributePair[]) => void;
   readonly onChangeValue: (value: string) => void;
+  /** Writes a value made whole elsewhere (the Value conditions editor) at once, undefined leaving the attribute out: one undo step. */
+  readonly onApplyValue: (value: Attr | undefined) => void;
   readonly onClose: () => void;
 }
 interface ObjectAttrsFieldProps extends ContextProps {
@@ -76,15 +108,15 @@ interface ObjectAttrsFieldProps extends ContextProps {
 export function AttributesSection(props: AttributesSectionProps) {
   const state = useAttributesSection(props);
   const { node, onSetProp, editor, setEditor, listRef, openEditor, tag, onReplaceProps, bindContext } = state;
-  // Connected to the component's attributes prop: the spread and the defaults
-  // before it are the prop's, edited from its settings; the rows are the
-  // element's own.
+  // Connected to the component's attributes prop: the defaults before the
+  // spread are the prop's, edited from its settings; the spread itself and
+  // the rows after it are the element's own markup, in source order.
   const restLocal = bindContext?.newProp?.restLocal;
   const binding = restLocal === undefined ? undefined : readAttributesBinding(node.props, restLocal);
-  const names =
-    binding === undefined || restLocal === undefined
-      ? state.names
-      : state.names.filter((name) => name !== spreadKey(restLocal) && !binding.defaults.some((entry) => entry.name === name));
+  // Stacki's own attributes stay on the node and are never a row: no edit here
+  // can reach them, so every write below carries them through untouched.
+  const ownNames = visibleAttributeNames(state.names);
+  const names = binding === undefined ? ownNames : ownNames.filter((name) => !binding.defaults.some((entry) => entry.name === name));
 
   return (
     <div className="props-field" ref={listRef}>
@@ -113,21 +145,19 @@ export function AttributesSection(props: AttributesSectionProps) {
         <div className="attrs-list">
           {names.map((name) => {
             const value = node.props?.[name];
-            const syntax = value?.type === 'spread' ? 'spread' : 'pair';
+            if (value?.type === 'spread') {
+              return <SpreadRow key={name} name={name} spread={value.value} state={state} />;
+            }
             return (
               <div
                 key={name}
-                className={`attr-row ${syntax} ${editor?.attr === name ? 'editing' : ''}`}
+                className={`attr-row pair ${editor?.attr === name ? 'editing' : ''}`}
                 data-attribute-editor-trigger
                 onClick={() => openEditor(name)}
               >
-                <span className="attr-name">{attributeDisplayName(name, value)}</span>
-                {syntax === 'pair' && (
-                  <>
-                    <span className="attr-eq">=</span>
-                    <span className="attr-value">{decodeAttr(value)}</span>
-                  </>
-                )}
+                <span className="attr-name">{name}</span>
+                <span className="attr-eq">=</span>
+                <AttributeRowValue name={name} value={value} />
                 <button
                   className="row-action"
                   title="Delete attribute"
@@ -147,10 +177,112 @@ export function AttributesSection(props: AttributesSectionProps) {
         </div>
       )}
 
-      {binding !== undefined && restLocal !== undefined && <AttributesPropNote local={restLocal} />}
       <AttributesSectionPopup state={state} />
     </div>
   );
+}
+
+// A pair's value as its row previews it: a conditional or a class list as its
+// chip, anything else as written.
+function AttributeRowValue({ name, value }: { readonly name: string; readonly value: Attr | undefined }) {
+  if (conditionalOfAttr(value) !== undefined) {
+    return (
+      <span className="attr-value">
+        <ConditionalBadge />
+      </span>
+    );
+  }
+  if (name === 'class:list' && classListOfAttr(value) !== undefined) {
+    return (
+      <span className="attr-value">
+        <ConditionalBadge label="Class list" />
+      </span>
+    );
+  }
+  return <span className="attr-value">{decodeAttr(value)}</span>;
+}
+
+// A spread (`{...rest}`, `{...Astro.props}`) as the code it is: no name to
+// rename and no value to edit, only where it sits, which decides whether the
+// attributes beside it override it or are overridden. Removing it rewrites
+// the tag without it and leaves every other attribute where it was.
+function SpreadRow({ name, spread, state }: { readonly name: string; readonly spread: string; readonly state: AttributesState }) {
+  const { node, onReplaceAttributes, editor, openEditor } = state;
+  assert(name.startsWith('...'), 'SpreadRow: a spread is keyed by its source');
+  return (
+    <div
+      className={`attr-row spread ${editor?.attr === name ? 'editing' : ''}`}
+      title="Spread: passes every attribute this value holds"
+      data-attribute-editor-trigger
+      onClick={() => openEditor(name)}
+    >
+      <span className="attr-name">
+        <CodeInline text={`{...${spread}}`} language="javascript" />
+      </span>
+      {onReplaceAttributes !== undefined && (
+        <button
+          className="row-action"
+          title="Delete spread"
+          aria-label={`Delete {...${spread}}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (editor?.attr === name) {
+              state.setEditor(undefined);
+            }
+            onReplaceAttributes(withoutAttribute(node.props, name));
+          }}
+        >
+          <TrashIcon size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The attributes in order with a spread of `path` last, where a new attribute goes; one already there stays where it is. */
+export function withSpreadAdded(props: PropValues | undefined, path: string): Readonly<Record<string, Attr>> {
+  const key = `...${path}`;
+  const out: Record<string, Attr> = {};
+  for (const [name, value] of Object.entries(props ?? {})) {
+    if (value !== undefined) {
+      Object.defineProperty(out, name, { value, enumerable: true, writable: true, configurable: true });
+    }
+  }
+  if (!Object.hasOwn(out, key)) {
+    Object.defineProperty(out, key, { value: { type: 'spread', value: path }, enumerable: true, writable: true, configurable: true });
+  }
+  assert(out[key]?.type === 'spread', 'withSpreadAdded: the spread is there');
+  assert(Object.keys(out).length <= LIMITS.attrsPerNodeMax + 1, 'withSpreadAdded: attribute limit exceeded');
+  return out;
+}
+
+/** The attributes in order with the spread keyed `from` now spreading `path`, in the same place. */
+export function withSpreadRenamed(props: PropValues | undefined, from: string, path: string): Readonly<Record<string, Attr>> {
+  const key = `...${path}`;
+  assert(Object.hasOwn(props ?? {}, from), 'withSpreadRenamed: the spread is there');
+  const out: Record<string, Attr> = {};
+  for (const [name, value] of Object.entries(props ?? {})) {
+    const [slot, entry]: readonly [string, Attr | undefined] = name === from ? [key, { type: 'spread', value: path }] : [name, value];
+    if (entry !== undefined) {
+      Object.defineProperty(out, slot, { value: entry, enumerable: true, writable: true, configurable: true });
+    }
+  }
+  assert(Object.keys(out).indexOf(key) === Object.keys(props ?? {}).indexOf(from), 'withSpreadRenamed: the spread keeps its place');
+  return out;
+}
+
+/** The attributes in order without `name`, Stacki's own included. */
+export function withoutAttribute(props: PropValues | undefined, name: string): Readonly<Record<string, Attr>> {
+  const out: Record<string, Attr> = {};
+  const entries = Object.entries(props ?? {});
+  assert(entries.length <= LIMITS.attrsPerNodeMax, 'withoutAttribute: attribute limit exceeded');
+  for (const [key, value] of entries) {
+    if (key !== name && value !== undefined) {
+      Object.defineProperty(out, key, { value, enumerable: true, writable: true, configurable: true });
+    }
+  }
+  assert(!Object.hasOwn(out, name), 'withoutAttribute: the attribute is gone');
+  return out;
 }
 
 function useAttributesSection(props: AttributesSectionProps) {
@@ -182,7 +314,9 @@ function AttributesSectionPopup({ state }: { readonly state: AttributesState }) 
     return undefined;
   }
   const value = editor.attr ? node.props?.[editor.attr] : undefined;
-  const syntax = value?.type === 'spread' ? 'spread' : 'pair';
+  // A spread opens the editor on its code: a Name of `{...rest}` and no value.
+  const spreadPath = value?.type === 'spread' ? value.value : undefined;
+  const onReplaceAttributes = state.onReplaceAttributes;
   return (
     <AttrEditor
       key={editor.attr ?? '__new'}
@@ -193,10 +327,31 @@ function AttributesSectionPopup({ state }: { readonly state: AttributesState }) 
       dataContext={bindContext}
       tag={state.tag}
       reservedNames={state.reservedNames}
-      name={attributeDisplayName(editor.attr ?? '', value)}
-      value={syntax === 'pair' ? decodeAttr(value) : ''}
-      syntax={syntax}
+      name={spreadPath === undefined ? (editor.attr ?? '') : `{...${spreadPath}}`}
+      value={spreadPath === undefined ? decodeAttr(value) : ''}
+      spreadPath={spreadPath}
+      onRenameSpread={
+        onReplaceAttributes === undefined || editor.attr === undefined
+          ? undefined
+          : (path) => {
+              const from = editor.attr;
+              if (from === undefined) {
+                return;
+              }
+              onReplaceAttributes(withSpreadRenamed(node.props, from, path));
+              setEditor((current) => (current ? { ...current, attr: `...${path}` } : undefined));
+            }
+      }
       isNew={editor.attr === undefined}
+      takenNames={Object.keys(node.props ?? {}).filter((key) => key !== editor.attr)}
+      onCommitSpread={
+        onReplaceAttributes === undefined
+          ? undefined
+          : (path) => {
+              setEditor(undefined);
+              onReplaceAttributes(withSpreadAdded(node.props, path));
+            }
+      }
       onCommitName={(newName) => {
         const clean = newName.trim();
         if (editor.attr === undefined) {
@@ -213,6 +368,14 @@ function AttributesSectionPopup({ state }: { readonly state: AttributesState }) 
       onChangeValue={(text) => {
         if (editor.attr) {
           onSetProp(editor.attr, encodeAttr(text));
+        }
+      }}
+      onApplyValue={(next) => {
+        if (editor.attr) {
+          onSetProp(editor.attr, next, true);
+          if (next === undefined) {
+            setEditor(undefined); // No value left the attribute out: there is no row to edit.
+          }
         }
       }}
       // Pasting `id="hero"` fills both boxes at once — the attribute is
@@ -263,17 +426,34 @@ function attributesCommitMany(state: AttributesState, pairs: readonly AttributeP
 
 function AttrEditor(props: AttrEditorProps) {
   const state = useAttrEditor(props);
-  const { ref, pos: position, syntax, isStyleValue, assetMode, setAssetMode } = state;
+  const { ref, pos: position, isStyleValue, assetMode, setAssetMode, spreadName } = state;
 
   return (
     <div ref={ref} className="attr-editor" style={{ top: position.top, left: position.left, width: position.width }}>
       <AttributeName state={state} />
-      <AttributeNameNote name={state.draftName} tag={state.tag} reserved={state.reservedNames ?? []} syntax={state.syntax} />
+      {spreadName.kind === 'none' && state.spreadPath === undefined && (
+        <AttributeNameNote
+          name={state.draftName}
+          context={{ tag: state.tag, reserved: state.reservedNames ?? [], own: state.isNew ? undefined : state.name, taken: state.takenNames }}
+        />
+      )}
+      {spreadName.kind === 'none' && state.spreadPath !== undefined && (
+        <div className="attr-name-note" role="alert">
+          A spread’s Name is its code, such as {'{...rest}'}.
+        </div>
+      )}
+      {spreadName.kind !== 'none' && (
+        <SpreadNameNote
+          spread={spreadName}
+          // An existing spread always says what it does; a new one only where one can be written.
+          available={state.spreadPath !== undefined || state.onCommitSpread !== undefined}
+        />
+      )}
       {/* The field sits beside its label like the name row, whichever kind it
           is; `top` just stops the label and toggle from centring against a
-          tall field. */}
-      {syntax === 'pair' && (
-        <div className={`attr-editor-row ${isStyleValue || assetMode ? 'top' : ''}`}>
+          tall field. A spread has no value. */}
+      {spreadName.kind === 'none' && state.spreadPath === undefined && (
+        <div className={`attr-editor-row ${isStyleValue || assetMode ? 'top' : ''}`} ref={state.valueRowRef}>
           <span>Value</span>
           <AttributeValue state={state} />
           <AttributePopups state={state} />
@@ -291,7 +471,8 @@ function AttrEditor(props: AttrEditorProps) {
 }
 
 function useAttrEditor(props: AttrEditorProps) {
-  const { name, value, syntax, isNew, bindContext, onCommitName, onClose, triggerRootRef } = props;
+  const { value, isNew, bindContext, onCommitName, onCommitSpread, onClose, triggerRootRef } = props;
+  const { name } = props;
   const [draftName, setDraftName] = useState(name);
   const [draftValue, setDraftValue] = useState(value);
   const ref = useRef<HTMLDivElement>(null);
@@ -306,6 +487,9 @@ function useAttrEditor(props: AttrEditorProps) {
   const scopeNames = new Set(scope.map((completion) => completion.label.split('.')[0] ?? ''));
   const chipsInScope = (text: string) => scopeChips(text, scopeNames);
   const bindApiRef = useRef<InsertAPI | undefined>(undefined);
+  // The Value row, which the Value conditions editor opens beside, and whether it is open.
+  const valueRowRef = useRef<HTMLDivElement>(null);
+  const [conditionalOpen, setConditionalOpen] = useState(false);
 
   // Whether the value is an {expression} is settled when the popover opens,
   // so the field can't change shape halfway through typing one. The name is
@@ -330,15 +514,45 @@ function useAttrEditor(props: AttrEditorProps) {
   }, []);
   const focusValue = !isNew && !mounted.current;
 
+  // A spread typed into a new attribute's Name is the whole attribute: it is
+  // added in place and the editor closes, as it has nothing more to edit.
+  const spreadName = spreadOfName(draftName);
+  const commitSpread = (path: string): void => {
+    if (props.takenNames.includes(`...${path}`)) {
+      return;
+    }
+    if (isNew && onCommitSpread !== undefined) {
+      onCommitSpread(path);
+    } else if (props.spreadPath !== undefined && props.spreadPath !== path && props.onRenameSpread !== undefined) {
+      props.onRenameSpread(path);
+    }
+  };
   const commitName = () => {
-    if (syntax === 'pair') {
-      onCommitName(draftName);
+    switch (spreadName.kind) {
+      case 'none':
+        // A spread stays a spread: its Name is its code, and an attribute is added on its own.
+        if (props.spreadPath === undefined) {
+          onCommitName(draftName);
+        }
+        return;
+      case 'spread':
+        commitSpread(spreadName.path);
+        return;
+      case 'invalid':
+        return; // The note under the Name says why; nothing is written.
+      default: {
+        const exhaustive: never = spreadName;
+        return exhaustive;
+      }
     }
   };
 
   useAttrEditorDismiss(ref, triggerRootRef, onClose);
   return {
     ...props,
+    name,
+    spreadName,
+    commitSpread,
     draftName,
     setDraftName,
     draftValue,
@@ -351,6 +565,9 @@ function useAttrEditor(props: AttrEditorProps) {
     scope,
     chipsInScope,
     bindApiRef,
+    valueRowRef,
+    conditionalOpen,
+    setConditionalOpen,
     assetMode,
     setAssetMode,
     isStyleValue,
@@ -369,6 +586,11 @@ function useAttrEditorDismiss(ref: RefObject<HTMLElement>, triggerRootRef: RefOb
       if (ref.current?.contains(target)) {
         return;
       }
+      // A press in a pop-up this editor opened (a menu, the Value conditions
+      // editor) is inside the editor as far as the person is concerned.
+      if (target instanceof window.Element && target.closest('[data-popup-phase]') !== null) {
+        return;
+      }
       const trigger = target instanceof window.Element ? target.closest('[data-attribute-editor-trigger]') : undefined;
       if (trigger && triggerRootRef.current?.contains(trigger)) {
         return;
@@ -376,7 +598,9 @@ function useAttrEditorDismiss(ref: RefObject<HTMLElement>, triggerRootRef: RefOb
       onClose();
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      // A pop-up open over the editor (a menu, the Value conditions editor)
+      // takes Escape for itself; the next Escape closes the editor.
+      if (event.key === 'Escape' && document.querySelector('[data-popup-phase]') === null) {
         onClose();
       }
     };
@@ -390,63 +614,113 @@ function useAttrEditorDismiss(ref: RefObject<HTMLElement>, triggerRootRef: RefOb
 }
 // Advice under the Name, never a refusal: a name this tag does not take, or
 // one the component already means something by, still saves (htmlAttributes.ts).
-export function AttributeNameNote(props: {
-  readonly name: string;
-  readonly tag: string | undefined;
-  readonly reserved: readonly string[];
-  readonly syntax: 'pair' | 'spread';
-}) {
-  const note = props.syntax === 'spread' ? undefined : attributeNameNote(props.name, props.tag, props.reserved);
+export function AttributeNameNote(props: { readonly name: string; readonly context: AttributeNameContext }) {
+  const note = attributeNameNote(props.name, props.context);
   return note === undefined ? undefined : (
     <div className="attr-name-note" role="note">
       {note}
     </div>
   );
 }
+// What a spread typed into the Name does, shown as it is typed: the code it
+// writes, highlighted, and what it passes; or why it cannot be written.
+function SpreadNameNote({ spread, available }: { readonly spread: Exclude<SpreadName, { readonly kind: 'none' }>; readonly available: boolean }) {
+  if (spread.kind === 'invalid') {
+    return (
+      <div className="attr-name-note" role="alert">
+        {spread.message}
+      </div>
+    );
+  }
+  if (!available) {
+    return (
+      <div className="attr-name-note" role="note">
+        A spread is added as a new attribute of an element.
+      </div>
+    );
+  }
+  return (
+    <div className="attr-name-note attr-spread-note" role="note">
+      <CodeInline text={`{...${spread.path}}`} language="javascript" />
+      Spread: passes every property of {spread.path}
+    </div>
+  );
+}
 function AttributeName({ state }: { readonly state: AttributeState }) {
-  const { syntax, isNew, draftName, setDraftName, setDraftValue, onCommitPair, onCommitMany, commitName } = state;
+  const { isNew, draftName, setDraftName, setDraftValue, onCommitPair, onCommitMany, commitName } = state;
+  const nameRef = useRef<HTMLDivElement>(null);
+  const [picker, setPicker] = useState<FieldPosition | undefined>(undefined);
+  // A spread's Name takes data like a value does: the dot picks what it spreads.
+  const spreading = state.spreadPath !== undefined || state.spreadName.kind !== 'none';
   return (
     <div className="attr-editor-row">
       <span>Name</span>
-      <input
-        autoFocus={isNew}
-        value={draftName}
-        readOnly={syntax === 'spread'}
-        placeholder="data-attribute"
-        spellCheck={false}
-        onPaste={(event) => {
-          if (syntax === 'spread') {
-            return;
-          }
-          const text = event.clipboardData.getData('text');
-          // Only when it actually looks like markup — a plain name paste
-          // must keep behaving like a paste into a text box.
-          if (!text || !/=/.test(text)) {
-            return;
-          }
-          const pairs = parseAttrPaste(text);
-          if (!pairs.length) {
-            return;
-          }
-          event.preventDefault();
-          const pair = pairs[0];
-          if (pairs.length === 1 && pair) {
-            setDraftName(pair.name);
-            setDraftValue(pair.value);
-            onCommitPair(pair.name, pair.value);
-          } else {
-            onCommitMany(pairs);
-          }
-        }}
-        onChange={(event) => setDraftName(event.target.value.replace(/[^\w@:.-]/g, ''))}
-        onBlur={commitName}
-        onKeyDown={(event) => event.key === 'Enter' && (commitName(), event.currentTarget.blur())}
-      />
+      <div className="attr-name-field" ref={nameRef}>
+        <input
+          autoFocus={isNew}
+          value={draftName}
+          placeholder="data-attribute"
+          spellCheck={false}
+          onPaste={(event) => {
+            const text = event.clipboardData.getData('text');
+            // Only when it actually looks like markup — a plain name paste
+            // must keep behaving like a paste into a text box.
+            if (!text || !/=/.test(text)) {
+              return;
+            }
+            const pairs = parseAttrPaste(text);
+            if (!pairs.length) {
+              return;
+            }
+            event.preventDefault();
+            const pair = pairs[0];
+            if (pairs.length === 1 && pair) {
+              setDraftName(pair.name);
+              setDraftValue(pair.value);
+              onCommitPair(pair.name, pair.value);
+            } else {
+              onCommitMany(pairs);
+            }
+          }}
+          onChange={(event) => setDraftName(typedAttributeName(event.target.value))}
+          onBlur={commitName}
+          onKeyDown={(event) => event.key === 'Enter' && (commitName(), event.currentTarget.blur())}
+        />
+        {spreading && (
+          <BindHandle
+            active={picker !== undefined}
+            onOpen={() => {
+              const bounds = nameRef.current?.getBoundingClientRect();
+              setPicker(picker !== undefined || bounds === undefined ? undefined : dataPickerPosition(bounds));
+            }}
+          />
+        )}
+      </div>
+      {picker !== undefined && (
+        <FieldDataPicker
+          pos={picker}
+          bindContext={state.bindContext}
+          current={state.spreadName.kind === 'spread' ? state.spreadName.path : undefined}
+          onPick={(path) => {
+            setPicker(undefined);
+            // What it spreads is a name in scope: a prop, a frontmatter object.
+            if (isReferencePath(path)) {
+              setDraftName(`{...${path}}`);
+              state.commitSpread(path);
+            }
+          }}
+          onClose={() => setPicker(undefined)}
+        />
+      )}
     </div>
   );
 }
 function AttributeValue({ state }: { readonly state: AttributeState }) {
   const { isStyleValue, draftValue, focusValue, setDraftValue, onChangeValue, assetMode, projectPath } = state;
+  // Code the Value conditions editor can draw is drawn by it; any other code keeps the code editor.
+  const conditional = conditionalOfAttr(encodeAttr(draftValue));
+  // A `class:list` in the shape the class-list editor draws is drawn by it.
+  const classList = state.draftName === 'class:list' ? classListOfAttr(encodeAttr(draftValue)) : undefined;
   return isStyleValue ? (
     // A style attribute is CSS, so edit it as CSS — one declaration per
     // line, highlighted. An {expression} value stays a plain field:
@@ -474,6 +748,16 @@ function AttributeValue({ state }: { readonly state: AttributeState }) {
         }}
       />
     </div>
+  ) : classList !== undefined ? (
+    <ClassListField model={classList} value={encodeAttr(draftValue)} bindContext={state.bindContext} onApply={(next) => applyValue(state, next)} />
+  ) : conditional !== undefined ? (
+    <ConditionalField
+      model={conditional}
+      value={encodeAttr(draftValue)}
+      bindContext={state.bindContext}
+      language={valueLanguageOf(state.draftName)}
+      onApply={(next) => applyValue(state, next)}
+    />
   ) : (
     // The same field a schema-driven prop gets: text with data in it shown
     // as chips, and real code edited as code — JavaScript, highlighted. A
@@ -554,8 +838,23 @@ function expandedAttributeEditorPosition(host: HTMLElement): FieldPosition {
 }
 function AttributePopups({ state }: { readonly state: AttributeState }) {
   const { bigAt, draftName, draftValue, scope, chipsInScope, bindContext, setDraftValue, onChangeValue, setBigAt, insertAt, setInsertAt, bindApiRef } = state;
+  const catalog = useConditionCatalog(bindContext);
+  // Only in a component, which has props to test, and only for a value a branch can hold.
+  const start = bindContext?.newProp === undefined ? undefined : startingConditional(encodeAttr(draftValue), catalog);
   return (
     <>
+      {state.conditionalOpen && start !== undefined && (
+        <ConditionalEditor
+          anchorRef={state.valueRowRef}
+          start={start}
+          model={undefined}
+          value={encodeAttr(draftValue)}
+          bindContext={bindContext}
+          language={valueLanguageOf(draftName)}
+          onApply={(next) => applyValue(state, next)}
+          onClose={() => state.setConditionalOpen(false)}
+        />
+      )}
       {bigAt ? (
         <ValueCodeEditor
           pos={bigAt}
@@ -594,11 +893,25 @@ function AttributePopups({ state }: { readonly state: AttributeState }) {
             setDraftValue(text);
             onChangeValue(text);
           }}
+          onConditional={
+            start === undefined
+              ? undefined
+              : () => {
+                  setInsertAt(undefined);
+                  state.setConditionalOpen(true);
+                }
+          }
           onClose={() => setInsertAt(undefined)}
         />
       ) : undefined}
     </>
   );
+}
+
+// A whole value from the Value conditions editor: shown at once, written at once.
+function applyValue(state: AttributeState, next: Attr | undefined): void {
+  state.setDraftValue(decodeAttr(next));
+  state.onApplyValue(next);
 }
 
 export function ObjectAttrsField(props: ObjectAttrsFieldProps) {
@@ -688,7 +1001,7 @@ function ObjectAttrsFieldPopup({ state }: { readonly state: ObjectAttributesStat
       dataContext={bindContext}
       name={editor.index !== undefined ? (entries[editor.index]?.key ?? '') : ''}
       value={editor.index !== undefined ? decodeRaw(entries[editor.index]?.raw ?? '') : ''}
-      syntax="pair"
+      takenNames={entries.filter((_, index) => index !== editor.index).map((entry) => entry.key)}
       isNew={editor.index === undefined}
       onCommitName={(newName) => {
         const clean = newName.trim();
@@ -709,6 +1022,18 @@ function ObjectAttrsFieldPopup({ state }: { readonly state: ObjectAttributesStat
         if (editor.index !== undefined) {
           onCommit(entries.map((en, i) => (i === editor.index ? { ...en, raw: encodeRaw(text) } : en)));
         }
+      }}
+      onApplyValue={(next) => {
+        if (editor.index === undefined) {
+          return;
+        }
+        if (next === undefined) {
+          onCommit(entries.filter((_, i) => i !== editor.index));
+          setEditor(undefined);
+          return;
+        }
+        const text = decodeAttr(next);
+        onCommit(entries.map((en, i) => (i === editor.index ? { ...en, raw: encodeRaw(text) } : en)));
       }}
       onCommitPair={(name, value) => {
         const entry = { key: name.trim(), raw: encodeRaw(value) };

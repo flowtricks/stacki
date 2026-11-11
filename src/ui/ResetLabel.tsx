@@ -1,6 +1,8 @@
 // A shared reset menu keeps field labels consistent across props and content editors.
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { CornerIcon, ResetIcon } from './Icons';
+import { popupLayer } from './popupLayer';
 
 export interface ResetMenuProps {
   readonly position: { readonly left: number; readonly top: number };
@@ -12,6 +14,7 @@ export interface ResetMenuProps {
 }
 export function ResetLabel(props: { readonly label: React.ReactNode; readonly active: boolean; readonly onReset: () => void }) {
   const [position, setPosition] = useState<ResetMenuProps['position']>();
+  const layer = useRef<HTMLElement>(popupLayer());
   const reset = () => {
     setPosition(undefined);
     props.onReset();
@@ -32,6 +35,7 @@ export function ResetLabel(props: { readonly label: React.ReactNode; readonly ac
             reset();
           } else {
             const bounds = event.currentTarget.getBoundingClientRect();
+            layer.current = resetMenuLayer(event.currentTarget);
             setPosition({ left: bounds.left, top: bounds.bottom + 4 });
           }
         }}
@@ -44,9 +48,19 @@ export function ResetLabel(props: { readonly label: React.ReactNode; readonly ac
       >
         {props.label}
       </span>
-      {props.active && position && <ResetMenu position={position} onReset={reset} resetLabel="Reset" unbindLabel="" onClose={() => setPosition(undefined)} />}
+      {props.active &&
+        position &&
+        createPortal(<ResetMenu position={position} onReset={reset} resetLabel="Reset" unbindLabel="" onClose={() => setPosition(undefined)} />, layer.current)}
     </>
   );
+}
+
+// The menu is fixed to the viewport, so it renders outside the label's own
+// boxes: a scroll area's fade mask (Settings) would otherwise fade it. Inside
+// a popup it renders into that popup's surface, so it stays in the popup's top
+// layer and a press on it is a press inside the popup, not a dismissal.
+function resetMenuLayer(label: HTMLElement): HTMLElement {
+  return label.closest<HTMLElement>('.popup-surface') ?? popupLayer();
 }
 
 export function ResetMenu({ position, onReset, resetLabel = 'Reset to default property value', onUnbind, unbindLabel, onClose }: ResetMenuProps) {

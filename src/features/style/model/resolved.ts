@@ -19,12 +19,25 @@ import {
 } from './selectors';
 import { spacingSides } from './spacingShorthand';
 import type { BreakpointId, ParsedRule, Specificity } from './styleTypes';
+import type { InlineDeclaration } from '../../../../shared/engine/inlineStyle';
+import { INLINE_STYLE_LABEL, INLINE_STYLE_SELECTOR } from './inlineTarget';
 
 export type ContextKey = string; // '' = Base; else the joined atContext
 export type StateKey = '' | ':hover' | ':focus' | ':active';
 
 /** Which layer an edit targets: the embed CSS or the native Webflow class style. */
 export type SourceKey = 'embed' | 'native';
+
+/** Where a contributed value comes from: a layer, or the element's own `style`
+ *  attribute, which outranks every selector (model/inlineTarget.ts). */
+export type ContributorOrigin = SourceKey | 'inline';
+
+/** The selected element's inline declarations, folded in above every rule. */
+export type InlineResolveInput = {
+  readonly declarations: readonly InlineDeclaration[];
+  /** The "Inline styles" chip is the edit target: its values are the selected ones. */
+  readonly selected: boolean;
+};
 
 /**
  * A selectable context in the panel — Base, a Webflow breakpoint, an embed
@@ -119,8 +132,8 @@ export type Contributor = {
   /** Document order of the owning rule (ascending = earlier in the cascade). */
   order: number;
   ruleId: string;
-  /** Where this value comes from: an embed rule or a native Webflow style. */
-  origin: SourceKey;
+  /** Where this value comes from: an embed rule, a native Webflow style, or the style attribute. */
+  origin: ContributorOrigin;
   /** For native contributors: the NativeModel.styles index (else undefined). */
   styleIndex?: number;
   /** For native contributors: breakpoint cascade tier (0 = base; else undefined). */
@@ -151,7 +164,7 @@ export type ResolvedProp = {
   /** Which layer the editable (selected) value lives in — so writes/clears target
    *  the right place. 'native' when the Webflow class sets it, 'embed' when the
    *  picked embed does (native-first, embed-fallback). undefined when 'other'. */
-  selectedOrigin?: SourceKey;
+  selectedOrigin?: ContributorOrigin;
   /** The selected selector's own value for this prop (source==='selected'). */
   selectedValue?: { value: string; important: boolean };
   /** The cascade winner across all contributors in this context/state. */
@@ -269,8 +282,17 @@ export type MatchedSelector = {
   state: StateKey;
   /** True for a lone tag/class/attr compound (chip-composable / native-eligible). */
   simple: boolean;
-  /** True when at least one matching rule comes from a component's style tag. */
+  /** True when at least one matching rule comes from a component's style tag. This
+   *  says where an edit is saved; the chip's green follows inComponentMarkup. */
   fromComponent: boolean;
+  /** True when every class and attribute the chip needs on the selected element is
+   *  written in the open component's markup (model/componentMarkup.ts): the chip is
+   *  the component's, and green, wherever its CSS lives. */
+  inComponentMarkup?: boolean;
+  /** True while whether inComponentMarkup holds is still being read (the selected
+   *  instance's component file is on its way): the chip is drawn neutral, never in a
+   *  colour it may lose a moment later. */
+  provenancePending?: boolean;
   /** True when the chip names a class the instance passed to the component open on
    *  the canvas (`column1Class="hero_copy"`): the page's class, not the component's
    *  (model/instanceClasses.ts). */
@@ -524,7 +546,13 @@ function isBareSelector(canon: ReturnType<typeof canonicalCompound>): boolean {
   return canon.universal && canon.oneCompound && canon.tokens.length === 0 && !canon.pseudoElement && canon.pseudoClasses.length === 0;
 }
 
-export function resolveStyle(model: RuleModel, context: ContextKey, activeSelector: string, native?: NativeResolveInput): ResolvedStyle {
+export function resolveStyle(
+  model: RuleModel,
+  context: ContextKey,
+  activeSelector: string,
+  native?: NativeResolveInput,
+  inline?: InlineResolveInput,
+): ResolvedStyle {
   const all = [...model.base, ...model.conditional];
 
   // The panel views ONE interaction state and ONE pseudo-element target at a time,
@@ -573,6 +601,14 @@ export function resolveStyle(model: RuleModel, context: ContextKey, activeSelect
     const list = byProp.get(contribution.prop) ?? [];
     list.push(nativeContributor(contribution));
     byProp.set(contribution.prop, list);
+  }
+
+  // The style attribute applies to the element in every query and state, above any
+  // selector, and never to its ::before or ::after box.
+  for (const [prop, contributor] of view.activePseudo ? [] : inlineContributors(inline)) {
+    const list = byProp.get(prop) ?? [];
+    list.push(contributor);
+    byProp.set(prop, list);
   }
 
   const props = new Map<string, ResolvedProp>();
@@ -788,6 +824,47 @@ function isSelectedRule(matched: MatchedRule, view: ResolveView): boolean {
   );
 }
 
+// Above any selector's (no selector has a million ids), so the cascade ranks the
+// style attribute first, below only an `!important` rule over a plain declaration.
+const INLINE_SPECIFICITY: Specificity = [1_000_000, 0, 0];
+const INLINE_ORDER = Number.MAX_SAFE_INTEGER;
+
+// One contributor per property the attribute sets, read as a rule's declarations
+// are (declaredByProp): the last wins unless an earlier one is `!important`, and a
+// box shorthand also counts for each side.
+function inlineContributors(inline: InlineResolveInput | undefined): ReadonlyMap<string, Contributor> {
+  const contributors = new Map<string, Contributor>();
+  if (inline === undefined) {
+    return contributors;
+  }
+  const declare = (prop: string, value: Declared): void => {
+    if (contributors.get(prop)?.important === true && !value.important) {
+      return;
+    }
+    contributors.set(prop, {
+      selectorText: INLINE_STYLE_SELECTOR,
+      display: INLINE_STYLE_LABEL,
+      value: value.value,
+      important: value.important,
+      specificity: INLINE_SPECIFICITY,
+      order: INLINE_ORDER,
+      ruleId: `inline:${prop}`,
+      origin: 'inline',
+      isSelected: inline.selected,
+      winning: false,
+      complexOnly: false,
+    });
+  };
+  for (const declaration of inline.declarations) {
+    declare(declaration.property, { value: declaration.value, important: declaration.important });
+    for (const [side, value] of spacingSides(declaration.property, declaration.value)) {
+      declare(side, { value, important: declaration.important });
+    }
+  }
+  assert(contributors.size >= Math.min(inline.declarations.length, 1), 'inlineContributors: none dropped');
+  return contributors;
+}
+
 function nativeContributor(contribution: NativeContribution): Contributor {
   return {
     selectorText: contribution.selector,
@@ -836,7 +913,10 @@ function resolveProp(prop: string, list: Contributor[], native: NativeResolveInp
       contribution.atState !== false,
   );
   const embedSelected = list.find((contribution) => contribution.origin === 'embed' && contribution.isSelected);
-  const selected = source === 'native' ? (nativeSelected ?? embedSelected) : embedSelected;
+  // The "Inline styles" chip picked: the attribute is the target, whatever layer is chosen.
+  const inlineSelected = list.find((contribution) => contribution.origin === 'inline' && contribution.isSelected);
+  const layerSelected = source === 'native' ? (nativeSelected ?? embedSelected) : embedSelected;
+  const selected = inlineSelected ?? layerSelected;
   // Mark the contributor whose value is the one being edited (the picked selector's)
   // so the provenance list can highlight it rather than the cascade winner.
   if (selected) {

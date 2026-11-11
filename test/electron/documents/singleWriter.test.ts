@@ -123,8 +123,57 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
       reason: 'exclusive temporary Wrangler config inside a publish snapshot; removed after deploy',
     },
   },
+  // An app bundle is static files only ever served to its sandboxed frame, never a page:
+  // written whole into a staging folder and renamed into place, beside its lockfile.
+  'electron/project/appStore.ts': {
+    writeFileSync: { count: 2, reason: "an installed app bundle's files in .stacki/apps/<id> (staged), and the apps lockfile's temporary copy" },
+    renameSync: { count: 2, reason: 'puts the staged app folder in place whole, and the lockfile (atomic save)' },
+  },
+  // What apps keep and do beyond their bundle. None of these is a page, chunk or stylesheet:
+  // app metadata, sealed secrets and tokens live in their own JSON files, and the project
+  // files an app writes go through the document actors when they are text.
+  'electron/handlers/appAccessHandlers.ts': {
+    writeFileSync: { count: 1, reason: 'the staged copy of non-UTF-8 bytes an app writes (an image); text goes through the document actors' },
+    renameSync: { count: 1, reason: 'puts those staged bytes in place whole' },
+  },
+  'electron/handlers/appDataHandlers.ts': {
+    writeFileSync: { count: 1, reason: "this computer's random person key in userData (app-person-device), made once" },
+  },
+  'electron/project/appFilesStore.ts': {
+    writeFile: {
+      count: 2,
+      reason: "calls of the host's injected writer (document actors for text on Desktop) for an app's write and its undo, not node:fs",
+    },
+    renameSync: { count: 1, reason: 'an app moving one project file; a move writes no bytes' },
+  },
+  'electron/project/appSettingsStore.ts': {
+    writeFileSync: { count: 1, reason: 'the temporary copy of .stacki/apps/settings.json or a sealed secrets vault file in userData' },
+    renameSync: { count: 1, reason: 'puts that settings file in place whole (atomic save)' },
+  },
+  'electron/project/appSignIn.ts': {
+    writeFileSync: { count: 1, reason: "the temporary copy of an app's sealed OAuth tokens in the secret vault, outside the project" },
+    renameSync: { count: 1, reason: 'puts that token file in place whole (atomic save)' },
+  },
+  'electron/project/appStorageStore.ts': {
+    writeFileSync: { count: 1, reason: "the temporary copy of an app's stored values (.stacki/app-data/<id>.json or the local folder)" },
+    renameSync: { count: 1, reason: 'puts that storage file in place whole (atomic save)' },
+  },
   'electron/project/starter.ts': {
     writeFileSync: { count: 1, reason: 'package.json of a new project from a starter' },
+  },
+  // The AI chat panel's own files, all in userData or the system temp folder, never in the project.
+  // The project files an agent's edit is undone in go through the document actors (aiHandlers.ts).
+  'electron/handlers/ai/agentInstaller.ts': {
+    writeFileSync: { count: 3, reason: "a pinned adapter's package.json, lockfile and install marker, staged in userData/agents" },
+    renameSync: { count: 1, reason: 'puts the staged adapter folder in place whole' },
+  },
+  'electron/handlers/ai/chatStore.ts': {
+    appendFileSync: { count: 1, reason: "a chat's transcript in userData/ai, append-only" },
+    writeFileSync: { count: 1, reason: 'the temporary copy of the chat index or a reviews file in userData/ai' },
+    renameSync: { count: 1, reason: 'puts that index or reviews file in place whole (atomic save)' },
+  },
+  'electron/handlers/ai/treeSnapshot.ts': {
+    copyFileSync: { count: 1, reason: "a temporary copy of the project's git index in the system temp folder, for a snapshot; removed after" },
   },
   'electron/terminal/terminal.ts': {
     writeFileSync: { count: 1, reason: 'a pasted clipboard image in the app temp directory' },

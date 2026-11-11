@@ -151,7 +151,7 @@ test('a missing native terminal binding does not prevent app startup', async () 
   try {
     const terminal = require(terminalPath);
     assert.equal(nativeLoadCount, 0, 'node-pty must remain unloaded while the app starts');
-    terminal.registerTerminalHandlers({ send: () => {}, projectRoot: () => process.cwd() });
+    terminal.registerTerminalHandlers({ send: () => {}, projectRoot: () => process.cwd(), gate: () => undefined });
     const start = handlers.get('terminal:start');
     assert.equal(typeof start, 'function');
     const result = await start({}, { id: 'test', cwd: process.cwd(), cols: 92, rows: 18 });
@@ -198,7 +198,7 @@ test('native terminal starts with the measured grid before its first output', as
   let terminal;
   try {
     terminal = require(terminalPath);
-    terminal.registerTerminalHandlers({ send: () => {}, projectRoot: () => process.cwd() });
+    terminal.registerTerminalHandlers({ send: () => {}, projectRoot: () => process.cwd(), gate: () => undefined });
     const result = await handlers.get('terminal:start')(
       {},
       {

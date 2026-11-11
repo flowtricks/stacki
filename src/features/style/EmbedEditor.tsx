@@ -67,6 +67,7 @@ import {
   useNativeCreate,
   useAutoSelect,
 } from './embed/useEditorResolution';
+import { useInlineCard, useInlineState } from './embed/useInlineTarget';
 import './embedEditor.css';
 import {
   useSetProp,
@@ -126,7 +127,8 @@ function useEditorFoundation() {
   const selectionState = useSelectionState();
   const nativeState = useNativeState(selectionState);
   const pendingWrites = usePendingWrites(editorRefs, busyState, scanState, nativeState);
-  return { busyState, editorRefs, nativeState, pendingWrites, scanState, selectionState };
+  const inlineState = useInlineState();
+  return { busyState, editorRefs, inlineState, nativeState, pendingWrites, scanState, selectionState };
 }
 
 // Scanning the embeds and resolving the element against them.
@@ -231,7 +233,7 @@ function useEditorResolution(
   editorElement: ReturnType<typeof useEditorElement>,
   editorContexts: ReturnType<typeof useEditorContexts>,
 ) {
-  const { nativeState, pendingWrites, scanState, selectionState } = editorFoundation;
+  const { inlineState, nativeState, pendingWrites, scanState, selectionState } = editorFoundation;
   const { activeSelectorHook, elementTokens, selectorPick, tokenDefault } = editorElement;
   const { componentSource, nativeTarget, styleContextsHook } = editorContexts;
 
@@ -244,6 +246,7 @@ function useEditorResolution(
     styleContextsHook,
     nativeTarget,
     componentSource,
+    inlineState,
   );
   const selectorChipsHook = useSelectorChips(
     scanState,
@@ -403,7 +406,7 @@ function useEditorCardView(
   const { busyState, editorRefs, nativeState, scanState, selectionState } = editorFoundation;
   const { refreshHook } = editorSelection;
   const { ruleActions } = editorRuleEdits;
-  const { elementTokens } = editorElement;
+  const { elementTokens, typedSelector } = editorElement;
   const { nativeTarget, querySuggestionsHook, renameQuery, sourceDocumentHook } = editorContexts;
   const { contextChange, resolvedHook, selectorChipsHook } = editorResolution;
   const { writeNewRuleHook } = editorRuleWrites;
@@ -438,7 +441,8 @@ function useEditorCardView(
     sourceOptionsHook,
   );
   const editorView = useEditorView(editorRefs, busyState, scanState, nativeState, elementTokens, embedNavHook, selectionCard, contextCard, sourceCard);
-  return { editorView };
+  const card = useInlineCard(editorView.view.card, editorFoundation.inlineState, { deselect: typedSelector.deselect, setSaveError: busyState.setSaveError });
+  return { editorView: { view: { ...editorView.view, card } } };
 }
 
 // What the panel's root renders from.

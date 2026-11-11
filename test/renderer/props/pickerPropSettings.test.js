@@ -284,7 +284,7 @@ test('the form loads every option a list prop has', async () => {
   assert.equal(labelled('Name').querySelector('input').value, 'features');
   assert.match(form().querySelector('.property-type .dd-trigger').textContent, /List/);
   assert.equal(form().querySelector('input[aria-label="Required"]').checked, false);
-  assert.equal(form().querySelector('input[aria-label="Readonly"]').checked, false);
+  assert.ok(form().querySelector('input[aria-label="Readonly"]') === null, 'Readonly is not offered');
   assert.equal(labelled('Tooltip').querySelector('textarea').value, 'The plan’s features.'.replace('’', "'"));
   assert.deepEqual(
     [...form().querySelectorAll('[aria-label="Item fields"] input[aria-label="Field name"]')].map((input) => input.value),
@@ -324,10 +324,10 @@ test('a toggle saves at once', async () => {
   const { saver, source, log } = project();
   await drawPicker(saver);
   await openFeatures();
-  await click(form().querySelector('input[aria-label="Readonly"]'));
+  await click(form().querySelector('input[aria-label="Required"]'));
   await flush();
   assert.equal(log.edits, 1);
-  assert.match(source(), /readonly features\?: readonly/);
+  assert.match(source(), /\bfeatures: readonly/);
   await clear();
 });
 
@@ -584,11 +584,11 @@ test('a file changed on disk reloads under the form, and the edit is kept and sa
   // Someone else's edit lands while the form is open: its source is stale.
   const newer = source().replace('heading: string;', 'heading: string;\n  extra?: string;').replace("/** The plan's features. */", '/** From elsewhere. */');
   fs.writeFileSync(saver.file, newer);
-  await click(form().querySelector('input[aria-label="Readonly"]'));
+  await click(form().querySelector('input[aria-label="Required"]'));
   await flush();
   assert.equal(log.edits, 2, 'refused once, then saved against the file as it is');
   assert.match(source(), /extra\?: string;/, 'the other edit is kept');
-  assert.match(source(), /readonly features\?: readonly/, 'and so is this one');
+  assert.match(source(), /\bfeatures: readonly/, 'and so is this one');
   assert.match(source(), /\/\*\* From elsewhere\. \*\//, 'a field this form did not touch takes the file’s value');
   assert.equal(labelled('Tooltip').querySelector('textarea').value, 'From elsewhere.', 'the form shows it');
   assert.match(form().querySelector('[role="status"]').textContent, /changed on disk/);

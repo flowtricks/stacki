@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { useStyleFiles } from './useStyleFiles';
 import type { HostState } from './model/host';
 import { setHost } from './model/host';
+import { prefetchComponentSources } from './model/componentSourceCache';
 import { PX_LENGTHS, sameLengthUnit, type LengthUnit } from '../../../shared/properties/lengthUnit';
 import EmbedEditor from './EmbedEditor';
 import './tokens.css';
@@ -27,6 +28,11 @@ interface StylePanelProps {
   readonly onAddClass?: HostState['addClass'] | undefined;
   readonly onRemoveClass?: HostState['removeClass'] | undefined;
   readonly onRemoveAttribute?: HostState['removeAttribute'] | undefined;
+  readonly onSetInlineStyle?: HostState['setInlineStyle'] | undefined;
+  /** The open page's component files, read ahead for the chips' colours (HostState). */
+  readonly pageComponentPaths?: readonly string[] | undefined;
+  /** False while the canvas has not yet reported the selection's classes (HostState). Absent → known. */
+  readonly renderedClassesKnown?: boolean | undefined;
   readonly onSpacingHover?: HostState['onSpacingHover'];
   readonly renderedClasses?: readonly string[] | undefined;
   readonly projectClasses?: readonly string[] | undefined;
@@ -35,6 +41,8 @@ interface StylePanelProps {
   readonly openFileKind?: HostState['openFileKind'];
   /** The page a component is being edited on, whose styles reach it (HostState). */
   readonly contextPagePath?: string | undefined;
+  /** The component file the selected instance renders (HostState). */
+  readonly selectedComponentPath?: string | undefined;
   readonly pseudoRequest?: HostState['pseudoRequest'];
   /** The navigator lists ::before and ::after rows (HostState). */
   readonly pseudoRows?: boolean;
@@ -46,6 +54,8 @@ interface StylePanelProps {
 
 type StyleFiles = HostState['files'];
 
+const NO_PATHS: readonly string[] = [];
+
 export default function StylePanel(props: StylePanelProps) {
   const files = useStyleFiles(props.project?.path, undefined, readStyleFiles);
   const astroFiles = useStyleFiles(props.project?.path, props.openFilePath, readAstroStyleFiles);
@@ -55,6 +65,9 @@ export default function StylePanel(props: StylePanelProps) {
   // parent's effects. Publishing here ensures their first read is current.
   setHost(host);
   useEffect(() => setHost(host), [host]);
+  // Read with the page, not on the first instance picked: that pick then draws its settled colours.
+  const pageComponentPaths = props.pageComponentPaths ?? NO_PATHS;
+  useEffect(() => prefetchComponentSources(pageComponentPaths), [pageComponentPaths]);
   const hostRef = useRef<HTMLDivElement>(null);
   usePanelBounds(hostRef);
   useSelectorFocus(hostRef, props.selectorFocus ?? 0);
@@ -94,6 +107,7 @@ function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleF
     openFilePath: props.openFilePath,
     openFileKind: props.openFileKind,
     contextPagePath: props.contextPagePath,
+    selectedComponentPath: props.selectedComponentPath,
     writeStyleNode: props.onWriteStyleNode,
     selectNode: props.onSelectNode,
     setCanvasWidth: props.onCanvasWidth,
@@ -101,6 +115,9 @@ function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleF
     addClass: props.onAddClass,
     removeClass: props.onRemoveClass,
     removeAttribute: props.onRemoveAttribute,
+    setInlineStyle: props.onSetInlineStyle,
+    pageComponentPaths: props.pageComponentPaths ?? NO_PATHS,
+    renderedClassesKnown: props.renderedClassesKnown ?? true,
     onSpacingHover: props.onSpacingHover,
     renderedClasses: [...(props.renderedClasses ?? [])],
     projectClasses: [...(props.projectClasses ?? [])],

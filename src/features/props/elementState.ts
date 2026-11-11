@@ -3,13 +3,14 @@
 // and the dimensions action (PropsPanel.tsx).
 
 import type { Attr, ValueNode } from '../../../shared/page/pageNode';
-import type { FieldDefinition } from './propRules';
+import type { FieldDefinition, PropValues } from './propRules';
 import type { SetProp } from './propAttributes';
 import type { FieldPickerAt } from './propBindings';
 import type { RichInsertAPI } from './RichContent';
 import type { AssetDimensions } from '../../ui/AssetThumb';
-import type { AssetReference, PickedAsset } from '../../ui/AssetField';
+import type { AltPick, AssetReference, PickedAsset } from '../../ui/AssetField';
 import { createPropRules } from './propRules';
+import { visibleAttributeNames } from '../../../shared/core/internalAttributes';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import React, { useEffect, useRef, useState } from 'react';
@@ -20,9 +21,27 @@ import { sourceKind, useSourceDimensions } from './SourcePanels';
 import { useLayoutMetadata } from './useLayoutMetadata';
 import { useLayoutText } from './useLayoutText';
 
-// Whether the Settings group is open, remembered across selections. See where it
-// is read, below.
-export let settingsGroupOpen = false;
+// Whether the Settings group is open: open by default, remembered across selections,
+// projects and restarts. It is a per-viewer convenience, so it lives in localStorage,
+// and storage that is denied or holds anything else falls back to open.
+const SETTINGS_GROUP_OPEN_KEY = 'stacki.props.settingsOpen';
+export let settingsGroupOpen = readSettingsGroupOpen();
+
+function readSettingsGroupOpen(): boolean {
+  try {
+    return localStorage.getItem(SETTINGS_GROUP_OPEN_KEY) !== 'closed';
+  } catch {
+    return true;
+  }
+}
+
+function storeSettingsGroupOpen(state: { readonly open: boolean }): void {
+  try {
+    localStorage.setItem(SETTINGS_GROUP_OPEN_KEY, state.open ? 'open' : 'closed');
+  } catch {
+    // Losing an optional preference must not interrupt editing.
+  }
+}
 
 // Element hooks have a stable lifetime across ordinary selections. Other node
 // kinds mount their own editors, so selecting text cannot change this hook order.
@@ -52,6 +71,8 @@ export function useElementProps(props: ElementPropsPanelProps) {
     onSrcDimensions: assets.setSourceDimensions,
     siblingProps: props.node.props,
     srcKind: assets.sourceKind,
+    nodeId: props.node.id,
+    onPickWithAlt: altPickWriter(props, schema),
     onPickAsset: props.onSetAssetProp
       ? (name: string, picked: PickedAsset) => props.onSetAssetProp?.(props.node.id, name, picked, assetReferenceFor(props.node.kind, schema, name))
       : undefined,
@@ -98,7 +119,9 @@ export function elementFieldLayout(props: ElementPropsPanelProps) {
   // is currently set — hover-previewing a value must not remount the field
   // (that would close the dropdown mid-hover).
   const showSlotField = Array.isArray(slotOptions) && slotOptions.some((slot) => slot !== 'default') && !schemaNames.has('slot');
-  let extraProps = Object.keys(node.props || {}).filter((key) => !schemaNames.has(key) && !(showSlotField && key === 'slot'));
+  // Stacki's own attributes (an app's durable `data-stacki-key`) stay in the
+  // props but are never a field or an attribute row (internalAttributes.ts).
+  let extraProps = visibleAttributeNames(Object.keys(node.props || {})).filter((key) => !schemaNames.has(key) && !(showSlotField && key === 'slot'));
   // With a free-form Attributes section, unknown attrs live there instead of
   // as individual fields — except class and style, which keep dedicated ones.
   let attrNames: string[] = [];
@@ -216,6 +239,7 @@ export function useElementFocus(props: ElementPropsPanelProps) {
   const [settingsOpen, setSettingsOpenState] = useState(settingsGroupOpen);
   const setSettingsOpen = (next: React.SetStateAction<boolean>) => {
     settingsGroupOpen = typeof next === 'function' ? next(settingsGroupOpen) : next;
+    storeSettingsGroupOpen({ open: settingsGroupOpen });
     setSettingsOpenState(settingsGroupOpen);
   };
 
@@ -332,6 +356,43 @@ export function elementSettings(
     settingsCount,
   };
 }
+// An app's image pick may carry alt text: written to an <img>, or a component that declares `alt`.
+// An app's pick with alt text: the field and the alt in one write, so one undo step. A
+// value goes in as both props at once; a project file goes through the asset write, which
+// adds the alt to the same edit as the prop and its import.
+export function altPickWriter(
+  props: ElementPropsPanelProps,
+  schema: readonly FieldDefinition[],
+): ((name: string, pick: AltPick, alt: string) => void) | undefined {
+  const { node, onSetProps, onSetAssetProp } = props;
+  if (onSetProps === undefined) {
+    return undefined;
+  }
+  if (node.name !== 'img') {
+    if (!schema.some((field) => field.name === 'alt')) {
+      return undefined;
+    }
+  }
+  return (name, pick, alt) => {
+    assert(name !== 'alt', 'The alt is written beside the picked field, not as it');
+    const altProps: PropValues = { alt: { type: 'string', value: alt } };
+    switch (pick.kind) {
+      case 'value':
+        onSetProps(node.id, { [name]: { type: 'string', value: pick.value }, ...altProps });
+        return;
+      case 'entry':
+        // A field offers a project file to its host only through onPickAsset, which this writes.
+        assert(onSetAssetProp !== undefined, 'A picked project file has an asset write');
+        onSetAssetProp(node.id, name, pick.entry, assetReferenceFor(node.kind, schema, name), altProps);
+        return;
+      default: {
+        const exhaustive: never = pick;
+        return exhaustive;
+      }
+    }
+  };
+}
+
 export function elementDimensionAction(props: ElementPropsPanelProps) {
   const { node, schema = [], onSetProps } = props;
   const onPickDimensions = (fieldName: string, dims: AssetDimensions) => {

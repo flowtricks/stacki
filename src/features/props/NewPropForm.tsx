@@ -12,7 +12,7 @@
 // its default with the asset card and picker every image field uses; the
 // default decides the type (an imported file, or a URL; imagePropDefault.ts).
 //
-// Required, Readonly, the Code type, a List's item fields and its default
+// Required, the Code type, a List's item fields and its default
 // items are the Properties panel's own sections (PropertySections.tsx), so a
 // prop offers the same options wherever it is made. A List's default items are
 // the instance's list field, `{}` toggle and all: code the list cannot show is
@@ -36,13 +36,12 @@ import {
   defaultCode,
   numberSettingsProblem,
   optionsProblem,
-  switchSettingsProblem,
   typeText,
   type AttributeDefault,
   type NewPropKind,
   type PropDeclaration,
 } from '../../editor/propDeclaration';
-import { SWITCH_LABELS, type NumberSettings, type SwitchSettings } from '../../editor/propDocumentation';
+import { type NumberSettings } from '../../editor/propDocumentation';
 import {
   boundPath,
   FIT_KINDS,
@@ -108,7 +107,7 @@ export default function NewPropForm(props: NewPropFormProps) {
         </div>
       )}
       <KindSettings form={form} />
-      {/* The same Required, Readonly and Code type the Properties panel edits (PropertySections.tsx). */}
+      {/* The same Required and Code type the Properties panel edits (PropertySections.tsx). */}
       <PropertyFlagsFields required={form.flags.required} readonly={form.flags.readonly} onChange={form.setFlags} />
       <div className="new-prop-code-type">
         <CodeTypeField
@@ -151,7 +150,6 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
   const [defaultText, setDefaultText] = useState(() => initialDefault(first, seed.value));
   const [options, setOptions] = useState<readonly string[]>(() => [seed.value.trim() === '' ? 'Option 1' : seed.value]);
   const [number, setNumber] = useState<NumberSettings>({ min: undefined, max: undefined, decimals: undefined });
-  const [switchLabels, setSwitchLabels] = useState<SwitchSettings>(SWITCH_LABELS);
   const [attributes, setAttributes] = useState<readonly AttributeDefault[]>([]);
   // A list field of a child component starts from its items' fields and the items it holds now.
   const [listFields, setListFields] = useState<readonly ItemFieldDeclaration[]>(() => (seed.itemFields?.length ? seed.itemFields : LIST_STARTER_FIELDS));
@@ -178,7 +176,6 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
     defaultText,
     options,
     number,
-    switch: switchLabels,
     attributes,
     tag: seed.tag ?? '',
     list,
@@ -237,8 +234,6 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
     setOptions: edit(setOptions),
     number,
     setNumber: edit(setNumber),
-    switchLabels,
-    setSwitchLabels: edit(setSwitchLabels),
     attributes,
     setAttributes: edit(setAttributes),
     listFields,
@@ -280,8 +275,6 @@ function settingsProblem(declaration: PropDeclaration): string | undefined {
   switch (declaration.kind) {
     case 'number':
       return numberSettingsProblem(declaration.number) ?? defaultProblem(declaration);
-    case 'boolean':
-      return switchSettingsProblem(declaration.switch);
     case 'option':
       return optionsProblem(declaration.options) ?? defaultProblem(declaration);
     case 'attributes':
@@ -292,6 +285,7 @@ function settingsProblem(declaration: PropDeclaration): string | undefined {
       const image = imageDefaultOf(declaration.image);
       return image.ok ? undefined : image.error;
     }
+    case 'boolean':
     case 'string':
       return undefined;
     default: {
@@ -310,8 +304,6 @@ function KindSettings({ form }: { readonly form: FormState }) {
   switch (form.kind) {
     case 'number':
       return <NumberSettingsEditor settings={form.number} onChange={form.setNumber} />;
-    case 'boolean':
-      return <SwitchSettingsEditor settings={form.switchLabels} onChange={form.setSwitchLabels} />;
     case 'option':
       // The same list editor the Properties panel's Options use (PropertyOptions), over the words themselves.
       return (
@@ -337,6 +329,7 @@ function KindSettings({ form }: { readonly form: FormState }) {
           }}
         />
       );
+    case 'boolean':
     case 'string':
     case 'attributes':
     case 'image':
@@ -372,8 +365,8 @@ function DefaultEditor({ form, host }: { readonly form: FormState; readonly host
       return (
         <SegSwitch
           options={[
-            { value: 'true', label: form.switchLabels.onLabel || SWITCH_LABELS.onLabel },
-            { value: 'false', label: form.switchLabels.offLabel || SWITCH_LABELS.offLabel },
+            { value: 'true', label: 'True' },
+            { value: 'false', label: 'False' },
           ]}
           current={form.defaultText}
           onPick={form.setDefaultText}
@@ -445,33 +438,6 @@ export function NumberSettingsEditor(props: { readonly settings: NumberSettings;
       {field('Min', 'min', 'None')}
       {field('Max', 'max', 'None')}
       {field('Decimals', 'decimals', 'Auto')}
-    </div>
-  );
-}
-
-/** What a switch prop's two sides are called. */
-export function SwitchSettingsEditor(props: { readonly settings: SwitchSettings; readonly onChange: (settings: SwitchSettings) => void }) {
-  return (
-    <div className="new-prop-settings">
-      <div className="loop-bind-title">Switch settings</div>
-      <label className="loop-bind-name">
-        <span className="loop-settings-editor-label">On label</span>
-        <input
-          className="new-prop-input"
-          aria-label="On label"
-          value={props.settings.onLabel}
-          onChange={(event) => props.onChange({ ...props.settings, onLabel: event.target.value })}
-        />
-      </label>
-      <label className="loop-bind-name">
-        <span className="loop-settings-editor-label">Off label</span>
-        <input
-          className="new-prop-input"
-          aria-label="Off label"
-          value={props.settings.offLabel}
-          onChange={(event) => props.onChange({ ...props.settings, offLabel: event.target.value })}
-        />
-      </label>
     </div>
   );
 }

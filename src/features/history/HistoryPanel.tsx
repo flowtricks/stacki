@@ -21,7 +21,7 @@ export default function HistoryPanel(props: HistoryPanelProps) {
       <div className="panel-body history-body">
         {props.controls}
         {props.previewRef && (
-          <button className="history-exit-preview" onClick={props.onExitPreview}>
+          <button className="history-exit-preview primary" onClick={props.onExitPreview}>
             Back to now
           </button>
         )}

@@ -6,6 +6,8 @@ import { record, string } from '../../shared/validation';
 import { applyVariableOperation } from './variableOperations';
 import { VARIABLE_ROOT, withVariableWorkspace } from './variableWorkspace';
 import { batchedRead } from '../../shared/batchedRead';
+import { readMetadataSource } from '../settings/projectMetadata';
+import { METADATA_FILES } from '../../../vendor/stacki/shared/properties/projectMetadata';
 
 type Rooms = ReturnType<typeof createRooms>;
 export function variableRoutes(root: string, rooms: Rooms) {
@@ -64,7 +66,10 @@ async function variableSources(root: string, rooms: Pick<Rooms, 'read'>) {
     }
     return [file, text] as const;
   });
-  return new Map(entries);
+  // The variables folders decide which stylesheets the variables panel reads (cssVarRead.ts); the
+  // snapshot carries them so the synchronous reader sees the same settings as the disk.
+  const folders = await readMetadataSource(root, 'folders');
+  return new Map(folders.source === undefined ? entries : [...entries, [METADATA_FILES.folders, folders.source] as const]);
 }
 async function editVariables(rooms: Rooms, before: Map<string, string>, input: Record<string, unknown>) {
   const next = new Map(before);

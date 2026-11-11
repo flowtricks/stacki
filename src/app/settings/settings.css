@@ -1,96 +1,519 @@
+/* Settings: a sidebar of tabs beside the chosen tab's page (Settings.tsx).
+   The dialog has a fixed height, so switching tabs never makes it jump. The
+   page's header is fixed; only the scroll area under it moves, and it fades an
+   edge only while there is more to scroll past it, so a row is never cut in
+   half against the chrome. The header is set off by a 1px line, like every
+   Stacki header; sections are separated by space, headings and fills.
+
+   Spacing scale: 4, 8, 12, 16, 24, 32. Text: 13px labels, 12px muted
+   descriptions, 11px section headings. */
 .app-settings {
+  --settings-gutter: 32px;
+  --settings-fade: 24px;
   margin: auto;
   inset: 0;
-  width: min(560px, calc(100vw - 48px));
-  max-height: calc(100dvh - 48px);
+  width: min(880px, calc(100vw - 48px));
+  height: min(640px, calc(100dvh - 48px));
   padding: 0;
-  border: 1px solid #3a3a3a;
-  border-radius: 16px;
+  border-radius: 14px;
   background: #1b1b1b;
   color: #e8e8e8;
-  box-shadow: 0 24px 90px #0008;
+  box-shadow: 0 24px 90px rgba(0, 0, 0, 0.6);
   font: inherit;
+  overflow: hidden;
 }
-.app-settings header,
-.app-settings footer {
+.app-settings-layout {
+  height: 100%;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+/* The sidebar: a darker fill, the dialog's title, then the tabs. */
+.app-settings-sidebar {
+  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
-}
-.app-settings h2 {
-  font-size: 21px;
-}
-.app-settings footer {
-  justify-content: flex-end;
-  border-top: 1px solid #333;
-}
-.app-settings-content {
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 12px;
+  background: #161616;
   overflow-y: auto;
-  max-height: calc(100dvh - 220px);
-  padding: 0 24px 24px;
 }
-.app-preferences {
-  padding-bottom: 12px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid #333;
-}
-.app-preference-row {
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  font-size: 13px;
+.app-settings-sidebar h2 {
+  margin: 0;
+  padding: 4px 10px;
+  font-size: 15px;
   font-weight: 600;
 }
-.app-preference-toggle {
-  position: relative;
-  flex: 0 0 34px;
-  width: 34px;
-  height: 20px;
+.app-settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.app-settings-tabs [role='tab'] {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+.app-settings-tabs [role='tab'] svg {
+  color: var(--text-faint);
+}
+.app-settings-tabs [role='tab']:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+/* The app's selected-row fill (.structure-node.selected): a soft accent ground
+   with an accent icon. */
+.app-settings-tabs [role='tab'][aria-selected='true'] {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.app-settings-tabs [role='tab'][aria-selected='true'] svg {
+  color: var(--accent);
+}
+.app-settings-tabs [role='tab']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* The page: a fixed header, the scroll area, and the action bar when shown. */
+.app-settings-main {
+  min-width: 0;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.app-settings-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 16px 8px var(--settings-gutter);
+  border-bottom: 1px solid var(--border);
+}
+.app-settings-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+.app-settings-close {
+  width: 28px;
+  height: 28px;
   padding: 0;
-  border: 1px solid #666;
-  border-radius: 999px;
-  background: #444;
+  border-radius: 6px;
 }
-.app-preference-toggle span {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: #fff;
-  transition: transform 120ms ease;
+.app-settings-close:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
-.app-preference-toggle[aria-checked='true'] {
-  background: #009dff;
-  border-color: #009dff;
+/* The fade is a mask, so it fades whatever scrolls under it (cards, chips,
+   code) into the dialog's own background. Each edge's fade is zero until the
+   scroll area says there is more past it (useScrollEdges). */
+.app-settings-scroll {
+  --settings-fade-top: 0px;
+  --settings-fade-bottom: 0px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px var(--settings-gutter) var(--settings-gutter);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--settings-fade-top), #000 calc(100% - var(--settings-fade-bottom)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--settings-fade-top), #000 calc(100% - var(--settings-fade-bottom)), transparent 100%);
 }
-.app-preference-toggle[aria-checked='true'] span {
-  transform: translateX(14px);
+.app-settings-scroll[data-edge-top='fade'] {
+  --settings-fade-top: var(--settings-fade);
 }
-.app-preference-toggle:focus-visible {
-  outline: 2px solid #009dff;
-  outline-offset: 3px;
+.app-settings-scroll[data-edge-bottom='fade'] {
+  --settings-fade-bottom: var(--settings-fade);
 }
-.app-preference-toggle:disabled {
-  opacity: 0.5;
+/* A readable measure: wide dialogs leave space at the right, not long lines. */
+.app-settings-content {
+  max-width: 600px;
 }
-@media (prefers-reduced-motion: reduce) {
-  .app-preference-toggle span {
-    transition: none;
-  }
+.app-settings-panel[hidden] {
+  display: none;
 }
-.app-preferences p,
-.app-settings-content > p {
-  margin: 8px 0 20px;
-  color: #aaa;
+.app-settings-panel > section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* A tab's opening sentence, and loading lines. */
+.app-settings-intro,
+.app-settings-status {
+  margin: 0;
+  color: var(--text-dim);
   font-size: 12px;
   line-height: 1.6;
 }
-.app-preferences [role='alert'] {
+.app-settings-status {
+  color: var(--text-faint);
+}
+
+/* A section: a small heading, an optional muted description, then its rows. */
+.app-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.app-settings-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.app-settings-section-header h4 {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.app-settings-section-header p {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* A row: label and description in the first column, the control in a second
+   column of its own, so controls line up down the page however long the text. */
+.app-settings-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 24px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.app-settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.app-settings-row-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.app-settings-row-description {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app-settings-row-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* Nothing to show: centred in the page, an icon on a soft disc above one sentence. */
+.app-settings-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+  text-align: center;
+}
+.app-settings-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+.app-settings-empty p {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+/* A tab's opening sentence with its save indicator at the right: "Saving…",
+   then "Saved" with a tick for a moment. It keeps its width while idle, so the
+   sentence beside it never reflows as a save comes and goes. */
+.app-settings-intro-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.app-settings-intro-row .app-settings-intro {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.app-settings-saved {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 56px;
+  min-height: 19px;
+  justify-content: flex-end;
+  color: var(--text-faint);
+  font-size: 12px;
+  transition: opacity 200ms ease;
+}
+.app-settings-saved[data-state='idle'] {
+  opacity: 0;
+}
+.app-settings-saved[data-state='saved'] svg {
+  color: var(--green);
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-settings-saved {
+    transition: none;
+  }
+}
+
+/* A notice beside the control it is about: why a change was refused, or that a
+   save failed, with Retry. A soft red fill, never an outline. */
+.app-settings-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 8px 8px 12px;
+  border-radius: 6px;
+  background: rgba(255, 155, 146, 0.08);
   color: #ff9b92;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app-settings-notice button {
+  flex: none;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.app-settings-notice button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Narrow windows: the sidebar becomes a row of tabs above the page, scrolling
+   sideways rather than cutting a label off; rows stack their control under
+   the text once there is no room beside it. */
+@media (max-width: 640px) {
+  .app-settings {
+    --settings-gutter: 16px;
+  }
+  .app-settings-layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .app-settings-sidebar {
+    flex-direction: row;
+    align-items: center;
+    padding: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .app-settings-sidebar h2 {
+    display: none;
+  }
+  .app-settings-tabs {
+    flex-direction: row;
+  }
+  .app-settings-tabs [role='tab'] {
+    flex: none;
+  }
+  .app-settings-header {
+    padding-top: 12px;
+  }
+}
+@media (max-width: 480px) {
+  .app-settings-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .app-settings-row-control {
+    justify-content: flex-start;
+  }
+}
+/* Settings → Folders: one row per panel, its folders as chips with a remove
+   button, then its two actions. Rows are separated by space and a soft fill,
+   never lines; a chip is a fill, not an outline. */
+.app-folders {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.app-folders-notice {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: #ff9b9214;
+  color: #ff9b92;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.app-folder-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+/* The heading row: icon, title, then the row's actions in a column of their
+   own at the right, so every row's Add button lines up whatever the title. */
+.app-folder-heading {
+  align-self: stretch;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.app-folder-heading > svg {
+  color: var(--text-faint);
+}
+.app-folder-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-folder-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 4px 0 8px;
+  border-radius: 6px;
+  background: #ffffff10;
+  font-size: 12px;
+}
+.app-folder-chip:not(:has(button)) {
+  padding-right: 8px;
+}
+.app-folder-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.app-folder-chip button:hover {
+  background: #ffffff14;
+  color: var(--text);
+}
+.app-folder-none,
+.app-folder-fixed {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.app-folder-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+}
+/* The title, plain at its defaults; once changed, the app's blue set label
+   (.prop-label.set), whose click offers Reset to default. */
+.app-folder-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-folder-title .prop-label:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.app-folder-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 500;
+}
+.app-folder-actions button:hover:not(:disabled) {
+  background: #ffffff10;
+  color: var(--text);
+}
+.app-folder-actions button:disabled {
+  opacity: 0.45;
+}
+.app-folder-chip button:focus-visible,
+.app-folder-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* The CMS section's collection switches: the name, then its switch at the right end. */
+.app-folder-toggles {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.app-folder-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 30px;
+  font-size: 12px;
+}
+/* A data file's export, under its file in the data picker list. */
+.app-folder-toggle.is-nested {
+  padding-left: 16px;
+}
+.app-folder-link {
+  display: inline;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.app-folder-link:hover {
+  text-decoration: underline;
+}
+.app-folder-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

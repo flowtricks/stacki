@@ -1,6 +1,8 @@
 import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import InsertSearch, { type InsertItem } from '../../../vendor/stacki/src/features/palette/InsertSearch';
+import { useInsertAppsSource, type InsertAppsNotify } from '../../../vendor/stacki/src/app/shell/insertApps';
+import { useStudioRole } from '../roles/useEditorRole';
 import { insertTargetFor } from '../../../vendor/stacki/src/editor/insertTarget';
 import { parsePageModel } from '../../../vendor/stacki/shared/page/pageNode';
 import type { useEditor } from '../project/useEditor';
@@ -15,11 +17,14 @@ export function QuickInsert({
   model,
   project,
   enabled,
+  browseApps,
   report,
 }: {
   readonly model: ReturnType<typeof useEditor>;
   readonly project: Project;
   readonly enabled: boolean;
+  /** Switches the rail to the Apps panel, for the palette's Apps tab. */
+  readonly browseApps: () => void;
   readonly report: (error: unknown) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -30,27 +35,63 @@ export function QuickInsert({
     return null;
   }
   return (
+    <QuickInsertSearch
+      model={model}
+      project={project}
+      allowSlot={!isCanvasPage(document.file)}
+      browseApps={browseApps}
+      report={report}
+      close={() => setOpen(false)}
+    />
+  );
+}
+
+// The open palette, mounted only while it shows, so the installed apps are read when it opens
+// (Studio's apps client, through the shared insertApps.ts), as Desktop's palette reads them.
+function QuickInsertSearch({
+  model,
+  project,
+  allowSlot,
+  browseApps,
+  report,
+  close,
+}: {
+  readonly model: ReturnType<typeof useEditor>;
+  readonly project: Project;
+  readonly allowSlot: boolean;
+  readonly browseApps: () => void;
+  readonly report: (error: unknown) => void;
+  readonly close: () => void;
+}) {
+  const role = useStudioRole();
+  // Studio tells the person things through its report channel: a message, or an error for a failure.
+  const notify = useCallback<InsertAppsNotify>((message, kind) => report(kind === 'error' ? new Error(message) : message), [report]);
+  const apps = useInsertAppsSource({ projectPath: project.name, role, browse: browseApps, notify });
+  return (
     <InsertSearch
       projectKey={project.workspaceId ?? project.name}
       components={project.components.map((component) => ({
         name: component.name,
         path: component.file,
-        folder: component.file
-          .replace(/^src\/(components|layouts)\//, '')
-          .split('/')
-          .slice(0, -1)
-          .join('/'),
-        isLayout: component.file.startsWith('src/layouts/'),
+        folder:
+          component.folder ??
+          component.file
+            .replace(/^src\/(components|layouts)\//, '')
+            .split('/')
+            .slice(0, -1)
+            .join('/'),
+        isLayout: component.isLayout === true,
       }))}
-      allowSlot={!isCanvasPage(document.file)}
+      allowSlot={allowSlot}
       devUrl={location.origin}
       resolvePreviewURL={resolvePreviewURL}
       trailingSlash="ignore"
+      apps={apps}
       onInsert={(item) => {
-        setOpen(false);
+        close();
         void insertChoice(model, project, item).catch(report);
       }}
-      onClose={() => setOpen(false)}
+      onClose={close}
     />
   );
 }

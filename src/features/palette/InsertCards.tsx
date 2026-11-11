@@ -1,4 +1,5 @@
 import { useCallback, useRef, type MouseEvent, type RefObject } from 'react';
+import type { ComponentPreviewGesture } from './paletteModel';
 import { assert } from '../../../shared/core/assert';
 import { insertFolderLabel, type InsertFolderKey } from './insertFolders';
 import type { InsertPill } from './insertGrid';
@@ -20,6 +21,7 @@ export function InsertCard({
   scrollRoot,
   onVisible,
   onSettled,
+  showFolder,
   onHover,
   onInsert,
 }: {
@@ -32,6 +34,8 @@ export function InsertCard({
   readonly onVisible: (key: string, visible: boolean) => void;
   /** The card's frame answered or gave up; the grid may start another. */
   readonly onSettled: (key: string) => void;
+  /** Whether the label row names the card's folder pill; redundant, and so left out, while a pill filters the grid. */
+  readonly showFolder: boolean;
   readonly onHover: () => void;
   readonly onInsert: () => void;
 }) {
@@ -40,19 +44,49 @@ export function InsertCard({
   useReportVisibility(ref, scrollRoot, itemKey, onVisible);
   const uses = item.instances ?? 0;
   const settle = useCallback(() => onSettled(itemKey), [onSettled, itemKey]);
+  const gesture = useCardGesture(onHover, onInsert);
+  const folder = showFolder && item.card.folder !== undefined ? insertFolderLabel(item.card.folder) : undefined;
   return (
     <div ref={ref} className={`insert-item insert-card ${highlighted ? 'highlight' : ''}`} onMouseMove={highlighted ? undefined : onHover} onClick={onInsert}>
-      <InsertPreviewSurface source={{ ...host, component: item.preview }} mounted={mounted} icon={item.icon} onSettled={settle} />
+      <InsertPreviewSurface source={{ ...host, component: item.preview }} mounted={mounted} icon={item.icon} onSettled={settle} onGesture={gesture} />
       <div className="insert-card-foot">
         <span className="insert-item-icon">{item.icon}</span>
         <span className="insert-item-label">{item.label}</span>
+        {folder !== undefined && <span className="insert-card-folder">· {folder}</span>}
         {uses > 0 && <span className="insert-item-uses">{uses}×</span>}
       </div>
     </div>
   );
 }
 
-/** A row of the plain list the All results, Elements and Other tabs show: icon, label and where it comes from. */
+/**
+ * What the live preview's pointer means to its card: coming in highlights the card as the pointer over
+ * the card's own edge does, and a click inserts. Stable for the frame's message listener; the latest
+ * handlers are read when a gesture arrives.
+ */
+function useCardGesture(onHover: () => void, onInsert: () => void): (gesture: ComponentPreviewGesture) => void {
+  const latest = useRef({ onHover, onInsert });
+  latest.current = { onHover, onInsert };
+  return useCallback((gesture: ComponentPreviewGesture) => {
+    switch (gesture) {
+      case 'pointer':
+        latest.current.onHover();
+        return;
+      case 'click':
+        latest.current.onInsert();
+        return;
+      default: {
+        const exhaustive: never = gesture;
+        return exhaustive;
+      }
+    }
+  }, []);
+}
+
+/**
+ * A row of the plain list the All results, Elements and Other tabs show: icon, label and where it comes
+ * from. A component says where with its folder pill's name, as its card does.
+ */
 export function InsertRow({
   item,
   highlighted,
@@ -64,11 +98,12 @@ export function InsertRow({
   readonly onHover: () => void;
   readonly onInsert: () => void;
 }) {
+  const where = item.card?.folder === undefined ? item.sub : insertFolderLabel(item.card.folder);
   return (
     <div className={`insert-item ${highlighted ? 'highlight' : ''}`} onMouseMove={highlighted ? undefined : onHover} onClick={onInsert}>
       <span className="insert-item-icon">{item.icon}</span>
       <span className="insert-item-label">{item.label}</span>
-      {item.sub && <span className="insert-item-sub">{item.sub}</span>}
+      {where !== undefined && where !== '' && <span className="insert-item-sub">{where}</span>}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { safePath } from '../project/projectServer';
 import { saveAsset, forgetAsset } from '../storage/assetStorage';
 import { filePath, record, string } from '../../shared/validation';
 import { managedAsset } from './assetStateTypes';
+import { assetFolderPath } from './assetFolders';
 import { readAssetState, saveAssetState } from './assetState';
 
 export async function mutateAsset(root: string, input: unknown) {
@@ -12,7 +13,7 @@ export async function mutateAsset(root: string, input: unknown) {
   const kind = string(value['kind'], 12);
   const rel = directoryOrFile(value['rel']);
   if (kind === 'mkdir') {
-    const destination = child(rel, value['name']);
+    const destination = assetFolderPath(root, child(rel, value['name']));
     await vacant(root, destination);
     const state = await readAssetState(root);
     await saveAssetState(root, {
@@ -24,6 +25,7 @@ export async function mutateAsset(root: string, input: unknown) {
     return { ok: true };
   }
   filePath(rel); // Root directories cannot be renamed, moved, or deleted.
+  assetFolderPath(root, rel);
   const source = await safePath(root, rel);
   const info = await stat(source);
   if (kind === 'delete') {
@@ -49,6 +51,7 @@ export async function mutateAsset(root: string, input: unknown) {
   if (destination === rel) {
     return { ok: true };
   }
+  assetFolderPath(root, destination);
   if (destination.startsWith(rel + '/')) {
     throw new Error('A folder cannot be moved into itself');
   }

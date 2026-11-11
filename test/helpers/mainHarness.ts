@@ -99,7 +99,7 @@ function mainHarnessElectron(userData: string, handlers: Map<string, (event: unk
     },
     protocol: { registerSchemesAsPrivileged: () => undefined },
     clipboard: { writeText: () => undefined },
-    shell: { trashItem: (file: string) => fs.rmSync(file, { recursive: true, force: true }) },
+    shell: { trashItem: (file: string) => fs.rmSync(file, { recursive: true, force: true }), showItemInFolder: () => undefined },
   };
   return electron;
 }

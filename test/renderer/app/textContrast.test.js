@@ -1,7 +1,7 @@
 // Goal: every text colour token stays readable on the surfaces it is drawn on.
 // Grey text on a dark fill drifted below WCAG AA once (#666 on a popover's
 // section fill was 2.4:1), so the ratios are pinned rather than eyeballed.
-// Method: the `:root` blocks of src/app/styles.css (the app's tokens) and
+// Method: the `:root` blocks of src/app/styles.css (the app's tokens), the dropdown's shared sheet, and
 // src/features/style/tokens.css (the style editor's) are read as text, `var()`
 // aliases resolved, and translucent fills composited over the surface they sit
 // on. WCAG 2 relative luminance gives each pair's contrast, which must meet the
@@ -120,7 +120,8 @@ test('the contrast helpers match known WCAG ratios and refuse what they cannot r
 test('app text tokens are readable on panels, popovers and their fills', () => {
   const { css, tokens } = rootTokens('src/app/styles.css');
   const color = (name) => opaque(resolve(tokens, name));
-  const popover = /\n\.dd-popup \{[^}]*?background: (#[0-9a-f]{3,6});/i.exec(css);
+  // The dropdown's menu lives in its shared sheet, which styles.css imports (and the app UI kit builds from).
+  const popover = /\n\.dd-popup \{[^}]*?background: (#[0-9a-f]{3,6});/i.exec(fs.readFileSync(repoPath('src/ui/dropdown.css'), 'utf8'));
   assert.ok(popover, '.dd-popup background not found');
   const popoverRGB = opaque(popover[1]);
   const panel = color('--bg-panel');

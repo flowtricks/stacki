@@ -71,7 +71,10 @@ export function resolveInstanceProps(node: TreeView | undefined, context: DataCo
   const out: Record<string, unknown> = {};
 
   for (const [name, prop] of Object.entries(props)) {
-    if (!prop || name === 'class' || name.startsWith('class:')) {
+    // `class` is a prop like any other to the component that reads it
+    // (`const { class: className } = Astro.props`), so its value is shown there.
+    // A `class:list` directive is Astro's to combine, and is not worked out here.
+    if (!prop || name.startsWith('class:')) {
       continue;
     }
     // Written as text: `variant="cover"` is its own answer.

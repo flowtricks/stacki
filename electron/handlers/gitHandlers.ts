@@ -14,6 +14,8 @@ import { capture } from '../lib/mainHelpers';
 import { run, git } from '../lib/nodeTools';
 import { parkBranch, unparkBranch, currentBranch, readGitLog, readGitIdentity, readGitParked } from '../git/gitParking';
 import type { MainHost } from './mainHost';
+import { registerGitAvatarHandler } from './gitAvatarHandlers';
+import { registerGitHubUserSearchHandler } from './githubUserSearchHandlers';
 
 export function registerGitHandlers(host: Pick<MainHost, 'ipcMain'>): void {
   registerGitInfoHandler(host);
@@ -21,6 +23,8 @@ export function registerGitHandlers(host: Pick<MainHost, 'ipcMain'>): void {
   registerGitUnparkHandlers(host);
   registerGitPublishHandler(host);
   registerGitPullHandler(host);
+  registerGitAvatarHandler(host);
+  registerGitHubUserSearchHandler(host);
 }
 
 function registerGitInfoHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {

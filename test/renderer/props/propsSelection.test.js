@@ -19,9 +19,10 @@ buildSync({
   external: ['react', 'react-dom', 'react/jsx-runtime'],
   logLevel: 'silent',
 });
-const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true, url: 'http://localhost/' });
 global.window = dom.window;
 global.document = dom.window.document;
+global.localStorage = dom.window.localStorage;
 for (const name of ['Node', 'Element', 'HTMLElement', 'MutationObserver', 'DOMRect', 'Window']) {
   global[name] = dom.window[name];
 }
@@ -90,13 +91,18 @@ const fragment = {
     }
   }
   await act(async () => root.render(React.createElement(PropsPanel, { ...props, node: nodes[1] })));
+  // Settings starts open; closing it is remembered across selections and in storage.
   const toggle = document.querySelector('.props-group [aria-expanded]');
   assert.ok(toggle);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true', 'Settings is open by default');
   await act(async () => toggle.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
-  assert.equal(document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'), 'true');
+  assert.equal(document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'), 'false');
   await act(async () => root.render(React.createElement(PropsPanel, { ...props, node: nodes[2] })));
   await act(async () => root.render(React.createElement(PropsPanel, { ...props, node: nodes[1] })));
-  assert.equal(document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'), 'true');
+  assert.equal(document.querySelector('.props-group [aria-expanded]').getAttribute('aria-expanded'), 'false', 'closed stays closed across selections');
+  assert.equal(dom.window.localStorage.getItem('stacki.props.settingsOpen'), 'closed', 'the choice is stored for other projects and restarts');
+  await act(async () => document.querySelector('.props-group [aria-expanded]').dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true })));
+  assert.equal(dom.window.localStorage.getItem('stacki.props.settingsOpen'), 'open', 'reopening is stored too');
   await act(async () => root.render(React.createElement(PropsPanel, { ...props, allowAttrs: false, node: fragment })));
   assert.equal(document.querySelector('.attr-name')?.textContent, 'set:html', 'Fragment directives appear in Attributes without a component rest prop');
   await act(async () => root.unmount());

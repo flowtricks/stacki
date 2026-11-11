@@ -66,11 +66,23 @@ test('attribute names are checked against the tag, with the always-valid names a
   assert.equal(names.attributeValidOn('onclick', 'p'), true);
   assert.equal(names.attributeValidOn('role', 'section'), true);
   assert.equal(names.attributeValidOn('anything', 'my-widget'), true, 'a custom element takes any name');
-  assert.equal(names.attributeNameNote('required', 'div', []), 'required isn’t an attribute of <div>.');
-  assert.equal(names.attributeNameNote('href', 'a', []), undefined);
-  assert.equal(names.attributeNameNote('set:html', 'div', []), 'This is a reserved name.');
-  assert.equal(names.attributeNameNote('client:load', 'div', []), 'This is a reserved name.');
-  assert.equal(names.attributeNameNote('title', undefined, ['title']), 'This is a reserved name.', 'an instance attribute named like a prop');
-  assert.equal(names.attributeNameNote('anything', undefined, []), undefined, 'an instance without a tag notes reserved names only');
-  assert.equal(names.attributeNameNote('', 'div', []), undefined);
+  const on = (tag, more = {}) => ({ tag, reserved: [], own: undefined, taken: [], ...more });
+  assert.equal(names.attributeNameNote('required', on('div')), 'required isn’t an attribute of <div>.');
+  assert.equal(names.attributeNameNote('href', on('a')), undefined);
+  assert.equal(names.attributeNameNote('set:html', on('div')), 'This is a reserved name.');
+  assert.equal(names.attributeNameNote('client:load', on('div')), 'This is a reserved name.');
+  assert.equal(names.attributeNameNote('title', on(undefined, { reserved: ['title'] })), 'This is a reserved name.', 'an instance attribute named like a prop');
+  assert.equal(names.attributeNameNote('anything', on(undefined)), undefined, 'an instance without a tag notes reserved names only');
+  assert.equal(names.attributeNameNote('', on('div')), undefined);
+});
+
+test('a name is noted only as it is typed for a new or renamed attribute, never as the attribute already has it', () => {
+  const on = (tag, more = {}) => ({ tag, reserved: [], own: undefined, taken: [], ...more });
+  assert.equal(names.attributeNameNote('class:list', on('div', { own: 'class:list' })), undefined, 'an existing class:list is what the file says');
+  assert.equal(names.attributeNameNote('set:html', on('div', { own: 'set:html' })), undefined, 'and so is any existing directive');
+  assert.equal(names.attributeNameNote('class:list', on('div')), 'Classes are edited in the Style panel.', 'adding one gets a calm hint');
+  assert.equal(names.attributeNameNote('class', on('div', { own: 'id' })), 'Classes are edited in the Style panel.', 'renaming onto one too');
+  assert.equal(names.attributeNameNote('class', on(undefined)), undefined, 'a tag with no class field takes class like any attribute');
+  assert.equal(names.attributeNameNote('id', on('div', { taken: ['id'] })), 'id is already on this element.');
+  assert.equal(names.attributeNameNote('id', on('div', { own: 'id', taken: [] })), undefined);
 });

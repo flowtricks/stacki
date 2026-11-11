@@ -1,5 +1,6 @@
 // A selector longer than the panel stays inside its row, and the row's lock
-// stays where it can be clicked.
+// stays where it can be clicked. Every lock, a stylesheet heading's and each
+// row's, with or without the row's trash beside it, sits in one column.
 //
 //   node test/renderer/selectors/selectorRowWidth.test.js
 //
@@ -27,16 +28,23 @@ const check = (what, condition, detail) => {
 const LIST_WIDTH_PX = 280;
 const LONG_SELECTOR = '.inline-video_wrap.is-focused .button_icon_wrap .button_text_inner .button_main_wrap';
 
-// One row as SelectorsPanel's SelectorRow renders it, locked.
-function rowMarkup(selector) {
+// One row as SelectorsPanel's SelectorRow renders it: locked, or unused with
+// its trash before its lock (laid out though hidden until hover).
+function rowMarkup(selector, kind = 'kept') {
+  const trash = kind === 'unused' ? '<button class="ghost selectors-remove-one" aria-label="Remove">T</button>' : '';
   return (
     '<div class="selectors-row-slot">' +
-    '<div class="selectors-row is-kept">' +
+    `<div class="selectors-row is-${kind}">` +
     `<code class="selectors-selector">${selector}</code>` +
-    '<span class="selectors-actions"><button class="ghost selectors-lock on" aria-label="Unlock">L</button></span>' +
+    `<span class="selectors-actions">${trash}<button class="ghost selectors-lock ${kind === 'kept' ? 'on' : ''}" aria-label="Lock">L</button></span>` +
     '</div></div>'
   );
 }
+
+// A stylesheet heading as SheetSection renders it, with its lock.
+const HEADING =
+  '<div class="selectors-heading"><h3 class="selectors-heading-name selectors-file">patterns.css</h3>' +
+  '<span class="tip-anchor selectors-sheet-lock-anchor"><button class="ghost selectors-sheet-lock" aria-label="Lock patterns.css">L</button></span></div>';
 
 (() => {
   const electronPath = (() => {
@@ -55,7 +63,14 @@ function rowMarkup(selector) {
   fs.mkdirSync(pageDirectory, { recursive: true });
   fs.writeFileSync(
     path.join(pageDirectory, 'app.css'),
-    ['src/features/style/tokens.css', 'src/app/styles.css', 'src/features/selectors/selectors.css']
+    [
+      'src/features/style/tokens.css', // The sheets styles.css imports first (its @import is not followed in a concatenation).
+      'src/ui/controls.css',
+      'src/ui/dropdown.css',
+      'src/ui/resetLabel.css',
+      'src/app/styles.css',
+      'src/features/selectors/selectors.css',
+    ]
       .map((file) => fs.readFileSync(path.join(ROOT, file), 'utf8'))
       .join('\n'),
   );
@@ -64,8 +79,11 @@ function rowMarkup(selector) {
     '<!doctype html><meta charset=utf-8><link rel="stylesheet" href="app.css">' +
       '<style>body{margin:0;background:#1a1a1a}</style>' +
       `<div class="selectors-panel"><div class="selectors-body" style="width:${LIST_WIDTH_PX}px">` +
+      `<section class="selectors-group"><div class="selectors-group-body">${HEADING}` +
       rowMarkup(LONG_SELECTOR) +
       rowMarkup('.mapboxgl-ctrl-logo') +
+      rowMarkup('.pattern-a', 'unused') +
+      '</div></section>' +
       '</div></div>',
   );
 
@@ -81,7 +99,9 @@ function rowMarkup(selector) {
        await win.loadFile(path.join(__dirname, 'index.html'));
        const result = await win.webContents.executeJavaScript(\`(() => {
          const list = document.querySelector('.selectors-body').getBoundingClientRect();
-         return [...document.querySelectorAll('.selectors-row')].map((row) => {
+         const heading = document.querySelector('.selectors-sheet-lock').getBoundingClientRect();
+         const trash = document.querySelector('.selectors-remove-one').getBoundingClientRect();
+         const rows = [...document.querySelectorAll('.selectors-row')].map((row) => {
            const box = row.getBoundingClientRect();
            const lock = row.querySelector('.selectors-lock').getBoundingClientRect();
            const text = row.querySelector('.selectors-selector');
@@ -96,6 +116,7 @@ function rowMarkup(selector) {
              lockHit: hit !== null && hit.closest('.selectors-lock') !== null,
            };
          });
+         return { rows, headingLockRight: Math.round(heading.right), trashRight: Math.round(trash.right) };
        })()\`);
        console.log(JSON.stringify(result));
        app.quit();
@@ -104,11 +125,12 @@ function rowMarkup(selector) {
 
   const { spawnSync } = require('child_process');
   const run = spawnSync(electronPath, [probe], { encoding: 'utf8', timeout: 120000 });
-  const line = (run.stdout || '').split('\n').find((text) => text.trim().startsWith('['));
+  const line = (run.stdout || '').split('\n').find((text) => text.trim().startsWith('{'));
   if (!line) {
     check('the browser probe ran', false, (run.stderr || run.stdout || '').slice(0, 500));
   } else {
-    const [long, short] = JSON.parse(line);
+    const measured = JSON.parse(line);
+    const [long, short, unused] = measured.rows;
     check('there are two rows to measure', long !== undefined && short !== undefined, line);
     if (long !== undefined && short !== undefined) {
       check('a long selector keeps its row inside the list', long.rowRight <= long.listRight, JSON.stringify(long));
@@ -117,6 +139,16 @@ function rowMarkup(selector) {
       check('the selector is cut short with an ellipsis, not the row widened', long.textClipped, JSON.stringify(long));
       check('a short selector also ends at the list edge', short.rowRight === short.listRight, JSON.stringify(short));
       check('both locks line up', long.lockRight === short.lockRight, `${long.lockRight} vs ${short.lockRight}`);
+    }
+    check('there is a row with a trash to measure', unused !== undefined, line);
+    if (unused !== undefined && short !== undefined) {
+      check('a row with its trash keeps its lock in the column', unused.lockRight === short.lockRight, `${unused.lockRight} vs ${short.lockRight}`);
+      check('the trash sits before the lock', measured.trashRight <= unused.lockRight - 12, JSON.stringify(measured));
+      check(
+        'the stylesheet heading lock lines up with the row locks',
+        measured.headingLockRight === short.lockRight,
+        `${measured.headingLockRight} vs ${short.lockRight}`,
+      );
     }
   }
 

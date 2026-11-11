@@ -111,9 +111,17 @@ export function memberComment(frontmatter: string, member: ts.PropertySignature)
 /**
  * The edits that turn `member` (read as `previous`) into `property`: one for
  * its doc comment, modifiers, name and question mark (they sit together before
- * the type), one for its type. Nothing else in the member is touched.
+ * the type), one for its type. Nothing else in the member is touched. The type
+ * is written where `typeTarget` says: the member's own type, or the body of
+ * the same-file alias its options live in (propertyTypes.ts, optionAliasOf).
  */
-export function memberEdits(frontmatter: string, member: ts.PropertySignature, previous: DeclaredFields, property: DeclaredFields): readonly SourceEdit[] {
+export function memberEdits(
+  frontmatter: string,
+  member: ts.PropertySignature,
+  previous: DeclaredFields,
+  property: DeclaredFields,
+  typeTarget: ts.TypeNode | undefined = member.type,
+): readonly SourceEdit[] {
   assert(property.name.length > 0, 'memberEdits: the saved property has a name');
   assert(property.description.length <= PROPERTY_LIMITS.textCharsMax, 'memberEdits: the tooltip is bounded');
   const edits: SourceEdit[] = [];
@@ -121,8 +129,9 @@ export function memberEdits(frontmatter: string, member: ts.PropertySignature, p
   if (head !== undefined) {
     edits.push(head);
   }
-  if (property.type !== previous.type && member.type !== undefined) {
-    edits.push({ start: member.type.getStart(), end: member.type.end, text: property.type });
+  if (property.type !== previous.type && typeTarget !== undefined) {
+    assert(member.type !== undefined, 'memberEdits: a type target belongs to a typed member');
+    edits.push({ start: typeTarget.getStart(), end: typeTarget.end, text: property.type });
   }
   return edits;
 }

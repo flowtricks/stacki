@@ -31,18 +31,20 @@ export function ComponentsPanel({
   return (
     <PalettePanel
       components={project.components
-        .filter((component) => !component.file.startsWith('src/layouts/'))
+        .filter((component) => component.isLayout !== true)
         .map((component) => {
           const instances = counts.get(component.file);
           return {
             name: component.name,
             path: component.file,
             ...(component.origin === undefined ? {} : { origin: component.origin }),
-            folder: component.file
-              .replace(/^src\/components\//, '')
-              .split('/')
-              .slice(0, -1)
-              .join('/'),
+            folder:
+              component.folder ??
+              component.file
+                .replace(/^src\/components\//, '')
+                .split('/')
+                .slice(0, -1)
+                .join('/'),
             schema: component.fields,
             slots: component.slots,
             ...(instances === undefined ? {} : { instances }),

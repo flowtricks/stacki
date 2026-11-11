@@ -1,3 +1,6 @@
+import type { InlineChip, InlineCodeView } from './useInlineTarget';
+import { InlineBranchEditor, InlineBranchPicker } from './InlineBranchEditor';
+import { CodeBlock } from '../../../ui/CodeBlock';
 import Popup from '../../../ui/Popup';
 // Media and container queries — picking one, adding and editing it — and the
 // style card's CSS code view (EmbedEditor.tsx).
@@ -481,6 +484,8 @@ export type CssCodeSectionProps = {
   readonly open: boolean;
   readonly onToggle: () => void;
   readonly onSave: (rule: ParsedRule, css: string) => void;
+  /** The style attribute written as code, shown in place of the rules. */
+  readonly inlineCode?: InlineCodeView | undefined;
 };
 
 export function CssCodeHeader({ open, sourceLabel, onToggle }: { readonly open: boolean; readonly sourceLabel: string; readonly onToggle: () => void }) {
@@ -507,7 +512,7 @@ export function CssCodeHeader({ open, sourceLabel, onToggle }: { readonly open: 
   );
 }
 
-export function CssCodeSection({ model, activeSelector, visibleSelectors, editableRule, busy, open, onToggle, onSave }: CssCodeSectionProps) {
+export function CssCodeSection({ model, activeSelector, visibleSelectors, editableRule, busy, open, onToggle, onSave, inlineCode }: CssCodeSectionProps) {
   const layer = usePanelLayer();
   const rules = useMemo(() => {
     const visible = [...model.base, ...model.conditional].filter((rule) => cssRuleMatchesVisibleSelector(rule, visibleSelectors));
@@ -516,14 +521,22 @@ export function CssCodeSection({ model, activeSelector, visibleSelectors, editab
   }, [model, activeSelector, visibleSelectors, layer]);
   const view = useMemo(() => buildCssRuleView(rules), [rules]);
   const sources = useMemo(() => [...new Set(rules.map((entry) => entry.rule.embedLabel))], [rules]);
-  const sourceLabel = activeSelector ? (editableRule?.embedLabel ?? sources.join(', ')) : '';
+  const sourceLabel = inlineCode !== undefined ? 'style attribute' : activeSelector ? (editableRule?.embedLabel ?? sources.join(', ')) : '';
 
   return (
     <section className={`embed-editor_css-code ${open ? 'is-open' : 'is-collapsed'}`}>
       <CssCodeHeader open={open} sourceLabel={sourceLabel} onToggle={onToggle} />
+      {open && inlineCode?.kind === 'branches' ? <InlineBranchPicker view={inlineCode.view} busy={busy} /> : undefined}
       {open ? (
         <div className="embed-editor_css-code-body">
-          {activeSelector && editableRule ? (
+          {inlineCode?.kind === 'branches' ? (
+            <InlineBranchEditor view={inlineCode.view} busy={busy} />
+          ) : inlineCode?.kind === 'readonly' ? (
+            <>
+              <p className="embed-editor_inline-writes-to">{inlineCode.reason}</p>
+              <CodeBlock text={inlineCode.code} language="css" className="embed-editor_css-code-preview" label="The style attribute, read-only" />
+            </>
+          ) : activeSelector && editableRule ? (
             <EditableCssRule key={editableRule.ruleId} rule={editableRule} busy={busy} onSave={onSave} />
           ) : view.code ? (
             <CssCodePreview view={view} ariaLabel="CSS matching this element" />
@@ -560,6 +573,11 @@ export type StyleCardProps = {
   selectors: MatchedSelector[];
   suggestions: SelectorSuggestion[];
   activeSelector: string;
+  /** The "Inline styles" chip for the element's style attribute, when it has one (useInlineTarget.ts). */
+  inline?: InlineChip | undefined;
+  /** The picked chip's attribute written as code: its branches to edit, or read-only
+   *  CSS with why, shown in the CSS code section in place of the rules (useInlineTarget.ts). */
+  inlineCode?: InlineCodeView | undefined;
   onSelectActive: (selector: string) => void;
   onDeselect: () => void;
   onAddSelector: (selector: string, placement: ClassPlacement) => void;

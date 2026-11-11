@@ -11,6 +11,7 @@ import * as path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { MAIN_LIMITS } from '../lib/mainLimits';
 import { isStudioDirectory } from '../lib/studioDirectory';
+import { DEFAULT_PROJECT_FOLDERS, folderHolding } from '../../shared/properties/projectFolders';
 import type { SelectorNote } from '../../shared/properties/selectorUsage';
 import type { StyleKeepList } from '../../shared/properties/styleKeepList';
 import { emptyHits, scanMentions, type MentionHits, type MentionInterest } from './selectorMentions';
@@ -88,20 +89,31 @@ const LOCKFILES = new Set(['package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', '
 const OTHER_STYLE_EXTENSIONS = new Set(['.scss', '.sass', '.less', '.styl']);
 // The package files that run or render: code, components and the data code reads.
 const PACKAGE_EXTENSIONS = new Set(['.js', '.mjs', '.cjs', '.jsx', '.ts', '.mts', '.cts', '.tsx', '.astro', '.svelte', '.vue', '.html', '.json']);
-// The top-level folders whose stylesheets are the site's, matching the style
-// panel (electron/project/styleFiles.ts). Files elsewhere still count as
-// mentions — a script in scripts/ can add a class — but their own selectors
-// are not offered for clean-up.
+// The top-level folders whose Astro `<style>` blocks are the site's. Files
+// elsewhere still count as mentions — a script in scripts/ can add a class —
+// but their own selectors are not offered for clean-up. Plain stylesheets are
+// the site's when they are in a style folder (.stacki/folders.json), matching
+// the style panel (electron/project/styleFiles.ts); by default that is the same three folders.
 const SITE_FOLDERS = new Set(['src', 'public', 'styles']);
 const PACKAGE_SKIPPED_DIRECTORIES = new Set(['.bin', '.cache', '.vite']);
 
 /** The whole check against a project on disk: read it, then analyse it. */
-export async function checkSelectorUsage(root: string, keepList: StyleKeepList, packages: PackageSearch = 'search'): Promise<UsageAnalysis> {
-  const input = await readSelectorUsageInput(root, keepList);
+export async function checkSelectorUsage(
+  root: string,
+  keepList: StyleKeepList,
+  packages: PackageSearch = 'search',
+  // The project's style folders (.stacki/folders.json), read by the caller.
+  styleFolders: readonly string[] = DEFAULT_PROJECT_FOLDERS.styles,
+): Promise<UsageAnalysis> {
+  const input = await readSelectorUsageInput(root, keepList, styleFolders);
   return analyzeSelectorUsage(input, (interest) => scanInstalledPackages(root, interest, packages));
 }
 
-export async function readSelectorUsageInput(root: string, keepList: StyleKeepList): Promise<UsageInput> {
+export async function readSelectorUsageInput(
+  root: string,
+  keepList: StyleKeepList,
+  styleFolders: readonly string[] = DEFAULT_PROJECT_FOLDERS.styles,
+): Promise<UsageInput> {
   const stylesheets: ProjectText[] = [];
   const astro: AstroSheet[] = [];
   const others: ProjectText[] = [];
@@ -160,8 +172,8 @@ export async function readSelectorUsageInput(root: string, keepList: StyleKeepLi
         continue;
       }
       if (extension === '.css') {
-        // A stylesheet outside the site's folders is neither checked nor a mention.
-        if (next.site) {
+        // A stylesheet outside the site's style folders is neither checked nor a mention.
+        if (folderHolding(styleFolders, rel) !== undefined) {
           stylesheets.push({ rel, text });
         }
       } else if (extension === '.astro' && next.site) {

@@ -1,8 +1,11 @@
 // A property's description, split into what the Properties panel shows as
 // separate fields: the tooltip (the words a designer reads on hover) and the
 // settings Stacki keeps as JSDoc tags on the same comment (propDocumentation.ts
-// reads them: `@min`, `@max`, `@decimals`, `@onLabel`, `@offLabel`, and the
-// kind tag `@format`). The new-prop form writes the same tags, so a prop made
+// reads them: `@min`, `@max`, `@decimals`, and the kind tag `@format`).
+// `@onLabel` and `@offLabel`, a switch's side names Stacki once wrote, are
+// legacy: Astro has no such thing for a boolean, so nothing reads them. They
+// stay out of the tooltip and are kept as written, and the tooltip field offers
+// to remove them (legacyTagsOf, withoutLegacyTags). The new-prop form writes the same tags, so a prop made
 // from the bind dot and one edited here read and write alike.
 //
 // Every function here takes the description as main read it and returns a
@@ -13,16 +16,17 @@
 
 import { assert } from '../../../shared/core/assert';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
-import { NUMBER_DECIMALS_MAX, SWITCH_LABELS, readPropDocumentation, type NumberSettings, type SwitchSettings } from '../../editor/propDocumentation';
+import { NUMBER_DECIMALS_MAX, readPropDocumentation, type NumberSettings } from '../../editor/propDocumentation';
 
 /** The tags the panel edits as fields of their own. */
-export const SETTING_TAG_NAMES = ['min', 'max', 'decimals', 'onLabel', 'offLabel', 'format'] as const;
+export const SETTING_TAG_NAMES = ['min', 'max', 'decimals', 'format'] as const;
 export type SettingTagName = (typeof SETTING_TAG_NAMES)[number];
+/** Tags Stacki once wrote and no longer reads: kept out of the tooltip, never written. */
+export const LEGACY_TAG_NAMES = ['onLabel', 'offLabel'] as const;
 
-// The new-prop form's bound on a switch label (DECLARATION_LIMITS.labelCharsMax).
-export const SWITCH_LABEL_CHARS_MAX = 40;
 const LINES_MAX = 1024;
-const TAG_LINE = new RegExp(`^\\s*@(${SETTING_TAG_NAMES.join('|')})\\b`);
+const TAG_LINE = new RegExp(`^\\s*@(${[...SETTING_TAG_NAMES, ...LEGACY_TAG_NAMES].join('|')})\\b`);
+const LEGACY_TAG_LINE = new RegExp(`^\\s*@(${LEGACY_TAG_NAMES.join('|')})\\b`);
 
 /** The tooltip: the description without the setting tags' lines. */
 export function tooltipOf(description: string): string {
@@ -80,9 +84,19 @@ export function numberSettingsOf(description: string): NumberSettings {
   return readPropDocumentation(description).number;
 }
 
-/** A switch prop's labels as the description states them. */
-export function switchSettingsOf(description: string): SwitchSettings {
-  return readPropDocumentation(description).switch;
+/** The legacy tag lines a description still has, as written. */
+export function legacyTagsOf(description: string): readonly string[] {
+  return descriptionLines(description).filter((line) => LEGACY_TAG_LINE.test(line));
+}
+
+/** The description without its legacy tag lines; every other line kept as written. */
+export function withoutLegacyTags(description: string): string {
+  const out = descriptionLines(description)
+    .filter((line) => !LEGACY_TAG_LINE.test(line))
+    .join('\n');
+  assert(legacyTagsOf(out).length === 0, 'withoutLegacyTags: no legacy tag remains');
+  assert(tooltipOf(out) === tooltipOf(description), 'withoutLegacyTags: the tooltip is unchanged');
+  return out;
 }
 
 /** Why a number setting as typed cannot be written, or undefined when it can. */
@@ -99,12 +113,6 @@ export function numberSettingProblem(settings: NumberSettings): string | undefin
     }
   }
   return undefined;
-}
-
-/** A switch label as written: the default words (On, Off) are not written at all. */
-export function switchLabelTag(value: string, side: 'onLabel' | 'offLabel'): string | undefined {
-  const text = value.replace(/\s+/g, ' ').trim().slice(0, SWITCH_LABEL_CHARS_MAX);
-  return text === '' || text === SWITCH_LABELS[side] ? undefined : text;
 }
 
 function tagName(line: string): SettingTagName | undefined {

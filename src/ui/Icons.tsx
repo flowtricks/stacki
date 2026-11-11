@@ -124,6 +124,23 @@ export const FileIcon = (props: IconProps) => (
   </I>
 );
 
+// An open book: the Instructions panel, the project's Markdown for agents and people.
+export const InstructionsIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="M2 3.4c2-.8 4-.7 6 .8 2-1.5 4-1.6 6-.8v9.2c-2-.8-4-.7-6 .8-2-1.5-4-1.6-6-.8Z" />
+    <path d="M8 4.2v9.2" />
+  </I>
+);
+
+// A wand: a skill, the know-how an agent picks up when a task calls for it.
+export const SkillIcon = (props: IconProps) => (
+  <I {...props}>
+    <path d="m2.5 13.5 7.8-7.8" />
+    <path d="m9.2 4.6 2.2 2.2" />
+    <path d="M12 1.8v2M13 2.8h-2M13.6 7.4v1.4M14.3 8.1h-1.4M6.4 1.6v1.4M7.1 2.3H5.7" />
+  </I>
+);
+
 // An easing curve: what the editor behind it edits.
 export const EaseIcon = (props: IconProps) => (
   <I {...props}>
@@ -502,6 +519,60 @@ export const CmsIcon = ({ size = 24, className, style }: IconProps) => (
   </svg>
 );
 
+// The Apps rail icon: three rounded squares and a plus.
+export const AppsIcon = ({ size = 24, className, style }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    className={className}
+    style={{ display: 'block', flexShrink: 0, ...style }}
+    aria-hidden="true"
+  >
+    <path
+      opacity="0.4"
+      d="M6 7.79289V6.5C6 6.22386 6.22386 6 6.5 6H7.79289C8.23835 6 8.46143 6.53857 8.14645 6.85355L6.85355 8.14645C6.53857 8.46143 6 8.23835 6 7.79289Z"
+      fill="currentColor"
+    />
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M11 5.5C11 4.67157 10.3284 4 9.5 4H5.5C4.67157 4 4 4.67157 4 5.5V9.5C4 10.3284 4.67157 11 5.5 11H9.5C10.3284 11 11 10.3284 11 9.5V5.5ZM9.5 5C9.77614 5 10 5.22386 10 5.5V9.5C10 9.77614 9.77614 10 9.5 10H5.5C5.22386 10 5 9.77614 5 9.5V5.5C5 5.22386 5.22386 5 5.5 5H9.5Z"
+      fill="currentColor"
+    />
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M19 5.5C19 4.67157 18.3284 4 17.5 4H13.5C12.6716 4 12 4.67157 12 5.5V9.5C12 10.3284 12.6716 11 13.5 11H17.5C18.3284 11 19 10.3284 19 9.5V5.5ZM17.5 5C17.7761 5 18 5.22386 18 5.5V9.5C18 9.77614 17.7761 10 17.5 10H13.5C13.2239 10 13 9.77614 13 9.5V5.5C13 5.22386 13.2239 5 13.5 5H17.5Z"
+      fill="currentColor"
+    />
+    <path
+      fillRule="evenodd"
+      clipRule="evenodd"
+      d="M5.5 12C4.67157 12 4 12.6716 4 13.5V17.5C4 18.3284 4.67157 19 5.5 19H9.5C10.3284 19 11 18.3284 11 17.5V13.5C11 12.6716 10.3284 12 9.5 12H5.5ZM5 13.5C5 13.2239 5.22386 13 5.5 13H9.5C9.77614 13 10 13.2239 10 13.5V17.5C10 17.7761 9.77614 18 9.5 18H5.5C5.22386 18 5 17.7761 5 17.5V13.5Z"
+      fill="currentColor"
+    />
+    <path d="M15 15H12V16H15V19H16V16H19V15H16V12H15V15Z" fill="currentColor" />
+  </svg>
+);
+
+// The Stacki mark from the wordmark (welcome/StackiLogo.tsx), in `currentColor`
+// so it takes the colour of the row it sits in.
+export const StackiMarkIcon = ({ size = 16, className, style }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 458 458"
+    fill="none"
+    className={className}
+    style={{ display: 'block', flexShrink: 0, ...style }}
+    aria-hidden="true"
+  >
+    <path d={paths.stackiMarkPath} fill="currentColor" />
+  </svg>
+);
+
 export const PagePanelIcon = (props: IconProps) => (
   <I24 {...props}>
     <path fillRule="evenodd" clipRule="evenodd" d={paths.pagePanelIconPath1} fill="currentColor" />
@@ -720,9 +791,15 @@ export const SortIcon = (props: IconProps) => (
 );
 
 // Disconnecting a setting from a property: a chain link broken in two.
+// A link broken in two: what disconnecting a value from what it was bound to does.
 export const UnlinkIcon = (props: IconProps) => (
-  <I {...props}>
-    <path d="m7 4.5.9-.9a2.6 2.6 0 0 1 3.7 3.7l-.9.9M9 11.5l-.9.9a2.6 2.6 0 0 1-3.7-3.7l.9-.9M3 3l1.4 1.4M11.6 11.6 13 13M2 6.5h1.5M6.5 2v1.5M14 9.5h-1.5M9.5 14v-1.5" />
+  <I {...props} filled>
+    <path d="M5.85355 4.14526L3.85477 2.14648L3.14767 2.85359L5.14645 4.85237L5.85355 4.14526Z" />
+    <path d="M11.5 10.5H14V9.50004H11.5V10.5Z" />
+    <path d="M2 5.49885H4.5V6.49885H2V5.49885Z" />
+    <path d="M10.1464 11.8536L12.1464 13.8536L12.8536 13.1465L10.8536 11.1465L10.1464 11.8536Z" />
+    <path d="M5.85355 7.85384L4.85355 8.85384C4.22039 9.487 4.22039 10.5136 4.85355 11.1467C5.48672 11.7799 6.51328 11.7799 7.14644 11.1467L8.14645 10.1467L8.85355 10.8538L7.85355 11.8538C6.82986 12.8775 5.17014 12.8775 4.14645 11.8538C3.12276 10.8301 3.12276 9.17042 4.14645 8.14673L5.14645 7.14673L5.85355 7.85384Z" />
+    <path d="M11.8536 4.14673C10.8299 3.12304 9.17014 3.12304 8.14645 4.14673L7.14645 5.14673L7.85355 5.85384L8.85355 4.85383C9.48672 4.22067 10.5133 4.22067 11.1464 4.85384C11.7796 5.487 11.7796 6.51356 11.1464 7.14673L10.1464 8.14673L10.8536 8.85384L11.8536 7.85383C12.8772 6.83014 12.8772 5.17042 11.8536 4.14673Z" />
   </I>
 );
 

@@ -95,12 +95,18 @@
   --color-class-tag-bg: #016bcd;
   --color-tag-bg: #b53a9a;
   --color-component-tag: #79e09c;
-  --color-component-tag-bg: rgba(37, 157, 77, 0.25);
-  --color-component-tag-bg-hover: rgba(37, 157, 77, 0.4);
+  --color-component-tag-bg: rgba(37, 157, 77, 0.4);
+  --color-component-tag-bg-hover: rgba(37, 157, 77, 0.55);
   --color-component-tag-bg-active: #16783c;
   --color-selector-context-bg: var(--color-bg-surface);
   --color-selector-context-bg-hover: var(--color-bg-surface-raised);
-  --color-selector-context-bg-active: var(--color-bg-surface-high);
+  --color-selector-context-bg-active: #636363; /* Clearly brighter than hover (#3b3b3b), so the selected grey chip stands out. */
+  /* The "Inline styles" chip (InlineStyleChip.tsx): a muted amber, apart from every
+     selector family, because the style attribute is not a selector and outranks them. */
+  --color-inline-tag: #f6d38a;
+  --color-inline-tag-bg: rgba(196, 140, 32, 0.28);
+  --color-inline-tag-bg-hover: rgba(196, 140, 32, 0.42);
+  --color-inline-tag-bg-active: #9b6b14;
   /* Provenance label — a property set through another selector (Embed Editor). */
   --color-prop-orange: #ffbc86;
   --color-prop-orange-bg: rgba(223, 100, 12, 0.2);

@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CloseIcon } from '../../ui/Icons';
 import { ok } from '../../../shared/core/result';
 import { PropertyConditions } from './PropertyDeclarationInfo';
+import { PropertyShareNotice } from './PropertyShareNotice';
 import { PropertySettingsFields } from './PropertyEditor';
 import PropertyReadOnlyFields from './PropertyReadOnlyFields';
 import type { PropertySaveHost } from './propertyAutosave';
@@ -101,6 +102,7 @@ function EditableBody({ loaded, saverRef }: { readonly loaded: LoadedProperty; r
   return (
     <>
       <PropertyConditions property={loaded.property} />
+      <PropertyShareNotice property={loaded.property} onOpenFile={saverRef.current.openFile} />
       {loaded.property.editing?.kind === 'override' && <p className="property-help">{loaded.property.editing.reason}</p>}
       <PropertySettingsFields property={loaded.property} frontmatter={loaded.frontmatter} projectPath={saverRef.current.projectPath} saveHost={saveHost} />
     </>

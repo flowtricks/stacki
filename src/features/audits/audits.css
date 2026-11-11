@@ -1,0 +1,904 @@
+/* The Audits panel, on the Navigator's grid: list rows of its height and
+   padding, the full-width hover fill, nothing else. Severity is the tint of a
+   rule's icon; actions appear on an occurrence's hover and take no width at
+   rest. Fills, never borders. */
+
+.audits-panel {
+  --audits-high: #ff6b6b;
+  --audits-medium: #e8b45a;
+  min-height: 0;
+}
+
+.audits-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.audits-pill {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+.audits-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.audits-menu-gap {
+  display: inline-block;
+  width: 12px;
+}
+
+.audits-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+/* The category menu fills the toolbar's row beside the Site · This page
+   switch at its end; it gives way first when the panel is narrow. */
+.audits-category {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 100%;
+}
+.audits-scope {
+  flex: 0 0 auto;
+}
+/* The first run's calm progress line, under the toolbar. */
+.audits-progress {
+  margin: 0;
+  padding: 0 12px 8px;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.audits-toolbar .ui-search {
+  flex: 1 1 100%;
+}
+
+/* 4px here plus each row's 8px puts content 12px from the panel's edge. */
+.audits-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 0;
+  overflow-y: auto;
+  /* The scrollbar's room is kept whether or not it shows, so rows never shift when it appears. */
+  scrollbar-gutter: stable;
+  padding: 0 4px 12px;
+}
+
+.audits-ready {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 26px;
+  padding: 0 8px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.audits-note {
+  margin: 0;
+  padding: 4px 8px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.audits-clean {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.audits-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* A click focuses a row or button without a ring; the keyboard still gets one (above). */
+.audits-panel :focus:not(:focus-visible),
+.audits-review :focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+.audits-icon {
+  display: flex;
+  flex: none;
+  color: var(--text-dim);
+}
+.audits-row .audits-icon.audits-high {
+  color: var(--audits-high);
+}
+.audits-row .audits-icon.audits-medium {
+  color: var(--audits-medium);
+}
+.audits-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audits-count,
+.audits-tag {
+  flex: none;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.audits-tag {
+  font-family: var(--font-mono, ui-monospace, monospace);
+}
+
+.audits-rule.open > .audits-row {
+  background: var(--bg-hover);
+}
+.audits-rule-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /* Rows and text line up under the title, past the icon (14px) and its gap (6px). */
+  padding: 0 0 4px 20px;
+}
+.audits-why {
+  margin: 0;
+  padding: 2px 8px 4px;
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.audits-occurrence-row {
+  height: 26px;
+}
+.audits-occurrence-row.ignored .audits-title {
+  color: var(--text-dim);
+}
+
+/* At rest the actions take no width; on hover or focus they sit at the row's right. */
+.audits-hover-actions {
+  display: none;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+}
+.audits-row:hover .audits-hover-actions,
+.audits-row:focus-within .audits-hover-actions {
+  display: flex;
+}
+.audits-icon-button {
+  padding: 3px;
+  color: var(--text-dim);
+}
+
+.audits-link {
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.audits-link.muted {
+  color: var(--text-dim);
+}
+
+.audits-inset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 2px 4px 6px 8px;
+  padding: 6px;
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+.audits-code {
+  margin: 0;
+  padding: 5px 7px;
+  overflow-x: auto;
+  border-radius: 5px;
+  background: var(--bg);
+  font-size: 10.5px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.audits-before {
+  opacity: 0.6;
+}
+.audits-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.audits-reason {
+  flex: 1 1 120px;
+  min-width: 0;
+  padding: 3px 6px;
+  border-radius: 5px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+@keyframes audits-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.audits-spin {
+  animation: audits-spin 0.9s linear infinite;
+}
+
+/* Find & replace: two fields, a row of options, results grouped by file. */
+.audits-find {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 4px 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.audits-find-options {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.audits-toggle {
+  min-width: 26px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+}
+.audits-toggle.on {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.audits-find-name {
+  padding: 6px 8px 2px;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Speed: the measure row and each page's score. */
+.audits-measure {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 4px;
+}
+.audits-score-value {
+  flex: none;
+  min-width: 26px;
+  font-weight: 600;
+  text-align: right;
+}
+.audits-score-value.good {
+  color: #4cc38a;
+}
+.audits-score-value.fair {
+  color: var(--audits-medium);
+}
+.audits-score-value.poor {
+  color: var(--audits-high);
+}
+
+/* Settings → Audits, on the Roles tab's grid (roles.css). */
+.audits-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.audits-settings-intro {
+  margin: 0 0 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.audits-path-chip {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 11px;
+}
+.audits-settings-section {
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.audits-settings-heading {
+  margin-bottom: 0;
+}
+.audits-settings .audits-settings-disclosure {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-dim);
+  text-align: left;
+}
+.audits-settings-disclosure:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+.audits-settings-disclosure svg {
+  flex: none;
+  transition: transform 0.15s;
+}
+.audits-settings-section[data-open='true'] .audits-settings-disclosure svg {
+  transform: rotate(90deg);
+}
+.audits-settings-summary {
+  color: var(--text-faint, var(--text-dim));
+  font-size: 11px;
+}
+.audits-settings-body {
+  padding: 4px 0 10px;
+}
+.audits-settings .audits-settings-row {
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  padding: 5px 0;
+}
+.audits-settings .audits-settings-plain {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.audits-settings-description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audits-settings-priority {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.audits-settings-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.audits-settings-subpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.audits-settings-subpanel h5 {
+  margin: 4px 0 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+}
+.audits-settings-hint {
+  margin: 0 0 6px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+.audits-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.audits-chip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.audits-chip-remove {
+  display: inline-flex;
+  padding: 1px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.audits-chip-input {
+  flex: 1 1 160px;
+  min-width: 120px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 11.5px;
+}
+
+/* The review window for raw CSS values: a toolbar, then a table whose columns line up on every row. */
+.audits-review .dockable-window-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.audits-review-title {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.audits-review-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+}
+.audits-review-filters .audits-review-filter {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+}
+.audits-pill-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 12px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+.audits-pill-toggle.on {
+  background: var(--accent-soft, var(--bg-hover));
+  color: var(--text);
+}
+.audits-apply {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  font-size: 11.5px;
+}
+.audits-review-confirm {
+  margin: 0 12px 8px;
+}
+.audits-review-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding: 0 8px 12px;
+}
+/* Selector | Declaration | Suggestion | Line | Actions. Every cell clips its own content. */
+.audits-review-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(180px, 1.3fr) minmax(110px, 0.9fr) 40px 52px;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+}
+.audits-review-row:hover:not(.audits-review-columns) {
+  background: var(--bg-hover);
+}
+.audits-review-row.nested {
+  opacity: 0.85;
+}
+.audits-review-row.nested .audits-review-selector {
+  padding-left: 14px;
+}
+.audits-review-columns {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  min-height: 24px;
+  background: var(--bg-panel, var(--bg));
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.audits-review-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.audits-review-selector > *,
+.audits-muted-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.audits-muted-text {
+  color: var(--text-dim);
+}
+.audits-review-value {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: var(--bg-input);
+}
+.audits-uses {
+  flex: none;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 10px;
+}
+.audits-review-suggestion {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.audits-review-choice {
+  width: auto;
+  max-width: 100%;
+}
+.audits-review-line {
+  justify-content: flex-end;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.audits-review-actions {
+  justify-content: flex-end;
+  visibility: hidden;
+}
+.audits-review-row:hover .audits-review-actions,
+.audits-review-row:focus-within .audits-review-actions {
+  visibility: visible;
+}
+.audits-review-file {
+  margin-top: 6px;
+}
+.audits-review-file-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  text-align: left;
+}
+.audits-review-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audits-swatch {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 12%);
+}
+
+.audits-measure-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+.audits-measure-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audits-measure-numbers {
+  margin: 0;
+  padding: 0 8px 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* A rule's title never truncates: it keeps its width, and the breakdown beside it
+   (muted detail) gives way first, down to nothing. */
+.list-item.audits-row:not(.audits-occurrence-row) > .label.audits-title {
+  flex: 0 0 auto;
+  overflow: visible;
+  text-overflow: clip;
+}
+.audits-rule > .audits-row .audits-breakdown {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audits-rule > .audits-row .audits-review-button {
+  flex: none;
+}
+/* A rule's count sits at the row's right whether or not a breakdown or Review precedes it. */
+.audits-rule > .audits-row .audits-count {
+  margin-left: auto;
+}
+.audits-rule > .audits-row .audits-breakdown + .audits-count,
+.audits-rule > .audits-row .audits-review-button + .audits-count {
+  margin-left: 0;
+}
+.audits-review-columns span:nth-child(4) {
+  text-align: right;
+}
+
+/* The Speed card: measuring, measured and failed, on one calm fill. */
+.audits-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0 4px 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-input);
+}
+.audits-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.audits-card-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.audits-card-note {
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.audits-card-button {
+  flex: none;
+  align-self: flex-start;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+  font-size: 11.5px;
+}
+.audits-card-button.secondary {
+  align-self: center;
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.audits-card-error .audits-card-head {
+  color: var(--audits-medium);
+}
+.audits-progress {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--bg-hover);
+}
+.audits-progress span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 35%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: audits-progress 1.4s ease-in-out infinite;
+}
+@keyframes audits-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .audits-progress span {
+    animation: none;
+    width: 100%;
+    opacity: 0.4;
+  }
+}
+.audits-ring {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+.audits-ring svg {
+  position: absolute;
+  inset: 0;
+}
+.audits-ring-track,
+.audits-ring-value {
+  fill: none;
+  stroke-width: 3;
+}
+.audits-ring-track {
+  stroke: var(--bg-hover);
+}
+.audits-ring-value {
+  stroke: currentColor;
+  stroke-linecap: round;
+}
+.audits-ring.good {
+  color: #4cc38a;
+}
+.audits-ring.fair {
+  color: var(--audits-medium);
+}
+.audits-ring.poor {
+  color: var(--audits-high);
+}
+.audits-ring-score {
+  position: relative;
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.audits-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 6px;
+}
+.audits-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: var(--bg);
+  cursor: help;
+}
+.audits-tile-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.audits-tile-value {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.audits-rating {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+}
+.audits-rating.good {
+  background: #4cc38a;
+}
+.audits-rating.fair {
+  background: var(--audits-medium);
+}
+.audits-rating.poor {
+  background: var(--audits-high);
+}
+.audits-card-pages {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.audits-card-page {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 24px;
+  font-size: 11.5px;
+}
+.audits-card-page-route {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audits-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* Every occurrence row leads with an icon in a fixed column, so the names line up. */
+.audits-occurrence-icon {
+  display: flex;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--text-dim);
+}
+
+/* A rule opens to its pages, components and files, each a group row with a chevron; a
+   group opens to its element rows, indented as the Navigator indents a child. */
+.audits-group-row .audits-chevron {
+  display: flex;
+  flex: 0 0 12px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  transition: transform 0.12s ease;
+}
+.audits-file-group.open > .audits-group-row .audits-chevron {
+  transform: rotate(90deg);
+}
+.audits-group-row {
+  margin-left: -14px;
+}
+.audits-file-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-left: 16px;
+}
+/* An element row: the Navigator's label, and under it the text the finding is about, muted. */
+.audits-occurrence-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+.audits-occurrence-text .audits-title {
+  flex: none;
+}
+.audits-note-line {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audits-occurrence-row:has(.audits-note-line) {
+  height: auto;
+  min-height: 28px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}

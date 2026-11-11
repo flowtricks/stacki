@@ -19,6 +19,7 @@ import Sheet from './VariableTable';
 import { VariableScopeBadge } from './VariableScopeBadge';
 import DockableWindow, { type WindowMode } from '../../ui/DockableWindow';
 import { readWindowMode, storeWindowMode } from '../../ui/windowPreferences';
+import { variableCache } from './variableCache';
 import '../style/utilities.css';
 export { dropPlan, movesForDrop } from './variableRows';
 export { createScrollSync } from './variableScroll';
@@ -177,13 +178,22 @@ function useVariableData(
   showToast: VariablesViewProps['showToast'],
   setDrafts: React.Dispatch<React.SetStateAction<Readonly<Record<string, string>>>>,
 ) {
+  // The panel's last read (variableCache.ts, also filled ahead by panelPrefetch.ts)
+  // draws the table in the first frame; starting empty drew a blank sheet the
+  // first time a group opened, and the table popped in when the read landed.
   const [snapshot, setSnapshot] = useState<{
     readonly files: readonly VariableFile[];
     readonly values: Readonly<Record<string, string>>;
-  }>({ files: [], values: {} });
+  }>(() => {
+    const kept = variableCache.get(projectPath);
+    return kept?.kind === 'ready' ? kept.value : { files: [], values: {} };
+  });
   const currentRead = useRef<() => Promise<void>>(() => Promise.resolve());
   useEffect(() => {
     const reader = createVariableRefresh(projectPath, (result) => {
+      if (result.ok) {
+        variableCache.set(projectPath, result.value);
+      }
       setSnapshot(result.ok ? result.value : { files: [], values: {} });
       if (!result.ok) {
         showToast?.(result.error, 'error');

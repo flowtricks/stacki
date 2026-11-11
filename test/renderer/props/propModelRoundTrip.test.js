@@ -23,7 +23,6 @@ const { schemaFieldsOf } = require('#dist/shared/properties/propModelSchema.js')
 
 const COMPONENTS = 200;
 const WORDS = ['Card', 'count', 'shown', 'in', 'the', 'badge', 'Hero', 'title', 'Wide', 'layout', 'colour', 'of', 'text'];
-const LABELS = ['On', 'Off', 'Shown', 'Hidden', 'Open', 'Closed', 'Yes', 'No'];
 const OPTIONS = ['primary', 'secondary', 'ghost', 'small', 'large', 'left', 'right', 'centre'];
 
 // mulberry32: a 32-bit seeded PRNG, so a failure is reproducible from its seed.
@@ -60,7 +59,6 @@ const BLANK = {
   defaultText: '',
   options: [],
   number: { min: undefined, max: undefined, decimals: undefined },
-  switch: { onLabel: 'On', offLabel: 'Off' },
   attributes: [],
   tag: '',
   list: { fields: [], items: [] },
@@ -84,8 +82,7 @@ function randomDeclaration(random, key) {
       return { ...base, number: { min, max, decimals }, defaultText: value === undefined || random.maybe() ? '' : String(value) };
     }
     case 'boolean': {
-      const [onLabel, offLabel] = random.maybe() ? ['On', 'Off'] : random.distinct(LABELS, 2);
-      return { ...base, switch: { onLabel, offLabel }, defaultText: random.pick(['', 'true', 'false']) };
+      return { ...base, defaultText: random.pick(['', 'true', 'false']) };
     }
     case 'option': {
       const options = random.distinct(OPTIONS, random.int(2, 4));
@@ -152,8 +149,8 @@ test('every prop the New property form writes reads back the same through the pr
         assert.equal(field.step, decimals === undefined ? undefined : Number((10 ** -decimals).toFixed(decimals)), where(declared));
       }
       if (declared.kind === 'boolean') {
-        assert.deepEqual([prop.control.onLabel ?? 'On', prop.control.offLabel ?? 'Off'], [declared.switch.onLabel, declared.switch.offLabel], where(declared));
-        assert.deepEqual(renderer.switch, declared.switch, where(declared));
+        assert.deepEqual(prop.control, { kind: 'switch' }, where(declared));
+        assert.doesNotMatch(prop.documentation ?? '', /@onLabel|@offLabel/, where(declared));
       }
       if (declared.kind === 'option') {
         assert.deepEqual(

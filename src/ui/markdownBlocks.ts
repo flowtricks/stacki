@@ -18,6 +18,12 @@
 // marker, how wide its paragraphs wrap, how it spells its links — is collected
 // as it is read, so a block the person does edit is written the way the rest of
 // the document is.
+//
+// With `extensions: 'gfm'` (the Instructions panel), GitHub's tables and task
+// list items are shown as what they are: a table as a table whose rows keep
+// their own bytes, a `- [ ]` item as a checkbox (the class `task`, `done` when
+// ticked). A table whose rows disagree on their cell count stays kept as
+// written, so an edit can never drop a cell. The CMS reads CommonMark, as it did.
 import { assert } from '../../shared/core/assert';
 import { safeHTMLLink } from './htmlFieldModel';
 import { escapeHTML } from './richTextModel';
@@ -37,7 +43,16 @@ export const MARKDOWN_LIMITS = {
 /** The class of a block the editor shows as its source, kept as written. */
 export const KEPT_CLASS = 'stacki-markdown-kept';
 
-export type MarkdownBlockKind = 'paragraph' | 'heading' | 'code' | 'rule' | 'quote' | 'list' | 'kept';
+export type MarkdownBlockKind = 'paragraph' | 'heading' | 'code' | 'rule' | 'quote' | 'list' | 'table' | 'kept';
+
+/** What the reader understands beyond CommonMark: `gfm` adds tables and task list items. */
+export interface MarkdownReadOptions {
+  readonly extensions: 'commonmark' | 'gfm';
+}
+
+/** The class of a task list item, and of a ticked one beside it. */
+export const TASK_CLASS = 'task';
+export const TASK_DONE_CLASS = 'done';
 
 /** One item of a top-level list: the HTML it is shown as, and its own lines. */
 export interface MarkdownItem {
@@ -53,7 +68,7 @@ export interface MarkdownBlock {
   readonly source: string;
   /** The one element the editor shows for it. */
   readonly html: string;
-  /** A list's items, so an edit to one item keeps the others' bytes. */
+  /** A list's items, or a table's rows (header, delimiter, body), so an edit to one keeps the others' bytes. */
   readonly items: readonly MarkdownItem[];
 }
 
@@ -101,11 +116,11 @@ export function markdownHTML(document: MarkdownDocument): string {
 }
 
 /** The body read into blocks. Total: Markdown it cannot model is kept, never refused. */
-export function parseMarkdown(markdown: string): MarkdownDocument {
+export function parseMarkdown(markdown: string, options: MarkdownReadOptions = { extensions: 'commonmark' }): MarkdownDocument {
   const style = newStyleBuilder();
   const lines = splitLines(markdown);
   const references = linkDefinitions(lines.map((line) => line.text));
-  const context: RenderContext = { style, references, depth: 0 };
+  const context: RenderContext = { style, references, depth: 0, gfm: options.extensions === 'gfm' };
   const scanned =
     markdown.length > MARKDOWN_LIMITS.charsMax || lines.length > MARKDOWN_LIMITS.linesMax ? wholeBlock(lines) : scanBlocks(lines.map((line) => line.text));
   const blocks: MarkdownPlacedBlock[] = [];
@@ -548,6 +563,8 @@ interface RenderContext {
   readonly style: StyleBuilder;
   readonly references: ReadonlyMap<string, Definition>;
   readonly depth: number;
+  /** Tables and task list items are shown, not kept. */
+  readonly gfm: boolean;
 }
 
 function newStyleBuilder(): StyleBuilder {
@@ -636,6 +653,14 @@ function topBlock(scan: Scan, lines: readonly Line[], source: string, context: R
   if (rendered === undefined) {
     return { kind: 'kept', source, html: keptHTML(source), items: [] };
   }
+  if (rendered.kind === 'table') {
+    const rows = lines.slice(scan.first, scan.end).map((line, at) => ({
+      html: at === 1 ? '' : (tableRowHTML(line.text, at === 0 ? 'th' : 'td', tableShape(texts[1] ?? ''), context) ?? ''),
+      source: line.text + line.carriage,
+      number: undefined,
+    }));
+    return { kind: 'table', source, html: rendered.html, items: rows };
+  }
   return { kind: rendered.kind, source, html: rendered.html, items: [] };
 }
 
@@ -681,7 +706,10 @@ function renderScan(
       const html = renderList(lines, items, context);
       return html === undefined ? undefined : { kind: 'list', html };
     }
-    case 'table':
+    case 'table': {
+      const table = context.gfm ? renderTable(lines, context) : undefined;
+      return table === undefined ? undefined : { kind: 'table', html: table };
+    }
     case 'html':
     case 'definition':
     case 'esm':
@@ -813,9 +841,11 @@ function renderList(lines: readonly string[], items: readonly ItemScan[], contex
 
 function renderItem(item: ItemScan, shape: { readonly loose: boolean }, context: RenderContext): string | undefined {
   const inner = { ...context, depth: context.depth + 1 };
+  const task = context.gfm ? (TASK.exec(item.contents[0] ?? '') ?? undefined) : undefined;
+  const contents = task === undefined ? item.contents : [(item.contents[0] ?? '').slice(task[0].length), ...item.contents.slice(1)];
   let html = '';
-  for (const scan of scanBlocks(item.contents)) {
-    const lines = item.contents.slice(scan.first, scan.end);
+  for (const scan of scanBlocks(contents)) {
+    const lines = contents.slice(scan.first, scan.end);
     if (!shape.loose && scan.kind === 'paragraph') {
       const inline = renderInline(paragraphText(lines), inner, 0);
       if (inline === undefined) {
@@ -824,13 +854,107 @@ function renderItem(item: ItemScan, shape: { readonly loose: boolean }, context:
       html += inline;
       continue;
     }
-    const rendered = renderScan(scan, item.contents, 0, inner);
+    const rendered = renderScan(scan, contents, 0, inner);
     if (rendered === undefined) {
       return undefined;
     }
     html += rendered.html;
   }
-  return `<li>${html}</li>`;
+  if (task === undefined) {
+    return `<li>${html}</li>`;
+  }
+  const done = (task[1] ?? ' ') !== ' ';
+  return `<li class="${done ? `${TASK_CLASS} ${TASK_DONE_CLASS}` : TASK_CLASS}">${html}</li>`;
+}
+
+// A task item's box: `[ ]` or `[x]` and the space after it, before text.
+const TASK = /^\[([ xX])\][ \t]+(?=\S)/;
+
+// ---------------------------------------------------------------------------
+// Tables (GitHub Flavored Markdown)
+// ---------------------------------------------------------------------------
+
+type CellAlign = 'left' | 'center' | 'right' | undefined;
+
+/** A row's cells as written: outer pipes off, split at every pipe not escaped. */
+export function tableCells(line: string): readonly string[] {
+  let row = line.trim();
+  if (row.startsWith('|')) {
+    row = row.slice(1);
+  }
+  if (row.endsWith('|') && !row.endsWith('\\|')) {
+    row = row.slice(0, -1);
+  }
+  const cells: string[] = [];
+  let cell = '';
+  for (let index = 0; index < row.length; index += 1) {
+    const character = row[index] ?? '';
+    if (character === '\\' && row[index + 1] === '|') {
+      cell += '\\|';
+      index += 1;
+    } else if (character === '|') {
+      cells.push(cell.trim());
+      cell = '';
+    } else {
+      cell += character;
+    }
+  }
+  cells.push(cell.trim());
+  assert(cells.length > 0, 'A row has a cell');
+  return cells;
+}
+
+/** The alignment of each column, from the delimiter row. */
+export function tableShape(delimiter: string): readonly CellAlign[] {
+  return tableCells(delimiter).map((cell) => {
+    const left = cell.startsWith(':');
+    const right = cell.endsWith(':');
+    if (left && right) {
+      return 'center';
+    }
+    if (right) {
+      return 'right';
+    }
+    return left ? 'left' : undefined;
+  });
+}
+
+function tableRowHTML(line: string, tag: 'th' | 'td', aligns: readonly CellAlign[], context: RenderContext): string | undefined {
+  const cells = tableCells(line);
+  if (cells.length !== aligns.length) {
+    return undefined;
+  }
+  let html = '';
+  for (const [at, cell] of cells.entries()) {
+    const inline = renderInline(cell, context, 0);
+    if (inline === undefined) {
+      return undefined;
+    }
+    const align = aligns[at];
+    html += `<${tag}${align === undefined ? '' : ` class="align-${align}"`}>${inline}</${tag}>`;
+  }
+  return `<tr>${html}</tr>`;
+}
+
+// A table the editor can show: every row has the header's cells, each cell inline Markdown it reads.
+function renderTable(lines: readonly string[], context: RenderContext): string | undefined {
+  assert(lines.length >= 2, 'A table has a header and a delimiter');
+  const delimiter = lines[1] ?? '';
+  assert(TABLE_DELIMITER.test(delimiter), 'A table block has its delimiter row second');
+  const aligns = tableShape(delimiter);
+  const header = tableRowHTML(lines[0] ?? '', 'th', aligns, context);
+  if (header === undefined) {
+    return undefined;
+  }
+  let body = '';
+  for (const line of lines.slice(2)) {
+    const row = tableRowHTML(line, 'td', aligns, context);
+    if (row === undefined) {
+      return undefined;
+    }
+    body += row;
+  }
+  return `<table><thead>${header}</thead>${body === '' ? '' : `<tbody>${body}</tbody>`}</table>`;
 }
 
 // ---------------------------------------------------------------------------

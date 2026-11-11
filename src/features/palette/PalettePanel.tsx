@@ -5,13 +5,16 @@ import type { ComponentUsageFile } from './paletteModel';
 import type { ComponentCreationSource, UsageAnchor, UsagePopup } from './PaletteDialogs';
 import { cleanError } from '../../lib/cleanError';
 import { allowDragEffect, clearDrag, setDrag } from '../../editor/dragState';
-import { rankInsertItems } from './insertRank';
+import { rankInsertItems } from '../../lib/insertRank';
 import { ComponentPreviewPopup } from './ComponentPreviewPopup';
 import { groupPaletteComponents, parseComponentUsage, prettyComponentName } from './paletteModel';
 import { ComponentPlusIcon, ElementComponentIcon, LayoutIcon } from '../../ui/Icons';
 import { CreateComponentModal, InstancesPopup } from './PaletteDialogs';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
+import { can } from '../../../shared/properties/projectRoles';
+import { useCurrentRole } from '../../lib/useCurrentRole';
+import { currentRole } from '../../lib/currentRole';
 
 interface PalettePanelProps {
   readonly components: readonly ScanComponent[];
@@ -69,7 +72,8 @@ function useCreateRequest(request: number, source: ComponentCreationSource, setC
       return;
     }
     firstRequest.current = request;
-    if (source.kind === 'ready') {
+    // The shortcut asks too: a role without component creation is not offered the dialog.
+    if (source.kind === 'ready' && can(currentRole(), 'component:create')) {
       setCreating(true);
     }
   }, [request, setCreating, source.kind]);
@@ -141,11 +145,12 @@ function PaletteHeader({
   readonly tooltip: ReturnType<typeof useDelayedTooltip>;
 }) {
   const canCreate = source.kind === 'ready';
+  const allowed = can(useCurrentRole(), 'component:create');
   return (
     <>
       <div className="panel-header">
         <h2>Components</h2>
-        <span className="tip-anchor" onMouseEnter={tooltip.show} onMouseLeave={tooltip.hide}>
+        <span hidden={!allowed} className="tip-anchor" onMouseEnter={tooltip.show} onMouseLeave={tooltip.hide}>
           <button
             className="ghost"
             aria-label="New component"

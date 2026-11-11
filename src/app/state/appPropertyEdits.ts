@@ -279,7 +279,7 @@ function useRemoveFromNode(coreState: ReturnType<typeof useCoreState>, lifecycle
 // Writing an asset pick into a prop.
 export function useAssetProp(coreState: ReturnType<typeof useCoreState>, classEdits: ReturnType<typeof useClassEdits>, history: ReturnType<typeof useHistory>) {
   const { pageStateRef, projectRef } = coreState;
-  const { setProp } = classEdits;
+  const { setProp, setProps } = classEdits;
   const { commitEdit } = history;
 
   // Writes an asset pick into a prop. The root decides the form:
@@ -292,15 +292,24 @@ export function useAssetProp(coreState: ReturnType<typeof useCoreState>, classEd
   // can't happen. A plain <img>, or a component prop typed as a string, gets
   // `hero.src` instead: it needs the URL out of the imported object, not the
   // object (assetReferenceFor in elementState.ts decides).
+  //
+  // `also` are props written in the same edit, so one undo step: the alt text an
+  // app's image pick came with (assetPick.ts onPickWithAlt).
   const setAssetProp = useCallback(
-    async (nodeId: string, propName: string, picked: PickedAsset & { readonly abs?: string }, reference: AssetReference) => {
+    async (nodeId: string, propName: string, picked: PickedAsset & { readonly abs?: string }, reference: AssetReference, also: PropValues = {}) => {
+      assert(also[propName] === undefined, 'setAssetProp: the picked prop is not also written beside itself');
       const { pageState: state, currentPage: page } = pageStateRef.current;
       if (!state?.editable || !page?.path || !picked?.rel) {
         return;
       }
       const withoutRoot = picked.rel.split('/').slice(1).join('/');
       if (picked.root !== 'src') {
-        setProp(nodeId, propName, { type: 'string', value: '/' + withoutRoot }, true);
+        const value: Attr = { type: 'string', value: '/' + withoutRoot };
+        if (Object.keys(also).length === 0) {
+          setProp(nodeId, propName, value, true);
+        } else {
+          setProps(nodeId, { [propName]: value, ...also }, true);
+        }
         return;
       }
       const projectPath = projectRef.current?.path;
@@ -343,7 +352,7 @@ export function useAssetProp(coreState: ReturnType<typeof useCoreState>, classEd
       // it needs and the one a replaced image leaves behind — one undo step.
       const value = { type: 'expr' as const, value: reference === 'url' ? `${binding}.src` : binding };
       const options = { coalesceKey: undefined, urgency: true };
-      const prop = propsGesture(nodeId, { [propName]: value }, options);
+      const prop = propsGesture(nodeId, { [propName]: value, ...also }, options);
       const imported = (current: EditorModel): EditorModel => {
         const entry = { name: binding, path: spec, quote: "'" };
         const imports = added ? [...current.imports, entry] : current.imports;
@@ -355,7 +364,7 @@ export function useAssetProp(coreState: ReturnType<typeof useCoreState>, classEd
       const changed = frontmatterOf(imported(afterProp)) !== frontmatterOf(afterProp);
       commitEdit(changed ? sequence(prop, frontmatterGesture(afterProp, options, imported)) : prop);
     },
-    [commitEdit, setProp, pageStateRef, projectRef],
+    [commitEdit, setProp, setProps, pageStateRef, projectRef],
   );
   return { setAssetProp };
 }

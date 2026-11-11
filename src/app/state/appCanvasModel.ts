@@ -3,7 +3,7 @@
 // overlay's info (appViewModel.ts).
 
 import { requestCanvasReports } from '../../editor/canvasQuery';
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { isFragmentNode, liveClassesById as classesByNodeId } from '../../editor/liveClasses';
 import { isDataBound } from '../../editor/bindings';
 import { thenBranch } from '../../editor/branches';
@@ -349,8 +349,8 @@ export function useSelectionPaths(
   const { model } = shortcuts;
   const { tree } = pageOps;
   const { editedRel } = canvasNotices;
-  const { currentPage, editStack, pageState, project, rightTab, rightTabRefs } = coreState;
-  const { selectedId, selectionKeysRef, setRightTabInd, canvasPathForRef } = coreState;
+  const { currentPage, editStack, project } = coreState;
+  const { selectedId, selectionKeysRef, canvasPathForRef } = coreState;
 
   const pathFor = (id: string | undefined): string | undefined => {
     if (!model || !id) {
@@ -395,22 +395,6 @@ export function useSelectionPaths(
         selectedId === 'frontmatter' ? `${openRel}#frontmatter` : leafPath !== undefined ? `${openRel}#${leafPath}` : `${openRel}#`,
       ];
 
-  // Position the Style/Settings highlight: on tab change, when the panel first
-  // appears, and whenever the tab strip's width changes.
-  useLayoutEffect(() => {
-    const measure = () => {
-      const tabButton = rightTabRefs.current[rightTab];
-      setRightTabInd(tabButton ? { left: tabButton.offsetLeft, width: tabButton.offsetWidth } : undefined);
-    };
-    measure();
-    const strip = rightTabRefs.current[rightTab]?.parentElement;
-    if (!strip || typeof ResizeObserver === 'undefined') {
-      return;
-    }
-    const ro = new ResizeObserver(measure);
-    ro.observe(strip);
-    return () => ro.disconnect();
-  }, [rightTab, pageState?.editable, rightTabRefs, setRightTabInd]);
   return { openRel, pathFor };
 }
 

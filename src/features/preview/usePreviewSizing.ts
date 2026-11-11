@@ -1,9 +1,10 @@
 // Extracted without behavioral changes from Stacki PreviewPane.tsx.
+import { assert } from '../../../shared/core/assert';
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 import { deviceForWidth, deviceWidth, type PreviewDevice } from './PreviewToolbar';
-import { PREVIEW_WIDTH_LIMITS, heldPreviewViewport, type PreviewSize } from './previewViewport';
-import { usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
+import { PREVIEW_WIDTH_LIMITS, previewViewport } from './previewViewport';
+import { panelDragPhase, subscribePanelDragPhase, usePanelDragPhase, type PanelDragPhase } from '../../ui/panelDragPhase';
 /** A width asked of the canvas from outside it (the style panel picking a media
  *  query). `serial` counts the asks, so the same width asked again still applies. */
 export type CanvasWidthRequest = { readonly widthPx: number; readonly serial: number };
@@ -20,7 +21,9 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   const { customWidth, setCustomWidth, customHeight, setCustomHeight } = dimensions;
   const [resizing, setResizing] = useState(false);
-  useMeasuredSize(wrapRef, setAvailable);
+  const width = customWidth ?? deviceWidth(device);
+  // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without React.
+  useMeasuredSize(wrapRef, { fluid: width === undefined }, setAvailable);
   useDeviceShortcuts(onDevice);
   useEffect(() => {
     if (device !== 'custom') {
@@ -30,9 +33,8 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
       setCustomHeight(undefined);
     }
   }, [device, setCustomWidth, setCustomHeight]);
-  const width = customWidth ?? deviceWidth(device);
-  const panelHold = usePanelHold(available, usePanelDragPhase());
-  const viewport = heldPreviewViewport(width, available, panelHold.held, customHeight);
+  const panelSettling = usePanelSettling(usePanelDragPhase());
+  const viewport = previewViewport(width, available, customHeight);
   const activeDevice = device === 'canvas' ? 'canvas' : (deviceForWidth(viewport.width) ?? device);
   const setWidth = (next: number): void => {
     setCustomWidth(next);
@@ -62,56 +64,78 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
     customHeight,
     resizing,
     // True from a side-panel drag's start until the frame after release: the frame skips its size transition.
-    panelSettling: panelHold.settling,
+    panelSettling,
     width,
     activeDevice,
     startResize,
   };
 }
 
-function useMeasuredSize(ref: React.RefObject<HTMLDivElement>, setSize: React.Dispatch<React.SetStateAction<{ width: number; height: number }>>): void {
+// Measures the canvas. During a side-panel drag the canvas follows the panel live, by CSS
+// (the wrap is flex: 1). A fluid frame fills it by CSS too, so its measure (a render of the
+// whole preview and its overlays) waits for release and runs once; a fixed-width frame keeps
+// measuring each frame, at the observer's own once-per-frame pace, so its scale follows live.
+function useMeasuredSize(
+  ref: React.RefObject<HTMLDivElement>,
+  options: { readonly fluid: boolean },
+  setSize: React.Dispatch<React.SetStateAction<{ width: number; height: number }>>,
+): void {
+  const { fluid } = options;
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) {
       return;
     }
-    const measure = (): void => setSize({ width: element.clientWidth, height: element.clientHeight });
+    let pending = false;
+    const measure = (): void => {
+      pending = false;
+      const next = { width: element.clientWidth, height: element.clientHeight };
+      assert(Number.isFinite(next.width), 'The canvas width is finite');
+      setSize((previous) => (previous.width === next.width && previous.height === next.height ? previous : next));
+    };
+    const observed = (): void => {
+      if (fluid && panelDragPhase() === 'dragging') {
+        pending = true;
+      } else {
+        measure();
+      }
+    };
     measure();
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver(observed);
     observer.observe(element);
-    return () => observer.disconnect();
-  }, [ref, setSize]);
+    const stopPhase = subscribePanelDragPhase(() => {
+      if (pending && panelDragPhase() === 'idle') {
+        measure();
+      }
+    });
+    return () => {
+      stopPhase();
+      observer.disconnect();
+    };
+  }, [ref, fluid, setSize]);
 }
 
-// A side-panel drag holds the canvas size it began with; on release the real size applies
-// for one frame without the frame's width transition, which would otherwise re-lay out the
-// page at every animated width. The hold is captured in a layout effect, before any resize
-// observer can report the panel's new width. (A state update during render would be simpler,
-// but React then skips its store-snapshot bookkeeping and misses the release.)
-type PanelHold = { readonly kind: 'live' } | { readonly kind: 'held'; readonly size: PreviewSize } | { readonly kind: 'releasing' };
+// From a side-panel drag's start until the frame after release, the frame skips its width
+// transition, so it tracks the panel instead of easing behind it.
+type PanelSettling = 'live' | 'dragging' | 'releasing';
 
-function usePanelHold(available: PreviewSize, phase: PanelDragPhase): { readonly held: PreviewSize | undefined; readonly settling: boolean } {
-  const [hold, setHold] = useState<PanelHold>({ kind: 'live' });
-  const availableRef = useRef(available);
-  availableRef.current = available;
+function usePanelSettling(phase: PanelDragPhase): boolean {
+  const [settling, setSettling] = useState<PanelSettling>('live');
   useLayoutEffect(() => {
     if (phase === 'dragging') {
-      setHold((current) => (current.kind === 'held' ? current : { kind: 'held', size: availableRef.current }));
+      setSettling('dragging');
     } else {
-      setHold((current) => (current.kind === 'held' ? { kind: 'releasing' } : current));
+      setSettling((current) => (current === 'dragging' ? 'releasing' : current));
     }
   }, [phase]);
   useEffect(() => {
-    if (hold.kind !== 'releasing') {
+    if (settling !== 'releasing') {
       return undefined;
     }
-    const frame = requestAnimationFrame(() => setHold({ kind: 'live' }));
+    const frame = requestAnimationFrame(() => setSettling('live'));
     return () => cancelAnimationFrame(frame);
-  }, [hold.kind]);
-  if (phase === 'dragging') {
-    return { held: hold.kind === 'held' ? hold.size : available, settling: true };
-  }
-  return { held: undefined, settling: hold.kind !== 'live' };
+  }, [settling]);
+  return phase === 'dragging' || settling !== 'live';
 }
 
 function useDeviceShortcuts(onDevice: (device: PreviewDevice) => void): void {

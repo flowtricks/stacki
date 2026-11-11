@@ -98,7 +98,15 @@ const check = (what, condition, detail) => {
   // which only exists in the CSS.
   fs.writeFileSync(
     path.join(pageDirectory, 'app.css'),
-    ['src/app/styles.css', 'src/features/style/utilities.css', 'src/features/style/embedEditor.css']
+    [
+      // The sheets styles.css imports first (its @import is not followed in a concatenation).
+      'src/ui/controls.css',
+      'src/ui/dropdown.css',
+      'src/ui/resetLabel.css',
+      'src/app/styles.css',
+      'src/features/style/utilities.css',
+      'src/features/style/embedEditor.css',
+    ]
       .map((file) => fs.readFileSync(path.join(root, file), 'utf8'))
       .join('\n'),
   );

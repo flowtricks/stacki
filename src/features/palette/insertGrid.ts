@@ -64,7 +64,7 @@ export interface ViewItem {
   readonly card?: { readonly folder: InsertFolderKey | undefined } | undefined;
 }
 
-export type InsertTab = 'all' | 'components' | 'elements' | 'other';
+export type InsertTab = 'all' | 'components' | 'elements' | 'other' | 'apps';
 
 export interface InsertPill {
   readonly key: InsertFolderKey;

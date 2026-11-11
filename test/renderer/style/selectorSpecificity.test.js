@@ -1,7 +1,9 @@
-// Goal: the Style panel's selector well lists the element's tag first when a rule
-// styles it, then every other chip by CSS specificity, least specific first, so the
-// list builds up the way the cascade does and the chip whose values win is the last
-// one read. Chips of equal specificity keep the order they came in: the sort is stable.
+// Goal: the Style panel's selector well reads broadest first: the element's tag when a
+// rule styles it, then the global chips (`:target`, `*`: no class, id or attribute, no
+// ancestor), then the component's chips together, then the element's classes and the
+// nested selectors. Inside each group chips run by CSS specificity, least specific
+// first, so the group builds up the way the cascade does and its winning chip is read
+// last. Chips of equal specificity keep the order they came in: the sort is stable.
 // Method: the specificity calculator (selectorSpecificity, the parser the cascade uses)
 // is pinned on each rule that is easy to get wrong: :where() counts nothing, :is(),
 // :not() and :has() count their strongest argument, attributes and pseudo-classes count
@@ -162,15 +164,15 @@ test('a list weighs its strongest member; text that does not parse weighs nothin
   assert.deepEqual(model.selectorSpecificity('.a[unclosed'), [0, 0, 0]);
 });
 
-test('the user’s p.cta_lede.text-style-large lists its styled tag first, then least specific first', async () => {
+test('the user’s p.cta_lede.text-style-large lists its styled tag first, then the globals, then its classes', async () => {
   const chips = chipTexts(await modelOf(LEDE_CSS));
-  assert.deepEqual(chips, ['p', '.cta_lede', '.text-style-large', '[class*="text-style-"]', ':target', ':focus-visible']);
+  assert.deepEqual(chips, ['p', ':target', ':focus-visible', '.cta_lede', '.text-style-large', '[class*="text-style-"]']);
 });
 
-test('an unstyled tag takes its place by specificity, after a (0,0,0) chip', async () => {
+test('an unstyled tag reads with the globals, before a (0,0,0) class chip', async () => {
   const css = LEDE_CSS.replace('p { margin: 0; }', '') + '\n:where(.cta_lede) { margin: 1rem; }\n';
   const chips = chipTexts(await modelOf(css), { selector: 'p' });
-  assert.deepEqual(chips, [':where(.cta_lede)', 'p', '.cta_lede', '.text-style-large', '[class*="text-style-"]', ':target', ':focus-visible']);
+  assert.deepEqual(chips, ['p', ':target', ':focus-visible', ':where(.cta_lede)', '.cta_lede', '.text-style-large', '[class*="text-style-"]']);
 });
 
 test('nested rules rank by the full selector they resolve to', async () => {
@@ -178,7 +180,7 @@ test('nested rules rank by the full selector they resolve to', async () => {
   const chips = chipTexts(await modelOf(css));
   // `main > p` is (0,0,2), `.text-style-large.cta_lede` is (0,2,0).
   assert.equal(chips[0], 'p', 'the styled tag still leads');
-  assert.equal(chips[1], 'main > p', '(0,0,2) sorts before every (0,1,0) chip');
+  assert.equal(chips[3], 'main > p', 'after the globals, (0,0,2) sorts before every (0,1,0) chip');
   assert.equal(chips[chips.length - 1], '.text-style-large.cta_lede', '(0,2,0) sorts last');
 });
 
@@ -194,14 +196,14 @@ test('chips of equal specificity keep the order they came in', async () => {
 p { margin: 0; }
 `;
   const chips = chipTexts(await modelOf(reversed));
-  assert.deepEqual(chips, ['p', '.cta_lede', '.text-style-large', '[class*="text-style-"]', ':focus-visible', ':target']);
+  assert.deepEqual(chips, ['p', ':focus-visible', ':target', '.cta_lede', '.text-style-large', '[class*="text-style-"]']);
 });
 
 test('a stronger chip moves behind a later, weaker one', async () => {
   const css = `${LEDE_CSS}\nmain > p.cta_lede { padding: 0; }\n:where(.cta_lede) { margin: 1rem; }\n`;
   const chips = chipTexts(await modelOf(css));
   assert.equal(chips[0], 'p', 'the styled tag leads whatever its specificity');
-  assert.equal(chips[1], ':where(.cta_lede)', '(0,0,0) comes before every other chip');
+  assert.equal(chips[3], ':where(.cta_lede)', 'after the globals, (0,0,0) comes before every other chip');
   assert.equal(chips[chips.length - 1], 'main > p.cta_lede', '(0,1,2) outranks every (0,1,0) chip, so it sorts last');
 });
 
@@ -217,8 +219,52 @@ test('global and inherited chips keep their category after the sort', async () =
     const entry = model.classifySelector({ text });
     return entry.inherited ? 'inherited' : entry.global ? 'global' : 'own';
   });
-  assert.deepEqual(chips, ['p', 'main p', '.cta_lede', '.text-style-large', '[class*="text-style-"]', ':target', ':focus-visible']);
-  assert.deepEqual(categories, ['global', 'inherited', 'own', 'own', 'own', 'global', 'global']);
+  assert.deepEqual(chips, ['p', ':target', ':focus-visible', 'main p', '.cta_lede', '.text-style-large', '[class*="text-style-"]']);
+  assert.deepEqual(categories, ['global', 'global', 'global', 'inherited', 'own', 'own', 'own']);
+});
+
+test('chipsFor marks the chips the component markup writes, and only inside a component', async () => {
+  const markup = { classes: ['cta_lede'], attributes: new Map() };
+  const green = (componentMarkup) =>
+    model
+      .chipsFor({
+        model: undefined,
+        nativeModel: undefined,
+        currentContext: BASE,
+        activeSelector: '',
+        selectedSelectorText: undefined,
+        tokens: [],
+        classList: NODES.lede.classes,
+        removedClasses: new Set(),
+        pseudo: '',
+        componentMarkup,
+      })
+      .filter((chip) => chip.inComponentMarkup === true);
+  assert.deepEqual(green(markup), [], 'no rules, no chips');
+  const ruleModel = await modelOf(LEDE_CSS);
+  const chips = (componentMarkup) =>
+    model
+      .chipsFor({
+        model: ruleModel,
+        nativeModel: undefined,
+        currentContext: BASE,
+        activeSelector: '',
+        selectedSelectorText: undefined,
+        tokens: [],
+        classList: NODES.lede.classes,
+        removedClasses: new Set(),
+        pseudo: '',
+        componentMarkup,
+      })
+      .map((chip) => `${chip.text}${chip.inComponentMarkup === true ? ' (green)' : ''}`);
+  // `.cta_lede` is written in the markup; `.text-style-large` is not, and the CSS of
+  // both is in a plain stylesheet. The green chip moves ahead of the page's class.
+  assert.deepEqual(chips(markup), ['p', ':target', ':focus-visible', '.cta_lede (green)', '.text-style-large', '[class*="text-style-"]']);
+  assert.deepEqual(
+    chips(undefined),
+    ['p', ':target', ':focus-visible', '.cta_lede', '.text-style-large', '[class*="text-style-"]'],
+    'on a page nothing is green',
+  );
 });
 
 test('bySpecificity is stable, ranks weakest first, and keeps every chip', () => {
@@ -252,17 +298,17 @@ test('a class count outranks any number of types, and an id any number of classe
   );
 });
 
-test('wellOrder puts a styled bare tag first and leaves an unstyled one in place', () => {
+test('wellOrder puts a styled bare tag first and an unstyled one with the globals', () => {
   const chip = (text, specificity, pending) => ({ text, specificity, ...(pending ? { pending: true } : {}) });
   const styled = model.wellOrder([chip('.heading', [0, 1, 0]), chip(':target', [0, 1, 0]), chip('h2', [0, 0, 1])]);
   assert.deepEqual(
     styled.map((entry) => entry.text),
-    ['h2', '.heading', ':target'],
+    ['h2', ':target', '.heading'],
   );
   const unstyled = model.wellOrder([chip('.heading', [0, 1, 0]), chip('h2', [0, 0, 1], true), chip(':where(.x)', [0, 0, 0])]);
   assert.deepEqual(
     unstyled.map((entry) => entry.text),
-    [':where(.x)', 'h2', '.heading'],
+    ['h2', ':where(.x)', '.heading'],
   );
   assert.deepEqual(model.wellOrder([]), []);
   // Only the tag alone leads: a tag with anything on it is a selector like any other.
@@ -270,4 +316,63 @@ test('wellOrder puts a styled bare tag first and leaves an unstyled one in place
     assert.equal(model.isBareTagSelector(text), false, text);
   }
   assert.equal(model.isBareTagSelector('h2'), true);
+});
+
+test('wellOrder reads tag, then globals, then the element classes, then nested selectors', () => {
+  const chip = (text, specificity) => ({ text, specificity });
+  // The user's `img.image[data-image-component="true"]`, in the order the chips came in
+  // (inChipOrder puts the element's class before a bare pseudo on a tie).
+  const ordered = model.wellOrder([
+    chip('.image', [0, 1, 0]),
+    chip('.layout > * > :first-child', [0, 1, 0]),
+    chip(':target', [0, 1, 0]),
+    chip(':focus-visible', [0, 1, 0]),
+    chip('*', [0, 0, 0]),
+    chip('img', [0, 0, 1]),
+    chip('.text > :is(.image, .video, .overlay)', [0, 2, 0]),
+  ]);
+  assert.deepEqual(
+    ordered.map((entry) => entry.text),
+    ['img', '*', ':target', ':focus-visible', '.image', '.layout > * > :first-child', '.text > :is(.image, .video, .overlay)'],
+  );
+  // The globals are a group, not a tie-break: a heavier global still reads first.
+  const heavier = model.wellOrder([chip('.image', [0, 1, 0]), chip(':focus-visible:hover', [0, 2, 0])]);
+  assert.deepEqual(
+    heavier.map((entry) => entry.text),
+    [':focus-visible:hover', '.image'],
+  );
+  // An ancestor-qualified plain selector is inherited, not global, so it reads with the rest.
+  const inherited = model.wellOrder([chip('.image', [0, 1, 1]), chip('main :target', [0, 1, 1])]);
+  assert.deepEqual(
+    inherited.map((entry) => entry.text),
+    ['.image', 'main :target'],
+  );
+});
+
+test('wellOrder keeps the component chips together, after the globals and before the page classes', () => {
+  const chip = (text, specificity, green) => ({ text, specificity, ...(green ? { inComponentMarkup: true } : {}) });
+  // The user's ContentWrapper root `div.layout.card-layout.theme-dark.flex-grow`, with
+  // `theme-brand` passed by the page. `.theme-dark` is written in the component's
+  // markup though its CSS is global, so it is green and joins `.layout`.
+  const ordered = model.wellOrder([
+    chip(':target', [0, 1, 0]),
+    chip(':focus-visible', [0, 1, 0]),
+    chip('.layout', [0, 1, 0], true),
+    chip('.theme-dark', [0, 1, 0], true),
+    chip('.flex-grow', [0, 1, 0], true),
+    chip('.theme-brand', [0, 1, 0]),
+    chip('[class*="theme-"]', [0, 1, 0], true),
+    chip('.layout.card-layout', [0, 2, 0], true),
+    chip('.container > [class]', [0, 2, 0], true),
+  ]);
+  assert.deepEqual(
+    ordered.map((entry) => entry.text),
+    [':target', ':focus-visible', '.layout', '.theme-dark', '.flex-grow', '[class*="theme-"]', '.layout.card-layout', '.container > [class]', '.theme-brand'],
+  );
+  // A styled tag still leads, whatever else is green.
+  const tagged = model.wellOrder([chip('.layout', [0, 1, 0], true), chip(':target', [0, 1, 0]), chip('div', [0, 0, 1], true)]);
+  assert.deepEqual(
+    tagged.map((entry) => entry.text),
+    ['div', ':target', '.layout'],
+  );
 });

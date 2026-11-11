@@ -39,13 +39,20 @@ try {
     .filter({ hasText: /^render$/ })
     .waitFor();
   await page.getByRole('button', { name: 'Add property', exact: true }).click();
+  // No Save button: committing the name creates the prop, the other fields save themselves, and closing saves what is pending.
   await page.getByLabel('Name', { exact: true }).fill('studioTestLabel');
+  await page.getByLabel('Name', { exact: true }).press('Enter');
+  await propertyRow(page).waitFor();
   await page.getByLabel('Default text', { exact: true }).fill('Default label');
   await page.getByLabel('Tooltip', { exact: true }).fill('Property manager browser verification');
-  await page.getByRole('button', { name: 'Save property', exact: true }).click();
-  await propertyRow(page).waitFor();
+  await page.getByRole('button', { name: 'Close property settings', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('.property-saving-overlay'));
   await propertyRow(peer).waitFor();
   assert.match(await readSource(page), /studioTestLabel\?: string/);
+  // Closing the form saves the pending tooltip; give that save a bounded moment to land.
+  for (let attempt = 0; attempt < 50 && !/Property manager browser verification/.test(await readSource(page)); attempt++) {
+    await page.waitForTimeout(100);
+  }
   assert.match(await readSource(page), /Property manager browser verification/);
   await propertyRow(page).click();
   assert.equal(await page.getByLabel('Default text', { exact: true }).inputValue(), 'Default label');

@@ -45,7 +45,26 @@ export function usePanelData<T>(
   return { state, refresh };
 }
 
-interface PanelCache<T> {
+/**
+ * Reads a panel's data ahead of its first open, so the panel opens on its list
+ * rather than on a loading skeleton that the list then replaces. A failed read
+ * leaves the cache empty: the panel reads again when it opens and reports the
+ * failure itself. Data a panel already read wins over this older read.
+ */
+export async function prewarmPanelCache<T>(cache: PanelCache<T>, key: string, read: () => Promise<Result<T, string>>): Promise<void> {
+  assert(key.length > 0, 'prewarmPanelCache: the cache entry has a key');
+  if (cache.get(key) !== undefined) {
+    return;
+  }
+  const result = await read();
+  if (result.ok) {
+    if (cache.get(key) === undefined) {
+      cache.set(key, result.value);
+    }
+  }
+}
+
+export interface PanelCache<T> {
   readonly get: (projectPath: string) => PanelData<T> | undefined;
   readonly set: (projectPath: string, value: T) => void;
 }

@@ -33,6 +33,7 @@ import {
   readSampleValue,
   runNativeEdit,
 } from '../../ipc/appBridge';
+import { appShortcutRoute } from '../../features/apps/appsRuntime';
 import { newId, routeToPath } from '../model/nodeFactory';
 import { previewNeedsPath, previewPageFor, previewPathOfPage } from '../model/previewPage';
 import { astroAssetGesture, insertedNode } from '../model/pageGestures';
@@ -255,7 +256,22 @@ export function useMenuShortcuts(
       // panel, the CMS itself. A command carries its own inverse and needs no
       // page — and a snapshot without one is dropped rather than applied, which
       // undo already does.
+      //
+      // Focus in an app's frame (docs/apps.md, "Undo, redo and shortcuts"): the
+      // menu takes ⌘Z before the frame sees it, so it is routed here. A text
+      // field in the app undoes its own typing, an app that keeps the shortcut
+      // hears `shortcut.press`, and otherwise this is Stacki's undo, once: the
+      // frame never saw the key, so its SDK forwarded nothing.
       window.avb.onMenu('undo', () => {
+        const route = appShortcutRoute('Mod+Z', document.activeElement ?? undefined);
+        if (route === 'app') {
+          return;
+        }
+        // A text field in the app's frame: the field's own undo, as for a field of Stacki's.
+        if (route === 'native') {
+          runNativeEdit('undo');
+          return;
+        }
         if (inEditable()) {
           runNativeEdit('undo');
           return;
@@ -264,6 +280,15 @@ export function useMenuShortcuts(
         void undo();
       }),
       window.avb.onMenu('redo', () => {
+        const route = appShortcutRoute('Mod+Shift+Z', document.activeElement ?? undefined);
+        if (route === 'app') {
+          return;
+        }
+        // A text field in the app's frame: the field's own redo, as for a field of Stacki's.
+        if (route === 'native') {
+          runNativeEdit('redo');
+          return;
+        }
         if (inEditable()) {
           runNativeEdit('redo');
           return;

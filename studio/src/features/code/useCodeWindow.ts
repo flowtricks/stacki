@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useEditorRole } from '../roles/useEditorRole';
+import { useStudioRole } from '../roles/useEditorRole';
+import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { codeWindowEdit, codeWindowSource } from './codeWindowSource';
 
 export function useCodeWindow(document: SharedDocument | undefined, selected: string, report: (error: unknown) => void) {
-  const role = useEditorRole();
+  // The code window is raw source: it needs `code:edit` (shared/properties/projectRoles.ts).
+  const role = can(useStudioRole(), 'code:edit') ? 'admin' : 'client';
   const [target, setTarget] = useState<{
     readonly document: SharedDocument;
     readonly id: string;

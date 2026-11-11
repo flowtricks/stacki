@@ -335,12 +335,13 @@ test('an attributes prop: the header dot makes it, the element spreads it after 
     'and so does the order around the spread',
   );
 
-  // Drawn connected: the chip in the dot's place, its own rows, the note.
+  // Drawn connected: the chip in the dot's place, the spread as its code where
+  // it sits, then the element's own rows; the defaults are the prop's.
   await draw({ ...anchor, props: replaced[0] }, 'rest');
   assert.equal(container.querySelector('.attrs-bound-chip').textContent.trim(), 'rest');
   const rows = [...container.querySelectorAll('.attr-row .attr-name')].map((row) => row.textContent);
-  assert.deepEqual(rows, ['data-label'], 'the spread and its defaults are the prop’s, not rows');
-  assert.ok(container.querySelector('.attrs-bound-note'), 'the line says where an instance’s attributes go');
+  assert.deepEqual(rows, ['{...rest}', 'data-label'], 'the spread is a row of its own, its defaults are the prop’s');
+  assert.ok(container.querySelector('.attr-row.spread code'), 'the spread is drawn as code');
   await click(container.querySelector('.attrs-bound-chip'));
   await click(byText('Disconnect'));
   assert.deepEqual(replaced[1], { class: anchor.props.class, 'data-label': anchor.props['data-label'] }, 'disconnecting leaves the element’s own attributes');
@@ -384,7 +385,6 @@ test('a component with no frontmatter gets one holding the new prop', async (con
     defaultText: '#',
     options: [],
     number: { min: undefined, max: undefined, decimals: undefined },
-    switch: { onLabel: 'On', offLabel: 'Off' },
     attributes: [],
     tag: '',
   };

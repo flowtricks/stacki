@@ -99,7 +99,7 @@ test.before(async () => {
 });
 
 test('setting tags: the tooltip and each tag read and write apart', () => {
-  const { tooltipOf, withTooltip, tagValue, withTag, numberSettingProblem, switchLabelTag } = modules;
+  const { tooltipOf, withTooltip, tagValue, withTag, numberSettingProblem, legacyTagsOf, withoutLegacyTags } = modules;
   const description = 'How many columns.\n@default 3\n@min 1\n@max 6';
   assert.equal(tooltipOf(description), 'How many columns.\n@default 3');
   assert.equal(withTooltip(description, 'How many columns.\n@default 3'), description);
@@ -119,10 +119,14 @@ test('setting tags: the tooltip and each tag read and write apart', () => {
   assert.equal(numberSettingProblem({ min: undefined, max: undefined, decimals: 1.5 }), 'Decimals is a whole number.');
   assert.match(numberSettingProblem({ min: undefined, max: undefined, decimals: 11 }), /between 0 and 10/);
   assert.equal(numberSettingProblem({ min: 0, max: 0, decimals: 0 }), undefined);
-  assert.equal(switchLabelTag(' On ', 'onLabel'), undefined);
-  assert.equal(switchLabelTag('Shown', 'onLabel'), 'Shown');
-  assert.equal(switchLabelTag('Off', 'offLabel'), undefined);
-  assert.equal(switchLabelTag('x'.repeat(60), 'offLabel').length, 40);
+  // Legacy switch labels: out of the tooltip, kept by a tooltip edit, removed only on request.
+  const legacy = 'Starts open.\n@onLabel Shown\n@offLabel Hidden';
+  assert.equal(tooltipOf(legacy), 'Starts open.');
+  assert.deepEqual(legacyTagsOf(legacy), ['@onLabel Shown', '@offLabel Hidden']);
+  assert.equal(withTooltip(legacy, 'Opens.'), 'Opens.\n@onLabel Shown\n@offLabel Hidden');
+  assert.equal(withoutLegacyTags(legacy), 'Starts open.');
+  assert.equal(withoutLegacyTags(description), description);
+  assert.deepEqual(legacyTagsOf(description), []);
   assert.throws(() => tooltipOf('x'.repeat(40000)), /description is bounded/);
 });
 
@@ -275,6 +279,8 @@ async function mountPanel(source, host = {}) {
       await act(async () => view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: text } }));
     },
     click,
+    focus: async (element) => act(async () => element.focus()),
+    blur: async (element) => act(async () => element.dispatchEvent(new window.FocusEvent('focusout', { bubbles: true }))),
     row,
     saveButton,
     field,
@@ -318,21 +324,28 @@ test('number and switch settings round-trip through the JSDoc tags, one line at 
   assert.ok(document.querySelector('.property-default-note') === null);
   await panel.click(panel.saveButton());
   assert.equal(panel.source(), afterMax.replace('   * @decimals 0\n', ''));
-  // A Switch's labels: the default word removes its tag.
+  // A Switch has no label fields; its legacy tags stay until the docs are edited and their removal asked for.
   const beforeSwitch = panel.source();
   await panel.click(panel.row('open'));
-  assert.equal(panel.field('On label').value, 'Shown');
-  assert.equal(panel.field('Off label').value, 'Hidden');
-  await panel.setValue(panel.field('On label'), 'On');
-  await panel.setValue(panel.field('Off label'), 'Closed');
+  assert.ok(panel.field('On label') === null);
+  assert.ok(panel.field('Off label') === null);
+  assert.ok(document.querySelector('.property-legacy-tags') === null, 'no offer before the docs are edited');
+  await panel.focus(panel.tooltip());
+  assert.match(document.querySelector('.property-legacy-tags').textContent, /unused switch label tags/);
   await panel.click(panel.saveButton());
-  assert.equal(panel.source(), beforeSwitch.replace('   * @onLabel Shown\n', '').replace('@offLabel Hidden', '@offLabel Closed'));
-  // Editing the tooltip keeps the setting tags after it.
+  assert.equal(panel.source(), beforeSwitch, 'opening and focusing writes nothing');
+  // Editing the tooltip keeps the tags after it; Remove takes them out.
   const beforeTooltip = panel.source();
   await panel.click(panel.row('open'));
   await panel.setValue(panel.tooltip(), 'Whether it starts open.');
   await panel.click(panel.saveButton());
   assert.equal(panel.source(), beforeTooltip.replace('Whether the panel starts open.', 'Whether it starts open.'));
+  await panel.click(panel.row('open'));
+  await panel.focus(panel.tooltip());
+  await panel.click(document.querySelector('.property-legacy-remove'));
+  await panel.click(panel.saveButton());
+  assert.doesNotMatch(panel.source(), /@onLabel|@offLabel/);
+  assert.match(panel.source(), /Whether it starts open\./);
   // A Text prop has no kind settings.
   await panel.click(panel.row('caption'));
   assert.ok(document.querySelector('.property-settings') === null);
@@ -381,7 +394,7 @@ test('the Kind picker writes the native type, and the format tag for Link', asyn
   await panel.unmount();
 });
 
-test('the attributes prop is a row with its tooltip, defaults and connections', async () => {
+test('the attributes prop is a row with its connections and defaults, saved as each changes', async () => {
   const selected = [];
   const replaced = [];
   const panel = await mountPanel(ATTRIBUTES_SOURCE, {
@@ -396,9 +409,15 @@ test('the attributes prop is a row with its tooltip, defaults and connections', 
   assert.equal(document.querySelectorAll('.property-list .property-row').length, 1, 'the rest binding is not a declared prop row');
   await panel.click(attributesRow);
   const editor = document.querySelector('.property-attributes-editor');
+  // One line says what it does; a rest prop has no tooltip field and no Save button.
+  assert.match(editor.querySelector('.property-help').textContent, /^Passes any other attributes through \{\.\.\.rest\}\.$/);
+  assert.ok(editor.querySelector('textarea[aria-label="Tooltip"]') === null);
+  assert.equal(
+    [...editor.querySelectorAll('button')].find((button) => button.textContent === 'Save property'),
+    undefined,
+  );
   assert.match(editor.textContent, /Connections: 2 elements/);
   assert.match(editor.textContent, /different defaults/);
-  assert.equal(editor.querySelector('textarea[aria-label="Tooltip"]').value, 'Extra link attributes');
   assert.equal(editor.querySelector('input[aria-label="Default attribute 1 name"]').value, 'href');
   assert.equal(editor.querySelector('input[aria-label="Default attribute 1 value"]').value, '/x');
   // A connection selects its element.
@@ -409,17 +428,18 @@ test('the attributes prop is a row with its tooltip, defaults and connections', 
   );
   await panel.click(connections[1]);
   assert.deepEqual(selected, ['n2']);
-  // A nameless default is refused with the reason.
+  // A nameless default is refused with the reason when its row is left.
   await panel.click(editor.querySelector('[aria-label="Add default attribute"]'));
-  await panel.setValue(editor.querySelector('input[aria-label="Default attribute 2 value"]'), 'x');
-  await panel.click(panel.saveButton());
+  const value = editor.querySelector('input[aria-label="Default attribute 2 value"]');
+  await panel.setValue(value, 'x');
+  await panel.blur(value);
   assert.match(toastMessages(), /needs a name/);
   assert.equal(replaced.length, 0);
-  // Saving writes the tooltip as a frontmatter edit and the defaults through the page editor.
-  await panel.setValue(editor.querySelector('input[aria-label="Default attribute 2 name"]'), 'target');
-  await panel.setValue(editor.querySelector('textarea[aria-label="Tooltip"]'), 'Attributes for the link');
-  await panel.click(panel.saveButton());
-  assert.equal(panel.source(), ATTRIBUTES_SOURCE.replace('@attributes Extra link attributes', '@attributes Attributes for the link'));
+  // Leaving a row writes the defaults through the page editor; the source is untouched.
+  const name = editor.querySelector('input[aria-label="Default attribute 2 name"]');
+  await panel.setValue(name, 'target');
+  await panel.blur(name);
+  assert.equal(panel.source(), ATTRIBUTES_SOURCE);
   assert.deepEqual(
     replaced.map((entry) => [entry.id, Object.keys(entry.props)]),
     [
@@ -427,7 +447,6 @@ test('the attributes prop is a row with its tooltip, defaults and connections', 
       ['n2', ['href', 'target', '...rest']],
     ],
   );
-  assert.ok(document.querySelector('.property-attributes-editor') === null);
   await panel.unmount();
   // Without the page host the defaults are shown, read-only, and connections cannot select.
   const bare = await mountPanel(ATTRIBUTES_SOURCE, { nodes: attributeNodes() });

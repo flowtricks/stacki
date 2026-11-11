@@ -4,14 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useCodeAccess, ManagedValue } from '../../ui/CodeAccess';
 import type { BindInputHandle } from './BindInput';
 import type { ExprInputAPI } from '../../ui/ExprInput';
-import type { PickerNode } from './DataPicker';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { definedFields } from '../../../shared/core/boundary';
 import { dataTree, scopeChips, scopeCompletions } from '../../editor/dataSuggest';
-import { partsFromValue, resolvePick, templateHoles, valueFromParts, valueModeOf } from '../../editor/bindings';
+import { partsFromValue, resolvePick, templateHoles, valueFromParts, valueModeOf, type PickNeed } from '../../editor/bindings';
 import BindInput from './BindInput';
 import DataPicker from './DataPicker';
+import { BindOverrideWaiting, pickerPaths, useBindOverride } from './bindOverride';
 import ExprInput from '../../ui/ExprInput';
 import { type FieldPosition, type Chip, type BindFieldProps } from './bindingTypes';
 import { referencedName, symbolTarget, VarSourceEditor } from './BindingEditors';
@@ -30,7 +30,9 @@ export {
 // panel draw (PropertySections.tsx), offered here beside the binding fields the
 // Properties panel already edits defaults with.
 export {
+  CodeTypeEditor,
   CodeTypeField,
+  CodeTypeToggle,
   ItemFieldsEditor,
   ListDefaultField,
   PropertyFlagsFields,
@@ -176,9 +178,9 @@ function useBindFieldActions(state: BindingState) {
     });
   };
 
-  const pick = (rawPath: string, query: PickerNode['query'] | undefined) => {
+  const pick = (rawPath: string, need: PickNeed | undefined) => {
     const chip = menu?.chip;
-    const path = resolvePick(rawPath, query ?? undefined, bindContext ?? undefined);
+    const path = resolvePick(rawPath, need, bindContext ?? undefined);
     setMenu(undefined);
     if (!showInput) {
       // A hole in the code was pressed: repoint THAT hole and leave the program
@@ -223,22 +225,37 @@ function useBindFieldAPI({ apiRef, showInput, inputRef }: BindingState) {
 }
 type BindingViewState = BindingState & ReturnType<typeof useBindFieldActions>;
 function BindFieldMenu({ state }: { readonly state: BindingViewState }) {
-  const { menu, bindContext, showInput, expr, pick, editTarget, editChip, editName, setMenu, setRaw } = state;
+  // Mounted per opening, so the `cms.bind` override is asked once each time the menu opens.
+  return state.menu && <BindFieldMenuPopup state={state} menu={state.menu} />;
+}
+function BindFieldMenuPopup({ state, menu }: { readonly state: BindingViewState; readonly menu: NonNullable<BindingViewState['menu']> }) {
+  const { bindContext, showInput, expr, pick, editTarget, editChip, editName, setMenu, setRaw } = state;
+  const current = menu.chip ? chipPath(menu.chip) : showInput ? undefined : expr;
+  // A running app that answers `cms.bind` is asked first, as the field's dot and a loop's
+  // Source ask (bindOverride.tsx); its path is picked as a row click would be, so a chip it
+  // was opened on is repointed in place.
+  const override = useBindOverride({
+    ask: () => ({ purpose: 'field', current: current === '' ? undefined : current, paths: pickerPaths(dataTree(bindContext || {})) }),
+    onPicked: (path) => pick(path, undefined),
+    onCancel: () => setMenu(undefined),
+  });
   return (
-    menu && (
-      <Popup
-        mode="popover"
-        portal={false}
-        onClose={() => setMenu(undefined)}
-        className="dd-popup bind-menu"
-        style={{ left: menu.left, top: menu.top, width: menu.width }}
-      >
-        {/* Built on every render rather than captured when the popup opened:
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={() => setMenu(undefined)}
+      className="dd-popup bind-menu"
+      style={{ left: menu.left, top: menu.top, width: menu.width }}
+    >
+      {override.kind === 'waiting' ? (
+        <BindOverrideWaiting owner={override.owner} onStacki={override.useStacki} />
+      ) : (
+        /* Built on every render rather than captured when the popup opened:
           stepping to another entry from inside it changes what the data IS,
-          and a snapshot would go on showing the entry you stepped away from. */}
+          and a snapshot would go on showing the entry you stepped away from. */
         <DataPicker
           tree={dataTree(bindContext || {})}
-          current={menu.chip ? chipPath(menu.chip) : showInput ? undefined : expr}
+          current={current}
           entries={bindContext?.entryNav ?? undefined}
           {...definedFields({ onStepItem: bindContext?.onStepItem })}
           onPick={pick}
@@ -252,8 +269,8 @@ function BindFieldMenu({ state }: { readonly state: BindingViewState }) {
             setRaw(true);
           }}
         />
-      </Popup>
-    )
+      )}
+    </Popup>
   );
 }
 function BindFieldSource({ state }: { readonly state: BindingState }) {

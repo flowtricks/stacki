@@ -1,11 +1,23 @@
 import { usePreviewContextMenu } from './usePreviewContextMenu';
+import {
+  canvasClickBox,
+  canvasClicksCaptured,
+  coordinateOf,
+  takeCanvasClick,
+  noteCanvasOpen,
+  observeCanvasClick,
+  type CanvasClickReport,
+} from '../../../vendor/stacki/src/ui/canvasClickSlot';
+import { receiveCanvasPoint } from '../../../vendor/stacki/src/ui/canvasPointQuery';
+import { resendCanvasOutlineMode } from '../../../vendor/stacki/src/ui/canvasOutlineMode';
 import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import { usePreviewSource } from '../../../vendor/stacki/src/features/preview/usePreviewSource';
 import { emptyOutlines, parseOutlines, type OutlineState } from './outlineState';
 import { receivePreviewKey } from './previewKeys';
 import { receiveStyleModifiers } from './styleModifiers';
 import { receiveCanvasReply, setCanvasFrame, noteCanvasReady } from '../../../vendor/stacki/src/editor/canvasQuery';
-import { NO_TEXT_MARKS, parsePreviewMessage, type TextMarks } from '../../../vendor/stacki/src/features/preview/previewMessages';
+import { NO_TEXT_MARKS, parsePreviewMessage, parseShortcutMessage, type TextMarks } from '../../../vendor/stacki/src/features/preview/previewMessages';
+import { runShortcutCommand } from '../../../vendor/stacki/src/features/apps/appCommands';
 import type { GuideMetrics } from '../../../vendor/stacki/src/features/preview/guideModel';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { request } from '../project/projectClient';
@@ -68,6 +80,7 @@ export function usePreview(
         postMessage: (message: unknown) => postToFrame(frame.current, target?.origin, message),
       });
       noteCanvasReady();
+      resendCanvasOutlineMode(); // A new document starts in the editor's own mode.
       // React calls this for the current iframe, including replacements with the same URL.
       for (const listener of loadListeners.current) {
         listener();
@@ -142,14 +155,25 @@ function usePreviewMessages(
       if (isMessage(event.data, 'avb:query-result')) {
         receiveCanvasReply(event.data);
       }
+      if (isMessage(event.data, 'avb:point-result')) {
+        receiveCanvasPoint(event.data);
+      }
       if (isMessage(event.data, 'studio:open')) {
+        noteCanvasOpen(); // A double click: the observed click it began with is no placement.
+      }
+      if (isMessage(event.data, 'studio:open') && !canvasClicksCaptured()) {
         const data = record(event.data);
         callbacks.current.onOpen?.(string(data['id'], 500), messageOccurrence(data));
       }
       if (isMessage(event.data, 'studio:outside-focus')) {
         callbacks.current.onOutside();
       }
-      receiveSelection(event.data, callbacks.current.onSelect);
+      // While a Stacki app captures canvas clicks, a click is the app's, not a selection (canvasClickSlot.ts).
+      if (!takeCapturedClick(event.data)) {
+        // An observing app hears the click too, after the double-click window; Studio selects as always.
+        observeSelectionClick(event.data);
+        receiveSelection(event.data, callbacks.current.onSelect);
+      }
     };
     const variant = (event: Event) => {
       if (event instanceof CustomEvent) {
@@ -211,6 +235,11 @@ function receiveStudioSignals(data: unknown, patch: () => void) {
   }
   if (isMessage(data, 'studio:key')) {
     receivePreviewKey(data);
+  }
+  // A key in the app command range, pressed while the canvas had focus (previewKeys.ts).
+  const shortcut = parseShortcutMessage(data);
+  if (shortcut?.name === 'appCommand') {
+    runShortcutCommand(shortcut.shortcut);
   }
   if (isMessage(data, 'studio:interaction')) {
     window.dispatchEvent(new Event('studio:interaction'));
@@ -281,6 +310,46 @@ function selectionID(data: unknown): string | undefined {
     return data.id;
   }
   return undefined;
+}
+
+// A `studio:select` as the click report an app hears.
+function selectionClick(value: unknown): CanvasClickReport | undefined {
+  const id = selectionID(value);
+  if (id === undefined) {
+    return undefined;
+  }
+  const data = record(value);
+  return {
+    path: id,
+    occurrence: messageOccurrence(data),
+    x: coordinateOf(data['x']),
+    y: coordinateOf(data['y']),
+    box: canvasClickBox(data['box']),
+  };
+}
+
+// A `studio:select` the observing app hears as well (canvasClickSlot.ts observeCanvasClick).
+function observeSelectionClick(value: unknown): void {
+  const click = selectionClick(value);
+  if (click !== undefined) {
+    observeCanvasClick(click);
+  }
+}
+
+// A `studio:select` handed to the app capturing canvas clicks; false when none captures, or it is another message.
+function takeCapturedClick(value: unknown): boolean {
+  const id = selectionID(value);
+  if (id === undefined || !canvasClicksCaptured()) {
+    return false;
+  }
+  const data = record(value);
+  return takeCanvasClick({
+    path: id,
+    occurrence: messageOccurrence(data),
+    x: coordinateOf(data['x']),
+    y: coordinateOf(data['y']),
+    box: canvasClickBox(data['box']),
+  });
 }
 
 function isMessage(value: unknown, type: string): boolean {

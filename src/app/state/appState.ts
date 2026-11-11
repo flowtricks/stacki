@@ -30,7 +30,6 @@ import {
   type PreviewCommitInfo,
   type ProjectIdentity,
   type RightTab,
-  type RightTabIndicator,
 } from '../appTypes';
 import {
   findEditorNodeById as findNodeById,
@@ -348,8 +347,6 @@ export function useWindowState() {
   const [contentFocus, setContentFocus] = useState(0);
   // Sliding highlight behind the active Style/Settings tab, measured from the
   // buttons so it tracks their real geometry (and any panel resize).
-  const rightTabRefs = useRef<Record<string, HTMLButtonElement | undefined>>({});
-  const [rightTabInd, setRightTabInd] = useState<RightTabIndicator | undefined>(undefined);
   // The asset request a field is waiting on, and the tab to go back to once
   // it's answered — "Choose Image…" borrows the left panel rather than
   // opening a window over the canvas.
@@ -373,8 +370,6 @@ export function useWindowState() {
     previewRef,
     revealTick,
     rightTab,
-    rightTabInd,
-    rightTabRefs,
     selectionKeysRef,
     setAssetPick,
     setClassFocus,
@@ -390,7 +385,6 @@ export function useWindowState() {
     setPreviewRef,
     setRevealTick,
     setRightTab,
-    setRightTabInd,
     setTermOpen,
     tabBeforePick,
     termOpen,

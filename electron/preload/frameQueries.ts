@@ -1,5 +1,9 @@
 import { receiveLiveVariables } from './frameLiveVariables';
 import { receiveLiveRules } from './frameLiveRules';
+import { receiveAppCursor } from './frameAppCursor';
+import { receivePointQuery } from './framePointQuery';
+import { receiveOutlineMode } from './frameOutlineMode';
+import { receiveAppScroll, receiveAppWheel } from './frameAppScroll';
 import { parseCanvasInteraction, parseCanvasSitePages } from '../../shared/properties/canvasInteraction';
 import { hidePendingDelete, settlePendingDeletes } from './framePendingDelete';
 import { listenForCanvasMoves, revertCanvasMoves, showCanvasMove } from './frameMove';
@@ -34,7 +38,7 @@ import {
 } from './frameRegions';
 import { ownClasses, resetThinCache } from './frameMeasure';
 import { forgetReportedKeys, paintOpened, scrollPathIntoView, sendClasses, sendRects, sendRendered } from './frameReports';
-import { enterDesignMode, startOutlines } from './frameTargets';
+import { enterDesignMode, nodeAtPoint, startOutlines } from './frameTargets';
 
 // Nodes that put nothing on the page: a component that returns null for the
 // props it was given (an <Img> with no src, a grid with no children) still
@@ -141,6 +145,21 @@ export function listenForQueries(): void {
       return;
     }
     if (receiveLiveRules(data)) {
+      return;
+    }
+    if (receiveAppCursor(data)) {
+      return;
+    }
+    if (receivePointQuery(data, nodeAtPoint, (message) => window.parent.postMessage(message, '*'))) {
+      return;
+    }
+    if (receiveOutlineMode(data)) {
+      return; // The next hover resolves in the new mode.
+    }
+    if (receiveAppScroll(data)) {
+      return;
+    }
+    if (receiveAppWheel(data)) {
       return;
     }
     if (data['type'] === 'avb:query' && typeof data['id'] === 'number') {

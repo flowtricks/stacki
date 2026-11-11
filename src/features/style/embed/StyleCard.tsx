@@ -43,7 +43,7 @@ export function StyleCard(card: StyleCardProps) {
   return (
     <div className="embed-editor_rule u-surface-surface">
       <StyleCardHead card={card} onVisibleSelectorsChange={rememberVisibleSelectors} />
-      {card.sourceNote ? <p className="embed-editor_source-note">{card.sourceNote}</p> : undefined}
+      {/* No note under the card: the chips and the CSS code already say what is being edited. */}
 
       <CssCodeSection
         model={card.model}
@@ -54,13 +54,17 @@ export function StyleCard(card: StyleCardProps) {
         open={card.cssCodeOpen}
         onToggle={card.onToggleCssCode}
         onSave={card.onSaveCssRule}
+        inlineCode={card.inlineCode}
       />
 
-      <StyleSections card={card} openProvenance={provenance.openProvenance} />
-
-      <div className="embed-editor_rule-foot">
-        <AddPropertyRow busy={busy} onAdd={card.onAdd} />
-      </div>
+      {/* A style attribute the panel can only show (inlineCode `readonly`) keeps its
+        controls in view, disabled: a fieldset disables every control inside it. */}
+      <fieldset className="embed-editor_controls" disabled={card.inlineCode?.kind === 'readonly'}>
+        <StyleSections card={card} openProvenance={provenance.openProvenance} />
+        <div className="embed-editor_rule-foot">
+          <AddPropertyRow busy={busy} onAdd={card.onAdd} />
+        </div>
+      </fieldset>
 
       {shown && provenanceResolved !== undefined ? (
         <ProvenancePopover
@@ -165,6 +169,7 @@ export function StyleCardHead({ card, onVisibleSelectorsChange }: { card: StyleC
         onDeselect={card.onDeselect}
         onAdd={card.onAddSelector}
         onVisibleSelectorsChange={onVisibleSelectorsChange}
+        inline={card.inline}
       />
       <SourcePickerRow card={card} />
     </div>

@@ -109,8 +109,10 @@ const check = (what, condition, detail) => {
     JSON.stringify(got({ meta: expr('helper()') })),
   );
   check('and so does a node with no props at all', resolveInstanceProps({ kind: 'component' }, PAGE) === undefined);
-  // Classes belong to the style panel, not the data picker.
-  check('the class attribute is left alone', got({ class: text('card') }) === undefined, JSON.stringify(got({ class: text('card') })));
+  // A component reads `class` as a prop (`{ class: className }`), so its value is answered;
+  // a `class:list` directive is Astro's to combine, and is left out.
+  check('the class attribute is answered', got({ class: text('card') })?.class === 'card', JSON.stringify(got({ class: text('card') })));
+  check('a class:list directive is left alone', got({ 'class:list': expr('["a", b]') }) === undefined, JSON.stringify(got({ 'class:list': expr('["a", b]') })));
 
   // ── What the picker does with it ──────────────────────────────────────────
   // The whole point: the same rows, with values in them.

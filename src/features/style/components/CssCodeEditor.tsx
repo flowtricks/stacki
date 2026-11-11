@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { search } from '@codemirror/search';
 import { Decoration, EditorView } from '@codemirror/view';
+import type { Extension } from '@codemirror/state';
 import { tags } from '@lezer/highlight';
 import { cssEditorIndentExtensions } from './cssEditorIndent';
 import { lockedEdgeExtensions, type CodeEditorLockedEdges } from '../../../ui/codeEditorLockedEdges';
@@ -44,7 +45,11 @@ type CodeEditorProps = {
   lockedEdges?: CodeEditorLockedEdges;
   onChange?: (value: string) => void;
   onSelectionChange?: (position: number) => void;
+  /** More editor behaviour, made once by the caller (an inline branch's atomic `${…}` tokens). */
+  extensions?: readonly Extension[];
 };
+
+const NO_EXTENSIONS: readonly Extension[] = [];
 
 const codeEditorHighlightStyle = HighlightStyle.define([
   { tag: tags.keyword, color: 'var(--color-info)' },
@@ -178,6 +183,7 @@ export function CodeEditor({
   lockedEdges,
   onChange,
   onSelectionChange,
+  extensions: extraExtensions = NO_EXTENSIONS,
 }: CodeEditorProps) {
   const codeVariables = useCodeVariables(variables, { readOnly });
   const variableExtension = codeVariables.extension;
@@ -191,10 +197,18 @@ export function CodeEditor({
     const locked = lockedEdgeExtensions({ prefixLength, suffixLength });
     const wrapping = lineOverflow === 'wrap' ? [EditorView.lineWrapping] : [];
     if (!highlights.length) {
-      return [...codeEditorExtensions[language], ...wrapping, variableExtension, ...locked, ...selectionExtensions];
+      return [...codeEditorExtensions[language], ...wrapping, variableExtension, ...locked, ...selectionExtensions, ...extraExtensions];
     }
-    return [...codeEditorExtensions[language], ...wrapping, variableExtension, ...locked, highlightDecorations(highlights), ...selectionExtensions];
-  }, [language, lineOverflow, onSelectionChange, prefixLength, suffixLength, tokenHighlights, value.length, variableExtension]);
+    return [
+      ...codeEditorExtensions[language],
+      ...wrapping,
+      variableExtension,
+      ...locked,
+      highlightDecorations(highlights),
+      ...selectionExtensions,
+      ...extraExtensions,
+    ];
+  }, [language, lineOverflow, onSelectionChange, prefixLength, suffixLength, tokenHighlights, value.length, variableExtension, extraExtensions]);
 
   // The frame holds the bind dot in the editor's top-left corner, shown on
   // hover as it is over every value field (embed-editor_varconnect's rules).

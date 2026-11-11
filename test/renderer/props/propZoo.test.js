@@ -196,7 +196,8 @@ const SPEC = {
       label: text({ default: 'Go', doc: 'The text on the button.' }),
       columns: number({ default: 3, min: 1, max: 6, decimals: 0 }),
       opacity: number({ default: 0.8, min: 0, max: 1, decimals: 2 }),
-      open: boolean({ default: true, onLabel: 'Shown', offLabel: 'Hidden' }),
+      // Its doc still has the legacy @onLabel/@offLabel tags: they are ignored.
+      open: boolean({ default: true }),
       text: text({ deprecated: true }),
       density: choice(['compact', 'medium', 'comfortable'], { default: 'medium' }),
     },
@@ -352,11 +353,6 @@ function propAspects(record, name, spec) {
   for (const key of ['min', 'max', 'decimals']) {
     if (spec[key] !== undefined) {
       out.push(['settings', `${key} ${spec[key]}`, `${key} ${documentation?.number[key]}`]);
-    }
-  }
-  for (const key of ['onLabel', 'offLabel']) {
-    if (spec[key] !== undefined) {
-      out.push(['settings', `${key} ${spec[key]}`, `${key} ${documentation?.switch[key]}`]);
     }
   }
   if (spec.deprecated) {

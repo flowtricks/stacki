@@ -70,7 +70,7 @@ export function Navigator(props: NavigatorProps) {
     <div className="studio-navigator" ref={wrapper}>
       <StructurePanel
         key={props.document?.ready ? props.document.file : 'loading'}
-        {...studioElementActions(props, client ? 'client' : 'designer')}
+        {...studioElementActions(props, client ? 'client' : 'admin')}
         pageState={pageState}
         layouts={[]}
         currentLayoutName={nodes.find((node) => node.id === 'layout')?.name ?? ''}

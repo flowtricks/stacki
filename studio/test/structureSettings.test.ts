@@ -51,7 +51,8 @@ const PROJECT = {
   components: [
     { file: 'src/components/Card.astro', name: 'Card', fields: [], slots: [] },
     { file: 'src/components/Hero.astro', name: 'Hero', fields: [], slots: [] },
-    { file: 'src/layouts/Base.astro', name: 'Base', fields: [], slots: ['default'] },
+    // The scan marks a layout (projectServer.ts); the file's folder alone no longer decides it.
+    { file: 'src/layouts/Base.astro', name: 'Base', isLayout: true as const, fields: [], slots: ['default'] },
   ],
 };
 
@@ -203,7 +204,6 @@ const { title = "Hello" } = Astro.props;
     defaultText: 'More',
     options: [],
     number: { min: undefined, max: undefined, decimals: undefined },
-    switch: { onLabel: 'On', offLabel: 'Off' },
     attributes: [],
     tag: '',
     list: { fields: [], items: [] },

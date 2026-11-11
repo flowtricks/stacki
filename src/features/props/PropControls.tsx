@@ -10,10 +10,9 @@ import { assert } from '../../../shared/core/assert';
 import { definedFields } from '../../../shared/core/boundary';
 import { resolveAssetImport } from '../../ipc/assetBridge';
 import { BindField, ExprValueField } from './propBindings';
-import { statedSwitchLabels } from '../../editor/propDocumentation';
 import { ObjectAttrsField, parseObjectLiteral, serializeObjectLiteral } from './propAttributes';
 import { looksLikeAssetPath, mediaKindFor } from '../../ui/AssetThumb';
-import AssetField from '../../ui/AssetField';
+import AssetField, { type AssetFieldProps } from '../../ui/AssetField';
 import LinkField from './LinkField';
 import ListField from './ListField';
 import ObjectField from './ObjectField';
@@ -28,6 +27,7 @@ import SegSwitch from './SegSwitch';
 import StyleEditor, { collapseDeclarations } from './StyleEditor';
 import { ChevronDownIcon } from '../../ui/Icons';
 import {
+  type AssetContext,
   type AssetImportFieldProps,
   attrText,
   mediaWord,
@@ -73,6 +73,8 @@ export function AssetImportField({ binding, name, assetContext, onChange }: Asse
       onPickEntry={assetContext.onPickAsset && ((picked) => assetContext.onPickAsset && assetContext.onPickAsset(name, picked))}
       onDimensions={(dimensions) => assetContext.onPickDimensions?.(name, dimensions)}
       onCurrentDimensions={(dimensions) => /^src$/i.test(name) && assetContext.onSrcDimensions?.(dimensions)}
+      pickTarget={{ nodeId: assetContext.nodeId, field: name }}
+      onPickWithAlt={altPickFor(name, assetContext)}
     />
   );
 }
@@ -285,15 +287,13 @@ export function BooleanControl({ state }: { readonly state: PropControlState }) 
   // Show the effective boolean while the label tracks only an explicit override.
   const fallback = !!field.default;
   const current = value ? value.type !== 'expr' || value.value === 'true' : fallback;
-  // A switch prop's own words for its sides, from its doc's @onLabel and @offLabel.
-  const labels = statedSwitchLabels(field.doc);
   return (
     <div className="props-field">
       {label}
       <SegSwitch
         options={[
-          { value: true, label: labels?.onLabel ?? 'True' },
-          { value: false, label: labels?.offLabel ?? 'False' },
+          { value: true, label: 'True' },
+          { value: false, label: 'False' },
         ]}
         current={current}
         onPick={(next) =>
@@ -498,6 +498,8 @@ export function MediaControl({ state }: { readonly state: PropControlState }) {
         onPickEntry={assetContext.onPickAsset && ((picked) => assetContext.onPickAsset && assetContext.onPickAsset(name, picked))}
         onDimensions={(dimensions) => assetContext.onPickDimensions?.(name, dimensions)}
         onCurrentDimensions={(dimensions) => /^src$/i.test(name) && assetContext.onSrcDimensions?.(dimensions)}
+        pickTarget={{ nodeId: assetContext.nodeId, field: name }}
+        onPickWithAlt={altPickFor(name, assetContext)}
       />
     </div>
   );
@@ -652,4 +654,16 @@ export function TextControl({ state }: { readonly state: PropControlState }) {
       )}
     </div>
   );
+}
+
+// Only an element's `src` takes an app's alt text along with the pick (assetPick.ts onPickWithAlt).
+function altPickFor(name: string, assetContext: AssetContext): AssetFieldProps['onPickWithAlt'] {
+  const write = assetContext.onPickWithAlt;
+  if (write === undefined) {
+    return undefined;
+  }
+  if (/^src$/i.test(name)) {
+    return (pick, alt) => write(name, pick, alt);
+  }
+  return undefined;
 }

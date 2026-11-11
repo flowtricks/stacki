@@ -6,6 +6,8 @@ import { arrayItems, arrayText, moveItem } from '../props/arrayValue';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 import ListField from '../props/ListField';
 import type { ListFieldChange } from '../props/ListField';
+import { CodeTypeEditor, CodeTypeToggle } from '../props/propBindings';
+import type { CodeMode } from './PropertyType';
 
 export type PropertyOptionChange =
   | {
@@ -17,13 +19,29 @@ export type PropertyOptionChange =
 interface PropertyOptionsProps {
   readonly type: string;
   readonly disabled: boolean;
+  /** The `{}` switch: on, the options' union is edited as code in the list's place. */
+  readonly code: CodeMode;
   readonly onChange: (change: PropertyOptionChange) => void;
+  /** A code edit of the union, which no option rename can follow. */
+  readonly onTypeChange: (type: string) => void;
 }
 
-export function PropertyOptions({ type, disabled, onChange }: PropertyOptionsProps) {
+export function PropertyOptions({ type, disabled, code, onChange, onTypeChange }: PropertyOptionsProps) {
   // Retain the original scalar kind through intermediate edits such as '-' in a number.
   const scalarKind = useRef<'text' | 'literal'>();
   const options = literalOptions(type);
+  if (code.open) {
+    // While the code is edited the union may stop being options; the field stays where it was opened.
+    return (
+      <div className="property-options props-field">
+        <div className="property-options-heading">
+          <span>Options</span>
+          <CodeTypeToggle open={code.open} onToggle={() => code.setOpen(!code.open)} />
+        </div>
+        <CodeTypeEditor type={type} placeholder="" onChange={onTypeChange} />
+      </div>
+    );
+  }
   if (!options) {
     return undefined;
   }
@@ -47,7 +65,10 @@ export function PropertyOptions({ type, disabled, onChange }: PropertyOptionsPro
   };
   return (
     <div className="property-options props-field">
-      <span>Options</span>
+      <div className="property-options-heading">
+        <span>Options</span>
+        <CodeTypeToggle open={code.open} onToggle={() => code.setOpen(!code.open)} />
+      </div>
       <ListField
         value={value}
         onChange={(text, immediate, listChange) => change(text, immediate ? 'immediate' : 'draft', listChange)}

@@ -312,12 +312,18 @@ const check = (what, condition, detail) => {
         'data-astro-cid-j7pv25f6': '',
         'data-astro-source-file': '/project/src/pages/index.astro',
         'data-astro-source-loc': '9:5',
+        'data-stacki-key': 'k1kkgbiyvxd6l',
       },
     };
     const tokens = snapshotTokens(unclassed);
     check(
       "Astro's generated attributes are not selector tokens",
       tokens.every((token) => !token.name.startsWith('attr:data-astro-')),
+      JSON.stringify(tokens.map((token) => token.name)),
+    );
+    check(
+      "Stacki's own node key is not a selector token",
+      tokens.every((token) => token.name !== 'attr:data-stacki-key'),
       JSON.stringify(tokens.map((token) => token.name)),
     );
     const picked = tokensToSelector(defaultSelectorTokens(tokens), tokens);

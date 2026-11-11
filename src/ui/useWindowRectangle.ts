@@ -6,9 +6,9 @@ import { fitWindowRectangle, resizeWindowRectangle, type WindowEdge, type Window
 import { readWindowRectangle, storeWindowRectangle } from './windowPreferences';
 
 // Tool windows and the code editor share geometry, without knowing their dock location.
-export function useWindowRectangle(minimum: WindowSize, storageKey?: string) {
+export function useWindowRectangle(minimum: WindowSize, storageKey?: string, initialSize?: WindowSize) {
   const [dragging, setDragging] = useState(false);
-  const [rectangle, setRectangle] = useWindowPlacement(minimum, { storageKey, dragging });
+  const [rectangle, setRectangle] = useWindowPlacement(minimum, { storageKey, dragging, initialSize });
   const startPointer = usePointerDrag();
   const start = (event: PointerEvent<HTMLDivElement>, edge?: WindowEdge): void => {
     if (event.button !== 0 || event.isPrimary === false) {
@@ -56,12 +56,14 @@ function useWindowPlacement(
   {
     storageKey,
     dragging,
+    initialSize,
   }: {
     readonly storageKey: string | undefined;
     readonly dragging: boolean;
+    readonly initialSize: WindowSize | undefined;
   },
 ) {
-  const [rectangle, setRectangle] = useState(() => readWindowRectangle(storageKey, viewportSize(), minimum));
+  const [rectangle, setRectangle] = useState(() => readWindowRectangle(storageKey, viewportSize(), minimum, initialSize));
   const { width, height } = minimum;
   useEffect(() => {
     const fit = (): void => {

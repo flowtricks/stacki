@@ -5,6 +5,7 @@ import { assert } from '../../shared/core/assert';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { componentPreviewStylesModule } from './componentPreviewStyles';
+import { PAGES_FOLDER, foldersFor, isWithin, type ProjectFolders } from '../../shared/properties/projectFolders';
 import {
   componentPreviewContextModule,
   componentPreviewSample,
@@ -137,7 +138,9 @@ export function componentPreviewPath(paths: readonly string[], requestedPath: un
   const name = requestedName;
   if (selected) {
     const key = '/' + selected.replace(/^\/+/, '');
-    if (/^\/(src\/(components|layouts)|node_modules)\/.+\.astro$/.test(key)) {
+    // Only a file the route's own globs loaded can match: those name the configured
+    // component and layout folders (.stacki/folders.json), so src/ is the outer bound.
+    if (/^\/(src|node_modules)\/.+\.astro$/.test(key)) {
       return paths.find((candidate) => candidate === key);
     }
     return undefined;
@@ -212,9 +215,11 @@ export function componentPreviewPlugin(projectDirectories: readonly string[], pa
         return undefined;
       }
       const file = path.resolve(id.slice(0, separator));
+      // Only the route's globs ask for these, and they name the configured component and
+      // layout folders (renderComponentPreviewPage), all under src/ and never in its pages.
       const relative = roots
         .map((candidate) => path.relative(candidate, file).split(path.sep).join('/'))
-        .find((candidate) => /^src\/(components|layouts)\/.+\.astro$/.test(candidate));
+        .find((candidate) => /^src\/.+\.astro$/.test(candidate) && !isWithin(PAGES_FOLDER, candidate));
       assert(relative !== undefined, 'Preview metadata must belong to a project component or layout');
       const bytes = fs.statSync(file).size;
       assert(bytes <= PREVIEW_LIMITS.sourceCharsMax, 'Component source exceeds size limit');
@@ -288,11 +293,29 @@ export function renderComponentPreviewRecipe(): string {
   return PREVIEW_RECIPE_NODE.replace('__STACKI_SLOT_POSITIONS__', () => positions.join('\n      '));
 }
 
-export function renderComponentPreviewPage(): string {
-  return PREVIEW_PAGE.replace('__STACKI_PREVIEW_PATH__', () => componentPreviewPath.toString() + '\n' + componentPreviewLayout.toString()).replace(
-    '__STACKI_PREVIEW_RECIPE__',
-    PREVIEW_RECIPE_FILE,
-  );
+/**
+ * The preview route's page. Its globs name the project's component and layout folders
+ * (`.stacki/folders.json`, read when the dev server starts), so a configured folder
+ * previews like `src/components` does. Without a configuration the page is what it always was.
+ */
+export function renderComponentPreviewPage(config?: ProjectFolders): string {
+  // previewFolders asserts each folder is a plain path, so it sits inside single quotes as it is.
+  const globs = previewFolders(config).map((folder) => `'/${folder}/**/*.astro'`);
+  // An empty glob list would be a Vite error; a pattern no file matches previews nothing instead.
+  const list = '[' + (globs.length === 0 ? ["'/src/__stacki_no_components__/*.astro'"] : globs).join(', ') + ']';
+  return PREVIEW_PAGE.replace('__STACKI_PREVIEW_PATH__', () => componentPreviewPath.toString() + '\n' + componentPreviewLayout.toString())
+    .replace('__STACKI_PREVIEW_RECIPE__', PREVIEW_RECIPE_FILE)
+    .replaceAll('__STACKI_PREVIEW_GLOBS__', () => list);
+}
+
+/** The folders the preview route loads components from: the component folders, then the layout ones. */
+function previewFolders(config: ProjectFolders | undefined): readonly string[] {
+  const folders = [...foldersFor('components', config), ...foldersFor('layouts', config)];
+  // The parser restricts these to src/; each becomes a glob literal in generated code.
+  for (const folder of folders) {
+    assert(/^src\/[A-Za-z0-9_. /-]+$/.test(folder), 'previewFolders: a component folder is a plain path under src/');
+  }
+  return folders;
 }
 
 interface PackagePreviewSource {
@@ -338,14 +361,14 @@ import { contextStyles, htmlAttributes, bodyAttributes } from 'virtual:stacki-co
 import { packageModules, packageInputs } from 'virtual:stacki-package-components';
 import RecipeNode from './__STACKI_PREVIEW_RECIPE__';
 const mods = {
-  ...import.meta.glob(['/src/components/**/*.astro', '/src/layouts/**/*.astro']), ...packageModules,
+  ...import.meta.glob(__STACKI_PREVIEW_GLOBS__), ...packageModules,
 };
 const canvasId = Astro.url.searchParams.get('defaults') || '';
 const canvasKey = '/.stacki/canvas/' + canvasId + '.astro';
 // Resolve on demand: a new canvas can be created after this route was compiled.
 const DefaultCanvas = /^[a-f0-9-]{36}$/.test(canvasId)
   ? (await import(/* @vite-ignore */ canvasKey)).default : null;
-const inputs = { ...import.meta.glob(['/src/components/**/*.astro', '/src/layouts/**/*.astro'], {
+const inputs = { ...import.meta.glob(__STACKI_PREVIEW_GLOBS__, {
   query: '?raw&stacki-preview-props', import: 'default',
 }), ...packageInputs };
 const selected = componentPreviewPath(
@@ -493,6 +516,36 @@ if (selected) {
           requestAnimationFrame(fit);
         }
         fit();
+        // The page is a live picture: the pointer reaches it, so :hover, hover-driven scripts and
+        // focus-visible styles answer as on the real page, but it never acts. Presses, clicks, drags,
+        // context menus and submits stop here, before the component's own handlers, so a link or a
+        // form cannot navigate and nothing inside takes focus. The host learns of the pointer coming
+        // in and of a click, and treats them as its own (the insert palette's card highlights and inserts).
+        function gesture(name) {
+          window.parent.postMessage({ type: 'avb:component-preview-gesture', gesture: name }, '*');
+        }
+        var inside = false;
+        function arrive() {
+          if (inside) return;
+          inside = true;
+          gesture('pointer');
+        }
+        window.addEventListener('mouseover', arrive, true);
+        window.addEventListener('mousemove', arrive, true);
+        document.addEventListener('mouseout', function (event) {
+          if (!event.relatedTarget) inside = false;
+        }, true);
+        function refuse(event) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+        ['pointerdown', 'mousedown', 'mouseup', 'pointerup', 'auxclick', 'dblclick', 'contextmenu', 'dragstart', 'submit', 'touchstart'].forEach(function (name) {
+          window.addEventListener(name, refuse, { capture: true, passive: false });
+        });
+        window.addEventListener('click', function (event) {
+          refuse(event);
+          if (event.button === 0) gesture('click');
+        }, true);
         // In dev, Vite injects component CSS asynchronously and images decode
         // later — both change the layout after the first fit, which would
         // leave the stage unscaled and spilling past the card. Re-fit on any

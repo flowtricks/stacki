@@ -216,23 +216,43 @@ export function attributeValidOn(name: string, tag: string): boolean {
   return !GLOBAL_ONLY.has(tag);
 }
 
+/** What an attribute name is checked against. */
+export interface AttributeNameContext {
+  /** The element's tag; absent for an instance, whose attribute names are not checked against one. */
+  readonly tag: string | undefined;
+  /** The component's declared props, for an instance's attribute list. */
+  readonly reserved: readonly string[];
+  /** The name the attribute already has, when an existing one is being edited: it is never flagged. */
+  readonly own: string | undefined;
+  /** The names the element's other attributes already have. */
+  readonly taken: readonly string[];
+}
+
 /**
  * The advisory note under an attribute's Name field, or undefined when the
- * name is fine. `reserved` is the component's declared props, for an
- * instance's attribute list; without a tag (an instance) only reserved names
- * are noted.
+ * name is fine. Only a name being typed for a new or renamed attribute is
+ * noted: the name the attribute already has (`class:list` on an element that
+ * has one) is what the file says, and is never flagged.
  */
-export function attributeNameNote(name: string, tag: string | undefined, reserved: readonly string[]): string | undefined {
+export function attributeNameNote(name: string, context: AttributeNameContext): string | undefined {
   const clean = name.trim();
-  if (clean === '') {
+  if (clean === '' || clean === context.own) {
     return undefined;
   }
-  assert(reserved.length <= LIMITS.propSchemaFieldsMax, 'attributeNameNote: reserved names are bounded');
-  if (RESERVED.test(clean) || reserved.includes(clean)) {
+  assert(context.reserved.length <= LIMITS.propSchemaFieldsMax, 'attributeNameNote: reserved names are bounded');
+  assert(context.taken.length <= LIMITS.attrsPerNodeMax, 'attributeNameNote: taken names are bounded');
+  // An element's classes have a field of their own, driven by the Style panel's selectors.
+  if (context.tag !== undefined && (clean === 'class' || clean === 'class:list')) {
+    return 'Classes are edited in the Style panel.';
+  }
+  if (context.taken.includes(clean)) {
+    return `${clean} is already on this element.`;
+  }
+  if (RESERVED.test(clean) || context.reserved.includes(clean)) {
     return 'This is a reserved name.';
   }
-  if (tag === undefined || clean.startsWith('{')) {
+  if (context.tag === undefined || clean.startsWith('{')) {
     return undefined;
   }
-  return attributeValidOn(clean, tag) ? undefined : `${clean} isn’t an attribute of <${tag}>.`;
+  return attributeValidOn(clean, context.tag) ? undefined : `${clean} isn’t an attribute of <${context.tag}>.`;
 }

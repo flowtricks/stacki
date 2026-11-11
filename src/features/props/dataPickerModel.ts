@@ -134,6 +134,11 @@ export interface DataOrigin {
  * component's own, and a project collection reads the same everywhere.
  */
 export function sectionHeading(section: string, origin: DataOrigin | undefined): string | undefined {
+  // A project data file is headed by its path under src/, as the CMS panel lists it.
+  const dataFile = dataFileOfSection(section);
+  if (dataFile !== undefined) {
+    return dataFile.startsWith('src/') ? dataFile.slice('src/'.length) : dataFile;
+  }
   const file = fileNameOf(origin?.file);
   const component = componentNameOf(origin?.file);
   switch (section) {
@@ -157,6 +162,45 @@ export function sectionHeading(section: string, origin: DataOrigin | undefined):
     default:
       return undefined;
   }
+}
+
+/** The section a project data file's exports are listed under: one per file. */
+const DATA_FILE_SECTION = 'data-file:';
+
+export function dataFileSection(file: string): string {
+  assert(file.length > 0, 'dataFileSection: the file is named');
+  return DATA_FILE_SECTION + file;
+}
+
+/** The project file a section lists the exports of, or undefined for any other section. */
+export function dataFileOfSection(section: string | undefined): string | undefined {
+  if (section === undefined || !section.startsWith(DATA_FILE_SECTION)) {
+    return undefined;
+  }
+  const file = section.slice(DATA_FILE_SECTION.length);
+  return file === '' ? undefined : file;
+}
+
+/**
+ * One heading the picker draws where a group of rows starts: a group's own
+ * (`group`, drawn as `section` is), or a quiet part of the group above it.
+ */
+export type SectionHead = { readonly kind: 'group'; readonly heading: string; readonly section: string } | { readonly kind: 'part'; readonly heading: string };
+
+/**
+ * The headings drawn where `section` starts, after `previous`. A component's
+ * frontmatter is the component's own, as its props are: it is a part of the
+ * component's group, under a quiet "Frontmatter", and opens that group itself
+ * when the component has no props. A page's frontmatter keeps its own group.
+ */
+export function sectionHeads(section: string, previous: string | undefined, origin: DataOrigin | undefined): readonly SectionHead[] {
+  const component = componentNameOf(origin?.file);
+  if (section === 'frontmatter' && component !== undefined) {
+    const part: SectionHead = { kind: 'part', heading: 'Frontmatter' };
+    return previous === 'props' ? [part] : [{ kind: 'group', heading: component, section: 'props' }, part];
+  }
+  const heading = sectionHeading(section, origin);
+  return heading === undefined ? [] : [{ kind: 'group', heading, section }];
 }
 
 /** Whether a group of rows is a component's own: its heading is drawn as components are. */

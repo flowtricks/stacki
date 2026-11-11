@@ -679,8 +679,10 @@ test('custom widths preserve layout size, scale ' + 'to fit, and reset with devi
     await setWidth('7680');
     assert.equal(sized.style.width, '7680px');
     await act(() => document.querySelector('[data-tooltip="Reset canvas to available width"]').click());
-    assert.equal(sized.style.width, '824px');
-    assert.equal(sized.style.height, '700px');
+    // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without a render.
+    assert.equal(sized.style.width, '100%');
+    assert.equal(sized.style.height, '100%');
+    assert.doesNotMatch(sized.style.transform, /scale/);
     assert.equal(document.querySelector('iframe'), frame);
   } finally {
     await act(() => root.unmount());

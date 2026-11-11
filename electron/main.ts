@@ -3,6 +3,9 @@ import { registerCmsConnectionHandlers } from './handlers/cmsConnectionHandlers'
 import { CmsConnectionStore } from './content/cmsConnectionStore';
 import { MediaConnectionStore } from './content/media/mediaConnectionStore';
 import { registerMediaHostingHandlers } from './handlers/mediaHostingHandlers';
+import { APP_SCHEME, APP_SCHEME_PRIVILEGES, registerAppsHandlers, serveAppRequest } from './handlers/appsHandlers';
+import { desktopLocalStorageDirectory, registerAppDataHandlers } from './handlers/appDataHandlers';
+import { keepAppFramesHome } from './app/appFrameNavigation';
 import { SanityLogin } from './content/sanityLogin';
 import { cmsPreviewEnvironment } from './content/cmsPreviewEnvironment';
 import { registerProjectMetadataHandlers } from './handlers/projectMetadataHandlers';
@@ -48,6 +51,8 @@ import { openingBounds } from './app/windowBounds';
 import { isAppPage, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
 import { registerTerminalHandlers, cleanupTerminals } from './terminal/terminal';
 import { watchProject } from './project/projectWatcher';
+import { watchInstructions } from './project/instructionsWatcher';
+import { registerInstructionHandlers } from './handlers/instructionHandlers';
 import { autoUpdater } from 'electron-updater';
 import { AutoUpdates } from './app/autoUpdate';
 import { isWin } from './lib/mainHelpers';
@@ -71,10 +76,18 @@ import { registerPreviewHandlers } from './handlers/previewHandlers';
 import { registerProjectHandlers } from './handlers/projectHandlers';
 import { registerProjectScanHandlers } from './handlers/projectScanHandlers';
 import { registerStyleSourceHandlers } from './handlers/styleSourceHandlers';
+import { registerAppPageFilesHandlers } from './handlers/appPageFilesHandlers';
 import { registerSelectorHandlers } from './handlers/selectorHandlers';
+import { registerAuditHandlers } from './handlers/auditHandlers';
+import { registerAiHandlers, registerAiSendChannels } from './handlers/ai/aiHandlers';
+import { createGitHubIdentity, createRoleGate, registerRoleHandlers } from './handlers/roleAccess';
 
 // The facade keeps native Electron registration behind a parsed payload boundary.
-const ipcMain = { handle: createIpcRegistrar(nativeIpcMain) };
+// Project roles (.stacki/roles.json) refuse the write paths a role hides; the gate
+// reads the open project lazily because it is set when a project's watcher starts.
+const githubIdentity = createGitHubIdentity();
+const roleGate = createRoleGate({ openRoot: () => openProjectRoot, identity: githubIdentity });
+const ipcMain = { handle: createIpcRegistrar(nativeIpcMain, () => roleGate) };
 setToolPathHome(app.getPath('home'));
 
 let mainWindow: Window | undefined = undefined;
@@ -180,6 +193,15 @@ protocol.registerSchemesAsPrivileged([
     // corsEnabled lets the renderer's FontFace loads (CORS-checked, unlike
     // <img>) reach this scheme; serveFile adds the allow-origin header.
     privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
+  {
+    // Stacki Apps: one origin per installed app (stacki-app://<id>/), served
+    // from the open project's .stacki/apps only. Each document arrives with a
+    // sandboxing content security policy (handlers/appsHandlers.ts). corsEnabled lets
+    // an app's opaque-origin frame fetch its own files (`fetch('config.json')`);
+    // serveAppRequest answers them with Access-Control-Allow-Origin: *.
+    scheme: APP_SCHEME,
+    privileges: APP_SCHEME_PRIVILEGES,
   },
 ]);
 
@@ -306,6 +328,7 @@ function createWindow() {
 
   listenForPreviewFailures(mainWindow.webContents, () => devServers.current()?.url);
   keepPreviewsOnSite(mainWindow.webContents, openExternalLink);
+  keepAppFramesHome(mainWindow.webContents, openExternalLink);
 
   // A renderer that does not load leaves an empty window; the log says why.
   const loaded = process.env['VITE_DEV_SERVER_URL'] ? mainWindow.loadURL(process.env['VITE_DEV_SERVER_URL']) : mainWindow.loadFile(RUNTIME_PATHS.rendererIndex);
@@ -499,6 +522,7 @@ app.whenReady().then(
     settings = readSettings();
     setApplicationIcon();
     registerAssetProtocol();
+    protocol.handle(APP_SCHEME, (request) => serveAppRequest(request.url, openProjectRoot));
     refusePrivatePermissions();
     buildMenu();
     createWindow();
@@ -522,7 +546,8 @@ app.whenReady().then(
     });
     // Terminals open in the project the app has open — same reach as the asset
     // protocol, which is what `openProjectRoot` already scopes.
-    registerTerminalHandlers({ send, projectRoot: () => openProjectRoot });
+    registerTerminalHandlers({ send, projectRoot: () => openProjectRoot, gate: () => roleGate });
+    registerAiSendChannels(nativeIpcMain, aiServices.host);
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
@@ -545,6 +570,7 @@ ipcMain.handle('project:close', async (_event, next) => {
   stopAllServices();
   stopAllPreviews();
   cleanupTerminals();
+  aiServices.stopAll();
   stopWatchingProject();
   // Nothing is open, so nothing is in reach: the asset protocol and the
   // terminals both scope themselves to this.
@@ -586,6 +612,8 @@ app.on('before-quit', () => stopAllServices());
 app.on('before-quit', () => stopAllPreviews());
 // A pty outlives the window that opened it unless it is killed.
 app.on('before-quit', () => cleanupTerminals());
+// An agent and the tools it started outlive the app unless they are stopped.
+app.on('before-quit', () => aiServices.stopAll());
 
 // ---------------------------------------------------------------------------
 // The renderer's window: what the main process tells it, and its dialogs
@@ -617,6 +645,8 @@ const SETTINGS_DEFAULTS: AppSettings = {
   sound: false,
   usageCountsEnabled: true,
   usageNoticeVersion: 0,
+  appsPersonHidden: false,
+  aiAskBeforeTrust: false,
 };
 let settings: AppSettings = { ...SETTINGS_DEFAULTS };
 let usageCountInFlight: AbortController | undefined;
@@ -649,6 +679,8 @@ function writeSettings(): boolean {
 const publicSettings = () => ({
   sound: settings.sound,
   usageCountsEnabled: settings.usageCountsEnabled,
+  appsPersonHidden: settings.appsPersonHidden,
+  aiAskBeforeTrust: settings.aiAskBeforeTrust,
 });
 ipcMain.handle('settings:get', publicSettings);
 ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
@@ -657,6 +689,14 @@ ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
     settings = { ...settings, sound: enabled };
     saved = writeSettings();
     send('menu:sound', enabled);
+  } else if (setting === 'aiAskBeforeTrust') {
+    settings = { ...settings, aiAskBeforeTrust: enabled };
+    saved = writeSettings();
+  } else if (setting === 'appsPersonHidden') {
+    settings = { ...settings, appsPersonHidden: enabled };
+    saved = writeSettings();
+    // Running apps hear what `person.get` answers now.
+    send('apps:personChanged', {});
   } else {
     saved = setUsageCountsEnabled(enabled);
   }
@@ -828,6 +868,8 @@ ipcMain.handle('recents:remove', async (_event, projectPath) => {
 // ---------------------------------------------------------------------------
 
 let watcher: ReturnType<typeof watchProject> | undefined;
+// The Instructions panel's own watcher: root and dot-folder Markdown the source watcher never sees.
+let instructionsWatcher: ReturnType<typeof watchInstructions> | undefined;
 
 // A compile error replaces the site with the dev server's own error screen, and
 // that screen carries no HMR client — so when the mistake is fixed, nothing in
@@ -900,6 +942,17 @@ ipcMain.handle('watch:start', async (_event, projectPath) => {
     scheduleThumb: (projectPath, delayMs) => thumbnails.schedule(projectPath, delayMs),
     mediaPattern: MEDIA_EXT,
   });
+  try {
+    instructionsWatcher = watchInstructions({
+      projectPath,
+      send,
+      isSelfWrite,
+      noteExternalChange: (changed) => documents.noteExternalChange(changed),
+    });
+  } catch (error: unknown) {
+    // Without it the panel still lists on open and on focus; the editor keeps working.
+    console.warn(`Instructions watcher unavailable: ${String(error)}`);
+  }
   noteUsageActivity();
   return { ok: true as const };
 });
@@ -907,6 +960,8 @@ ipcMain.handle('watch:start', async (_event, projectPath) => {
 function stopWatchingProject() {
   watcher?.close();
   watcher = undefined;
+  instructionsWatcher?.close();
+  instructionsWatcher = undefined;
   clearTimeout(pageChangeTimer);
   pageChangeTimer = undefined;
   pageChangeExternal = false;
@@ -953,12 +1008,20 @@ const host: MainHost = {
   documents,
   noteAppWrite,
   noteProjectRoot,
+  openProject: () => openProjectRoot,
   readTrailingSlash: (projectPath) => devServers.readTrailingSlash(projectPath),
   send,
   shell,
   showOpenDialog,
 };
 registerAssetHandlers(host);
+// The AI chat panel: its agents start on a prompt, never at load.
+const aiServices = registerAiHandlers(host, {
+  userData: () => app.getPath('userData'),
+  version: () => app.getVersion(),
+  askBeforeTrust: () => settings.aiAskBeforeTrust,
+});
+registerAuditHandlers(host, { openMeasureWindow: (options) => new BrowserWindow(options) });
 registerCmsHandlers(host);
 registerComponentHandlers(host);
 registerContentHandlers(host, { restartForNewContentConfig: (devUrl) => devServers.restartForNewContentConfig(devUrl) });
@@ -978,12 +1041,37 @@ registerPageTemplateHandlers(
 registerPreviewHandlers(host);
 registerProjectHandlers(host);
 registerProjectMetadataHandlers(host);
+registerInstructionHandlers(host);
 registerPublishHandlers(host);
 registerCmsConnectionHandlers(host, cmsConnections, new SanityLogin(cmsConnections));
 registerMediaHostingHandlers(host, mediaConnections);
+// App settings' secrets are sealed by the operating system too, in a folder of
+// the user data, never in the project (electron/project/appSettingsStore.ts).
+registerAppsHandlers(host, {
+  build: app.isPackaged ? 'release' : 'development',
+  localStorageDirectory: (project) => desktopLocalStorageDirectory(app.getPath('userData'), project),
+  openBrowser: (url) => shell.openExternal(url),
+  version: () => app.getVersion(),
+  vault: {
+    directory: () => path.join(app.getPath('userData'), 'app-secrets'),
+    seal: {
+      refusal: () => (safeStorage.isEncryptionAvailable() ? undefined : 'This computer cannot encrypt secrets, so Stacki will not keep them.'),
+      seal: (value) => safeStorage.encryptString(value).toString('base64'),
+      open: (sealed) => safeStorage.decryptString(Buffer.from(sealed, 'base64')),
+    },
+  },
+});
 registerStudioHandlers(host, app.isPackaged ? { kind: 'packaged' } : { kind: 'development', appPath: app.getAppPath() }, () => app.getVersion());
 registerProjectScanHandlers(host);
 registerStyleSourceHandlers(host);
+registerAppPageFilesHandlers(host);
 registerSelectorHandlers(host);
+registerRoleHandlers(host, githubIdentity);
+registerAppDataHandlers(host, {
+  userData: () => app.getPath('userData'),
+  identity: githubIdentity,
+  personHidden: () => settings.appsPersonHidden,
+  version: () => app.getVersion(),
+});
 registerDevServerHandlers({ ipcMain, devServers, thumbnails });
 registerThumbnailHandlers({ ipcMain, thumbnails, userDataPath: () => app.getPath('userData') });

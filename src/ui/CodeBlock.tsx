@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { astroCodeLines } from './astroHighlight';
+import { astroCodeLines, astroCodeLinesNow } from './astroHighlight';
 import { codeTokenLines, languageFor, plainCodeLines, type CodeLanguage, type CodeLine } from './codeHighlight';
 import './codeBlock.css';
 
@@ -62,14 +62,17 @@ export function CodeTokens({ line }: { readonly line: CodeLine | undefined }) {
 }
 
 /**
- * The text as coloured lines. Astro's grammar loads on demand, so its text is
- * plain until the lines arrive, as the editor keeps it neutral while it loads.
+ * The text as coloured lines. Astro's grammar loads on demand: once loaded (the
+ * app fetches it when a project opens) the first paint is coloured; before
+ * that the text is plain until the lines arrive.
  */
 export function useCodeLines(text: string, language: CodeLanguage | undefined): readonly CodeLine[] {
   const [astro, setAstro] = useState<{ readonly text: string; readonly lines: readonly CodeLine[] }>();
-  const immediate = useMemo(() => (language === 'astro' ? plainCodeLines(text) : codeTokenLines(text, language)), [text, language]);
+  // Undefined only for Astro text whose grammar is still loading.
+  const now = useMemo(() => (language === 'astro' ? astroCodeLinesNow(text) : codeTokenLines(text, language)), [text, language]);
+  const plain = useMemo(() => plainCodeLines(text), [text]);
   useEffect(() => {
-    if (language !== 'astro') {
+    if (now !== undefined) {
       return;
     }
     let active = true;
@@ -87,8 +90,11 @@ export function useCodeLines(text: string, language: CodeLanguage | undefined): 
     return () => {
       active = false;
     };
-  }, [text, language]);
-  return language === 'astro' && astro?.text === text ? astro.lines : immediate;
+  }, [text, now]);
+  if (now !== undefined) {
+    return now;
+  }
+  return astro?.text === text ? astro.lines : plain;
 }
 
 function CodeLines({ lines }: { readonly lines: readonly CodeLine[] }) {

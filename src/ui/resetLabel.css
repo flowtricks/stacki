@@ -1,0 +1,56 @@
+/* The blue reset label (ResetLabel.tsx) and the menu its click opens. Shared: the editor imports it from src/app/styles.css and the app UI kit
+   (scripts/build/appUiKit.mts) builds apps' controls from this same file. */
+.prop-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  vertical-align: middle;
+  padding: 1px 5px;
+  margin: -1px 0 -1px -5px;
+  border-radius: 4px;
+}
+.prop-label .prop-label-icon {
+  opacity: 0.85;
+  margin-left: -1px;
+}
+.prop-label.set {
+  color: var(--accent);
+  background: var(--accent-soft);
+  cursor: pointer;
+}
+.prop-label.set:hover {
+  background: rgba(0, 153, 255, 0.26);
+}
+/* A deprecated prop still works, so it stays where it is, its name struck
+   through in the dim grey and the "Deprecated" tag beside it. */
+.prop-label.deprecated {
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+}
+
+/* Popup menu opened by clicking a set prop's label */
+.prop-menu {
+  position: fixed;
+  z-index: 500;
+  background: #232323;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+  padding: 4px;
+}
+.prop-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #ddd;
+  white-space: nowrap;
+}
+.prop-menu-item:hover {
+  background: var(--accent);
+  color: white;
+}

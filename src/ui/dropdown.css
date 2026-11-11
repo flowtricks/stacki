@@ -1,0 +1,195 @@
+/* The custom dropdown (Dropdown.tsx): its trigger, menu, options and search. Shared: the editor imports it from src/app/styles.css and the app UI kit
+   (scripts/build/appUiKit.mts) builds apps' controls from this same file. */
+.dd-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text);
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.dd-trigger:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.dd-trigger:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.dd-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dd-label.dim {
+  color: var(--text-faint);
+}
+.dd-chevron {
+  color: var(--text-faint);
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.dd-popup {
+  position: fixed;
+  z-index: 400;
+  /* Height comes from the content; the component caps it inline, and only
+     when the window has less room than the list needs. */
+  overflow-y: auto;
+  background: #232323;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+  padding: 4px;
+}
+.dd-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 4px 0 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #ddd;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.dd-option.highlight {
+  background: var(--accent);
+  color: white;
+}
+.dd-option.selected:not(.highlight) {
+  color: var(--text);
+}
+.dd-option.dim:not(.highlight) {
+  color: var(--text-faint);
+}
+/* The check ends the row, so icons and images align down the left edge (a
+   rule across the app). Its column is kept empty on unchecked rows, so labels
+   never shift; after a hint it follows the hint rather than splitting the gap. */
+.dd-check {
+  width: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+/* A row's hint (a key, a count), muted at the end of the row before its check. */
+.dd-option .dd-hint {
+  margin-left: auto;
+  padding-left: 10px;
+  font-size: 10px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.dd-option.highlight .dd-hint {
+  color: rgba(255, 255, 255, 0.8);
+}
+.dd-hint ~ .dd-check {
+  margin-left: 0;
+}
+/* A row that removes something (an app menu's Remove): highlighted, its fill,
+   text and icon all turn red together, as the editor's ⋯ menus' danger rows do
+   (styles.css `.more-menu-item.is-danger`). */
+.dd-option.is-danger.highlight {
+  background: rgba(255, 90, 90, 0.16);
+  color: #ff9b9b;
+}
+.dd-option.is-danger.highlight .dd-icon {
+  color: #ff9b9b;
+}
+/* A line between runs of rows in a menu: a 1px fill, as Stacki's dividers are. */
+.dd-separator {
+  height: 1px;
+  margin: 4px 4px;
+  background: var(--border);
+}
+.dd-option-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A heading over a run of options (Content collections, On this page). */
+.dd-group-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 4px;
+  color: var(--text-faint);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dd-group-label:not(:first-child) {
+  margin-top: 4px;
+}
+.dd-group-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+.dd-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--text-faint);
+}
+.dd-option.highlight .dd-icon {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* A popup with a filter box scrolls its list, not itself, so the box stays
+   put while the options move under it. */
+/* Wide enough to read an entry id in: the trigger is a chip in the title bar,
+   and inheriting its width is what cut "2025/the-cost-of-a-thousand-images"
+   down to "2025/the-cost-of-a-tho…". */
+.dd-popup.dd-searchable {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  min-width: 300px;
+}
+.dd-search {
+  flex-shrink: 0;
+  /* The global field rule sets width: 100%, which with side margins pushed the
+     box past the menu's right edge and made the inset uneven. Auto lets the
+     column's stretch fit it between the margins, so both sides are inset. */
+  width: auto;
+  height: 30px;
+  margin: 6px 6px 0;
+  padding: 0 8px;
+  font-size: 12px;
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text);
+}
+.dd-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.dd-popup.dd-searchable .dd-list {
+  overflow-y: auto;
+  /* As the data picker's list: the scrollbar never moves the rows. */
+  scrollbar-gutter: stable;
+  /* The same 6px inset as the search box above, with a gap under it before the first row. */
+  padding: 6px 6px 6px;
+}
+.dd-empty {
+  padding: 8px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}

@@ -5,11 +5,15 @@ import {
   parsePublishDiscovery,
   discoveryList,
   discoveryIdentifier,
+  connectionFailureMessage,
+  type ConnectionFailure,
+  type ConnectionProblem,
+  type DiscoveryProvider,
   type DiscoveryRequest,
   type PublishDiscovery,
   type PublishProject,
 } from '../../shared/properties/publishDiscovery';
-import { discoveryCommand } from './publishDiscoveryCommand';
+import { discoveryCommand, DiscoveryCommandError } from './publishDiscoveryCommand';
 import { cloudflareAccounts, cloudflareProjects, cloudflareWorkers } from './publishDiscoveryCloudflare';
 import { vercelAccounts, vercelProjects } from './publishDiscoveryVercel';
 import { linkedPublishProject } from './publishLinkedProject';
@@ -19,21 +23,42 @@ export async function discoverPublishing(root: string, input: DiscoveryRequest):
   const request = parseDiscoveryRequest(input);
   try {
     return parsePublishDiscovery(await discoverProvider(root, request));
-  } catch {
-    const tool = {
-      cloudflare: 'wrangler',
-      'cloudflare-workers': 'wrangler',
-      linked: 'hosting CLI',
-      vercel: 'vercel',
-      github: 'gh auth',
-    }[request.provider];
-    return {
-      kind: 'failed',
-      message:
-        `Could not discover ${request.provider} projects or accounts. ` +
-        `Install the latest CLI, run ${tool} login on this machine, then retry. ` +
-        'Check your connection and account permissions, or use manual configuration.',
-    };
+  } catch (error: unknown) {
+    return { kind: 'failed', ...connectionProblem(request.provider, failureReason(error)) };
+  }
+}
+
+const PROVIDER_LABELS: Readonly<Record<DiscoveryProvider, string>> = {
+  cloudflare: 'Cloudflare',
+  'cloudflare-workers': 'Cloudflare',
+  linked: 'hosting',
+  vercel: 'Vercel',
+  github: 'GitHub',
+};
+
+export function connectionProblem(provider: DiscoveryProvider, reason: ConnectionFailure): ConnectionProblem {
+  return { reason, message: connectionFailureMessage(PROVIDER_LABELS[provider], reason) };
+}
+
+// Only a classified command failure says why; anything else (a malformed reply, a bound) is unknown.
+function failureReason(error: unknown): ConnectionFailure {
+  return error instanceof DiscoveryCommandError ? error.reason : 'unknown';
+}
+
+// A missing tool or login blocks publishing even when a linked project can still be listed.
+function blocksPublishing(reason: ConnectionFailure): boolean {
+  switch (reason) {
+    case 'missing-cli':
+    case 'signed-out':
+    case 'expired':
+      return true;
+    case 'network':
+    case 'unknown':
+      return false;
+    default: {
+      const exhaustive: never = reason;
+      return exhaustive;
+    }
   }
 }
 
@@ -80,7 +105,8 @@ async function discoverHosting(root: string, provider: 'cloudflare' | 'cloudflar
   ]);
   const linkedProjects = linked.status === 'fulfilled' ? linked.value : [];
   if (connected.status === 'rejected' && linkedProjects.length === 0) {
-    throw new Error('No accessible provider connection.');
+    // Keep the classified reason: it decides whether the settings offer install, sign-in or refresh.
+    throw connected.reason instanceof DiscoveryCommandError ? connected.reason : new Error('No accessible provider connection.');
   }
   const accounts = connected.status === 'fulfilled' ? connected.value : [];
   if (accounts.length > 20) {
@@ -107,10 +133,24 @@ async function discoverHosting(root: string, provider: 'cloudflare' | 'cloudflar
     kind: 'ready',
     accounts,
     projects: [...unique.values()],
-    ...(connected.status === 'rejected' || results.some((result) => result.status === 'rejected')
-      ? { notice: 'Some accounts could not be loaded. Refresh to retry.' }
-      : {}),
+    ...discoveryNotice(provider, connected.status === 'rejected' ? failureReason(connected.reason) : undefined, results),
   };
+}
+
+function discoveryNotice(
+  provider: DiscoveryProvider,
+  connection: ConnectionFailure | undefined,
+  results: readonly PromiseSettledResult<unknown>[],
+): { readonly notice?: ConnectionProblem } {
+  if (connection !== undefined) {
+    if (blocksPublishing(connection)) {
+      return { notice: connectionProblem(provider, connection) };
+    }
+  }
+  if (connection !== undefined || results.some((result) => result.status === 'rejected')) {
+    return { notice: { reason: connection ?? 'unknown', message: 'Some accounts could not be loaded. Refresh to retry.' } };
+  }
+  return {};
 }
 
 function discoveryProjectKey(project: PublishProject): string {

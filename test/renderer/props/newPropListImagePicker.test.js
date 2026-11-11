@@ -192,7 +192,6 @@ const BASE = {
   defaultText: '',
   options: [],
   number: { min: undefined, max: undefined, decimals: undefined },
-  switch: { onLabel: 'On', offLabel: 'Off' },
   attributes: [],
   tag: '',
 };

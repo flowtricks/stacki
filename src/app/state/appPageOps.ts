@@ -1,4 +1,4 @@
-import { componentReference } from '../model/componentReference';
+import { componentFileOf, componentReference } from '../model/componentReference';
 import { useListProps } from './useListProps';
 // Page operations: changing the layout, creating, moving and deleting pages
 // and folders, the selection's model, creating from a selection, the
@@ -16,14 +16,14 @@ import { writeFrontmatter } from '../../../shared/page/frontmatterSource';
 import { namesIn } from '../../editor/classAttr';
 import { toComponentName } from '../../features/palette/componentName';
 import { cleanError } from '../../lib/cleanError';
-import { autoQueryName, namesInScope, queriesInScope, QUERY_MARK } from '../../editor/dataSuggest';
-import { entrySampleKey } from '../../editor/dataSample';
+import { entrySampleKey, type ImportNeed } from '../../editor/dataSample';
+import { withCollectionQuery, withDataImport } from '../../editor/frontmatterAdditions';
 import type { FieldDefinition } from '../../features/props/propRules';
 import type { ComponentCreationSource } from '../../features/palette/PaletteDialogs';
 import { planExtraction, type ExtractionRead } from '../../editor/extractFrontmatter';
 import { type FrontmatterSubject } from '../../features/code/codeWindowTarget';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
-import { type EditorModel, type EditorNode } from '../../editor/pageView';
+import { type EditorNode } from '../../editor/pageView';
 import {
   createProjectPage,
   createProjectPageFolder,
@@ -55,7 +55,7 @@ import {
   useQueryCleanup,
 } from './appShortcuts';
 import { useScopeSamples } from './scopeSamples';
-import { useImportedValues } from './appImportedValues';
+import { useDesktopProjectSources, useImportedValues } from './appImportedValues';
 import { newPropGesture } from '../model/newPropGesture';
 import type { PropDeclaration } from '../../editor/propDeclaration';
 import { err, ok, type Result } from '../../../shared/core/result';
@@ -82,8 +82,9 @@ export function useShortcuts(
   useSampleValues(coreState, routes);
   useScopeSamples(coreState, routes);
   const importedValues = useImportedValues(coreState, routes);
+  const projectSources = useDesktopProjectSources(coreState, routes);
   useQueryCleanup(routes, history);
-  return { ...insertItemScope, ...interactivePreview, ...routes, importedValues };
+  return { ...insertItemScope, ...interactivePreview, ...routes, importedValues, projectSources };
 }
 
 // Changing the page’s layout.
@@ -407,7 +408,7 @@ export function useSelectionModel(
 ) {
   const { model } = shortcuts;
   const { devStatus, devUrl, sampleAskedRef, selectedId, setCollectionSamples } = coreState;
-  const { commitEdit, holdForNextEdit } = history;
+  const { holdForNextEdit } = history;
 
   // ----------------------------------------------------------------
   // Selection helpers
@@ -456,38 +457,26 @@ export function useSelectionModel(
   // Binding to a collection this page doesn't read yet: the query that fetches
   // it is written here, and the binding then names it like any other value.
   // A query already targeting that collection is reused — one page asking the
-  // same content twice is a page doing the same work twice.
+  // same content twice is a page doing the same work twice. The query is held
+  // for the field's own edit (holdForNextEdit), so the two are one undo step.
   const ensureCollectionQuery = (collection: string): string => {
-    const fm = model?.extraFrontmatter || '';
-    const existing = queriesInScope(fm).get(collection);
-    if (existing) {
-      return existing;
+    const added = withCollectionQuery(model ?? { imports: [], extraFrontmatter: '' }, collection);
+    if (model !== undefined && added.model !== model) {
+      // Step 9: the frontmatter gesture — the import and the query line, as the
+      // slot of the block that differs.
+      holdForNextEdit(frontmatterGesture(model, { coalesceKey: undefined, urgency: false }, (shown) => withCollectionQuery(shown, collection).model));
     }
-    const name = autoQueryName(collection, namesInScope(fm, model?.imports));
-    if (!model) {
-      return name;
+    return added.name;
+  };
+  // Binding to a data file's export this file does not import yet: the import
+  // is added (or joined to the module's existing one) and held for the field's
+  // edit, as a collection's query is, and the binding names what it reads as.
+  const ensureDataImport = (need: ImportNeed): string => {
+    const added = withDataImport(model ?? { imports: [], extraFrontmatter: '' }, need);
+    if (model !== undefined && added.model !== model) {
+      holdForNextEdit(frontmatterGesture(model, { coalesceKey: undefined, urgency: false }, (shown) => withDataImport(shown, need).model));
     }
-    // Step 9: the frontmatter gesture — the import and the query line, as the
-    // slot of the block that differs.
-    const queried = (pageModel: EditorModel): EditorModel => {
-      const reads = pageModel.imports.some((i) => i.name === 'getCollection' && i.path === 'astro:content');
-      const entry = {
-        name: 'getCollection',
-        imported: 'getCollection',
-        path: 'astro:content',
-        quote: "'",
-        named: true,
-      };
-      const existing = pageModel.extraFrontmatter || '';
-      const gap = existing && !existing.endsWith('\n') ? '\n' : '';
-      // No trailing newline: the printer ends the line, and one added here
-      // would be left behind as a blank line when the query is taken back.
-      const query = `const ${name} = await getCollection('${collection}'); // ${QUERY_MARK}`;
-      const imports = reads ? pageModel.imports : [...pageModel.imports, entry];
-      return { ...pageModel, imports, extraFrontmatter: `${existing}${gap}${query}` };
-    };
-    commitEdit(frontmatterGesture(model, { coalesceKey: undefined, urgency: false }, queried));
-    return name;
+    return added.name;
   };
   // A prop declared from the binding picker of an open component: held for
   // the field's edit that binds it, so Create is one undo step, and answered
@@ -506,6 +495,7 @@ export function useSelectionModel(
   return {
     createBoundProp,
     ensureCollectionQuery,
+    ensureDataImport,
     frontmatterCode,
     requestCollectionSample,
     selectedAncestors,
@@ -660,13 +650,25 @@ export function useSelectedSchema(
           components: insertables,
         })
       : undefined;
+  // The same file without a guess: the Style panel reads its markup for green chips,
+  // and two components of one name must not be confused (componentFileOf).
+  const selectedComponentFile =
+    selectedNode?.kind === 'component'
+      ? componentFileOf({
+          name: selectedNode.name,
+          project: project?.path,
+          file: currentPage?.path,
+          imports: model?.imports ?? [],
+          components: insertables,
+        })
+      : undefined;
   const selectedSchema =
     selectedId === 'layout' && isMarkdownFormatRef.current
       ? schemaFor(scan.layouts.find((layout) => layout.name === currentLayoutName))
       : selectedFields(selectedNode, selectedComponent);
   // Props the component's loop reads its settings from, drawn with the loop's editors.
   const listProps = useListProps(project?.path, selectedComponent?.path);
-  return { currentLayoutName, layoutNode, selectedSchema, selectedComponent, listProps };
+  return { currentLayoutName, layoutNode, selectedSchema, selectedComponent, selectedComponentFile, listProps };
 }
 
 function selectedFields(node: ReturnType<typeof useCreateFrom>['selectedNode'], component: ScanComponent | undefined): readonly FieldDefinition[] {

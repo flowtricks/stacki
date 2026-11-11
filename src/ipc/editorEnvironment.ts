@@ -4,6 +4,7 @@ import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 export const historyTransport = {
   log: (payload: Parameters<PreloadBridge['gitLog']>[0]) => window.avb.gitLog(payload),
   diff: (payload: Parameters<PreloadBridge['gitCommitDiff']>[0]) => window.avb.gitCommitDiff(payload),
+  avatars: (payload: Parameters<PreloadBridge['gitAvatars']>[0]) => window.avb.gitAvatars(payload),
 };
 export { onFilesChanged as onPropertyFilesChanged } from '../ipc/appBridge';
 export const cmsTransport = {

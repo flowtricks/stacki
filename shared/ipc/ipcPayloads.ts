@@ -16,6 +16,21 @@ import {
 } from '../properties/cmsRemote';
 import { parseVideoLinkURL } from '../properties/linkPreview';
 import { parseMediaAccountConnect, parseMediaAccountKey } from '../properties/mediaAccounts';
+import { parseAppId, parseAppVersion, parseGitHubSource, parseReleaseTag, parseStagedToken } from '../properties/apps';
+import { parseAppFolderName } from '../properties/appFolders';
+import { parseGitHubLogin } from '../properties/projectRoles';
+import {
+  parseAppRepositoryRef,
+  parseAppScanTarget,
+  parseAppShareRequest,
+  parseMarketplaceSubmission,
+  parseSharedReleaseSource,
+} from '../properties/appPublish';
+import { parseAppSettingValuesReply } from '../properties/appSettings';
+import { parseAppFileOperation, type AppFileOperation } from '../properties/appFiles';
+import { parseAuthProviderId } from '../properties/appAuth';
+import { parseAppNetRequest } from '../properties/appNet';
+import { parseAppStorageKey, parseAppStorageScope, parseAppStorageValue, parseAppStorageWriter } from '../properties/appStorage';
 import {
   MEDIA_HOSTING_LIMITS,
   parseMediaConnectionDraft,
@@ -31,22 +46,36 @@ import { parseCanvasCreate, defaultsCanvasFile } from '../properties/defaultsCan
 import { parseDiscoveryRequest } from '../properties/publishDiscovery';
 import { parsePublishCommitMessage, parsePublishTarget } from '../properties/publishConfig';
 import { metadataKind, parseMetadataWrite } from '../properties/projectMetadata';
+import { parseInstructionFilePath, parseInstructionPath } from '../properties/instructions';
+import { parseGitHubLoginQuery } from '../properties/projectRoles';
 import { parseSelectorFileChanges, parseSelectorFileDigests, parseSelectorIds } from '../properties/selectorUsage';
 import { parseCreatePackageManager } from '../properties/packageManager';
 import { parseImageFormat, parseImagePath } from './assetConversion';
 import { parseGitHubRepository } from './githubRepository';
 import { parseCommitDiffRequest } from './gitCommitDiff';
+import { parseCommitAvatarRequest } from './commitAvatars';
 import { parsePreferenceName } from './preferences';
 import { parseStudioSource } from './studioSetup';
 import { parseStudioRequestId } from './studioProgress';
 import { parsePropertyChange, propertySource } from '../properties/propertyEditing';
 import { parseEdit, parseEditBatchRequest, parseEditRequest } from '../engine/editRequest';
 import { parsePreviewRender } from '../page/previewToken';
+import { AI_PAYLOADS } from './aiChat';
 // Complete invoke-channel inventory. Every main-process listener receives the
 // parsed shape below; payload field names retain the existing renderer protocol.
 import { object, text, pathText, boolean, count, optional, nullable, list, dictionary, data, digest, record } from '../core/boundary';
 import type { Parsed } from '../core/boundary';
 import { toArray } from '../core/record';
+
+// The files one `apps:fileStamps` batch may name: APP_RPC_LIMITS.indexFilesMax (shared/properties/appsRpc.ts).
+export const APP_FILE_STAMPS_MAX = 2000;
+function appFileList(input: unknown): string[] {
+  const rels = list(pathText)(input);
+  if (rels.length > APP_FILE_STAMPS_MAX) {
+    throw new Error(`An app stamps at most ${APP_FILE_STAMPS_MAX} files at once`);
+  }
+  return rels;
+}
 
 // Native terminal dimensions use positive signed 16-bit coordinates on Windows.
 export const TERMINAL_DIMENSION_MAX = 32_767;
@@ -75,6 +104,15 @@ function packageSearch(input: unknown): 'cached' | 'search' {
     return input;
   }
   throw new Error('Unknown package search mode');
+}
+// `cleanup` (the default) honours every lock; `chosen` is the user deleting one
+// selector by hand, which a stylesheet or folder lock does not stop (a name
+// lock still does: the row's own lock must be lifted first).
+function removalReach(input: unknown): 'cleanup' | 'chosen' {
+  if (input === 'cleanup' || input === 'chosen') {
+    return input;
+  }
+  throw new Error('Unknown selector removal reach');
 }
 // Undo writes a cleanup's `before` text back; redo writes its `after` again.
 function restoreDirection(input: unknown): 'before' | 'after' {
@@ -122,6 +160,62 @@ const componentImport = object({
 });
 const strings = list(text);
 const project = { projectPath: pathText };
+// The Audits panel's rendered pass: a page of the project's own dev server, which
+// main fetches (the renderer's origin cannot). Only a loopback http origin is
+// accepted, so the channel can never be pointed at another host.
+function loopbackOrigin(input: unknown): string {
+  const value = text(input);
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('Expected a dev server URL');
+  }
+  if (url.protocol !== 'http:' || !['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
+    throw new Error('Expected a loopback http dev server URL');
+  }
+  return url.origin;
+}
+function routePath(input: unknown): string {
+  const value = pathText(input);
+  if (!value.startsWith('/') || value.startsWith('//') || value.length > 2_048) {
+    throw new Error('Expected a site-relative route');
+  }
+  return value;
+}
+
+// An app's file operation: its paths are checked against the app's own refusals, so the id is read first.
+/** Window pixels a canvas snapshot may cover each way: larger than any screen, so a rect past it is not one. */
+export const CANVAS_SNAPSHOT_PX_MAX = 16_384;
+/** The widest PNG a canvas snapshot returns (APP_RPC_LIMITS.snapshotWidthPxMax). */
+export const CANVAS_SNAPSHOT_WIDTH_MAX = 800;
+
+// A region of the editor window to photograph for `canvas.snapshot`, and the widest image to return.
+function canvasSnapshotRequest(input: unknown): {
+  readonly rect: { readonly x: number; readonly y: number; readonly width: number; readonly height: number };
+  readonly widthMax: number;
+} {
+  const value = object({ rect: object({ x: count, y: count, width: count, height: count }), widthMax: count })(input);
+  const { rect } = value;
+  for (const side of [rect.x, rect.y, rect.x + rect.width, rect.y + rect.height]) {
+    if (side > CANVAS_SNAPSHOT_PX_MAX) {
+      throw new Error('A snapshot lies within the window');
+    }
+  }
+  if (rect.width < 1 || rect.height < 1) {
+    throw new Error('A snapshot covers at least a pixel each way');
+  }
+  if (value.widthMax < 1 || value.widthMax > CANVAS_SNAPSHOT_WIDTH_MAX) {
+    throw new Error(`A snapshot is at most ${CANVAS_SNAPSHOT_WIDTH_MAX} pixels wide`);
+  }
+  return value;
+}
+
+function appFileRequest(input: unknown): { readonly projectPath: string; readonly id: string; readonly operation: AppFileOperation } {
+  const value = record(input);
+  const id = parseAppId(value['id']);
+  return { projectPath: pathText(value['projectPath']), id, operation: parseAppFileOperation(value['operation'], id) };
+}
 const relative = { ...project, rel: pathText };
 // A folder of one saved media hosting connection (mediaHosting.ts).
 const mediaFolder = { ...project, connectionId: parseMediaConnectionId, folder: parseMediaFolder };
@@ -176,11 +270,32 @@ function imageBytes(input: unknown): number[] {
   });
 }
 
+function parsePickTarget(input: unknown): 'file' {
+  if (input === 'file') {
+    return input;
+  }
+  throw new Error('Expected pick target file');
+}
+
 export const IPC_PAYLOADS = {
+  // The AI chat panel's channels (shared/ipc/aiChat.ts).
+  ...AI_PAYLOADS,
+  'instructions:create': object({ ...project, file: parseInstructionFilePath, source: text }),
+  'instructions:createFolder': object({ ...project, folder: parseInstructionPath }),
+  'instructions:list': object({ ...project }),
+  'instructions:read': object({ ...project, file: parseInstructionFilePath }),
+  'instructions:reveal': object({ ...project, file: parseInstructionPath }),
+  'instructions:write': object({ ...project, file: parseInstructionFilePath, source: text, base: text }),
   'project:metadata': object({ ...project, kind: metadataKind }),
   'project:createDefaultsCanvas': object({ ...project, canvas: parseCanvasCreate }),
   'project:removeDefaultsCanvas': object({ ...project, file: defaultsCanvasFile }),
   'project:writeMetadata': object({ ...project, write: parseMetadataWrite }),
+  // `target: 'file'` picks one file (Settings → Folders, CMS data files); absent picks a folder.
+  'project:pickFolder': object({ ...project, target: optional(parsePickTarget) }),
+  // Who the signed-in GitHub user is, for the project's roles (shared/properties/projectRoles.ts).
+  'roles:identity': object({ ...project }),
+  // The Roles tab's member picker: the typed start of a GitHub username, nothing else (shared/ipc/githubUserSearch.ts).
+  'github:searchUsers': object({ ...project, query: parseGitHubLoginQuery }),
   'studio:status': pathText,
   'studio:install': object({
     ...project,
@@ -287,6 +402,7 @@ export const IPC_PAYLOADS = {
   'git:checkout': object({ ...branch, create: maybeFlag, parkFirst: maybeFlag }),
   'git:commit': object({ ...project, message: text, paths: optional(list(pathText)) }),
   'git:commitDiff': parseCommitDiffRequest,
+  'git:avatars': parseCommitAvatarRequest,
   'git:deleteBranch': object({ ...branch, force: maybeFlag }),
   'git:ghStatus': pathText,
   'git:info': pathText,
@@ -383,6 +499,68 @@ export const IPC_PAYLOADS = {
     kind: parseRemoteAssetKind,
   }),
   'cmsRemote:linkPreview': object({ url: parseVideoLinkURL }),
+  // Stacki Apps (shared/properties/apps.ts). Install is staged, then committed once an admin confirms it.
+  'apps:list': object({ ...project }),
+  'apps:pickFile': object({ ...project }),
+  'apps:stageGitHub': object({ ...project, source: parseGitHubSource, tag: optional(parseReleaseTag) }),
+  'apps:githubRepositories': object({ ...project, account: parseGitHubLogin }),
+  'apps:githubReleases': object({ ...project, source: parseGitHubSource }),
+  'apps:commit': object({ ...project, token: parseStagedToken }),
+  'apps:discard': object({ ...project, token: parseStagedToken }),
+  'apps:uninstall': object({ ...project, id: parseAppId }),
+  'apps:checkUpdates': object({ ...project, force: maybeFlag }),
+  'apps:applyUpdate': object({ ...project, id: parseAppId }),
+  // Apps added as a folder (shared/properties/appFolders.ts): the folders that do not read as an app,
+  // and showing one in the file manager.
+  'apps:folders': object({ ...project }),
+  'apps:revealFolder': object({ ...project, folder: parseAppFolderName }),
+  // The official marketplace (shared/properties/appMarketplace.ts): browse its index, install an approved version.
+  'apps:marketplace': object({ ...project, refresh: maybeFlag }),
+  'apps:installMarketplace': object({ ...project, id: parseAppId, version: parseAppVersion }),
+  'apps:setAutoUpdate': object({ ...project, id: parseAppId, autoUpdate: boolean }),
+  // Where an installed app lives (shared/properties/appPlace.ts): its GitHub repository's visibility, read in main.
+  'apps:repositoryVisibility': object({ ...project, id: parseAppId }),
+  // Sharing and publishing apps (shared/properties/appPublish.ts). Every GitHub call runs in main with the account's token.
+  'apps:scanSecrets': object({ ...project, target: parseAppScanTarget }),
+  'apps:repositoryStatus': object({ ...project, repository: parseAppRepositoryRef }),
+  'apps:makePublic': object({ ...project, repository: parseAppRepositoryRef }),
+  'apps:addLicense': object({ ...project, repository: parseAppRepositoryRef }),
+  'apps:share': object({ ...project, share: parseAppShareRequest }),
+  'apps:switchSource': object({ ...project, id: parseAppId, source: parseSharedReleaseSource }),
+  'apps:checkMarketplace': object({ ...project, repository: parseAppRepositoryRef }),
+  'apps:submitMarketplace': object({ ...project, submission: parseMarketplaceSubmission }),
+  // App settings (shared/properties/appSettings.ts): main checks the values against the app's own declarations.
+  'apps:readSettings': object({ ...project, id: parseAppId }),
+  'apps:writeSettings': object({ ...project, id: parseAppId, values: parseAppSettingValuesReply }),
+  // Pages and components an app reads (`page.findByAttribute`): stamped in one batch, at most the files an app may read.
+  'apps:fileStamps': object({ ...project, rels: appFileList }),
+  // App storage (shared/properties/appStorage.ts) and who the person is (appsRpc.ts AppPerson). A write
+  // carries the window's writer token, so the change notice tells the window its own write.
+  'apps:storageGet': object({ ...project, id: parseAppId, scope: parseAppStorageScope, key: parseAppStorageKey }),
+  'apps:storageSet': object({
+    ...project,
+    id: parseAppId,
+    scope: parseAppStorageScope,
+    key: parseAppStorageKey,
+    value: optional(parseAppStorageValue),
+    writer: parseAppStorageWriter,
+  }),
+  'apps:storageKeys': object({ ...project, id: parseAppId, scope: parseAppStorageScope }),
+  'apps:storageWatch': object({ ...project }),
+  'apps:person': object({ ...project }),
+  'apps:people': object({ ...project }),
+  'apps:hostVersion': nothing,
+  // `canvas.snapshot`: main photographs this region of the sender's window (the canvas, cropped to an element).
+  'apps:canvasSnapshot': canvasSnapshotRequest,
+  // Project files an app reads and writes (shared/properties/appFiles.ts): each path checked for the app that asks.
+  'apps:files': appFileRequest,
+  // OAuth sign-ins (shared/properties/appAuth.ts): main runs the flow and keeps the tokens; the renderer gets an access token only.
+  'apps:authConnect': object({ ...project, id: parseAppId, provider: parseAuthProviderId }),
+  'apps:authStatus': object({ ...project, id: parseAppId }),
+  'apps:authToken': object({ ...project, id: parseAppId, provider: parseAuthProviderId }),
+  'apps:authDisconnect': object({ ...project, id: parseAppId, provider: parseAuthProviderId }),
+  // A request main makes for an app (shared/properties/appNet.ts), to the hosts its manifest declares only.
+  'apps:netFetch': object({ ...project, id: parseAppId, request: parseAppNetRequest }),
   'mediaHosting:connections': object({ ...project }),
   'mediaHosting:save': object({ ...project, draft: parseMediaConnectionDraft }),
   'mediaHosting:remove': object({ ...project, id: parseMediaConnectionId }),
@@ -419,6 +597,8 @@ export const IPC_PAYLOADS = {
   'pageTemplate:plan': object({ ...project, draft: parsePageTemplateDraft }),
   'pageTemplate:sample': object({ ...project, request: parseDataSampleRequest }),
   'project:setEnv': object({ ...project, name: parseEnvPayloadName, value: parseSecretValue }),
+  'audit:render': object({ ...project, devUrl: loopbackOrigin, route: routePath }),
+  'audit:measure': object({ ...project, devUrl: loopbackOrigin, route: routePath }),
   'page:dynamicPaths': object({ ...project, pagePath: pathText, devUrl: maybeText }),
   // A visual edit in the renderer's terms, authored against the checksum of
   // the page it shows; main turns it into an intent (step 6).
@@ -489,7 +669,7 @@ export const IPC_PAYLOADS = {
   'style:readFile': pathText,
   'style:writeFile': object({ filePath: pathText, css: text, announce: maybeFlag }),
   'style:selectorUsage': object({ ...project, packages: optional(packageSearch) }),
-  'style:removeSelectors': object({ ...project, ids: parseSelectorIds, files: parseSelectorFileDigests }),
+  'style:removeSelectors': object({ ...project, ids: parseSelectorIds, files: parseSelectorFileDigests, reach: optional(removalReach) }),
   'style:restoreSelectors': object({ ...project, changes: parseSelectorFileChanges, to: restoreDirection }),
   'terminal:clipboardImage': object({ bytes: imageBytes, mime: text }),
   'terminal:close': object({ id: text }),

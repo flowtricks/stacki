@@ -1,0 +1,109 @@
+/* App settings: the details popup's section and the "Set up" prompt (AppSettings.tsx).
+   Fills, never borders, as the rest of the Apps panel. */
+.apps-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.apps-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.apps-setting-label {
+  color: var(--text);
+  font-size: 11.5px;
+}
+.apps-setting-required {
+  color: var(--text-faint);
+}
+.apps-setting-input {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+.apps-setting-input input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.apps-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 16px;
+  overflow: auto;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.apps-setup-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.apps-setup-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+/* The details popup's "Advanced" disclosure: the editor's group head (styles.css
+   .props-group-head), a quiet full-width button whose chevron turns to point down
+   when open, with a fill on hover instead of a border. */
+.apps-settings-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.apps-settings-advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.apps-settings-advanced-toggle:hover,
+.apps-settings-advanced-toggle:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.apps-settings-advanced-chevron {
+  color: var(--text-faint);
+  transition: transform 0.12s;
+}
+.apps-settings-advanced[data-open='true'] .apps-settings-advanced-chevron {
+  transform: rotate(90deg);
+}
+.apps-settings-advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.apps-settings-advanced-body[hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .apps-settings-advanced-chevron {
+    transition: none;
+  }
+}

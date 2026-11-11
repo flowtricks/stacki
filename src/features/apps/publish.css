@@ -1,0 +1,514 @@
+/* Share app and Publish to marketplace (ShareApp.tsx, PublishMarketplace.tsx,
+   SecretScanReport.tsx): the Load popup's frame (apps.css .apps-connect) with
+   their own bodies. Fills, never borders; a chosen option shows its check on the right. */
+.apps-publish-repository {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 0;
+}
+.apps-submit,
+.apps-share-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.apps-share-switch {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text);
+}
+.apps-share-created ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  font-size: 11.5px;
+}
+.apps-steps,
+.apps-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.apps-step,
+.apps-check {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+.apps-check {
+  grid-template-columns: 18px 1fr;
+}
+.apps-step.done,
+.apps-step.running,
+.apps-check.passed {
+  color: var(--text);
+}
+.apps-step.failed {
+  color: var(--danger, var(--text));
+}
+.apps-step-mark {
+  display: inline-flex;
+  justify-content: center;
+}
+.apps-requirement,
+.apps-refused,
+.apps-scan-found {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.apps-requirement-title,
+.apps-scan-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.apps-scan {
+  margin: 0;
+  font-size: 12px;
+}
+.apps-scan-clean {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+}
+.apps-scan-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.apps-scan-finding {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.apps-scan-where {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.apps-submit-summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+.apps-submit-summary dt {
+  color: var(--text-faint);
+}
+.apps-submit-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Share app (ShareApp.tsx): compact, like GitHub's new-repository dialog. The
+   app is the header's subject; one owner/name field; the visibility as a
+   segmented control with one line under it; the scan as a status row; Cancel
+   and Share together at the footer's right. Fills, never borders; the header
+   and footer keep the modal's 1px lines. */
+.apps-share.apps-connect {
+  width: min(440px, calc(100vw - 48px));
+}
+.apps-share .apps-connect-header {
+  gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.apps-share-subject-icon {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+.apps-share-subject-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #1d1d1d;
+  color: var(--text);
+}
+.apps-share-subject {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.apps-share-subject-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.apps-share-subject-meta {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 400;
+}
+.apps-share-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+}
+.apps-share-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.apps-share-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.apps-share-label {
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.apps-share-detail {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+/* The destination: the owner chip, "/" and the name on one fill, as GitHub draws owner/repository. */
+.apps-share-destination {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  padding: 0 4px;
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+.apps-share-destination:focus-within {
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.apps-share-destination[data-status='invalid'],
+.apps-share-destination[data-status='exists'] {
+  box-shadow: 0 0 0 1px var(--red);
+}
+.apps-share-destination .dd-trigger.apps-share-owner {
+  flex: none;
+  width: auto;
+  max-width: 50%;
+  height: 24px;
+  gap: 6px;
+  padding: 0 6px 0 4px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  font-size: 12px;
+  font-weight: 500;
+}
+.apps-share-destination .dd-trigger.apps-share-owner:hover {
+  background: var(--bg-active);
+}
+.apps-share-destination .apps-share-owner .dd-icon {
+  display: inline-flex;
+  flex: none;
+}
+.apps-share-slash {
+  flex: none;
+  padding: 0 2px;
+  color: var(--text-faint);
+  font-size: 14px;
+}
+.apps-share-destination input.apps-share-name {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+.apps-share-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 15px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.apps-share-status.available {
+  color: var(--green);
+}
+.apps-share-status.invalid {
+  color: var(--red);
+}
+.apps-share-visibility.ui-tabs {
+  flex: none;
+  width: 168px;
+}
+/* The scan as one row: an icon, what it found, and for a blocked scan its details and a rescan. */
+.apps-share-scan {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  font-size: 11.5px;
+}
+.apps-share-scan.blocked {
+  background: color-mix(in srgb, var(--red) 10%, var(--bg-input));
+}
+.apps-share-scan-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 18px;
+}
+.apps-share-scan-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+.apps-share-scan.clean .apps-share-scan-icon {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green);
+}
+.apps-share-scan.blocked .apps-share-scan-icon {
+  color: var(--red);
+}
+.apps-share-scan-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+}
+.apps-share-scan.blocked .apps-share-scan-text {
+  color: var(--text);
+}
+.apps-share-scan button.apps-share-scan-action {
+  flex: none;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.apps-share-scan button.apps-share-scan-action:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.apps-share-scan-chevron {
+  transition: transform 120ms ease;
+}
+.apps-share-scan-chevron.open {
+  transform: rotate(180deg);
+}
+.apps-share-scan-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 24px;
+}
+/* A wide code sample scrolls inside its own block, never the popup's body sideways. */
+.apps-share .apps-connect-body {
+  overflow-x: hidden;
+}
+.apps-share-scan-detail > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.apps-share-scan-detail .apps-scan-finding {
+  overflow-wrap: anywhere;
+}
+.apps-share-scan-detail .apps-note {
+  margin: 0;
+}
+.apps-share-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: conic-gradient(var(--text-dim), transparent 75%);
+  mask: radial-gradient(circle, transparent 3px, #000 3.5px);
+  animation: apps-share-spin 800ms linear infinite;
+}
+@keyframes apps-share-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .apps-share-spinner {
+    animation: none;
+  }
+}
+/* Progress: one quiet list on one fill, a mark per step. */
+.apps-share .apps-steps {
+  gap: 0;
+  padding: 4px 0;
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+.apps-share .apps-step {
+  grid-template-columns: 16px 1fr auto;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 0;
+  background: transparent;
+  font-size: 11.5px;
+}
+.apps-share .apps-step .apps-note {
+  margin: 0;
+}
+.apps-share .apps-step-mark {
+  align-items: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--bg-hover);
+}
+.apps-share .apps-step.done .apps-step-mark {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green);
+}
+.apps-share .apps-step.running .apps-step-mark {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.apps-share .apps-step.failed .apps-step-mark {
+  background: transparent;
+  color: var(--red);
+}
+/* Success: the outcome, the link with its two actions, the steps, the update switch. */
+.apps-share-done {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.apps-share-done-mark {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green);
+}
+.apps-share-done-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 12px;
+}
+.apps-share-done-text strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.apps-share-link-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 32px;
+  padding: 0 4px 0 10px;
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+.apps-share-link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+  text-decoration: none;
+}
+.apps-share-link span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.apps-share-link:hover span {
+  text-decoration: underline;
+}
+.apps-share-link-row .apps-share-link-action {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+.apps-share-link-row .apps-share-link-action:hover {
+  background: var(--bg-active);
+}
+.apps-share-update {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bg-input);
+}
+.apps-share-update-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 12px;
+}

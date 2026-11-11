@@ -32,7 +32,7 @@ const check = (what, condition, detail) => {
   const bundlePath = path.join(buildDirectory, 'popup-layers.bundle.js');
   await esbuild.build({
     stdin: {
-      contents: `export { registerPopupLayer, inOwnedPopup, hasOwnedPopup } ` + `from './src/features/style/model/popupLayer'`,
+      contents: `export { registerPopupLayer, inOwnedPopup, hasOwnedPopup } ` + `from './src/ui/popupOwnership'`,
       resolveDir: ROOT,
       loader: 'ts',
     },

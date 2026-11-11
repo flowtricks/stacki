@@ -37,6 +37,8 @@ import { hasContentConfig } from '../content/contentConfig';
 import { DATA_ENDPOINT, PATHS_ENDPOINT, VALUE_ENDPOINT, renderMarkerConfig } from '../preview/markerConfig';
 import { PROGRESS_CLEARED, installDependencies } from './projectHandlers';
 import type { MainHost } from './mainHost';
+import { readProjectFolders } from '../lib/projectFolders';
+import { configOf } from '../../shared/properties/projectFolders';
 import type { Thumbnails } from './thumbnails';
 
 // Subscribe before sending the stop signal so a fast exit cannot be missed.
@@ -293,7 +295,9 @@ export class DevServers {
       ]);
       const configPath = path.join(directory, 'astro.config.mjs');
       fs.writeFileSync(configPath, config);
-      fs.writeFileSync(path.join(directory, 'preview.astro'), renderComponentPreviewPage());
+      // The route's globs follow the project's component folders as they are now; a later
+      // change to .stacki/folders.json reaches previews when the dev server next starts.
+      fs.writeFileSync(path.join(directory, 'preview.astro'), renderComponentPreviewPage(configOf(readProjectFolders(projectPath))));
       // The page imports the recipe node component from beside it (componentPreviewRecipe.ts).
       fs.writeFileSync(path.join(directory, PREVIEW_RECIPE_FILE), renderComponentPreviewRecipe());
       fs.writeFileSync(path.join(directory, 'paths.js'), PATHS_ENDPOINT);

@@ -16,7 +16,8 @@ import ExprInput from '../../ui/ExprInput';
 import { ResetLabel } from '../../ui/ResetLabel';
 import { ChevronRightIcon, CloseIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
-import { NULL_DATA, isPlainObject, fieldKey, blankFor, omitField, useTargets } from './contentFieldData';
+import Dropdown from '../../ui/Dropdown';
+import { NULL_DATA, isPlainObject, fieldKey, blankFor, omitField, useTargets, type Target } from './contentFieldData';
 export { isPlainObject, blankFor, omitField } from './contentFieldData';
 
 export interface FieldContext {
@@ -44,21 +45,18 @@ function ReferenceField({ field, value, context, onChange }: FieldProps) {
   const known = targets?.some((target) => target.id === selected);
   return (
     <div className="content-ref">
-      <select
+      <Dropdown
+        ariaLabel={fieldName(field)}
         value={selected}
-        onChange={(event) => {
-          const next = event.target.value;
-          onChange(next === '' ? (field.nullable ? NULL_DATA : undefined) : next);
-        }}
-      >
-        <option value="">{field.nullable ? 'None' : 'Choose an entry…'}</option>
-        {(targets ?? []).map((target) => (
-          <option key={target.id} value={target.id}>
-            {target.title === target.id ? target.id : `${target.title} — ${target.id}`}
-          </option>
-        ))}
-        {selected && targets && !known && <option value={selected}>{selected} (missing)</option>}
-      </select>
+        options={[
+          { value: '', label: field.nullable ? 'None' : 'Choose an entry…', dim: true, pinned: true },
+          ...(targets ?? []).map((target) => ({ value: target.id, label: targetLabel(target) })),
+          ...(selected && targets && !known ? [{ value: selected, label: `${selected} (missing)` }] : []),
+        ]}
+        searchable={(targets ?? []).length > 6}
+        livePreview={false}
+        onChange={(next) => onChange(next === '' ? (field.nullable ? NULL_DATA : undefined) : next)}
+      />
       {selected && targets && !known && (
         <div className="content-warn">
           Nothing in {field.target} has the id “{selected}”.
@@ -85,22 +83,16 @@ function ReferenceList({ field, value, context, onChange }: FieldProps) {
           </div>
         );
       })}
-      <select
+      <Dropdown
+        ariaLabel={`Add to ${fieldName(field)}`}
         value=""
+        options={remaining.map((target) => ({ value: target.id, label: targetLabel(target) }))}
+        placeholder={remaining.length ? 'Add…' : 'Nothing left to add'}
         disabled={remaining.length === 0}
-        onChange={(event) => {
-          if (event.target.value) {
-            onChange([...values, event.target.value]);
-          }
-        }}
-      >
-        <option value="">{remaining.length ? 'Add…' : 'Nothing left to add'}</option>
-        {remaining.map((target) => (
-          <option key={target.id} value={target.id}>
-            {target.title === target.id ? target.id : `${target.title} — ${target.id}`}
-          </option>
-        ))}
-      </select>
+        searchable={remaining.length > 6}
+        livePreview={false}
+        onChange={(next) => onChange([...values, next])}
+      />
     </div>
   );
 }
@@ -236,13 +228,13 @@ export function UnionField(props: FieldProps) {
       {discriminator && (
         <div className="content-union-head">
           <label>{labelize(discriminator)}</label>
-          <select value={String(current[discriminator] ?? '')} onChange={(event) => switchTo(event.target.value)}>
-            {(props.field.members ?? []).map((entry) => (
-              <option key={String(entry.value)} value={String(entry.value)}>
-                {entry.label}
-              </option>
-            ))}
-          </select>
+          <Dropdown
+            ariaLabel={labelize(discriminator)}
+            value={String(current[discriminator] ?? '')}
+            options={(props.field.members ?? []).map((entry) => ({ value: String(entry.value), label: entry.label }))}
+            livePreview={false}
+            onChange={switchTo}
+          />
         </div>
       )}
       <div className="cms-group-box">
@@ -488,14 +480,16 @@ function NumberField({ field, value, onChange }: FieldProps) {
 
 function EnumField({ field, value, onChange }: FieldProps) {
   return (
-    <select value={value === null || value === undefined ? '' : String(value)} onChange={(event) => onChange(event.target.value || undefined)}>
-      {!field.required && <option value="">Not set</option>}
-      {(field.options ?? []).map((option) => (
-        <option key={String(option)} value={String(option)}>
-          {labelize(String(option))}
-        </option>
-      ))}
-    </select>
+    <Dropdown
+      ariaLabel={fieldName(field)}
+      value={value === null || value === undefined ? '' : String(value)}
+      options={[
+        ...(field.required ? [] : [{ value: '', label: 'Not set', dim: true }]),
+        ...(field.options ?? []).map((option) => ({ value: String(option), label: labelize(String(option)) })),
+      ]}
+      livePreview={false}
+      onChange={(next) => onChange(next || undefined)}
+    />
   );
 }
 
@@ -667,4 +661,17 @@ function FieldHeader(props: FieldProps & { readonly present: boolean; readonly s
 export function issueMessageAt(issues: readonly WireValidationIssue[], path: readonly (string | number)[]): string | undefined {
   const found = issues.find((issue) => issue.path.length === path.length && issue.path.every((part, index) => String(part) === String(path[index])));
   return found?.message;
+}
+
+// A reference names its entry by title, with the id beside it when the two differ.
+function targetLabel(target: Target): string {
+  return target.title === target.id ? target.id : `${target.title} — ${target.id}`;
+}
+
+// What a field's dropdown is called to a screen reader: its label, else its key.
+function fieldName(field: FieldDescriptor): string {
+  if (field.label !== undefined) {
+    return field.label;
+  }
+  return field.key === undefined ? 'Value' : labelize(field.key);
 }

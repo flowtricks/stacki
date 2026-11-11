@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { addressHistoryFor, pageAddressHost } from './pageAddress';
 import { chooseTemplateEntry, isTemplateFile, useCanvasRoute } from '../pages/templateEntryStore';
-import { useEditorRole } from '../roles/useEditorRole';
+import { useStudioRole } from '../roles/useEditorRole';
+import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
 import type { Peer } from '../collaboration/presence';
 import type { FollowTarget } from '../collaboration/useCollaborators';
 import { clearAssetRequest, getPendingAsset } from '../../../vendor/stacki/src/ui/assetPick';
@@ -13,7 +14,8 @@ export interface ComponentFocus {
 export type OpenFile = (file: string, focus?: ComponentFocus) => void;
 
 export function useEditorNavigation() {
-  const role = useEditorRole();
+  // Opening a component's own file needs `component:edit` (shared/properties/projectRoles.ts).
+  const role = can(useStudioRole(), 'component:edit') ? 'admin' : 'client';
   // A host that keeps the address in step names the first page; Studio opens the home page.
   const [host] = useState(pageAddressHost);
   const [file, setFile] = useState(() => initialFile(host));

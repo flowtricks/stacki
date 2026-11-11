@@ -15,14 +15,23 @@ export interface PublishProject {
   readonly name: string;
   readonly hosting: Hosting;
 }
+// Why a provider connection could not be read. The reason, never the CLI's output, crosses the
+// boundary: it picks the recovery the settings offer (install, sign in, sign in again, refresh).
+export const CONNECTION_FAILURES = ['missing-cli', 'signed-out', 'expired', 'network', 'unknown'] as const;
+export type ConnectionFailure = (typeof CONNECTION_FAILURES)[number];
+export interface ConnectionProblem {
+  readonly reason: ConnectionFailure;
+  readonly message: string;
+}
 export type PublishDiscovery =
   | {
       readonly kind: 'ready';
       readonly accounts: readonly PublishAccount[];
       readonly projects: readonly PublishProject[];
-      readonly notice?: string;
+      // Discovery partly worked (a linked project, or some accounts), but a connection did not.
+      readonly notice?: ConnectionProblem;
     }
-  | { readonly kind: 'failed'; readonly message: string };
+  | ({ readonly kind: 'failed' } & ConnectionProblem);
 export const DISCOVERY_LIMITS = { itemsMax: 500, pagesMax: 5, timeoutMs: 30_000 } as const;
 
 export function parseDiscoveryRequest(input: unknown): DiscoveryRequest {
@@ -41,14 +50,14 @@ export function parseDiscoveryRequest(input: unknown): DiscoveryRequest {
 export function parsePublishDiscovery(input: unknown): PublishDiscovery {
   const value = record(input);
   if (value['kind'] === 'failed') {
-    return { kind: 'failed', message: discoveryLabel(value['message']) };
+    return { kind: 'failed', ...parseConnectionProblem(value) };
   }
   if (value['kind'] !== 'ready') {
     throw new Error('Invalid publishing discovery result.');
   }
   return {
     kind: 'ready',
-    ...(value['notice'] === undefined ? {} : { notice: discoveryLabel(value['notice']) }),
+    ...(value['notice'] === undefined ? {} : { notice: parseConnectionProblem(record(value['notice'])) }),
     accounts: discoveryList(value['accounts']).map((item) => {
       const account = record(item);
       return { id: discoveryIdentifier(account['id']), name: discoveryLabel(account['name']) };
@@ -61,6 +70,36 @@ export function parsePublishDiscovery(input: unknown): PublishDiscovery {
       };
     }),
   };
+}
+
+export function parseConnectionProblem(value: Readonly<Record<string, unknown>>): ConnectionProblem {
+  const reason = CONNECTION_FAILURES.find((entry) => entry === value['reason']);
+  if (reason === undefined) {
+    throw new Error('Unknown publishing connection failure.');
+  }
+  return { reason, message: discoveryLabel(value['message']) };
+}
+
+/** What a person reads for each failure; the label names the provider ("Vercel"). */
+export function connectionFailureMessage(label: string, reason: ConnectionFailure): string {
+  assert(label.length > 0, 'A connection failure names its provider');
+  assert(label.length <= 64, 'A provider label stays short');
+  switch (reason) {
+    case 'missing-cli':
+      return `The ${label} command-line tool is not installed on this computer.`;
+    case 'signed-out':
+      return `You are not signed in to ${label}.`;
+    case 'expired':
+      return `${label} sign-in expired or was revoked. Sign in again.`;
+    case 'network':
+      return `Could not reach ${label}. Check your internet connection, then refresh.`;
+    case 'unknown':
+      return `Could not load ${label} accounts. Refresh to try again, or enter the IDs manually.`;
+    default: {
+      const exhaustive: never = reason;
+      return exhaustive;
+    }
+  }
 }
 
 export function discoveryList(input: unknown): readonly unknown[] {

@@ -215,13 +215,3 @@ function AttributesSettings(props: AttributesPropProps & { readonly local: strin
     </div>
   );
 }
-
-/** The line under a connected list: what an instance adds, and where. */
-export function AttributesPropNote({ local }: { readonly local: string }) {
-  return (
-    <div className="attrs-bound-note" title="Each page using this component can add its own attributes here.">
-      <PlusIcon size={10} />
-      items in <span className="loop-bind-chip">{`{${local}}`}</span>
-    </div>
-  );
-}

@@ -1,5 +1,7 @@
 // A property's kind settings in the Properties panel: a Number's Min, Max and
-// Decimals, a Switch's On and Off labels, and the tooltip. They are the same
+// Decimals, and the tooltip. A Switch has none: Astro gives a boolean no side
+// names, so the On and Off labels Stacki once wrote are legacy tags the tooltip
+// offers to remove. They are the same
 // JSDoc tags the bind dot's new-prop form writes (propDocumentation.ts), edited
 // in place on the property's description (settingTags.ts). Each field
 // keeps the text as typed, so a half-typed number (`-`) stays on screen while
@@ -9,17 +11,17 @@ import { useState } from 'react';
 import AutoTextarea from '../../ui/AutoTextarea';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
-import { NUMBER_DECIMALS_MAX, SWITCH_LABELS, numberNote } from '../../editor/propDocumentation';
+import { NUMBER_DECIMALS_MAX, numberNote } from '../../editor/propDocumentation';
 import { propertyKind } from './propertyKinds';
 import {
-  SWITCH_LABEL_CHARS_MAX,
+  legacyTagsOf,
   numberSettingProblem,
   numberSettingsOf,
-  switchLabelTag,
   tagValue,
   tooltipOf,
   withTag,
   withTooltip,
+  withoutLegacyTags,
   type SettingTagName,
 } from './settingTags';
 
@@ -34,24 +36,36 @@ export function PropertyKindSettings({ property, onChange }: SettingsProps) {
   if (kind === 'number') {
     return <NumberSettingsFields key="number" property={property} onChange={onChange} />;
   }
-  if (kind === 'switch') {
-    return <SwitchSettingsFields key="switch" property={property} onChange={onChange} />;
-  }
   return undefined;
 }
 
 /** The tooltip: the description's words, without the setting tags the fields above own. */
+// Legacy `@onLabel`/`@offLabel` tags stay as written until the person edits
+// these docs; then the field offers to take them out.
 export function PropertyTooltip({ property, onChange }: SettingsProps) {
+  const [editing, setEditing] = useState(false);
+  const legacy = legacyTagsOf(property.description);
   return (
-    <label>
-      Tooltip
-      <AutoTextarea
-        value={tooltipOf(property.description)}
-        maxLength={PROPERTY_LIMITS.textCharsMax}
-        placeholder="Describe how to use this property…"
-        onChange={(event) => onChange(withTooltip(property.description, event.target.value))}
-      />
-    </label>
+    <>
+      <label>
+        Tooltip
+        <AutoTextarea
+          value={tooltipOf(property.description)}
+          maxLength={PROPERTY_LIMITS.textCharsMax}
+          placeholder="Describe how to use this property…"
+          onFocus={() => setEditing(true)}
+          onChange={(event) => onChange(withTooltip(property.description, event.target.value))}
+        />
+      </label>
+      {editing && legacy.length > 0 && (
+        <p className="property-help property-legacy-tags">
+          This doc has {legacy.length === 1 ? 'an unused switch label tag' : 'unused switch label tags'} nothing reads.{' '}
+          <button type="button" className="property-legacy-remove" onClick={() => onChange(withoutLegacyTags(property.description))}>
+            Remove {legacy.length === 1 ? 'it' : 'them'}
+          </button>
+        </p>
+      )}
+    </>
   );
 }
 
@@ -128,43 +142,6 @@ function NumberSettingField(props: {
         onChange={(event) => props.onChange(event.target.value)}
       />
     </label>
-  );
-}
-
-function SwitchSettingsFields({ property, onChange }: SettingsProps) {
-  const [texts, setTexts] = useState(() => ({
-    onLabel: tagValue(property.description, 'onLabel') ?? '',
-    offLabel: tagValue(property.description, 'offLabel') ?? '',
-  }));
-  const change = (side: 'onLabel' | 'offLabel', text: string): void => {
-    setTexts({ ...texts, [side]: text });
-    onChange(withTag(property.description, side, switchLabelTag(text, side)));
-  };
-  return (
-    <div className="property-settings" role="group" aria-label="Switch settings">
-      <div className="property-settings-row">
-        <label>
-          On label
-          <input
-            aria-label="On label"
-            placeholder={SWITCH_LABELS.onLabel}
-            value={texts.onLabel}
-            maxLength={SWITCH_LABEL_CHARS_MAX}
-            onChange={(event) => change('onLabel', event.target.value)}
-          />
-        </label>
-        <label>
-          Off label
-          <input
-            aria-label="Off label"
-            placeholder={SWITCH_LABELS.offLabel}
-            value={texts.offLabel}
-            maxLength={SWITCH_LABEL_CHARS_MAX}
-            onChange={(event) => change('offLabel', event.target.value)}
-          />
-        </label>
-      </div>
-    </div>
   );
 }
 

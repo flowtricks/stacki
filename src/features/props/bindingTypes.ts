@@ -86,6 +86,8 @@ export interface FieldDataPickerProps extends BindingContextProps {
   /** Binds the whole field to a prop just made for it; picking inserts at the caret instead. */
   readonly onBindNew?: ((path: string, declaration: PropDeclaration) => void) | undefined;
   readonly onWrite?: (() => void) | undefined;
+  /** Offers "Create conditional" in a component, which opens the field's Value conditions editor. Absent, the row is not drawn. */
+  readonly onConditional?: (() => void) | undefined;
   readonly onClose: () => void;
 }
 export interface BindFieldProps extends BindingContextProps {

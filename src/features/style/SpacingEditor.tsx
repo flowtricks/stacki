@@ -9,7 +9,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import useScrub from './components/useScrub';
 import { handleArrowStep } from './model/numberStep';
 import { isNonNegative } from './model/cssProperties';
-import { hasOwnedPopup, inOwnedPopup } from './model/popupLayer';
+import { hasOwnedPopup, inOwnedPopup } from '../../ui/popupOwnership';
 import ProvenanceList from './ProvenanceList';
 import VariableConnect from './VariableConnect';
 import { type ResolvedProp } from './model/resolved';

@@ -1,4 +1,5 @@
 import { record } from '../../shared/validation';
+import { isReservedShortcut, shortcutOfPress } from '../../../vendor/stacki/shared/properties/appShortcuts';
 const keys = new Set([
   'z',
   'y',
@@ -25,6 +26,28 @@ const keys = new Set([
 ]);
 const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 export function forwardPreviewKeys(post: (message: unknown) => void, interactive: () => boolean) {
+  // The app command range (APP_RESERVED_SHORTCUTS, ⌘⌥⇧1 to 9), as Desktop's canvas forwards it
+  // (frameDesign.ts forwardShortcut): the editor's own listener (AppsHost.tsx) never sees a key
+  // pressed in here, so an app's command would not run while the canvas has focus. Forwarded in
+  // both canvas modes and from fields, as Desktop does: no Stacki shortcut or typed text uses it.
+  // The message is Desktop's, so one parser (previewMessages.ts) reads it in both editors.
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (event.isComposing) {
+        return;
+      }
+      const shortcut = shortcutOfPress(event);
+      if (shortcut === undefined) {
+        return;
+      }
+      if (isReservedShortcut(shortcut)) {
+        event.preventDefault();
+        post({ type: 'avb:shortcut', name: 'appCommand', shortcut });
+      }
+    },
+    true,
+  );
   // Arrow keys, as Desktop's canvas forwards them (frameDesign.ts forwardShortcut): a click on
   // the canvas puts keyboard focus in here, so without this they scroll the page instead of
   // moving the selection. Caught on the way down, before the page's own handlers, and in both

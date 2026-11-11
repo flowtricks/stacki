@@ -21,6 +21,7 @@ import {
   useContentEdits,
 } from './appPropertyEdits';
 import { useShortcuts } from './appPageOps';
+import { useAppInsert } from './appInsert';
 import { useLoopEdits } from './appLoopEdits';
 import {
   usePageOps,
@@ -45,6 +46,7 @@ export function useAppScope() {
   const history = useHistory(coreState, lifecycle, navigation);
   const nodeEdits = useNodeEdits(coreState, lifecycle, history);
   const shortcuts = useShortcuts(coreState, lifecycle, navigation, history, nodeEdits);
+  const appInsert = useAppInsert(coreState, history);
   const propertyEdits = usePropertyEdits(coreState, lifecycle, history, nodeEdits);
   const pageOps = usePageOps(coreState, lifecycle, navigation, history, nodeEdits, shortcuts);
   const viewModel = useViewModel(coreState, lifecycle, shortcuts, pageOps);
@@ -55,6 +57,7 @@ export function useAppScope() {
     ...history,
     ...nodeEdits,
     ...shortcuts,
+    ...appInsert,
     ...propertyEdits,
     ...pageOps,
     ...viewModel,

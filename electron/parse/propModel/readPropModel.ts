@@ -158,7 +158,7 @@ function declaredDrafts(blocks: readonly (readonly FiledSignature[])[], scope: T
       name: entry.name,
       declared: true,
       typeText: boundedText(entry.texts.join(' | ')),
-      control: documentedControl(controlOfParts(entry.parts, scope, TOP_WALK), entry.noted, documentation),
+      control: documentedControl(controlOfParts(entry.parts, scope, TOP_WALK), entry.noted),
       presence,
       nullable: entry.hasNull || (presence === 'required' && entry.hasUndefined),
       documentation,
@@ -217,10 +217,9 @@ function interfaceBody(declaration: ts.InterfaceDeclaration, file: ts.SourceFile
   return open === -1 ? text : text.slice(open);
 }
 
-// The settings a doc's tags and prose give a number or a switch. `noted` is
-// the member's own doc, which states its range; `documentation` is the doc the
-// field shows, which a union's branches may share.
-function documentedControl(control: PropControl, noted: string, documentation: string): PropControl {
+// The settings a doc's tags and prose give a number. `noted` is the member's
+// own doc, which states its range. A switch takes nothing from its doc.
+function documentedControl(control: PropControl, noted: string): PropControl {
   if (control.kind === 'number') {
     const rules = numberRules(noted);
     const tags = readPropTags(noted);
@@ -233,10 +232,6 @@ function documentedControl(control: PropControl, noted: string, documentation: s
       step: rules.step,
       decimals: tags.decimals,
     };
-  }
-  if (control.kind === 'switch') {
-    const tags = readPropTags(documentation);
-    return { kind: 'switch', onLabel: tags.onLabel, offLabel: tags.offLabel };
   }
   return control;
 }
@@ -256,7 +251,7 @@ function literalControl(value: PropDefault): PropControl {
     return { kind: 'text' };
   }
   if (typeof value === 'boolean') {
-    return { kind: 'switch', onLabel: undefined, offLabel: undefined };
+    return { kind: 'switch' };
   }
   return { kind: 'number', min: undefined, max: undefined, minExclusive: false, maxExclusive: false, step: undefined, decimals: undefined };
 }

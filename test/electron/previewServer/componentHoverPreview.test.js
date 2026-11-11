@@ -266,3 +266,39 @@ test('Vite metadata exports plain ESM data and reflects source edits', async (co
     assert.throws(() => plugin.load(path.join(project, relative) + '?raw&stacki-preview-props'), /must belong to a project component or layout/);
   }
 });
+
+test('the preview page answers the pointer but never acts: clicks, presses and submits stop, and are reported', async () => {
+  const { JSDOM } = require('jsdom');
+  const script = renderComponentPreviewPage().match(/<script is:inline>([\s\S]*?)<\/script>/)?.[1];
+  assert.ok(script, 'the test runs the generated page script itself');
+  const dom = new JSDOM(
+    `<body><div id="avb-stage"><a href="https://example.com/away">Link</a><form><button>Send</button></form></div><div id="avb-empty"></div></body>`,
+    { url: 'http://localhost/__avb/preview', runScripts: 'outside-only', pretendToBeVisual: true },
+  );
+  try {
+    const { window } = dom;
+    const posted = [];
+    window.addEventListener('message', (event) => posted.push(event.data));
+    const reached = [];
+    window.document.querySelector('a').addEventListener('click', () => reached.push('component click'));
+    window.eval(script);
+    const link = window.document.querySelector('a');
+    link.dispatchEvent(new window.MouseEvent('mouseover', { bubbles: true }));
+    link.dispatchEvent(new window.MouseEvent('mousemove', { bubbles: true }));
+    const press = new window.MouseEvent('mousedown', { bubbles: true, cancelable: true });
+    link.dispatchEvent(press);
+    assert.equal(press.defaultPrevented, true, 'a press takes no focus and starts no selection');
+    const click = new window.MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    link.dispatchEvent(click);
+    assert.equal(click.defaultPrevented, true, 'a link does not navigate');
+    assert.deepEqual(reached, [], "the component's own click handler never runs");
+    const submit = new window.Event('submit', { bubbles: true, cancelable: true });
+    window.document.querySelector('form').dispatchEvent(submit);
+    assert.equal(submit.defaultPrevented, true, 'a form does not submit');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const gestures = posted.filter((data) => data.type === 'avb:component-preview-gesture').map((data) => data.gesture);
+    assert.deepEqual(gestures, ['pointer', 'click'], 'the pointer coming in once, then the click; a move inside says nothing new');
+  } finally {
+    dom.window.close();
+  }
+});

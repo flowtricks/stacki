@@ -1,0 +1,348 @@
+/* A conditional value (ConditionalValue.tsx): the purple chip a bound value
+   wears, the read-only summary under it, and the Value conditions editor.
+   Fills, never borders: groups sit on a lighter fill than the pop-up. */
+
+.conditional-badge,
+.conditional-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 5px;
+  background: rgba(146, 116, 255, 0.28);
+  color: #c9bbff;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+/* The chip takes the place of the field it stands for, in the field's own box
+   (controls.css `input`): full width, the same type size, padding, edge and
+   radius, so the row does not move when a value becomes conditional. */
+.conditional-chip {
+  width: 100%;
+  height: auto;
+  justify-content: flex-start;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: normal;
+  cursor: pointer;
+}
+/* Its own hover, a brighter purple of the same family: written through
+   :not(:disabled) so it outweighs the base `button:hover` grey (controls.css). */
+.conditional-chip:hover:not(:disabled),
+.conditional-chip[aria-expanded='true'] {
+  background: rgba(146, 116, 255, 0.38);
+  color: #d7ccff;
+}
+
+.conditional-field {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 0;
+}
+.conditional-summary {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+.conditional-summary:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.conditional-lines,
+.conditional-line {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.conditional-lines {
+  gap: 6px;
+}
+.conditional-heading {
+  color: var(--text);
+}
+.conditional-bullet::before {
+  content: '• ';
+}
+.conditional-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.conditional-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.conditional-empty {
+  color: var(--text-faint);
+  font-style: italic;
+}
+
+/* The editor. */
+.conditional-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  min-width: 300px;
+}
+.conditional-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+}
+.conditional-group:focus-visible {
+  outline: 1px solid var(--accent);
+}
+.conditional-group.is-dragging {
+  opacity: 0.4;
+}
+/* Where a dragged group would land: the shared drop line, in the gap above or below. */
+.conditional-gap {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.conditional-gap.is-before {
+  top: -10px;
+}
+.conditional-gap.is-after {
+  bottom: -10px;
+}
+/* The grip shows on hover, at the group's top-left, and is what a drag starts from. */
+.conditional-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 18px;
+  margin-left: -4px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: grab;
+  opacity: 0;
+}
+.conditional-group:hover .conditional-grip,
+.conditional-group:focus-within .conditional-grip {
+  opacity: 1;
+}
+.conditional-grip:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+/* Between the conditions and the value they give. */
+.conditional-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.conditional-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.conditional-group-head > .loop-settings-remove {
+  margin-left: auto;
+}
+/* As wide as its word, not the row: the trigger is full width by default (dropdown.css). */
+.dd-trigger.conditional-match {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  gap: 4px;
+}
+.conditional-or {
+  align-self: center;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.conditional-condition {
+  /* Prop and operator as wide as their words, the values the rest of the
+     line; in a narrow panel the values wrap under them, and the row's one
+     remove stays at the end. */
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px;
+}
+.conditional-condition > .dd-trigger.conditional-subject,
+.conditional-condition > .dd-trigger.conditional-operator {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 100%;
+}
+.conditional-condition > .multi-select,
+.conditional-condition > .conditional-values-none {
+  flex: 1 1 160px;
+}
+.conditional-condition > .loop-settings-remove {
+  margin-left: auto;
+}
+.conditional-add,
+.conditional-add-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+}
+/* A ghost text button, left under the conditions it adds to. */
+.conditional-add {
+  align-self: flex-start;
+  justify-content: flex-start;
+}
+/* "+ New group" sits on a full-width line, the line running out on both sides. */
+.conditional-add-group-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.conditional-add-group-row::before,
+.conditional-add-group-row::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.conditional-add-group {
+  flex: 0 0 auto;
+}
+.conditional-add:hover:not(:disabled),
+.conditional-add-group:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.conditional-add:disabled,
+.conditional-add-group:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+.conditional-value-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.conditional-value-row > .attr-value-field > input {
+  width: 100%;
+}
+.conditional-value-label {
+  flex: 0 0 auto;
+}
+
+/* A spread attribute (propAttributes.tsx SpreadRow): its code, and nothing to edit. */
+.attr-row.spread {
+  cursor: default;
+}
+.attr-row.spread .attr-name {
+  font-family: var(--mono);
+}
+
+/* Where a prop field's Value conditions editor opens from (PropFieldLabel.tsx):
+   out of the flow, so the field's gaps between its label and control stay as they were. */
+.conditional-anchor {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+/* A spread typed into a new attribute's Name (propAttributes.tsx SpreadNameNote): the code it writes, then what it does. */
+.attr-spread-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+/* "If [all] conditions in this group are true" stays one line beside its picker. */
+.conditional-group-head {
+  white-space: nowrap;
+}
+.conditional-phrase {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A style attribute's branch value: the CSS editor's highlighting in an input's box. */
+.conditional-css-input {
+  width: 100%;
+}
+.conditional-css {
+  white-space: normal;
+}
+
+/* The class-list editor: a row per class, its grip, field and remove on one line. */
+.class-list-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.class-list-entry-head > .conditional-value-row {
+  flex: 1;
+  min-width: 0;
+}
+.conditional-bullet-when {
+  color: var(--text-faint);
+}
+.class-list-line {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* In the attribute editor, the Value label sits on the chip's line, not
+   centred against the chip and the summary under it: the chip is an input's
+   height, so the label takes an input's top padding. */
+.attr-editor-row:has(> .conditional-field) {
+  align-items: flex-start;
+}
+.attr-editor-row:has(> .conditional-field) > span {
+  padding-top: 7px;
+}
+
+/* In a class row the grip always shows, muted, so every row lines up the same. */
+.class-list-entry .conditional-grip {
+  opacity: 0.5;
+}
+.class-list-entry:hover .conditional-grip,
+.class-list-entry:focus-within .conditional-grip {
+  opacity: 1;
+}
+.conditional-group-head > .loop-settings-remove {
+  margin-left: auto;
+}

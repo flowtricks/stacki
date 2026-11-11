@@ -3917,7 +3917,7 @@
 .embed-editor_selector-chip:not(.is-active):not(.is-pending) {
   background: color-mix(in srgb, var(--color-class-tag-bg) 45%, #000);
 }
-.embed-editor_selector-chip:not(.is-active):hover:not(:disabled) {
+.embed-editor_selector-chip:not(.is-active):not(.is-pending):hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-class-tag-bg) 65%, #000);
 }
 .embed-editor_selector-chip.is-active {
@@ -3929,39 +3929,151 @@
 .embed-editor_selector-chip.is-active:hover:not(:disabled) {
   background: var(--color-class-tag-bg);
 }
-.embed-editor_selector-chip.is-component:not(.is-pending) {
-  background: var(--color-component-tag-bg);
-  color: var(--color-component-tag);
-}
-.embed-editor_selector-chip.is-component:not(.is-active):hover:not(:disabled) {
-  background: var(--color-component-tag-bg-hover);
-  color: var(--color-component-tag);
-}
-.embed-editor_selector-chip.is-component.is-active {
-  background: var(--color-component-tag-bg-active);
-  color: #fff;
-}
-.embed-editor_selector-chip.is-component.is-active:hover:not(:disabled) {
-  background: var(--color-component-tag-bg-active);
-}
-/* Global and ancestor-dependent selectors are supporting context, not styles
-   attached directly to the selected element. Neutral grey takes precedence over
-   source provenance (including component green), with distinct hover/active steps. */
-.embed-editor_selector-chip:is(.is-global, .is-inherited):not(.is-pending) {
+/* A plain chip (selectorKind: only tags, `*` and pseudos, such as `img`, `:target`)
+   describes a project-wide group rather than this element, so it is grey, with
+   distinct hover and active steps. A class chip (a class, id or attribute anywhere,
+   nested ones included) keeps the blue above, whether or not it is global or
+   inherited: those filter the well, they do not colour it. Text colour is set in
+   every state, so hovering never changes the colour family. */
+.embed-editor_selector-chip.is-plain:not(.is-pending) {
   background: var(--color-selector-context-bg);
   color: var(--color-text-primary);
 }
-.embed-editor_selector-chip:is(.is-global, .is-inherited):not(.is-active):hover:not(:disabled) {
+.embed-editor_selector-chip.is-plain:not(.is-pending):not(.is-active):hover:not(:disabled) {
   background: var(--color-selector-context-bg-hover);
+  color: var(--color-text-primary);
 }
-.embed-editor_selector-chip:is(.is-global, .is-inherited).is-active {
+.embed-editor_selector-chip.is-plain.is-active:not(.is-pending) {
   background: var(--color-selector-context-bg-active);
   color: #fff;
 }
-.embed-editor_selector-chip:is(.is-global, .is-inherited).is-active:hover:not(:disabled) {
+.embed-editor_selector-chip.is-plain.is-active:not(.is-pending):hover:not(:disabled) {
   background: var(--color-selector-context-bg-active);
+  color: #fff;
 }
-.embed-editor_selector-chip.is-active.is-pending:hover:not(:disabled) {
+/* A chip whose classes and attributes are written in the open component's markup
+   (inComponentMarkup, model/componentMarkup.ts) has a green fill in every state, wherever
+   its CSS lives: at rest and on hover with the white text a blue class chip has,
+   and selected in the stronger green with white text. Each
+   state names its text colour, because a hover rule that set colour where the rest
+   rule did not painted a grey chip's text green on hover only. A pending chip has no
+   rule yet, so no provenance colour applies to it in any state. */
+.embed-editor_selector-chip.is-component:not(.is-pending) {
+  background: var(--color-component-tag-bg);
+  color: #fff;
+}
+.embed-editor_selector-chip.is-component:not(.is-pending):not(.is-active):hover:not(:disabled) {
+  background: var(--color-component-tag-bg-hover);
+  color: #fff;
+}
+.embed-editor_selector-chip.is-component.is-active:not(.is-pending) {
+  background: var(--color-component-tag-bg-active);
+  color: #fff;
+}
+.embed-editor_selector-chip.is-component.is-active:not(.is-pending):hover:not(:disabled) {
+  background: var(--color-component-tag-bg-active);
+  color: #fff;
+}
+/* The property controls' wrapper (StyleCard.tsx): no chrome of its own. Disabled for a
+   style attribute the panel can only show, so it reads as unavailable but stays in view. */
+.embed-editor_controls {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.embed-editor_controls:disabled {
+  opacity: 0.5;
+}
+/* The CSS code section for an inline style written as code (InlineBranchEditor.tsx):
+   the branch picker under the header, a muted line saying where edits go, and each
+   `${prop}` as a purple, atomic token. */
+.embed-editor_inline-branch {
+  margin: 0 var(--space-3) var(--space-2);
+}
+.embed-editor_inline-writes-to {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-size-xs);
+}
+.embed-editor_inline-token {
+  padding: 0 3px;
+  border-radius: var(--radius-xs);
+  background: rgba(168, 85, 247, 0.22);
+  color: #d8b4fe;
+}
+
+/* A chip whose colour is still being read (provenancePending: the selected instance's
+   component file is on its way) is neutral grey in every state, never a blue it may
+   lose to green a moment later. After the component rules, so it outranks them. */
+.embed-editor_selector-chip.is-provenance-pending:not(.is-pending) {
+  background: var(--color-selector-context-bg);
+  color: var(--color-text-secondary);
+}
+.embed-editor_selector-chip.is-provenance-pending:not(.is-pending):not(.is-active):hover:not(:disabled) {
+  background: var(--color-selector-context-bg-hover);
+  color: var(--color-text-secondary);
+}
+.embed-editor_selector-chip.is-provenance-pending.is-active:not(.is-pending),
+.embed-editor_selector-chip.is-provenance-pending.is-active:not(.is-pending):hover:not(:disabled) {
+  background: var(--color-selector-context-bg-active);
+  color: #fff;
+}
+
+/* The "Inline styles" chip (InlineStyleChip.tsx) is amber in every state, with amber
+   text at rest and on hover and white text once picked. Each rule outranks the blue
+   rest, hover and active rules above (same specificity or more, later in the file),
+   and names its text colour, so hovering never changes the family. A chip for an
+   attribute written as code (`is-code`) keeps the family: only its icon differs. */
+.embed-editor_selector-chip.is-inline:not(.is-active) {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--color-inline-tag-bg);
+  color: var(--color-inline-tag);
+}
+.embed-editor_selector-chip.is-inline:not(.is-active):hover:not(:disabled) {
+  background: var(--color-inline-tag-bg-hover);
+  color: var(--color-inline-tag);
+}
+.embed-editor_selector-chip.is-inline.is-active {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--color-inline-tag-bg-active);
+  color: #fff;
+}
+.embed-editor_selector-chip.is-inline.is-active:hover:not(:disabled) {
+  background: var(--color-inline-tag-bg-active);
+  color: #fff;
+}
+.embed-editor_inline-chip-icon {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* The chip's `⋯`: a quiet fill of the same amber, so it reads as the chip's own. */
+.embed-editor_inline-chip-more {
+  min-height: var(--embed-editor_chip-h);
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-inline-tag);
+}
+.embed-editor_inline-chip-more:hover:not(:disabled) {
+  background: var(--color-inline-tag-bg);
+  color: var(--color-inline-tag);
+}
+
+/* A pending chip holds its empty fill on hover too, against the app-wide button
+   hover (styles.css): a fill only on hover would claim a colour it does not have. */
+.embed-editor_selector-chip.is-pending:hover:not(:disabled) {
   background: transparent;
 }
 /* Picked but no rule for it yet (freshly added/typed) — dashed outline, no fill. */

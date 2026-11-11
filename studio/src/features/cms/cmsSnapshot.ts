@@ -8,6 +8,7 @@ import { sourcePath, string } from '../../shared/validation';
 import { stopServiceAndWait } from '../../../vendor/stacki/electron/content/contentConfig';
 import { createHash } from 'node:crypto';
 import { SerialQueue } from '../../shared/serialQueue';
+import { PROJECT_FOLDERS_FILE } from '../../../vendor/stacki/shared/properties/projectFolders';
 
 export const CMS_SOURCE = /\.(astro|json|md|mdx|mdoc|markdown|css|[cm]?[jt]sx?|yaml|yml|toml|csv|ndjson)$/i;
 export async function cmsSources(root: string, rooms?: ReturnType<typeof createRooms>) {
@@ -84,7 +85,8 @@ function cmsSignature(snapshot: Awaited<ReturnType<typeof cmsSources>>) {
 
 async function cmsConfiguration(root: string) {
   const entries: (readonly [string, string])[] = [];
-  for (const file of ['package.json', 'tsconfig.json', 'jsconfig.json']) {
+  // The folder settings choose the CMS panel's data files (cms:list reads `cms.files`), so the stage carries them.
+  for (const file of ['package.json', 'tsconfig.json', 'jsconfig.json', PROJECT_FOLDERS_FILE]) {
     try {
       entries.push([file, string(await readFile(path.join(root, file), 'utf8'))]);
     } catch (error: unknown) {
@@ -108,6 +110,7 @@ export async function withCmsSnapshot<T>(root: string, snapshot: Awaited<ReturnT
 async function stageSources(root: string, stage: string, snapshot: Awaited<ReturnType<typeof cmsSources>>) {
   await symlink(path.join(root, 'node_modules'), path.join(stage, 'node_modules'), 'dir');
   for (const [file, source] of snapshot.configuration) {
+    await mkdir(path.dirname(path.join(stage, file)), { recursive: true });
     await writeFile(path.join(stage, file), source);
   }
   // Asset placeholders allow import resolution without copying binary uploads.

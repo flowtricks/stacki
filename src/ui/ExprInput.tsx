@@ -165,6 +165,11 @@ export interface ExprInputProps {
   readonly completions?: readonly Completion[];
   /** What the text is written in: an expression by default, a TypeScript type, or a line of markup. */
   readonly language?: 'html' | 'javascript' | 'typescript';
+  /**
+   * A language of the caller's own in place of `language`, for text this
+   * module does not know: a style attribute's declarations (StyleEditor.tsx).
+   */
+  readonly syntax?: Extension | undefined;
   /** The field's accessible name, for a field no <label> wraps. */
   readonly ariaLabel?: string;
 }
@@ -240,7 +245,7 @@ function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs
         // A one-line field is shaped like an input, so Tab leaves it as Tab leaves one.
         initial.multiline ? codeIndentExtensions() : codeIndentSettings(),
         keymap.of(exprKeys(initial, refs)),
-        initial.language === 'html' ? html() : javascript({ typescript: initial.language === 'typescript' }),
+        initial.syntax ?? (initial.language === 'html' ? html() : javascript({ typescript: initial.language === 'typescript' })),
         ...(initial.ariaLabel === undefined ? [] : [EditorView.contentAttributes.of({ 'aria-label': initial.ariaLabel })]),
         // Scope is read at request time: frontmatter can change while this editor stays mounted.
         autocompletion({
@@ -319,6 +324,17 @@ function exprCompletions(context: CompletionContext, props: ExprInputProps) {
   return { from: before.from + prefix.length, options, validFor: /^[\w$]*$/ };
 }
 
+// The document position of a chip's element, or undefined when it is not in the document.
+function chipPosition(view: EditorView, chip: Element): number | undefined {
+  try {
+    return view.posAtDOM(chip);
+  } catch (error: unknown) {
+    // posAtDOM throws for a node outside the editor's content: the pointer decides then.
+    void error;
+    return undefined;
+  }
+}
+
 function exprEvents(refs: ExprRefs): Extension {
   const touchedRef = refs.touched;
   return EditorView.domEventHandlers({
@@ -327,14 +343,17 @@ function exprEvents(refs: ExprRefs): Extension {
       if (!ElementType || !(event.target instanceof ElementType)) {
         return false;
       }
-      if (!event.target.closest('.cm-chip, .expr-chip')) {
+      const chip = event.target.closest('.cm-chip, .expr-chip');
+      if (!chip) {
         return false;
       }
       event.preventDefault();
-      const position = view.posAtCoords({ x: event.clientX, y: event.clientY });
+      // Where the chip sits in the document, read from the chip itself, so the
+      // press finds it whatever the layout; the pointer's place is the fallback.
+      const position = chipPosition(view, chip) ?? view.posAtCoords({ x: event.clientX, y: event.clientY }) ?? undefined;
       const ranges = view.state.field(chipsOfField)?.(view.state.doc.toString()) || [];
       assert(ranges.length <= LIMITS.treeNodesMax, 'ExprInput: chip limit exceeded');
-      const hit = position === null ? undefined : ranges.find((range) => position >= range.from && position <= range.to);
+      const hit = position === undefined ? undefined : ranges.find((range) => position >= range.from && position <= range.to);
       refs.latest.current.onChipClick?.(hit || undefined);
       return true;
     },

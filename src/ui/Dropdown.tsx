@@ -1,6 +1,6 @@
 import Popup from './Popup';
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { KeyboardEvent, MutableRefObject, ReactNode, RefObject } from 'react';
+import type { CSSProperties, KeyboardEvent, MutableRefObject, ReactNode, RefObject } from 'react';
 import { endDragNotes, hoverNote } from './sound';
 import { useSoundHere } from './soundScope';
 import { ChevronDownIcon, CheckIcon } from './Icons';
@@ -75,6 +75,13 @@ export interface DropdownProps<T = string> {
   readonly onPreview?: (value: T) => void;
   readonly onCancelPreview?: () => void;
   readonly onCommitPreview?: () => void;
+  /**
+   * The row the person is on while the menu is open, by pointer or arrow keys, for a
+   * preview outside the field (an app's canvas highlight). It is heard once per change:
+   * `undefined` when the pointer leaves the rows, the row is disabled, or the menu
+   * closes. It never changes the value, and opening the menu announces nothing.
+   */
+  readonly onHighlight?: (value: T | undefined) => void;
   readonly searchable?: boolean;
   readonly searchPlaceholder?: string;
 }
@@ -199,6 +206,7 @@ function useDropdownSelection<T>(props: DropdownProps<T>): Selection<T> {
 function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Actions<T> {
   const { setOpen, setHighlight, committed, previewed, visible } = state;
   const { value, options, onChange, onPreview, onPrepare, onCancelPreview } = props;
+  const announceHighlight = useHighlightAnnouncer(props.onHighlight, { open: state.open });
   // No handler, no preview: a stray hover must never change a form's value.
   const livePreview = props.livePreview ?? onPreview !== undefined;
   const hoverFrame = useRef<number | undefined>(undefined);
@@ -258,6 +266,7 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
       cancelHover();
       setHighlight(index);
       const option = visible[index];
+      announceHighlight(option);
       if (option) {
         previewOption(option);
       }
@@ -266,11 +275,13 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
       cancelHover();
       setHighlight(index);
       const option = visible[index];
+      announceHighlight(option);
       if (option && livePreview) {
         hoverFrame.current = window.requestAnimationFrame(() => previewOption(option));
       }
     },
     leave: () => {
+      announceHighlight(undefined);
       // Only a canvas preview (onCancelPreview) is dropped on the way out. A dropdown
       // that previews by writing keeps its row until it closes, as it always has.
       if (onCancelPreview === undefined) {
@@ -290,6 +301,35 @@ function useDropdownActions<T>(props: DropdownProps<T>, state: Selection<T>): Ac
       commitDropdownOption(props, state, option);
     },
   };
+}
+
+/**
+ * Tells `onHighlight` about the row the person moved to, only when it changed, and
+ * `undefined` when the menu closes or the dropdown goes while open. Nothing told yet
+ * reads as `undefined`, so a close before any highlight tells nothing.
+ */
+function useHighlightAnnouncer<T>(
+  onHighlight: ((value: T | undefined) => void) | undefined,
+  { open }: { readonly open: boolean },
+): (option: DropdownOption<T> | undefined) => void {
+  const told = useRef<T | undefined>(undefined);
+  const listener = useRef(onHighlight);
+  listener.current = onHighlight;
+  const announce = useCallback((option: DropdownOption<T> | undefined): void => {
+    const value = option === undefined || option.disabled === true ? undefined : option.value;
+    if (Object.is(told.current, value)) {
+      return; // Once per change: the pointer moving within one row tells nothing new.
+    }
+    told.current = value;
+    listener.current?.(value);
+  }, []);
+  useEffect(() => {
+    if (!open) {
+      announce(undefined);
+    }
+  }, [open, announce]);
+  useEffect(() => () => announce(undefined), [announce]);
+  return announce;
 }
 
 function initializeDropdown<T>(state: Selection<T>, value: T): void {
@@ -459,6 +499,14 @@ interface PopupProps<T> {
   readonly position: PopupPosition;
   readonly onKey: (event: KeyboardEvent<HTMLElement>) => void;
 }
+// The menu is never narrower than its trigger (or its stated least width), and
+// grows to its longest option so none is clipped, up to the window's edge.
+function menuStyle(position: PopupPosition): CSSProperties {
+  const room = Math.max(position.width, window.innerWidth - position.left - POPUP_EDGE);
+  assert(room >= position.width, 'menuStyle: the menu has at least its least width');
+  return { ...position, width: 'max-content', minWidth: position.width, maxWidth: room };
+}
+
 function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
   return (
     <Popup
@@ -468,7 +516,7 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
       onClose={control.close}
       ref={control.popupRef}
       className={`dd-popup ${props.searchable ? 'dd-searchable' : ''} ${props.optionLayout === 'stacked' ? 'dd-stacked' : ''} ${props.menuClassName || ''}`}
-      style={position}
+      style={menuStyle(position)}
     >
       {props.searchable && (
         <input

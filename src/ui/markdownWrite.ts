@@ -10,7 +10,16 @@
 // equal however the editor treated its neighbours. The longest common subsequence
 // pairs them, so a block moved, inserted or removed leaves the others matched.
 import { assert } from '../../shared/core/assert';
-import { KEPT_CLASS, printDocument, type MarkdownDocument, type MarkdownItem, type MarkdownStyle } from './markdownBlocks';
+import {
+  KEPT_CLASS,
+  TASK_CLASS,
+  TASK_DONE_CLASS,
+  printDocument,
+  tableShape,
+  type MarkdownDocument,
+  type MarkdownItem,
+  type MarkdownStyle,
+} from './markdownBlocks';
 
 export const MARKDOWN_WRITE_LIMITS = {
   /** The most block pairs the matcher compares; past it, only the unchanged ends match. */
@@ -29,25 +38,38 @@ export function markdownFromHTML(html: string, base: MarkdownDocument, document:
     originals,
     units.map((unit) => unit.key),
   );
-  const writer: Writer = { style: base.style, items: reusableItems(base, document) };
+  const writer: Writer = { style: base.style, items: reusableItems(base, document), delimiters: tableDelimiters(base) };
+  // A Windows file keeps its line endings in the blocks an edit rewrites too.
+  const eol = printDocument(base).includes('\r\n') ? '\r\n' : '\n';
+  const matchedOriginals = new Set(matches.values());
   let markdown = base.lead;
   let previous: number | undefined;
   let written = 0;
   for (const [at, unit] of units.entries()) {
-    const original = matches.get(at);
+    const matched = matches.get(at);
+    // An edited block in the place of an original one that matched nothing replaces it, and keeps its gap.
+    const next = previous === undefined ? 0 : previous + 1;
+    const replacing = matched === undefined && next < base.blocks.length && !matchedOriginals.has(next) ? next : undefined;
+    const original = matched ?? replacing;
     const placed = original === undefined ? undefined : base.blocks[original];
-    const text = placed === undefined ? writeUnit(unit, writer, 0) : placed.block.source;
+    const text = matched === undefined ? writeUnit(unit, writer, 0).replace(/\r?\n/g, eol) : (placed?.block.source ?? '');
     if (text === '') {
       continue;
     }
     // Two blocks that stood together keep the lines between them; anything else is one blank line.
-    const together = placed !== undefined && original !== undefined && previous !== undefined && original === previous + 1;
-    const gap = written === 0 ? '' : together ? placed.gap : '\n\n';
+    const together = placed !== undefined && original !== undefined && (previous === undefined ? original === 0 : original === previous + 1);
+    // A kept block ends on its own `\r`; the line break after it is only the `\n`.
+    const ending = markdown.endsWith('\r');
+    const gap =
+      written === 0 ? '' : together ? (eol === '\r\n' && placed.gap.startsWith('\n') && !ending ? '\r' : '') + placed.gap : (ending ? '\n' : eol) + eol;
     markdown += gap + text;
     previous = original;
     written += 1;
   }
-  const result = markdown + (base.blocks.length > 0 ? base.trail : written > 0 ? '\n' : '');
+  assert(matchedOriginals.size === matches.size, 'Each original block matches at most one unit');
+  // A rewritten last block of a Windows file ends its line as the block it replaced did.
+  const carriage = eol === '\r\n' && base.trail.startsWith('\n') && written > 0 && !markdown.endsWith('\r') ? '\r' : '';
+  const result = markdown + (base.blocks.length > 0 ? carriage + base.trail : written > 0 ? eol : '');
   assert(written > 0 || result.trim() === '', 'A body with no blocks writes no text');
   if (matches.size === base.blocks.length && matches.size === units.length) {
     assert(result === printDocument(base), 'An unchanged body writes back byte for byte');
@@ -165,8 +187,28 @@ function longestCommon(originals: readonly string[], edited: readonly string[]):
 
 interface Writer {
   readonly style: MarkdownStyle;
-  /** A top-level list item's HTML → its own lines, reused where the item is unchanged. */
+  /** A top-level list item's or table row's HTML → its own lines, reused where it is unchanged. */
   readonly items: ReadonlyMap<string, MarkdownItem>;
+  /** A table's column alignments (`tableKey`) → the delimiter row the document wrote for them. */
+  readonly delimiters: ReadonlyMap<string, string>;
+}
+
+function tableDelimiters(base: MarkdownDocument): ReadonlyMap<string, string> {
+  const delimiters = new Map<string, string>();
+  for (const placed of base.blocks) {
+    const delimiter = placed.block.kind === 'table' ? placed.block.items[1] : undefined;
+    if (delimiter !== undefined) {
+      const key = tableKey(tableShape(delimiter.source));
+      if (!delimiters.has(key)) {
+        delimiters.set(key, delimiter.source.replace(/\r$/, ''));
+      }
+    }
+  }
+  return delimiters;
+}
+
+function tableKey(aligns: readonly (string | undefined)[]): string {
+  return aligns.map((align) => align ?? '-').join(',');
 }
 
 function reusableItems(base: MarkdownDocument, document: Document): ReadonlyMap<string, MarkdownItem> {
@@ -217,6 +259,8 @@ function blockMarkdown(element: Element, writer: Writer, depth: number): string 
       return listMarkdown(element, writer, depth);
     case 'hr':
       return writer.style.rule;
+    case 'table':
+      return tableMarkdown(element, writer);
     default:
       // A paragraph, or a `div` the editor made: holding blocks, it is written as them.
       if (children.some((child) => isElement(child) && BLOCK_TAGS.has(child.localName))) {
@@ -305,7 +349,7 @@ function listMarkdown(list: Element, writer: Writer, depth: number): string {
   const loose = items.some((item) => [...item.children].some((child) => child.localName === 'p'));
   const written = items.map((item, at) => {
     const marker = ordered ? `${first + at}${style.delimiter} ` : `${style.bullet} `;
-    const reused = depth === 0 ? reusedItem(item.outerHTML, marker, writer) : undefined;
+    const reused = depth === 0 ? (reusedItem(item.outerHTML, marker, writer) ?? toggledItem(item, marker, writer)) : undefined;
     return reused ?? itemMarkdown(item, marker, writer, depth);
   });
   assert(written.length === items.length, 'Every item is written');
@@ -322,7 +366,40 @@ function reusedItem(html: string, marker: string, writer: Writer): string | unde
   return written.startsWith(marker.trimEnd()) && item.source.length - written.length === 0 ? item.source : undefined;
 }
 
+// A task item whose only change is its tick keeps its lines, with the box flipped.
+function toggledItem(item: Element, marker: string, writer: Writer): string | undefined {
+  if (!item.classList.contains(TASK_CLASS)) {
+    return undefined;
+  }
+  const flipped = item.cloneNode(true);
+  assert(isElement(flipped), 'A cloned item is an element');
+  flipped.classList.toggle(TASK_DONE_CLASS);
+  const original = reusedItem(flipped.outerHTML, marker, writer);
+  if (original === undefined) {
+    return undefined;
+  }
+  const done = item.classList.contains(TASK_DONE_CLASS);
+  const toggled = original.replace(/^(\s*(?:[-+*]|\d{1,9}[.)])[ \t]+)\[[ xX]\]/, `$1[${done ? 'x' : ' '}]`);
+  assert(toggled.length === original.length, 'Flipping a box keeps the item its length');
+  return toggled;
+}
+
 function itemMarkdown(item: Element, marker: string, writer: Writer, depth: number): string {
+  if (item.classList.contains(TASK_CLASS)) {
+    // The box follows the marker; the item's content lines up under the marker as before.
+    const box = item.classList.contains(TASK_DONE_CLASS) ? '[x] ' : '[ ] ';
+    const plain = item.cloneNode(true);
+    assert(isElement(plain), 'A cloned item is an element');
+    plain.removeAttribute('class');
+    const written = plainItemMarkdown(plain, marker, writer, depth);
+    return written.length > marker.trimEnd().length ? marker + box + written.slice(marker.length) : `${marker}${box.trimEnd()}`;
+  }
+  return plainItemMarkdown(item, marker, writer, depth);
+}
+
+// An item without a task box: its blocks under its marker. Nesting is bounded by the writer's depth.
+function plainItemMarkdown(item: Element, marker: string, writer: Writer, depth: number): string {
+  assert(depth <= MARKDOWN_WRITE_LIMITS.depthMax + 1, 'An item is written inside the depth bound');
   const indent = ' '.repeat(marker.length);
   const children = item.localName === 'li' ? [...item.childNodes] : [item];
   const loose = [...item.children].some((child) => child.localName === 'p');
@@ -337,6 +414,44 @@ function itemMarkdown(item: Element, marker: string, writer: Writer, depth: numb
     .split('\n')
     .map((line, at) => (at === 0 ? marker + line : line === '' ? '' : indent + line))
     .join('\n');
+}
+
+// An edited table: rows still shown as they were keep their bytes, and so does
+// the delimiter row while the columns keep their alignment; the rest is printed
+// as `| a | b |` rows. Pipes in a cell are escaped, line breaks become spaces.
+function tableMarkdown(table: Element, writer: Writer): string {
+  const rows = [...table.querySelectorAll('tr')].filter((row) => row.closest('table') === table);
+  const header = rows[0];
+  if (header === undefined) {
+    return '';
+  }
+  const aligns = [...header.children].map((cell) => /(?:^|\s)align-(left|center|right)(?:\s|$)/.exec(cell.getAttribute('class') ?? '')?.[1]);
+  const columns = aligns.length;
+  assert(columns > 0, 'A table row has a cell');
+  const line = (row: Element): string => {
+    const reused = writer.items.get(row.outerHTML);
+    if (reused !== undefined && !reused.source.includes('\n')) {
+      return reused.source.replace(/\r$/, '');
+    }
+    const cells = [...row.children].slice(0, columns).map((cell) => cellMarkdown(cell, writer.style));
+    while (cells.length < columns) {
+      cells.push('');
+    }
+    return `| ${cells.join(' | ')} |`;
+  };
+  const delimiter =
+    writer.delimiters.get(tableKey(aligns)) ??
+    `| ${aligns.map((align) => (align === 'center' ? ':---:' : align === 'right' ? '---:' : align === 'left' ? ':---' : '---')).join(' | ')} |`;
+  const lines = [line(header), delimiter, ...rows.slice(1).map(line)];
+  assert(lines.length === rows.length + 1, 'Every row and the delimiter are written');
+  return lines.join('\n');
+}
+
+function cellMarkdown(cell: Element, style: MarkdownStyle): string {
+  return inlineMarkdown([...cell.childNodes], style, 0)
+    .replace(/\\\n|\n/g, ' ')
+    .replace(/(?<!\\)\|/g, '\\|')
+    .trim();
 }
 
 // ---------------------------------------------------------------------------

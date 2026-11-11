@@ -5,7 +5,8 @@ import type { PropertyOrigins } from './propertyOrigins';
 import type { ModelSchemaField } from '../../shared/properties/propModelSchema';
 import { schemaFieldsOf } from '../../shared/properties/propModelSchema';
 import { readPropModel } from '../parse/propModel/readPropModel';
-import { createPropertyTypeReader } from './propertyTypes';
+import { createPropertyTypeReader, optionAliasOf, optionAliasWarning } from './propertyTypes';
+import { literalOptions } from '../../shared/properties/propertyOptions';
 import { bindComponentDefault, renamePropertyLocal } from './propertyRename';
 import type { PropertyRename } from './propertyRename';
 import ts from 'typescript';
@@ -136,13 +137,23 @@ function sourcedProperty(property: ComponentProperty, definitions: Definitions, 
       : {}),
     type: definitions.advanced && types.length ? [...new Set(types)].join(' | ') : property.type,
     origin: origins.origin(property.name, binding),
-    editing: definitions.advanced
-      ? contractEditing(definitions, contracts, property.name)
-      : {
-          kind: 'editable',
-        },
+    editing: withAliasWarning(
+      definitions.advanced ? contractEditing(definitions, contracts, property.name) : { kind: 'editable' },
+      member ?? definitions.members.find((item) => propertyKey(item.name) === property.name),
+      definitions.document.syntax,
+    ),
     conditions: contracts.conditions(property.name),
   };
+}
+
+// An editable prop whose options live in an alias other declarations share says so.
+function withAliasWarning(editing: PropertyEditing, member: ts.PropertySignature | undefined, syntax: ts.SourceFile): PropertyEditing {
+  if (editing.kind !== 'editable' || member === undefined) {
+    return editing;
+  }
+  const alias = optionAliasOf(syntax, member);
+  const warning = alias === undefined ? undefined : optionAliasWarning(alias);
+  return warning === undefined ? editing : { kind: 'editable', warning };
 }
 
 function contractEditing(definitions: Definitions, contracts: PropertyContracts, name: string): PropertyEditing {
@@ -391,7 +402,10 @@ function declarationEdits(
   const member = definitions.members.find((item) => propertyKey(item.name) === originalName);
   if (member) {
     assert(previous !== undefined, 'A declared member was read before its save');
-    return ok(memberEdits(definitions.document.frontmatter, member, previous, property));
+    // Options kept in a same-file alias are written there, so the alias stays the one place they live.
+    const alias = optionAliasOf(definitions.document.syntax, member);
+    const target = alias !== undefined && literalOptions(property.type) !== undefined ? alias.declaration.type : member.type;
+    return ok(memberEdits(definitions.document.frontmatter, member, previous, property, target));
   }
   if (previous !== undefined && sameDeclaration(previous, property)) {
     return ok([]);

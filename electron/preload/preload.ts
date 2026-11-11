@@ -17,7 +17,11 @@ import { exposeBridge } from './preloadBridge';
 import { listenForDesign, markFrameMode } from './frameDesign';
 import { listenForQueries, startWhenReady } from './frameQueries';
 
-if (!process.isMainFrame) {
+// A Stacki app's frame (stacki-app:) is the app's own sandboxed document: it
+// gets neither half. It talks to Stacki only through postMessage and the RPC.
+if (location.protocol === 'stacki-app:') {
+  // Nothing to install.
+} else if (!process.isMainFrame) {
   const post = (message: unknown) => window.parent.postMessage(message, '*');
   // Opening text selects what holds it. Prop text is already selected by the
   // two clicks before the double click: its element lives in the component's

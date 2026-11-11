@@ -1,5 +1,7 @@
 import type { Attr } from '../../shared/page/pageNode';
 import { TYPE_OPERATORS } from './dataScope';
+import { assert } from '../../shared/core/assert';
+import type { ImportNeed } from './dataSample';
 // Whether a node renders data rather than fixed markup — an expression prop
 // (`href={service.link}`), an `{expr}` child, or text with an interpolation
 // in it. Only the node's own props and its direct children count: a section
@@ -350,28 +352,52 @@ export function valueFromParts(
   return { type: 'expr', value: `\`${body}\`` };
 }
 
-interface PickQuery {
-  readonly collection: string;
-  readonly name: string;
-}
+/**
+ * What a pick needs written before its path means anything: the query that
+ * reads a project collection, or the import of a data file's export. `name`
+ * is the name the path starts with, as the picker offered it.
+ */
+export type PickNeed =
+  | { readonly kind: 'collection'; readonly collection: string; readonly name: string }
+  | { readonly kind: 'import'; readonly import: ImportNeed; readonly name: string };
 
 interface BindContext {
   readonly ensureQuery?: (collection: string) => string | undefined;
+  readonly ensureImport?: (need: ImportNeed) => string | undefined;
 }
 
 /**
- * A pick can name data the page doesn't fetch yet. `query` says what has to be
- * written before the path means anything; the app answers with the name the
- * query ended up under — which may be one that was already there, since a page
- * asking for the same collection twice is the same query twice.
+ * A pick can name data the file doesn't read yet. `need` says what has to be
+ * written before the path means anything; the app writes it and answers with
+ * the name it ended up under — which may be one that was already there, since
+ * a page asking for the same collection twice is the same query twice, and an
+ * import of a name the file already uses is read under an alias.
  */
-export function resolvePick(path: string, query: PickQuery | undefined, bindContext: BindContext | undefined): string {
-  if (!query || !bindContext?.ensureQuery) {
+export function resolvePick(path: string, need: PickNeed | undefined, bindContext: BindContext | undefined): string {
+  if (need === undefined) {
     return path;
   }
-  const actual = bindContext.ensureQuery(query.collection);
-  if (!actual || actual === query.name) {
+  assert(
+    path === need.name || path.startsWith(need.name + '.') || path.startsWith(need.name + '['),
+    'resolvePick: the path starts with the name its need reads',
+  );
+  const actual = actualName(need, bindContext);
+  if (actual === undefined || actual === need.name) {
     return path;
   }
-  return actual + String(path).slice(query.name.length);
+  return actual + path.slice(need.name.length);
+}
+
+// What the host wrote, by the name the path now starts with; undefined when it cannot write.
+function actualName(need: PickNeed, bindContext: BindContext | undefined): string | undefined {
+  switch (need.kind) {
+    case 'collection':
+      return bindContext?.ensureQuery?.(need.collection);
+    case 'import':
+      return bindContext?.ensureImport?.(need.import);
+    default: {
+      const exhaustive: never = need;
+      return exhaustive;
+    }
+  }
 }

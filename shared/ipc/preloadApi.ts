@@ -5,8 +5,17 @@ import type { IpcPayloads } from './ipcPayloads';
 interface InvokeChannels {
   readonly createDefaultsCanvas: 'project:createDefaultsCanvas';
   readonly removeDefaultsCanvas: 'project:removeDefaultsCanvas';
+  readonly listInstructions: 'instructions:list';
+  readonly readInstruction: 'instructions:read';
+  readonly writeInstruction: 'instructions:write';
+  readonly createInstruction: 'instructions:create';
+  readonly createInstructionFolder: 'instructions:createFolder';
+  readonly revealInstruction: 'instructions:reveal';
   readonly projectMetadata: 'project:metadata';
   readonly writeProjectMetadata: 'project:writeMetadata';
+  readonly pickProjectFolder: 'project:pickFolder';
+  readonly rolesIdentity: 'roles:identity';
+  readonly githubSearchUsers: 'github:searchUsers';
   readonly studioStatus: 'studio:status';
   readonly installStudio: 'studio:install';
   readonly openProjectDialog: 'project:openDialog';
@@ -92,6 +101,8 @@ interface InvokeChannels {
   readonly injectedRoutes: 'project:injectedRoutes';
   readonly sampleEntry: 'content:sampleEntry';
   readonly sampleValue: 'content:sampleValue';
+  readonly renderAuditPage: 'audit:render';
+  readonly measureAuditPage: 'audit:measure';
   readonly startDevServer: 'dev:start';
   readonly stopDevServer: 'dev:stop';
   readonly diagnoseDev: 'dev:diagnose';
@@ -112,6 +123,7 @@ interface InvokeChannels {
   readonly checkPreview: 'preview:check';
   readonly gitLog: 'git:log';
   readonly gitCommitDiff: 'git:commitDiff';
+  readonly gitAvatars: 'git:avatars';
   readonly gitAllFiles: 'git:allFiles';
   readonly gitStatus: 'git:status';
   readonly gitWorktrees: 'git:worktrees';
@@ -154,6 +166,47 @@ interface InvokeChannels {
   readonly createRemoteDocument: 'cmsRemote:create';
   readonly deleteRemoteDocuments: 'cmsRemote:delete';
   readonly moveRemoteDocument: 'cmsRemote:move';
+  readonly listApps: 'apps:list';
+  readonly pickAppFile: 'apps:pickFile';
+  readonly stageGitHubApp: 'apps:stageGitHub';
+  readonly appRepositories: 'apps:githubRepositories';
+  readonly appReleases: 'apps:githubReleases';
+  readonly commitApp: 'apps:commit';
+  readonly discardApp: 'apps:discard';
+  readonly uninstallApp: 'apps:uninstall';
+  readonly checkAppUpdates: 'apps:checkUpdates';
+  readonly applyAppUpdate: 'apps:applyUpdate';
+  readonly appFolders: 'apps:folders';
+  readonly revealAppFolder: 'apps:revealFolder';
+  readonly appMarketplace: 'apps:marketplace';
+  readonly installMarketplaceApp: 'apps:installMarketplace';
+  readonly setAppAutoUpdate: 'apps:setAutoUpdate';
+  readonly appRepositoryVisibility: 'apps:repositoryVisibility';
+  readonly scanAppSecrets: 'apps:scanSecrets';
+  readonly appRepositoryStatus: 'apps:repositoryStatus';
+  readonly makeAppRepositoryPublic: 'apps:makePublic';
+  readonly addAppLicense: 'apps:addLicense';
+  readonly shareApp: 'apps:share';
+  readonly switchAppSource: 'apps:switchSource';
+  readonly checkMarketplaceApp: 'apps:checkMarketplace';
+  readonly submitMarketplaceApp: 'apps:submitMarketplace';
+  readonly readAppSettings: 'apps:readSettings';
+  readonly writeAppSettings: 'apps:writeSettings';
+  readonly appFileStamps: 'apps:fileStamps';
+  readonly appStorageGet: 'apps:storageGet';
+  readonly appStorageSet: 'apps:storageSet';
+  readonly appStorageKeys: 'apps:storageKeys';
+  readonly watchAppStorage: 'apps:storageWatch';
+  readonly appPerson: 'apps:person';
+  readonly appPeople: 'apps:people';
+  readonly appHostVersion: 'apps:hostVersion';
+  readonly appCanvasSnapshot: 'apps:canvasSnapshot';
+  readonly appFiles: 'apps:files';
+  readonly connectAppAuth: 'apps:authConnect';
+  readonly appAuthStatus: 'apps:authStatus';
+  readonly appAuthToken: 'apps:authToken';
+  readonly disconnectAppAuth: 'apps:authDisconnect';
+  readonly appNetFetch: 'apps:netFetch';
   readonly mediaConnections: 'mediaHosting:connections';
   readonly saveMediaConnection: 'mediaHosting:save';
   readonly removeMediaConnection: 'mediaHosting:remove';
@@ -172,6 +225,20 @@ interface InvokeChannels {
   readonly openExternal: 'shell:openExternal';
   readonly pendingProject: 'project:pending';
   readonly closeProject: 'project:close';
+  readonly aiAgents: 'ai:agents';
+  readonly aiInstallAgent: 'ai:installAgent';
+  readonly aiTrust: 'ai:trust';
+  readonly aiChats: 'ai:chats';
+  readonly aiChatCreate: 'ai:chatCreate';
+  readonly aiChatUpdate: 'ai:chatUpdate';
+  readonly aiChatDelete: 'ai:chatDelete';
+  readonly aiChatRead: 'ai:chatRead';
+  readonly aiPrompt: 'ai:prompt';
+  readonly aiCancel: 'ai:cancel';
+  readonly aiPermission: 'ai:permission';
+  readonly aiSetOption: 'ai:setOption';
+  readonly aiReview: 'ai:review';
+  readonly aiSetup: 'ai:setup';
   readonly startTerminal: 'terminal:start';
   readonly resizeTerminal: 'terminal:resize';
   readonly closeTerminal: 'terminal:close';
@@ -196,8 +263,18 @@ export type PreloadBridge = InvokeSurface & {
   readonly getFilePath: (file: File) => string | undefined;
   readonly terminalInput: (id: string, data: string) => void;
   readonly terminalAck: (id: string, count: number) => void;
+  /** The AI panel applied this many pushed event characters (shared/ipc/aiChat.ts AiAck). */
+  readonly aiAck: (chars: number) => void;
+  /** Batched transcript events (shared/ipc/aiChat.ts AiEventsPush). */
+  readonly onAiEvents: (callback: (data: unknown) => void) => () => void;
+  /** An agent's availability changed (shared/ipc/aiChat.ts AiStatusPush). */
+  readonly onAiAgentStatus: (callback: (data: unknown) => void) => () => void;
+  /** A guided setup step moved on (shared/ipc/aiChat.ts SetupState). */
+  readonly onAiSetup: (callback: (data: unknown) => void) => () => void;
   readonly terminalClipboardImage: (bytes: Uint8Array, mime: string) => Promise<unknown>;
   readonly onAssetsChanged: (callback: () => void) => () => void;
+  /** `.stacki/apps/` changed: the folders whose files moved (shared/properties/appFolders.ts AppFoldersChange). */
+  readonly onAppFoldersChanged: (callback: (data: unknown) => void) => () => void;
   readonly onCssChanged: (callback: () => void) => () => void;
   readonly onCmsChanged: (callback: () => void) => () => void;
   readonly onPageMaybeChanged: (callback: (data: unknown) => void) => () => void;
@@ -209,7 +286,13 @@ export type PreloadBridge = InvokeSurface & {
   readonly onDevExit: (callback: (data: unknown) => void) => () => void;
   readonly onProgress: (callback: (data: unknown) => void) => () => void;
   readonly onStudioProgress: (callback: (data: unknown) => void) => () => void;
+  readonly onAppShareProgress: (callback: (data: unknown) => void) => () => void;
+  readonly onAppStorageChanged: (callback: (data: unknown) => void) => () => void;
+  readonly onAppPersonChanged: (callback: () => void) => () => void;
+  readonly onAppAuthChanged: (callback: (data: unknown) => void) => () => void;
   readonly onCreateLog: (callback: (data: unknown) => void) => () => void;
   readonly onFsChanged: (callback: (data: unknown) => void) => () => void;
+  /** A Markdown file the Instructions panel lists changed outside the app, or the hidden paths did: `{ files }`, project-relative. */
+  readonly onInstructionsChanged: (callback: (data: unknown) => void) => () => void;
   readonly onMenu: (channel: string, callback: (data?: unknown) => void) => () => void;
 };

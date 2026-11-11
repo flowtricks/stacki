@@ -4,12 +4,12 @@
 import { MAIN_LIMITS, readSource } from '../lib/mainLimits';
 import { writeProjectText } from '../documents/documentWrites';
 import { isPathWithin, sameFilesystemPath } from '../lib/platform';
-import type { AssetEntry } from '../lib/mainTypes';
+import { toPosix } from '../lib/mainHelpers';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { MainHost } from './mainHost';
 import { replacementRefusal } from '../../shared/properties/mediaHosting';
-import { MEDIA_EXT, publicDirectoryOf, rootOfRel, assetAbs, uniqueTarget, imageSizeOf, listAssetTree } from '../project/assetFiles';
+import { rootOfRel, assetAbs, assetWriteRefusal, uniqueTarget, imageSizeOf, listAssetEntries } from '../project/assetFiles';
 
 export function registerAssetHandlers(host: Pick<MainHost, 'assertInProject' | 'ipcMain' | 'noteAppWrite' | 'send' | 'shell' | 'showOpenDialog'>): void {
   registerAssetsListHandlers(host);
@@ -24,27 +24,9 @@ function registerAssetsListHandlers({
   send,
 }: Pick<MainHost, 'ipcMain' | 'showOpenDialog' | 'noteAppWrite' | 'send'>): void {
   ipcMain.handle('assets:list', async (_event, projectPath) => {
-    const entries: AssetEntry[] = [];
-    // The roots themselves are entries, so the panel navigates and drops into
-    // them with the folder handling it already has.
-    const publicDirectory = publicDirectoryOf(projectPath);
-    const sourceDirectory = path.join(projectPath, 'src');
-    const hasPublic = fs.existsSync(publicDirectory);
-    if (hasPublic) {
-      entries.push({
-        rel: 'public',
-        name: 'public',
-        parent: '',
-        isDir: true,
-        root: 'public',
-        isRoot: true,
-      });
-      entries.push(...listAssetTree(publicDirectory, 'public', { mediaOnly: false }));
-    }
-    if (fs.existsSync(sourceDirectory)) {
-      entries.push({ rel: 'src', name: 'src', parent: '', isDir: true, root: 'src', isRoot: true });
-      entries.push(...listAssetTree(sourceDirectory, 'src', { mediaOnly: true }));
-    }
+    // Which folders under public/ and src/ hold assets is the project's choice
+    // (.stacki/folders.json); by default, all of both.
+    const { entries, hasPublic } = listAssetEntries(projectPath);
     return { entries, missing: !hasPublic };
   });
 
@@ -113,6 +95,16 @@ function registerAssetsMoveHandlers({
     if (sameFilesystemPath(target, from)) {
       return { ok: true as const };
     }
+    // A file under src/ stays media on both sides of a rename: renaming code, or
+    // renaming an image to `.astro`, is not an asset operation.
+    if (fs.statSync(from).isFile()) {
+      for (const side of [from, target]) {
+        const refusal = assetWriteRefusal(toPosix(path.relative(path.resolve(projectPath), side)));
+        if (refusal !== undefined) {
+          throw new Error(refusal);
+        }
+      }
+    }
     if (fs.existsSync(target)) {
       throw new Error('Something with that name already exists.');
     }
@@ -135,19 +127,18 @@ function registerAssetsMoveHandlers({
     // Under src/ only media is an asset; everything else there is code (pages,
     // components, stylesheets) that only the document actors write, so a raw
     // byte copy must never reach it (test/electron/documents/singleWriter.test.ts).
-    if (rootOfRel(rel) === 'src') {
-      if (!MEDIA_EXT.test(target)) {
-        return { ok: false as const, message: `${path.basename(rel)} is source code, not an asset; edit it in the project instead.` };
-      }
+    const refusal = assetWriteRefusal(toPosix(path.relative(path.resolve(projectPath), target)));
+    if (refusal !== undefined) {
+      return { ok: false as const, message: refusal };
     }
     const picked = await showOpenDialog({ title: `Replace ${path.basename(rel)}`, properties: ['openFile'] });
     const source = picked.filePaths[0];
     if (picked.canceled || source === undefined) {
       return { ok: true as const, value: false };
     }
-    const refusal = replacementRefusal(path.basename(target), path.basename(source));
-    if (refusal !== undefined) {
-      return { ok: false as const, message: refusal };
+    const mismatch = replacementRefusal(path.basename(target), path.basename(source));
+    if (mismatch !== undefined) {
+      return { ok: false as const, message: mismatch };
     }
     noteAppWrite();
     fs.copyFileSync(source, target);

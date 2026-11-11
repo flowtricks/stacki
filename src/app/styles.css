@@ -1,3 +1,9 @@
+/* Shared component sheets, first so the cascade is the one they had inline here.
+   The app UI kit builds from the same files (scripts/build/appUiKit.mts). */
+@import '../ui/controls.css';
+@import '../ui/dropdown.css';
+@import '../ui/resetLabel.css';
+
 :root {
   --bg: #191919; /* canvas */
   --bg-panel: #111111; /* side panels */
@@ -7,6 +13,11 @@
   --bg-active: rgba(255, 255, 255, 0.09);
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
+  /* Scrollbar thumbs: low contrast at rest, a step brighter under the pointer
+     or while dragged. Surfaces that are light (the start screen's recents) set
+     their own pair; the track is always transparent. */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
   /* Text, high to low emphasis. Each step clears WCAG AA (4.5:1) on the panel,
      the canvas, and the #232323 popovers with a hover or input fill on them:
      #666 was 2.4:1 on a popover's section fill, too faint to read. Pinned by
@@ -15,6 +26,8 @@
   --text-dim: #b8b8b8;
   --text-faint: #989898;
   --accent: #0099ff;
+  /* A hovered accent button: the accent a step brighter, never a grey. */
+  --accent-hover: color-mix(in srgb, var(--accent), #fff 14%);
   --accent-soft: rgba(0, 153, 255, 0.16);
   /* Selected text, everywhere. A saturated blue rather than the accent, which
      is too light to carry white text — this one clears 5:1 against white, so a
@@ -57,125 +70,6 @@ body {
   overflow: hidden;
   user-select: none;
   -webkit-font-smoothing: antialiased;
-}
-
-button {
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 500;
-  text-decoration: none;
-  color: var(--text);
-  background: var(--bg-input);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  padding: 6px 12px;
-  cursor: pointer;
-  transition: background 0.1s;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-/* Not inside the style panel: that panel styles its own controls, and this
-   rule was quietly winning over them. It is more specific than a panel rule
-   like `.u-select-button:hover` (a type selector's worth more), and it sets the
-   background shorthand — so a dropdown's own opaque colour was thrown away on
-   hover and replaced by a faint white wash over the panel *behind* it, which
-   lands darker than the control. Hovering made things dimmer.
-   `:where()` keeps the exclusion from changing what this rule beats elsewhere. */
-button:hover:not(:disabled):where(:not(.style-panel-host *, .style-panel-surface *)) {
-  background: var(--bg-active);
-}
-button:disabled {
-  opacity: 0.4;
-}
-/* Disabled controls keep the same cursor over labels and icons, even when
-   individual features supply their own cursor styles. */
-button:is(:disabled, [aria-disabled='true']),
-button:is(:disabled, [aria-disabled='true']) * {
-  cursor: not-allowed !important;
-}
-/* A selected option is already in effect, rather than an unavailable action. */
-button:is(:disabled, [aria-disabled='true']):is([aria-current]:not([aria-current='false']), [aria-selected='true'], [aria-pressed='true'], .active, .on),
-button:is(:disabled, [aria-disabled='true']):is([aria-current]:not([aria-current='false']), [aria-selected='true'], [aria-pressed='true'], .active, .on) * {
-  cursor: default !important;
-}
-button.primary {
-  background: var(--accent);
-  color: white;
-  font-weight: 600;
-}
-button.primary:hover:not(:disabled) {
-  background: #24a8ff;
-}
-button.ghost {
-  background: transparent;
-  color: var(--text-dim);
-  padding: 4px;
-  border-radius: 6px;
-}
-button.ghost:hover:not(:disabled) {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-button.danger {
-  color: var(--red);
-}
-
-input,
-select,
-textarea {
-  font-family: inherit;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--bg-input);
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 6px 8px;
-  outline: none;
-  width: 100%;
-  transition:
-    border-color 0.1s,
-    background 0.1s;
-}
-/* No hover on a field. A button lights up because pressing it does something;
-   a field just sits there holding a value, and lighting it under the pointer
-   made the panel twitch on the way past. Focus is where a field changes — see
-   below. (This used to paint every input, the style panel's included, which is
-   why the panel's fields flickered on the way to a control.) */
-input:focus,
-select:focus,
-textarea:focus {
-  border-color: var(--accent);
-  background: var(--bg-input);
-}
-input[type='checkbox'] {
-  width: auto;
-  accent-color: var(--accent);
-}
-
-/* Focus, in this app's colour.
-   Left to the browser, the ring is drawn in whatever Chromium takes from the
-   system — which is not this interface's blue, and here came out orange on
-   every row, button and field that took focus. Replaced rather than removed:
-   the ring is how anyone working from the keyboard knows where they are, and a
-   window with no focus indicator is a window you can get lost in. Controls that
-   draw their own ring (the style panel's fields, which use an inset shadow so
-   the ring hugs the control) still do — they set `outline: none` themselves and
-   are more specific than this. */
-/* …except a field, which already says it: `input:focus` above turns its border the
-   same accent and darkens its fill. An outline on top of that is a second ring
-   around the first, which is what the attribute editor's value box was drawing.
-   `:where()` keeps this at the same weight, so anything that opts out still wins. */
-:focus-visible:where(:not(input):not(textarea):not(select)) {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-textarea {
-  font-family: inherit;
-  font-size: 12px;
-  line-height: 1.5;
-  resize: none;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1298,6 +1192,41 @@ html[data-platform='win32'] .titlebar {
   background: var(--bg-hover);
   color: var(--text);
 }
+/* A list whose rows scroll (ListField marks it .is-scrolling) keeps Add item
+   over the last visible row, with a fade above it, so the cut-off row shows
+   there is more. The items' bottom padding is the same depth, so the last row
+   still scrolls clear. The Add row is opaque in the list's own fill
+   (--list-field-bg); a list that fits is drawn as before. */
+.list-field {
+  --list-field-bg: var(--bg-panel);
+}
+.property-editor .list-field,
+.new-prop-form .list-field {
+  --list-field-bg: var(--bg-panel-2);
+}
+.list-field-items.is-scrolling {
+  padding-bottom: 8px;
+}
+.list-field-items.is-scrolling + .list-field-add {
+  position: relative;
+  z-index: 1;
+  margin-top: -8px;
+  border-top: 0;
+  background: var(--list-field-bg);
+}
+.list-field-items.is-scrolling + .list-field-add::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 14px;
+  background: linear-gradient(to bottom, transparent, var(--list-field-bg));
+  pointer-events: none;
+}
+.list-field-items.is-scrolling + .list-field-add:hover {
+  background: linear-gradient(var(--bg-hover), var(--bg-hover)), var(--list-field-bg);
+}
 
 .attr-editor {
   position: fixed;
@@ -1395,6 +1324,21 @@ html[data-platform='win32'] .titlebar {
 .attr-editor-row.top > span,
 .attr-editor-row:has(.cm-editor) > span {
   padding-top: 6px;
+}
+/* A value written as code takes the editor's whole width under its label, as a
+   code field does in the panel: beside the label and the two toggles it had a
+   third of the row, and a ternary wrapped onto a line per token. The toggles
+   stay on the label's line, at its end. */
+.attr-editor-row:has(> .attr-value-field .cm-editor) {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.attr-editor-row:has(> .attr-value-field .cm-editor) > .attr-value-field {
+  order: 1;
+  flex-basis: 100%;
+}
+.attr-editor-row:has(> .attr-value-field .cm-editor) > .attr-expand-toggle {
+  margin-left: auto;
 }
 .attr-editor-row > .attr-asset-toggle,
 .attr-editor-row > .attr-expand-toggle {
@@ -1783,6 +1727,83 @@ html[data-platform='win32'] .titlebar {
   font-size: 11.5px;
   color: var(--text-faint);
 }
+/* An app row: its icon on a rounded square in the list's icon slot, a one-line description and its author. */
+.insert-app-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.insert-app-tile.is-lettered {
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+}
+.insert-app-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Who made the app, at the row's right end: a small round picture and "by <login>", muted. */
+.insert-app-byline {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.insert-app-avatar {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--bg-hover);
+}
+/* The empty Apps tab: a section in the results, left-aligned with the rows below it. */
+.insert-apps-empty-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px 12px;
+}
+.insert-apps-empty-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--bg-active);
+  color: var(--text-dim);
+}
+.insert-apps-empty-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.insert-apps-empty-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+.insert-apps-empty-note {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+/* The palette's marketplace results: one heading above the first, inside that row's list child. */
+.insert-section-heading {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
 .insert-item.insert-card {
   flex-direction: column;
   align-items: stretch;
@@ -1802,10 +1823,26 @@ html[data-platform='win32'] .titlebar {
   min-width: 0;
 }
 .insert-card-foot .insert-item-label {
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* The card's folder pill name, after its label. Its huge shrink factor gives it nearly all the shrinking,
+   so it truncates to nothing before the name loses a letter; the count stays at the right edge. */
+.insert-card-foot .insert-card-folder {
+  flex: 0 100000 auto;
+  min-width: 0;
+  margin-left: -4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.insert-card-foot .insert-item-uses {
+  flex-shrink: 0;
 }
 .insert-item-uses {
   margin-left: auto;
@@ -1827,8 +1864,16 @@ html[data-platform='win32'] .titlebar {
 .insert-surface-card {
   aspect-ratio: 16 / 10;
 }
-.insert-item.insert-card.highlight .insert-surface {
-  box-shadow: 0 0 0 2px var(--text);
+/* The highlight ring sits inside the surface, above the frame: an outer ring would be cut off by the
+   scrolling grid at its top row and side edges, where the grid's padding is narrower than the ring. */
+.insert-item.insert-card.highlight .insert-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--text);
+  pointer-events: none;
 }
 .insert-frame {
   position: absolute;
@@ -1838,8 +1883,9 @@ html[data-platform='win32'] .titlebar {
   height: 100%;
   border: none;
   background: #f2f2f2;
-  /* The card's click inserts; the frame is a picture inside it. */
-  pointer-events: none;
+  /* A live picture: the pointer reaches the page so hover states show, and the page refuses presses and
+     reports them to the card, which inserts (componentPreview.ts, ComponentPreviewFrame). */
+  pointer-events: auto;
 }
 .insert-surface-note {
   position: absolute;
@@ -2186,48 +2232,6 @@ html[data-platform='win32'] .titlebar {
   justify-content: center;
 }
 
-/* Asset picker modal */
-.asset-picker {
-  width: min(680px, calc(100vw - 80px));
-  max-height: 70vh;
-  display: flex;
-  flex-direction: column;
-  background: #222222;
-  border: 1px solid var(--border-strong);
-  border-radius: 14px;
-  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
-}
-.asset-picker-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.asset-picker-body {
-  flex: 1;
-  min-height: 120px;
-  overflow-y: auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 12px;
-  padding: 14px;
-  align-content: start;
-}
-.asset-picker-body .asset-tile {
-  cursor: pointer;
-}
-.asset-picker-body .asset-tile.selected .asset-thumb {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-  border-color: var(--accent);
-}
-.asset-picker-body .asset-tile.folder .asset-thumb {
-  color: var(--text-dim);
-}
-
 /* Floating code editor window */
 .code-window {
   position: fixed;
@@ -2325,6 +2329,10 @@ html[data-platform='win32'] .titlebar {
 .rail {
   width: 44px;
   flex-shrink: 0;
+  /* The rail never grows past the window: what does not fit moves into its More menu
+     (railOverflow.ts), so its height is the room it has, never its content's. */
+  min-height: 0;
+  overflow: hidden;
   background: var(--bg-panel);
   border-right: 1px solid var(--border);
   display: flex;
@@ -2336,10 +2344,47 @@ html[data-platform='win32'] .titlebar {
 .rail-btn {
   width: 32px;
   height: 32px;
+  flex: none;
   padding: 0;
   background: transparent;
   border-radius: 8px;
   color: var(--text-dim);
+}
+/* The line between the panels and the apps a role pinned (railOverflow.ts counts its height). */
+.rail-separator {
+  flex: none;
+  width: 20px;
+  height: 1px;
+  margin: 2px 0;
+  background: var(--border);
+}
+/* The AI chat button keeps its place at the rail's foot (railOverflow.ts measures it as anchored). */
+.rail-anchor {
+  margin-top: auto;
+  flex: none;
+  /* The same inset from the window's bottom edge as the first button has from the top
+     (.rail's padding-top). Inside the anchor, so railOverflow's offsetHeight counts it. */
+  padding-bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+/* A pinned app's own tile, centred in its button. */
+.rail-btn.rail-app {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* An icon in the More menu: the panel's, or the pinned app's tile, at the menu's size. */
+.rail-more-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  color: var(--text-dim);
+}
+.rail-btn.rail-more.is-open {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 .rail-btn:hover:not(:disabled) {
   background: var(--bg-hover);
@@ -2796,8 +2841,7 @@ body > .embed-editor_provenance {
   transition: none;
 }
 :where(.style-panel-host, .style-panel-surface) input,
-:where(.style-panel-host, .style-panel-surface) textarea,
-:where(.style-panel-host, .style-panel-surface) select {
+:where(.style-panel-host, .style-panel-surface) textarea {
   font: inherit;
   color: inherit;
   width: auto;
@@ -3103,18 +3147,27 @@ body > .embed-editor_provenance {
 .dp-row:hover {
   background: var(--bg-active);
 }
-/* What the field is bound to now: the row is lit in the same purple as the
-   chip that opened the picker, so the connection between the two is visible
-   rather than something to work out. */
+/* What the field is bound to now, or a field kept in a picker of many: the
+   row is lit in the same purple as the chip that opened the picker, so the
+   connection between the two is visible rather than something to work out.
+   A fill and the check, never an outline (house style), so chosen rows side
+   by side read as one lit run rather than a stack of boxes. */
 .dp-row.selected {
-  background: rgba(146, 116, 255, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(146, 116, 255, 0.4);
+  background: rgba(146, 116, 255, 0.12);
+}
+.dp-row.selected:has(+ .dp-row.selected) {
+  border-bottom-right-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.dp-row.selected + .dp-row.selected {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 .dp-row.selected .dp-key {
   color: var(--collection-purple);
 }
 .dp-row.selected:hover {
-  background: rgba(146, 116, 255, 0.24);
+  background: rgba(146, 116, 255, 0.2);
 }
 /* Under the pointer the row only brightens: every column keeps its colour,
    so a dim count or value stays as readable as the name beside it. */
@@ -3175,13 +3228,7 @@ body > .embed-editor_provenance {
 .dp-row.disabled:hover {
   background: transparent;
 }
-/* A control at the end of the search row, such as Select all. */
-.dp-search-action {
-  flex: none;
-  padding: 2px 6px;
-  color: var(--text-dim);
-  font-size: 11px;
-}
+
 /* A row's way to its prop's settings, always there and muted until it is
    reached for. The slot ends every row of a picker that has one, so a row with
    no gear keeps its values in line with the rows that have one. */
@@ -3319,6 +3366,39 @@ body > .embed-editor_provenance {
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--text-faint);
+}
+/* A part of a group from elsewhere in the same file (a component's
+   frontmatter under its props): quiet words, no fill of its own. */
+.dp-subsection {
+  padding: 6px 8px 2px;
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.dp-section-heading {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A control over the whole group, such as Select all: small words at the end
+   of the heading, in sentence case so it reads as an action, not a name. */
+.dp-section-action {
+  flex: none;
+  height: auto;
+  margin: -2px -4px -2px 0;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.dp-section-action:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text);
 }
 /* The source's mark before a section heading: a component, or Astro. */
 .dp-section-icon {
@@ -3796,173 +3876,6 @@ body > .embed-editor_provenance {
 /* Custom dropdown                                                     */
 /* ------------------------------------------------------------------ */
 
-.dd-trigger {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--text);
-  background: var(--bg-input);
-  border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 6px 8px;
-  cursor: pointer;
-}
-.dd-trigger:hover {
-  background: rgba(255, 255, 255, 0.08);
-}
-.dd-trigger:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.dd-label {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.dd-label.dim {
-  color: var(--text-faint);
-}
-.dd-chevron {
-  color: var(--text-faint);
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-.dd-popup {
-  position: fixed;
-  z-index: 400;
-  /* Height comes from the content; the component caps it inline, and only
-     when the window has less room than the list needs. */
-  overflow-y: auto;
-  background: #232323;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
-  padding: 4px;
-}
-.dd-option {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 4px 0 8px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 12px;
-  color: #ddd;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.dd-option.highlight {
-  background: var(--accent);
-  color: white;
-}
-.dd-option.selected:not(.highlight) {
-  color: var(--text);
-}
-.dd-option.dim:not(.highlight) {
-  color: var(--text-faint);
-}
-/* The check ends the row, so icons and images align down the left edge (a
-   rule across the app). Its column is kept empty on unchecked rows, so labels
-   never shift; after a hint it follows the hint rather than splitting the gap. */
-.dd-check {
-  width: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-.dd-hint ~ .dd-check {
-  margin-left: 0;
-}
-.dd-option-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* A heading over a run of options (Content collections, On this page). */
-.dd-group-label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 8px 4px;
-  color: var(--text-faint);
-  font-size: 10px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.dd-group-label:not(:first-child) {
-  margin-top: 4px;
-}
-.dd-group-icon {
-  display: flex;
-  flex-shrink: 0;
-  color: var(--text-dim);
-}
-.dd-icon {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  color: var(--text-faint);
-}
-.dd-option.highlight .dd-icon {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-/* A popup with a filter box scrolls its list, not itself, so the box stays
-   put while the options move under it. */
-/* Wide enough to read an entry id in: the trigger is a chip in the title bar,
-   and inheriting its width is what cut "2025/the-cost-of-a-thousand-images"
-   down to "2025/the-cost-of-a-tho…". */
-.dd-popup.dd-searchable {
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 0;
-  min-width: 300px;
-}
-.dd-search {
-  flex-shrink: 0;
-  /* The global field rule sets width: 100%, which with side margins pushed the
-     box past the menu's right edge and made the inset uneven. Auto lets the
-     column's stretch fit it between the margins, so both sides are inset. */
-  width: auto;
-  height: 30px;
-  margin: 6px 6px 0;
-  padding: 0 8px;
-  font-size: 12px;
-  background: var(--bg-input);
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--text);
-}
-.dd-search:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.dd-popup.dd-searchable .dd-list {
-  overflow-y: auto;
-  /* As the data picker's list: the scrollbar never moves the rows. */
-  scrollbar-gutter: stable;
-  /* The same 6px inset as the search box above, with a gap under it before the first row. */
-  padding: 6px 6px 6px;
-}
-.dd-empty {
-  padding: 8px;
-  font-size: 11.5px;
-  color: var(--text-faint);
-}
-
 /* A generated route is purple wherever it appears — the Pages panel, the title
    bar, and here, where every option is one page a collection makes. */
 .dd-trigger.collection .dd-label,
@@ -3988,16 +3901,7 @@ body > .embed-editor_provenance {
 .dd-option.highlight .dd-option-icon {
   color: #fff;
 }
-.dd-option .dd-hint {
-  margin-left: auto;
-  padding-left: 10px;
-  font-size: 10px;
-  color: var(--text-faint);
-  flex-shrink: 0;
-}
-.dd-option.highlight .dd-hint {
-  color: rgba(255, 255, 255, 0.8);
-}
+/* A row's hint (`.dd-hint`) is styled with the rows themselves, in src/ui/dropdown.css. */
 /* Two-line rows: the description sits under the label, in the type the Pages
    panel gives a page's route, and the check stays at the end of the row. The
    height is STACKED_OPTION_HEIGHT in Dropdown.tsx. */
@@ -4065,33 +3969,6 @@ body > .embed-editor_provenance {
   color: var(--text-faint);
   font-weight: 400;
   margin-left: 6px;
-}
-.prop-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  vertical-align: middle;
-  padding: 1px 5px;
-  margin: -1px 0 -1px -5px;
-  border-radius: 4px;
-}
-.prop-label .prop-label-icon {
-  opacity: 0.85;
-  margin-left: -1px;
-}
-.prop-label.set {
-  color: var(--accent);
-  background: var(--accent-soft);
-  cursor: pointer;
-}
-.prop-label.set:hover {
-  background: rgba(0, 153, 255, 0.26);
-}
-/* A deprecated prop still works, so it stays where it is, its name struck
-   through in the dim grey and the "Deprecated" tag beside it. */
-.prop-label.deprecated {
-  text-decoration: line-through;
-  text-decoration-color: var(--text-faint);
 }
 .prop-deprecated {
   margin-left: 6px;
@@ -4283,33 +4160,6 @@ body > .embed-editor_provenance {
   color: #f0b429;
   background: rgba(240, 180, 41, 0.14);
   cursor: help;
-}
-
-/* Popup menu opened by clicking a set prop's label */
-.prop-menu {
-  position: fixed;
-  z-index: 500;
-  background: #232323;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
-  padding: 4px;
-}
-.prop-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: 26px;
-  padding: 0 10px 0 8px;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 12px;
-  color: #ddd;
-  white-space: nowrap;
-}
-.prop-menu-item:hover {
-  background: var(--accent);
-  color: white;
 }
 
 /* Right-click context menu (navigator) */
@@ -5399,6 +5249,18 @@ body > .embed-editor_provenance {
   position: relative;
   display: flex;
 }
+/* The chevron never shrinks under its label. Each place sets the chevron's
+   padding itself: an aspect-ratio square here once tied its width to the
+   pair's height, so a wrapped label grew the chevron, which squeezed the
+   label further, and the welcome buttons rendered about 100px tall. */
+.welcome-split-button > .welcome-split-arrow {
+  flex: none;
+}
+/* The ring sits inside its own half: outside, it would run over the other
+   half and the two would read as one focused control. */
+.welcome-split-button > button:focus-visible {
+  outline-offset: -2px;
+}
 .welcome .welcome-split-button > button {
   transition:
     background 160ms ease,
@@ -5537,15 +5399,68 @@ body > .embed-editor_provenance {
   overflow-x: auto;
   overflow-y: hidden;
   padding: 2px 24px 6px;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-  /* Fade the cards at the trailing edge so a rail that runs past the window
-     reads as scrollable. Fading the cards, not painting over them, leaves the
-     backdrop one continuous surface. */
-  mask-image: linear-gradient(to left, transparent, #000 56px);
+  /* No scroll snapping. Snapping each card's start to the scrollport's start
+     ignored the 24px padding, so the first card's snap point sat 24px in: the
+     rail could never rest at its left edge, and Chromium re-snapped it there on
+     every layout change (a retaken thumbnail, a resize) — the row slid over on
+     its own. The user's position is kept exactly where they leave it.
+     Pinned by test/renderer/welcome/recentRail.test.js. */
+  /* The shared ::-webkit-scrollbar styling below, recoloured for the light
+     backdrop. `scrollbar-width` must stay unset: setting it switches Chromium
+     back to its native grey bar and ignores every ::-webkit-scrollbar rule. */
+  --scrollbar-thumb: rgb(0 0 0 / calc(0.14 * var(--recent-rail-thumb-alpha)));
+  --scrollbar-thumb-hover: rgb(0 0 0 / calc(0.28 * var(--recent-rail-thumb-alpha)));
+  --recent-rail-scrollbar-height: 10px;
 }
-.recent-rail > * {
-  scroll-snap-align: start;
+/* The thumb's visibility, 0 to 1, scaling both thumb colours above. Scrollbar
+   parts accept no opacity and no transitions of their own, so the fade
+   animates this registered number on the rail and the thumb picks up the
+   colour it produces. Registered, or it could not be transitioned. */
+@property --recent-rail-thumb-alpha {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+/* macOS: an overlay bar, as the system draws them. Hidden at rest, shown while
+   the rail scrolls, the pointer is over the bar, or the thumb is dragged
+   (recentRail.ts sets data-scrolling), and gone a second after. Hiding only
+   clears the colour, so the bar keeps its space and the cards never move. */
+.recent-rail[data-scrollbar='overlay'] {
+  --recent-rail-thumb-alpha: 0;
+  transition: --recent-rail-thumb-alpha 0.3s ease;
+}
+.recent-rail[data-scrollbar='overlay'][data-scrolling] {
+  --recent-rail-thumb-alpha: 1;
+  transition-duration: 0.1s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .recent-rail[data-scrollbar='overlay'] {
+    transition: none;
+  }
+}
+/* Fade the cards at the trailing edge while the rail runs past the window, so
+   it reads as scrollable; at the end the fade goes, so the last card shows in
+   full. Fading the cards, not painting over them, leaves the backdrop one
+   continuous surface. The second layer keeps the scrollbar strip under the
+   cards unfaded. */
+.recent-rail[data-more='end'] {
+  mask-image: linear-gradient(to left, transparent, #000 56px), linear-gradient(#000, #000);
+  mask-size:
+    100% calc(100% - var(--recent-rail-scrollbar-height)),
+    100% var(--recent-rail-scrollbar-height);
+  mask-position: top, bottom;
+  mask-repeat: no-repeat;
+}
+.recent-rail::-webkit-scrollbar {
+  height: var(--recent-rail-scrollbar-height);
+}
+/* Inset by the cards' own side padding, so the bar spans exactly the row. */
+.recent-rail::-webkit-scrollbar-track {
+  margin: 0 24px;
+}
+.recent-rail::-webkit-scrollbar-thumb {
+  border-width: 3px;
+  border-radius: 5px;
 }
 .recent-card {
   position: relative;
@@ -5702,13 +5617,14 @@ body > .embed-editor_provenance {
   height: 8px;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
   background-clip: padding-box;
   border: 2px solid transparent;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: var(--scrollbar-thumb-hover);
   background-clip: padding-box;
   border: 2px solid transparent;
 }
@@ -5807,7 +5723,7 @@ body > .embed-editor_provenance {
    the rect itself stays clear. */
 .node-focus {
   position: absolute;
-  z-index: 3;
+  z-index: var(--canvas-layer-focus);
   pointer-events: none;
   box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.55);
   outline: 1px solid var(--green);
@@ -5821,7 +5737,7 @@ body > .embed-editor_provenance {
    stay legible, since the point is to see what the space is doing to it. */
 .spacing-band {
   position: absolute;
-  z-index: 3;
+  z-index: var(--canvas-layer-spacing);
   pointer-events: none;
   display: flex;
   align-items: center;
@@ -5861,7 +5777,7 @@ body > .embed-editor_provenance {
 
 .node-outline {
   position: absolute;
-  z-index: 4;
+  z-index: var(--canvas-layer-outline);
   pointer-events: none;
   outline: 1px solid var(--accent);
   outline-offset: -1px;
@@ -7184,7 +7100,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
 }
 .cms-field.has-issue input,
 .cms-field.has-issue textarea,
-.cms-field.has-issue select {
+.cms-field.has-issue .dd-trigger {
   border-color: rgba(255, 69, 58, 0.55);
 }
 .content-required {
@@ -7257,10 +7173,10 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: transparent;
   padding: 0 4px;
 }
-.content-reflist select {
+.content-reflist .dd-trigger {
   flex: 1;
+  width: auto;
   min-width: 130px;
-  height: 24px;
 }
 .content-chip {
   display: inline-flex;
@@ -7291,8 +7207,9 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   font-size: 11.5px;
   color: var(--text-dim);
 }
-.content-union-head select {
+.content-union-head .dd-trigger {
   flex: 1;
+  width: auto;
 }
 
 .content-record-row {
@@ -7698,8 +7615,21 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: rgba(255, 90, 90, 0.16);
   color: #ff9b9b;
 }
-.vars-menu-item.is-danger:hover > svg {
+/* The icon turns with the text, so a hovered "Remove app" reads red from its trash can on. */
+.vars-menu-item.is-danger:hover > svg,
+.more-menu-item.is-danger:hover:not(:disabled) > svg {
   color: #ff9b9b;
+}
+/* The row for what is open now (the rail's active panel, listed in its More menu). */
+.more-menu-item.is-current {
+  background: var(--bg-active);
+}
+/* A key that does the same as the row, muted at its end. */
+.more-menu-shortcut {
+  margin-left: auto;
+  padding-left: 16px;
+  color: var(--text-faint);
+  font-size: 11px;
 }
 /* Each row owns its grid: labels stay fixed, while value tracks share the same
    width bounds so headings and cells resize together. */
@@ -7915,93 +7845,6 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   font-size: 11px;
   padding: 4px;
 }
-.git-pick {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  overflow: hidden;
-}
-.git-pick-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 6px;
-  border-bottom: 1px solid var(--border);
-}
-.git-pick-head button {
-  font-size: 10.5px;
-  padding: 2px 4px;
-}
-.git-pick-count {
-  font-size: 10px;
-  color: var(--text-faint);
-  font-variant-numeric: tabular-nums;
-}
-.git-pick-list {
-  max-height: 220px;
-  overflow-y: auto;
-  padding: 2px;
-}
-/* The heading toggles its whole group — "just the stylesheets" is the shape of
-   most real picks, and hunting them out of a flat list is not. */
-.git-pick-group + .git-pick-group {
-  margin-top: 4px;
-}
-.git-pick-group-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 4px 4px 3px;
-  background: none;
-  border: none;
-  color: var(--text-faint);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.git-pick-group-head:hover {
-  color: var(--text-dim);
-}
-.git-pick-group-count {
-  font-weight: 500;
-  letter-spacing: 0;
-}
-.git-pick-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 4px;
-  border-radius: 4px;
-  font-size: 11.5px;
-  color: var(--text-dim);
-  cursor: pointer;
-}
-.git-pick-row:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-.git-pick-row input {
-  margin: 0;
-  flex-shrink: 0;
-}
-.git-pick-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* The real filename, when the friendly name hides it: "Home" does not say
-   index.astro, and which file is being saved is the whole question here. */
-.git-pick-file {
-  margin-left: auto;
-  padding-left: 6px;
-  font-size: 10px;
-  color: var(--text-faint);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
 /* ------------------------------------------------------------------ */
 /* File browser                                                        */
 /* ------------------------------------------------------------------ */
@@ -8211,17 +8054,6 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   flex: 1;
   min-width: 0;
 }
-.history-graph-toolbar select {
-  flex: 1;
-  min-width: 0;
-  padding: 4px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg);
-  color: var(--text);
-  font: inherit;
-  font-size: 11px;
-}
 
 .history-commit {
   display: grid;
@@ -8284,7 +8116,8 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   align-items: flex-start;
   gap: 8px;
   width: 100%;
-  padding: 8px 6px 6px;
+  /* 8 + subject 17 + gap 2 + meta 16 + 3 = the fixed 46px row; the top keeps the dot aligned. */
+  padding: 8px 6px 3px;
   background: none;
   border: none;
   border-radius: 4px;
@@ -8365,13 +8198,52 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* A centred row, so the avatar shares the text's line box. Its left edge stays on the
+   subject line's, under the HEAD and branch tags. */
 .history-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  height: 16px;
   font-size: 10.5px;
-  line-height: 13px;
+  line-height: 16px;
   color: var(--text-faint);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.history-meta-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* As tall as the meta line (16px) and no taller: the row is a fixed 46px beside the graph. */
+.history-avatar {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 22%, var(--bg-hover));
+  font-size: 7px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0;
+  text-align: center;
+}
+.history-avatar img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.history-avatar img[data-state='loading'] {
+  opacity: 0;
 }
 
 .history-commit-body {
@@ -9780,9 +9652,6 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   font-size: 12px;
   font-weight: 500;
 }
-.git-panel-controls .git-pick {
-  width: 100%;
-}
 .git-initialize {
   width: 100%;
   margin: 8px 0;
@@ -9942,4 +9811,29 @@ viewBox='0 0 16 16' fill='none' stroke='%23999999' stroke-width='1.5'%3E\
   background: rgba(255, 255, 255, 0.1);
   color: var(--text);
   cursor: pointer;
+}
+
+/* An attribute's Name, and the dot a spread's Name takes data with: the value
+   field's corner dot (`.attr-value-field`), on the name. */
+.attr-name-field {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  padding: 9px 0 0 9px;
+  margin: -9px 0 0 -9px;
+}
+.attr-name-field > .bind-handle,
+.attr-name-field > .bind-handle:hover:not(:disabled),
+.attr-name-field > .bind-handle.on {
+  top: 9px;
+  left: 9px;
+  bottom: auto;
+  width: 12px;
+  height: 12px;
+  transform: translate(-50%, -50%);
+}
+.attr-name-field:hover > .bind-handle,
+.attr-name-field > .bind-handle.on {
+  opacity: 1;
+  pointer-events: auto;
 }

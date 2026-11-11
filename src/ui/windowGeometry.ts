@@ -28,6 +28,22 @@ export function initialWindowRectangle(viewport: WindowSize, minimum: WindowSize
   );
 }
 
+// A window that names its own first size (an app's manifest) opens centered at that size.
+export function centeredWindowRectangle(viewport: WindowSize, size: WindowSize, minimum: WindowSize): WindowRectangle {
+  assert(Number.isFinite(size.width), 'Window initial width must be finite');
+  assert(Number.isFinite(size.height), 'Window initial height must be finite');
+  return fitWindowRectangle(
+    {
+      x: Math.round((viewport.width - size.width) / 2),
+      y: Math.round((viewport.height - size.height) / 2),
+      width: Math.max(minimum.width, size.width),
+      height: Math.max(minimum.height, size.height),
+    },
+    viewport,
+    minimum,
+  );
+}
+
 export function fitWindowRectangle(rectangle: WindowRectangle, viewport: WindowSize, minimum: WindowSize): WindowRectangle {
   assert(Number.isFinite(viewport.width), 'Window viewport width must be finite');
   assert(viewport.width > 0, 'Window viewport width must be positive');

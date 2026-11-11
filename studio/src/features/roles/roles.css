@@ -43,7 +43,7 @@
 .client-role-badge {
   color: var(--text-dim);
   font-size: 10px;
-  border: 1px solid var(--border);
+  background: var(--bg-hover);
   padding: 3px 6px;
   border-radius: 4px;
 }

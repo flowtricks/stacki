@@ -6,16 +6,17 @@
 // — its title, its buttons, its own state — and draws these sections from it,
 // so an option offered in one place is the same control in the other.
 //
-// - Required and Readonly: whether the member is written without `?`, and
-//   with `readonly`.
-// - Code type: the TypeScript written for the prop, behind a disclosure, in the
-//   highlighted field a default's code is edited in.
+// - Required: whether the member is written without `?`. TypeScript's
+//   `readonly` does nothing for an Astro prop, so it is not offered; a member
+//   that has it keeps it as written.
+// - Code type: the TypeScript written for the prop, in the highlighted field a
+//   default's code is edited in, behind the host's `{}` toggle.
 // - Item fields: a List's fields, a name and a kind each.
 // - The default items: the very field an instance of the component edits the
 //   list with (PropField), with its `{}` toggle between the list and its code.
 
 import { useRef } from 'react';
-import { ChevronDownIcon, ChevronRightIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
+import { BracesIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import Dropdown from '../../ui/Dropdown';
 import ExprInput from '../../ui/ExprInput';
 import { assert } from '../../../shared/core/assert';
@@ -45,7 +46,7 @@ export interface PropertyFlags {
   readonly readonly: boolean;
 }
 
-/** Required (no `?`) and Readonly (`readonly`), as two checkboxes. */
+/** Required (no `?`), as a checkbox. `readonly` is carried through as it was read. */
 export function PropertyFlagsFields(props: PropertyFlags & { readonly onChange: (flags: PropertyFlags) => void }) {
   const { required, readonly, onChange } = props;
   return (
@@ -54,15 +55,51 @@ export function PropertyFlagsFields(props: PropertyFlags & { readonly onChange: 
         <input type="checkbox" aria-label="Required" checked={required} onChange={(event) => onChange({ required: event.target.checked, readonly })} />
         Required
       </label>
-      <label>
-        <input type="checkbox" aria-label="Readonly" checked={readonly} onChange={(event) => onChange({ required, readonly: event.target.checked })} />
-        Readonly
-      </label>
     </div>
   );
 }
 
-/** The TypeScript written for the prop, behind a "Code type" disclosure the host opens and shuts. */
+/**
+ * The `{}` button that switches a section between its controls and the code
+ * type, the same toggle a default's value and its code use (PropertyDefault.tsx).
+ */
+export function CodeTypeToggle(props: { readonly open: boolean; readonly onToggle: () => void }) {
+  const action = props.open ? 'Use the controls' : 'Edit the code type';
+  return (
+    <button
+      type="button"
+      className={`prop-expr-toggle property-code-toggle${props.open ? ' on' : ''}`}
+      aria-pressed={props.open}
+      aria-label={action}
+      title={action}
+      onClick={props.onToggle}
+    >
+      <BracesIcon size={12} />
+    </button>
+  );
+}
+
+/** The TypeScript written for the prop, in the highlighted code field. */
+export function CodeTypeEditor(props: { readonly type: string; readonly placeholder: string; readonly onChange: (type: string) => void }) {
+  return (
+    <ExprInput
+      ariaLabel="Code type"
+      className="property-code"
+      language="typescript"
+      value={props.type}
+      syncValue={props.type}
+      placeholder={props.placeholder}
+      onChange={(type) => {
+        // An editor has no maxLength, so the bound the input held is held here.
+        if (type.length <= PROPERTY_LIMITS.textCharsMax) {
+          props.onChange(type);
+        }
+      }}
+    />
+  );
+}
+
+/** The code type as a section of its own: its label with the `{}` toggle, and the field when it is on. */
 export function CodeTypeField(props: {
   readonly type: string;
   readonly placeholder: string;
@@ -70,29 +107,13 @@ export function CodeTypeField(props: {
   readonly onToggle: () => void;
   readonly onChange: (type: string) => void;
 }) {
-  const action = props.open ? 'Hide the code type' : 'Show the code type';
   return (
     <>
-      <button type="button" className="property-code-toggle" aria-expanded={props.open} aria-label={action} title={action} onClick={props.onToggle}>
-        {props.open ? <ChevronDownIcon size={10} /> : <ChevronRightIcon size={10} />}
-        Code type
-      </button>
-      {props.open && (
-        <ExprInput
-          ariaLabel="Code type"
-          className="property-code"
-          language="typescript"
-          value={props.type}
-          syncValue={props.type}
-          placeholder={props.placeholder}
-          onChange={(type) => {
-            // An editor has no maxLength, so the bound the input held is held here.
-            if (type.length <= PROPERTY_LIMITS.textCharsMax) {
-              props.onChange(type);
-            }
-          }}
-        />
-      )}
+      <div className="property-code-heading">
+        <span>Code type</span>
+        <CodeTypeToggle open={props.open} onToggle={props.onToggle} />
+      </div>
+      {props.open && <CodeTypeEditor type={props.type} placeholder={props.placeholder} onChange={props.onChange} />}
     </>
   );
 }

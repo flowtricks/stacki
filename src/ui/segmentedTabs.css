@@ -1,0 +1,88 @@
+/* Segmented tabs (SegmentedTabs.tsx): plain labels over one pill
+   (.ui-tabs-indicator) that slides and resizes to the active tab. Its transform
+   and width are set inline from the tab's layout offsets
+   (src/ui/segmentIndicator.ts). The Apps panel's Installed / Marketplace switch
+   draws with it, and the app UI kit's `<stacki-tabs>` is the same component
+   under this same file (scripts/build/appUiKit.mts). Background fills, never
+   borders.
+   Each tab is as wide as its label plus the same side padding, and the track
+   hugs its tabs (max-width keeps it inside a narrow parent). `.is-equal`
+   (layout="equal") is the exception, for a two-way switch that fills its row:
+   the track takes its container's width and the tabs split it evenly. */
+.ui-tabs {
+  --ui-tabs-pad: 2px;
+  position: relative;
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  gap: 2px;
+  padding: var(--ui-tabs-pad);
+  border-radius: 7px;
+  background: var(--bg-input);
+}
+.ui-tabs-indicator {
+  position: absolute;
+  z-index: 0;
+  top: var(--ui-tabs-pad);
+  bottom: var(--ui-tabs-pad);
+  left: 0;
+  width: 0;
+  border-radius: 5px;
+  background: var(--bg-active);
+  pointer-events: none;
+}
+.ui-tabs-indicator.is-animated {
+  transition:
+    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.ui-tab {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 11.5px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 120ms ease-out;
+}
+/* Equal shares: the track fills its container, each tab one even share of it
+   whatever its label, and a label too long for its share is cut, not spilled. */
+.ui-tabs.is-equal {
+  width: auto;
+}
+.ui-tabs.is-equal > .ui-tab {
+  flex: 1 1 0;
+  min-width: 0;
+}
+/* The pill is the active tab's background, so hover changes the text only: the
+   app's blanket button:hover fill would paint a second pill. */
+.ui-tab:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text-dim);
+}
+.ui-tab.on,
+.ui-tab.on:hover:not(:disabled) {
+  background: transparent;
+  color: var(--text);
+}
+.ui-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 1px var(--color-border-focus, var(--accent));
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-tabs-indicator.is-animated,
+  .ui-tab {
+    transition: none;
+  }
+}

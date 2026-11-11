@@ -1,6 +1,6 @@
 import { frameContextPoint, type ContextPoint } from './contextPosition';
 import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type React from 'react';
 import type { OverlayInfo, RectMap, SpacingMap } from './PreviewOverlays';
 import type { PreviewDevice } from './PreviewToolbar';
@@ -15,6 +15,9 @@ import type { Digest } from '../../../shared/core/brand';
 import { judgeEventToken, type PreviewRender, type PreviewVerdict } from '../../../shared/page/previewToken';
 import type { CanvasSelectionVerdict } from './previewSelection';
 import type { CanvasEventRequest } from '../../editor/canvasClick';
+import { canvasClicksCaptured, noteCanvasOpen, observeCanvasClick, takeCanvasClick } from '../../ui/canvasClickSlot';
+import { receiveCanvasPoint } from '../../ui/canvasPointQuery';
+import { canvasHighlight, noteDeepHover, resendCanvasOutlineMode, subscribeCanvasHighlight } from '../../ui/canvasOutlineMode';
 
 /** Whether a click or double-click on the canvas may select what it names
  * (src/features/preview/previewGate.ts). Hover needs only the token to be the latest. */
@@ -57,6 +60,8 @@ export interface PreviewRuntimeProps {
   readonly onStaleEvent: (verdict: Extract<PreviewVerdict, { readonly tag: 'stale' }>) => void;
   /** The canvas reloaded instead of patching (step 7): past a cap, it says so. */
   readonly onPreviewReload?: (reason: PreviewReloadReason) => void;
+  /** More paths to measure: the elements app overlays are anchored to (src/features/apps). */
+  readonly extraTrackPaths?: readonly string[] | undefined;
 }
 
 /** What a canvas click said besides its path: whether it landed outside the
@@ -99,7 +104,10 @@ export function usePreviewRuntime(props: PreviewRuntimeProps, url: string | unde
   const [guide, setGuide] = useState<GuideMetrics | undefined>(undefined);
   const [textMarks, setTextMarks] = useState<TextMarks>(NO_TEXT_MARKS);
   const hoverPseudo = hoveredPseudo(props, canvasHover, canvasHoverPseudo);
-  const { hoverPath, trackPaths } = useTrackedPaths(props, canvasHover, hoverPseudo);
+  // An app's highlight (`canvas.highlight`) is drawn in its own slot (PreviewOverlays.tsx), so the frame measures it too.
+  const highlight = useSyncExternalStore(subscribeCanvasHighlight, canvasHighlight);
+  const tracked = highlight === undefined ? props : { ...props, extraTrackPaths: [...(props.extraTrackPaths ?? []), highlight.path] };
+  const { hoverPath, trackPaths } = useTrackedPaths(tracked, canvasHover, hoverPseudo);
   const refs = useRuntimeRefs(props, selectedOccurrence);
   const setters = useMemo(
     () => ({
@@ -245,12 +253,24 @@ function useTrackedPaths(props: PreviewRuntimeProps, canvasHover: string | undef
   // A picked or hovered ::before / ::after is measured on its own (framePseudo.ts).
   const selectedPseudoPath = props.selPath !== undefined && props.selPseudo !== undefined ? pseudoPath(props.selPath, props.selPseudo) : undefined;
   const hoverPseudoPath = hoverPath !== undefined && hoverPseudo !== undefined ? pseudoPath(hoverPath, hoverPseudo) : undefined;
+  // App overlay anchors come joined too, for the same reason.
+  const extraPaths = (props.extraTrackPaths ?? []).join('\n');
   const trackPaths = useMemo(
     // The loop's child paths come joined as one string, so the list is rebuilt
     // only when they change rather than on every render.
     () =>
-      trackedPaths(props.selPath, hoverPath, props.focusPath, selectedBoxPath, hoverBoxPath, selectedPseudoPath, hoverPseudoPath, ...loopBoxPaths.split('\n')),
-    [props.focusPath, hoverPath, hoverBoxPath, props.selPath, selectedBoxPath, selectedPseudoPath, hoverPseudoPath, loopBoxPaths],
+      trackedPaths(
+        props.selPath,
+        hoverPath,
+        props.focusPath,
+        selectedBoxPath,
+        hoverBoxPath,
+        selectedPseudoPath,
+        hoverPseudoPath,
+        ...loopBoxPaths.split('\n'),
+        ...extraPaths.split('\n'),
+      ),
+    [props.focusPath, hoverPath, hoverBoxPath, props.selPath, selectedBoxPath, selectedPseudoPath, hoverPseudoPath, loopBoxPaths, extraPaths],
   );
   return { hoverPath, trackPaths };
 }
@@ -353,6 +373,7 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
     case 'hover-node':
       // A picture, not a selection: only the rendering has to be the latest.
       if (judgeEventToken(message.token, refs.render.current).tag === 'current') {
+        noteDeepHover(message.path, message.deep);
         setters.setCanvasHover(message.path);
         setters.setCanvasHoverPseudo(message.pseudo);
         setters.setHoverOcc(message.occurrence);
@@ -365,6 +386,12 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       applyContextMenu(message, refs, setters, frame);
       break;
     case 'click-node':
+      // While a Stacki app captures canvas clicks, the click is the app's, not a selection (src/ui/canvasClickSlot.ts).
+      if (takeCanvasClick({ path: message.path, occurrence: message.occurrence, x: message.x, y: message.y, box: message.box })) {
+        break;
+      }
+      // An observing app hears the click too, after the double-click window; the editor selects as always.
+      observeCanvasClick({ path: message.path, occurrence: message.occurrence, x: message.x, y: message.y, box: message.box });
       gateEvent(message.token, refs, { kind: 'click', path: message.path, outside: message.outside }, (path) =>
         // A pseudo-element belongs to the node the click named; when the gate
         // re-resolved the path to another node, it no longer applies.
@@ -380,6 +407,7 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       break;
     case 'canvas-ready':
       noteCanvasReady();
+      resendCanvasOutlineMode(); // A new document starts in the editor's own mode.
       break;
     case 'guide':
       setters.setGuide(message.metrics);
@@ -387,10 +415,17 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
     case 'query-result':
       receiveCanvasReply(message.input);
       break;
+    case 'point-result':
+      receiveCanvasPoint(message.input);
+      break;
     case 'text-marks':
       setters.setTextMarks({ hover: message.hover, picked: message.picked });
       break;
     case 'open-node':
+      noteCanvasOpen(); // A double click: the observed click it began with is no placement.
+      if (canvasClicksCaptured()) {
+        break; // A double click while an app captures is two clicks for the app, never a drill-in.
+      }
       gateEvent(message.token, refs, { kind: 'open' }, () => refs.props.current.onOpenPath?.(message.path ?? undefined, message.occurrence));
       break;
   }

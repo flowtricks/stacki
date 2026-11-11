@@ -3,7 +3,7 @@ import { assert } from '../../../shared/core/assert';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import type { TrailingSlash } from '../../editor/pageState';
 import { ComponentPreviewFrame } from './ComponentPreviewPopup';
-import { componentPreviewURL } from './paletteModel';
+import { componentPreviewURL, type ComponentPreviewGesture } from './paletteModel';
 
 // The picture of a component in the insert grid: the same live rendering the Components panel's
 // hover card shows, through the same preview route and frame (ComponentPreviewPopup.tsx). The
@@ -48,6 +48,7 @@ export function InsertPreviewSurface({
   mounted,
   icon,
   onSettled,
+  onGesture,
 }: {
   readonly source: InsertPreviewSource;
   /** Whether the grid has given this card one of its frames right now. */
@@ -55,6 +56,8 @@ export function InsertPreviewSurface({
   readonly icon: ReactNode;
   /** The frame has answered: the grid may start the next one. */
   readonly onSettled?: (() => void) | undefined;
+  /** The pointer came into the live preview, or clicked it: the card's own hover and insert. */
+  readonly onGesture?: ((gesture: ComponentPreviewGesture) => void) | undefined;
 }) {
   const url = insertPreviewURL(source);
   let content: ReactNode;
@@ -62,7 +65,17 @@ export function InsertPreviewSurface({
     content = <PreviewNote icon={icon} state={{ kind: 'empty', reason: source.component === undefined ? PREVIEW_REASONS.noFile : PREVIEW_REASONS.noServer }} />;
   } else if (mounted) {
     assert(source.component !== undefined, 'A card URL names a component');
-    content = <CardFrame key={url} url={url} name={source.component.name} icon={icon} resolvePreviewURL={source.resolvePreviewURL} onSettled={onSettled} />;
+    content = (
+      <CardFrame
+        key={url}
+        url={url}
+        name={source.component.name}
+        icon={icon}
+        resolvePreviewURL={source.resolvePreviewURL}
+        onSettled={onSettled}
+        onGesture={onGesture}
+      />
+    );
   } else {
     content = <PreviewNote icon={icon} state={{ kind: 'loading' }} />;
   }
@@ -75,12 +88,14 @@ function CardFrame({
   icon,
   resolvePreviewURL,
   onSettled,
+  onGesture,
 }: {
   readonly url: string;
   readonly name: string;
   readonly icon: ReactNode;
   readonly resolvePreviewURL: ((url: string) => Promise<string>) | undefined;
   readonly onSettled: (() => void) | undefined;
+  readonly onGesture: ((gesture: ComponentPreviewGesture) => void) | undefined;
 }) {
   const [state, setState] = useState<FrameState>({ kind: 'loading' });
   const receive = useCallback(
@@ -93,7 +108,15 @@ function CardFrame({
   );
   return (
     <>
-      <ComponentPreviewFrame url={url} name={name} visible={state.kind === 'ready'} surface="card" resolvePreviewURL={resolvePreviewURL} onStatus={receive} />
+      <ComponentPreviewFrame
+        url={url}
+        name={name}
+        visible={state.kind === 'ready'}
+        surface="card"
+        resolvePreviewURL={resolvePreviewURL}
+        onStatus={receive}
+        onGesture={onGesture}
+      />
       {state.kind !== 'ready' && <PreviewNote icon={icon} state={state} />}
     </>
   );

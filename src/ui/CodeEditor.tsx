@@ -452,13 +452,15 @@ export function codeEditorLanguage(language: string | undefined): LanguageSuppor
         LanguageDescription.of({
           name: 'css',
           extensions: ['css'],
-          load: async () => css(),
+          // Given, not loaded: a loaded fence language arrives a tick after the
+          // first paint, so its block would paint grey and then recolour.
+          support: css(),
         }),
         LanguageDescription.of({
           name: 'javascript',
           alias: ['js', 'jsx', 'ts', 'tsx', 'typescript'],
           extensions: ['js', 'ts'],
-          load: async () => javascript({ typescript: true, jsx: true }),
+          support: javascript({ typescript: true, jsx: true }),
         }),
       ],
     });

@@ -2,6 +2,12 @@
 import './previewLinks';
 import { receiveLiveVariables } from '../../../vendor/stacki/electron/preload/frameLiveVariables';
 import { receiveLiveRules } from '../../../vendor/stacki/electron/preload/frameLiveRules';
+import { receiveAppCursor } from '../../../vendor/stacki/electron/preload/frameAppCursor';
+import { receivePointQuery, type FramePointHit } from '../../../vendor/stacki/electron/preload/framePointQuery';
+import { deepHoverAt, receiveOutlineMode } from '../../../vendor/stacki/electron/preload/frameOutlineMode';
+import { HIGHLIGHT_MESSAGE, parseCanvasHighlight } from '../../../vendor/stacki/shared/properties/deepOutline';
+import { receiveAppScroll, receiveAppWheel } from '../../../vendor/stacki/electron/preload/frameAppScroll';
+import { rectsForPath } from '../../../vendor/stacki/electron/preload/frameMeasure';
 import { installCanvasText } from '../../../vendor/stacki/electron/preload/frameText';
 import { parseCanvasInteraction, parseCanvasSitePages, type CanvasInteraction } from '../../../vendor/stacki/shared/properties/canvasInteraction';
 import {
@@ -111,7 +117,10 @@ function pageClaimsEscape(event: KeyboardEvent): boolean {
 forwardStyleModifiers(post);
 let labels: Record<string, { label: string; component: boolean; nodeKind: string }> = {};
 const paint = createOutlines(post);
-const draw = () => paint(selected, hovered, collaborators);
+// An app's highlight (`canvas.highlight`): the editor draws it in its own slot (PreviewOverlays.tsx), so this
+// frame only measures its path beside the selection's and the hover's.
+let highlighted: string | undefined;
+const draw = () => paint(selected, hovered, highlighted === undefined ? collaborators : [...collaborators, highlighted]);
 function target(id: string, occurrence?: number): OutlineTarget | undefined {
   return id
     ? {
@@ -147,6 +156,15 @@ document.addEventListener(
       return;
     }
     const { id, occurrence } = locate(event.target, event.clientX, event.clientY) ?? { id: '', occurrence: 0 };
+    // Deep outline mode: inside a closed component the hover outlines what editing that component would (frameOutlineMode.ts).
+    const deep = deepHoverAt(event.target, id === '' ? undefined : scope + id);
+    if (deep !== undefined) {
+      if (hovered?.id !== deep.path || hovered?.occurrence !== deep.occurrence) {
+        hovered = { id: deep.path, label: deep.node.label, component: deep.node.kind === 'component', nodeKind: deep.node.kind, occurrence: deep.occurrence };
+        draw();
+      }
+      return;
+    }
     if (hovered?.id !== scope + id || hovered?.occurrence !== occurrence) {
       hovered = target(id, occurrence);
       draw();
@@ -210,7 +228,16 @@ for (const type of ['click', 'dblclick', 'contextmenu']) {
       }
       const located = locate(event.target, event.clientX, event.clientY);
       if (located) {
-        post({ type: type === 'click' ? 'studio:select' : 'studio:open', id: located.id, occurrence: located.occurrence });
+        // Where the pointer was and the box of the copy it hit, for an app capturing canvas clicks (canvasCapture.ts).
+        const box = rectsForPath(scope + located.id)?.[located.occurrence];
+        post({
+          type: type === 'click' ? 'studio:select' : 'studio:open',
+          id: located.id,
+          occurrence: located.occurrence,
+          x: event.clientX,
+          y: event.clientY,
+          box,
+        });
       }
     },
     true,
@@ -235,6 +262,26 @@ window.addEventListener('message', (event) => {
     return;
   }
   if (receiveLiveRules(data)) {
+    return;
+  }
+  if (receiveAppCursor(data)) {
+    return;
+  }
+  if (receivePointQuery(data, nodeAtPoint, post)) {
+    return;
+  }
+  if (receiveOutlineMode(data)) {
+    return;
+  }
+  if (data.type === HIGHLIGHT_MESSAGE) {
+    highlighted = parseCanvasHighlight('highlight' in data ? data.highlight : undefined)?.path;
+    draw();
+    return;
+  }
+  if (receiveAppScroll(data)) {
+    return;
+  }
+  if (receiveAppWheel(data)) {
     return;
   }
   receiveLiveText(data);
@@ -410,6 +457,15 @@ function locate(element: Element, x: number, y: number): { readonly id: string; 
     }
   }
   return id === undefined ? undefined : { id, occurrence: occurrenceAt(id, x, y) };
+}
+// What is under a point for an app dragging an overlay item (framePointQuery.ts): a click's id, copy and box there.
+function nodeAtPoint(x: number, y: number): FramePointHit | undefined {
+  const element = document.elementFromPoint(x, y);
+  const located = element === null ? undefined : locate(element, x, y);
+  if (located === undefined) {
+    return undefined;
+  }
+  return { path: located.id, occurrence: located.occurrence, box: rectsForPath(scope + located.id)?.[located.occurrence] };
 }
 function depthOf(path: string): number {
   return path.split('.').length;

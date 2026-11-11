@@ -1,0 +1,143 @@
+/* Settings → Roles: member pictures, the username field's suggestions, and the app picker.
+   Fills only, never lines: a highlighted row is the accent fill, as in the app's menus. */
+.app-role-chip .history-avatar {
+  margin-left: -4px;
+}
+.app-role-member-field {
+  position: relative;
+  display: flex;
+  flex: 0 1 220px;
+}
+.app-role-add .app-role-member-field input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.app-role-suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 400;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: max(100%, 280px);
+  margin: 0;
+  padding: 4px;
+  overflow: hidden;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: #232323;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55);
+  list-style: none;
+  /* MemberPicker sets the height from its row count (MEMBER_PICKER_LIMITS), so the list
+     grows and shrinks smoothly as typing narrows it instead of jumping. */
+  transition: height 120ms ease;
+}
+/* Every row is exactly MEMBER_PICKER_LIMITS.rowHeightPx tall, so the set height fits it. */
+.app-role-suggestion,
+.app-role-suggestion-status {
+  flex: none;
+  box-sizing: border-box;
+  height: 28px;
+}
+.app-role-suggestion {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-radius: 5px;
+  color: #ddd;
+  font-size: 12px;
+  cursor: pointer;
+}
+.app-role-suggestion:hover:not(.highlight) {
+  background: #ffffff10;
+}
+.app-role-suggestion.highlight {
+  background: var(--accent);
+  color: #fff;
+}
+.app-role-suggestion-login {
+  font-weight: 600;
+  white-space: nowrap;
+}
+.app-role-suggestion-name {
+  overflow: hidden;
+  color: var(--text-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-role-suggestion.highlight .app-role-suggestion-name {
+  color: inherit;
+  opacity: 0.8;
+}
+.app-role-suggestion-status {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.app-role-app-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  object-fit: cover;
+}
+.app-role-chip .app-role-app-icon {
+  margin-left: -2px;
+}
+/* Role heading: the Roles tab's people icon, muted, on the title's line. */
+.app-role-heading-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--text-dim);
+}
+/* The permissions disclosure. Height animates through a grid row (0fr to 1fr), so
+   the grid inside keeps its own layout; reduced motion opens it at once. */
+.app-role-permissions-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+.app-role-permissions-toggle:hover {
+  background: #ffffff10;
+  color: var(--text);
+}
+.app-role-permissions-toggle svg {
+  transition: transform 160ms ease;
+}
+.app-role-permissions[data-open='true'] .app-role-permissions-toggle svg {
+  transform: rotate(90deg);
+}
+.app-role-permissions-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 200ms ease;
+}
+.app-role-permissions[data-open='true'] .app-role-permissions-body {
+  grid-template-rows: 1fr;
+}
+.app-role-permissions-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+.app-role-permissions[data-open='true'] .app-role-permissions-inner > .app-role-access {
+  padding-top: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-role-suggestions,
+  .app-role-permissions-toggle svg,
+  .app-role-permissions-body {
+    transition: none;
+  }
+}

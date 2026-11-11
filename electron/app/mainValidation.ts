@@ -12,6 +12,10 @@ export interface AppSettings {
   readonly usageCountsEnabled: boolean;
   readonly usageNoticeVersion: number;
   readonly usageLastAttemptDay?: string;
+  /** Apps read the person's id only, never their Git name, email or GitHub account (docs/apps.md, "The person"). */
+  readonly appsPersonHidden: boolean;
+  /** Ask before AI agents may work in a project opened for the first time; off: opening the panel allows it. */
+  readonly aiAskBeforeTrust: boolean;
 }
 
 export function parseSettings(input: unknown): AppSettings {
@@ -20,6 +24,8 @@ export function parseSettings(input: unknown): AppSettings {
     usageCountsEnabled: optional(boolean),
     usageNoticeVersion: optional(count),
     usageLastAttemptDay: optional(text),
+    appsPersonHidden: optional(boolean),
+    aiAskBeforeTrust: optional(boolean),
   })(input);
   if (value.usageNoticeVersion !== undefined && value.usageNoticeVersion > 10) {
     throw new Error('Settings: invalid usage notice version');
@@ -31,6 +37,8 @@ export function parseSettings(input: unknown): AppSettings {
     sound: value.sound,
     usageCountsEnabled: value.usageCountsEnabled ?? true,
     usageNoticeVersion: value.usageNoticeVersion ?? 0,
+    appsPersonHidden: value.appsPersonHidden ?? false,
+    aiAskBeforeTrust: value.aiAskBeforeTrust ?? false,
     ...(value.usageLastAttemptDay === undefined ? {} : { usageLastAttemptDay: value.usageLastAttemptDay }),
   };
 }

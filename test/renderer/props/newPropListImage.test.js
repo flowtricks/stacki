@@ -28,14 +28,12 @@ const suggest = load('src/editor/dataSuggest.ts');
 const schemaReader = require('#dist/electron/parse/astroPropSchema.js');
 
 const NONE = { min: undefined, max: undefined, decimals: undefined };
-const SWITCH = { onLabel: 'On', offLabel: 'Off' };
 const EMPTY_LIST = { fields: [], items: [] };
 const declare = (fields) => ({
   tooltip: '',
   defaultText: '',
   options: [],
   number: NONE,
-  switch: SWITCH,
   attributes: [],
   tag: '',
   list: EMPTY_LIST,

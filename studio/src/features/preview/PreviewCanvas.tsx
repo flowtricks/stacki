@@ -12,6 +12,7 @@ import type { Peer } from '../collaboration/presence';
 import { spacingHover } from './spacingHover';
 import { useLiveValue } from '../../../vendor/stacki/src/ui/liveValue';
 import { PreviewOverlays } from '../../../vendor/stacki/src/features/preview/PreviewOverlays';
+import { StudioAppOverlays } from '../apps/StudioApps';
 import { GuideOverlay } from '../../../vendor/stacki/src/features/preview/GuideOverlay';
 import { useColumnGuide, type ShownGuide } from '../../../vendor/stacki/src/features/preview/guideSettings';
 import { outlineInfo, outlineNode } from './outlineInfo';
@@ -184,12 +185,18 @@ function DesignFrame({
       <div
         ref={sizing.frameRef}
         className={`frame-sized ${sizing.width ? '' : 'full'} ${sizing.resizing || sizing.panelSettling ? 'resizing' : ''}`}
-        style={{
-          width: sizing.viewport.width,
-          height: sizing.viewport.height,
-          bottom: 'auto',
-          transform: `translateX(-50%) scale(${sizing.viewport.scale})`,
-        }}
+        // A fluid frame fills the canvas by CSS, so it follows a side-panel drag each frame
+        // without a render (usePreviewSizing puts off its measure until release).
+        style={
+          sizing.width
+            ? {
+                width: sizing.viewport.width,
+                height: sizing.viewport.height,
+                bottom: 'auto',
+                transform: `translateX(-50%) scale(${sizing.viewport.scale})`,
+              }
+            : { width: '100%', height: '100%', bottom: 'auto', transform: 'translateX(-50%)' }
+        }
       >
         <div className="frame-clip">
           <iframe
@@ -228,11 +235,13 @@ function CanvasOverlays({
   readonly shownGuide: ShownGuide | undefined;
 }) {
   const spacing = useLiveValue(spacingHover);
-  const style: CSSProperties = {
-    width: sizing.viewport.width * sizing.viewport.scale,
-    height: sizing.viewport.height * sizing.viewport.scale,
-    borderRadius: sizing.width ? 10 * sizing.viewport.scale : 0,
-  };
+  const style: CSSProperties = sizing.width
+    ? {
+        width: sizing.viewport.width * sizing.viewport.scale,
+        height: sizing.viewport.height * sizing.viewport.scale,
+        borderRadius: 10 * sizing.viewport.scale,
+      }
+    : { width: '100%', height: '100%', borderRadius: 0 };
   return (
     <div className={`preview-overlay-layer ${sizing.width ? '' : 'full'}`} style={style}>
       {/* First in the layer, so the outlines and spacing bands paint over it. */}
@@ -268,6 +277,7 @@ function CanvasOverlays({
             : undefined
         }
       />
+      <StudioAppOverlays rects={props.preview.outlines.rects} scale={sizing.viewport.scale} file={props.file} />
     </div>
   );
 }

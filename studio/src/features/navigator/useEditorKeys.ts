@@ -21,7 +21,16 @@ export function useEditorKeys(
       const value = event.key.toLowerCase();
       if (primary && (value === 'z' || value === 'y')) {
         event.preventDefault();
-        void document.history.step(event.shiftKey || value === 'y' ? 'redo' : 'undo').catch(report);
+        const direction = event.shiftKey || value === 'y' ? 'redo' : 'undo';
+        // A step an app named (docs/apps.md, "Undo labels") says which one went: a string reports as a notice.
+        void document.history
+          .step(direction)
+          .then((label) => {
+            if (label !== undefined) {
+              report(`${direction === 'undo' ? 'Undid' : 'Redid'} ${label}`);
+            }
+          })
+          .catch(report);
         return;
       }
       if (event.target instanceof Element && event.target.closest('input, textarea, select, [contenteditable=true], .cm-editor')) {

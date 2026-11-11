@@ -1,4 +1,7 @@
-import React from 'react';
+import { outsideScope } from '../../../shared/properties/deepOutline';
+import { canvasHighlight, deepHoverNode, subscribeCanvasHighlight } from '../../ui/canvasOutlineMode';
+import type { CanvasHighlight } from '../../../shared/properties/deepOutline';
+import React, { useSyncExternalStore } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import type { Box } from './outlineBoxes';
@@ -68,6 +71,32 @@ interface PreviewOverlaysProps {
   readonly textMarks?: TextMarks | undefined;
   readonly overlayInfo?: (path: string) => OverlayInfo | undefined;
   readonly onOpenComponent?: ((path: string, occurrence: number) => void) | undefined;
+  /** The open file's path prefix ('' for a page): a hover outside it is a deep hover (shared/properties/deepOutline.ts). */
+  readonly pathScope?: string | undefined;
+}
+
+/**
+ * A deep hover's outline: the node inside a closed component, drawn as the editor draws it
+ * with that component open: an instance green with ⬡ and its name, an element with its first
+ * class or tag. Undefined when the frame did not label it, and then nothing is drawn rather
+ * than a guess.
+ */
+export function deepOutlineInfo(path: string): OverlayInfo | undefined {
+  const node = deepHoverNode(path);
+  if (node === undefined) {
+    return undefined;
+  }
+  return {
+    label: node.label,
+    kind: node.kind,
+    tag: node.tag,
+    astroAsset: false,
+    dynamicTag: false,
+    nodeKind: node.kind,
+    childCount: 0,
+    isLayout: false,
+    bound: false,
+  };
 }
 
 export function PreviewOverlays(props: PreviewOverlaysProps) {
@@ -106,12 +135,16 @@ function SpacingOverlays(props: PreviewOverlaysProps) {
 }
 
 function NodeOutlines(props: PreviewOverlaysProps) {
-  const outlines = outlineTargets(props);
+  // An app's highlight (`canvas.highlight`), in its own slot: the real selection and hover are untouched beside it.
+  const highlight = useSyncExternalStore(subscribeCanvasHighlight, canvasHighlight, canvasHighlight);
+  const outlines = outlineTargets(props, highlight);
   return outlines.flatMap((outline) => {
     if (outline.pseudo !== undefined) {
-      return <PseudoOutline key={`${outline.type}-pseudo`} outline={outline} rects={props.rects} scale={props.scale} />;
+      return <PseudoOutline key={`${outline.slot}-pseudo`} outline={outline} rects={props.rects} scale={props.scale} />;
     }
-    const info = props.overlayInfo?.(outline.path);
+    // A deep hover or a highlight names a node inside a closed component, which the open file's tree cannot label.
+    const info =
+      outline.slot !== 'sel' && outsideScope(outline.path, props.pathScope ?? '') ? deepOutlineInfo(outline.path) : props.overlayInfo?.(outline.path);
     const geometryPath = outlineBoxPath(outline.path, info?.nodeKind);
     const all = props.rects[geometryPath] ?? props.rects[outline.path];
     if (!all || !info) {
@@ -125,7 +158,7 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     const boxes = loop !== undefined ? [loop] : copies;
     return boxes.map((box, index) => (
       <div
-        key={`${outline.type}-${index}`}
+        key={`${outline.slot}-${index}`}
         className={`node-outline ${outline.type} ${info.kind}${info.bound ? ' bound' : ''}${
           outline.type === 'sel' ? textMarkState(props.textMarks, { pointedAt: props.hoverPath === outline.path }) : ''
         }`}
@@ -134,7 +167,13 @@ function NodeOutlines(props: PreviewOverlaysProps) {
         <span className={`node-outline-tag ${box.y * props.scale < 20 ? 'inside' : ''}`}>
           {outlineIcon(info)}
           {info.label}
-          {outline.type === 'sel' && <ComponentEditButton info={info} path={outline.path} occurrence={all.indexOf(box)} onOpen={props.onOpenComponent} />}
+          {outline.slot === 'sel' && <ComponentEditButton info={info} path={outline.path} occurrence={all.indexOf(box)} onOpen={props.onOpenComponent} />}
+          {/* A highlight shows the selected chip's component icon, but opens nothing: it is display only. */}
+          {outline.slot === 'highlight' && outline.type === 'sel' && info.kind === 'component' && (
+            <span className="node-outline-edit" aria-hidden="true">
+              <ComponentEditIcon size={14} />
+            </span>
+          )}
         </span>
       </div>
     ));
@@ -184,22 +223,34 @@ function ComponentEditButton({
 
 interface OutlineTarget {
   readonly path: string;
+  /** Which outline this is: the hover, the real selection, or an app's highlight. */
+  readonly slot: 'hover' | 'sel' | 'highlight';
+  /** How it is drawn. */
   readonly type: 'hover' | 'sel';
   readonly occ: number | undefined;
   readonly pseudo: PseudoLayer | undefined;
 }
 
-function outlineTargets(props: PreviewOverlaysProps): readonly OutlineTarget[] {
+function outlineTargets(props: PreviewOverlaysProps, highlight: CanvasHighlight | undefined): readonly OutlineTarget[] {
   const targets: OutlineTarget[] = [];
-  if (props.hoverPath) {
+  // While an app highlights, the hover gives way to it, as the app's own hover is what moves it.
+  if (highlight !== undefined) {
+    targets.push({
+      path: highlight.path,
+      slot: 'highlight',
+      type: highlight.style === 'hover' ? 'hover' : 'sel',
+      occ: highlight.occurrence,
+      pseudo: undefined,
+    });
+  } else if (props.hoverPath) {
     // The element and its ::before are different layers: hovering one while the other is selected outlines it.
     const samePseudo = props.hoverPseudo === props.selPseudo;
     if (!samePseudo || !hoverIsSelection({ path: props.hoverPath, occ: props.hoverOcc }, { path: props.selPath, occ: props.selOcc })) {
-      targets.push({ path: props.hoverPath, type: 'hover', occ: props.hoverOcc, pseudo: props.hoverPseudo });
+      targets.push({ path: props.hoverPath, slot: 'hover', type: 'hover', occ: props.hoverOcc, pseudo: props.hoverPseudo });
     }
   }
   if (props.selPath) {
-    targets.push({ path: props.selPath, type: 'sel', occ: props.selOcc, pseudo: props.selPseudo });
+    targets.push({ path: props.selPath, slot: 'sel', type: 'sel', occ: props.selOcc, pseudo: props.selPseudo });
   }
   return targets;
 }

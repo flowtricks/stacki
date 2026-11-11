@@ -7,17 +7,19 @@ import { useMemo, useRef } from 'react';
 import { assert } from '../../shared/core/assert';
 import CodeEditor from './CodeEditor';
 import HtmlField from './HtmlField';
-import { markdownHTML, parseMarkdown } from './markdownBlocks';
+import { markdownHTML, parseMarkdown, type MarkdownReadOptions } from './markdownBlocks';
 import { markdownFromHTML } from './markdownWrite';
 
 interface Props {
   readonly value: string;
   readonly label?: string | undefined;
+  /** `gfm` shows tables and task list items (the Instructions panel); the CMS reads CommonMark. */
+  readonly extensions?: MarkdownReadOptions['extensions'] | undefined;
   readonly onChange: (value: string) => void;
 }
 
-export default function MarkdownField({ value, label, onChange }: Props) {
-  const parsed = useMemo(() => parseMarkdown(value), [value]);
+export default function MarkdownField({ value, label, extensions = 'commonmark', onChange }: Props) {
+  const parsed = useMemo(() => parseMarkdown(value, { extensions }), [value, extensions]);
   // The Markdown this field last wrote and the HTML it came from: while the value is
   // still that Markdown, the editor keeps its own HTML, so writing never moves the caret.
   const emitted = useRef<{ readonly markdown: string; readonly html: string }>();

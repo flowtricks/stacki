@@ -1,6 +1,7 @@
 import { useDesktopDefaultsCanvas } from './state/useDesktopDefaultsCanvas';
 import { useCallback } from 'react';
 import Settings from './settings/Settings';
+import { useProjectRoles } from './roles/useProjectRoles';
 import { type DynamicEntry, type ProjectIdentity } from './appTypes';
 import { routeToPath } from './model/nodeFactory';
 import { schemaFor } from './model/pageGestures';
@@ -13,11 +14,14 @@ import { readRestBinding } from '../editor/propDeclaration';
 import { imagePropsOf, propKeysByLocal, type NewPropHost, type PropSettingsOffer } from '../features/props/newPropModel';
 import PropertySettingsDialog from '../features/componentProperties/PropertySettingsDialog';
 import PanelBoundary from '../ui/PanelBoundary';
+import { shownPickerCollections } from './state/projectSources';
 
 export default function App() {
   const scope = useAppScope();
   const actions = useUiActions(scope);
   const defaultsCanvas = useDesktopDefaultsCanvas(scope);
+  // The project's role (.stacki/roles.json and the signed-in GitHub user) drives what the UI shows.
+  useProjectRoles(scope.project?.path);
   const app: AppView = {
     ...scope,
     ...actions,
@@ -29,7 +33,12 @@ export default function App() {
       <PanelBoundary name="Stacki" resetKey={app.project?.path}>
         <AppContent app={app} />
       </PanelBoundary>
-      <Settings projectPath={app.project?.path} previewURL={app.devStatus === 'on' ? app.devUrl : undefined} />
+      <Settings
+        projectPath={app.project?.path}
+        previewURL={app.devStatus === 'on' ? app.devUrl : undefined}
+        pages={{ folder: app.scan.pagesFolder ?? 'src/pages', configFile: app.scan.astroConfig }}
+        onOpenFile={(rel) => void app.openProjectFile(rel)}
+      />
     </>
   );
 }
@@ -189,6 +198,8 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
       // its data. What it does have is the instance it was opened from, whose
       // props are its Astro.props — the values it is rendering with right now.
       propsSample: app.currentPage?.kind === 'component' ? app.instanceProps : dynamicEntry?.props || undefined,
+      // Edited from an instance: what it passes, so a prop it leaves out reads its default or "not set".
+      ...(app.currentPage?.kind === 'component' && app.instancePassed !== undefined ? { propsInstance: { passed: app.instancePassed } } : {}),
       propsSchema: schemaFor(editedEntry),
       collectionSamples: app.collectionSamples,
       // The render's own values win: they are what the canvas is showing.
@@ -199,13 +210,18 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
       // What the file's imports hold, read from their modules: `APP_VERSION`
       // from src/consts.ts is a value to bind to, not a missing field.
       importedValues: app.importedValues,
-      collections: app.collections,
+      // The project's collections and data file exports the file does not read
+      // yet, less what Settings → Folders leaves out of the picker: picking from
+      // one writes its query or import, then binds (projectSources.ts).
+      collections: shownPickerCollections(app.collections, app.projectSources.config),
+      projectSources: app.projectSources.nodes,
       // Opening a collection in the picker asks for one entry of it; nothing is
       // fetched for collections nobody looks at.
       onNeedSample: app.requestCollectionSample,
       // Picking from a collection this page doesn't read yet writes the query
       // that fetches it, and answers with the name it ended up under.
       ensureQuery: app.ensureCollectionQuery,
+      ensureImport: app.ensureDataImport,
       entryNav: entryNavOf(app, dynamicEntry),
       // Which file a binding is written into, and the page a component is shown
       // on: the picker heads each group of rows by where its data lives, so a
@@ -253,6 +269,7 @@ function propSettingsOf(app: AppView, projectPath: string, file: string, keys: R
     changePhase: app.propertySave.changePhase,
     recordUndo: app.recordPropertyUndo,
     completeSave: app.completePropertySave,
+    openFile: (rel: string) => void app.openProjectFile(rel),
   };
   return {
     keyOf: (path) => keys.get(path),

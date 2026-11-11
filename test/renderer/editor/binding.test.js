@@ -469,9 +469,10 @@ const check = (what, condition, detail) => {
 
   // The picker is told what the chip MEANS, and a press on a chip in another
   // field puts this one away rather than leaving two pickers open at once.
+  // The menu works out `current` once, so the picker and a running app's `cms.bind` override are told the same value.
   check(
     'the picker marks the current value by what the chip means',
-    /current=\{menu\.chip \? chipPath\(menu\.chip\)/.test(panel),
+    /const current = menu\.chip \? chipPath\(menu\.chip\)/.test(panel) && /<DataPicker[^>]*\scurrent=\{current\}/.test(panel),
     "the picker is reading the chip's written text again",
   );
   check('a chip in another field closes this one', /onClose=\{\(\) => setMenu\(undefined\)\}/.test(panel), 'any chip anywhere keeps this picker open');

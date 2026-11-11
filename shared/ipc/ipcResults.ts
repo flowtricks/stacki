@@ -1,3 +1,7 @@
+import type { AiResults } from './aiChat';
+import type { AppFileAnswer } from '../properties/appFiles';
+import type { AppAccessToken, AppAuthStatus } from '../properties/appAuth';
+import type { AppNetResponse } from '../properties/appNet';
 import type { AccountState } from './publishAccount';
 import type { CmsConnectionList, CmsSaveResult, SanityLoginState } from '../properties/cmsConnections';
 import type {
@@ -12,6 +16,10 @@ import type {
 } from '../properties/cmsRemote';
 import type { LinkPreview } from '../properties/linkPreview';
 import type { MediaAccountChoices } from '../properties/mediaAccounts';
+import type { AppRelease, AppRepository, AppStaged, AppSummary, AppUpdateOutcome, AppsResult } from '../properties/apps';
+import type { AppFolderBroken } from '../properties/appFolders';
+import type { MarketplaceIndex } from '../properties/appMarketplace';
+import type { AppRepositoryPlaceReply } from '../properties/appPlace';
 import type { MediaConnectionList, MediaListing, MediaResult, MediaSaveResult } from '../properties/mediaHosting';
 import type { DataSample, PageTemplatePlan } from '../properties/pageTemplate';
 import type { AstroRemoteEditAnswer, AstroRemoteReadAnswer } from '../properties/astroContent';
@@ -19,12 +27,19 @@ import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
 import type { DesktopPublishState, PublishAvailability } from '../properties/publishState';
 import type { MetadataFile } from '../properties/projectMetadata';
+import type { InstructionListing, InstructionWriteResult } from '../properties/instructions';
 import type { LengthUnit } from '../properties/lengthUnit';
 import type { SelectorRemoval, SelectorReport } from '../properties/selectorUsage';
 import type { ConversionResult } from './assetConversion';
 import type { CommitDiffResult } from './gitCommitDiff';
+import type { CommitAvatarResult } from './commitAvatars';
+import type { GitHubUserSearchResult } from './githubUserSearch';
 import type { StudioStatus, StudioInstallResult } from './studioSetup';
 import type { StudioInstallProgress } from './studioProgress';
+import type { AppSecretScan } from '../properties/appSecrets';
+import type { AppSettingValues } from '../properties/appSettings';
+import type { AppEditOutcome, AppMember, AppPerson } from '../properties/appsRpc';
+import type { AppRepositoryStatus, AppShareOutcome, AppVisibilityOutcome, MarketplacePrecheck, MarketplaceSubmissionOutcome } from '../properties/appPublish';
 
 export interface StudioEventResults {
   readonly 'studio:progress': StudioInstallProgress;
@@ -117,11 +132,23 @@ export type WirePageEdit =
     } & WirePageDiskRead)
   | { readonly ok: false; readonly error: WirePageEditError };
 
-export interface IpcResults {
+export interface IpcResults extends AiResults {
   readonly 'project:createDefaultsCanvas': { readonly file: string };
   readonly 'project:removeDefaultsCanvas': undefined;
+  readonly 'instructions:create': InstructionWriteResult;
+  readonly 'instructions:createFolder': InstructionWriteResult;
+  readonly 'instructions:list': InstructionListing;
+  readonly 'instructions:read': InstructionWriteResult;
+  readonly 'instructions:reveal': { readonly ok: true };
+  readonly 'instructions:write': InstructionWriteResult;
   readonly 'project:metadata': Result<MetadataFile>;
   readonly 'project:writeMetadata': Result<MetadataFile>;
+  /** A folder chosen in the system dialog, project-relative; `outside` when it is not in the project. */
+  readonly 'project:pickFolder':
+    { readonly kind: 'canceled' } | { readonly kind: 'picked'; readonly path: string } | { readonly kind: 'outside'; readonly message: string };
+  /** The signed-in GitHub user roles resolve for; undefined when nobody is signed in (the local user is then admin). */
+  readonly 'roles:identity': { readonly login: undefined | string };
+  readonly 'github:searchUsers': GitHubUserSearchResult;
   readonly 'studio:status': StudioStatus;
   readonly 'studio:install': StudioInstallResult;
   readonly 'component:properties': Result<ComponentProperties>;
@@ -282,6 +309,10 @@ export interface IpcResults {
     readonly entry: Data;
     readonly error?: undefined | string;
   };
+  /** The rendered page's HTML for the Audits panel, or why it could not be fetched. */
+  readonly 'audit:render': { readonly ok: true; readonly status: number; readonly html: string } | { readonly ok: false; readonly message: string };
+  /** A page's performance report from a hidden window, unparsed: shared/page/auditPerformance.ts parses it. */
+  readonly 'audit:measure': { readonly ok: true; readonly measurement: unknown } | { readonly ok: false; readonly message: string };
   readonly 'content:sampleValue': {
     readonly value: Data;
     readonly error?: undefined | string;
@@ -451,6 +482,7 @@ export interface IpcResults {
     readonly atEnd: boolean;
   };
   readonly 'git:commitDiff': CommitDiffResult;
+  readonly 'git:avatars': CommitAvatarResult;
   readonly 'git:merge': WireMergeOutcome;
   readonly 'git:park': {
     readonly ok: true;
@@ -485,6 +517,49 @@ export interface IpcResults {
   readonly 'cmsRemote:references': RemoteResult<readonly RemoteReferenceOption[]>;
   readonly 'cmsRemote:upload': RemoteResult<RemoteAsset | undefined>;
   readonly 'cmsRemote:linkPreview': RemoteResult<LinkPreview | undefined>;
+  readonly 'apps:list': AppsResult<readonly AppSummary[]>;
+  readonly 'apps:pickFile': AppsResult<AppStaged | undefined>;
+  readonly 'apps:stageGitHub': AppsResult<AppStaged>;
+  readonly 'apps:githubRepositories': AppsResult<readonly AppRepository[]>;
+  readonly 'apps:githubReleases': AppsResult<readonly AppRelease[]>;
+  readonly 'apps:commit': AppsResult<AppSummary>;
+  readonly 'apps:discard': { readonly ok: true };
+  readonly 'apps:uninstall': AppsResult<readonly AppSummary[]>;
+  readonly 'apps:checkUpdates': AppsResult<readonly AppUpdateOutcome[]>;
+  readonly 'apps:applyUpdate': AppsResult<AppSummary>;
+  readonly 'apps:folders': AppsResult<readonly AppFolderBroken[]>;
+  readonly 'apps:revealFolder': { readonly ok: true };
+  readonly 'apps:marketplace': AppsResult<MarketplaceIndex>;
+  readonly 'apps:installMarketplace': AppsResult<AppSummary>;
+  readonly 'apps:setAutoUpdate': AppsResult<readonly AppSummary[]>;
+  readonly 'apps:repositoryVisibility': AppsResult<AppRepositoryPlaceReply>;
+  readonly 'apps:scanSecrets': AppsResult<AppSecretScan>;
+  readonly 'apps:repositoryStatus': AppsResult<AppRepositoryStatus>;
+  readonly 'apps:makePublic': AppsResult<AppVisibilityOutcome>;
+  readonly 'apps:addLicense': AppsResult<AppRepositoryStatus>;
+  readonly 'apps:share': AppsResult<AppShareOutcome>;
+  readonly 'apps:switchSource': AppsResult<AppSummary>;
+  readonly 'apps:checkMarketplace': AppsResult<MarketplacePrecheck>;
+  readonly 'apps:submitMarketplace': AppsResult<MarketplaceSubmissionOutcome>;
+  readonly 'apps:readSettings': AppsResult<AppSettingValues>;
+  readonly 'apps:writeSettings': AppsResult<AppSettingValues>;
+  /** Each file's modification stamp, in the order asked; undefined for a file that is gone or not a file. */
+  readonly 'apps:fileStamps': { readonly stamps: readonly ({ readonly mtimeMs: number; readonly sizeBytes: number } | undefined)[] };
+  readonly 'apps:storageGet': AppsResult<{ readonly value: string | undefined }>;
+  readonly 'apps:storageSet': AppsResult<AppEditOutcome>;
+  readonly 'apps:storageKeys': AppsResult<readonly string[]>;
+  readonly 'apps:storageWatch': { readonly ok: true };
+  readonly 'apps:person': AppsResult<AppPerson>;
+  readonly 'apps:people': AppsResult<readonly AppMember[]>;
+  readonly 'apps:hostVersion': { readonly version: string };
+  /** A PNG data URL of the region asked, at most APP_RPC_LIMITS.snapshotBytesMax. */
+  readonly 'apps:canvasSnapshot': AppsResult<{ readonly url: string; readonly width: number; readonly height: number }>;
+  readonly 'apps:files': AppsResult<AppFileAnswer>;
+  readonly 'apps:authConnect': AppsResult<AppAuthStatus>;
+  readonly 'apps:authStatus': AppsResult<readonly AppAuthStatus[]>;
+  readonly 'apps:authToken': AppsResult<AppAccessToken>;
+  readonly 'apps:authDisconnect': AppsResult<readonly AppAuthStatus[]>;
+  readonly 'apps:netFetch': AppsResult<AppNetResponse>;
   readonly 'mediaHosting:connections': MediaConnectionList;
   readonly 'mediaHosting:save': MediaSaveResult;
   readonly 'mediaHosting:remove': MediaConnectionList;
@@ -754,10 +829,12 @@ export interface IpcResults {
   readonly 'settings:get': {
     readonly sound: boolean;
     readonly usageCountsEnabled: boolean;
+    readonly appsPersonHidden: boolean;
   };
   readonly 'settings:set': {
     readonly sound: boolean;
     readonly usageCountsEnabled: boolean;
+    readonly appsPersonHidden: boolean;
     readonly saved: boolean;
   };
   readonly 'shell:openExternal': {

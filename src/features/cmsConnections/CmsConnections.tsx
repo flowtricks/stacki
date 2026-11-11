@@ -3,7 +3,6 @@
 // Stacki Studio; only the bridge underneath differs (src/ipc/cmsConnectionsBridge.ts).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import './cmsConnections.css';
-import { InfoLabel } from '../../ui/InfoLabel';
 import Popup from '../../ui/Popup';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { CmsIcon, PayloadIcon, SanityIcon } from '../../ui/Icons';
@@ -31,15 +30,9 @@ export function CmsConnections({ projectPath }: { readonly projectPath: string }
   };
   return (
     <section className="cms-connections" aria-label="CMS connections">
-      <h3>
-        <InfoLabel
-          label="CMS connections"
-          description={
-            'Connect the CMS this site’s content comes from, so text from it can be edited on ' +
-            'the canvas. Edits are saved as drafts in the CMS; nothing is published.'
-          }
-        />
-      </h3>
+      <p className="cms-connections-intro">
+        Connect the CMS this site’s content comes from, so text from it can be edited on the canvas. Edits are saved as drafts in the CMS; nothing is published.
+      </p>
       {error && <ErrorToast message={error} />}
       {list?.encryption === 'unavailable' && <p className="cms-connections-alert">This computer can’t encrypt keys, so Stacki won’t save any.</p>}
       <ConnectionRows connections={list?.connections ?? []} onRemove={remove} />
@@ -52,7 +45,7 @@ export function CmsConnections({ projectPath }: { readonly projectPath: string }
 
 function ConnectionRows(props: { readonly connections: readonly CmsConnection[]; readonly onRemove: (connection: CmsConnection) => void }) {
   if (props.connections.length === 0) {
-    return <p>No CMS connected.</p>;
+    return <p className="cms-connections-empty">No CMS connected yet. Choose one below.</p>;
   }
   return (
     <ul className="cms-connection-list">

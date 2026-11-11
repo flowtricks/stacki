@@ -26,6 +26,8 @@ import type { LoopSource } from '../../editor/loopQuery';
 import type { LoopCatalog } from './loopCatalog';
 import { componentNameOf } from './dataPickerModel';
 import { RowPopup } from './LoopRows';
+import { pickerPaths, useBindOverrideOnPress } from './bindOverride';
+import { OverrideNote } from '../../ui/OverrideNote';
 
 /** The page's data, as the data picker reads it, for the Source picker. */
 export interface SourcePickerData {
@@ -81,6 +83,23 @@ export function SourcePicker(props: {
     setOpen(false);
     props.onPick(pick);
   };
+  const override = useBindOverrideOnPress();
+  // A running app that answers `cms.bind` is asked first (docs/apps.md, "Overrides"); Alt-click skips it.
+  const askApp = (): void =>
+    override.ask(
+      { purpose: 'loop-source', current: props.current, paths: pickerPaths(sourceTree(props.catalog, props.data, sanity.samples)) },
+      {
+        onPicked: (path) => {
+          const pick = followed(pickOf(path), sanity.samples);
+          if (pick === undefined) {
+            setOpen(true); // A path that is no list Stacki can loop over: the person picks one.
+          } else {
+            choose(pick);
+          }
+        },
+        onStacki: () => setOpen(true),
+      },
+    );
   return (
     <>
       <button
@@ -89,8 +108,12 @@ export function SourcePicker(props: {
         className="dd-trigger loop-source-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
-        onClick={() => {
+        onClick={(event) => {
           setCreating(false);
+          if (!open && override.owner !== undefined && !event.altKey) {
+            askApp();
+            return;
+          }
           setOpen(!open);
         }}
       >
@@ -100,6 +123,7 @@ export function SourcePicker(props: {
           <ChevronDownIcon size={11} />
         </span>
       </button>
+      <OverrideNote point="cms.bind" />
       {open && creating && newList !== undefined && (
         <RowPopup anchor={anchor} heightPxMax={PICKER_HEIGHT_PX_MAX} label="New List property" onClose={() => setOpen(false)}>
           <NewPropForm host={newList.host} seed={newList.seed} onCancel={() => setCreating(false)} onCreated={() => setOpen(false)} />
@@ -129,6 +153,7 @@ export function SourcePicker(props: {
               tree={sourceTree(props.catalog, props.data, sanity.samples)}
               current={props.current}
               footer={false}
+              sources="open"
               origin={{ file: props.data?.file, page: undefined }}
               propSettings={newList?.host.propSettings}
               {...(props.data?.onStepItem ? { onStepItem: props.data.onStepItem } : {})}

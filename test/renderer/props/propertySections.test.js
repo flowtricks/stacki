@@ -1,12 +1,13 @@
 // Goal: the two places a component prop is made or edited — the Settings
 // panel's "Property settings" pop-up (NewPropForm) and the Properties panel's
 // property editor (PropertyEditor) — offer the same options through the same
-// sections (PropertySections.tsx): Required, Readonly, Code type, a List's item
-// fields, and its default items in the instance's own list field with the
-// `{}` toggle between the list and its code. A List made in either place with
-// the same fields, Required off and Readonly on is written the same, an
-// existing List reads every option back, and code the list cannot show stays
-// code instead of being dropped.
+// sections (PropertySections.tsx): Required, the `{}` Code type toggle, a
+// List's item fields, and its default items in the instance's own list field
+// with the `{}` toggle between the list and its code. Readonly is not offered
+// (TypeScript's `readonly` does nothing for an Astro prop), and an existing
+// `readonly` is kept as read. A List made in either place with the same fields
+// and Required off is written the same, an existing List reads every option
+// back, and code the list cannot show stays code instead of being dropped.
 //
 // Method: both hosts rendered in jsdom with React from the app's own bundle.
 // The controls each draws are read by their accessible names. A List is made
@@ -230,14 +231,14 @@ test('the Code type is highlighted TypeScript in both hosts, and editing it writ
 });
 
 test('both hosts offer the same options for a List and for a Text', async () => {
-  const everything = { required: true, readonly: true, codeType: true, tooltip: true, itemFields: true, defaultItems: true, defaultToggle: true };
+  const everything = { required: true, readonly: false, codeType: true, tooltip: true, itemFields: true, defaultItems: true, defaultToggle: true };
   await drawPopup({ fit: 'list', label: 'features', value: ITEMS }, () => {});
   assert.deepEqual(controls(), everything, 'the pop-up, for a List');
   await clear();
   await drawEditor(listProperty({}), () => {});
   assert.deepEqual(controls(), everything, 'the Properties panel, for a List');
   await clear();
-  const scalar = { required: true, readonly: true, codeType: true, tooltip: true, itemFields: false, defaultItems: false, defaultToggle: false };
+  const scalar = { required: true, readonly: false, codeType: true, tooltip: true, itemFields: false, defaultItems: false, defaultToggle: false };
   await drawPopup({ fit: 'text', label: 'caption', value: 'Hi' }, () => {});
   assert.deepEqual(controls(), scalar, 'the pop-up, for a Text');
   await clear();
@@ -246,8 +247,8 @@ test('both hosts offer the same options for a List and for a Text', async () => 
   await clear();
 });
 
-test('a List with item fields, Required off and Readonly on is written the same from either host', async () => {
-  // The pop-up: the fields it starts with, Readonly ticked, then Create.
+test('a List with item fields and Required off is written the same from either host', async () => {
+  // The pop-up: the fields it starts with, then Create.
   let declaration;
   await drawPopup({ fit: 'list', label: 'features', value: ITEMS }, (made) => {
     declaration = made;
@@ -257,7 +258,6 @@ test('a List with item fields, Required off and Readonly on is written the same 
     ['text', 'text'],
   ]);
   assert.deepEqual(rows(), ['One'], 'the default items show as rows');
-  await click(document.querySelector('input[aria-label="Readonly"]'));
   await click(byText('Create'));
   assert.ok(declaration, 'Create declared the prop');
   const frontmatter = 'interface Props {\n  heading?: string;\n}\nconst { heading = "Plans" } = Astro.props;\n';
@@ -265,20 +265,21 @@ test('a List with item fields, Required off and Readonly on is written the same 
   assert.ok(popup.ok, JSON.stringify(popup));
   await clear();
 
-  // The Properties panel: the same List, Readonly ticked, then Save.
+  // The Properties panel: the same List, created when its name is committed; there is no Save button.
   let change;
   await drawEditor(listProperty({ name: '' }), (made) => {
     change = made;
   });
-  await type(document.querySelector('.property-editor label input'), 'features');
-  await click(document.querySelector('input[aria-label="Readonly"]'));
-  await click(byText('Save property'));
-  assert.ok(change, 'Save sent the change');
+  assert.equal(byText('Save property'), undefined);
+  const nameInput = document.querySelector('.property-editor label input');
+  await type(nameInput, 'features');
+  await act(async () => nameInput.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })));
+  assert.ok(change, 'committing the name sent the change');
   const written = editPropertyDefinition(SOURCE, change);
   assert.ok(written.ok, JSON.stringify(written));
   await clear();
 
-  const member = '  readonly features?: readonly { title: string; text: string }[];';
+  const member = '  features?: readonly { title: string; text: string }[];';
   assert.ok(popup.value.frontmatter.includes(member), popup.value.frontmatter);
   assert.ok(written.value.includes(member), written.value);
   assert.match(popup.value.frontmatter, /features = \[\{ title: "One", text: "Two" \}\]/);
@@ -315,7 +316,7 @@ test('an existing List reads every option back in the Properties panel', async (
     ['photo', 'image'],
   ]);
   assert.equal(document.querySelector('input[aria-label="Required"]').checked, true);
-  assert.equal(document.querySelector('input[aria-label="Readonly"]').checked, true);
+  assert.ok(document.querySelector('input[aria-label="Readonly"]') === null, 'readonly is kept as read, not offered');
   assert.deepEqual(rows(), ['Pro']);
   assert.match(document.querySelector('.property-editor textarea').value, /The plan’s features/);
   // A named item type is read through the frontmatter that declares it.
@@ -329,7 +330,7 @@ test('an existing List reads every option back in the Properties panel', async (
   await clear();
 });
 
-test('the default’s {} toggle: both views edit one value, and code the list cannot show stays code', async () => {
+test('the default’s {} toggle: both views edit one value, and code the list cannot show is cleared on the way back', async () => {
   for (const host of ['popup', 'editor']) {
     let saved = '';
     let declaration;
@@ -351,23 +352,23 @@ test('the default’s {} toggle: both views edit one value, and code the list ca
     assert.equal(codeView(), undefined, `${host}: back to the list`);
     assert.deepEqual(rows(), ['Basic', 'Pro'], `${host}: the list shows what the code said`);
 
-    // Code the list cannot hold: the toggle keeps it, and says why.
+    // Code the list cannot hold: asking for the list clears it (a notice offers it back).
     await click(toggle());
-    await typeCode('[...extraPlans, { title: "Pro", text: "Paid" }]');
+    await typeCode('[...extraPlans]');
     await click(toggle());
-    assert.ok(codeView(), `${host}: the code view stays`);
-    assert.equal(codeView().state.doc.toString(), '[...extraPlans, { title: "Pro", text: "Paid" }]', `${host}: the code is kept`);
-    assert.match(document.querySelector('[aria-label="Default items"] .prop-field-note.problem').textContent, /stays as code/);
+    assert.equal(codeView(), undefined, `${host}: the list, as asked for`);
+    assert.deepEqual(rows(), [], `${host}: empty, since it could not show the code`);
+    assert.equal(document.querySelector('[aria-label="Default items"] .prop-field-note.problem') ?? undefined, undefined, `${host}: no blocking error`);
 
     if (host === 'popup') {
       await type(document.querySelector('.new-prop-form input[aria-label="Name"]'), 'features');
       await click(byText('Create'));
       const made = modules.declaredProp('', declaration, new Set());
       assert.ok(made.ok, JSON.stringify(made));
-      assert.match(made.value.frontmatter, /features = \[\.\.\.extraPlans, \{ title: "Pro", text: "Paid" \}\]/, 'the pop-up writes the code as typed');
+      assert.doesNotMatch(made.value.frontmatter, /extraPlans/, 'the pop-up writes what the list holds, not the cleared code');
     } else {
       await click(document.querySelector('[aria-label="Close property settings"]'));
-      assert.equal(saved, '[...extraPlans, { title: "Pro", text: "Paid" }]', 'the editor saves the code as typed');
+      assert.doesNotMatch(saved, /extraPlans/, 'the editor saves what the list holds, not the cleared code');
     }
     await clear();
   }

@@ -58,7 +58,7 @@ export function readPropertyContracts(document: PropertySyntax): PropertyContrac
   for (const [name, usages] of publicContract.members) {
     const member = usages[0]?.member;
     assert(member !== undefined, 'Contract field has a declaration');
-    const reason = commonMemberRestriction(name, publicContract, runtimeContracts);
+    const reason = commonMemberRestriction(name, publicContract, runtimeContracts) ?? memberTypeRestriction(member, declarations, imports);
     if (reason) {
       reasons.set(name, reason);
     } else {
@@ -123,6 +123,39 @@ function commonMemberRestriction(name: string, contract: Contract, runtimeContra
   return undefined;
 }
 
+// A member whose own type is defined elsewhere or computed: its options (or
+// shape) are not this file's text, so the panel cannot show or write them. A
+// same-file alias of literal options is editable (propertyTypes.ts, optionAliasOf).
+function memberTypeRestriction(member: ts.PropertySignature, declarations: ReadonlyMap<string, Declaration>, imports: ReadonlySet<string>): string | undefined {
+  const type = member.type;
+  if (type === undefined) {
+    return undefined;
+  }
+  const reason = 'This prop depends on a shared or computed type that must be edited in source.';
+  if (ts.isMappedTypeNode(type) || ts.isConditionalTypeNode(type) || ts.isIndexedAccessTypeNode(type)) {
+    return reason;
+  }
+  if (ts.isTypeQueryNode(type)) {
+    return reason;
+  }
+  if (ts.isTypeOperatorNode(type) && type.operator === ts.SyntaxKind.KeyOfKeyword) {
+    return reason;
+  }
+  if (!ts.isTypeReferenceNode(type)) {
+    return undefined;
+  }
+  const head = type.typeName.getText().split('.')[0];
+  assert(head !== undefined, 'A type reference has a leading name');
+  if (imports.has(head)) {
+    return reason;
+  }
+  const declaration = declarations.get(head);
+  if (declaration?.typeParameters !== undefined) {
+    return reason;
+  }
+  return undefined;
+}
+
 function readContract(
   root: ts.Node | undefined,
   declarations: ReadonlyMap<string, Declaration>,
@@ -156,7 +189,7 @@ function readContract(
       const children = contractChildren(item, declarations, attributes, imports);
       if (children === undefined) {
         complete = false;
-      } else {
+      } else if (children !== 'opaque') {
         work.push(...children);
       }
     }
@@ -175,19 +208,30 @@ function isInheritedAstroAttributes(node: ts.Node, declarations: ReadonlyMap<str
   return attributes.has(name) && !declarations.has(name);
 }
 
+// What a contract node contributes: the nodes beneath it; 'opaque', a named
+// type declared elsewhere (imported, global, generic, exported) whose fields
+// this file cannot see; or undefined, a computed or cyclic type that makes the
+// contract incomplete. An opaque part sits beside the local members in an
+// intersection: it can add fields but never remove a sibling's, so the local
+// members stay editable (`type Props = SeoProps & { theme?: … }`). A computed
+// part (a mapped, conditional or indexed type) can produce any key, so it
+// still makes every member read-only.
+type ContractChildren = readonly Work[] | 'opaque' | undefined;
+
 function contractChildren(
   item: Work,
   declarations: ReadonlyMap<string, Declaration>,
   attributes: ReadonlySet<string>,
   imports: ReadonlySet<string>,
-): readonly Work[] | undefined {
+): ContractChildren {
   const { node } = item;
   if (ts.isTypeAliasDeclaration(node) || ts.isInterfaceDeclaration(node)) {
     if (node.typeParameters || item.path.includes(node.name.text) || item.path.length >= 64) {
       return undefined;
     }
+    // Other files may import an exported declaration, so its members are not this file's to edit.
     if (node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)) {
-      return undefined;
+      return 'opaque';
     }
     const next = { ...item, path: [...item.path, node.name.text] };
     if (ts.isTypeAliasDeclaration(node)) {
@@ -222,7 +266,15 @@ function contractChildren(
       return [];
     }
     const declaration = declarations.get(name);
-    return declaration && !node.typeArguments ? [{ ...item, node: declaration }] : undefined;
+    if (declaration === undefined) {
+      // Imported or global: its fields live in another file.
+      return 'opaque';
+    }
+    if (node.typeArguments !== undefined) {
+      // A local generic instantiated here: its fields depend on the arguments, and stay in source.
+      return 'opaque';
+    }
+    return [{ ...item, node: declaration }];
   }
   return undefined;
 }

@@ -6,6 +6,7 @@ const { setTimeout: delay } = require('node:timers/promises');
 const loadRenderer = require('../../helpers/rendererModule');
 const { parsePageOrder, reorderPageEntries, PAGE_ORDER_LIMITS } = loadRenderer('shared/properties/pageOrder.ts');
 const { PageOrderController } = loadRenderer('src/features/pages/pageOrderPersistence.ts');
+const LOADING = { kind: 'loading', order: { version: 1, entries: [] } };
 
 async function until(predicate) {
   for (let count = 0; count < 100; count += 1) {
@@ -82,8 +83,8 @@ test('saved order reloads; stale and malformed disk data cannot be overwritten',
   };
   const firstStates = [];
   const secondStates = [];
-  const first = new PageOrderController('/project', (state) => firstStates.push(state));
-  const second = new PageOrderController('/project', (state) => secondStates.push(state));
+  const first = new PageOrderController('/project', LOADING, (state) => firstStates.push(state));
+  const second = new PageOrderController('/project', LOADING, (state) => secondStates.push(state));
   try {
     first.reload();
     second.reload();
@@ -108,6 +109,43 @@ test('saved order reloads; stale and malformed disk data cannot be overwritten',
   } finally {
     first.close();
     second.close();
+    delete globalThis.window;
+  }
+});
+
+test('a kept order stays ready while it is read again, and a save outranks the read it overtook', async () => {
+  // The Pages panel opens on the order it last saw (so its rows hold still) and
+  // reads the file again in place. A drag saved before that read lands must not
+  // be undone by the older answer.
+  let source = JSON.stringify({ version: 1, entries: ['about.astro', 'index.astro'] });
+  let answerRead;
+  globalThis.window = {
+    avb: {
+      projectMetadata: () => new Promise((resolve) => (answerRead = () => resolve({ ok: true, value: { source } }))),
+      writeProjectMetadata: async ({ write }) => {
+        source = write.source;
+        return { ok: true, value: { source } };
+      },
+    },
+  };
+  const kept = { kind: 'ready', order: { version: 1, entries: ['about.astro', 'index.astro'] }, source };
+  const states = [];
+  const controller = new PageOrderController('/kept', kept, (state) => states.push(state));
+  try {
+    const stale = source;
+    controller.reload();
+    assert.equal(states.length, 0, 'A kept order is not replaced by a loading state');
+    const moved = { version: 1, entries: ['index.astro', 'about.astro'] };
+    controller.save(moved);
+    await until(() => states.at(-1)?.kind === 'ready');
+    // The read began before the save; its answer (the bytes before the save) arrives last.
+    source = stale;
+    answerRead();
+    await delay(20);
+    assert.deepEqual(states.at(-1).order, moved, 'The older read does not undo the save');
+    assert.throws(() => new PageOrderController('/kept', { kind: 'saving', order: moved }, () => undefined), /it starts loading or on a kept order/);
+  } finally {
+    controller.close();
     delete globalThis.window;
   }
 });

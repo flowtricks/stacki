@@ -1,4 +1,5 @@
 import { assert } from '../../../shared/core/assert';
+import { DATA_TREE_HEIGHT_PX_MAX, DATA_TREE_WIDTH_PX_MIN } from '../../ui/DataTree';
 import type { FieldPosition } from './bindingTypes';
 
 // Where the data picker opens under the field it was opened from. Every row
@@ -7,8 +8,9 @@ import type { FieldPosition } from './bindingTypes';
 // as far as it must to stay inside the window, since fields sit in the right
 // sidebar and a wider popup would otherwise run off the window's right edge.
 
-export const DATA_PICKER_WIDTH_PX_MIN = 320;
-export const DATA_PICKER_HEIGHT_PX_MAX = 340;
+// Every data tree's size (ui/DataTree.tsx), so the page template's sample tree opens as wide.
+export const DATA_PICKER_WIDTH_PX_MIN = DATA_TREE_WIDTH_PX_MIN;
+export const DATA_PICKER_HEIGHT_PX_MAX = DATA_TREE_HEIGHT_PX_MAX;
 const VIEWPORT_GUTTER_PX = 8;
 // The picker is never pushed higher than this, so it stays clear of the toolbar.
 const TOP_PX_MIN = 60;

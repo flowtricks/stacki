@@ -166,13 +166,18 @@ test('the picker renders the pager, the chosen entry, and the source headings', 
   assert.match(third, /Content Collections/);
   assert.doesNotMatch(third, /Works anywhere|dp-section-note/, 'a section heading carries no note');
 
-  // Nothing bound: a content collection stays closed, saying how many entries
-  // it holds, and carries Astro's mark so it reads as a collection.
+  // Nothing bound: the content collections fold under their heading, which
+  // carries Astro's mark, and nothing in them is drawn.
   const closed = render(undefined);
   assert.doesNotMatch(closed, /dp-item-count/, 'no entry is opened');
-  assert.doesNotMatch(closed, /title="statsEntries\[0\]\.data/, 'no entry fields are listed');
-  assert.match(closed, /title="Content collection"/, 'the collection row carries the CMS mark');
-  assert.match(closed, /class="dp-section"><svg[^>]*dp-section-icon/, 'the Content Collections heading carries the Astro mark');
+  assert.doesNotMatch(closed, /title="statsEntries/, 'the folded collection draws no rows');
+  assert.match(closed, /class="dp-section collapsible"[^>]*aria-expanded="false"/, 'the heading says it is folded');
+  assert.match(closed, /<svg[^>]*dp-section-icon/, 'the Content Collections heading carries the Astro mark');
+
+  // Laid open, as the loop's Source picker draws it: the collection row closed, with the CMS mark.
+  const laid = renderToStaticMarkup(React.createElement(DataPicker, { tree, current: undefined, origin, sources: 'open', onPick() {}, onExpand() {} }));
+  assert.doesNotMatch(laid, /title="statsEntries\[0\]\.data/, 'no entry fields are listed');
+  assert.match(laid, /title="Content collection"/, 'the collection row carries the CMS mark');
 
   // Bound to an entry not read yet: the reading row stands in for it.
   const unread = render('statsEntries[1].data.Header');

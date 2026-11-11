@@ -4,6 +4,7 @@
 // login out (electron/content/sanityLogin.ts).
 import { useEffect, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
+import Dropdown from '../../ui/Dropdown';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { SanityIcon } from '../../ui/Icons';
 import { openSanitySignIn, sanityLogin } from '../../ipc/cmsConnectionsBridge';
@@ -99,33 +100,33 @@ function ProjectChoice(props: {
   return (
     <>
       {suggestion && <p>This site’s .env names the project and dataset chosen below.</p>}
-      <label>
-        Project
-        <select
+      <div className="publish-field">
+        <label>Project</label>
+        <Dropdown
+          ariaLabel="Project"
           value={projectId}
-          onChange={(event) => {
-            setProjectId(event.target.value);
-            const next = projects.find((entry) => entry.id === event.target.value);
+          options={projects.map((entry) => ({ value: entry.id, label: `${entry.name} (${entry.id})` }))}
+          searchable={projects.length > 6}
+          menuClassName="publish-dropdown"
+          livePreview={false}
+          onChange={(nextId) => {
+            setProjectId(nextId);
+            const next = projects.find((entry) => entry.id === nextId);
             setDataset(next?.datasets[0] ?? '');
           }}
-        >
-          {projects.map((entry) => (
-            <option key={entry.id} value={entry.id}>
-              {entry.name} ({entry.id})
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Dataset
-        <select value={dataset} onChange={(event) => setDataset(event.target.value)}>
-          {datasets.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
-      </label>
+        />
+      </div>
+      <div className="publish-field">
+        <label>Dataset</label>
+        <Dropdown
+          ariaLabel="Dataset"
+          value={dataset}
+          options={datasets.map((name) => ({ value: name, label: name }))}
+          menuClassName="publish-dropdown"
+          livePreview={false}
+          onChange={setDataset}
+        />
+      </div>
       <button type="button" className="primary" disabled={!project || !datasets.includes(dataset)} onClick={() => props.choose(projectId, dataset)}>
         Connect
       </button>

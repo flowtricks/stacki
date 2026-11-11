@@ -1,6 +1,6 @@
-// The pieces every data tree draws: a search box, a row with its chevron and
-// indent, the arrows that step through a list's items, and a value as a person
-// reads it. The Settings panel's data picker and the page template's sample
+// The pieces every data tree draws: a search box, a group's heading, a row
+// with its chevron and indent, the arrows that step through a list's items,
+// and a value as a person reads it. The Settings panel's data picker and the page template's sample
 // tree both draw their rows from here, so the two cannot drift apart: one is a
 // choice of binding, the other a choice of fields, and they look and move alike.
 
@@ -14,6 +14,12 @@ import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, SearchIcon } from './Icon
 // its name lines up under its parent's name, just past the parent's chevron.
 const DEPTH_INDENT_PX = 18;
 const ROW_INSET_PX = 6;
+
+// The size of every data tree's popup: the Settings panel's data picker and
+// the page template's sample tree. Every row carries a name and the value it
+// holds side by side, so a tree narrower than this cuts both short.
+export const DATA_TREE_WIDTH_PX_MIN = 320;
+export const DATA_TREE_HEIGHT_PX_MAX = 340;
 
 /** The left padding of a row, or of a note under one, `depth` levels down. */
 export function dataRowIndentPx(depth: number): number {
@@ -158,14 +164,11 @@ export function DataSearch({
   value,
   label,
   inputRef,
-  action,
   onChange,
 }: {
   readonly value: string;
   readonly label: string;
   readonly inputRef?: Ref<HTMLInputElement> | undefined;
-  /** A control at the end of the search row, such as Select all. */
-  readonly action?: ReactNode;
   readonly onChange: (value: string) => void;
 }) {
   return (
@@ -180,9 +183,89 @@ export function DataSearch({
         autoFocus
         onChange={(event) => onChange(event.target.value)}
       />
-      {action}
     </div>
   );
+}
+
+/**
+ * How a group's heading reads: a source's name in muted capitals, or a
+ * component's name as it is written, in the green a component is drawn in.
+ */
+export type DataSectionTone = 'source' | 'component';
+
+// The heading over a group of rows, set apart by a fill rather than a rule
+// (house style). A control that acts on the whole group, such as Select all,
+// ends the heading, so the search row above stays only a search.
+// A group can fold away under its heading (`collapse`): the heading then
+// leads with the chevron a row opens with, and a click, Enter or Space on it
+// opens or closes the group.
+export function DataSection({
+  heading,
+  tone,
+  icon,
+  action,
+  collapse,
+}: {
+  readonly heading: string;
+  readonly tone: DataSectionTone;
+  readonly icon?: ReactNode;
+  readonly action?: { readonly label: string; readonly onClick: () => void } | undefined;
+  readonly collapse?: { readonly open: boolean; readonly onToggle: () => void } | undefined;
+}) {
+  assert(heading.length > 0, 'DataSection: a heading has words');
+  assert(heading.length <= LIMITS.attrCharsMax, 'DataSection: heading limit exceeded');
+  const className = `${tone === 'component' ? 'dp-section component' : 'dp-section'}${collapse === undefined ? '' : ' collapsible'}`;
+  if (collapse !== undefined) {
+    return (
+      <div
+        className={className}
+        role="button"
+        tabIndex={0}
+        aria-expanded={collapse.open}
+        title={collapse.open ? 'Close' : 'Open'}
+        // Pressing it keeps the caret in the search, as pressing a row does.
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={collapse.onToggle}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            collapse.onToggle();
+          }
+        }}
+      >
+        <span className={collapse.open ? 'dp-twist open' : 'dp-twist'}>
+          <ChevronRightIcon size={10} />
+        </span>
+        {icon}
+        <span className="dp-section-heading">{heading}</span>
+      </div>
+    );
+  }
+  return (
+    <div className={className}>
+      {icon}
+      <span className="dp-section-heading">{heading}</span>
+      {action !== undefined && (
+        <button
+          type="button"
+          className="dp-section-action"
+          // Pressing it keeps the caret in the search, as pressing a row does.
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={action.onClick}
+        >
+          {action.label}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// A quiet heading inside a group, for a part of it that comes from somewhere
+// else in the same file: a component's frontmatter under its props.
+export function DataSubsection({ heading }: { readonly heading: string }) {
+  assert(heading.length > 0, 'DataSubsection: a heading has words');
+  assert(heading.length <= LIMITS.attrCharsMax, 'DataSubsection: heading limit exceeded');
+  return <div className="dp-subsection">{heading}</div>;
 }
 
 // What a field holds, as a person reads it: words without the quotes a sample

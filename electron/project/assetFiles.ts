@@ -8,7 +8,9 @@ import { assert } from '../../shared/core/assert';
 import type { AssetEntry } from '../lib/mainTypes';
 import * as path from 'path';
 import * as fs from 'fs';
-import { capture } from '../lib/mainHelpers';
+import { capture, toPosix } from '../lib/mainHelpers';
+import { projectFoldersFor } from '../lib/projectFolders';
+import { folderHolding, isAboveFolder } from '../../shared/properties/projectFolders';
 
 // ---------------------------------------------------------------------------
 // Assets (public/) — list, upload, move, rename, folders
@@ -37,7 +39,9 @@ export const MEDIA_EXT = new RegExp(
 
 export const rootOfRel = (rel: string) => String(rel || '').split('/')[0] ?? '';
 
-// Refuses anything that escapes the two roots.
+// Refuses anything that escapes the two roots, and anything outside the
+// project's asset folders (.stacki/folders.json; by default the whole of both
+// roots), so configuring a folder can only narrow where the panel writes.
 export function assetAbs(projectPath: string, rel: string) {
   const clean = String(rel || '').replace(/^\/+/, '');
   const root = rootOfRel(clean);
@@ -49,7 +53,83 @@ export function assetAbs(projectPath: string, rel: string) {
   if (!isPathWithin(rootAbs, abs)) {
     throw new Error('Invalid asset path');
   }
+  // The resolved path, not the text: `src/assets/../pages` names src/pages.
+  const resolved = toPosix(path.relative(path.resolve(projectPath), abs));
+  if (folderHolding(projectFoldersFor(projectPath, 'assets'), resolved) === undefined) {
+    throw new Error(`${resolved} is not in one of the project's asset folders.`);
+  }
   return abs;
+}
+
+/**
+ * Why a write may not touch the file at `rel`, or undefined when it may. Under
+ * public/ every file is an asset: the folder exists to be served. Anywhere
+ * else only media is: the rest is code (pages, components, stylesheets) that
+ * only the document actors write, so a raw byte copy or a rename must never
+ * reach it, whichever folders the project lists as asset folders
+ * (test/electron/documents/singleWriter.test.ts).
+ */
+export function assetWriteRefusal(rel: string): string | undefined {
+  assert(rel.length > 0, 'assetWriteRefusal: the asset is named');
+  if (rootOfRel(rel) === 'public') {
+    return undefined;
+  }
+  assert(rootOfRel(rel) === 'src', 'assetWriteRefusal: an asset is under public/ or src/');
+  if (MEDIA_EXT.test(rel)) {
+    return undefined;
+  }
+  return `${path.posix.basename(rel)} is source code, not an asset; edit it in the project instead.`;
+}
+
+/**
+ * Everything the assets panel lists: each root (`public`, `src`) that holds a
+ * configured asset folder, the folders between a root and a configured folder
+ * (so the tree reaches it), and each configured folder's tree. Under src/ only
+ * media is listed. With the default folders this is both roots' whole trees,
+ * as it always was.
+ */
+export function listAssetEntries(projectPath: string): { readonly entries: AssetEntry[]; readonly hasPublic: boolean } {
+  const folders = projectFoldersFor(projectPath, 'assets');
+  const entries: AssetEntry[] = [];
+  let hasPublic = false;
+  for (const root of ASSET_ROOTS) {
+    const rootFolders = folders.filter((folder) => rootOfRel(folder) === root);
+    const rootDirectory = path.join(projectPath, root);
+    if (rootFolders.length === 0 || !fs.existsSync(rootDirectory)) {
+      continue;
+    }
+    if (root === 'public') {
+      hasPublic = true;
+    }
+    // The roots themselves are entries, so the panel navigates and drops into
+    // them with the folder handling it already has.
+    entries.push({ rel: root, name: root, parent: '', isDir: true, root, isRoot: true });
+    const listed = new Set<string>([root]);
+    for (const folder of rootFolders) {
+      const directory = path.join(projectPath, ...folder.split('/'));
+      if (!fs.existsSync(directory)) {
+        continue;
+      }
+      // Folders between the root and the configured one, then the folder itself.
+      const segments = folder.split('/');
+      for (let depth = 2; depth <= segments.length; depth++) {
+        const rel = segments.slice(0, depth).join('/');
+        assert(depth === 2 || isAboveFolder(folders, segments.slice(0, depth - 1).join('/')), 'listAssetEntries: each step leads to the folder');
+        if (!listed.has(rel)) {
+          listed.add(rel);
+          entries.push({ rel, name: segments[depth - 1] ?? rel, parent: segments.slice(0, depth - 1).join('/'), isDir: true, root });
+        }
+      }
+      for (const entry of listAssetTree(directory, folder, { mediaOnly: root === 'src' })) {
+        if (!listed.has(entry.rel)) {
+          listed.add(entry.rel);
+          entries.push(entry);
+        }
+      }
+    }
+  }
+  assert(entries.length === new Set(entries.map((entry) => entry.rel)).size, 'listAssetEntries: each path is listed once');
+  return { entries, hasPublic };
 }
 
 // A destination name that doesn't collide: name.ext, name-1.ext, name-2.ext and on.

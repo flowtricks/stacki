@@ -7,9 +7,13 @@ import { StateEffect, StateField, type Extension } from '@codemirror/state';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from '@codemirror/view';
 import { LIMITS } from '../../shared/core/limits';
+import { assert } from '../../shared/core/assert';
 import { plainCodeLines, type CodeLine, type CodeTokenStyle } from './codeHighlight';
 
 const highlightDelayMs = 60;
+// How long a new Astro editor stays hidden waiting for the grammar, rather than
+// painting grey text that recolours a moment later. Past it, the text shows plain.
+const highlightWaitMsMax = 150;
 const fontItalic = 1;
 const fontBold = 2;
 const fontUnderline = 4;
@@ -45,7 +49,8 @@ const mutedColorReplacements = {
 
 const replaceAstroHighlight = StateEffect.define<DecorationSet>();
 const astroHighlightField = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
+  // Once the grammar is loaded, a new editor is coloured in its first frame.
+  create: (state) => initialAstroDecorations(state.doc.toString()),
   update: (decorations, transaction) => {
     const replacement = transaction.effects.find((effect) => effect.is(replaceAstroHighlight));
     return replacement ? replacement.value : decorations.map(transaction.changes);
@@ -53,52 +58,93 @@ const astroHighlightField = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 
+// Whether a new editor is waiting for the grammar. Held in state, not set on the
+// DOM, because CodeMirror owns the editor element's class list.
+const revealAstroText = StateEffect.define<undefined>();
+const astroPendingField = StateField.define<boolean>({
+  create: () => highlighterReady === undefined,
+  update: (pending, transaction) => (transaction.effects.some((effect) => effect.is(revealAstroText)) ? false : pending),
+  provide: (field) => EditorView.editorAttributes.from(field, (pending) => (pending ? { class: 'cm-astro-pending' } : {})),
+});
+
 const astroTokenOptions = { lang: 'astro', theme: 'tokyo-night', colorReplacements: mutedColorReplacements } as const;
 
 type AstroToken = { readonly color?: string | undefined; readonly fontStyle?: number | undefined };
 type AstroHighlighter = Awaited<ReturnType<typeof createAstroHighlighter>>;
 let highlighterPromise: Promise<AstroHighlighter> | undefined;
+// The loaded grammar, read synchronously so a first paint can be coloured.
+let highlighterReady: AstroHighlighter | undefined;
 
 export const astroHighlight: Extension = [
   // Keep text neutral while Shiki loads instead of flashing basicSetup's fallback colors.
   syntaxHighlighting(HighlightStyle.define([])),
   astroHighlightField,
+  astroPendingField,
   EditorView.baseTheme({
     '.cm-astro-token, .cm-astro-token *': {
       color: 'var(--astro-token-color) !important',
+    },
+    '&.cm-astro-pending .cm-content': {
+      visibility: 'hidden',
     },
   }),
   ViewPlugin.fromClass(
     class {
       private revision = 0;
       private timer: ReturnType<typeof setTimeout> | undefined;
+      private readonly revealTimer: ReturnType<typeof setTimeout> | undefined;
+      private destroyed = false;
 
       constructor(private readonly view: EditorView) {
-        this.schedule();
+        if (!view.state.field(astroPendingField)) {
+          // The grammar coloured the document as the state was created.
+          this.revealTimer = undefined;
+          return;
+        }
+        // The grammar is still loading: the text is held back for a bounded
+        // wait instead of painting grey and recolouring a moment later.
+        this.revealTimer = setTimeout(() => this.reveal(), highlightWaitMsMax);
+        this.schedule(0);
       }
 
       update(update: ViewUpdate): void {
         if (update.docChanged) {
-          this.schedule();
+          this.schedule(highlightDelayMs);
         }
       }
 
       destroy(): void {
+        this.destroyed = true;
         this.revision += 1;
         clearTimeout(this.timer);
+        clearTimeout(this.revealTimer);
       }
 
-      private schedule(): void {
+      private reveal(): void {
+        clearTimeout(this.revealTimer);
+        if (this.destroyed) {
+          return;
+        }
+        if (this.view.state.field(astroPendingField)) {
+          this.view.dispatch({ effects: revealAstroText.of(undefined) });
+        }
+      }
+
+      private schedule(delayMs: number): void {
+        assert(delayMs >= 0, 'astroHighlight: a highlight is never scheduled in the past');
+        assert(delayMs <= highlightDelayMs, 'astroHighlight: a highlight waits at most one typing pause');
         this.revision += 1;
         const revision = this.revision;
         clearTimeout(this.timer);
         this.timer = setTimeout(() => {
-          void highlightAstro(this.view, revision, () => this.revision).catch((error: unknown) => {
-            // Highlighting is presentation, so a grammar failure must not
-            // take editing down with it. Keep the plain structural parser.
-            console.error('Astro syntax highlighting failed', error);
-          });
-        }, highlightDelayMs);
+          void highlightAstro(this.view, revision, () => this.revision)
+            .catch((error: unknown) => {
+              // Highlighting is presentation, so a grammar failure must not
+              // take editing down with it. Keep the plain structural parser.
+              console.error('Astro syntax highlighting failed', error);
+            })
+            .finally(() => this.reveal());
+        }, delayMs);
       }
     },
   ),
@@ -114,6 +160,31 @@ export async function astroCodeLines(source: string): Promise<readonly CodeLine[
     return plainCodeLines(source);
   }
   const instance = await astroHighlighter();
+  return astroLinesOf(instance, source);
+}
+
+/**
+ * The same lines at once when the grammar has already loaded, so a block's
+ * first paint is coloured; undefined while it is still loading.
+ */
+export function astroCodeLinesNow(source: string): readonly CodeLine[] | undefined {
+  if (source.length > LIMITS.syntaxHighlightCharsMax) {
+    return plainCodeLines(source);
+  }
+  return highlighterReady === undefined ? undefined : astroLinesOf(highlighterReady, source);
+}
+
+/**
+ * Loads the Astro grammar ahead of the first Astro editor or block, so that
+ * one paints coloured. Called when a project opens; a failure is reported
+ * again, and handled, by the first highlight that needs the grammar.
+ */
+export async function prefetchAstroHighlighter(): Promise<void> {
+  const instance = await astroHighlighter();
+  assert(highlighterReady === instance, 'prefetchAstroHighlighter: the loaded grammar is ready to read');
+}
+
+function astroLinesOf(instance: AstroHighlighter, source: string): readonly CodeLine[] {
   const lines = instance.codeToTokensBase(source, astroTokenOptions);
   return lines.map((line) => line.map((token) => ({ text: token.content, style: astroCodeStyle(token) })));
 }
@@ -125,6 +196,29 @@ async function highlightAstro(view: EditorView, revision: number, currentRevisio
     return;
   }
   const instance = await astroHighlighter();
+  replaceHighlight(view, astroDecorations(instance, source), revision, source, currentRevision);
+}
+
+// A new editor's colours: none while the grammar loads (the view plugin waits
+// for it), and a grammar failure leaves the text plain rather than refusing to
+// open the editor.
+function initialAstroDecorations(source: string): DecorationSet {
+  if (highlighterReady === undefined) {
+    return Decoration.none;
+  }
+  try {
+    return astroDecorations(highlighterReady, source);
+  } catch (error: unknown) {
+    console.error('Astro syntax highlighting failed', error);
+    return Decoration.none;
+  }
+}
+
+// The grammar's colours for `source`, as editor decorations.
+function astroDecorations(instance: AstroHighlighter, source: string): DecorationSet {
+  if (source.length > LIMITS.syntaxHighlightCharsMax) {
+    return Decoration.none;
+  }
   const lines = instance.codeToTokensBase(source, astroTokenOptions);
   const ranges = lines.flatMap((line) =>
     line.flatMap((token) => {
@@ -144,7 +238,7 @@ async function highlightAstro(view: EditorView, revision: number, currentRevisio
       ];
     }),
   );
-  replaceHighlight(view, Decoration.set(ranges, true), revision, source, currentRevision);
+  return Decoration.set(ranges, true);
 }
 
 function replaceHighlight(view: EditorView, decorations: DecorationSet, revision: number, source: string, currentRevision: () => number): void {
@@ -196,7 +290,17 @@ function astroHighlighter(): Promise<AstroHighlighter> {
   if (highlighterPromise) {
     return highlighterPromise;
   }
-  highlighterPromise = createAstroHighlighter();
+  highlighterPromise = createAstroHighlighter().then(
+    (instance) => {
+      highlighterReady = instance;
+      return instance;
+    },
+    (error: unknown) => {
+      // A failed load is not remembered: the next editor asks again.
+      highlighterPromise = undefined;
+      throw error;
+    },
+  );
   return highlighterPromise;
 }
 

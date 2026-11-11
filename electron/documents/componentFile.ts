@@ -29,6 +29,7 @@ import { assert } from '../../shared/core/assert';
 import type { Digest } from '../../shared/core/brand';
 import { mapModuleSpecifiers } from '../../shared/page/frontmatterSource';
 import { isPathDescendant } from '../lib/platform';
+import { DEFAULT_PROJECT_FOLDERS } from '../../shared/properties/projectFolders';
 import { digestOf } from './atomicWrite';
 import { serializePage, serializeNodes } from '../parse/astroParser';
 import { CODE_INDENT_UNIT } from '../../shared/core/indent';
@@ -63,6 +64,8 @@ interface ComponentFileArgs {
   readonly imports?: readonly ComponentImport[];
   readonly props?: readonly unknown[];
   readonly frontmatter?: MovedFrontmatter;
+  /** The project's component folders (.stacki/folders.json), read by the caller; the new file goes in the first. */
+  readonly componentFolders?: readonly string[];
 }
 
 /**
@@ -70,7 +73,16 @@ interface ComponentFileArgs {
  * the name can't be used — nothing is written here; the caller does that, so
  * every write to the project stays in one place.
  */
-function componentFile({ projectPath, pagePath, name, nodes, imports = [], props = [], frontmatter }: ComponentFileArgs): {
+function componentFile({
+  projectPath,
+  pagePath,
+  name,
+  nodes,
+  imports = [],
+  props = [],
+  frontmatter,
+  componentFolders = DEFAULT_PROJECT_FOLDERS.components,
+}: ComponentFileArgs): {
   path: string;
   rel: string;
   text: string;
@@ -82,7 +94,12 @@ function componentFile({ projectPath, pagePath, name, nodes, imports = [], props
     throw new Error('Nothing to make a component from.');
   }
 
-  const componentsDirectory = path.join(projectPath, 'src', 'components');
+  // A new component goes in the first component folder the project lists (.stacki/folders.json).
+  const componentFolder = componentFolders[0];
+  if (componentFolder === undefined) {
+    throw new Error('This project lists no component folders. Add one in Settings → Folders.');
+  }
+  const componentsDirectory = path.join(projectPath, ...componentFolder.split('/'));
   const target = path.join(componentsDirectory, `${name}.astro`);
   // Case-insensitively: on a Mac, Card.astro and card.astro are the same file,
   // and writing the second silently replaces the first.
@@ -177,6 +194,8 @@ interface ComponentDiscardArgs {
   readonly checksum: Digest;
   /** Delete it even when it changed since: the person said so. */
   readonly force: boolean;
+  /** The project's component folders, read by the caller: only a file in one of them can be taken back. */
+  readonly componentFolders?: readonly string[];
 }
 
 /**
@@ -185,9 +204,16 @@ interface ComponentDiscardArgs {
  * Only a component file can go — the request crosses a process boundary, and a
  * path anywhere else is refused rather than deleted.
  */
-function discardComponentFile({ projectPath, path: target, checksum, force }: ComponentDiscardArgs): ComponentDiscard {
-  const componentsDirectory = path.join(projectPath, 'src', 'components');
-  if (!isPathDescendant(componentsDirectory, target)) {
+function discardComponentFile({
+  projectPath,
+  path: target,
+  checksum,
+  force,
+  componentFolders = DEFAULT_PROJECT_FOLDERS.components,
+}: ComponentDiscardArgs): ComponentDiscard {
+  // Any listed component folder: the one it was made in is the first of them.
+  const inComponentFolder = componentFolders.some((folder) => isPathDescendant(path.join(projectPath, ...folder.split('/')), target));
+  if (!inComponentFolder) {
     throw new Error('Only a component file can be taken back.');
   }
   if (path.extname(target) !== '.astro') {
