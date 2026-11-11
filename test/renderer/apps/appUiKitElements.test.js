@@ -183,6 +183,11 @@ const check = (what, condition, detail) => {
        const pressedBefore = toggle.querySelector('button').getAttribute('aria-pressed');
        toggle.querySelector('button').click();
        await settle();
+       // The fill fades in; slowed motion outlasts the sleep, so wait for it, within a bound.
+       await Promise.race([
+         Promise.all(document.getAnimations().map((animation) => animation.finished)),
+         new Promise((resolve) => setTimeout(resolve, 5000)),
+       ]);
        const toggleButton = toggle.querySelector('button');
        const pressed = {
          before: pressedBefore,
