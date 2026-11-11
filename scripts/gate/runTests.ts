@@ -136,7 +136,9 @@ const staticChecks: readonly TestCommand[] = [
   {
     name: 'eslint',
     command: node,
-    argumentsList: [path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js'), '--max-warnings', '0', '.'],
+    // Type-aware lint of the whole tree passed Node's default heap (about 2 GB) on
+    // GitHub's macOS runner in 1.1.0; 6 GB leaves room on every runner, which has 7 GB or more.
+    argumentsList: ['--max-old-space-size=6144', path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js'), '--max-warnings', '0', '.'],
   },
   {
     // Line width, shell scripts, test headers, the dependency record, one

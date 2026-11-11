@@ -40,6 +40,16 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.1.1 the 1.1.0 changes, through every platform's build
+
+- The same app as 1.1.0, which never became public: GitHub's runners failed three checks.
+  ESLint ran out of Node's default heap on macOS (the gate now gives it 6 GB), Studio's tests
+  passed the five-minute child limit on Windows (they now run in batches of 20 suites), and four
+  new apps UI probes need pointer input and motion that Linux's hidden xvfb window never
+  delivers (those checks run on macOS and Windows). No app code changed.
+- `create-stacki` 1.1.0 was published; 1.1.1 carries the same Studio at the new version.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.1.1.
+
 ## 1.1.0 apps platform, Audits, Instructions and an AI panel
 
 - Apps: apps can read canvas layers and node references, watch edits as they happen, highlight
@@ -61,7 +71,7 @@ include later changes.
 - Interface: three rail icon sets (Stacki, Phosphor, Custom), no flicker when switching panels,
   a canvas that follows a resize live, and a smaller welcome split button.
 - Vercel: the connection installs the CLI and signs in, says why a step failed, and refreshes.
-- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.1.0.
+- Desktop, the Studio source bundle and `create-stacki` were aligned at 1.1.0; 1.1.1 published it.
 
 ## 1.0.24 the 1.0.23 changes, through the Windows build
 

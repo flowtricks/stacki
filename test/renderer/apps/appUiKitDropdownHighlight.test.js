@@ -131,6 +131,12 @@ const check = (what, condition, detail) => {
      });`,
   );
   const { spawnSync } = require('child_process');
+  // GitHub's Linux runner (xvfb) delivers no pointer or key input to a hidden window and
+  // never ticks its animations, so this probe can only fail there; macOS and Windows run it.
+  if (process.platform === 'linux') {
+    console.log('skipped on Linux: input and motion need a shown window');
+    return;
+  }
   const run = spawnSync(electronPath, [probe], { encoding: 'utf8', timeout: 120000 });
   const line = (run.stdout || '').split('\n').find((text) => text.trim().startsWith('{'));
   if (!line) {
