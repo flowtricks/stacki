@@ -40,6 +40,7 @@ test('watch only completed source and preserve project ignores', { timeout: 1500
     // Vite can finish the initial scan before createServer resolves. Observe the
     // watched files instead of waiting for an event that may already have fired.
     await waitForWatched(server.watcher, directory);
+    await settleStartupEvents(events);
     await writeFile(source + '.studio-tmp', '<h1>After</h1>');
     await writeFile(source + '.project-ignore', 'Ignored');
     await setTimeout(250);
@@ -110,6 +111,21 @@ async function waitForWatched(watcher: { readonly getWatched: () => Readonly<Rec
     await setTimeout(10);
   }
   assert.fail('Source files were not registered with the watcher');
+}
+
+// macOS replays the events of files created moments before the watcher started
+// (addDir and change for the fixture itself). Those are setup noise, not saves, so
+// wait until a quiet window passes, then forget them. The wait is bounded.
+async function settleStartupEvents(events: string[]): Promise<void> {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const seen = events.length;
+    await setTimeout(150);
+    if (events.length === seen) {
+      events.length = 0;
+      return;
+    }
+  }
+  assert.fail('Startup watcher events did not settle');
 }
 
 async function waitForEvent(events: readonly string[], expected: string): Promise<void> {
