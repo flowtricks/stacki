@@ -24,9 +24,10 @@ import type { McpServerConfig } from '../../../shared/properties/mcpConfig';
  * app started before the update). Distinct from a read that failed, because the cure is a restart.
  */
 export class McpUnavailableError extends Error {
+  override readonly name = 'McpUnavailableError';
+
   constructor() {
     super('The MCP channels are not available in this running app.');
-    this.name = 'McpUnavailableError';
   }
 }
 

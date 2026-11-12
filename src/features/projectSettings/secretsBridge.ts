@@ -18,9 +18,10 @@ import {
  * (a development app started before the update). Distinct from a read that failed, because the cure is a restart.
  */
 export class SecretsUnavailableError extends Error {
+  override readonly name = 'SecretsUnavailableError';
+
   constructor() {
     super('The Secrets channels are not available in this running app.');
-    this.name = 'SecretsUnavailableError';
   }
 }
 
