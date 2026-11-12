@@ -12,6 +12,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Check npm trusted publishing before the long test run
+        # Why: a missing or mismatched npm trusted publisher surfaces only as a bare E404 after ten
+        # minutes of tests. This exchanges the job's OIDC identity for a publish token, fails in
+        # seconds with npm's own message, and never prints the token it receives.
+        run: |
+          set -euo pipefail
+          jwt="$(curl -sS --fail-with-body -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org" | jq -r .value)"
+          echo "::add-mask::${jwt}"
+          response="$(mktemp)"
+          status="$(curl -sS -o "${response}" -w '%{http_code}' -X POST -H "Authorization: Bearer ${jwt}" https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/create-stacki)"
+          if [ "${status}" = "200" ]; then
+            echo "npm accepted the trusted publisher for this workflow"
+          else
+            echo "npm refused the OIDC exchange (HTTP ${status}):"
+            cat "${response}"
+            exit 1
+          fi
       - uses: actions/setup-node@v6
         with:
           node-version: 24

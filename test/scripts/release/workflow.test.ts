@@ -106,3 +106,12 @@ test('every job that uploads to the release waits for the single draft job', () 
     assert.ok(names.includes('draft'), `${name} must need the draft job`);
   }
 });
+
+test('create-stacki publishing checks npm trusted publishing before the long test run', () => {
+  const steps = jobSteps(workflowJobs('.github/workflows/publish-create-stacki.yml')['publish']);
+  const probe = steps.findIndex((step) => command(step).includes('/-/npm/v1/oidc/token/exchange/package/create-stacki'));
+  const tests = steps.findIndex((step) => command(step).includes('npm test'));
+  assert.ok(probe >= 0, 'The OIDC exchange probe must exist');
+  assert.ok(probe < tests, 'The probe must fail before ten minutes of tests');
+  assert.doesNotMatch(command(steps[probe] ?? {}), /cat "\$\{?jwt|echo "\$\{?jwt\}"(?!.*add-mask)/);
+});
