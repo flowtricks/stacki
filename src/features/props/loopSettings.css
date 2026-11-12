@@ -987,22 +987,59 @@
   align-items: center;
   gap: 6px;
 }
-/* A list's item field: its name, its kind, and the bin. */
+/*
+ * A list's item field: its name, its kind, and the bin. Narrow, the name takes
+ * the first line with the bin at its end and the kind wraps beneath it, so the
+ * name stays readable; wide, all three share one line. The container is the
+ * card (or nested group) the rows sit in, so the layout follows the panel width.
+ */
+.property-item-fields,
+.property-nested-fields {
+  container-type: inline-size;
+  container-name: item-fields;
+}
 .new-prop-list-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px;
+}
+.new-prop-list-field > input {
+  grid-column: 1;
+  grid-row: 1;
+}
+.new-prop-list-field > .loop-settings-remove {
+  grid-column: 2;
+  grid-row: 1;
+}
+.new-prop-list-field > .dropdown,
+.new-prop-list-field > :nth-child(2) {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+@container item-fields (min-width: 320px) {
+  .new-prop-list-field {
+    grid-template-columns: minmax(96px, 1fr) max-content auto;
+  }
+  .new-prop-list-field > input,
+  .new-prop-list-field > .dropdown,
+  .new-prop-list-field > :nth-child(2),
+  .new-prop-list-field > .loop-settings-remove {
+    grid-column: auto;
+    grid-row: auto;
+  }
 }
 .new-prop-list-field .dd-trigger,
 .loop-property-default .dd-trigger {
   width: 100%;
   min-width: 0;
 }
-/* The type trigger fits its longest label, icon and chevron; the name input shrinks instead. */
-.new-prop-list-field > .dropdown,
-.new-prop-list-field > :nth-child(2) {
-  min-width: 9.5rem;
+/* Wide, the type trigger fits its longest label, icon and chevron; the name input shrinks instead. */
+@container item-fields (min-width: 320px) {
+  .new-prop-list-field > .dropdown,
+  .new-prop-list-field > :nth-child(2) {
+    min-width: 9.5rem;
+  }
 }
 .new-prop-list-field > input {
   min-width: 0;

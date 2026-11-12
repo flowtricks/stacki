@@ -82,6 +82,18 @@ export type JsStatementKind =
   /** Code that runs for what it does rather than for a name it declares. */
   | 'effect';
 
+/**
+ * One declarator of `const a = 1, b = 2;`, read as a statement of its own so that
+ * each can move or stay alone. `declarators` holds every sibling's span, the
+ * statement's own among them, and `whole` the declaration with its leading comment.
+ */
+export interface JsDeclaratorPart {
+  readonly keyword: 'const' | 'let' | 'var';
+  readonly index: number;
+  readonly declarators: readonly { readonly from: number; readonly to: number }[];
+  readonly whole: { readonly from: number; readonly to: number };
+}
+
 /** One statement at the top of a module, with the comments that belong to it. */
 export interface JsStatement {
   readonly from: number;
@@ -97,6 +109,8 @@ export interface JsStatement {
   readonly volatile: boolean;
   /** Whether it reads `import.meta`, whose paths and URL are the file's own. */
   readonly readsImportMeta: boolean;
+  /** Set when this is one declarator of a declaration that has several; `from` and `to` then span just that declarator. */
+  readonly declarator?: JsDeclaratorPart;
 }
 
 export interface JsAnalysis {
@@ -173,14 +187,18 @@ export function readModuleStatements(source: string): readonly JsStatement[] {
     if (COMMENT_NODES.has(node.name)) {
       const last = statements[statements.length - 1];
       if (last !== undefined && sameLine(source, last.to, node.from)) {
-        statements[statements.length - 1] = { ...last, to: node.to };
+        statements[statements.length - 1] = {
+          ...last,
+          to: node.to,
+          ...(last.declarator === undefined ? {} : { declarator: { ...last.declarator, whole: { from: last.declarator.whole.from, to: node.to } } }),
+        };
       } else {
         comment =
           comment !== undefined && directlyAbove(source, comment.to, node.from) ? { from: comment.from, to: node.to } : { from: node.from, to: node.to };
       }
     } else {
       const from = comment !== undefined && directlyAbove(source, comment.to, node.from) ? comment.from : node.from;
-      statements.push(readStatement(node, from, source));
+      statements.push(...readStatementParts(node, from, source));
       comment = undefined;
     }
     node = node.nextSibling ?? undefined;
@@ -519,6 +537,78 @@ function sameLine(source: string, from: number, to: number): boolean {
 function directlyAbove(source: string, from: number, to: number): boolean {
   assert(from <= to, 'directlyAbove: a comment comes before what it is above');
   return source.slice(from, to).split('\n').length <= 2;
+}
+
+// A declaration with several declarators reads as one statement each: `const a = 1,
+// b = 2` is two bindings that move, stay and run on their own terms. The comment above
+// belongs to the declaration, so it is in `whole` and not in any declarator.
+function readStatementParts(node: SyntaxNode, from: number, source: string): readonly JsStatement[] {
+  const whole = readStatement(node, from, source);
+  const spans = node.name === 'VariableDeclaration' ? declaratorSpans(node) : [];
+  if (spans.length < 2) {
+    return [whole];
+  }
+  const { kind } = whole;
+  assert(kind === 'const' || kind === 'let' || kind === 'var', 'readStatementParts: only a variable declaration is split');
+  const children = childrenOf(node);
+  return spans.map((span, index) => {
+    const inside = children.filter((child) => span.from <= child.from && child.to <= span.to);
+    const parts = new Set<StatementPart | undefined>();
+    for (const child of inside) {
+      child.cursor().iterate((inner) => {
+        parts.add(statementPart(inner, source));
+      });
+    }
+    return {
+      ...whole,
+      from: span.from,
+      to: span.to,
+      callable: inside.some((child) => CALLABLE_NODES.has(child.name)),
+      awaits: parts.has('awaits'),
+      volatile: parts.has('volatile'),
+      readsImportMeta: parts.has('import-meta'),
+      declarator: { keyword: kind, index, declarators: spans, whole: { from, to: node.to } },
+    };
+  });
+}
+
+const CALLABLE_NODES = new Set(['ArrowFunction', 'FunctionExpression', 'ClassExpression']);
+
+function childrenOf(node: SyntaxNode): readonly SyntaxNode[] {
+  const children: SyntaxNode[] = [];
+  let child = node.firstChild ?? undefined;
+  for (let count = 0; child !== undefined && count < LIMITS.treeNodesMax; count++) {
+    children.push(child);
+    child = child.nextSibling ?? undefined;
+  }
+  return children;
+}
+
+// The declarators are separated by top-level commas, since a comma inside an
+// initializer sits in a node of its own. The keyword and the closing `;` belong to
+// none of them.
+function declaratorSpans(node: SyntaxNode): readonly { readonly from: number; readonly to: number }[] {
+  const spans: { from: number; to: number }[] = [];
+  let open: { from: number; to: number } | undefined = undefined;
+  for (const child of childrenOf(node)) {
+    if (child.name === 'const' || child.name === 'let' || child.name === 'var') {
+      continue;
+    }
+    if (child.name === ',' || child.name === ';') {
+      if (open !== undefined) {
+        spans.push(open);
+      }
+      open = undefined;
+    } else if (open === undefined) {
+      open = { from: child.from, to: child.to };
+    } else {
+      open.to = child.to;
+    }
+  }
+  if (open !== undefined) {
+    spans.push(open);
+  }
+  return spans;
 }
 
 function readStatement(node: SyntaxNode, from: number, source: string): JsStatement {

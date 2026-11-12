@@ -32,6 +32,8 @@ export interface PreviewRuntimeProps {
   readonly overlayInfo?: ((path: string) => OverlayInfo | undefined) | undefined;
   readonly focusPath?: string | undefined;
   readonly focusOcc?: number | undefined;
+  /** The opened copy: a selection with no copy of its own outlines this one, not every copy. */
+  readonly openedOcc?: number | undefined;
   readonly pathScope?: string;
   readonly refreshKey?: string | number;
   readonly device: PreviewDevice;
@@ -149,7 +151,7 @@ export function usePreviewRuntime(props: PreviewRuntimeProps, url: string | unde
     iframeRef,
     rects,
     spacing,
-    selOcc: selectedOccurrence,
+    selOcc: selectedOccurrence ?? props.openedOcc,
     hoverPath,
     hoverOcc: props.navHoverPath ? 0 : hoverOcc,
     hoverPseudo,

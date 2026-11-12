@@ -13,7 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { type DropdownOption } from '../../ui/Dropdown';
-import { AstroIcon, SanityIcon, CloseIcon, CollectionIcon, FileIcon, LayersIcon, TextIcon } from '../../ui/Icons';
+import { AstroIcon, SanityIcon, CloseIcon, CmsIcon, FileIcon, LayersIcon, TextIcon } from '../../ui/Icons';
 import type { TreeNode } from '../../editor/dataSample';
 import { treeListFields } from './loopProjectData';
 import { assert } from '../../../shared/core/assert';
@@ -714,7 +714,7 @@ function SourceRow(props: SourceRowProps) {
       <div className="loop-settings-source">
         <SourcePicker
           label={props.fieldList === undefined ? (shown?.label ?? 'None') : fieldListLabel(props.fieldList, catalog)}
-          icon={fieldListIcon(props.fieldList) ?? shown?.icon ?? <CollectionIcon size={13} />}
+          icon={fieldListIcon(props.fieldList) ?? shown?.icon ?? <CmsIcon size={13} />}
           current={pickerPath(props, reading)}
           catalog={catalog}
           data={props.pickerData}
@@ -796,7 +796,7 @@ function sourceOptions(props: SourceRowProps, catalog: LoopCatalog | undefined, 
       group: astro ? 'Content collections' : sanityLabel,
       groupIcon: astro ? <AstroIcon size={12} /> : <SanityIcon size={12} />,
       hint,
-      icon: <CollectionIcon size={13} />,
+      icon: <CmsIcon size={13} />,
       dim: sanityMissing && !astro,
     });
   }
@@ -839,7 +839,7 @@ function currentOption(props: SourceRowProps, current: string): DropdownOption<s
         icon: project ? <FileIcon size={13} /> : <LayersIcon size={13} />,
       };
     }
-    return { value: current, label: source.collection, group: source.kind === 'astro' ? 'Content collections' : 'Sanity', icon: <CollectionIcon size={13} /> };
+    return { value: current, label: source.collection, group: source.kind === 'astro' ? 'Content collections' : 'Sanity', icon: <CmsIcon size={13} /> };
   }
   if (reading.kind === 'value' && props.traced !== undefined) {
     // Named for what it really is: the collection, and the code it comes through.

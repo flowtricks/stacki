@@ -53,6 +53,26 @@ export function onePerPlace<T extends Box>(boxes: readonly T[] | undefined): rea
   return list.filter((box) => kept.includes(box));
 }
 
+/**
+ * The boxes to draw for a node's reported copies.
+ *
+ * No occurrence means the node, so one box per place. A number means that copy:
+ * the one clicked on the canvas, or the one whose component the user opened. A
+ * number past the end (the loop shrank since) is the first copy rather than
+ * nothing and rather than every copy, which drew a selected outline on each
+ * item of a loop.
+ */
+export function copiesToDraw<T extends Box>(all: readonly T[], occurrence: number | undefined): readonly T[] {
+  assert(all.length <= LIMITS.treeNodesMax, 'copiesToDraw: box count exceeds limit');
+  if (occurrence === undefined) {
+    return onePerPlace(all);
+  }
+  assert(Number.isSafeInteger(occurrence), 'copiesToDraw: an occurrence is a whole number');
+  assert(occurrence >= 0, 'copiesToDraw: an occurrence is not negative');
+  const selected = all[occurrence];
+  return selected ? [selected] : all.slice(0, 1);
+}
+
 /** A map has no box of its own: it is on the page only as the copies of what
  * it renders. Its outline sits on its first child's boxes, so hovering a loop
  * outlines the same item its child would, drawn in the loop's colour. Borrowing

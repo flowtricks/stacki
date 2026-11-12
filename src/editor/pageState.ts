@@ -20,6 +20,14 @@ export interface OpenFile {
   readonly focusOcc?: number;
   readonly focusWhole?: boolean;
   readonly hostKey?: string | undefined;
+  /**
+   * Which copy of the instance the user opened, among the copies of its host
+   * node, when the focus above it could not be narrowed to that copy: opening
+   * a component inside a component keeps the outermost instance as the focus,
+   * so a loop's copies of the inner one all stay in view and this says which
+   * one was meant. Absent where the focus already holds a single copy.
+   */
+  readonly hostOcc?: number | undefined;
 }
 
 export interface OpenRoute {

@@ -637,7 +637,12 @@ function valueOf(facts: ExtractionFacts, settled: Settled, value: { readonly nam
 function statementText(facts: ExtractionFacts, index: number): string {
   const statement = facts.statements[index];
   assert(statement !== undefined, 'An index points at a statement');
-  return facts.code.slice(statement.from, statement.to);
+  const { declarator } = statement;
+  if (declarator === undefined) {
+    return facts.code.slice(statement.from, statement.to);
+  }
+  // One declarator of several travels as a declaration of its own.
+  return `${declarator.keyword} ${facts.code.slice(statement.from, statement.to)};`;
 }
 
 // An import leaves only when this extraction is why nothing reads it any more.
@@ -653,10 +658,7 @@ function withoutStatements(facts: ExtractionFacts, leaving: readonly number[]): 
   const { code } = facts;
   const pieces: string[] = [];
   let at = 0;
-  for (const index of leaving) {
-    const statement = facts.statements[index];
-    assert(statement !== undefined, 'An index points at a statement');
-    const span = wholeLines(code, statement);
+  for (const span of removedSpans(facts, leaving)) {
     // Two statements on one line can claim the same line ends.
     pieces.push(code.slice(at, Math.max(at, span.from)));
     at = Math.max(at, span.to);
@@ -665,6 +667,66 @@ function withoutStatements(facts: ExtractionFacts, leaving: readonly number[]): 
   const left = pieces.join('').trim();
   assert(left.length <= code.length, 'Taking code out never adds any');
   return left;
+}
+
+// The text each leaving statement takes with it, in source order. A declarator whose
+// siblings all leave too takes the whole declaration; one with a sibling that stays
+// takes only itself and the comma that set it apart, so the others are left as written.
+function removedSpans(facts: ExtractionFacts, leaving: readonly number[]): readonly { readonly from: number; readonly to: number }[] {
+  const spans: { from: number; to: number }[] = [];
+  const leavingParts = new Map<number, Set<number>>();
+  for (const index of leaving) {
+    const statement = facts.statements[index];
+    assert(statement !== undefined, 'An index points at a statement');
+    const { declarator } = statement;
+    if (declarator === undefined) {
+      spans.push(wholeLines(facts.code, statement));
+    } else {
+      const parts = leavingParts.get(declarator.whole.from) ?? new Set<number>();
+      parts.add(declarator.index);
+      leavingParts.set(declarator.whole.from, parts);
+    }
+  }
+  for (const [wholeFrom, parts] of leavingParts) {
+    const statement = facts.statements.find((candidate) => candidate.declarator?.whole.from === wholeFrom);
+    assert(statement?.declarator !== undefined, 'A leaving declarator has its declaration');
+    const { declarators, whole } = statement.declarator;
+    if (parts.size === declarators.length) {
+      spans.push(wholeLines(facts.code, whole));
+    } else {
+      spans.push(...declaratorSpansLeaving(declarators, parts));
+    }
+  }
+  return spans.sort((first, second) => first.from - second.from);
+}
+
+// Each leaving declarator before the last one that stays goes with the comma after it;
+// the ones after it go with the comma before the first of them.
+function declaratorSpansLeaving(
+  declarators: readonly { readonly from: number; readonly to: number }[],
+  leaving: ReadonlySet<number>,
+): readonly { readonly from: number; readonly to: number }[] {
+  const staying = declarators.map((_, index) => index).filter((index) => !leaving.has(index));
+  const lastStaying = staying[staying.length - 1];
+  assert(lastStaying !== undefined, 'Something of the declaration stays');
+  const spans: { from: number; to: number }[] = [];
+  declarators.forEach((declarator, index) => {
+    const next = declarators[index + 1];
+    if (leaving.has(index)) {
+      if (index < lastStaying) {
+        assert(next !== undefined, 'A declarator before the last that stays has one after it');
+        spans.push({ from: declarator.from, to: next.from });
+      }
+    }
+  });
+  const last = declarators[declarators.length - 1];
+  const kept = declarators[lastStaying];
+  assert(last !== undefined, 'A declaration has declarators');
+  assert(kept !== undefined, 'The last declarator that stays is one of them');
+  if (lastStaying < declarators.length - 1) {
+    spans.push({ from: kept.to, to: last.to });
+  }
+  return spans;
 }
 
 // A statement alone on its lines takes those lines with it, and the blank line

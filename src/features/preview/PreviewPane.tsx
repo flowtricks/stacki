@@ -67,6 +67,8 @@ interface PreviewPaneProps {
   readonly onNodeClasses?: (classes: Readonly<Record<string, readonly string[]>>) => void;
   readonly focusPath?: string | undefined;
   readonly focusOcc?: number | undefined;
+  /** The copy of a repeated component the user opened, for the selection to outline alone (previewRuntime.ts). */
+  readonly openedOcc?: number | undefined;
   readonly focusWhole?: boolean;
   readonly device: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;

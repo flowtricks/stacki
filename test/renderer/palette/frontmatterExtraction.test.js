@@ -737,6 +737,245 @@ const { a, b } = { a: 1, b: 2 };
   assert.deepEqual(split.props, ['a', 'b']);
 });
 
+// ── 2b. What leaves the page ────────────────────────────────────────────────
+// The page must stop declaring what only the section used, and only that: each case
+// reads both files as text, then checks what was kept as hard as what was taken.
+
+test('moved and read nowhere else: the declaration and its import leave, and only they', async (context) => {
+  const setup = await project(
+    context,
+    `---
+import Layout from '../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+
+const title = 'Home';
+const statsEntries = (await getCollection('stats')).sort((a, b) => a.data.order - b.data.order);
+const subtitle = 'Numbers';
+---
+<Layout title={title}>
+  <h2>{subtitle}</h2>
+  <section class="stats">
+    {statsEntries.map((entry) => <p>{entry.data.title}</p>)}
+  </section>
+</Layout>
+`,
+  );
+  const { page, component } = await extract(setup);
+  assert.equal(
+    page,
+    `---
+import Layout from '../layouts/Base.astro';
+import Stats from '../components/Stats.astro';
+
+const title = 'Home';
+const subtitle = 'Numbers';
+---
+<Layout title={title}>
+  <h2>{subtitle}</h2>
+  <Stats />
+</Layout>
+`,
+    'the blank line the file had is the single one left, and nothing else was reprinted',
+  );
+  assert.match(frontmatterOf(component), /const statsEntries = \(await getCollection\('stats'\)\)\.sort/);
+  assert.ok(!/\n\n\n/.test(page), 'no run of blank lines');
+});
+
+test('moved but read again by other markup: the declaration stays and the dialog says so', async (context) => {
+  const setup = await project(
+    context,
+    `---
+import { getCollection } from 'astro:content';
+const statsEntries = await getCollection('stats');
+---
+<section class="stats">{statsEntries.length}</section>
+<footer>{statsEntries.length} stats</footer>
+`,
+  );
+  const { plan, page } = await extract(setup);
+  assert.match(valueNamed(plan, 'statsEntries').note, /A copy stays on this page/);
+  assert.match(frontmatterOf(page), /const statsEntries = await getCollection\('stats'\);/);
+  assert.match(frontmatterOf(page), /import \{ getCollection \} from 'astro:content';/);
+});
+
+test('moved but read by a script or another statement: it stays', () => {
+  const byScript = planned(`---
+const statsEntries = [1, 2];
+---
+<section class="stats">{statsEntries.length}</section>
+<script define:vars={{ statsEntries }}>console.log(statsEntries)</script>
+`);
+  assert.match(byScript.parent.extraFrontmatter, /const statsEntries = \[1, 2\];/);
+  const byStatement = planned(`---
+const statsEntries = [1, 2];
+const first = statsEntries[0];
+---
+<section class="stats">{statsEntries.length}</section>
+<p>{first}</p>
+`);
+  assert.match(byStatement.parent.extraFrontmatter, /const statsEntries = /);
+});
+
+test('only the moved declaration leaves when its neighbours stay', () => {
+  const plan = planned(`---
+import { getCollection } from 'astro:content';
+const pages = await getCollection('pages');
+const statsEntries = await getCollection('stats');
+const posts = await getCollection('posts');
+---
+<section class="stats">{statsEntries.length}</section>
+<p>{pages.length}{posts.length}</p>
+`);
+  assert.equal(plan.parent.extraFrontmatter, "const pages = await getCollection('pages');\nconst posts = await getCollection('posts');");
+  assert.deepEqual(
+    plan.parent.imports.map((entry) => entry.name),
+    ['getCollection'],
+    'the import is still used by the statements that stayed',
+  );
+  assert.equal(plan.moved.code, "const statsEntries = await getCollection('stats');", 'and nothing of the neighbours travels');
+});
+
+test('an import another remaining use needs is kept; one nobody else uses goes', () => {
+  const plan = planned(`---
+import { getCollection, getEntry } from 'astro:content';
+const statsEntries = await getCollection('stats');
+const home = await getEntry('pages', 'home');
+---
+<section class="stats">{statsEntries.length}</section>
+<h1>{home.data.title}</h1>
+`);
+  assert.deepEqual(
+    plan.parent.imports.map((entry) => entry.name),
+    ['getEntry'],
+  );
+  assert.deepEqual(
+    plan.moved.imports.map((entry) => entry.name),
+    ['getCollection'],
+  );
+});
+
+test('an import still read by the template stays when the declaration leaves', () => {
+  const plan = planned(`---
+import { getCollection } from 'astro:content';
+const statsEntries = await getCollection('stats');
+---
+<section class="stats">{statsEntries.length}</section>
+<p>{String(getCollection)}</p>
+`);
+  assert.equal(plan.parent.extraFrontmatter, '', 'the declaration left');
+  assert.deepEqual(
+    plan.parent.imports.map((entry) => entry.name),
+    ['getCollection'],
+  );
+});
+
+test('a declaration shared with a neighbour in one statement is split: only the moved declarator leaves', async (context) => {
+  const setup = await project(
+    context,
+    `---
+import { getCollection } from 'astro:content';
+const pages = await getCollection('pages'), statsEntries = await getCollection('stats');
+---
+<section class="stats">{statsEntries.length}</section>
+<p>{pages.length}</p>
+`,
+  );
+  const { plan, page, component } = await extract(setup);
+  assert.equal(valueNamed(plan, 'statsEntries').note, undefined, 'nothing of it stays');
+  assert.equal(frontmatterOf(component).includes('pages'), false, 'the neighbour does not travel');
+  assert.match(frontmatterOf(component), /const statsEntries = await getCollection\('stats'\);/);
+  assert.match(frontmatterOf(page), /^const pages = await getCollection\('pages'\);$/m, 'the neighbour stays, as one declaration');
+  assert.ok(!frontmatterOf(page).includes('statsEntries'));
+  assert.match(frontmatterOf(page), /import \{ getCollection \} from 'astro:content';/);
+});
+
+test('splitting a statement leaves every other declarator as written, wherever the moved one stood', () => {
+  const first = planned(`---
+const statsEntries = [1], a = { x: 1, y: [2, 3] }, b = (n) => n;
+---
+<section class="stats">{statsEntries.length}</section>
+<p>{a.x}{b(1)}</p>
+`);
+  assert.equal(first.parent.extraFrontmatter, 'const a = { x: 1, y: [2, 3] }, b = (n) => n;');
+  const middle = planned(`---
+const a = { x: 1 }, statsEntries = [1], b = 2;
+---
+<section class="stats">{statsEntries.length}</section>
+<p>{a.x}{b}</p>
+`);
+  assert.equal(middle.parent.extraFrontmatter, 'const a = { x: 1 }, b = 2;');
+  const last = planned(`---
+const a = 1, b = [2, 3], statsEntries = [1];
+---
+<section class="stats">{statsEntries.length}</section>
+<p>{a}{b}</p>
+`);
+  assert.equal(last.parent.extraFrontmatter, 'const a = 1, b = [2, 3];');
+  const both = planned(`---
+const a = 1, statsEntries = [1], c = [4];
+---
+<section class="stats">{statsEntries.length}{c.length}</section>
+<p>{a}</p>
+`);
+  assert.equal(both.parent.extraFrontmatter, 'const a = 1;', 'two declarators leave, one stays');
+  assert.equal(both.moved.code, 'const statsEntries = [1];\nconst c = [4];');
+});
+
+test('a statement whose declarators all move leaves whole, comment and all', () => {
+  const plan = planned(`---
+const kept = 1;
+
+// The numbers.
+const a = [1], statsEntries = [a];
+---
+<p>{kept}</p>
+<section class="stats">{statsEntries.length}</section>
+`);
+  assert.equal(plan.parent.extraFrontmatter, 'const kept = 1;');
+});
+
+test('a declarator a staying neighbour reads is kept with it', () => {
+  const plan = planned(`---
+const statsEntries = [1, 2], total = statsEntries.length;
+---
+<section class="stats">{statsEntries.length}</section>
+<p>{total}</p>
+`);
+  assert.match(valueNamed(plan, 'statsEntries').note, /A copy stays/);
+  assert.equal(plan.parent.extraFrontmatter, 'const statsEntries = [1, 2], total = statsEntries.length;');
+});
+
+test('a pattern declaration is not split: it moves whole or stays whole', () => {
+  const plan = planned(`---
+const [pages, statsEntries] = await Promise.all([get('pages'), get('stats')]);
+---
+<section class="stats">{statsEntries.length}</section>
+<p>{pages.length}</p>
+`);
+  assert.match(plan.parent.extraFrontmatter, /^const \[pages, statsEntries\] = /, 'a destructure is one declarator and stays intact');
+});
+
+test('when the moved code was all the frontmatter held, the page keeps only what it imports', async (context) => {
+  const setup = await project(
+    context,
+    `---
+const statsEntries = [1, 2];
+---
+<section class="stats">{statsEntries.length}</section>
+`,
+  );
+  const { page } = await extract(setup);
+  assert.equal(
+    page,
+    `---
+import Stats from '../components/Stats.astro';
+---
+<Stats />
+`,
+    'a clean block, with no gap where the declaration was',
+  );
+});
+
 test('an import only the markup read leaves with it; one the rest of the page reads stays', async (context) => {
   const setup = await project(
     context,

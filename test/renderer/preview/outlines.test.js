@@ -152,11 +152,7 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
   // --- the overlay uses it ---------------------------------------------------
   const runtime = fs.readFileSync(repoPath('src/features/preview/previewRuntime.ts'), 'utf8');
   const overlays = fs.readFileSync(repoPath('src/features/preview/PreviewOverlays.tsx'), 'utf8');
-  check(
-    'a navigator hover draws one box per place',
-    /outline\.occ === undefined \? onePerPlace\(all\)/.test(overlays),
-    'the hover outlines are back to one box per run',
-  );
+  check('a navigator hover draws one box per place', /copiesToDraw\(all, outline\.occ\)/.test(overlays), 'the hover outlines are back to one box per run');
   check(
     'the overlay asks it rather than comparing paths',
     /!hoverIsSelection\([\s\S]{0,100}path: props\.hoverPath[\s\S]{0,100}occ: props\.hoverOcc/.test(overlays),
@@ -489,6 +485,37 @@ const stacked = (layers, opacity = 0.14) => 1 - (1 - opacity) ** layers;
     check('the component root is one box too', root.length === 1, JSON.stringify(root));
     check('around the open card', root[0]?.y === 2200 && root[0]?.h === 100, JSON.stringify(root[0]));
   }
+
+  // --- one opened copy of a repeated component ---------------------------------
+  // Opening NavLink from a header that renders it per item left the selected
+  // `li` outlined on every item, because a selection with no copy of its own
+  // draws one box per place. The opened copy is now the selection's copy, so
+  // exactly one box is drawn; a copy past the end (the loop shrank) is the first.
+  const { copiesToDraw } = require(bundlePath);
+  const three = [box(0, 0, 300, 40), box(0, 60, 300, 40), box(0, 120, 300, 40)];
+  const two = three.slice(0, 2);
+  const ys = (boxes) => boxes.map((one) => one.y).join(',');
+  check('two copies, the second opened: only the second', ys(copiesToDraw(two, 1)) === '60', ys(copiesToDraw(two, 1)));
+  check('three copies, the third opened: only the third', ys(copiesToDraw(three, 2)) === '120', ys(copiesToDraw(three, 2)));
+  check('three copies, the first opened: only the first', ys(copiesToDraw(three, 0)) === '0');
+  check('an opened copy past the end falls back to the first', ys(copiesToDraw(two, 5)) === '0', ys(copiesToDraw(two, 5)));
+  check('no recorded copy keeps one box per place', ys(copiesToDraw(three, undefined)) === '0,60,120');
+  check('no copies at all draws nothing and does not crash', copiesToDraw([], 1).length === 0);
+  check('one box with a copy past the end is that box', copiesToDraw([hero], 3).length === 1);
+  let negativeCopy = '';
+  try {
+    copiesToDraw(two, -1);
+  } catch (error) {
+    negativeCopy = String(error);
+  }
+  check('a negative copy is a bug', negativeCopy.includes('an occurrence is not negative'), negativeCopy);
+  let fractionalCopy = '';
+  try {
+    copiesToDraw(two, 0.5);
+  } catch (error) {
+    fractionalCopy = String(error);
+  }
+  check('a fractional copy is a bug', fractionalCopy.includes('an occurrence is a whole number'), fractionalCopy);
 
   if (failures.length) {
     console.error(`\noutlines: ${failures.length} failed, ${checked - failures.length} passed\n`);

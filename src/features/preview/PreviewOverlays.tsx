@@ -7,7 +7,7 @@ import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import type { Box } from './outlineBoxes';
 import type { PreviewMessage } from './previewMessages';
 import { NO_TEXT_MARKS, type TextMarks } from './previewMessages';
-import { hoverIsSelection, loopChildPaths, onePerPlace, outlineBoxPath, unionBox } from './outlineBoxes';
+import { copiesToDraw, hoverIsSelection, loopChildPaths, onePerPlace, outlineBoxPath, unionBox } from './outlineBoxes';
 import { spacingBands, withLiveSpacing } from './spacingBands';
 import {
   BranchIcon,
@@ -150,12 +150,9 @@ function NodeOutlines(props: PreviewOverlaysProps) {
     if (!all || !info) {
       return [];
     }
-    // No occurrence means the node, so draw one box per place. A number means
-    // the specific repeated copy clicked on the canvas. A loop is every copy.
-    const selected = outline.occ === undefined ? undefined : all[outline.occ];
+    // A loop is every copy; anything else is the copy it names (copiesToDraw).
     const loop = info.nodeKind === 'map' ? loopBox(props.rects, outline.path, info.childCount) : undefined;
-    const copies = outline.occ === undefined ? onePerPlace(all) : selected ? [selected] : all.slice(0, 1);
-    const boxes = loop !== undefined ? [loop] : copies;
+    const boxes = loop !== undefined ? [loop] : copiesToDraw(all, outline.occ);
     return boxes.map((box, index) => (
       <div
         key={`${outline.slot}-${index}`}
@@ -171,7 +168,7 @@ function NodeOutlines(props: PreviewOverlaysProps) {
           {/* A highlight shows the selected chip's component icon, but opens nothing: it is display only. */}
           {outline.slot === 'highlight' && outline.type === 'sel' && info.kind === 'component' && (
             <span className="node-outline-edit" aria-hidden="true">
-              <ComponentEditIcon size={14} />
+              <ComponentEditIcon size={12} />
             </span>
           )}
         </span>
@@ -216,7 +213,7 @@ function ComponentEditButton({
         onOpen(path, occurrence);
       }}
     >
-      <ComponentEditIcon size={14} />
+      <ComponentEditIcon size={12} />
     </button>
   );
 }
@@ -263,8 +260,7 @@ function PseudoOutline({ outline, rects, scale }: { readonly outline: OutlineTar
   if (!all) {
     return [];
   }
-  const selected = outline.occ === undefined ? undefined : all[outline.occ];
-  const boxes = outline.occ === undefined ? onePerPlace(all) : selected ? [selected] : all.slice(0, 1);
+  const boxes = copiesToDraw(all, outline.occ);
   return boxes.map((box, index) => (
     <div key={`${outline.type}-pseudo-${index}`} className={`node-outline ${outline.type} element`} style={boxStyle(box, scale)}>
       <span className={`node-outline-tag ${box.y * scale < 20 ? 'inside' : ''}`}>
@@ -344,11 +340,7 @@ function selectionBoxes(props: PreviewOverlaysProps): readonly Box[] {
   if (loop !== undefined) {
     return [loop];
   }
-  if (props.selOcc === undefined) {
-    return onePerPlace(all);
-  }
-  const selected = all[props.selOcc];
-  return selected ? [selected] : all.slice(0, 1);
+  return copiesToDraw(all, props.selOcc);
 }
 
 // Tags sit on their box's top-left corner, so two boxes whose corners lie
