@@ -9,7 +9,7 @@
 // CMS panel.
 import React, { useEffect, useState } from 'react';
 import { CodeInline } from '../../ui/CodeBlock';
-import { BracesIcon, CloseIcon, CmsIcon, CollectionIcon, PlusIcon } from '../../ui/Icons';
+import { BracesIcon, CloseIcon, CmsIcon, PlusIcon } from '../../ui/Icons';
 import { cleanError } from '../../lib/cleanError';
 import { assert } from '../../../shared/core/assert';
 import {
@@ -145,7 +145,7 @@ export function CmsSources(props: {
     <>
       <div className="app-folder-row" aria-label="CMS collections">
         <div className="app-folder-heading">
-          <CollectionIcon size={14} />
+          <CmsIcon size={14} />
           <span className="app-folder-title">CMS collections</span>
         </div>
         {sources.collections.length === 0 && <p className="app-folder-fixed">The content config declares no collections.</p>}

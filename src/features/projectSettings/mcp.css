@@ -1,0 +1,308 @@
+/* The MCP tab. Like the Secrets tab, blocks are set apart by background fills; none draws a border or a divider. */
+
+/* One gap token sets the rhythm between sections; blocks inside a section sit closer together. */
+.mcp {
+  --mcp-gap: 12px;
+  gap: var(--mcp-gap);
+}
+.mcp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mcp-section h4 {
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+}
+.mcp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mcp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+}
+.mcp-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mcp-card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.mcp-card-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcp-card-line {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcp-card-note {
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+.mcp-status {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.mcp-status-needs-secrets {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.mcp-status-invalid {
+  background: color-mix(in srgb, var(--red) 16%, transparent);
+  color: var(--text);
+}
+.mcp-agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.mcp-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 11px;
+}
+.mcp-chip-muted {
+  color: var(--text-faint);
+}
+.mcp-chip-button {
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.mcp-chip-button:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.mcp-chip-button.on {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.mcp-add-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+/* The add row: one filled bar, the provider dropdown attached on the left, the input, the hint and Add. */
+.mcp-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+}
+.mcp-add-provider {
+  flex: 0 0 auto;
+  width: auto;
+  max-width: 40%;
+  background: var(--bg-input);
+}
+.mcp-add-input {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 26px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  outline: none;
+  text-overflow: ellipsis;
+}
+.mcp-add-input::placeholder {
+  color: var(--text-faint);
+  font-family: inherit;
+}
+.mcp-add-button {
+  flex: 0 0 auto;
+  height: 24px;
+}
+.mcp-form-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.mcp-form-head .mcp-docs {
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcp-form-back {
+  padding: 4px;
+}
+.mcp-form-title {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcp-disclosure-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.mcp-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 500;
+}
+.mcp-disclosure:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.mcp-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 10.5px;
+}
+.mcp-small-button {
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 11.5px;
+}
+.mcp-small-button:hover:not(:disabled) {
+  background: var(--bg-active);
+}
+.mcp-add-label,
+.mcp-field > span:first-child {
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+.mcp-form,
+.mcp-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+}
+.mcp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mcp-pair {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.8fr) minmax(0, 1.2fr) auto auto;
+  align-items: center;
+  gap: 4px;
+}
+.mcp-pair-secret {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.mcp-pair .ghost {
+  padding: 4px;
+}
+.mcp-add-pair {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 5px;
+}
+.mcp-args {
+  resize: vertical;
+}
+.mcp-paste {
+  width: 100%;
+}
+.mcp-preview-line {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mcp-docs {
+  align-self: flex-start;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.mcp-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.mcp-json {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mcp-json-editor {
+  min-height: 9rem;
+  max-height: 21rem;
+  overflow: auto;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+}
+/* The editor sits on the input surface, so its gutter takes that surface too: no darker block beside line one. */
+.mcp-json-editor .cm-editor {
+  height: auto;
+  min-height: 9rem;
+}
+.mcp-json-editor .cm-gutters {
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+.mcp-json-editor .cm-activeLineGutter {
+  background: transparent;
+  color: var(--text-dim);
+}
+.mcp-issues {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  color: var(--red);
+  font-size: 11px;
+  list-style: none;
+}

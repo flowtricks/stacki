@@ -77,6 +77,8 @@ export const ACCESS_FEATURES = [
   'panel:instructions',
   /** The Audits panel: accessibility and SEO findings, and their fixes. */
   'panel:audits',
+  /** The Settings panel at the rail's foot: the project's secrets (`.env`). Admin only until a role is given it. */
+  'panel:projectSettings',
   // Right panels.
   'panel:style',
   'panel:settings',
@@ -277,6 +279,7 @@ export const ACCESS_GROUPS: readonly {
       { feature: 'panel:ai', label: 'AI chat' },
       { feature: 'panel:instructions', label: 'Instructions' },
       { feature: 'panel:audits', label: 'Audits' },
+      { feature: 'panel:projectSettings', label: 'Project settings (secrets)' },
       { feature: 'panel:style', label: 'Style panel' },
       { feature: 'panel:settings', label: 'Settings panel' },
     ],

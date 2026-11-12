@@ -1,0 +1,245 @@
+/* The Settings rail panel and its Secrets tab. Rows and blocks are set apart by background fills, as
+   across the app; none draws a border or a divider. */
+
+.project-settings-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+  padding: 2px 8px 12px;
+}
+.project-settings-tabs {
+  display: flex;
+  flex: 0 0 148px;
+  flex-direction: column;
+  gap: 2px;
+}
+.project-settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: left;
+}
+.project-settings-tab > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.project-settings-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.project-settings-tab.on {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.project-settings-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 0 4px 0 8px;
+}
+
+.secrets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.secrets-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.secrets-heading {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.secrets-heading h3 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.secrets-heading p,
+.secrets-note,
+.secrets-hint {
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+.secrets-heading p {
+  margin-top: 2px;
+}
+.secrets-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.secrets-actions .primary,
+.secrets-row-actions .primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.secrets-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 11.5px;
+}
+.secrets-failure {
+  background: color-mix(in srgb, var(--red) 16%, transparent);
+}
+.secrets-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+  color: var(--text-faint);
+  font-size: 11.5px;
+  text-align: center;
+}
+.secrets-empty strong {
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.secrets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.secrets-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 0.9fr) minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 8px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+}
+.secrets-row:hover,
+.secrets-row:focus-within {
+  background: var(--bg-active);
+}
+.secrets-hint {
+  grid-column: 1 / -1;
+}
+.secrets-problem {
+  color: var(--red);
+}
+.secrets-name,
+.secrets-value,
+.secrets-input {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.secrets-name {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.secrets-value {
+  min-width: 0;
+  overflow: hidden;
+  padding: 4px 6px;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.secrets-value:hover {
+  background: var(--bg-input);
+}
+.secrets-value-static {
+  cursor: default;
+}
+.secrets-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+.secrets-row-actions .ghost {
+  padding: 4px;
+}
+/* The placeholder row shares .secrets-row's grid; its slots are the size of the real controls (a 14px icon
+   in a ghost button's 4px padding and 1px border is 24px) so the list does not move when the names arrive. */
+.secrets-row-skeleton {
+  pointer-events: none;
+}
+.secrets-row-skeleton:hover {
+  background: var(--bg-hover);
+}
+.secrets-skeleton-value {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 6px;
+}
+.secrets-skeleton-slot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+.secrets-row-actions .ghost.danger:hover {
+  color: var(--red);
+}
+.secrets-input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text);
+}
+.secrets-draft {
+  background: var(--bg-panel-2);
+}
+
+/* The (i) mark beside a title: the longer explanation lives in its tooltip, not on screen. */
+.settings-info {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-faint);
+  vertical-align: middle;
+}
+.settings-info:hover,
+.settings-info:focus-visible {
+  color: var(--text);
+}
+.rail-tooltip.settings-info-tip {
+  z-index: 10001;
+  max-width: 260px;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+}

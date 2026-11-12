@@ -95,7 +95,7 @@ export async function writeProjectSecret(projectRoot: string, input: { readonly 
   return change;
 }
 
-function writeIgnoreRule(projectRoot: string): IgnoreChange {
+export function writeIgnoreRule(projectRoot: string): IgnoreChange {
   const file = path.join(projectRoot, '.gitignore');
   const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : undefined;
   const text = gitignoreWithEnv(before);
@@ -112,7 +112,7 @@ function writeIgnoreRule(projectRoot: string): IgnoreChange {
 
 // `git ls-files --error-unmatch` fails for a path Git does not track, and in a
 // folder that is not a repository, and both mean .env is not tracked.
-async function isTracked(projectRoot: string, git: Git): Promise<boolean> {
+export async function isTracked(projectRoot: string, git: Git): Promise<boolean> {
   try {
     await git(projectRoot, ['ls-files', '--error-unmatch', '--', ENV_FILE]);
     return true;
@@ -122,7 +122,7 @@ async function isTracked(projectRoot: string, git: Git): Promise<boolean> {
 }
 
 // `git check-ignore` exits 1 for a path it does not ignore, and 128 outside a repository.
-async function ignoreState(projectRoot: string, git: Git): Promise<'ignored' | 'not-ignored' | 'no-repository'> {
+export async function ignoreState(projectRoot: string, git: Git): Promise<'ignored' | 'not-ignored' | 'no-repository'> {
   try {
     await git(projectRoot, ['check-ignore', '--quiet', '--', ENV_FILE]);
     return 'ignored';

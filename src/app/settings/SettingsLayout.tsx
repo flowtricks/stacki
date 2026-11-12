@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { CheckIcon } from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 /** How long "Saved" stays after a save: long enough to read, short enough to stay quiet. */
 const SAVED_SHOWN_MS = 1600;
@@ -60,13 +61,14 @@ export function SettingsIntro(props: { readonly saving: SaveIndicatorState; read
 }
 
 function SaveIndicator(props: { readonly state: SaveIndicatorState }) {
+  const translate = useTranslate();
   return (
     <span className="app-settings-saved" role="status" data-state={props.state}>
-      {props.state === 'saving' && 'Saving…'}
+      {props.state === 'saving' && translate('settings.saving')}
       {props.state === 'saved' && (
         <>
           <CheckIcon size={12} />
-          Saved
+          {translate('settings.saved')}
         </>
       )}
     </span>
@@ -78,12 +80,13 @@ function SaveIndicator(props: { readonly state: SaveIndicatorState }) {
  * control is back at its saved value), or a save that failed, with Retry.
  */
 export function SettingsNotice(props: { readonly message: string; readonly onRetry?: () => void }) {
+  const translate = useTranslate();
   return (
     <div className="app-settings-notice" role="alert">
       <span>{props.message}</span>
       {props.onRetry !== undefined && (
         <button type="button" onClick={props.onRetry}>
-          Retry
+          {translate('settings.retry')}
         </button>
       )}
     </div>

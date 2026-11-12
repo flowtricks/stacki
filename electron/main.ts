@@ -41,6 +41,7 @@ import {
   clipboard,
   session,
   safeStorage,
+  systemPreferences,
 } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -48,11 +49,14 @@ import { pathToFileURL } from 'url';
 import { stopAllServices } from './content/contentConfig';
 import * as thumbs from './project/thumbs';
 import { openingBounds } from './app/windowBounds';
-import { isAppPage, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
+import { isAppPage, isAllowedMedia, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
+import { openMicrophoneSettings, microphoneStatus, requestMicrophone, type MicrophoneSystem } from './app/microphoneAccess';
 import { registerTerminalHandlers, cleanupTerminals } from './terminal/terminal';
 import { watchProject } from './project/projectWatcher';
 import { watchInstructions } from './project/instructionsWatcher';
 import { registerInstructionHandlers } from './handlers/instructionHandlers';
+import { registerSecretsHandlers } from './handlers/secretsHandlers';
+import { registerMcpHandlers } from './handlers/mcpHandlers';
 import { autoUpdater } from 'electron-updater';
 import { AutoUpdates } from './app/autoUpdate';
 import { isWin } from './lib/mainHelpers';
@@ -230,10 +234,41 @@ function registerAssetProtocol() {
 
 // Every window shares the default session, so one rule covers the app and its previews.
 function refusePrivatePermissions() {
-  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => {
+  const appUrl = appPageUrl();
+  session.defaultSession.setPermissionRequestHandler((_contents, permission, callback, details) => {
+    if (permission === 'media') {
+      // Dictation's microphone: audio from Stacki's own page only (windowSecurity.isAllowedMedia).
+      const mediaTypes = 'mediaTypes' in details ? details.mediaTypes : undefined;
+      callback(isAllowedMedia({ mediaTypes, requestingUrl: details.requestingUrl, appUrl }));
+      return;
+    }
     callback(!isPrivatePermission(permission));
   });
-  session.defaultSession.setPermissionCheckHandler((_contents, permission) => !isPrivatePermission(permission));
+  session.defaultSession.setPermissionCheckHandler((_contents, permission, requestingOrigin, details) => {
+    if (permission === 'media') {
+      // A check names one kind at a time; 'unknown' is the system asking whether any device exists.
+      const mediaTypes = 'mediaType' in details && details.mediaType !== 'video' ? ['audio'] : undefined;
+      return isAllowedMedia({ mediaTypes, requestingUrl: details.requestingUrl ?? requestingOrigin, appUrl });
+    }
+    return !isPrivatePermission(permission);
+  });
+}
+
+// The page the main window shows: the dev server in development, the built file when packaged.
+function appPageUrl(): string {
+  return process.env['VITE_DEV_SERVER_URL'] ?? pathToFileURL(RUNTIME_PATHS.rendererIndex).toString();
+}
+
+// The microphone as the system sees it. In development the application is Electron itself,
+// listed under "Electron" in System Settings; installed, it is "Stacki" (app.getName()).
+function microphoneSystem(): MicrophoneSystem {
+  return {
+    platform: process.platform,
+    appName: app.isPackaged ? app.getName() : 'Electron',
+    mediaAccessStatus: () => systemPreferences.getMediaAccessStatus('microphone'),
+    askForAccess: () => systemPreferences.askForMediaAccess('microphone'),
+    openExternal: (url) => shell.openExternal(url),
+  };
 }
 
 // The preload hands Stacki's API to whatever page this window shows, so the
@@ -342,7 +377,7 @@ function createWindow() {
     }
     return { action: 'deny' };
   });
-  keepOnAppPage(mainWindow, process.env['VITE_DEV_SERVER_URL'] ?? pathToFileURL(RUNTIME_PATHS.rendererIndex).toString());
+  keepOnAppPage(mainWindow, appPageUrl());
 
   // Somebody closed the window. Whatever was open is over: the next window is a
   // fresh start and belongs on the welcome screen, not back in the project this
@@ -365,6 +400,19 @@ function openExternalLink(url: string) {
     console.error(`[shell] could not open ${url}:`, error);
   });
 }
+
+ipcMain.handle('microphone:status', () => microphoneStatus(microphoneSystem()));
+ipcMain.handle('microphone:request', () => requestMicrophone(microphoneSystem()));
+// No payload: the address is fixed in shared/properties/microphone.ts, never a renderer's.
+ipcMain.handle('microphone:openSettings', async () => {
+  const system = microphoneSystem();
+  if (system.platform === 'darwin') {
+    await openMicrophoneSettings(system).catch((error: unknown) => {
+      console.error('[microphone] could not open System Settings:', error);
+    });
+  }
+  return { ok: true as const };
+});
 
 ipcMain.handle('shell:openExternal', async (_event, url) => {
   if (isBrowserLink(url)) {
@@ -1042,6 +1090,8 @@ registerPreviewHandlers(host);
 registerProjectHandlers(host);
 registerProjectMetadataHandlers(host);
 registerInstructionHandlers(host);
+registerSecretsHandlers(host);
+registerMcpHandlers(host);
 registerPublishHandlers(host);
 registerCmsConnectionHandlers(host, cmsConnections, new SanityLogin(cmsConnections));
 registerMediaHostingHandlers(host, mediaConnections);

@@ -84,6 +84,18 @@ interface InvokeChannels {
   readonly planPageTemplate: 'pageTemplate:plan';
   readonly sampleDataSource: 'pageTemplate:sample';
   readonly setProjectEnv: 'project:setEnv';
+  readonly listSecrets: 'secrets:list';
+  readonly readSecret: 'secrets:read';
+  readonly applySecretsChange: 'secrets:apply';
+  readonly ignoreSecretsFile: 'secrets:ignore';
+  readonly readMcp: 'mcp:read';
+  readonly readMcpText: 'mcp:readText';
+  readonly revealMcpServer: 'mcp:reveal';
+  readonly applyMcpChange: 'mcp:apply';
+  readonly saveMcpText: 'mcp:saveText';
+  readonly readMcpCodex: 'mcp:readCodex';
+  readonly revealMcpCodexServer: 'mcp:revealCodex';
+  readonly applyMcpCodexChange: 'mcp:applyCodex';
   readonly deletePage: 'page:delete';
   readonly movePage: 'page:move';
   readonly createPageFolder: 'pagefolder:create';
@@ -251,6 +263,9 @@ interface InvokeChannels {
   readonly closeTerminal: 'terminal:close';
   readonly settings: 'settings:get';
   readonly setPreference: 'settings:set';
+  readonly microphoneOpenSettings: 'microphone:openSettings';
+  readonly microphoneRequest: 'microphone:request';
+  readonly microphoneStatus: 'microphone:status';
   readonly nativeCopy: 'native:copy';
   readonly nativePaste: 'native:paste';
   readonly nativeUndo: 'native:undo';

@@ -1,3 +1,4 @@
+import type { MicrophoneReport } from '../properties/microphone';
 import type { AiResults } from './aiChat';
 import type { AppFileAnswer } from '../properties/appFiles';
 import type { AppAccessToken, AppAuthStatus } from '../properties/appAuth';
@@ -37,6 +38,9 @@ import type { GitHubUserSearchResult } from './githubUserSearch';
 import type { StudioStatus, StudioInstallResult } from './studioSetup';
 import type { StudioInstallProgress } from './studioProgress';
 import type { AppSecretScan } from '../properties/appSecrets';
+import type { SecretsListing, SecretsResult, SecretValue } from '../properties/secrets';
+import type { McpCodexState, McpListing, McpResult, McpText } from '../properties/mcp';
+import type { McpServerConfig } from '../properties/mcpConfig';
 import type { AppSettingValues } from '../properties/appSettings';
 import type { AppEditOutcome, AppMember, AppPerson } from '../properties/appsRpc';
 import type { AppRepositoryStatus, AppShareOutcome, AppVisibilityOutcome, MarketplacePrecheck, MarketplaceSubmissionOutcome } from '../properties/appPublish';
@@ -611,6 +615,11 @@ export interface IpcResults extends AiResults {
         readonly error: string;
       };
   readonly 'git:worktrees': ReadonlyArray<WireWorktreeInfo>;
+  readonly 'microphone:openSettings': {
+    readonly ok: true;
+  };
+  readonly 'microphone:request': MicrophoneReport;
+  readonly 'microphone:status': MicrophoneReport;
   readonly 'native:copy': {
     readonly ok: true;
   };
@@ -633,6 +642,18 @@ export interface IpcResults extends AiResults {
   readonly 'pageTemplate:plan': RemoteResult<PageTemplatePlan>;
   readonly 'pageTemplate:sample': RemoteResult<DataSample>;
   readonly 'project:setEnv': RemoteResult<{ readonly gitignore: 'already-ignored' | 'added' }>;
+  readonly 'secrets:list': SecretsResult<SecretsListing>;
+  readonly 'secrets:read': SecretsResult<SecretValue>;
+  readonly 'secrets:apply': SecretsResult<SecretsListing>;
+  readonly 'secrets:ignore': SecretsResult<SecretsListing>;
+  readonly 'mcp:read': McpResult<McpListing>;
+  readonly 'mcp:readText': McpResult<McpText>;
+  readonly 'mcp:reveal': McpResult<McpServerConfig>;
+  readonly 'mcp:apply': McpResult<McpListing>;
+  readonly 'mcp:saveText': McpResult<McpListing>;
+  readonly 'mcp:readCodex': McpCodexState;
+  readonly 'mcp:revealCodex': McpResult<McpServerConfig>;
+  readonly 'mcp:applyCodex': McpResult<McpCodexState>;
   readonly 'page:dynamicPaths':
     | {
         readonly entries: ReadonlyArray<never>;

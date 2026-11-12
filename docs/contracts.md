@@ -723,6 +723,62 @@ Document edits over the collaboration socket stay UI-gated, as Client mode was.
 role's UI. It changes only the renderer's active role (`src/lib/currentRole.ts`: `currentRole()` and
 `onRoleChange()`), never the file or what main and the server allow. Studio keeps the choice for the tab in sessionStorage (`studio-role`).
 
+## Settings panel and secrets
+
+The Settings rail button (`projectSettings`, access feature `panel:projectSettings`, admin only until a
+role is granted it; shortcut ⌥S) sits directly above the AI button and opens a panel with a typed tab
+registry (`src/features/projectSettings/settingsTabs.ts`). It is the project's settings, apart from the
+app's own Settings screen (`src/app/settings`). Its one tab, Secrets, edits the project's `.env`.
+
+- `shared/properties/envFile.ts` is the codec. It keeps comments, blank lines, quoting, `export`
+  prefixes, spacing, the byte-order mark and line endings: parse then serialize is byte-identical, and an
+  edit rewrites only the line it touches. Bounds: names 128 characters, values 16 KiB, 512 variables,
+  4000 lines, 256 KiB. Multi-line quoted values are listed but not edited here.
+- `secrets:list` returns names only. `secrets:read` returns one value, for a person who revealed or began
+  editing it. `secrets:apply` applies one change (`add`, `update`, `remove`, `create`) against the revision
+  (digest of the file's bytes) it was authored on; a file that changed since is refused with `changed`.
+  `secrets:ignore` appends `.env` to `.gitignore`. A missing `.env` is the ordinary empty list.
+- Writes go through the document actors (atomic, mode kept); a new `.env` is made mode 0600 first.
+  No value appears in a log, an error, a listing or the DOM of a hidden row; failures are fixed text per code.
+- The list reloads when the window regains focus; there is no file watcher for `.env` yet.
+- A running app whose main process or preload predates these channels shows "restart Stacki" rather than a
+  read failure (`SecretsUnavailableError`).
+- Studio does not show the panel: its project files live in a browser store or a repository, where a
+  `.env` would be committed or shared, so Studio's rail does not list it and `panel:projectSettings` has no
+  Studio route.
+
+## Settings panel: MCP servers
+
+The Settings panel's second tab, MCP, lists the servers in the project's `.mcp.json` (Claude Code's project
+file, top-level `mcpServers`) as cards, adds one from a typed provider catalog or from a pasted line, edits and
+removes them, and offers a JSON view of the whole file. It follows the Secrets tab's architecture.
+
+- Wire shapes and parsers: `shared/properties/mcp.ts`. The model, bounds and summaries: `mcpConfig.ts`
+  (`MCP_LIMITS`: 64 servers, names `[A-Za-z0-9_.-]{1,64}`, 64 arguments of 2 KiB, 64 variables or headers, file
+  256 KiB). The `.mcp.json` codec: `mcpJson.ts`. The pasted-command reader: `mcpCommand.ts`. The provider catalog:
+  `mcpProviders.ts` (entries marked `// verify` were not checked against the provider's current documentation).
+- Channels: `mcp:read` (summaries, never a literal variable or header value), `mcp:readText` (the file's text, for
+  the JSON view), `mcp:reveal` (one server's values, for a person who began editing it), `mcp:apply` (`add`, `update`,
+  `remove` against a revision, a digest of the file's bytes), `mcp:saveText` (the whole text from the JSON view, checked
+  again in main), and for Codex `mcp:readCodex`, `mcp:revealCodex` and `mcp:applyCodex`.
+- `.mcp.json` is edited by region: an edit replaces, inserts or deletes only the entry (or the managed fields of the
+  entry: `type`, `command`, `args`, `env`, `url`, `headers`) it names. Indentation, key order, line endings, unknown
+  top-level keys and unknown per-server fields keep their bytes. A repeated key, a comment or a trailing comma is a
+  refusal with a line and column. Writes go through the document actors; a stale revision is `changed`.
+- A pasted line (`claude mcp add ...`, `add-json`, `codex mcp add ...`, a URL, an `npx` line) is parsed as inert text
+  into a typed server and shown as a preview; it is never passed to a shell. Unquoted `;`, `&&`, `|`, `>`, backticks,
+  `$(`, newlines and comments refuse the whole line. The panel always writes the project file, whatever scope was
+  pasted. Literal variable and header values move to `.env` through the Secrets store and `.mcp.json` keeps `${NAME}`.
+- Codex keeps servers in `~/.codex/config.toml`, user-wide. No channel takes a path: main builds that one path from the
+  home folder. A change names a project server by name; main reads it from `.mcp.json`, maps it (`mcpCodex.ts`), and
+  `mcpToml.ts` splices only that `[mcp_servers.<name>]` table (and its `env`, `http_headers`, `env_http_headers`
+  sub-tables), refusing on any doubt about the file. The file is replaced atomically beside itself, keeping its mode,
+  after a digest check; the panel asks first and says the file is outside the project. The Codex CLI's HTTP keys
+  (`url`, `bearer_token_env_var`, `http_headers`, `env_http_headers`) come from its documentation, not from a
+  checked install.
+- A running app that predates the channels shows "restart Stacki" (`McpUnavailableError`), as the Secrets tab does.
+- Studio does not show the panel; `mcp.ts` and `mcpConfig.ts` reach Studio only because the shared IPC types import them.
+
 ## Required gate
 
 Run `env -u ELECTRON_RUN_AS_NODE npm test` before merging. The gate cleans and
@@ -1781,12 +1837,16 @@ in jsdom).
 ## Audits
 
 `.stacki/audits.json` (`shared/properties/auditIgnores.ts`) is the tracked audit configuration:
-`{ "version": 2, "ignored": [{ "id", "reason" }], "checks"?, "tokens"?, "placeholders"? }`. One file
+`{ "version": 2, "ignored": [{ "id", "reason" }], "ignoredPages"?, "checks"?, "tokens"?, "placeholders"? }`. One file
 holds both ignores and settings, rather than a second `.stacki/lint.json`: both are "how this
 project audits itself", edited from the same panel and Settings tab, and one file is one write
 witnessed against one set of bytes. Version 1 (ignores only) still reads and is written back as
 version 2; settings at their defaults are left out of the file.
 
+- `ignoredPages`: `[{ "file", "reason" }]`, at most 500, `file` project-relative and unique. A page entry
+  silences every finding of every check in that file; finding-level `ignored` entries are separate and
+  stay when a page is unignored. Written only when non-empty, so older files read unchanged; a file
+  that has the key is refused by older builds (unknown field), as every addition to this file is.
 - `checks`: by check id (`^[a-z0-9-]{1,40}$`, at most 100), `{ "enabled"?: boolean, "priority"?: "high" | "medium" | "low" }`.
 - `tokens`: `properties` (names, `padding*` matching a prefix), `colors`, `px`, `remOutsideVariables`
   (booleans), `allowed` (raw values, compared lower-cased).

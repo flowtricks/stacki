@@ -19,6 +19,9 @@ const jsonNull: unknown = JSON.parse('null');
 
 const noPayload = new Set([
   'project:pending',
+  'microphone:openSettings',
+  'microphone:request',
+  'microphone:status',
   'native:copy',
   'native:paste',
   'native:undo',
@@ -237,6 +240,22 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   },
   'pageTemplate:sample': { projectPath: '/site', request: { kind: 'http-json', url: 'https://api.example.com/items', headers: [] } },
   'project:setEnv': { projectPath: '/site', name: 'API_TOKEN', value: 'value' },
+  'secrets:list': { projectPath: '/site' },
+  'secrets:read': { projectPath: '/site', revision: 'a'.repeat(64), index: 0 },
+  'secrets:apply': { projectPath: '/site', revision: 'a'.repeat(64), change: { kind: 'remove', index: 0 } },
+  'secrets:ignore': { projectPath: '/site' },
+  'mcp:read': { projectPath: '/site' },
+  'mcp:readText': { projectPath: '/site' },
+  'mcp:reveal': { projectPath: '/site', revision: 'a'.repeat(64), name: 'Sanity' },
+  'mcp:apply': {
+    projectPath: '/site',
+    revision: 'a'.repeat(64),
+    change: { kind: 'add', name: 'Sanity', config: { transport: 'http', url: 'https://mcp.sanity.io', headers: [] } },
+  },
+  'mcp:saveText': { projectPath: '/site', revision: 'a'.repeat(64), text: '{}' },
+  'mcp:readCodex': { projectPath: '/site' },
+  'mcp:revealCodex': { projectPath: '/site', revision: 'a'.repeat(64), name: 'Sanity' },
+  'mcp:applyCodex': { projectPath: '/site', revision: 'a'.repeat(64), projectRevision: 'b'.repeat(64), change: { kind: 'put', name: 'Sanity' } },
   'content:remoteRead': {
     projectPath: '/site',
     request: { operation: 'documents', collection: 'blog' },
@@ -652,4 +671,18 @@ test('media hosting payloads refuse traversal, unknown entries, unbounded upload
     /Expected object/,
   );
   assert.throws(() => parseIpcPayload('assets:replace', { projectPath: '/site' }), /Expected string/);
+});
+
+test('the microphone channels take no payload: a renderer can never choose the address System Settings opens', () => {
+  for (const channel of ['microphone:status', 'microphone:request', 'microphone:openSettings'] as const) {
+    assert.equal(parseIpcPayload(channel, undefined), undefined, channel);
+    for (const supplied of [
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera',
+      'https://example.com',
+      { url: 'https://example.com' },
+      '',
+    ]) {
+      assert.throws(() => parseIpcPayload(channel, supplied), /Expected no payload/, `${channel} ${JSON.stringify(supplied)}`);
+    }
+  }
 });

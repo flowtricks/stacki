@@ -59,6 +59,11 @@ export const CHANNEL_ACCESS: Readonly<Partial<Record<IpcChannel, readonly Access
   'cmsConnections:remove': ['settings:cms'],
   'cmsConnections:sanityLogin': ['settings:cms'],
   'project:setEnv': ['settings:cms'],
+  // Reads too: a secret is the one thing a shared read must not hand to a role without the panel.
+  'secrets:list': ['panel:projectSettings'],
+  'secrets:read': ['panel:projectSettings'],
+  'secrets:apply': ['panel:projectSettings'],
+  'secrets:ignore': ['panel:projectSettings'],
   'css:addSection': ['panel:variables'],
   'css:addVariables': ['panel:variables'],
   'css:moveHeading': ['panel:variables'],

@@ -23,6 +23,9 @@ import { RolesSettings } from './RolesSettings';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { canSettingsTab } from '../../lib/roleAccess';
 import { FeatureIcon } from '../featureIcons';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
+import { LanguageSetting } from './LanguageSetting';
 import { SettingsEmpty, SettingsIntro, SettingsRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 
 interface Props {
@@ -77,14 +80,14 @@ export default function Settings(props: Props) {
   return open ? <SettingsDialog {...props} tab={open} registerSwitch={registerSwitch} onClose={() => setOpen(undefined)} /> : undefined;
 }
 
-const TAB_LABELS: Readonly<Record<SettingsTab, string>> = {
-  editor: 'Editor settings',
-  folders: 'Folders',
-  cms: 'CMS connections',
-  studio: 'Stacki Studio',
-  instructions: 'Instructions',
-  audits: 'Audits',
-  roles: 'Roles',
+const TAB_LABELS: Readonly<Record<SettingsTab, MessageKey>> = {
+  editor: 'settings.tab.editor',
+  folders: 'settings.tab.folders',
+  cms: 'settings.tab.cms',
+  studio: 'settings.tab.studio',
+  instructions: 'settings.tab.instructions',
+  audits: 'settings.tab.audits',
+  roles: 'settings.tab.roles',
 };
 
 function TabIcon(props: { readonly tab: SettingsTab }) {
@@ -99,6 +102,7 @@ interface DialogProps extends Props {
 }
 
 function SettingsDialog(props: DialogProps) {
+  const translate = useTranslate();
   // Tabs the project's role hides are left out; a hidden tab opens on the first shown one.
   const role = useCurrentRole();
   const shown = SETTINGS_TABS.filter((item) => canSettingsTab(role, item));
@@ -129,12 +133,12 @@ function SettingsDialog(props: DialogProps) {
     <Popup className="app-settings" labelledBy="app-settings-title" onClose={props.onClose}>
       {({ close }) => (
         <div className="app-settings-layout">
-          <nav className="app-settings-sidebar" aria-label="Settings">
-            <h2 id="app-settings-title">Settings</h2>
+          <nav className="app-settings-sidebar" aria-label={translate('settings.title')}>
+            <h2 id="app-settings-title">{translate('settings.title')}</h2>
             <div
               className="app-settings-tabs"
               role="tablist"
-              aria-label="Settings sections"
+              aria-label={translate('settings.sections')}
               aria-orientation="vertical"
               onKeyDown={(event) => {
                 const next = settingsTabAfterKey(tab, event.key, shown);
@@ -164,15 +168,15 @@ function SettingsDialog(props: DialogProps) {
                   onClick={() => show(item)}
                 >
                   <TabIcon tab={item} />
-                  <span>{TAB_LABELS[item]}</span>
+                  <span>{translate(TAB_LABELS[item])}</span>
                 </button>
               ))}
             </div>
           </nav>
           <div className="app-settings-main">
             <header className="app-settings-header">
-              <h3>{TAB_LABELS[tab]}</h3>
-              <button type="button" className="ghost app-settings-close" aria-label="Close settings" onClick={close}>
+              <h3>{translate(TAB_LABELS[tab])}</h3>
+              <button type="button" className="ghost app-settings-close" aria-label={translate('settings.close')} onClick={close}>
                 <CloseIcon size={14} />
               </button>
             </header>
@@ -200,6 +204,7 @@ function SettingsDialog(props: DialogProps) {
 }
 
 function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onClose: () => void }) {
+  const translate = useTranslate();
   const icon = <FeatureIcon feature={`settings:${props.tab}`} size={20} />;
   switch (props.tab) {
     case 'editor':
@@ -213,37 +218,37 @@ function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onCl
           {...(props.onOpenFile === undefined ? {} : { onOpenFile: openAfterClosing(props.onClose, props.onOpenFile) })}
         />
       ) : (
-        <SettingsEmpty icon={icon}>Open a project to choose its folders.</SettingsEmpty>
+        <SettingsEmpty icon={icon}>{translate('settings.empty.folders')}</SettingsEmpty>
       );
     case 'cms':
       return props.projectPath ? (
         <CmsConnections key={`cms:${props.projectPath}`} projectPath={props.projectPath} />
       ) : (
-        <SettingsEmpty icon={icon}>Open a project to connect a CMS.</SettingsEmpty>
+        <SettingsEmpty icon={icon}>{translate('settings.empty.cms')}</SettingsEmpty>
       );
     case 'studio':
       return props.projectPath ? (
         <StudioSetup key={props.projectPath} projectPath={props.projectPath} previewURL={props.previewURL} onClose={props.onClose} />
       ) : (
-        <SettingsEmpty icon={icon}>Open a project to add Stacki Studio.</SettingsEmpty>
+        <SettingsEmpty icon={icon}>{translate('settings.empty.studio')}</SettingsEmpty>
       );
     case 'instructions':
       return props.projectPath ? (
         <InstructionsSettings key={`instructions:${props.projectPath}`} projectPath={props.projectPath} />
       ) : (
-        <SettingsEmpty icon={icon}>Open a project to choose what the Instructions panel hides.</SettingsEmpty>
+        <SettingsEmpty icon={icon}>{translate('settings.empty.instructions')}</SettingsEmpty>
       );
     case 'audits':
       return props.projectPath ? (
         <AuditsSettings key={`audits:${props.projectPath}`} projectPath={props.projectPath} />
       ) : (
-        <SettingsEmpty icon={icon}>Open a project to configure its audits.</SettingsEmpty>
+        <SettingsEmpty icon={icon}>{translate('settings.empty.audits')}</SettingsEmpty>
       );
     case 'roles':
       return props.projectPath ? (
         <RolesSettings key={`roles:${props.projectPath}`} projectPath={props.projectPath} />
       ) : (
-        <SettingsEmpty icon={icon}>Open a project to set its roles.</SettingsEmpty>
+        <SettingsEmpty icon={icon}>{translate('settings.empty.roles')}</SettingsEmpty>
       );
     default: {
       const exhaustive: never = props.tab;
@@ -261,6 +266,7 @@ function openAfterClosing(close: () => void, open: (rel: string) => void): (rel:
 }
 
 function usePreferences() {
+  const translate = useTranslate();
   const [value, setValue] = useState<Awaited<ReturnType<typeof readPreferences>>>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -290,7 +296,7 @@ function usePreferences() {
       const result = await indicator.track(savePreference(input));
       setValue(result);
       if (!result.saved) {
-        setError('Applied for this session, but could not save. Check disk space and try again.');
+        setError(translate('settings.editor.saveFailed'));
       }
     } catch (failure: unknown) {
       setError(cleanError(failure));
@@ -303,41 +309,34 @@ function usePreferences() {
 
 // Editor settings save each switch as it flips: each is safe to apply alone.
 function Preferences() {
+  const translate = useTranslate();
   const { value, busy, error, change, saving } = usePreferences();
   return (
-    <section className="app-preferences" aria-label="App preferences">
-      <SettingsIntro saving={saving}>How Stacki behaves on this computer. Changes save as you make them.</SettingsIntro>
-      <SettingsSection title="General">
+    <section className="app-preferences" aria-label={translate('settings.editor.preferences')}>
+      <SettingsIntro saving={saving}>{translate('settings.editor.intro')}</SettingsIntro>
+      <SettingsSection title={translate('settings.editor.section.general')}>
+        <LanguageSetting />
         <PreferenceToggle
-          label="Interface sounds"
-          description="Play subtle sounds as you use the editor."
+          label={translate('settings.editor.sound.label')}
+          description={translate('settings.editor.sound.description')}
           checked={value?.sound ?? false}
           disabled={!value || busy}
           onToggle={() => void change({ setting: 'sound', enabled: !value?.sound })}
         />
       </SettingsSection>
-      <SettingsSection title="AI">
+      <SettingsSection title={translate('settings.editor.section.ai')}>
         <PreferenceToggle
-          label="Ask before allowing agents in a new project"
-          description={
-            'Off: opening the AI chat panel in a project lets Claude and Codex work in it, and is remembered. ' +
-            'Either way, a new chat asks before each edit and command. An agent starting in a project also runs ' +
-            'that project’s own agent hooks and .mcp.json servers.'
-          }
+          label={translate('settings.editor.ai.askBeforeTrust.label')}
+          description={translate('settings.editor.ai.askBeforeTrust.description')}
           checked={value?.aiAskBeforeTrust ?? false}
           disabled={!value || busy}
           onToggle={() => void change({ setting: 'aiAskBeforeTrust', enabled: !value?.aiAskBeforeTrust })}
         />
       </SettingsSection>
-      <SettingsSection title="Privacy">
+      <SettingsSection title={translate('settings.editor.section.privacy')}>
         <PreferenceToggle
-          label="Anonymous usage counts"
-          description={
-            'Send one count on days you open a project. No project names, file contents, ' +
-            'device identifier, or activity history are sent. Daily totals are kept on ' +
-            'Cloudflare for up to 366 days. Its network sees your connection IP; ' +
-            'the usage database does not store it.'
-          }
+          label={translate('settings.editor.privacy.usageCounts.label')}
+          description={translate('settings.editor.privacy.usageCounts.description')}
           checked={value?.usageCountsEnabled ?? false}
           disabled={!value || busy}
           onToggle={() =>
@@ -348,11 +347,8 @@ function Preferences() {
           }
         />
         <PreferenceToggle
-          label="Hide my details from apps"
-          description={
-            'Apps see only an id that is the same for you in this project. ' +
-            'Without this, they also see your Git name and email and your GitHub account for publishing.'
-          }
+          label={translate('settings.editor.privacy.hideDetails.label')}
+          description={translate('settings.editor.privacy.hideDetails.description')}
           checked={value?.appsPersonHidden ?? false}
           disabled={!value || busy}
           onToggle={() => void change({ setting: 'appsPersonHidden', enabled: !value?.appsPersonHidden })}
@@ -360,7 +356,7 @@ function Preferences() {
       </SettingsSection>
       {!value && !error && (
         <p className="app-settings-status" role="status">
-          Loading preferences…
+          {translate('settings.editor.loading')}
         </p>
       )}
       {error && <ErrorToast message={error} />}
