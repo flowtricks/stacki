@@ -3699,17 +3699,31 @@ body > .embed-editor_provenance {
   font-size: 12px;
 }
 
-/* Structure tree — flat Framer-style layer rows */
+/* Structure tree — dense layer rows.
+   Every density knob of the navigator lives here: tune these, not the rules
+   below. StructureTree.tsx and TreeDragDrop.tsx read the indent. */
+.navigator {
+  --navigator-row-height: 32px;
+  --navigator-row-padding: 6px;
+  --navigator-row-gap: 4px;
+  --navigator-row-radius: 4px;
+  --navigator-indent: 12px;
+  --navigator-font-size: 12px;
+  --navigator-font-weight: 400;
+  --navigator-label-color: var(--text);
+  --navigator-icon-color: var(--text-dim);
+}
 .structure-node {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 6px;
-  border-radius: 6px;
+  gap: var(--navigator-row-gap, 6px);
+  height: var(--navigator-row-height, 28px);
+  padding: 0 var(--navigator-row-padding, 6px);
+  font-size: var(--navigator-font-size, 12px);
+  border-radius: var(--navigator-row-radius, 6px);
   border: 1px solid transparent;
   cursor: pointer;
-  color: var(--text-dim);
+  color: var(--navigator-label-color, var(--text-dim));
   /* Rows are at least panel-width but grow with deep indentation + long
      labels, so horizontal scrolling reveals the full text. */
   width: fit-content;
@@ -3724,6 +3738,34 @@ body > .embed-editor_provenance {
   background: var(--accent-soft);
   color: var(--text);
 }
+/* The selected row is a capsule. With an open subtree it becomes the head of a
+   block: its bottom corners square off and the subtree below rounds them. */
+.structure-node.selected:has(+ .structure-subtree) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+/* Tint strength of the subtree block: raise the percentage for a stronger
+   background, lower it for a more transparent one. */
+.structure-subtree {
+  --subtree-tint: 8%;
+  /* flow-root keeps the overlay drop gaps' negative margins inside the block;
+     without it the first gap pulls the block up over the selected row and the
+     two tints add up in a visible band. */
+  display: flow-root;
+  /* Clip the square hover of the last row to the block's rounded corners. */
+  overflow: clip;
+  background: color-mix(in srgb, var(--accent) var(--subtree-tint), transparent);
+  border-radius: 0 0 var(--navigator-row-radius, 6px) var(--navigator-row-radius, 6px);
+  margin-bottom: 2px;
+}
+/* Inside the open block the hover is square: it fills the block edge to edge
+   instead of floating as a capsule. Rows elsewhere keep their radius. */
+.structure-subtree .structure-node:hover {
+  border-radius: 0;
+}
+.structure-subtree.is-component {
+  background: color-mix(in srgb, var(--component-green) var(--subtree-tint), transparent);
+}
 /* Hovering must not repaint the selected row's icon — the :hover rule below
    has the same specificity and would otherwise win on source order. */
 .structure-node.selected .icon,
@@ -3731,12 +3773,12 @@ body > .embed-editor_provenance {
   color: var(--accent);
 }
 .structure-node.layout-node {
-  color: var(--text-dim);
+  color: var(--navigator-label-color, var(--text-dim));
 }
 .structure-node .icon {
   display: flex;
   align-items: center;
-  color: var(--text-faint);
+  color: var(--navigator-icon-color, var(--text-faint));
 }
 .structure-node:hover .icon {
   color: var(--text-dim);
@@ -3757,6 +3799,34 @@ body > .embed-editor_provenance {
   color: var(--text-faint);
   opacity: 0.6;
 }
+/* A leaf's empty slot: it holds the width, never the pointer. */
+.structure-node .drag-handle.is-empty {
+  display: flex;
+  flex-shrink: 0;
+  width: 18px;
+  align-self: stretch;
+  margin: 0 -2px 0 -4px;
+  pointer-events: none;
+}
+/* Hierarchy guides, as in Webflow: a thin line from each open parent's
+   chevron down past its last child, shown while the pointer is over the tree. */
+.structure-children {
+  position: relative;
+}
+.structure-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-strong, var(--border));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 1;
+}
+.navigator .panel-body:hover .structure-guide {
+  opacity: 0.4;
+}
 .tree-drag-row .drag-handle:hover {
   opacity: 1;
   color: var(--text);
@@ -3764,7 +3834,7 @@ body > .embed-editor_provenance {
 .structure-node .label {
   flex: 1;
   white-space: nowrap;
-  font-weight: 500;
+  font-weight: var(--navigator-font-weight, 500);
 }
 .structure-node .prop-preview {
   font-size: 10.5px;
@@ -3845,6 +3915,25 @@ body > .embed-editor_provenance {
   margin-top: -3.5px;
   margin-bottom: -3.5px;
   z-index: 1;
+}
+/* Navigator gaps take no room; they catch the pointer only during a drag
+   over the panel (StructurePanel.tsx sets .is-drag-over). */
+.navigator .nav-gap.nav-gap-overlay {
+  /* Zero height, not 7px with -3.5px margins: adjacent negative margins merge,
+     so each level of a subtree ending together left 3.5px of blank strip at
+     the bottom of the block. The 7px hit area lives in the ::before. */
+  height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  pointer-events: none;
+}
+.navigator .nav-gap.nav-gap-overlay::before {
+  content: '';
+  position: absolute;
+  inset: -3.5px 0;
+}
+.navigator .panel-body.is-drag-over .nav-gap.nav-gap-overlay {
+  pointer-events: auto;
 }
 .drop-indicator {
   /* The marker must not move the gap or become a new drag target. */
