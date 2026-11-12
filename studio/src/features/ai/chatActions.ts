@@ -33,13 +33,17 @@ export async function sendChat(id: string, file: string) {
     content: chat.draft.trim(),
     images: chat.images,
   };
+  const startedAt = Date.now();
   updateChat(id, (thread) => ({
     ...thread,
     draft: '',
+    segments: [],
     images: [],
     status: 'working',
+    startedAt,
+    updatedAt: startedAt,
     error: '',
-    title: thread.messages.length ? thread.title : (message.content || 'Image conversation').slice(0, 60),
+    title: thread.messages.length || thread.title !== 'New chat' ? thread.title : (message.content || 'Image conversation').slice(0, 60),
     messages: [...thread.messages, message].slice(-39),
   }));
   try {
@@ -56,6 +60,7 @@ export async function sendChat(id: string, file: string) {
           role: 'assistant' as const,
           content: proposal.summary,
           images: [],
+          durationMs: Date.now() - startedAt,
           ...(proposal.changes.length ? { proposal } : {}),
         },
       ].slice(-40),
@@ -65,11 +70,12 @@ export async function sendChat(id: string, file: string) {
       ...thread,
       error: controller.signal.aborted ? 'Response stopped.' : error instanceof Error ? error.message : 'Could not send message.',
       draft: thread.draft || chat.draft,
+      segments: thread.segments.length ? thread.segments : chat.segments,
       images: thread.images.length ? thread.images : chat.images,
     }));
   } finally {
     running.delete(id);
-    updateChat(id, (thread) => ({ ...thread, status: 'idle' }));
+    updateChat(id, (thread) => ({ ...thread, status: 'idle', startedAt: undefined, updatedAt: Date.now() }));
   }
 }
 export function stopChat(id: string) {

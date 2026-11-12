@@ -13,7 +13,11 @@
 // (`commit`, `installMarketplace`, `applyUpdate`) or an admin switched on that
 // app's auto-update. With it on, a check installs a GitHub app's newer release
 // (its SHA-256 recorded as it was checked) or a marketplace app's newest
-// approved version (only bytes whose SHA-256 the index approved).
+// approved version (only bytes whose SHA-256 the index approved), but only when
+// that version asks for nothing the installed one did not (appManifestAdditions:
+// network hosts, sign-in providers, role switches). Otherwise the check records
+// it as waiting, with what it adds, and reports `needs-approval`: a person reads
+// the additions and chooses Update.
 import { randomBytes } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
 import { assert } from '../../shared/core/assert';
@@ -22,6 +26,8 @@ import {
   appsFailureMessage,
   compareAppVersions,
   stackiVersionProblem,
+  type AppAvailableUpdate,
+  appManifestAdditions,
   type AppGitHubSource,
   type AppInstallSource,
   type AppLockEntry,
@@ -188,7 +194,27 @@ export function createAppService(options: AppServiceOptions) {
     return { bundle, sha256: downloaded.sha256 };
   };
 
-  const checkMarketplace = async (projectRoot: string, lock: AppLockEntry, index: MarketplaceIndex): Promise<AppUpdateOutcome> => {
+  // What a check says of an update that is waiting for a person: held for their OK when auto-update is on
+  // but the version asks for more than the installed one did, otherwise simply available.
+  const waitingOutcome = (lock: AppLockEntry, update: AppAvailableUpdate): AppUpdateOutcome => {
+    if (lock.autoUpdate) {
+      assert(update.additions.length > 0, 'With auto-update on, only an update that asks for more waits');
+      return { kind: 'needs-approval', id: lock.id, version: update.version, additions: update.additions };
+    }
+    return { kind: 'available', id: lock.id, version: update.version };
+  };
+
+  // Whether the update recorded by an earlier check is still the one to act on, so the bundle is not downloaded again:
+  // it stays unless auto-update could install it now (it was recorded with nothing new, before the switch was turned on).
+  const recordedStillWaits = (lock: AppLockEntry): boolean => {
+    if (lock.update === undefined) {
+      return false;
+    }
+    return !lock.autoUpdate || lock.update.additions.length > 0;
+  };
+
+  const checkMarketplace = async (projectRoot: string, summary: AppSummary, index: MarketplaceIndex): Promise<AppUpdateOutcome> => {
+    const { lock } = summary;
     const id = lock.id;
     const app = marketplaceApp(index, id);
     if (app === undefined) {
@@ -203,25 +229,37 @@ export function createAppService(options: AppServiceOptions) {
     if (tooOld !== undefined) {
       return { kind: 'failed', id, message: `${app.name} ${next.version}: ${tooOld}` };
     }
-    if (lock.autoUpdate) {
-      const { bundle, sha256 } = await approvedBundle(app, next);
-      install(projectRoot, bundle, { kind: 'marketplace', id, version: next.version }, sha256, { autoUpdate: true });
-      return { kind: 'updated', id, version: next.version };
+    if (lock.update !== undefined && recordedStillWaits(lock)) {
+      if (lock.update.version === next.version && lock.update.sha256 === next.sha256) {
+        return waitingOutcome(lock, lock.update);
+      }
     }
-    // The index carries the version and digest, so recording an update downloads nothing.
-    updateLockEntry(projectRoot, id, (entry) => ({ ...entry, update: { version: next.version, tag: next.tag, sha256: next.sha256 } }));
-    return { kind: 'available', id, version: next.version };
+    // The approved bytes are downloaded (and their digest checked) so the update can say what it adds to the installed version.
+    const { bundle, sha256 } = await approvedBundle(app, next);
+    const additions = appManifestAdditions(summary.manifest, bundle.manifest);
+    if (lock.autoUpdate) {
+      if (additions.length === 0) {
+        install(projectRoot, bundle, { kind: 'marketplace', id, version: next.version }, sha256, { autoUpdate: true });
+        return { kind: 'updated', id, version: next.version };
+      }
+    }
+    const update: AppAvailableUpdate = { version: next.version, tag: next.tag, sha256: next.sha256, additions };
+    updateLockEntry(projectRoot, id, (entry) => ({ ...entry, update }));
+    return waitingOutcome(lock, update);
   };
 
-  const checkGitHub = async (projectRoot: string, lock: AppLockEntry, source: AppGitHubSource & { readonly tag: string }): Promise<AppUpdateOutcome> => {
+  const checkGitHub = async (projectRoot: string, summary: AppSummary, source: AppGitHubSource & { readonly tag: string }): Promise<AppUpdateOutcome> => {
+    const { lock } = summary;
     const id = lock.id;
     const auth = await token(source.account);
     const latest = await releaseAsset(options.fetch, source, { token: auth });
     if (latest.tag === source.tag) {
       return { kind: 'current', id };
     }
-    if (!lock.autoUpdate && lock.update?.tag === latest.tag) {
-      return { kind: 'available', id, version: lock.update.version };
+    if (lock.update !== undefined && recordedStillWaits(lock)) {
+      if (lock.update.tag === latest.tag) {
+        return waitingOutcome(lock, lock.update);
+      }
     }
     const downloaded = await downloadReleaseAsset(options.fetch, latest, auth);
     const bundle = readAppBundle(downloaded.bytes, inflate);
@@ -235,13 +273,17 @@ export function createAppService(options: AppServiceOptions) {
     if (tooOld !== undefined) {
       return { kind: 'failed', id, message: `${bundle.manifest.name} ${bundle.manifest.version}: ${tooOld}` };
     }
+    const additions = appManifestAdditions(summary.manifest, bundle.manifest);
     if (lock.autoUpdate) {
-      // The bytes this check downloaded and digested are the ones installed.
-      install(projectRoot, bundle, { ...source, tag: latest.tag }, downloaded.sha256, { autoUpdate: true });
-      return { kind: 'updated', id, version: bundle.manifest.version };
+      if (additions.length === 0) {
+        // The bytes this check downloaded and digested are the ones installed.
+        install(projectRoot, bundle, { ...source, tag: latest.tag }, downloaded.sha256, { autoUpdate: true });
+        return { kind: 'updated', id, version: bundle.manifest.version };
+      }
     }
-    updateLockEntry(projectRoot, id, (entry) => ({ ...entry, update: { version: bundle.manifest.version, tag: latest.tag, sha256: downloaded.sha256 } }));
-    return { kind: 'available', id, version: bundle.manifest.version };
+    const update: AppAvailableUpdate = { version: bundle.manifest.version, tag: latest.tag, sha256: downloaded.sha256, additions };
+    updateLockEntry(projectRoot, id, (entry) => ({ ...entry, update }));
+    return waitingOutcome(lock, update);
   };
 
   // Every source kind is handled here, so a new kind is a compile error until it is.
@@ -253,9 +295,9 @@ export function createAppService(options: AppServiceOptions) {
       case 'local':
         return { kind: 'current', id: lock.id };
       case 'github':
-        return checkGitHub(projectRoot, lock, source);
+        return checkGitHub(projectRoot, summary, source);
       case 'marketplace':
-        return checkMarketplace(projectRoot, lock, await marketplace());
+        return checkMarketplace(projectRoot, summary, await marketplace());
       default: {
         const exhaustive: never = source;
         return exhaustive;

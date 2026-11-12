@@ -61,7 +61,9 @@ const check = (what, condition, detail) => {
   refuses('jobs', 'a name standing for a list');
   refuses('[...defaults, "other"]', 'a spread');
   refuses('[{ value, label }]', 'an object that names things instead of saying them');
-  refuses('[{ value: { deep: 1 } }]', 'an object inside an object');
+  refuses('[{ value: { deep: 1, ...more } }]', 'an object inside an object that is a program');
+  refuses('[{ a: { b: { c: { d: 1 } } } }]', 'an object nested past the bound a List property’s fields go');
+  check('an object inside an object is a nested group, kept as written', arrayText(arrayItems('[{ value: { deep: 1 } }]')) === '[{ value: { deep: 1 } }]');
   refuses('["a", other]', 'an item that is a name');
   refuses('[items.map((i) => i.name)]', 'a call');
   refuses('[`${prefix} one`]', 'a template with a hole in it');

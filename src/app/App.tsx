@@ -215,6 +215,7 @@ function bindContextOf(app: AppView, route: CanvasRoute) {
       // one writes its query or import, then binds (projectSources.ts).
       collections: shownPickerCollections(app.collections, app.projectSources.config),
       projectSources: app.projectSources.nodes,
+      projectModules: app.projectSources.imported,
       // Opening a collection in the picker asks for one entry of it; nothing is
       // fetched for collections nobody looks at.
       onNeedSample: app.requestCollectionSample,

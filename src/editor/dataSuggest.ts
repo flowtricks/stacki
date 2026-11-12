@@ -20,7 +20,7 @@ import {
   referenceCallIn,
 } from './dataSource';
 import { entrySampleKey, sampleAt, sampleKey, type TreeNode, sampleNode, literalNode } from './dataSample';
-import { queriesInScope, namesInScope, type CollectionReader, type DataContext, type SchemaField, autoQueryName } from './dataScope';
+import { queriesInScope, namesInScope, type CollectionReader, type DataContext, type SchemaField, type ShapeMember, autoQueryName } from './dataScope';
 import { loopSourcePath, parseLoopHead } from './loopSource';
 import type { ImportedValue } from './importedValues';
 export {
@@ -159,18 +159,30 @@ function shapeChildren(field: SchemaField | undefined, base: string): TreeNode[]
   if (!field?.shape?.length) {
     return undefined;
   }
-  const shape = field.shape;
+  return shapeNodes(field, base, 1);
+}
+
+// The rows of a declared shape, a member that is a list or an object carrying
+// the rows of its own (`items[0].children[0].title`), down to the depth a List
+// property's item fields nest.
+function shapeNodes(owner: Pick<ShapeMember, 'shape' | 'shapeIsList'>, base: string, depth: number): TreeNode[] {
+  const shape = owner.shape ?? [];
+  assert(depth <= LIMITS.listFieldDepthMax, 'shapeNodes: the shape nests within its bound');
   const fields = (at: string): TreeNode[] =>
-    shape.map((field) => ({
-      path: `${at}.${field.name}`,
-      key: field.name,
-      kind: field.type === 'code' ? 'value' : (field.type ?? 'value'),
-      preview: '',
-      children: undefined,
-    }));
+    shape.map((member) => {
+      const path = `${at}.${member.name}`;
+      const nested = member.shape?.length && depth < LIMITS.listFieldDepthMax ? shapeNodes(member, path, depth + 1) : undefined;
+      return {
+        path,
+        key: member.name,
+        kind: nested ? (member.shapeIsList ? 'list' : 'object') : shapeMemberKind(member),
+        preview: '',
+        children: nested,
+      };
+    });
   // A list is written the way a sample of one is, so everything downstream —
   // the loop item's fields, the picker's own walk — reads it the same way.
-  return field.shapeIsList
+  return owner.shapeIsList === true
     ? [
         {
           path: `${base}[0]`,
@@ -181,6 +193,17 @@ function shapeChildren(field: SchemaField | undefined, base: string): TreeNode[]
         },
       ]
     : fields(base);
+}
+
+// What a member is called in the tree: its type, with the files a text member's format says it holds listed as images and a date as one.
+function shapeMemberKind(member: ShapeMember): string {
+  if (member.type === 'code') {
+    return 'value';
+  }
+  if (member.format === 'image' || member.format === 'video' || member.format === 'file') {
+    return 'image url';
+  }
+  return member.format === 'date' ? 'date' : (member.type ?? 'value');
 }
 
 // 1. This file's own props. Real values when the canvas is showing an entry

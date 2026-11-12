@@ -41,6 +41,7 @@ import {
 } from './propFieldModel';
 import { codeRowValue, objectSeed, optionAttr, optionValue, previewsOptions } from './propKinds';
 import { itemShapeOf } from './listItemShape';
+import { readPropDocumentation } from '../../editor/propDocumentation';
 
 export function AssetImportField({ binding, name, assetContext, onChange }: AssetImportFieldProps) {
   const [rel, setRel] = useState<string | undefined>(undefined);
@@ -463,21 +464,24 @@ export function MediaControl({ state }: { readonly state: PropControlState }) {
   const renderedFallback = name === 'image' ? assetContext.layoutImage : undefined;
 
   const nodeName = String(assetContext.nodeName || '').toLowerCase();
+  const declaredKind = declaredMediaKind(readPropDocumentation(state.field.doc).format);
   const mediaKind = looksLikeAssetPath(valueText)
     ? mediaKindFor(valueText)
-    : /^(poster|image|logo|icon|avatar|thumb|thumbnail|photo|banner|cover)$/.test(mediaWord(name))
-      ? 'image'
-      : mediaWord(name) === 'video'
-        ? 'video'
-        : mediaWord(name) === 'audio'
-          ? 'audio'
-          : nodeName === 'video'
-            ? 'video'
-            : nodeName === 'audio'
-              ? 'audio'
-              : ['img', 'source', 'picture', 'image'].includes(nodeName)
-                ? 'image'
-                : 'asset';
+    : declaredKind !== undefined
+      ? declaredKind
+      : /^(poster|image|logo|icon|avatar|thumb|thumbnail|photo|banner|cover)$/.test(mediaWord(name))
+        ? 'image'
+        : mediaWord(name) === 'video'
+          ? 'video'
+          : mediaWord(name) === 'audio'
+            ? 'audio'
+            : nodeName === 'video'
+              ? 'video'
+              : nodeName === 'audio'
+                ? 'audio'
+                : ['img', 'source', 'picture', 'image'].includes(nodeName)
+                  ? 'image'
+                  : 'asset';
   // A video's src card shows its poster while the frame loads, or instead of
   // one that never does; only a literal poster has a value to show.
   const poster = /^src$/i.test(name) ? assetContext.siblingProps?.['poster'] : undefined;
@@ -503,6 +507,13 @@ export function MediaControl({ state }: { readonly state: PropControlState }) {
       />
     </div>
   );
+}
+// The media a field's `@format` names, for a field whose name does not say.
+function declaredMediaKind(format: string | undefined): 'image' | 'video' | 'asset' | undefined {
+  if (format === 'image' || format === 'video') {
+    return format;
+  }
+  return format === 'file' ? 'asset' : undefined;
 }
 export function ImportedAssetControl({ state }: { readonly state: PropControlState }) {
   const { assetContext, onChange, name, assetBinding, label } = state;
@@ -625,7 +636,9 @@ export function TextControl({ state }: { readonly state: PropControlState }) {
   // A bare attribute has no authored text value; preserve that absence in the input.
   const text = state.value?.type === 'bare' ? undefined : valueText;
   const content = text ?? '';
-  if (containsHTML(content)) {
+  const format = readPropDocumentation(field.doc).format;
+  // Rich text is HTML, so its field is the rich text editor even while it is empty.
+  if (containsHTML(content) || format === 'richtext') {
     return (
       <div className="props-field">
         {label}
@@ -633,7 +646,7 @@ export function TextControl({ state }: { readonly state: PropControlState }) {
       </div>
     );
   }
-  if (calendarValue(content)) {
+  if (calendarValue(content) || format === 'date') {
     return (
       <div className="props-field">
         {label}
@@ -642,15 +655,23 @@ export function TextControl({ state }: { readonly state: PropControlState }) {
     );
   }
   // A field declared multi-line (a CMS's long text) always gets the box;
-  // otherwise its length or its name says it holds prose.
-  const long = field.type === 'text' || String(valueText).length > 48 || /text|description|content|body|paragraph/i.test(name);
+  // otherwise its length or its name says it holds prose. A format that is a
+  // single line (an address, a number to call) never does.
+  const oneLine = format === 'email' || format === 'phone' || format === 'text';
+  const long =
+    format === 'longtext' || (!oneLine && (field.type === 'text' || String(valueText).length > 48 || /text|description|content|body|paragraph/i.test(name)));
   return (
     <div className="props-field">
       {label}
       {long ? (
         <AutoTextarea value={text} placeholder={placeholderFor(field)} onChange={(event) => onChange({ type: 'string', value: event.target.value })} />
       ) : (
-        <input value={text} placeholder={placeholderFor(field)} onChange={(event) => onChange({ type: 'string', value: event.target.value })} />
+        <input
+          type={format === 'email' ? 'email' : format === 'phone' ? 'tel' : 'text'}
+          value={text}
+          placeholder={placeholderFor(field)}
+          onChange={(event) => onChange({ type: 'string', value: event.target.value })}
+        />
       )}
     </div>
   );

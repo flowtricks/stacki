@@ -34,12 +34,8 @@ let windowState: AiWindowState = { mode: initialMode(), floatingOpen: false, mer
 const listeners = new Set<() => void>();
 
 function initialMode(): WindowMode {
-  // The panel starts docked; readWindowMode's own default (floating) suits windows that start floating.
-  try {
-    return localStorage.getItem(WINDOW_MODE_KEY) === null ? 'docked' : readWindowMode(WINDOW_MODE_KEY);
-  } catch {
-    return 'docked';
-  }
+  // The panel starts docked and then remembers the mode it was last used in.
+  return readWindowMode(WINDOW_MODE_KEY, { fallback: 'docked' });
 }
 
 function setWindowState(change: (current: AiWindowState) => AiWindowState): void {
@@ -145,6 +141,8 @@ function AiWindow({ app, mode, onModeChange }: { readonly app: ShellView; readon
       }}
       onMerge={(clash, settle) => setWindowState((current) => ({ ...current, merge: { clash, settle } }))}
       onOpenExternal={(url) => void openExternalURL(url)}
+      // The same way the Audits panel and Settings show a project file: in the code panel.
+      onOpenFile={(path) => void app.openProjectFile(path)}
       renderFrame={(header: ReactNode, body: ReactNode) => (
         <DockableWindow
           mode={mode}

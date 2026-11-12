@@ -6,16 +6,39 @@ import { type RuleModel } from '../model/cascade';
 import { listMatchedSelectors, selectorKey, type MatchedSelector, type StyleContext } from '../model/resolved';
 import { nativeSelectorChips } from '../model/nativeStyles';
 import { canonicalCompound, compareSpecificity } from '../model/selectors';
-import { getHost } from '../model/host';
+import { getHost, walkNodes, type HostNode } from '../model/host';
 import type { ElementSnapshot, NativeModel, ParsedRule, Specificity } from '../model/styleTypes';
 
 // Re-read every embed no more than this often when just switching selection.
 export const BG_REFRESH_THROTTLE_MS = 4000;
 
-/** Which stylesheets the host is offering, as a comparable string. */
+/** Which stylesheets the host is offering, as a comparable string: the files, the components
+ *  with a global block, and the open file's own `<style>` blocks. A block that appears (the
+ *  first styles of a page, or one inserted from the palette) is a new place for rules, so it
+ *  must change this, or the panel would not look for them until its next poll. */
 export function sheetSignature(): string {
   const host = getHost();
-  return [...host.files, ...host.astroFiles].map((file) => file.path).join('|');
+  return [...host.files, ...host.astroFiles].map((file) => file.path).join('|') + `#${styleBlockIds(host.nodes)}`;
+}
+
+// The ids of the `<style>` blocks of a node list. A signature is asked for on every host
+// change, and the host swaps `nodes` only when the page model changes, so the answer is kept
+// per list.
+const styleBlockIdsOf = new WeakMap<readonly HostNode[], string>();
+function styleBlockIds(nodes: readonly HostNode[]): string {
+  const known = styleBlockIdsOf.get(nodes);
+  if (known !== undefined) {
+    return known;
+  }
+  const ids: string[] = [];
+  walkNodes(nodes, (node) => {
+    if (node.kind === 'raw' && node.name === 'style') {
+      ids.push(node.id);
+    }
+  });
+  const joined = ids.join(',');
+  styleBlockIdsOf.set(nodes, joined);
+  return joined;
 }
 // How often to poll the Designer for out-of-app edits (classes / attributes /
 // native styles). The API has no change events, so we re-read on this cadence and

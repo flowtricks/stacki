@@ -12,16 +12,22 @@ import { parseAgentId, type AgentId } from '../properties/ai/agentIds';
 import { AI_LIMITS } from '../properties/ai/aiLimits';
 import {
   parseChatEvent,
+  parseChatList,
   parseChatOption,
   parseChatSummary,
+  parseSectionName,
   toChatId,
   toPermissionRequestId,
+  toSectionId,
   toTurnId,
   type ChatEvent,
+  type ChatList,
   type ChatOption,
   type ChatSummary,
+  type SectionId,
   type TurnId,
 } from '../properties/ai/chatModel';
+import { parseMentionCandidates, parseMentionKinds, parseMentionQuery, parsePromptParts, type MentionCandidate } from '../properties/ai/mentions';
 import { parseMergeResolution, type MergeResolution } from './mergeResolution';
 import type { WireConflictPart, WireMergeClash } from './ipcWire';
 
@@ -143,6 +149,45 @@ function prompt(input: unknown): string {
   return bounded(AI_LIMITS.promptCharsMax, 'prompt')(input);
 }
 
+const section = (input: unknown): SectionId => toSectionId(text(input));
+
+/** How a prompt reaches a chat: `send` starts a turn (refused while one runs), `steer` injects into the running turn. */
+export type PromptMode = 'send' | 'steer';
+
+function promptMode(input: unknown): PromptMode {
+  if (input === 'send' || input === 'steer') {
+    return input;
+  }
+  throw new Error('prompt mode: expected send or steer');
+}
+
+/** A change to a project's sections. Names are trimmed; a repeated name is refused where the list is known (chatStore.ts). */
+export type SectionAction =
+  | { readonly kind: 'create'; readonly name: string }
+  | { readonly kind: 'rename'; readonly section: SectionId; readonly name: string }
+  | { readonly kind: 'delete'; readonly section: SectionId }
+  | { readonly kind: 'collapse'; readonly section: SectionId; readonly collapsed: boolean }
+  /** `before` undefined: after the last section. */
+  | { readonly kind: 'move'; readonly section: SectionId; readonly before: SectionId | undefined };
+
+export function parseSectionAction(input: unknown): SectionAction {
+  const value = record(input);
+  switch (value['kind']) {
+    case 'create':
+      return { kind: 'create', name: parseSectionName(value['name']) };
+    case 'rename':
+      return { kind: 'rename', section: section(value['section']), name: parseSectionName(value['name']) };
+    case 'delete':
+      return { kind: 'delete', section: section(value['section']) };
+    case 'collapse':
+      return { kind: 'collapse', section: section(value['section']), collapsed: boolean(value['collapsed']) };
+    case 'move':
+      return { kind: 'move', section: section(value['section']), before: optional(section)(value['before']) };
+    default:
+      throw new Error('section action: unknown kind');
+  }
+}
+
 /** The payload parsers ipcPayloads.ts lists, one per channel. */
 export const AI_PAYLOADS = {
   'ai:agents': object({ projectPath }),
@@ -150,10 +195,27 @@ export const AI_PAYLOADS = {
   'ai:trust': object({ projectPath }),
   'ai:chats': object({ projectPath }),
   'ai:chatCreate': object({ projectPath, agent: parseAgentId, title: optional(title), settings: optional(parseChatSettings) }),
-  'ai:chatUpdate': object({ projectPath, chat, title: optional(title), pinned: optional(boolean), settings: optional(parseChatSettings) }),
+  'ai:chatUpdate': object({
+    projectPath,
+    chat,
+    title: optional(title),
+    pinned: optional(boolean),
+    settings: optional(parseChatSettings),
+    /** Archive (true) or restore (false). Archiving also stops the chat's running adapter session. */
+    archived: optional(boolean),
+    unread: optional(boolean),
+  }),
   'ai:chatDelete': object({ projectPath, chat }),
   'ai:chatRead': object({ projectPath, chat }),
-  'ai:prompt': object({ projectPath, chat, text: prompt, attachments }),
+  'ai:prompt': object({ projectPath, chat, text: prompt, attachments, parts: optional(parsePromptParts), mode: optional(promptMode) }),
+  'ai:steer': object({ projectPath, chat, text: prompt, attachments, parts: optional(parsePromptParts) }),
+  'ai:compact': object({ projectPath, chat }),
+  'ai:chatFork': object({ projectPath, chat }),
+  /** `section` undefined: the implicit first section. `before` undefined: after the section's last chat. */
+  'ai:chatMove': object({ projectPath, chat, section: optional(section), before: optional(chat) }),
+  'ai:sections': object({ projectPath, action: parseSectionAction }),
+  'ai:diff': object({ projectPath, chat, turn: (input: unknown) => toTurnId(text(input)), path: pathText }),
+  'ai:mentions': object({ projectPath, query: parseMentionQuery, kinds: parseMentionKinds }),
   'ai:cancel': object({ projectPath, chat }),
   'ai:permission': object({ projectPath, chat, request: (input: unknown) => toPermissionRequestId(text(input)), answer: permissionAnswer }),
   'ai:setOption': object({ projectPath, chat, option: bounded(AI_LIMITS.idCharsMax, 'option'), value: bounded(AI_LIMITS.idCharsMax, 'value') }),
@@ -190,8 +252,33 @@ export interface AiAgentsReply {
 }
 
 export interface AiFailure {
-  readonly code: 'not-trusted' | 'missing-cli' | 'not-installed' | 'sign-in' | 'busy' | 'agent-failed' | 'chat-missing' | 'read-only';
+  readonly code:
+    | 'not-trusted'
+    | 'missing-cli'
+    | 'not-installed'
+    | 'sign-in'
+    | 'busy'
+    | 'agent-failed'
+    | 'chat-missing'
+    | 'read-only'
+    /** The agent does not offer this (steering, fork, compaction); the control should not have been shown. */
+    | 'unsupported'
+    | 'section-missing'
+    /** The request is well formed but cannot be applied: a repeated section name, too many sections. */
+    | 'invalid';
   readonly message: string;
+}
+
+/** `steered`: injected into the running turn. `startedNewTurn`: no turn was running, so the message began one. */
+export interface SteerReply {
+  readonly turn: TurnId;
+  readonly outcome: 'steered' | 'startedNewTurn';
+}
+
+/** One pending file's text before and after a turn (undefined: absent on that side). Settled files keep none. */
+export interface DiffReply {
+  readonly oldText: string | undefined;
+  readonly newText: string | undefined;
 }
 
 export interface ChatTranscript {
@@ -227,12 +314,19 @@ export interface AiResults {
   readonly 'ai:agents': AiAgentsReply;
   readonly 'ai:installAgent': Result<AgentAvailability, AiFailure>;
   readonly 'ai:trust': { readonly ok: true };
-  readonly 'ai:chats': readonly ChatSummary[];
+  readonly 'ai:chats': ChatList;
   readonly 'ai:chatCreate': Result<ChatSummary, AiFailure>;
   readonly 'ai:chatUpdate': Result<ChatSummary, AiFailure>;
   readonly 'ai:chatDelete': { readonly ok: true };
   readonly 'ai:chatRead': Result<ChatTranscript, AiFailure>;
   readonly 'ai:prompt': Result<{ readonly turn: TurnId }, AiFailure>;
+  readonly 'ai:steer': Result<SteerReply, AiFailure>;
+  readonly 'ai:compact': Result<{ readonly started: true }, AiFailure>;
+  readonly 'ai:chatFork': Result<ChatSummary, AiFailure>;
+  readonly 'ai:chatMove': Result<ChatList, AiFailure>;
+  readonly 'ai:sections': Result<ChatList, AiFailure>;
+  readonly 'ai:diff': Result<DiffReply, AiFailure>;
+  readonly 'ai:mentions': Result<readonly MentionCandidate[], AiFailure>;
   readonly 'ai:cancel': { readonly ok: true };
   readonly 'ai:permission': Result<{ readonly answered: true }, AiFailure>;
   readonly 'ai:setOption': Result<{ readonly set: true }, AiFailure>;
@@ -254,6 +348,9 @@ const FAILURE_CODES: readonly AiFailure['code'][] = [
   'agent-failed',
   'chat-missing',
   'read-only',
+  'unsupported',
+  'section-missing',
+  'invalid',
 ];
 
 export function parseAgentAvailability(input: unknown): AgentAvailability {
@@ -321,16 +418,8 @@ export function parseAiResult<T>(input: unknown, parse: (value: unknown) => T): 
   throw new Error('ai result: expected ok flag');
 }
 
-export function parseChatSummaries(input: unknown): readonly ChatSummary[] {
-  const values = toArray(input);
-  if (values === undefined) {
-    throw new Error('ai:chats: expected array');
-  }
-  if (values.length > AI_LIMITS.chatsMax) {
-    throw new Error('ai:chats: exceeds limit');
-  }
-  return values.map(parseChatSummary);
-}
+/** The reply of `ai:chats`, `ai:chatMove` and `ai:sections`: the whole list, so the renderer replaces its copy in one update. */
+export { parseChatList };
 
 export function parseChatTranscript(input: unknown): ChatTranscript {
   const value = record(input);
@@ -414,6 +503,36 @@ export function parseAiStatusPush(input: unknown): AiStatusPush {
     throw new Error('ai:agentStatus.options: exceeds limit');
   }
   return { projectPath: pathText(value['projectPath']), availability: parseAgentAvailability(value['availability']), options: options?.map(parseChatOption) };
+}
+
+/** The success value of `ai:steer`. */
+export function parseSteerReply(input: unknown): SteerReply {
+  const value = record(input);
+  const outcome = value['outcome'] === 'steered' || value['outcome'] === 'startedNewTurn' ? value['outcome'] : undefined;
+  if (outcome === undefined) {
+    throw new Error('ai:steer.outcome: unknown outcome');
+  }
+  return { turn: toTurnId(text(value['turn'])), outcome };
+}
+
+/** The success value of `ai:compact`. */
+export function parseCompactStarted(input: unknown): { readonly started: true } {
+  if (record(input)['started'] !== true) {
+    throw new Error('ai:compact.started: expected true');
+  }
+  return { started: true };
+}
+
+/** The success value of `ai:diff`: each side bounded by the file bound. */
+export function parseDiffReply(input: unknown): DiffReply {
+  const value = record(input);
+  const side = optional(bounded(AI_LIMITS.fileCharsMax, 'diff'));
+  return { oldText: side(value['oldText']), newText: side(value['newText']) };
+}
+
+/** The success value of `ai:mentions`. */
+export function parseMentionReply(input: unknown): readonly MentionCandidate[] {
+  return parseMentionCandidates(input);
 }
 
 /** The success value of `ai:prompt`: the turn the prompt started. */

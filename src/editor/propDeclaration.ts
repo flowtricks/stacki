@@ -41,7 +41,8 @@ import { err, ok, type Result } from '../../shared/core/result';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { destructureEnd, freeLocal, propNamed, propsInterfaceBody, propsInterfaceEnd, propsPattern, readPropsDestructure } from './loopProps';
 import { NUMBER_DECIMALS_MAX, type NumberSettings } from './propDocumentation';
-import { isListType, listDefaultCode, listFieldsOfType, listSettingsProblem, listTypeText, type ItemFieldDeclaration, type ListSettings } from './listPropType';
+import type { ItemFieldDeclaration } from './itemFields';
+import { isListType, listDefaultCode, listFieldsOfType, listSettingsProblem, listTypeText, type ListSettings } from './listPropType';
 import { IMAGE_TYPE, imageDefaultOf, imageTypeText, type ImageDefault } from './imagePropDefault';
 
 /** What a new prop holds: words, a number, a switch, one of a list of words, attributes, a list of items or an image. */

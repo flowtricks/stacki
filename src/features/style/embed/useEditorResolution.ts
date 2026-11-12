@@ -7,7 +7,20 @@ import { hslaToRgba } from '../model/colorWrite';
 import { contextKeyOf, editableRuleFor, selectedRulesSetting, type SourceKey } from '../model/resolved';
 import { mediaParamsForBreakpoint, optionsFor } from '../model/nativeStyles';
 import { createRuleInPlacedQuery, ensureNestPath, ensureQueryBlock, parseNestedInput, type NestStep } from '../model/css';
-import { applyNativePropertyAt, applyNativeToNewBaseClass, removeNativePropertyAt, webflowApi, writeEmbedDocument, type EmbedDocument } from '../model/webflow';
+import {
+  applyNativePropertyAt,
+  applyNativeToNewBaseClass,
+  blankStyleDocument,
+  rebuildRules,
+  removeNativePropertyAt,
+  webflowApi,
+  writeEmbedDocument,
+  writeFirstStyleBlock,
+  type EmbedDocument,
+} from '../model/webflow';
+import { getHost, walkNodes } from '../model/host';
+import { authoredClassTokens } from '../model/webflowElement';
+import { isAutoClassSelector, planFirstStyles, type FirstStylesPlan } from '../model/firstStyleBlock';
 import { type PropWrite } from './EditorBasics';
 import {
   upgradedDefault,
@@ -180,12 +193,14 @@ export function useWriteNewRule(
   refreshDerivedHook: ReturnType<typeof useRefreshDerived>,
   selectorPick: ReturnType<typeof useSelectorPick>,
   resolvedHook: ReturnType<typeof useResolved>,
+  editorRefs: ReturnType<typeof useEditorRefs>,
 ) {
-  const { setBusyBoth } = busyState;
+  const { setBusyBoth, setSaveError } = busyState;
   const { setStatus } = scanState;
   const { settleEmbedWrite } = pendingWrites;
   const { refreshDerived } = refreshDerivedHook;
-  const { typedPathsRef } = selectorPick;
+  const { selectActiveSelector, typedPathsRef } = selectorPick;
+  const { primedRef } = editorRefs;
   const { resolved } = resolvedHook;
 
   // Writes target the picked selector's rule in the current context/state, and
@@ -205,16 +220,31 @@ export function useWriteNewRule(
       wrapper: string | undefined;
       bpMedia: string | undefined;
       selector: string;
+      /** First styles (model/firstStyleBlock.ts): what else the write has to do besides
+       *  adding a rule. Absent in every ordinary write. */
+      firstStyles?: Exclude<FirstStylesPlan, { kind: 'normal' | 'refused' }>;
     },
     write: PropWrite,
   ) => {
-    const { embedDocument, region, embedContext, wrapper, bpMedia } = where;
+    const { embedDocument, region, embedContext, wrapper, bpMedia, firstStyles } = where;
     const fullSelector = where.selector;
     setBusyBoth(true);
     setStatus('Saving…');
     // try/finally so `busy` always clears even if creating the rule / writing throws
     // (a stuck busy would disable every button in the panel).
     try {
+      // The class goes on first when sources exist: the rule is built into a live document
+      // below, and a refused class must not leave a rule in it that was never written.
+      if (firstStyles?.kind === 'class') {
+        const outcome = (await getHost().addClass?.(firstStyles.className, PLACEMENT_END)) ?? {
+          tag: 'refused',
+          message: 'This page cannot take a class here.',
+        };
+        if (outcome.tag === 'refused') {
+          setSaveError(`${fullSelector} is not on the element (${outcome.message}), so its rule was not written.`);
+          return;
+        }
+      }
       const nested = takeTypedPath(typedPathsRef.current, fullSelector, embedContext ?? '');
       const ok = createRuleForWrite(region, {
         nested,
@@ -228,7 +258,16 @@ export function useWriteNewRule(
         setStatus('Nothing to save.');
         return;
       }
-      const result = await writeEmbedDocument(embedDocument);
+      const result =
+        firstStyles !== undefined && firstStyles.kind !== 'class'
+          ? await writeFirstStyleBlock(embedDocument, firstStyles.kind === 'block-and-class' ? firstStyles.className : undefined)
+          : await writeEmbedDocument(embedDocument);
+      if (firstStyles !== undefined && result.ok) {
+        // The element changed, so what the canvas matched for these selectors no longer
+        // holds (as for a class typed into the selector box), and the new class is the pick.
+        primedRef.current = undefined;
+        selectActiveSelector(fullSelector);
+      }
       await refreshDerived();
       if (!settleEmbedWrite(embedDocument, result, 'rule')) {
         return;
@@ -243,6 +282,7 @@ export function useWriteNewRule(
 
 // Create a rule for the pick in the current context.
 export function useCreateRule(
+  busyState: ReturnType<typeof useBusyState>,
   scanState: ReturnType<typeof useScanState>,
   pendingWrites: ReturnType<typeof usePendingWrites>,
   elementTokens: ReturnType<typeof useElementTokens>,
@@ -252,8 +292,9 @@ export function useCreateRule(
   writeNewRuleHook: ReturnType<typeof useWriteNewRule>,
 ) {
   const { setStatus } = scanState;
+  const { setSaveError } = busyState;
   const { documentByKey } = pendingWrites;
-  const { model } = elementTokens;
+  const { model, snapshot } = elementTokens;
   const { activeSelector } = activeSelectorHook;
   const { currentContext } = styleContextsHook;
   const { selectedEmbedKey } = resolvedHook;
@@ -270,12 +311,68 @@ export function useCreateRule(
     // Write into the chosen embed when one is selected; otherwise the embed of a
     // matching rule in this context (or the first embed).
     const where = newRuleTarget();
-    if (!where) {
+    const requested = selectorOverride ?? activeSelector;
+    const plan = firstStylesPlan(requested);
+    if (plan.kind === 'refused') {
+      setSaveError(plan.message);
+      return;
+    }
+    if (plan.kind === 'normal') {
+      if (!where) {
+        setStatus('No embed here to write to — add an HTML embed first.');
+        return;
+      }
+      void writeNewRule({ ...where, embedContext, wrapper: currentContext.wrapper, bpMedia, selector: requested }, write);
+      return;
+    }
+    // First styles (model/firstStyleBlock.ts). A block with no source yet is built in a blank
+    // document and handed to the host with its class, as one edit; with a block already there
+    // the rule goes into it and the class is put on first.
+    const firstStyles = plan;
+    const selector = plan.kind === 'block' ? requested : `.${plan.className}`;
+    const target = plan.kind === 'class' ? where : blankTarget();
+    if (!target) {
       setStatus('No embed here to write to — add an HTML embed first.');
       return;
     }
-    const fullSelector = selectorOverride ?? activeSelector;
-    void writeNewRule({ ...where, embedContext, wrapper: currentContext.wrapper, bpMedia, selector: fullSelector }, write);
+    void writeNewRule({ ...target, embedContext, wrapper: currentContext.wrapper, bpMedia, selector, firstStyles }, write);
+  };
+  const blankTarget = () => {
+    const embedDocument = blankStyleDocument();
+    const region = embedDocument.regions[0];
+    return region === undefined ? undefined : { embedDocument, region };
+  };
+  // What a rule that is about to be created does first: nothing, for any project that has a
+  // style of its own.
+  const firstStylesPlan = (selector: string): FirstStylesPlan => {
+    const host = getHost();
+    const tag = snapshot?.tag;
+    const elementClasses = snapshot?.classes ?? [];
+    const bareTag = tag !== undefined && selector === tag && elementClasses.length === 0;
+    const documents = [...documentByKey.values()];
+    // Reading every rule of every source is the one costly step, and only a source made of
+    // this mode's own rules can matter, so it is read only for a class-less tag with sources.
+    const ruleSelectors = bareTag && documents.length > 0 ? rebuildRules(documents).flatMap((rule) => rule.selectors.map((info) => info.text)) : [];
+    const taken = new Set<string>(elementClasses);
+    walkNodes(host.nodes, (node) => {
+      for (const name of authoredClassTokens(node)) {
+        taken.add(name);
+      }
+    });
+    for (const text of ruleSelectors) {
+      if (isAutoClassSelector(text)) {
+        taken.add(text.trim().slice(1));
+      }
+    }
+    return planFirstStyles({
+      selector,
+      tag,
+      elementClasses,
+      sourceCount: documents.length,
+      ruleSelectors,
+      takenClasses: taken,
+      filePath: host.openFilePath,
+    });
   };
   // The stylesheet a new rule in the current context lands in. A query row names
   // its block's stylesheet, so that wins over the source dropdown's pick, which

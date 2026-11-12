@@ -47,17 +47,20 @@ test('each source kind maps to its pills', () => {
   assert.deepEqual(labels(appPlacePills(LOCAL, NONE)), ['Local']);
   assert.equal(appPlacePills(LOCAL, NONE)[0]?.tooltip, "Only in this project's .stacki/apps folder");
   assert.deepEqual(labels(appPlacePills(GITHUB, NONE)), ['GitHub'], 'no visibility before the host answers');
-  assert.deepEqual(labels(appPlacePills(MARKETPLACE, NONE)), ['GitHub']);
+  assert.deepEqual(labels(appPlacePills(MARKETPLACE, NONE)), ['Marketplace'], 'an app installed from the marketplace says so, not GitHub');
   const place = (visibility: 'private' | 'public' | undefined) => ({ place: { owner: 'octocat', repository: 'heat-map', visibility }, listed: false });
   assert.deepEqual(labels(appPlacePills(GITHUB, place('private'))), ['GitHub · Private']);
   assert.deepEqual(labels(appPlacePills(GITHUB, place('public'))), ['GitHub · Public']);
   assert.deepEqual(labels(appPlacePills(GITHUB, place(undefined))), ['GitHub'], 'a failed lookup says nothing');
   assert.match(appPlacePills(GITHUB, place('private'))[0]?.tooltip ?? '', /octocat\/heat-map, a private GitHub repository/);
-  assert.deepEqual(labels(appPlacePills(MARKETPLACE, { ...place('public'), listed: true })), ['GitHub · Public', 'Marketplace']);
+  // One origin per row: Local, GitHub or Marketplace. Listed in the marketplace wins, whatever the install source.
+  assert.deepEqual(labels(appPlacePills(MARKETPLACE, { ...place('public'), listed: true })), ['Marketplace']);
   assert.deepEqual(
     appPlacePills(GITHUB, { place: undefined, listed: true }).map((pill) => pill.kind),
-    ['github', 'marketplace'],
+    ['marketplace'],
   );
+  assert.deepEqual(labels(appPlacePills(LOCAL, { place: undefined, listed: true })), ['Marketplace'], 'a local copy of a listed app is a marketplace app');
+  assert.deepEqual(labels(appPlacePills(FILE, { place: undefined, listed: true })), ['Marketplace']);
 });
 
 test('the marketplace lists an app by id and repository; a local app never matches', () => {

@@ -289,10 +289,6 @@ export type MatchedSelector = {
    *  written in the open component's markup (model/componentMarkup.ts): the chip is
    *  the component's, and green, wherever its CSS lives. */
   inComponentMarkup?: boolean;
-  /** True while whether inComponentMarkup holds is still being read (the selected
-   *  instance's component file is on its way): the chip is drawn neutral, never in a
-   *  colour it may lose a moment later. */
-  provenancePending?: boolean;
   /** True when the chip names a class the instance passed to the component open on
    *  the canvas (`column1Class="hero_copy"`): the page's class, not the component's
    *  (model/instanceClasses.ts). */

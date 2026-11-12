@@ -40,6 +40,10 @@ export type StopReason = 'end_turn' | 'max_tokens' | 'max_turn_requests' | 'refu
 export type PermissionKind = 'allow_once' | 'allow_always' | 'reject_once' | 'reject_always';
 export type PlanStatus = 'pending' | 'in_progress' | 'completed';
 export type PlanPriority = 'high' | 'medium' | 'low';
+/** The lifecycle of a context compaction, as `compaction_update` names it. */
+export type CompactionState = 'in_progress' | 'completed' | 'failed' | 'cancelled';
+/** What `_session/steering` did with a message (acp-agent.js, `steerSession`). */
+export type SteerOutcome = 'steered' | 'startedNewTurn' | 'promptRequired';
 
 const TOOL_KINDS: readonly ToolKind[] = ['read', 'edit', 'delete', 'move', 'search', 'execute', 'think', 'fetch', 'switch_mode', 'other'];
 const TOOL_STATUSES: readonly ToolStatus[] = ['pending', 'in_progress', 'completed', 'failed'];
@@ -47,6 +51,8 @@ const STOP_REASONS: readonly StopReason[] = ['end_turn', 'max_tokens', 'max_turn
 const PERMISSION_KINDS: readonly PermissionKind[] = ['allow_once', 'allow_always', 'reject_once', 'reject_always'];
 const PLAN_STATUSES: readonly PlanStatus[] = ['pending', 'in_progress', 'completed'];
 const PLAN_PRIORITIES: readonly PlanPriority[] = ['high', 'medium', 'low'];
+const COMPACTION_STATES: readonly CompactionState[] = ['in_progress', 'completed', 'failed', 'cancelled'];
+const STEER_OUTCOMES: readonly SteerOutcome[] = ['steered', 'startedNewTurn', 'promptRequired'];
 
 /** A content block, reduced to what the panel shows. Audio and blobs are named, not carried. */
 export type AcpContent =
@@ -80,6 +86,19 @@ export interface AcpToolCall {
   readonly exitCode: number | undefined;
   /** The tool call a subagent's call runs under (Claude's `_meta.claudeCode.parentToolUseId`). */
   readonly parent: string | undefined;
+  /** The agent's own name for the tool (Claude's `_meta.claudeCode.toolName`: `Bash`, `compact`). */
+  readonly toolName: string | undefined;
+  /** The three fields of `rawInput` the panel uses; the rest of the input is dropped. */
+  readonly rawInput: AcpRawInput | undefined;
+  /** What a Codex subagent call reports in `rawInput.activityKind` (`started`, ...). */
+  readonly activityKind: string | undefined;
+}
+
+export interface AcpRawInput {
+  readonly command: string | undefined;
+  readonly description: string | undefined;
+  /** Claude's `run_in_background` on a Bash call. */
+  readonly runInBackground: boolean | undefined;
 }
 
 export interface AcpPlanEntry {
@@ -119,6 +138,15 @@ export type AcpUpdate =
   | { readonly kind: 'config'; readonly options: readonly AcpConfigOption[] }
   | { readonly kind: 'info'; readonly title: string | undefined }
   | { readonly kind: 'usage'; readonly used: number; readonly size: number }
+  | {
+      readonly kind: 'compaction';
+      readonly id: string;
+      readonly status: CompactionState;
+      readonly summary: string | undefined;
+      readonly error: string | undefined;
+    }
+  /** A chunk of a compaction's summary: acknowledged and dropped, since the panel shows status only. */
+  | { readonly kind: 'compaction-summary'; readonly id: string }
   | { readonly kind: 'notice'; readonly severity: string; readonly title: string; readonly message: string | undefined }
   | { readonly kind: 'unknown-update'; readonly sessionUpdate: string };
 
@@ -135,6 +163,15 @@ export interface AcpInitialize {
   readonly resumeSession: boolean;
   readonly images: boolean;
   readonly embeddedContext: boolean;
+  /** Top-level `_meta.steering.supported`: `_session/steering` injects a message into a running turn. */
+  readonly steering: boolean;
+  /** Claude's `agentCapabilities._meta.claudeCode.promptQueueing`: a second plain prompt queues. */
+  readonly promptQueueing: boolean;
+  /** `sessionCapabilities`: each is present as an object when the agent supports the method. */
+  readonly fork: boolean;
+  readonly close: boolean;
+  readonly delete: boolean;
+  readonly title: boolean;
 }
 
 export interface AcpMode {
@@ -258,6 +295,13 @@ export function parseInitializeResult(input: unknown): Result<AcpInitialize, Acp
       resumeSession: toRecord(session['resume']) !== undefined,
       images: prompt['image'] === true,
       embeddedContext: prompt['embeddedContext'] === true,
+      // Declared as `_meta` extensions, so both are optional objects a plain agent omits.
+      steering: toRecord(toRecord(value['_meta'])?.['steering'])?.['supported'] === true,
+      promptQueueing: toRecord(toRecord(toRecord(capabilities['_meta'])?.['claudeCode']))?.['promptQueueing'] === true,
+      fork: toRecord(session['fork']) !== undefined,
+      close: toRecord(session['close']) !== undefined,
+      delete: toRecord(session['delete']) !== undefined,
+      title: toRecord(session['title']) !== undefined,
     };
     assert(parsed.agentName.length > 0, 'initialize: the agent has a name');
     return parsed;
@@ -280,6 +324,21 @@ export function parseSessionResult(input: unknown, sessionId: string | undefined
     assert(session.sessionId.length > 0, 'session: a session has an id');
     return session;
   });
+}
+
+/** The answer to `_session/steering`: what the adapter did with the message. An outcome it does not name is a failure. */
+export function parseSteerResult(input: unknown): Result<{ readonly outcome: SteerOutcome }, AcpWireError> {
+  return guarded(() => {
+    const value = required(input, 'steering');
+    const outcome = oneOf(value['outcome'], STEER_OUTCOMES, 'steering.outcome');
+    assert(STEER_OUTCOMES.includes(outcome), 'steering: a known outcome');
+    return { outcome };
+  });
+}
+
+/** The answer to `session/fork`: the new session, shaped like `session/new`'s. */
+export function parseForkResult(input: unknown): Result<AcpSession, AcpWireError> {
+  return parseSessionResult(input, undefined);
 }
 
 export function parsePromptResult(input: unknown): Result<AcpPromptEnd, AcpWireError> {
@@ -382,7 +441,23 @@ function parseUpdate(update: Record<string, unknown>): AcpUpdate {
     case 'session_info_update':
       return { kind: 'info', title: optionalText(update['title'], AI_LIMITS.titleCharsMax * 4) };
     case 'usage_update':
-      return { kind: 'usage', used: requiredCount(update['used'], 'usage.used'), size: requiredCount(update['size'], 'usage.size') };
+      return { kind: 'usage', used: tokenCount(update['used'], 'usage.used'), size: tokenCount(update['size'], 'usage.size') };
+    case 'compaction_update': {
+      const status = optionalOneOf(update['status'], COMPACTION_STATES);
+      // A status the protocol reserves for later (or an `_`-prefixed extension) is shown as an unsupported update, not guessed at.
+      if (status === undefined) {
+        return { kind: 'unknown-update', sessionUpdate: kind };
+      }
+      return {
+        kind: 'compaction',
+        id: requiredText(update['compactionId'], AI_LIMITS.idCharsMax, 'compaction.compactionId'),
+        status,
+        summary: optionalText(update['summary'], AI_LIMITS.labelCharsMax),
+        error: optionalText(update['error'], AI_LIMITS.labelCharsMax),
+      };
+    }
+    case 'compaction_summary_chunk':
+      return { kind: 'compaction-summary', id: requiredText(update['compactionId'], AI_LIMITS.idCharsMax, 'compaction.compactionId') };
     case 'notice':
       return {
         kind: 'notice',
@@ -400,6 +475,7 @@ function parseToolCall(value: Record<string, unknown>): AcpToolCall {
   const delta = toRecord(meta?.['terminal_output_delta']);
   const exit = toRecord(meta?.['terminal_exit']);
   const claude = toRecord(meta?.['claudeCode']);
+  const raw = toRecord(value['rawInput']);
   const content = value['content'];
   const locations = value['locations'];
   const call: AcpToolCall = {
@@ -412,9 +488,26 @@ function parseToolCall(value: Record<string, unknown>): AcpToolCall {
     outputDelta: optionalText(delta?.['data'], AI_LIMITS.toolOutputCharsMax),
     exitCode: typeof exit?.['exit_code'] === 'number' && Number.isSafeInteger(exit['exit_code']) ? exit['exit_code'] : undefined,
     parent: optionalText(claude?.['parentToolUseId'], AI_LIMITS.idCharsMax),
+    toolName: optionalText(claude?.['toolName'], AI_LIMITS.idCharsMax),
+    rawInput: parseRawInput(raw),
+    activityKind: optionalText(raw?.['activityKind'], AI_LIMITS.idCharsMax),
   };
   assert(call.id.length > 0, 'toolCall: a call has an id');
   return call;
+}
+
+// Only three fields of a tool's input matter to the panel; the input itself can be a whole file.
+function parseRawInput(raw: Record<string, unknown> | undefined): AcpRawInput | undefined {
+  if (raw === undefined) {
+    return undefined;
+  }
+  const command = typeof raw['command'] === 'string' ? optionalText(raw['command'], AI_LIMITS.labelCharsMax) : undefined;
+  const description = optionalText(raw['description'], AI_LIMITS.labelCharsMax);
+  const runInBackground = typeof raw['run_in_background'] === 'boolean' ? raw['run_in_background'] : undefined;
+  if (command === undefined && description === undefined && runInBackground === undefined) {
+    return undefined;
+  }
+  return { command, description, runInBackground };
 }
 
 function parseToolContent(input: unknown): AcpToolContent {
@@ -585,6 +678,15 @@ function requiredCount(input: unknown, label: string): number {
     throw new Error(`${label}: expected nonnegative integer`);
   }
   return input;
+}
+
+/** A token count: a nonnegative integer within the sanity ceiling, so a bad number cannot reach a percentage. */
+function tokenCount(input: unknown, label: string): number {
+  const value = requiredCount(input, label);
+  if (value > AI_LIMITS.contextTokensMax) {
+    throw new Error(`${label}: exceeds limit`);
+  }
+  return value;
 }
 
 function optionalCount(input: unknown, label: string): number | undefined {

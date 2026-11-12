@@ -147,10 +147,13 @@ export function appPlacePills(
   source: AppInstallSource,
   facts: { readonly place: AppRepositoryPlace | undefined; readonly listed: boolean },
 ): readonly AppPill[] {
-  const home = appHomePill(source, facts.place);
-  const pills: readonly AppPill[] = facts.listed ? [home, { kind: 'marketplace', label: 'Marketplace', tooltip: 'Listed in the Stacki marketplace' }] : [home];
-  assert(pills.length >= 1, 'Every app says where it lives');
-  assert(pills.length <= 2, 'A row has at most two place pills');
+  // One origin, three words: Marketplace (installed from it, or listed in it), GitHub, or Local. A marketplace
+  // app is also on GitHub and a listed local copy is also in the marketplace; the row says the most specific.
+  const pills: readonly AppPill[] =
+    source.kind === 'marketplace' || facts.listed
+      ? [{ kind: 'marketplace', label: 'Marketplace', tooltip: 'Listed in the Stacki marketplace' }]
+      : [appHomePill(source, facts.place)];
+  assert(pills.length === 1, 'A row says where the app comes from with one pill');
   return pills;
 }
 

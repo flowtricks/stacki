@@ -140,3 +140,40 @@ test('the model of any component parses: the producer checks its own output', ()
     ],
   );
 });
+
+test('a member of an object type states what it holds with a @format tag, on the line of the member before too', () => {
+  const group = prop(
+    'interface Props { items: readonly { title: string; /** @format color */ tint: string;\n  /** @format date */\n  day: string; /** @format */ other: string }[] }',
+    'items',
+  ).control.item;
+  assert.deepEqual(
+    group.fields.map((field) => [field.name, field.control.format]),
+    [
+      ['title', undefined],
+      ['tint', 'color'],
+      ['day', 'date'],
+      ['other', undefined],
+    ],
+  );
+  assert.equal(
+    prop('interface Props { n: { /** @format color */ count: number } }', 'n').control.fields[0].control.kind,
+    'number',
+    'a tag on a number states nothing',
+  );
+});
+
+test('a list nested as deep as a List property’s fields go is modelled, and the level past it is code', () => {
+  const lists = (count) => `${'readonly { l: '.repeat(count)}string${' }[]'.repeat(count)}`;
+  let control = prop(`interface Props { x: ${lists(3)} }`, 'x').control;
+  for (let level = 0; level < 3; level++) {
+    assert.equal(control.kind, 'list', `list ${level}`);
+    control = control.item.fields[0].control;
+  }
+  assert.equal(control.kind, 'text');
+  let beyond = prop(`interface Props { x: ${lists(4)} }`, 'x').control;
+  for (let level = 0; level < 3; level++) {
+    beyond = beyond.item.fields[0].control;
+  }
+  assert.equal(beyond.kind, 'list');
+  assert.deepEqual(beyond.item, { kind: 'code', reason: 'nestingDepth' });
+});

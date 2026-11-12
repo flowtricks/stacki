@@ -100,10 +100,12 @@ test('the complete channel inventory matches real main and terminal registration
   // main, which applies the privacy preference.
   // An element's snapshot adds one (apps:canvasSnapshot): main photographs the region of the
   // sender's own window the renderer measured, the one capture API the renderer lacks.
-  // The AI chat panel adds fourteen (shared/ipc/aiChat.ts): agents and their install, trusting the
-  // project, the chat list and one chat's create, update, delete and read, a prompt, stopping it,
-  // a permission answer, a setting, keeping or undoing one file’s change, and the guided setup.
-  assert.equal(harness.handlers.size, 242);
+  // The AI chat panel adds twenty-one (shared/ipc/aiChat.ts): agents and their install, trusting the
+  // project, the chat list and one chat's create, update, delete and read, a prompt, steering a running
+  // turn, compacting, forking, moving a chat and sectioning the list, one turn's file diff, @ mention
+  // candidates, stopping it, a permission answer, a setting, keeping or undoing one file’s change, and
+  // the guided setup.
+  assert.equal(harness.handlers.size, 249);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name

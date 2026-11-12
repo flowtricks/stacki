@@ -3,13 +3,13 @@ import type { Attr } from '../../../shared/page/pageNode';
 import type { Item, ItemField } from './arrayValue';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import { PlusIcon, CloseIcon } from '../../ui/Icons';
+import { PlusIcon, CloseIcon, ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
 import ListFieldRow from '../../ui/ListFieldRow';
 import type { PickedAsset } from '../../ui/AssetField';
 import { allowDragEffect } from '../../editor/dragState';
-import { arrayItems, arrayText, blankLike, itemLabel, moveItem } from './arrayValue';
+import { arrayItems, arrayText, blankLike, itemLabel, moveItem, nestedItems } from './arrayValue';
 import type { SourceContext } from './bindingTypes';
-import { blankItemOf, conformedItem, itemFieldDefinition, itemFieldKind, itemFieldOf, itemFieldValue, type ItemShapeField } from './listItemShape';
+import { blankItemOf, conformedItem, itemFieldDeclaration, itemFieldDefinition, itemFieldOf, itemFieldValue, type ItemShapeField } from './listItemShape';
 import PropField from './PropField';
 import type { RichContext } from './RichContent';
 
@@ -95,7 +95,7 @@ function ItemEditor({ item: given, shape, projectPath, bindContext, dataContext,
           <ItemFieldControl
             key={field.key}
             field={field}
-            kind={itemFieldKind(field, shape)}
+            declaration={itemFieldDeclaration(field, shape)}
             projectPath={projectPath}
             bindContext={bindContext}
             dataContext={dataContext}
@@ -121,23 +121,36 @@ function closeOnEnter(event: React.KeyboardEvent<HTMLDivElement>, onClose: () =>
 }
 
 // One field of an object item, drawn by PropField as any prop's field is: its
-// label, its `{}`, its bind dot, its chips, and the control its kind takes.
+// label, its `{}`, its bind dot, its chips, and the control its kind takes. A
+// List or a Group is a sub-editor of its own, drawn by NestedFieldEditor.
 function ItemFieldControl(props: {
   readonly field: ItemField;
-  readonly kind: ReturnType<typeof itemFieldKind>;
+  readonly declaration: ItemShapeField;
   readonly projectPath: string | undefined;
   readonly bindContext: RichContext | undefined;
   readonly dataContext: SourceContext | undefined;
   readonly onSet: (field: ItemField) => void;
 }) {
-  const { field, kind, projectPath, onSet } = props;
+  const { field, declaration, projectPath, onSet } = props;
   const [note, setNote] = useState<string | undefined>(undefined);
   // Code the list cannot hold yet stays on screen here, because the number box
   // shows only what it is given and `-` has to survive on the way to `-2`.
   const [draft, setDraft] = useState<Attr | undefined>(undefined);
+  if (declaration.kind === 'list' || declaration.kind === 'group') {
+    return (
+      <NestedFieldEditor
+        field={field}
+        declaration={declaration}
+        projectPath={projectPath}
+        bindContext={props.bindContext}
+        dataContext={props.dataContext}
+        onSet={onSet}
+      />
+    );
+  }
   const write = (value: Attr | undefined): void => {
-    const next = itemFieldOf(field, value, kind, '"');
-    setDraft(next === undefined ? heldDraft(value, kind) : undefined);
+    const next = itemFieldOf(field, value, declaration, '"');
+    setDraft(next === undefined ? heldDraft(value, declaration.kind) : undefined);
     if (next !== undefined) {
       setNote(undefined);
       onSet(next);
@@ -157,7 +170,7 @@ function ItemFieldControl(props: {
     <>
       <PropField
         nodeKey={`item:${field.key}`}
-        field={itemFieldDefinition(field.key, kind)}
+        field={itemFieldDefinition(field.key, declaration)}
         value={draft ?? itemFieldValue(field)}
         bindContext={props.bindContext}
         dataContext={props.dataContext}
@@ -169,10 +182,99 @@ function ItemFieldControl(props: {
   );
 }
 
+// A List or a Group among an item's fields: a collapsible sub-editor with the
+// very rows and fields the item itself is edited with. A list is a ListField
+// over the nested array; a group is the fields of its one object. Both write
+// the nested literal back into the field as one value, so the file keeps one
+// array literal (arrayValue.ts).
+function NestedFieldEditor(props: {
+  readonly field: ItemField;
+  readonly declaration: Extract<ItemShapeField, { kind: 'list' | 'group' }>;
+  readonly projectPath: string | undefined;
+  readonly bindContext: RichContext | undefined;
+  readonly dataContext: SourceContext | undefined;
+  readonly onSet: (field: ItemField) => void;
+}) {
+  const { field, declaration, onSet } = props;
+  const [open, setOpen] = useState(false);
+  const nested = field.quote === undefined ? nestedItems(field.text) : undefined;
+  const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
+  const summary = declaration.kind === 'list' ? countLabel(nested?.length ?? 0) : '';
+  return (
+    <div className="props-field list-item-nested" data-kind={declaration.kind}>
+      <button
+        type="button"
+        className="list-item-nested-head"
+        aria-expanded={open}
+        aria-label={`${field.key}, ${declaration.kind}`}
+        onClick={() => setOpen(!open)}
+      >
+        <Chevron size={12} />
+        <span className="list-item-nested-name">{field.key}</span>
+        {summary !== '' && <span className="list-item-nested-count">{summary}</span>}
+      </button>
+      {open && nested === undefined && <div className="list-item-note">This {declaration.kind} is set in code.</div>}
+      {open && nested !== undefined && declaration.kind === 'list' && (
+        <ListField
+          value={field.text}
+          itemShape={declaration.fields}
+          projectPath={props.projectPath}
+          bindContext={props.bindContext}
+          dataContext={props.dataContext}
+          itemsMax={LIST_ITEMS_MAX}
+          onChange={(text) => onSet({ ...field, text })}
+        />
+      )}
+      {open && nested !== undefined && declaration.kind === 'group' && (
+        <GroupFields
+          fields={nested[0]?.fields ?? []}
+          shape={declaration.fields}
+          projectPath={props.projectPath}
+          bindContext={props.bindContext}
+          dataContext={props.dataContext}
+          onChange={(fields) => onSet({ ...field, text: arrayText([{ fields }]).slice(1, -1) })}
+        />
+      )}
+    </div>
+  );
+}
+
+// The fields of one object, each with the control its kind takes.
+function GroupFields(props: {
+  readonly fields: readonly ItemField[];
+  readonly shape: readonly ItemShapeField[];
+  readonly projectPath: string | undefined;
+  readonly bindContext: RichContext | undefined;
+  readonly dataContext: SourceContext | undefined;
+  readonly onChange: (fields: readonly ItemField[]) => void;
+}) {
+  const fields = conformedItem({ fields: props.fields }, props.shape, '"').fields ?? [];
+  return (
+    <div className="list-item-nested-body">
+      {fields.map((field, at) => (
+        <ItemFieldControl
+          key={field.key}
+          field={field}
+          declaration={itemFieldDeclaration(field, props.shape)}
+          projectPath={props.projectPath}
+          bindContext={props.bindContext}
+          dataContext={props.dataContext}
+          onSet={(next) => props.onChange(fields.map((own, index) => (index === at ? next : own)))}
+        />
+      ))}
+    </div>
+  );
+}
+
+// "No items", "1 item", "3 items".
+function countLabel(count: number): string {
+  return count === 0 ? 'No items' : count === 1 ? '1 item' : `${count} items`;
+}
+
 // What a refused value is held as. As code, a number on its way (`-`) reads as
 // bound and PropField would swap the box for the code field under the caret;
 // as words it stays in the box until the next key makes it a number.
-function heldDraft(value: Attr | undefined, kind: ReturnType<typeof itemFieldKind>): Attr | undefined {
+function heldDraft(value: Attr | undefined, kind: ItemShapeField['kind']): Attr | undefined {
   if (value?.type === 'expr' && kind === 'number' && /^[-+]?\.?$/.test(value.value.trim())) {
     return { type: 'string', value: value.value };
   }
@@ -229,6 +331,9 @@ export function emptyNote(placeholder: unknown) {
   const text = String(placeholder ?? '').trim();
   return !text || /^\[\s*\]$/.test(text) ? '' : text;
 }
+
+// A nested list holds as many items as a List property's own default does.
+const LIST_ITEMS_MAX = 100;
 
 export type ListFieldChange =
   | { readonly kind: 'edit'; readonly index: number }

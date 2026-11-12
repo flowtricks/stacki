@@ -10,6 +10,7 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { objectFields } from './arrayValue';
 import { isLinkName } from '../../editor/fieldNames';
+import { readPropDocumentation } from '../../editor/propDocumentation';
 
 /** How a prop whose value is set in code is shown: as a read-only row, as its fields, or as usual. */
 export type CodeRowKind = 'action' | 'code' | undefined;
@@ -108,10 +109,14 @@ export function previewsOptions(field: ChoiceWriting): boolean {
   return !(field.expressionOptions ?? []).some((option) => option === 'true' || option === 'false');
 }
 
-/** Whether a string prop is a link: its name ends in `href`, `url` or `link` (fieldNames.ts). */
-export function isLinkProp(field: Pick<FieldDefinition, 'name' | 'type'>): boolean {
+/**
+ * Whether a string prop is a link: its `@format` says so, or it says nothing
+ * else and its name ends in `href`, `url` or `link` (fieldNames.ts).
+ */
+export function isLinkProp(field: Pick<FieldDefinition, 'name' | 'type' | 'doc'>): boolean {
   if (field.type !== 'string' && field.type !== 'other') {
     return false;
   }
-  return isLinkName(field.name);
+  const format = readPropDocumentation(field.doc).format;
+  return format === undefined ? isLinkName(field.name) : format === 'link';
 }

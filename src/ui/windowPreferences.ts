@@ -5,8 +5,12 @@ import { centeredWindowRectangle, fitWindowRectangle, initialWindowRectangle, ty
 const STORED_VALUE_CHARS_MAX = 256;
 const COORDINATE_PX_MAX = 100_000;
 
-// A separate key preserves compatibility with existing saved window rectangles.
-export function readWindowMode(key: string): WindowMode {
+/**
+ * The mode a window was last left in. With nothing stored (or storage denied) it is the window's own starting
+ * mode: floating unless the caller says its window starts docked (the Variables panel and the AI panel do).
+ * A separate key preserves compatibility with existing saved window rectangles.
+ */
+export function readWindowMode(key: string, options: { readonly fallback?: WindowMode } = {}): WindowMode {
   try {
     const value: unknown = localStorage.getItem(key);
     if (value === 'docked' || value === 'floating') {
@@ -15,7 +19,7 @@ export function readWindowMode(key: string): WindowMode {
   } catch {
     // Storage is optional; a denied read must not prevent opening the editor.
   }
-  return 'floating';
+  return options.fallback ?? 'floating';
 }
 
 export function storeWindowMode(key: string, mode: WindowMode): void {

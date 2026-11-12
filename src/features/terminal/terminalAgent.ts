@@ -95,6 +95,10 @@ export function terminalAgentHandler(deps: {
   readonly mode?: () => LaunchMode;
 }): AgentTaskHandler {
   return async (task) => {
+    // The terminal runs the agent on the prompt at once; it has no message box to hold one for review.
+    if (task.delivery === 'draft') {
+      return { tag: 'declined' };
+    }
     const mode = (deps.mode ?? storedLaunchMode)();
     const command = deps.available() ? agentLaunchCommand(mode, task.prompt, deps.platform) : undefined;
     if (command === undefined) {

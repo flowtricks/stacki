@@ -4,7 +4,16 @@
 
 import { chipStyleOf, inlineResolveInput, inlineTargetOf, type InlineState } from './useInlineTarget';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { resolveStyle, selectorsMatch, type ContextInfo, type ContextKey, type MatchedSelector, type SourceKey, type StyleContext } from '../model/resolved';
+import {
+  resolveStyle,
+  selectorKey,
+  selectorsMatch,
+  type ContextInfo,
+  type ContextKey,
+  type MatchedSelector,
+  type SourceKey,
+  type StyleContext,
+} from '../model/resolved';
 import { breakpointForAtContext, breakpointTier, buildStyleContexts, nativeContribsFor, nativeHasValues, selectedNativeIndexFor } from '../model/nativeStyles';
 import { listAtRuleBlocks } from '../model/css';
 import {
@@ -22,9 +31,9 @@ import {
 import { reachOfWrapper, wrapperOnLayer, type WrapperReach } from '../model/queryReach';
 import { canvasWidthForQuery } from '../model/queryWidth';
 import { isGlobalSelector, type MatchTarget } from '../model/selectors';
-import { selectedInstanceMarkup, selectedInstanceMarkupPending } from '../model/webflowElement';
+import { selectedInstanceMarkup, selectedInstanceMarkupPending, selectedInstanceScope } from '../model/webflowElement';
+import { rememberChipProvenance, rememberedGreenChips } from '../model/chipProvenanceMemory';
 import { componentSource, componentSourcePending } from '../model/componentSourceCache';
-import { assert } from '../../../../shared/core/assert';
 import { useComponentSourceTick } from './useComponentSourceTick';
 import { nativeStylingAvailable, rebuildRules } from '../model/webflow';
 import { indexQueriesByClass, orderContexts, relativeContexts, relativesOf } from '../model/contextOrder';
@@ -535,13 +544,16 @@ export function useSelectorChips(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the tick stands for the cache's contents
     [elementTokens.componentMarkup, snapshot, documentByKey, componentSourceTick],
   );
-  // While the instance's component file is still being read, its chips' colour is unknown.
+  // While the instance's component file is still being read, its chips keep the colour
+  // they last settled in (chipProvenanceMemory.ts); the read only refines it.
   const provenancePending = useMemo(
     () =>
       elementTokens.componentMarkup === undefined && snapshot !== undefined && selectedInstanceMarkupPending(documentByKey.values(), componentSourcePending),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the tick stands for the cache's contents
     [elementTokens.componentMarkup, snapshot, documentByKey, componentSourceTick],
   );
+  const instanceScope = selectedInstanceScope();
+  const rememberedGreen = provenancePending && instanceScope !== undefined ? rememberedGreenChips(instanceScope) : undefined;
   const { activeSelector } = activeSelectorHook;
   const { currentContext, styleContexts } = styleContextsHook;
   const pseudo = usePanelLayer();
@@ -552,25 +564,23 @@ export function useSelectorChips(
   // pick/typed one) so it shows as selected while you add its first property.
   const selectorChips = useMemo<MatchedSelector[]>(
     () =>
-      withProvenancePending(
-        chipsFor({
-          model: model === undefined ? undefined : modelForContext(model, currentContext),
-          nativeModel,
-          currentContext,
-          activeSelector,
-          selectedSelectorText,
-          tokens,
-          classList: snapshot?.classList ?? [],
-          removedClasses,
-          pseudo,
-          instanceClasses,
-          componentMarkup,
-          typedLabels,
-        }),
-        { pending: provenancePending },
-      ),
+      chipsFor({
+        model: model === undefined ? undefined : modelForContext(model, currentContext),
+        nativeModel,
+        currentContext,
+        activeSelector,
+        selectedSelectorText,
+        tokens,
+        classList: snapshot?.classList ?? [],
+        removedClasses,
+        pseudo,
+        instanceClasses,
+        componentMarkup,
+        rememberedGreen,
+        typedLabels,
+      }),
     [
-      provenancePending,
+      rememberedGreen,
       model,
       nativeModel,
       currentContext,
@@ -585,6 +595,17 @@ export function useSelectorChips(
       typedLabels,
     ],
   );
+
+  // A settled answer is remembered, so the next read of the same component starts
+  // from it. Never while pending: that would remember the memory.
+  useEffect(() => {
+    if (!provenancePending && instanceScope !== undefined) {
+      rememberChipProvenance(instanceScope, {
+        greenKeys: selectorChips.filter((chip) => chip.inComponentMarkup === true).map((chip) => selectorKey(chip.text)),
+        plainKeys: selectorChips.filter((chip) => chip.inComponentMarkup !== true && chip.pending !== true).map((chip) => selectorKey(chip.text)),
+      });
+    }
+  }, [provenancePending, instanceScope, selectorChips]);
 
   // Per-context dropdown info: embed hasStyles/combos (for the dot + auto-highlight)
   // plus whether the breakpoint carries native values.
@@ -631,16 +652,6 @@ export function useSelectorChips(
     return orderContexts(styleContexts, own, relatives);
   }, [contextInfos, queryIndex, styleContexts]);
   return { contextInfos, orderedContexts, selectorChips };
-}
-
-/** The chips with their colour marked unknown while the component file is read; a pending chip has no colour to wait on. */
-export function withProvenancePending(chips: MatchedSelector[], provenance: { readonly pending: boolean }): MatchedSelector[] {
-  if (!provenance.pending) {
-    return chips;
-  }
-  const marked = chips.map((chip) => (chip.pending === true ? chip : { ...chip, provenancePending: true }));
-  assert(marked.length === chips.length, 'withProvenancePending: every chip is kept');
-  return marked;
 }
 
 // The canvas page's root font size, for a `rem` query width. The canvas query

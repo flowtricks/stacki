@@ -203,7 +203,7 @@ test('GitHub: install, find an update, Update installs only the checked bytes', 
   const found = await service.checkUpdates(root, true);
   assert.deepEqual(found.ok ? found.value : found.message, [{ kind: 'available', id: 'heat-map', version: '1.1.0' }]);
   assert.equal(readAppsLock(root).apps[0]?.version, '1.0.0');
-  assert.deepEqual(readAppsLock(root).apps[0]?.update, { version: '1.1.0', tag: 'v1.1.0', sha256: sha256(second) });
+  assert.deepEqual(readAppsLock(root).apps[0]?.update, { version: '1.1.0', tag: 'v1.1.0', sha256: sha256(second), additions: [] });
 
   // Automatic checks are spaced out; a forced one is not.
   now += 60_000;

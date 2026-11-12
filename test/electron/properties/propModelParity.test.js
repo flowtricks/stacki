@@ -53,6 +53,75 @@ const INTENDED = {
   // the entry's default, which the Properties panel already showed.
   [`${ZOO}src/components/NestedDestructure.astro#schema.meta.default`]: { old: undefined, new: '{}' },
   [`${ZOO}src/components/NestedDestructure.astro#schema.meta.defaultExpr`]: { old: undefined, new: true },
+  // A member of a prop's shape now carries what its type says beyond the word: the choices of an
+  // enum and the shape of a nested object or list, which a List prop's item fields nest into
+  // (propSchema.ts PropShapeField). The regex reader named only the type.
+  [`${ZOO}src/components/ListFilterProp.astro#schema.filters.shape`]: {
+    old: [
+      { name: 'filterFor', type: 'enum' },
+      { name: 'fields', type: 'code' },
+    ],
+    new: [
+      { name: 'filterFor', type: 'enum', options: ['ALL', 'ANY'] },
+      {
+        name: 'fields',
+        type: 'code',
+        shape: [
+          { name: 'fieldPath', type: 'string' },
+          { name: 'operatorName', type: 'string' },
+          { name: 'value', type: 'other' },
+        ],
+        shapeIsList: true,
+      },
+    ],
+  },
+  [`${ZOO}src/components/ListLookalike.astro#schema.filters.shape`]: {
+    old: [
+      { name: 'filterFor', type: 'enum' },
+      { name: 'fields', type: 'code' },
+    ],
+    new: [
+      { name: 'filterFor', type: 'enum', options: ['ALL', 'ANY'] },
+      {
+        name: 'fields',
+        type: 'code',
+        shape: [
+          { name: 'fieldPath', type: 'string' },
+          { name: 'operatorName', type: 'string' },
+          { name: 'value', type: 'other' },
+        ],
+        shapeIsList: true,
+      },
+    ],
+  },
+  [`${ZOO}src/components/NestedObject.astro#schema.cta.shape`]: {
+    old: [
+      { name: 'label', type: 'string' },
+      { name: 'link', type: 'code' },
+    ],
+    new: [
+      { name: 'label', type: 'string' },
+      {
+        name: 'link',
+        type: 'code',
+        shape: [
+          { name: 'href', type: 'string' },
+          { name: 'external', type: 'boolean' },
+        ],
+        shapeIsList: false,
+      },
+    ],
+  },
+  [`${ZOO}src/components/ListLookalike.astro#schema.sort.shape`]: {
+    old: [
+      { name: 'field', type: 'string' },
+      { name: 'direction', type: 'enum' },
+    ],
+    new: [
+      { name: 'field', type: 'string' },
+      { name: 'direction', type: 'enum', options: ['asc', 'desc'] },
+    ],
+  },
   // The Properties panel listed declared and destructured props only, so a
   // prop the component reads as `Astro.props.year` was offered on instances
   // but missing from the panel (propZoo's DirectAccessUntyped gap). Both

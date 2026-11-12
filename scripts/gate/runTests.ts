@@ -5,6 +5,7 @@
 //   npm test -- hoverCost electron/  suites by name, or every suite under a folder
 //   npm test -- --list               the suites, without running them
 //   npm test -- --jobs=4             at most four suites at once
+//   npm test -- --electron-jobs=2    at most two suites that open Electron windows at once
 //
 // Naming suites builds what they load over the existing tree and skips the
 // clean and the whole-tree static checks (gatePlan.ts says why); the stop hook
@@ -18,18 +19,29 @@
 import os = require('node:os');
 import path = require('node:path');
 import { gatePlanFor, targetedNotice, type BuildStage } from './gatePlan';
-import { parseJobs, POOL_LIMITS, runTestCommand, runTestPool, stopTestPool, type TestCommand, type TestOutcome } from './testPool';
+import {
+  parseElectronJobs,
+  parseJobs,
+  POOL_LIMITS,
+  runTestCommand,
+  runTestPool,
+  stopTestPool,
+  withDockPreload,
+  type TestCommand,
+  type TestOutcome,
+} from './testPool';
 import { repositoryRoot } from '../lib/repoRoot';
-import { discoverTestFiles, selectSuites, suitesFor, type Suite } from './testDiscovery';
+import { discoverTestFiles, selectSuites, startsElectron, suitesFor, type Suite } from './testDiscovery';
 
 const root = repositoryRoot();
 const flags = process.argv.slice(2).filter((argument) => argument.startsWith('--'));
-const unknownFlags = flags.filter((flag) => !flag.startsWith('--jobs=') && flag !== '--list');
+const unknownFlags = flags.filter((flag) => !flag.startsWith('--jobs=') && !flag.startsWith('--electron-jobs=') && flag !== '--list');
 if (unknownFlags.length > 0) {
-  console.error(`Unknown flag: ${unknownFlags.join(', ')} (supported: --jobs=<n>, --list)`);
+  console.error(`Unknown flag: ${unknownFlags.join(', ')} (supported: --jobs=<n>, --electron-jobs=<n>, --list)`);
   process.exit(1);
 }
 const jobs = parseJobs(flags.find((flag) => flag.startsWith('--jobs='))?.slice('--jobs='.length), os.availableParallelism());
+const electronJobs = parseElectronJobs(flags.find((flag) => flag.startsWith('--electron-jobs='))?.slice('--electron-jobs='.length), jobs);
 const queries = process.argv.slice(2).filter((argument) => !argument.startsWith('--'));
 const { selected, unmatched } = selectSuites(suitesFor(discoverTestFiles(root)), queries);
 if (selected.length === 0 || unmatched.length > 0) {
@@ -49,6 +61,12 @@ const environment = {
   PATH: `${path.join(root, 'node_modules', '.bin')}${path.delimiter}${pathValue}`,
 };
 const node = process.execPath;
+// Test commands, and the Electron probes they start, run without a Dock icon (hideDockPreload.js
+// says how). The static checks and builds keep the plain environment: nothing there opens a window.
+const testEnvironment = {
+  ...environment,
+  NODE_OPTIONS: withDockPreload(process.env['NODE_OPTIONS'], path.join(root, 'test', 'helpers', 'hideDockPreload.js')),
+};
 const typeScript = path.join(root, 'node_modules', 'typescript', 'bin', 'tsc');
 const plan = gatePlanFor({ queries, selected });
 // Node >= 22.18 strips types itself (package.json engines).
@@ -150,8 +168,9 @@ const staticChecks: readonly TestCommand[] = [
   {
     name: 'prettier',
     command: node,
+    // formatTree.mts names the files through git, so a local exclude list is honoured (issue #78).
     argumentsList: [
-      path.join(root, 'node_modules', 'prettier', 'bin', 'prettier.cjs'),
+      path.join(root, 'scripts', 'policy', 'formatTree.mts'),
       '--check',
       '--cache',
       '--cache-strategy',
@@ -160,7 +179,6 @@ const staticChecks: readonly TestCommand[] = [
       prettierCache,
       '--log-level',
       'warn',
-      '.',
     ],
   },
   {
@@ -176,11 +194,13 @@ const staticChecks: readonly TestCommand[] = [
 const electronInput: unknown = require('electron');
 const electronBinary = typeof electronInput === 'string' ? electronInput : 'electron';
 const toCommand = (suite: Suite): TestCommand => {
+  const kind = startsElectron(root, suite) ? 'electron' : undefined;
   if (suite.options.runner === 'electron') {
-    return { name: suite.name, command: electronBinary, argumentsList: [suite.file] };
+    return { name: suite.name, command: electronBinary, argumentsList: [suite.file], kind: 'electron' };
   }
   const nodeArguments = suite.options.nodeArguments ?? [];
-  return { name: suite.name, command: node, argumentsList: [...nodeArguments, suite.file] };
+  const command = { name: suite.name, command: node, argumentsList: [...nodeArguments, suite.file] };
+  return kind === undefined ? command : { ...command, kind };
 };
 const phases: readonly (readonly TestCommand[])[] = [
   selected.filter((suite) => suite.options.phase !== 'alone').map(toCommand),
@@ -276,11 +296,11 @@ async function runPhases(): Promise<readonly TestOutcome[]> {
     await runStaticChecks();
   }
   testsStartedMs = Date.now();
-  console.log(`\n[gate] ${names.length} test suites, ${jobs} at a time`);
+  console.log(`\n[gate] ${names.length} test suites, ${jobs} at a time, ${electronJobs} of them with Electron windows`);
   const outcomes: TestOutcome[] = [];
   for (const [index, phase] of phases.entries()) {
     const phaseJobs = index === 0 ? jobs : 1;
-    const options = { cwd: root, environment, jobs: phaseJobs };
+    const options = { cwd: root, environment: testEnvironment, jobs: phaseJobs, electronJobs: Math.min(electronJobs, phaseJobs) };
     outcomes.push(...(await runTestPool(phase, options, report)));
   }
   return outcomes;

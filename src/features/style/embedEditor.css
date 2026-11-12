@@ -4003,23 +4003,6 @@
   color: #d8b4fe;
 }
 
-/* A chip whose colour is still being read (provenancePending: the selected instance's
-   component file is on its way) is neutral grey in every state, never a blue it may
-   lose to green a moment later. After the component rules, so it outranks them. */
-.embed-editor_selector-chip.is-provenance-pending:not(.is-pending) {
-  background: var(--color-selector-context-bg);
-  color: var(--color-text-secondary);
-}
-.embed-editor_selector-chip.is-provenance-pending:not(.is-pending):not(.is-active):hover:not(:disabled) {
-  background: var(--color-selector-context-bg-hover);
-  color: var(--color-text-secondary);
-}
-.embed-editor_selector-chip.is-provenance-pending.is-active:not(.is-pending),
-.embed-editor_selector-chip.is-provenance-pending.is-active:not(.is-pending):hover:not(:disabled) {
-  background: var(--color-selector-context-bg-active);
-  color: #fff;
-}
-
 /* The "Inline styles" chip (InlineStyleChip.tsx) is amber in every state, with amber
    text at rest and on hover and white text once picked. Each rule outranks the blue
    rest, hover and active rules above (same specificity or more, later in the file),

@@ -1,7 +1,7 @@
 // Goal: the insert palette lists installed apps. They rank into All results after the insert kinds and
 // have their own Apps tab; Enter or a click on an app closes the palette and opens the app; an app the
 // role has no grant for is absent, and a role without the Apps panel has no Apps tab; an Apps tab with
-// no app is a section with a title, a note and action rows (connect, copy the prompt, upload, open the panel) that the
+// no app is a section with a title, a note and action rows (connect, build an app, open the panel) that the
 // keys move through and Enter runs; a remembered Apps tab that is not on offer opens All results.
 // A search on the Apps tab also lists marketplace apps under one "Marketplace" heading after the installed
 // ones, for a role with `marketplace:view` only; choosing one opens it, never installs it.
@@ -180,9 +180,8 @@ test('an Apps tab with no app is a section: a tile, a title, a note, and action 
   const apps = {
     list: { kind: 'ready', apps: [] },
     browse: () => ran.push('browse'),
-    upload: () => ran.push('upload'),
     connect: () => ran.push('connect'),
-    copyPrompt: () => ran.push('copyPrompt'),
+    buildApp: () => ran.push('buildApp'),
   };
   const view = await mount({ apps, storedTab: 'apps' });
   const actions = () => [...view.container.querySelectorAll('.insert-apps-action')];
@@ -195,7 +194,7 @@ test('an Apps tab with no app is a section: a tile, a title, a note, and action 
     assert.match(section.querySelector('.insert-apps-empty-note').textContent, /Apps add tools/);
     assert.deepEqual(
       actions().map((row) => row.textContent),
-      ['Load App From GitHub', '“Build an app” prompt', 'Upload app file', 'Open Apps panel'],
+      ['Load App From GitHub', 'Build an app', 'Open Apps panel'],
       'connecting first, the panel last',
     );
     assert.ok(
@@ -209,21 +208,18 @@ test('an Apps tab with no app is a section: a tile, a title, a note, and action 
     await view.key('ArrowDown');
     assert.equal(highlighted(), 1);
     await view.key('Enter');
-    assert.deepEqual(ran, ['connect', 'copyPrompt']);
+    assert.deepEqual(ran, ['connect', 'buildApp']);
     await view.key('ArrowDown');
+    await view.key('ArrowDown');
+    assert.equal(highlighted(), 2, 'the last row is the end of the list');
     await view.key('Enter');
-    assert.deepEqual(ran, ['connect', 'copyPrompt', 'upload']);
-    await view.key('ArrowDown');
-    await view.key('ArrowDown');
-    assert.equal(highlighted(), 3, 'the last row is the end of the list');
-    await view.key('Enter');
-    assert.deepEqual(ran, ['connect', 'copyPrompt', 'upload', 'browse']);
+    assert.deepEqual(ran, ['connect', 'buildApp', 'browse']);
     await view.key('ArrowUp');
-    assert.equal(highlighted(), 2);
+    assert.equal(highlighted(), 1);
     await view.click(actions()[0]);
-    assert.deepEqual(ran, ['connect', 'copyPrompt', 'upload', 'browse', 'connect'], 'a click runs its row');
+    assert.deepEqual(ran, ['connect', 'buildApp', 'browse', 'connect'], 'a click runs its row');
     await view.query('anything');
-    assert.equal(actions().length, 4, 'a search cannot hide the way to install one');
+    assert.equal(actions().length, 3, 'a search cannot hide the way to install one');
   } finally {
     await view.unmount();
   }
@@ -245,7 +241,7 @@ test('without install actions from the host the rows open the Apps panel, and a 
   try {
     assert.deepEqual(
       [...client.container.querySelectorAll('.insert-apps-action')].map((row) => row.textContent),
-      ['“Build an app” prompt', 'Open Apps panel'],
+      ['Build an app', 'Open Apps panel'],
       'installing is an admin’s; anyone may build one',
     );
   } finally {
@@ -304,8 +300,8 @@ test('the role filter and row text', () => {
   assert.throws(() => palette.paletteAppByline({ ...apps[0], author: { ...octocat, login: '' } }), /an author has a login/);
   const browse = () => {};
   const keys = (role) => palette.paletteAppsActions({ list: { kind: 'ready', apps: [] }, browse }, role).map((action) => action.key);
-  assert.deepEqual(keys(palette.ADMIN_VIEW), ['connect', 'copyPrompt', 'upload', 'browse']);
-  assert.deepEqual(keys(clientRole(['panel:apps'])), ['copyPrompt', 'browse']);
+  assert.deepEqual(keys(palette.ADMIN_VIEW), ['connect', 'buildApp', 'browse']);
+  assert.deepEqual(keys(clientRole(['panel:apps'])), ['buildApp', 'browse']);
   assert.throws(() => keys(clientRole([])), /only a role with the Apps panel/);
 });
 

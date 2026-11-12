@@ -6,6 +6,13 @@
 // field or two — `{ value: "us", label: "United States" }` — which is a row
 // with several things in it and a popup to edit them in.
 //
+// An item's field can itself hold a list or an object (a List property's item
+// fields nest, itemFields.ts): `{ title: "A", children: [{ title: "B" }] }`.
+// Such a value stays one field, its text the nested literal as written, and the
+// editor draws it with the very rows and fields it draws an item with. It
+// nests as deep as a List property's fields do (LIMITS.listFieldDepthMax), and
+// a literal that holds anything else, or nests deeper, is code.
+//
 // That only works while every value is one a field can SHOW. `[...defaults,
 // other]`, `[getOptions()]`, a name standing for a list somewhere else, an
 // object with another object inside it: those are programs, and a row that
@@ -18,6 +25,9 @@
 // So this reads an array literal and answers with its items, or with undefined,
 // which is the field's cue to stay in the code editor. A `quote` of undefined marks a
 // value written without quotes: a number, a yes/no, or a field's code.
+
+import { assert } from '../../../shared/core/assert';
+import { LIMITS } from '../../../shared/core/limits';
 
 export interface ScalarItem {
   readonly text: string;
@@ -44,10 +54,14 @@ type ItemDraft = { text: string; quote: string | undefined } | { fields: ItemFie
 
 const NUMBER_TEXT = /^[-+]?(\d+\.?\d*|\.\d+)$/;
 
+// A List property's item fields nest LIMITS.listFieldDepthMax levels: the top list's items are the first, so
+// a literal inside them nests at most one level fewer.
+const NESTING_DEPTH_MAX = LIMITS.listFieldDepthMax - 1;
+
 // `{ value: "a", label: "A" }` — an object whose every value is a word, a number
 // or an expression. That is a thing with several fields, which a row can name
 // and a popup can edit; an object with another object inside it is not.
-function objectFrom(source: string): { fields: ItemField[] } | undefined {
+function objectFrom(source: string, nesting: number): { fields: ItemField[] } | undefined {
   const body = source.trim().slice(1, -1);
   const parts = splitTop(body);
   if (!parts) {
@@ -79,10 +93,17 @@ function objectFrom(source: string): { fields: ItemField[] } | undefined {
       fields.push({ key, keyQuote, text: raw, quote: undefined });
       continue;
     }
-    const value = itemFrom(raw) ?? codeFrom(raw);
-    // A field holds a word, a number or code. An object inside an object is a
-    // shape with no depth of fields to show it in, and the popup would have
-    // nowhere to put it.
+    // A list or an object inside an item is a field of its own that is read, and
+    // checked, as the literal it is; one this cannot read keeps the whole list code.
+    if (raw.startsWith('[') || raw.startsWith('{')) {
+      if (nestedItems(raw, nesting + 1) === undefined) {
+        return undefined;
+      }
+      fields.push({ key, keyQuote, text: raw, quote: undefined });
+      continue;
+    }
+    const value = itemFrom(raw, nesting) ?? codeFrom(raw);
+    // A field holds a word, a number or code.
     if (!value || 'fields' in value) {
       return undefined;
     }
@@ -92,7 +113,8 @@ function objectFrom(source: string): { fields: ItemField[] } | undefined {
 }
 
 // A field's value as code, written back exactly as it reads. An object or an
-// array is structure rather than a value, so it stays the list's reason to be code.
+// array here is one this could not read (a nested literal is read before this
+// is asked), so it stays the list's reason to be code.
 function codeFrom(raw: string): ItemDraft | undefined {
   if (raw === '' || raw.startsWith('{') || raw.startsWith('[')) {
     return undefined;
@@ -100,10 +122,18 @@ function codeFrom(raw: string): ItemDraft | undefined {
   return { text: raw, quote: undefined };
 }
 
-/** Whether a field holds code, where a word, a number or a yes/no is a literal. */
+/**
+ * Whether a field holds code, where a word, a number or a yes/no is a literal.
+ * A nested list or object is a literal too, unless something inside it is
+ * bound to data.
+ */
 export function fieldHoldsCode(field: Pick<ItemField, 'text' | 'quote'>): boolean {
   if (field.quote !== undefined) {
     return false;
+  }
+  const nested = nestedItems(field.text);
+  if (nested !== undefined) {
+    return itemsHoldCode(nested);
   }
   return field.text !== 'true' && field.text !== 'false' && !NUMBER_TEXT.test(field.text);
 }
@@ -111,6 +141,26 @@ export function fieldHoldsCode(field: Pick<ItemField, 'text' | 'quote'>): boolea
 /** Whether any item is bound to data, so the list can only be written as the code it is. */
 export function itemsHoldCode(items: readonly Item[]): boolean {
   return items.some((item) => (item.fields ?? []).some(fieldHoldsCode));
+}
+
+/**
+ * The items a nested value holds: an array literal's items, or the one object
+ * of an object literal, as `[item]`. Undefined for anything else, and for a
+ * literal nested deeper than a List property's fields go.
+ */
+export function nestedItems(source: string, nesting = 1): Item[] | undefined {
+  const text = source.trim();
+  if (nesting > NESTING_DEPTH_MAX) {
+    return undefined;
+  }
+  if (text.startsWith('[')) {
+    return arrayItems(text, nesting);
+  }
+  if (text.startsWith('{') && text.endsWith('}')) {
+    const object = objectFrom(text, nesting);
+    return object === undefined ? undefined : [object];
+  }
+  return undefined;
 }
 
 /** The first colon that separates a key from its value, at the top level. */
@@ -138,13 +188,13 @@ function topColon(part: string): number {
 }
 
 /** A quoted string, a number, an object of those, or nothing this can show. */
-function itemFrom(source: string): ItemDraft | undefined {
+function itemFrom(source: string, nesting: number): ItemDraft | undefined {
   const text = source.trim();
   if (!text) {
     return undefined;
   }
   if (text.charAt(0) === '{' && text.charAt(text.length - 1) === '}') {
-    return objectFrom(text);
+    return objectFrom(text, nesting);
   }
   const quote = text.charAt(0);
   if (quote === '"' || quote === "'" || quote === '`') {
@@ -219,7 +269,8 @@ function splitTop(body: string): string[] | undefined {
  * empty array is an empty list, which is not the same as undefined: one is a list
  * with nothing in it, the other is not a list.
  */
-export function arrayItems(source: unknown): Item[] | undefined {
+export function arrayItems(source: unknown, nesting = 0): Item[] | undefined {
+  assert(nesting <= NESTING_DEPTH_MAX, 'arrayItems: a list nests within its bound');
   const text = String(source ?? '').trim();
   if (!text.startsWith('[') || !text.endsWith(']')) {
     return undefined;
@@ -239,7 +290,7 @@ export function arrayItems(source: unknown): Item[] | undefined {
       }
       return undefined;
     }
-    const item = itemFrom(part);
+    const item = itemFrom(part, nesting);
     if (!item) {
       return undefined;
     }
@@ -346,7 +397,7 @@ export function objectFields(source: unknown): ObjectRow[] | undefined {
       out.push({ key, keyQuote, kind: 'boolean', text: raw, quote: undefined });
       continue;
     }
-    const value = itemFrom(raw);
+    const value = itemFrom(raw, 0);
     // An object inside an object has no second level of fields to live in.
     if (!value || 'fields' in value) {
       return undefined;
@@ -414,14 +465,22 @@ export function blankLike(items: readonly Item[] | undefined): Item {
   if (!shape || !shape.fields) {
     return { text: '', quote };
   }
-  return {
-    fields: shape.fields.map((field) => ({
-      key: field.key,
-      keyQuote: field.keyQuote,
-      text: '',
-      quote: field.quote ?? quote,
-    })),
-  };
+  return { fields: shape.fields.map((field) => blankLikeField(field, quote, 1)) };
+}
+
+// A field with nothing in it, like `field`: a nested list is empty and a nested object has blank fields of its own.
+function blankLikeField(field: ItemField, quote: string, depth: number): ItemField {
+  assert(depth <= LIMITS.listFieldDepthMax, 'blankLikeField: a field nests within its bound');
+  const nested = field.quote === undefined ? nestedItems(field.text) : undefined;
+  const object = nested?.[0]?.fields;
+  if (nested !== undefined && field.text.trim().startsWith('[')) {
+    return { key: field.key, keyQuote: field.keyQuote, text: '[]', quote: undefined };
+  }
+  if (object !== undefined) {
+    const inner = object.map((own) => blankLikeField(own, quote, depth + 1));
+    return { key: field.key, keyQuote: field.keyQuote, text: arrayText([{ fields: inner }]).slice(1, -1), quote: undefined };
+  }
+  return { key: field.key, keyQuote: field.keyQuote, text: '', quote: field.quote ?? quote };
 }
 
 /**

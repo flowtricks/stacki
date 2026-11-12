@@ -36,7 +36,7 @@ export interface AppDirectoryEntry {
 let revealPanel: (() => void) | undefined;
 
 /** What another surface (the command palette) asks the Apps panel to start. */
-export type AppsPanelRequest = 'connect' | 'upload' | 'marketplace';
+export type AppsPanelRequest = 'connect' | 'marketplace';
 
 let pendingRequest: { readonly kind: AppsPanelRequest; readonly serial: number } | undefined;
 let requestSerial = 0;
@@ -54,11 +54,6 @@ function request(kind: AppsPanelRequest): void {
 /** Opens the Apps panel's "Load App From GitHub" popup, revealing the panel. */
 export function requestAppConnect(): void {
   request('connect');
-}
-
-/** Starts "Upload app file" in the Apps panel, revealing the panel. */
-export function requestAppUpload(): void {
-  request('upload');
 }
 
 /** Opens the Apps panel's Marketplace tab, revealing the panel (marketplace/marketplaceRequests.ts names the app). */

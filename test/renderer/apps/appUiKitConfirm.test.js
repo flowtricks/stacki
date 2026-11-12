@@ -67,16 +67,39 @@ const check = (what, condition, detail) => {
      const path = require('path');
      app.on('window-all-closed', () => {});
      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-     // After the opening or closing motion.
-     const SETTLE_MS = 400;
+     // The most any one wait may take. A wait ends on the event it names; this only bounds a hang.
+     const BOUND_MS = 5000;
+     // Polls a condition inside the page, within BOUND_MS. It returns whether the condition held, so
+     // the checks that follow report the real state instead of a timeout.
+     const PAGE_WAITS = \`
+       const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+       const frames = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+       const until = async (condition) => {
+         for (let waited = 0; waited < \${BOUND_MS}; waited += 10) {
+           if (condition()) { return true; }
+           await pause(10);
+         }
+         return condition();
+       };
+       // Every opening or closing motion finished, and the frame after it painted.
+       const calm = async () => {
+         await frames();
+         await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
+         await frames();
+       };
+     \`;
      // Opens a question from the opener and records what shows.
      const open = (call) => \`(async () => { try {
+       \${PAGE_WAITS}
        const opener = document.getElementById('opener');
        opener.focus();
        window.answer = 'pending';
        const asked = \${call};
        asked.then((value) => { window.answer = value; }, (error) => { window.answer = 'rejected: ' + String(error); });
-       await new Promise((resolve) => setTimeout(resolve, \${SETTLE_MS}));
+       // Shown, with focus moved into it (a question the page hides never gets there), then at rest.
+       await until(() => document.querySelector('.stacki-kit-confirm') !== null);
+       await until(() => { const shown = document.querySelector('.stacki-kit-confirm'); return shown !== null && shown.contains(document.activeElement); });
+       await calm();
        const surface = document.querySelector('.stacki-kit-confirm');
        const buttons = surface ? [...surface.querySelectorAll('.stacki-kit-confirm-actions button')] : [];
        const confirm = buttons[1];
@@ -108,7 +131,10 @@ const check = (what, condition, detail) => {
        };
      } catch (error) { return { failed: String(error && error.stack || error) }; } })()\`;
      const after = \`(async () => {
-       await new Promise((resolve) => setTimeout(resolve, \${SETTLE_MS}));
+       \${PAGE_WAITS}
+       // Answered and gone: the exit motion keeps the surface mounted until it ends.
+       await until(() => document.querySelector('.stacki-kit-confirm') === null && window.answer !== 'pending');
+       await calm();
        const focused = document.activeElement;
        return {
          answer: window.answer,
@@ -120,10 +146,12 @@ const check = (what, condition, detail) => {
      })()\`;
      app.whenReady().then(async () => {
        try {
-         const win = new BrowserWindow({ show: false, width: 400, height: 500 });
+         const win = new BrowserWindow({ show: false, width: 400, height: 500, webPreferences: { backgroundThrottling: false } });
          await win.loadFile(path.join(__dirname, 'app.html'));
-         await wait(SETTLE_MS);
          const js = (code) => win.webContents.executeJavaScript(code);
+         for (let waited = 0; waited < BOUND_MS && (await js("typeof window.stackiConfirm")) !== 'function'; waited += 10) {
+           await wait(10);
+         }
          // Return, as the keyboard sends it: a button acts on the character event, not the key down.
          const pressReturn = () => {
            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Return' });

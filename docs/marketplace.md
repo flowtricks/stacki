@@ -72,8 +72,8 @@ A download is also refused unless the zip's manifest has the entry's `id` and th
 2. In Stacki, choose **Submit to marketplace** in the app's **⋯** menu in the Apps panel
    ("Publishing to the marketplace" in [the Apps guide](apps.md)). It checks that the repository is public, tagged
    `stacki-app`, released and MIT licensed, and that the [secret scan](apps.md#secret-scanning) is
-   clean, and offers **Make public** and **Add MIT license** where it can. An app uploaded from a
-   file, or added to the project folder, is shared to GitHub first. Or use the web form at stacki.build/marketplace/submit.
+   clean, and offers **Make public** and **Add MIT license** where it can. An app added to the project
+   folder, or installed from a file earlier, is shared to GitHub first, unless it is already listed (see [Apps already shared](apps.md#apps-already-shared)). Or use the web form at stacki.build/marketplace/submit.
 3. Before Submit, Stacki asks the Worker's check, `GET /api/marketplace/check?repository=owner/repo`,
    which answers `{ ok: true, app: { id, name, version, iconPresent } }` ("Ready to submit: Heat map
    v1.2.0") or `{ ok: false, code, message }`, shown as is.
@@ -88,8 +88,13 @@ A download is also refused unless the zip's manifest has the entry's `id` and th
    (`terms`, `invalid`, `repository`, `license`, `github-token`, `too-large`, `content-type`,
    `rate-limited`, `busy`, `queue-full`) and Stacki shows the message as is; `unconfigured` (503), a
    404 or no answer reads as the marketplace not taking submissions yet, with **Open the web form**.
-   Nothing is listed until the owner approves it. To submit a later version, submit again after
-   releasing it.
+   A first listing waits until the owner approves it. Only a first listing needs a submission: after
+   that, nothing is submitted for a new version. The marketplace follows the repository's GitHub
+   releases itself and lists a new one within about 30 minutes, if it passes the same checks an
+   approval runs. Submitting the repository again still lists a new release at once, with the reply
+   `201 { ok, status: "listed", appId, version, tag }`; a release that fails a check is refused with
+   `{ ok: false, code, message }` (a version already listed is a 400), never queued. A different
+   repository claiming a listed id waits for the owner, who will refuse it.
 
 A development build reads other addresses for the check and the submissions from
 `STACKI_MARKETPLACE_CHECK_URL` and `STACKI_MARKETPLACE_SUBMISSIONS_URL`, under the same rules as the
@@ -113,15 +118,22 @@ Submissions are reviewed on **https://stacki.build/marketplace/admin**, which on
 sign in to.
 
 1. Read the submission: the notes, including the hosts it names, and the repository's source at the
-   release tag. Try the release in a test project (Apps panel, **Upload app file**).
+   release tag. Try the release in a test project (Apps panel, **+** menu, **Load App From GitHub**).
 2. Approve it, optionally with categories, an author, a replacement description, a release tag, or
    the asset's file name when the release has several zips. The Worker reads the release from
    GitHub, downloads the asset, checks the bundle against Stacki's limits, refuses it if the manifest
    names no icon, computes the SHA-256, and only then writes the app or version to D1.
 3. The index is cached for **60 seconds**; every approval (and every withdrawal) clears that cache,
    so the change is in the next read.
-4. A later version of a listed app is approved the same way, from its submission or from the app on
-   the admin page. Its `id` must match the listed app, and its version and tag must be new.
+4. A later version of a listed app needs no submission and no review. The marketplace follows the
+   repository's releases automatically: within about 30 minutes of a new GitHub release (the latest
+   release, or for an app in a repository holding several, its newest `<app>-v<version>` release),
+   it lists the version if the release passes the same checks as an approval (bundle limits, secret
+   scan, MIT licence, same repository and asset pattern, a higher version and a new tag, a matching
+   `id`). Drafts and prereleases are ignored. A release that fails a check is not listed, the owner
+   sees why on the admin page, and it is looked at again only when a newer release appears or a day
+   later. Only a first listing, or a different repository, waits for the owner. The admin page
+   still lists the versions, to withdraw them; a withdrawn version is not listed again.
 
 To withdraw a version, withdraw it on the admin page. **Withdrawing the newest version switches the
 listing back to the previous one**, icon included; an app with no approved version left drops out of

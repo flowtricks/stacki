@@ -18,7 +18,6 @@ import { appsFailureMessage, stackiVersionProblem, type AppSummary } from '../..
 import {
   latestApprovedVersion,
   MARKETPLACE_DISCLAIMER,
-  MARKETPLACE_LICENSE,
   MARKETPLACE_LIMITS,
   MARKETPLACE_SUBMIT_URL,
   type MarketplaceApp,
@@ -29,9 +28,10 @@ import { rankInsertItems } from '../../../lib/insertRank';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
 import { SegmentedTabs } from '../../../ui/SegmentedTabs';
 import { SearchField } from '../../../ui/SearchField';
-import { AppsIcon, ExternalIcon, RefreshIcon } from '../../../ui/Icons';
+import { AppsIcon, ExternalIcon, MoreIcon, RefreshIcon } from '../../../ui/Icons';
 import { appTileColor, appTileInitial } from '../AppTile';
 import { MarketplaceIcon, MarketplaceInstallIcon } from './MarketplaceIcons';
+import { MarketplaceDetailsPopup } from './MarketplaceDetailsPopup';
 import { useMarketplaceFocus } from './marketplaceRequests';
 import './marketplace.css';
 import { AppNetworkNote } from '../AppConnections';
@@ -422,6 +422,8 @@ function MarketplaceRow(props: {
   const { app, focused, onFocusShown } = props;
   const latest = latestApprovedVersion(app);
   const row = useRef<HTMLLIElement>(null);
+  // The description and the facts behind a row open in a popup from its ⋯, so a list of apps reads as names.
+  const [detailsOpen, setDetailsOpen] = useState(false);
   // The app the palette asked for is scrolled into view once, then the request is spent.
   useEffect(() => {
     if (focused) {
@@ -435,24 +437,42 @@ function MarketplaceRow(props: {
       <span className="apps-row-text">
         <span className="apps-row-name">
           <span className="apps-row-title">{app.name}</span>
-          {app.license === MARKETPLACE_LICENSE && <span className="apps-badge muted">{MARKETPLACE_LICENSE}</span>}
-          {latest.stackiVersionMin !== undefined && (
-            <span className="apps-badge muted" title={`Needs Stacki ${latest.stackiVersionMin} or later`}>
-              Stacki {latest.stackiVersionMin}+
-            </span>
-          )}
         </span>
+        {/* One quiet line under the name: who, and which version. The licence and the Stacki minimum are in the details. */}
         <span className="apps-market-byline">
           <span className="apps-row-avatar">{props.avatar}</span>
-          <span>by {app.author}</span>
+          <span className="apps-market-author">by {app.author}</span>
+          {/* An installed app says so here, in the version's place; the version is in its details. */}
+          {props.installed ? <span className="apps-badge muted">Installed</span> : <span className="apps-market-version">v{latest.version}</span>}
         </span>
-        <span className="apps-market-description">{app.description}</span>
         {app.network !== undefined && <AppNetworkNote network={app.network} />}
       </span>
       <span className="apps-market-side">
-        <MarketplaceAction {...props} />
-        <span className="apps-row-version">v{latest.version}</span>
+        <span className="apps-market-actions">
+          <button
+            type="button"
+            className="apps-icon-button"
+            title="App details"
+            aria-label={`${app.name} details`}
+            aria-haspopup="dialog"
+            onClick={() => setDetailsOpen(true)}
+          >
+            <MoreIcon size={14} />
+          </button>
+          <MarketplaceAction {...props} />
+        </span>
       </span>
+      {detailsOpen && (
+        <MarketplaceDetailsPopup
+          app={app}
+          latest={latest}
+          icon={<MarketplaceAppIcon app={app} />}
+          avatar={props.avatar}
+          installed={props.installed}
+          action={<MarketplaceAction {...props} />}
+          onClose={() => setDetailsOpen(false)}
+        />
+      )}
     </li>
   );
 }
@@ -466,7 +486,7 @@ function MarketplaceAction(props: {
   readonly onInstall: (app: MarketplaceApp) => void;
 }) {
   if (props.installed) {
-    return <span className="apps-badge muted">Installed</span>;
+    return undefined;
   }
   if (!props.mayInstall) {
     return undefined;

@@ -238,7 +238,10 @@ export function usePropFieldModel(props: PropFieldProps) {
   const isExpr = value?.type === 'expr' || (type === 'code' && value?.type !== 'string');
   // An Image prop (its default imports a file, `image = placeholder`) is
   // media whatever it is called; otherwise its name says so.
-  const isMediaAttr = isMediaName(name) || field.defaultAsset !== undefined;
+  // A `@format` that names a kind decides it; the name only speaks when no format does.
+  const format = readPropDocumentation(field.doc).format;
+  const isMediaAttr =
+    format === undefined ? isMediaName(name) || field.defaultAsset !== undefined : MEDIA_FORMATS.has(format) || field.defaultAsset !== undefined;
   // Required and its note are an instance's concern: a defaults recipe or a
   // CMS entry states its own obligations (remoteCms.css marks those).
   const required = policy === 'instance' && isRequiredField(props.field, branchDefault);
@@ -309,6 +312,9 @@ function spreadsProps(siblings: PropValues | undefined): boolean {
 export function fieldDeprecation(field: FieldDefinition): string | undefined {
   return field.deprecated ?? deprecationOf(field.doc);
 }
+
+// The `@format` words of a field that holds a file from the project: an image, a video, any other file.
+const MEDIA_FORMATS: ReadonlySet<string> = new Set(['image', 'video', 'file']);
 
 // A literal colour: hex, a colour function, or a CSS variable (a token).
 const COLOR_HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;

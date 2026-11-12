@@ -696,7 +696,6 @@ export function chipClassName(entry: ClassifiedSelector, state: ChipState): stri
     state.active && 'is-active',
     entry.selector.pending && 'is-pending',
     entry.selector.inComponentMarkup === true && 'is-component',
-    entry.selector.provenancePending === true && 'is-provenance-pending',
     entry.selector.fromInstance === true && 'is-instance',
     entry.global && 'is-global',
     entry.inherited && 'is-inherited',

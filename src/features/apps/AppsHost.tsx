@@ -297,17 +297,25 @@ function useUpdateChecks(projectPath: string, role: RoleView, notify: (message: 
         }
         noteUpdateOutcomes(answer.value);
         const available = answer.value.filter((outcome) => outcome.kind === 'available');
+        const held = answer.value.filter((outcome) => outcome.kind === 'needs-approval');
         const updated = answer.value.filter((outcome) => outcome.kind === 'updated');
         // An auto-updated app restarts closed, so its next open runs the new version.
         for (const outcome of updated) {
           stopApp(outcome.id);
         }
-        if (available.length + updated.length > 0) {
+        if (available.length + held.length + updated.length > 0) {
           bumpAppsRefresh();
         }
         if (updated.length > 0) {
           notifyRef.current(
             updated.length === 1 ? 'An app updated itself (auto-update is on).' : `${updated.length} apps updated themselves (auto-update is on).`,
+            'info',
+          );
+        }
+        // Auto-update is on for these, but the new version asks for more than the installed one did: only a person's OK installs it.
+        if (adminRef.current && held.length > 0) {
+          notifyRef.current(
+            held.length === 1 ? 'An app update needs your OK in the Apps panel.' : `${held.length} app updates need your OK in the Apps panel.`,
             'info',
           );
         }

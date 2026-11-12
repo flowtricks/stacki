@@ -1,0 +1,338 @@
+/* The composer (ChatComposer.tsx, ComposerInput.tsx, ComposerStatusLine.tsx). Surfaces are separated by background fills, never borders. */
+.ai-compose {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ai-commands {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 4px;
+  background: var(--bg-panel);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  z-index: 5;
+}
+.ai-commands button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 4px 8px;
+  background: transparent;
+  text-align: left;
+}
+.ai-commands button.on {
+  background: var(--bg-active);
+}
+.ai-command-name {
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11.5px;
+}
+.ai-command-description {
+  font-size: 11px;
+  color: var(--text-faint);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The box: one slim row. The "+" and the right-hand buttons sit on the bottom edge so they stay put as the text grows. */
+.ai-composer {
+  background: var(--bg-input);
+  border-radius: 12px;
+  padding: 5px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ai-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-composer.is-blocked .ai-editor .cm-placeholder {
+  color: var(--text-dim);
+}
+.ai-composer.is-blocked .ai-send {
+  background: var(--bg-active);
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+.ai-composer.is-dragging {
+  background: var(--accent-soft);
+}
+/* The input (ComposerInput.tsx, a CodeMirror editor): one line when empty, growing with the text up to a cap. */
+.ai-composer .ai-editor {
+  flex: 1;
+  min-width: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.ai-composer .ai-editor .cm-editor {
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+}
+.ai-composer .ai-editor .cm-editor.cm-focused {
+  outline: none;
+}
+.ai-composer .ai-editor .cm-content {
+  min-height: 26px;
+  padding: 4px 2px;
+  font-family: inherit;
+  line-height: 18px;
+  caret-color: var(--text);
+}
+.ai-composer .ai-editor .cm-line {
+  padding: 0;
+}
+.ai-composer .ai-editor .cm-placeholder {
+  /* One line: a placeholder that wraps would double the slim box in the docked panel's width. */
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  vertical-align: top;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--text-faint);
+}
+.ai-plus {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  color: var(--text-dim);
+}
+.ai-plus.is-open {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.ai-composer-end {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+  height: 26px;
+}
+.ai-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ai-attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-active);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 11px;
+  max-width: 180px;
+}
+.ai-attachment img {
+  width: 18px;
+  height: 18px;
+  object-fit: cover;
+  border-radius: 2px;
+}
+.ai-attachment span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-tool-button.is-listening {
+  color: var(--red);
+}
+.ai-send {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: #fff;
+}
+.ai-send-arrow {
+  transform: rotate(180deg);
+}
+.ai-stop-square {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.ai-compose-problem {
+  font-size: 11px;
+  color: var(--red);
+}
+.ai-compose-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* OpenAI's mark is monochrome: drawn in the full text colour, as OpenAI shows its white mark on dark. */
+.ai-logo-codex {
+  color: var(--text);
+}
+
+/* Queued messages, above the box (QueuedPrompts.tsx). */
+.ai-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.ai-queued {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 3px 4px 3px 10px;
+  border-radius: 10px;
+  background: var(--bg-input);
+  font-size: 11.5px;
+}
+.ai-queued-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+.ai-queued-send {
+  flex: none;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ai-queued-remove {
+  flex: none;
+  padding: 4px;
+  color: var(--text-faint);
+}
+.ai-queue-paused {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0 4px 0 10px;
+  font-size: 11px;
+  color: var(--amber);
+}
+
+/* The status line under the box (ComposerStatusLine.tsx): quiet text chips and the context ring. */
+.ai-status-line {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 2px;
+}
+.ai-status-spacer {
+  flex: 1;
+}
+.ai-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  min-width: 0;
+  flex: 0 1 auto;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.ai-chip:hover:not(:disabled),
+.ai-chip.is-open {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.ai-chip:disabled {
+  opacity: 0.55;
+}
+.ai-chip.is-danger {
+  color: #ff9b9b;
+}
+.ai-chip-logo {
+  display: inline-flex;
+  flex: none;
+}
+.ai-chip-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-chip-quiet {
+  flex: none;
+  color: var(--text-faint);
+}
+.ai-ring {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+}
+
+/* The context panel the ring opens (ContextRing.tsx), drawn like a menu. */
+.ai-ring-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: min(260px, calc(100vw - 16px));
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
+  color: var(--text);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  font-size: 12px;
+}
+.ai-ring-sentence {
+  font-variant-numeric: tabular-nums;
+}
+.ai-ring-sentence[data-tone='amber'] {
+  color: #ffb340;
+}
+.ai-ring-sentence[data-tone='red'] {
+  color: var(--red);
+}
+.ai-ring-note {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.ai-ring-compact {
+  align-self: flex-start;
+  padding: 4px 11px;
+  border-radius: 7px;
+  background: var(--bg-active);
+  color: var(--text);
+}
+.ai-ring-compact:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+.ai-ring-compact:disabled {
+  opacity: 0.4;
+}

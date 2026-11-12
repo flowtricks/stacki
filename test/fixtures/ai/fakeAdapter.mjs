@@ -3,6 +3,24 @@
 // for a prompt, announces an edit, asks permission, writes the file through the
 // client, streams text and ends the turn. "crash" in a prompt exits mid-turn;
 // "sign in" answers AUTH_REQUIRED.
+//
+// Scenarios, chosen by what a prompt says (so a test needs no side channel):
+//   usage         a usage_update with a 1,000,000-token window
+//   background    a Bash call with run_in_background that finishes AFTER the turn
+//   stream        a command whose output arrives as terminal deltas and again as result text
+//   capabilities  echoes the client capabilities it was given as the agent's message
+//   notice        a notice update, twice
+//   hold          keeps the turn open until a steering message or a cancel arrives
+//   unauthorized  an internal error carrying an HTTP 401, as Claude reports an expired login
+//   /compact      compaction_update in_progress then completed ("/compact fail": failed)
+// Other methods: `_session/steering` (accepted while a turn is held, `promptRequired` when idle,
+// an error when the text says "refuse"), `session/fork` (answers `fork-of-<source>` with the
+// source's modes), `session/set_mode`.
+//
+// Environment switches: FAKE_PLAIN=1 advertises no steering and no fork; FAKE_COMPACTION=tool
+// reports /compact as a tool call titled "Compact conversation" (toolName "compact") instead of
+// compaction_update, and FAKE_COMPACTION=silent reports nothing at all; FAKE_LEGACY_MODES=1 offers modes as session modes only (no `mode` option);
+// FAKE_BYPASS=1 starts every new session in the "bypassPermissions" mode.
 import fs from 'node:fs';
 import readline from 'node:readline';
 
@@ -16,11 +34,42 @@ const request = (method, params) =>
     send({ id, method, params });
   });
 const update = (sessionId, body) => send({ method: 'session/update', params: { sessionId, update: body } });
+const plain = process.env.FAKE_PLAIN === '1';
+const legacyModes = process.env.FAKE_LEGACY_MODES === '1';
+// Claude's own mode ids, so Stacki's asking mode (`default`) and its unrestricted one are the real ones.
+const startMode = process.env.FAKE_BYPASS === '1' ? 'bypassPermissions' : 'auto';
+const MODES = [
+  { id: 'default', name: 'Manual', description: 'Always ask before making changes' },
+  { id: 'auto', name: 'Auto' },
+  { id: 'bypassPermissions', name: 'Bypass permissions' },
+];
 const options = (mode) => [
-  { id: 'mode', name: 'Mode', category: 'mode', type: 'select', currentValue: mode, options: [{ value: 'ask', name: 'Ask' }, { value: 'auto', name: 'Auto' }] },
+  ...(legacyModes
+    ? []
+    : [
+        {
+          id: 'mode',
+          name: 'Mode',
+          category: 'mode',
+          type: 'select',
+          currentValue: mode,
+          options: MODES.map((entry) => ({ value: entry.id, name: entry.name })),
+        },
+      ]),
   { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'small', options: [{ value: 'small', name: 'Small' }, { value: 'large', name: 'Large' }] },
 ];
+const modesOf = (mode) => (legacyModes ? { modes: { currentModeId: mode, availableModes: MODES } } : {});
+let clientCapabilities;
 let cancelled = false;
+// The prompt a "hold" turn left open: answered when a steering message arrives or the turn is cancelled.
+let held;
+
+const finishHeld = (stopReason) => {
+  if (held !== undefined) {
+    send({ id: held.id, result: { stopReason } });
+    held = undefined;
+  }
+};
 
 readline.createInterface({ input: process.stdin }).on('line', async (line) => {
   const message = JSON.parse(line);
@@ -31,13 +80,39 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
   }
   const { id, method, params } = message;
   if (method === 'initialize') {
-    send({ id, result: { protocolVersion: 1, agentInfo: { name: 'fake', version: '1' }, agentCapabilities: { loadSession: false, promptCapabilities: { image: true } } } });
+    clientCapabilities = params.clientCapabilities;
+    send({
+      id,
+      result: {
+        protocolVersion: 1,
+        agentInfo: { name: 'fake', version: '1' },
+        agentCapabilities: { loadSession: false, promptCapabilities: { image: true, embeddedContext: true }, ...(plain ? {} : { sessionCapabilities: { fork: {} } }) },
+        ...(plain ? {} : { _meta: { steering: { supported: true } } }),
+      },
+    });
   } else if (method === 'session/new') {
-    send({ id, result: { sessionId: `s${next++}`, configOptions: options('auto') } });
+    send({ id, result: { sessionId: `s${next++}`, configOptions: options(startMode), ...modesOf(startMode) } });
+  } else if (method === 'session/fork') {
+    send({ id, result: { sessionId: `fork-of-${params.sessionId}`, configOptions: options('bypassPermissions'), ...modesOf('bypassPermissions') } });
   } else if (method === 'session/set_config_option') {
     send({ id, result: { configOptions: options(params.value) } });
+  } else if (method === 'session/set_mode') {
+    send({ id, result: {} });
+    update(params.sessionId, { sessionUpdate: 'current_mode_update', currentModeId: params.modeId });
+  } else if (method === '_session/steering') {
+    const text = params.prompt.map((block) => block.text ?? '').join('');
+    if (text.includes('refuse')) {
+      send({ id, error: { code: -32602, message: 'Steering refused' } });
+    } else if (held === undefined) {
+      send({ id, result: { outcome: 'promptRequired', reason: 'noRunningTurn' } });
+    } else {
+      send({ id, result: { outcome: 'steered' } });
+      update(held.sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: `Steered: ${text}` } });
+      finishHeld('end_turn');
+    }
   } else if (method === 'session/cancel') {
     cancelled = true;
+    finishHeld('cancelled');
   } else if (method === 'session/prompt') {
     const text = params.prompt.find((block) => block.type === 'text')?.text ?? '';
     const sessionId = params.sessionId;
@@ -45,10 +120,23 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
       send({ id, error: { code: -32000, message: 'Authentication required' } });
       return;
     }
+    if (text.includes('unauthorized')) {
+      send({ id, error: { code: -32603, message: 'Internal error: API Error: 401 {"type":"error","error":{"type":"authentication_error"}} · Please run /login' } });
+      return;
+    }
     if (text.includes('crash')) {
       process.exit(3);
     }
     cancelled = false;
+    if (text.startsWith('/compact')) {
+      runCompaction(id, sessionId, text);
+      return;
+    }
+    if (text.includes('hold')) {
+      update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Working' } });
+      held = { id, sessionId };
+      return;
+    }
     const file = text.match(/edit (\S+)/)?.[1];
     if (file !== undefined) {
       update(sessionId, { sessionUpdate: 'tool_call', toolCallId: 'edit1', title: `Edit ${file}`, kind: 'edit', status: 'pending', locations: [{ path: file }] });
@@ -69,12 +157,64 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
       await request('fs/write_text_file', { sessionId, path: file, content: before.replace('two', '2') });
       update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'edit1', status: 'completed', content: [{ type: 'diff', path: file, oldText: before, newText: before.replace('two', '2') }] });
     }
+    if (text.includes('capabilities')) {
+      update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: JSON.stringify(clientCapabilities) } });
+    }
+    if (text.includes('stream')) {
+      update(sessionId, { sessionUpdate: 'tool_call', toolCallId: 'run1', title: 'Run it', kind: 'execute', status: 'in_progress', rawInput: { command: 'echo ab' } });
+      for (const data of ['a', 'b']) {
+        update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'run1', _meta: { terminal_output_delta: { terminal_id: 't1', data } } });
+      }
+      update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'run1', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'ab' } }] });
+    }
+    if (text.includes('notice')) {
+      for (let count = 0; count < 2; count++) {
+        update(sessionId, { sessionUpdate: 'notice', severity: 'warning', title: 'Heads up', message: 'Something changed' });
+      }
+    }
+    if (text.includes('background')) {
+      update(sessionId, {
+        sessionUpdate: 'tool_call',
+        toolCallId: 'bg1',
+        title: 'Run the server',
+        kind: 'execute',
+        status: 'in_progress',
+        rawInput: { command: 'npm run dev', description: 'Dev server', run_in_background: true },
+        _meta: { claudeCode: { toolName: 'Bash' } },
+      });
+      // The command finishes after the turn has ended.
+      setTimeout(() => update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'bg1', status: 'completed' }), 300);
+    }
     for (const word of ['Done', ' and', ' dusted.']) {
       update(sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: word } });
     }
-    update(sessionId, { sessionUpdate: 'usage_update', used: 10, size: 100 });
+    update(sessionId, { sessionUpdate: 'usage_update', used: text.includes('usage') ? 41250 : 10, size: text.includes('usage') ? 1_000_000 : 100 });
     send({ id, result: { stopReason: cancelled ? 'cancelled' : 'end_turn' } });
   } else {
     send({ id, error: { code: -32601, message: 'Method not found' } });
   }
 });
+
+// `/compact`: the progress the adapter reports, in the shape the client's capabilities ask for.
+function runCompaction(id, sessionId, text) {
+  const failing = text.includes('fail');
+  if (process.env.FAKE_COMPACTION === 'silent') {
+    send({ id, result: { stopReason: 'end_turn' } });
+    return;
+  }
+  if (process.env.FAKE_COMPACTION === 'tool') {
+    const call = { sessionUpdate: 'tool_call', toolCallId: 'compact1', title: 'Compact conversation', kind: 'other', _meta: { claudeCode: { toolName: 'compact' } } };
+    update(sessionId, { ...call, status: 'in_progress' });
+    update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'compact1', status: failing ? 'failed' : 'completed', _meta: { claudeCode: { toolName: 'compact' } } });
+    // A duplicate, as adapters repeat updates.
+    update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'compact1', status: failing ? 'failed' : 'completed', _meta: { claudeCode: { toolName: 'compact' } } });
+  } else {
+    update(sessionId, { sessionUpdate: 'compaction_update', compactionId: 'c1', status: 'in_progress' });
+    update(sessionId, { sessionUpdate: 'compaction_update', compactionId: 'c1', status: 'in_progress' });
+    update(sessionId, failing ? { sessionUpdate: 'compaction_update', compactionId: 'c1', status: 'failed', error: 'Nothing to compact' } : { sessionUpdate: 'compaction_update', compactionId: 'c1', status: 'completed' });
+    update(sessionId, { sessionUpdate: 'compaction_update', compactionId: 'c1', status: 'completed' });
+  }
+  update(sessionId, { sessionUpdate: 'usage_update', used: 5000, size: 1_000_000 });
+  // The turn ends `end_turn` even when compaction failed, as the real adapter's does.
+  send({ id, result: { stopReason: 'end_turn' } });
+}

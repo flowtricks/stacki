@@ -1,5 +1,5 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
-import { drag as centralDrag, eye as centralEye, eyeOff as centralEyeOff, trash as centralTrash } from '../../ui/central/centralGeometry';
+import { drag as centralDrag, eye as centralEye, eyeOff as centralEyeOff, trashCanSimple as centralTrashCanSimple } from '../../ui/central/centralGeometry';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
 const GripIcon = centralIcon(centralDrag);
 const EyeIcon = centralIcon(centralEye);
 const EyeOffIcon = centralIcon(centralEyeOff);
-const TrashIcon = centralIcon(centralTrash);
+const TrashIcon = centralIcon(centralTrashCanSimple);
 
 export type LayerListProps = {
   /** Number of rows (top layer first). */

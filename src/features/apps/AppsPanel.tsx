@@ -1,5 +1,6 @@
 // The Apps panel (rail key E). A heading with a + menu of every way to add an
-// app (Load App From GitHub, Upload app file, the "Build an app" prompt), a
+// app (Load App From GitHub; Build an app, which opens the AI chat with the build
+// prompt waiting unsent in its message box, appPrompt.ts), a
 // search field over the installed apps, and one row per app: its icon tile,
 // name, one-line description, where it lives (Local, GitHub · Private
 // or Public, Marketplace: appPlaces.tsx) and its author's picture when the app
@@ -11,9 +12,12 @@
 // `marketplace:view` also gets an Installed / Marketplace switch: the Marketplace
 // tab lists community apps (marketplace/MarketplaceView.tsx), installable with
 // `marketplace:install`. Share to GitHub (`apps:share`, ShareApp.tsx) applies to
-// an uploaded app; Submit to marketplace (`marketplace:publish`,
-// PublishMarketplace.tsx) opens the publish popup at the app's own repository,
-// or leads an uploaded app through Share first. A row click opens the app's
+// an uploaded app that no repository holds yet; Submit to marketplace
+// (`marketplace:publish`, PublishMarketplace.tsx) opens the publish popup at the
+// app's own repository (or, for a file or folder app already on GitHub, at that one,
+// publishFlow.ts appPublication), or leads an uploaded app through Share first. An app
+// the marketplace already lists has no Submit: the marketplace follows its repository's
+// releases, so a new version is a new GitHub release. A row click opens the app's
 // details popup (AppDetails.tsx): about, App settings, commands, updates and
 // Uninstall. Shared by Desktop and Studio: the host supplies its role, how to
 // draw a GitHub picture and its GitHub sign-in.
@@ -21,15 +25,15 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { can, type RoleView } from '../../../shared/properties/projectRoles';
 import { appAuthorLogin, type AppStaged, type AppSummary, type AppsResult } from '../../../shared/properties/apps';
 import { appAccessFeature } from '../../../shared/properties/appsRpc';
-import { applyAppUpdate, chooseAppFile, commitApp, discardApp, listInstalledAppList, uninstallApp } from '../../ipc/appsBridge';
+import { applyAppUpdate, commitApp, discardApp, listInstalledAppList, uninstallApp } from '../../ipc/appsBridge';
 import { setAppAutoUpdate } from '../../ipc/appMarketplaceBridge';
-import { AppsIcon, CopyIcon, GitHubIcon, PlusIcon, SyncIcon, UploadIcon, WarningTriangleIcon } from '../../ui/Icons';
+import { AppsIcon, GitHubIcon, PlusIcon, SparkleIcon, RefreshIcon, WarningTriangleIcon } from '../../ui/Icons';
 import { SearchField } from '../../ui/SearchField';
 import MoreMenu from '../../ui/MoreMenu';
 import { AppTile } from './AppTile';
 import { AppRowCount, keepAppBadges } from './appBadges';
 import { ConnectGitHub, type ConnectGitHubProps } from './ConnectGitHub';
-import { copyAppBuildPrompt } from './appPrompt';
+import { BUILD_APP_LABEL, requestBuildApp } from './appPrompt';
 import { useAppsPanelRequest } from './appsDirectory';
 import { useAppDetailsRequest } from './appDetailsRequests';
 import { launchApp, stopApp, useAppsRuntime } from './appsRuntime';
@@ -39,7 +43,7 @@ import { useAppsRefresh } from './appsRefresh';
 import { BrokenAppRow } from './AppFolderRows';
 import { listBrokenAppFolders } from '../../ipc/appFoldersBridge';
 import { joinBrokenRows, type AppFolderBroken } from '../../../shared/properties/appFolders';
-import { noteInstalledApps, updateAvailableLabel } from './appUpdates';
+import { appUpdateStatus, noteInstalledApps, updateStatusLabel } from './appUpdates';
 import { AppDetails, appMenuItems, type AppDetailsSectionId, type AppItemActions } from './AppDetails';
 import { AppPlacePills, NO_APP_PLACE_FACTS, useAppPlaces, type AppPlaceFacts } from './appPlaces';
 import { AppsViewTabs, MarketplaceView, type AppsView } from './marketplace/MarketplaceView';
@@ -149,21 +153,7 @@ export default function AppsPanel(props: AppsPanelProps) {
       setView('installed');
       setConnecting(true);
     },
-    upload: () =>
-      void run(
-        () => chooseAppFile(projectPath),
-        (value) => {
-          setView('installed');
-          setStaged(value);
-        },
-      ),
-    copyPrompt: () =>
-      void copyAppBuildPrompt().then((copied) =>
-        props.notify(
-          copied ? 'Copied the “Build an app” prompt. Paste it into your AI agent.' : 'Stacki could not reach the clipboard.',
-          copied ? 'success' : 'error',
-        ),
-      ),
+    buildApp: () => void requestBuildApp(props.notify),
   };
   usePanelRequests(install);
   // An app asking for its own settings (`app.openSettings`): its details open at that section.
@@ -185,6 +175,7 @@ export default function AppsPanel(props: AppsPanelProps) {
     [load, props.role],
   );
   // Where each app lives (Local, GitHub · Private or Public, Marketplace): the rows' pills and the details' About.
+  // The index also tells whether a file or folder app is already listed, so Submit can say "new version" (a role that publishes sees the marketplace).
   const places = useAppPlaces(projectPath, visible, { marketplace: marketplaceShown });
   const panelApp = shownDockedApp(runtime.running, props.role);
   const appActions: AppActions = {
@@ -194,7 +185,7 @@ export default function AppsPanel(props: AppsPanelProps) {
     share: mayShare ? (app) => setSharing({ app }) : undefined,
     submit: mayPublish
       ? (app) => {
-          const route = marketplaceSubmitRoute(app.lock.source, { mayShare });
+          const route = marketplaceSubmitRoute(app.lock.source, { mayShare, publication: places.get(app.manifest.id)?.published });
           switch (route.kind) {
             case 'publish':
               return () => setPublishing({ initial: undefined, preselect: { owner: route.owner, repository: route.repository, account: route.account } });
@@ -280,7 +271,7 @@ export default function AppsPanel(props: AppsPanelProps) {
         <ShareApp
           projectPath={projectPath}
           app={sharing.app}
-          uploaded={load.kind === 'ready' ? uploadedApps(load.apps) : []}
+          uploaded={load.kind === 'ready' ? uploadedApps(load.apps, { published: (app) => places.get(app.manifest.id)?.published !== undefined }) : []}
           renderSignIn={props.renderSignIn}
           renderAvatar={avatar}
           notify={props.notify}
@@ -303,6 +294,7 @@ export default function AppsPanel(props: AppsPanelProps) {
         <PublishMarketplace
           projectPath={projectPath}
           installed={load.kind === 'ready' ? load.apps : []}
+          isPublished={(app) => places.get(app.manifest.id)?.published !== undefined}
           initial={publishing.initial}
           preselect={publishing.preselect}
           renderSignIn={props.renderSignIn}
@@ -390,11 +382,7 @@ function usePanelRequests(install: InstallActions): void {
     if (!actions.admin) {
       return;
     }
-    if (request === 'connect') {
-      actions.connect();
-    } else {
-      actions.upload();
-    }
+    actions.connect();
   }, [request, handled, latest]);
 }
 
@@ -410,8 +398,8 @@ export interface InstallActions {
   /** Shows the Marketplace tab; absent for a role without `marketplace:view`. */
   readonly marketplace?: (() => void) | undefined;
   readonly connect: () => void;
-  readonly upload: () => void;
-  readonly copyPrompt: () => void;
+  /** Opens the AI chat with the build prompt in its message box, unsent (appPrompt.ts). */
+  readonly buildApp: () => void;
 }
 
 interface AppActions extends AppItemActions {
@@ -419,14 +407,13 @@ interface AppActions extends AppItemActions {
   readonly showDetails: (app: AppSummary) => void;
 }
 
-const COPY_PROMPT_LABEL = '“Build an app” prompt';
-
 /**
  * The header's + menu: every way to add an app, in the order every surface
- * uses (Load App From GitHub, Upload app file, the prompt), whether or not apps
- * are installed. A role that cannot install gets the prompt alone, which needs
- * no install rights. Offering an app (Share, Submit) is each app's own ⋯ menu;
- * browsing the marketplace is the panel's Marketplace tab.
+ * uses (Load App From GitHub, Build an app), whether or not apps are installed.
+ * A role that cannot install gets Build an app alone, which needs no install
+ * rights. Submitting an app to the marketplace is not here: it is in the app's
+ * own ⋯ menu (Share to GitHub, Submit to marketplace); browsing the marketplace
+ * is the panel's Marketplace tab.
  */
 export function InstallMenu({ install }: { readonly install: InstallActions }) {
   return (
@@ -436,9 +423,9 @@ export function InstallMenu({ install }: { readonly install: InstallActions }) {
       icon={<PlusIcon size={13} />}
       width={240}
       items={[
+        // The same sparkle as the AI chat's rail button: the item opens that chat. First, because building is the common start.
+        { label: BUILD_APP_LABEL, icon: <SparkleIcon size={14} />, onSelect: install.buildApp },
         install.admin && { label: LOAD_FROM_GITHUB_LABEL, icon: <GitHubIcon size={14} />, disabled: install.busy, onSelect: install.connect },
-        install.admin && { label: 'Upload app file', icon: <UploadIcon size={14} />, disabled: install.busy, onSelect: install.upload },
-        { label: COPY_PROMPT_LABEL, icon: <CopyIcon size={14} />, onSelect: install.copyPrompt },
       ]}
     />
   );
@@ -539,9 +526,7 @@ export function EmptyApps({ install }: { readonly install: InstallActions }) {
         <AppsIcon size={24} />
       </span>
       <p>Add tools to Stacki with apps.</p>
-      <p className="apps-note">
-        {install.admin ? 'Use + to add an app.' : 'Use + for the “Build an app” prompt, and ask an admin to install apps for this project.'}
-      </p>
+      <p className="apps-note">{install.admin ? 'Use + to add an app.' : 'Use + for Build an app, and ask an admin to install apps for this project.'}</p>
     </div>
   );
 }
@@ -571,6 +556,7 @@ export function AppRow({
   const { manifest, lock } = app;
   // No author, no picture: an initial made up from the app's name says nothing (the details' rule too).
   const author = appAuthorLogin(app);
+  const updating = appUpdateStatus(lock);
   return (
     <li className="apps-row">
       <div className="apps-row-main">
@@ -584,8 +570,10 @@ export function AppRow({
             {/* Who made it, as their GitHub picture, leads the description line. */}
             <span className="apps-row-byline">
               {author !== undefined && <span className="apps-row-avatar">{avatar}</span>}
-              {lock.update !== undefined ? (
-                <span className="apps-row-description apps-row-update">{updateAvailableLabel(lock.update)}</span>
+              {updating.kind !== 'none' ? (
+                <span className="apps-row-description apps-row-update" data-needs-ok={updating.kind === 'needs-approval'}>
+                  {updateStatusLabel(updating)}
+                </span>
               ) : (
                 <span className="apps-row-description">{manifest.description || `Version ${manifest.version}`}</span>
               )}
@@ -596,16 +584,16 @@ export function AppRow({
           </span>
         </button>
         <span className="apps-row-actions">
-          {lock.update !== undefined && actions.admin && (
+          {updating.kind !== 'none' && actions.admin && (
             <button
               type="button"
               className="apps-icon-button"
-              title={`Update to ${lock.update.version}`}
+              title={`Update to ${updating.update.version}`}
               aria-label={`Update ${manifest.name}`}
               disabled={actions.busy}
               onClick={() => actions.update(app)}
             >
-              <SyncIcon size={14} />
+              <RefreshIcon size={14} />
             </button>
           )}
           <button type="button" className="apps-open primary" onClick={() => actions.open(app)}>
@@ -614,7 +602,7 @@ export function AppRow({
           <MoreMenu
             title={`${manifest.name} options`}
             width={200}
-            items={appMenuItems(app, actions, { details: () => actions.showDetails(app), finish: (action) => action() })}
+            items={appMenuItems(app, actions, { details: () => actions.showDetails(app), finish: (action) => action(), place: place ?? NO_APP_PLACE_FACTS })}
           />
         </span>
       </div>

@@ -50,8 +50,9 @@ import { createServer, type ViteDevServer } from 'vite';
 // The Instructions panel's payloads validate its listing and files (instructions), and project
 // metadata reads the Audits panel's ignore list (auditIgnores): two more.
 // The AI chat's payloads validate chats, prompts and agent events (aiChat), over the chat model
-// (chatModel), the agent ids (agentIds) and the chat's bounds (aiLimits): four more.
-const MODULES_MAX = 87;
+// (chatModel), the agent ids (agentIds) and the chat's bounds (aiLimits): four more. The @ mention
+// candidates (mentions) add one.
+const MODULES_MAX = 88;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

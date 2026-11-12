@@ -52,7 +52,7 @@ const check = (what, condition, detail) => {
   const React = require('react');
   const { renderToStaticMarkup } = require('react-dom/server');
   const { EmptyApps } = require(bundle);
-  const install = { admin: true, busy: false, upload() {}, connect() {}, copyPrompt() {} };
+  const install = { admin: true, busy: false, connect() {}, buildApp() {} };
   const markup = renderToStaticMarkup(React.createElement(EmptyApps, { install }));
   fs.writeFileSync(
     path.join(pageDirectory, 'app.css'),

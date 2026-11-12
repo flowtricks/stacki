@@ -1,0 +1,38 @@
+/* The progress ring (ProgressRing.tsx). The track is a soft fill, the arc takes the tone. */
+.progress-ring {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-dim, #b8b8b8);
+  --progress-ring-arc: var(--text-dim, #b8b8b8);
+}
+.progress-ring[data-tone='amber'] {
+  --progress-ring-arc: #ffb340;
+}
+.progress-ring[data-tone='red'] {
+  --progress-ring-arc: var(--red, #ff453a);
+}
+.progress-ring:focus-visible {
+  outline: 2px solid var(--accent, #0099ff);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+.progress-ring-track {
+  stroke: rgba(255, 255, 255, 0.16);
+}
+.progress-ring-fill {
+  stroke: var(--progress-ring-arc);
+  transition: stroke-dasharray 240ms ease;
+}
+.progress-ring-tooltip {
+  /* Popup tooltips sit above everything, including a menu opened over the ring. */
+  z-index: 10000;
+  padding: 6px 10px;
+  border: 0;
+  background: var(--color-bg-surface-high, #4a4a4a);
+  font-size: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-ring-fill {
+    transition: none;
+  }
+}

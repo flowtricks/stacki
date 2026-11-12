@@ -1,7 +1,7 @@
 {
   "name": "stacki",
   "productName": "Stacki",
-  "version": "1.1.9",
+  "version": "1.2.0",
   "description": "Stacki — a visual Astro builder with live preview and publishing.",
   "homepage": "https://github.com/flowtricks/stacki",
   "main": "dist/electron/main.js",
@@ -16,8 +16,8 @@
   "scripts": {
     "lint": "eslint --max-warnings 0 .",
     "typecheck": "node scripts/policy/checkLocal.mts --types",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format": "node scripts/policy/formatTree.mts --write",
+    "format:check": "node scripts/policy/formatTree.mts --check",
     "check:policy": "node scripts/policy/scan.mts",
     "check:changed": "node scripts/agent/checkChanged.mts",
     "check:local": "node scripts/policy/checkLocal.mts",

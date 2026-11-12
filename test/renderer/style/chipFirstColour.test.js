@@ -1,5 +1,5 @@
 // A component instance's selector chips are drawn in their settled colours from the
-// first render, never blue first and green a moment later.
+// first render, never grey first and coloured a moment later.
 //
 //   node test/renderer/style/chipFirstColour.test.js
 //
@@ -7,8 +7,8 @@
 // asynchronously into the component source cache. The page's component files are read
 // as the page loads (pageComponentFiles, prefetchComponentSources), so the first render
 // after load already has them and equals the settled one. If a read is genuinely still
-// in flight, the chips are neutral grey (provenancePending), never the blue they would
-// lose.
+// in flight, the chips keep the colour they last settled in, or the one their text decides
+// (chipFirstPaint.test.js), never a neutral grey.
 //
 // Method: the host holds a page with a `<Heading>` instance and its resolved file; the
 // panel's own functions are asked, in the order the panel asks them, for the markup, the
@@ -37,7 +37,6 @@ esbuild.buildSync({
       "export { selectedInstanceMarkup, selectedInstanceMarkupPending } from './src/features/style/model/webflowElement';",
       "export { setHost, getHost } from './src/features/style/model/host';",
       "export { componentSource, componentSourcePending, prefetchComponentSources, rememberComponentSource, forgetComponentSources } from './src/features/style/model/componentSourceCache';",
-      "export { withProvenancePending } from './src/features/style/embed/useEditorContexts';",
       "export { pageComponentFiles } from './src/app/model/componentReference';",
     ].join('\n'),
     resolveDir: ROOT,
@@ -75,13 +74,10 @@ function selectInstance(componentPath, rendered = { classes: ['heading', 'text-s
 const TEXTS = ['.heading', '.text-style-display', '[class*="text-style-"]'];
 const matched = (text) => ({ text, specificity: model.selectorSpecificity(text), state: '', simple: false, key: text, fromComponent: false });
 
-// The chips as the panel builds them on one render: markup if the file is held, the
-// pending flag otherwise (useSelectorChips).
+// The chips as the panel builds them on one render: green for what the markup writes.
 function chipsNow() {
   const markup = model.selectedInstanceMarkup([], model.componentSource);
-  const pending = markup === undefined && model.selectedInstanceMarkupPending([], model.componentSourcePending);
-  const chips = TEXTS.map((text) => (model.writtenInMarkup(text, markup) ? { ...matched(text), inComponentMarkup: true } : matched(text)));
-  return model.withProvenancePending(chips, { pending });
+  return TEXTS.map((text) => (model.writtenInMarkup(text, markup) ? { ...matched(text), inComponentMarkup: true } : matched(text)));
 }
 
 const CHIP = '.embed-editor_selector-chip';
@@ -159,37 +155,21 @@ test('the page’s component files are read with the page, so the first render i
   const settled = chipsNow().map((chip) => model.chipClassName(model.classifySelector(chip), {}));
   assert.deepEqual(first, settled);
   for (const chip of chipsNow()) {
-    assert.equal(chip.provenancePending, undefined, chip.text);
     assert.deepEqual(families(chip, false), ['green', 'green'], chip.text);
     assert.deepEqual(families(chip, true), ['green', 'green'], chip.text);
   }
 });
 
-test('a read still in flight draws the chips neutral, never blue', () => {
+test('a read still in flight never draws a chip neutral', () => {
   model.forgetComponentSources([]);
-  // The canvas has not yet said what the instance renders (Heading's root is an
-  // expression, so its rendered classes alone make it green).
-  selectInstance(HEADING_PATH, { classes: [], known: false });
+  selectInstance('/project/src/components/Unread.astro', { classes: [], known: true });
   assert.equal(model.selectedInstanceMarkupPending([], model.componentSourcePending), true);
   for (const chip of chipsNow()) {
-    assert.deepEqual(families(chip, false), ['grey', 'grey'], chip.text);
+    const className = model.chipClassName(model.classifySelector(chip), {});
+    assert.ok(!className.includes('provenance-pending'), className);
+    assert.ok(className.includes('is-class'), className);
+    assert.deepEqual(families(chip, false), ['blue', 'blue'], chip.text);
   }
-  // The file is still being read, and the classes reported say nothing alone.
-  selectInstance('/project/src/components/Unread.astro', { classes: [], known: true });
-  const chips = chipsNow();
-  assert.equal(model.componentSourcePending('/project/src/components/Unread.astro'), true);
-  for (const chip of chips) {
-    assert.equal(chip.provenancePending, true, chip.text);
-    assert.deepEqual(families(chip, false), ['grey', 'grey'], chip.text);
-    assert.equal(families(chip, true)[0], 'grey', chip.text);
-    assert.ok(model.chipClassName(model.classifySelector(chip), {}).includes('is-provenance-pending'));
-  }
-  // A pending chip (no rule yet) keeps its own look: no provenance to wait on.
-  const typed = model.withProvenancePending([{ ...matched('.new'), pending: true }], { pending: true });
-  assert.equal(typed[0].provenancePending, undefined);
-  // Nothing pending: the chips are returned as they are.
-  const settled = [matched('.heading')];
-  assert.equal(model.withProvenancePending(settled, { pending: false }), settled);
 });
 
 test('nothing waits for an element written in the page, or inside the open component', () => {

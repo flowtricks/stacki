@@ -11,21 +11,28 @@ import {
   parseAiEventsPush,
   parseAiResult,
   parseAiStatusPush,
-  parseChatSummaries,
+  parseChatList,
   parseChatTranscript,
+  parseCompactStarted,
+  parseDiffReply,
+  parseMentionReply,
   parsePromptTurn,
   parseSetupState,
   parseReviewOutcome,
+  parseSteerReply,
   type AgentAvailability,
   type AiAgentsReply,
   type AiEventsPush,
   type AiFailure,
   type AiStatusPush,
   type ChatTranscript,
+  type DiffReply,
   type ReviewOutcome,
   type SetupState,
+  type SteerReply,
 } from '../../../shared/ipc/aiChat';
-import { parseChatSummary, type ChatSummary, type TurnId } from '../../../shared/properties/ai/chatModel';
+import { parseChatSummary, type ChatList, type ChatSummary, type TurnId } from '../../../shared/properties/ai/chatModel';
+import type { MentionCandidate } from '../../../shared/properties/ai/mentions';
 import { cleanError } from '../../lib/cleanError';
 
 export type AiReply<T> = Result<T, AiFailure>;
@@ -37,7 +44,13 @@ async function call<T>(run: () => Promise<unknown>, parse: (input: unknown) => T
   } catch (error: unknown) {
     return err({ code: 'agent-failed', message: cleanError(error) });
   }
-  return { ok: true, value: parse(reply) };
+  try {
+    return { ok: true, value: parse(reply) };
+  } catch (error: unknown) {
+    // A reply that does not parse is a failure the panel can show, not an exception that blanks it: the main
+    // process and the renderer are built together, so this is a version mismatch or a bug worth a message.
+    return err({ code: 'agent-failed', message: `Unexpected reply from Stacki: ${cleanError(error)}` });
+  }
 }
 
 async function callResult<T>(run: () => Promise<unknown>, parse: (input: unknown) => T): Promise<Result<T, AiFailure>> {
@@ -63,9 +76,10 @@ export async function aiTrust(projectPath: string): Promise<AiReply<true>> {
   );
 }
 
-export function aiChats(projectPath: string): Promise<AiReply<readonly ChatSummary[]>> {
+/** The project's chats in display order, with its sections. */
+export function aiChats(projectPath: string): Promise<AiReply<ChatList>> {
   const payload = parseIpcPayload('ai:chats', { projectPath });
-  return call(() => window.avb.aiChats(payload), parseChatSummaries);
+  return call(() => window.avb.aiChats(payload), parseChatList);
 }
 
 export function aiChatCreate(input: IpcPayloads['ai:chatCreate']): Promise<AiReply<ChatSummary>> {
@@ -94,6 +108,44 @@ export function aiChatRead(input: IpcPayloads['ai:chatRead']): Promise<AiReply<C
 export function aiPrompt(input: IpcPayloads['ai:prompt']): Promise<AiReply<{ readonly turn: TurnId }>> {
   const payload = parseIpcPayload('ai:prompt', input);
   return callResult(() => window.avb.aiPrompt(payload), parsePromptTurn);
+}
+
+/** Injects a message into the running turn (`ai:steer`); `unsupported` when the agent cannot. */
+export function aiSteer(input: IpcPayloads['ai:steer']): Promise<AiReply<SteerReply>> {
+  const payload = parseIpcPayload('ai:steer', input);
+  return callResult(() => window.avb.aiSteer(payload), parseSteerReply);
+}
+
+export function aiCompact(input: IpcPayloads['ai:compact']): Promise<AiReply<{ readonly started: true }>> {
+  const payload = parseIpcPayload('ai:compact', input);
+  return callResult(() => window.avb.aiCompact(payload), parseCompactStarted);
+}
+
+export function aiChatFork(input: IpcPayloads['ai:chatFork']): Promise<AiReply<ChatSummary>> {
+  const payload = parseIpcPayload('ai:chatFork', input);
+  return callResult(() => window.avb.aiChatFork(payload), parseChatSummary);
+}
+
+/** Moves a chat; the reply is the whole list, which replaces the renderer's copy. */
+export function aiChatMove(input: IpcPayloads['ai:chatMove']): Promise<AiReply<ChatList>> {
+  const payload = parseIpcPayload('ai:chatMove', input);
+  return callResult(() => window.avb.aiChatMove(payload), parseChatList);
+}
+
+export function aiSections(input: IpcPayloads['ai:sections']): Promise<AiReply<ChatList>> {
+  const payload = parseIpcPayload('ai:sections', input);
+  return callResult(() => window.avb.aiSections(payload), parseChatList);
+}
+
+/** A pending file's text before and after a turn. */
+export function aiDiff(input: IpcPayloads['ai:diff']): Promise<AiReply<DiffReply>> {
+  const payload = parseIpcPayload('ai:diff', input);
+  return callResult(() => window.avb.aiDiff(payload), parseDiffReply);
+}
+
+export function aiMentions(input: IpcPayloads['ai:mentions']): Promise<AiReply<readonly MentionCandidate[]>> {
+  const payload = parseIpcPayload('ai:mentions', input);
+  return callResult(() => window.avb.aiMentions(payload), parseMentionReply);
 }
 
 export function aiCancel(input: IpcPayloads['ai:cancel']): Promise<AiReply<true>> {

@@ -280,8 +280,8 @@ function useEditorRuleWrites(
   const nativeRefresh = useNativeRefresh(editorRefs, nativeState);
   useFocusResync(editorRefs, refreshHook, nativeRefresh);
   const nativeOps = useNativeOps(editorRefs, busyState, scanState, nativeState, nativeRefresh);
-  const writeNewRuleHook = useWriteNewRule(busyState, scanState, pendingWrites, refreshDerivedHook, selectorPick, resolvedHook);
-  const createRule = useCreateRule(scanState, pendingWrites, elementTokens, activeSelectorHook, styleContextsHook, resolvedHook, writeNewRuleHook);
+  const writeNewRuleHook = useWriteNewRule(busyState, scanState, pendingWrites, refreshDerivedHook, selectorPick, resolvedHook, editorRefs);
+  const createRule = useCreateRule(busyState, scanState, pendingWrites, elementTokens, activeSelectorHook, styleContextsHook, resolvedHook, writeNewRuleHook);
   const emptyContext = useEmptyContext(busyState, scanState, pendingWrites, refreshDerivedHook, elementTokens, resolvedHook);
   return { createRule, emptyContext, nativeOps, nativeRefresh, writeNewRuleHook };
 }

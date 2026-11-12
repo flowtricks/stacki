@@ -1,0 +1,107 @@
+/* The chip editor (chipEditor.ts, ChipPicker.tsx). Chips are the purple pill the Style panel
+   draws for a bound value (`.conditional-chip`, props/conditionalValue.css): the same fill
+   and text, hover a brighter purple, no border. The values are lifted into custom
+   properties here so other chips (the sent-message chips) share one definition; the Style
+   panel's own file is not edited. */
+
+:root {
+  --chip-purple-fill: rgba(146, 116, 255, 0.28);
+  --chip-purple-fill-hover: rgba(146, 116, 255, 0.38);
+  --chip-purple-text: #c9bbff;
+  --chip-purple-text-hover: #d7ccff;
+}
+
+.chip-editor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  height: 20px;
+  margin: 0 1px;
+  padding: 0 7px;
+  border: none;
+  border-radius: 5px;
+  background: var(--chip-purple-fill);
+  color: var(--chip-purple-text);
+  font-family: var(--font, system-ui, sans-serif);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 20px;
+  vertical-align: baseline;
+  white-space: nowrap;
+  user-select: none;
+}
+.chip-editor-chip[role='button'] {
+  cursor: pointer;
+}
+.chip-editor-chip:hover {
+  background: var(--chip-purple-fill-hover);
+  color: var(--chip-purple-text-hover);
+}
+.chip-editor-chip-label {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chip-editor-chip > svg {
+  flex: none;
+}
+.chip-picker {
+  z-index: 300;
+  box-sizing: border-box;
+  max-height: min(340px, calc(100vh - 16px));
+  padding: 6px;
+  overflow-y: auto;
+  border: 0;
+  border-radius: 12px;
+  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
+  color: var(--text, #f5f5f5);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+}
+.chip-picker-heading {
+  padding: 8px 10px 4px;
+  color: var(--text-faint, #989898);
+  font-size: 12px;
+  font-weight: 500;
+}
+.chip-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  cursor: default;
+}
+.chip-picker-option.is-active {
+  background: rgba(255, 255, 255, 0.09);
+}
+.chip-picker-icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--text-dim, #b8b8b8);
+}
+.chip-picker-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.chip-picker-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip-picker-description {
+  overflow: hidden;
+  color: var(--text-faint, #989898);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip-picker-empty {
+  padding: 8px 10px;
+  color: var(--text-faint, #989898);
+}

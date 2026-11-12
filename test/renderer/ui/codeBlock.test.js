@@ -383,15 +383,26 @@ test('a chat fence is highlighted by the language it names, and an unnamed one s
   assert.ok(!unnamed.querySelector('.code-token'));
 });
 
-test('a chat proposal highlights both versions of a file, and a new file says so in words', async () => {
+test('a chat proposal highlights both versions of a file when it opens, and a new file says so in words', async () => {
+  // The proposal card lists each file collapsed; opening one draws Desktop's DiffView, whose rows are CodeBlock tokens.
   const proposal = (before) => ({ changes: [{ file: 'src/a.css', before, after: '.a { color: red; }' }] });
   const chat = (before) => ({ id: 'c', status: 'idle', messages: [{ id: 'm', role: 'assistant', content: '', images: [], proposal: proposal(before) }] });
+  const open = async (host) => {
+    assert.ok(!host.querySelector('.ai-diffview'), 'A file stays closed until it is opened');
+    await act(async () => host.querySelector('.ai-file-toggle').click());
+    await waitFor(() => host.querySelector('.ai-diffview .history-diff-code'), 'the proposal diff');
+  };
   const changed = await mount(create(code.ChatMessages, { chat: chat('.a { margin: 0; }'), refresh: () => {} }));
-  assert.ok(changed.querySelector('pre.diff-before .code-token'));
-  assert.ok(changed.querySelector('pre.diff-after .code-token'));
+  await open(changed);
+  const [deleted, added] = [...changed.querySelectorAll('.history-diff-code')];
+  assert.equal(deleted.textContent, '.a { margin: 0; }');
+  assert.equal(added.textContent, '.a { color: red; }');
+  await waitFor(() => deleted.querySelector('.code-token') && added.querySelector('.code-token'), 'both versions highlighted');
   const created = await mount(create(code.ChatMessages, { chat: chat(''), refresh: () => {} }));
-  assert.equal(created.querySelector('pre.diff-before').textContent, '(new file)');
-  assert.ok(!created.querySelector('pre.diff-before .code-token'));
+  assert.equal(created.querySelector('.ai-file-kind-created').textContent, 'New');
+  await open(created);
+  assert.ok(!created.querySelector('.history-diff-line.deleted'), 'A new file has no old side');
+  assert.ok(created.querySelector('.history-diff-line.added .code-token'));
 });
 
 test('a collection source that does not parse opens in the highlighted editor', async () => {

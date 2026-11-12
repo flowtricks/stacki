@@ -57,7 +57,7 @@ function useVariablesView(props: VariablesViewProps) {
 
 export default function VariablesView(props: VariablesViewProps) {
   const state = useVariablesView(props);
-  const [mode, setMode] = useState(() => readWindowMode(WINDOW_MODE_KEY));
+  const [mode, setMode] = useState(() => readWindowMode(WINDOW_MODE_KEY, { fallback: 'docked' }));
   const changeMode = (next: WindowMode): void => {
     setMode(next);
     storeWindowMode(WINDOW_MODE_KEY, next);

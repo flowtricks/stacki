@@ -386,6 +386,12 @@ export function astroAssetGesture(
   }
 }
 
+// A new `<style is:global>` holding `inner`: the one place a block Stacki adds is shaped, for the
+// insert palette (empty) and for the Style panel's first styles (a first rule).
+export function globalStyleNode(id: NodeId, inner: string): EditorNode {
+  return { id, kind: 'raw', name: 'style', props: { [STYLE_GLOBAL_ATTRIBUTE]: { type: 'bare' } }, inner };
+}
+
 // A new node for an insert-palette item that needs no import, or undefined for one
 // that is not inserted as a node here. A style block is always global
 // (styleBlockScope.ts).
@@ -430,7 +436,7 @@ export function insertedNode(item: InsertItem, id: NodeId): EditorNode | undefin
   } else if (item.type === 'doctype') {
     node = { id, kind: 'raw-line', value: '<!doctype html>' };
   } else if (item.type === 'style') {
-    node = { id, kind: 'raw', name: 'style', props: { [STYLE_GLOBAL_ATTRIBUTE]: { type: 'bare' } }, inner: '' };
+    node = globalStyleNode(id, '');
   } else if (item.type === 'script') {
     node = { id, kind: 'raw', name: 'script', props: {}, inner: '' };
   }

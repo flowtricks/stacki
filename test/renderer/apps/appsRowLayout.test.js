@@ -50,8 +50,10 @@ const summary = (id, name, description, update) => ({
     version: '1.0.0',
     sha256: 'a'.repeat(64),
     installedAt: '2026-11-10T00:00:00.000Z',
-    source: { kind: 'file', fileName: `${id}.zip` },
-    ...(update ? { update: { version: '1.1.0', tag: 'v1.1.0', sha256: 'e'.repeat(64) } } : {}),
+    // An update waits only for an app with a source to update from; an uploaded app offers none.
+    source: update ? { kind: 'github', owner: 'octocat', repository: id, asset: `${id}.zip`, tag: 'v1.0.0' } : { kind: 'file', fileName: `${id}.zip` },
+    autoUpdate: false,
+    ...(update ? { update: { version: '1.1.0', tag: 'v1.1.0', sha256: 'e'.repeat(64), additions: [] } } : {}),
   },
 });
 

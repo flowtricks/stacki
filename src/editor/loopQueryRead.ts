@@ -514,7 +514,19 @@ function heldListChain(pipeline: Extract<Pipeline, { readonly kind: 'value' }>, 
   if (pipeline.chain.length > 0) {
     return undefined;
   }
-  return listPropOf(context.input.frontmatter, pipeline.root) === undefined ? undefined : [];
+  if (listPropOf(context.input.frontmatter, pipeline.root) !== undefined) {
+    return [];
+  }
+  // A list a project module exports (`import { NAV } from '../consts'`) is read
+  // where the loop reads it, like a prop: the name is the list, and its steps
+  // are the loop's settings. A package's import, or one called, is not.
+  return importsProjectData(context.input.imports, pipeline.root) ? [] : undefined;
+}
+
+// Whether `name` is imported, by name or default, from a module of the project itself.
+const PROJECT_SPECIFIER = /^(?:\.{1,2}\/|@\/|~\/)/;
+function importsProjectData(imports: readonly LoopImport[], name: string): boolean {
+  return imports.some((entry) => entry.name === name && PROJECT_SPECIFIER.test(entry.path));
 }
 
 // ---------------------------------------------------------------------------

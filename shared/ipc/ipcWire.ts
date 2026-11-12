@@ -299,10 +299,7 @@ export type WireSchemaField = {
   readonly options?: undefined | ReadonlyArray<string>;
   readonly numeric?: undefined | boolean;
   readonly doc?: undefined | string;
-  readonly shape?: ReadonlyArray<{
-    readonly name: string;
-    readonly type: string;
-  }>;
+  readonly shape?: ReadonlyArray<WirePropShapeField>;
   readonly shapeIsList?: boolean;
   readonly unions?: undefined | ReadonlyArray<WirePropUnion>;
   readonly min?: number;
@@ -564,6 +561,16 @@ export type WireFrontmatterLayout = {
   readonly extra: string;
   readonly slots: ReadonlyArray<WireImportSlot>;
 };
+
+/** One member of a prop's object or list-of-objects shape; nested members carry their own (propSchema.ts PropShapeField). */
+export interface WirePropShapeField {
+  readonly name: string;
+  readonly type: string;
+  readonly format?: string;
+  readonly options?: ReadonlyArray<string>;
+  readonly shape?: ReadonlyArray<WirePropShapeField>;
+  readonly shapeIsList?: boolean;
+}
 
 export type WirePropUnion = {
   readonly names: ReadonlyArray<string>;

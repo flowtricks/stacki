@@ -4,7 +4,7 @@
 // it failed. Why not interleave: 150 commands writing at once is unreadable,
 // and the failure is the part anyone needs.
 
-import { spawn, type SpawnOptionsWithStdioTuple, type StdioNull, type StdioPipe } from 'node:child_process';
+import { spawn, spawnSync, type SpawnOptionsWithStdioTuple, type StdioNull, type StdioPipe } from 'node:child_process';
 import { performance } from 'node:perf_hooks';
 
 export interface TestCommand {
@@ -13,6 +13,11 @@ export interface TestCommand {
   readonly command: string;
   /** Arguments for a direct spawn; absent means `command` is a shell line. */
   readonly argumentsList?: readonly string[];
+  /**
+   * `electron`: the command launches real Electron processes with windows. The pool runs at most
+   * `PoolOptions.electronJobs` of these at once, however many jobs it has for other commands.
+   */
+  readonly kind?: 'electron';
 }
 
 export interface TestOutcome {
@@ -27,11 +32,19 @@ export interface PoolOptions {
   readonly jobs: number;
   readonly cwd: string;
   readonly environment: NodeJS.ProcessEnv;
+  /** At most this many `kind: 'electron'` commands at once; absent means no separate cap. */
+  readonly electronJobs?: number;
 }
 
 export const POOL_LIMITS = {
   /** More concurrent test processes than this only adds contention. */
   jobsMax: 16,
+  /**
+   * Electron suites running at once by default. Each opens windows and a GPU process, and on a
+   * loaded machine a window that waits for focus or a frame misses its timing; four sit well
+   * inside what a laptop paints without contention, whatever `jobsMax` allows for the rest.
+   */
+  electronJobsDefault: 4,
   /** Output kept per command; a failure's cause is almost always at the end. */
   outputBytesMax: 4 * 1024 * 1024,
   /**
@@ -44,12 +57,40 @@ export const POOL_LIMITS = {
 
 const running = new Set<ReturnType<typeof spawn>>();
 
+/**
+ * Kill a command's whole process group: the command, the Electron processes a probe started, and
+ * their GPU and renderer helpers. Each command is spawned as its own group leader (see
+ * `runTestCommand`), so one signal reaches every descendant, including orphans whose parent died
+ * first; `child.kill` alone reaches only the direct child and left helpers running. A group with no
+ * members is not an error: the command ending on its own is the normal case.
+ */
+function killProcessGroup(child: ReturnType<typeof spawn>): void {
+  const processId = child.pid;
+  if (processId === undefined) {
+    return;
+  }
+  if (process.platform === 'win32') {
+    // Windows has no process groups; taskkill walks the tree instead.
+    spawnSync('taskkill', ['/pid', String(processId), '/T', '/F'], { stdio: 'ignore' });
+    return;
+  }
+  try {
+    process.kill(-processId, 'SIGKILL');
+  } catch {
+    // ESRCH: no process is left in the group, which is what we want.
+  }
+}
+
 /** Stop every command still running (the runner calls this on SIGINT). */
 export function stopTestPool(): void {
   for (const child of running) {
-    child.kill('SIGTERM');
+    killProcessGroup(child);
   }
 }
+
+// The runner can leave through `process.exit` with commands still running; the exit handler runs
+// synchronously, so the sweep still happens and no Electron process outlives the gate.
+process.once('exit', stopTestPool);
 
 /** Run `commands` with at most `options.jobs` at once. Outcomes come back in
  * input order; `onDone` hears each one as it finishes. */
@@ -59,18 +100,35 @@ export async function runTestPool(
   onDone: (outcome: TestOutcome) => void,
 ): Promise<readonly TestOutcome[]> {
   assertJobs(options.jobs);
+  const electronJobs = options.electronJobs ?? options.jobs;
+  assertElectronJobs(electronJobs);
   const outcomes: (TestOutcome | undefined)[] = commands.map(() => undefined);
-  let next = 0;
+  const pending = commands.map((_, index) => index);
+  let electronRunning = 0;
+  // The first pending command that may start now: an Electron command waits while its cap is
+  // full, and a later command of another kind goes first. A worker that finds none ends; the
+  // workers running Electron commands are still alive and take the rest as they finish.
+  const claim = (): number | undefined => {
+    for (const [position, index] of pending.entries()) {
+      if (commands[index]?.kind === 'electron' && electronRunning >= electronJobs) {
+        continue;
+      }
+      pending.splice(position, 1);
+      return index;
+    }
+    return undefined;
+  };
   const worker = async (): Promise<void> => {
-    // Each pass claims one index; the loop ends when the list is exhausted.
-    while (next < commands.length) {
-      const index = next;
-      next += 1;
+    // Each pass claims one index; the loop ends when nothing can start.
+    for (let index = claim(); index !== undefined; index = claim()) {
       const command = commands[index];
       if (command === undefined) {
         throw new Error(`Test pool index ${index} is outside the command list`);
       }
+      const isElectron = command.kind === 'electron';
+      electronRunning += isElectron ? 1 : 0;
       const outcome = await runTestCommand(command, options);
+      electronRunning -= isElectron ? 1 : 0;
       outcomes[index] = outcome;
       onDone(outcome);
     }
@@ -95,6 +153,8 @@ export function runTestCommand(command: TestCommand, options: PoolOptions): Prom
       cwd: options.cwd,
       env: options.environment,
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Its own process group, so the whole tree can be killed at once (`killProcessGroup`).
+      detached: process.platform !== 'win32',
     };
     // With a shell and no arguments, the command line runs as written.
     const child =
@@ -104,13 +164,19 @@ export function runTestCommand(command: TestCommand, options: PoolOptions): Prom
     running.add(child);
     const timer = setTimeout(() => {
       output.push(Buffer.from(`\nKilled after ${POOL_LIMITS.commandMsMax / 1000} s without exiting.\n`));
-      child.kill('SIGKILL');
+      killProcessGroup(child);
     }, POOL_LIMITS.commandMsMax);
     child.stdout.on('data', (chunk: Buffer) => output.push(chunk));
     child.stderr.on('data', (chunk: Buffer) => output.push(chunk));
     const finish = (ending: { readonly passed: boolean; readonly note: string }): void => {
       clearTimeout(timer);
       running.delete(child);
+      // A command that passed or failed has no business leaving processes behind: sweep what it
+      // started (an Electron helper that outlived its probe is the usual straggler). Windows has
+      // no group to sweep, and its tree is already gone when the command exits on its own.
+      if (process.platform !== 'win32') {
+        killProcessGroup(child);
+      }
       if (ending.note !== '') {
         output.push(Buffer.from(`\n${ending.note}\n`));
       }
@@ -136,6 +202,37 @@ export function parseJobs(flag: string | undefined, cpus: number): number {
   }
   assertJobs(jobs);
   return jobs;
+}
+
+/** Parse `--electron-jobs=<n>`; absent means the default, never more than `jobs`. */
+export function parseElectronJobs(flag: string | undefined, jobs: number): number {
+  if (flag === undefined) {
+    return Math.min(POOL_LIMITS.electronJobsDefault, jobs);
+  }
+  const electronJobs = Number(flag);
+  if (!Number.isSafeInteger(electronJobs)) {
+    throw new Error(`--electron-jobs expects a whole number, got ${JSON.stringify(flag)}`);
+  }
+  assertElectronJobs(electronJobs);
+  return electronJobs;
+}
+
+/**
+ * NODE_OPTIONS with the Dock preload added. The path is quoted because NODE_OPTIONS splits on
+ * spaces, and a checkout under a folder with a space in its name must still load the file.
+ */
+export function withDockPreload(existing: string | undefined, preloadPath: string): string {
+  const preload = `--require ${JSON.stringify(preloadPath)}`;
+  return existing === undefined || existing === '' ? preload : `${existing} ${preload}`;
+}
+
+function assertElectronJobs(electronJobs: number): void {
+  if (electronJobs < 1) {
+    throw new Error(`Electron jobs must be at least 1, got ${electronJobs}`);
+  }
+  if (electronJobs > POOL_LIMITS.jobsMax) {
+    throw new Error(`Electron jobs must be at most ${POOL_LIMITS.jobsMax}, got ${electronJobs}`);
+  }
 }
 
 function assertJobs(jobs: number): void {

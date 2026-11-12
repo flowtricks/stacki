@@ -19,7 +19,14 @@ import { readProjectFolderSettings } from '../../ipc/projectFolderSettings';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import type { ImportLike } from '../../editor/dataSource';
 import { entrySampleKey, type TreeNode } from '../../editor/dataSample';
-import { aliasProbeFor, dataFileExports, projectSourceNodes, type DataFileExport, type ImportStyle } from '../../features/props/projectDataSources';
+import {
+  aliasProbeFor,
+  dataFileExports,
+  importedProjectData,
+  projectSourceNodes,
+  type DataFileExport,
+  type ImportStyle,
+} from '../../features/props/projectDataSources';
 
 /** Fired after the Folders tab saves, so an open picker re-reads what it may list. */
 export const PROJECT_SOURCES_CHANGED = 'stacki:project-sources-changed';
@@ -41,6 +48,8 @@ export interface ProjectSourcesHost {
 export interface ProjectSources {
   /** The picker's roots for data file exports, each carrying the import a pick writes. */
   readonly nodes: readonly TreeNode[];
+  /** The data file exports the file already imports, by local name: `{ NAV: 'src/consts.ts' }`. */
+  readonly imported: Readonly<Record<string, string>>;
   /** The folder settings read with them, for leaving collections out (shownPickerCollections). */
   readonly config: ProjectFolders | undefined;
 }
@@ -60,7 +69,8 @@ export function useProjectSources(host: ProjectSourcesHost): ProjectSources {
   const exports = catalog?.exports ?? NO_EXPORTS;
   const config = catalog?.config;
   const nodes = useMemo(() => projectSourceNodes({ exports, config, style, file, frontmatter, imports }), [exports, config, style, file, frontmatter, imports]);
-  return { nodes, config };
+  const imported = useMemo(() => importedProjectData({ exports, file, imports }), [exports, file, imports]);
+  return { nodes, imported, config };
 }
 
 /** The collections the picker lists: every one but those the project left out of it. */

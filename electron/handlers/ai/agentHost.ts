@@ -13,18 +13,31 @@
 // (eventPump.ts), permission requests wait on the person (permissionBroker.ts),
 // and when the prompt answers, the ledger's changes and the turn's end close it.
 //
+// Beyond a plain turn the host steers a running turn (`_session/steering`),
+// compacts a conversation (`/compact`, reported as compaction events), forks a
+// session for a forked chat (`session/fork`), derives background work from tool
+// calls, and keeps the chat record's context usage and unread mark current.
+//
 // Security: nothing runs before the person trusts the project (`ai:trust`,
 // remembered per project in the chat index); every new chat starts in the
 // agent's asking mode; the adapter's environment is the person's shell
 // environment with Stacki's own variables and any host agent session's removed.
 import { spawn, type ChildProcess } from 'node:child_process';
-import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { assert } from '../../../shared/core/assert';
 import { err, ok, type Result } from '../../../shared/core/result';
-import type { AgentAvailability, AiAgentsReply, AiFailure, PermissionAnswer, PromptAttachment, ReviewAction, ReviewOutcome } from '../../../shared/ipc/aiChat';
+import type {
+  AgentAvailability,
+  AiAgentsReply,
+  AiFailure,
+  PermissionAnswer,
+  PromptAttachment,
+  ReviewAction,
+  ReviewOutcome,
+  SteerReply,
+} from '../../../shared/ipc/aiChat';
 import {
   ACP_AUTH_REQUIRED,
   ACP_PROTOCOL_VERSION,
@@ -34,35 +47,75 @@ import {
   parseReadFileRequest,
   parseSessionNotification,
   parseSessionResult,
+  parseSteerResult,
   parseWriteFileRequest,
   type AcpInitialize,
   type AcpSession,
+  type AcpUpdate,
 } from '../../../shared/properties/ai/acpWire';
+import { canCompact, isDangerousMode } from '../../../shared/properties/ai/agentPresentation';
 import { AGENTS, AGENT_IDS, parseAgentId, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import {
   parseChatOption,
   toTurnId,
+  type ChatContext,
   type ChatEvent,
   type ChatId,
   type ChatOption,
+  type CompactionStatus,
   type PermissionRequestId,
+  type SentPart,
   type TurnId,
   type TurnStop,
 } from '../../../shared/properties/ai/chatModel';
+import type { PromptPart } from '../../../shared/properties/ai/mentions';
 import { stopProcessTree } from '../../lib/nodeTools';
 import { AcpConnection, METHOD_NOT_FOUND, type AcpAnswer, type AcpRequestFailure } from './acpConnection';
 import { installAdapter, runNpm, type NpmRunner } from './agentInstaller';
 import { ADAPTERS, FALLBACK_OPTIONS, findCli, installedEntry } from './agentRegistry';
-import { ChangeLedger, parseLedgerTurns, serializeLedger, type LedgerFiles } from './changeLedger';
-import { chatOption, eventsForUpdate, toolPaths } from './chatEvents';
+import { ChangeLedger, parseLedgerTurns, serializeLedger, type LedgerDiff, type LedgerFiles } from './changeLedger';
+import { chatOption, CompactionCalls, eventsForUpdate, toolPaths } from './chatEvents';
 import type { ChatRecord, ChatStore } from './chatStore';
 import { EventPump } from './eventPump';
 import { cancelled, PermissionBroker } from './permissionBroker';
+import { buildPrompt, inside, type BuiltPrompt } from './promptBlocks';
 import type { TreeSnapshots } from './treeSnapshot';
 
 /** The title a chat has until its first prompt names it. */
 export const NEW_CHAT_TITLE = 'New chat';
+
+/**
+ * What Stacki tells every adapter it can do, exactly. Only open ACP capabilities: `session.compaction`
+ * makes Claude report `/compact` as `compaction_update` instead of a tool call, `session.notices` makes
+ * it send warnings as `notice` updates, and `_meta.terminal_output_delta` makes it stream a command's
+ * output. NOT `_meta.jetbrains` (the adapters send background-task data, the recommended effort and
+ * native subagent sessions only to JetBrains AIR clients, and Stacki does not impersonate one), NOT
+ * `session.configOptions.boolean` (toggles stay two-choice selects) and NOT `elicitation`.
+ */
+export const CLIENT_CAPABILITIES = {
+  fs: { readTextFile: true, writeTextFile: true },
+  terminal: false,
+  session: { compaction: {}, notices: {} },
+  _meta: { terminal_output_delta: true },
+} as const;
+
+/**
+ * Tool calls remembered per chat for output de-duplication and background tracking. Beside the code that
+ * enforces it (AGENTS.md section 10); a call past it is forgotten oldest first, which only costs a
+ * repeated line of output, never correctness.
+ */
+const TOOL_CALLS_TRACKED_MAX = 1_024;
+
+/**
+ * Words an adapter uses when the model API refuses the person's credentials. Claude reports an expired
+ * login as an internal error carrying the HTTP 401 and the CLI's "run /login" hint, not as ACP's
+ * authentication-required code, so the turn would otherwise end as a red error instead of the sign-in card.
+ */
+const SIGN_IN_MESSAGE = /API Error: 401\b|authentication_error|Invalid authentication credentials|Please run \/login/i;
+
+/** How the host's own prompt of a turn was made: a person's message, or Stacki asking the agent to compact. */
+type TurnPurpose = 'message' | 'compaction';
 
 export interface AgentHostDeps {
   readonly userData: string;
@@ -73,6 +126,8 @@ export interface AgentHostDeps {
   /** The person's shell environment (lib/shellEnvironment.ts), read at each start. */
   readonly environment: () => Readonly<Record<string, string | undefined>>;
   readonly now: () => number;
+  /** The person's home folder, where user skills live (`~/.claude/skills`); the operating system's by default. */
+  readonly home?: () => string;
   readonly version: string;
   /** Ask before agents work in a new project (Settings); when off, opening the panel allows it. */
   readonly askBeforeTrust?: () => boolean;
@@ -120,7 +175,23 @@ class ChatRuntime {
   /** Session updates are replayed history while a `session/load` runs. */
   replaying = false;
   turn: TurnId | undefined = undefined;
+  purpose: TurnPurpose | undefined = undefined;
   options: readonly ChatOption[] = [];
+  /** How modes are set: as the `mode` config option, or (an agent that offers session modes only) with `session/set_mode`. */
+  modeStyle: 'option' | 'session' = 'option';
+  /** The slash commands the agent advertised last, without the slash. */
+  commands: ReadonlySet<string> = new Set();
+  /** Ids of tool calls that are compactions, so an update naming only the id is never shown as a tool. */
+  readonly compactionCalls = new CompactionCalls();
+  /** Compaction events seen in the running turn, for the compaction turn's closing row. */
+  compactionSignals = 0;
+  private readonly compactionStates = new Map<string, CompactionStatus>();
+  private readonly streamedCalls = new Set<string>();
+  /** Background tool calls and the turn that started each. */
+  private readonly backgroundCalls = new Map<string, TurnId>();
+  private lastNotice: string | undefined = undefined;
+  private pendingContext: ChatContext | undefined = undefined;
+  private idleWaiters: (() => void)[] = [];
 
   constructor(
     readonly chat: ChatId,
@@ -129,18 +200,45 @@ class ChatRuntime {
     readonly ledger: ChangeLedger,
   ) {}
 
-  claim(turn: TurnId): void {
+  claim(turn: TurnId, purpose: TurnPurpose): void {
     assert(this.turn === undefined, 'ChatRuntime.claim: one turn at a time');
     this.turn = turn;
+    this.purpose = purpose;
+    this.lastNotice = undefined;
+    this.compactionSignals = 0;
   }
 
   release(): void {
     this.turn = undefined;
+    this.purpose = undefined;
+    const waiters = this.idleWaiters;
+    this.idleWaiters = [];
+    for (const wake of waiters) {
+      wake();
+    }
+    assert(this.turn === undefined, 'ChatRuntime.release: no turn is claimed');
   }
 
-  bind(sessionId: string): void {
+  /** Resolves when no turn is running, or after `timeoutMs`; a caller checks `turn` after. */
+  untilIdle(timeoutMs: number): Promise<void> {
+    if (this.turn === undefined || this.idleWaiters.length >= AI_LIMITS.pendingRequestsMax) {
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      const wake = (): void => {
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(wake, timeoutMs);
+      timer.unref?.();
+      this.idleWaiters.push(wake);
+    });
+  }
+
+  bind(sessionId: string, modeStyle: 'option' | 'session'): void {
     assert(sessionId.length > 0, 'ChatRuntime.bind: a session has an id');
     this.sessionId = sessionId;
+    this.modeStyle = modeStyle;
   }
 
   startReplay(): void {
@@ -154,6 +252,102 @@ class ChatRuntime {
   setOptions(options: readonly ChatOption[]): void {
     this.options = options.slice(0, AI_LIMITS.configOptionsMax);
   }
+
+  noteCommands(names: readonly string[]): void {
+    this.commands = new Set(names.map((name) => name.replace(/^\//, '')));
+  }
+
+  /**
+   * Whether a compaction event is news. A compaction ends once: a repeated status, and anything after
+   * a terminal status, is a duplicate (adapters repeat updates, and a replay can resend them).
+   */
+  noteCompaction(id: string, status: CompactionStatus): boolean {
+    const known = this.compactionStates.get(id);
+    if (known !== undefined && (known !== 'in_progress' || known === status)) {
+      return false;
+    }
+    if (this.compactionStates.size >= AI_LIMITS.compactionsMax && known === undefined) {
+      const oldest = this.compactionStates.keys().next();
+      if (oldest.done !== true) {
+        this.compactionStates.delete(oldest.value);
+      }
+    }
+    this.compactionStates.set(id, status);
+    this.compactionSignals += 1;
+    assert(this.compactionStates.size <= AI_LIMITS.compactionsMax, 'ChatRuntime.noteCompaction: bounded');
+    return true;
+  }
+
+  /** The compactions that started and have not ended. */
+  openCompactions(): readonly string[] {
+    return [...this.compactionStates].filter(([, status]) => status === 'in_progress').map(([id]) => id);
+  }
+
+  /** A notice the same as the one just before it is dropped (the `notices` capability can repeat a warning a message also carries). */
+  noteNotice(text: string): boolean {
+    if (this.lastNotice === text) {
+      return false;
+    }
+    this.lastNotice = text;
+    return true;
+  }
+
+  noteContext(context: ChatContext): void {
+    this.pendingContext = context;
+  }
+
+  takeContext(): ChatContext | undefined {
+    const context = this.pendingContext;
+    this.pendingContext = undefined;
+    return context;
+  }
+
+  /** The turn that started a background tool call (its input said `run_in_background`); undefined for any other call. */
+  backgroundTurn(call: string): TurnId | undefined {
+    return this.backgroundCalls.get(call);
+  }
+
+  hasBackground(): boolean {
+    return this.backgroundCalls.size > 0;
+  }
+
+  /**
+   * The tool event as it should be stored. Output the call already streamed as terminal deltas is not
+   * sent again in its result text (the adapter repeats it there when the client takes deltas), and a
+   * call started in the background is remembered so its late updates still reach the transcript.
+   */
+  refineTool(update: AcpUpdate, event: Extract<ChatEvent, { readonly kind: 'tool' }>): ChatEvent {
+    const call = update.kind === 'tool-call' || update.kind === 'tool-call-update' ? update.call : undefined;
+    if (event.background === true) {
+      if (!this.backgroundCalls.has(event.call) && this.backgroundCalls.size >= AI_LIMITS.backgroundTasksMax) {
+        const oldest = this.backgroundCalls.keys().next();
+        if (oldest.done !== true) {
+          this.backgroundCalls.delete(oldest.value);
+        }
+      }
+      this.backgroundCalls.set(event.call, event.turn);
+      assert(this.backgroundCalls.size <= AI_LIMITS.backgroundTasksMax, 'ChatRuntime.refineTool: background calls are bounded');
+    }
+    if (call === undefined || event.output === undefined) {
+      return event;
+    }
+    if (call.outputDelta !== undefined) {
+      remember(this.streamedCalls, event.call, TOOL_CALLS_TRACKED_MAX);
+      return { ...event, output: call.outputDelta.slice(-AI_LIMITS.toolOutputCharsMax) };
+    }
+    return this.streamedCalls.has(event.call) ? { ...event, output: undefined } : event;
+  }
+}
+
+function remember(set: Set<string>, value: string, max: number): void {
+  if (!set.has(value) && set.size >= max) {
+    const oldest = set.values().next();
+    if (oldest.done !== true) {
+      set.delete(oldest.value);
+    }
+  }
+  set.add(value);
+  assert(set.size <= max, 'remember: bounded');
 }
 
 interface Crashes {
@@ -261,60 +455,172 @@ export class AgentHost {
   // Turns
   // -------------------------------------------------------------------------
 
-  async prompt(root: string, chat: ChatId, text: string, attachments: readonly PromptAttachment[]): Promise<Result<{ readonly turn: TurnId }, AiFailure>> {
-    if (!this.deps.store.readIndex(root).trusted && this.deps.askBeforeTrust?.() !== true) {
-      this.deps.store.trust(root);
+  /**
+   * Starts a turn. `options.parts` are the mentions and text the person composed; `text` stays the
+   * plain fallback the transcript and the chat's title are made of. A second prompt while a turn runs
+   * is refused (`busy`): holding it for later is the renderer's queue, and `steer` injects into the turn.
+   */
+  async prompt(
+    root: string,
+    chat: ChatId,
+    text: string,
+    attachments: readonly PromptAttachment[],
+    options: PromptOptions = {},
+  ): Promise<Result<{ readonly turn: TurnId }, AiFailure>> {
+    const opened = this.openChat(root, chat);
+    if (!opened.ok) {
+      return opened;
     }
-    const index = this.deps.store.readIndex(root);
-    if (!index.trusted) {
-      return err({ code: 'not-trusted', message: 'Allow agents to work in this project first.' });
-    }
-    const record = index.chats.find((candidate) => candidate.id === chat);
-    if (record === undefined) {
-      return err({ code: 'chat-missing', message: 'This chat no longer exists.' });
-    }
-    if (this.deps.store.read(root, chat).full) {
-      return err({ code: 'read-only', message: 'This chat is full. Start a new chat to continue.' });
-    }
-    const runtime = this.runtimeFor(root, record);
+    const { record, runtime } = opened.value;
     if (runtime.turn !== undefined) {
       return err({ code: 'busy', message: 'The agent is still answering. Stop it or wait.' });
     }
-    if (text.trim() === '' && attachments.length === 0) {
+    if (text.trim() === '' && attachments.length === 0 && (options.parts === undefined || options.parts.length === 0)) {
       return err({ code: 'busy', message: 'Write a message first.' });
     }
     const turn = toTurnId(`t${randomBytes(8).toString('hex')}`);
     // Claimed before any await, so a second prompt in the same moment is refused, not interleaved.
-    runtime.claim(turn);
+    runtime.claim(turn, 'message');
     const started = await this.startTurn(runtime, record);
     if (!started.ok) {
       runtime.release();
       return started;
     }
     const process = started.value;
+    const built = await this.promptOf(process, runtime, { text, attachments, parts: options.parts });
+    if (!built.ok) {
+      runtime.release();
+      return built;
+    }
     await runtime.ledger.begin(turn);
     const now = this.deps.now();
-    this.emit(runtime, [
-      { kind: 'turn-start', turn, at: now },
-      {
-        kind: 'user',
-        turn,
-        text,
-        attachments: attachments.map((attachment) => ({ kind: attachment.kind, name: attachment.kind === 'image' ? attachment.name : attachment.path })),
-        at: now,
-      },
-    ]);
+    this.emit(runtime, [{ kind: 'turn-start', turn, at: now }, userEvent(turn, now, { text, attachments, sent: built.value.sent, mode: undefined })]);
     if (record.title === NEW_CHAT_TITLE) {
       this.retitle(runtime, titleFrom(text, attachments));
     }
-    void this.runTurn(process, runtime, turn, promptBlocks(root, text, attachments));
+    void this.runTurn(process, runtime, turn, built.value.blocks, 'message');
     assert(runtime.turn === turn, 'prompt: the turn is running');
     return ok({ turn });
   }
 
+  /**
+   * Injects a message into the turn that is running (`_session/steering`). With no turn running there is
+   * nothing to steer, so the message starts one (`startedNewTurn`). An agent that does not offer steering
+   * answers `unsupported`; an adapter that refuses answers its own failure. Either way nothing was sent, and
+   * the renderer holds the message in its queue instead.
+   */
+  async steer(
+    root: string,
+    chat: ChatId,
+    text: string,
+    attachments: readonly PromptAttachment[],
+    parts: readonly PromptPart[] | undefined,
+  ): Promise<Result<SteerReply, AiFailure>> {
+    const opened = this.openChat(root, chat);
+    if (!opened.ok) {
+      return opened;
+    }
+    const { runtime } = opened.value;
+    const turn = runtime.turn;
+    if (turn === undefined) {
+      const started = await this.prompt(root, chat, text, attachments, { parts });
+      return started.ok ? ok({ turn: started.value.turn, outcome: 'startedNewTurn' }) : started;
+    }
+    if (runtime.purpose === 'compaction') {
+      return err({ code: 'busy', message: 'The conversation is being compacted. Send your message when it is done.' });
+    }
+    const process = this.processes.get(processKey(runtime.agent, root));
+    const ready = process === undefined ? undefined : await process.ready;
+    if (process === undefined || ready === undefined || !ready.ok || runtime.sessionId === undefined) {
+      return err({ code: 'agent-failed', message: `${AGENTS[runtime.agent].label} is not running.` });
+    }
+    if (!ready.value.steering) {
+      return err({ code: 'unsupported', message: `${AGENTS[runtime.agent].label} cannot take a message while it works.` });
+    }
+    const built = await this.promptOf(process, runtime, { text, attachments, parts });
+    if (!built.ok) {
+      return built;
+    }
+    if (built.value.blocks.length === 0) {
+      return err({ code: 'busy', message: 'Write a message first.' });
+    }
+    // `promptRequired` makes an adapter whose turn just ended say so instead of starting one Stacki cannot follow.
+    const answer = await process.connection.request(
+      '_session/steering',
+      { sessionId: runtime.sessionId, prompt: built.value.blocks, _meta: { steering: { idleBehavior: 'promptRequired' } } },
+      AI_LIMITS.requestMsMax,
+    );
+    if (!answer.ok) {
+      return err(failureOf(answer.error, runtime.agent, process.stderr));
+    }
+    const outcome = parseSteerResult(answer.value);
+    if (!outcome.ok) {
+      return err({ code: 'agent-failed', message: `${AGENTS[runtime.agent].label} answered in a way Stacki does not understand.` });
+    }
+    switch (outcome.value.outcome) {
+      case 'steered': {
+        this.emit(runtime, [userEvent(turn, this.deps.now(), { text, attachments, sent: built.value.sent, mode: 'steer' })]);
+        return ok({ turn, outcome: 'steered' });
+      }
+      case 'promptRequired': {
+        // The turn ended between Stacki's check and the adapter's: it is finishing, then this message is a prompt.
+        await runtime.untilIdle(AI_LIMITS.requestMsMax);
+        if (runtime.turn !== undefined) {
+          return err({ code: 'busy', message: 'The agent is still answering. Stop it or wait.' });
+        }
+        const started = await this.prompt(root, chat, text, attachments, { parts });
+        return started.ok ? ok({ turn: started.value.turn, outcome: 'startedNewTurn' }) : started;
+      }
+      case 'startedNewTurn':
+        // An adapter that ignores the opt-in began a turn on its own; Stacki cannot follow it, so say so.
+        return err({ code: 'agent-failed', message: `${AGENTS[runtime.agent].label} started the message as a separate turn that Stacki cannot show.` });
+      default: {
+        const exhaustive: never = outcome.value.outcome;
+        return exhaustive;
+      }
+    }
+  }
+
+  /**
+   * Compacts the conversation: the agent is sent `/compact` as an ordinary prompt (Claude executes it
+   * itself; the command list does not name it). Progress arrives as compaction events, and the turn
+   * ends like any other. Only for an agent that can (Codex has no compact command), only while idle.
+   */
+  async compact(root: string, chat: ChatId): Promise<Result<{ readonly started: true }, AiFailure>> {
+    const opened = this.openChat(root, chat);
+    if (!opened.ok) {
+      return opened;
+    }
+    const { record, runtime } = opened.value;
+    if (!canCompact(runtime.agent)) {
+      return err({ code: 'unsupported', message: `${AGENTS[runtime.agent].label} cannot compact a conversation from Stacki.` });
+    }
+    if (runtime.turn !== undefined) {
+      return err({ code: 'busy', message: 'The agent is still answering. Compact when it is done.' });
+    }
+    if (record.sessionId === undefined && runtime.sessionId === undefined) {
+      return err({ code: 'invalid', message: 'There is nothing to compact yet.' });
+    }
+    const turn = toTurnId(`t${randomBytes(8).toString('hex')}`);
+    runtime.claim(turn, 'compaction');
+    const started = await this.startTurn(runtime, record);
+    if (!started.ok) {
+      runtime.release();
+      return started;
+    }
+    this.emit(runtime, [{ kind: 'turn-start', turn, at: this.deps.now() }]);
+    void this.runTurn(started.value, runtime, turn, [{ type: 'text', text: '/compact' }], 'compaction');
+    assert(runtime.turn === turn, 'compact: the compaction is running');
+    return ok({ started: true });
+  }
+
   cancel(root: string, chat: ChatId): void {
     const runtime = this.chats.get(chat);
-    if (runtime === undefined || runtime.root !== root || runtime.turn === undefined) {
+    if (runtime === undefined || runtime.root !== root) {
+      return;
+    }
+    // "Stop agent" also reaches a background command that outlives its turn; with neither there is nothing to stop.
+    if (runtime.turn === undefined && !runtime.hasBackground()) {
       return;
     }
     this.permissions.cancel(chat);
@@ -322,6 +628,19 @@ export class AgentHost {
     if (process !== undefined && runtime.sessionId !== undefined) {
       process.connection.notify('session/cancel', { sessionId: runtime.sessionId });
     }
+  }
+
+  /**
+   * One pending file's text before and after a turn, read from the chat's live ledger (the same one Keep
+   * and Undo act on), so it is current even before the reviews file was written. Undefined once the
+   * change is settled or no longer kept.
+   */
+  diff(root: string, chat: ChatId, turn: TurnId, file: string): LedgerDiff | undefined {
+    const record = this.deps.store.find(root, chat);
+    if (record === undefined) {
+      return undefined;
+    }
+    return this.runtimeFor(root, record).ledger.diffOf(turn, file);
   }
 
   answerPermission(root: string, chat: ChatId, request: PermissionRequestId, answer: PermissionAnswer): Result<{ readonly answered: true }, AiFailure> {
@@ -349,18 +668,15 @@ export class AgentHost {
     if (known === undefined || !known.choices.some((choice) => choice.value === value)) {
       return err({ code: 'busy', message: 'The agent does not offer that setting.' });
     }
-    const answer = await started.value.connection.request(
-      'session/set_config_option',
-      { sessionId: runtime.sessionId, configId: option, value },
-      AI_LIMITS.requestMsMax,
-    );
+    const answer = await this.changeSetting(started.value, runtime, option, value);
     if (!answer.ok) {
       return err(failureOf(answer.error, runtime.agent));
     }
-    // Some agents answer with every option; others only announce the change in an update.
-    const reply = parseSessionResult(answer.value, runtime.sessionId);
-    const options = reply.ok && reply.value.options.length > 0 ? reply.value.options.map(chatOption) : withValue(runtime.options, option, value);
-    this.updateOptions(runtime, options);
+    // Some agents answer with every option; others only announce the change in an update. A mode set
+    // through `session/set_mode` answers nothing but success.
+    const reply = runtime.modeStyle === 'session' && option === 'mode' ? undefined : parseSessionResult(answer.value, runtime.sessionId);
+    const options = reply?.ok === true && reply.value.options.length > 0 ? reply.value.options.map(chatOption) : withValue(runtime.options, option, value);
+    this.updateOptions(runtime, runtime.modeStyle === 'session' ? keepLegacyMode(runtime.options, options) : options);
     return ok({ set: true });
   }
 
@@ -409,6 +725,49 @@ export class AgentHost {
   // -------------------------------------------------------------------------
   // Processes and sessions
   // -------------------------------------------------------------------------
+
+  // The checks every message to a chat begins with: allowed here, still exists, not full. Trust is remembered
+  // when Settings does not ask first (opening the panel counts as yes).
+  private openChat(root: string, chat: ChatId): Result<{ readonly record: ChatRecord; readonly runtime: ChatRuntime }, AiFailure> {
+    if (!this.deps.store.readIndex(root).trusted && this.deps.askBeforeTrust?.() !== true) {
+      this.deps.store.trust(root);
+    }
+    const index = this.deps.store.readIndex(root);
+    if (!index.trusted) {
+      return err({ code: 'not-trusted', message: 'Allow agents to work in this project first.' });
+    }
+    const record = index.chats.find((candidate) => candidate.id === chat);
+    if (record === undefined) {
+      return err({ code: 'chat-missing', message: 'This chat no longer exists.' });
+    }
+    if (this.deps.store.read(root, chat).full) {
+      return err({ code: 'read-only', message: 'This chat is full. Start a new chat to continue.' });
+    }
+    return ok({ record, runtime: this.runtimeFor(root, record) });
+  }
+
+  // The blocks of a message for this agent: what it accepts (embedded files) and advertises (slash commands) decide them.
+  private async promptOf(
+    process: AgentProcess,
+    runtime: ChatRuntime,
+    content: { readonly text: string; readonly attachments: readonly PromptAttachment[]; readonly parts: readonly PromptPart[] | undefined },
+  ): Promise<Result<BuiltPrompt, AiFailure>> {
+    const ready = await process.ready;
+    if (!ready.ok) {
+      return ready;
+    }
+    return buildPrompt(
+      {
+        root: runtime.root,
+        home: (this.deps.home ?? os.homedir)(),
+        agent: runtime.agent,
+        embeddedContext: ready.value.embeddedContext,
+        commands: runtime.commands,
+        read: (file) => this.deps.files.read(file),
+      },
+      content,
+    );
+  }
 
   private async startTurn(runtime: ChatRuntime, record: ChatRecord): Promise<Result<AgentProcess, AiFailure>> {
     return this.startTurnlessSession(runtime, record);
@@ -488,7 +847,7 @@ export class AgentHost {
         'initialize',
         {
           protocolVersion: ACP_PROTOCOL_VERSION,
-          clientCapabilities: { fs: { readTextFile: true, writeTextFile: true }, terminal: false },
+          clientCapabilities: CLIENT_CAPABILITIES,
           clientInfo: { name: 'stacki', title: 'Stacki', version: this.deps.version },
         },
         AI_LIMITS.requestMsMax,
@@ -546,6 +905,12 @@ export class AgentHost {
         return loaded;
       }
     }
+    if (stored === undefined && record.forkOf !== undefined) {
+      const forked = await this.forkSession(process, runtime, { record, init, base });
+      if (forked !== undefined) {
+        return forked;
+      }
+    }
     const created = await this.openSession(process, runtime, 'session/new', base, undefined);
     if (!created.ok) {
       return created;
@@ -562,6 +927,44 @@ export class AgentHost {
     await this.applyAskMode(process, runtime);
     await this.applySettings(process, runtime, record.settings);
     return created;
+  }
+
+  /**
+   * A forked chat continues its original's agent session: `session/fork` from the original's session id.
+   * Undefined when it cannot (the agent has no fork, the original never had a session, the fork failed),
+   * after saying so in the transcript, so the caller starts a fresh session instead. A sign-in failure is
+   * returned as the failure it is: a fresh session would only fail the same way.
+   */
+  private async forkSession(
+    process: AgentProcess,
+    runtime: ChatRuntime,
+    context: { readonly record: ChatRecord; readonly init: AcpInitialize; readonly base: Readonly<Record<string, unknown>> },
+  ): Promise<Result<AcpSession, AiFailure> | undefined> {
+    const { record, init, base } = context;
+    const source = record.forkOf === undefined ? undefined : this.deps.store.find(runtime.root, record.forkOf)?.sessionId;
+    const label = AGENTS[runtime.agent].label;
+    if (source === undefined || !init.fork) {
+      this.emit(runtime, [
+        { kind: 'notice', severity: 'warning', text: `${label} cannot carry the earlier conversation into a fork, so this chat starts a new one.` },
+      ]);
+      return undefined;
+    }
+    const forked = await this.openSession(process, runtime, 'session/fork', { ...base, sessionId: source }, undefined);
+    if (!forked.ok) {
+      if (forked.error.code === 'sign-in') {
+        return forked;
+      }
+      this.emit(runtime, [{ kind: 'notice', severity: 'warning', text: `${label} could not fork the earlier conversation, so this chat starts a new one.` }]);
+      return undefined;
+    }
+    // A fork continues the original's mode; one that left the original unrestricted starts asking again.
+    const mode = runtime.options.find((option) => option.category === 'mode' || option.id === 'mode');
+    if (mode !== undefined && isDangerousMode(runtime.agent, mode.currentValue)) {
+      await this.applyAskMode(process, runtime);
+    }
+    await this.applySettings(process, runtime, record.settings);
+    assert(runtime.sessionId === forked.value.sessionId, 'forkSession: the chat is bound to the forked session');
+    return forked;
   }
 
   private async openSession(
@@ -588,10 +991,11 @@ export class AgentHost {
     }
     this.signIn.delete(runtime.agent);
     process.sessions.set(session.value.sessionId, runtime.chat);
-    runtime.bind(session.value.sessionId);
+    const settings = sessionSettings(session.value);
+    runtime.bind(session.value.sessionId, settings.legacyModes ? 'session' : 'option');
     this.deps.store.update(runtime.root, runtime.chat, (current) => ({ ...current, sessionId: session.value.sessionId }));
-    if (session.value.options.length > 0) {
-      this.updateOptions(runtime, session.value.options.map(chatOption));
+    if (settings.options.length > 0) {
+      this.updateOptions(runtime, settings.options);
     }
     assert(process.sessions.get(session.value.sessionId) === runtime.chat, 'openSession: the session is mapped to its chat');
     return ok(session.value);
@@ -604,17 +1008,21 @@ export class AgentHost {
     if (mode === undefined || mode.currentValue === ask || !mode.choices.some((choice) => choice.value === ask)) {
       return;
     }
-    const answer = await process.connection.request(
-      'session/set_config_option',
-      { sessionId: runtime.sessionId, configId: mode.id, value: ask },
-      AI_LIMITS.requestMsMax,
-    );
+    const answer = await this.changeSetting(process, runtime, mode.id, ask);
     if (answer.ok) {
       this.updateOptions(runtime, withValue(runtime.options, mode.id, ask));
     }
   }
 
-  private async runTurn(process: AgentProcess, runtime: ChatRuntime, turn: TurnId, prompt: readonly unknown[]): Promise<void> {
+  // A setting is a config option, except the modes of an agent that offers them as session modes only.
+  private changeSetting(process: AgentProcess, runtime: ChatRuntime, option: string, value: string): Promise<Result<unknown, AcpRequestFailure>> {
+    if (runtime.modeStyle === 'session' && option === 'mode') {
+      return process.connection.request('session/set_mode', { sessionId: runtime.sessionId, modeId: value }, AI_LIMITS.requestMsMax);
+    }
+    return process.connection.request('session/set_config_option', { sessionId: runtime.sessionId, configId: option, value }, AI_LIMITS.requestMsMax);
+  }
+
+  private async runTurn(process: AgentProcess, runtime: ChatRuntime, turn: TurnId, prompt: readonly unknown[], purpose: TurnPurpose): Promise<void> {
     this.holdAwake(process);
     const answer = await process.connection.request('session/prompt', { sessionId: runtime.sessionId, prompt }, AI_LIMITS.turnMsMax);
     let stop: TurnStop = 'error';
@@ -629,20 +1037,54 @@ export class AgentHost {
       }
       const failure = this.noteFailure(failureOf(answer.error, runtime.agent, process.stderr), runtime);
       message = failure.message;
+      // An auth failure ends the turn as its own stop, so the transcript can show one sign-in card instead of an error.
+      stop = failure.code === 'sign-in' ? 'sign-in' : 'error';
     }
     this.permissions.cancel(runtime.chat);
-    const changes = await runtime.ledger.finish(turn);
     const events: ChatEvent[] = [];
-    if (changes.entries.length > 0) {
-      this.deps.store.writeReviews(runtime.root, runtime.chat, serializeLedger(runtime.ledger.stored()));
-      events.push({ kind: 'changes', turn, files: ChangeLedger.changesOf(changes) });
+    // A compaction has an end whatever happened: a row left "in progress" under a finished turn would spin forever.
+    const at = this.deps.now();
+    events.push(...this.closeCompactions(runtime, { turn, stop, purpose, at }));
+    if (purpose === 'message') {
+      const changes = await runtime.ledger.finish(turn);
+      if (changes.entries.length > 0) {
+        this.deps.store.writeReviews(runtime.root, runtime.chat, serializeLedger(runtime.ledger.stored()));
+        events.push({ kind: 'changes', turn, files: ChangeLedger.changesOf(changes) });
+      }
     }
     events.push({ kind: 'turn-end', turn, stop, message, at: this.deps.now() });
+    // The record first: the renderer clears `unread` when it sees the turn end, and must clear what is already set.
+    const context = runtime.takeContext();
+    this.deps.store.update(runtime.root, runtime.chat, (current) => ({
+      ...current,
+      updatedAt: Math.max(current.createdAt, this.deps.now()),
+      unread: current.unread || endsUnread(stop),
+      context: context ?? current.context,
+    }));
     this.emit(runtime, events);
     this.pump.flush();
     runtime.release();
-    this.deps.store.update(runtime.root, runtime.chat, (current) => ({ ...current, updatedAt: Math.max(current.createdAt, this.deps.now()) }));
     this.releaseAwake(process);
+  }
+
+  // The rows that close compactions the turn left open. The compaction turn that saw no signal at all (an
+  // adapter that reports none) still answers the person's click with one row.
+  private closeCompactions(
+    runtime: ChatRuntime,
+    ending: { readonly turn: TurnId; readonly stop: TurnStop; readonly purpose: TurnPurpose; readonly at: number },
+  ): readonly ChatEvent[] {
+    const { turn, stop, purpose, at } = ending;
+    const status: CompactionStatus = stop === 'end_turn' ? 'completed' : stop === 'cancelled' ? 'cancelled' : 'failed';
+    const events: ChatEvent[] = [];
+    for (const id of runtime.openCompactions()) {
+      if (runtime.noteCompaction(id, status)) {
+        events.push({ kind: 'compaction', turn, id, status, at });
+      }
+    }
+    if (purpose === 'compaction' && runtime.compactionSignals === 0) {
+      events.push({ kind: 'compaction', turn, id: `compact-${turn}`, status, at });
+    }
+    return events;
   }
 
   private handleNotification(process: AgentProcess, method: string, params: unknown): void {
@@ -665,8 +1107,12 @@ export class AgentHost {
         runtime.ledger.noteTouch(file);
       }
     }
+    if (update.kind === 'commands') {
+      runtime.noteCommands(update.commands.map((command) => command.name));
+    }
     if (update.kind === 'config') {
-      this.updateOptions(runtime, update.options.map(chatOption));
+      const incoming = update.options.map(chatOption);
+      this.updateOptions(runtime, runtime.modeStyle === 'session' ? keepLegacyMode(runtime.options, incoming) : incoming);
       return;
     }
     if (update.kind === 'mode') {
@@ -683,7 +1129,34 @@ export class AgentHost {
       }
       return;
     }
-    this.emit(runtime, eventsForUpdate(update, runtime.turn));
+    // A background command finishes after its turn did: its update still belongs to the turn that started it.
+    const owner = update.kind === 'tool-call' || update.kind === 'tool-call-update' ? runtime.backgroundTurn(update.call.id) : undefined;
+    const turn = owner ?? runtime.turn;
+    const events = eventsForUpdate(update, turn, { at: this.deps.now(), compactions: runtime.compactionCalls }).flatMap((event) =>
+      this.refine(runtime, update, event),
+    );
+    this.emit(runtime, events);
+    if (update.kind === 'usage' && runtime.turn === undefined) {
+      // Outside a turn (a compaction the CLI ran on its own) nothing will persist it later.
+      this.deps.store.update(runtime.root, runtime.chat, (current) => ({ ...current, context: runtime.takeContext() ?? current.context }));
+    }
+  }
+
+  // The per-chat rules that decide whether an event is stored as it came, changed, or dropped.
+  private refine(runtime: ChatRuntime, update: AcpUpdate, event: ChatEvent): readonly ChatEvent[] {
+    if (event.kind === 'tool') {
+      return [runtime.refineTool(update, event)];
+    }
+    if (event.kind === 'compaction') {
+      return runtime.noteCompaction(event.id, event.status) ? [event] : [];
+    }
+    if (event.kind === 'notice') {
+      return runtime.noteNotice(event.text) ? [event] : [];
+    }
+    if (event.kind === 'usage') {
+      runtime.noteContext({ used: event.used, size: event.size });
+    }
+    return [event];
   }
 
   private async handleRequest(process: AgentProcess, method: string, params: unknown): Promise<AcpAnswer> {
@@ -938,11 +1411,7 @@ export class AgentHost {
       if (option === undefined || option.currentValue === setting.value || !option.choices.some((choice) => choice.value === setting.value)) {
         continue; // A setting the agent no longer offers falls back to its own default.
       }
-      const answer = await process.connection.request(
-        'session/set_config_option',
-        { sessionId: runtime.sessionId, configId: option.id, value: setting.value },
-        AI_LIMITS.requestMsMax,
-      );
+      const answer = await this.changeSetting(process, runtime, option.id, setting.value);
       if (answer.ok) {
         this.updateOptions(runtime, withValue(runtime.options, option.id, setting.value));
       }
@@ -960,8 +1429,8 @@ export class AgentHost {
 
   private noteFailure(failure: AiFailure, runtime: ChatRuntime): AiFailure {
     if (failure.code === 'sign-in') {
+      // The availability below is what the panel draws (one sign-in card). No transcript notice: it only repeated the card, in red.
       this.signIn.add(runtime.agent);
-      this.emit(runtime, [{ kind: 'notice', severity: 'sign-in', text: failure.message }]);
       this.publishStatus(runtime.agent, runtime.root);
     }
     return failure;
@@ -1034,7 +1503,7 @@ function failureOf(failure: AcpRequestFailure, agent: AgentId, stderr?: string):
   const label = AGENTS[agent].label;
   switch (failure.kind) {
     case 'rpc':
-      if (failure.code === ACP_AUTH_REQUIRED) {
+      if (failure.code === ACP_AUTH_REQUIRED || SIGN_IN_MESSAGE.test(failure.message)) {
         return { code: 'sign-in', message: `Sign in to ${label} to continue.` };
       }
       return { code: 'agent-failed', message: failure.message.slice(0, AI_LIMITS.labelCharsMax) };
@@ -1060,6 +1529,64 @@ function withValue(options: readonly ChatOption[], id: string, value: string): r
   return options.map((option) => (option.id === id ? { ...option, currentValue: value } : option));
 }
 
+/** A turn that ended is news to a person who is elsewhere, unless they ended it themselves or are shown the sign-in card. */
+function endsUnread(stop: TurnStop): boolean {
+  return stop !== 'cancelled' && stop !== 'sign-in';
+}
+
+/** What `prompt` takes besides the plain text and the attachments. */
+export interface PromptOptions {
+  /** The mentions and text the person composed; absent: the message is its text. */
+  readonly parts?: readonly PromptPart[] | undefined;
+}
+
+function userEvent(
+  turn: TurnId,
+  at: number,
+  sent: {
+    readonly text: string;
+    readonly attachments: readonly PromptAttachment[];
+    readonly sent: readonly SentPart[] | undefined;
+    readonly mode: 'steer' | undefined;
+  },
+): ChatEvent {
+  return {
+    kind: 'user',
+    turn,
+    text: sent.text,
+    attachments: sent.attachments.map((attachment) => ({ kind: attachment.kind, name: attachment.kind === 'image' ? attachment.name : attachment.path })),
+    at,
+    ...(sent.sent === undefined ? {} : { parts: sent.sent }),
+    ...(sent.mode === undefined ? {} : { mode: sent.mode }),
+  };
+}
+
+// The settings a session reports. An agent that offers modes only as session modes (no `mode` config option)
+// gets a `mode` option made of them, so the composer's mode menu works the same; `legacyModes` says to set it
+// with `session/set_mode`.
+function sessionSettings(session: AcpSession): { readonly options: readonly ChatOption[]; readonly legacyModes: boolean } {
+  const options = session.options.map(chatOption);
+  const offersMode = options.some((option) => option.category === 'mode' || option.id === 'mode');
+  const first = session.modes[0];
+  if (offersMode || first === undefined) {
+    return { options, legacyModes: false };
+  }
+  const mode: ChatOption = {
+    id: 'mode',
+    name: 'Mode',
+    category: 'mode',
+    currentValue: session.currentModeId ?? first.id,
+    choices: session.modes.map((candidate) => ({ value: candidate.id, name: candidate.name, description: candidate.description })),
+  };
+  return { options: [...options, mode], legacyModes: true };
+}
+
+// A config update names every option the agent has, and a session-mode agent's list has no `mode` in it.
+function keepLegacyMode(current: readonly ChatOption[], incoming: readonly ChatOption[]): readonly ChatOption[] {
+  const mode = current.find((option) => option.id === 'mode');
+  return mode === undefined || incoming.some((option) => option.id === 'mode') ? incoming : [...incoming, mode];
+}
+
 function titleFrom(text: string, attachments: readonly PromptAttachment[]): string {
   const first = text.split('\n').find((line) => line.trim() !== '');
   if (first !== undefined) {
@@ -1067,28 +1594,6 @@ function titleFrom(text: string, attachments: readonly PromptAttachment[]): stri
   }
   const attachment = attachments[0];
   return attachment === undefined ? NEW_CHAT_TITLE : attachment.kind === 'image' ? attachment.name : attachment.path;
-}
-
-/** The prompt's content blocks: the text, each image inline, each project file as a link the agent reads itself. */
-export function promptBlocks(root: string, text: string, attachments: readonly PromptAttachment[]): readonly unknown[] {
-  const blocks: unknown[] = text.trim() === '' ? [] : [{ type: 'text', text }];
-  for (const attachment of attachments) {
-    if (attachment.kind === 'image') {
-      blocks.push({ type: 'image', mimeType: attachment.mimeType, data: attachment.data });
-    } else {
-      const file = path.resolve(root, attachment.path);
-      if (inside(root, file) && fs.existsSync(file)) {
-        blocks.push({ type: 'resource_link', name: path.basename(file), uri: pathToFileURL(file).href });
-      }
-    }
-  }
-  assert(blocks.length <= AI_LIMITS.attachmentsMax + 1, 'promptBlocks: bounded by the attachments');
-  return blocks;
-}
-
-function inside(root: string, file: string): boolean {
-  const relative = path.relative(root, file);
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
 function delay(ms: number): Promise<void> {

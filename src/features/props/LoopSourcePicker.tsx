@@ -8,7 +8,10 @@
 // have and loops over it, so the items' fields are the loop item's fields.
 //
 // The tree is the data picker's own (DataPicker.tsx), fed with the project's
-// collections from the catalog and the page's lists from its data tree.
+// collections from the catalog and the page's lists from its data tree. Between
+// the two sits "Project data": the lists the project keeps outside the page, in
+// its data modules (loopProjectData.ts), whether the file imports them yet or
+// not. Picking one that is not imported writes its import with the loop.
 
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
@@ -23,6 +26,8 @@ import { listsOnly } from '../../editor/dataSuggest';
 import { isGroqPath, type FieldList } from '../../editor/loopFieldList';
 import { toRecord } from '../../../shared/core/record';
 import type { LoopSource } from '../../editor/loopQuery';
+import type { ImportNeed } from '../../editor/dataSample';
+import { projectDataNames, projectDataRows } from './loopProjectData';
 import type { LoopCatalog } from './loopCatalog';
 import { componentNameOf } from './dataPickerModel';
 import { RowPopup } from './LoopRows';
@@ -40,6 +45,8 @@ export interface SourcePickerData {
   readonly frontmatter: string;
   /** The open file: a component's lists are headed by its name, and lead the tree. */
   readonly file: string | undefined;
+  /** The data file exports the file already imports, by local name, so they are listed with the project's data. */
+  readonly projectModules?: Readonly<Record<string, string>> | undefined;
 }
 
 /** What a pick in the Source picker means. */
@@ -48,7 +55,8 @@ export type SourcePick =
   | { readonly kind: 'list' }
   | { readonly kind: 'collection'; readonly source: LoopSource }
   | { readonly kind: 'field'; readonly list: FieldList }
-  | { readonly kind: 'value'; readonly data: string };
+  /** A list the page holds; from a project module the file does not import yet, with the import to write. */
+  | { readonly kind: 'value'; readonly data: string; readonly import?: ImportNeed | undefined };
 
 /** A List property the Source menu can make: the component it goes in, and what the form starts from. */
 export interface NewListOffer {
@@ -71,6 +79,8 @@ export function SourcePicker(props: {
   readonly loadSanitySample?: ((type: string) => Promise<unknown>) | undefined;
   /** In a component: "New List property", which makes one and loops over it. */
   readonly newList?: NewListOffer | undefined;
+  /** Whether the loop reads dynamic data (a property, a collection, a project list): the trigger is purple, as every value bound to data is. */
+  readonly bound?: boolean;
   readonly onPick: (pick: SourcePick) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -105,7 +115,7 @@ export function SourcePicker(props: {
       <button
         ref={attach}
         type="button"
-        className="dd-trigger loop-source-trigger"
+        className={`dd-trigger loop-source-trigger${props.bound === true ? ' is-bound' : ''}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={(event) => {
@@ -164,10 +174,10 @@ export function SourcePicker(props: {
                   props.data?.onNeedSample?.(node.query.collection, index);
                 }
               }}
-              onPick={(path) => {
+              onPick={(path, need) => {
                 const pick = followed(pickOf(path), sanity.samples);
                 if (pick !== undefined) {
-                  choose(pick);
+                  choose(need?.kind === 'import' && pick.kind === 'value' ? { ...pick, import: need.import } : pick);
                 }
               }}
             />
@@ -273,8 +283,12 @@ export function sourceTree(
     });
   }
   const inComponent = componentNameOf(data?.file) !== undefined;
-  const own = pageLists(data).map((node) => ({ ...node, section: inComponent ? 'loop-component' : 'loop-page' }));
-  const nodes = inComponent ? [...own, ...collections] : [...collections, ...own];
+  const modules = data?.projectModules ?? {};
+  const taken = data === undefined ? new Set<string>() : projectDataNames(data.tree, modules);
+  const project = data === undefined ? [] : projectDataRows(data.tree, modules);
+  const own = pageLists(data, taken).map((node) => ({ ...node, section: inComponent ? 'loop-component' : 'loop-page' }));
+  // Project data sits between the file's own lists and the collections, whichever leads.
+  const nodes = inComponent ? [...own, ...project, ...collections] : [...collections, ...project, ...own];
   assert(nodes.length <= LIMITS.treeNodesMax, 'The Source tree is bounded');
   return nodes;
 }
@@ -298,12 +312,12 @@ function listMarked(nodes: readonly TreeNode[] | undefined, depth: number): read
 
 // The page's own lists, without collections (above) or the functions a
 // page imports to call (`queryItems(…)`): a function is not a list.
-function pageLists(data: SourcePickerData | undefined): readonly PickerNode[] {
+function pageLists(data: SourcePickerData | undefined, projectData: ReadonlySet<string>): readonly PickerNode[] {
   if (data === undefined) {
     return [];
   }
   return listsOnly(data.tree).filter((node) => {
-    if (node.section === 'collections' || node.query !== undefined) {
+    if (node.section === 'collections' || node.query !== undefined || projectData.has(node.path)) {
       return false;
     }
     return !(node.kind === 'imported' && calledIn(data.frontmatter, node.key));

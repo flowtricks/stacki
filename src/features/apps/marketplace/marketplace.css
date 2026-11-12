@@ -70,8 +70,10 @@
 }
 .apps-market-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 10px;
+  /* The icon sits well clear of the name: 10px read as crowded beside a 32px tile, and installed rows use 18px. */
+  gap: 6px 16px;
   padding: 8px;
   border-radius: 8px;
 }
@@ -95,6 +97,31 @@
   font-size: 10.5px;
   color: var(--text-faint);
 }
+.apps-market-author {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The version follows the author after a dot, and keeps its width so a long login is what truncates. */
+.apps-market-version {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.apps-market-version::before {
+  content: '·';
+  margin-right: 5px;
+}
+/* A row's name gets the line to itself: it wraps rather than cut to "Feed…". */
+.apps-market-row .apps-row-title {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.apps-market-row .apps-row-text {
+  gap: 4px;
+}
 .apps-market-description {
   font-size: 11px;
   line-height: 1.4;
@@ -107,8 +134,11 @@
   align-items: flex-end;
   gap: 4px;
 }
-.apps-market-side .apps-row-version {
-  white-space: nowrap;
+/* The ⋯ sits beside Install, so the app's details are one tap away without a second line of chrome. */
+.apps-market-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .rail-btn {
   position: relative;
@@ -125,6 +155,10 @@
 }
 .apps-row-description.apps-row-update {
   color: var(--accent);
+}
+/* Auto-update is on but the version asks for more: it waits for a person, in the amber the details use for "look at this". */
+.apps-row-description.apps-row-update[data-needs-ok='true'] {
+  color: var(--amber);
 }
 /* The tab's first line: who answers for a community app. Short and muted, never a banner. */
 .apps-market-disclaimer {

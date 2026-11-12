@@ -525,6 +525,9 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
           ? app.addClassToNode(selectedId, name, placement, app.pathFor(selectedId))
           : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
       }
+      onAddStyleBlock={(request) =>
+        selectedId ? app.addStyleBlock(selectedId, request, app.pathFor(selectedId)) : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
+      }
       onRemoveClass={(name) =>
         selectedId ? app.removeClassFromNode(selectedId, name, app.pathFor(selectedId)) : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
       }

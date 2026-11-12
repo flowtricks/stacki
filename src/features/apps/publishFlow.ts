@@ -12,6 +12,8 @@ import {
   type AppVisibilityOutcome,
   type MarketplaceCheck,
 } from '../../../shared/properties/appPublish';
+import { marketplaceApp, type MarketplaceIndex } from '../../../shared/properties/appMarketplace';
+import { appListedInMarketplace } from '../../../shared/properties/appPlace';
 import { LOAD_FROM_GITHUB_LABEL, chooserRows, type ChooserRow } from './repositoryChooser';
 
 /** A row of the publish chooser: the Load chooser's rows, plus apps uploaded to this project. */
@@ -20,9 +22,74 @@ export type PublishRow = ChooserRow | { readonly kind: 'uploaded'; readonly key:
 /** The rows Enter and the arrows move over. */
 export type PublishPickable = Extract<PublishRow, { readonly kind: 'use' | 'repository' | 'uploaded' }>;
 
-/** Apps installed from a file or added to the project folder: the ones a share puts on GitHub. */
-export function uploadedApps(apps: readonly AppSummary[]): readonly AppSummary[] {
-  const uploaded = apps.filter((app) => appShareable(app.lock.source));
+/**
+ * The GitHub repository an installed app is already published to, and whether the marketplace lists
+ * it. An app installed from a file or the project folder is "already shared" when the marketplace
+ * lists its id (the listing names the repository, so a copy of a published app is not shared a
+ * second time) or its manifest names the repository it updates from. A GitHub install is published
+ * to its own repository; a marketplace install is the listing's and has nothing to submit.
+ */
+export interface AppPublication {
+  readonly owner: string;
+  readonly repository: string;
+  /** The signed-in account that reads the repository, when the source names one. */
+  readonly account: string | undefined;
+  /** Whether the marketplace lists the app: it then follows the repository's releases by itself, so there is nothing to submit. */
+  readonly listed: boolean;
+}
+
+/**
+ * Where `app` is already published, or undefined when it lives only in this project (or is a
+ * marketplace install). `index` is the marketplace index the Marketplace tab reads, undefined where
+ * it could not be read or the role may not see it.
+ *
+ * Security: a listed id yields the listing's own repository, never the manifest's, so a manifest cannot
+ * steer a submission to another repository under a listed id. An unlisted app's manifest is checked
+ * by the publish checklist and the marketplace like any repository a person picks.
+ */
+export function appPublication(app: Pick<AppSummary, 'manifest' | 'lock'>, index: MarketplaceIndex | undefined): AppPublication | undefined {
+  const { source } = app.lock;
+  const { id } = app.manifest;
+  assert(id.length > 0, 'An installed app has an id');
+  switch (source.kind) {
+    case 'github': {
+      assert(source.owner.length > 0, 'A GitHub source names its owner');
+      const listed = index !== undefined && appListedInMarketplace(index, { id, source });
+      return { owner: source.owner, repository: source.repository, account: source.account, listed };
+    }
+    case 'file':
+    case 'local': {
+      const listing = index === undefined ? undefined : marketplaceApp(index, id);
+      if (listing !== undefined) {
+        assert(listing.source.owner.length > 0, 'A listing names its repository owner');
+        return { owner: listing.source.owner, repository: listing.source.repository, account: undefined, listed: true };
+      }
+      const named = app.manifest.source;
+      if (named !== undefined) {
+        return { owner: named.owner, repository: named.repository, account: named.account, listed: false };
+      }
+      return undefined;
+    }
+    case 'marketplace':
+      return undefined;
+    default: {
+      const exhaustive: never = source;
+      return exhaustive;
+    }
+  }
+}
+
+/** Whether Share to GitHub applies to this app now: it has no repository yet (appShareable) and is not already published. */
+export function appNeedsShare(source: AppSummary['lock']['source'], publication: AppPublication | undefined): boolean {
+  return appShareable(source) && publication === undefined;
+}
+
+/**
+ * Apps installed from a file or added to the project folder that no repository holds yet: the ones a
+ * share puts on GitHub. An app already published is reached through its repository instead.
+ */
+export function uploadedApps(apps: readonly AppSummary[], options: { readonly published: (app: AppSummary) => boolean }): readonly AppSummary[] {
+  const uploaded = apps.filter((app) => appShareable(app.lock.source) && !options.published(app));
   assert(uploaded.length <= apps.length, 'Uploaded apps are installed apps');
   return uploaded;
 }
@@ -49,29 +116,47 @@ export function appShareable(source: AppSummary['lock']['source']): boolean {
 }
 
 /**
- * Where an app's "Submit to marketplace" leads: a GitHub app straight to its
- * own repository's checklist; an uploaded one into Share first (the marketplace
+ * Where an app's "Submit to marketplace" leads: a GitHub app that is not listed yet straight to its
+ * own repository's checklist, as does an uploaded or folder app that is already
+ * published (appPublication); any other uploaded one into Share first (the marketplace
  * takes GitHub repositories only), when the role may share; otherwise nowhere,
- * and the item is hidden rather than offered as a dead end. A marketplace app is
- * already listed.
+ * and the item is hidden rather than offered as a dead end. An app the marketplace
+ * lists has nothing to submit, whatever its source: the marketplace follows the
+ * repository's releases (a new version is a new GitHub release, never a submission),
+ * so the item is hidden for it too.
  */
 export type MarketplaceSubmitRoute =
   | { readonly kind: 'publish'; readonly owner: string; readonly repository: string; readonly account: string | undefined }
   | { readonly kind: 'share-first' }
   | { readonly kind: 'none' };
 
-export function marketplaceSubmitRoute(source: AppSummary['lock']['source'], options: { readonly mayShare: boolean }): MarketplaceSubmitRoute {
+export function marketplaceSubmitRoute(
+  source: AppSummary['lock']['source'],
+  options: { readonly mayShare: boolean; readonly publication: AppPublication | undefined },
+): MarketplaceSubmitRoute {
   switch (source.kind) {
     case 'github':
       assert(source.owner.length > 0, 'A GitHub source names its owner');
       assert(source.repository.length > 0, 'A GitHub source names its repository');
+      if (options.publication?.listed === true) {
+        return { kind: 'none' };
+      }
       return { kind: 'publish', owner: source.owner, repository: source.repository, account: source.account };
     case 'file':
-    case 'local':
+    case 'local': {
+      const { publication } = options;
+      if (publication?.listed === true) {
+        return { kind: 'none' };
+      }
+      if (publication !== undefined) {
+        // Already on GitHub: the checklist opens on that repository, with no share in between.
+        return { kind: 'publish', owner: publication.owner, repository: publication.repository, account: publication.account };
+      }
       if (appShareable(source) && options.mayShare) {
         return { kind: 'share-first' };
       }
       return { kind: 'none' };
+    }
     case 'marketplace':
       return { kind: 'none' };
     default: {

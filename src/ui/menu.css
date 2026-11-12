@@ -1,0 +1,201 @@
+/* The shared Menu (Menu.tsx). A dark rounded popover. Rows are separated by space and
+   by fills, never by borders: hover and keyboard focus lighten the row, and the only
+   rule between groups is the divider strip, a filled bar. */
+
+.menu-surface {
+  /* Menus portal to the document and must clear floating tool windows (250). */
+  z-index: 300;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 6px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--menu-surface, var(--color-bg-surface-raised, #3b3b3b));
+  color: var(--text, #f5f5f5);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.5),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+}
+.menu-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+/* One row. The app centres bare buttons (the `button` rule in styles.css), and the menu is
+   portalled outside any panel reset, so the row sets its own alignment. */
+.menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+.menu-row:hover:not(:disabled),
+.menu-row:focus-visible,
+.menu-row.is-open {
+  background: rgba(255, 255, 255, 0.09);
+  outline: none;
+}
+.menu-row:disabled {
+  opacity: 0.4;
+}
+.menu-row.is-danger {
+  color: #ff9b9b;
+}
+.menu-row.is-danger:hover:not(:disabled),
+.menu-row.is-danger:focus-visible {
+  background: rgba(255, 90, 90, 0.16);
+}
+
+.menu-icon {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  color: var(--text-dim, #b8b8b8);
+}
+.menu-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.menu-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.menu-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-description {
+  color: var(--text-faint, #989898);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+/* The "Recommended" label: a filled capsule, quiet next to the title. */
+.menu-pill {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(0, 153, 255, 0.2);
+  color: #7cc4ff;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 15px;
+}
+
+/* The end of the row: info mark, key or value, then the check, so a column of
+   checks lines up down the right edge and the icons stay on the left. */
+.menu-end {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--text-faint, #989898);
+}
+.menu-key {
+  min-width: 10px;
+  font-size: 12px;
+  text-align: right;
+}
+.menu-value {
+  max-width: 120px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.menu-check {
+  display: inline-flex;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  color: var(--accent, #0099ff);
+}
+.menu-info {
+  display: inline-flex;
+  color: var(--text-faint, #989898);
+}
+
+/* The switch of a toggle row: drawn here as a plain span because the row itself is the button. */
+.menu-switch {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.2);
+  transition: background-color 120ms ease;
+}
+.menu-switch[data-on='true'] {
+  background: var(--accent, #0099ff);
+}
+.menu-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: transform 120ms ease;
+}
+.menu-switch[data-on='true'] .menu-switch-thumb {
+  transform: translateX(12px);
+}
+
+.menu-heading {
+  padding: 8px 10px 4px;
+  color: var(--text-faint, #989898);
+  font-size: 12px;
+  font-weight: 500;
+}
+.menu-note {
+  padding: 6px 10px 8px;
+  color: var(--text-faint, #989898);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.menu-divider {
+  height: 1px;
+  margin: 4px 6px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.menu-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-switch,
+  .menu-switch-thumb {
+    transition: none;
+  }
+}

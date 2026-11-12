@@ -7,6 +7,7 @@
 // A task is built by Stacki's own code, but a handler may send it to another
 // process or a person's clipboard, so its size is bounded here, where it is made.
 import { assert } from '../core/assert';
+import type { BuiltinChipId } from './ai/mentions';
 
 export const AGENT_TASK_LIMITS = {
   titleCharsMax: 200,
@@ -22,9 +23,23 @@ export interface AgentNodeRef {
   readonly path: readonly number[];
 }
 
+/**
+ * What a handler does with the prompt. `send` (the default) starts the agent on it. `draft` only places it in
+ * a message box for the person to read, edit and send: used where the prompt is a starting point they should
+ * review first (the Apps panel's "Build an app"). A handler with no message box declines a draft.
+ */
+export type AgentTaskDelivery = 'send' | 'draft';
+
 export interface AgentTask {
   readonly title: string;
   readonly prompt: string;
+  readonly delivery?: AgentTaskDelivery;
+  /**
+   * Only with `delivery: 'draft'`: the built-in instructions chip to place in the composer in place of
+   * the prompt's text. `prompt` stays required, for a clipboard fallback and for a handler with no
+   * composer (the terminal declines drafts), so the chip and the prompt always say the same thing.
+   */
+  readonly draftChip?: BuiltinChipId;
   readonly context: {
     /** Project-relative files the task is about. */
     readonly files: readonly string[];
@@ -40,6 +55,7 @@ export function agentTask(input: AgentTask): AgentTask {
   assert(input.title.length <= AGENT_TASK_LIMITS.titleCharsMax, 'agentTask: the title is bounded');
   assert(input.prompt.trim().length > 0, 'agentTask: a task has a prompt');
   assert(input.prompt.length <= AGENT_TASK_LIMITS.promptCharsMax, 'agentTask: the prompt is bounded');
+  assert(input.draftChip === undefined || input.delivery === 'draft', 'agentTask: a draft chip belongs to a draft');
   assert(input.context.files.length <= AGENT_TASK_LIMITS.filesMax, 'agentTask: the files are bounded');
   assert(input.context.nodeRefs.length <= AGENT_TASK_LIMITS.nodeRefsMax, 'agentTask: the element references are bounded');
   assert(input.context.findingIds.length <= AGENT_TASK_LIMITS.findingIdsMax, 'agentTask: the finding ids are bounded');

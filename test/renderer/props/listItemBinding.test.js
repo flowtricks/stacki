@@ -167,7 +167,7 @@ test('the code view shows a bound list as written', async () => {
 });
 
 test('a list with code a field cannot hold stays code', async () => {
-  await draw('[{ title: { deep: entry.title } }]');
+  await draw('[{ title: { ...rest } }]');
   assert.ok(!document.querySelector('.list-field'), 'it stays code');
   assert.ok(document.querySelector('.cm-content, .bind-input'));
   await clear();
@@ -194,8 +194,9 @@ test('the literal holds code per field, and round-trips byte for byte', () => {
   ]) {
     assert.equal(modules.arrayText(modules.arrayItems(source)), source);
   }
-  assert.equal(modules.arrayItems('[{ a: { b: 1 } }]'), undefined, 'an object inside a field is not a value');
-  assert.equal(modules.arrayItems('[{ a: [1] }]'), undefined, 'nor a list');
+  assert.equal(modules.arrayText(modules.arrayItems('[{ a: { b: 1 } }]')), '[{ a: { b: 1 } }]', 'an object inside a field is a nested group, kept as written');
+  assert.equal(modules.arrayText(modules.arrayItems('[{ a: [{ b: 1 }] }]')), '[{ a: [{ b: 1 }] }]', 'and a list a nested list');
+  assert.equal(modules.arrayItems('[{ a: { b: { ...c } } }]'), undefined, 'a nested spread is still a program');
   assert.equal(modules.arrayItems('[...rest]'), undefined, 'a spread is still a program');
   assert.equal(modules.arrayItems('[a, "b"]'), undefined, 'and so is a word that is code');
 });
@@ -215,7 +216,7 @@ test('a field writes only what the list can hold', () => {
   assert.deepEqual(write({ type: 'expr', value: ' entry.title ' }), { ...field, text: 'entry.title', quote: undefined });
   assert.deepEqual(write({ type: 'string', value: 'Two' }), { ...field, text: 'Two' });
   assert.deepEqual(write(undefined), { ...field, text: '' }, 'taken away, it is blank');
-  for (const unfinished of ['format(', '-', 'a.', 'a, b', '{ b: 1 }', '[1]']) {
+  for (const unfinished of ['format(', '-', 'a.', 'a, b']) {
     assert.equal(write({ type: 'expr', value: unfinished }), undefined, unfinished);
   }
   assert.deepEqual(modules.itemFieldValue(field), { type: 'string', value: 'One' });

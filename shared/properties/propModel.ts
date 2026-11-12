@@ -26,8 +26,9 @@ import { PROP_FIELD_USAGES, type DefaultRule, type PropDefault, type PropFieldUs
 // requested for shared/core/limits.ts (plan D14) and may move there once a
 // human approves the change to that gate file.
 export const PROP_MODEL_LIMITS = {
-  // How deep groups and lists of groups nest: `items: { cta: { link: {…} } }[]` is three.
-  propNestingDepthMax: 4,
+  // How deep groups and lists of groups nest: `items: { cta: { link: {…} } }[]` is three. A List prop's
+  // item fields nest LIMITS.listFieldDepthMax levels, and each level of a list is a list and a group.
+  propNestingDepthMax: LIMITS.listFieldDepthMax * 2,
   // Branches of one union of prop shapes; past this the union is not modelled.
   propVariantsMax: 32,
   propsMax: LIMITS.propSchemaFieldsMax,
@@ -51,7 +52,8 @@ export const CODE_REASONS = ['untyped', 'unrecognized', 'opaque', 'tuple', 'nest
 export type CodeReason = (typeof CODE_REASONS)[number];
 
 export type PropControl =
-  | { readonly kind: 'text' }
+  // `format` is the `@format` word a member of a group states: `color`, `date`, `longtext`.
+  | { readonly kind: 'text'; readonly format?: string }
   | {
       readonly kind: 'number';
       readonly min: number | undefined;
@@ -190,14 +192,18 @@ function parseMember(value: Readonly<Record<string, unknown>>, where: string, de
 // Groups and lists nest; `depth` counts the groups above this control, and a
 // model nested deeper than the bound is refused rather than walked.
 function parseControl(input: unknown, where: string, depth: number): PropControl {
-  if (depth > PROP_MODEL_LIMITS.propNestingDepthMax) {
-    fail(where, `nesting exceeds ${PROP_MODEL_LIMITS.propNestingDepthMax}`);
-  }
   const value = modelRecord(input, where);
   const kind = oneOf(value['kind'], `${where}.kind`, PROP_CONTROL_KINDS);
+  // The producer stops a list or group at the bound by making what is inside it code, which is one level past.
+  const stoppedAtBound = depth === PROP_MODEL_LIMITS.propNestingDepthMax + 1 && kind === 'code' && value['reason'] === 'nestingDepth';
+  if (depth > PROP_MODEL_LIMITS.propNestingDepthMax && !stoppedAtBound) {
+    fail(where, `nesting exceeds ${PROP_MODEL_LIMITS.propNestingDepthMax}`);
+  }
   switch (kind) {
-    case 'text':
-      return { kind };
+    case 'text': {
+      const format = optionalText(value['format'], `${where}.format`);
+      return format === undefined ? { kind } : { kind, format };
+    }
     case 'number':
       return parseNumberControl(value, where);
     case 'switch':

@@ -833,6 +833,19 @@
   width: 100%;
   min-width: 0;
 }
+/* A loop that reads data (a property, a collection, a project list) is purple, like every value bound to dynamic data: the linked bar, the conditional chip. None and Custom list stay neutral. */
+.loop-source-trigger.is-bound {
+  background: rgba(146, 116, 255, 0.28);
+  color: #c9bbff;
+}
+.loop-source-trigger.is-bound:hover,
+.loop-source-trigger.is-bound[aria-expanded='true'] {
+  background: rgba(146, 116, 255, 0.38);
+}
+.loop-source-trigger.is-bound .dd-icon,
+.loop-source-trigger.is-bound .dd-chevron {
+  color: inherit;
+}
 .loop-source-picker {
   display: flex;
   flex-direction: column;
@@ -977,7 +990,7 @@
 /* A list's item field: its name, its kind, and the bin. */
 .new-prop-list-field {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 92px) auto;
+  grid-template-columns: minmax(0, 1fr) max-content auto;
   align-items: center;
   gap: 6px;
 }
@@ -985,6 +998,56 @@
 .loop-property-default .dd-trigger {
   width: 100%;
   min-width: 0;
+}
+/* The type trigger fits its longest label, icon and chevron; the name input shrinks instead. */
+.new-prop-list-field > .dropdown,
+.new-prop-list-field > :nth-child(2) {
+  min-width: 9.5rem;
+}
+.new-prop-list-field > input {
+  min-width: 0;
+}
+.new-prop-list-field .dd-trigger {
+  white-space: nowrap;
+}
+/* A list or group's own fields: indented on a quiet fill, never a rule. */
+.property-nested-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+}
+.property-nested-title {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.list-item-nested-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+.list-item-nested-count {
+  margin-left: auto;
+  color: var(--text-dim);
+}
+.list-item-nested-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-left: 10px;
 }
 .new-prop-note {
   color: var(--text-dim);

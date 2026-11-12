@@ -131,8 +131,9 @@ export function runSourcePathCheck(root: string): ChildResult {
 export function runEslint(root: string, files: readonly string[]): ChildResult {
   assert(files.length <= POLICY_LIMITS.filesPerCheckMax, 'runEslint: file limit exceeded');
   const eslint = path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js');
-  const cache = path.join(root, 'node_modules', '.cache', 'eslint') + path.sep;
-  const argumentsList = [eslint, '--cache', '--cache-location', cache, '--max-warnings', '0', '--no-warn-ignored', ...files];
+  // No --cache: ESLint keys a cached result on the linted file and the config only, but the type-aware rules also read the types of every file it
+  // imports. A changed dependency therefore left a stale "unsafe argument" verdict that no re-run could clear.
+  const argumentsList = [eslint, '--no-cache', '--max-warnings', '0', '--no-warn-ignored', ...files];
   return runChild(process.execPath, argumentsList, { cwd: root });
 }
 

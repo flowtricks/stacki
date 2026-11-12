@@ -66,7 +66,7 @@ export function EditorSidebar({ panel, close, props, model, openCode, showNaviga
       {panel === 'properties' && document && !file.startsWith('src/pages/') && <ComponentProperties key={file} document={document} refresh={refresh} />}
       {panel === 'variables' && <VariableNavigation view={props.view} file={file} />}
       {panel === 'history' && <HistorySidebar props={props} model={model} />}
-      {panel === 'ai' && <ChatPanel file={file} refresh={refresh} error={report} />}
+      {panel === 'ai' && <ChatPanel file={file} project={project} refresh={refresh} error={report} />}
       {panel === 'apps' && <StudioAppsPanel props={props} />}
       {!mobile && resize.handle}
     </aside>

@@ -3,7 +3,7 @@
 // Kind-specific payloads remain a union so serializers cannot invent a node.
 import type { Attr, AttrSpan } from '../../shared/page/pageNode';
 import type { FrontmatterModel } from '../../shared/page/frontmatterSource';
-import type { CodeKind, PropFieldUsage } from '../../shared/properties/propSchema';
+import type { CodeKind, PropFieldUsage, PropShapeField } from '../../shared/properties/propSchema';
 import type { SchemaFieldType } from '../../shared/properties/propModelSchema';
 
 interface NodeMetadata {
@@ -124,7 +124,7 @@ export interface SchemaField extends NumberRules {
   // The declared type as written, for the code row; only on code-only props.
   typeText?: string | undefined;
   readonly doc?: string | undefined;
-  readonly shape?: readonly { readonly name: string; readonly type: string }[];
+  readonly shape?: readonly PropShapeField[];
   readonly shapeIsList?: boolean;
   readonly unions?: readonly PropUnion[] | undefined;
   // The `@deprecated` notice, and whether the component reads the prop (shared/properties/propSchema.ts).

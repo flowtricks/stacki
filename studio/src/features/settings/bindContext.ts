@@ -36,6 +36,7 @@ export function useBindContext(file: string, source: string, nodes: readonly Par
     collectionSamples: files.samples,
     onNeedSample: files.requestSample,
     projectSources: sources.nodes,
+    projectModules: sources.imported,
     ...(propsSample === undefined ? {} : { propsSample }),
     frontmatter,
     imports,

@@ -8,7 +8,7 @@ import {
   file as centralFile,
   microphone as centralMicrophone,
   stop as centralStop,
-  trash as centralTrash,
+  trashCanSimple as centralTrashCanSimple,
 } from '../../../vendor/stacki/src/ui/central/centralGeometry';
 
 const icons = {
@@ -20,7 +20,7 @@ const icons = {
   stop: centralIcon(centralStop),
   chevron: centralIcon(centralChevronDown),
   file: centralIcon(centralFile),
-  trash: centralIcon(centralTrash),
+  trash: centralIcon(centralTrashCanSimple),
 };
 
 export function ChatIcon({ name }: { readonly name: keyof typeof icons }) {

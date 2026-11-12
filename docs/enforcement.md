@@ -31,6 +31,12 @@ Commands for people and agents:
   cannot catch differences in the build targets' library and module settings.
 - `npm run check:policy` — the repository policy scan.
 - `npm run lint`, `npm run typecheck`, `npm run format` — the individual tools.
+- Files this clone hides from git for itself (`.git/info/exclude`, the global excludes file; a
+  local notes folder, say) are skipped by every gate, not only by the scan: ESLint's config ignores
+  them (`scripts/policy/gitExcludes.mts`), and Prettier runs over git's file list
+  (`scripts/policy/formatTree.mts`, behind `npm run format`, `format:check`, `check:local` and the
+  gate) because it walks the folder and reads no exclude list. `.gitignore` and `.prettierignore`
+  apply as before, so a clean checkout is checked exactly as it was.
 - `env -u ELECTRON_RUN_AS_NODE npm test` — the full gate CI runs.
 - `env -u ELECTRON_RUN_AS_NODE npm test -- <suite or folder/>` — only the named suites, for
   iterating. It builds over the existing tree (incrementally) and skips the clean and the
@@ -55,6 +61,11 @@ hooks run in the harness's environment, not the agent's shell).
 
 The shell check is a heuristic — a shell can write a file in more ways than any list names — and
 the agent hooks are guard rails, not a sandbox. CI is the gate that cannot be argued with.
+
+The command check reads the checkout's own path as data: every spelling a shell accepts for it
+(raw, backslash-escaped, inside single or double quotes) is read as `.` before the command is split,
+so a root such as `/Users/Lilian's Home/stacki` cannot turn `tee <root>/.claude/settings.json` into
+an allow (`withRootAsDot` in `scripts/agent/core.mts`; issue #78).
 
 ## Rule map
 
@@ -83,7 +94,7 @@ the agent hooks are guard rails, not a sandbox. CI is the gate that cannot be ar
 |---|---|
 | Required tsconfig flags | tsc: every `tsconfig*.json`; `scripts/tsconfig.json` adds `verbatimModuleSyntax` for scripts |
 | Required ESLint rules | lint: `eslint.config.mjs` is the source of truth |
-| Prettier, width 160 | CI: `prettier --check` (a width target, not a limit: no check holds line width) |
+| Prettier, width 160 | CI: `prettier --check` through `scripts/policy/formatTree.mts` (a width target, not a limit: no check holds line width) |
 
 ### Core patterns
 
@@ -125,6 +136,7 @@ the agent hooks are guard rails, not a sandbox. CI is the gate that cannot be ar
 | — | No `@ts-nocheck`; `@ts-expect-error` says why | scan: `no-ts-nocheck`; lint: `ban-ts-comment` |
 | — | Code display: code in the UI is syntax highlighted | test: `test/renderer/ui/codeDisplayRule.test.js` (source scan with named allowlists); `test/renderer/ui/codeBlock.test.js` for each site; review for code that looks like a label |
 | — | Dropdowns: the custom dropdown, never a native `<select>` | lint: `stacki/no-native-select` (JSX `<select>` and `createElement('select')`) in `src/` via `eslint.config.mjs`, and in `studio/src/` and `studio/demo/` via `studio/eslint.config.ts`, which loads the vendored rule file |
+| — | Studio's AI chat shows Desktop's components, not copies: the shared menu, diff view, chip editor, sessions list classes and styles reach Studio only through `studio/scripts/shared-source.json`, assembled into `studio/vendor/stacki` | `npm --prefix studio run assemble` fails on a listed file that no longer exists, and `check` and `lint` fail on an adapter that imports one that moved or lost an export; test: `studio/test/chatState.test.ts` (stored history, pin and reorder, mentions), `studio/test/ai.browser.ts` (the panel in a real browser); review for look, since no check compares pixels |
 
 ## Changing a rule
 

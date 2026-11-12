@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
-import { AppsIcon, CopyIcon, GitHubIcon, UploadIcon } from '../../ui/Icons';
+import { AppsIcon, GitHubIcon, SparkleIcon } from '../../ui/Icons';
 import { paletteAppByline, type PaletteApp, type PaletteAppAuthor, type PaletteAppsAction } from './paletteApps';
 
 // The insert palette's app rows: an app in the plain list (All results and the Apps tab), and what the Apps
@@ -147,7 +147,6 @@ export function InsertAppsEmpty({
 
 const ACTION_ICONS: Readonly<Record<PaletteAppsAction['key'], ReactNode>> = {
   connect: <GitHubIcon size={14} />,
-  copyPrompt: <CopyIcon size={14} />,
-  upload: <UploadIcon size={14} />,
+  buildApp: <SparkleIcon size={14} />,
   browse: <AppsIcon size={14} />,
 };

@@ -234,6 +234,13 @@ interface InvokeChannels {
   readonly aiChatDelete: 'ai:chatDelete';
   readonly aiChatRead: 'ai:chatRead';
   readonly aiPrompt: 'ai:prompt';
+  readonly aiSteer: 'ai:steer';
+  readonly aiCompact: 'ai:compact';
+  readonly aiChatFork: 'ai:chatFork';
+  readonly aiChatMove: 'ai:chatMove';
+  readonly aiSections: 'ai:sections';
+  readonly aiDiff: 'ai:diff';
+  readonly aiMentions: 'ai:mentions';
   readonly aiCancel: 'ai:cancel';
   readonly aiPermission: 'ai:permission';
   readonly aiSetOption: 'ai:setOption';

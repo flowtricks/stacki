@@ -74,6 +74,8 @@ export interface PublishMarketplaceProps {
   readonly renderSignIn: ConnectGitHubProps['renderSignIn'];
   readonly renderAvatar: ConnectGitHubProps['renderAvatar'];
   readonly onClose: () => void;
+  /** Whether an installed app is already published to a repository (publishFlow.ts appPublication): it is not listed as "uploaded". */
+  readonly isPublished: (app: AppSummary) => boolean;
   /** An uploaded app was chosen: the panel opens Share app for it. */
   readonly onShareUploaded: (app: AppSummary) => void;
   /** A repository to start on, as after a public share's "Also submit to the marketplace". */
@@ -142,7 +144,7 @@ export function PublishMarketplace(props: PublishMarketplaceProps) {
               accounts={accounts.kind === 'ready' ? accounts.value : []}
               account={listAccount}
               list={list}
-              uploaded={uploadedApps(props.installed)}
+              uploaded={uploadedApps(props.installed, { published: props.isPublished })}
               renderAvatar={props.renderAvatar}
               onAccount={setAccount}
               onPick={(row) => {

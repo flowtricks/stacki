@@ -4,7 +4,7 @@ import {
   close as centralClose,
   copy as centralCopy,
   drag as centralDrag,
-  trash as centralTrash,
+  trashCanSimple as centralTrashCanSimple,
   warning as centralWarning,
 } from '../../ui/central/centralGeometry';
 // What the grid settings' parts share: the writers and labels they are handed,
@@ -37,7 +37,7 @@ export const resolvedValue = (read: Read, prop: string): string => {
 // Icons.
 export const CloseIcon = centralIcon(centralClose);
 export const PlusIcon = centralIcon(centralAdd);
-export const TrashIcon = centralIcon(centralTrash);
+export const TrashIcon = centralIcon(centralTrashCanSimple);
 export const DuplicateIcon = centralIcon(centralCopy);
 export const GripIcon = centralIcon(centralDrag);
 export const WarnIcon = centralIcon(centralWarning);

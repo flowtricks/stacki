@@ -26,6 +26,7 @@ interface StylePanelProps {
   readonly onCanvasWidth?: HostState['setCanvasWidth'] | undefined;
   readonly onRecordUndo?: HostState['recordUndo'] | undefined;
   readonly onAddClass?: HostState['addClass'] | undefined;
+  readonly onAddStyleBlock?: HostState['addStyleBlock'] | undefined;
   readonly onRemoveClass?: HostState['removeClass'] | undefined;
   readonly onRemoveAttribute?: HostState['removeAttribute'] | undefined;
   readonly onSetInlineStyle?: HostState['setInlineStyle'] | undefined;
@@ -113,6 +114,7 @@ function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleF
     setCanvasWidth: props.onCanvasWidth,
     recordUndo: props.onRecordUndo,
     addClass: props.onAddClass,
+    addStyleBlock: props.onAddStyleBlock,
     removeClass: props.onRemoveClass,
     removeAttribute: props.onRemoveAttribute,
     setInlineStyle: props.onSetInlineStyle,

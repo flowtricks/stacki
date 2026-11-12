@@ -8,6 +8,7 @@ import type { SharedDocument } from '../collaboration/useDocument';
 import { nodeTextEdit } from './settingsEdits';
 import { attributeEdit } from '../source/source';
 import { addStyleClass } from './styleClassEdit';
+import { addStyleBlockSource } from './styleBlockEdit';
 import type { ParserNode } from '../source/source';
 import type { OutlineState } from '../preview/outlineState';
 import { pathFor } from '../project/previewSelection';
@@ -77,6 +78,15 @@ export function StyleSettings({
             return { tag: 'applied' };
           } catch (error) {
             return { tag: 'refused', message: String(error) };
+          }
+        }}
+        onAddStyleBlock={async (request) => {
+          try {
+            document.replaceSource(addStyleBlockSource(document.text.toString(), document.file, selected, request));
+            await document.whenSaved();
+            return { tag: 'applied' };
+          } catch (error) {
+            return { tag: 'refused', message: error instanceof Error ? error.message : String(error) };
           }
         }}
         onSetInlineStyle={(nodeId, style) => {

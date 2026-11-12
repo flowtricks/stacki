@@ -40,6 +40,40 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.2.0 AI panel overhaul, nested list props and Apps polish
+
+- Desktop, the Studio source bundle and `create-stacki` are all at 1.2.0. 1.1.9 never became
+  public (its macOS job failed on a flaky probe), so its changes ship here.
+- **AI panel**: a Claude-desktop-style composer with model, effort and mode menus, a context
+  ring with Compact, and queue and steer. `@` mentions files and skills as purple chips. Build an
+  app inserts an "App builder instructions" chip (click to copy).
+- **AI transcript**: live timers, loading dots, collapsible activity groups, thinking blocks, a
+  plan card, background tasks and compaction rows. A real diff view has Keep and Undo per file,
+  and permission cards ask before risky steps.
+- **AI chats**: a chat list with sections, pin, unread, rename, fork, archive, delete and
+  drag-to-reorder. One calm sign-in card replaces five notices, and the panel background matches
+  the dark rail. Studio's chat shares the look and every part it can.
+- **Style panel**: a project with no style tags and no CSS files gets a `<style is:global>` block
+  on the page and a `.class` (then `.class-2`...) on the selected element at the first style.
+  Selector chips paint in their final colours from the first frame.
+- **Loops and props**: List props take 16 item field kinds with icons, and lists nest inside lists
+  and groups (3 levels). The loop Source menu lists "Project data": arrays exported from
+  `src/consts.ts` and other data modules, and JSON. A loop reading data shows purple, and the
+  custom list has a `{}` toggle for raw array code.
+- **Apps**: one origin badge per app (Local, GitHub or Marketplace). Marketplace rows have a
+  details popup, an update button and an "Update automatically" switch for apps from others; an
+  update that adds network hosts, sign-in providers or permissions waits for your OK. Build an
+  app is first in the + menu and Upload app file is gone from it. Feedback pins appears in the
+  marketplace, and listed apps follow their GitHub releases automatically.
+- **Polish**: Central trash-can-simple and arrow-rotate-clockwise icons. The Audits panel shows
+  one row per style tag with its values and an Apply button, without per-issue paragraphs, and
+  severity colours stay on hover. Value conditions have better contrast. The Variables panel
+  starts docked and remembers its mode. The preview toolbar's taller-than-neighbours ⋯ is fixed,
+  tooltips show over popups, and the account menu is a popup.
+- **The gate**: the pre-push gate now works from folders with apostrophes and respects
+  `.git/info/exclude`. Electron test windows stay out of the Dock and run at most 4 at once. The
+  hook's ESLint no longer uses a cache.
+
 ## 1.1.9 the 1.1.7 changes, through Studio's browser test
 
 - The same app as 1.1.8, which never became public: Linux, Windows and macOS passed, but Studio's
@@ -940,6 +974,22 @@ that is possible, and keep the required remote check. Never skip a gate to make 
 Shared popups remain mounted while their close animation runs, and consume outside clicks during
 that time. After closing a popup, wait for that popup to detach before clicking another control.
 Do not use an arbitrary sleep or weaken the assertion.
+
+The same holds for input. A hidden (`show: false`) window is not guaranteed to paint: GitHub's macOS
+runner never ran its animation frames (1.1.6), and Chromium holds a mouse move until the next frame,
+so a probe that moves the pointer and sleeps 60 ms hears nothing on such a machine (issue #78, the
+dropdown highlight probe). A probe that needs pointer input or motion renders offscreen
+(`webPreferences: { offscreen: true }`), which paints on its own clock, and waits for the page to
+report the event it sent (a counter its own capture listener bumps) within a bound, then for a frame.
+`test/renderer/apps/appUiKitDropdownHighlight.test.js` is the pattern. Probes that wait for a popup
+wait for its rows to mount and for it to detach, not for 400 ms.
+
+Probes run without a Dock icon. On macOS every Electron process started from a terminal gets its own
+Dock tile, and sixteen suites at once filled the Dock. The gate adds `test/helpers/hideDockPreload.js`
+to `NODE_OPTIONS` for its test commands, so every probe's main process hides its tile before its first
+window with no edit to the probe; windows, focus and pointer input are unaffected. The gate runs at
+most four Electron suites at once (`--electron-jobs=<n>` changes it), starts each command as its own
+process group, and kills that whole group when the command ends, times out, or the gate exits.
 
 In the 0.1.64 release, the Studio browser scenario closed the account menu and immediately clicked
 `Expand all`. The closing popup consumed that click, leaving the navigator collapsed. The test

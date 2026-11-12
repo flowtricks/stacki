@@ -16,6 +16,8 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import type { ChoiceOption, PropControl, PropMember } from '../../../shared/properties/propModel';
 import { PROP_MODEL_LIMITS } from '../../../shared/properties/propModel';
+import { readPropTags } from '../../../shared/properties/propTags';
+import { commentDocumentation } from './propProse';
 
 /** A declaration a type may name, with the file it was read from (the component, or an imported file). */
 export type TypeDeclaration =
@@ -357,6 +359,23 @@ export interface FiledSignature {
   readonly file: ts.SourceFile;
 }
 
+/**
+ * A member's doc comment: the comments right above it. A comment on the line
+ * of the member before belongs to that member, not this one, unless this
+ * member opens the line (`{ /** Tip. *\/ title: string }`).
+ */
+export function memberDocumentation(signature: FiledSignature): string {
+  const text = signature.file.text;
+  const start = signature.member.getStart(signature.file);
+  const ranges = (ts.getLeadingCommentRanges(text, signature.member.pos) ?? []).filter((range) => {
+    const lineStart = text.lastIndexOf('\n', range.pos - 1) + 1;
+    const ownLine = text.slice(lineStart, range.pos).trim() === '';
+    const trailsPrevious = !ownLine && text.slice(range.end, start).includes('\n');
+    return !trailsPrevious;
+  });
+  return commentDocumentation(text, start, ranges);
+}
+
 /** An interface's members with those of the local interfaces and aliases it extends, extended ones first. */
 export function interfaceMembers(
   declaration: Extract<TypeDeclaration, { kind: 'interface' }>,
@@ -436,12 +455,28 @@ function groupOfSignatures(members: readonly FiledSignature[], scope: TypeScope,
     fields.set(name, {
       name,
       typeText: member.type === undefined ? '' : boundedText(member.type.getText(file)),
-      control: member.type === undefined ? { kind: 'code', reason: 'untyped' } : controlOfType(member.type, file, scope, nested(walk)),
+      control:
+        member.type === undefined
+          ? { kind: 'code', reason: 'untyped' }
+          : formattedControl(controlOfType(member.type, file, scope, nested(walk)), { member, file }),
       presence: member.questionToken === undefined ? 'required' : 'optional',
     });
   }
   assert(fields.size <= PROP_MODEL_LIMITS.propsMax, 'groupOfSignatures: fields are bounded');
   return { kind: 'group', fields: [...fields.values()] };
+}
+
+// A text member says what it holds with a `@format` tag on its doc (`/** @format color */ accent: string`), the tag a prop has.
+function formattedControl(control: PropControl, signature: FiledSignature): PropControl {
+  if (control.kind !== 'text') {
+    return control;
+  }
+  // The scanner takes a comment on the line of the member before for that token's trailing comment, and the
+  // parser attaches no doc to it, so the member's leading trivia (`; /** @format color */ tint`) is read as text.
+  const trivia = signature.file.text.slice(signature.member.pos, signature.member.getStart(signature.file));
+  const attached = (trivia.match(/\/\*\*[\s\S]*?\*\//g) ?? []).join(' ');
+  const format = readPropTags(`${memberDocumentation(signature)} ${attached}`.slice(0, PROP_MODEL_LIMITS.docCharsMax)).format;
+  return format === undefined ? control : { kind: 'text', format };
 }
 
 /** A member's name as a prop is called: an identifier, or a quoted name such as `'data-id'`. */

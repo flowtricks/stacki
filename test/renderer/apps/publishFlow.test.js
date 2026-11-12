@@ -11,7 +11,11 @@
 // Share applies to an uploaded app and to one added to the project folder;
 // Submit to marketplace opens a GitHub app's own repository, leads an uploaded
 // or folder app through Share (only for a role that may share), and is absent
-// for a marketplace app.
+// for a marketplace app. An uploaded or folder app that is already published (the
+// marketplace lists its id, or its manifest names a repository) is not shared again:
+// its Submit opens that repository's checklist, and a listed id always yields the
+// listing's own repository, never the manifest's. An app the marketplace lists has no
+// Submit at all: the marketplace follows its repository's releases.
 // Method: the pure model (src/features/apps/publishFlow.ts) over hand-made
 // repositories and installed apps.
 const test = require('node:test');
@@ -37,7 +41,7 @@ test('the publish chooser lists tagged repositories and uploaded apps in two sec
   const rows = flow.publishChooserRows({
     query: '',
     repositories: [repository('octocat', 'heat-map', true, false), repository('octocat', 'site', false, false)],
-    uploaded: flow.uploadedApps([installed('alt-text', 'file'), installed('charts', 'marketplace')]),
+    uploaded: flow.uploadedApps([installed('alt-text', 'file'), installed('charts', 'marketplace')], { published: () => false }),
   });
   assert.deepEqual(
     rows.map((row) =>
@@ -144,22 +148,110 @@ test('Share applies to uploaded and folder apps; Submit routes each source', () 
   assert.equal(flow.appShareable(local), true);
   assert.equal(flow.appShareable(github), false, 'a GitHub app already has its repository');
   assert.equal(flow.appShareable(marketplace), false);
-  assert.deepEqual(flow.marketplaceSubmitRoute(github, { mayShare: false }), {
+  assert.deepEqual(flow.marketplaceSubmitRoute(github, { mayShare: false, publication: undefined }), {
     kind: 'publish',
     owner: 'octocat',
     repository: 'heat-map',
     account: undefined,
   });
   assert.deepEqual(
-    flow.marketplaceSubmitRoute({ ...github, account: 'acme-bot' }, { mayShare: true }).account,
+    flow.marketplaceSubmitRoute({ ...github, account: 'acme-bot' }, { mayShare: true, publication: undefined }).account,
     'acme-bot',
     'a private repository keeps its reader',
   );
   for (const source of [file, local]) {
-    assert.deepEqual(flow.marketplaceSubmitRoute(source, { mayShare: true }), { kind: 'share-first' });
-    assert.deepEqual(flow.marketplaceSubmitRoute(source, { mayShare: false }), { kind: 'none' }, 'no dead end for a role that cannot share');
+    assert.deepEqual(flow.marketplaceSubmitRoute(source, { mayShare: true, publication: undefined }), { kind: 'share-first' });
+    assert.deepEqual(
+      flow.marketplaceSubmitRoute(source, { mayShare: false, publication: undefined }),
+      { kind: 'none' },
+      'no dead end for a role that cannot share',
+    );
   }
-  assert.deepEqual(flow.marketplaceSubmitRoute(marketplace, { mayShare: true }), { kind: 'none' }, 'already listed');
+  assert.deepEqual(flow.marketplaceSubmitRoute(marketplace, { mayShare: true, publication: undefined }), { kind: 'none' }, 'already listed');
   const apps = [{ lock: { source: file } }, { lock: { source: local } }, { lock: { source: github } }];
-  assert.equal(flow.uploadedApps(apps).length, 2, 'the publish chooser lists uploaded and folder apps');
+  assert.equal(flow.uploadedApps(apps, { published: () => false }).length, 2, 'the publish chooser lists uploaded and folder apps');
+});
+
+const listing = (id, owner, repositoryName) => ({
+  id,
+  name: id,
+  description: 'd',
+  author: owner,
+  iconURL: 'https://stacki.build/api/marketplace/icons/x.png',
+  categories: [],
+  source: { kind: 'github', owner, repository: repositoryName, asset: `${id}.zip` },
+  versions: [{ version: '1.8.1', tag: 'v1.8.1', sha256: 'a'.repeat(64) }],
+  license: 'MIT',
+  network: undefined,
+});
+const indexOf = (...apps) => ({ version: 1, apps });
+const local = (id, manifestSource) => ({
+  manifest: { id, name: id, version: '1.0.0', source: manifestSource },
+  lock: { id, source: { kind: 'local' } },
+});
+
+test('an app added from the project folder that the marketplace lists is already shared: it has nothing to submit', () => {
+  const index = indexOf(listing('feedback-pins', 'flowtricks', 'feedback-pins'));
+  const publication = flow.appPublication(local('feedback-pins', undefined), index);
+  assert.deepEqual(publication, { owner: 'flowtricks', repository: 'feedback-pins', account: undefined, listed: true });
+  assert.equal(flow.appNeedsShare({ kind: 'local' }, publication), false, 'no Share to GitHub');
+  for (const mayShare of [true, false]) {
+    assert.deepEqual(flow.marketplaceSubmitRoute({ kind: 'local' }, { mayShare, publication }), { kind: 'none' }, 'listed: no submit item');
+  }
+  // The same for an app installed from a file.
+  assert.equal(flow.appPublication({ manifest: { id: 'feedback-pins' }, lock: { source: { kind: 'file', fileName: 'x.zip' } } }, index).listed, true);
+  // Negative space: an app the index does not list, with no repository named, still has to be shared first.
+  const alone = flow.appPublication(local('notes', undefined), index);
+  assert.equal(alone, undefined);
+  assert.equal(flow.appNeedsShare({ kind: 'local' }, alone), true);
+  assert.deepEqual(flow.marketplaceSubmitRoute({ kind: 'local' }, { mayShare: true, publication: alone }), { kind: 'share-first' });
+  assert.equal(flow.appPublication(local('notes', undefined), undefined), undefined, 'no index, no listing');
+});
+
+test('a listed id yields only the listing’s repository, whatever the manifest names', () => {
+  const index = indexOf(listing('feedback-pins', 'flowtricks', 'feedback-pins'));
+  const hijack = flow.appPublication(local('feedback-pins', { kind: 'github', owner: 'mallory', repository: 'feedback-pins', asset: 'x.zip' }), index);
+  assert.equal(hijack.owner, 'flowtricks');
+  assert.equal(hijack.repository, 'feedback-pins');
+  assert.equal(hijack.listed, true);
+  const route = flow.marketplaceSubmitRoute({ kind: 'local' }, { mayShare: true, publication: hijack });
+  assert.notEqual(route.owner, 'mallory', 'the route never names another repository');
+  assert.equal(route.kind, 'none', 'and a listed app has nothing to submit at all');
+});
+
+test('an unlisted folder app whose manifest names its repository is shared already; a GitHub app is published to its own', () => {
+  const named = { kind: 'github', owner: 'octocat', repository: 'heat-map', asset: 'heat-map.zip', account: 'acme-bot' };
+  const publication = flow.appPublication(local('heat-map', named), indexOf());
+  assert.deepEqual(publication, { owner: 'octocat', repository: 'heat-map', account: 'acme-bot', listed: false });
+  assert.deepEqual(
+    flow.marketplaceSubmitRoute({ kind: 'local' }, { mayShare: false, publication }),
+    { kind: 'publish', owner: 'octocat', repository: 'heat-map', account: 'acme-bot' },
+    'not listed yet: a first submission',
+  );
+  assert.equal(flow.appNeedsShare({ kind: 'local' }, publication), false);
+  const github = { manifest: { id: 'heat-map' }, lock: { source: { ...named, kind: 'github', tag: 'v1.0.0' } } };
+  assert.equal(flow.appPublication(github, indexOf()).listed, false);
+  assert.equal(flow.appPublication(github, indexOf(listing('heat-map', 'octocat', 'heat-map'))).listed, true, 'a listed GitHub app is listed');
+  const listedGithub = flow.appPublication(github, indexOf(listing('heat-map', 'octocat', 'heat-map')));
+  assert.deepEqual(
+    flow.marketplaceSubmitRoute(github.lock.source, { mayShare: true, publication: listedGithub }),
+    { kind: 'none' },
+    'a listed GitHub app has nothing to submit',
+  );
+  assert.equal(
+    flow.marketplaceSubmitRoute(github.lock.source, { mayShare: true, publication: flow.appPublication(github, indexOf()) }).kind,
+    'publish',
+    'unlisted: first submission',
+  );
+  assert.equal(
+    flow.appPublication(github, indexOf(listing('heat-map', 'someone-else', 'heat-map'))).listed,
+    false,
+    'another repository’s listing is not this app’s',
+  );
+  assert.equal(
+    flow.appPublication({ manifest: { id: 'heat-map' }, lock: { source: { kind: 'marketplace', id: 'heat-map', version: '1.0.0' } } }, indexOf()),
+    undefined,
+  );
+  const apps = [local('a', undefined), local('b', undefined)];
+  assert.equal(flow.uploadedApps(apps, { published: (app) => app.manifest.id === 'a' }).length, 1, 'a published app leaves the uploaded section');
 });

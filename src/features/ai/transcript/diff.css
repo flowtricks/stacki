@@ -1,0 +1,268 @@
+/* The diff view (DiffView.tsx) and the changes card (ChangesCard.tsx). Surfaces are separated by background fills, never borders.
+   The rows' colours come from the history diff's classes (`history-diff-*`); the rules here only fit them to the narrow panel. */
+
+.ai-diffview {
+  background: var(--bg);
+  border-radius: 6px;
+  overflow: hidden;
+  min-width: 0;
+}
+.ai-diffview-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ai-diffview .ai-diff-path {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.ai-diffview-kind {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.ai-diffview-counts {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+.ai-diffview-scroll {
+  max-height: 360px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  user-select: text;
+}
+.ai-diffview-compact .ai-diffview-scroll {
+  max-height: 170px;
+}
+.ai-diffview-lines {
+  width: max-content;
+  min-width: 100%;
+  font: 11.5px / 18px var(--mono, ui-monospace, monospace);
+  tab-size: 2;
+}
+.ai-diffview .history-diff-line {
+  grid-template-columns: 34px 14px 1fr;
+  min-height: 18px;
+}
+.ai-diffview .history-diff-number {
+  padding-right: 6px;
+}
+.ai-diffview .history-diff-code {
+  padding-right: 12px;
+}
+/* The words that changed inside an edited line: a stronger fill of the line's own colour. */
+.ai-diffview .history-diff-line.added .ai-diff-word {
+  background: rgba(48, 193, 88, 0.3);
+  border-radius: 2px;
+}
+.ai-diffview .history-diff-line.deleted .ai-diff-word {
+  background: rgba(255, 69, 58, 0.3);
+  border-radius: 2px;
+}
+.ai-diffview-gap {
+  position: sticky;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 22px;
+  padding: 0 8px 0 10px;
+  background: var(--accent-soft);
+  color: var(--text-dim);
+  font: 11px / 22px var(--font, system-ui, sans-serif);
+  text-align: left;
+  border-radius: 0;
+}
+.ai-diffview-gap:hover {
+  color: var(--text);
+}
+.ai-diffview-note {
+  margin: 0;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* The changes card */
+.ai-changes-card {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 6px;
+  min-width: 0;
+}
+.ai-changes-card-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px 4px;
+  font-size: 12px;
+}
+.ai-changes-card-title {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.ai-changes-total {
+  font-weight: 400;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.ai-changes-bulk {
+  display: flex;
+  gap: 2px;
+}
+.ai-changes-bulk button,
+.ai-file-actions button {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 5px;
+  background: var(--bg-active);
+  color: var(--text);
+}
+.ai-changes-bulk button:disabled,
+.ai-file-actions button:disabled {
+  opacity: 0.5;
+}
+.ai-changes-bulk .ai-changes-keep {
+  background: var(--accent);
+  color: #fff;
+}
+.ai-file {
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  min-width: 0;
+}
+.ai-file-open {
+  background: var(--bg);
+}
+.ai-file-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-file-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 12px;
+  border-radius: 6px;
+}
+.ai-file-toggle:hover {
+  background: var(--bg-hover, var(--bg-active));
+}
+.ai-file-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ai-file-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.ai-file-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The folder is a second, quieter line so two files of one name stay apart without squeezing the name. */
+.ai-file-folder {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--text-faint);
+}
+.ai-file-counts {
+  flex: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.ai-file-added {
+  color: var(--green);
+}
+.ai-file-removed {
+  color: var(--red);
+}
+.ai-file-kind {
+  flex: none;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.ai-file-kind-created {
+  color: var(--green);
+}
+.ai-file-kind-deleted {
+  color: var(--red);
+}
+.ai-file .ai-file-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding-right: 4px;
+}
+.ai-file .ai-file-done {
+  flex: none;
+  padding-right: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-file-open-button {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-faint);
+  border-radius: 5px;
+}
+.ai-file-open-button:hover {
+  color: var(--text);
+  background: var(--bg-active);
+}
+.ai-file-body {
+  padding: 0 4px 4px;
+}
+.ai-file-body .ai-diffview {
+  background: transparent;
+}
+.ai-file-gone {
+  margin: 0;
+  padding: 4px 8px 8px 24px;
+  font-size: 11px;
+  color: var(--text-faint);
+}

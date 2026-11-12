@@ -1,0 +1,52 @@
+/* The four-dot loader (LoaderDots.tsx). */
+.loader-dots {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: calc(var(--loader-dot, 4px) * 0.75);
+  color: var(--text-dim, #b8b8b8);
+}
+.loader-dot {
+  width: var(--loader-dot, 4px);
+  height: var(--loader-dot, 4px);
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: loader-dot-swell 1.1s ease-in-out infinite;
+}
+.loader-dot:nth-child(2) {
+  animation-delay: 0.14s;
+}
+.loader-dot:nth-child(3) {
+  animation-delay: 0.28s;
+}
+.loader-dot:nth-child(4) {
+  animation-delay: 0.42s;
+}
+@keyframes loader-dot-swell {
+  0%,
+  70%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loader-dot {
+    animation: none;
+    transform: none;
+  }
+  .loader-dot:nth-child(2) {
+    opacity: 0.5;
+  }
+  .loader-dot:nth-child(3) {
+    opacity: 0.7;
+  }
+  .loader-dot:nth-child(4) {
+    opacity: 1;
+  }
+}

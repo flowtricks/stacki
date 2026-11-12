@@ -144,7 +144,9 @@ test('a sign-in failure and a crash end the turn as values', async (context) => 
   assert.ok(chat !== undefined);
   assert.ok((await host.prompt(root, chat.id, 'please sign in', [])).ok);
   await until('the sign-in end', () => ofKind(events(), 'turn-end').length > 0);
-  assert.ok(ofKind(events(), 'notice').some((event) => event.severity === 'sign-in'));
+  // One signal, not three: the turn ends as `sign-in` and the availability says so; no red notice repeats it.
+  assert.equal(created(ofKind(events(), 'turn-end')[0]).stop, 'sign-in');
+  assert.equal(ofKind(events(), 'notice').length, 0);
   assert.equal(host.availability('codex', root).state, 'sign-in');
   await host.install('codex', root); // "I've signed in" clears the state.
   assert.equal(host.availability('codex', root).state, 'ready');
@@ -253,7 +255,7 @@ test('the store round-trips chats, skips unreadable lines and holds its bounds',
   const store = new ChatStore(path.join(temporary('store'), 'ai'));
   const chat = store.create(root, 'claude', 'First', 5);
   assert.ok(chat !== undefined);
-  assert.equal(store.list(root).length, 1);
+  assert.equal(store.list(root).chats.length, 1);
   const turn = toTurnId(`t${'3'.repeat(16)}`);
   assert.ok(store.append(root, chat.id, [{ kind: 'turn-start', turn, at: 6 }]));
   const file = path.join(store.projectDirectory(root), 'chats', `${chat.id}.jsonl`);
@@ -264,19 +266,19 @@ test('the store round-trips chats, skips unreadable lines and holds its bounds',
   );
   const renamed = store.update(root, chat.id, (record) => ({ ...record, title: 'Renamed', pinned: true }));
   assert.equal(renamed?.title, 'Renamed');
-  assert.equal(store.list(root)[0]?.pinned, true);
+  assert.equal(store.list(root).chats[0]?.pinned, true);
   assert.equal(store.readIndex(root).trusted, false);
   store.trust(root);
   assert.equal(store.readIndex(root).trusted, true);
   fs.writeFileSync(path.join(store.projectDirectory(root), 'index.json'), '{broken');
-  assert.deepEqual(store.list(root), [], 'a broken index reads as empty');
-  store.writeIndex(root, { version: 1, trusted: true, chats: [] });
+  assert.deepEqual(store.list(root), { chats: [], sections: [] }, 'a broken index reads as empty');
+  store.writeIndex(root, { version: 2, trusted: true, sections: [], chats: [] });
   for (let index = 0; index < AI_LIMITS.chatsMax; index++) {
     assert.ok(store.create(root, 'codex', `Chat ${index}`, 1) !== undefined);
   }
   assert.equal(store.create(root, 'codex', 'One too many', 1), undefined);
-  store.delete(root, created(store.list(root)[0]).id);
-  assert.equal(store.list(root).length, AI_LIMITS.chatsMax - 1);
+  store.delete(root, created(store.list(root).chats[0]).id);
+  assert.equal(store.list(root).chats.length, AI_LIMITS.chatsMax - 1);
 });
 
 test('the ledger keeps, undoes, creates and deletes, and hands drift to the merge editor', async () => {

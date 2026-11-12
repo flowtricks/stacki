@@ -26,6 +26,7 @@ import {
   entryPath,
   dataFileOfSection,
   isComponentSection,
+  PROJECT_DATA_SECTION,
   sectionHeads,
   missingLabel,
   pagesOfPath,
@@ -184,6 +185,8 @@ export interface PickerNode {
   readonly unbindable?: string;
   /** A muted word in place of a value: a prop the instance does not pass and has no default reads "not set". */
   readonly note?: string;
+  /** A muted line under the name: where the row lives, when two rows could be mistaken for each other. */
+  readonly detail?: string;
   readonly lazy?: boolean;
   readonly pickable?: boolean;
   readonly missing?: boolean;
@@ -468,6 +471,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
         depth={depth}
         label={showPath ? node.path : node.key}
         title={`${node.path} — ${node.unbindable ?? node.kind}`}
+        detail={node.detail}
         expandable={expandable === true}
         open={isOpen}
         selected={isCurrent}
@@ -647,6 +651,9 @@ function SectionIcon({ section }: { readonly section: string | undefined }) {
   }
   if (section === 'collections') {
     return <AstroIcon size={11} className="dp-section-icon" />;
+  }
+  if (section === PROJECT_DATA_SECTION) {
+    return <FileIcon size={11} className="dp-section-icon" />;
   }
   // A project data file is a file, marked as the Pages panel marks one; the
   // CMS mark stays with what the CMS holds (the collections' rows).

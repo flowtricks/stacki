@@ -1,0 +1,285 @@
+/* The sessions list and the panel header's list controls (SessionsView.tsx, ChatRow.tsx, SectionHeader.tsx,
+   ChatHeader.tsx). Surfaces are separated by background fills, never borders. */
+.ai-sessions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+}
+.ai-sessions-search {
+  flex: none;
+}
+.ai-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 6px;
+}
+/* A drag in progress: nothing under the pointer selects, and the cursor says something is held. */
+.ai-list:has([data-dragging]) {
+  user-select: none;
+  cursor: grabbing;
+}
+
+/* A section: its header, then its rows. */
+.ai-section {
+  display: flex;
+  flex-direction: column;
+}
+.ai-section-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 4px 0 8px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.ai-section-head.is-static {
+  cursor: default;
+}
+.ai-section-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-left: -6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.ai-section-toggle:hover,
+.ai-section-toggle:focus-visible,
+.ai-section-head.has-menu .ai-section-toggle {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.ai-section-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-section-head .ai-row-more {
+  margin-left: auto;
+}
+.ai-section-head:hover .ai-row-more,
+.ai-section-head:focus-within .ai-row-more,
+.ai-section-head.has-menu .ai-row-more {
+  opacity: 1;
+}
+.ai-section-head.is-renaming {
+  height: 30px;
+}
+.ai-section-rename {
+  margin: 0 4px 0 -6px;
+}
+.ai-section-empty {
+  list-style: none;
+  padding: 4px 8px 4px 26px;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+/* A chat row. The hovered row swaps its age for the "⋯" button. */
+.ai-list-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ai-list-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: 7px;
+}
+.ai-list-row:hover,
+.ai-list-row:focus-within,
+.ai-list-row.has-menu {
+  background: var(--bg-hover);
+}
+.ai-list-open {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 6px;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  text-align: left;
+}
+.ai-list-open:focus-visible {
+  background: var(--bg-input);
+  outline: none;
+}
+.ai-list-open[data-dragging] {
+  opacity: 0.5;
+}
+.ai-list-open.is-static {
+  cursor: default;
+}
+.ai-row-lead {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+}
+.ai-unread-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.ai-list-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.ai-list-row.is-unread .ai-list-title {
+  font-weight: 600;
+}
+.ai-list-row.is-archived .ai-list-title {
+  color: var(--text-faint);
+}
+.ai-row-meta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ai-row-meta svg {
+  opacity: 0.55;
+}
+.ai-list-row:hover .ai-row-meta,
+.ai-list-row:focus-within .ai-row-meta,
+.ai-list-row.has-menu .ai-row-meta {
+  visibility: hidden;
+}
+.ai-row-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  opacity: 0;
+}
+.ai-list-row .ai-row-more {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.ai-list-row:hover .ai-row-more,
+.ai-list-row:focus-within .ai-row-more,
+.ai-list-row.has-menu .ai-row-more,
+.ai-row-more:focus-visible {
+  opacity: 1;
+}
+.ai-row-more:hover,
+.ai-row-more[aria-expanded='true'] {
+  background: var(--bg-input);
+  color: var(--text);
+}
+.ai-row-restore {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 11px;
+}
+.ai-list-row.is-archived .ai-row-more {
+  right: 4px;
+}
+.ai-list-row.is-renaming {
+  height: 30px;
+  padding-left: 6px;
+}
+/* A field is exactly as tall as the line it replaces, so renaming moves nothing below it. */
+.ai-rename {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 26px;
+  margin: 0 4px 0 0;
+}
+
+/* Where a dragged row would land: zero height, so showing it moves nothing. */
+.ai-drop-slot {
+  position: relative;
+  height: 0;
+  list-style: none;
+}
+
+/* The list's empty and filtered-out states, and the foot's "New section". */
+.ai-sessions-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ai-sessions-empty p {
+  margin: 0;
+}
+.ai-sessions-start,
+.ai-new-section {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+.ai-sessions-start {
+  padding: 5px 10px;
+  background: var(--bg-input);
+  color: var(--text);
+}
+.ai-new-section {
+  align-self: flex-start;
+  padding: 5px 8px;
+}
+.ai-new-section:hover:not(:disabled),
+.ai-new-section:focus-visible {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.ai-new-section:disabled {
+  opacity: 0.5;
+}
+
+/* The header. */
+.ai-header .ai-filter-button.on {
+  color: var(--accent);
+}
+.ai-header h2 {
+  cursor: default;
+}
+.ai-header-rename {
+  flex: 1;
+  min-width: 0;
+}

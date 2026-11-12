@@ -82,6 +82,8 @@
   align-items: center;
   justify-content: space-between;
   height: 26px;
+  /* Room under the Apply button, so it does not sit on the first finding's fill. */
+  margin-bottom: 8px;
   padding: 0 8px;
   color: var(--text-dim);
   font-size: 11.5px;
@@ -121,6 +123,14 @@
 .audits-row .audits-icon.audits-medium {
   color: var(--audits-medium);
 }
+/* The list's hover rule (".list-item:hover:not(.active) .icon", styles.css) greys every row icon and is more
+   specific than the two tints above, so a hovered row lost its severity colour. These keep it on hover. */
+.audits-panel .audits-row:hover .audits-icon.audits-high {
+  color: var(--audits-high);
+}
+.audits-panel .audits-row:hover .audits-icon.audits-medium {
+  color: var(--audits-medium);
+}
 .audits-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -148,13 +158,6 @@
   gap: 1px;
   /* Rows and text line up under the title, past the icon (14px) and its gap (6px). */
   padding: 0 0 4px 20px;
-}
-.audits-why {
-  margin: 0;
-  padding: 2px 8px 4px;
-  color: var(--text-dim);
-  font-size: 11px;
-  line-height: 1.45;
 }
 .audits-occurrence-row {
   height: 26px;
@@ -479,6 +482,17 @@
   background: var(--accent);
   color: white;
   font-size: 11.5px;
+  font-weight: 500;
+}
+.audits-apply:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.audits-apply:disabled {
+  opacity: 0.5;
+}
+/* In the "N fixes ready" row it sits at the row's right edge, on the row's own 8px padding. */
+.audits-ready .audits-apply {
+  flex: none;
 }
 .audits-review-confirm {
   margin: 0 12px 8px;

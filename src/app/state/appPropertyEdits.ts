@@ -1,7 +1,8 @@
 // Editing a node's properties: its comment, classes, asset props, renames,
 // kind and tag, text, branches and content (App.tsx).
 
-import type { ClassOutcome } from '../../features/style/model/host';
+import type { ClassOutcome, StyleBlockRequest } from '../../features/style/model/host';
+import { fileLayoutOf, styleBlockFileSupported, styleBlockInner, UNSUPPORTED_FILE_MESSAGE } from '../../features/style/model/firstStyleBlock';
 import { useCallback, useRef } from 'react';
 import { labelsNode } from '../../../shared/page/leadingNote';
 import type { Attr } from '../../../shared/page/pageNode';
@@ -25,6 +26,7 @@ import {
 import { readFrontmatter } from '../../../shared/page/frontmatterSource';
 import { isAttributeHost } from '../../../shared/engine/intent';
 import { hasClass, withClass, type ClassPlacement } from '../../editor/classAttr';
+import type { EditGesture } from '../../editor/pageEdits';
 import { attributeRemoval, classRemoval, type PropRemoval } from '../../editor/selectorRemoval';
 import { withAttributes } from '../../editor/attributesBinding';
 import { previewAddedClass, previewClassProps } from '../../editor/previewClassPatch';
@@ -40,7 +42,7 @@ import { findEditorNodeById as findNodeById } from '../../editor/pageState';
 import { type EditorModel, type EditorNode } from '../../editor/pageView';
 import { findImportPath } from '../../ipc/appBridge';
 import { newId, inlineWithIds, tagChangeGesture, restatedText, statedText, frontmatterOf } from '../model/nodeFactory';
-import { withPrunedImports, chooseImportPath } from '../model/pageGestures';
+import { withPrunedImports, chooseImportPath, globalStyleNode } from '../model/pageGestures';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useHistory } from './appNodeEdits';
@@ -105,6 +107,7 @@ export function useClassEdits(coreState: ReturnType<typeof useCoreState>, lifecy
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
   const addClassToNode = useAddClassToNode(coreState, lifecycle, history);
+  const addStyleBlock = useAddStyleBlock(coreState, lifecycle, history);
   const { removeClassFromNode, removeAttributeFromNode } = useRemoveFromNode(coreState, lifecycle, history);
 
   // Step 6, attribute: set or remove one prop, as an edit request when it has
@@ -158,7 +161,7 @@ export function useClassEdits(coreState: ReturnType<typeof useCoreState>, lifecy
     },
     [commitEdit, pageStateRef],
   );
-  return { addClassToNode, removeClassFromNode, removeAttributeFromNode, setProp, setProps, replaceProps };
+  return { addClassToNode, addStyleBlock, removeClassFromNode, removeAttributeFromNode, setProp, setProps, replaceProps };
 }
 
 function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
@@ -184,29 +187,15 @@ function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle
       if (!node) {
         return { tag: 'refused', message: 'the element is gone' };
       }
-      // Bare text has no tag to hold the class. Refused here, so the panel can
-      // say why and the page never queues an edit it cannot state.
-      if (!isAttributeHost(node.kind)) {
-        const message = 'Plain text has no tag to hold a class. Right-click it and use Convert to first.';
-        showToast(message, 'error');
-        return { tag: 'refused', message };
-      }
-      if (hasClass(node.props, clean)) {
+      const plan = planClassEdit(nodeId, node, clean, placement);
+      if (plan.tag === 'present') {
         return { tag: 'applied' };
       }
-      const edit = withClass(node.props, clean, placement);
-      if (!edit) {
-        const message = `Stacki couldn’t add the class “${clean}”. Check the class name and retry.`;
-        showToast(message, 'error');
-        return { tag: 'refused', message };
+      if (plan.tag === 'refused') {
+        showToast(plan.message, 'error');
+        return { tag: 'refused', message: plan.message };
       }
-      // Step 6, attribute: the class attribute, as its own edit request.
-      const patch = { [edit.key]: edit.value, ...(edit.remove ? { class: undefined } : {}) };
-      const gesture = propsGesture(nodeId, patch, { coalesceKey: undefined, urgency: true });
-      // Migrating class to class:list must be one node rewrite, so a failed
-      // second attribute write cannot leave duplicate class attributes.
-      const request = edit.remove ? () => undefined : gesture.request;
-      if (!commitEdit({ ...gesture, request })) {
+      if (!commitEdit(plan.gesture)) {
         return { tag: 'refused', message: 'the edit could not be queued' };
       }
       previewAddedClass(previewPath, clean);
@@ -218,6 +207,77 @@ function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle
       }
     },
     [commitEdit, flushSave, showToast, pageStateRef],
+  );
+}
+
+type ClassPlan = { readonly tag: 'present' } | { readonly tag: 'refused'; readonly message: string } | { readonly tag: 'edit'; readonly gesture: EditGesture };
+
+// The page edit that puts `clean` on a node, or why it cannot be: shared by the class typed in
+// the selector box and the first styles of a page (useAddStyleBlock), so both put a class on
+// an element the same way.
+function planClassEdit(nodeId: string, node: EditorNode, clean: string, placement: ClassPlacement): ClassPlan {
+  // Bare text has no tag to hold the class. Refused here, so the panel can
+  // say why and the page never queues an edit it cannot state.
+  if (!isAttributeHost(node.kind)) {
+    return { tag: 'refused', message: 'Plain text has no tag to hold a class. Right-click it and use Convert to first.' };
+  }
+  if (hasClass(node.props, clean)) {
+    return { tag: 'present' };
+  }
+  const edit = withClass(node.props, clean, placement);
+  if (!edit) {
+    return { tag: 'refused', message: `Stacki couldn’t add the class “${clean}”. Check the class name and retry.` };
+  }
+  // Step 6, attribute: the class attribute, as its own edit request.
+  const patch = { [edit.key]: edit.value, ...(edit.remove ? { class: undefined } : {}) };
+  const gesture = propsGesture(nodeId, patch, { coalesceKey: undefined, urgency: true });
+  // Migrating class to class:list must be one node rewrite, so a failed
+  // second attribute write cannot leave duplicate class attributes.
+  return { tag: 'edit', gesture: edit.remove ? { ...gesture, request: () => undefined } : gesture };
+}
+
+// The first styles of a page that has no style source (firstStyleBlock.ts): a `<style is:global>`
+// block at the end of the open file and, when the rule needs one, a class on the selected
+// element. Both are ONE gesture, so one edit on disk and one undo step: undoing the block
+// leaves no class behind that styles nothing, and undoing the class leaves no orphan rule.
+function useAddStyleBlock(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const { pageStateRef } = coreState;
+  const { flushSave } = lifecycle;
+  const { commitEdit } = history;
+  return useCallback(
+    async (nodeId: string, request: StyleBlockRequest, previewPath?: string): Promise<ClassOutcome> => {
+      const { currentPage, pageState: state } = pageStateRef.current;
+      if (!nodeId || !state?.editable) {
+        return { tag: 'refused', message: 'no element is selected' };
+      }
+      if (!styleBlockFileSupported(currentPage?.path)) {
+        return { tag: 'refused', message: UNSUPPORTED_FILE_MESSAGE };
+      }
+      const node = findNodeById(state.model.nodes, nodeId);
+      if (!node) {
+        return { tag: 'refused', message: 'the element is gone' };
+      }
+      // The class is planned before anything is queued: a refusal must leave the page as it was.
+      const plan = request.className === undefined ? ({ tag: 'present' } as const) : planClassEdit(nodeId, node, request.className, request.placement);
+      if (plan.tag === 'refused') {
+        return { tag: 'refused', message: plan.message };
+      }
+      const block = globalStyleNode(newId(), styleBlockInner(request.css, fileLayoutOf(state.source)));
+      const insert = insertGesture(state.model, block, undefined, { urgency: true });
+      if (!commitEdit(plan.tag === 'edit' ? sequence(insert, plan.gesture) : insert)) {
+        return { tag: 'refused', message: 'the edit could not be queued' };
+      }
+      if (request.className !== undefined) {
+        previewAddedClass(previewPath, request.className);
+      }
+      try {
+        await flushSave();
+        return { tag: 'applied' };
+      } catch (error: unknown) {
+        return { tag: 'refused', message: cleanError(error) };
+      }
+    },
+    [commitEdit, flushSave, pageStateRef],
   );
 }
 

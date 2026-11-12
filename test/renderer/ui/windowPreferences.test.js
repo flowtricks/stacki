@@ -77,7 +77,8 @@ test('window mode restores only valid preferences without overwriting geometry',
     },
   });
   try {
-    assert.equal(readWindowMode('variables.mode'), 'floating');
+    assert.equal(readWindowMode('variables.mode'), 'floating', 'nothing stored starts floating, the window default');
+    assert.equal(readWindowMode('variables.mode', { fallback: 'docked' }), 'docked', 'a window that starts docked says so');
     for (const mode of ['docked', 'floating', 'docked']) {
       storeWindowMode('variables.mode', mode);
       assert.equal(readWindowMode('variables.mode'), mode);

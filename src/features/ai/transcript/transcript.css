@@ -1,0 +1,517 @@
+/* The transcript (TranscriptView.tsx and the cards it draws). Surfaces are separated by background fills, never borders. */
+/* Transcript */
+.ai-transcript {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 2px;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.ai-transcript-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.ai-earlier,
+.ai-group-earlier {
+  align-self: center;
+  background: var(--bg-input);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ai-message-user {
+  align-self: flex-end;
+  max-width: 88%;
+  background: var(--bg-active);
+  border-radius: 10px;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-message-attachments {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-message-agent {
+  overflow-wrap: anywhere;
+}
+.ai-message {
+  position: relative;
+}
+.ai-worked {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.ai-markdown p,
+.ai-markdown ul,
+.ai-markdown ol {
+  margin: 0 0 6px;
+}
+/* The app's reset zeroes list padding, which leaves a list's markers outside the message and clipped by the scroller. */
+.ai-markdown ul,
+.ai-markdown ol {
+  padding-left: 18px;
+}
+.ai-markdown h3 {
+  font-size: 12.5px;
+  margin: 8px 0 4px;
+}
+.ai-markdown .code-block {
+  background: var(--bg-input);
+  border-radius: 6px;
+  padding: 8px;
+  overflow-x: auto;
+  font: 11.5px / 1.5 var(--mono, ui-monospace, monospace);
+}
+.ai-thought {
+  color: var(--text-dim);
+}
+.ai-thought-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  text-align: left;
+}
+.ai-thought-head:hover {
+  background: var(--bg-input);
+}
+.ai-thought-body {
+  margin: 2px 0 0 18px;
+  padding: 6px 8px;
+  max-height: 260px;
+  overflow: auto;
+  border-radius: 6px;
+  background: var(--bg-input);
+  font-size: 12px;
+}
+
+/* The line under a running turn */
+.ai-turn-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px;
+  color: var(--text-dim);
+  font-size: 12px;
+}
+.ai-turn-time {
+  min-width: 4.2em;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+.ai-latest {
+  position: sticky;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin: 0 auto;
+  background: var(--bg-active);
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 11px;
+}
+.ai-retry {
+  align-self: flex-start;
+}
+
+/* An activity group: the agent's work between two messages, folded to a line */
+.ai-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.ai-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  text-align: left;
+}
+.ai-group-head:hover {
+  background: var(--bg-active);
+}
+.ai-group-mark {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-faint);
+}
+.ai-group-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.ai-group-failed {
+  font-size: 10.5px;
+  color: var(--red);
+}
+.ai-group-time,
+.ai-tool-time,
+.ai-task-time {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.ai-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-left: 10px;
+  min-width: 0;
+}
+
+/* Tool calls */
+.ai-tool {
+  background: var(--bg-input);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.ai-tool-nested {
+  margin-left: 14px;
+}
+.ai-tool-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--text-dim);
+  text-align: left;
+}
+.ai-tool-head:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.ai-tool-head:not(:disabled):hover {
+  background: var(--bg-active);
+}
+.ai-tool-spacer {
+  width: 12px;
+}
+.ai-tool-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+.ai-tool-status {
+  display: inline-flex;
+  align-items: center;
+  min-width: 14px;
+  justify-content: flex-end;
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.ai-tool-count {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.ai-status-in_progress {
+  color: var(--accent);
+}
+.ai-status-failed {
+  color: var(--red);
+}
+.ai-tool-command {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  white-space: pre-wrap;
+}
+.ai-tool-more {
+  font-size: 10.5px;
+  color: var(--text-faint);
+}
+.ai-tool-showall {
+  align-self: flex-start;
+  background: var(--bg-active);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ai-tool-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+.ai-tool-paths {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.ai-tool-output {
+  max-height: 220px;
+  max-width: 100%;
+  overflow: auto;
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 4px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+/* Permission, plan and notices */
+.ai-permission {
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ai-permission-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.ai-permission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ai-allow {
+  background: var(--accent);
+  color: #fff;
+}
+.ai-reject {
+  background: var(--bg-active);
+}
+.ai-permission-answered {
+  flex-direction: row;
+  justify-content: space-between;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.ai-permission-outcome {
+  color: var(--text-faint);
+}
+.ai-notice {
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+}
+.ai-notice-error,
+.ai-notice-sign-in {
+  background: rgba(255, 69, 58, 0.12);
+  color: var(--text);
+}
+.ai-notice-warning {
+  background: rgba(255, 179, 64, 0.12);
+}
+.ai-plan {
+  background: var(--bg-input);
+  border-radius: 6px;
+}
+.ai-plan-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: transparent;
+  text-align: left;
+}
+.ai-plan-count {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-plan-current {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-plan-entries {
+  margin: 0;
+  list-style: none;
+  padding: 0 8px 8px 12px;
+  font-size: 12px;
+}
+.ai-plan-entries li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 1px 0;
+}
+.ai-plan-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 18px;
+  flex: none;
+}
+.ai-plan-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.ai-plan-in_progress .ai-plan-text {
+  color: var(--text);
+}
+.ai-plan-completed {
+  color: var(--text-faint);
+}
+.ai-plan-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  opacity: 0.5;
+}
+
+/* A reply that failed for any reason but signing in: one quiet row, no alarm colours. */
+.ai-error-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--text-dim);
+}
+.ai-error-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+.ai-error-title {
+  flex: 1;
+  min-width: 0;
+}
+.ai-error-body .ai-details {
+  flex-basis: 100%;
+}
+
+/* Compaction */
+.ai-compaction {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+.ai-compaction-mark {
+  display: inline-flex;
+  align-items: center;
+}
+.ai-compaction-detail {
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+.ai-compaction-failed {
+  background: rgba(255, 69, 58, 0.12);
+  color: var(--text);
+}
+.ai-compaction-failed .ai-compaction-mark {
+  color: var(--red);
+}
+
+/* Background tasks */
+.ai-tasks {
+  background: var(--bg-input);
+  border-radius: 6px;
+  min-width: 0;
+}
+.ai-tasks-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 4px;
+}
+.ai-tasks-head {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: transparent;
+  color: var(--text-dim);
+  text-align: left;
+}
+.ai-tasks-stop {
+  flex: none;
+  background: var(--bg-active);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+.ai-tasks-list {
+  margin: 0;
+  padding: 0 8px 8px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ai-task {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1px 8px;
+  align-items: center;
+}
+.ai-task-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-task-finished {
+  color: var(--text-faint);
+}
+.ai-task-failed .ai-task-time {
+  color: var(--red);
+}
+.ai-task-peek {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 19px;
+  font: 10.5px / 1.4 var(--mono, ui-monospace, monospace);
+  color: var(--text-faint);
+}

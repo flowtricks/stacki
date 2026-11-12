@@ -7,8 +7,9 @@
 // optional keys (`deprecated`, `usage`), never as renamed ones.
 
 import { assert } from '../core/assert';
+import { LIMITS } from '../core/limits';
 import type { CodeKind, PropDefault, PropShapeField, PropUnion } from './propSchema';
-import type { ComponentPropModel, PropControl, PropModel, PropUsage } from './propModel';
+import type { ComponentPropModel, PropControl, PropMember, PropModel, PropUsage } from './propModel';
 
 /** The schema's own word for each kind of value a field takes. */
 export type SchemaFieldType = 'enum' | 'attrs' | 'code' | 'string' | 'number' | 'boolean' | 'other';
@@ -134,7 +135,7 @@ function declaredField(prop: PropModel, type: SchemaFieldType, codeKind: CodeKin
   const choice = control.kind === 'choice' ? control : undefined;
   const written =
     choice === undefined || choice.numeric ? [] : choice.options.filter((option) => option.written === 'expression').map((option) => option.value);
-  const shape = shapeOf(control);
+  const shape = shapeOf(control, 1);
   // A value only code can give carries its type, so the panel can say what it
   // takes — when the type says so; a kind read from a default has no type to show.
   const typed = prop.recognition.source === 'type' && codeKind !== undefined;
@@ -175,11 +176,32 @@ function numberKeys(control: Extract<PropControl, { kind: 'number' }>): Pick<Mod
 
 // What one of these is made of, when the type says: the fields of an object,
 // or of each item of a list of objects (`list` tells `ServiceTime[]`, which a
-// loop over it hands one of, from a plain object).
-function shapeOf(control: PropControl): { readonly fields: readonly PropShapeField[]; readonly list: boolean } | undefined {
+// loop over it hands one of, from a plain object). A field that is itself an
+// object or a list of them carries its own shape, down to the depth a List
+// property's item fields nest (LIMITS.listFieldDepthMax).
+function shapeOf(control: PropControl, depth: number): { readonly fields: readonly PropShapeField[]; readonly list: boolean } | undefined {
+  assert(depth <= LIMITS.listFieldDepthMax, 'shapeOf: the shape nests within its bound');
   const group = control.kind === 'group' ? control : control.kind === 'list' && control.item.kind === 'group' ? control.item : undefined;
   if (group === undefined || group.fields.length === 0) {
     return undefined;
   }
-  return { fields: group.fields.map((field) => ({ name: field.name, type: schemaTypeOf(field.control).type })), list: control.kind === 'list' };
+  return { fields: group.fields.map((field) => shapeFieldOf(field, depth)), list: control.kind === 'list' };
+}
+
+// One member of a shape: its type, and what the type cannot say on its own.
+function shapeFieldOf(field: PropMember, depth: number): PropShapeField {
+  const control = field.control;
+  const nested = depth < LIMITS.listFieldDepthMax ? shapeOf(control, depth + 1) : undefined;
+  // Options written as expressions (`flag={true}`) are not words an Option field can hold.
+  const options =
+    control.kind === 'choice' && !control.numeric && control.options.every((option) => option.written === 'string')
+      ? control.options.map((option) => option.value)
+      : undefined;
+  return {
+    name: field.name,
+    type: schemaTypeOf(control).type,
+    ...(control.kind === 'text' && control.format !== undefined ? { format: control.format } : {}),
+    ...(options === undefined ? {} : { options }),
+    ...(nested === undefined ? {} : { shape: nested.fields, shapeIsList: nested.list }),
+  };
 }

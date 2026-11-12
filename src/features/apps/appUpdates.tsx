@@ -1,12 +1,12 @@
 // What the Apps platform shows about updates outside the update flow itself:
 // which installed apps have an update waiting (for the rail's badge), how a row
-// says so ("Update available · v1.2.0"), and each app's Auto-update switch.
+// says so ("Update available · v1.2.0"), and each app's Update automatically switch.
 //
 // The waiting set is the last thing the editor learned: the installed list the
 // Apps panel read (which replaces it), or an update check's outcomes (which add
 // and remove ids). It holds app ids only, at most one per installed app.
 //
-// Auto-update is off for every app until an admin turns it on (docs/apps.md,
+// Update automatically is off for every app until an admin turns it on (docs/apps.md,
 // "Update policy"): an app is third-party code, so new code runs only after a
 // person chose Update or switched this on for that app.
 import { useSyncExternalStore } from 'react';
@@ -28,10 +28,10 @@ function publish(next: ReadonlySet<string>): void {
   }
 }
 
-/** The installed apps as just read: an app has an update waiting exactly when its lock entry records one. */
+/** The installed apps as just read: an app has an update waiting exactly when its lock entry records one and it has a source to update from. */
 export function noteInstalledApps(apps: readonly AppSummary[]): void {
   assert(apps.length <= APP_LIMITS.appsMax, 'Installed apps are bounded');
-  publish(new Set(apps.filter((app) => app.lock.update !== undefined).map((app) => app.manifest.id)));
+  publish(new Set(apps.filter((app) => appUpdateStatus(app.lock).kind !== 'none').map((app) => app.manifest.id)));
 }
 
 /** An update check's outcomes: an available update waits; an installed one, or a current app, no longer does. */
@@ -41,6 +41,10 @@ export function noteUpdateOutcomes(outcomes: readonly AppUpdateOutcome[]): void 
   for (const outcome of outcomes) {
     switch (outcome.kind) {
       case 'available':
+        next.add(outcome.id);
+        break;
+      case 'needs-approval':
+        // Held for a person's OK: it waits like any available update.
         next.add(outcome.id);
         break;
       case 'updated':
@@ -61,16 +65,18 @@ export function noteUpdateOutcomes(outcomes: readonly AppUpdateOutcome[]): void 
   publish(next);
 }
 
+/** How many installed apps have an update waiting right now. */
+export function waitingUpdateCount(): number {
+  return waiting.size;
+}
+
 export function useWaitingUpdateCount(): number {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => {
-        listeners.delete(listener);
-      };
-    },
-    () => waiting.size,
-  );
+  return useSyncExternalStore((listener) => {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  }, waitingUpdateCount);
 }
 
 /**
@@ -103,9 +109,62 @@ export function updateAvailableLabel(update: AppAvailableUpdate): string {
 }
 
 /**
- * An app's Auto-update row in its details popup's Updates list (a list item): a
- * switch for an admin, the state for anyone else; what it does is in its hint.
- * An uploaded app has no source to update from, so it has none.
+ * What an installed app's update looks like to the person, decided from its lock entry alone:
+ * - `none`: nothing waits, or the app has no source to update from (an uploaded app or one added to
+ *   the project folder is the person's own, so it never offers Update).
+ * - `available`: a newer version waits; Update installs it.
+ * - `needs-approval`: auto-update is on, but the new version asks for more than the installed one did
+ *   (new network hosts, sign-in providers or role switches, `additions`). The main process does not
+ *   install it by itself; the row says "Update needs your OK" until a person chooses Update.
+ */
+export type AppUpdateStatus =
+  | { readonly kind: 'none' }
+  | { readonly kind: 'available'; readonly update: AppAvailableUpdate }
+  | { readonly kind: 'needs-approval'; readonly update: AppAvailableUpdate };
+
+export function appUpdateStatus(lock: AppSummary['lock']): AppUpdateStatus {
+  if (!appUpdatable(lock.source)) {
+    return { kind: 'none' };
+  }
+  const { update } = lock;
+  if (update === undefined) {
+    return { kind: 'none' };
+  }
+  if (lock.autoUpdate) {
+    if (update.additions.length > 0) {
+      return { kind: 'needs-approval', update };
+    }
+  }
+  return { kind: 'available', update };
+}
+
+/** The row's and the details' words for a status: "Update available · v1.2.0" or "Update needs your OK · v1.2.0". */
+export function updateStatusLabel(status: Exclude<AppUpdateStatus, { readonly kind: 'none' }>): string {
+  assert(status.update.version.length > 0, 'An update names its version');
+  switch (status.kind) {
+    case 'available':
+      return updateAvailableLabel(status.update);
+    case 'needs-approval':
+      return `Update needs your OK · v${status.update.version}`;
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
+}
+
+/** The one line under an update that asks for more: what is new in it, or undefined when nothing is. */
+export function updateAdditionsNote(update: AppAvailableUpdate): string | undefined {
+  if (update.additions.length === 0) {
+    return undefined;
+  }
+  return `New in v${update.version}: ${update.additions.join(', ')}.`;
+}
+
+/**
+ * An app's "Update automatically" row in its details popup's Updates list: a switch for an admin, the
+ * state for anyone else. Only an app with a source to update from has it. It is off until an admin
+ * turns it on, and its hint says who it is for: new code runs unattended, so only a publisher you trust.
  */
 export function AutoUpdateSetting({
   app,
@@ -122,14 +181,10 @@ export function AutoUpdateSetting({
   if (!appUpdatable(lock.source)) {
     return undefined;
   }
-  const note =
-    lock.source.kind === 'marketplace'
-      ? 'Installs new versions the Stacki marketplace approves, when each is checked.'
-      : 'Installs each new GitHub release of this app, when it is checked.';
   return (
-    <AppDetailsItem label="Auto-update" hint={lock.autoUpdate ? note : 'Off: updates wait for you to choose Update.'}>
+    <AppDetailsItem label="Update automatically" hint={AUTO_UPDATE_HINT}>
       <Switch
-        label={`Auto-update ${app.manifest.name}`}
+        label={`Update ${app.manifest.name} automatically`}
         checked={lock.autoUpdate}
         disabled={!admin || busy}
         onToggle={() => onChange({ autoUpdate: !lock.autoUpdate })}
@@ -137,6 +192,9 @@ export function AutoUpdateSetting({
     </AppDetailsItem>
   );
 }
+
+/** What the switch does, and for whom; a version that asks for more still waits for a person's OK (appUpdateStatus). */
+export const AUTO_UPDATE_HINT = 'Install new versions of this app as they are released. Only turn this on for a publisher you trust.';
 
 /** Whether an app has somewhere to update from: an uploaded app, or one added to the project folder, has not. */
 export function appUpdatable(source: AppSummary['lock']['source']): boolean {

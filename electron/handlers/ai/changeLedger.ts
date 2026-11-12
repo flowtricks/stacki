@@ -168,6 +168,11 @@ export class ChangeLedger {
     return this.turns;
   }
 
+  /** One pending file's text before and after `turn`; undefined once it is settled or no longer kept. */
+  diffOf(turn: TurnId, file: string): LedgerDiff | undefined {
+    return diffOfTurns(this.turns, turn, this.relative(file) ?? file);
+  }
+
   /** The changes of one turn, as the transcript records them. */
   static changesOf(turn: LedgerTurn): readonly ChatFileChange[] {
     return turn.entries.map((entry) => ({ path: entry.path, change: changeKind(entry), review: entry.review }));
@@ -293,6 +298,27 @@ function changeKind(entry: LedgerEntry): FileChangeKind {
     return 'created';
   }
   return entry.after === undefined ? 'deleted' : 'modified';
+}
+
+/** A pending change's two sides. Undefined `oldText`: the turn created the file; undefined `newText`: it deleted it. */
+export interface LedgerDiff {
+  readonly oldText: string | undefined;
+  readonly newText: string | undefined;
+}
+
+/**
+ * The diff of one file in one turn, from the ledger's turns (live or read back from the reviews
+ * file). Only a pending entry has content: a settled one keeps none (`serializeLedger`), so asking
+ * for it answers undefined rather than an empty text that would read as a deleted file.
+ */
+export function diffOfTurns(turns: readonly LedgerTurn[], turn: TurnId, relative: string): LedgerDiff | undefined {
+  const entry = turns.find((candidate) => candidate.turn === turn)?.entries.find((candidate) => candidate.path === relative);
+  if (entry === undefined || entry.review !== 'pending') {
+    return undefined;
+  }
+  assert((entry.before?.length ?? 0) <= AI_LIMITS.fileCharsMax, 'diffOfTurns: the ledger only keeps files within the file bound');
+  assert((entry.after?.length ?? 0) <= AI_LIMITS.fileCharsMax, 'diffOfTurns: the ledger only keeps files within the file bound');
+  return { oldText: entry.before, newText: entry.after };
 }
 
 /** The reviews file, parsed; anything malformed is dropped (the edits themselves are already on disk). */

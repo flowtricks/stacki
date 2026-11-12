@@ -77,4 +77,50 @@ export const AI_LIMITS = {
   installMsMax: 10 * 60 * 1000,
   /** Characters of an adapter's stderr kept for the error a person sees. */
   stderrCharsMax: 16_000,
+
+  // The panel overhaul: sections, queue, mentions, compaction (docs/contracts.md "AI panel").
+  /** Prompts held in the renderer while a turn runs; the next one is refused, never silently dropped. */
+  queuedPromptsMax: 16,
+  /** Named sections of one project's chat list. */
+  sectionsMax: 50,
+  sectionNameCharsMax: 60,
+  /** Mention chips on one prompt; past it the prompt is refused at the parser. */
+  mentionsMax: 16,
+  /** One mentioned file embedded in a prompt, and all of them together; past either the file travels as a link. */
+  mentionFileCharsMax: 100_000,
+  mentionTotalCharsMax: 400_000,
+  /** The excerpt of a mentioned file kept in the transcript. */
+  mentionPreviewCharsMax: 4_000,
+  /** The bundled instructions a built-in chip carries (the same bound as an agent task's prompt). */
+  mentionBuiltinCharsMax: 60_000,
+  /** Files the mention scan looks at, and candidates one query returns. */
+  mentionScanFilesMax: 50_000,
+  mentionResultsMax: 50,
+  /** How long a project's scanned file list is reused before the next query scans again. */
+  mentionCacheMs: 10_000,
+  /** Projects whose scans are cached at once. */
+  mentionCachedProjectsMax: 4,
+  /** Skills the mention scan reads, and characters kept of a skill's description. */
+  mentionSkillsMax: 500,
+  mentionSkillDescriptionCharsMax: 400,
+  /** The characters of a query typed after `@`. */
+  mentionQueryCharsMax: 200,
+  /** Segments (text runs and chips) in one composer draft. */
+  composerSegmentsMax: 256,
+  /** Drafts kept in browser storage per project. */
+  draftsStoredMax: 50,
+  /** Parts (text runs and chips) in one prompt. */
+  promptPartsMax: 64,
+  /** Blocks beyond the parts and attachments that mention expansion may add (links, wrappers). */
+  promptBlocksExtraMax: 8,
+  /** Background tasks the transcript tracks at once. */
+  backgroundTasksMax: 64,
+  /** The reason a compaction failed, as far as it is kept and shown (the adapter's text is cut to it). */
+  compactionErrorCharsMax: 500,
+  /** Compactions remembered per chat. */
+  compactionsMax: 256,
+  /** Expanded or collapsed states the transcript remembers (in memory). */
+  transcriptUiEntriesMax: 2_000,
+  /** Sanity ceiling for a context window or the tokens used in it. */
+  contextTokensMax: 2_000_000_000,
 } as const satisfies Record<string, number>;

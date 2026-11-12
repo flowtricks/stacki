@@ -129,6 +129,13 @@ assert.equal(literal.literalItems(`[${Array.from({ length: 201 }, () => '"x"').j
 assert.equal(literal.literalCode(['He said "hi"', 'x']), '["He said \\"hi\\"", "x"]');
 assert.deepEqual(literal.literalItems(literal.literalCode(['He said "hi"', '\\'])), ['He said "hi"', '\\'], 'escapes round-trip');
 assert.throws(() => literal.literalCode(['x'.repeat(501)]), /A typed item is bounded/);
+// A custom list's `{}` code box holds any array literal: rows hold only strings, code holds the rest.
+assert.equal(literal.isArrayLiteral('["a", "b"]'), true);
+assert.equal(literal.isArrayLiteral('[{ title: "A" }, { title: "B" }]'), true, 'objects are an array too, shown as code');
+assert.equal(literal.isArrayLiteral('[]'), true);
+for (const code of ['features', '"a"', '{ a: 1 }', 'items.map((item) => item)', '', '[', 'getCollection("x")']) {
+  assert.equal(literal.isArrayLiteral(code), false, `${code} is not an array literal`);
+}
 
 // What a row of the Source picker means: a collection, a list inside its
 // items, or a list on the page. A list inside one particular item is not

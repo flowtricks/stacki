@@ -408,6 +408,7 @@ function MapListSettings({ props, children }: { readonly props: MapEditorProps; 
       onStepItem: context?.onStepItem,
       frontmatter,
       file: dataContext?.filePath,
+      projectModules: context?.projectModules,
     }),
     [tree, context, frontmatter, dataContext?.filePath],
   );

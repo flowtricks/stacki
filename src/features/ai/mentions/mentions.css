@@ -1,0 +1,14 @@
+/* Chips in a sent message (MentionChipView.tsx) and the composer's "Copied" state (ComposerInput.tsx). The pill itself is the editor's: .chip-editor-chip in
+   src/ui/chipEditor/chipEditor.css, so a chip looks the same typed and sent. Only what a sent chip adds is here. */
+.mention-chip-view {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+}
+button.mention-chip-view {
+  cursor: pointer;
+}
+.chip-editor-chip.is-copied {
+  background: var(--chip-purple-fill-hover);
+  color: var(--chip-purple-text-hover);
+}

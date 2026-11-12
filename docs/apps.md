@@ -1753,7 +1753,7 @@ function render(role) {
 }
 ```
 
-Only an admin can install, update or remove apps, and switch an app's auto-update. Two more
+Only an admin can install, update or remove apps, and switch an app's **Update automatically**. Two more
 features cover the official marketplace: `marketplace:view` shows the Apps panel's **Marketplace**
 tab and marketplace results in the command palette, and `marketplace:install` lets the role install
 an approved app from it. Each needs `panel:apps`, and installing needs `marketplace:view` too. Admin
@@ -1852,8 +1852,9 @@ In the Apps panel (rail key **E**), an admin adds an app from the header's **+**
   for you). Stacki checks the bundle and its `stacki-app.json` and shows its icon, name and version;
   **Install** installs it. Stacki Studio has no GitHub sign-in, so there you paste a public
   repository.
-- **Upload app file**: choose a `.zip`; Stacki checks it and shows it the same way.
-- **\"Build an app\" prompt**: a short prompt for an AI agent that links to this guide. A role that cannot install gets this one alone.
+- **Build an app**: opens the AI chat with the app builder instructions as a purple chip in the message box, waiting for you to add your words and send (Stacki never sends it for you); click the chip to copy the instructions, for an agent outside the project. They are a short prompt that links to this guide, bundled in Stacki rather than in your project. The chip goes to the end of a message you were typing, or into an empty chat or a new one, so what you typed is never replaced. A role without the AI chat gets the prompt on the clipboard instead, with a notice saying so. This is the one item a role that cannot install gets.
+
+An app file (a `.zip`) is no longer chosen from disk: publish it to a GitHub release and use **Load App From GitHub**, or write the app straight to `.stacki/apps/<id>/` to test it. Apps already installed from a file keep working, with their details, Share to GitHub and updates.
 
 The search field above the list (**Search installed apps**) filters the installed apps by name,
 description and id; browsing the marketplace is the panel's **Marketplace** tab.
@@ -1861,11 +1862,15 @@ description and id; browsing the marketplace is the panel's **Marketplace** tab.
 Each installed app's row has **Open** and a **⋯** menu, in this order, each where it applies:
 
 - **Details**: the app's details popup (a click on the row opens it too).
-- **Share to GitHub…**: for an app uploaded from a file or added to the project folder, with
-  `apps:share` ([Sharing an app privately with your org](#sharing-an-app-privately-with-your-org)).
+- **Share to GitHub…**: for an app uploaded from a file or added to the project folder that is not
+  on GitHub yet, with `apps:share` ([Sharing an app privately with your org](#sharing-an-app-privately-with-your-org)).
 - **Submit to marketplace**: with `marketplace:publish`. An app from GitHub opens **Publish to
   marketplace** at its own repository; an uploaded or folder app goes through Share to GitHub first
-  (so it needs `apps:share` too). A marketplace app is already listed and has no Submit.
+  (so it needs `apps:share` too), unless it is [already shared](#apps-already-shared). **An app the
+  marketplace already lists has no Submit item at all**, whatever its source: the marketplace follows
+  its repository's GitHub releases, so a new version is a new release there, never a submission. Its
+  details show a quiet **Listed in the marketplace** row with the listed latest version and a link to
+  the repository.
 - **Remove app**: admins; it asks first, as **Uninstall app** in the details does.
 
 An app's details popup has the app's icon and name at the top, with one line under the name: the
@@ -1875,7 +1880,8 @@ lines, then **More**) and a few one-line facts (**Installed from**, **Stored in*
 offline" or how many services it reaches); **External services**, one line per host, when it reaches
 any; the [secret scan](#secret-scanning) of an app added to the project folder; **App settings**;
 **Connections**; **Commands**, one line per command with its shortcut field; **Updates** (an
-available update and the Auto-update switch); and, for admins, **Uninstall app** at the foot, which
+available update with **Update**, and the **Update automatically** switch); a listed app's **About** also
+has a **Listed in the marketplace** row; and, for admins, **Uninstall app** at the foot, which
 asks first. Longer explanations sit behind a **?** beside a label. A section with nothing to show for
 the app is left out. Escape or a click outside closes it.
 
@@ -1892,7 +1898,7 @@ moment it is there, whether Stacki wrote it or you did: copied in by hand, writt
 building the app, brought by a `git pull`, or copied from another project. It is listed in the
 Installed list with every other app and opens at once.
 
-- **Source.** An app the lockfile names keeps its record: where it came from, its auto-update
+- **Source.** An app the lockfile names keeps its record: where it came from, its update-automatically
   switch and its SHA-256. A folder the lockfile does not name is listed with the source
   **Added to the project folder** (`"kind": "local"`), the SHA-256 of its files, and no updates.
   Stacki writes nothing for it: listing never changes the lockfile, so a pull or a copy never
@@ -1928,20 +1934,38 @@ newest version the Stacki owner approved.
 
 An app is third-party code, so **nothing installs new code unless a person chose it**: an admin's
 **Install** or **Update**, a role with `marketplace:install` installing from the marketplace, or that
-app's **Auto-update** switch, which an admin turned on.
+app's **Update automatically** switch, which an admin turned on.
 
-- **Auto-update is off for every app**, marketplace apps included, until an admin turns it on in the
-  app's details. The switch is stored per app in the lockfile (`"autoUpdate": true`); a lockfile
-  without it reads as off. An uploaded app has no source to update from, so it has no switch.
-- **Off**: the check still runs. A newer version shows **Update available · v1.2.0** on the app's
-  row and a dot on the rail's Apps button (for admins, who can act on it). **Update** installs that
-  version into `.stacki/apps/<id>/` and updates the lockfile.
-- **On**: the check installs the update itself and says so. A marketplace app installs only a
-  version the index approves, and only when the download's SHA-256 equals the approved one; a newer
-  release that is not approved yet is never installed. A GitHub-release app installs the newest
-  release, recording the SHA-256 of the bytes the check downloaded and installed.
-- A marketplace update waiting for **Update** is checked against the index again first: a version
-  whose approval was withdrawn since installs nothing.
+- **Update automatically is off for every app**, marketplace apps included, until an admin turns it on
+  in the app's details (**Updates**: "Install new versions of this app as they are released. Only turn
+  this on for a publisher you trust."). The switch is stored per app in the lockfile
+  (`"autoUpdate": true`); a lockfile without it reads as off. An uploaded app, or one added to the
+  project folder, is your own and has no source to update from, so it has no switch and never offers
+  Update.
+- **You see a new version.** The check runs when a project opens and every few minutes after, for GitHub
+  and marketplace installs alike. A newer version reads **Update available · v1.2.0** on the app's row
+  and in its details, with a dot on the rail's Apps button (for admins, who can act on it). A new
+  version of a listed app needs no submission: a GitHub app's check reads the repository's latest
+  release, and a marketplace app's reads the index's newest approved version, whose download must match
+  the approved SHA-256.
+- **Update** (the Refresh button on the row, and in the details) installs that version into
+  `.stacki/apps/<id>/`, updates the lockfile and says so, or shows why it could not. A marketplace
+  update is checked against the index again first: a version whose approval was withdrawn since
+  installs nothing.
+- **On**: the check installs the update itself and says so. A marketplace app installs only a version
+  the index approves, and only when the download's SHA-256 equals the approved one; a newer release that
+  is not approved yet is never installed. A GitHub-release app installs the newest release, recording
+  the SHA-256 of the bytes the check downloaded and installed.
+- **A version that asks for more is never installed silently.** Each check compares the new manifest
+  with the installed one: external hosts in `network`, `auth` providers (or a changed provider
+  endpoint) and role `permissions` it did not have before. If there are any, auto-update installs
+  nothing: the lockfile records the update with those lines (`update.additions`), the row reads
+  **Update needs your OK · v1.2.0**, the details list what is new ("New in v1.2.0: reaches
+  api.example.com."), and only an admin's **Update** installs it. With auto-update off the same lines
+  show on the available update, so the choice is informed. Asking for less, or the same, is an
+  ordinary update. A held update is not downloaded again on later checks.
+- Update only appears for an app from GitHub or the marketplace; an app you added from a file or the
+  project folder never offers it.
 
 ## The marketplace
 
@@ -2207,9 +2231,28 @@ Each step shows its progress. If one fails, the popup says which, and lists exac
 created, so you can finish or delete it on GitHub. When it is done, **Shared to owner/repo** offers
 **Copy link** and **Invite people** (the repository's access settings on GitHub), and asks whether to
 **install updates from this repository** (on by default): the app's lockfile source switches from the
-uploaded file (or the project folder) to that release, auto-update off as always, so the project gets an update notice when
+uploaded file (or the project folder) to that release, update automatically off as always, so the project gets an update notice when
 the repository publishes a new release. A public share also offers **Also submit to the marketplace**.
 Sharing needs Stacki Desktop, which holds your GitHub sign-in.
+
+## Apps already shared
+
+An app installed from a file or added to the project folder can be a copy of an app that is already
+on GitHub. Stacki treats it as **already shared** when the marketplace lists its `id` (the listing
+names the repository, read from the index the Marketplace tab already caches, so there is no extra
+request), or when its `stacki-app.json` names the repository it updates from in `source`. Such an app
+has no **Share to GitHub…**. When it is not listed yet, its **⋯** menu offers **Submit to marketplace**,
+which opens the same checklist as a GitHub app's, already on that repository; the first listing still
+needs a submission and the owner's approval. When the marketplace lists it, its menu has no submit item
+at all: the marketplace follows the repository's releases, and its details show a quiet **Listed in the
+marketplace** row with the listed latest version and a link to the repository, beside the repository
+under the version. A role that may publish needs `apps:share` only
+for apps that are not on GitHub yet.
+
+An `id` match never chooses the repository: a listed `id` always leads to the repository the
+listing names, whatever the manifest says, and the marketplace itself refuses a different repository
+under a listed `id`. A later version of a listed app is a new GitHub release of its repository; the marketplace picks it up
+and lists it without a review when the release passes the checks of an approval ([the marketplace](marketplace.md)).
 
 ## Publishing to the marketplace
 
@@ -2250,9 +2293,9 @@ To test the zip a release would ship:
 
 1. Write the app as a folder with `stacki-app.json` at its root.
 2. Zip it from inside the folder: `cd my-app && zip -r ../my-app.zip .`
-3. Open a test project in Stacki, press **E**, open the header's **+** menu, choose
-   **Upload app file**, then **Install**, then **Open**.
-4. Change files, bump `version`, zip and upload again to replace it.
+3. Attach the zip to a GitHub release of a test repository (`gh release create v0.0.1 my-app.zip`), open a test project in Stacki, press **E**, open the header's **+** menu, choose
+   **Load App From GitHub**, then **Install**, then **Open**.
+4. Change files, bump `version`, release again and update the app to replace it.
 5. Use the developer tools on the app frame (in Desktop, View, Toggle Developer Tools) to see its
    console and messages.
 

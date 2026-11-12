@@ -60,6 +60,11 @@ const DATA_EXTENSIONS = ['.ts', '.js', '.mjs', '.mts', '.cjs', '.cts', '.tsx', '
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 // Exports listed for the whole project: far more than a site keeps its settings in.
 export const PROJECT_EXPORTS_MAX = 256;
+// Items of one list read into the picker. A constants file can hold thousands of
+// rows; the picker shows the shape of the first few, and the list says how many there are.
+// Why 50: the entry pager and the field rows read only the first items, and the tree is
+// rebuilt on every keystroke of the search, so its size is the cost of each one.
+export const PROJECT_LIST_ITEMS_MAX = 50;
 
 /**
  * Every export the CMS catalog read from a data module or JSON file under
@@ -138,6 +143,36 @@ export function projectSourceNodes(input: ProjectSourceInput): TreeNode[] {
 }
 
 /**
+ * The data files a file already imports from, by the local name of each export it
+ * reads (`NAV` -> `src/consts.ts`): the in-scope half of the project's data, which
+ * projectSourceNodes leaves out because the frontmatter section lists it. The Source
+ * menu groups both halves together, so it needs to know which names are the project's.
+ */
+export function importedProjectData(input: Pick<ProjectSourceInput, 'exports' | 'file' | 'imports'>): Readonly<Record<string, string>> {
+  const from = input.file;
+  if (from === undefined || from === '') {
+    return {};
+  }
+  assert(input.exports.length <= PROJECT_EXPORTS_MAX, 'importedProjectData: the export list is bounded');
+  const files = new Set(input.exports.map((item) => item.file));
+  const out: Record<string, string> = {};
+  for (const imp of input.imports) {
+    const file = moduleFileOf(imp.path ?? '', from, files);
+    const local = imp.name ?? '';
+    if (file === undefined || local === '' || imp.typeOnly === true) {
+      continue;
+    }
+    // Only an export the CMS read: a function or a type the module also exports is not data.
+    const exported = imp.named === true ? (imp.imported ?? local) : 'default';
+    if (input.exports.some((item) => item.file === file && item.exported === exported)) {
+      out[local] = file;
+    }
+  }
+  assert(Object.keys(out).length <= input.imports.length, 'importedProjectData: one name per import at most');
+  return out;
+}
+
+/**
  * The specifier `target` is imported by from `from`: `@/consts` through the
  * alias, else `../consts` relative to the importer. Both project-relative.
  */
@@ -206,8 +241,35 @@ function defaultName(file: string): string {
 // carry as code (`{ __expr }`) is bindable by its name but shows no value:
 // putting code in the value column is what the picker exists to avoid.
 function valueNode(name: string, value: unknown): TreeNode {
-  const node = sampleNode(name, name, withoutExpressions(value, 0), 0);
-  return markExpressions(node, value, 0);
+  const bounded = boundedLists(value, 0);
+  const marked = markExpressions(sampleNode(name, name, withoutExpressions(bounded, 0), 0), bounded, 0);
+  // A whole export written as a list but computed: a list, known only to its code.
+  return isComputedList(value) ? { ...marked, computedList: true } : marked;
+}
+
+/** Whether an export's value is the CMS's marker for code that starts as a list: `[...a, ...b]`. */
+export function isComputedList(value: unknown): boolean {
+  const record = toRecord(value);
+  const code = record?.[EXPRESSION];
+  return isExpression(value) && typeof code === 'string' && code.trimStart().startsWith('[');
+}
+
+// Lists cut to PROJECT_LIST_ITEMS_MAX items, with the rest counted by the marker the
+// sampler leaves for it (dataSample.ts `marker`), so "400 items" still says 400.
+function boundedLists(value: unknown, depth: number): unknown {
+  assert(depth <= LIMITS.treeDepthMax, 'boundedLists: depth limit exceeded');
+  if (Array.isArray(value)) {
+    const kept = value.slice(0, PROJECT_LIST_ITEMS_MAX).map((item: unknown) => boundedLists(item, depth + 1));
+    const rest = value.length - kept.length;
+    const out = rest > 0 ? [...kept, { __stacki: 'more', count: rest }] : kept;
+    assert(out.length <= PROJECT_LIST_ITEMS_MAX + 1, 'boundedLists: the cut list is bounded');
+    return out;
+  }
+  const record = toRecord(value);
+  if (record === undefined || isExpression(value)) {
+    return value;
+  }
+  return Object.fromEntries(Object.entries(record).map(([key, item]) => [key, boundedLists(item, depth + 1)]));
 }
 
 function withoutExpressions(value: unknown, depth: number): unknown {

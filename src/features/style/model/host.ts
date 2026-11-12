@@ -51,6 +51,16 @@ export type StyleNodeTarget = {
 /** A `style` attribute as the panel writes it: a declaration string, or an expression (`style={…}`). */
 export type InlineStyleAttr = { readonly type: 'string' | 'expr'; readonly value: string };
 
+/** A new style block for the open file, and the class its rule needs on the selected element. */
+export type StyleBlockRequest = {
+  /** The block's CSS as the panel builds it: tab-indented rule lines ended by `\n`. The host
+   *  sets it between the tags in the file's own indent and line ending (styleBlockInner). */
+  readonly css: string;
+  /** The class to put on the selected element, or undefined when it already carries the selector. */
+  readonly className: string | undefined;
+  readonly placement: ClassPlacement;
+};
+
 export type ClassOutcome = { readonly tag: 'applied' } | { readonly tag: 'refused'; readonly message: string };
 
 export type HostState = {
@@ -118,6 +128,12 @@ export type HostState = {
    *  page edit reached disk or was refused: the stylesheet rule for that class
    *  is written only after it applied (step 6, plan §3.3 — outcome-gated). */
   addClass: ((className: string, placement: ClassPlacement) => Promise<ClassOutcome>) | undefined;
+  /** First styles of a page with no style source (model/firstStyleBlock.ts): add a
+   *  `<style is:global>` block holding `css` at the end of the open file and, when
+   *  `className` is given, put that class on the selected element, as ONE page edit and so
+   *  one undo step. The CSS is the block's whole text, rule included. Resolves once the edit
+   *  reached disk or was refused; a refusal says why. Absent where the host cannot add a node. */
+  addStyleBlock: ((request: StyleBlockRequest) => Promise<ClassOutcome>) | undefined;
   /** Take a class, or an attribute, off the selected element: a chip selected in
    *  the selector field and then Delete. Only a name written literally on the
    *  element is removed; anything computed is refused, and the refusal says why
@@ -195,6 +211,7 @@ const state: HostState = {
   setCanvasWidth: undefined,
   recordUndo: undefined,
   addClass: undefined,
+  addStyleBlock: undefined,
   removeClass: undefined,
   removeAttribute: undefined,
   setInlineStyle: undefined,

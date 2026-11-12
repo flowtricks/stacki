@@ -27,7 +27,8 @@ import { assert } from '../../../shared/core/assert';
 import ListField from './ListField';
 import { CodeTypeField, ItemFieldsEditor, ListDefaultField, PropertyFlagsFields, type PropertyFlags } from './PropertySections';
 import { arrayItems, arrayText, itemsHoldCode } from './arrayValue';
-import { LIST_STARTER_FIELDS, listSettingsProblem, type ItemFieldDeclaration } from '../../editor/listPropType';
+import type { ItemFieldDeclaration } from '../../editor/itemFields';
+import { LIST_STARTER_FIELDS, listSettingsProblem } from '../../editor/listPropType';
 import { imageDefaultOf } from '../../editor/imagePropDefault';
 import { itemValuesOf } from './listItemShape';
 import {

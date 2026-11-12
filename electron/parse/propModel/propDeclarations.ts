@@ -10,18 +10,21 @@ import { assert } from '../../../shared/core/assert';
 import { PROP_MODEL_LIMITS, type PropsDeclaration } from '../../../shared/properties/propModel';
 import type { DefaultRule, PropUnion, UnionBranch } from '../../../shared/properties/propSchema';
 import { isAstroProps, syntaxNodes } from '../astroSyntax';
-import { commentDocumentation, statedDefault } from './propProse';
+import { statedDefault } from './propProse';
 import {
   PROP_TYPE_LIMITS,
   flattenParts,
   isNullish,
   literalOf,
+  memberDocumentation,
   memberKey,
   referencedDeclaration,
   type FiledSignature,
   type TypeDeclaration,
   type TypeScope,
 } from './propTypes';
+
+export { memberDocumentation };
 
 /** The type that describes the props, and how the component wrote it. */
 export interface PropsType {
@@ -178,23 +181,6 @@ function declarationBlocks(declaration: TypeDeclaration, scope: TypeScope, seen:
     }
   }
   out.push(declaration.node.members.filter(ts.isPropertySignature).map((member) => ({ member, file: declaration.file })));
-}
-
-/**
- * A member's doc comment: the comments right above it. A comment on the line
- * of the member before belongs to that member, not this one, unless this
- * member opens the line (`{ /** Tip. *\/ title: string }`).
- */
-export function memberDocumentation(signature: FiledSignature): string {
-  const text = signature.file.text;
-  const start = signature.member.getStart(signature.file);
-  const ranges = (ts.getLeadingCommentRanges(text, signature.member.pos) ?? []).filter((range) => {
-    const lineStart = text.lastIndexOf('\n', range.pos - 1) + 1;
-    const ownLine = text.slice(lineStart, range.pos).trim() === '';
-    const trailsPrevious = !ownLine && text.slice(range.end, start).includes('\n');
-    return !trailsPrevious;
-  });
-  return commentDocumentation(text, start, ranges);
 }
 
 // ---------------------------------------------------------------------------

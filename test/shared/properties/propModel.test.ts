@@ -182,7 +182,9 @@ test('every known-bad shape is refused with its path', () => {
 
 test('the bounds hold: nesting depth, variants, options, text and counts', () => {
   // A group one deeper than the bound is refused rather than walked.
-  refuses(/nesting exceeds 4/, (model) => Object.assign(at(model.props, 6), { control: group(PROP_MODEL_LIMITS.propNestingDepthMax + 2) }));
+  refuses(new RegExp(`nesting exceeds ${PROP_MODEL_LIMITS.propNestingDepthMax}`), (model) =>
+    Object.assign(at(model.props, 6), { control: group(PROP_MODEL_LIMITS.propNestingDepthMax + 2) }),
+  );
   // A list of lists counts as nesting too.
   const deepList = (depth: number): unknown => {
     let control: unknown = { kind: 'text' };
@@ -192,7 +194,10 @@ test('the bounds hold: nesting depth, variants, options, text and counts', () =>
     return control;
   };
   assert.doesNotThrow(() => parsePropModel({ ...goodModel(), props: [prop('a', deepList(PROP_MODEL_LIMITS.propNestingDepthMax))] }));
-  assert.throws(() => parsePropModel({ ...goodModel(), props: [prop('a', deepList(PROP_MODEL_LIMITS.propNestingDepthMax + 1))] }), /nesting exceeds 4/);
+  assert.throws(
+    () => parsePropModel({ ...goodModel(), props: [prop('a', deepList(PROP_MODEL_LIMITS.propNestingDepthMax + 1))] }),
+    new RegExp(`nesting exceeds ${PROP_MODEL_LIMITS.propNestingDepthMax}`),
+  );
   const branch = { forbids: [], pins: {}, defaults: {}, rules: {}, docs: {} };
   const variants = (count: number) => ({ ...goodModel(), unions: [{ names: [], branches: Array.from({ length: count }, () => branch) }] });
   assert.doesNotThrow(() => parsePropModel(variants(PROP_MODEL_LIMITS.propVariantsMax)));

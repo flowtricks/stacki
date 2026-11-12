@@ -36,8 +36,9 @@ function project(): string {
   return root;
 }
 
-function appZip(version: string, extra = ''): Uint8Array {
-  const manifest = { manifestVersion: 1, id: 'heat-map', name: 'Heat map', version, entry: 'index.html' };
+function appZip(version: string, extra = '', hosts: readonly string[] = []): Uint8Array {
+  const network = hosts.map((host) => ({ host, purpose: 'Data for the map' }));
+  const manifest = { manifestVersion: 1, id: 'heat-map', name: 'Heat map', version, entry: 'index.html', ...(network.length > 0 ? { network } : {}) };
   return writeStoredZip([
     { path: 'stacki-app.json', bytes: encoder.encode(JSON.stringify(manifest)) },
     { path: 'index.html', bytes: encoder.encode(`<p>v${version}${extra}</p>`) },
@@ -58,8 +59,8 @@ function world(): World {
   return { releases: new Map(), approved: [], calls: [] };
 }
 
-function release(state: World, version: string, options: { approve: boolean }): Uint8Array {
-  const bytes = appZip(version);
+function release(state: World, version: string, options: { approve: boolean; hosts?: readonly string[] }): Uint8Array {
+  const bytes = appZip(version, '', options.hosts ?? []);
   state.releases.set(`v${version}`, bytes);
   if (options.approve) {
     state.approved.push({ version, tag: `v${version}`, sha256: sha256(bytes) });
@@ -171,7 +172,7 @@ test('auto-update off: a check records the approved update and installs nothing'
   assert.deepEqual(checked.ok ? checked.value : checked.message, [{ kind: 'available', id: 'heat-map', version: '1.1.0' }]);
   const entry = readAppsLock(root).apps[0];
   assert.equal(entry?.version, '1.0.0', 'nothing new was installed');
-  assert.deepEqual(entry?.update, { version: '1.1.0', tag: 'v1.1.0', sha256: sha256(second) });
+  assert.deepEqual(entry?.update, { version: '1.1.0', tag: 'v1.1.0', sha256: sha256(second), additions: [] });
   assert.equal(fs.readFileSync(path.join(root, '.stacki/apps/heat-map/index.html'), 'utf8'), '<p>v1.0.0</p>');
 
   // Update installs it, a person's choice.
@@ -254,6 +255,101 @@ test('GitHub apps: auto-update off records the release; on installs the release 
   assert.equal(entry?.version, '1.2.0');
   assert.equal(entry?.sha256, sha256(third), 'the digest recorded is the one checked');
   assert.equal(entry?.update, undefined);
+});
+
+test('auto-update on: a marketplace version that asks for a new host waits for a person’s OK; nothing else is held', async () => {
+  const root = project();
+  const state = world();
+  release(state, '1.0.0', { approve: true, hosts: ['tiles.example.com'] });
+  const apps = service(state);
+  assert.ok((await apps.installMarketplace(root, 'heat-map', '1.0.0')).ok);
+  assert.ok(apps.setAutoUpdate(root, 'heat-map', { autoUpdate: true }).ok);
+
+  // Keeping its host and dropping none installs by itself; this is the ordinary auto-update.
+  release(state, '1.1.0', { approve: true, hosts: ['tiles.example.com'] });
+  const quiet = await apps.checkUpdates(root, true);
+  assert.deepEqual(quiet.ok ? quiet.value : quiet.message, [{ kind: 'updated', id: 'heat-map', version: '1.1.0' }]);
+
+  // A new host: held. The installed version stays, the lock records what is new, the outcome says it needs OK.
+  const held = release(state, '1.2.0', { approve: true, hosts: ['tiles.example.com', 'api.example.com'] });
+  const checked = await apps.checkUpdates(root, true);
+  assert.deepEqual(checked.ok ? checked.value : checked.message, [
+    { kind: 'needs-approval', id: 'heat-map', version: '1.2.0', additions: ['reaches api.example.com'] },
+  ]);
+  let entry = readAppsLock(root).apps[0];
+  assert.equal(entry?.version, '1.1.0', 'auto-update did not install it');
+  assert.deepEqual(entry?.update, { version: '1.2.0', tag: 'v1.2.0', sha256: sha256(held), additions: ['reaches api.example.com'] });
+  assert.equal(entry?.autoUpdate, true);
+
+  // A later check keeps it held without downloading the bundle again.
+  const before = state.calls.length;
+  const again = await apps.checkUpdates(root, true);
+  assert.equal(again.ok ? again.value[0]?.kind : again.message, 'needs-approval');
+  assert.ok(!state.calls.slice(before).some((url) => url.includes('/assets/')), 'the held bundle is not downloaded again');
+  assert.equal(readAppsLock(root).apps[0]?.version, '1.1.0');
+
+  // A person's Update installs it and clears the hold; the switch survives.
+  const updated = await apps.applyUpdate(root, 'heat-map');
+  assert.ok(updated.ok, updated.ok ? '' : updated.message);
+  entry = readAppsLock(root).apps[0];
+  assert.equal(entry?.version, '1.2.0');
+  assert.equal(entry?.update, undefined);
+  assert.equal(entry?.autoUpdate, true);
+});
+
+test('auto-update off records what a version adds; switching it on later installs a version that adds nothing', async () => {
+  const root = project();
+  const state = world();
+  release(state, '1.0.0', { approve: true });
+  const apps = service(state);
+  assert.ok((await apps.installMarketplace(root, 'heat-map', '1.0.0')).ok);
+  release(state, '1.1.0', { approve: true, hosts: ['api.example.com'] });
+  const off = await apps.checkUpdates(root, true);
+  assert.deepEqual(off.ok ? off.value : off.message, [{ kind: 'available', id: 'heat-map', version: '1.1.0' }], 'off: simply available');
+  assert.deepEqual(readAppsLock(root).apps[0]?.update?.additions, ['reaches api.example.com'], 'but the lock says what it adds');
+
+  // Turning the switch on does not wave an update that adds a host through.
+  assert.ok(apps.setAutoUpdate(root, 'heat-map', { autoUpdate: true }).ok);
+  const held = await apps.checkUpdates(root, true);
+  assert.equal(held.ok ? held.value[0]?.kind : held.message, 'needs-approval');
+  assert.equal(readAppsLock(root).apps[0]?.version, '1.0.0');
+
+  // An update recorded with nothing new, then the switch on: the next check installs it.
+  assert.ok((await apps.applyUpdate(root, 'heat-map')).ok);
+  assert.ok(apps.setAutoUpdate(root, 'heat-map', { autoUpdate: false }).ok);
+  release(state, '1.2.0', { approve: true, hosts: ['api.example.com'] });
+  assert.equal((await apps.checkUpdates(root, true)).ok, true);
+  assert.equal(readAppsLock(root).apps[0]?.update?.version, '1.2.0');
+  assert.deepEqual(readAppsLock(root).apps[0]?.update?.additions, []);
+  assert.ok(apps.setAutoUpdate(root, 'heat-map', { autoUpdate: true }).ok);
+  const installed = await apps.checkUpdates(root, true);
+  assert.deepEqual(installed.ok ? installed.value : installed.message, [{ kind: 'updated', id: 'heat-map', version: '1.2.0' }]);
+});
+
+test('GitHub apps: auto-update on holds a release that adds a host, and installs one that does not', async () => {
+  const root = project();
+  const state = world();
+  release(state, '1.0.0', { approve: false });
+  const apps = service(state);
+  const source = { kind: 'github' as const, owner: 'octocat', repository: 'heat-map', asset: 'heat-map.zip' };
+  const staged = await apps.stageGitHub(root, source, undefined);
+  assert.ok(staged.ok, staged.ok ? '' : staged.message);
+  assert.ok(apps.commit(root, staged.value.token).ok);
+  assert.ok(apps.setAutoUpdate(root, 'heat-map', { autoUpdate: true }).ok);
+
+  release(state, '1.1.0', { approve: false, hosts: ['api.example.com'] });
+  const held = await apps.checkUpdates(root, true);
+  assert.deepEqual(held.ok ? held.value : held.message, [{ kind: 'needs-approval', id: 'heat-map', version: '1.1.0', additions: ['reaches api.example.com'] }]);
+  assert.equal(readAppsLock(root).apps[0]?.version, '1.0.0');
+  assert.equal(fs.readFileSync(path.join(root, '.stacki/apps/heat-map/index.html'), 'utf8'), '<p>v1.0.0</p>');
+
+  const updated = await apps.applyUpdate(root, 'heat-map');
+  assert.ok(updated.ok, updated.ok ? '' : updated.message);
+  assert.equal(readAppsLock(root).apps[0]?.version, '1.1.0');
+
+  release(state, '1.2.0', { approve: false, hosts: ['api.example.com'] });
+  const installed = await apps.checkUpdates(root, true);
+  assert.deepEqual(installed.ok ? installed.value : installed.message, [{ kind: 'updated', id: 'heat-map', version: '1.2.0' }]);
 });
 
 test('auto-update has no meaning for an uploaded app, and a reinstall keeps it only from the same kind of source', () => {

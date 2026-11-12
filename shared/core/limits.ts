@@ -24,6 +24,20 @@ export const LIMITS = {
   propSchemaFieldsMax: 512,
   /** Literal options on one union-typed prop. */
   propOptionsMax: 256,
+  /**
+   * Levels of item fields one List prop declares: its items' fields, the fields
+   * of a list or group among them, and the fields of one more inside that. A
+   * field on the last level is a plain value. The Properties panel draws one
+   * nested editor per level, and the prop model reads them back
+   * (PROP_MODEL_LIMITS.propNestingDepthMax counts each list and group twice).
+   */
+  listFieldDepthMax: 3,
+  /** Item fields on one level of a List prop's item. */
+  listFieldsPerLevelMax: 24,
+  /** Item fields on every level of one List prop together. */
+  listFieldsTotalMax: 96,
+  /** Choices of one Option item field. */
+  listOptionsMax: 32,
   /** Import declarations in one frontmatter block. */
   importsMax: 256,
   /** Length of one IPC payload string field. */

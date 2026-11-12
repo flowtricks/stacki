@@ -2,6 +2,7 @@ import { centralIcon, centralIconSize } from './central/CentralIcon';
 import {
   add as centralAdd,
   arrowDown as centralArrowDown,
+  arrowRotateClockwise as centralArrowRotateClockwise,
   audio as centralAudio,
   braces as centralBraces,
   branch as centralBranch,
@@ -62,7 +63,6 @@ import {
   phoneCall as centralPhoneCall,
   pin as centralPin,
   properties as centralProperties,
-  refresh as centralRefresh,
   repeat as centralRepeat,
   search as centralSearch,
   settings as centralSettings,
@@ -74,7 +74,7 @@ import {
   text as centralText,
   textSize as centralTextSize,
   toggle as centralToggle,
-  trash as centralTrash,
+  trashCanSimple as centralTrashCanSimple,
   undo as centralUndo,
   unlink as centralUnlink,
   upload as centralUpload,
@@ -234,7 +234,8 @@ export const ChevronDownIcon = centralIcon(centralChevronDown);
 
 export const PlusIcon = centralIcon(centralAdd);
 
-export const RefreshIcon = centralIcon(centralRefresh);
+// Central's clockwise rotate arrow: reload, refresh, rescan and update.
+export const RefreshIcon = centralIcon(centralArrowRotateClockwise);
 
 // Two arrows chasing each other: a field kept in step with another.
 export const SyncIcon = centralIcon(centralSync);
@@ -386,7 +387,7 @@ export const WarningTriangleIcon = centralIcon(centralWarning);
 
 export const GearIcon = centralIcon(centralSettings);
 
-export const TrashIcon = centralIcon(centralTrash);
+export const TrashIcon = centralIcon(centralTrashCanSimple);
 
 export const FolderOpenIcon = centralIcon(centralFolderOpen);
 

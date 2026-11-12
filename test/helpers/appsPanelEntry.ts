@@ -5,4 +5,5 @@
 // ones the details popup lists.
 export { default } from '../../src/features/apps/AppsPanel';
 export { ConfirmHost } from '../../src/ui/ConfirmDialog';
+export { registerAgentTaskHandler } from '../../src/lib/agentTasks';
 export { configureAppCommands } from '../../src/features/apps/appCommands';

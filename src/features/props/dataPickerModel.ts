@@ -155,6 +155,9 @@ export function sectionHeading(section: string, origin: DataOrigin | undefined):
       return 'Content Collections';
     case 'loop-sanity':
       return 'Sanity';
+    case PROJECT_DATA_SECTION:
+      // The lists the project keeps outside the page, in its data modules (loopProjectData.ts).
+      return 'Project data';
     case 'loop-page':
       return 'On this page';
     case 'loop-component':
@@ -163,6 +166,9 @@ export function sectionHeading(section: string, origin: DataOrigin | undefined):
       return undefined;
   }
 }
+
+/** The Source menu's group of project data lists (loopProjectData.ts), whatever file each is in. */
+export const PROJECT_DATA_SECTION = 'loop-project';
 
 /** The section a project data file's exports are listed under: one per file. */
 const DATA_FILE_SECTION = 'data-file:';

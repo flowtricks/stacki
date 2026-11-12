@@ -14,13 +14,51 @@ export type DiffRow =
   | { readonly kind: 'added'; readonly text: string; readonly after: number }
   | { readonly kind: 'deleted'; readonly text: string; readonly before: number };
 
+/** The rows of a comparison and whether they are exact: a change too large to align is shown as the old region removed and the new one added. */
+export interface LineDiffResult {
+  readonly rows: readonly DiffRow[];
+  readonly exact: boolean;
+}
+
+/** The first `AI_DIFF_LIMITS.rowsMax` rows; use `diffRows` when the total is needed (a change count must not stop at the cap). */
 export function lineDiff(before: string | undefined, after: string): readonly DiffRow[] {
+  return diffRows(before, after).rows.slice(0, AI_DIFF_LIMITS.rowsMax);
+}
+
+/**
+ * Every row of the comparison. The lines both sides share at the start and end are set aside before
+ * the alignment runs, so a small edit in a long file costs only the edited region (a 5,000-line file
+ * with one changed line would otherwise exceed the table bound and show as wholly replaced).
+ */
+export function diffRows(before: string | undefined, after: string | undefined): LineDiffResult {
   const left = before === undefined || before === '' ? [] : before.split('\n');
-  const right = after === '' ? [] : after.split('\n');
-  const rows = (left.length + 1) * (right.length + 1) > AI_DIFF_LIMITS.cellsMax ? replaceAll(left, right) : common(left, right);
-  assert(rows.filter((row) => row.kind !== 'added').length === left.length, 'lineDiff: every old line appears once');
-  assert(rows.filter((row) => row.kind !== 'deleted').length === right.length, 'lineDiff: every new line appears once');
-  return rows.slice(0, AI_DIFF_LIMITS.rowsMax);
+  const right = after === undefined || after === '' ? [] : after.split('\n');
+  const sharedMax = Math.min(left.length, right.length);
+  let head = 0;
+  while (head < sharedMax && left[head] === right[head]) {
+    head += 1;
+  }
+  let tail = 0;
+  while (tail < sharedMax - head && left[left.length - 1 - tail] === right[right.length - 1 - tail]) {
+    tail += 1;
+  }
+  const middleLeft = left.slice(head, left.length - tail);
+  const middleRight = right.slice(head, right.length - tail);
+  const exact = (middleLeft.length + 1) * (middleRight.length + 1) <= AI_DIFF_LIMITS.cellsMax;
+  const middle = exact ? common(middleLeft, middleRight, head) : replaceAll(middleLeft, middleRight, head);
+  const rows: DiffRow[] = [];
+  for (let index = 0; index < head; index++) {
+    rows.push({ kind: 'context', text: left[index] ?? '', before: index + 1, after: index + 1 });
+  }
+  rows.push(...middle);
+  for (let offset = 0; offset < tail; offset++) {
+    const beforeIndex = left.length - tail + offset;
+    const afterIndex = right.length - tail + offset;
+    rows.push({ kind: 'context', text: left[beforeIndex] ?? '', before: beforeIndex + 1, after: afterIndex + 1 });
+  }
+  assert(rows.filter((row) => row.kind !== 'added').length === left.length, 'diffRows: every old line appears once');
+  assert(rows.filter((row) => row.kind !== 'deleted').length === right.length, 'diffRows: every new line appears once');
+  return { rows, exact };
 }
 
 /** Only the changed rows and `context` lines around each change, for a compact card. */
@@ -54,14 +92,15 @@ export function compactRows(rows: readonly DiffRow[], context: number): readonly
   return out;
 }
 
-function replaceAll(left: readonly string[], right: readonly string[]): readonly DiffRow[] {
+function replaceAll(left: readonly string[], right: readonly string[], offset: number): readonly DiffRow[] {
   return [
-    ...left.map((text, index): DiffRow => ({ kind: 'deleted', text, before: index + 1 })),
-    ...right.map((text, index): DiffRow => ({ kind: 'added', text, after: index + 1 })),
+    ...left.map((text, index): DiffRow => ({ kind: 'deleted', text, before: offset + index + 1 })),
+    ...right.map((text, index): DiffRow => ({ kind: 'added', text, after: offset + index + 1 })),
   ];
 }
 
-function common(left: readonly string[], right: readonly string[]): readonly DiffRow[] {
+/** `offset` is how many lines both sides shared before these, so row numbers count from the top of the file. */
+function common(left: readonly string[], right: readonly string[], offset: number): readonly DiffRow[] {
   const width = right.length + 1;
   const table = new Uint32Array((left.length + 1) * width);
   for (let i = left.length - 1; i >= 0; i--) {
@@ -75,14 +114,14 @@ function common(left: readonly string[], right: readonly string[]): readonly Dif
   let j = 0;
   while (i < left.length || j < right.length) {
     if (i < left.length && j < right.length && left[i] === right[j]) {
-      rows.push({ kind: 'context', text: left[i] ?? '', before: i + 1, after: j + 1 });
+      rows.push({ kind: 'context', text: left[i] ?? '', before: offset + i + 1, after: offset + j + 1 });
       i += 1;
       j += 1;
     } else if (j < right.length && (i >= left.length || (table[i * width + j + 1] ?? 0) >= (table[(i + 1) * width + j] ?? 0))) {
-      rows.push({ kind: 'added', text: right[j] ?? '', after: j + 1 });
+      rows.push({ kind: 'added', text: right[j] ?? '', after: offset + j + 1 });
       j += 1;
     } else {
-      rows.push({ kind: 'deleted', text: left[i] ?? '', before: i + 1 });
+      rows.push({ kind: 'deleted', text: left[i] ?? '', before: offset + i + 1 });
       i += 1;
     }
   }

@@ -1,23 +1,16 @@
 // The guided setup for one agent, for people who never open a terminal: its
 // mark, one sentence, one primary button. Underneath, the agent's own CLI does
-// each step (electron/handlers/ai/agentSetup.ts lists every command it runs);
-// the sign-in finishes in the browser, and Stacki never sees the credentials.
-import { useState } from 'react';
+// each step (electron/handlers/ai/agentSetup.ts lists every command it runs).
+// Signing in is SignInCard.tsx; this file keeps the install steps and the
+// signed-in account row.
 import { assert } from '../../../shared/core/assert';
 import type { SetupAccount, SetupState } from '../../../shared/ipc/aiChat';
-import { SETUP_CODE_CHARS_MAX } from '../../../shared/ipc/aiChat';
 import { agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { ClaudeLogo, CodexLogo } from '../../ui/agentLogos';
-import { MoreIcon } from '../../ui/Icons';
+import MoreMenu from '../../ui/MoreMenu';
 import { runSetup } from './aiStore';
 
-export function SetupCard({
-  setup,
-  onOpenExternal,
-}: {
-  readonly setup: Exclude<SetupState, { readonly step: 'ready' }>;
-  readonly onOpenExternal: (url: string) => void;
-}) {
+export function SetupCard({ setup }: { readonly setup: Exclude<SetupState, { readonly step: 'ready' | 'signed-out' | 'signing-in' }> }) {
   const { agent } = setup;
   const label = agentLabel(agent);
   switch (setup.step) {
@@ -33,26 +26,6 @@ export function SetupCard({
       return (
         <Card agent={agent} title={`Installing ${label}…`} text="This can take a minute. You can keep working meanwhile." busy>
           {undefined}
-        </Card>
-      );
-    case 'signed-out':
-      return (
-        <Card agent={agent} title={`Sign in to ${label}`} text={`Use your ${providerAccount(agent)} account. Your browser opens to finish.`}>
-          <button className="ai-primary" onClick={() => void runSetup(agent, { kind: 'signIn' })}>
-            {signInLabel(agent)}
-          </button>
-        </Card>
-      );
-    case 'signing-in':
-      return (
-        <Card agent={agent} title="Finish signing in in your browser…" text="When the page says you are signed in, come back here." busy>
-          {setup.needsCode && <CodeField agent={agent} />}
-          <div className="ai-gate-actions">
-            {setup.url !== undefined && <button onClick={() => onOpenExternal(setup.url ?? '')}>Open the page again</button>}
-            <button className="ghost" onClick={() => void runSetup(agent, { kind: 'cancel' })}>
-              Cancel
-            </button>
-          </div>
         </Card>
       );
     case 'failed':
@@ -80,29 +53,22 @@ export function SetupCard({
   }
 }
 
-/** Ready: who is signed in, by name and plan; the email only inside ⋯, with Sign out under it. */
+/** Ready: who is signed in, by name and plan; the email only inside ⋯, with Sign out under it. The menu is the shared popup, drawn over the panel, never inline. */
 export function AccountRow({ setup }: { readonly setup: Extract<SetupState, { readonly step: 'ready' }> }) {
-  const [open, setOpen] = useState(false);
   return (
     <div className="ai-account">
       <AgentMark agent={setup.agent} />
       <span className="ai-account-name">{accountLabel(setup.agent, setup.account)}</span>
-      <button className="ghost" aria-label="Account options" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-        <MoreIcon size={12} />
-      </button>
-      {open && (
-        <div className="ai-account-menu" role="menu">
-          {setup.account.email !== undefined && (
-            <div className="ai-account-email" role="menuitem" aria-disabled="true">
-              <span>Account</span>
-              <span>{setup.account.email}</span>
-            </div>
-          )}
-          <button role="menuitem" className="ghost" onClick={() => void runSetup(setup.agent, { kind: 'signOut' })}>
-            Sign out
-          </button>
-        </div>
-      )}
+      <MoreMenu
+        className="ghost"
+        title="Account options"
+        width={220}
+        items={[
+          // The email is context, not an action: a disabled first row names the account.
+          setup.account.email !== undefined && { label: `Account  ${setup.account.email}`, disabled: true },
+          { label: 'Sign out', onSelect: () => void runSetup(setup.agent, { kind: 'signOut' }) },
+        ]}
+      />
     </div>
   );
 }
@@ -114,34 +80,6 @@ export function accountLabel(agent: AgentId, account: SetupAccount): string {
     return account.plan === undefined ? account.name : `${account.name} · ${account.plan}`;
   }
   return account.plan === undefined ? `Signed in to ${product}` : `${product} ${account.plan}`;
-}
-
-function CodeField({ agent }: { readonly agent: AgentId }) {
-  const [code, setCode] = useState('');
-  return (
-    <form
-      className="ai-code"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const trimmed = code.trim();
-        if (trimmed !== '') {
-          void runSetup(agent, { kind: 'code', code: trimmed });
-          setCode('');
-        }
-      }}
-    >
-      <input
-        aria-label="Code from the browser"
-        placeholder="Paste the code from your browser"
-        maxLength={SETUP_CODE_CHARS_MAX}
-        value={code}
-        onChange={(event) => setCode(event.target.value)}
-      />
-      <button type="submit" className="ai-primary" disabled={code.trim() === ''}>
-        Continue
-      </button>
-    </form>
-  );
 }
 
 function Card({
@@ -173,12 +111,4 @@ function Card({
 
 function AgentMark({ agent }: { readonly agent: AgentId }) {
   return agent === 'claude' ? <ClaudeLogo size={18} /> : <CodexLogo size={18} className="ai-logo-codex" />;
-}
-
-function signInLabel(agent: AgentId): string {
-  return agent === 'claude' ? 'Sign in with Claude' : 'Sign in with ChatGPT';
-}
-
-function providerAccount(agent: AgentId): string {
-  return agent === 'claude' ? 'Claude' : 'ChatGPT';
 }

@@ -245,6 +245,11 @@ export interface TreeNode {
   unbindable?: string;
   /** A muted word in the value column where there is no value to show: "not set". */
   note?: string;
+  /**
+   * A data file export written as a list but computed (`[...a, ...b]`): it is a list,
+   * and its items are known only to the code. The loop's Source menu lists it, disabled.
+   */
+  computedList?: boolean;
   lazy?: boolean;
   /** The whole address of an image the value names: the preview is clipped. */
   image?: string;

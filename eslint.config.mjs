@@ -14,6 +14,7 @@ import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
 import stacki from './scripts/eslintPlugin/index.mts';
+import { eslintIgnoresFor, localExcludedPaths } from './scripts/policy/gitExcludes.mts';
 
 // AGENTS.md §12: no abbreviations. Word → what to write instead. Checked word
 // by word on every declared name (scripts/eslintPlugin/naming.mts). Loop
@@ -376,7 +377,17 @@ const SHARED_AREAS = {
 
 export default [
   {
-    ignores: ['studio/**', 'node_modules/**', 'dist/**', 'release/**', 'coverage/**', '**/generated/**'],
+    // Plus what this clone's own exclude lists hide from git (a local notes folder): ESLint reads
+    // no ignore file, so it would lint them and fail for a contributor (issue #78).
+    ignores: [
+      'studio/**',
+      'node_modules/**',
+      'dist/**',
+      'release/**',
+      'coverage/**',
+      '**/generated/**',
+      ...eslintIgnoresFor(localExcludedPaths(import.meta.dirname)),
+    ],
   },
   {
     // The JavaScript left in the tree: ESM configs and content-tool modules,

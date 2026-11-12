@@ -45,8 +45,8 @@ export function componentSource(path: string): string | undefined {
 
 /**
  * Whether the file's text is on its way: asked and not landed. A file never asked
- * for is asked now, so it is on its way too. A chip whose colour waits on it is drawn
- * neutral meanwhile rather than in a colour it may lose (SelectorPicker.tsx).
+ * for is asked now, so it is on its way too. A chip whose colour waits on it keeps its
+ * remembered colour meanwhile (chipProvenanceMemory.ts).
  */
 export function componentSourcePending(path: string): boolean {
   const known = componentSource(path) !== undefined;

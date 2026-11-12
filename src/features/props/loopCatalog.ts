@@ -8,7 +8,7 @@ import { assert } from '../../../shared/core/assert';
 import { toRecord } from '../../../shared/core/record';
 import { ASTRO_CONTENT_ID } from '../../../shared/properties/astroContent';
 import type { RemoteSchemaField, RemoteType } from '../../../shared/properties/cmsRemoteSchema';
-import type { ItemFieldDeclaration, ItemFieldKind } from '../../editor/listPropType';
+import { ITEM_FIELD_LIMITS, type ItemFieldDeclaration, type ItemFieldKind } from '../../editor/itemFields';
 import type { LoopField, LoopFieldKind, LoopSource, LoopSourceKind } from '../../editor/loopQuery';
 import { isFieldPath, ITEM_FIELD } from '../../editor/loopQuery';
 import { listCmsConnections, remoteReferenceOptions } from '../../ipc/cmsConnectionsBridge';
@@ -46,25 +46,54 @@ export interface CatalogField extends LoopField {
   readonly references: readonly string[];
 }
 
-/** A List prop's item fields as the filter and sort menus offer them. */
-export function listItemFields(fields: readonly ItemFieldDeclaration[]): readonly CatalogField[] {
+/**
+ * A List prop's item fields as the filter and sort menus offer them. A group's
+ * fields are offered by their path (`address.city`); a nested list is one
+ * field that is there or not, since each of its items is many values.
+ */
+export function listItemFields(fields: readonly ItemFieldDeclaration[], prefix = '', depth = 1): readonly CatalogField[] {
   assert(fields.length <= LOOP_CATALOG_LIMITS.fieldsMax, 'A list’s item fields are bounded');
-  return fields.map((field) => ({ path: field.name, title: titled(field.name), kind: itemFieldKind(field.kind), options: [], references: [] }));
+  assert(depth <= ITEM_FIELD_LIMITS.walkDepthMax, 'A list’s item fields nest within their bound');
+  const out: CatalogField[] = [];
+  for (const field of fields) {
+    const path = `${prefix}${field.name}`;
+    if (field.kind === 'group') {
+      out.push(...listItemFields(field.fields, `${path}.`, depth + 1));
+    } else {
+      const options = field.kind === 'option' ? field.options.map((option) => ({ title: option, value: option })) : [];
+      out.push({ path, title: titled(path), kind: itemFieldKind(field.kind), options, references: [] });
+    }
+  }
+  assert(out.length <= LOOP_CATALOG_LIMITS.fieldsMax, 'A list’s offered fields are bounded');
+  return out;
 }
 
-// A link is words to compare; an image is only there or not, since its text is
-// an address rather than something a person filters by.
+// A link is words to compare; an image, a video or a file is only there or
+// not, since its text is an address rather than something a person filters by.
 function itemFieldKind(kind: ItemFieldKind): LoopFieldKind {
   switch (kind) {
     case 'text':
+    case 'longText':
+    case 'richText':
     case 'link':
+    case 'email':
+    case 'phone':
+    case 'color':
+    case 'option':
       return 'text';
     case 'number':
       return 'number';
     case 'switch':
       return 'boolean';
+    case 'date':
+      return 'date';
     case 'image':
+    case 'video':
+    case 'file':
       return 'image';
+    case 'list':
+    case 'group':
+      return 'list';
     default: {
       const exhaustive: never = kind;
       return exhaustive;

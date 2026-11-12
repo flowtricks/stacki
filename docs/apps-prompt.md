@@ -81,8 +81,6 @@ stacki.build/docs/apps, or `docs/apps.md` in the Stacki repository.
 To test while you build, write the app straight to `.stacki/apps/<id>/` in the open project (the folder named exactly as `id`): it is installed at once and reloads when its files change.
 
 1. `cd my-app && zip -r ../my-app.zip .`
-2. In Stacki press **E**, open the header's **+** menu, choose
-   **Upload app file**, then **Install**, then **Open**.
-3. To publish, attach the zip to a GitHub release (`gh release create v1.0.0 my-app.zip`) and use
-   **Load App From GitHub**; projects see new releases as updates.
-4. Tag the repository with the `stacki-app` topic (`gh repo edit --add-topic stacki-app`) so Load App From GitHub lists it.
+2. To publish, attach the zip to a GitHub release (`gh release create v1.0.0 my-app.zip`). In Stacki press **E**,
+   open the header's **+** menu, choose **Load App From GitHub**, then **Install**, then **Open**; projects see new releases as updates.
+3. Tag the repository with the `stacki-app` topic (`gh repo edit --add-topic stacki-app`) so Load App From GitHub lists it.

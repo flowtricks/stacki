@@ -70,6 +70,18 @@ export function suitesFor(files: readonly string[]): readonly Suite[] {
   }));
 }
 
+// A suite that opens Electron either runs under the Electron binary or starts it from a probe by
+// `electronPath`, the name every probe here gives the path `require('electron')` returns.
+const STARTS_ELECTRON = /\belectronPath\b|require\(['"]electron['"]\)/;
+
+/** Whether this suite launches real Electron processes, so the pool can cap how many run at once. */
+export function startsElectron(root: string, suite: Suite): boolean {
+  if (suite.options.runner === 'electron') {
+    return true;
+  }
+  return STARTS_ELECTRON.test(fs.readFileSync(path.join(root, suite.file), 'utf8'));
+}
+
 // A query's letters only, lower-cased: `test:popoverdropdown`, `popover-dropdown`
 // and `popoverDropdown` all name the same suite.
 function folded(text: string): string {

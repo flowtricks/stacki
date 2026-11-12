@@ -40,7 +40,7 @@ test('the prompt is short and has what an agent needs to start', () => {
     '"author"',
     'stacki-sdk.js',
     'zip -r',
-    'Upload app file',
+    'Load App From GitHub',
     'stacki.build/docs/apps',
     'docs/apps.md',
   ]) {

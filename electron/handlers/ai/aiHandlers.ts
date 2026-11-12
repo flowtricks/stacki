@@ -6,11 +6,13 @@
 // The one-way `ai:ack` is registered by main.ts with the native ipcMain, next
 // to the terminal's, through `registerAiSendChannels`.
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { assert } from '../../../shared/core/assert';
-import { err, ok } from '../../../shared/core/result';
-import { parseAiAck } from '../../../shared/ipc/aiChat';
+import { err, ok, type Result } from '../../../shared/core/result';
+import { parseAiAck, type AiFailure, type SectionAction } from '../../../shared/ipc/aiChat';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
+import { isProjectRelativePath } from '../../../shared/properties/ai/mentions';
 import { createProjectText, writeProjectText } from '../../documents/documentWrites';
 import { sameFilesystemPath } from '../../lib/platform';
 import { buildShellEnv } from '../../lib/shellEnvironment';
@@ -18,7 +20,27 @@ import type { MainHost } from '../mainHost';
 import { AgentHost, NEW_CHAT_TITLE } from './agentHost';
 import { AgentSetup } from './agentSetup';
 import { UnreadableFile, type LedgerFiles } from './changeLedger';
-import { ChatStore, summaryOf } from './chatStore';
+import {
+  ChatStore,
+  chainOperations,
+  collapseSection,
+  createSection,
+  deleteSection,
+  listOf,
+  moveChat,
+  moveSection,
+  newSectionId,
+  renameSection,
+  setArchived,
+  setPinned,
+  setUnread,
+  summaryOf,
+  updateChat,
+  type ChatIndex,
+  type ListResult,
+} from './chatStore';
+import { MentionIndex, listProjectFiles } from './mentionIndex';
+import type { ChatSummary } from '../../../shared/properties/ai/chatModel';
 import { GIT_SNAPSHOTS } from './treeSnapshot';
 
 export interface AiHandlerOptions {
@@ -33,6 +55,8 @@ export interface AiHandlerOptions {
 export interface AiServices {
   readonly host: () => AgentHost;
   readonly stopAll: () => void;
+  /** Forget the scanned file and skill lists of the `@` picker; main calls it when a window gains focus. */
+  readonly invalidateMentions: () => void;
 }
 
 export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject' | 'send' | 'shell'>, options: AiHandlerOptions): AiServices {
@@ -66,6 +90,7 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     assert(path.isAbsolute(root), 'ai: the open project has an absolute path');
     return root;
   };
+  const mentions = new MentionIndex({ home: () => os.homedir(), now: Date.now, listFiles: listProjectFiles });
   let setup: AgentSetup | undefined;
   const agentSetup = (): AgentSetup => {
     setup ??= new AgentSetup({
@@ -99,14 +124,31 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
       : ok(summaryOf(record));
   });
   host.ipcMain.handle('ai:chatUpdate', (_event, input) => {
-    const record = chats().update(open(input.projectPath), input.chat, (current) => ({
-      ...current,
-      title: input.title ?? current.title,
-      pinned: input.pinned ?? current.pinned,
-      // Settings chosen before the chat's session exists; a running session is changed through ai:setOption.
-      settings: input.settings ?? current.settings,
-    }));
-    return record === undefined ? err({ code: 'chat-missing' as const, message: 'This chat no longer exists.' }) : ok(summaryOf(record));
+    const root = open(input.projectPath);
+    const now = Date.now();
+    const result = chats().mutate(root, (index) =>
+      chainOperations(index, [
+        (current) =>
+          updateChat(current, input.chat, (record) => ({
+            ...record,
+            title: input.title ?? record.title,
+            // Settings chosen before the chat's session exists; a running session is changed through ai:setOption.
+            settings: input.settings ?? record.settings,
+          })),
+        (current) => (input.pinned === undefined ? ok(current) : setPinned(current, input.chat, { pinned: input.pinned })),
+        (current) => (input.unread === undefined ? ok(current) : setUnread(current, input.chat, { unread: input.unread })),
+        // Archiving keeps the time it first happened; restoring clears it.
+        (current) => (input.archived === undefined ? ok(current) : archive(current, input.chat, { archived: input.archived, now })),
+      ]),
+    );
+    if (!result.ok) {
+      return result;
+    }
+    if (input.archived === true) {
+      // An archived chat has no live session: its adapter work stops, and a restore resumes it from the stored session id.
+      agentHost().forget(root, input.chat);
+    }
+    return summaryResult(result.value, input.chat);
   });
   host.ipcMain.handle('ai:chatDelete', (_event, input) => {
     const root = open(input.projectPath);
@@ -123,7 +165,39 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     const transcript = chats().read(root, input.chat);
     return ok({ summary: summaryOf(record), events: transcript.events, full: transcript.full });
   });
-  host.ipcMain.handle('ai:prompt', (_event, input) => agentHost().prompt(open(input.projectPath), input.chat, input.text, input.attachments));
+  host.ipcMain.handle('ai:prompt', (_event, input) => {
+    const root = open(input.projectPath);
+    // A steer injects into the running turn (and starts one when none runs); a send is refused while a turn runs.
+    if (input.mode === 'steer') {
+      return agentHost().steer(root, input.chat, input.text, input.attachments, input.parts);
+    }
+    return agentHost().prompt(root, input.chat, input.text, input.attachments, { parts: input.parts });
+  });
+  host.ipcMain.handle('ai:steer', (_event, input) => agentHost().steer(open(input.projectPath), input.chat, input.text, input.attachments, input.parts));
+  host.ipcMain.handle('ai:compact', (_event, input) => agentHost().compact(open(input.projectPath), input.chat));
+  host.ipcMain.handle('ai:chatFork', (_event, input) => {
+    const forked = chats().fork(open(input.projectPath), input.chat, Date.now());
+    return forked.ok ? ok(summaryOf(forked.value)) : forked;
+  });
+  host.ipcMain.handle('ai:chatMove', (_event, input) =>
+    listResult(chats().mutate(open(input.projectPath), (index) => moveChat(index, input.chat, input.section, input.before))),
+  );
+  host.ipcMain.handle('ai:sections', (_event, input) =>
+    listResult(chats().mutate(open(input.projectPath), (index) => applySectionAction(index, input.action))),
+  );
+  host.ipcMain.handle('ai:diff', (_event, input): Result<{ readonly oldText: string | undefined; readonly newText: string | undefined }, AiFailure> => {
+    const root = open(input.projectPath);
+    if (chats().find(root, input.chat) === undefined) {
+      return err({ code: 'chat-missing', message: 'This chat no longer exists.' });
+    }
+    if (!isProjectRelativePath(input.path)) {
+      return err({ code: 'invalid', message: 'A change is named by its project-relative path.' });
+    }
+    // The live ledger, the one Keep and Undo act on: current before the reviews file was ever written.
+    const diff = agentHost().diff(root, input.chat, input.turn, input.path);
+    return diff === undefined ? err({ code: 'invalid', message: 'This change is no longer kept for review, so its diff is not available.' }) : ok(diff);
+  });
+  host.ipcMain.handle('ai:mentions', async (_event, input) => ok(await mentions.search(open(input.projectPath), input.query, input.kinds)));
   host.ipcMain.handle('ai:cancel', (_event, input) => {
     agentHost().cancel(open(input.projectPath), input.chat);
     return { ok: true as const };
@@ -137,7 +211,46 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
       setup?.stopAll();
       agents?.stopAll();
     },
+    invalidateMentions: () => mentions.invalidate(),
   };
+}
+
+function archive(index: ChatIndex, chat: ChatSummary['id'], change: { readonly archived: boolean; readonly now: number }): ListResult {
+  const { archived, now } = change;
+  const current = index.chats.find((record) => record.id === chat);
+  if (!archived) {
+    return setArchived(index, chat, undefined);
+  }
+  return setArchived(index, chat, current?.archivedAt ?? now);
+}
+
+/** The reply of a change to the list: the whole list, so the renderer replaces its copy in one step. */
+function listResult(result: ListResult): Result<ReturnType<typeof listOf>, AiFailure> {
+  return result.ok ? ok(listOf(result.value)) : result;
+}
+
+function summaryResult(index: ChatIndex, chat: ChatSummary['id']): Result<ChatSummary, AiFailure> {
+  const record = index.chats.find((candidate) => candidate.id === chat);
+  return record === undefined ? err({ code: 'chat-missing', message: 'This chat no longer exists.' }) : ok(summaryOf(record));
+}
+
+function applySectionAction(index: ChatIndex, action: SectionAction): ListResult {
+  switch (action.kind) {
+    case 'create':
+      return createSection(index, newSectionId(), action.name);
+    case 'rename':
+      return renameSection(index, action.section, action.name);
+    case 'delete':
+      return deleteSection(index, action.section);
+    case 'collapse':
+      return collapseSection(index, action.section, { collapsed: action.collapsed });
+    case 'move':
+      return moveSection(index, action.section, action.before);
+    default: {
+      const exhaustive: never = action;
+      return exhaustive;
+    }
+  }
 }
 
 // The renderer names the project as it opened it; a link in the path still names the same folder.

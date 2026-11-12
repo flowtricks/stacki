@@ -27,6 +27,8 @@ import { appliedEdits, sectionCodeProblem, sectionEdits, type LoopSection } from
 import { parseExpression, parseFrontmatter, type ParsedFrontmatter } from './loopSyntax';
 import { dataFormProblem, optionsLiteral, rewrittenOptions } from './optionsQuery';
 import { LIST_ITEMS_HELPER, LIST_ITEMS_NAME, listItemsNeed } from './listItemsHelper';
+import type { ImportNeed } from './dataSample';
+import { withDataImport } from './frontmatterAdditions';
 import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import { reboundOptions, type BindingChange } from './optionsBinding';
 import { fieldListCode, type FieldList } from './loopFieldList';
@@ -43,7 +45,18 @@ export type LoopTarget =
       /** `data` writes the settings as data a prop can hold (listItemsHelper.ts); code otherwise. */
       readonly form?: 'code' | 'data' | undefined;
     }
-  | { readonly kind: 'value'; readonly data: string }
+  | {
+      readonly kind: 'value';
+      readonly data: string;
+      /**
+       * The project data module the list is exported from, when the file does not
+       * import it yet: the plan adds the import (or joins the module's existing
+       * `import { … }`) in the same change, so the loop and its import are one undo step.
+       * `data` starts with the name the tree offered (`need.name`); the plan rewrites it
+       * if the file already reads that export under another name.
+       */
+      readonly import?: ImportNeed | undefined;
+    }
   | { readonly kind: 'empty' }
   /** One of the list's settings linked to a component prop, or unlinked. */
   | { readonly kind: 'binding'; readonly change: BindingChange }
@@ -85,7 +98,8 @@ export type LoopPlanResult = { readonly ok: true; readonly plan: LoopPlan } | { 
 const DEFAULT_SANITY_CLIENT = 'sanityClient';
 const CLEANUP_PASSES_MAX = 16;
 
-export function planLoop(input: LoopPlanInput): LoopPlanResult {
+export function planLoop(requested: LoopPlanInput): LoopPlanResult {
+  const input = withProjectImport(requested);
   const head = splitMapHead(input.loop.head);
   if (head === undefined) {
     return { ok: false, message: 'This loop is written as custom code. Edit it in the Code field.' };
@@ -141,6 +155,28 @@ export function planLoop(input: LoopPlanInput): LoopPlanResult {
       restored: restoring,
     },
   };
+}
+
+// A project data export picked in the Source menu: the import it needs is added
+// to the model first, so everything after reads (and keeps, when cleaning up)
+// a file that already imports it. The data's root is the local name the import
+// ended up under, which is not the offered one when the file already read that
+// name for something else (`NAV2`).
+function withProjectImport(input: LoopPlanInput): LoopPlanInput {
+  const target = input.target;
+  if (target.kind !== 'value' || target.import === undefined) {
+    return input;
+  }
+  const need = target.import;
+  const data = target.data.trim();
+  assert(
+    data === need.name || data.startsWith(need.name + '.') || data.startsWith(need.name + '['),
+    'A project export is looped by the name it is imported as',
+  );
+  const added = withDataImport(input.model, need);
+  const rebased = added.name + data.slice(need.name.length);
+  assert(added.model.imports.length >= input.model.imports.length, 'Importing a project export only adds');
+  return { ...input, model: added.model, target: { kind: 'value', data: rebased } };
 }
 
 // A List prop's settings live in the loop's own head, where the prop is read:

@@ -37,6 +37,9 @@ export const APP_LIMITS = {
   versionCharsMax: 32,
   /** Installed apps in one project. */
   appsMax: 50,
+  /** What a waiting update adds that the installed version lacked (`appManifestAdditions`), at most this many lines. */
+  updateAdditionsMax: 64,
+  updateAdditionCharsMax: 160,
   /** Files in one bundle, directories not counted. */
   filesMax: 200,
   /** One file, uncompressed. */
@@ -162,6 +165,12 @@ export interface AppAvailableUpdate {
   readonly tag: string;
   /** SHA-256 of the archive that was checked; Update installs only these bytes. */
   readonly sha256: string;
+  /**
+   * What this version asks for that the installed one did not (`appManifestAdditions`): new network
+   * hosts, sign-in providers and role switches, one short line each. Empty: nothing new. An update
+   * with additions never installs by itself, even with auto-update on; a person reads and chooses it.
+   */
+  readonly additions: readonly string[];
 }
 
 export interface AppLockEntry {
@@ -213,6 +222,8 @@ export type AppUpdateOutcome =
   | { readonly kind: 'current'; readonly id: string }
   | { readonly kind: 'available'; readonly id: string; readonly version: string }
   | { readonly kind: 'failed'; readonly id: string; readonly message: string }
+  /** Auto-update was on, but this version asks for more than the installed one did: it waits for a person's OK. */
+  | { readonly kind: 'needs-approval'; readonly id: string; readonly version: string; readonly additions: readonly string[] }
   /** Auto-update was on, and the check installed this version. */
   | { readonly kind: 'updated'; readonly id: string; readonly version: string };
 
@@ -1022,7 +1033,20 @@ function parseAvailableUpdate(input: unknown): AppAvailableUpdate {
     version: parseAppVersion(value['version']),
     tag: boundedText(value['tag'], APP_LIMITS.tagCharsMax, 'Release tag'),
     sha256: parseSha256(value['sha256']),
+    additions: parseUpdateAdditions(value['additions']),
   };
+}
+
+/** The lines an update adds, as stored and sent; lockfiles written before they existed read as none. */
+export function parseUpdateAdditions(input: unknown): readonly string[] {
+  if (input === undefined || input === null) {
+    return [];
+  }
+  const items = toArray(input);
+  if (items === undefined || items.length > APP_LIMITS.updateAdditionsMax) {
+    throw new Error('Update additions are a bounded list');
+  }
+  return items.map((item) => boundedText(item, APP_LIMITS.updateAdditionCharsMax, 'Update addition'));
 }
 
 /** The lockfile's text: stable order, two-space indent, checked by its own parser first. */
@@ -1098,11 +1122,52 @@ export function parseAppUpdateOutcome(input: unknown): AppUpdateOutcome {
       return { kind: 'available', id, version: parseAppVersion(value['version']) };
     case 'failed':
       return { kind: 'failed', id, message: boundedText(value['message'], APP_LIMITS.messageCharsMax, 'Failure message') };
+    case 'needs-approval':
+      return { kind: 'needs-approval', id, version: parseAppVersion(value['version']), additions: parseUpdateAdditions(value['additions']) };
     case 'updated':
       return { kind: 'updated', id, version: parseAppVersion(value['version']) };
     default:
       throw new Error('Unknown update outcome');
   }
+}
+
+/**
+ * What `next` asks for that `previous` did not, as short lines for a person to read: external hosts
+ * it may call, sign-in providers it connects to, and role switches it adds. Removing or keeping any
+ * of them adds nothing. This is what decides whether an update may install by itself: it may, only
+ * when the answer is empty, so a new version can never widen what the app reaches or asks without a
+ * person seeing it first.
+ */
+export function appManifestAdditions(
+  previous: Pick<AppManifest, 'network' | 'auth' | 'permissions'>,
+  next: Pick<AppManifest, 'network' | 'auth' | 'permissions'>,
+): readonly string[] {
+  const hosts = new Set(previous.network.map((entry) => entry.host));
+  const providers = new Map(previous.auth.map((entry) => [entry.id, entry]));
+  const switches = new Set(previous.permissions.map((entry) => entry.id));
+  const lines: string[] = [];
+  for (const entry of next.network) {
+    if (!hosts.has(entry.host)) {
+      lines.push(`reaches ${entry.host}`);
+    }
+  }
+  for (const entry of next.auth) {
+    const before = providers.get(entry.id);
+    if (before === undefined) {
+      lines.push(`signs in to ${entry.label}`);
+    } else if (before.authorizeURL !== entry.authorizeURL || before.tokenURL !== entry.tokenURL) {
+      // Same provider id, other endpoints: the sign-in would go somewhere the person never saw.
+      lines.push(`changes where ${entry.label} signs in`);
+    }
+  }
+  for (const entry of next.permissions) {
+    if (!switches.has(entry.id)) {
+      lines.push(`adds the “${entry.label}” permission`);
+    }
+  }
+  const bounded = lines.slice(0, APP_LIMITS.updateAdditionsMax).map((line) => line.slice(0, APP_LIMITS.updateAdditionCharsMax));
+  assert(bounded.length <= lines.length, 'Additions are only ever cut, never invented');
+  return bounded;
 }
 
 /** An `AppsResult` reply, its value checked by `parse`. */

@@ -279,9 +279,27 @@ export function selectedInstanceMarkup(
 }
 
 /**
+ * The key the selected instance's chip colours are remembered under: its component's
+ * file, else its name. Undefined when the selection is not an instance on a page.
+ */
+export function selectedInstanceScope(): string | undefined {
+  const host = getHost();
+  if (host.openFileKind === 'component') {
+    return undefined;
+  }
+  const node = nodeById(host.selectedId);
+  if (node === undefined || node.kind !== 'component') {
+    return undefined;
+  }
+  const scope = host.selectedComponentPath ?? node.name;
+  return scope === undefined || scope.length === 0 ? undefined : scope.replaceAll('\\', '/');
+}
+
+/**
  * Whether the selected instance's colours are still unknown: the canvas has not yet
  * reported the classes it renders, or its component's file is imported, not among the
- * loaded stylesheets, and still being read. The chips are drawn neutral meanwhile.
+ * loaded stylesheets, and still being read. The chips keep their remembered colour meanwhile
+ * (chipProvenanceMemory.ts).
  */
 export function selectedInstanceMarkupPending(documents: Iterable<ComponentSourceText>, pending: (path: string) => boolean): boolean {
   const host = getHost();

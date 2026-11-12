@@ -908,7 +908,8 @@ function separatorBefore(bytes: ByteString, projection: ValidProjection, node: P
   const separator = textOf(bytes, toByteSpan(start, first.span.start));
   if (separator === '') {
     if (node.path.length === 1) {
-      return '\n';
+      // The file's own line break: a bare LF here put one LF line in a CRLF file.
+      return eolOf(bytes);
     }
   }
   return separator;

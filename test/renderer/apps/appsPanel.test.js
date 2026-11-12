@@ -1,6 +1,6 @@
 // Goal: the Apps panel is never blank. It always shows its heading, with a +
-// menu of every way to add an app (Load App From GitHub, Upload app file, the
-// prompt; the prompt alone for a non-admin); it shows skeleton rows while
+// menu of every way to add an app (Load App From GitHub, Build an app, which
+// opens the AI chat on the build prompt without sending it; Build an app alone for a non-admin; no Upload app file); it shows skeleton rows while
 // loading, an empty state that points at + when nothing is installed, and the
 // error ("Restart Stacki to use Apps.") when the main process predates Apps.
 // Installed apps list with their tiles; search ("Search installed apps")
@@ -13,15 +13,17 @@
 // reason only in its small print; an index with no apps invites a submission
 // through stacki.build's form. The tab opens with the community-apps
 // disclaimer, and Install asks first. Each row's ⋯ menu holds Details, Share to
-// GitHub… (an uploaded app, `apps:share`), Submit to marketplace
+// GitHub… (an uploaded app that no repository holds yet, `apps:share`), Submit to marketplace
 // (`marketplace:publish`: a GitHub app's opens the in-app Publish to
 // marketplace popup at its own repository, an uploaded one's leads through
 // Share first) and Remove app, which asks first as Uninstall app does. An app's details open in a popup from a row
 // click or ⋯ → Details, show a meta line (version, author, repository), one-line
 // facts and commands with the long text behind hints, never an "Unknown"
 // author, ask before Uninstall app, and close on Escape. A waiting update
-// reads "Update available · v…" on its row and puts a dot on the rail's Apps button; each app's Auto-update switch starts off and
-// only an admin flips it. Each row says where its app lives ("Local", "GitHub ·
+// reads "Update available · v…" on its row and puts a dot on the rail's Apps button; each app's Update automatically switch starts off
+// and only an admin flips it. Update installs and says so; an app whose auto-update is on but whose
+// new version asks for more reads "Update needs your OK" with what it adds; an uploaded or folder app
+// never offers Update. Each row says where its app lives ("Local", "GitHub ·
 // Private", "Marketplace"), as does its details' About with a link to GitHub, and
 // a row draws no avatar when the app names no author. One app the editor cannot
 // read (an auth provider naming a setting its manifest does not declare) is a
@@ -82,7 +84,7 @@ const { act } = require('react');
 // The panel and the confirmation host from one bundle, so the panel's confirmDialog reaches this host.
 const panelModule = bundle('test/helpers/appsPanelEntry.ts', 'panel');
 const AppsPanel = panelModule.default;
-const { ConfirmHost } = panelModule;
+const { ConfirmHost, registerAgentTaskHandler } = panelModule;
 const LeftRail = bundle('src/app/LeftRail.tsx', 'rail').default;
 const roles = bundle('shared/properties/projectRoles.ts', 'roles');
 
@@ -169,7 +171,8 @@ test('the header + lists every way to add an app, installed or not; a non-admin 
     await act(async () => plus.dispatchEvent(new MouseEvent('click', { bubbles: true })));
     return labels;
   };
-  const every = ['Load App From GitHub', 'Upload app file', '“Build an app” prompt'];
+  // Submitting to the marketplace is in each app's own menu, not here.
+  const every = ['Build an app', 'Load App From GitHub'];
   window.avb = { listApps: async () => ({ ok: true, value: [] }) };
   const empty = await mount(panel());
   assert.deepEqual(await headerMenu(empty.container), every);
@@ -180,8 +183,56 @@ test('the header + lists every way to add an app, installed or not; a non-admin 
   assert.equal(installed.container.querySelector('.welcome-split-button') ?? undefined, undefined, 'the body has no split button');
   await act(async () => installed.root.unmount());
   const viewer = await mount(panel({ id: 'client', name: 'Client', isAdmin: false, features: new Set(['panel:apps']) }));
-  assert.deepEqual(await headerMenu(viewer.container), ['“Build an app” prompt']);
+  assert.deepEqual(await headerMenu(viewer.container), ['Build an app']);
   await act(async () => viewer.root.unmount());
+  const publisher = await mount(
+    panel({ id: 'publisher', name: 'Publisher', isAdmin: false, features: new Set(['panel:apps', 'marketplace:view', 'marketplace:publish']) }),
+  );
+  assert.deepEqual(
+    await headerMenu(publisher.container),
+    ['Build an app'],
+    "a publisher without install rights gets Build an app alone; Submit is in each app's own menu",
+  );
+  await act(async () => publisher.root.unmount());
+});
+
+test('Build an app hands the prompt to the AI chat as an unsent draft, and copies it with a notice when no chat takes it', async () => {
+  window.avb = { listApps: async () => ({ ok: true, value: [] }) };
+  const notices = [];
+  const choose = async (container, label) => {
+    const plus = container.querySelector('.apps-header [aria-label="Add an app"]');
+    await act(async () => plus.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    const item = [...document.querySelectorAll('[role=menuitem]')].find((entry) => entry.textContent === label);
+    assert.ok(item, label);
+    await act(async () => item.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    // A menu runs its item after its closing motion.
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+  };
+  const host = await mount(
+    React.createElement(AppsPanel, { projectPath: '/p', role: roles.ADMIN_VIEW, notify: (message, kind) => notices.push({ message, kind }) }),
+  );
+  // A chat takes it: the task is a draft, and the panel adds no notice to what the chat already shows.
+  const tasks = [];
+  const unregister = registerAgentTaskHandler('ai-panel', 20, async (task) => {
+    tasks.push(task);
+    return { tag: 'sent', where: 'Claude in the AI panel' };
+  });
+  await choose(host.container, 'Build an app');
+  unregister();
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].delivery, 'draft', 'the person sends it, Stacki never does');
+  assert.match(tasks[0].prompt, /stacki-app\.json/, 'the build prompt');
+  assert.deepEqual(notices, []);
+  // Nothing takes it: it lands on the clipboard and the notice says so.
+  const copied = [];
+  Object.defineProperty(window.navigator, 'clipboard', { value: { writeText: async (text) => copied.push(text) }, configurable: true });
+  await choose(host.container, 'Build an app');
+  assert.equal(copied.length, 1);
+  assert.equal(copied[0], tasks[0].prompt);
+  assert.equal(notices.length, 1);
+  assert.equal(notices[0].kind, 'success', 'the copy worked; the message says why it was a copy');
+  assert.match(notices[0].message, /AI chat isn’t available here/);
+  await act(async () => host.root.unmount());
 });
 
 test('each row’s ⋯ menu: Details, Share to GitHub…, Submit to marketplace and Remove app, as the role and source allow', async () => {
@@ -268,6 +319,113 @@ test('each row’s ⋯ menu: Details, Share to GitHub…, Submit to marketplace 
   await act(async () => viewer.root.unmount());
 });
 
+test('a folder app the marketplace lists has no Share to GitHub and no Submit at all; its details say it is listed', async () => {
+  const click = (element) => act(async () => element.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+  const local = (id, name, manifestSource) => {
+    const added = summary(id, name, 'Pin comments to elements');
+    return {
+      manifest: { ...added.manifest, source: manifestSource },
+      lock: { ...added.lock, source: { kind: 'local' }, autoUpdate: false },
+    };
+  };
+  const apps = [
+    local('feedback-pins', 'Feedback pins', undefined),
+    local('notes', 'Notes', { kind: 'github', owner: 'octocat', repository: 'notes', asset: 'notes.zip' }),
+    local('scratch', 'Scratch', undefined),
+  ];
+  const index = {
+    version: 1,
+    apps: [
+      {
+        id: 'feedback-pins',
+        name: 'Feedback pins',
+        description: 'Pin comments to elements',
+        author: 'flowtricks',
+        icon: 'https://stacki.build/api/marketplace/icons/feedback-pins.png',
+        categories: [],
+        source: { owner: 'flowtricks', repository: 'feedback-pins', asset: 'feedback-pins.zip' },
+        versions: [{ version: '1.8.1', tag: 'v1.8.1', sha256: 'b'.repeat(64) }],
+      },
+    ],
+  };
+  const statuses = [];
+  window.avb = {
+    listApps: async () => ({ ok: true, value: apps }),
+    appMarketplace: async () => ({ ok: true, value: index }),
+    discoverPublishing: async () => ({ kind: 'ready', accounts: [{ id: 'octocat', name: 'octocat' }], projects: [] }),
+    listAppRepositories: () => new Promise(() => {}),
+    appRepositoryStatus: (input) => {
+      statuses.push({ owner: input.repository.owner, repository: input.repository.repository });
+      return new Promise(() => {});
+    },
+  };
+  const menuOf = async (container, name) => {
+    const more = container.querySelector(`.apps-row [aria-label="${name} options"]`);
+    await click(more);
+    const items = [...document.querySelectorAll('[role=menuitem]')];
+    return { labels: items.map((item) => item.textContent), items, close: () => click(more) };
+  };
+  const renderSignIn = () => React.createElement('div', {}, 'sign in');
+  const { container, root } = await mount(
+    React.createElement(AppsPanel, { projectPath: '/shared-check', role: roles.ADMIN_VIEW, notify: () => {}, renderSignIn }),
+  );
+  await settle();
+  const scratch = await menuOf(container, 'Scratch');
+  assert.deepEqual(scratch.labels, ['Details', 'Share to GitHub…', 'Submit to marketplace', 'Remove app'], 'an app on no repository is shared first');
+  assert.equal(scratch.items[2].disabled, true);
+  await scratch.close();
+  await settle();
+  const notes = await menuOf(container, 'Notes');
+  assert.deepEqual(
+    notes.labels,
+    ['Details', 'Submit to marketplace', 'Remove app'],
+    'a manifest that names its repository is shared already; not listed yet, so a first submission',
+  );
+  // The first listing still needs a submission: it opens the checklist on the repository the manifest names.
+  assert.equal(notes.items[1].disabled, false);
+  await click(notes.items[1]);
+  await settle();
+  assert.ok(document.querySelector('[aria-label="Publish to marketplace"]'), 'the publish checklist opens');
+  assert.deepEqual(statuses, [{ owner: 'octocat', repository: 'notes' }], 'on the repository the manifest names');
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  await settle();
+  const pins = await menuOf(container, 'Feedback pins');
+  assert.deepEqual(
+    pins.labels,
+    ['Details', 'Remove app'],
+    'a listed app has nothing to submit (the marketplace follows its releases) and is never shared again',
+  );
+  await pins.close();
+  await act(async () => root.unmount());
+
+  // A publisher who may not share has no Submit for a listed app either.
+  const publisher = {
+    id: 'publisher',
+    name: 'Publisher',
+    isAdmin: false,
+    features: new Set(['panel:apps', 'marketplace:view', 'marketplace:publish', 'app:*']),
+  };
+  const lone = await mount(React.createElement(AppsPanel, { projectPath: '/shared-check', role: publisher, notify: () => {}, renderSignIn }));
+  await settle();
+  const loneMenu = await menuOf(lone.container, 'Feedback pins');
+  assert.deepEqual(loneMenu.labels, ['Details']);
+  // Its details name the listed repository, as a GitHub app's do, and say it is listed with its latest version.
+  await click(loneMenu.items[0]);
+  await settle();
+  const surface = document.querySelector('[aria-label="Feedback pins details"] .popup-surface');
+  assert.ok(surface, 'the details open');
+  assert.equal(surface.querySelector('a.apps-details-repository').getAttribute('href'), 'https://github.com/flowtricks/feedback-pins');
+  const listedRow = [...surface.querySelectorAll('.apps-details-item')].find((row) => /Listed in the marketplace/.test(row.textContent));
+  assert.ok(listedRow, 'a quiet Listed in the marketplace row');
+  assert.match(listedRow.textContent, /v1\.8\.1/, 'with the listed latest version');
+  assert.equal(listedRow.querySelector('a').getAttribute('href'), 'https://github.com/flowtricks/feedback-pins', 'and a link to the repository');
+  assert.doesNotMatch(surface.textContent, /Submit/, 'no submit anywhere in the details');
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  await settle();
+  await act(async () => lone.root.unmount());
+});
+
 test('an app’s details open in a popup from ⋯ → Details only, show each section, ask before Uninstall, and close on Escape', async () => {
   const click = (element) => act(async () => element.dispatchEvent(new MouseEvent('click', { bubbles: true })));
   const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
@@ -279,7 +437,7 @@ test('an app’s details open in a popup from ⋯ → Details only, show each se
       settings: [{ id: 'api-key', label: 'API key', kind: 'secret', required: true }],
       commands: [{ id: 'toggle', title: 'Toggle heat map', shortcut: undefined, panel: undefined }],
     },
-    lock: { ...base.lock, source: github, autoUpdate: false, update: { version: '1.1.0', tag: 'v1.1.0', sha256: 'e'.repeat(64) } },
+    lock: { ...base.lock, source: github, autoUpdate: false, update: { version: '1.1.0', tag: 'v1.1.0', sha256: 'e'.repeat(64), additions: [] } },
   };
   const removed = [];
   window.avb = {
@@ -582,7 +740,22 @@ test('the Marketplace tab lists approved apps, marks installed ones, and install
   assert.equal(rows[0].querySelector('.apps-badge').textContent, 'Installed');
   assert.equal(rows[0].querySelector('button.apps-button') ?? undefined, undefined, 'an installed app offers no Install');
   assert.match(rows[1].textContent, /by hubot/);
-  assert.match(rows[1].textContent, /v0\.3\.0/, 'the newest approved version is offered');
+  assert.equal(rows[1].querySelector('.apps-market-description') ?? undefined, undefined, 'the description stays folded until the ⋯ opens it');
+  const detailsButton = rows[1].querySelector('button[aria-label="Alt text check details"]');
+  assert.ok(detailsButton, 'a row has a ⋯ details button');
+  await click(detailsButton);
+  await settle();
+  const popup = document.querySelector('.apps-details-popup');
+  assert.ok(popup, 'the ⋯ opens the details popup');
+  assert.match(popup.textContent, /Alt text check/);
+  assert.match(popup.textContent, /Images without alt text/, 'the description is in the popup');
+  assert.equal(popup.querySelector('a.apps-details-link').getAttribute('href'), 'https://github.com/hubot/alt-text', 'the repository link');
+  assert.ok(popup.querySelector('button.apps-button'), 'the popup offers Install to a role that may install');
+  await act(async () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+  // The popup leaves with a motion, so it is gone only after that has run. The boolean keeps a failure readable:
+  // a DOM node in a failed deepEqual message is inspected whole and can exhaust memory.
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+  assert.equal(document.querySelector('.apps-details-popup') === null, true, 'Escape closes it');
   assert.match(admin.container.querySelector('.apps-market-disclaimer').textContent, /Community apps, MIT licensed\. Stacki doesn’t review them/);
   await click(rows[1].querySelector('button.apps-button'));
   const confirmation = document.querySelector('.confirm-dialog');
@@ -621,6 +794,13 @@ test('an unreadable marketplace is a calm state with Retry; an empty one invites
     // A reply that is not a valid index is refused by the renderer's own parser.
     { ok: true, value: { version: 2, apps: [] } },
   ];
+  // Each read of the panel here is a project of its own: the list the panel kept for '/p' from earlier tests would
+  // start the places lookup, which reads the index too, and take the failing first answer meant for the tab.
+  let projects = 0;
+  const freshPanel = () => {
+    projects += 1;
+    return React.createElement(AppsPanel, { projectPath: `/unreadable-${projects}`, role: roles.ADMIN_VIEW, notify: () => {} });
+  };
   for (const reply of replies) {
     const asked = [];
     window.avb = {
@@ -630,7 +810,7 @@ test('an unreadable marketplace is a calm state with Retry; an empty one invites
         return asked.length === 1 ? reply : { ok: true, value: marketplaceIndex };
       },
     };
-    const { container, root } = await mount(panel());
+    const { container, root } = await mount(freshPanel());
     await openMarketplace(container);
     const state = container.querySelector('[aria-label="Marketplace unavailable"]');
     assert.ok(state, `an unavailable state for ${JSON.stringify(reply)}`);
@@ -658,7 +838,7 @@ test('an unreadable marketplace is a calm state with Retry; an empty one invites
     listApps: async () => ({ ok: true, value: [] }),
     appMarketplace: async () => ({ ok: true, value: { version: 1, apps: [] } }),
   };
-  const { container, root } = await mount(panel());
+  const { container, root } = await mount(freshPanel());
   await openMarketplace(container);
   const empty = container.querySelector('[aria-label="Marketplace empty"]');
   assert.ok(empty, 'an empty index has its own state');
@@ -676,7 +856,7 @@ test('a waiting update reads on its row and dots the rail; auto-update starts of
   const base = summary('heat-map', 'Heat map', 'Clicks on the canvas');
   const waiting = {
     ...base,
-    lock: { ...base.lock, source: github, autoUpdate: false, update: { version: '1.1.0', tag: 'v1.1.0', sha256: 'e'.repeat(64) } },
+    lock: { ...base.lock, source: github, autoUpdate: false, update: { version: '1.1.0', tag: 'v1.1.0', sha256: 'e'.repeat(64), additions: [] } },
   };
   const switches = [];
   window.avb = {
@@ -721,6 +901,115 @@ test('a waiting update reads on its row and dots the rail; auto-update starts of
   await act(async () => nonAdmin.root.unmount());
 });
 
+test('Update installs from the row and the details and says so; a failure is shown; the version it adds is named', async () => {
+  const github = { kind: 'github', owner: 'octocat', repository: 'heat-map', asset: 'heat-map.zip', tag: 'v1.0.0' };
+  const base = summary('heat-map', 'Heat map', 'Clicks on the canvas');
+  const waiting = {
+    ...base,
+    lock: {
+      ...base.lock,
+      source: github,
+      autoUpdate: false,
+      update: { version: '1.1.0', tag: 'v1.1.0', sha256: 'e'.repeat(64), additions: ['reaches api.example.com'] },
+    },
+  };
+  const applied = [];
+  let outcome = { ok: true, value: { ...waiting, manifest: { ...waiting.manifest, version: '1.1.0' } } };
+  window.avb = {
+    listApps: async () => ({ ok: true, value: [waiting] }),
+    applyAppUpdate: async (input) => {
+      applied.push(input);
+      return outcome;
+    },
+  };
+  const messages = [];
+  const notify = (message, kind) => messages.push([kind, message]);
+  const { container, root } = await mount(React.createElement(AppsPanel, { projectPath: '/p', role: roles.ADMIN_VIEW, notify }));
+  const click = (element) => act(async () => element.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+  // The row: the accent line, and the Refresh-icon button.
+  assert.equal(container.querySelector('.apps-row-update').textContent, 'Update available · v1.1.0');
+  assert.equal(container.querySelector('.apps-row-update').getAttribute('data-needs-ok'), 'false');
+  const rowButton = container.querySelector('.apps-row [aria-label="Update Heat map"]');
+  assert.ok(rowButton, 'the row has an Update button');
+  assert.equal(rowButton.getAttribute('title'), 'Update to 1.1.0');
+  await click(rowButton);
+  await settle();
+  assert.deepEqual(applied, [{ projectPath: '/p', id: 'heat-map' }]);
+  assert.deepEqual(messages.at(-1), ['success', 'Heat map updated to 1.1.0.']);
+  // The failure message is shown as it came.
+  outcome = { ok: false, message: 'The download no longer matches the SHA-256 that was checked.' };
+  await click(rowButton);
+  await settle();
+  assert.deepEqual(messages.at(-1), ['error', 'The download no longer matches the SHA-256 that was checked.']);
+  // The details: the same state, what the version adds, and an Update button.
+  await click(container.querySelector('.apps-row [aria-label="Heat map options"]'));
+  await click([...document.querySelectorAll('[role=menuitem]')].find((item) => item.textContent === 'Details'));
+  await settle();
+  const updates = document.querySelector('[aria-label="Heat map updates"]');
+  assert.ok(updates, 'the details have an Updates list');
+  assert.match(updates.textContent, /Update available · v1\.1\.0/);
+  assert.match(updates.textContent, /Update automatically/);
+  const detailsButton = [...updates.querySelectorAll('button')].find((button) => button.textContent === 'Update');
+  assert.ok(detailsButton, 'the details have an Update button');
+  assert.ok(detailsButton.querySelector('svg'), 'with the Refresh icon');
+  assert.equal(updates.querySelector('[role=switch]').getAttribute('aria-label'), 'Update Heat map automatically');
+  await act(async () => root.unmount());
+});
+
+test('auto-update on: a version that asks for more reads "Update needs your OK" and still has Update; an own app never offers Update', async () => {
+  const marketplace = { kind: 'marketplace', id: 'heat-map', version: '1.0.0' };
+  const base = summary('heat-map', 'Heat map', 'Clicks on the canvas');
+  const held = {
+    ...base,
+    lock: {
+      ...base.lock,
+      source: marketplace,
+      autoUpdate: true,
+      update: { version: '1.1.0', tag: 'v1.1.0', sha256: 'e'.repeat(64), additions: ['reaches api.example.com'] },
+    },
+  };
+  const quiet = summary('quiet-app', 'Quiet app', 'Nothing new');
+  const quietWaiting = {
+    ...quiet,
+    lock: {
+      ...quiet.lock,
+      source: { kind: 'marketplace', id: 'quiet-app', version: '1.0.0' },
+      autoUpdate: false,
+      update: { version: '1.1.0', tag: 'v1.1.0', sha256: 'f'.repeat(64), additions: [] },
+    },
+  };
+  // An uploaded app and one added to the project folder are the person's own: even a stray `update` offers nothing.
+  const upload = summary('own-upload', 'Own upload', 'Mine');
+  const uploadStray = {
+    ...upload,
+    lock: { ...upload.lock, autoUpdate: false, update: { version: '9.0.0', tag: 'v9', sha256: 'c'.repeat(64), additions: [] } },
+  };
+  const folder = summary('own-folder', 'Own folder', 'Mine');
+  const folderOwn = { ...folder, lock: { ...folder.lock, source: { kind: 'local' }, autoUpdate: false, update: undefined } };
+  window.avb = { listApps: async () => ({ ok: true, value: [held, quietWaiting, uploadStray, folderOwn] }) };
+  const { container, root } = await mount(panel());
+  const row = (name) => [...container.querySelectorAll('.apps-row')].find((item) => item.querySelector('.apps-row-title')?.textContent === name);
+  const heldLine = row('Heat map').querySelector('.apps-row-update');
+  assert.equal(heldLine.textContent, 'Update needs your OK · v1.1.0');
+  assert.equal(heldLine.getAttribute('data-needs-ok'), 'true');
+  assert.ok(row('Heat map').querySelector('[aria-label="Update Heat map"]'), 'a person can still choose Update');
+  assert.equal(row('Quiet app').querySelector('.apps-row-update').textContent, 'Update available · v1.1.0');
+  for (const name of ['Own upload', 'Own folder']) {
+    assert.equal(row(name).querySelector('.apps-row-update') ?? undefined, undefined, `${name} offers no update`);
+    assert.equal(row(name).querySelector('[aria-label^="Update "]') ?? undefined, undefined, `${name} has no Update button`);
+  }
+  // The held app's details say it needs the OK, and its switch is on (what it adds is the hint, covered in appUpdates).
+  const click = (element) => act(async () => element.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  await click(row('Heat map').querySelector('[aria-label="Heat map options"]'));
+  await click([...document.querySelectorAll('[role=menuitem]')].find((item) => item.textContent === 'Details'));
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+  const updates = document.querySelector('[aria-label="Heat map updates"]');
+  assert.match(updates.textContent, /Update needs your OK · v1\.1\.0/);
+  assert.equal(updates.querySelector('[role=switch]').getAttribute('aria-checked'), 'true');
+  await act(async () => root.unmount());
+});
+
 test('rows say where each app lives, and draw no avatar without an author', async () => {
   const github = { kind: 'github', owner: 'octocat', repository: 'heat-map', asset: 'heat-map.zip', tag: 'v1.0.0', account: 'octocat' };
   const fromGitHub = summary('heat-map', 'Heat map', 'Clicks on the canvas');
@@ -753,8 +1042,9 @@ test('rows say where each app lives, and draw no avatar without an author', asyn
   await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
   const rowOf = (name) => [...container.querySelectorAll('.apps-row')].find((row) => row.querySelector('.apps-row-title').textContent === name);
   const pills = (name) => [...rowOf(name).querySelectorAll('.apps-place-pill')].map((pill) => pill.textContent);
-  assert.deepEqual(pills('Heat map'), ['GitHub · Private', 'Marketplace'], 'listed under its id and repository');
-  assert.deepEqual(pills('Alt text check'), ['GitHub', 'Marketplace'], 'a failed visibility lookup shows GitHub alone');
+  // One origin pill per row: Marketplace when installed from it or listed in it, else GitHub, else Local.
+  assert.deepEqual(pills('Heat map'), ['Marketplace'], 'a GitHub app the marketplace lists says Marketplace alone');
+  assert.deepEqual(pills('Alt text check'), ['Marketplace'], 'an app installed from the marketplace says Marketplace alone');
   assert.deepEqual(pills('Translate'), ['Local']);
   assert.deepEqual(asked.sort(), ['alt-text', 'heat-map'], 'only apps on GitHub are looked up');
   // An author from the manifest, or the repository's owner for a GitHub app; an uploaded app without one has none.
@@ -775,11 +1065,11 @@ test('rows say where each app lives, and draw no avatar without an author', asyn
   await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
   const about = document.querySelector('.apps-details-popup');
   // The pills' explanations are the Stored in hint's sentence.
-  assert.match(about.textContent, /Installed from octocat\/heat-map, a private GitHub repository\./);
+  assert.match(about.textContent, /Installed fromGitHub · v1\.0\.0/, 'the details still say where the app was installed from');
   assert.match(about.textContent, /Listed in the Stacki marketplace\./);
   assert.deepEqual(
     [...about.querySelectorAll('.apps-place-pill')].map((pill) => pill.textContent),
-    ['GitHub · Private', 'Marketplace'],
+    ['Marketplace'],
   );
   const link = about.querySelector('a.apps-details-repository');
   assert.equal(link.textContent, 'octocat/heat-map', 'the repository link names it, beside the author');

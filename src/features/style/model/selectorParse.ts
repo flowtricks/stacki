@@ -272,8 +272,17 @@ export function selectorDependsOnAncestor(selectorText: string): boolean {
  */
 export type SelectorKind = 'class' | 'plain';
 
+/**
+ * Past this many characters a selector is not parsed, only scanned: the chip's colour is
+ * decided on the first paint, so its cost is bounded and never waits on a long rule.
+ */
+export const SELECTOR_KIND_PARSE_MAX = 2048;
+
 export function selectorKind(text: string): SelectorKind {
   assert(typeof text === 'string', 'selectorKind: the selector is text');
+  if (text.length > SELECTOR_KIND_PARSE_MAX) {
+    return /[.#[]/.test(text) ? 'class' : 'plain';
+  }
   let root: selectorParser.Root;
   try {
     root = selectorParser().astSync(text);

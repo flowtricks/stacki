@@ -15,7 +15,7 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 12px;
+  gap: 16px;
   padding: 16px;
   border-bottom: 1px solid var(--border);
 }
@@ -244,6 +244,17 @@
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
+.apps-details-listed {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* The details' Update button: its icon and word on one line. */
+.apps-update-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 .apps-details-place {
   display: inline-flex;
   align-items: center;
@@ -298,7 +309,9 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
 }
+/* A hint inside a popup draws over it: popups sit at 10000 (popup.css) and the rail tooltip's own 600 left the tip hidden beneath. */
 .rail-tooltip.apps-details-tip {
+  z-index: 10001;
   max-width: 280px;
   font-weight: 400;
   line-height: 1.45;

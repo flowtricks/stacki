@@ -28,7 +28,7 @@ import { memberTypes, type NewPropKind, type PropDeclaration } from '../../edito
 import { readPropsDestructure } from '../../editor/loopProps';
 import { isMediaName } from '../../editor/fieldNames';
 import { isImageType } from '../../editor/imagePropDefault';
-import type { ItemFieldDeclaration } from '../../editor/listPropType';
+import type { ItemFieldDeclaration } from '../../editor/itemFields';
 
 /** The kind of field a picker was opened on. */
 export type FieldFit = 'content' | 'text' | 'number' | 'boolean' | 'attributes' | 'image' | 'list';

@@ -1,16 +1,26 @@
+import { ConfirmHost } from '../../../vendor/stacki/src/ui/ConfirmDialog';
 import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
-import { useEffect, useState } from 'react';
-import { request } from '../project/projectClient';
+import { useEffect, useMemo, useState } from 'react';
+import { request, type Project } from '../project/projectClient';
 import { parseModels, type ModelConfiguration } from './chatContracts';
-import { useChats, initializeChats, updateChat, createChat, type ChatThread } from './chatState';
+import { useChats, initializeChats, createChat, setDraftText, updateChat, CHATS_MAX, type ChatThread } from './chatState';
 import { ChatComposer } from './ChatComposer';
+import { ChatList } from './ChatList';
 import { ChatMessages } from './ChatMessages';
-import { ChatSwitcher } from './ChatSwitcher';
 import { ChatIcon } from './ChatIcon';
+import { mentionFiles } from './mentionFiles';
 import './chat.css';
 
-export function ChatPanel({ file, refresh }: { readonly file: string; readonly refresh: () => void; readonly error: (error: unknown) => void }) {
+interface PanelProps {
+  readonly file: string;
+  readonly project: Pick<Project, 'pages' | 'components' | 'assets'>;
+  readonly refresh: () => void;
+  readonly error: (error: unknown) => void;
+}
+export function ChatPanel({ file, project, refresh }: PanelProps) {
   const state = useChats();
+  const [listing, setListing] = useState(false);
+  const files = useMemo(() => mentionFiles(project, file), [project, file]);
   const { config, error, reload } = useModels();
   const chat = state.threads.find((chat) => chat.id === state.active) ?? state.threads[0];
   useEffect(() => {
@@ -30,14 +40,28 @@ export function ChatPanel({ file, refresh }: { readonly file: string; readonly r
   }
   return (
     <section className="chat-panel" aria-label="AI workspace">
+      <ConfirmHost />
       <header className="chat-header">
-        <ChatSwitcher chats={state.threads} active={chat} />
+        <button
+          className="chat-switcher-button"
+          aria-label="Chat history"
+          aria-expanded={listing}
+          title={listing ? 'Back to the chat' : 'All chats'}
+          onClick={() => setListing(!listing)}
+        >
+          <ChatIcon name="chat" />
+          <span>{listing ? 'Chats' : chat.title}</span>
+          <ChatIcon name="chevron" />
+        </button>
         <button
           className="chat-icon-button"
           aria-label="New chat"
-          title={state.threads.length >= 20 ? 'Delete a chat to make room' : 'New chat'}
-          disabled={state.threads.length >= 20}
-          onClick={() => createChat(chat.model || config.defaultModel)}
+          title={state.threads.length >= CHATS_MAX ? 'Delete a chat to make room' : 'New chat'}
+          disabled={state.threads.length >= CHATS_MAX}
+          onClick={() => {
+            createChat(chat.model || config.defaultModel);
+            setListing(false);
+          }}
         >
           <ChatIcon name="plus" />
         </button>
@@ -59,8 +83,22 @@ export function ChatPanel({ file, refresh }: { readonly file: string; readonly r
       )}
       {/* The keys reset each part's local state when the chat changes. They must differ: siblings that share a
           key make React leave an orphaned transcript in the page on every render, in development and production alike. */}
-      {chat.messages.length || chat.error ? <ChatMessages key={`messages-${chat.id}`} chat={chat} refresh={refresh} /> : <ChatWelcome chat={chat} />}
-      <ChatComposer key={`composer-${chat.id}`} chat={chat} file={file} config={config} />
+      {listing ? (
+        <ChatList
+          chats={state.threads}
+          active={chat.id}
+          onOpen={() => setListing(false)}
+          onNew={() => {
+            createChat(chat.model || config.defaultModel);
+            setListing(false);
+          }}
+        />
+      ) : (
+        <>
+          {chat.messages.length || chat.error ? <ChatMessages key={`messages-${chat.id}`} chat={chat} refresh={refresh} /> : <ChatWelcome chat={chat} />}
+          <ChatComposer key={`composer-${chat.id}`} chat={chat} file={file} files={files} config={config} />
+        </>
+      )}
     </section>
   );
 }
@@ -101,8 +139,8 @@ function ChatWelcome({ chat }: { readonly chat: ChatThread }) {
           <button
             key={prompt}
             onClick={() => {
-              updateChat(chat.id, (thread) => ({ ...thread, draft: prompt }));
-              document.querySelector<HTMLTextAreaElement>('.chat-composer textarea')?.focus();
+              setDraftText(chat.id, prompt);
+              document.querySelector<HTMLElement>('.ai-composer .cm-content')?.focus();
             }}
           >
             {prompt}

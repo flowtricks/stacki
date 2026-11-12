@@ -79,7 +79,48 @@ export function commandVerdict(command: string, root: string): Verdict {
       return verdict;
     }
   }
-  return shellWriteVerdict(command, root);
+  return shellWriteVerdict(withRootAsDot(command, root), root);
+}
+
+// A checkout path is data, not shell syntax: `/Users/Lilian's Home/stacki` has an
+// apostrophe that opens a quote nothing closes and a space that splits the path,
+// so the words after it no longer read as paths inside the repository and a gate
+// file write looked harmless (issue #78). Every spelling a shell accepts for the
+// root is rewritten to `.` before the command is split, so `tee <root>/.claude/…`
+// is read as `tee ./.claude/…` however the root was quoted or escaped.
+const ROOT_SPELLINGS_MAX = 8;
+
+function withRootAsDot(command: string, root: string): string {
+  const forward = root.split(path.sep).join('/');
+  assert(forward.length > 1, 'withRootAsDot: the root is not the filesystem root');
+  const spellings = new Set<string>([root, forward]);
+  for (const text of [root, forward]) {
+    spellings.add(text.replace(/[^\w/.:@%+=,-]/g, (character) => `\\${character}`)); // Backslash-escaped, unquoted.
+    spellings.add(text.replace(/'/g, "'\\''")); // Inside single quotes.
+    spellings.add(text.replace(/["\\$`]/g, (character) => `\\${character}`)); // Inside double quotes.
+  }
+  assert(spellings.size <= ROOT_SPELLINGS_MAX, 'withRootAsDot: spelling limit exceeded');
+  let result = command;
+  // Longest first: a short spelling must not eat the front of a longer one.
+  for (const spelling of [...spellings].sort((first, second) => second.length - first.length)) {
+    let from = 0;
+    for (let guard = 0; guard < COMMAND_CHARS_MAX; guard += 1) {
+      const index = result.indexOf(spelling, from);
+      if (index < 0) {
+        break;
+      }
+      const end = index + spelling.length;
+      // Only a whole path: `<root>-other/x` is a different directory.
+      if (end === result.length || /[/\s'"`;&|)<>]/.test(result.charAt(end))) {
+        result = `${result.slice(0, index)}.${result.slice(end)}`;
+        from = index + 1;
+      } else {
+        from = end;
+      }
+    }
+  }
+  // `'<root>'/.claude/x` closed its quote before the slash: `'.'/.claude/x` is `./.claude/x`.
+  return result.replace(/(["'])\.\1\//g, './');
 }
 
 // A shell command can write a file as surely as an edit tool can. When one

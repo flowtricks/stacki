@@ -105,6 +105,15 @@ function writtenKind(value: Js): LoopFieldKind {
 /** What a new custom list starts with, so the loop shows something at once. */
 export const STARTER_ITEMS: readonly string[] = ['Item 1', 'Item 2', 'Item 3'];
 
+/**
+ * Whether the data is an array literal of anything (`["a"]`, `[{ title: "a" }]`, `[]`): the shape a custom list's
+ * Items section can show, as rows when every item is a string and as code otherwise.
+ */
+export function isArrayLiteral(data: string): boolean {
+  const parsed = parseExpression(data.trim());
+  return parsed !== undefined && parsed.expression.kind === 'array';
+}
+
 /** The items of a typed list of strings, or undefined for any other code. */
 export function literalItems(data: string): readonly string[] | undefined {
   const parsed = parseExpression(data.trim());

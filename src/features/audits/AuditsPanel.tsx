@@ -9,6 +9,7 @@
 // numbers and raw attribute text stay in the row's tooltip. When safe fixes
 // exist, a slim row at the top applies them. Fixes preview their code first;
 // Ignore asks for a reason and writes the tracked `.stacki/audits.json`.
+import { assert } from '../../../shared/core/assert';
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { PageNode } from '../../../shared/page/pageNode';
 import { nodeAt } from '../../../shared/page/auditTrace';
@@ -226,7 +227,7 @@ export default function AuditsPanel(props: AuditsPanelProps) {
             <span>
               {fixes} {fixes === 1 ? 'fix' : 'fixes'} ready
             </span>
-            <button className="audits-link" disabled={busy} onClick={() => void actions.fix(view.fixable, 'Fix audit findings')}>
+            <button className="audits-apply" disabled={busy} onClick={() => void actions.fix(view.fixable, 'Fix audit findings')}>
               Apply
             </button>
           </div>
@@ -365,7 +366,6 @@ function RuleRow(props: {
       </div>
       {props.open && (
         <div className="audits-rule-body">
-          <p className="audits-why">{check.why}</p>
           {files.map(([file, findings]) => (
             <FileGroup key={file} file={file} findings={findings} nodes={trees?.get(file)} actions={props.actions} panel={props.panel} />
           ))}
@@ -428,8 +428,76 @@ function FileGroup(props: {
       </div>
       {open && (
         <div className="audits-file-body">
+          {sameElementRuns(props.findings).map(([only, ...others]) =>
+            only === undefined ? undefined : others.length === 0 ? (
+              <Occurrence key={only.id} finding={only} nodes={props.nodes} actions={props.actions} panel={props.panel} />
+            ) : (
+              <ElementGroup key={only.id} findings={[only, ...others]} nodes={props.nodes} actions={props.actions} panel={props.panel} />
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Consecutive findings that are about one element, in the order they came: seven raw values in one `<style>`
+ * are one element with seven findings, not seven rows that each read "style". A finding with no element of its own
+ * stands alone.
+ */
+export function sameElementRuns(findings: readonly AuditFinding[]): readonly (readonly AuditFinding[])[] {
+  const runs: AuditFinding[][] = [];
+  for (const finding of findings) {
+    const last = runs.at(-1);
+    const lastElement = last?.[0]?.element;
+    const sameElement = finding.element !== undefined && lastElement !== undefined && finding.element.path.join('.') === lastElement.path.join('.');
+    if (last !== undefined && sameElement) {
+      last.push(finding);
+    } else {
+      runs.push([finding]);
+    }
+  }
+  assert(runs.reduce((count, run) => count + run.length, 0) === findings.length, 'Grouping keeps every finding');
+  return runs;
+}
+
+/** One element that several findings are about: its own row (icon, name, count), the findings under it. */
+function ElementGroup(props: {
+  readonly findings: readonly AuditFinding[];
+  readonly nodes: readonly PageNode[] | undefined;
+  readonly actions: Actions;
+  readonly panel: AuditsPanelProps;
+}) {
+  const [open, setOpen] = useState(props.findings.length <= GROUP_OPEN_MAX);
+  const toggle = (): void => setOpen((value) => !value);
+  const [first] = props.findings;
+  assert(first !== undefined, 'An element group has findings');
+  const view = occurrenceView(first, props.nodes);
+  const element = first.element;
+  return (
+    <div className={`audits-file-group audits-element-group ${open ? 'open' : ''}`}>
+      <div
+        className="list-item audits-row audits-group-row"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={toggle}
+        onKeyDown={activateOnKey(toggle)}
+        onMouseEnter={element === undefined ? undefined : () => props.panel.onHover(first.file, element.path)}
+        onMouseLeave={element === undefined ? undefined : () => props.panel.onHover(first.file, undefined)}
+      >
+        <span className="audits-chevron" aria-hidden="true">
+          <ChevronRightIcon size={10} />
+        </span>
+        {view.icon}
+        <span className="label audits-title">{view.label}</span>
+        <span className="audits-count">{props.findings.length}</span>
+      </div>
+      {open && (
+        <div className="audits-file-body">
           {props.findings.map((finding) => (
-            <Occurrence key={finding.id} finding={finding} nodes={props.nodes} actions={props.actions} panel={props.panel} />
+            <Occurrence key={finding.id} finding={finding} nodes={props.nodes} actions={props.actions} panel={props.panel} nested={true} />
           ))}
         </div>
       )}
@@ -526,6 +594,14 @@ export function occurrenceView(finding: AuditFinding, nodes: readonly PageNode[]
   return { icon: <span className="audits-occurrence-icon">{described.icon}</span>, label: described.label };
 }
 
+/** A finding under its element's row: a raw CSS value reads as `padding: 12px`; anything else keeps its detail. */
+function nestedLabel(finding: AuditFinding, fallback: string): string {
+  if (finding.css !== undefined) {
+    return `${finding.css.property}: ${finding.css.value}`;
+  }
+  return finding.detail.length > 0 ? finding.detail : fallback;
+}
+
 /** The muted second line: the text in the finding's detail (`"Button Text"`, `href="/x"`), or why it is ignored. */
 export function occurrenceNote(finding: Pick<AuditFinding, 'detail' | 'excerpt'>, reason: string | undefined): string | undefined {
   if (reason !== undefined) {
@@ -543,6 +619,8 @@ function Occurrence(props: {
   readonly nodes: readonly PageNode[] | undefined;
   readonly actions: Actions;
   readonly panel: AuditsPanelProps;
+  /** Under its element's own row (ElementGroup): the row says what is wrong, not which element, which the parent row says. */
+  readonly nested?: boolean;
 }) {
   const { finding, actions, panel } = props;
   const [mode, setMode] = useState<'idle' | 'preview' | 'ignore' | 'relink'>('idle');
@@ -553,8 +631,10 @@ function Occurrence(props: {
   const go = (): void => panel.onReveal(finding.file, element?.path ?? fixTarget(finding), finding.prop);
   const href = /href="([^"]*)"/.exec(finding.detail)?.[1];
   const brokenRoute = finding.check === 'link-broken' && href !== undefined ? href.split(/[?#]/)[0] : undefined;
-  const view = occurrenceView(finding, props.nodes);
-  const note = occurrenceNote(finding, ignoredBecause);
+  const whole = occurrenceView(finding, props.nodes);
+  const view = props.nested === true ? { icon: <span className="audits-occurrence-icon" />, label: nestedLabel(finding, whole.label) } : whole;
+  const note =
+    props.nested === true && finding.css !== undefined && ignoredBecause === undefined ? finding.css.selector : occurrenceNote(finding, ignoredBecause);
   return (
     <div className="audits-occurrence">
       <div

@@ -68,7 +68,7 @@ test('shell writes to gate files ask a human; shell writes elsewhere do not', ()
     "sed -i 's/error/off/' eslint.config.mjs",
     'rm scripts/policy/scan.mts',
     `python3 - <<'EOF'\nopen('AGENTS.md','w')\nEOF`,
-    `tee ${ROOT}/.claude/settings.json < new.json`,
+    `tee '${ROOT.replace(/'/g, "'\\''")}'/.claude/settings.json < new.json`,
     'git checkout -- tsconfig.json',
   ];
   for (const command of asked) {
@@ -98,13 +98,53 @@ test('a write stays asked when a pipeline, subshell, cd, or heredoc carries the 
     'echo x > $(echo tsconfig.json)',
     '(cd scripts && rm agent/core.mts)',
     'cd scripts/agent && sed -i s/a/b/ core.mts',
-    `cd ${ROOT}/scripts && rm policy/scan.mts`,
+    `cd '${ROOT.replace(/'/g, "'\\''")}'/scripts && rm policy/scan.mts`,
     `npm test && python3 - <<'EOF'\nopen('eslint.config.mjs','w')\nEOF`,
     `cat <<-EOF > AGENTS.md\n\tx\n\tEOF`,
   ];
   for (const command of asked) {
     assert.equal(verdictOf(command), 'ask', command);
   }
+});
+
+test('a checkout path with shell-special characters still asks for a gate file write', () => {
+  // Issue #78: `/Users/Lilian's Home/stacki` made the apostrophe an unclosed quote and the
+  // space split the path, so `tee <root>/.claude/settings.json` read as harmless.
+  const roots = [
+    "/Users/Lilian's Home/stacki",
+    '/Users/a b/stacki',
+    '/Users/say "hi"/stacki',
+    '/Users/back\\slash/stacki',
+    '/Users/cost$HOME/stacki',
+    '/Users/tick`s/stacki',
+    '/Users/plain/stacki',
+  ];
+  const quotings = (root: string): readonly string[] => [
+    root,
+    `'${root.replace(/'/g, "'\\''")}'`,
+    `"${root.replace(/["\\$`]/g, (character) => `\\${character}`)}"`,
+    root.replace(/[^\w/.:@%+=,-]/g, (character) => `\\${character}`),
+  ];
+  for (const root of roots) {
+    for (const spelling of quotings(root)) {
+      const asked = [
+        `tee ${spelling}/.claude/settings.json < new.json`,
+        `echo x > ${spelling}/eslint.config.mjs`,
+        `rm ${spelling}/scripts/policy/scan.mts`,
+        `cd ${spelling}/scripts && rm policy/scan.mts`,
+        `cd ${spelling} && sed -i s/a/b/ AGENTS.md`,
+      ];
+      for (const command of asked) {
+        assert.equal(commandVerdict(command, root).kind, 'ask', `${root} :: ${command}`);
+      }
+      const allowed = [`echo x > ${spelling}/src/notes.txt`, `cat ${spelling}/eslint.config.mjs`, `cd ${spelling} && rm notes.txt`];
+      for (const command of allowed) {
+        assert.equal(commandVerdict(command, root).kind, 'allow', `${root} :: ${command}`);
+      }
+    }
+  }
+  // A sibling directory that merely starts with the root's name is not the repository.
+  assert.equal(commandVerdict("echo x > /Users/Lilian's Home/stacki-other/eslint.config.mjs", "/Users/Lilian's Home/stacki").kind, 'allow');
 });
 
 test('writeUnits keeps heredoc bodies, pipelines, and subshells whole', () => {

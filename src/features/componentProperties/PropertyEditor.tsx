@@ -17,7 +17,8 @@ import type { ComponentProperties, ComponentProperty, PropertyChange, PropertyOp
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { listPropsOf, type ListProp } from '../../editor/listProps';
 import { SETTING_PROP_TYPES } from '../../editor/optionsBinding';
-import { fieldNameProblem, listFieldsOfType, listTypeText, type ItemFieldDeclaration } from '../../editor/listPropType';
+import { fieldsProblem, type ItemFieldDeclaration } from '../../editor/itemFields';
+import { listFieldsOfType, listTypeText } from '../../editor/listPropType';
 import { ItemFieldsEditor, ListDefaultField, PropertyFlagsFields, type EditPace } from '../props/propBindings';
 import { propertyProblem, usePropertyAutosave, type PropertySaveHost } from './propertyAutosave';
 import { propertyKind } from './propertyKinds';
@@ -417,7 +418,7 @@ function PropertyItemFields({
       fields={fields.fields}
       itemsText={property.defaultValue.trim() === '' ? '[]' : property.defaultValue}
       onChange={(shape, pace) => {
-        const valid = shape.fields.every((field) => fieldNameProblem(field.name) === undefined);
+        const valid = fieldsProblem(shape.fields) === undefined;
         const type = valid ? listTypeText(frontmatter, shape.fields) : property.type;
         fields.set({ type, fields: shape.fields });
         form.hold(valid ? 'free' : 'held');

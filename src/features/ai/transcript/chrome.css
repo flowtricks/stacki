@@ -1,0 +1,228 @@
+/* Message chrome, permission requests and the failed-reply row (Messages.tsx, PermissionCard.tsx, ErrorRow.tsx).
+   Surfaces are separated by background fills, never borders. Selectors that restate a rule of transcript.css use two classes so they win whichever sheet loads first. */
+
+/* Messages */
+.ai-msg {
+  position: relative;
+  min-width: 0;
+}
+.ai-msg.ai-msg-user {
+  align-self: flex-end;
+  max-width: 88%;
+}
+.ai-transcript > .ai-msg:first-child {
+  margin-top: 10px;
+}
+.ai-msg-body.ai-msg-folded {
+  max-height: 16em;
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent);
+}
+.ai-msg-more {
+  margin-top: 4px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.ai-msg-more:hover {
+  color: var(--text);
+}
+.ai-msg-toolbar {
+  position: absolute;
+  top: -11px;
+  right: 6px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 1px 3px;
+  border-radius: 7px;
+  background: var(--bg-active);
+  color: var(--text-dim);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.ai-msg:hover > .ai-msg-toolbar,
+.ai-msg:focus-within > .ai-msg-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+.ai-msg-time {
+  padding: 0 5px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+.ai-msg-action {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 20px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  border-radius: 5px;
+}
+.ai-msg-action:hover {
+  color: var(--text);
+  background: var(--bg-input);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-msg-toolbar {
+    transition: none;
+  }
+}
+
+/* Permission requests */
+.ai-permission.ai-ask {
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 8px;
+  gap: 6px;
+  outline: none;
+}
+.ai-ask:focus-visible {
+  background: var(--accent-soft);
+}
+.ai-ask-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text);
+}
+.ai-ask-title {
+  font-size: 12px;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.ai-ask-code {
+  max-height: 96px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--bg);
+  border-radius: 5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.ai-ask-diff {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ai-ask-more {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-ask-paths {
+  margin: 0;
+  padding: 0 0 0 16px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+.ai-ask-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ai-ask-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+/* The key that answers the button, drawn from its data-key so the button's text stays the agent's own words. */
+.ai-ask-actions button::before {
+  content: attr(data-key);
+  display: inline-grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.ai-ask-actions button:not([data-key])::before {
+  display: none;
+}
+.ai-ask-actions .ai-reject::before,
+.ai-ask-actions .ai-allow-secondary::before {
+  background: rgba(127, 127, 127, 0.22);
+}
+.ai-ask-actions .ai-allow-secondary {
+  background: var(--bg-active);
+  color: var(--text);
+}
+.ai-ask-actions .ai-reject {
+  background: var(--bg-active);
+  color: var(--text-dim);
+}
+.ai-ask-actions .ai-reject:hover {
+  color: var(--text);
+}
+.ai-permission.ai-ask-done {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+.ai-ask-verdict {
+  flex: none;
+  color: var(--text-dim);
+}
+.ai-ask-what {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-ask-pin {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 12px;
+}
+.ai-ask-pin-text {
+  flex: 1 1 0;
+  min-width: 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-ask-pin-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+.ai-ask-pin-actions button {
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+}
+
+/* A failed reply */
+.ai-error-copy {
+  margin-top: 4px;
+  font-size: 11px;
+}

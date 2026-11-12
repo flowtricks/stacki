@@ -644,7 +644,10 @@ build (`test/legacy-parity.bench.js`) was retired at step 10 with the
   optional `deprecated` notice and `usage` the prop model adds.
 - `propModel.ts` is the one description of a component's props (docs/plans/prop-controls.md §2):
   `parsePropModel` checks every control kind, fallback and union table, and the nesting
-  (`propNestingDepthMax`) and variant (`propVariantsMax`) bounds kept beside it. The main process
+  (`propNestingDepthMax`, twice `LIMITS.listFieldDepthMax`) and variant (`propVariantsMax`) bounds kept beside it.
+  A `text` control may carry the `@format` word of its member (`color`, `date`, `longtext`), and a schema
+  `PropShapeField` carries that `format`, an enum's `options`, and the `shape`/`shapeIsList` of a nested object
+  or list of objects, nested at most `LIMITS.listFieldDepthMax` levels (`parseField` refuses deeper). The main process
   builds it (`electron/parse/propModel/readPropModel.ts`, on the TypeScript syntax tree) and
   parses its own output; `propModelSchema.ts` projects it onto `PropField`, and the Properties
   panel's list comes from the same model, so the panels cannot disagree. No IPC channel carries
@@ -1468,10 +1471,33 @@ the `ChatSummary`, and the `ChatEvent` union a transcript is made of). `shared/i
 channels' payload parsers (spread into `IPC_PAYLOADS`), result types (extended by `IpcResults`) and
 the renderer's reply and push parsers.
 
+The panel overhaul adds `agentPresentation.ts` (the composer's static tables: mode order and the one
+"Recommended" mode, which modes ask for confirmation, effort names and copy, which options are
+switches, which agents can compact; the protocol carries none of this, see "Protocol capabilities
+Stacki declares") and `mentions.ts` (`MentionChip`, `ComposerSegments`, `PromptPart`,
+`MentionCandidate` and their parsers: a draft read back from browser storage is a `Result` that reads
+as empty on failure, a prompt's parts are refused by the channel's parser; chip paths are
+project-relative with no `..`, absolute, backslash or empty segments). New bounds live in `AI_LIMITS`:
+`queuedPromptsMax`, `sectionsMax`, `sectionNameCharsMax`, `mentions*Max`, `composerSegmentsMax`,
+`draftsStoredMax`, `promptPartsMax`, `promptBlocksExtraMax`, `backgroundTasksMax`, `compactionsMax`,
+`transcriptUiEntriesMax`, `contextTokensMax`, `compactionErrorCharsMax` (500), `mentionCacheMs`,
+`mentionCachedProjectsMax`.
+
 **Channels.** `ai:agents`, `ai:installAgent`, `ai:trust`, `ai:chats`, `ai:chatCreate`,
 `ai:chatUpdate` (rename, pin), `ai:chatDelete`, `ai:chatRead`, `ai:prompt`, `ai:cancel`,
 `ai:permission`, `ai:setOption` (an agent's session setting: model, mode, effort), `ai:review` (keep,
-undo or resolve one file's change). Pushes: `ai:events` (batched `ChatEvent`s with their character
+undo or resolve one file's change), and, for chat management and the composer: `ai:steer`,
+`ai:compact`, `ai:chatFork`, `ai:chatMove`, `ai:sections`, `ai:diff`, `ai:mentions`. `ai:chats`,
+`ai:chatMove` and `ai:sections` answer the whole `ChatList { chats, sections }` (chats in display
+order) so the renderer replaces its copy in one update; `ai:chatUpdate` also takes `archived` and
+`unread`; `ai:prompt` also takes `parts` (mention chips; `text` stays the plain fallback, each chip read
+as `@path`, `/skill` or its title) and `mode` (`send`, or `steer`). Absence on the wire is `undefined`:
+`ai:chatMove` without `section` means the first, unsectioned section and without `before` means last.
+`AiFailure.code` adds `unsupported` (the agent lacks steering, fork or compaction), `section-missing`
+and `invalid` (a repeated section name, too many sections, an archived chat moved). `ai:steer` and
+`ai:compact` are the host's (below); `ai:diff` reads a pending file's text from the chat's live change
+ledger and answers `invalid` once the change is settled (settled entries keep no content); `ai:mentions` lists files and skills (below). All seven are gated on `code:edit`; the main
+process also exposes `invalidateMentions` for the window-focus hook. Pushes: `ai:events` (batched `ChatEvent`s with their character
 count) and `ai:agentStatus`. One-way: `ai:ack` (`{ chars }`, parsed before use, registered by main.ts
 beside the terminal's sends). Every project path must be the open project. Every write channel is
 gated on `code:edit` (an agent edits and runs anything, as the terminal does); the panel shows for
@@ -1497,6 +1523,53 @@ closes) and bounds pending requests (`pendingRequestsMax`, each with a timeout).
 one write and sends one push; above `flowHighWatermark` unacknowledged characters it stops reading
 every adapter until acks bring it under `flowLowWatermark` (the terminal's scheme).
 
+**Host protocol features** (`agentHost.ts`, `promptBlocks.ts`). Steering: `ai:steer` (or `ai:prompt`
+with `mode: 'steer'`) sends `_session/steering` with `idleBehavior: 'promptRequired'` to the running
+turn and records a `user` event with `mode: 'steer'`; with no turn running the message is an ordinary
+prompt (`startedNewTurn`); an agent that did not advertise `_meta.steering.supported` answers
+`unsupported`, an adapter that refuses answers its failure (`agent-failed`), and in both cases nothing
+was sent, so the renderer queues the message. A plain `ai:prompt` while a turn runs stays `busy`.
+Compaction: `ai:compact` sends `/compact` as an ordinary prompt in a turn of its own (no `user` event,
+no change ledger) for agents whose presentation says `canCompact` (Claude; Codex answers `unsupported`),
+only while idle and only for a chat that has a session (`invalid` otherwise). Both the
+`compaction_update` shape and the "Compact conversation" tool call (`toolName: 'compact'`, also by
+remembered call id) become `compaction` events; a compaction ends once, repeated or later updates of an
+id are dropped, a compaction still open when its turn ends is closed (`completed` after `end_turn`,
+`cancelled`, else `failed`), and a compaction turn that saw no signal at all still ends with one
+`completed`/`failed` row (id `compact-<turn>`). A `compaction` event may carry an optional `error`: the
+reason a compaction failed, only on a `failed` one (an adapter's text on a compaction that went well is a
+summary, not an error), trimmed and cut to `compactionErrorCharsMax` characters with a closing ellipsis
+(`compactionError` in `chatEvents.ts`), read back by the event parser with the same bound, so a long
+message can neither make the update vanish nor reach the panel unbounded. Absence is `undefined`, and a
+chat stored before the field existed reads as before. Fork: a chat with `forkOf` and no session opens with
+`session/fork` from the original's stored session id when the agent advertises `fork`; a fork whose
+original was left unrestricted (`isDangerousMode`) starts asking again; no fork capability, no original
+session or a failed fork starts a new session and says so in a notice (the copied transcript stays).
+Modes and settings: everything is `session/set_config_option`, except an agent that offers modes only as
+session modes (no `mode` config option): the host builds a `mode` option from them and sets it with
+`session/set_mode`. Choosing an unrestricted mode (`isDangerousMode`: Claude `bypassPermissions`, Codex
+`agent-full-access`) is confirmed by the renderer once per choice; the host does not enforce it, and
+every new chat still starts in the asking mode. Record: the last `usage` of a turn is written to the
+chat's `context` when the turn ends (at once when it arrives outside a turn), `unread` is set when a
+turn ends other than cancelled or by the sign-in card (before the `turn-end` event is sent, so the
+renderer's clear comes later), and `text` and `tool` events carry `at` from the host's clock. Background
+work is derived: a tool call whose `rawInput.run_in_background` is true is remembered per chat, its late
+updates after `turn-end` are stored under the turn that started it, and `ai:cancel` still reaches the
+adapter while one exists ("Stop agent"; no per-task stop exists without declaring AIR). Terminal output:
+with `_meta.terminal_output_delta` declared the adapter streams a command's output as deltas and repeats
+it in the completed result, so the result text of a call that streamed deltas is dropped. Notices: the same
+`notice` text twice in a row within a turn is stored once. A model API 401 (an internal error carrying
+`API Error: 401`, `authentication_error` or "Please run /login") ends the turn as `sign-in`, like ACP's
+authentication-required code. Mentions: `promptBlocks.ts` builds the ACP blocks of a prompt with `parts`:
+a file chip is read inside the project (links that leave it are refused; the prompt is refused with
+`invalid`) and embedded as a `resource` when it is text within `mentionFileCharsMax`, within
+`mentionTotalCharsMax` in all, and the agent advertised `embeddedContext`, else it travels as a
+`resource_link` and its stored part is `truncated`; a skill chip first in the message for Claude and
+advertised by the agent is the leading `/name `, otherwise "Use the `name` skill." plus a link to its
+SKILL.md (a project skill under the project, a `~/` skill under the person's home, nothing else); a
+built-in chip is its own text block wrapped in `<app-builder-instructions>`, kept in the transcript as a
+hash only. More than `mentionsMax` chips is refused. `AgentHost.diff` reads the live ledger.
+
 **Changes.** Edits apply when the agent makes them; each turn's changes are offered for Keep or Undo
 per file (`changeLedger.ts`). The spike found that neither adapter writes through the client's
 `fs/write_text_file` (Claude's CLI and Codex write files themselves, Codex often with a shell
@@ -1514,16 +1587,76 @@ replaced whole), `chats/<id>.jsonl` (append-only, every line parsed on read, a t
 skipped), `reviews/<id>.json` (pending reviews, settled entries keep no content). Bounded by
 `chatsMax`, `chatEventsMax`, `chatBytesMax`, `ledgerFilesMax`, `ledgerBytesMax`, `ledgerTurnsMax`.
 
-**Starting a chat.** The new-chat row is the provider (a Dropdown whose rows carry the official
-Claude and OpenAI marks, `src/ui/agentLogos.tsx`, sources noted there), then the settings the agent
-offers before a session exists — its models and, where it has one, its effort — each remembered per
-provider in the renderer, then New chat. `ai:agents` returns each agent's settings as it last reported them (main keeps them in
+**Chat management** (index version 2, `chatStore.ts`). The index adds `sections` (id `s<16 hex>`,
+name at most `sectionNameCharsMax` characters and unique ignoring case, `collapsed`, `rank`) and, per
+chat, `section` (absent: the implicit first section), `rank` (position in its section), `archivedAt`,
+`unread`, `context` (last `{used, size}`) and `forkOf`. Invariants, restored by `normalizeIndex` after
+every operation: sections are numbered 0..n-1; every chat is in a section that exists (else the first);
+within a section pinned chats come first and ranks are a permutation 0..n-1. So a drop of an unpinned
+chat among pinned ones lands at the boundary, a newly pinned chat goes to the top, a section's deletion
+moves its chats to the end of the first section (nothing is deleted), and archiving keeps section and
+rank so a restore puts the chat back. A fork is a record right below its original with `forkOf` set and
+no session, plus a copy of the transcript in which pending reviews are settled as kept (the fork has no
+ledger). **Migration:** a version 1 index (no sections, no list fields) reads as version 2 with ranks
+taken from the order the old list drew (pinned first, then newest update), unsectioned, nothing unread
+or archived; a bad record loses only itself; the file is rewritten as version 2 on the next write. An
+older build reads a version 2 index as empty, so the migration is one way. Transcripts are not
+rewritten: new event fields (`at`, `until`, `toolName`, `command`, `background`, `parts`, `mode`) are
+optional and the `compaction` kind is new, so chats stored before read as before, without durations.
+
+**Composer, mentions and chips.** `@` lists project text files (tracked and untracked via git, else a
+bounded walk; never `node_modules`, `.git`, `dist`, `.astro` or `.stacki/preview`) and skills from
+`<project>/.claude/skills/*`, `<project>/.agents/skills/*`, `~/.claude/skills/*` and
+`~/.codex/skills/*` (the last is Codex's convention, read only if present, not checked against an
+installed Codex). `AGENTS.md` and `CLAUDE.md` first, then Markdown, then other files, each by match
+quality; skills first within the result bound `mentionResultsMax`; a project skill hides a user skill of
+the same name. The scan is cached `mentionCacheMs` per project. A prompt carries at most `mentionsMax`
+chips; a "Build an app" task may carry `draftChip: 'app-builder'` (only with `delivery: 'draft'`) in
+addition to its prompt text.
+
+The composer's input is a CodeMirror editor (`src/features/ai/composer/ComposerInput.tsx`, on the generic
+`src/ui/chipEditor/*`): a chip is one placeholder character drawn as a purple pill, so Backspace removes it
+whole and undo restores it, and a placeholder typed or pasted is refused. `@` at a word start opens the picker
+(`ChipPicker`) under the caret: Built-in (App builder instructions, matched here), Skills and Files (asked of
+`ai:mentions` after a 60 ms pause, an older answer dropped), at most 12 rows, skills holding back so files keep
+four. It reports a draft as `ComposerSegments` (`onSegmentsChange`) and takes one back through `segments`; a
+change from outside (a send that cleared it, dictation, "Build an app") replaces the text and is not undoable.
+Enter reports `send`, Cmd or Ctrl+Enter `queue`, Shift+Enter is a new line, and a composing input method owns
+Enter. A file dragged from the Pages (`avb/page`) or Assets (`avb/asset`) panel becomes a file chip when its path
+is a project file (no folder, no `..`). The built-in text is not in the project: `src/lib/builtinInstructions.ts`
+is where the Apps panel provides it at load (features may not import each other) and
+`src/features/ai/mentions/builtinChips.ts` registers it with the store, so a send expands the chip; clicking the
+chip, in the box or in a sent message (`MentionChipView`), copies the text and shows "Copied" for 1.5 s.
+
+**Protocol capabilities Stacki declares.** The host declares only open ACP capabilities
+(`session.compaction`, `session.notices`, `_meta.terminal_output_delta`; not `jetbrains`, not
+`session.configOptions.boolean`, not `elicitation`): the adapters send background-task data, the
+recommended effort and native subagent sessions only to JetBrains AIR clients, and Stacki does not
+impersonate one. Spike of the installed Claude adapter 0.105.0 (recorded in
+`test/fixtures/ai/acpTrace.jsonl`): `_session/steering` on an idle session answers
+`{outcome: 'promptRequired', reason: 'noRunningTurn'}`; `session/fork` answers a new session shaped
+like `session/new`'s; `/compact` is accepted as an ordinary prompt even though the command list does not
+name it, reports as `compaction_update` (`in_progress`, then a terminal status, with `error` on failure)
+when the client declares `session.compaction` and as a tool call titled "Compact conversation"
+(`_meta.claudeCode.toolName: 'compact'`) when it does not, and its turn ends `end_turn` even when
+compaction failed. Not exercised (the CLI's sign-in had expired during the spike, so no model turn could
+run): steering a running turn, `terminal_output_delta` streaming, `run_in_background` Bash; those are read
+from the adapter source. Codex is not installed here: everything about it is from recorded lines.
+
+**Starting a chat.** The composer's status line (`composer/ComposerStatusLine.tsx`) holds the settings: a
+model chip ("Sonnet 5.5  Medium", opening the model menu with the agent's first models, an Effort
+submenu, the Ultracode and Fast switches the agent offers, More models and an Agent submenu for the
+provider, whose rows carry the official Claude and OpenAI marks, `src/ui/agentLogos.tsx`), a mode chip
+(the Mode menu) and the context ring. Model, effort and switches are remembered per provider in the
+renderer; the mode never is, so a new chat always starts in the mode that asks first, and choosing
+Bypass permissions or Full access (`isDangerousMode`) asks once per chat through `confirmDialog`. A mode
+picked before the session exists is stored with the chat (`ai:chatUpdate` `settings`) and applied after the
+asking mode. `ai:agents` returns each agent's settings as it last reported them (main keeps them in
 `userData/ai/agent-options.json`). In a trusted project, an agent that has never reported them is
 probed once in the background: a throwaway `session/new`, its config options read, then
-`session/delete`, and the result pushed on `ai:agentStatus`. So the row lists exactly what the
-person's installed Claude Code or Codex offers, with its own names, and effort is a segmented row
-(`EffortControl.tsx`). Before any report there is a documented fallback (`FALLBACK_OPTIONS` in
-agentRegistry.ts). The
+`session/delete`, and the result pushed on `ai:agentStatus`. So the menus list exactly what the
+person's installed Claude Code or Codex offers, with its own names. Before any report there is a
+documented fallback (`FALLBACK_OPTIONS` in agentRegistry.ts). The
 choices ride on `ai:chatCreate` (`settings`) and are applied with `session/set_config_option` once
 the chat's session exists, after the asking mode; a setting the agent no longer offers is skipped.
 The AI channels accept the open project's root itself (`MainHost.openProject`, compared through
@@ -1552,18 +1685,98 @@ model and effort: before a chat's first message they apply to that chat (another
 the empty chat); after it, another provider opens a new chat and the model or effort applies to the
 next message.
 
-**Renderer.** `aiBridge.ts` parses every reply and push; `aiStore.ts` keeps the state outside React
+**Renderer.** The feature folder is split by area: `AiPanel.tsx` is the shell (header slot, body switch,
+the trust and agent gates, sign-in and setup cards, `aiShell.css`); `transcript/` draws the conversation
+(`TranscriptView` and `Messages`, `ActivityGroup` for the agent's work between two messages, `ToolCard`,
+`ThinkingBlock`, `PlanCard`, `BackgroundTasks`, `CompactionRow`, `DiffView`, `ChangesCard`, `PermissionCard`,
+`SentParts` for a sent message's chips, `TurnStatus` and `ticker.ts`, the one clock every live timer reads,
+`ErrorRow`, with `transcript.css`, `chrome.css` and `diff.css`); `composer/` the message box (`ChatComposer`, `ComposerInput` for the text and the `/`
+menu, `ComposerStatusLine` for the provider, model and effort, `composer.css`); `sessions/` the chat list
+and header (`SessionsView`, `ChatHeader`, `sessions.css`). The first overhaul's flat files are gone, each
+replaced by the folder that now owns its job: `ChatComposer.tsx`, `EffortControl.tsx` and `ai.css` by
+`composer/` and the per-area sheets, `ChatList.tsx` by `sessions/`, `ChatItems.tsx` (with `MessageRows.tsx`
+and the one-line `PlanStrip.tsx`) by `transcript/` (`Messages.tsx`, `ToolCard`, `PlanCard`). The panel's
+background is the rail's own `--bg-panel` (`aiShell.css`), so the two read as one dark side. `aiBridge.ts` parses every reply and push (a
+reply that does not parse is a failure the panel shows, never an exception) and has one call per channel;
+`aiStore.ts` keeps the state outside React
 (so chats stream while the panel is closed, and a hand-off works without it) and acknowledges each
-push after folding it; `chatReducer.ts` is the pure fold from events to the transcript view,
+push after folding it. Besides the open chat, views, agents and setups it holds the project's `chats`
+(in the order main gave) and `sections` (a reply to a list change replaces both whole), the list `filter`,
+whether the panel is on screen (`visibility`), each chat's `queue` of messages waiting for its turn to
+end (at most `queuedPromptsMax`, in this window's memory only) with `queuePaused`, and `drafts`: a draft
+is `{ segments, attachments }`, text runs and mention chips in typed order (`draftText` is the plain
+text; `boundSegments` cuts to the limits; a built-in chip's text comes from `registerBuiltinChipText`).
+Drafts are written to browser storage per project after typing pauses (`draftStorage.ts`: parsed with
+`parseDraftSegments`, a bad entry skipped alone, at most `draftsStoredMax`) and restored for chats that
+still exist. `steerPrompt` sends the draft into the running turn (an agent that cannot take it gets the
+message queued instead), `queuePrompt` sets it aside (and sends it when no turn runs); the next queued message is
+sent only after a turn that ended `end_turn`, and after an error or a stop the queue is held (shown as
+paused) until Resume. A turn that ends in the open chat while the panel is on screen marks it read,
+otherwise unread, as main does. `chatReducer.ts` is the pure fold from events to the transcript view:
+every item has an increasing `id`, tool calls and thoughts carry the host's `at` stamps (a chat stored
+before timings shows no durations), a compaction is one item per id that only moves from in progress
+to a final state (with the usage before and the first usage after, derived), and `activeTasks` lists the
+open tool calls that are subagents, run in the background or outlived their turn (the protocol's
+background-task data is not sent to Stacki). `chatStatus.ts` holds the pure wording (ring tone, durations,
+the running-turn line, the activity headline) and `moveInList.ts` the optimistic reorder. All
 property-tested. "Fix with AI" (`src/lib/agentTasks.ts`) reaches the panel first
 (`aiAgentTask.ts`, priority 20, above the terminal's 10): a new chat with the task's prompt, sent at
-once when the project is trusted and the agent ready, otherwise left in the composer.
+once when the project is trusted and the agent ready, otherwise left in the composer. A task with
+`delivery: 'draft'` (the Apps panel's "Build an app") is never sent: it waits in the composer, and the
+terminal's handler declines it. With `draftChip: 'app-builder'` it is the App builder instructions chip that
+waits: appended to the end of the open chat's draft when that holds anything (the words stay, and a second
+click adds no second chip), else in an empty open chat or a new one; a draft already at `mentionsMax` declines
+the task, so the prompt goes to the clipboard.
+
+**Diffs, changes, permissions, messages.** `DiffView` draws one file's before/after as a unified diff
+(unified only: split would leave each side about 150px in the docked panel): line numbers, folded
+unchanged stretches behind "Show N lines", marked words inside an edited line, every line coloured as
+its file's language, and bounded (a compact row cap before "Show full diff", a larger one after, and an
+uncoloured fallback past `highlightCharsMax`). The rules are pure, in `diffModel.ts` and `lineDiff.ts`
+(shared head and tail are set aside before alignment, so one edit in a long file stays exact). `ChangesCard`
+shows "N files changed +A −R" with a row per file; the counts come from `ai:diff` for pending files
+(`changeDiffs.ts` asks once per file and remembers the counts after Keep or Undo, because the host keeps
+no text for a settled file). Its Keep, Undo, Keep all and Undo all call the caller's `onReview`, which
+is the existing review flow (`runReview`): the bulk actions wait for each file's review before the next,
+so a drifted undo opens one merge editor at a time. "Open file" appears only when `onOpenFile` is given.
+`PermissionCard` shows the command or the edit's diff of the tool call with the same `call` id (passed as
+`tool`), the options allow-first with the recommended one primary, answers to the keys 1..n and Esc
+(deny, only when a reject option exists; never inside a text field; only the oldest waiting request hears
+them), and collapses to "Allowed · the command" once answered; `PermissionPin` repeats the oldest waiting
+request above the composer while its card is scrolled away. `Messages.tsx` is presentational: the
+caller supplies `onEdit` and `onResend` (the last user message only), `partsView` (mention chips) and,
+if it wants to own the fold, `expanded`; a message over 40 lines or 4,000 characters folds behind
+"Show more".
+
+**Studio chat.** Studio has its own chat (`studio/src/features/ai/`) and does not use ACP or the IPC bridge:
+it sends one HTTP request per message to the model the server is configured with (`/studio/api/ai/models`,
+`propose`, `apply`) and gets one proposal back (a summary and per-file before/after changes), so there is no
+session to steer, queue, compact or fork. What is shared is drawn, not reimplemented: Studio's inventory
+(`studio/scripts/shared-source.json`) vendors Desktop's `Menu`, `LoaderDots`, the chip editor (`ChipPicker`,
+`chipEditor`, `chipTrigger`), the sectioned drag (`useSectionedDrag`), `DiffView` with `diffModel.ts`,
+`lineDiff.ts` and the ticker, `StatusChip`, and the stylesheets `composer.css`, `sessions.css`,
+`transcript.css`, `diff.css` and `mentions.css`, so Studio's composer, chat list, diff card and "Worked for
+12s" line carry Desktop's classes. Studio adds only adapters over its own transport and storage: the status
+line's model chip (a `Menu` of the server's models; no effort, mode or context ring, since the model has no
+settings and no usage to report), the `@` file picker over the project's pages, components and assets
+(`mentionFiles.ts`; a chip is sent as the text `@path`, which the server's model reads itself; no skills or
+built-in instructions, which need Desktop's main process), the chat list (pinned and other chats,
+drag-to-reorder, rename, delete through `confirmDialog`; no custom sections, unread, fork or archive) and a
+proposal card of the changed files, each opening to `DiffView`, with Apply to draft and Discard. Chats are
+kept in the browser (IndexedDB `studio-ai-chats`): version 2 stores the list in display order with `pinned`,
+`updatedAt`, `segments` (the draft with its chips, `parseDraftSegments`) and each reply's `durationMs`; a
+version 1 history (no `version`, oldest first) is read and turned around, and a draft that does not parse
+falls back to its words. The panel is `--bg-panel`, the rail's colour. Proofs: `studio/test/chatState.test.ts`
+(migration, pin and reorder, chips, mention search, durations) and `studio/test/ai.browser.ts` (the panel in
+a real browser, including a legacy history).
 
 Proofs: `test/shared/properties/ai/acpWire.test.ts` (recorded adapter lines, each bad shape, bounds,
 unknown variants), `test/shared/ipc/aiChatContract.test.ts`, `test/electron/handlers/ai/agentHost.test.ts`
 (a stand-in adapter process through whole turns; connection bounds; pump flow control; store
 round-trip and bounds; ledger keep, undo, drift and snapshots), `test/renderer/ai/chatReducer.test.js`
-(properties over seeded random streams) and `test/renderer/ai/aiPanel.test.js` (the panel in jsdom).
+(properties over seeded random streams), `test/renderer/ai/aiStore.test.js` (lists, sections, queue,
+unread, drafts), `test/renderer/ai/chatStatus.test.js` and `test/renderer/ai/aiPanel.test.js` (the panel
+in jsdom).
 
 ## Audits
 
@@ -1717,3 +1930,26 @@ Studio's `/studio/api/file-stamps` (`panel:pages`) the same; `src/features/apps/
 caches other pages' trees by them for `page.getTree` and `page.findByAttribute`. `node.key` writes
 `data-stacki-key` through the app's attribute edit (`src/features/apps/nodeKeys.ts`). The "Build an app" prompt is generated
 from `docs/apps-prompt.md` (`scripts/build/appsPrompt.mts`); `docs/apps.md` is the full guide.
+
+## List item fields
+
+A List prop's item fields (`src/editor/itemFields.ts`, written and read by `src/editor/listPropType.ts`) have sixteen
+kinds: Text, Long text, Rich text, Number, Switch, Image, Video, File, Link, Email, Phone, Color, Date, Option, List
+and Group. Each is written as TypeScript on the item type and read back as the same field:
+
+| Kind | TypeScript | Tag |
+| --- | --- | --- |
+| Number, Switch | `number`, `boolean` | none |
+| Text, Long text, Rich text, Image, Video, File, Link, Email, Phone, Color, Date | `string` | `/** @format <word> */` on the member, left out when the member's name already says it (`heroImage`, `ctaHref`) |
+| Option | `"a" \| "b"` (two to `LIMITS.listOptionsMax` words) | none |
+| List | `readonly { … }[]` with fields of its own | none |
+| Group | `{ … }` with fields of its own | none |
+
+Lists nest `LIMITS.listFieldDepthMax` (3) levels of fields (a list in a list in a list), with at most
+`LIMITS.listFieldsPerLevelMax` fields per level and `LIMITS.listFieldsTotalMax` in all; the pop-up offers no List or Group
+on the last level, `fieldsProblem` refuses deeper fields, and `listFieldsOfType` reads a deeper type as code. Names are
+identifiers, unique per level, and never `__proto__`, `constructor` or `prototype`. A type outside this set (a `Date`, a
+list of words, a method, an index signature) is not read: the panels show it as "Set in code". A nested list or group is one
+field of an item in the default array literal (`arrayValue.ts`), kept exactly as written. The data picker reaches nested
+fields as `item.children[0].title`; the loop's Filters and Sort list a Group's fields by path (`address.city`) and a nested
+List as a field that is set or empty.

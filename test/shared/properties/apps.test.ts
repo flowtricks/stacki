@@ -14,6 +14,8 @@ import {
   APP_LIMITS,
   APP_WINDOW_DEFAULT,
   appPopupSize,
+  appManifestAdditions,
+  parseAppUpdateOutcome,
   parseAppWindow,
   compareAppVersions,
   parseAppManifest,
@@ -206,6 +208,78 @@ test('the lockfile round-trips and refuses duplicates and bad updates', () => {
     parseAppsLock(JSON.parse(JSON.stringify({ version: 1, apps: [entry] }).replace(/"update":\{[^}]*\}/, '"update":null'))).apps[0]?.update,
     undefined,
   );
+});
+
+test('an update records what it adds; older lockfiles read as none, and the list is bounded', () => {
+  const entry = {
+    id: 'heat-map',
+    version: '1.2.0',
+    sha256: 'a'.repeat(64),
+    installedAt: '2026-11-10T00:00:00.000Z',
+    source: { kind: 'marketplace', id: 'heat-map', version: '1.2.0' },
+    update: { version: '1.3.0', tag: 'v1.3.0', sha256: 'b'.repeat(64) },
+  };
+  assert.deepEqual(parseAppsLock({ version: 1, apps: [entry] }).apps[0]?.update?.additions, [], 'a lockfile without additions reads as none');
+  const added = { ...entry, update: { ...entry.update, additions: ['reaches api.example.com'] } };
+  const lock = parseAppsLock({ version: 1, apps: [added] });
+  assert.deepEqual(parseAppsLock(JSON.parse(serializeAppsLock(lock))), lock, 'additions round-trip');
+  assert.throws(() => parseAppsLock({ version: 1, apps: [{ ...entry, update: { ...entry.update, additions: 'api.example.com' } }] }));
+  assert.throws(() => parseAppsLock({ version: 1, apps: [{ ...entry, update: { ...entry.update, additions: [7] } }] }));
+  assert.throws(() =>
+    parseAppsLock({ version: 1, apps: [{ ...entry, update: { ...entry.update, additions: ['x'.repeat(APP_LIMITS.updateAdditionCharsMax + 1)] } }] }),
+  );
+  const tooMany = Array.from({ length: APP_LIMITS.updateAdditionsMax + 1 }, (_, index) => `adds ${index}`);
+  assert.throws(() => parseAppsLock({ version: 1, apps: [{ ...entry, update: { ...entry.update, additions: tooMany } }] }));
+  // The outcome that holds an update for a person's OK is part of the contract too.
+  const held = { kind: 'needs-approval', id: 'heat-map', version: '1.3.0', additions: ['reaches api.example.com'] };
+  assert.deepEqual(parseAppUpdateOutcome(held), held);
+  assert.throws(() => parseAppUpdateOutcome({ ...held, version: 'one' }));
+  assert.throws(() => parseAppUpdateOutcome({ ...held, additions: [1] }));
+});
+
+test('appManifestAdditions lists only what a version newly asks for', () => {
+  const host = (name: string) => ({ host: name, purpose: 'Data' });
+  const provider = (id: string, tokenURL = 'https://oauth.example.com/token') => ({
+    id,
+    label: `Connect ${id}`,
+    authorizeURL: 'https://oauth.example.com/authorize',
+    tokenURL,
+    scopes: [],
+    pkce: true as const,
+    connection: undefined,
+    clientIdSetting: undefined,
+    clientSecretSetting: undefined,
+    authorizeParams: {},
+  });
+  const permission = (id: string) => ({ id, label: `Can ${id}`, description: undefined, default: false });
+  const before = { network: [host('a.example.com')], auth: [provider('google')], permissions: [permission('export')] };
+  assert.deepEqual(appManifestAdditions(before, before), [], 'the same asks add nothing');
+  assert.deepEqual(appManifestAdditions(before, { network: [], auth: [], permissions: [] }), [], 'asking for less adds nothing');
+  assert.deepEqual(
+    appManifestAdditions(before, { ...before, network: [host('a.example.com'), host('b.example.com')] }),
+    ['reaches b.example.com'],
+    'a new host',
+  );
+  assert.deepEqual(
+    appManifestAdditions(before, { ...before, auth: [provider('google'), provider('github')] }),
+    ['signs in to Connect github'],
+    'a new provider',
+  );
+  assert.deepEqual(
+    appManifestAdditions(before, { ...before, auth: [provider('google', 'https://evil.example.net/token')] }),
+    ['changes where Connect google signs in'],
+    'the same provider id pointed elsewhere',
+  );
+  assert.deepEqual(
+    appManifestAdditions(before, { ...before, permissions: [permission('export'), permission('delete')] }),
+    ['adds the “Can delete” permission'],
+    'a new role switch',
+  );
+  assert.deepEqual(appManifestAdditions({ network: [], auth: [], permissions: [] }, before), [
+    'reaches a.example.com',
+    'signs in to Connect google',
+    'adds the “Can export” permission',
+  ]);
 });
 
 test('releases order newest first, and the one zip is picked or the zips are offered', () => {

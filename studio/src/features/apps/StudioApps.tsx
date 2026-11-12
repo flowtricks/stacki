@@ -49,7 +49,9 @@ import CommitAvatar from '../../../vendor/stacki/src/features/history/CommitAvat
 import type { ParserNode } from '../source/source';
 import { routeFor } from '../project/projectClient';
 import { useStudioRole } from '../roles/useEditorRole';
-import { getStudioRole } from '../roles/roleStore';
+import { canStudioPanel, getStudioRole } from '../roles/roleStore';
+import { registerAgentTaskHandler } from '../../../vendor/stacki/src/lib/agentTasks';
+import { chatState, createChat, updateChat } from '../ai/chatState';
 import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { pathFor } from '../project/previewSelection';
 import type { EditorProps } from '../../app/Editor';
@@ -89,6 +91,37 @@ export function StudioAppsHost({ props, model }: { readonly props: EditorProps; 
     setAppsPanelReveal(() => current.current.props.view.setPanel('apps'));
     return () => setAppsPanelReveal(undefined);
   }, []);
+  // The Apps panel's "Build an app" opens Studio's chat on the prompt, unsent (the same hand-off as Desktop's AI panel).
+  useEffect(
+    () =>
+      registerAgentTaskHandler('studio-chat', 20, async (task) => {
+        if (task.delivery !== 'draft' || !canStudioPanel(getStudioRole(), 'ai')) {
+          return { tag: 'declined' };
+        }
+        const draftCharsMax = 12_000; // The composer's own limit (ChatComposer.tsx); a longer prompt would be cut.
+        if (task.prompt.length > draftCharsMax) {
+          return { tag: 'declined' };
+        }
+        // A chat with something typed or said is left as it is: the prompt goes to a new one, or after the typed words when the chats are full.
+        const busy = (thread: { readonly draft: string; readonly messages: readonly unknown[] }) => thread.draft.trim() !== '' || thread.messages.length > 0;
+        const active = chatState().threads.find((thread) => thread.id === chatState().active);
+        if (active !== undefined && busy(active)) {
+          createChat(active.model);
+        }
+        const target = chatState().threads.find((thread) => thread.id === chatState().active);
+        if (target === undefined) {
+          return { tag: 'declined' };
+        }
+        const joined = target.draft.trim() === '' ? task.prompt : `${target.draft}\n\n${task.prompt}`;
+        if (joined.length > draftCharsMax) {
+          return { tag: 'declined' };
+        }
+        updateChat(target.id, (thread) => ({ ...thread, draft: joined }));
+        current.current.props.view.setPanel('ai');
+        return { tag: 'sent', where: 'the AI chat' };
+      }),
+    [],
+  );
   useCanvasCapture({
     // A click's id is the open file's index path (previewClient.ts); `0` is the layout, as pathFor reads it.
     nodeIdForPath: (path) => {

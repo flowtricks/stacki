@@ -19,9 +19,12 @@
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  /* As tall as the button groups beside it, never taller: it stretches to the
-     row instead of carrying its own minimum, so it lines up on every screen. */
-  align-self: stretch;
+  /* As tall as the button groups beside it (.device-btns, about 28px), never taller. Stretching it to the
+     row made it the toolbar's whole 44px height, taller than the groups it sits beside, so it is centred
+     and sized to match them instead. */
+  align-self: center;
+  box-sizing: border-box;
+  height: 28px;
   gap: 8px;
   min-width: 30px;
   padding: 0 8px;

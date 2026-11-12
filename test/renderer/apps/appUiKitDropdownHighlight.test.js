@@ -14,7 +14,10 @@
 // Method: one page in Electron's Chromium, built from the shared module's
 // `ui.css` and `ui.js` exactly as an app serves them, driven with real mouse
 // moves and key presses (sendInputEvent), with focus on the trigger as a click leaves it. The document records every
-// `highlight` it hears, which the test checks in order.
+// `highlight` it hears, which the test checks in order. The window renders offscreen so it paints on
+// its own clock, and every input waits until the page has heard it (and painted the reaction), within
+// a bound, instead of sleeping: a fixed pause passes on a quick machine and fails on one that is busy
+// or whose hidden window is not painting (issue #78).
 const fs = require('fs');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
@@ -56,6 +59,11 @@ const check = (what, condition, detail) => {
     <script>
       window.heard = [];
       window.changes = 0;
+      // What the page itself received, so the probe waits on delivery instead of on a timer.
+      window.received = { mousemove: 0, keydown: 0 };
+      for (const kind of Object.keys(window.received)) {
+        document.addEventListener(kind, () => { window.received[kind] += 1; }, true);
+      }
       document.addEventListener('highlight', (event) => window.heard.push(event.detail.value === undefined ? '(none)' : event.detail.value));
       document.getElementById('target').addEventListener('change', () => { window.changes += 1; });
     </script>
@@ -72,27 +80,58 @@ const check = (what, condition, detail) => {
      const path = require('path');
      app.on('window-all-closed', () => {});
      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-     // After the menu's opening or closing motion.
-     const SETTLE_MS = 400;
      app.whenReady().then(async () => {
        try {
-         const win = new BrowserWindow({ show: false, width: 400, height: 500 });
+         // Offscreen rendering paints on its own clock, whatever the host does with a hidden
+         // window (occluded, display asleep, throttled). Chromium holds a mouse move until the
+         // next frame, so a window that never paints never hears the pointer (issue #78).
+         const win = new BrowserWindow({ show: false, width: 400, height: 500, webPreferences: { offscreen: true, backgroundThrottling: false } });
+         win.webContents.setFrameRate(60);
          await win.loadFile(path.join(__dirname, 'app.html'));
-         await wait(SETTLE_MS);
          const js = (code) => win.webContents.executeJavaScript(code);
-         const move = async (x, y) => {
-           win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(x), y: Math.round(y) });
-           await wait(60);
+         // Two animation frames: the page has laid out and painted what it was just told.
+         const frames = () => js('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+         // Polls until the page reports the condition, for at most DELIVERY_MS, then fails loudly.
+         const DELIVERY_MS = 5000;
+         const until = async (what, code) => {
+           for (let waited = 0; waited < DELIVERY_MS; waited += 10) {
+             if (await js(code)) {
+               return;
+             }
+             await wait(10);
+           }
+           const state = await js('({ visibility: document.visibilityState, focused: document.hasFocus(), received: window.received })');
+           throw new Error(what + ' was not delivered within ' + DELIVERY_MS + 'ms: ' + JSON.stringify(state));
          };
-         const key = async (keyCode) => {
-           win.webContents.sendInputEvent({ type: 'keyDown', keyCode });
-           win.webContents.sendInputEvent({ type: 'keyUp', keyCode });
-           await wait(60);
+         // Sends one input event and waits for the page to hear it, then for the frame that reacts.
+         const deliver = async (kind, send) => {
+           const before = await js('window.received.' + kind);
+           send();
+           await until('a ' + kind + ' event', 'window.received.' + kind + ' > ' + before);
+           await frames();
          };
+         const move = (x, y) => deliver('mousemove', () => win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.round(x), y: Math.round(y) }));
+         // The menu is open once its rows are mounted, closed once its popup has detached (it stays
+         // mounted for its exit motion and takes pointer input until then).
+         const opened = async () => {
+           await until('the menu rows', "document.querySelectorAll('.dd-popup .dd-option').length === 3");
+           await frames();
+         };
+         const closed = async () => {
+           await until('the menu to detach', "document.querySelector('.dd-popup') === null");
+           await frames();
+         };
+         const key = (keyCode) =>
+           deliver('keydown', () => {
+             win.webContents.sendInputEvent({ type: 'keyDown', keyCode });
+             win.webContents.sendInputEvent({ type: 'keyUp', keyCode });
+           });
+         await until('the first animation frame', 'window.received !== undefined');
+         await frames();
          const heard = () => js('window.heard.slice()');
          const result = {};
          await js("(() => { const trigger = document.querySelector('#target .dd-trigger'); trigger.focus(); trigger.click(); })()");
-         await wait(SETTLE_MS);
+         await opened();
          result.onOpen = await heard();
          const rows = await js("[...document.querySelectorAll('.dd-popup .dd-option')].map((row) => { const box = row.getBoundingClientRect(); return { x: box.left + box.width / 2, y: box.top + box.height / 2 }; })");
          result.rows = rows.length;
@@ -113,13 +152,13 @@ const check = (what, condition, detail) => {
          result.keys = await heard();
          // Closing clears it.
          await key('Escape');
-         await wait(SETTLE_MS);
+         await closed();
          result.closed = await heard();
          // A menu opened and closed with nothing highlighted tells nothing.
          await js("(() => { const trigger = document.querySelector('#target .dd-trigger'); trigger.focus(); trigger.click(); })()");
-         await wait(SETTLE_MS);
+         await opened();
          await key('Escape');
-         await wait(SETTLE_MS);
+         await closed();
          result.quiet = await heard();
          result.state = await js("({ value: document.getElementById('target').value, changes: window.changes })");
          win.destroy();

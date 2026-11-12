@@ -13,12 +13,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { type DropdownOption } from '../../ui/Dropdown';
-import { AstroIcon, SanityIcon, CloseIcon, CollectionIcon, LayersIcon, TextIcon } from '../../ui/Icons';
+import { AstroIcon, SanityIcon, CloseIcon, CollectionIcon, FileIcon, LayersIcon, TextIcon } from '../../ui/Icons';
+import type { TreeNode } from '../../editor/dataSample';
+import { treeListFields } from './loopProjectData';
 import { assert } from '../../../shared/core/assert';
 import { emptyQuery, type LoopFieldKind, type LoopQuery, type LoopSource } from '../../editor/loopQuery';
 import { readLoop, readingChain, type LoopReadInput, type LoopReading, type QueryHome } from '../../editor/loopQueryRead';
 import type { LoopTarget } from '../../editor/loopQueryPlan';
-import { literalCode, literalItems, STARTER_ITEMS, writtenListFields } from '../../editor/loopLiteral';
+import { isArrayLiteral, literalCode, literalItems, STARTER_ITEMS, writtenListFields } from '../../editor/loopLiteral';
 import { LiteralItemsSection } from './LoopLiteralItems';
 import { fieldListOf, type FieldList } from '../../editor/loopFieldList';
 import { fieldListPath, SourcePicker, sourcePath, type NewListOffer, type SourcePick, type SourcePickerData } from './LoopSourcePicker';
@@ -136,7 +138,7 @@ const NOTICE_MS = 6_000;
 export default function LoopSettings(props: LoopSettingsProps) {
   const catalog = useLoopCatalog(props.projectPath);
   const [notice, setNotice] = useNotice();
-  const { reading, fields, sections } = useLoopReading(props.input, props.projectPath, catalog);
+  const { reading, fields, sections } = useLoopReading(props.input, props.projectPath, catalog, props.pickerData?.tree);
   const holder = readingChain(reading)[0];
   const traced = useTracedEditing(reading, { projectPath: props.projectPath, filePath: props.filePath, catalog }, setNotice);
   const apply = (target: LoopTarget): void => {
@@ -150,8 +152,16 @@ export default function LoopSettings(props: LoopSettingsProps) {
     const result = props.onApply({ kind: 'section', section, code }, client);
     return result.ok ? undefined : result.message;
   };
+  // The custom list's `{}` code box: writes the array as typed; a refusal says why it could not be.
+  const applyItemsCode = (data: string): string | undefined => {
+    const client = catalog?.sanity.kind === 'connected' ? catalog.sanity.client : 'unavailable';
+    const result = props.onApply({ kind: 'value', data }, client);
+    return result.ok ? undefined : result.message;
+  };
   const code = sections === undefined ? undefined : sectionCodeContext(sections, { input: props.input, fields, applySection, applyQuery: apply });
   const literal = reading.kind === 'code' ? literalItems(props.input.data) : undefined;
+  // Any array literal gets the Items section: rows for strings, the `{}` code box for the rest.
+  const arrayLiteral = reading.kind === 'code' && isArrayLiteral(props.input.data);
   const readerOf = (path: string, exported: string): string | undefined =>
     props.input.imports.find((entry) => entry.path === path && (entry.imported ?? entry.name) === exported)?.name;
   const readers = { astro: readerOf('astro:content', 'getCollection'), sanity: readerOf('sanity:client', 'sanityClient') };
@@ -179,7 +189,19 @@ export default function LoopSettings(props: LoopSettingsProps) {
         newList={newListOffer(props, catalog, setNotice)}
       />
       {notice !== undefined && <NoticeBanner notice={notice} onDismiss={() => setNotice(undefined)} />}
-      <ReadingSettings {...shared} reading={reading} traced={traced} fields={fields} binding={binding} literal={literal} code={code} onApply={apply} />
+      <ReadingSettings
+        {...shared}
+        reading={reading}
+        traced={traced}
+        fields={fields}
+        binding={binding}
+        literal={literal}
+        arrayLiteral={arrayLiteral}
+        data={props.input.data}
+        onItemsCode={applyItemsCode}
+        code={code}
+        onApply={apply}
+      />
       {props.children}
       <ReadingDetails reading={reading} data={props.input.data} traced={traced} catalog={catalog} split={sections !== undefined} />
     </div>
@@ -297,6 +319,11 @@ function ReadingSettings(props: {
   readonly fields: readonly CatalogField[] | undefined;
   readonly binding: BindingContext | undefined;
   readonly literal: readonly string[] | undefined;
+  /** Whether the list is an array literal of anything: the custom list's Items section shows rows or its `{}` code. */
+  readonly arrayLiteral: boolean;
+  /** The list's code as written, for the Items code box. */
+  readonly data: string;
+  readonly onItemsCode: (data: string) => string | undefined;
   readonly catalog: LoopCatalog | undefined;
   readonly projectPath: string | undefined;
   /** The list's sections as code, when it splits into them. */
@@ -346,7 +373,14 @@ function ReadingSettings(props: {
           onChange={(query) => onApply({ kind: 'query', query, fields: fields ?? [] })}
         />
       )}
-      {literal !== undefined && <LiteralItemsSection items={literal} onChange={(items) => onApply({ kind: 'value', data: literalCode(items) })} />}
+      {props.arrayLiteral && (
+        <LiteralItemsSection
+          items={literal}
+          data={props.data}
+          onChange={(items) => onApply({ kind: 'value', data: literalCode(items) })}
+          onCode={props.onItemsCode}
+        />
+      )}
     </>
   );
 }
@@ -570,13 +604,18 @@ function useNotice(): readonly [Notice | undefined, (notice: Notice | undefined)
 
 // Read once for the source, then again with its fields' kinds, which settle
 // what `data.featured` alone means (a switch is on; anything else is code).
-function useLoopReading(input: Omit<LoopReadInput, 'fieldKind'>, projectPath: string | undefined, catalog: LoopCatalog | undefined) {
+function useLoopReading(
+  input: Omit<LoopReadInput, 'fieldKind'>,
+  projectPath: string | undefined,
+  catalog: LoopCatalog | undefined,
+  tree: readonly TreeNode[] | undefined,
+) {
   const first = useMemo(() => readLoop(input), [input]);
   const firstSource = first.kind === 'query' ? first.query.source : first.kind === 'partial' ? first.source : undefined;
   const catalogFields = useCatalogFields(projectPath, catalog, firstSource);
   const listFields = useMemo(
-    () => (firstSource?.kind === 'list' ? listSourceFields(input.frontmatter, firstSource.collection) : undefined),
-    [firstSource, input.frontmatter],
+    () => (firstSource?.kind === 'list' ? listSourceFields(input.frontmatter, firstSource.collection, tree) : undefined),
+    [firstSource, input.frontmatter, tree],
   );
   const fields = listFields ?? catalogFields;
   const reading = useMemo(() => {
@@ -595,12 +634,13 @@ function useLoopReading(input: Omit<LoopReadInput, 'fieldKind'>, projectPath: st
 
 // The fields a List prop's item type declares, or those a list written out in
 // the frontmatter holds; undefined for an untyped prop, whose fields are unknown.
-function listSourceFields(frontmatter: string, name: string): readonly CatalogField[] | undefined {
+function listSourceFields(frontmatter: string, name: string, tree: readonly TreeNode[] | undefined): readonly CatalogField[] | undefined {
   const prop = listPropOf(frontmatter, name);
   if (prop !== undefined) {
     return prop.fields === undefined ? undefined : listItemFields(prop.fields);
   }
-  const written = writtenListFields(frontmatter, name);
+  // A list imported from a project module has no declaration here: its first item, as the tree samples it, says.
+  const written = writtenListFields(frontmatter, name) ?? treeListFields(tree, name);
   return written?.map((field) => ({ path: field.path, title: titled(field.path), kind: field.kind, options: [], references: [] }));
 }
 
@@ -679,6 +719,7 @@ function SourceRow(props: SourceRowProps) {
           catalog={catalog}
           data={props.pickerData}
           newList={props.newList}
+          bound={props.fieldList !== undefined || (reading.kind !== 'empty' && reading.kind !== 'code')}
           loadSanitySample={(type) =>
             props.projectPath !== undefined && catalog !== undefined ? loadSanitySample(props.projectPath, catalog, type) : Promise.resolve(undefined)
           }
@@ -760,7 +801,14 @@ function sourceOptions(props: SourceRowProps, catalog: LoopCatalog | undefined, 
     });
   }
   for (const list of props.lists) {
-    options.push({ value: `value:${list.path}`, label: list.label, group: 'On this page', hint: list.hint, icon: <LayersIcon size={13} /> });
+    const project = isProjectData(props, list.path);
+    options.push({
+      value: `value:${list.path}`,
+      label: list.label,
+      group: project ? 'Project data' : 'On this page',
+      hint: list.hint,
+      icon: project ? <FileIcon size={13} /> : <LayersIcon size={13} />,
+    });
   }
   // What the loop reads now is always listed, even before the catalog loads
   // or when it is a list the menus do not offer.
@@ -771,12 +819,25 @@ function sourceOptions(props: SourceRowProps, catalog: LoopCatalog | undefined, 
   return options;
 }
 
+// Whether a list the loop can read is one of the project's data modules, which the menu groups apart.
+function isProjectData(props: SourceRowProps, name: string): boolean {
+  const modules = props.pickerData?.projectModules;
+  return modules !== undefined && Object.prototype.hasOwnProperty.call(modules, name);
+}
+
 function currentOption(props: SourceRowProps, current: string): DropdownOption<string> {
   const reading = props.reading;
   if (reading.kind === 'query' || reading.kind === 'partial') {
     const source = reading.kind === 'query' ? reading.query.source : reading.source;
     if (source.kind === 'list') {
-      return { value: current, label: source.collection, group: 'On this page', hint: '', icon: <LayersIcon size={13} /> };
+      const project = isProjectData(props, source.collection);
+      return {
+        value: current,
+        label: source.collection,
+        group: project ? 'Project data' : 'On this page',
+        hint: '',
+        icon: project ? <FileIcon size={13} /> : <LayersIcon size={13} />,
+      };
     }
     return { value: current, label: source.collection, group: source.kind === 'astro' ? 'Content collections' : 'Sanity', icon: <CollectionIcon size={13} /> };
   }

@@ -195,6 +195,9 @@ export interface ChipInputs {
   /** What the element's node writes in the open component file, which makes a chip
    *  green (model/componentMarkup.ts). Undefined on a page: nothing is green there. */
   componentMarkup?: ComponentMarkup | undefined;
+  /** The selector keys last settled green for this instance, used while its component
+   *  file is read again so the chips keep their colour (model/chipProvenanceMemory.ts). */
+  rememberedGreen?: ReadonlySet<string> | undefined;
   /** Nested selectors as they were typed, for chips with no rule yet (withTypedLabel). */
   typedLabels?: TypedLabels | undefined;
 }
@@ -249,7 +252,11 @@ export function chipsFor(inputs: ChipInputs): MatchedSelector[] {
   const typed = list.filter((entry) => chipLayer(entry) !== '' && !layered.includes(entry) && selectorsMatch(entry.text, inputs.activeSelector));
   // A chip is the component's (green) when the markup writes what it needs; an
   // instance's class is never written there, so its chip is not.
-  const shown = [...layered, ...typed].map((entry) => (writtenInMarkup(entry.text, inputs.componentMarkup) ? { ...entry, inComponentMarkup: true } : entry));
+  const shown = [...layered, ...typed].map((entry) =>
+    writtenInMarkup(entry.text, inputs.componentMarkup) || inputs.rememberedGreen?.has(selectorKey(entry.text)) === true
+      ? { ...entry, inComponentMarkup: true }
+      : entry,
+  );
   // The well reads broadest first (wellOrder): the styled tag, the global chips
   // (`:target`, `*`), the component's chips together, then the element's classes and
   // the nested selectors, each group least specific first. A specificity tie keeps the

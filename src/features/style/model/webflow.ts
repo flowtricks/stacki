@@ -29,6 +29,7 @@ import { variableEdit } from '../../../ipc/variableEditBridge';
 import { type AnyElement, serializeElementId, nodeById, buildSnapshot } from './webflowElement';
 import { type CanvasAsk, canvasIdentityOf } from './canvasAsk';
 import { isGlobalRegion } from './projectResources';
+import { PLACEMENT_END } from '../../../editor/classAttr';
 export { type ProjectVariable, streamProjectVariables, getProjectFontFamilies, type ImageAsset, getImageAssets } from './projectResources';
 
 export {
@@ -317,7 +318,7 @@ async function readSource(source: EmbedSource): Promise<string> {
 /** The text this doc's source file should now hold. A stylesheet or a <style>
  *  node is all CSS; a component file is its markup with only the edited
  *  regions re-stringified. */
-function serializeDocument(embedDocument: EmbedDocument): string {
+export function serializeDocument(embedDocument: EmbedDocument): string {
   if (embedDocument.source.origin.kind === 'astro') {
     return renderEmbed(embedDocument.segments, embedDocument.regions);
   }
@@ -502,6 +503,55 @@ export async function writeEmbedDocument(
   try {
     if (write({ nodeId: origin.nodeId, filePath: origin.filePath }, code, !live) === false) {
       return { ok: false, error: "Couldn't find that <style> block in the open file." };
+    }
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '';
+    return { ok: false, error: message || String(error) };
+  }
+  embedDocument.recordWritten(code);
+  return { ok: true, code };
+}
+
+/**
+ * A `<style is:global>` block that is not in the file yet: an empty document the panel builds the
+ * first rule in (editorModel.ts createRuleForWrite), so a first rule is shaped by the same code as
+ * every other. Nothing reads it back; the real block is scanned once the host has added it.
+ */
+export function blankStyleDocument(): EmbedDocument {
+  const host = getHost();
+  const source: EmbedSource = {
+    key: `node:${host.openFilePath ?? ''}:new`,
+    label: '<style is:global>',
+    classNames: [],
+    fromComponent: host.openFileKind === 'component',
+    componentName: undefined,
+    order: 0,
+    element: 'new',
+    origin: { kind: 'node', nodeId: 'new', filePath: host.openFilePath },
+  };
+  const region = parseRegion({ start: 0, end: 0, css: '', root: undefined });
+  return new EmbedDocument(source, '', ['', ''], [region]);
+}
+
+/**
+ * Hand the host a blank document's first rule as a new block, with the class the rule needs
+ * (firstStyleBlock.ts). One host edit, so one undo step; the result has the shape of every
+ * other write, so the panel settles it the same way.
+ */
+export async function writeFirstStyleBlock(embedDocument: EmbedDocument, className: string | undefined): Promise<EmbedWriteResult> {
+  embedWriteCount += 1;
+  const add = getHost().addStyleBlock;
+  if (!add) {
+    return { ok: false, error: 'This page cannot take a style block here.' };
+  }
+  const code = serializeDocument(embedDocument);
+  if (code.trim().length === 0) {
+    return { ok: false, error: 'There is no style to add yet.' };
+  }
+  try {
+    const outcome = await add({ css: code, className, placement: PLACEMENT_END });
+    if (outcome.tag === 'refused') {
+      return { ok: false, error: outcome.message };
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '';

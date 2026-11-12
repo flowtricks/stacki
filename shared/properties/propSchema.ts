@@ -24,9 +24,20 @@ export interface PropUnion {
   readonly names: readonly string[];
   readonly branches: readonly UnionBranch[];
 }
+/**
+ * One member of an object type, or of each item of a list of objects. Beyond
+ * its name and type it can carry what the type cannot say on its own: the
+ * `@format` word of a text member (`color`, `date`), the choices of an enum,
+ * and, for a nested list or object, its own members (`shape`, with
+ * `shapeIsList` for a list of them).
+ */
 export interface PropShapeField {
   readonly name: string;
   readonly type: string;
+  readonly format?: string;
+  readonly options?: readonly string[];
+  readonly shape?: readonly PropShapeField[];
+  readonly shapeIsList?: boolean;
 }
 // What a value only code can give is (see propModelSchema.ts schemaTypeOf): an object,
 // a function (an action) or a type no field can fill in (`any`, a promise).
@@ -85,7 +96,7 @@ export function parseField(input: unknown, where: string): PropField {
       expressionOptions: schemaOptional(value, 'expressionOptions', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax)),
       codeKind: schemaOptional(value, 'codeKind', where, schemaCodeKind),
       usage: schemaOptional(value, 'usage', where, schemaUsage),
-      shape: schemaOptional(value, 'shape', where, schemaShape),
+      shape: schemaOptional(value, 'shape', where, (input, at) => schemaShape(input, at, 1, shapeBudget())),
       unions: schemaOptional(value, 'unions', where, (input, at) => schemaArray(input, at, LIMITS.propOptionsMax).map((union) => schemaUnion(union, at))),
     }),
   };
@@ -228,12 +239,36 @@ function schemaUsage(input: unknown, where: string): PropFieldUsage {
   }
   return usage;
 }
-function schemaShape(input: unknown, where: string): readonly PropShapeField[] {
+interface ShapeBudget {
+  readonly take: () => boolean;
+}
+function shapeBudget(): ShapeBudget {
+  let remaining = LIMITS.propSchemaFieldsMax;
+  return {
+    take: () => {
+      remaining -= 1;
+      return remaining >= 0;
+    },
+  };
+}
+// A nested shape is bounded in depth (LIMITS.listFieldDepthMax) and in how many members it holds in all.
+function schemaShape(input: unknown, where: string, depth: number, budget: ShapeBudget): readonly PropShapeField[] {
+  if (depth > LIMITS.listFieldDepthMax) {
+    fail(where, `shape nesting exceeds ${LIMITS.listFieldDepthMax}`);
+  }
   return schemaArray(input, where, LIMITS.propSchemaFieldsMax).map((item) => {
+    if (!budget.take()) {
+      fail(where, `shape exceeds ${LIMITS.propSchemaFieldsMax} members`);
+    }
     const value = schemaRecord(item, where);
+    const nested = schemaOptional(value, 'shape', where, (input, at) => schemaShape(input, at, depth + 1, budget));
+    const options = schemaOptional(value, 'options', where, (input, at) => schemaStrings(input, at, LIMITS.propOptionsMax));
+    const format = schemaOptional(value, 'format', where, schemaText);
+    const isList = schemaOptional(value, 'shapeIsList', where, schemaBoolean);
     return {
       name: schemaText(value['name'], `${where}.name`),
       type: schemaText(value['type'], `${where}.type`),
+      ...definedFields({ format, options, shape: nested, shapeIsList: isList }),
     };
   });
 }

@@ -30,7 +30,7 @@ import { appAuthorLogin, type AppSummary } from '../../../shared/properties/apps
 import { appPlacePills } from '../../../shared/properties/appPlace';
 import { repositoryURL } from '../../../shared/properties/appPublish';
 import { confirmDialog } from '../../ui/ConfirmDialog';
-import { GitHubIcon, HelpCircleIcon, SyncIcon, TrashIcon } from '../../ui/Icons';
+import { GitHubIcon, HelpCircleIcon, RefreshIcon, TrashIcon } from '../../ui/Icons';
 import MoreMenu, { type MenuItem } from '../../ui/MoreMenu';
 import Popup from '../../ui/Popup';
 import { useScrollEdges } from '../../ui/useScrollEdges';
@@ -41,9 +41,9 @@ import { AppFolderScanSection, AppServicesSection } from './AppFolderRows';
 import { AppSettingsSection } from './AppSettings';
 import { AppTile } from './AppTile';
 import { AppPlacePills, type AppPlaceFacts } from './appPlaces';
-import { AutoUpdateSetting, appUpdatable, updateAvailableLabel } from './appUpdates';
+import { AutoUpdateSetting, appUpdatable, appUpdateStatus, updateAdditionsNote, updateStatusLabel } from './appUpdates';
 import { MarketplaceIcon } from './marketplace/MarketplaceIcons';
-import { appShareable } from './publishFlow';
+import { appNeedsShare } from './publishFlow';
 import './appDetails.css';
 
 /** What the Apps panel lets a person do to one installed app, from its row or its details. */
@@ -140,7 +140,11 @@ export function AppDetails(
                 <button type="button" className="apps-open primary" onClick={() => leave(() => actions.open(app))}>
                   Open
                 </button>
-                <MoreMenu title={`${manifest.name} options`} width={200} items={appMenuItems(app, actions, { details: undefined, finish: leave })} />
+                <MoreMenu
+                  title={`${manifest.name} options`}
+                  width={200}
+                  items={appMenuItems(app, actions, { details: undefined, finish: leave, place: props.place })}
+                />
               </span>
             </div>
             <div ref={body} className="modal-body apps-details-body" data-edge-top={edges.top} data-edge-bottom={edges.bottom}>
@@ -158,6 +162,9 @@ export function AppDetails(
   );
 }
 
+/** The menu item for a first listing; a listed app has none (the marketplace follows its repository's releases). */
+const SUBMIT_LABEL = 'Submit to marketplace';
+
 /**
  * The ⋯ menu of an app, on its row and in its details' header alike: Details
  * (the row's only), Update when one waits, Share to GitHub…, Submit to
@@ -167,28 +174,35 @@ export function AppDetails(
 export function appMenuItems(
   app: AppSummary,
   actions: AppItemActions,
-  options: { readonly details: (() => void) | undefined; readonly finish: (action: () => void) => void },
+  options: {
+    readonly details: (() => void) | undefined;
+    readonly finish: (action: () => void) => void;
+    /** Where the app lives (appPlaces.tsx): whether it is already published decides Share, and whether it is listed decides the submit item. */
+    readonly place: AppPlaceFacts;
+  },
 ): readonly (MenuItem | false)[] {
   const { lock } = app;
+  const updating = appUpdateStatus(lock);
   const submit = actions.submit?.(app);
   const share = actions.share;
+  const { published } = options.place;
+  // Not yet on GitHub: Share comes first, and Submit waits. Already published (even if installed from a file), it is the other way round.
+  const needsShare = appNeedsShare(lock.source, published);
   return [
     options.details !== undefined && { label: 'Details', icon: <HelpCircleIcon size={14} />, onSelect: options.details },
     options.details === undefined &&
-      lock.update !== undefined &&
+      updating.kind !== 'none' &&
       actions.admin && {
-        label: `Update to ${lock.update.version}`,
-        icon: <SyncIcon size={14} />,
+        label: `Update to ${updating.update.version}`,
+        icon: <RefreshIcon size={14} />,
         disabled: actions.busy,
         onSelect: () => actions.update(app),
       },
-    appShareable(lock.source) &&
-      share !== undefined && { label: 'Share to GitHub…', icon: <GitHubIcon size={14} />, onSelect: () => options.finish(() => share(app)) },
+    needsShare && share !== undefined && { label: 'Share to GitHub…', icon: <GitHubIcon size={14} />, onSelect: () => options.finish(() => share(app)) },
     // The marketplace lists GitHub repositories, so until the app is shared there it is
     // greyed: Share to GitHub, just above, is the step that comes first.
-    actions.submit !== undefined && appShareable(lock.source) && { label: 'Submit to marketplace', icon: <MarketplaceIcon size={14} />, disabled: true },
-    submit !== undefined &&
-      !appShareable(lock.source) && { label: 'Submit to marketplace', icon: <MarketplaceIcon size={14} />, onSelect: () => options.finish(submit) },
+    actions.submit !== undefined && needsShare && { label: SUBMIT_LABEL, icon: <MarketplaceIcon size={14} />, disabled: true },
+    submit !== undefined && !needsShare && { label: SUBMIT_LABEL, icon: <MarketplaceIcon size={14} />, onSelect: () => options.finish(submit) },
     actions.admin && {
       label: 'Remove app',
       icon: <TrashIcon size={14} />,
@@ -223,14 +237,23 @@ function wrapActions(actions: AppItemActions, finish: (action: () => void) => vo
   return { ...actions, uninstall: (app) => finish(() => actions.uninstall(app)) };
 }
 
+/**
+ * The GitHub repository an app belongs to: a GitHub install names its own, a marketplace install's comes
+ * from the host's lookup, and a local or uploaded app may still name the repository it updates from.
+ */
+function appRepository(app: AppSummary, place: AppPlaceFacts): { readonly owner: string; readonly repository: string } | undefined {
+  const { manifest, lock } = app;
+  return place.place ?? (lock.source.kind === 'github' ? lock.source : undefined) ?? place.published ?? manifest.source;
+}
+
 /** The line under the name: the version, the author with their picture, and the GitHub repository, each only when known. */
 function AppMeta({ app, avatar, place }: Pick<AppDetailsContext, 'app' | 'avatar' | 'place'>) {
-  const { manifest, lock } = app;
+  const { manifest } = app;
   assert(manifest.version.length > 0, 'An installed app has a version');
   const author = appAuthorLogin(app);
   // A GitHub install names its repository itself; a marketplace install's comes from the host's lookup;
   // a local or uploaded app may still name the repository it updates from in its manifest.
-  const repository = place.place ?? (lock.source.kind === 'github' ? lock.source : undefined) ?? manifest.source;
+  const repository = appRepository(app, place);
   return (
     <span className="apps-details-meta">
       <span className="apps-details-version" title={`Version ${manifest.version}`}>
@@ -275,6 +298,14 @@ function AboutSection({ app, place }: AppDetailsContext) {
         <AppDetailsItem label="Installed from">
           <span title={installSourceLabel(lock.source)}>{installSourceShortLabel(lock.source)}</span>
         </AppDetailsItem>
+        {place.listedVersion !== undefined && (
+          <AppDetailsItem
+            label="Listed in the marketplace"
+            hint="The marketplace follows this app’s GitHub releases: publish a release there and it appears here."
+          >
+            <ListedLatest version={place.listedVersion} repository={appRepository(app, place)} />
+          </AppDetailsItem>
+        )}
         {manifest.stackiVersionMin !== undefined && (
           <AppDetailsItem label="Needs" hint="Installs and updates are refused on an older Stacki.">
             Stacki {manifest.stackiVersionMin} or later
@@ -300,8 +331,35 @@ function AboutSection({ app, place }: AppDetailsContext) {
   );
 }
 
+/** The listed latest version, and the repository whose releases the marketplace follows. */
+function ListedLatest({
+  version,
+  repository,
+}: {
+  readonly version: string;
+  readonly repository: { readonly owner: string; readonly repository: string } | undefined;
+}) {
+  assert(version.length > 0, 'A listing names its version');
+  return (
+    <span className="apps-details-listed">
+      <span>v{version}</span>
+      {repository !== undefined && (
+        <a
+          className="apps-details-link"
+          href={repositoryURL(repository.owner, repository.repository)}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Open ${repository.owner}/${repository.repository} on GitHub`}
+        >
+          {repository.owner}/{repository.repository}
+        </a>
+      )}
+    </span>
+  );
+}
+
 /** The app's description, cut to three lines (appDetails.css); More shows the rest, only when there is a rest to show. */
-function AboutText({ text }: { readonly text: string }) {
+export function AboutText({ text }: { readonly text: string }) {
   assert(text.length > 0, 'An empty description draws nothing');
   const paragraph = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
@@ -344,13 +402,21 @@ function UpdatesSection({ app, actions }: AppDetailsContext) {
   if (!appUpdatable(lock.source)) {
     return undefined;
   }
+  const status = appUpdateStatus(lock);
+  // An admin installs; the hint says what the version adds when it asks for more, so the OK is an informed one.
+  const hint = status.kind === 'none' ? undefined : (updateAdditionsNote(status.update) ?? (actions.admin ? undefined : 'An admin can install this update.'));
   return (
     <AppDetailsSection title="Updates">
       <AppDetailsList label={`${app.manifest.name} updates`}>
-        {lock.update !== undefined && (
-          <AppDetailsItem label={updateAvailableLabel(lock.update)} {...(actions.admin ? {} : { hint: 'An admin can install this update.' })}>
+        {status.kind !== 'none' && (
+          <AppDetailsItem
+            label={updateStatusLabel(status)}
+            {...(hint === undefined ? {} : { hint })}
+            {...(status.kind === 'needs-approval' ? { tone: 'warning' as const } : {})}
+          >
             {actions.admin ? (
-              <button type="button" className="apps-button primary" disabled={actions.busy} onClick={() => actions.update(app)}>
+              <button type="button" className="apps-button primary apps-update-button" disabled={actions.busy} onClick={() => actions.update(app)}>
+                <RefreshIcon size={12} />
                 Update
               </button>
             ) : (

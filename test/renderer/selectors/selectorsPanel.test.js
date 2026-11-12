@@ -18,6 +18,14 @@ const { EMPTY_KEEP_LIST, parseStyleKeepList } = require('#dist/shared/properties
 const { repoPath } = require('../../helpers/sources.js');
 
 const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
+// Polls a condition the panel reaches through its bridge (a file written, an undo recorded, a
+// dialog mounted), within a bound, so a busy machine is waited for instead of failing a fixed pause.
+// The assertion that follows is unchanged: this only waits until it can be told.
+async function eventually(act, check) {
+  for (let attempt = 0; attempt < 200 && !check(); attempt += 1) {
+    await act(async () => settle(25));
+  }
+}
 const CSS = '.hero { a: b }\n.ghost { a: b }\n.is-open { a: b }\n';
 
 function project() {
@@ -130,33 +138,47 @@ test('lock, clean up and undo go through to the project files', async () => {
     // One row's trash removes just that style, and undo puts it back.
     const ghostRow = [...container.querySelectorAll('.selectors-row')].find((row) => row.textContent.includes('.ghost'));
     await click(ghostRow.querySelector('.selectors-remove-one'));
+    await eventually(
+      act,
+      () =>
+        fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8') === '.hero { a: b }\n.is-open { a: b }\n' && toasts.length > 0 && undos.length > 0,
+    );
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), '.hero { a: b }\n.is-open { a: b }\n');
     assert.deepEqual(toasts.at(-1), ['Removed 1 unused style', 'success']);
     await act(async () => {
       await undos[0].undo();
       await settle(80);
     });
+    await eventually(act, () => fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8') === CSS);
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), CSS);
     await click([...container.querySelectorAll('.selectors-tab')].find((tab) => tab.textContent.startsWith('All')));
     await rowsAre(['.hero:used', '.ghost:unused', '.is-open:unused']);
 
     const openRow = [...container.querySelectorAll('.selectors-row')].find((row) => row.textContent.includes('.is-open'));
     await click(openRow.querySelector('.selectors-lock'));
+    await eventually(act, () => keepList(root).keep.length === 1);
     assert.deepEqual(keepList(root).keep, ['is-open']);
     await rowsAre(['.hero:used', '.ghost:unused', '.is-open:kept']);
     // A Locked tab appears once something is locked, and unlocking from it works.
     await click([...container.querySelectorAll('.selectors-tab')].find((tab) => tab.textContent.startsWith('Locked')));
     await rowsAre(['.is-open:kept']);
     await click(container.querySelector('.selectors-lock'));
+    await eventually(act, () => keepList(root).keep.length === 0);
     assert.deepEqual(keepList(root).keep, []);
     await click([...container.querySelectorAll('.selectors-tab')].find((tab) => tab.textContent.startsWith('All')));
     await click([...container.querySelectorAll('.selectors-row')].find((row) => row.textContent.includes('.is-open')).querySelector('.selectors-lock'));
+    await eventually(act, () => keepList(root).keep.length === 1);
     assert.deepEqual(keepList(root).keep, ['is-open']);
 
     await click(container.querySelector('[aria-label="Clean up unused styles"]'));
+    await eventually(act, () => [...container.querySelectorAll('button')].some((button) => button.textContent === 'Remove style'));
     const listed = [...container.querySelectorAll('.selectors-selector')].map((selector) => selector.textContent);
     assert.deepEqual(listed, ['.ghost'], 'the confirmation lists only unused selectors');
     await click([...container.querySelectorAll('button')].find((button) => button.textContent === 'Remove style'));
+    await eventually(
+      act,
+      () => fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8') === '.hero { a: b }\n.is-open { a: b }\n' && undos.length === 2,
+    );
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), '.hero { a: b }\n.is-open { a: b }\n');
     assert.deepEqual(toasts.at(-1), ['Removed 1 unused style', 'success']);
     await rowsAre(['.hero:used', '.is-open:kept']);
@@ -166,11 +188,13 @@ test('lock, clean up and undo go through to the project files', async () => {
       await undos[1].undo();
       await settle(80);
     });
+    await eventually(act, () => fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8') === CSS);
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), CSS);
     await act(async () => {
       await undos[1].redo();
       await settle(80);
     });
+    await eventually(act, () => fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8') === '.hero { a: b }\n.is-open { a: b }\n');
     assert.equal(fs.readFileSync(path.join(root, 'src/styles/global.css'), 'utf8'), '.hero { a: b }\n.is-open { a: b }\n');
   } finally {
     await act(async () => reactRoot.unmount());
@@ -267,6 +291,7 @@ test('a stylesheet or folder locked from its heading leaves the Unused tab and t
     // Lock the file: persisted, gone from Unused (no group, no note), counted under Locked.
     // Its rows turn blue in place, then the group closes and is removed.
     await click(lock);
+    await waitFor(() => stored().lockedStylesheets.length === 1);
     assert.deepEqual(stored().lockedStylesheets, ['src/styles/patterns.css']);
     await waitFor(() => count('unused') === '2');
     assert.equal(count('kept'), '2');
@@ -276,6 +301,7 @@ test('a stylesheet or folder locked from its heading leaves the Unused tab and t
 
     // The cleanup lists only what it will remove.
     await click(button('Clean up unused styles'));
+    await waitFor(() => [...container.querySelectorAll('button')].some((candidate) => candidate.textContent === 'Cancel'));
     assert.deepEqual([...container.querySelectorAll('.selectors-selector')].map((selector) => selector.textContent).sort(), ['.gone', '.title']);
     await click([...container.querySelectorAll('button')].find((candidate) => candidate.textContent === 'Cancel'));
 
@@ -290,15 +316,18 @@ test('a stylesheet or folder locked from its heading leaves the Unused tab and t
     const trash = rowOf('.pattern-b').querySelector('.selectors-remove-one');
     assert.ok(trash, 'a sheet-locked row has a trash button');
     await click(trash);
+    await waitFor(() => patterns() === '.pattern-a { a: b }\n');
     assert.equal(patterns(), '.pattern-a { a: b }\n');
     await waitFor(() => rows().length === 1);
     await run(() => undos.at(-1).undo());
+    await waitFor(() => patterns() === files['src/styles/patterns.css']);
     assert.equal(patterns(), files['src/styles/patterns.css']);
     await waitFor(() => rows().length === 2);
 
     // Hover actions: the row's lock unlocks it alone, splitting the sheet lock in one write and one undo step.
     const undoCount = undos.length;
     await click(rowOf('.pattern-a').querySelector('.selectors-lock'));
+    await waitFor(() => stored().keep.length === 1 && undos.length === undoCount + 1);
     assert.deepEqual(stored().lockedStylesheets, []);
     assert.deepEqual(stored().keep, ['pattern-b']);
     assert.equal(undos.length, undoCount + 1);
@@ -308,17 +337,21 @@ test('a stylesheet or folder locked from its heading leaves the Unused tab and t
     assert.ok(button('Lock patterns.css from cleanup'), 'the heading shows the sheet unlocked');
     assert.equal(count('unused'), '3');
     await run(() => undos.at(-1).undo());
+    await waitFor(() => stored().keep.length === 0);
     assert.deepEqual(stored().lockedStylesheets, ['src/styles/patterns.css']);
     assert.deepEqual(stored().keep, []);
     await run(() => undos.at(-1).redo());
+    await waitFor(() => stored().keep.length === 1);
     assert.deepEqual(stored().keep, ['pattern-b']);
 
     // Relocking the sheet folds the name lock back into the sheet lock.
     await click(button('Lock patterns.css from cleanup'));
+    await waitFor(() => stored().keep.length === 0);
     assert.deepEqual(stored(), { version: 1, keep: [], lockedStylesheets: ['src/styles/patterns.css'] });
 
     // A folder lock covers every sheet under it; a sheet inside shows it, toggled at the folder.
     await click(button('Lock src/styles/ from cleanup'));
+    await waitFor(() => stored().lockedStylesheets.length === 2);
     assert.deepEqual(stored().lockedStylesheets, ['src/styles/', 'src/styles/patterns.css']);
     await waitFor(() => count('unused') === '1');
     assert.equal(button('Locked with src/styles/').disabled, true);
@@ -326,7 +359,9 @@ test('a stylesheet or folder locked from its heading leaves the Unused tab and t
 
     // Unlock both: normal behaviour returns.
     await click(button('Unlock src/styles/'));
+    await waitFor(() => button('Unlock patterns.css') !== null);
     await click(button('Unlock patterns.css'));
+    await waitFor(() => stored().lockedStylesheets.length === 0);
     assert.deepEqual(stored().lockedStylesheets, []);
     await waitFor(() => count('unused') === '4');
     assert.equal(patterns(), files['src/styles/patterns.css']);

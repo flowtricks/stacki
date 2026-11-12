@@ -6,46 +6,37 @@
 // The panel is a frame-agnostic pair: `renderFrame` receives its header and
 // body, so the app can put them in the docked left panel or a floating window
 // (DockableWindow) without the panel knowing which.
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import type { AgentAvailability, ReviewOutcome, SetupState } from '../../../shared/ipc/aiChat';
 import type { WireMergeClash } from '../../../shared/ipc/ipcWire';
 import type { MergeResolution } from '../../../shared/ipc/mergeResolution';
-import { AGENTS, AGENT_IDS, agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
-import type { ChatId, ChatOption, TurnId, TurnStop } from '../../../shared/properties/ai/chatModel';
-import { ClaudeLogo, CodexLogo } from '../../ui/agentLogos';
-import Dropdown from '../../ui/Dropdown';
+import { AGENTS, agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
+import type { ChatId, TurnId } from '../../../shared/properties/ai/chatModel';
 import { ErrorToast } from '../../ui/ErrorToast';
-import { ChevronLeftIcon, PlusIcon, SparkleIcon, TerminalIcon } from '../../ui/Icons';
 import {
-  answerPermission,
   dismissAiError,
+  EMPTY_DRAFT,
   installAgent,
   loadAiProject,
-  newChat,
-  openChat,
   openStartingChat,
-  preferredAgent,
-  rememberAgent,
-  rememberedSettings,
-  rememberSetting,
-  setChatOption,
-  switchProvider,
-  updateChatSettings,
   runSetup,
   reviewChange,
   sendPrompt,
+  setPanelVisibility,
   trustProject,
   useAiState,
   type AiState,
 } from './aiStore';
-import { ChatComposer } from './ChatComposer';
+import { ChatComposer } from './composer/ChatComposer';
 import { AccountRow, SetupCard } from './SetupCard';
-import { EffortControl, isEffort } from './EffortControl';
-import { ChangesCard, PermissionCard, PlanStrip, ToolCard } from './ChatItems';
-import { ChatList } from './ChatList';
-import { ChatText } from './ChatText';
-import { EMPTY_CHAT, type ChatView, type TranscriptItem } from './chatReducer';
-import './ai.css';
+import { SIGNED_IN_MS, SIGNED_IN_RETRY_MS, SignInCard, SignedInStrip, signInStage, useSignedInMoment, type SignInStage } from './SignInCard';
+import { readSignInFailures } from './signInTranscript';
+import { PlanCard } from './transcript/PlanCard';
+import { Transcript } from './transcript/TranscriptView';
+import { ChatHeader } from './sessions/ChatHeader';
+import { SessionsView } from './sessions/SessionsView';
+import { EMPTY_CHAT } from './chatReducer';
+import './aiShell.css';
 
 export interface AiPanelProps {
   readonly projectPath: string;
@@ -54,6 +45,8 @@ export interface AiPanelProps {
   /** Shows the merge editor for an undo whose file moved on; `settle` hears the choice, or undefined when cancelled. */
   readonly onMerge: (clash: WireMergeClash, settle: (resolution: MergeResolution | undefined) => void) => void;
   readonly onOpenExternal: (url: string) => void;
+  /** Shows a project file in the editor (the changes card's "Open file"); a path relative to the project. Without it the action is not offered. */
+  readonly onOpenFile?: ((path: string) => void) | undefined;
   readonly renderFrame: (header: ReactNode, body: ReactNode) => ReactNode;
 }
 
@@ -63,30 +56,24 @@ export default function AiPanel(props: AiPanelProps) {
   useEffect(() => {
     void loadAiProject(props.projectPath).then(() => openStartingChat());
   }, [props.projectPath]);
+  // The panel is on screen while it is mounted: a turn that ends in the open chat is read at once.
+  useEffect(() => {
+    setPanelVisibility('visible');
+    return () => setPanelVisibility('hidden');
+  }, []);
   const chat = state.open === undefined ? undefined : state.chats.find((candidate) => candidate.id === state.open);
-  const header = (
-    <div className="ai-header">
-      {chat !== undefined && (
-        <button className="ghost" aria-label="All chats" title="All chats" onClick={() => void openChat(undefined)}>
-          <ChevronLeftIcon size={12} />
-        </button>
-      )}
-      <SparkleIcon size={14} />
-      <h2 title={chat?.title}>{chat?.title ?? 'AI chat'}</h2>
-      <button className="ghost" aria-label="New chat" title="New chat" onClick={() => void newChat(preferredAgent())}>
-        <PlusIcon size={14} />
-      </button>
-    </div>
-  );
+  const header = <ChatHeader chat={chat} />;
   const body = (
     <div className="ai-body">
       {state.error !== undefined && <ErrorToast message={state.error} recovery={[{ label: 'Dismiss', run: dismissAiError }]} />}
       {!state.loaded ? (
-        <p className="ai-empty">Loading…</p>
+        <div className="ai-skeleton" role="status" aria-label="Loading chats">
+          {[0, 1, 2].map((row) => (
+            <span key={row} className="ai-skeleton-row" />
+          ))}
+        </div>
       ) : chat === undefined ? (
-        <>
-          <ChatList chats={state.chats} />
-        </>
+        <SessionsView chats={state.chats} />
       ) : (
         <ChatPane {...props} state={state} chatId={chat.id} agent={chat.agent} />
       )}
@@ -95,260 +82,81 @@ export default function AiPanel(props: AiPanelProps) {
   return <>{props.renderFrame(header, body)}</>;
 }
 
-// The composer's own settings, as Claude's and ChatGPT's composers have them: the provider (with its
-// mark), then the model and effort it offers. Before the chat's first message the provider and the
-// settings apply to this chat; after it, another provider starts a new chat and keeps this one, and a
-// model or effort change applies to the next message (both agents change them mid-session).
-function ComposerSettings({
-  state,
-  chatId,
-  agent,
-  view,
-}: {
-  readonly state: AiState;
-  readonly chatId: ChatId;
-  readonly agent: AgentId;
-  readonly view: ChatView;
-}) {
-  const [, setRevision] = useState(0);
-  const started = view.items.some((item) => item.kind === 'user');
-  const live = view.options.length > 0;
-  const remembered = new Map(rememberedSettings(agent).map((setting) => [setting.option, setting.value]));
-  const offered = (live ? view.options : (state.agentOptions.get(agent) ?? [])).filter(
-    (option) => option.category === 'model' || option.category === 'thought_level' || (live && option.category === 'mode'),
-  );
-  const ordered = [...offered].sort((left, right) => optionRank(left) - optionRank(right));
-  const running = view.running !== undefined;
-  return (
-    <>
-      <Dropdown
-        ariaLabel="Agent"
-        className="ai-option ai-provider"
-        value={agent}
-        disabled={running}
-        livePreview={false}
-        menuWidthMin={200}
-        options={AGENT_IDS.map((id) => ({
-          value: id,
-          label: agentLabel(id),
-          icon: <AgentLogo agent={id} />,
-          ...(started && id !== agent ? { hint: 'Switches to a new chat' } : {}),
-        }))}
-        onChange={(next) => {
-          if (next !== agent) {
-            rememberAgent(next);
-            void switchProvider(chatId, next, { started });
-          }
-        }}
-      />
-      {ordered.map((option) => {
-        const value = live ? option.currentValue : remembered.get(option.id);
-        const current = value !== undefined && option.choices.some((choice) => choice.value === value) ? value : option.currentValue;
-        const pick = (chosen: string): void => {
-          rememberSetting(agent, option.id, chosen);
-          setRevision((revision) => revision + 1);
-          void (live ? setChatOption(chatId, option.id, chosen) : updateChatSettings(chatId, agent));
-        };
-        return isEffort(option) ? (
-          <EffortControl key={option.id} option={option} value={current} disabled={running} onPick={pick} />
-        ) : (
-          <Dropdown
-            key={option.id}
-            ariaLabel={option.name}
-            className="ai-option"
-            value={current}
-            disabled={running}
-            livePreview={false}
-            optionLayout="stacked"
-            menuWidthMin={240}
-            options={option.choices.map((choice) => ({
-              value: choice.value,
-              label: choice.name,
-              ...(choice.description === undefined ? {} : { description: choice.description }),
-            }))}
-            onChange={pick}
-          />
-        );
-      })}
-    </>
-  );
-}
-
-function optionRank(option: ChatOption): number {
-  const order = ['model', 'thought_level', 'mode'];
-  const index = order.indexOf(option.category ?? option.id);
-  return index === -1 ? order.length : index;
-}
-
-function AgentLogo({ agent }: { readonly agent: AgentId }) {
-  switch (agent) {
-    case 'claude':
-      return <ClaudeLogo size={16} />;
-    case 'codex':
-      return <CodexLogo size={16} className="ai-logo-codex" />;
-    default: {
-      const exhaustive: never = agent;
-      return exhaustive;
-    }
-  }
-}
-
 function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chatId: ChatId; readonly agent: AgentId }) {
   const { state, chatId, agent, projectPath } = props;
   const view = state.views.get(chatId) ?? EMPTY_CHAT;
-  const draft = state.drafts.get(chatId) ?? { text: '', attachments: [] };
+  const draft = state.drafts.get(chatId) ?? EMPTY_DRAFT;
   const availability = state.agents.find((entry) => entry.agent === agent);
-  const blocked = !state.trusted ? 'Allow agents in this project first' : availability?.state === 'ready' ? undefined : `${agentLabel(agent)} is not ready`;
-  const review = (turn: TurnId, path: string, action: 'keep' | 'undo'): void => void runReview(props, chatId, turn, path, action);
+  const setup = state.setups.get(agent);
+  const reading = useMemo(() => readSignInFailures(view.items), [view.items]);
+  const stage = signInStage({ setup, expired: availability?.state === 'sign-in' });
+  const retryText = view.running === undefined && reading.interrupted ? view.lastPrompt?.text : undefined;
+  const moment = useSignedInMoment({ agent, needed: stage !== undefined, holdMs: retryText === undefined ? SIGNED_IN_MS : SIGNED_IN_RETRY_MS });
+  const started = view.items.some((item) => item.kind === 'user');
+  const blocked = !state.trusted ? 'Allow agents in this project first' : composerBlock({ agent, availability, stage, started });
+  const review = (turn: TurnId, path: string, action: 'keep' | 'undo'): Promise<void> => runReview(props, chatId, turn, path, action);
+  const retry = retryText === undefined ? undefined : (): void => void sendPrompt(chatId, retryText);
   // Where the agent's CLI stands is read again each time a chat with it opens, and after each step.
   useEffect(() => {
     void runSetup(agent, { kind: 'detect' });
   }, [agent, chatId]);
   return (
     <>
-      {view.plan !== undefined && view.plan.entries.length > 0 && <PlanStrip plan={view.plan} />}
-      <Transcript view={view} projectPath={projectPath} chatId={chatId} onReview={review} />
-      {!state.trusted ? <TrustCard /> : <AgentGate {...props} availability={availability} agent={agent} setup={state.setups.get(agent)} />}
-      <ChatComposer
-        chat={chatId}
-        agent={agent}
+      {view.plan !== undefined && view.plan.entries.length > 0 && <PlanCard plan={view.plan} chat={chatId} />}
+      <Transcript
         view={view}
-        draft={draft}
+        reading={reading}
+        retryHeldByCard={stage !== undefined || moment.shown}
         projectPath={projectPath}
-        disabled={blocked}
-        settings={<ComposerSettings state={state} chatId={chatId} agent={agent} view={view} />}
+        chatId={chatId}
+        onReview={review}
+        onOpenFile={props.onOpenFile}
       />
-      {view.usage !== undefined && view.usage.size > 0 && (
-        <div className="ai-usage" title="Context used">
-          {Math.round((view.usage.used / view.usage.size) * 100)}% of context used
-        </div>
+      {!state.trusted ? (
+        <TrustCard />
+      ) : moment.shown ? (
+        <SignedInStrip
+          onRetry={
+            retry === undefined
+              ? undefined
+              : () => {
+                  moment.dismiss();
+                  retry();
+                }
+          }
+        />
+      ) : (
+        <AgentGate
+          {...props}
+          availability={availability}
+          agent={agent}
+          setup={setup}
+          stage={stage}
+          details={reading.interrupted ? reading.details : undefined}
+        />
       )}
+      <ChatComposer chat={chatId} agent={agent} view={view} draft={draft} projectPath={projectPath} disabled={blocked} state={state} />
     </>
   );
 }
 
-function Transcript({
-  view,
-  projectPath,
-  chatId,
-  onReview,
+/** Why the composer cannot send, in words that say what to do; undefined when it can. */
+function composerBlock({
+  agent,
+  availability,
+  stage,
+  started,
 }: {
-  readonly view: ChatView;
-  readonly projectPath: string;
-  readonly chatId: ChatId;
-  readonly onReview: (turn: TurnId, path: string, action: 'keep' | 'undo') => void;
-}) {
-  const scroll = useRef<HTMLDivElement>(null);
-  const follow = useRef(true);
-  const [behind, setBehind] = useState(false);
-  useEffect(() => {
-    const element = scroll.current;
-    if (element === null) {
-      return;
-    }
-    if (follow.current) {
-      element.scrollTop = element.scrollHeight;
-    } else {
-      setBehind(true);
-    }
-  }, [view.items]);
-  const lastEnd = [...view.items].reverse().find((item) => item.kind === 'turn-end');
-  const canRetry = view.running === undefined && lastEnd?.kind === 'turn-end' && lastEnd.stop !== 'end_turn' && view.lastPrompt !== undefined;
-  return (
-    <div
-      className="ai-transcript"
-      ref={scroll}
-      role="log"
-      aria-label="Conversation"
-      onScroll={(event) => {
-        const element = event.currentTarget;
-        follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
-        if (follow.current) {
-          setBehind(false);
-        }
-      }}
-    >
-      {view.items.length === 0 && <p className="ai-empty">Ask for a change, or a question about this project.</p>}
-      {view.items.map((item, index) => (
-        <Item key={index} item={item} projectPath={projectPath} chatId={chatId} onReview={onReview} />
-      ))}
-      {view.running !== undefined && (
-        <div className="ai-working" role="status">
-          <span className="ai-working-dot" />
-          Working…
-        </div>
-      )}
-      {canRetry && view.lastPrompt !== undefined && (
-        <button className="ai-retry" onClick={() => void sendPrompt(chatId, view.lastPrompt?.text ?? '')}>
-          Retry
-        </button>
-      )}
-      {behind && (
-        <button
-          className="ai-latest"
-          onClick={() => {
-            const element = scroll.current;
-            if (element !== null) {
-              element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' });
-            }
-            follow.current = true;
-            setBehind(false);
-          }}
-        >
-          ↓ Latest
-        </button>
-      )}
-    </div>
-  );
-}
-
-function Item({
-  item,
-  projectPath,
-  chatId,
-  onReview,
-}: {
-  readonly item: TranscriptItem;
-  readonly projectPath: string;
-  readonly chatId: ChatId;
-  readonly onReview: (turn: TurnId, path: string, action: 'keep' | 'undo') => void;
-}) {
-  switch (item.kind) {
-    case 'user':
-      return (
-        <div className="ai-message ai-message-user">
-          <div className="ai-user-text">{item.text}</div>
-          {item.attachments.length > 0 && <div className="ai-message-attachments">{item.attachments.map((attachment) => attachment.name).join(', ')}</div>}
-        </div>
-      );
-    case 'text':
-      return item.role === 'thought' ? (
-        <details className="ai-thought">
-          <summary>Thinking</summary>
-          <ChatText text={item.text} />
-        </details>
-      ) : (
-        <div className="ai-message ai-message-agent">
-          <ChatText text={item.text} />
-        </div>
-      );
-    case 'tool':
-      return <ToolCard item={item} projectPath={projectPath} />;
-    case 'permission':
-      return <PermissionCard item={item} onAnswer={(optionId) => void answerPermission(chatId, item.request, optionId)} />;
-    case 'changes':
-      return <ChangesCard files={item.files} projectPath={projectPath} onReview={(path, action) => onReview(item.turn, path, action)} />;
-    case 'notice':
-      return <div className={`ai-notice ai-notice-${item.severity}`}>{item.text}</div>;
-    case 'turn-end':
-      return item.stop === 'end_turn' ? undefined : <div className="ai-notice ai-notice-warning">{turnEndText(item.stop, item.message)}</div>;
-    case 'unsupported':
-      return <div className="ai-notice ai-notice-info">{item.label}</div>;
-    default: {
-      const exhaustive: never = item;
-      return exhaustive;
-    }
+  readonly agent: AgentId;
+  readonly availability: AgentAvailability | undefined;
+  readonly stage: SignInStage | undefined;
+  readonly started: boolean;
+}): string | undefined {
+  const label = agentLabel(agent);
+  if (stage !== undefined) {
+    return started ? `Sign in to ${label} to keep chatting` : `Sign in to ${label} to start chatting`;
   }
+  return availability?.state === 'ready' ? undefined : `Set up ${label} to start chatting`;
 }
 
 function TrustCard() {
@@ -364,13 +172,23 @@ function TrustCard() {
 }
 
 function AgentGate(
-  props: AiPanelProps & { readonly availability: AgentAvailability | undefined; readonly agent: AgentId; readonly setup: SetupState | undefined },
+  props: AiPanelProps & {
+    readonly availability: AgentAvailability | undefined;
+    readonly agent: AgentId;
+    readonly setup: SetupState | undefined;
+    readonly stage: SignInStage | undefined;
+    readonly details: string | undefined;
+  },
 ) {
-  const { availability, agent, setup } = props;
+  const { availability, agent, setup, stage } = props;
   const label = agentLabel(agent);
-  // The person's own CLI first (install, sign in), by buttons; then Stacki's connector.
-  if (setup !== undefined && setup.step !== 'ready') {
-    return <SetupCard setup={setup} onOpenExternal={props.onOpenExternal} />;
+  // A sign-in, whatever its cause, is one card (SignInCard): never also a notice, a retry and a second card.
+  if (stage !== undefined) {
+    return <SignInCard agent={agent} stage={stage} details={props.details} onOpenExternal={props.onOpenExternal} onOpenTerminal={props.onOpenTerminal} />;
+  }
+  // The person's own CLI first (install), by buttons; then Stacki's connector.
+  if (setup !== undefined && setup.step !== 'ready' && setup.step !== 'signed-out' && setup.step !== 'signing-in') {
+    return <SetupCard setup={setup} />;
   }
   if (availability === undefined || availability.state === 'ready') {
     return setup?.step === 'ready' ? <AccountRow setup={setup} /> : undefined;
@@ -403,21 +221,7 @@ function AgentGate(
         </div>
       );
     case 'sign-in':
-      // The CLI says it is signed in, but the agent refused: an expired sign-in. Sign in again, by button.
-      return (
-        <div className="ai-gate">
-          <strong>Sign in to {label} again</strong>
-          <p>Your {label} sign-in has expired. Your browser opens to finish.</p>
-          <div className="ai-gate-actions">
-            <button className="ai-primary" onClick={() => void runSetup(agent, { kind: 'signIn' })}>
-              Sign in again
-            </button>
-            <button className="ghost" onClick={() => props.onOpenTerminal(AGENTS[agent].signInCommand)}>
-              <TerminalIcon size={12} /> Use the terminal instead
-            </button>
-          </div>
-        </div>
-      );
+      return undefined; // Unreachable: `stage` already covers an expired sign-in.
     case 'failed':
       return (
         <div className="ai-gate">
@@ -442,26 +246,5 @@ async function runReview(props: AiPanelProps, chat: ChatId, turn: TurnId, path: 
   const resolution = await new Promise<MergeResolution | undefined>((resolve) => props.onMerge(outcome.clash, resolve));
   if (resolution !== undefined) {
     await reviewChange(chat, turn, path, { kind: 'resolve', resolution });
-  }
-}
-
-function turnEndText(stop: TurnStop, message: string | undefined): string {
-  switch (stop) {
-    case 'cancelled':
-      return 'Stopped.';
-    case 'max_tokens':
-      return 'The reply reached its length limit.';
-    case 'max_turn_requests':
-      return 'The agent reached its step limit for one message.';
-    case 'refusal':
-      return 'The agent declined this request.';
-    case 'end_turn':
-      return 'Done.';
-    case 'error':
-      return message ?? 'Something went wrong.';
-    default: {
-      const exhaustive: never = stop;
-      return exhaustive;
-    }
   }
 }

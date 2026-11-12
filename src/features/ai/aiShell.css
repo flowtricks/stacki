@@ -1,0 +1,223 @@
+/* The AI chat panel shell: the frame, its header and body, and the cards that gate the composer (trust, setup, sign-in). Surfaces are separated by background fills, never borders. */
+
+.ai-frame {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+/* The panel takes the background of the rail of icons beside it (--bg-panel), so the two read as one dark side; the
+   cards and the composer box on it are one step lighter fills. DockableWindow paints the canvas colour first, so
+   this needs the extra class to win. The header's line is dropped: surfaces are separated by fills, never borders. */
+.dockable-window.ai-frame {
+  background: var(--bg-panel);
+}
+.ai-frame > .dockable-window-header {
+  border-bottom: 0;
+}
+.ai-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+  padding: 0 4px;
+  color: var(--text-dim);
+}
+.ai-header h2 {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+.ai-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 6px;
+  /* The same 10px inset from the window's bottom edge as the rail's AI button (.rail-anchor). */
+  padding: 0 8px 10px;
+}
+.ai-empty {
+  color: var(--text-faint);
+  font-size: 12px;
+  padding: 12px 4px;
+}
+
+/* Gates: the trust card and the agent's setup state. */
+.ai-gate {
+  background: var(--accent-soft);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ai-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ai-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.ai-gate p {
+  margin: 0;
+  color: var(--text-dim);
+}
+
+/* Guided setup (SetupCard.tsx). */
+.ai-setup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-code {
+  display: flex;
+  gap: 6px;
+}
+.ai-code input {
+  flex: 1;
+  min-width: 0;
+}
+/* The panel's first paint, before the chat list is read: quiet placeholder rows in the list's own rhythm instead of a word. */
+.ai-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+.ai-skeleton-row {
+  height: 34px;
+  border-radius: 8px;
+  background: var(--bg-input);
+  opacity: 0.6;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ai-skeleton-row {
+    animation: ai-skeleton-pulse 1.4s ease-in-out infinite;
+  }
+}
+@keyframes ai-skeleton-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+.ai-account {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-account-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The sign-in card (SignInCard.tsx): one filled surface for every sign-in state. */
+.ai-signin {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--bg-input);
+  border-radius: 10px;
+  padding: 12px;
+}
+.ai-signin-badge {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-active);
+  color: var(--text-dim);
+}
+.ai-signin-badge-done {
+  width: 20px;
+  height: 20px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.ai-signin-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ai-signin-body strong {
+  font-size: 13px;
+  line-height: 1.3;
+}
+.ai-signin-body p {
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+.ai-signin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+}
+.ai-signin-done {
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+}
+.ai-signin-done-text {
+  flex: 1;
+  min-width: 0;
+  color: var(--text-dim);
+}
+.ai-spinner {
+  animation: ai-spin 0.9s linear infinite;
+}
+@keyframes ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-spinner {
+    animation-duration: 3s;
+  }
+}
+
+/* The raw message behind a small disclosure: kept and selectable for support, never the headline. */
+.ai-details {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.ai-details summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.ai-details pre {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+  background: var(--bg-active);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 11px;
+}

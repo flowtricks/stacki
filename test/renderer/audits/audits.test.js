@@ -49,7 +49,7 @@ esbuild.buildSync({
       "export { reviewRows, reviewMatches } from './src/features/audits/StyleReview';",
       "export { revealNode, nextReveal, REVEAL_FLASH_MS, REVEAL_SETTLE_MS } from './src/app/shell/auditReveal';",
       "export { selectFromPanel } from './src/app/shell/panelSelection';",
-      "export { occurrenceName, occurrenceNote, fixTarget, GROUP_OPEN_MAX } from './src/features/audits/AuditsPanel';",
+      "export { occurrenceName, occurrenceNote, fixTarget, sameElementRuns, GROUP_OPEN_MAX } from './src/features/audits/AuditsPanel';",
     ].join('\n'),
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
     loader: 'tsx',
@@ -388,6 +388,10 @@ test('the terminal handler starts the configured agent with the prompt as one qu
   assert.equal(opened, 1);
   const noAccess = audits.terminalAgentHandler({ platform: 'darwin', available: () => false, openDock: () => assert.fail('no dock'), mode: () => 'claude' });
   assert.deepEqual(await noAccess(task), { tag: 'declined' });
+  // A draft is for a message box to hold; the terminal runs the agent at once, so it declines and opens nothing.
+  assert.deepEqual(await handler({ ...task, delivery: 'draft' }), { tag: 'declined' });
+  assert.equal(opened, 1, 'a declined draft opens no dock');
+  assert.deepEqual(tabs, ["claude 'Do it'"]);
   off();
 });
 
@@ -400,6 +404,27 @@ const finding = (over) => ({
   source: 'static',
   fix: undefined,
   ...over,
+});
+
+test('findings about one element are one run, so seven raw values in one style tag are one row, not seven', () => {
+  const style = { path: [2], tag: 'style', line: 9 };
+  const button = { path: [0, 1], tag: 'button', line: 4 };
+  const findings = [
+    finding({ id: 's1', element: style }),
+    finding({ id: 's2', element: style }),
+    finding({ id: 'b1', element: button }),
+    finding({ id: 's3', element: style }),
+    finding({ id: 'w1', element: undefined }),
+    finding({ id: 'w2', element: undefined }),
+  ];
+  const runs = audits.sameElementRuns(findings).map((run) => run.map((entry) => entry.id));
+  assert.deepEqual(
+    runs,
+    [['s1', 's2'], ['b1'], ['s3'], ['w1'], ['w2']],
+    'only neighbours on one element join; a finding with no element of its own stands alone; order is kept',
+  );
+  assert.deepEqual(audits.sameElementRuns([]), [], 'nothing groups to nothing');
+  assert.equal(audits.sameElementRuns(findings).flat().length, findings.length, 'no finding is lost or repeated');
 });
 
 test('the view filters by category, searches, hides ignored findings and groups by rule', () => {
@@ -495,7 +520,7 @@ test('the panel: a calm clean state, one flat list of one-line rules, and a fixe
   );
   assert.ok(rows[0].querySelector('.audits-icon.audits-high'), 'severity is the icon’s tint');
   await act(async () => rows[0].click());
-  assert.ok(container.querySelector('.audits-why'), 'one sentence of why');
+  assert.equal(container.querySelector('.audits-why') ?? undefined, undefined, 'an open rule lists its findings, with no paragraph of explanation');
   const group = container.querySelector('.audits-file-group > .audits-row');
   assert.deepEqual(
     [group.querySelector('.audits-title').textContent, group.querySelector('.audits-count').textContent],
