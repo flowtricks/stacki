@@ -584,8 +584,17 @@ export type SetupState =
   | { readonly agent: AgentId; readonly step: 'missing' }
   | { readonly agent: AgentId; readonly step: 'installing' }
   | { readonly agent: AgentId; readonly step: 'signed-out' }
-  /** `url`: the page the CLI asked for, opened in the browser; `needsCode`: the CLI waits for a pasted code. */
-  | { readonly agent: AgentId; readonly step: 'signing-in'; readonly url: string | undefined; readonly needsCode: boolean }
+  /**
+   * `url`: the page the CLI asked for, opened in the browser; `needsCode`: the CLI waits for a pasted code;
+   * `output`: what the CLI has printed so far, with links and tokens left out, for the card's Details.
+   */
+  | {
+      readonly agent: AgentId;
+      readonly step: 'signing-in';
+      readonly url: string | undefined;
+      readonly needsCode: boolean;
+      readonly output: string;
+    }
   | { readonly agent: AgentId; readonly step: 'ready'; readonly account: SetupAccount }
   /** A step that did not work: what to say, and the CLI's own output for "Copy details". */
   | {
@@ -620,7 +629,13 @@ export function parseSetupState(input: unknown): SetupState {
     case 'signed-out':
       return { agent, step };
     case 'signing-in':
-      return { agent, step, url: optional(bounded(AI_LIMITS.labelCharsMax, 'url'))(value['url']), needsCode: boolean(value['needsCode']) };
+      return {
+        agent,
+        step,
+        url: optional(bounded(AI_LIMITS.labelCharsMax, 'url'))(value['url']),
+        needsCode: boolean(value['needsCode']),
+        output: optional(bounded(SETUP_DETAILS_CHARS_MAX, 'output'))(value['output']) ?? '',
+      };
     case 'ready': {
       const account = record(value['account']);
       const field = optional(bounded(AI_LIMITS.labelCharsMax, 'account'));

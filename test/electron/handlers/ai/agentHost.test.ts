@@ -24,7 +24,7 @@ import { ChangeLedger, parseLedgerTurns, serializeLedger } from '#dist/electron/
 import { ChatStore } from '#dist/electron/handlers/ai/chatStore.js';
 import { EventPump } from '#dist/electron/handlers/ai/eventPump.js';
 import { AI_LIMITS } from '#dist/shared/properties/ai/aiLimits.js';
-import { toChatId, toTurnId, type ChatEvent } from '#dist/shared/properties/ai/chatModel.js';
+import { toChatId, toPermissionRequestId, toTurnId, type ChatEvent } from '#dist/shared/properties/ai/chatModel.js';
 import { parseAiEventsPush } from '#dist/shared/ipc/aiChat.js';
 
 const FAKE_ADAPTER = path.resolve('test/fixtures/ai/fakeAdapter.mjs');
@@ -115,6 +115,11 @@ test('a whole turn: ask mode, permission, the edit recorded and undone, text joi
   const permission = created(ofKind(events(), 'permission')[0]);
   const answer = host.answerPermission(root, chat.id, permission.request, { kind: 'option', optionId: 'yes' });
   assert.ok(answer.ok);
+  const echo = host.answerPermission(root, chat.id, permission.request, { kind: 'option', optionId: 'yes' });
+  assert.ok(echo.ok, 'a repeat of the answer is silent');
+  const stale = host.answerPermission(root, chat.id, toPermissionRequestId('p999'), { kind: 'option', optionId: 'yes' });
+  assert.ok(!stale.ok, 'an answer to a request that never waited still tells the person');
+  assert.equal(stale.error.message, 'This request was already answered or has expired.');
   await until('the end of the turn', () => ofKind(events(), 'turn-end').length > 0);
   assert.equal(fs.readFileSync(path.join(root, 'notes.txt'), 'utf8'), 'line one\nline 2\n');
   const all = events();

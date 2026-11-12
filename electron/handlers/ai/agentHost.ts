@@ -23,6 +23,7 @@
 // agent's asking mode; the adapter's environment is the person's shell
 // environment with Stacki's own variables and any host agent session's removed.
 import { spawn, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -74,6 +75,7 @@ import { stopProcessTree } from '../../lib/nodeTools';
 import { AcpConnection, METHOD_NOT_FOUND, type AcpAnswer, type AcpRequestFailure } from './acpConnection';
 import { installAdapter, runNpm, type NpmRunner } from './agentInstaller';
 import { ADAPTERS, FALLBACK_OPTIONS, findCli, installedEntry } from './agentRegistry';
+import { realFileSystem, runnableCliPath } from './windowsCommand';
 import { ChangeLedger, parseLedgerTurns, serializeLedger, type LedgerDiff, type LedgerFiles } from './changeLedger';
 import { chatOption, CompactionCalls, eventsForUpdate, toolPaths } from './chatEvents';
 import type { ChatRecord, ChatStore } from './chatStore';
@@ -648,7 +650,8 @@ export class AgentHost {
     if (runtime === undefined || runtime.root !== root) {
       return err({ code: 'chat-missing', message: 'This chat is not running.' });
     }
-    if (!this.permissions.answer(chat, request, answer)) {
+    // A repeat of the person's own answer is a success: the first one stands and already ran.
+    if (this.permissions.answer(chat, request, answer) === 'unknown') {
       return err({ code: 'busy', message: 'This request was already answered or has expired.' });
     }
     return ok({ answered: true });
@@ -819,7 +822,8 @@ export class AgentHost {
   }
 
   private spawnProcess(agent: AgentId, root: string, entry: string, cli: string): AgentProcess {
-    const environment = adapterEnvironment(this.deps.environment(), ADAPTERS[agent].cliVariable, cli);
+    const runnable = runnableAdapterCli(cli, this.deps.environment());
+    const environment = adapterEnvironment(this.deps.environment(), ADAPTERS[agent].cliVariable, runnable);
     const child = (this.deps.spawnAdapter ?? spawnAdapter)(entry, root, environment);
     assert(child.stdout !== null, 'spawnProcess: the adapter has a stdout pipe');
     assert(child.stdin !== null, 'spawnProcess: the adapter has a stdin pipe');
@@ -1461,6 +1465,14 @@ export class AgentHost {
 
 function processKey(agent: AgentId, root: string): string {
   return `${agent}\0${root}`;
+}
+
+/**
+ * Windows: the adapter starts the person's CLI itself, and a .cmd shim would be refused (windowsCommand.ts), so the
+ * native program behind it is handed over. A module function because `process` is a local name inside the host's methods.
+ */
+function runnableAdapterCli(cli: string, environment: Readonly<Record<string, string | undefined>>): string {
+  return runnableCliPath(cli, { platform: process.platform, environment, home: os.homedir(), execPath: process.execPath, fileSystem: realFileSystem(fs) });
 }
 
 function spawnAdapter(entry: string, root: string, environment: Readonly<Record<string, string | undefined>>): ChildProcess {

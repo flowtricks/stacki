@@ -16,29 +16,36 @@
 // The CLI stores the credentials itself: Stacki never sees or keeps them, and only reads what the
 // status command prints (the account's email and plan).
 //
+// A sign-in is never an endless wait: it ends ready, or failed with a sentence and the CLI's own
+// words (links and tokens left out) when the CLI exits without signing in, or after
+// SETUP_LIMITS.signInMsMax. The CLI's output is also written to the main-process log, redacted.
+//
 // Bounds: one setup process per agent at a time; output kept to SETUP_LIMITS.outputCharsMax; install
 // and sign-in each end after their timeout.
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { assert } from '../../../shared/core/assert';
 import { toRecord } from '../../../shared/core/record';
+import type { Result } from '../../../shared/core/result';
 import { SETUP_DETAILS_CHARS_MAX, type SetupAccount, type SetupAction, type SetupState } from '../../../shared/ipc/aiChat';
 import { AGENTS, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { findCli } from './agentRegistry';
+import { describeAttempt, realFileSystem, resolveWindowsCommand, type CommandFileSystem, type CommandLine, type ResolvedCommand } from './windowsCommand';
 
 export const SETUP_LIMITS = {
   outputCharsMax: SETUP_DETAILS_CHARS_MAX,
   installMsMax: 10 * 60 * 1000,
-  signInMsMax: 10 * 60 * 1000,
+  signInMsMax: 5 * 60 * 1000,
   statusMsMax: 20_000,
 } as const satisfies Record<string, number>;
 
-/** A command as an argument list: never a string a shell would re-read, except the official installer pipe. */
-export interface SetupCommand {
-  readonly command: string;
-  readonly args: readonly string[];
-}
+/**
+ * A command as an argument list: never a string a shell would re-read, except the official installer pipe.
+ * On Windows a .cmd shim is never started directly (windowsCommand.ts explains why); it is replaced by what it runs.
+ */
+export type SetupCommand = CommandLine;
 
 interface AgentSetupCommands {
   readonly install: (home: string, platform: NodeJS.Platform) => SetupCommand;
@@ -89,14 +96,22 @@ export interface SetupDeps {
   /** Opens a sign-in page in the person's browser. */
   readonly openExternal: (url: string) => void;
   readonly publish: (state: SetupState) => void;
+  /** One line for the main-process log; the text is already redacted. */
+  readonly log?: (line: string) => void;
   readonly spawnPipe?: (command: SetupCommand, environment: Readonly<Record<string, string | undefined>>) => SetupProcess;
   readonly spawnTerminal?: (command: SetupCommand, environment: Readonly<Record<string, string | undefined>>) => Promise<SetupProcess>;
   readonly home?: string;
   readonly platform?: NodeJS.Platform;
+  /** Where Windows shims are looked up; tests give a fake one. */
+  readonly fileSystem?: CommandFileSystem;
+  /** Stacki's own binary, the Node of last resort for a Windows shim. */
+  readonly execPath?: string;
 }
 
 /** What a running sign-in has printed so far, and what Stacki did about it. */
 interface SignInWatch {
+  /** Everything printed, escape codes included: they are stripped over the whole text, not per chunk, because a chunk can end inside one. */
+  raw: string;
   output: string;
   opened: string | undefined;
   needsCode: boolean;
@@ -173,9 +188,15 @@ export class AgentSetup {
     }
     this.set({ agent, step: 'installing' });
     const command = AGENT_SETUP[agent].install(this.deps.home ?? os.homedir(), this.deps.platform ?? process.platform);
-    const { output, exitCode } = await this.collect(agent, command, SETUP_LIMITS.installMsMax);
+    const { output, exitCode, attempt } = await this.collect(agent, command, SETUP_LIMITS.installMsMax);
     if (exitCode !== 0) {
-      return this.set({ agent, step: 'failed', during: 'install', message: installFailure(agent, command, output), details: output });
+      return this.set({
+        agent,
+        step: 'failed',
+        during: 'install',
+        message: installFailure(agent, command, output),
+        details: this.attemptDetails(attempt, output),
+      });
     }
     const after = await this.detect(agent);
     if (after.step === 'missing') {
@@ -199,17 +220,40 @@ export class AgentSetup {
       return this.state(agent);
     }
     const spawnTerminal = this.deps.spawnTerminal ?? spawnPseudoTerminal;
+    const resolved = this.resolve({ command: cli, args: AGENT_SETUP[agent].signIn });
+    if (!resolved.ok) {
+      return this.set({
+        agent,
+        step: 'failed',
+        during: 'sign-in',
+        message: `The sign-in could not start. ${resolved.error}`,
+        details: this.attemptDetails(cli, resolved.error),
+      });
+    }
     let process: SetupProcess;
     try {
-      process = await spawnTerminal({ command: cli, args: AGENT_SETUP[agent].signIn }, this.deps.environment());
+      process = await spawnTerminal(resolved.value.command, { ...this.deps.environment(), ...resolved.value.environment });
     } catch (error: unknown) {
-      return this.set({ agent, step: 'failed', during: 'sign-in', message: 'The sign-in could not start.', details: String(error) });
+      return this.set({
+        agent,
+        step: 'failed',
+        during: 'sign-in',
+        message: signInStartFailure(String(error)),
+        details: this.attemptDetails(resolved.value.description, String(error)),
+      });
     }
-    const watch: SignInWatch = { output: '', opened: undefined, needsCode: false };
+    const watch: SignInWatch = { raw: '', output: '', opened: undefined, needsCode: false };
     this.signInWatch.set(agent, watch);
     const timer = setTimeout(() => {
       this.stop(agent);
-      this.set({ agent, step: 'failed', during: 'sign-in', message: 'Signing in took too long. Try again.', details: watch.output });
+      this.log(agent, `sign-in stopped after ${Math.round(SETUP_LIMITS.signInMsMax / 60_000)} minutes without finishing`);
+      this.set({
+        agent,
+        step: 'failed',
+        during: 'sign-in',
+        message: `Sign-in didn’t finish in ${Math.round(SETUP_LIMITS.signInMsMax / 60_000)} minutes. Try again.`,
+        details: redactSignInOutput(watch.output),
+      });
     }, SETUP_LIMITS.signInMsMax);
     this.running.set(agent, { process, timer });
     process.onData((text) => this.signInOutput(agent, text));
@@ -218,19 +262,21 @@ export class AgentSetup {
         return; // Cancelled or timed out: already settled.
       }
       this.stop(agent);
+      this.log(agent, `sign-in process exited with code ${exitCode}`);
+      const details = redactSignInOutput(watch.output);
+      if (exitCode !== 0) {
+        // No status read: a CLI whose saved sign-in has expired still reports "signed in", which would
+        // pass a failed sign-in off as a success.
+        this.set({ agent, step: 'failed', during: 'sign-in', message: signInStopped(exitCode, details), details });
+        return;
+      }
       void this.detect(agent).then((state) => {
         if (state.step !== 'ready') {
-          this.set({
-            agent,
-            step: 'failed',
-            during: 'sign-in',
-            message: exitCode === 0 ? 'Sign-in did not finish. Try again.' : `Sign-in stopped (code ${exitCode}).`,
-            details: watch.output,
-          });
+          this.set({ agent, step: 'failed', during: 'sign-in', message: 'Sign-in did not finish. Try again.', details });
         }
       });
     });
-    return this.set({ agent, step: 'signing-in', url: undefined, needsCode: false });
+    return this.set({ agent, step: 'signing-in', url: undefined, needsCode: false, output: '' });
   }
 
   private signInOutput(agent: AgentId, text: string): void {
@@ -238,16 +284,27 @@ export class AgentSetup {
     if (watch === undefined) {
       return;
     }
-    watch.output = (watch.output + stripTerminalCodes(text)).slice(-SETUP_LIMITS.outputCharsMax);
+    watch.raw = (watch.raw + text).slice(-SETUP_LIMITS.outputCharsMax * 2);
+    const before = watch.output;
+    watch.output = stripTerminalCodes(watch.raw).slice(-SETUP_LIMITS.outputCharsMax);
+    if (watch.output !== before) {
+      this.log(agent, redactSignInOutput(stripTerminalCodes(text)).trim());
+    }
     const url = signInURL(watch.output, AGENT_SETUP[agent].signInHosts);
     const needsCode = asksForCode(watch.output);
     if (url !== undefined && url !== watch.opened) {
       watch.opened = url;
       this.deps.openExternal(url);
     }
-    if (needsCode !== watch.needsCode || url !== undefined) {
+    if (watch.output !== before || needsCode !== watch.needsCode || url !== undefined) {
       watch.needsCode = needsCode;
-      this.set({ agent, step: 'signing-in', url: watch.opened, needsCode });
+      this.set({ agent, step: 'signing-in', url: watch.opened, needsCode, output: redactSignInOutput(watch.output) });
+    }
+  }
+
+  private log(agent: AgentId, line: string): void {
+    if (line !== '') {
+      (this.deps.log ?? ((text: string) => console.info(text)))(`[ai-setup] ${agent}: ${line}`);
     }
   }
 
@@ -261,8 +318,10 @@ export class AgentSetup {
     running.process.write(`${code}\r`);
     watch.needsCode = false;
     // Only the prompt that asked is answered; a later one will ask again.
+    watch.raw = '';
     watch.output = '';
-    return this.set({ agent, step: 'signing-in', url: watch.opened, needsCode: false });
+    this.log(agent, 'a pasted code was sent to the sign-in');
+    return this.set({ agent, step: 'signing-in', url: watch.opened, needsCode: false, output: '' });
   }
 
   private async cancel(agent: AgentId): Promise<SetupState> {
@@ -275,9 +334,9 @@ export class AgentSetup {
     if (cli === undefined) {
       return this.set({ agent, step: 'missing' });
     }
-    const { output, exitCode } = await this.collect(agent, { command: cli, args: AGENT_SETUP[agent].signOut }, SETUP_LIMITS.statusMsMax);
+    const { output, exitCode, attempt } = await this.collect(agent, { command: cli, args: AGENT_SETUP[agent].signOut }, SETUP_LIMITS.statusMsMax);
     if (exitCode !== 0) {
-      return this.set({ agent, step: 'failed', during: 'sign-out', message: 'Signing out did not work.', details: output });
+      return this.set({ agent, step: 'failed', during: 'sign-out', message: 'Signing out did not work.', details: this.attemptDetails(attempt, output) });
     }
     return this.detect(agent);
   }
@@ -295,31 +354,68 @@ export class AgentSetup {
   }
 
   /** Runs a command to its end through a pipe, its output bounded; never rejects. */
-  private collect(agent: AgentId, command: SetupCommand, timeoutMs: number): Promise<{ readonly output: string; readonly exitCode: number }> {
+  private collect(agent: AgentId, command: SetupCommand, timeoutMs: number): Promise<CollectedRun> {
     const spawnPipe = this.deps.spawnPipe ?? spawnPipeProcess;
     return new Promise((resolve) => {
       let output = '';
       let process: SetupProcess;
+      const resolved = this.resolve(command);
+      if (!resolved.ok) {
+        // Nothing was started: the program is missing, so the person is told that (127, as a shell would).
+        resolve({ output: resolved.error, exitCode: 127, attempt: describe(command) });
+        return;
+      }
+      const attempt = resolved.value.description;
       try {
-        process = spawnPipe(command, this.deps.environment());
+        process = spawnPipe(resolved.value.command, { ...this.deps.environment(), ...resolved.value.environment });
       } catch (error: unknown) {
-        resolve({ output: String(error), exitCode: -1 });
+        resolve({ output: String(error), exitCode: -1, attempt });
         return;
       }
       const timer = setTimeout(() => {
         process.kill();
-        resolve({ output: `${output}\n(stopped after ${Math.round(timeoutMs / 1000)} s)`, exitCode: -1 });
+        resolve({ output: `${output}\n(stopped after ${Math.round(timeoutMs / 1000)} s)`, exitCode: -1, attempt });
       }, timeoutMs);
       process.onData((text) => {
         output = (output + stripTerminalCodes(text)).slice(-SETUP_LIMITS.outputCharsMax);
       });
       process.onExit((exitCode) => {
         clearTimeout(timer);
-        resolve({ output, exitCode });
+        resolve({ output, exitCode, attempt });
       });
       assert(agent.length > 0, 'collect: on behalf of an agent');
     });
   }
+
+  /** The command Windows can start for `command` (a shim becomes what it runs); unchanged elsewhere. */
+  private resolve(command: SetupCommand): Result<ResolvedCommand, string> {
+    return resolveWindowsCommand(command, {
+      platform: this.deps.platform ?? process.platform,
+      environment: this.deps.environment(),
+      home: this.deps.home ?? os.homedir(),
+      execPath: this.deps.execPath ?? process.execPath,
+      fileSystem: this.deps.fileSystem ?? realFileSystem(fs),
+    });
+  }
+
+  /** Details for a failure: where it happened and what was tried, then the last of what was printed, within the card's bound. */
+  private attemptDetails(attempt: string, output: string): string {
+    const header = `${describeAttempt(this.deps.platform ?? process.platform, os.arch(), attempt)}\n\n`;
+    const tail = output.trim();
+    assert(header.length < SETUP_LIMITS.outputCharsMax, 'attemptDetails: the header leaves room for the output');
+    return `${header}${tail.slice(-(SETUP_LIMITS.outputCharsMax - header.length))}`;
+  }
+}
+
+/** A finished command: its (bounded) output, exit code and what was run, as a person reads it. */
+interface CollectedRun {
+  readonly output: string;
+  readonly exitCode: number;
+  readonly attempt: string;
+}
+
+function describe(command: SetupCommand): string {
+  return [command.command, ...command.args].join(' ');
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +424,7 @@ export class AgentSetup {
 
 /** The first https address on an allowed host, as the CLI printed it. */
 export function signInURL(output: string, hosts: readonly string[]): string | undefined {
-  for (const match of output.matchAll(/https:\/\/[^\s"'<>]+/g)) {
+  for (const match of output.matchAll(/https:\/\/[^\s"'<>\x00-\x1f]+/g)) {
     const text = match[0].replace(/[).,;]+$/, '');
     let url: URL;
     try {
@@ -348,6 +444,31 @@ export function signInURL(output: string, hosts: readonly string[]): string | un
 export function asksForCode(output: string): boolean {
   const tail = output.slice(-600);
   return /paste (the |your )?(authorization |auth )?code|enter (the |your )?(authorization |auth )?code|code here/i.test(tail);
+}
+
+/**
+ * The CLI's words with what must not be kept left out: sign-in links (their query holds the one-time
+ * state; the card offers the link by its own buttons) and anything shaped like a token or a code.
+ */
+export function redactSignInOutput(text: string): string {
+  return text
+    .replace(/https?:\/\/[^\s"'<>\x00-\x1f]+/g, '[sign-in link]')
+    .replace(/\b(sk-ant-|sk-|ghp_|gho_|xox[bap]-)[A-Za-z0-9_-]{8,}/g, '[token]')
+    .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '$1 [token]')
+    .replace(/\b(access_token|refresh_token|id_token|code|authorization_code)(["']?\s*[:=]\s*["']?)[A-Za-z0-9._~+/=-]{8,}/gi, '$1$2[token]');
+}
+
+/** The sentence for a sign-in whose process exited with a failure: the CLI's last line when it said one, else the code. */
+export function signInStopped(exitCode: number, redactedOutput: string): string {
+  const lastLine = redactedOutput
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '' && !line.includes('[sign-in link]') && !/paste code here/i.test(line))
+    .at(-1);
+  if (lastLine !== undefined && lastLine.length <= 140) {
+    return `Sign-in stopped: ${lastLine}`;
+  }
+  return `Sign-in stopped (code ${exitCode}). Open Details for what the CLI said.`;
 }
 
 export function stripTerminalCodes(text: string): string {
@@ -399,10 +520,23 @@ export function planName(plan: string): string {
   return name;
 }
 
+/** Why a sign-in terminal did not start, in words a person can act on. */
+export function signInStartFailure(detail: string): string {
+  if (/posix_spawnp/i.test(detail)) {
+    // node-pty's helper lost its execute bit (an install that skipped scripts); `npm run fix:pty` restores it.
+    return 'The sign-in could not start: the terminal helper is not executable. Run “npm run fix:pty”, restart Stacki, then try again.';
+  }
+  return 'The sign-in could not start.';
+}
+
 function installFailure(agent: AgentId, command: SetupCommand, output: string): string {
   const label = AGENTS[agent].label;
-  if (/ENOENT|not found|command not found/i.test(output) && command.command.startsWith('npm')) {
+  if (/ENOENT|not found|command not found/i.test(output) && /(^|[\\/])npm(\.cmd)?$/i.test(command.command)) {
     return `Installing ${label} needs Node.js. Install Node.js from nodejs.org, then try again.`;
+  }
+  if (/EINVAL/.test(output)) {
+    // Windows refused to start a script directly. Stacki starts npm's JavaScript itself, so this means no way to do that was found.
+    return `Stacki could not start the ${label} installer on this computer. Open Details, or install it yourself in a terminal: npm install --global @openai/codex`;
   }
   if (/EACCES|permission denied|password/i.test(output)) {
     return `Installing ${label} needs permission Stacki does not ask for. Use “Copy details” and run it in Terminal.`;
@@ -411,7 +545,13 @@ function installFailure(agent: AgentId, command: SetupCommand, output: string): 
 }
 
 function spawnPipeProcess(command: SetupCommand, environment: Readonly<Record<string, string | undefined>>): SetupProcess {
-  const child = spawn(command.command, [...command.args], { env: { ...environment }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const child = spawn(command.command, [...command.args], {
+    env: { ...environment },
+    stdio: ['pipe', 'pipe', 'pipe'],
+    windowsHide: true,
+    // A cmd.exe command line (windowsCommand.ts) is already quoted: Node must not quote it again.
+    windowsVerbatimArguments: command.argumentStyle === 'verbatim',
+  });
   return {
     onData: (listener) => {
       child.stdout.setEncoding('utf8');
@@ -428,18 +568,31 @@ function spawnPipeProcess(command: SetupCommand, environment: Readonly<Record<st
   };
 }
 
+/** node-pty writes every value into the child's environment block, so an undefined one would arrive as the text "undefined". */
+function definedEnvironment(environment: Readonly<Record<string, string | undefined>>): Record<string, string> {
+  const defined: Record<string, string> = {};
+  for (const [key, value] of Object.entries(environment)) {
+    if (value !== undefined) {
+      defined[key] = value;
+    }
+  }
+  return defined;
+}
+
 function errorExit(error: unknown): number {
   return toRecord(error)?.['code'] === 'ENOENT' ? 127 : -1;
 }
 
 async function spawnPseudoTerminal(command: SetupCommand, environment: Readonly<Record<string, string | undefined>>): Promise<SetupProcess> {
   const pty = await import('node-pty');
-  const terminal = pty.spawn(command.command, [...command.args], {
+  // On Windows node-pty takes the arguments as one ready command line, which is how a verbatim one is handed over.
+  const args = command.argumentStyle === 'verbatim' ? command.args.join(' ') : [...command.args];
+  const terminal = pty.spawn(command.command, args, {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
     cwd: os.homedir(),
-    env: { ...environment, BROWSER: 'none' },
+    env: definedEnvironment({ ...environment, BROWSER: 'none' }),
   });
   return {
     onData: (listener) => terminal.onData(listener),

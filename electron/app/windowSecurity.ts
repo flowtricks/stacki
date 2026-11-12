@@ -28,7 +28,9 @@ export function isAppPage(url: string, appUrl: string): boolean {
 
 // Permissions that reveal the user or reach their devices. Electron grants every
 // request by default, and a previewed site may run scripts the user never read;
-// Stacki itself uses none of these, so they are refused for every page.
+// Stacki itself uses none of these, so they are refused for every page. 'media' is
+// not in this list: dictation needs the microphone, so it is decided by
+// isAllowedMedia below (audio, for Stacki's own page only).
 const PRIVATE_PERMISSIONS: ReadonlySet<string> = new Set([
   'clipboard-read',
   'deprecated-sync-clipboard-read',
@@ -37,11 +39,36 @@ const PRIVATE_PERMISSIONS: ReadonlySet<string> = new Set([
   'geolocation-approximate',
   'hid',
   'idle-detection',
-  'media',
   'serial',
   'usb',
 ]);
 
 export function isPrivatePermission(permission: string): boolean {
   return PRIVATE_PERMISSIONS.has(permission);
+}
+
+/**
+ * Whether a camera or microphone request is dictation's: audio only, from Stacki's own page.
+ * Why not simply refuse 'media' like the rest: the composer's voice input is Chromium's speech
+ * recognition, which asks for the microphone through this permission, and a blanket refusal
+ * made every dictation fail with "not-allowed" before macOS was even asked. A previewed site
+ * (another origin) and any video request stay refused. `mediaTypes` is what the request names;
+ * a request that names none is refused, because "everything" is not audio only.
+ */
+export function isAllowedMedia({
+  mediaTypes,
+  requestingUrl,
+  appUrl,
+}: {
+  readonly mediaTypes: readonly string[] | undefined;
+  readonly requestingUrl: string;
+  readonly appUrl: string;
+}): boolean {
+  if (mediaTypes === undefined || mediaTypes.length === 0) {
+    return false;
+  }
+  if (mediaTypes.some((type) => type !== 'audio')) {
+    return false;
+  }
+  return isAppPage(requestingUrl, appUrl);
 }

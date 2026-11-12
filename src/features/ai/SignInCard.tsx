@@ -11,7 +11,7 @@ import { SETUP_CODE_CHARS_MAX, type SetupState } from '../../../shared/ipc/aiCha
 import { AGENTS, agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { lock as centralLock } from '../../ui/central/centralGeometry';
-import { CheckIcon, ExternalIcon, TerminalIcon } from '../../ui/Icons';
+import { CheckIcon, CopyIcon, ExternalIcon, TerminalIcon } from '../../ui/Icons';
 import { runSetup } from './aiStore';
 
 const LockGlyph = centralIcon(centralLock);
@@ -23,7 +23,7 @@ export const SIGNED_IN_RETRY_MS = 12_000;
 /** Where a sign-in stands, from the agent's CLI (`setup`) and the agent's own answer (`expired`). */
 export type SignInStage =
   | { readonly kind: 'start'; readonly expired: boolean }
-  | { readonly kind: 'waiting'; readonly expired: boolean; readonly url: string | undefined; readonly needsCode: boolean }
+  | { readonly kind: 'waiting'; readonly expired: boolean; readonly url: string | undefined; readonly needsCode: boolean; readonly output: string }
   | { readonly kind: 'failed'; readonly expired: boolean; readonly message: string; readonly details: string };
 
 /**
@@ -32,7 +32,7 @@ export type SignInStage =
  */
 export function signInStage({ setup, expired }: { readonly setup: SetupState | undefined; readonly expired: boolean }): SignInStage | undefined {
   if (setup?.step === 'signing-in') {
-    return { kind: 'waiting', expired, url: setup.url, needsCode: setup.needsCode };
+    return { kind: 'waiting', expired, url: setup.url, needsCode: setup.needsCode, output: setup.output };
   }
   if (setup?.step === 'failed' && setup.during === 'sign-in') {
     return { kind: 'failed', expired, message: setup.message, details: setup.details };
@@ -83,7 +83,17 @@ export function SignInCard({
       );
     case 'waiting':
       return (
-        <Frame icon={<Spinner />} title="Finish signing in in your browser" text="When the page says you are signed in, come back here." busy details={details}>
+        <Frame
+          icon={<Spinner />}
+          title="Finish signing in in your browser"
+          text={
+            stage.needsCode
+              ? 'When the page shows a code, copy it and paste it below.'
+              : 'When the page says you are signed in, come back here. It ends by itself after five minutes.'
+          }
+          busy
+          details={joinDetails(stage.output, details)}
+        >
           {stage.needsCode && <CodeField agent={agent} />}
           <div className="ai-signin-actions">
             {stage.url !== undefined && (
@@ -91,6 +101,7 @@ export function SignInCard({
                 <ExternalIcon size={12} /> Didn’t open? Open the page again
               </button>
             )}
+            {stage.url !== undefined && <CopyLinkButton url={stage.url} />}
             <button className="ghost" onClick={() => void runSetup(agent, { kind: 'cancel' })}>
               Cancel
             </button>
@@ -207,6 +218,30 @@ function Spinner() {
     <svg className="ai-spinner" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
       <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeDasharray="22 16" />
     </svg>
+  );
+}
+
+/** The sign-in link on the clipboard, for a browser the page will not open in (any browser takes it pasted). */
+function CopyLinkButton({ url }: { readonly url: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) {
+      return undefined;
+    }
+    const timer = setTimeout(() => setCopied(false), 2000);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(url).then(
+          () => setCopied(true),
+          () => setCopied(false),
+        );
+      }}
+    >
+      {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />} {copied ? 'Copied' : 'Copy sign-in link'}
+    </button>
   );
 }
 

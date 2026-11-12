@@ -5,7 +5,7 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { isAppPage, isBrowserLink, isPrivatePermission } = require('#dist/electron/app/windowSecurity.js');
+const { isAllowedMedia, isAppPage, isBrowserLink, isPrivatePermission } = require('#dist/electron/app/windowSecurity.js');
 
 const PACKAGED_PAGE = 'file:///Applications/Stacki.app/Contents/Resources/app.asar/index.html';
 const DEV_PAGE = 'http://localhost:5173/';
@@ -62,7 +62,6 @@ test("the app's window may not leave its own page", () => {
 
 test('permissions that reveal the user or reach their devices are refused', () => {
   for (const permission of [
-    'media',
     'geolocation',
     'geolocation-approximate',
     'display-capture',
@@ -81,4 +80,22 @@ test('the permissions Stacki relies on, and other harmless ones, stay granted', 
   for (const permission of ['clipboard-sanitized-write', 'fullscreen', 'notifications', 'pointerLock', 'openExternal']) {
     assert.equal(isPrivatePermission(permission), false, permission);
   }
+});
+
+test('the microphone is allowed for dictation: audio only, from Stacki’s own page', () => {
+  assert.equal(isAllowedMedia({ mediaTypes: ['audio'], requestingUrl: DEV_PAGE, appUrl: DEV_PAGE }), true, 'dev page');
+  assert.equal(isAllowedMedia({ mediaTypes: ['audio'], requestingUrl: `${PACKAGED_PAGE}#/x`, appUrl: PACKAGED_PAGE }), true, 'packaged page');
+});
+
+test('the camera, an unnamed request and any other page are refused the microphone', () => {
+  const audio = ['audio'];
+  assert.equal(isAllowedMedia({ mediaTypes: ['video'], requestingUrl: DEV_PAGE, appUrl: DEV_PAGE }), false, 'camera');
+  assert.equal(isAllowedMedia({ mediaTypes: ['audio', 'video'], requestingUrl: DEV_PAGE, appUrl: DEV_PAGE }), false, 'camera with microphone');
+  assert.equal(isAllowedMedia({ mediaTypes: [], requestingUrl: DEV_PAGE, appUrl: DEV_PAGE }), false, 'names nothing');
+  assert.equal(isAllowedMedia({ mediaTypes: undefined, requestingUrl: DEV_PAGE, appUrl: DEV_PAGE }), false, 'names nothing at all');
+  assert.equal(isAllowedMedia({ mediaTypes: audio, requestingUrl: 'http://localhost:4321/', appUrl: DEV_PAGE }), false, 'a previewed site');
+  assert.equal(isAllowedMedia({ mediaTypes: audio, requestingUrl: 'https://example.com/', appUrl: DEV_PAGE }), false, 'the web');
+  assert.equal(isAllowedMedia({ mediaTypes: audio, requestingUrl: 'stacki-app://abc/', appUrl: DEV_PAGE }), false, 'an installed app');
+  assert.equal(isAllowedMedia({ mediaTypes: audio, requestingUrl: '', appUrl: DEV_PAGE }), false, 'no address');
+  assert.equal(isPrivatePermission('media'), false, 'media is decided by isAllowedMedia, not the blanket list');
 });

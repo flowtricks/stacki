@@ -14,7 +14,7 @@ import type { ChatId } from '../../../shared/properties/ai/chatModel';
 import type { BuiltinChipId } from '../../../shared/properties/ai/mentions';
 import type { AgentTask } from '../../../shared/properties/agentTask';
 import type { AgentTaskHandler } from '../../lib/agentTasks';
-import { aiState, draftFromText, draftText, isDraftEmpty, loadAiProject, newChat, preferredAgent, sendPrompt, setDraft } from './aiStore';
+import { aiState, draftFromText, draftText, isDraftEmpty, loadAiProject, newChat, preferredAgent, requestComposerFocus, sendPrompt, setDraft } from './aiStore';
 import { builtinChip } from './mentions/builtinChips';
 import { appendChip, hasBuiltinChip } from './mentions/mentionChips';
 
@@ -100,6 +100,7 @@ async function handDraftChip(
     return { tag: 'declined' };
   }
   openPanel();
+  requestComposerFocus();
   return { tag: 'sent', where: `${agentLabel(aiState().chats.find((entry) => entry.id === chat)?.agent ?? agent)} in the AI panel` };
 }
 
