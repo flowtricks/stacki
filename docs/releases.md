@@ -40,6 +40,20 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.3.0 Settings, Secrets and MCP, audit ignores, languages and AI polish
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.3.0.
+- **Settings panel**: Secrets (`.env` values) and MCP server tabs for the project.
+- **Audits**: Raw values are editable in place; findings can be ignored per page and restored
+  from an Ignored filter.
+- **Languages**: English, Spanish, French, German and Brazilian Portuguese, with a Language
+  setting and a catalog parity check.
+- **AI**: Windows Codex install fix, sign-in and microphone fixes, an agent switcher, duplicate
+  permission answers dropped, message actions, lighter tool rows and a wider default panel.
+- **Editor**: loop-instance outline and create-component frontmatter fixes; Navigator scroll and
+  icon fixes; a Skeleton primitive for instant UI.
+- `create-stacki` 1.3.0 follows when npm publishing is approved.
+
 ## 1.2.2 the 1.2.0 changes, through Windows
 
 - The same app as 1.2.1, which never became public: Linux, macOS and Studio's browser test passed,
