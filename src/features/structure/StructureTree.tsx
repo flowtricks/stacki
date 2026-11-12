@@ -141,6 +141,25 @@ interface TreeNodeProps extends StructureTreeContext {
   readonly depth: number;
 }
 
+// Brings a row into view inside the tree's own scroller and nothing else.
+// Why not `scrollIntoView`: it also scrolls every overflow ancestor, including
+// the clipped panel shell, which slid the "Navigator" header out of sight when
+// the selection moved. Only the `.panel-body` scroller moves here, and only
+// when the row is outside it.
+export function scrollRowIntoScroller(row: HTMLElement | undefined): void {
+  const scroller = row?.closest<HTMLElement>('.panel-body');
+  if (!row || !scroller) {
+    return;
+  }
+  const scrollerBounds = scroller.getBoundingClientRect();
+  const rowBounds = row.getBoundingClientRect();
+  if (rowBounds.top < scrollerBounds.top) {
+    scroller.scrollTop -= scrollerBounds.top - rowBounds.top;
+  } else if (rowBounds.bottom > scrollerBounds.bottom) {
+    scroller.scrollTop += rowBounds.bottom - scrollerBounds.bottom;
+  }
+}
+
 function TreeNode(props: TreeNodeProps) {
   const { node, depth } = props;
   const context = treeContextFromRow(props);
@@ -148,7 +167,7 @@ function TreeNode(props: TreeNodeProps) {
   const selected = props.selectedId === node.id;
   useEffect(() => {
     if (selected) {
-      rowRef.current?.scrollIntoView({ block: 'nearest' });
+      scrollRowIntoScroller(rowRef.current ?? undefined);
     }
   }, [selected]);
   const children = navigatorChildren(node);
@@ -458,17 +477,17 @@ function NodeStatus({ rendersNothing, hidden, inert }: { readonly rendersNothing
     <span className="node-empty">
       {rendersNothing && (
         <span title="Renders nothing on the page with its current props">
-          <HideIcon size={13} />
+          <HideIcon size={12} />
         </span>
       )}
       {hidden && !rendersNothing && (
         <span title="display: none — on the page, not drawn">
-          <HideIcon size={13} />
+          <HideIcon size={12} />
         </span>
       )}
       {inert && (
         <span title="pointer-events: none — drawn, but takes no clicks">
-          <PointerEventsNoneIcon size={13} />
+          <PointerEventsNoneIcon size={12} />
         </span>
       )}
     </span>

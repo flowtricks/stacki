@@ -9,6 +9,7 @@ import { PublishMenuOptions } from './PublishMenuOptions';
 import { publishButtonState, UNKNOWN_PUBLISH_AVAILABILITY, type PublishAvailability, type PublishButtonState } from '../../../shared/properties/publishState';
 import { usePublishConfiguration, configuredPublishAvailability } from './usePublishConfiguration';
 import { cachedPublishingDiscovery } from './publishDiscoveryCache';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import './publishing.css';
 
 interface Props {
@@ -135,23 +136,24 @@ function PublishButtons(props: {
 }) {
   // A finished publish rests as a neutral control, not a dimmed call to action; a running one
   // keeps its blue so "Publishing…" still reads as the app at work.
+  const translate = useTranslate();
   const current = props.state === 'current';
   const resting = current && !props.busy;
   return (
     <div className="stacki-publish-split" data-state={resting ? 'current' : 'ready'}>
-      <span className="stacki-publish-main" title={current ? 'All changes are up to date' : undefined}>
+      <span className="stacki-publish-main" title={current ? translate('publish.upToDate') : undefined}>
         <button
           className={resting ? undefined : 'primary'}
           disabled={props.busy || props.checking || current}
-          aria-description={current ? 'All changes are up to date' : undefined}
+          aria-description={current ? translate('publish.upToDate') : undefined}
           onClick={props.publish}
         >
-          {props.busy ? 'Publishing…' : 'Publish'}
+          {props.busy ? translate('publish.busy') : translate('publish.label')}
         </button>
       </span>
       <button
         className={resting ? 'stacki-publish-arrow' : 'primary stacki-publish-arrow'}
-        aria-label="More publish options"
+        aria-label={translate('publish.moreOptions')}
         aria-expanded={props.open}
         disabled={props.busy || props.checking}
         onClick={props.toggle}

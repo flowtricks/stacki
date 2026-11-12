@@ -49,6 +49,8 @@ import {
   image as centralImage,
   layers as centralLayers,
   layout as centralLayout,
+  lock as centralLock,
+  plug as centralPlug,
   barsThree as centralBarsThree,
   mail as centralMail,
   mapPin as centralMapPin,
@@ -62,6 +64,7 @@ import {
   phone as centralPhone,
   phoneCall as centralPhoneCall,
   pin as centralPin,
+  play as centralPlay,
   properties as centralProperties,
   repeat as centralRepeat,
   search as centralSearch,
@@ -258,6 +261,13 @@ export const CollapseVerticalIcon = centralIcon(centralCollapseVertical);
 export const RepeatIcon = centralIcon(centralRepeat);
 
 export const PreviewIcon = centralIcon(centralEye);
+
+// A padlock: the Settings panel's Secrets tab, and the secret rows' hidden values.
+export const LockIcon = centralIcon(centralLock);
+export const PlugIcon = centralIcon(centralPlug);
+
+// A play triangle: the titlebar button runs the site, so it reads as "run" rather than "look".
+export const PlayIcon = centralIcon(centralPlay);
 
 export const FolderIcon = centralIcon(centralFolder);
 

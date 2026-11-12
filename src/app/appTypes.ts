@@ -68,6 +68,7 @@ export type LeftTab =
   | 'apps'
   | 'instructions'
   | 'audits'
+  | 'projectSettings'
   | 'ai'
   | undefined;
 export type RightTab = 'style' | 'settings';

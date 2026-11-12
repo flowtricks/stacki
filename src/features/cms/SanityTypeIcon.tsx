@@ -5,13 +5,13 @@
 // the first time it is shown (`@sanity/icons` splits them), so a project's
 // icons cost only what it names.
 import { Icon as SanityIcon, icons, type IconSymbol } from '@sanity/icons';
-import { CollectionIcon } from '../../ui/Icons';
+import { CmsIcon } from '../../ui/Icons';
 import { COLLECTIONS } from './remoteCmsCache';
 
 export function SanityTypeIcon(props: { readonly symbol: string | undefined; readonly size: number }) {
   const { symbol } = props;
   if (symbol === undefined || !isSymbol(symbol)) {
-    return <CollectionIcon size={props.size} />;
+    return <CmsIcon size={props.size} />;
   }
   // Sanity draws on a 25-unit square with its own margin; a little larger
   // matches the visual size of Stacki's icons beside it.

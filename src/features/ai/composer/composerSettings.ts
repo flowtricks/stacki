@@ -15,6 +15,8 @@ export interface ComposerSettings {
   /** Each option with `currentValue` set to what the chat uses (or will use when it starts). */
   readonly options: readonly ChatOption[];
   readonly pick: (optionId: string, value: string) => void;
+  /** Each agent's state for the badge in the agent list; absent where nothing is known. */
+  readonly agentBadges?: Readonly<Partial<Record<AgentId, 'ready' | 'sign-in' | 'not-installed' | 'installing'>>>;
 }
 
 export function optionById(options: readonly ChatOption[], optionId: string): ChatOption | undefined {

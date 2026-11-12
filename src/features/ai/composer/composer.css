@@ -178,6 +178,28 @@
   font-size: 11px;
   color: var(--red);
 }
+.ai-dictation-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 6px 6px 6px 10px;
+}
+.ai-dictation-notice-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.ai-dictation-settings {
+  margin-top: 4px;
+}
+.ai-dictation-dismiss {
+  flex: none;
+}
 .ai-compose-hint {
   font-size: 11px;
   color: var(--text-faint);

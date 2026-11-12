@@ -1,0 +1,44 @@
+/* Placeholder shapes: a fill with a slow highlight, no borders. The fill is the same quiet step the app
+   uses for hovered rows, so a skeleton inside a row (which is itself a --bg-hover fill) reads as a shape. */
+.ui-skeleton {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  width: 100%;
+  height: 12px;
+  border-radius: 4px;
+  background: var(--bg-active);
+}
+.ui-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--bg-hover), transparent);
+  transform: translateX(-100%);
+  animation: ui-skeleton-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes ui-skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ui-skeleton::after {
+    animation: none;
+    display: none;
+  }
+}
+.ui-skeleton-rows {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ui-skeleton-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -27,6 +27,7 @@ esbuild.buildSync({
       "export { ConfirmHost } from './src/ui/ConfirmDialog';",
       "export { forgetDangerousModeConfirmations } from './src/features/ai/composer/ModeMenu';",
       "export { contextSentence } from './src/features/ai/composer/ContextRing';",
+      "export { agentBadge } from './src/features/ai/agentSwitch';",
     ].join('\n'),
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
     loader: 'tsx',
@@ -449,6 +450,52 @@ test('More models holds the rest, and Agent switches provider (a started chat sa
     callsNamed(calls, 'aiChatCreate').some((call) => call.payload.agent === 'codex'),
     'a new chat with the other provider',
   );
+});
+
+test('the account header above the box is the agent switcher: Claude and Codex with state badges, a check, and a new chat on Codex', async (context) => {
+  const { calls, container } = await mount(context);
+  const trigger = container.querySelector('.ai-account-switch');
+  assert.ok(trigger, 'the logo and name above the box are a button');
+  assert.equal(trigger.getAttribute('aria-haspopup'), 'menu');
+  assert.equal(trigger.getAttribute('aria-expanded'), 'false');
+  assert.match(trigger.getAttribute('aria-label'), /Change agent/);
+  assert.ok(trigger.querySelector('svg'), 'the agent mark');
+  assert.ok(trigger.querySelector('.ai-account-name'), 'the name truncates (ellipsis in aiShell.css) instead of wrapping');
+  await click(trigger);
+  assert.equal(trigger.getAttribute('aria-expanded'), 'true');
+  const list = [...document.querySelectorAll('[role="menu"]')].at(-1);
+  assert.deepEqual(
+    [...list.querySelectorAll('.menu-label')].map((label) => label.textContent),
+    ['Claude', 'Codex'],
+  );
+  assert.deepEqual(
+    [...list.querySelectorAll('.menu-pill')].map((pill) => pill.textContent),
+    ['Ready', 'Ready'],
+    'each agent carries its state',
+  );
+  assert.equal(list.querySelectorAll('.menu-check svg').length, 1, 'a check on the current agent');
+  assert.ok(list.querySelector('button').querySelector('.menu-check svg'), 'the check ends the Claude row');
+  await click([...list.querySelectorAll('button')].find((row) => row.textContent.startsWith('Codex')));
+  assert.ok(
+    callsNamed(calls, 'aiChatCreate').some((call) => call.payload.agent === 'codex'),
+    'a new chat with Codex',
+  );
+});
+
+test('the agent badge says Ready, Sign in or Not installed from the setup state, and nothing while unknown', () => {
+  const state = (setup, availability) => ({
+    setups: new Map(setup === undefined ? [] : [['codex', { agent: 'codex', ...setup }]]),
+    agents: availability === undefined ? [] : [{ agent: 'codex', ...availability }],
+  });
+  assert.equal(ai.agentBadge(state(undefined, undefined), 'codex'), undefined);
+  assert.equal(ai.agentBadge(state({ step: 'missing' }), 'codex'), 'not-installed');
+  assert.equal(ai.agentBadge(state({ step: 'signed-out' }), 'codex'), 'sign-in');
+  assert.equal(ai.agentBadge(state({ step: 'ready', account: {} }), 'codex'), 'ready');
+  assert.equal(ai.agentBadge(state(undefined, { state: 'sign-in' }), 'codex'), 'sign-in');
+  assert.equal(ai.agentBadge(state(undefined, { state: 'missing-cli' }), 'codex'), 'not-installed');
+  assert.equal(ai.agentBadge(state(undefined, { state: 'installing' }), 'codex'), 'installing');
+  assert.equal(ai.agentBadge(state(undefined, { state: 'ready', adapterVersion: '1', running: false }), 'codex'), 'ready');
+  assert.equal(ai.agentBadge(state(undefined, { state: 'failed', message: 'x' }), 'codex'), undefined);
 });
 
 test('the Mode menu: heading, the agent’s descriptions, numbers, Recommended on Auto, a check on the current mode', async (context) => {

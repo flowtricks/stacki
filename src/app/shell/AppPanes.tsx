@@ -96,6 +96,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         overlayInfo={app.overlayInfo}
         focusPath={app.focusPath}
         focusOcc={app.focusOcc}
+        openedOcc={app.openedOcc}
         focusWhole={app.focusWhole}
         device={app.device}
         onDevice={app.setDevice}

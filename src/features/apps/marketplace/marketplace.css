@@ -69,6 +69,8 @@
   background: var(--bg-active);
 }
 .apps-market-row {
+  /* The row is the query container, so its action can shrink to the icon when the panel is narrow. */
+  container-type: inline-size;
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
@@ -173,4 +175,43 @@
   color: var(--text-faint);
   font-size: 11px;
   text-align: center;
+}
+/* Placeholder rows for the index's first read and the next page: the tile and two lines, fill only. */
+.apps-market-skeletons {
+  padding: 0 4px;
+}
+.apps-market-skeleton {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+}
+.apps-market-skeleton-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Below 360px of row the label would squeeze the name to a sliver: Install keeps only its icon, a 26px square, as tall as the
+   labelled button. The label stays in the page, clipped, so assistive tech still reads it and the title still names it. */
+@container (max-width: 360px) {
+  .apps-market-install {
+    position: relative;
+    width: 26px;
+    padding: 0;
+  }
+  .apps-market-install .apps-header-actions {
+    justify-content: center;
+  }
+  .apps-market-install-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }

@@ -27,6 +27,9 @@
 .ai-message-user {
   align-self: flex-end;
   max-width: 88%;
+}
+.ai-message-user:not(.ai-msg),
+.ai-msg-bubble {
   background: var(--bg-active);
   border-radius: 10px;
   padding: 6px 10px;
@@ -140,12 +143,12 @@
   gap: 6px;
   padding: 4px 8px;
   border-radius: 6px;
-  background: var(--bg-input);
+  background: transparent;
   color: var(--text-dim);
   text-align: left;
 }
 .ai-group-head:hover {
-  background: var(--bg-active);
+  background: var(--bg-hover);
 }
 .ai-group-mark {
   display: inline-flex;
@@ -158,7 +161,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text);
+  color: var(--text-dim);
 }
 .ai-group-failed {
   font-size: 10.5px;
@@ -175,16 +178,20 @@
 .ai-group-body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-left: 10px;
+  gap: 0;
+  padding-left: 8px;
   min-width: 0;
 }
 
 /* Tool calls */
 .ai-tool {
-  background: var(--bg-input);
+  background: transparent;
   border-radius: 6px;
   overflow: hidden;
+}
+.ai-tool:hover,
+.ai-tool:has(> .ai-tool-body) {
+  background: var(--bg-hover);
 }
 .ai-tool-nested {
   margin-left: 14px;
@@ -194,18 +201,21 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px;
+  padding: 4px 8px;
   background: transparent;
   color: var(--text-dim);
+  font-size: 12px;
   text-align: left;
+}
+.ai-tool-head > svg {
+  flex: none;
+  color: var(--text-faint);
 }
 .ai-tool-head:disabled {
   opacity: 1;
   cursor: default;
 }
-.ai-tool-head:not(:disabled):hover {
-  background: var(--bg-active);
-}
+
 .ai-tool-spacer {
   width: 12px;
 }
@@ -215,7 +225,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text);
+  color: var(--text-dim);
+}
+.ai-tool-title .code-inline {
+  font-size: 12px;
+}
+.ai-tool-title .code-inline span {
+  opacity: 0.7;
 }
 .ai-tool-status {
   display: inline-flex;
@@ -224,6 +240,9 @@
   justify-content: flex-end;
   font-size: 10.5px;
   color: var(--text-faint);
+}
+.ai-status-completed {
+  opacity: 0.6;
 }
 .ai-tool-count {
   font-size: 10.5px;

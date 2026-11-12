@@ -325,6 +325,15 @@ test('Build an app puts the chip in the composer of a new chat and never sends i
   assert.equal(fake.named('aiPrompt').length, 0, 'a draft is never sent');
 });
 
+test('Build an app asks the message box for the keyboard, in a new chat and in one already open', async () => {
+  await start(model, { chats: [summary(CHAT)] });
+  const before = model.aiState().composerFocusRequests;
+  await handler([])(buildTask());
+  assert.equal(model.aiState().composerFocusRequests, before + 1, 'the box is asked to focus once the chip is placed');
+  await handler([])(buildTask());
+  assert.equal(model.aiState().composerFocusRequests, before + 2, 'a chat that already holds the chip is focused again');
+});
+
 test('Build an app appends the chip to a draft being typed, keeping its words, and does not add it twice', async () => {
   const fake = await start(model, { chats: [summary(CHAT)] });
   await model.openChat(CHAT);

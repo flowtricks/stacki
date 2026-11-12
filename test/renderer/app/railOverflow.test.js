@@ -237,6 +237,7 @@ async function resize(heightPx) {
     }
   });
 }
+const ANCHOR_PX = 36;
 const labels = () => [...document.querySelectorAll('.rail > button')].map((button) => button.getAttribute('aria-label'));
 
 test('the rail draws a role’s pins in pin order, after a line, with their badge, and only what the role may use', async () => {
@@ -275,8 +276,9 @@ test('a short rail collapses into More, keeps the active panel, and hidden short
   await mount('code');
   const tall = labels();
   assert.equal(tall.length, 13, 'twelve panels without Properties, then the pinned app');
-  // Room for four rows: three buttons and More. Desktop's rail has 10px of top padding in CSS; jsdom has none.
-  await resize(4 * 36 - 4);
+  // Room for four rows: three buttons and More, above the anchored Settings row (36px: its button and the gap, jsdom's fallback).
+  // Desktop's rail has 10px of top padding in CSS; jsdom has none.
+  await resize(ANCHOR_PX + 4 * 36 - 4);
   assert.deepEqual(labels(), ['Pages (P)', 'Navigator (Z)', 'Code (C)', 'More']);
   const more = document.querySelector('button.rail-more');
   assert.ok(!more.classList.contains('on'), 'the active panel shows, so More is not active');
@@ -304,6 +306,49 @@ test('with no room for the active panel, More reads as active', async () => {
   assert.deepEqual(labels(), ['More']);
   assert.ok(document.querySelector('button.rail-more').classList.contains('on'), 'the active panel is inside More');
   await act(async () => root.unmount());
+});
+
+test('Settings stays outside More and directly precedes the AI item at any height', async () => {
+  rail.setActualRole(rail.ADMIN_VIEW);
+  const container = document.createElement('div');
+  document.body.append(container);
+  const anchoredRoot = createRoot(container);
+  await act(async () =>
+    anchoredRoot.render(
+      React.createElement(rail.LeftRail, {
+        active: 'pages',
+        projectPath: '/project',
+        onSelect: () => undefined,
+        componentOpen: false,
+        aiButton: { active: false, onSelect: () => undefined },
+      }),
+    ),
+  );
+  await settle();
+  const anchored = () => [...container.querySelectorAll('.rail > .rail-anchor > button')].map((button) => button.getAttribute('aria-label'));
+  const moreRows = async () => {
+    const more = container.querySelector('button.rail-more');
+    if (more === null) {
+      return [];
+    }
+    await act(async () => more.click());
+    await settle();
+    const rows = [...document.querySelectorAll('.more-menu-item')].map((row) => row.textContent);
+    await act(async () => document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })));
+    return rows;
+  };
+  for (const heightPx of [1000, 400, ANCHOR_PX + 3 * 36, ANCHOR_PX, 20]) {
+    await resize(heightPx);
+    assert.deepEqual(anchored(), ['Settings (⌥S)', 'AI chat'], `${heightPx}px: Settings directly precedes AI, both anchored`);
+    assert.ok(
+      (await moreRows()).every((row) => !row.startsWith('Settings')),
+      `${heightPx}px: Settings is never in More`,
+    );
+  }
+  // The anchored block is counted once, as a measured row (jsdom has no layout, so the 36px fallback): two buttons and More fit above it.
+  await resize(ANCHOR_PX + 3 * 36 - 4);
+  assert.deepEqual(labels().length, 3, 'two buttons and More beside the anchored pair');
+  await act(async () => anchoredRoot.unmount());
 });
 
 test('pinnedRailApps keeps pin order and drops what the rail must ignore', () => {

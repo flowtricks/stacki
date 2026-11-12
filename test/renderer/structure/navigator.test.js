@@ -9,6 +9,13 @@
 // drawn inside the condition — and the branch rows come back the moment there
 // is an else to tell them apart from.
 //
+// Selecting a row also must not move the panel. `scrollIntoView` scrolls every
+// overflow ancestor, which slid the "Navigator" header out of sight, so the
+// selected row is brought into view by moving the tree's own `.panel-body`
+// scroller only, and not at all when the row is already visible. jsdom has no
+// layout, so rectangles are stubbed: the scroller spans 100..300 and the
+// selected row sits wherever the test says.
+//
 // The model keeps its branch either way: it is still where a drop lands, still
 // what the file writes out. This is only which rows the tree draws.
 
@@ -498,6 +505,97 @@ const WORDS = elementNode('words', 'p', [{ id: 'w-text', kind: 'expr', value: '{
         .run();
     });
     check('the code panel is one click away', opened.length === 1);
+  }
+
+  // --- selecting a row scrolls only the tree's own scroller --------------------
+  {
+    const scrollerTopY = 100;
+    const scrollerBottomY = 300;
+    let selectedTopY = 150;
+    const intoViewCalls = [];
+    const rectOf = (top, bottom) => ({ top, bottom, left: 0, right: 100, width: 100, height: bottom - top, x: 0, y: top });
+    const originalRect = dom.window.Element.prototype.getBoundingClientRect;
+    const originalIntoView = dom.window.Element.prototype.scrollIntoView;
+    dom.window.Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      if (this.classList.contains('panel-body')) {
+        return rectOf(scrollerTopY, scrollerBottomY);
+      }
+      if (this.getAttribute('data-node-id') === 'hero-command') {
+        return rectOf(selectedTopY, selectedTopY + 32);
+      }
+      return rectOf(scrollerTopY + 10, scrollerTopY + 42);
+    };
+    dom.window.Element.prototype.scrollIntoView = function scrollIntoView() {
+      intoViewCalls.push(this);
+    };
+    const selectWith = (selectedId) =>
+      act(async () => {
+        reactRoot.render(
+          React.createElement(StructurePanel, {
+            pageState: { editable: true, model: { nodes: [elementNode('section', 'section', [AND, TERNARY])], imports: [] } },
+            layouts: [],
+            currentLayoutName: '',
+            selectedId,
+            onSelect: () => {},
+            onDropComponent: () => {},
+            onMoveNode: () => {},
+            onRemoveNode: () => {},
+            onCopyNode: () => {},
+            onDuplicateNode: () => {},
+            onPasteNode: () => {},
+            onChangeLayout: () => {},
+            onCodeChange: () => {},
+            onOpenCodePanel: () => {},
+            onHoverNode: () => {},
+            onOpenComponent: () => {},
+            hasClipboard: false,
+          }),
+        );
+        await settle(20);
+      });
+    const ancestorScrolls = () => {
+      const moved = [];
+      for (let element = container.querySelector('.panel-body')?.parentElement; element; element = element.parentElement) {
+        if (element.scrollTop !== 0) {
+          moved.push(element.className || element.tagName);
+        }
+      }
+      return moved;
+    };
+    await selectWith('section');
+    const scroller = container.querySelector('.panel-body');
+    scroller.scrollTop = 40;
+    await selectWith('hero-command');
+    check('a visible selected row leaves the scroller where it was', scroller.scrollTop === 40, String(scroller.scrollTop));
+    check('selection never calls scrollIntoView', intoViewCalls.length === 0, String(intoViewCalls.length));
+    check('and no ancestor of the scroller scrolls', ancestorScrolls().length === 0, ancestorScrolls().join(','));
+
+    await selectWith('section');
+    selectedTopY = 400;
+    await selectWith('hero-command');
+    check(
+      'a row below the fold scrolls the scroller by exactly the hidden part',
+      scroller.scrollTop === 40 + (432 - scrollerBottomY),
+      String(scroller.scrollTop),
+    );
+    check('even then no ancestor of the scroller scrolls', ancestorScrolls().length === 0, ancestorScrolls().join(','));
+
+    await selectWith('section');
+    scroller.scrollTop = 200;
+    selectedTopY = 60;
+    await selectWith('hero-command');
+    check('a row above the fold scrolls back up to it', scroller.scrollTop === 200 - (scrollerTopY - 60), String(scroller.scrollTop));
+    check('no scrollIntoView call is made on any path', intoViewCalls.length === 0, String(intoViewCalls.length));
+
+    const subtreeRule = (/\.structure-subtree\s*\{[^}]*\}/.exec(fs.readFileSync(repoPath('src/app/styles.css'), 'utf8')) ?? [''])[0];
+    check(
+      'the tinted subtree adds no margin or padding that would move rows',
+      !/margin|padding/.test(subtreeRule.replace(/\/\*[\s\S]*?\*\//g, '')),
+      subtreeRule,
+    );
+
+    dom.window.Element.prototype.getBoundingClientRect = originalRect;
+    dom.window.Element.prototype.scrollIntoView = originalIntoView;
   }
 
   if (failures.length) {

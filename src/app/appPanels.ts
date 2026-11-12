@@ -18,6 +18,7 @@ export const CodePanel = lazyPanel(() => import('../features/code/CodePanel'));
 export const InstructionsPanel = lazyPanel(() => import('../features/instructions/InstructionsPanel'));
 export const InstructionsView = lazyPanel(() => import('./shell/InstructionsDocument'));
 export const AuditsPanel = lazyPanel(() => import('../features/audits/AuditsPanel'));
+export const ProjectSettingsPanel = lazyPanel(() => import('../features/projectSettings/ProjectSettingsPanel'));
 export const AiPanel = lazyPanel(() => import('../features/ai/AiPanel'));
 
 // Every lazy panel, in the order a session usually reaches them: the inspectors
@@ -36,6 +37,7 @@ const LAZY_PANELS = [
   InstructionsPanel,
   InstructionsView,
   AuditsPanel,
+  ProjectSettingsPanel,
   AiPanel,
 ] as const;
 

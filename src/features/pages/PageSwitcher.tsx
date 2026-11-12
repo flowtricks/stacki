@@ -2,7 +2,7 @@ import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { comparePageNames, isCollectionRoute } from './pageOrder';
-import { FileIcon, CollectionIcon, ChevronDownIcon, CheckIcon } from '../../ui/Icons';
+import { FileIcon, CmsIcon, ChevronDownIcon, CheckIcon } from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { pageDisplayName } from '../../lib/pageName';
@@ -20,7 +20,7 @@ interface PageSwitcherProps<T extends Page> {
 }
 const pretty = pageDisplayName;
 const PageGlyph = ({ page, size }: { readonly page: Page | undefined; readonly size: number }) =>
-  isCollectionRoute(page?.name) ? <CollectionIcon size={size} /> : <FileIcon size={size} />;
+  isCollectionRoute(page?.name) ? <CmsIcon size={size} /> : <FileIcon size={size} />;
 
 // Keep the selected page object intact: callers may carry source metadata beyond this projection.
 export default function PageSwitcher<T extends Page>(props: PageSwitcherProps<T>) {

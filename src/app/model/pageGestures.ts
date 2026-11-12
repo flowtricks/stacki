@@ -150,6 +150,7 @@ export function componentEntry(
     focusOcc,
     focusWhole,
     hostKey: hostPath ?? undefined,
+    hostOcc: nested ? host.occurrence : undefined,
   };
 }
 

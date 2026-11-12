@@ -57,6 +57,7 @@ const LAZY_PANELS = [
   'InstructionsPanel',
   'InstructionsDocument',
   'AuditsPanel',
+  'ProjectSettingsPanel',
   'AiPanel',
 ];
 const LAZY_IMPORT = /lazyPanel\(\(\) => import\('([^']+)'\)\)/g;
@@ -96,6 +97,7 @@ test('all optional editors load without hiding the app or replacing its preview'
     await checkCodeWindow(context);
     await checkInstructions(context);
     await checkAudits(context);
+    await checkProjectSettings(context);
     await checkAi(context);
     assert.equal(gates.requested.size, LAZY_PANELS.length, 'Every lazy editor was exercised');
   } finally {
@@ -216,6 +218,13 @@ async function checkAudits(context) {
   assert.equal(__lazyPanels.AuditsPanel.project.path, '/project');
 }
 
+async function checkProjectSettings(context) {
+  await context.act(() => pressOption('KeyS'));
+  assertPending(context, 'ProjectSettingsPanel');
+  await releasePanel(context, 'ProjectSettingsPanel');
+  assert.equal(__lazyPanels.ProjectSettingsPanel.projectPath, '/project');
+}
+
 // The AI button sits at the foot of the rail, outside the numbered tabs.
 async function checkAi(context) {
   const button = document.querySelector('.rail-btn[aria-label="AI chat"]');
@@ -333,6 +342,10 @@ async function buildApp() {
         }),
         'src/features/audits/AuditsPanel.tsx': () => ({
           contents: panelStub('AuditsPanel'),
+          loader: 'tsx',
+        }),
+        'src/features/projectSettings/ProjectSettingsPanel.tsx': () => ({
+          contents: panelStub('ProjectSettingsPanel'),
           loader: 'tsx',
         }),
         'src/features/ai/AiPanel.tsx': () => ({

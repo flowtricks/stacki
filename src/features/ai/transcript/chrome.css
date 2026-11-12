@@ -29,46 +29,57 @@
 .ai-msg-more:hover {
   color: var(--text);
 }
+.ai-msg {
+  display: flex;
+  flex-direction: column;
+}
+/* The actions row sits below the message and keeps its height always, so showing it never moves the layout. */
 .ai-msg-toolbar {
-  position: absolute;
-  top: -11px;
-  right: 6px;
-  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 1px;
-  padding: 1px 3px;
-  border-radius: 7px;
-  background: var(--bg-active);
+  gap: 4px;
+  height: 24px;
+  margin-top: 2px;
   color: var(--text-dim);
   opacity: 0;
-  pointer-events: none;
   transition: opacity 0.12s ease;
+}
+.ai-msg-user > .ai-msg-toolbar {
+  align-self: flex-end;
+}
+.ai-msg-agent > .ai-msg-toolbar {
+  align-self: flex-start;
 }
 .ai-msg:hover > .ai-msg-toolbar,
 .ai-msg:focus-within > .ai-msg-toolbar {
   opacity: 1;
-  pointer-events: auto;
+}
+/* Touch has no hover, so the row stays visible there. */
+@media (hover: none) {
+  .ai-msg-toolbar {
+    opacity: 1;
+  }
 }
 .ai-msg-time {
-  padding: 0 5px;
   font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   color: var(--text-faint);
+  white-space: nowrap;
 }
 .ai-msg-action {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   background: transparent;
   color: inherit;
-  border-radius: 5px;
+  border-radius: 6px;
 }
-.ai-msg-action:hover {
+.ai-msg-action:hover,
+.ai-msg-action:focus-visible {
   color: var(--text);
-  background: var(--bg-input);
+  background: var(--bg-hover);
 }
 @media (prefers-reduced-motion: reduce) {
   .ai-msg-toolbar {
@@ -166,7 +177,16 @@
   background: var(--bg-active);
   color: var(--text-dim);
 }
-.ai-ask-actions .ai-reject:hover {
+/* The global button:hover fill would turn these grey, so each keeps its resting
+   background on hover (written as button.* so it outweighs that rule) and gets a
+   non-grey cue instead: a brighter label, or slightly more brightness on the accent fill. */
+.ai-ask-actions button.ai-allow:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.12);
+}
+.ai-ask-actions button.ai-allow-secondary:hover:not(:disabled),
+.ai-ask-actions button.ai-reject:hover:not(:disabled) {
+  background: var(--bg-active);
   color: var(--text);
 }
 .ai-permission.ai-ask-done {

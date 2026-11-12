@@ -6,17 +6,18 @@
 // the same choice; and as the last row it does not push the models, the thing people change, down the menu.
 // Before the first message the provider is replaced (the empty chat is swapped); after it, choosing the
 // other provider opens a new chat and keeps this one (switchProvider).
-import { AGENT_IDS, agentLabel, type AgentId } from '../../../../shared/properties/ai/agentIds';
+import { agentLabel } from '../../../../shared/properties/ai/agentIds';
 import { splitModels, toggleOptions } from '../../../../shared/properties/ai/agentPresentation';
-import { ClaudeLogo, CodexLogo } from '../../../ui/agentLogos';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
+import type { Translator } from '../../../lib/i18n/localeContext';
 import Menu, { useMenuTrigger, type MenuEntry } from '../../../ui/Menu';
-import { rememberAgent, switchProvider } from '../aiStore';
+import { AgentLogo, agentSwitchEntries } from '../agentSwitch';
 import { currentChoiceName, modelOption, type ComposerSettings } from './composerSettings';
 import { effortEntries, effortLabel } from './EffortSubmenu';
 import { StatusChip } from './StatusChip';
 
 /** The rows of the model menu for these settings. Pure: the chip below only opens it. */
-export function modelMenuEntries(settings: ComposerSettings): readonly MenuEntry[] {
+export function modelMenuEntries(settings: ComposerSettings, translate: Translator): readonly MenuEntry[] {
   const entries: MenuEntry[] = [];
   const model = modelOption(settings);
   const split = model === undefined ? undefined : splitModels(settings.agent, model.choices);
@@ -65,28 +66,18 @@ export function modelMenuEntries(settings: ComposerSettings): readonly MenuEntry
   if (entries.length > 0) {
     entries.push({ kind: 'divider', id: 'divider-agent' });
   }
-  entries.push({ kind: 'submenu', id: 'agent', label: 'Agent', value: agentLabel(settings.agent), entries: agentEntries(settings) });
+  entries.push({
+    kind: 'submenu',
+    id: 'agent',
+    label: 'Agent',
+    value: agentLabel(settings.agent),
+    entries: agentSwitchEntries({ agent: settings.agent, chat: settings.chat, started: settings.started, badges: settings.agentBadges ?? {}, translate }),
+  });
   return entries;
 }
 
-function agentEntries(settings: ComposerSettings): readonly MenuEntry[] {
-  return AGENT_IDS.map((id) => ({
-    kind: 'item' as const,
-    id: `agent:${id}`,
-    label: agentLabel(id),
-    icon: <AgentLogo agent={id} />,
-    checked: id === settings.agent,
-    ...(settings.started && id !== settings.agent ? { description: 'Switches to a new chat' } : {}),
-    onSelect: () => {
-      if (id !== settings.agent) {
-        rememberAgent(id);
-        void switchProvider(settings.chat, id, { started: settings.started });
-      }
-    },
-  }));
-}
-
 export function ModelMenu({ settings }: { readonly settings: ComposerSettings }) {
+  const translate = useTranslate();
   const trigger = useMenuTrigger();
   const model = modelOption(settings);
   const modelName = currentChoiceName(model) ?? agentLabel(settings.agent);
@@ -108,20 +99,14 @@ export function ModelMenu({ settings }: { readonly settings: ComposerSettings })
         <span className="ai-chip-text">{modelName}</span>
         {level !== undefined && <span className="ai-chip-quiet">{level}</span>}
       </StatusChip>
-      <Menu open={trigger.open} anchor={trigger.anchor} entries={modelMenuEntries(settings)} label="Model" placement="above-start" onClose={trigger.close} />
+      <Menu
+        open={trigger.open}
+        anchor={trigger.anchor}
+        entries={modelMenuEntries(settings, translate)}
+        label="Model"
+        placement="above-start"
+        onClose={trigger.close}
+      />
     </>
   );
-}
-
-function AgentLogo({ agent }: { readonly agent: AgentId }) {
-  switch (agent) {
-    case 'claude':
-      return <ClaudeLogo size={12} />;
-    case 'codex':
-      return <CodexLogo size={12} className="ai-logo-codex" />;
-    default: {
-      const exhaustive: never = agent;
-      return exhaustive;
-    }
-  }
 }

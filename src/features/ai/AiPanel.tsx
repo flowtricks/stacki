@@ -10,7 +10,7 @@ import { useEffect, useMemo, type ReactNode } from 'react';
 import type { AgentAvailability, ReviewOutcome, SetupState } from '../../../shared/ipc/aiChat';
 import type { WireMergeClash } from '../../../shared/ipc/ipcWire';
 import type { MergeResolution } from '../../../shared/ipc/mergeResolution';
-import { AGENTS, agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
+import { AGENTS, AGENT_IDS, agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
 import type { ChatId, TurnId } from '../../../shared/properties/ai/chatModel';
 import { ErrorToast } from '../../ui/ErrorToast';
 import {
@@ -28,6 +28,7 @@ import {
   type AiState,
 } from './aiStore';
 import { ChatComposer } from './composer/ChatComposer';
+import { agentBadge, type AgentBadge } from './agentSwitch';
 import { AccountRow, SetupCard } from './SetupCard';
 import { SIGNED_IN_MS, SIGNED_IN_RETRY_MS, SignInCard, SignedInStrip, signInStage, useSignedInMoment, type SignInStage } from './SignInCard';
 import { readSignInFailures } from './signInTranscript';
@@ -93,6 +94,12 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
   const retryText = view.running === undefined && reading.interrupted ? view.lastPrompt?.text : undefined;
   const moment = useSignedInMoment({ agent, needed: stage !== undefined, holdMs: retryText === undefined ? SIGNED_IN_MS : SIGNED_IN_RETRY_MS });
   const started = view.items.some((item) => item.kind === 'user');
+  const badges = Object.fromEntries(
+    AGENT_IDS.flatMap((id) => {
+      const badge = agentBadge(state, id);
+      return badge === undefined ? [] : [[id, badge]];
+    }),
+  );
   const blocked = !state.trusted ? 'Allow agents in this project first' : composerBlock({ agent, availability, stage, started });
   const review = (turn: TurnId, path: string, action: 'keep' | 'undo'): Promise<void> => runReview(props, chatId, turn, path, action);
   const retry = retryText === undefined ? undefined : (): void => void sendPrompt(chatId, retryText);
@@ -130,6 +137,9 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
           {...props}
           availability={availability}
           agent={agent}
+          chatId={chatId}
+          started={started}
+          badges={badges}
           setup={setup}
           stage={stage}
           details={reading.interrupted ? reading.details : undefined}
@@ -175,6 +185,9 @@ function AgentGate(
   props: AiPanelProps & {
     readonly availability: AgentAvailability | undefined;
     readonly agent: AgentId;
+    readonly chatId: ChatId;
+    readonly started: boolean;
+    readonly badges: Readonly<Partial<Record<AgentId, AgentBadge>>>;
     readonly setup: SetupState | undefined;
     readonly stage: SignInStage | undefined;
     readonly details: string | undefined;
@@ -191,7 +204,7 @@ function AgentGate(
     return <SetupCard setup={setup} />;
   }
   if (availability === undefined || availability.state === 'ready') {
-    return setup?.step === 'ready' ? <AccountRow setup={setup} /> : undefined;
+    return setup?.step === 'ready' ? <AccountRow setup={setup} chat={props.chatId} started={props.started} badges={props.badges} /> : undefined;
   }
   switch (availability.state) {
     case 'missing-cli':

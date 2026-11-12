@@ -202,6 +202,8 @@ export interface AiState {
   /** Chats whose queue is held because their last turn did not end normally; shown as "Paused". */
   readonly queuePaused: ReadonlySet<ChatId>;
   readonly error: string | undefined;
+  /** Counts hand-offs that ask the open chat's message box to take the keyboard (see `requestComposerFocus`). */
+  readonly composerFocusRequests: number;
 }
 
 /** Chats whose transcripts stay in memory at once; the oldest others are read again when opened. */
@@ -224,6 +226,7 @@ const INITIAL: AiState = {
   queue: new Map(),
   queuePaused: new Set(),
   error: undefined,
+  composerFocusRequests: 0,
 };
 
 let state: AiState = INITIAL;
@@ -276,6 +279,7 @@ export async function loadAiProject(projectPath: string): Promise<void> {
 }
 
 export function resetAiStore(): void {
+  answeringPermissions.clear();
   unsubscribe?.();
   unsubscribe = undefined;
   if (persistTimer !== undefined) {
@@ -512,6 +516,14 @@ export function setDraft(chat: ChatId, change: (draft: ChatDraft) => ChatDraft):
   schedulePersist();
 }
 
+/**
+ * Asks the open chat's message box to take the keyboard, caret at the end of its draft. A counter rather than a flag: the box reads
+ * it in an effect, so it focuses when it mounts after the panel opens and again when it is already mounted, with no timer.
+ */
+export function requestComposerFocus(): void {
+  update((current) => ({ ...current, composerFocusRequests: current.composerFocusRequests + 1 }));
+}
+
 /** Registers where the bundled instructions of a built-in chip come from; the renderer holds their text, the main process never reads it. */
 export function registerBuiltinChipText(resolve: (id: BuiltinChipId) => string): void {
   builtinChipText = resolve;
@@ -715,15 +727,28 @@ export async function stopChat(chat: ChatId): Promise<void> {
   await aiCancel({ projectPath: requireProject(), chat });
 }
 
+// Requests whose answer is on its way to the main process. The card's buttons, its number keys (a held
+// key repeats) and the pinned strip all end here, so the first answer wins and the rest are dropped:
+// one request, one answer sent. A request is only ever in here while its call is in flight.
+const answeringPermissions = new Set<PermissionRequestId>();
+
 export async function answerPermission(chat: ChatId, request: PermissionRequestId, optionId: string | undefined): Promise<void> {
-  const reply = await aiPermission({
-    projectPath: requireProject(),
-    chat,
-    request,
-    answer: optionId === undefined ? { kind: 'cancel' } : { kind: 'option', optionId },
-  });
-  if (!reply.ok) {
-    fail(reply.error);
+  if (answeringPermissions.has(request)) {
+    return;
+  }
+  answeringPermissions.add(request);
+  try {
+    const reply = await aiPermission({
+      projectPath: requireProject(),
+      chat,
+      request,
+      answer: optionId === undefined ? { kind: 'cancel' } : { kind: 'option', optionId },
+    });
+    if (!reply.ok) {
+      fail(reply.error);
+    }
+  } finally {
+    answeringPermissions.delete(request);
   }
 }
 
@@ -819,7 +844,12 @@ function listen(): void {
     // A "ready" push while the agent's sign-in has expired is runSetup's to apply, together with the fresh availability
     // (one update, no flash of the expired card between the two).
     const expired = state.agents.some((entry) => entry.agent === next.agent && entry.state === 'sign-in');
-    if (next.step !== 'ready' || !expired) {
+    if (next.step === 'ready' && expired) {
+      // The sign-in finished on its own, long after the `signIn` request returned: nobody else will apply it.
+      // Leaving this push to runSetup left the card waiting forever (the agent's saved sign-in had expired,
+      // which is exactly when a person signs in again).
+      void settleSignedIn(next);
+    } else {
       setSetup(next);
     }
   });
@@ -1035,15 +1065,7 @@ export async function runSetup(agent: AgentId, action: SetupAction): Promise<voi
     return;
   }
   if (reply.value.step === 'ready' && (action.kind === 'signIn' || action.kind === 'code')) {
-    // Signed in: the host cleared its sign-in wait. Read the agent's availability first and apply it with the
-    // setup in one update, so the sign-in card gives way without a flash of the old "expired" card.
-    const agents = await aiAgents(projectPath);
-    const fresh = agents.ok && state.projectPath === projectPath ? agents.value.agents : undefined;
-    update((current) => ({
-      ...current,
-      agents: fresh ?? current.agents,
-      setups: new Map([...current.setups, [reply.value.agent, reply.value]]),
-    }));
+    await settleSignedIn(reply.value);
   } else {
     setSetup(reply.value);
   }
@@ -1054,6 +1076,21 @@ export async function runSetup(agent: AgentId, action: SetupAction): Promise<voi
       await installAgent(agent);
     }
   }
+}
+
+/**
+ * Signed in: the host cleared its sign-in wait. Read the agent's availability first and apply it with the
+ * setup in one update, so the sign-in card gives way without a flash of the old "expired" card.
+ */
+async function settleSignedIn(next: SetupState): Promise<void> {
+  const projectPath = state.projectPath;
+  const agents = projectPath === undefined ? undefined : await aiAgents(projectPath);
+  const fresh = agents?.ok === true && state.projectPath === projectPath ? agents.value.agents : undefined;
+  update((current) => ({
+    ...current,
+    agents: fresh ?? current.agents,
+    setups: new Map([...current.setups, [next.agent, next]]),
+  }));
 }
 
 function setSetup(next: SetupState): void {

@@ -28,7 +28,7 @@ test('every panel and More use a distinct outline on the rail', async () => {
     .filter(([key]) => key.startsWith('panel:') && key !== 'panel:style' && key !== 'panel:settings')
     .map(([, Icon]) => Icon);
   icons.push(RailMoreIcon);
-  assert.equal(icons.length, 15);
+  assert.equal(icons.length, 16);
   const rail = icons.map((Icon) => renderToStaticMarkup(createElement(Icon, { size: 20 })));
   assert.equal(new Set(rail).size, rail.length);
   for (const markup of rail) {

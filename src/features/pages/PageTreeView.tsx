@@ -10,7 +10,7 @@ import type { PageTreeNode, PageTreePage } from './pageTree';
 import { isCollectionRoute } from './pageOrder';
 import { countTreePages } from './pageTree';
 import { pageDisplayName, pageFolderDisplayName } from '../../lib/pageName';
-import { CollectionIcon, FileIcon, FolderIcon, FolderOpenIcon, TrashIcon } from '../../ui/Icons';
+import { CmsIcon, FileIcon, FolderIcon, FolderOpenIcon, TrashIcon } from '../../ui/Icons';
 import { allowDragEffect } from '../../editor/dragState';
 import { can } from '../../../shared/properties/projectRoles';
 import { useCurrentRole } from '../../lib/useCurrentRole';
@@ -93,7 +93,7 @@ function PageRow({ page, props }: { readonly page: PageTreePage; readonly props:
         }
       }}
     >
-      <span className="icon">{collection ? <CollectionIcon size={13} /> : <FileIcon size={13} />}</span>
+      <span className="icon">{collection ? <CmsIcon size={13} /> : <FileIcon size={13} />}</span>
       <span className="page-list-copy">
         <span className="label">{pageDisplayName(page)}</span>
         <span className="sub">{page.route}</span>

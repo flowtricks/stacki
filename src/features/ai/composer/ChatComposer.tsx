@@ -30,8 +30,10 @@ import {
 import { prepareImage } from '../chatImages';
 import type { ChatView } from '../chatReducer';
 import { useDictation } from '../useDictation';
+import { DictationNoticeRow } from './DictationNoticeRow';
 import { ComposerInput, type ComposerHandle, type SendKey } from './ComposerInput';
 import { ComposerStatusLine } from './ComposerStatusLine';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { PlusMenu } from './PlusMenu';
 import { QueuedPrompts } from './QueuedPrompts';
 import './composer.css';
@@ -58,6 +60,7 @@ export function ChatComposer({
   /** The panel's state: the status line reads the chat's settings and the queue from it. */
   readonly state: AiState;
 }) {
+  const translate = useTranslate();
   const [problem, setProblem] = useState<string | undefined>(undefined);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -66,6 +69,12 @@ export function ChatComposer({
   useEffect(() => {
     input.current?.focus();
   }, [chat]);
+  // A hand-off that placed something in the box (Build an app's chip) asks for the keyboard, including when the chat was already open.
+  useEffect(() => {
+    if (state.composerFocusRequests > 0) {
+      input.current?.focus();
+    }
+  }, [state.composerFocusRequests]);
   const voice = useDictation((spoken) => setDraft(chat, (current) => draftWithAppendedText(current, spoken)));
   const running = view.running !== undefined;
   const text = draftText(draft);
@@ -105,7 +114,11 @@ export function ChatComposer({
   };
   const placeholder =
     disabled ??
-    (dragging ? 'Drop images or files here' : running ? `⏎ to steer, ${QUEUE_KEY_LABEL} to queue` : `⏎ to send, ${QUEUE_KEY_LABEL} to queue for later`);
+    (dragging
+      ? translate('ai.composer.placeholder.drop')
+      : running
+        ? translate('ai.composer.placeholder.steer', { queueKey: QUEUE_KEY_LABEL })
+        : translate('ai.composer.placeholder.send', { queueKey: QUEUE_KEY_LABEL }));
   return (
     <div className="ai-compose">
       <QueuedPrompts chat={chat} queued={queued} paused={state.queuePaused.has(chat)} />
@@ -213,7 +226,10 @@ export function ChatComposer({
         </div>
       </form>
       <ComposerStatusLine state={state} chatId={chat} agent={agent} view={view} />
-      {(problem ?? voice.error) !== undefined && <div className="ai-compose-problem">{problem ?? voice.error}</div>}
+      {problem !== undefined && <div className="ai-compose-problem">{problem}</div>}
+      {problem === undefined && voice.notice !== undefined && (
+        <DictationNoticeRow notice={voice.notice} onDismiss={voice.dismiss} onOpenSettings={voice.openSettings} />
+      )}
       {voice.listening && <div className="ai-compose-hint">{voice.interim || 'Listening… click the microphone to finish'}</div>}
     </div>
   );

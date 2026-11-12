@@ -2368,6 +2368,8 @@ html[data-platform='win32'] .titlebar {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* Settings above the AI button: the rail's own spacing between buttons. */
+  gap: 4px;
 }
 /* A pinned app's own tile, centred in its button. */
 .rail-btn.rail-app {
@@ -2388,6 +2390,10 @@ html[data-platform='win32'] .titlebar {
 }
 .rail-btn:hover:not(:disabled) {
   background: var(--bg-hover);
+  color: var(--text);
+}
+.rail-btn[data-open='true'] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--text);
 }
 .rail-btn.on,
@@ -3756,7 +3762,8 @@ body > .embed-editor_provenance {
   overflow: clip;
   background: color-mix(in srgb, var(--accent) var(--subtree-tint), transparent);
   border-radius: 0 0 var(--navigator-row-radius, 6px) var(--navigator-row-radius, 6px);
-  margin-bottom: 2px;
+  /* No margin here: only the selected subtree is a block, so any extra space
+     would shift every row below it each time the selection moves. */
 }
 /* Inside the open block the hover is square: it fills the block edge to edge
    instead of floating as a capsule. Rows elsewhere keep their radius. */

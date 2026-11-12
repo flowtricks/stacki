@@ -26,7 +26,7 @@ import { DesktopInsertSearch } from './DesktopInsertSearch';
 import AssetsPanel from '../../features/assets/AssetsPanel';
 import TerminalDock from '../../features/terminal/TerminalDock';
 import { cleanError } from '../../lib/cleanError';
-import { PreviewIcon, RefreshIcon, ExternalIcon, ChevronLeftIcon, ElementComponentIcon, TerminalIcon, GearIcon } from '../../ui/Icons';
+import { PlayIcon, RefreshIcon, ExternalIcon, ChevronLeftIcon, ElementComponentIcon, TerminalIcon, GearIcon } from '../../ui/Icons';
 import { openAppSettings } from '../settings/Settings';
 import { AssetPickOverlay, assetPickTitle } from '../../ui/AssetPickOverlay';
 import type { HistoryCommit, HistoryCommitFile } from '../../features/history/historyBridge';
@@ -34,11 +34,12 @@ import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
 import { type LeftTab } from '../appTypes';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
-import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel, InstructionsPanel, preloadPanels } from '../appPanels';
+import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel, InstructionsPanel, ProjectSettingsPanel, preloadPanels } from '../appPanels';
 import { canvasPageOf } from '../../editor/pageState';
 import { projectRelative, type VariablePlace } from '../../editor/variablePlace';
 import { prewarmKeepList, prewarmSelectorReport } from '../../features/selectors/selectorsBridge';
 import { prewarmInstructionsListing } from '../../features/instructions/instructionsListingCache';
+import { prewarmSecretsListing } from '../../features/projectSettings/secretsCache';
 import { prewarmInstalledApps } from '../../features/apps/installedAppsCache';
 import { prewarmPageOrder } from '../../features/pages/pageOrderPersistence';
 import { useEffect } from 'react';
@@ -54,6 +55,7 @@ import { AppsTab, DesktopAppsHost } from './DesktopApps';
 import { AuditsHost, AuditsTab } from './DesktopAudits';
 import { AiHost, AiTab, useAiRailButton } from './DesktopAi';
 import { selectFromPanel } from './panelSelection';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // The start screen, before a project is open.
 export function WelcomeView({ app }: { readonly app: AppView }) {
@@ -153,6 +155,7 @@ function desktopPanelReads(projectPath: string): ReadonlyArray<() => Promise<voi
     () => prewarmInstalledApps(projectPath),
     () => prewarmKeepList(projectPath),
     () => prewarmInstructionsListing(projectPath),
+    () => prewarmSecretsListing(projectPath),
   ];
 }
 
@@ -256,6 +259,7 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
 }
 
 export function UrlGroup({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const { liveUrl, patternRoute } = app;
   return (
     <div className="url-group">
@@ -265,8 +269,8 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
       <div className="url-bar">
         <button
           className="titlebar-btn url-reload"
-          title="Reload preview"
-          aria-label="Reload preview"
+          title={translate('preview.reload')}
+          aria-label={translate('preview.reload')}
           disabled={!liveUrl}
           onClick={() => app.setRefreshKey((count) => count + 1)}
         >
@@ -383,7 +387,7 @@ function PreviewButton({ app }: { readonly app: ShellView }) {
           togglePreview(app);
         }}
       >
-        <PreviewIcon size={15} />
+        <PlayIcon size={15} />
       </button>
       {tooltip.value ? (
         <div className="rail-tooltip below" style={tooltip.value}>
@@ -451,6 +455,7 @@ export function LeftPanel({ app, tab }: { readonly app: ShellView; readonly tab:
       {tab === 'apps' && <AppsTab app={app} />}
       {tab === 'instructions' && <InstructionsPanel projectPath={app.project.path} showToast={app.showToast} />}
       {tab === 'audits' && <AuditsTab app={app} />}
+      {tab === 'projectSettings' && <ProjectSettingsPanel projectPath={app.project.path} />}
       {tab === 'ai' && <AiTab app={app} />}
       {tab === 'assets' && (
         <AssetsPanel

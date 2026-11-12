@@ -42,3 +42,38 @@ export function useDelayedTooltip(): {
 export function tooltipPointBelow(rect: Pick<DOMRect, 'left' | 'width' | 'bottom'>): TooltipPoint {
   return { left: rect.left + rect.width / 2, top: rect.bottom + TOOLTIP_GAP_PX };
 }
+
+/**
+ * The same wait, for a tip that is not drawn under its control: `place` turns the resting element into
+ * whatever the tip needs to be drawn (a side and a point, for the menu's info mark). `showNow` is for
+ * keyboard focus, which needs no wait.
+ */
+export function useDelayedPlacement<T>(place: (element: HTMLElement) => T): {
+  readonly value: T | undefined;
+  readonly show: (element: HTMLElement) => void;
+  readonly showNow: (element: HTMLElement) => void;
+  readonly hide: () => void;
+} {
+  const [value, setValue] = useState<T | undefined>(undefined);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(timer.current), []);
+  const show = useCallback(
+    (element: HTMLElement): void => {
+      clearTimeout(timer.current);
+      timer.current = setTimeout(() => setValue(place(element)), TOOLTIP_DELAY_MS);
+    },
+    [place],
+  );
+  const showNow = useCallback(
+    (element: HTMLElement): void => {
+      clearTimeout(timer.current);
+      setValue(place(element));
+    },
+    [place],
+  );
+  const hide = useCallback((): void => {
+    clearTimeout(timer.current);
+    setValue(undefined);
+  }, []);
+  return { value, show, showNow, hide };
+}

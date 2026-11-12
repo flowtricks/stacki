@@ -128,7 +128,8 @@ test('250 apps render 100, then 200, then 250 as the loading row comes into view
   const view = await mount();
   assert.equal(view.rows().length, 100);
   assert.equal(view.rows()[0], 'App 001');
-  assert.equal(view.sentinel().textContent, 'Loading more apps…');
+  assert.equal(view.sentinel().textContent, 'Loading', 'the row is a placeholder, with only its hidden status text');
+  assert.ok(view.sentinel().querySelector('.ui-skeleton'));
   const body = view.container.querySelector('.apps-body');
   const watching = observers.find((observer) => observer.elements.has(view.sentinel()));
   assert.equal(watching.options.root, body, 'the observer watches inside the panel, not the window');

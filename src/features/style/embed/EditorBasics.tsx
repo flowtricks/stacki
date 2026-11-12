@@ -3,7 +3,6 @@ import {
   check as centralCheck,
   circle as centralCircle,
   code as centralCode,
-  component as centralComponent,
   studioDisplay as centralStudioDisplay,
   edit as centralEdit,
   phone as centralPhone,
@@ -11,6 +10,8 @@ import {
   tablet as centralTablet,
 } from '../../../ui/central/centralGeometry';
 import { ErrorToast } from '../../../ui/ErrorToast';
+import { ComponentFillIcon } from '../../../ui/Icons';
+import type { IconProps } from '../../../ui/IconBase';
 // The style editor's basics: its scan, phase and write types, value and query
 // helpers, the icons it draws, and the save indicator (EmbedEditor.tsx).
 
@@ -150,8 +151,12 @@ export const COMPONENT_ICON_PATH =
   'M3 5.84206L3 10.703L7.5 13.1575V8.29661L3 5.84206ZM8.5 13.1575L13 10.703V5.84206' +
   'L8.5 8.29661V13.1575Z';
 
-// Webflow's component glyph — labels a component subheader in the source dropdown.
-export const ComponentIcon = centralIcon(centralComponent);
+// The Components panel's rail icon, so a component reads the same in the source dropdown
+// as in the left rail and one icon change moves both. The rail icon defaults to 20px;
+// the dropdown draws 16px glyphs, so the default is pinned back to 16 here.
+export function ComponentIcon({ size = 16, ...rest }: IconProps) {
+  return <ComponentFillIcon size={size} {...rest} />;
+}
 
 // Header save state: spinner while writing, check when everything is saved, an
 // error mark (with the reason in a toast) if the last write failed, or an unsaved

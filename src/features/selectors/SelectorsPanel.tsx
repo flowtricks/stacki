@@ -92,8 +92,14 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
   const report = state.kind === 'ready' ? state.value : early;
   const checking = state.kind === 'loading';
   const unused = report === undefined ? [] : unusedEntries(report);
-  // Until the user picks a tab, open on the clean-up when there is one.
-  const filter = chosen ?? (report === undefined ? 'all' : initialFilter(report));
+  // Until the user picks a tab, open on the clean-up when there is one. The opening tab is decided
+  // once, from the first full check, and then held: deriving it live would jump to All the moment
+  // the last unused style is locked, moving the user off the tab they were on.
+  const [opening, setOpening] = useState<SelectorFilter | undefined>(undefined);
+  if (opening === undefined && state.kind === 'ready') {
+    setOpening(initialFilter(state.value));
+  }
+  const filter = chosen ?? opening ?? (report === undefined ? 'all' : initialFilter(report));
 
   const hover = useHoverTip();
   // One path for removing styles, whether all of them or one row: the check

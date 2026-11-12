@@ -132,6 +132,7 @@ function canvasRouteOf(app: AppView) {
   const component = app.currentPage?.kind === 'component' ? app.currentPage : undefined;
   const focusPath = app.defaultsCanvas.state.kind === 'idle' ? component?.focusPath : app.defaultsCanvas.state.session.targetPath;
   const focusOcc = component ? (component.focusOcc ?? 0) : 0;
+  const openedOcc = component?.hostOcc;
   // The focus routes clicks either way; this says whether it also draws.
   const focusWhole = !!component?.focusWhole;
   // A dynamic page's route is a pattern, not a URL — /posts/[slug] is a 404.
@@ -155,6 +156,7 @@ function canvasRouteOf(app: AppView) {
     patternRoute,
     focusPath,
     focusOcc,
+    openedOcc,
     focusWhole,
     dynamicEntry,
     pageUrlPath,

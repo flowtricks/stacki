@@ -12,7 +12,7 @@ import type { ScanPage, ScanResult } from '../../../shared/properties/projectSca
 import { buildPageTree, collectPageTreeDirectories, pageDirectory, parsePageDragText } from './pageTree';
 import { pageDisplayName } from '../../lib/pageName';
 import { comparePageNames, isCollectionRoute } from './pageOrder';
-import { CollectionIcon, FileIcon, FolderIcon, FolderPlusIcon, PlusIcon } from '../../ui/Icons';
+import { CmsIcon, FileIcon, FolderIcon, FolderPlusIcon, PlusIcon } from '../../ui/Icons';
 import MoreMenu from '../../ui/MoreMenu';
 import type { ConnectionKeyCopy, PageTemplateDraft } from '../../../shared/properties/pageTemplate';
 import { NewPageModal } from './PageDialogs';
@@ -299,7 +299,7 @@ function SearchResults({
       className={`list-item ${isCollectionRoute(page.name) ? 'collection' : ''} ${currentPage?.path === page.path ? 'active' : ''}`}
       onClick={() => select(page)}
     >
-      <span className="icon">{isCollectionRoute(page.name) ? <CollectionIcon size={13} /> : <FileIcon size={13} />}</span>
+      <span className="icon">{isCollectionRoute(page.name) ? <CmsIcon size={13} /> : <FileIcon size={13} />}</span>
       <span className="page-list-copy">
         <span className="label">{pageDisplayName(page)}</span>
         <PageSearchPath path={page.route} query={query} />
@@ -347,11 +347,11 @@ function InjectedRoutes({
   );
 }
 
-// The two things `+` makes. A template gets the collection icon its rows have in the tree.
+// The two things `+` makes. A template gets the CMS icon its rows have in the tree.
 export function pageCreateMenuItems(actions: { readonly createPage: () => void; readonly createTemplate: () => void }) {
   return [
     { label: 'Create page', icon: <FileIcon size={13} />, onSelect: actions.createPage },
-    { label: 'Create page template', icon: <CollectionIcon size={13} />, onSelect: actions.createTemplate },
+    { label: 'Create page template', icon: <CmsIcon size={13} />, onSelect: actions.createTemplate },
   ];
 }
 

@@ -716,3 +716,36 @@ test('a stored mode never applies to a new chat: remembered settings leave modes
   );
   storage.clear();
 });
+
+test('one permission answer is sent once however many times it is triggered', async () => {
+  let release;
+  const gate = new Promise((resolve) => (release = resolve));
+  const fake = await start(list([summary(FIRST)]), { aiPermission: async () => (await gate, { ok: true, value: { answered: true } }) });
+  fake.calls.length = 0;
+  global.window.avb.aiPermission = async (payload) => {
+    fake.calls.push({ name: 'aiPermission', payload });
+    await gate;
+    return { ok: true, value: { answered: true } };
+  };
+  const first = store.answerPermission(FIRST, 'p1', 'yes');
+  const held = store.answerPermission(FIRST, 'p1', 'yes');
+  release();
+  await Promise.all([first, held]);
+  assert.equal(fake.named('aiPermission').length, 1, 'the held key and the click share one send');
+  assert.equal(store.aiState().error, undefined);
+  await store.answerPermission(FIRST, 'p2', 'yes');
+  assert.equal(fake.named('aiPermission').length, 2, 'another request is its own answer');
+});
+
+test('an answer the host refuses still shows its message, and can be retried', async () => {
+  const expired = failure('busy', 'This request was already answered or has expired.');
+  const fake = await start(list([summary(FIRST)]));
+  global.window.avb.aiPermission = async (payload) => {
+    fake.calls.push({ name: 'aiPermission', payload });
+    return expired;
+  };
+  await store.answerPermission(FIRST, 'p3', 'yes');
+  assert.equal(store.aiState().error, expired.error.message);
+  await store.answerPermission(FIRST, 'p3', 'yes');
+  assert.equal(fake.named('aiPermission').length, 2, 'a finished call frees the request');
+});

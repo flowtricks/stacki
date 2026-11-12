@@ -293,3 +293,31 @@ export function placeMenu(anchor: Box, size: Size, viewport: Size, placement: Me
   const top = above ? anchor.top - MENU_GAP_PX - height : anchor.top + anchor.height + MENU_GAP_PX;
   return { left, top: clampTop(top), heightMax };
 }
+
+/** Where an info mark's tip is drawn: beside the menu (never over its rows), level with the mark. */
+export interface InfoTipPlacement {
+  readonly side: 'left' | 'right';
+  /** The tip's edge nearest the menu, in viewport pixels. */
+  readonly left: number;
+  /** The vertical centre of the mark. */
+  readonly top: number;
+}
+
+const INFO_TIP_GAP_PX = 10;
+const INFO_TIP_WIDTH_PX_MAX = 240;
+const INFO_TIP_MARGIN_PX = 8;
+
+/** Right of the menu when the tip fits in the window there, else left of it. */
+export function placeInfoTip(
+  menu: { readonly left: number; readonly right: number },
+  mark: { readonly top: number; readonly height: number },
+  viewportWidth: number,
+): InfoTipPlacement {
+  assert(menu.right >= menu.left, 'placeInfoTip: a menu has a width');
+  assert(viewportWidth > 0, 'placeInfoTip: a window has a width');
+  const top = mark.top + mark.height / 2;
+  if (menu.right + INFO_TIP_GAP_PX + INFO_TIP_WIDTH_PX_MAX + INFO_TIP_MARGIN_PX <= viewportWidth) {
+    return { side: 'right', left: menu.right + INFO_TIP_GAP_PX, top };
+  }
+  return { side: 'left', left: menu.left - INFO_TIP_GAP_PX, top };
+}

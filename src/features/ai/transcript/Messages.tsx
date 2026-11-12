@@ -1,6 +1,5 @@
 // The two kinds of message in the transcript: what the person sent (a bubble) and what the agent
-// answered (text blocks). Both fold behind "Show more" when long, and show a toolbar on hover (copy,
-// the time, and for the last user message edit and resend).
+// answered (text blocks). Both fold behind "Show more" when long, and show a toolbar in a row below the bubble on hover (the time, copy, and for the last user message edit and resend).
 //
 // Presentational only: the transcript decides which message may be edited or resent and what those
 // do (`onEdit`, `onResend`), supplies the chips of a message that had mentions (`partsView`), and may
@@ -45,9 +44,12 @@ export function UserMessage({
   const folding = useFold(text, fold);
   return (
     <div className="ai-message ai-message-user ai-msg ai-msg-user">
-      <div className={`ai-user-text ai-msg-body${folding.folded ? ' ai-msg-folded' : ''}`}>{partsView ?? text}</div>
-      {attachments.length > 0 && <div className="ai-message-attachments">{attachments.map((attachment) => attachment.name).join(', ')}</div>}
-      <ShowMore folding={folding} />
+      <div className="ai-msg-bubble">
+        <div className={`ai-user-text ai-msg-body${folding.folded ? ' ai-msg-folded' : ''}`}>{partsView ?? text}</div>
+        {attachments.length > 0 && <div className="ai-message-attachments">{attachments.map((attachment) => attachment.name).join(', ')}</div>}
+        <ShowMore folding={folding} />
+      </div>
+      {/* The actions sit below the bubble, never on its edge, so they cannot overlap or clip the text. */}
       <MessageToolbar text={text} at={at} onEdit={onEdit} onResend={onResend} />
     </div>
   );
@@ -118,16 +120,16 @@ function MessageToolbar({
         </time>
       )}
       <button className="ai-msg-action" title={copyTitle(state)} aria-label="Copy message" onClick={() => copy(text)}>
-        {state === 'copied' ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
+        {state === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
       </button>
       {onEdit !== undefined && (
         <button className="ai-msg-action" title="Edit and send again" aria-label="Edit message" onClick={onEdit}>
-          <PencilIcon size={13} />
+          <PencilIcon size={14} />
         </button>
       )}
       {onResend !== undefined && (
         <button className="ai-msg-action" title="Send again" aria-label="Send message again" onClick={onResend}>
-          <RefreshIcon size={13} />
+          <RefreshIcon size={14} />
         </button>
       )}
     </div>
@@ -141,7 +143,7 @@ function copyTitle(state: CopyState): string {
     case 'failed':
       return 'Couldn’t copy';
     case 'idle':
-      return 'Copy';
+      return 'Copy message';
     default: {
       const exhaustive: never = state;
       return exhaustive;

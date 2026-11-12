@@ -199,3 +199,21 @@
     transition: none;
   }
 }
+
+/* The tip an info mark shows (Menu.tsx). It portals to the body and sits above the menu layers
+   (popups are 10000, menu surfaces 300), beside the menu so it never covers a row. */
+.rail-tooltip.menu-info-tip {
+  z-index: 10001;
+  max-width: 240px;
+  transform: translateY(-50%);
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+}
+.rail-tooltip.menu-info-tip.is-left {
+  transform: translate(-100%, -50%);
+}
+.rail-tooltip.menu-info-tip.is-left::before {
+  left: auto;
+  right: -4px;
+}

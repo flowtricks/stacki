@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { assert } from '../shared/core/assert';
 import App from './app/App';
+import { LocaleProvider } from './lib/i18n/LocaleProvider';
 import './app/styles.css';
 
 const rootElement = document.getElementById('root');
@@ -10,9 +11,11 @@ document.documentElement.dataset['platform'] = window.avb.platform;
 trackWindowZoom();
 
 createRoot(rootElement).render(
-  <React.Suspense fallback={undefined}>
-    <App />
-  </React.Suspense>,
+  <LocaleProvider>
+    <React.Suspense fallback={undefined}>
+      <App />
+    </React.Suspense>
+  </LocaleProvider>,
 );
 
 // The page zoom (⌘+ / ⌘−), as `--window-zoom`. The window's own buttons are drawn

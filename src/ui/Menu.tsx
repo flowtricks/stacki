@@ -19,14 +19,16 @@
 //
 // Usage: keep `open` and the anchor in the caller (useMenuTrigger does both) and pass the rows.
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, ReactNode, RefCallback } from 'react';
 import { assert } from '../../shared/core/assert';
 import Popup from './Popup';
 import { CheckIcon, ChevronRightIcon } from './Icons';
 import { centralIcon } from './central/CentralIcon';
 import { info as centralInfo } from './central/centralGeometry';
-import { assertMenuEntries, decideKey, initialIndex, isMenuRow, isNavigable, placeMenu } from './menuModel';
-import type { MenuEntry, MenuPlacement, MenuPosition, MenuRow } from './menuModel';
+import { assertMenuEntries, decideKey, initialIndex, isMenuRow, isNavigable, placeInfoTip, placeMenu } from './menuModel';
+import { useDelayedPlacement } from './delayedTooltip';
+import type { InfoTipPlacement, MenuEntry, MenuPlacement, MenuPosition, MenuRow } from './menuModel';
 import './menu.css';
 
 export type { MenuEntry, MenuItem, MenuSubmenu, MenuToggle, MenuHeading, MenuNote, MenuDivider, MenuPlacement } from './menuModel';
@@ -417,6 +419,8 @@ function RowButton({ entry, hasChecks, hasIcons, expanded, buttonRef, onChoose, 
     classes.push('is-open');
   }
   assert(entry.label.length > 0, 'Menu: every row has a label');
+  const infoText = entry.kind === 'submenu' ? undefined : entry.info;
+  const tip = useDelayedPlacement(placeTipFor);
   return (
     <button
       ref={buttonRef}
@@ -428,6 +432,17 @@ function RowButton({ entry, hasChecks, hasIcons, expanded, buttonRef, onChoose, 
         onChoose();
       }}
       onMouseEnter={onHover}
+      onFocus={(event) => {
+        // Keyboard focus explains the row at once; a pointer's hover-focus waits for the mark (below).
+        if (infoText !== undefined && isKeyboardFocus(event.currentTarget)) {
+          const mark = event.currentTarget.querySelector<HTMLElement>('.menu-info');
+          if (mark !== null) {
+            tip.showNow(mark);
+          }
+        }
+      }}
+      onBlur={tip.hide}
+      onMouseLeave={tip.hide}
       {...rowSemantics(entry, { expanded })}
     >
       {hasIcons && <span className="menu-icon">{entry.icon}</span>}
@@ -438,8 +453,38 @@ function RowButton({ entry, hasChecks, hasIcons, expanded, buttonRef, onChoose, 
         </span>
         {entry.description !== undefined && <span className="menu-description">{entry.description}</span>}
       </span>
-      <RowEnd entry={entry} hasChecks={hasChecks} />
+      <RowEnd entry={entry} hasChecks={hasChecks} onMarkEnter={infoText === undefined ? undefined : tip.show} onMarkLeave={tip.hide} />
+      {infoText !== undefined && tip.value !== undefined && createPortal(<InfoTip text={infoText} placement={tip.value} />, document.body)}
     </button>
+  );
+}
+
+// Why not the native `title`: the operating system draws it, late, in its own place, and not at all over
+// some popups. The tip is the app's own, drawn on the body so the menu's scroll and clip never cut it.
+function placeTipFor(mark: HTMLElement): InfoTipPlacement {
+  const menu = mark.closest('.menu-surface') ?? mark;
+  const box = mark.getBoundingClientRect();
+  return placeInfoTip(menu.getBoundingClientRect(), box, window.innerWidth);
+}
+
+function isKeyboardFocus(element: HTMLElement): boolean {
+  try {
+    return element.matches(':focus-visible');
+  } catch {
+    return false;
+  }
+}
+
+function InfoTip({ text, placement }: { readonly text: string; readonly placement: InfoTipPlacement }) {
+  return (
+    <div
+      className={`rail-tooltip menu-info-tip${placement.side === 'left' ? ' is-left' : ''}`}
+      role="tooltip"
+      data-side={placement.side}
+      style={{ left: placement.left, top: placement.top }}
+    >
+      {text}
+    </div>
   );
 }
 
@@ -458,13 +503,23 @@ function rowSemantics(entry: MenuRow, options: { readonly expanded: boolean }) {
   }
 }
 
-function RowEnd({ entry, hasChecks }: { readonly entry: MenuRow; readonly hasChecks: boolean }) {
+function RowEnd({
+  entry,
+  hasChecks,
+  onMarkEnter,
+  onMarkLeave,
+}: {
+  readonly entry: MenuRow;
+  readonly hasChecks: boolean;
+  readonly onMarkEnter: ((mark: HTMLElement) => void) | undefined;
+  readonly onMarkLeave: () => void;
+}) {
   switch (entry.kind) {
     case 'item': {
       const key = entry.shortcut ?? (entry.numberKey === undefined ? undefined : String(entry.numberKey));
       return (
         <span className="menu-end">
-          <InfoMark text={entry.info} />
+          <InfoMark text={entry.info} onEnter={onMarkEnter} onLeave={onMarkLeave} />
           {key !== undefined && <span className="menu-key">{key}</span>}
           {hasChecks && <span className="menu-check">{entry.checked === true && <CheckIcon size={14} />}</span>}
         </span>
@@ -473,7 +528,7 @@ function RowEnd({ entry, hasChecks }: { readonly entry: MenuRow; readonly hasChe
     case 'toggle':
       return (
         <span className="menu-end">
-          <InfoMark text={entry.info} />
+          <InfoMark text={entry.info} onEnter={onMarkEnter} onLeave={onMarkLeave} />
           <span className="menu-switch" data-on={entry.on} aria-hidden="true">
             <span className="menu-switch-thumb" />
           </span>
@@ -493,12 +548,20 @@ function RowEnd({ entry, hasChecks }: { readonly entry: MenuRow; readonly hasChe
   }
 }
 
-function InfoMark({ text }: { readonly text: string | undefined }) {
+function InfoMark({
+  text,
+  onEnter,
+  onLeave,
+}: {
+  readonly text: string | undefined;
+  readonly onEnter: ((mark: HTMLElement) => void) | undefined;
+  readonly onLeave: () => void;
+}) {
   if (text === undefined) {
     return undefined;
   }
   return (
-    <span className="menu-info" title={text}>
+    <span className="menu-info" onMouseEnter={(event) => onEnter?.(event.currentTarget)} onMouseLeave={onLeave}>
       <InfoIcon />
       <span className="menu-visually-hidden">{text}</span>
     </span>

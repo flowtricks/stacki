@@ -16,6 +16,7 @@ import { openExternalURL } from '../../ipc/appBridge';
 import { registerAgentTaskHandler } from '../../lib/agentTasks';
 import { canPanel } from '../../lib/roleAccess';
 import { useCurrentRole } from '../../lib/useCurrentRole';
+import { useAiPanelWidth } from './aiPanelWidth';
 import DockableWindow, { type WindowMode } from '../../ui/DockableWindow';
 import { readWindowMode, storeWindowMode } from '../../ui/windowPreferences';
 import { AiPanel } from '../appPanels';
@@ -84,10 +85,16 @@ export function useAiRailButton(app: ShellView): { readonly active: boolean; rea
 /** The docked panel, inside the left panel. */
 export function AiTab({ app }: { readonly app: ShellView }) {
   const state = useAiWindow();
-  const changeMode = useModeChange(app);
   if (state.mode === 'floating') {
     return <p className="ai-empty">The AI chat is in its own window.</p>;
   }
+  return <DockedAi app={app} />;
+}
+
+// Its own component so the wider chat width is held only while the chat is docked: a popped-out chat leaves the left panel its shared width.
+function DockedAi({ app }: { readonly app: ShellView }) {
+  useAiPanelWidth();
+  const changeMode = useModeChange(app);
   return <AiWindow app={app} mode="docked" onModeChange={changeMode} />;
 }
 

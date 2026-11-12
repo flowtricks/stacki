@@ -218,7 +218,11 @@ export function createChipEditor<Chip>(options: ChipEditorOptions<Chip>): ChipEd
         chipIndex += 1;
       }
     }
-    return base.update({ effects, annotations: chipInsertion.of(true) }).state;
+    // The caret opens at the end of the draft, after its last chip and trailing text: a draft that arrives with a chip already in it
+    // (the Apps panel's Build an app) would otherwise open with the caret at position 0, in front of the chip.
+    const placed = base.update({ effects, selection: { anchor: draft.text.length }, annotations: chipInsertion.of(true) }).state;
+    assert(placed.selection.main.head === placed.doc.length, 'chip editor: a new state opens with the caret at the end');
+    return placed;
   };
 
   return {

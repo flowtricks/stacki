@@ -557,14 +557,23 @@ export function AppRow({
   // No author, no picture: an initial made up from the app's name says nothing (the details' rule too).
   const author = appAuthorLogin(app);
   const updating = appUpdateStatus(lock);
+  // Open means running in the host's store, docked or popped out: launching an open app keeps its one window (launchApp).
+  const open = useAppsRuntime().running.some((running) => running.app.manifest.id === manifest.id);
   return (
     <li className="apps-row">
-      <div className="apps-row-main">
-        <button type="button" className="apps-row-select" aria-label={`Open ${manifest.name}`} onClick={() => actions.open(app)}>
+      <div className="apps-row-main" data-open={open}>
+        <button
+          type="button"
+          className="apps-row-select"
+          aria-label={`Open ${manifest.name}`}
+          aria-current={open ? 'true' : undefined}
+          onClick={() => actions.open(app)}
+        >
           <AppTile manifest={manifest} size={40} />
           <span className="apps-row-text">
             <span className="apps-row-name">
               <span className="apps-row-title">{manifest.name}</span>
+              {open && <span className="apps-row-open-dot" aria-hidden="true" />}
               <AppRowCount appId={manifest.id} name={manifest.name} />
             </span>
             {/* Who made it, as their GitHub picture, leads the description line. */}

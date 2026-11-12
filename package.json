@@ -190,7 +190,10 @@
       "entitlementsInherit": "resources/entitlements.mac.inherit.plist",
       "forceCodeSigning": true,
       "notarize": true,
-      "minimumSystemVersion": "13.0.0"
+      "minimumSystemVersion": "13.0.0",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Stacki uses the microphone only when you press the microphone button to dictate a message to the AI panel."
+      }
     },
     "win": {
       "icon": "resources/icon.ico",

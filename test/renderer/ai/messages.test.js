@@ -72,6 +72,27 @@ test('a user message shows its text, attachments, time and a Copy that writes th
   assert.equal(action(container, 'Copy message').title, 'Copied');
 });
 
+test('the actions row sits outside the bubble, below it, with the time and Copy, on user and agent messages', async (context) => {
+  const user = await render(
+    React.createElement(view.UserMessage, { text: 'Hi', attachments: [], at: Date.UTC(2026, 0, 2, 15, 4), onEdit: undefined, onResend: undefined }),
+  );
+  const agent = await render(React.createElement(view.AgentMessage, { text: 'Hello', at: Date.UTC(2026, 0, 2, 15, 4) }));
+  context.after(async () => {
+    await act(() => user.root.unmount());
+    await act(() => agent.root.unmount());
+  });
+  for (const { container } of [user, agent]) {
+    const row = container.querySelector('.ai-msg-toolbar');
+    assert.ok(row.querySelector('.ai-msg-time'), 'the row carries the time');
+    assert.equal(row.querySelector('[aria-label="Copy message"]').title, 'Copy message');
+    assert.equal(row.closest('.ai-msg-bubble') ?? undefined, undefined, 'the row is not inside the bubble');
+  }
+  const bubble = user.container.querySelector('.ai-msg-bubble');
+  assert.ok(bubble.querySelector('.ai-user-text'));
+  assert.equal(bubble.querySelector('.ai-msg-toolbar') ?? undefined, undefined);
+  assert.equal(bubble.nextElementSibling.className, 'ai-msg-toolbar', 'the row follows the bubble directly');
+});
+
 test('a refused clipboard says so instead of claiming it copied', async (context) => {
   fakeClipboard(context, true);
   const { container, root } = await render(React.createElement(view.AgentMessage, { text: 'Hello', at: undefined }));

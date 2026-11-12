@@ -8,10 +8,11 @@
 // remembered: a new chat always begins in the mode that asks first, because the agent applies the chat's
 // stored settings after that default and a remembered "Bypass permissions" would silently carry over.
 import { useEffect, useState } from 'react';
-import type { AgentId } from '../../../../shared/properties/ai/agentIds';
+import { AGENT_IDS, type AgentId } from '../../../../shared/properties/ai/agentIds';
 import { AGENT_PRESENTATION } from '../../../../shared/properties/ai/agentPresentation';
 import type { ChatId, ChatOption } from '../../../../shared/properties/ai/chatModel';
 import { aiChatUpdate } from '../aiBridge';
+import { agentBadge } from '../agentSwitch';
 import { rememberedSettings, rememberSetting, setChatOption, type AiState } from '../aiStore';
 import type { ChatView } from '../chatReducer';
 import { ContextRing } from './ContextRing';
@@ -93,7 +94,13 @@ export function ComposerStatusLine({
     }
     setRevision((revision) => revision + 1);
   };
-  const settings: ComposerSettings = { agent, chat: chatId, started, running, options, pick };
+  const agentBadges = Object.fromEntries(
+    AGENT_IDS.flatMap((id) => {
+      const badge = agentBadge(state, id);
+      return badge === undefined ? [] : [[id, badge]];
+    }),
+  );
+  const settings: ComposerSettings = { agent, chat: chatId, started, running, options, pick, agentBadges };
   const summary = state.chats.find((candidate) => candidate.id === chatId);
   const usage = view.usage ?? summary?.context;
   const modeKnown = optionById(options, AGENT_PRESENTATION[agent].modes.optionId) !== undefined;

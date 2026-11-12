@@ -136,7 +136,7 @@ export const CHIP_MARK = '\u0000';
 // How deep the field's markup is read. contentEditable nests typed text a level or
 // two inside the spans it inserts; pasted markup can nest further, and anything
 // nested past this bound is left unread rather than recursed into without end.
-export const TOKEN_FIELD_LIMITS = { nestingDepthMax: 64 } as const;
+export const TOKEN_FIELD_LIMITS = { nestingDepthMax: 64, chipsMax: 256 } as const;
 
 export function fieldText(root: HTMLElement): string {
   let out = '';
@@ -239,22 +239,22 @@ export function serializeTokens(root: HTMLElement, bare: string, varForm: string
 
 // Move a collapsed caret across the atomic chip when it sits right at the chip's edge —
 // browsers otherwise stall there, so you can't arrow behind a lone variable to type
-// `!important`. Returns true when it handled the key (so the caller preventDefaults).
+// `!important`. Returns true when it handled the key (so the caller preventDefault).
+//
+// "Right at the edge" ignores zero-width spaces: buildTokenHtml leaves one as the caret
+// slot beside a chip at either end of the value, and a caret in front of that slot (the
+// far left of a field that opens on a chip) is visually against the chip. Treating the
+// slot as a character made the first ArrowRight a silent step over it, and the person
+// could not tell why the caret would not move past the chip to delete it. Every chip is
+// considered, not only the first: a value of two variables has two edges to step over.
 export function jumpCaretPastChip(root: HTMLElement, direction: 'left' | 'right'): boolean {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) {
     return false;
   }
-  const chip = root.querySelector<HTMLElement>('[data-chip]');
-  if (!chip) {
-    return false;
-  }
+  const chips = [...root.querySelectorAll<HTMLElement>('[data-chip]')];
+  assert(chips.length <= TOKEN_FIELD_LIMITS.chipsMax, 'jumpCaretPastChip: the field holds a bounded number of chips');
   const { startContainer: node, startOffset: off } = selection.getRangeAt(0);
-  // The text a caret beside the chip sits in. A neighbour may be a coloured run, or
-  // the `.cx-space` element a gap is drawn in, whose text node holds the caret: the
-  // element itself never does.
-  const before = edgeTextNode(chip.previousSibling ?? undefined, 'end');
-  const after = edgeTextNode(chip.nextSibling ?? undefined, 'start');
   const place = (target: Node, offset: number) => {
     const range = document.createRange();
     range.setStart(target, offset);
@@ -262,18 +262,62 @@ export function jumpCaretPastChip(root: HTMLElement, direction: 'left' | 'right'
     selection.removeAllRanges();
     selection.addRange(range);
   };
-  // Caret is immediately before the chip (end of the preceding text node, or the root
-  // slot just before it) → drop it just after the chip, and vice-versa.
-  const beforeLength = before?.textContent?.length ?? 0;
-  const rightAdjacent = (node === before && off === beforeLength) || (node === root && root.childNodes[off] === chip);
-  const leftAdjacent = (node === after && off === 0) || (node === root && root.childNodes[off - 1] === chip);
-  if (direction === 'right' && rightAdjacent && after) {
-    place(after, 0);
-    return true;
+  for (const chip of chips) {
+    if (direction === 'right' && caretBesideChip(chip, node, off, 'before')) {
+      // Against the chip's far side, so Backspace there removes the chip.
+      place(slotBeside(chip, 'after'), 0);
+      return true;
+    }
+    if (direction === 'left' && caretBesideChip(chip, node, off, 'after')) {
+      const slot = slotBeside(chip, 'before');
+      place(slot, slot.length);
+      return true;
+    }
   }
-  if (direction === 'left' && leftAdjacent && before) {
-    place(before, beforeLength);
-    return true;
+  return false;
+}
+
+// The text node a caret on `side` of `chip` sits in. A neighbour may be a coloured run, or
+// the `.cx-space` element a gap is drawn in, whose text node holds the caret: the element
+// itself never does. Where no text is there (a chip welded to another chip, or to the end
+// of the field) a zero-width slot is added, which the serializer strips; browsers will not
+// hold a typing caret beside a non-editable node without one.
+function slotBeside(chip: HTMLElement, side: 'before' | 'after'): Text {
+  const ownerDocument = chip.ownerDocument;
+  const sibling = (side === 'before' ? chip.previousSibling : chip.nextSibling) ?? undefined;
+  const weldedChip = sibling !== undefined && isHTMLElementInDocument(sibling, ownerDocument) && sibling.dataset['chip'] !== undefined;
+  const edge = sibling === undefined || weldedChip ? undefined : edgeTextNode(sibling, side === 'before' ? 'end' : 'start');
+  // Checked against the node's own window: nodes from another realm are not this realm's Text.
+  const TextConstructor = ownerDocument.defaultView?.Text;
+  assert(TextConstructor !== undefined, 'slotBeside: the field belongs to a window');
+  if (edge instanceof TextConstructor) {
+    return edge;
+  }
+  const parent = chip.parentNode;
+  assert(parent !== null, 'slotBeside: the chip is in the field');
+  const slot = ownerDocument.createTextNode('\u200B');
+  parent.insertBefore(slot, side === 'before' ? chip : chip.nextSibling);
+  return slot;
+}
+
+const isZeroWidth = (text: string): boolean => text.replace(/\u200B/g, '') === '';
+
+// Whether the caret at (`node`, `offset`) stands on `side` of `chip` with nothing visible
+// between. The caret is either in that
+// text with only zero-width spaces between it and the chip, or at the chip's parent with
+// only zero-width text nodes between its child slot and the chip.
+function caretBesideChip(chip: HTMLElement, node: Node, offset: number, side: 'before' | 'after'): boolean {
+  const own = side === 'before' ? edgeTextNode(chip.previousSibling ?? undefined, 'end') : edgeTextNode(chip.nextSibling ?? undefined, 'start');
+  if (own !== undefined && node === own) {
+    const text = own.textContent ?? '';
+    return isZeroWidth(side === 'before' ? text.slice(offset) : text.slice(0, offset));
+  }
+  if (node === chip.parentNode) {
+    const children = [...node.childNodes];
+    const chipIndex = children.indexOf(chip);
+    assert(chipIndex >= 0, 'caretBesideChip: the chip is among its parent’s children');
+    const between = side === 'before' ? children.slice(offset, chipIndex) : children.slice(chipIndex + 1, offset);
+    return offset <= children.length && between.every((child) => child.nodeType === 3 && isZeroWidth(child.textContent ?? ''));
   }
   return false;
 }

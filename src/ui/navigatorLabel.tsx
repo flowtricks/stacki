@@ -78,10 +78,11 @@ function describeComponent(node: PairedNode, live?: readonly string[]) {
   if (node.dynamicTag) {
     return { icon: <CustomElementIcon size={12} />, label: truncate(labelWithLive(node, live), 40) };
   }
+  // Central icons snap to 12/16/20, so a requested 14 drew at 16 beside the 12px element icons. Rows use 12.
   if (node.astroAsset) {
-    return { icon: astroAssetIcon(node.name, 14), label: node.name };
+    return { icon: astroAssetIcon(node.name, 12), label: node.name };
   }
-  return { icon: <ElementComponentIcon size={14} />, label: node.name };
+  return { icon: <ElementComponentIcon size={12} />, label: node.name };
 }
 
 /** A label cut to `lengthMax` characters, ending in an ellipsis when cut. */

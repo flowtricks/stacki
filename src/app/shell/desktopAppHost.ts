@@ -329,7 +329,8 @@ function leftTabOf(panel: AppLeftPanel): NonNullable<LeftTab> {
 }
 
 function panelsOf(app: ShellView): AppEventState['panels'] {
-  return { left: app.leftTab, right: app.rightTab };
+  // The project's Settings panel holds secrets and is not part of the apps' panel vocabulary: apps see it as no panel.
+  return { left: app.leftTab === 'projectSettings' ? undefined : app.leftTab, right: app.rightTab };
 }
 
 /**

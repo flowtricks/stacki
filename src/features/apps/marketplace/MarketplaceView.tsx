@@ -28,6 +28,7 @@ import { rankInsertItems } from '../../../lib/insertRank';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
 import { SegmentedTabs } from '../../../ui/SegmentedTabs';
 import { SearchField } from '../../../ui/SearchField';
+import { Skeleton, SkeletonRows } from '../../../ui/Skeleton';
 import { AppsIcon, ExternalIcon, MoreIcon, RefreshIcon } from '../../../ui/Icons';
 import { appTileColor, appTileInitial } from '../AppTile';
 import { MarketplaceIcon, MarketplaceInstallIcon } from './MarketplaceIcons';
@@ -49,6 +50,9 @@ interface MarketplaceSearchItem {
 
 /** The most pages the list can show: the whole index, a page at a time. */
 const MARKETPLACE_PAGES_MAX = Math.ceil(MARKETPLACE_LIMITS.appsMax / MARKETPLACE_LIMITS.pageSize);
+
+/** Placeholder rows drawn while the index is first read: a screenful of the list's own rows. */
+const MARKETPLACE_SKELETON_ROWS = 5;
 
 /** Which list the Apps panel shows: the project's apps, or the marketplace. */
 export type AppsView = 'installed' | 'marketplace';
@@ -247,8 +251,8 @@ function MarketplaceBody(props: {
   switch (load.kind) {
     case 'loading':
       return (
-        <div className="apps-message" role="status">
-          <p>Reading the marketplace…</p>
+        <div className="apps-market-skeletons">
+          <SkeletonRows count={MARKETPLACE_SKELETON_ROWS} row={() => <MarketplaceSkeletonRow />} />
         </div>
       );
     case 'failed':
@@ -281,8 +285,8 @@ function MarketplaceBody(props: {
             />
           ))}
           {props.more && (
-            <li ref={props.sentinelRef} className="apps-market-more" role="status">
-              Loading more apps…
+            <li ref={props.sentinelRef} className="apps-market-more">
+              <SkeletonRows count={1} row={() => <MarketplaceSkeletonRow />} />
             </li>
           )}
         </ul>
@@ -366,6 +370,19 @@ function useNextPage(options: {
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [bodyRef, sentinelRef, pageCount, more, onNext]);
+}
+
+// A row's shape with nothing in it: the tile and two lines, in the row's own rhythm.
+function MarketplaceSkeletonRow() {
+  return (
+    <div className="apps-market-skeleton">
+      <Skeleton width="40px" height="40px" radius="8px" />
+      <span className="apps-market-skeleton-lines">
+        <Skeleton width="55%" height="8px" />
+        <Skeleton width="80%" height="8px" />
+      </span>
+    </div>
+  );
 }
 
 /**
@@ -497,14 +514,14 @@ function MarketplaceAction(props: {
   return (
     <button
       type="button"
-      className="apps-button primary"
+      className="apps-button primary apps-market-install"
       title={tooOld ?? `Install ${props.app.name} ${latest.version}, approved with SHA-256 ${latest.sha256.slice(0, 12)}…`}
       disabled={props.installing !== undefined || tooOld !== undefined}
       onClick={() => props.onInstall(props.app)}
     >
       <span className="apps-header-actions">
         <MarketplaceInstallIcon size={12} />
-        {props.installing === props.app.id ? 'Installing…' : 'Install'}
+        <span className="apps-market-install-label">{props.installing === props.app.id ? 'Installing…' : 'Install'}</span>
       </span>
     </button>
   );

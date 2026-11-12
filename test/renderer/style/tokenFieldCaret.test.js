@@ -12,7 +12,9 @@
 // side of the chip, and that the written value carries no caret-slot characters.
 // The negative space: presses over text and modified or double presses are left
 // to the browser, and a chip with no text beside it is given a slot rather than
-// an element-level caret a browser cannot type at. Run it alone with
+// an element-level caret a browser cannot type at. Arrowing across a chip (jumpCaretPastChip)
+// is checked for a chip-only value, a chip in the middle and at the end, adjacent chips, and
+// the zero-width caret slot at the far left. Run it alone with
 // `node test/renderer/style/tokenFieldCaret.test.js`.
 
 const assert = require('assert/strict');
@@ -226,6 +228,61 @@ const check = (what, condition, detail) => {
     caret().node === space.firstChild && caret().offset === 0,
     `caret in ${caret().node.nodeName} at ${caret().offset}`,
   );
+
+  // --- arrowing across a chip next to a caret slot -----------------------------
+  //
+  // The reported case: a field that is only a chip, caret at its far left. The caret
+  // there is in front of the zero-width slot buildTokenHtml leaves, so the first
+  // ArrowRight used to be a silent step over the slot and the chip was not passed.
+  // One press must land against the chip's far side (where Backspace removes it).
+  const fieldSelection = document.getSelection();
+  const chipAt = (index) => field.querySelectorAll('[data-chip]')[index];
+  const atEdgeOf = (target, side) => {
+    const { node, offset } = caret();
+    const neighbour = side === 'before' ? target.previousSibling : target.nextSibling;
+    return node === neighbour && offset === (side === 'before' ? neighbour.length : 0);
+  };
+  field.innerHTML = buildTokenHtml(binding, chips);
+  fieldSelection.collapse(field.firstChild, 0);
+  check('a chip-only value: → from the far left is handled', jumpCaretPastChip(field, 'right') === true);
+  check('and lands after the chip in one press', atEdgeOf(chipAt(0), 'after'), `caret in ${caret().node.nodeName} at ${caret().offset}`);
+  check('← from there is handled', jumpCaretPastChip(field, 'left') === true);
+  check('and lands before the chip, against it', atEdgeOf(chipAt(0), 'before'), `caret in ${caret().node.nodeName} at ${caret().offset}`);
+  fieldSelection.collapse(field, 0);
+  check('the same from the field element itself', jumpCaretPastChip(field, 'right') === true && atEdgeOf(chipAt(0), 'after'));
+  fieldSelection.collapse(field, field.childNodes.length);
+  check('and ← from the far right', jumpCaretPastChip(field, 'left') === true && atEdgeOf(chipAt(0), 'before'));
+  check('it never rewrites the value', written() === binding, written());
+
+  // Chip in the middle, in the end, and typed text beside it.
+  field.innerHTML = buildTokenHtml(`calc(${binding} + 1px)`, chips);
+  fieldSelection.collapse(field.firstChild, 5);
+  check('a chip in the middle: → steps over it', jumpCaretPastChip(field, 'right') === true && atEdgeOf(chipAt(0), 'after'));
+  check('← steps back', jumpCaretPastChip(field, 'left') === true && atEdgeOf(chipAt(0), 'before'));
+  fieldSelection.collapse(field.firstChild, 2);
+  check('a caret away from the chip is the browser’s', jumpCaretPastChip(field, 'right') === false);
+  field.innerHTML = buildTokenHtml(`a ${binding}`, chips);
+  fieldSelection.collapse(field.firstChild, 2);
+  check('a chip at the end: → steps over it', jumpCaretPastChip(field, 'right') === true && atEdgeOf(chipAt(0), 'after'));
+
+  // Two chips: the second has edges too (only the first used to).
+  const two = [chips[0], { text: 'var(--dark-800)', name: 'dark-800', type: 'Color' }];
+  field.innerHTML = buildTokenHtml(`${two[0].text}${two[1].text}`, two);
+  fieldSelection.collapse(field.firstChild, 0);
+  check('adjacent chips: → passes the first', jumpCaretPastChip(field, 'right') === true && atEdgeOf(chipAt(0), 'after'));
+  check('adjacent chips: → passes the second', jumpCaretPastChip(field, 'right') === true && atEdgeOf(chipAt(1), 'after'), `caret in ${caret().node.nodeName}`);
+  check('adjacent chips: ← passes the second back', jumpCaretPastChip(field, 'left') === true && atEdgeOf(chipAt(1), 'before'));
+  field.innerHTML = buildTokenHtml(`${two[0].text} ${two[1].text}`, two);
+  fieldSelection.collapse(field.querySelectorAll('[data-chip]')[1].previousSibling.firstChild, 1);
+  check('chips with a space: the caret after the space passes the second', jumpCaretPastChip(field, 'right') === true && atEdgeOf(chipAt(1), 'after'));
+
+  // The negative space: a selection, or no chip, leaves the key to the browser.
+  field.innerHTML = buildTokenHtml('12px', []);
+  fieldSelection.collapse(field.firstChild, 0);
+  check('no chip: nothing to step over', jumpCaretPastChip(field, 'right') === false);
+  field.innerHTML = buildTokenHtml(binding, chips);
+  fieldSelection.setBaseAndExtent(field.firstChild, 0, field.lastChild, 1);
+  check('a selection is the browser’s (Shift+Arrow, Home, End stay native)', jumpCaretPastChip(field, 'right') === false);
 
   // --- the assertions that pin the inputs -------------------------------------
   let message = '';

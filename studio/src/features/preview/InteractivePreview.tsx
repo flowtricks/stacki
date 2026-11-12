@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { PreviewIcon } from '../../../vendor/stacki/src/ui/Icons';
+import { PlayIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { request, routeFor, type Project } from '../project/projectClient';
 import { parsePreviewTarget } from './usePreview';
 import { replaceFrameAddress, useFrameAddress } from './frameAddress';
@@ -234,7 +234,7 @@ export function PreviewButton({ preview }: { readonly preview: InteractivePrevie
       aria-pressed={preview.active}
       onClick={preview.toggle}
     >
-      <PreviewIcon size={15} />
+      <PlayIcon size={15} />
     </button>
   );
 }

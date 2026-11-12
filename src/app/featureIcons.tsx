@@ -66,6 +66,7 @@ export const FEATURE_ICONS: Readonly<Record<StaticAccessFeature, FeatureIconComp
   'panel:ai': SparkleIcon,
   'panel:instructions': InstructionsIcon,
   'panel:audits': AuditsIcon,
+  'panel:projectSettings': GearIcon,
   // The right panels' tabs are text; these are the closest icons.
   'panel:style': DropletIcon,
   'panel:settings': GearIcon,

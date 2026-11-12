@@ -154,6 +154,27 @@ test('a draft opens with its chips drawn as pills and reads back unchanged', () 
   assert.equal(pills[0].getAttribute('contenteditable'), 'false');
 });
 
+test('a draft that arrives holding a chip opens with the caret after it, so typing continues behind the chip', () => {
+  const { view, editor, segments } = open([
+    { kind: 'chip', chip: chip('App builder instructions') },
+    { kind: 'text', text: ' ' },
+  ]);
+  assert.equal(view.state.selection.main.empty, true, 'the selection is collapsed');
+  assert.equal(view.state.selection.main.head, view.state.doc.length, 'the caret is at the end, after the chip and its trailing space');
+  view.dispatch(view.state.replaceSelection('Make a timer'));
+  assert.deepEqual(segments(), [
+    { kind: 'chip', chip: chip('App builder instructions') },
+    { kind: 'text', text: ' Make a timer' },
+  ]);
+  const replaced = view.state.update(
+    editor.replaceSegments(view.state, [
+      { kind: 'chip', chip: chip('x') },
+      { kind: 'text', text: ' ' },
+    ]),
+  ).state;
+  assert.equal(replaced.selection.main.head, replaced.doc.length, 'a draft replaced from outside also leaves the caret at the end');
+});
+
 test('inserting a chip replaces the typed trigger and leaves the caret after it', () => {
   const { editor, view, segments } = open([{ kind: 'text', text: 'Use @ag' }]);
   view.dispatch(editor.insertChip(view.state, chip('AGENTS.md'), { from: 4, to: 7 }));

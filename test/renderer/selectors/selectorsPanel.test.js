@@ -369,3 +369,35 @@ test('a stylesheet or folder locked from its heading leaves the Unused tab and t
     await panel.close();
   }
 });
+
+test('locking the last unused stylesheet leaves the user on the Unused tab and shows its empty state', async () => {
+  // Goal: the tab only changes when the user picks it. The opening tab (Unused while there is a clean-up)
+  // used to be derived live, so emptying Unused jumped the panel to All.
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-selectors-lasttab-'));
+  const files = {
+    'src/styles/patterns.css': '.pattern-a { a: b }\n.pattern-b { a: b }\n',
+    'src/pages/index.astro': '---\n---\n<h1 class="hero">Hi</h1>\n',
+    'node_modules/lib/index.js': 'export {};\n',
+  };
+  for (const [rel, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+    fs.writeFileSync(path.join(root, rel), text);
+  }
+  const panel = await mountPanel(root, await load());
+  const { container, waitFor, click } = panel;
+  const count = (tab) => container.querySelector(`[data-tab="${tab}"] .selectors-tab-count`)?.textContent;
+  const selected = () => container.querySelector('.selectors-tab.on')?.getAttribute('data-tab');
+  try {
+    await waitFor(() => count('unused') === '2');
+    assert.equal(selected(), 'unused');
+    await click(container.querySelector('[aria-label="Lock patterns.css from cleanup"]'));
+    await waitFor(() => count('unused') === '0');
+    assert.equal(count('kept'), '2');
+    // Still on Unused, now empty, instead of All.
+    assert.equal(selected(), 'unused');
+    await waitFor(() => /No unused styles/.test(container.textContent));
+    assert.equal(container.querySelectorAll('.selectors-row').length, 0);
+  } finally {
+    await panel.close();
+  }
+});

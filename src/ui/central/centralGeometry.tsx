@@ -3071,6 +3071,32 @@ export const lock = {
   ),
 };
 
+// A plug: two prongs, a rounded body and its cord. Drawn for the Settings panel's MCP tab, in the same
+// 24-unit grid, round caps and joins as the rest of the set.
+export const plug = {
+  name: 'plug',
+  compact: (
+    <>
+      <path d="M9 3V7M15 3V7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M6.75 7H17.25V11.5C17.25 14.4 14.9 16.75 12 16.75C9.1 16.75 6.75 14.4 6.75 11.5V7Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M12 16.75V21" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  standard: (
+    <>
+      <path d="M9 3V7M15 3V7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6.5 7H17.5V11.5C17.5 14.5 15.04 17 12 17C8.96 17 6.5 14.5 6.5 11.5V7Z" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 17V21.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+};
+
 export const mail = {
   name: 'mail',
   // Figma variant 5658:58223.
@@ -3751,6 +3777,35 @@ export const pin = {
         strokeLinejoin="round"
       />
       <path d="M8 16L3.5 20.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+};
+
+// A filled, rounded triangle for "run" actions; drawn in the Central fill style.
+export const play = {
+  name: 'play',
+  compact: (
+    <>
+      <path
+        d="M7.75 5.4C7.75 4.63 8.58 4.15 9.25 4.54L19.1 10.64C19.74 11.04 19.74 11.96 19.1 12.36L9.25 18.46C8.58 18.85 7.75 18.37 7.75 17.6V5.4Z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  standard: (
+    <>
+      <path
+        d="M7.75 5.4C7.75 4.63 8.58 4.15 9.25 4.54L19.1 10.64C19.74 11.04 19.74 11.96 19.1 12.36L9.25 18.46C8.58 18.85 7.75 18.37 7.75 17.6V5.4Z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </>
   ),
 };

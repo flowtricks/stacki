@@ -7,8 +7,10 @@ import { FEATURE_ICONS } from './featureIcons';
 import { AppsRailBadge } from '../features/apps/appUpdates';
 import { AppTile } from '../features/apps/AppTile';
 import { RailAppFace, openPinnedApp, railAppId, usePinnedRailApps, useShownPinnedApp } from './railApps';
+import { useAppsRuntime } from '../features/apps/appsRuntime';
 import { RailMore, type RailMoreItem } from './RailMore';
 import { useRailOverflow, type RailOverflowItem } from './railOverflow';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 // Each button draws its access feature's icon (featureIcons.tsx), the same one the
 // Roles permission grid shows, so the two cannot drift apart.
@@ -27,7 +29,10 @@ const TABS = [
   { id: 'instructions', title: 'Instructions', shortcut: '⌥I', Icon: FEATURE_ICONS['panel:instructions'] },
   { id: 'audits', title: 'Audits', shortcut: '⌥A', Icon: FEATURE_ICONS['panel:audits'] },
 ] as const;
-export type RailTab = (typeof TABS)[number]['id'];
+// The project's Settings panel (features/projectSettings) sits at the rail's foot, directly above the AI button,
+// and like it never moves into More (railOverflow.ts measures the anchored pair). Not the app's Settings screen.
+const SETTINGS_TAB = { id: 'projectSettings', shortcut: '⌥S', Icon: FEATURE_ICONS['panel:projectSettings'] } as const;
+export type RailTab = (typeof TABS)[number]['id'] | typeof SETTINGS_TAB.id;
 
 const TOOLTIP_DELAY = 500;
 const AiRailIcon = FEATURE_ICONS['panel:ai'];
@@ -54,6 +59,7 @@ export default function LeftRail({
   readonly aiButton?: { readonly active: boolean; readonly onSelect: () => void } | undefined;
 }) {
   const [tip, setTip] = useState<{ readonly label: string; readonly left: number; readonly top: number } | undefined>(undefined);
+  const translate = useTranslate();
   const timerRef = useRef<ReturnType<typeof setTimeout>>();
   const railRef = useRef<HTMLDivElement>(null);
   const anchorRef = useRef<HTMLDivElement>(null);
@@ -83,12 +89,14 @@ export default function LeftRail({
   // A pinned app the open Apps panel shows is the active button, in place of Apps itself.
   const shownApp = useShownPinnedApp(role, active === 'apps' ? 'open' : 'closed');
   const activeApp = pinned.find((app) => app.manifest.id === shownApp);
+  const openApps = useAppsRuntime().running;
   const activeId = activeApp === undefined ? active : railAppId(activeApp.manifest.id);
   const items: readonly RailOverflowItem[] = [
     ...tabs.map((tab): RailOverflowItem => ({ id: tab.id, group: 'panel' })),
     ...pinned.map((app): RailOverflowItem => ({ id: railAppId(app.manifest.id), group: 'app' })),
   ];
-  const layout = useRailOverflow(railRef, aiButton === undefined ? undefined : anchorRef, items, activeId);
+  const showSettings = canPanel(role, SETTINGS_TAB.id);
+  const layout = useRailOverflow(railRef, aiButton === undefined && !showSettings ? undefined : anchorRef, items, activeId);
   const shown = new Set(layout.visible);
   const shownTabs = tabs.filter((tab) => shown.has(tab.id));
   const shownApps = pinned.filter((app) => shown.has(railAppId(app.manifest.id)));
@@ -145,6 +153,7 @@ export default function LeftRail({
             aria-label={app.manifest.name}
             aria-pressed={activeId === id}
             className={`rail-btn rail-app ${activeId === id ? 'on' : ''}`}
+            data-open={openApps.some((running) => running.app.manifest.id === app.manifest.id)}
             onMouseEnter={showSoon(app.manifest.name)}
             onMouseLeave={hide}
             onClick={() => selectApp(app)}
@@ -154,22 +163,40 @@ export default function LeftRail({
         );
       })}
       {moreItems.length > 0 && <RailMore items={moreItems} active={activeId} />}
-      {aiButton !== undefined && (
-        // Anchored at the foot like Studio's AI button: it never moves into More (railOverflow.ts).
+      {(aiButton !== undefined || showSettings) && (
+        // Anchored at the foot like Studio's AI button: these never move into More (railOverflow.ts).
+        // Settings comes first, so it sits directly above the AI button.
         <div className="rail-anchor" ref={anchorRef}>
-          <button
-            aria-label="AI chat"
-            aria-pressed={aiButton.active}
-            className={`rail-btn ${aiButton.active ? 'on' : ''}`}
-            onMouseEnter={showSoon('AI chat')}
-            onMouseLeave={hide}
-            onClick={() => {
-              hide();
-              aiButton.onSelect();
-            }}
-          >
-            <AiRailIcon size={20} />
-          </button>
+          {showSettings && (
+            <button
+              aria-label={`${translate('rail.settings')} (${SETTINGS_TAB.shortcut})`}
+              aria-pressed={active === SETTINGS_TAB.id}
+              className={`rail-btn ${active === SETTINGS_TAB.id ? 'on' : ''}`}
+              onMouseEnter={showSoon(translate('rail.settings'))}
+              onMouseLeave={hide}
+              onClick={() => {
+                hide();
+                onSelect(SETTINGS_TAB.id);
+              }}
+            >
+              <SETTINGS_TAB.Icon size={20} />
+            </button>
+          )}
+          {aiButton !== undefined && (
+            <button
+              aria-label="AI chat"
+              aria-pressed={aiButton.active}
+              className={`rail-btn ${aiButton.active ? 'on' : ''}`}
+              onMouseEnter={showSoon('AI chat')}
+              onMouseLeave={hide}
+              onClick={() => {
+                hide();
+                aiButton.onSelect();
+              }}
+            >
+              <AiRailIcon size={20} />
+            </button>
+          )}
         </div>
       )}
       {tip && (
@@ -182,7 +209,7 @@ export default function LeftRail({
 }
 
 function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onSelect: (tab: RailTab) => void): void {
-  // P / Z / ⇧A / J / G / E / ⌥C / ⌥V / ⌥H / ⌥I toggle the panels (ignored while typing in a field).
+  // P / Z / ⇧A / J / G / E / ⌥C / ⌥V / ⌥H / ⌥I / ⌥A / ⌥S toggle the panels (ignored while typing in a field).
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (event.metaKey || event.ctrlKey) {
@@ -213,6 +240,9 @@ function useRailKeys({ componentOpen }: { readonly componentOpen: boolean }, onS
         } else if (event.code === 'KeyA') {
           event.preventDefault();
           onSelect('audits');
+        } else if (event.code === 'KeyS') {
+          event.preventDefault();
+          onSelect('projectSettings');
         }
         return;
       }
