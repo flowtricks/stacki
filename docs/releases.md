@@ -47,6 +47,11 @@ include later changes.
   test for `\` and left the second one (`notes/bad.js`) matching `/` only. Both now accept either
   separator. Everything in the 1.2.0 and 1.2.1 entries ships here; Desktop, the Studio bundle and
   `create-stacki` are aligned at 1.2.2.
+- The Studio source-watch test (`studio/test/sourceWatch.test.ts`) failed twice in the pre-push
+  gate under load: macOS replays the events of fixture files written just before the watcher
+  starts, and they arrive late. It now writes a sentinel file once the watcher is up and drops
+  everything before the sentinel's own event (the stream is ordered), and passed 36 parallel
+  runs.
 - Lesson: after fixing a platform assertion, search the whole test for the same pattern before
   tagging (`grep -n '\\/' <test>`).
 
