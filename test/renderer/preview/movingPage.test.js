@@ -222,11 +222,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     /setSelectedOccurrence\(message\.occurrence\)/.test(runtime),
     'a canvas click no longer picks an instance',
   );
-  check(
-    'which the outline draws as every place',
-    /outline\.occ === undefined \? onePerPlace\(all\)/.test(overlays),
-    'a selection with no occurrence draws one box',
-  );
+  check('which the outline draws as every place', /copiesToDraw\(all, outline\.occ\)/.test(overlays), 'a selection with no occurrence draws one box');
   check(
     'the panels read the first copy when the selection means all of them',
     /selOcc \?\? 0/.test(`${runtime}\n${overlays}`),

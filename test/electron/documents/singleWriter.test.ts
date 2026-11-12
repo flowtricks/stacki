@@ -63,6 +63,10 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
     writeFileSync: { count: 1, reason: 'encrypted CMS connection keys in userData, never a page' },
     renameSync: { count: 1, reason: 'puts that connection file in place whole (atomic save)' },
   },
+  'electron/content/mcpFiles.ts': {
+    writeFileSync: { count: 1, reason: 'the project MCP config (.mcp.json or Codex config), a settings file and never a page' },
+    renameSync: { count: 1, reason: 'puts that config file in place whole (atomic save)' },
+  },
   'electron/content/media/mediaConnectionStore.ts': {
     writeFileSync: { count: 1, reason: 'encrypted media hosting keys in userData (media-connections.json), never a page' },
     renameSync: { count: 1, reason: 'puts that connection file in place whole (atomic save)' },

@@ -52,7 +52,9 @@ import { createServer, type ViteDevServer } from 'vite';
 // The AI chat's payloads validate chats, prompts and agent events (aiChat), over the chat model
 // (chatModel), the agent ids (agentIds) and the chat's bounds (aiLimits): four more. The @ mention
 // candidates (mentions) add one.
-const MODULES_MAX = 88;
+// The Settings payloads (secrets, mcp and the microphone) validate their changes with the envFile,
+// secrets and mcp parsers: about eight more, with a little headroom.
+const MODULES_MAX = 96;
 // Repository paths; the dev server serves each at `/<path>`.
 const ENTRY_MODULES: ReadonlyArray<{ readonly file: string; readonly exportName: string }> = [
   { file: 'src/lib/cleanError.ts', exportName: 'cleanError' },

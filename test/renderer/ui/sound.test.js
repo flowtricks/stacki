@@ -575,7 +575,8 @@ function fakeAudio() {
   const main = fs.readFileSync(repoPath('dist/electron/main.js'), 'utf8');
   check('settings opens from the menu', /label: 'Settings…'/.test(main));
   const preferences = fs.readFileSync(repoPath('src/app/settings/Settings.tsx'), 'utf8');
-  check('sound is in settings', /Interface sounds/.test(preferences));
+  const catalog = fs.readFileSync(repoPath('shared/properties/i18n/messages/en.ts'), 'utf8');
+  check('sound is in settings', /settings\.editor\.sound\.label/.test(preferences) && /Interface sounds/.test(catalog));
   // The row draws the app's one switch component (src/ui/Switch.tsx), which carries the role.
   const switchSource = fs.readFileSync(repoPath('src/ui/Switch.tsx'), 'utf8');
   check('an accessible switch controls sound', /<Switch\b/.test(preferences));

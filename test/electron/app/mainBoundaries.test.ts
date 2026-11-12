@@ -105,7 +105,9 @@ test('the complete channel inventory matches real main and terminal registration
   // turn, compacting, forking, moving a chat and sectioning the list, one turn's file diff, @ mention
   // candidates, stopping it, a permission answer, a setting, keeping or undoing one file’s change, and
   // the guided setup.
-  assert.equal(harness.handlers.size, 249);
+  // Settings adds secrets:* and mcp:* (project .env values and MCP servers) and the microphone adds three
+  // (microphone:status, :request and :openSettings), 264 in all.
+  assert.equal(harness.handlers.size, 264);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name
