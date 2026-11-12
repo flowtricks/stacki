@@ -18,7 +18,8 @@ import { AUDIT_CHECKS, type AuditFinding, type AuditPriority, type AuditRuleGrou
 import { auditPrompt, promptBatches, AUDIT_PROMPT_FINDINGS_MAX } from '../../../shared/page/auditPrompt';
 import { linkFix } from '../../../shared/page/auditRepairs';
 import { agentTask } from '../../../shared/properties/agentTask';
-import { withIgnore, withoutIgnore, type AuditIgnores } from '../../../shared/properties/auditIgnores';
+import { ignoreReasons, ignoredEntryCount } from '../../../shared/properties/auditIgnoreList';
+import { withIgnore, withIgnoredPage, withoutAnyIgnores, withoutIgnore, withoutIgnoredPage, type AuditIgnores } from '../../../shared/properties/auditIgnores';
 import { agentTaskMessage, requestAgentTask } from '../../lib/agentTasks';
 import { CodeBlock } from '../../ui/CodeBlock';
 import Dropdown from '../../ui/Dropdown';
@@ -32,9 +33,12 @@ import type { AuditScope } from './auditScope';
 import { SegmentedTabs } from '../../ui/SegmentedTabs';
 import { saveAuditIgnores } from './auditsBridge';
 import { allFindings, auditState, updateAuditState, useAuditState } from './auditStore';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { IgnoredList } from './IgnoredList';
 import { FindReplace } from './FindReplace';
 import { PerformanceBar } from './PerformanceBar';
 import { AUDIT_FILTERS, auditView, type AuditFilter } from './auditView';
+import type { RawValueKit } from './RawValueField';
 import { StyleReview } from './StyleReview';
 import './audits.css';
 
@@ -64,6 +68,8 @@ export interface AuditsPanelProps {
   readonly sources: () => { readonly current: SearchSource | undefined; readonly all: readonly SearchSource[] };
   /** Opens Settings on the Audits tab. */
   readonly onConfigure: () => void;
+  /** The Style panel's value input, for editing a raw value in the review window; absent, values are read-only. */
+  readonly valueKit?: RawValueKit;
 }
 
 export interface SearchSource {
@@ -83,6 +89,7 @@ interface ShownRule extends AuditRuleGroup {
 }
 
 export default function AuditsPanel(props: AuditsPanelProps) {
+  const translate = useTranslate();
   const state = useAuditState();
   const [filter, setFilter] = useState<AuditFilter>(() => storedFilter(props.project.path));
   const [reviewing, setReviewing] = useState<readonly AuditFinding[] | undefined>(undefined);
@@ -91,8 +98,9 @@ export default function AuditsPanel(props: AuditsPanelProps) {
   const [searching, setSearching] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
-  const ignoredIds = new Set(state.ignores.value.ignored.map((entry) => entry.id));
-  const reasons = new Map(state.ignores.value.ignored.map((entry) => [entry.id, entry.reason]));
+  const reasons = ignoreReasons(allFindings(state), state.ignores.value);
+  const ignoredIds: ReadonlySet<string> = new Set(reasons.keys());
+  const [ignoredView, setIgnoredView] = useState(false);
   const view = auditView({ findings: allFindings(state), ignored: ignoredIds, filter, search, showIgnored });
   const [findOpen, setFindOpen] = useState(false);
   const rules: readonly ShownRule[] = view.groups.flatMap((group) => group.rules.map((rule) => ({ ...rule, priority: group.priority })));
@@ -134,6 +142,10 @@ export default function AuditsPanel(props: AuditsPanelProps) {
     },
     ignore: (finding, reason) => writeIgnores(props, (value) => withIgnore(value, { id: finding.id, reason })),
     ignoreAll: (findings, reason) => writeIgnores(props, (value) => findings.reduce((file, finding) => withIgnore(file, { id: finding.id, reason }), value)),
+    ignorePage: (file, reason) => writeIgnores(props, (value) => withIgnoredPage(value, { file, reason })),
+    unignorePage: (file) => writeIgnores(props, (value) => withoutIgnoredPage(value, file)),
+    unignoreIds: (ids) => writeIgnores(props, (value) => ids.reduce(withoutIgnore, value)),
+    unignoreAll: () => writeIgnores(props, withoutAnyIgnores),
     restore: (finding) => writeIgnores(props, (value) => withoutIgnore(value, finding.id)),
     reasonOf: (finding) => reasons.get(finding.id),
   };
@@ -200,6 +212,16 @@ export default function AuditsPanel(props: AuditsPanelProps) {
           tabs={SCOPE_TABS}
           onPick={(scope) => updateAuditState((current) => ({ ...current, scope }))}
         />
+        <button
+          className={`audits-pill-toggle ${ignoredView ? 'on' : ''}`}
+          role="switch"
+          aria-checked={ignoredView}
+          onClick={() => setIgnoredView((value) => !value)}
+        >
+          {ignoredView && <CheckIcon size={11} />}
+          {translate('audits.ignored.chip')}
+          {ignoredEntryCount(state.ignores.value) > 0 && <span className="audits-count">{ignoredEntryCount(state.ignores.value)}</span>}
+        </button>
         {searching && <SearchField label="Search findings" value={search} onChange={setSearch} />}
       </div>
       {state.running && state.report === undefined && state.progress !== undefined && (
@@ -211,7 +233,8 @@ export default function AuditsPanel(props: AuditsPanelProps) {
         <StyleReview findings={reviewing.filter((item) => !ignoredIds.has(item.id))} actions={actions} panel={props} onClose={() => setReviewing(undefined)} />
       )}
       <div className="audits-list">
-        {findOpen && (
+        {ignoredView && <IgnoredList findings={allFindings(state)} ignores={state.ignores.value} actions={actions} />}
+        {!ignoredView && findOpen && (
           <FindReplace
             project={props.project}
             fixDeps={props.fixDeps}
@@ -221,8 +244,8 @@ export default function AuditsPanel(props: AuditsPanelProps) {
             onClose={() => setFindOpen(false)}
           />
         )}
-        {filter === 'performance' && <PerformanceBar measure={props.measure} />}
-        {fixes > 0 && (
+        {!ignoredView && filter === 'performance' && <PerformanceBar measure={props.measure} />}
+        {!ignoredView && fixes > 0 && (
           <div className="audits-ready">
             <span>
               {fixes} {fixes === 1 ? 'fix' : 'fixes'} ready
@@ -232,7 +255,7 @@ export default function AuditsPanel(props: AuditsPanelProps) {
             </button>
           </div>
         )}
-        {rules.map((rule) => (
+        {(ignoredView ? [] : rules).map((rule) => (
           <RuleRow
             onReview={(findings) => setReviewing(findings)}
             key={rule.check}
@@ -243,8 +266,8 @@ export default function AuditsPanel(props: AuditsPanelProps) {
             panel={props}
           />
         ))}
-        {rules.length === 0 && filter !== 'performance' && <EmptyState filtered={view.counts.all > 0} />}
-        {rules.length === 0 && filter === 'performance' && <SpeedClear />}
+        {!ignoredView && rules.length === 0 && filter !== 'performance' && <EmptyState filtered={view.counts.all > 0} />}
+        {!ignoredView && rules.length === 0 && filter === 'performance' && <SpeedClear />}
       </div>
     </div>
   );
@@ -257,6 +280,12 @@ export interface Actions {
   readonly ignore: (finding: AuditFinding, reason: string) => Promise<void>;
   /** Several findings ignored with one reason, in one write. */
   readonly ignoreAll: (findings: readonly AuditFinding[], reason: string) => Promise<void>;
+  /** Every finding in `file`, of every check, ignored with one entry. */
+  readonly ignorePage: (file: string, reason: string) => Promise<void>;
+  /** Removes the whole-page entry; findings ignored one by one stay ignored. */
+  readonly unignorePage: (file: string) => Promise<void>;
+  readonly unignoreIds: (ids: readonly string[]) => Promise<void>;
+  readonly unignoreAll: () => Promise<void>;
   readonly restore: (finding: AuditFinding) => Promise<void>;
   readonly reasonOf: (finding: AuditFinding) => string | undefined;
 }
@@ -413,7 +442,10 @@ function FileGroup(props: {
   readonly actions: Actions;
   readonly panel: AuditsPanelProps;
 }) {
+  const translate = useTranslate();
   const [open, setOpen] = useState(props.findings.length <= GROUP_OPEN_MAX);
+  const [ignoring, setIgnoring] = useState(false);
+  const [reason, setReason] = useState('');
   const toggle = (): void => setOpen((value) => !value);
   const [first] = props.findings;
   return (
@@ -425,7 +457,41 @@ function FileGroup(props: {
         <FileKindIcon file={props.file} kind={first?.fileKind} />
         <span className="label audits-title">{first === undefined ? props.file : occurrenceName(first)}</span>
         <span className="audits-count">{props.findings.length}</span>
+        <span onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+          <MoreMenu
+            className="audits-icon-button"
+            title={translate('audits.ignorePage.menu')}
+            width={200}
+            items={[{ label: translate('audits.ignorePage.menu'), onSelect: () => setIgnoring(true) }]}
+          />
+        </span>
       </div>
+      {ignoring && (
+        <div className="audits-inset audits-actions">
+          <input
+            className="audits-reason"
+            placeholder={translate('audits.ignorePage.placeholder')}
+            aria-label={translate('audits.ignorePage.aria')}
+            value={reason}
+            maxLength={500}
+            autoFocus
+            onChange={(event) => setReason(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && reason.trim().length > 0) {
+                void props.actions.ignorePage(props.file, reason);
+              } else if (event.key === 'Escape') {
+                setIgnoring(false);
+              }
+            }}
+          />
+          <button className="audits-link" disabled={reason.trim().length === 0} onClick={() => void props.actions.ignorePage(props.file, reason)}>
+            {translate('audits.ignorePage.submit')}
+          </button>
+          <button className="audits-link muted" onClick={() => setIgnoring(false)}>
+            {translate('audits.ignored.cancel')}
+          </button>
+        </div>
+      )}
       {open && (
         <div className="audits-file-body">
           {sameElementRuns(props.findings).map(([only, ...others]) =>

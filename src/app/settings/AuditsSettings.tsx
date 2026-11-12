@@ -18,12 +18,16 @@ import { can } from '../../../shared/properties/projectRoles';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { ChevronRightIcon, CloseIcon } from '../../ui/Icons';
 import MoreMenu from '../../ui/MoreMenu';
+import { Skeleton, SkeletonRows } from '../../ui/Skeleton';
 import { Switch } from '../../ui/Switch';
 import { AUDIT_ICONS } from '../../features/audits/AuditIcons';
 import { readAuditIgnores, saveAuditIgnores, type StoredIgnores } from '../../features/audits/auditsBridge';
 import { updateAuditState } from '../../features/audits/auditStore';
 import '../../features/audits/audits.css';
 import './roles.css';
+
+/** Placeholder rows drawn while the audit file is first read: a few checks' worth. */
+const AUDIT_SETTINGS_SKELETON_ROWS = 6;
 
 const CATEGORY_LABELS: Readonly<Record<AuditCategory, string>> = {
   accessibility: 'Accessibility',
@@ -49,7 +53,7 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
   }, [projectPath]);
   useEffect(load, [load]);
   if (state.kind === 'loading') {
-    return <div className="props-empty">Reading the audit settings…</div>;
+    return <SkeletonRows count={AUDIT_SETTINGS_SKELETON_ROWS} row={() => <Skeleton height="28px" radius="8px" />} />;
   }
   if (state.kind === 'error') {
     return (

@@ -617,7 +617,13 @@ export interface AuditCssContext {
   readonly line: number | undefined;
   /** colour, spacing, radius, type, size or unit (shared/page/auditTokens.ts tokenGroup). */
   readonly group: string;
+  /** Where the token's bytes are, so the review window can replace them without a variable to swap to. Absent for an inline `style` attribute. */
+  readonly place?: AuditCssPlace;
 }
+
+/** The bytes of a raw token: inside a `<style>` block's text at `path`, or in a stylesheet file, at `offset`. */
+export type AuditCssPlace =
+  { readonly tag: 'style-block'; readonly path: readonly number[]; readonly offset: number } | { readonly tag: 'stylesheet'; readonly offset: number };
 
 /** The id a finding is ignored by: the check, the file, the element's path and the detail. */
 export function findingId(input: Pick<AuditFinding, 'check' | 'file' | 'element' | 'detail'>): string {

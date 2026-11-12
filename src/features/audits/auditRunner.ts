@@ -671,6 +671,7 @@ async function stylesheetFindings(input: AuditRunInput, facts: AuditFacts, io: A
             token: issue.token,
             line: lineOf(lines, issue.offset),
             group: tokenGroup(issue),
+            place: { tag: 'stylesheet' as const, offset: issue.offset },
           },
           source: 'static',
           fix: first,

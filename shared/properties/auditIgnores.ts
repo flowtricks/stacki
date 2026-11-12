@@ -6,6 +6,7 @@
 //   {
 //     "version": 2,
 //     "ignored": [{ "id": "img-alt|src/pages/index.astro|0.3|src=\"/a.png\"", "reason": "Decorative hero" }],
+//     "ignoredPages": [{ "file": "src/pages/legal.astro", "reason": "Copy comes from the lawyers" }],
 //     "checks": { "token-value": { "enabled": false }, "token-color": { "priority": "high" } },
 //     "tokens": { "properties": ["border-radius", "gap"], "colors": true, "px": false, "remOutsideVariables": true, "allowed": ["1px", "100%"] },
 //     "placeholders": ["lorem ipsum", "button text"]
@@ -14,7 +15,10 @@
 // One file, not a second `.stacki/lint.json`: ignores and settings are both "how
 // this project's audit behaves", are edited from the same panel and Settings tab,
 // and one file means one write witnessed against one set of bytes. Version 1
-// (ignores only) still reads; it is written back as version 2.
+// (ignores only) still reads; it is written back as version 2. `ignoredPages` is
+// optional and written only when there is one: a file without it reads as before,
+// and a page entry silences every finding of every check in that file, while the
+// per-finding `ignored` entries stay untouched whether the page is ignored or not.
 //
 // An id is the finding's own (shared/page/auditFindings.ts findingId), so an
 // ignore follows the finding while the file holds still and lapses when the
@@ -27,6 +31,7 @@ export const AUDIT_IGNORES_FILE = '.stacki/audits.json';
 
 export const AUDIT_IGNORE_LIMITS = {
   entriesMax: 2_000,
+  pagesMax: 500,
   idCharsMax: 1_024,
   reasonCharsMax: 500,
   checksMax: 100,
@@ -36,6 +41,12 @@ export const AUDIT_IGNORE_LIMITS = {
 
 export interface AuditIgnore {
   readonly id: string;
+  readonly reason: string;
+}
+
+/** A whole page or file ignored: every finding in `file` (project-relative), whatever the check. */
+export interface AuditIgnoredPage {
+  readonly file: string;
   readonly reason: string;
 }
 
@@ -66,6 +77,8 @@ export interface AuditFile {
   readonly version: 2;
   /** Unique by id, in the order they were added. */
   readonly ignored: readonly AuditIgnore[];
+  /** Pages ignored whole, unique by file, in the order they were added. */
+  readonly ignoredPages: readonly AuditIgnoredPage[];
   /** Overrides by check id; a check not named keeps its defaults. */
   readonly checks: Readonly<Record<string, AuditCheckSetting>>;
   readonly tokens: AuditTokenSettings;
@@ -107,9 +120,16 @@ export const DEFAULT_PLACEHOLDERS: readonly string[] = [
   'text goes here',
 ];
 
-export const EMPTY_AUDIT_IGNORES: AuditFile = { version: 2, ignored: [], checks: {}, tokens: DEFAULT_TOKEN_SETTINGS, placeholders: DEFAULT_PLACEHOLDERS };
+export const EMPTY_AUDIT_IGNORES: AuditFile = {
+  version: 2,
+  ignored: [],
+  ignoredPages: [],
+  checks: {},
+  tokens: DEFAULT_TOKEN_SETTINGS,
+  placeholders: DEFAULT_PLACEHOLDERS,
+};
 
-const TOP_FIELDS = ['version', 'ignored', 'checks', 'tokens', 'placeholders'] as const;
+const TOP_FIELDS = ['version', 'ignored', 'ignoredPages', 'checks', 'tokens', 'placeholders'] as const;
 const TOKEN_FIELDS = ['properties', 'colors', 'px', 'remOutsideVariables', 'allowed'] as const;
 
 /** The file's value, or a throw naming the first field that is wrong. */
@@ -145,10 +165,55 @@ export function parseAuditIgnores(input: unknown): AuditFile {
   return {
     version: 2,
     ignored,
+    ignoredPages: parseIgnoredPages(value['ignoredPages']),
     checks: value['checks'] === undefined ? {} : parseChecks(value['checks']),
     tokens: value['tokens'] === undefined ? DEFAULT_TOKEN_SETTINGS : parseTokens(value['tokens']),
     placeholders: value['placeholders'] === undefined ? DEFAULT_PLACEHOLDERS : parseList(value['placeholders'], 'Audit settings.placeholders'),
   };
+}
+
+function parseIgnoredPages(input: unknown): readonly AuditIgnoredPage[] {
+  if (input === undefined) {
+    return [];
+  }
+  const list = toArray(input);
+  if (list === undefined) {
+    throw new Error('Audit ignores.ignoredPages: expected an array');
+  }
+  if (list.length > AUDIT_IGNORE_LIMITS.pagesMax) {
+    throw new Error(`Audit ignores.ignoredPages: more than ${AUDIT_IGNORE_LIMITS.pagesMax} entries`);
+  }
+  const pages = list.map((entry, index): AuditIgnoredPage => {
+    const where = `Audit ignores.ignoredPages[${index}]`;
+    const value = toRecord(entry);
+    if (value === undefined) {
+      throw new Error(`${where}: expected an object`);
+    }
+    for (const key of Object.keys(value)) {
+      if (key !== 'file' && key !== 'reason') {
+        throw new Error(`${where}: unknown field "${key}"`);
+      }
+    }
+    const file = value['file'];
+    const reason = value['reason'];
+    if (typeof file !== 'string' || file.length === 0 || file.startsWith('/')) {
+      throw new Error(`${where}.file: expected a project-relative path`);
+    }
+    if (file.length > AUDIT_IGNORE_LIMITS.idCharsMax) {
+      throw new Error(`${where}.file: longer than ${AUDIT_IGNORE_LIMITS.idCharsMax} characters`);
+    }
+    if (typeof reason !== 'string' || reason.trim().length === 0) {
+      throw new Error(`${where}.reason: expected a non-empty string`);
+    }
+    if (reason.length > AUDIT_IGNORE_LIMITS.reasonCharsMax) {
+      throw new Error(`${where}.reason: longer than ${AUDIT_IGNORE_LIMITS.reasonCharsMax} characters`);
+    }
+    return { file, reason };
+  });
+  if (new Set(pages.map((page) => page.file)).size !== pages.length) {
+    throw new Error('Audit ignores.ignoredPages: a file is listed twice');
+  }
+  return pages;
 }
 
 function parseAuditIgnore(input: unknown, index: number): AuditIgnore {
@@ -282,6 +347,7 @@ export function serializeAuditIgnores(value: AuditFile): string {
   const body = {
     version: 2,
     ignored: value.ignored.map((entry) => ({ id: entry.id, reason: entry.reason })),
+    ...(value.ignoredPages.length === 0 ? {} : { ignoredPages: value.ignoredPages.map((page) => ({ file: page.file, reason: page.reason })) }),
     ...(Object.keys(value.checks).length === 0 ? {} : { checks: serializedChecks(value.checks) }),
     ...(same(value.tokens, DEFAULT_TOKEN_SETTINGS) ? {} : { tokens: value.tokens }),
     ...(same(value.placeholders, DEFAULT_PLACEHOLDERS) ? {} : { placeholders: value.placeholders }),
@@ -308,6 +374,29 @@ export function withIgnore(value: AuditFile, entry: AuditIgnore): AuditFile {
     throw new Error(`At most ${AUDIT_IGNORE_LIMITS.entriesMax} findings can be ignored`);
   }
   return { ...value, ignored: [...kept, { id: entry.id, reason: entry.reason.trim().slice(0, AUDIT_IGNORE_LIMITS.reasonCharsMax) }] };
+}
+
+/** The file with `file` ignored whole, or its reason replaced when it already is. */
+export function withIgnoredPage(value: AuditFile, entry: AuditIgnoredPage): AuditFile {
+  assert(entry.file.length > 0, 'withIgnoredPage: an entry has a file');
+  assert(entry.reason.trim().length > 0, 'withIgnoredPage: an entry has a reason');
+  const kept = value.ignoredPages.filter((existing) => existing.file !== entry.file);
+  if (kept.length >= AUDIT_IGNORE_LIMITS.pagesMax) {
+    throw new Error(`At most ${AUDIT_IGNORE_LIMITS.pagesMax} pages can be ignored`);
+  }
+  return { ...value, ignoredPages: [...kept, { file: entry.file, reason: entry.reason.trim().slice(0, AUDIT_IGNORE_LIMITS.reasonCharsMax) }] };
+}
+
+/** The file without the whole-page ignore for `file`; finding-level ignores in it stay. */
+export function withoutIgnoredPage(value: AuditFile, file: string): AuditFile {
+  const ignoredPages = value.ignoredPages.filter((entry) => entry.file !== file);
+  assert(ignoredPages.length >= value.ignoredPages.length - 1, 'withoutIgnoredPage: removes at most one entry');
+  return { ...value, ignoredPages };
+}
+
+/** The file with no ignores at all (findings or pages); checks and settings stay as written. */
+export function withoutAnyIgnores(value: AuditFile): AuditFile {
+  return { ...value, ignored: [], ignoredPages: [] };
 }
 
 /** The file without the entry for `id`. */

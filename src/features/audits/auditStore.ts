@@ -2,6 +2,7 @@
 // value: the chosen scope, the last report, whether a run is going, and the
 // project's ignore file. The runner (useAuditRunner.ts) is its one writer; it
 // keeps running while the panel is closed, so the badge counts what is open.
+import { ignoreReasons } from '../../../shared/properties/auditIgnoreList';
 import { useSyncExternalStore } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { AuditFinding } from '../../../shared/page/auditFindings';
@@ -126,8 +127,8 @@ export function useAuditState(): AuditState {
 export function openFindings(
   current: Pick<AuditState, 'report' | 'ignores'> & { readonly performance?: Pick<PerformanceState, 'findings'> },
 ): readonly AuditFinding[] {
-  const ignored = new Set(current.ignores.value.ignored.map((entry) => entry.id));
   const findings = allFindings(current);
+  const ignored = ignoreReasons(findings, current.ignores.value);
   const open = findings.filter((finding) => !ignored.has(finding.id));
   assert(open.length <= findings.length, 'openFindings: a subset');
   return open;
@@ -137,8 +138,9 @@ export function openFindings(
 export function ignoredFindings(
   current: Pick<AuditState, 'report' | 'ignores'> & { readonly performance?: Pick<PerformanceState, 'findings'> },
 ): readonly { readonly finding: AuditFinding; readonly reason: string }[] {
-  const reasons = new Map(current.ignores.value.ignored.map((entry) => [entry.id, entry.reason]));
-  return allFindings(current).flatMap((finding) => {
+  const findings = allFindings(current);
+  const reasons = ignoreReasons(findings, current.ignores.value);
+  return findings.flatMap((finding) => {
     const reason = reasons.get(finding.id);
     return reason === undefined ? [] : [{ finding, reason }];
   });

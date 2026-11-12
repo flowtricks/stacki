@@ -16,10 +16,14 @@ import {
   withIgnore,
   withoutIgnore,
   withCheckSetting,
+  withIgnoredPage,
+  withoutAnyIgnores,
+  withoutIgnoredPage,
   tokenProperty,
   DEFAULT_PLACEHOLDERS,
   DEFAULT_TOKEN_SETTINGS,
 } from '#dist/shared/properties/auditIgnores.js';
+import { ignoreReasons, ignoredEntryCount, ignoredGroups } from '#dist/shared/properties/auditIgnoreList.js';
 import { AGENT_TASK_LIMITS, agentTask } from '#dist/shared/properties/agentTask.js';
 import { validateMetadata } from '#dist/shared/properties/projectMetadata.js';
 
@@ -126,4 +130,100 @@ test('version 2 settings: defaults fill what the file leaves out, and only choic
   assert.throws(() => parseAuditIgnores({ version: 2, ignored: [], placeholders: lists(AUDIT_IGNORE_LIMITS.listItemsMax + 1) }), /more than/);
   assert.equal(tokenProperty(DEFAULT_TOKEN_SETTINGS, 'padding-inline-start'), true);
   assert.equal(tokenProperty(DEFAULT_TOKEN_SETTINGS, 'color'), false);
+});
+
+// Whole-page ignores: an optional list beside the per-finding one. Old files read
+// unchanged and write back without the key; bad entries are refused by field; add
+// and remove touch only their entry and keep the order; the ignore list groups
+// every entry by file, keeps stale ones, and a finding's own reason beats its page's.
+
+const withPage = { ...good, ignoredPages: [{ file: 'src/pages/legal.astro', reason: 'Lawyers own the copy' }] };
+
+test('page entries round-trip, and a file without them reads and writes as before', () => {
+  assert.deepEqual(parseAuditIgnores(withPage), withPage);
+  assert.deepEqual(parseAuditIgnoresSource(serializeAuditIgnores(withPage)), withPage);
+  assert.equal(serializeAuditIgnores(good).includes('ignoredPages'), false, 'nothing to say, nothing written');
+  assert.deepEqual(parseAuditIgnoresSource('{ "version": 1, "ignored": [] }').ignoredPages, []);
+});
+
+test('bad page entries are refused with the field named', () => {
+  const bad = (pages: unknown) => () => parseAuditIgnores({ ...good, ignoredPages: pages });
+  assert.throws(bad('x'), /ignoredPages: expected an array/);
+  assert.throws(bad([1]), /ignoredPages\[0\]: expected an object/);
+  assert.throws(bad([{ file: '', reason: 'r' }]), /ignoredPages\[0\]\.file/);
+  assert.throws(bad([{ file: '/abs.astro', reason: 'r' }]), /ignoredPages\[0\]\.file/);
+  assert.throws(bad([{ file: 'a.astro', reason: ' ' }]), /ignoredPages\[0\]\.reason/);
+  assert.throws(bad([{ file: 'a.astro', reason: 'r', extra: 1 }]), /unknown field "extra"/);
+  assert.throws(
+    bad([
+      { file: 'a.astro', reason: 'r' },
+      { file: 'a.astro', reason: 's' },
+    ]),
+    /a file is listed twice/,
+  );
+  assert.throws(bad(Array.from({ length: AUDIT_IGNORE_LIMITS.pagesMax + 1 }, (_, index) => ({ file: `f${index}`, reason: 'r' }))), /more than/);
+});
+
+test('ignoring and unignoring a page touch only that entry', () => {
+  const first = withIgnoredPage(good, { file: 'a.astro', reason: ' one ' });
+  const second = withIgnoredPage(first, { file: 'b.astro', reason: 'two' });
+  assert.deepEqual(second.ignoredPages, [
+    { file: 'a.astro', reason: 'one' },
+    { file: 'b.astro', reason: 'two' },
+  ]);
+  assert.deepEqual(
+    withIgnoredPage(second, { file: 'a.astro', reason: 'again' }).ignoredPages.map((page) => page.file),
+    ['b.astro', 'a.astro'],
+    'replaced, moved last',
+  );
+  const without = withoutIgnoredPage(second, 'a.astro');
+  assert.deepEqual(without.ignoredPages, [{ file: 'b.astro', reason: 'two' }]);
+  assert.deepEqual(without.ignored, good.ignored, 'finding-level ignores stay');
+  assert.deepEqual(withoutIgnoredPage(without, 'missing.astro'), without);
+  assert.throws(() => withIgnoredPage(good, { file: 'a.astro', reason: ' ' }), /Assertion failed/);
+  assert.deepEqual(withoutAnyIgnores({ ...withPage, checks: { x: { enabled: false, priority: undefined } } }).checks, {
+    x: { enabled: false, priority: undefined },
+  });
+  assert.equal(ignoredEntryCount(withoutAnyIgnores(withPage)), 0);
+});
+
+const found = (id: string, file: string) => ({ id, file, detail: `detail ${id}` });
+
+test('a page silences every finding in it; a finding keeps its own reason', () => {
+  const alt = found('img-alt|src/pages/legal.astro|0|a', 'src/pages/legal.astro');
+  const link = found('link-text|src/pages/legal.astro|1|b', 'src/pages/legal.astro');
+  const other = found('x|src/pages/home.astro|0|c', 'src/pages/home.astro');
+  const findings = [alt, link, other];
+  const file = { ...withPage, ignored: [{ id: link.id, reason: 'mine' }] };
+  const reasons = ignoreReasons(findings, file);
+  assert.equal(reasons.get(alt.id), 'Lawyers own the copy');
+  assert.equal(reasons.get(link.id), 'mine');
+  assert.equal(reasons.has(other.id), false, 'another page is untouched');
+  assert.equal(ignoredEntryCount(file), 2);
+});
+
+test('the ignored list groups by file and keeps stale entries removable', () => {
+  const findings = [found('img-alt|src/pages/legal.astro|0|a', 'src/pages/legal.astro')];
+  const file = {
+    ...good,
+    ignored: [
+      { id: 'img-alt|src/pages/legal.astro|0|a', reason: 'live' },
+      { id: 'img-alt|src/pages/gone.astro|3|old', reason: 'moved' },
+    ],
+    ignoredPages: [
+      { file: 'src/pages/legal.astro', reason: 'whole' },
+      { file: 'src/pages/deleted.astro', reason: 'stale page' },
+    ],
+  };
+  const groups = ignoredGroups(findings, file);
+  assert.deepEqual(
+    groups.map((group) => [group.file, group.page?.count, group.findings.map((row) => row.live)]),
+    [
+      ['src/pages/deleted.astro', 0, []],
+      ['src/pages/gone.astro', undefined, [false]],
+      ['src/pages/legal.astro', 1, [true]],
+    ],
+  );
+  assert.equal(groups[1]?.findings[0]?.label, 'old', 'a stale entry is named from its id');
+  assert.deepEqual(ignoredGroups([], EMPTY_AUDIT_IGNORES), []);
 });

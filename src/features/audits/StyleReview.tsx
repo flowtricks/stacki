@@ -17,6 +17,7 @@ import Dropdown from '../../ui/Dropdown';
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon } from '../../ui/Icons';
 import MoreMenu from '../../ui/MoreMenu';
 import { CrosshairIcon } from './AuditIcons';
+import { RawValueField } from './RawValueField';
 import { FileKindIcon, type Actions, type AuditsPanelProps } from './AuditsPanel';
 
 /** Rows the window draws before it asks to narrow the filters. */
@@ -273,9 +274,7 @@ function ReviewLine(props: {
           <>
             <CodeInline text={`${css.property}:`} language="css" />
             {css.group === 'colour' && <span className="audits-swatch" style={{ background: css.token }} />}
-            <strong className="audits-review-value">
-              <CodeInline text={css.token} language="css" />
-            </strong>
+            <RawValueField findings={props.all} actions={actions} kit={props.panel.valueKit} />
           </>
         )}
         {props.uses !== undefined && (

@@ -22,6 +22,7 @@ import { AuditsPanel } from '../appPanels';
 import { relativeTo } from '../../features/audits/auditScope';
 import { openAppSettings } from '../settings/Settings';
 import { nextReveal, revealNode, type PendingReveal } from './auditReveal';
+import { AUDIT_VALUE_KIT } from './auditValueKit';
 import { selectFromPanel } from './panelSelection';
 import type { ShellView } from '../App';
 
@@ -83,6 +84,7 @@ export function AuditsTab({ app }: { readonly app: ShellView }) {
       measure={() => measureTargets(app)}
       sources={() => searchSources(app)}
       onConfigure={() => openAppSettings('audits')}
+      valueKit={AUDIT_VALUE_KIT}
     />
   );
 }

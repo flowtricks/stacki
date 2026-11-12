@@ -17,6 +17,7 @@ import {
   auditFinding,
   descriptionLengthCheck,
   type AuditCssContext,
+  type AuditCssPlace,
   type AuditEdit,
   type AuditFileKind,
   type AuditFinding,
@@ -1061,7 +1062,7 @@ function checkStyleBlock(run: FileRun, visit: Visit): void {
       file: run.input.file,
       edits: [{ tag: 'raw-text', path: visit.path, expect: 'style', offset: issue.offset, before: issue.token, after: `var(${name})` }],
     }));
-    addToken(run, visit, issue, fixes, innerLine(run, node, issue.offset));
+    addToken(run, visit, issue, fixes, innerLine(run, node, issue.offset), { tag: 'style-block', path: visit.path, offset: issue.offset });
   }
 }
 
@@ -1076,13 +1077,21 @@ function checkInlineStyle(run: FileRun, visit: Visit, value: string): void {
       const next = `${value.slice(0, issue.offset)}var(${name})${value.slice(issue.offset + issue.token.length)}`;
       return attributeFix(run, visit, `Use var(${name})`, { [writtenName(props, 'style')]: stringValue(next) });
     });
-    addToken(run, visit, { ...issue, selector: 'style=""' }, fixes, undefined);
+    addToken(run, visit, { ...issue, selector: 'style=""' }, fixes, undefined, undefined);
   }
 }
 
-function addToken(run: FileRun, visit: Visit, issue: TokenIssue, fixes: readonly AuditFix[], line: number | undefined): void {
+function addToken(run: FileRun, visit: Visit, issue: TokenIssue, fixes: readonly AuditFix[], line: number | undefined, place: AuditCssPlace | undefined): void {
   const [first, ...rest] = fixes;
-  const css: AuditCssContext = { selector: issue.selector, property: issue.property, value: issue.value, token: issue.token, line, group: tokenGroup(issue) };
+  const css: AuditCssContext = {
+    selector: issue.selector,
+    property: issue.property,
+    value: issue.value,
+    token: issue.token,
+    line,
+    group: tokenGroup(issue),
+    ...(place === undefined ? {} : { place }),
+  };
   add(run, visit, {
     check: issue.kind,
     detail: `${issue.selector} { ${issue.property}: ${issue.token} }`,

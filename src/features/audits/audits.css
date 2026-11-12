@@ -661,6 +661,18 @@
 }
 .audits-rule > .audits-row .audits-review-button {
   flex: none;
+  align-self: center;
+  height: 24px;
+  min-height: 0;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: var(--bg-input);
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 24px;
+}
+.audits-rule > .audits-row .audits-review-button:hover {
+  background: var(--bg-hover);
 }
 /* A rule's count sits at the row's right whether or not a breakdown or Review precedes it. */
 .audits-rule > .audits-row .audits-count {
@@ -915,4 +927,49 @@
   min-height: 28px;
   padding-top: 3px;
   padding-bottom: 3px;
+}
+
+/* A raw value edited in place: the pill at rest, the Style panel's value input while editing. */
+.audits-review-value-button {
+  min-width: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+}
+.audits-review-value-button:hover:not(:disabled) .audits-review-value {
+  background: var(--bg-hover);
+}
+.audits-review-edit {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 80px;
+}
+.audits-review-edit .embed-editor_varconnect {
+  flex: 1;
+  min-width: 0;
+}
+.audits-review-edit-error {
+  flex: none;
+  color: var(--danger, #e5484d);
+  font-size: 11px;
+}
+
+/* The Ignored view: entries grouped by file, each row a name, its reason and Unignore. */
+.audits-ignored-head {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 12px;
+}
+.audits-ignored-row .audits-muted-text {
+  flex: 0 1 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audits-ignored-row .audits-link {
+  flex: none;
+  align-self: center;
 }

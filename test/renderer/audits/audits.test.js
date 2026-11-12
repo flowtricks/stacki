@@ -46,6 +46,9 @@ esbuild.buildSync({
       "export { EMPTY_AUDIT_IGNORES } from './shared/properties/auditIgnores';",
       "export { findInTree, findPattern, replacementFinding, findInData, replacedInData } from './src/features/audits/findText';",
       "export { storedFilter, breakdown } from './src/features/audits/AuditsPanel';",
+      "export { parseRawValue, valueFixes } from './shared/page/auditValueEdit';",
+      "export { RawValueField } from './src/features/audits/RawValueField';",
+      "export { withIgnoredPage } from './shared/properties/auditIgnores';",
       "export { reviewRows, reviewMatches } from './src/features/audits/StyleReview';",
       "export { revealNode, nextReveal, REVEAL_FLASH_MS, REVEAL_SETTLE_MS } from './src/app/shell/auditReveal';",
       "export { selectFromPanel } from './src/app/shell/panelSelection';",
@@ -847,4 +850,146 @@ test('the category is a dropdown remembered per project, and code-style rules sh
   assert.equal(audits.reviewRows([css('spacing', '6px'), css('spacing', '6px')], { collapse: false }).length, 2);
   assert.equal(audits.reviewMatches(css('radius', '3px'), { kind: 'spacing', file: 'all', fixable: false }), false);
   assert.equal(audits.reviewMatches(css('radius', '3px'), { kind: 'all', file: 'all', fixable: true }), false, 'no fix');
+});
+
+// Editing a raw value in the review window: the same fix pipeline writes the one token.
+const SHEET = '.button_wrap {\n  gap: 0.5em !important;\n  padding: 0.5em;\n}\n.card { gap: 0.5em; }\n';
+async function sheetFindings() {
+  const report = await audits.runAudit(
+    { settings: audits.EMPTY_AUDIT_IGNORES, scope: 'site', projectPath: PROJECT, scan, open: undefined },
+    io({ styleFiles: async () => [{ rel: 'src/styles/a.css', path: '/site/src/styles/a.css' }], readStyle: async () => SHEET }),
+  );
+  return report.findings.filter((entry) => entry.css !== undefined && entry.css.token === '0.5em');
+}
+const sheetDeps = (store, commands) => ({
+  projectPath: PROJECT,
+  open: undefined,
+  readPage: async () => ({ editable: false }),
+  readText: async () => store.text,
+  writeText: async (_path, text) => {
+    store.text = text;
+  },
+  send: async () => ({ ok: false }),
+  sendBatch: async () => ({ ok: false }),
+  pushCommand: (command) => commands.push(command),
+});
+
+test('a raw value typed over in the review window changes only its token; !important stays; identical values change together; undo restores', async () => {
+  const found = await sheetFindings();
+  assert.equal(found.length, 3, 'gap, padding and the card gap are raw');
+  const gaps = found.filter((entry) => entry.css.property === 'gap');
+  const store = { text: SHEET };
+  const commands = [];
+  const targets = audits.valueFixes(gaps, 'var(--space-2)');
+  const outcome = await audits.applyFixes(targets, sheetDeps(store, commands), 'Set gap');
+  assert.deepEqual(outcome.failures, []);
+  assert.equal(store.text, SHEET.replace(/gap: 0\.5em/g, 'gap: var(--space-2)'), 'both gaps, the !important kept, the padding and the formatting untouched');
+  assert.equal(commands.length, 1, 'one undo step for the group');
+  await commands[0].undo();
+  assert.equal(store.text, SHEET, 'undo puts the old bytes back');
+});
+
+test('a declaration that changed since it was listed is refused with a message, never written', async () => {
+  const [first] = await sheetFindings();
+  const store = { text: SHEET.replace('gap: 0.5em !important', 'gap: 0.75em !important') };
+  const before = store.text;
+  const outcome = await audits.applyFixes(audits.valueFixes([first], '1rem'), sheetDeps(store, []), 'Set');
+  assert.equal(outcome.fixed, 0);
+  assert.match(outcome.failures[0].message, /changed since the audit/);
+  assert.equal(store.text, before, 'nothing written');
+});
+
+test('the value field is read-only without the style kit, and a refused value keeps the editor open with the reason', async () => {
+  const [first] = await sheetFindings();
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const fixed = [];
+  const actions = { busy: false, fix: async (targets, label) => fixed.push([targets.length, label]) };
+  await act(async () => root.render(React.createElement(audits.RawValueField, { findings: [first], actions, kit: undefined })));
+  assert.equal(container.querySelector('button') ?? undefined, undefined, 'no kit: a plain pill');
+  let draft;
+  const kit = {
+    supports: (_property, value) => !value.startsWith('banana'),
+    Input: (props) => {
+      draft = props;
+      return React.createElement('input', {
+        'aria-label': props.ariaLabel,
+        value: props.value,
+        onChange: (event) => props.onChange(event.target.value),
+        onBlur: props.onBlur,
+      });
+    },
+  };
+  await act(async () => root.render(React.createElement(audits.RawValueField, { findings: [first], actions, kit })));
+  await act(async () => container.querySelector('button.audits-review-value-button').click());
+  assert.ok(draft, 'pressing the pill opens the input');
+  assert.equal(draft.value, '0.5em', 'pre-filled with the declared value');
+  await act(async () => draft.onChange('banana'));
+  await act(async () => draft.onBlur());
+  assert.match(container.querySelector('[role="alert"]').textContent, /does not accept/);
+  assert.deepEqual(fixed, [], 'a refused value writes nothing');
+  await act(async () => draft.onChange('1rem'));
+  await act(async () => draft.onBlur());
+  assert.deepEqual(fixed, [[1, 'Set gap to 1rem']]);
+  assert.equal(container.querySelector('input') ?? undefined, undefined, 'the editor closes after a commit');
+  await act(async () => container.querySelector('button.audits-review-value-button').click());
+  await act(async () =>
+    container.querySelector('.audits-review-edit').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true })),
+  );
+  assert.equal(container.querySelector('input') ?? undefined, undefined, 'Escape closes without a write');
+  assert.equal(fixed.length, 1);
+  await act(async () => root.unmount());
+});
+
+test('the panel: ignoring a page hides its findings and drops the counts; the Ignored view lists it and Unignore restores', async () => {
+  const writes = [];
+  window.avb.projectMetadata = async () => ({ ok: true, value: {} });
+  window.avb.writeProjectMetadata = async (input) => {
+    writes.push(input.write.source);
+    return { ok: true, value: { source: input.write.source } };
+  };
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const report = {
+    scope: 'site',
+    findings: [
+      finding({ id: 'a', check: 'img-alt' }),
+      finding({ id: 'b', check: 'link-text' }),
+      finding({ id: 'c', check: 'img-alt', file: 'src/pages/about.astro' }),
+    ],
+    files: 2,
+    unreadable: 0,
+    skipped: 0,
+    rendered: { tag: 'done', pages: 1 },
+    checkedAt: Date.now(),
+    trees: new Map(),
+  };
+  await act(async () => audits.updateAuditState((state) => ({ ...state, report, ignores: { source: undefined, value: audits.EMPTY_AUDIT_IGNORES } })));
+  await act(async () => root.render(React.createElement(audits.AuditsPanel, panelProps)));
+  assert.equal(container.querySelector('.audits-pill').textContent, '3');
+  // The page's ignore is the state the dialog writes; here through the same store write the menu uses.
+  await act(async () => {
+    const base = audits.auditState().ignores;
+    audits.updateAuditState((state) => ({
+      ...state,
+      ignores: { source: base.source, value: audits.withIgnoredPage(base.value, { file: 'src/pages/index.astro', reason: 'Legal' }) },
+    }));
+  });
+  assert.equal(container.querySelector('.audits-pill').textContent, '1', 'both findings on the ignored page drop out of the count');
+  const chip = [...container.querySelectorAll('.audits-pill-toggle')].find((button) => /Ignored/.test(button.textContent));
+  assert.match(chip.textContent, /Ignored\s*1/, 'the chip counts entries');
+  await act(async () => chip.click());
+  assert.match(container.querySelector('.audits-ignored').textContent, /src\/pages\/index\.astro/);
+  assert.match(container.querySelector('.audits-ignored').textContent, /Whole page ignored: Legal/);
+  const unignore = [...container.querySelectorAll('.audits-ignored button')].find((button) => button.textContent === 'Unignore');
+  await act(async () => unignore.click());
+  await settle();
+  assert.ok(writes.length === 1 && !writes[0].includes('ignoredPages'), 'only the entry went out of the file');
+  assert.match(container.textContent, /Nothing is ignored/);
+  await act(async () => chip.click());
+  assert.equal(container.querySelector('.audits-pill').textContent, '3', 'the findings are back');
+  await act(async () => root.unmount());
+  audits.resetAuditState('/site');
 });
