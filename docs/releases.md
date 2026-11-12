@@ -40,6 +40,16 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.2.2 the 1.2.0 changes, through Windows
+
+- The same app as 1.2.1, which never became public: Linux, macOS and Studio's browser test passed,
+  but the Windows job failed. 1.2.1 fixed the first path assertion in the local-excludes ESLint
+  test for `\` and left the second one (`notes/bad.js`) matching `/` only. Both now accept either
+  separator. Everything in the 1.2.0 and 1.2.1 entries ships here; Desktop, the Studio bundle and
+  `create-stacki` are aligned at 1.2.2.
+- Lesson: after fixing a platform assertion, search the whole test for the same pattern before
+  tagging (`grep -n '\\/' <test>`).
+
 ## 1.2.1 the 1.2.0 changes, through Studio's undo and two slow-runner tests
 
 - The same app as 1.2.0, which never became public: Linux passed, but Windows, macOS and Studio's

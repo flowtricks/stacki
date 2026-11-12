@@ -151,7 +151,7 @@ test('ESLint skips a local notes folder and still lints everything else', () => 
       write(root, '.git/info/exclude', '');
       const unhidden = run();
       assert.equal(unhidden.status, 1);
-      assert.match(String(unhidden.stdout), /notes\/bad\.js/);
+      assert.match(String(unhidden.stdout), /notes[\\/]bad\.js/);
     });
   } finally {
     rmSync(root, { recursive: true, force: true });
