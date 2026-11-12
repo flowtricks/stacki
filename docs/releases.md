@@ -1001,6 +1001,17 @@ Some failures depend on external services, signing, authentication, or hosted ru
 When a local test cannot reasonably reproduce the cause, document why, record the verification
 that is possible, and keep the required remote check. Never skip a gate to make publishing succeed.
 
+## One draft per tag
+
+On 2026-11-12 the v1.2.2 release made two drafts: build-mac, build-windows and build-linux start
+together, and each `electron-builder --publish always` (`EP_DRAFT`) creates a draft when it finds none
+for the tag. The installers went to one draft and the later `gh release upload "$TAG"` steps (mac's
+`latest-mac.yml`, the Studio bundle) to the other, so publish refused (`missing latest.yml`) and the
+release was completed by hand. The workflow's `draft` job now creates the draft once (idempotent,
+titled with the version as electron-builder does), and every job that uploads `needs` it.
+After the first run with this job, confirm only ONE draft exists for the tag
+(`gh release list --repo flowtricks/stacki-releases`).
+
 ## Browser tests and animated popups
 
 Shared popups remain mounted while their close animation runs, and consume outside clicks during

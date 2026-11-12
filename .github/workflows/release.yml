@@ -8,7 +8,38 @@ on:
       - 'v*'
 
 jobs:
+  # Create the draft release once, before any job uploads to it. The three
+  # electron-builder jobs start together, and each creates a draft for the tag
+  # when it finds none: v1.2.2 got two drafts within a second, the installers
+  # landed in one and the `gh release upload` steps in the other, and publish
+  # refused (missing latest.yml). With the draft already present,
+  # electron-builder reuses it (it matches tag_name against `v<version>`) and
+  # `gh release upload "$TAG"` has a single target.
+  #
+  # The job itself always runs, and only its steps check the event. A skipped
+  # job would skip every dependant, and build-linux and build-studio must still
+  # run on a manual dispatch; a job that succeeds as a no-op there leaves the
+  # graph and the dispatch behaviour exactly as they were.
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create the draft release if the tag has none
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        # The title is the version without the "v", as electron-builder names its
+        # drafts. Viewing first keeps a re-run of the workflow from failing.
+        run: |
+          if gh release view "$TAG" --repo flowtricks/stacki-releases >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          else
+            gh release create "$TAG" --repo flowtricks/stacki-releases \
+              --draft --title "${TAG#v}" --notes ""
+          fi
+
   build-mac:
+    needs: draft
     if: github.event_name == 'push'
     runs-on: macos-latest
     steps:
@@ -66,6 +97,7 @@ jobs:
           TAG: ${{ github.ref_name }}
 
   build-windows:
+    needs: draft
     if: github.event_name == 'push'
     runs-on: windows-latest
     steps:
@@ -96,6 +128,7 @@ jobs:
           EP_DRAFT: true
 
   build-linux:
+    needs: draft
     # Build native modules on the oldest supported Ubuntu so the resulting
     # glibc/libstdc++ requirements also work on newer desktop distributions.
     runs-on: ubuntu-22.04
@@ -178,7 +211,7 @@ jobs:
           xvfb-run --auto-servernum node dist/scripts/release/linuxSmoke.js /opt/Stacki/stacki
 
   build-studio:
-    needs: build-linux
+    needs: [draft, build-linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -229,7 +262,7 @@ jobs:
   # Publish only when every platform has uploaded and both Linux installs work.
   publish:
     if: github.event_name == 'push'
-    needs: [build-mac, build-windows, build-linux, test-linux-install, build-studio]
+    needs: [draft, build-mac, build-windows, build-linux, test-linux-install, build-studio]
     runs-on: ubuntu-latest
     steps:
       - name: Verify all platforms uploaded, then publish

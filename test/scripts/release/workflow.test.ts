@@ -93,3 +93,16 @@ test('Windows checkouts preserve source LF endings before formatting checks', ()
   const attributes = readFileSync('.gitattributes', 'utf8');
   assert.match(attributes, /^\*\s+text=auto\s+eol=lf\s*$/m);
 });
+
+test('every job that uploads to the release waits for the single draft job', () => {
+  // Three parallel electron-builder jobs once each created a draft (v1.2.2): uploads need one target.
+  const jobs = workflowJobs('.github/workflows/release.yml');
+  const draftCommands = jobSteps(jobs['draft']).map(command).join('\n');
+  assert.match(draftCommands, /gh release view "\$TAG" --repo flowtricks\/stacki-releases/);
+  assert.match(draftCommands, /gh release create "\$TAG"[\s\S]*--draft/);
+  for (const name of ['build-mac', 'build-windows', 'build-linux', 'build-studio', 'publish']) {
+    const needs = record(jobs[name])['needs'];
+    const names = typeof needs === 'string' ? [needs] : list(text)(needs);
+    assert.ok(names.includes('draft'), `${name} must need the draft job`);
+  }
+});
