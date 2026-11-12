@@ -255,6 +255,9 @@ export class AgentSetup {
         details: redactSignInOutput(watch.output),
       });
     }, SETUP_LIMITS.signInMsMax);
+    // The bound must never keep the process alive: a sign-in nobody finishes would otherwise hold the app
+    // (and any test that starts one) open for the full five minutes after everything else has ended.
+    timer.unref();
     this.running.set(agent, { process, timer });
     process.onData((text) => this.signInOutput(agent, text));
     process.onExit((exitCode) => {
