@@ -143,7 +143,8 @@ test('ESLint skips a local notes folder and still lints everything else', () => 
       write(root, 'src/bad.js', 'export const c = missingName;\n');
       const dirty = run();
       assert.equal(dirty.status, 1);
-      assert.match(String(dirty.stdout), /src\/bad\.js/);
+      // ESLint prints the platform's separator: `\` on Windows.
+      assert.match(String(dirty.stdout), /src[\\/]bad\.js/);
       assert.doesNotMatch(String(dirty.stdout), /notes/);
       // Without the exclude, the notes folder fails like any other: only the exclude changed the verdict.
       rmSync(path.join(root, 'src/bad.js'));

@@ -35,7 +35,7 @@ export function Navigator(props: NavigatorProps) {
   const parsed = useMemo(() => parsePage(source, { locs: true }), [source]);
   const wrapper = useRef<HTMLDivElement>(null);
   useTouchTree(wrapper);
-  const shown = useShownMove(source);
+  const shown = useShownMove(source, props.document?.revision ?? 0);
   const pageState = useMemo(() => {
     if (!parsed.editable) {
       return { editable: false as const, source, reason: parsed.reason };
@@ -95,13 +95,15 @@ interface LooseNode {
   readonly children?: readonly LooseNode[] | undefined;
 }
 
-// A drop's order, shown in the Navigator until the source it was planned over changes
-// (the server's answer) or the server refuses it. The move is forgotten on the first
-// change, not merely hidden: an undo restores exactly the source it was planned over,
-// and a hidden move would then show again over the restored order.
-function useShownMove(source: string) {
-  const [state, setState] = useState<{ readonly source: string; readonly move: CanvasMove } | undefined>(undefined);
-  if (state !== undefined && state.source !== source) {
+// A drop's order, shown in the Navigator until the document changes (the server's
+// answer) or the server refuses it. The move is forgotten on the first change, not
+// merely hidden: an undo restores exactly the source it was planned over, and a hidden
+// move would then show again over the restored order. The document's revision counts
+// the change even when the answer and an undo land before React renders between them,
+// which the source text alone cannot see (an undo pressed right after a drop).
+function useShownMove(source: string, revision: number) {
+  const [state, setState] = useState<{ readonly source: string; readonly revision: number; readonly move: CanvasMove } | undefined>(undefined);
+  if (state !== undefined && (state.source !== source || state.revision !== revision)) {
     setState(undefined); // React re-renders before committing; the stale move never shows.
   }
   useEffect(() => {
@@ -110,7 +112,7 @@ function useShownMove(source: string) {
     return () => window.removeEventListener('studio:action-refused', refused);
   }, []);
   return {
-    move: state?.source === source ? state.move : undefined,
-    show: (move: CanvasMove) => setState({ source, move }),
+    move: state?.source === source && state.revision === revision ? state.move : undefined,
+    show: (move: CanvasMove) => setState({ source, revision, move }),
   };
 }

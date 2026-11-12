@@ -18,6 +18,8 @@ import { record, string, textChange } from '../../shared/validation';
 import type { Edit, TreeAction } from '../source/source';
 
 export const LOCAL = Symbol('local');
+// An unanswered structural action releases an undo after this long, so a lost answer cannot freeze undo.
+const ACTION_ANSWER_WAIT_MS = 3000;
 const STRUCTURE = Symbol('structure');
 export class SharedDocument {
   readonly cursors = new CursorChannel((message) => this.send(message));
@@ -28,7 +30,7 @@ export class SharedDocument {
     trackedOrigins: new Set([LOCAL, STRUCTURE]),
     captureTimeout: 400,
   });
-  readonly history = new EditorHistory(this.undo);
+  readonly history = new EditorHistory(this.undo, () => this.actionAnswered());
   private readonly stopRoleCapture = subscribeRole(() => this.undo.stopCapturing());
   recordCommand = this.history.record.bind(this.history);
   revision = 0;
@@ -55,7 +57,26 @@ export class SharedDocument {
   // server answers an applied action with its own update before the save
   // acknowledgement; one acknowledged with no update, or answered with an error, was
   // refused, and whatever the canvas showed ahead of it goes back (actionRefused).
-  private actionSave: number | undefined;
+  private actionSaveValue: number | undefined;
+  // Actions between their call and their send: the checksum is computed first, and an undo in that gap
+  // would still take the step before the move.
+  private actionsStarting = 0;
+  private readonly actionWaiters = new Set<() => void>();
+  private get actionSave(): number | undefined {
+    return this.actionSaveValue;
+  }
+  // Whoever waits for the answer (undo, see actionAnswered) is released the moment the action stops being pending.
+  private set actionSave(value: number | undefined) {
+    this.actionSaveValue = value;
+    this.releaseActionWaiters();
+  }
+  private releaseActionWaiters() {
+    if (this.actionSaveValue === undefined && this.actionsStarting === 0) {
+      for (const release of [...this.actionWaiters]) {
+        release();
+      }
+    }
+  }
   private readonly saves = new SaveWatch(() => this.recoverSave());
   private reconnect?: ReturnType<typeof setTimeout>;
   private stopWatching?: () => void;
@@ -265,6 +286,29 @@ export class SharedDocument {
         return false;
     }
   }
+  /**
+   * Resolves once the structural action sent last is answered (applied or refused), or after
+   * ACTION_ANSWER_WAIT_MS. Why: the navigator shows a move at once, but its undo step exists only
+   * when the server's update arrives; undoing in that gap would undo the step before the move, and
+   * the two edits then tangle (the 1.2.0 browser-test failure after a navigator drag).
+   */
+  actionAnswered(): Promise<void> {
+    if (this.actionSave === undefined && this.actionsStarting === 0) {
+      return Promise.resolve();
+    }
+    if (this.actionWaiters.size >= 100) {
+      throw new Error('Assertion failed: undo waiters stay bounded');
+    }
+    return new Promise<void>((resolve) => {
+      const release = () => {
+        clearTimeout(timer);
+        this.actionWaiters.delete(release);
+        resolve();
+      };
+      const timer = setTimeout(release, ACTION_ANSWER_WAIT_MS);
+      this.actionWaiters.add(release);
+    });
+  }
   private refuseAction() {
     if (this.actionSave === undefined) {
       return;
@@ -392,6 +436,15 @@ export class SharedDocument {
   }
   /** Sends a structural action; false when it was not sent (nothing to edit). */
   async action(action: TreeAction): Promise<boolean> {
+    this.actionsStarting++;
+    try {
+      return await this.sendAction(action);
+    } finally {
+      this.actionsStarting--;
+      this.releaseActionWaiters();
+    }
+  }
+  private async sendAction(action: TreeAction): Promise<boolean> {
     if (getEditorRole() === 'client') {
       if (!this.file.startsWith('src/pages/')) {
         throw new Error('Component source is protected in Client mode.');

@@ -13,7 +13,11 @@ export class EditorHistory {
   private readonly future: Command[] = [];
   private restoring = false;
   private last = 0;
-  constructor(private readonly manager: Y.UndoManager) {
+  constructor(
+    private readonly manager: Y.UndoManager,
+    /** Resolves when no structural action is waiting for the server, so its undo step exists before one is taken. */
+    private readonly settled: () => Promise<void> = () => Promise.resolve(),
+  ) {
     manager.on('stack-item-added', (event) => {
       if (!this.restoring && event.type === 'undo') {
         this.record({ undo: () => manager.undo(), redo: () => manager.redo() }, true);
@@ -54,6 +58,10 @@ export class EditorHistory {
   }
   /** Undoes or redoes one step; resolves with the step's label, when it has one. */
   async step(direction: 'undo' | 'redo'): Promise<string | undefined> {
+    if (this.restoring) {
+      return undefined;
+    }
+    await this.settled();
     if (this.restoring) {
       return undefined;
     }

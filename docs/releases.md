@@ -40,6 +40,23 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.2.1 the 1.2.0 changes, through Studio's undo and two slow-runner tests
+
+- The same app as 1.2.0, which never became public: Linux passed, but Windows, macOS and Studio's
+  browser test failed. Everything in the 1.2.0 entry ships here; Desktop, the Studio bundle and
+  `create-stacki` are aligned at 1.2.1.
+- **Studio undo after a drag**: pressing undo right after a navigator drop undid the step before
+  the move, because the move's undo step exists only when the server answers. Undo now waits for
+  the unanswered action (bounded at 3 seconds), and the Navigator forgets a shown move on any
+  document change, so an answer and an undo that land before React renders cannot leave the
+  moved order on screen over the restored source (`studio/test/editorHistorySettled.test.ts`;
+  `npm run test:browser` reproduced it on a fresh copy of the fixture and passes ten runs in a row).
+- Windows: the local-excludes ESLint test matched `src/bad.js` where ESLint prints `src\bad.js`.
+- macOS: the app-frame transparency probe sampled the canvas before the iframe's card painted;
+  it now captures again, within a bound, until the card shows.
+- The source-watch test settles macOS's replayed startup events before it asserts (added in the
+  1.2.0 push, after the pre-push hook failed under load).
+
 ## 1.2.0 AI panel overhaul, nested list props and Apps polish
 
 - Desktop, the Studio source bundle and `create-stacki` are all at 1.2.0. 1.1.9 never became

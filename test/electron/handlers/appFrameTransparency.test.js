@@ -119,8 +119,20 @@ const SAMPLES = {
 async function capture(window, file, surface) {
   await window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(host(file, surface))}`);
   await settled(window);
-  const image = await window.webContents.capturePage();
-  return Object.fromEntries(Object.entries(SAMPLES).map(([name, at]) => [name, pixel(image, at.x, at.y)]));
+  // The iframe's first paint can reach the capture a few frames after `load` on a slow macOS runner
+  // (the 1.2.0 release run sampled the bare canvas where the card was). Capture again until the card
+  // shows, within a bound; a card that never paints still fails its check, and the margins are read
+  // from that same capture, so waiting cannot hide an opaque box.
+  let pixels;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const image = await window.webContents.capturePage();
+    pixels = Object.fromEntries(Object.entries(SAMPLES).map(([name, at]) => [name, pixel(image, at.x, at.y)]));
+    if (near(pixels.card, CARD)) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return pixels;
 }
 
 app.whenReady().then(async () => {
