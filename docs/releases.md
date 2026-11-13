@@ -40,6 +40,18 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.1 the 1.4.0 changes, through Windows
+
+- The same app as 1.4.0, which never became public: Linux, macOS and Studio's browser test passed,
+  but the Windows job failed two new Electron probes (`renderer/app/settingsLayout` and
+  `renderer/publishing/branchChipLook`). They started Electron with `ELECTRON_RUN_AS_NODE` set to an
+  empty string, which Windows still counts as set, so Electron ran as plain Node and `app` was
+  undefined. Both now delete the variable. No app code changed. Everything in the 1.4.0 entry ships
+  here; Desktop, the Studio bundle and `create-stacki` are aligned at 1.4.1 (`create-stacki` 1.4.0 was
+  published with the same Studio at the old version).
+- Lesson: never set a spawned Electron's `ELECTRON_RUN_AS_NODE` to `''`; delete the key
+  (`grep -rn "ELECTRON_RUN_AS_NODE: ''" test`).
+
 ## 1.4.0 Full translations, Payload CMS, git branch chip and faster first open
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.0.
