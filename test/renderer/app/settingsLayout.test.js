@@ -250,7 +250,10 @@ app.whenReady().then(async () => {
     check('a permission title and its (i) sit left of its switch', match.permissionTitleRight.every(Boolean), detail);
     check('the page starts close under the header', match.topGap >= 0 && match.topGap <= 40, detail);
     check('the sidebar title is inset from the dialog edge', match.sidebarLeft >= 20, detail);
-    for (const [name, text] of Object.entries(TIPS)) {
+    // Hover needs pointer input that GitHub's Linux (xvfb) and Windows hidden windows never deliver (see
+    // appUiKitTooltip), so the hover checks run on macOS only; the keyboard-focus check below runs everywhere.
+    const hoverTips = process.platform === 'darwin' ? Object.entries(TIPS) : [];
+    for (const [name, text] of hoverTips) {
       const tip = tips[name];
       const why = JSON.stringify(tip);
       check(`${name}: hovering the (i) shows a tooltip`, tip?.shown === true, why);
