@@ -9,6 +9,7 @@
   "files": [
     "dist/cli.mjs",
     "dist/stacki-studio.json",
+    "dist/demo/",
     "README.md",
     "LICENSE"
   ],
