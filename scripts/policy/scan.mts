@@ -174,12 +174,16 @@ function ancestors(folder: string): readonly string[] {
 }
 
 // Names are unique within a layout root, ignoring case, so a file named in a
-// test, a lint list or a conversation is one file.
+// test, a lint list or a conversation is one file. The per-locale message
+// catalogs are exempt: each language folder intentionally repeats the same
+// file names so the catalogs stay in parity (human-approved gate change).
+const LOCALE_CATALOG_ROOT = 'shared/properties/i18n/messages/';
+
 export function layoutUniquenessViolations(files: readonly string[]): readonly Violation[] {
   const found: Violation[] = [];
   for (const root of LAYOUT_ROOTS) {
     const seen = new Map<string, string>();
-    const named = files.filter((candidate) => candidate.startsWith(root) && !isExempt(candidate));
+    const named = files.filter((candidate) => candidate.startsWith(root) && !candidate.startsWith(LOCALE_CATALOG_ROOT) && !isExempt(candidate));
     for (const file of named) {
       const name = path.posix.basename(file).toLowerCase();
       const first = seen.get(name);

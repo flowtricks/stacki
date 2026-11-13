@@ -148,6 +148,17 @@ test('layout names are unique within a root, ignoring case', () => {
   assert.deepEqual(layoutUniquenessViolations(['shared/a.ts', 'electron/a.ts']), []);
 });
 
+test('per-locale message catalogs may repeat file names', () => {
+  const catalogs = ['shared/properties/i18n/messages/en/audits.ts', 'shared/properties/i18n/messages/es/audits.ts'];
+  assert.deepEqual(layoutUniquenessViolations(catalogs), []);
+  // A non-catalog file with the same name is still a clash with another non-catalog file.
+  const clash = ['shared/properties/audits.ts', 'shared/page/audits.ts'];
+  assert.deepEqual(
+    layoutUniquenessViolations(clash).map((violation) => violation.rule),
+    ['layout-unique'],
+  );
+});
+
 test('test/ mirrors the source: suites in their area, helpers apart', () => {
   const header = '// Header.\n';
   for (const file of [
