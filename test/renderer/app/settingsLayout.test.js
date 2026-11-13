@@ -213,10 +213,14 @@ app.whenReady().then(async () => {
   );
   fs.writeFileSync(path.join(directory, 'probe.js'), PROBE);
   const { spawnSync } = require('child_process');
+  // The variable must be absent, not empty: on Windows an empty value still counts as set and Electron then
+  // runs as plain Node, where `app` is undefined.
+  const environment = { ...process.env };
+  delete environment.ELECTRON_RUN_AS_NODE;
   const run = spawnSync(electronPath, [path.join(directory, 'probe.js')], {
     encoding: 'utf8',
     timeout: 120000,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '' },
+    env: environment,
   });
   const line = (run.stdout || '').split('\n').find((text) => text.trim().startsWith('{'));
   if (!line) {

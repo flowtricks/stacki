@@ -203,10 +203,14 @@ function realInfo(scratch, name, setup) {
     `<!doctype html><meta charset=utf-8>${SHEETS.map((file) => `<link rel="stylesheet" href="file://${path.join(ROOT, file)}">`).join('')}<style>body{margin:0;background:#191919}*,*::before,*::after{transition:none!important;animation:none!important}.titlebar{margin:24px}</style><div id="root"></div><script defer src="entry.js"></script>`,
   );
   fs.writeFileSync(path.join(directory, 'probe.js'), PROBE);
+  // The variable must be absent, not empty: on Windows an empty value still counts as set and Electron then
+  // runs as plain Node, where `app` is undefined.
+  const environment = { ...process.env, STACKI_CASES: JSON.stringify(cases) };
+  delete environment.ELECTRON_RUN_AS_NODE;
   const run = spawnSync(electronPath, [path.join(directory, 'probe.js')], {
     encoding: 'utf8',
     timeout: 120000,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '', STACKI_CASES: JSON.stringify(cases) },
+    env: environment,
   });
   fs.rmSync(scratch, { recursive: true, force: true });
   const line = (run.stdout || '').split('\n').find((text) => text.trim().startsWith('{'));
