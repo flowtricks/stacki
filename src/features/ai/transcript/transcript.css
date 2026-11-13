@@ -534,3 +534,20 @@
   font: 10.5px / 1.4 var(--mono, ui-monospace, monospace);
   color: var(--text-faint);
 }
+.ai-untracked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ai-untracked-turn-on {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--text);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.ai-untracked-failed {
+  color: var(--text-faint);
+}

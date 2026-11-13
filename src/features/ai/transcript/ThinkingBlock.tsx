@@ -5,10 +5,12 @@ import { memo, useId } from 'react';
 import { LoaderDots } from '../../../ui/LoaderDots';
 import { ChevronDownIcon, ChevronRightIcon } from '../../../ui/Icons';
 import { ChatText } from '../ChatText';
+import { useChatWords } from '../useChatWords';
 import { thoughtLabel, type TextItem } from './transcriptModel';
 import { useOpenState } from './transcriptUi';
 
 export const ThinkingBlock = memo(function ThinkingBlock({ item, chatId, live }: { readonly item: TextItem; readonly chatId: string; readonly live: boolean }) {
+  const words = useChatWords();
   const [open, change] = useOpenState(chatId, `thought:${item.id}`, { open: false });
   const bodyId = useId();
   return (
@@ -16,7 +18,7 @@ export const ThinkingBlock = memo(function ThinkingBlock({ item, chatId, live }:
       <button className="ai-thought-head" aria-expanded={open} aria-controls={open ? bodyId : undefined} onClick={() => change({ open: !open })}>
         {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
         {live && <LoaderDots dotPx={3} />}
-        <span>{thoughtLabel(item, { live })}</span>
+        <span>{thoughtLabel(item, { live }, words)}</span>
       </button>
       {open && (
         <div className="ai-thought-body" id={bodyId}>

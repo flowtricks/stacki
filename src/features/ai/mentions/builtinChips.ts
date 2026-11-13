@@ -12,6 +12,7 @@
 import { assert } from '../../../../shared/core/assert';
 import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
 import { BUILTIN_CHIP_IDS, BUILTIN_CHIP_TITLES, type BuiltinChipId, type MentionChip } from '../../../../shared/properties/ai/mentions';
+import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
 import { reportErrorToast } from '../../../ui/errorNotices';
 import { builtinInstructionsText } from '../../../lib/builtinInstructions';
 import { registerBuiltinChipText } from '../aiStore';
@@ -19,9 +20,11 @@ import { registerBuiltinChipText } from '../aiStore';
 export type BuiltinMentionChip = Extract<MentionChip, { readonly kind: 'builtin' }>;
 
 export interface BuiltinChipDefinition {
+  /** The English title: the words the agent receives for the chip and what the picker matches. Shown translated from `titleKey`. */
   readonly title: string;
-  /** The hover text: what the chip is and what clicking it does. */
-  readonly description: string;
+  readonly titleKey: MessageKey;
+  /** The hover text: what the chip is and what clicking it does (a catalog key). */
+  readonly descriptionKey: MessageKey;
   /** Extra words the picker matches besides the title. */
   readonly keywords: readonly string[];
   /** The bundled text, read when it is needed so a test or a hot reload sees the current module. */
@@ -31,7 +34,8 @@ export interface BuiltinChipDefinition {
 export const BUILTIN_CHIPS: Readonly<Record<BuiltinChipId, BuiltinChipDefinition>> = {
   'app-builder': {
     title: BUILTIN_CHIP_TITLES['app-builder'],
-    description: 'Instructions for building a Stacki app. Click to copy them.',
+    titleKey: 'ai.mention.builtin.appBuilder.title',
+    descriptionKey: 'ai.mention.builtin.appBuilder.description',
     keywords: ['app', 'build', 'builder', 'stacki', 'sdk', 'manifest'],
     text: () => builtinInstructionsText('app-builder'),
   },
@@ -39,7 +43,6 @@ export const BUILTIN_CHIPS: Readonly<Record<BuiltinChipId, BuiltinChipDefinition
 
 /** How long a chip says "Copied" after a click. */
 export const COPIED_LABEL_MS = 1_500;
-export const COPIED_LABEL = 'Copied';
 
 /** The bundled text of a built-in chip, checked: never empty, never past what a prompt part may carry. */
 export function builtinChipText(id: BuiltinChipId): string {

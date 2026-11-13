@@ -25,7 +25,9 @@ esbuild.buildSync({
     contents: [
       "export { Transcript } from './src/features/ai/transcript/TranscriptView';",
       "export { PlanCard } from './src/features/ai/transcript/PlanCard';",
-      "export * as model from './src/features/ai/transcript/transcriptModel';",
+      "export * as rawModel from './src/features/ai/transcript/transcriptModel';",
+      "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
+      "export { formattersFor } from './shared/core/i18n/format';",
       "export { createTicker } from './src/features/ai/transcript/ticker';",
       "export { openState, setOpenState, expandAllItems, collapseAllItems, resetTranscriptUi } from './src/features/ai/transcript/transcriptUi';",
       "export { EMPTY_CHAT, reduceChat } from './src/features/ai/chatReducer';",
@@ -81,7 +83,15 @@ const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
 const ui = require(output);
-const { model } = ui;
+// The English forms of the model's wording functions, which take the language's messages and number format.
+const words = { translate: ui.ENGLISH_TRANSLATE, formatNumber: ui.formattersFor('en').formatNumber };
+const model = {
+  ...ui.rawModel,
+  summarizeGroup: (items) => ui.rawModel.summarizeGroup(items, words),
+  thoughtLabel: (item, options) => ui.rawModel.thoughtLabel(item, options, words),
+  runningLabel: (view, now) => ui.rawModel.runningLabel(view, now, ui.ENGLISH_TRANSLATE),
+  compactionLine: (item) => ui.rawModel.compactionLine(item, words),
+};
 
 const CHAT = `c${'a'.repeat(24)}`;
 const turnId = (number) => `t${String(number).padStart(16, '0')}`;
@@ -322,7 +332,7 @@ test('compaction rows: running, saved tokens from before and after, failed, stop
   });
   assert.equal(
     model.compactionLine({ ...base, status: 'completed', before: { used: 82_000, size: 200_000 }, after: { used: 40_000, size: 200_000 } }).text,
-    'Conversation compacted · saved ~42k tokens',
+    'Conversation compacted · saved ~42K tokens',
   );
   assert.equal(
     model.compactionLine({ ...base, status: 'completed', before: undefined, after: undefined }).text,
@@ -341,8 +351,11 @@ test('compaction rows: running, saved tokens from before and after, failed, stop
     detail: 'OAuth expired',
   });
   assert.equal(model.compactionLine({ ...base, status: 'cancelled', before: undefined, after: undefined }).tone, 'stopped');
-  assert.deepEqual([850, 42_000, 1_234_000, -5].map(model.formatTokens), ['850', '42k', '1.2M', '0']);
-  assert.throws(() => model.formatTokens(Number.NaN), /finite/);
+  assert.deepEqual(
+    [850, 42_000, 1_234_000, -5].map((tokens) => model.formatTokens(tokens, words.formatNumber)),
+    ['850', '42K', '1.2M', '0'],
+  );
+  assert.throws(() => model.formatTokens(Number.NaN, words.formatNumber), /finite/);
 });
 
 test('long text and tool output are cut at their bounds, from the end that matters', () => {
@@ -805,7 +818,7 @@ test('the compaction row: in progress with the loader, then what it saved, or th
   ]);
   await render(completed);
   assert.equal(container.querySelectorAll('.ai-compaction').length, 1, 'one row per compaction');
-  assert.equal(text(container, '.ai-compaction'), 'Conversation compacted · saved ~42k tokens');
+  assert.equal(text(container, '.ai-compaction'), 'Conversation compacted · saved ~42K tokens');
   await render(
     fold(
       user(TURN, 'x', 1),

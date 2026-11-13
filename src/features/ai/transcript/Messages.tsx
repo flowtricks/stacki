@@ -6,6 +6,8 @@
 // control the fold (`expanded`, `onExpandedChange`) so it survives the message being re-rendered.
 import { useState, type ReactNode } from 'react';
 import type { ChatAttachmentName } from '../../../../shared/properties/ai/chatModel';
+import type { Translator } from '../../../lib/i18n/localeContext';
+import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { CheckIcon, CopyIcon, PencilIcon, RefreshIcon } from '../../../ui/Icons';
 import { ChatText } from '../ChatText';
 import { useCopy, type CopyState } from './copyText';
@@ -89,12 +91,13 @@ function useFold(text: string, props: FoldProps): Folding {
 }
 
 function ShowMore({ folding }: { readonly folding: Folding }) {
+  const translate = useTranslate();
   if (!folding.long) {
     return undefined;
   }
   return (
     <button className="ai-msg-more" aria-expanded={!folding.folded} onClick={folding.toggle}>
-      {folding.folded ? 'Show more' : 'Show less'}
+      {folding.folded ? translate('ai.message.showMore') : translate('ai.message.showLess')}
     </button>
   );
 }
@@ -110,25 +113,27 @@ function MessageToolbar({
   readonly onEdit: (() => void) | undefined;
   readonly onResend: (() => void) | undefined;
 }) {
+  const translate = useTranslate();
+  const { formatDate } = useFormat();
   const { state, copy } = useCopy();
-  const time = timeLabel(at);
+  const time = timeLabel(at, formatDate);
   return (
-    <div className="ai-msg-toolbar" role="toolbar" aria-label="Message actions">
+    <div className="ai-msg-toolbar" role="toolbar" aria-label={translate('ai.message.actions')}>
       {time !== undefined && (
-        <time className="ai-msg-time" dateTime={new Date(at ?? 0).toISOString()} title={fullTimeLabel(at)}>
+        <time className="ai-msg-time" dateTime={new Date(at ?? 0).toISOString()} title={fullTimeLabel(at, formatDate)}>
           {time}
         </time>
       )}
-      <button className="ai-msg-action" title={copyTitle(state)} aria-label="Copy message" onClick={() => copy(text)}>
+      <button className="ai-msg-action" title={copyTitle(state, translate)} aria-label={translate('ai.message.copy')} onClick={() => copy(text)}>
         {state === 'copied' ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
       </button>
       {onEdit !== undefined && (
-        <button className="ai-msg-action" title="Edit and send again" aria-label="Edit message" onClick={onEdit}>
+        <button className="ai-msg-action" title={translate('ai.message.editTitle')} aria-label={translate('ai.message.edit')} onClick={onEdit}>
           <PencilIcon size={14} />
         </button>
       )}
       {onResend !== undefined && (
-        <button className="ai-msg-action" title="Send again" aria-label="Send message again" onClick={onResend}>
+        <button className="ai-msg-action" title={translate('ai.message.resendTitle')} aria-label={translate('ai.message.resend')} onClick={onResend}>
           <RefreshIcon size={14} />
         </button>
       )}
@@ -136,14 +141,14 @@ function MessageToolbar({
   );
 }
 
-function copyTitle(state: CopyState): string {
+function copyTitle(state: CopyState, translate: Translator): string {
   switch (state) {
     case 'copied':
-      return 'Copied';
+      return translate('ai.common.copied');
     case 'failed':
-      return 'Couldn’t copy';
+      return translate('ai.common.copyFailed');
     case 'idle':
-      return 'Copy message';
+      return translate('ai.message.copy');
     default: {
       const exhaustive: never = state;
       return exhaustive;

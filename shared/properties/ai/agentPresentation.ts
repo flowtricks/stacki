@@ -14,6 +14,7 @@
 // order with the adapter's own name: a newer adapter degrades to plain rows, it
 // never hides a choice.
 import { assert } from '../../core/assert';
+import { englishText, messageRef, type MessageKey } from '../i18n/messageRef';
 import type { AgentId } from './agentIds';
 import { AI_LIMITS } from './aiLimits';
 import type { ChatOption } from './chatModel';
@@ -39,12 +40,12 @@ export interface EffortPresentation {
   readonly order: readonly string[];
   /** Choices left out of the menu (the adapter's "use my default"). */
   readonly hidden: readonly string[];
-  /** Shorter names for the adapter's own ("xhigh" is "Extra"). */
-  readonly labels: Readonly<Record<string, string>>;
+  /** Shorter names for the adapter's own ("xhigh" is "Extra"), as catalog keys: the table defines them, so they are translated. */
+  readonly labels: Readonly<Record<string, MessageKey>>;
   readonly recommended: string | undefined;
-  /** Choices that get an information icon, with what it says. */
-  readonly info: Readonly<Record<string, string>>;
-  readonly description: string;
+  /** Choices that get an information icon, with what it says (catalog keys). */
+  readonly info: Readonly<Record<string, MessageKey>>;
+  readonly description: MessageKey;
 }
 
 export interface AgentPresentation {
@@ -55,13 +56,13 @@ export interface AgentPresentation {
   readonly modelsPrimaryMax: number;
   /** Options shown as switch rows when they offer exactly "on" and "off". */
   readonly toggleOptionIds: readonly string[];
-  /** Names for the switches, since the adapter's are terse ("Fast"). */
-  readonly toggleLabels: Readonly<Record<string, string>>;
+  /** Names for the switches, since the adapter's are terse ("Fast"), as catalog keys. */
+  readonly toggleLabels: Readonly<Record<string, MessageKey>>;
   /** The agent has a compact command (Claude's `/compact`); Codex has none in its recorded commands. */
   readonly canCompact: boolean;
 }
 
-const EFFORT_DESCRIPTION = 'Higher effort means more thorough responses, but takes longer and uses your limits faster.';
+const EFFORT_DESCRIPTION = 'ai.effort.description';
 
 export const AGENT_PRESENTATION: Readonly<Record<AgentId, AgentPresentation>> = {
   claude: {
@@ -76,15 +77,15 @@ export const AGENT_PRESENTATION: Readonly<Record<AgentId, AgentPresentation>> = 
       optionId: 'effort',
       order: ['low', 'medium', 'high', 'xhigh', 'max'],
       hidden: ['default'],
-      labels: { xhigh: 'Extra' },
+      labels: { xhigh: 'ai.effort.extra' },
       recommended: 'medium',
-      info: { max: 'Maximum reasoning: the most thorough and slowest setting, and it uses your limits fastest.' },
+      info: { max: 'ai.effort.info.max' },
       description: EFFORT_DESCRIPTION,
     },
     modelOptionId: 'model',
     modelsPrimaryMax: 4,
     toggleOptionIds: ['ultracode', 'fast'],
-    toggleLabels: { ultracode: 'Ultracode', fast: 'Fast mode' },
+    toggleLabels: { ultracode: 'ai.toggle.ultracode', fast: 'ai.toggle.fastMode' },
     canCompact: true,
   },
   codex: {
@@ -99,18 +100,18 @@ export const AGENT_PRESENTATION: Readonly<Record<AgentId, AgentPresentation>> = 
       optionId: 'reasoning_effort',
       order: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
       hidden: [],
-      labels: { xhigh: 'Extra' },
+      labels: { xhigh: 'ai.effort.extra' },
       recommended: 'medium',
       info: {
-        max: 'Maximum reasoning: the most thorough and slowest setting, and it uses your limits fastest.',
-        ultra: 'Ultra delegates work to other agents and can use your limits quickly.',
+        max: 'ai.effort.info.max',
+        ultra: 'ai.effort.info.ultra',
       },
       description: EFFORT_DESCRIPTION,
     },
     modelOptionId: 'model',
     modelsPrimaryMax: 4,
     toggleOptionIds: ['fast-mode'],
-    toggleLabels: { 'fast-mode': 'Fast mode' },
+    toggleLabels: { 'fast-mode': 'ai.toggle.fastMode' },
     canCompact: false,
   },
 };
@@ -138,12 +139,24 @@ export function isRecommendedMode(agent: AgentId, mode: string): boolean {
   return AGENT_PRESENTATION[agent].modes.recommended === mode;
 }
 
+/** One effort row: `labelKey` is set when Stacki defines the name (translate it), absent when `label` is the adapter's own. */
+export interface EffortRow {
+  readonly value: string;
+  readonly label: string;
+  readonly labelKey: MessageKey | undefined;
+  readonly choice: Choice;
+}
+
 /** The effort rows: the table's order, the hidden choice left out, each with the name the menu shows. */
-export function effortRows(agent: AgentId, choices: readonly Choice[]): readonly { readonly value: string; readonly label: string; readonly choice: Choice }[] {
+export function effortRows(agent: AgentId, choices: readonly Choice[]): readonly EffortRow[] {
   const effort = AGENT_PRESENTATION[agent].effort;
   const rows = orderedChoices(effort.order, choices)
     .filter((choice) => !effort.hidden.includes(choice.value))
-    .map((choice) => ({ value: choice.value, label: effort.labels[choice.value] ?? choice.name, choice }));
+    .map((choice) => {
+      // A name the table defines is Stacki's and has a catalog key; the adapter's own name is data and shows as sent.
+      const labelKey = effort.labels[choice.value];
+      return { value: choice.value, label: labelKey === undefined ? choice.name : englishText(messageRef(labelKey)), labelKey, choice };
+    });
   assert(rows.length <= choices.length, 'effortRows: never more rows than choices');
   return rows;
 }
@@ -164,6 +177,8 @@ export function splitModels(agent: AgentId, choices: readonly Choice[]): { reado
 export interface ToggleOption {
   readonly optionId: string;
   readonly label: string;
+  /** Set when the table names the switch (translate it); absent when `label` is the adapter's own. */
+  readonly labelKey: MessageKey | undefined;
   readonly on: boolean;
   /** The values to send to switch it on and off. */
   readonly onValue: 'on';
@@ -183,7 +198,15 @@ export function toggleOptions(agent: AgentId, options: readonly ChatOption[]): r
     if (values.length !== 2 || values[0] !== 'off' || values[1] !== 'on') {
       continue;
     }
-    toggles.push({ optionId, label: presentation.toggleLabels[optionId] ?? option.name, on: option.currentValue === 'on', onValue: 'on', offValue: 'off' });
+    const labelKey = presentation.toggleLabels[optionId];
+    toggles.push({
+      optionId,
+      label: labelKey === undefined ? option.name : englishText(messageRef(labelKey)),
+      labelKey,
+      on: option.currentValue === 'on',
+      onValue: 'on',
+      offValue: 'off',
+    });
   }
   assert(toggles.length <= presentation.toggleOptionIds.length, 'toggleOptions: only the switches the table names');
   return toggles;

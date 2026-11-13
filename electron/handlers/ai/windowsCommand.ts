@@ -103,7 +103,7 @@ export const realFileSystem = (fs: typeof import('node:fs')): CommandFileSystem 
 });
 
 export function nodeMissingMessage(name: string): string {
-  return `${name} was not found. Install Node.js from ${NODE_DOWNLOAD_URL} (it includes npm), restart Stacki, then try again.`;
+  return `${name} was not found. Install Node.js from ${NODE_DOWNLOAD_URL} (it includes npm), restart Stacki, then try again.`; // i18n-ignore: a technical detail interpolated into a translated sentence; it carries a URL and a command name.
 }
 
 /** The command Windows can start for `command`; unchanged off Windows. */
@@ -164,7 +164,7 @@ export function runnableCliPath(cli: string, options: ResolveOptions): string {
 /** The command for Details: what was tried on which platform, with nothing secret in it (arguments are constants). */
 export function describeAttempt(platform: NodeJS.Platform, arch: string, attempt: string): string {
   assert(attempt.length > 0, 'describeAttempt: a command was tried');
-  return `Platform: ${platform} ${arch}\nTried: ${attempt}`;
+  return `Platform: ${platform} ${arch}\nTried: ${attempt}`; // i18n-ignore: a diagnostic block for support (Details), not interface text.
 }
 
 export function describe(command: string, args: readonly string[]): string {

@@ -8,10 +8,12 @@
 // nothing on its own; a caller that wants a click (to expand the file's excerpt) passes
 // `onClick`, and the chip becomes a button.
 import { useEffect, useRef, useState } from 'react';
-import { BUILTIN_CHIP_TITLES, type BuiltinChipId } from '../../../../shared/properties/ai/mentions';
+import type { BuiltinChipId } from '../../../../shared/properties/ai/mentions';
+import type { Translator } from '../../../lib/i18n/localeContext';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { FileIcon, InstructionsIcon, SkillIcon } from '../../../ui/Icons';
 import '../../../ui/chipEditor/chipEditor.css';
-import { BUILTIN_CHIPS, COPIED_LABEL, COPIED_LABEL_MS, copyBuiltinChip } from './builtinChips';
+import { BUILTIN_CHIPS, COPIED_LABEL_MS, copyBuiltinChip } from './builtinChips';
 import { baseName } from './mentionChips';
 import './mentions.css';
 
@@ -22,6 +24,7 @@ export type MentionChipViewChip =
   | { readonly kind: 'builtin'; readonly id: BuiltinChipId };
 
 export function MentionChipView({ chip, onClick }: { readonly chip: MentionChipViewChip; readonly onClick?: () => void }) {
+  const translate = useTranslate();
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   useEffect(
@@ -32,7 +35,7 @@ export function MentionChipView({ chip, onClick }: { readonly chip: MentionChipV
     },
     [],
   );
-  const look = viewLook(chip);
+  const look = viewLook(chip, translate);
   const copy = (): void => {
     if (chip.kind !== 'builtin') {
       return;
@@ -52,7 +55,7 @@ export function MentionChipView({ chip, onClick }: { readonly chip: MentionChipV
     <>
       {look.icon}
       <span className="chip-editor-chip-label" aria-live="polite">
-        {copied ? COPIED_LABEL : look.label}
+        {copied ? translate('ai.common.copied') : look.label}
       </span>
     </>
   );
@@ -77,14 +80,25 @@ export function MentionChipView({ chip, onClick }: { readonly chip: MentionChipV
   );
 }
 
-function viewLook(chip: MentionChipViewChip): { readonly label: string; readonly title: string; readonly icon: React.ReactNode } {
+function viewLook(chip: MentionChipViewChip, translate: Translator): { readonly label: string; readonly title: string; readonly icon: React.ReactNode } {
   switch (chip.kind) {
     case 'file':
       return { label: baseName(chip.path), title: chip.path, icon: <FileIcon size={12} /> };
     case 'skill':
-      return { label: chip.name, title: chip.path === undefined ? `${chip.name} skill` : `${chip.name} skill (${chip.path})`, icon: <SkillIcon size={12} /> };
+      return {
+        label: chip.name,
+        title:
+          chip.path === undefined
+            ? translate('ai.mention.skillTitleShort', { name: chip.name })
+            : translate('ai.mention.skillTitle', { name: chip.name, path: chip.path }),
+        icon: <SkillIcon size={12} />,
+      };
     case 'builtin':
-      return { label: BUILTIN_CHIP_TITLES[chip.id], title: BUILTIN_CHIPS[chip.id].description, icon: <InstructionsIcon size={12} /> };
+      return {
+        label: translate(BUILTIN_CHIPS[chip.id].titleKey),
+        title: translate(BUILTIN_CHIPS[chip.id].descriptionKey),
+        icon: <InstructionsIcon size={12} />,
+      };
     default: {
       const exhaustive: never = chip;
       return exhaustive;

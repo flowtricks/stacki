@@ -8,6 +8,8 @@
 // tracks what the renderer has applied, not merely received.
 import { useSyncExternalStore } from 'react';
 import { assert } from '../../../shared/core/assert';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
+import { described } from '../../../shared/properties/i18n/messageRef';
 import type {
   AgentAvailability,
   AiFailure,
@@ -20,8 +22,8 @@ import type {
   SetupState,
 } from '../../../shared/ipc/aiChat';
 import { AGENT_IDS, type AgentId } from '../../../shared/properties/ai/agentIds';
-import { AGENT_PRESENTATION } from '../../../shared/properties/ai/agentPresentation';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
+import { applyRemember, NO_REMEMBERED_SETTINGS, type RememberedSettings } from '../../../shared/properties/ai/rememberedSettings';
 import type {
   ChatEvent,
   ChatId,
@@ -62,6 +64,7 @@ import {
   aiPrompt,
   aiReview,
   aiSections,
+  aiRemember,
   aiSetOption,
   aiSteer,
   aiTrust,
@@ -187,6 +190,8 @@ export interface AiState {
   readonly agents: readonly AgentAvailability[];
   /** Each agent's settings as it last reported them (models, efforts), for a chat not started yet. */
   readonly agentOptions: ReadonlyMap<AgentId, readonly ChatOption[]>;
+  /** The settings last used per agent (mode, model, effort, switches): what a new chat starts with and shows in its first frame. */
+  readonly remembered: RememberedSettings;
   /** The project's chats in display order (pinned first within a section, then by rank), archived ones included. */
   readonly chats: readonly ChatSummary[];
   readonly sections: readonly ChatSection[];
@@ -202,6 +207,8 @@ export interface AiState {
   /** Chats whose queue is held because their last turn did not end normally; shown as "Paused". */
   readonly queuePaused: ReadonlySet<ChatId>;
   readonly error: string | undefined;
+  /** The same sentence as a reference, so the panel shows it in the person's language; `error` stays for logs and old readers. */
+  readonly errorRef: MessageRef | undefined;
   /** Counts hand-offs that ask the open chat's message box to take the keyboard (see `requestComposerFocus`). */
   readonly composerFocusRequests: number;
 }
@@ -215,6 +222,7 @@ const INITIAL: AiState = {
   trusted: false,
   agents: [],
   agentOptions: new Map(),
+  remembered: NO_REMEMBERED_SETTINGS,
   chats: [],
   sections: [],
   filter: DEFAULT_CHAT_FILTER,
@@ -226,6 +234,7 @@ const INITIAL: AiState = {
   queue: new Map(),
   queuePaused: new Set(),
   error: undefined,
+  errorRef: undefined,
   composerFocusRequests: 0,
 };
 
@@ -271,10 +280,11 @@ export async function loadAiProject(projectPath: string): Promise<void> {
     trusted: agents.ok ? agents.value.trusted : current.trusted,
     agents: agents.ok ? agents.value.agents : current.agents,
     agentOptions: agents.ok ? new Map(agents.value.options.map((entry) => [entry.agent, entry.options])) : current.agentOptions,
+    remembered: agents.ok ? agents.value.remembered : current.remembered,
     chats: chats.ok ? chats.value.chats : current.chats,
     sections: chats.ok ? chats.value.sections : current.sections,
     drafts: chats.ok ? withStoredDrafts(current.drafts, chats.value.chats, readStoredDrafts(projectPath)) : current.drafts,
-    error: firstError(agents, chats),
+    ...failureFields(firstFailure(agents, chats)),
   }));
 }
 
@@ -318,7 +328,7 @@ export function setPanelVisibility(visibility: PanelVisibility): void {
 export async function trustProject(): Promise<void> {
   const projectPath = requireProject();
   const reply = await aiTrust(projectPath);
-  update((current) => ({ ...current, trusted: reply.ok ? true : current.trusted, error: reply.ok ? undefined : reply.error.message }));
+  update((current) => ({ ...current, trusted: reply.ok ? true : current.trusted, ...failureFields(reply.ok ? undefined : reply.error) }));
   if (reply.ok) {
     // Trusted now: main may ask the agents for their real models and efforts.
     await loadAiProject(projectPath);
@@ -329,14 +339,13 @@ export async function installAgent(agent: AgentId): Promise<void> {
   const projectPath = requireProject();
   setAgent({ agent, state: 'installing' });
   const reply = await aiInstallAgent({ projectPath, agent });
-  setAgent(reply.ok ? reply.value : { agent, state: 'failed', message: reply.error.message });
+  setAgent(reply.ok ? reply.value : { agent, state: 'failed', message: reply.error.message, messageRef: reply.error.messageRef });
 }
 
-/** A new chat with `agent`, starting with the settings last chosen for it (rememberSettings). */
+/** A new chat with `agent`. It starts with the settings last used for that agent: the main process applies them when its session starts. */
 export async function newChat(agent: AgentId): Promise<ChatId | undefined> {
   const projectPath = requireProject();
-  const settings = rememberedSettings(agent);
-  const reply = await aiChatCreate({ projectPath, agent, ...(settings.length === 0 ? {} : { settings }) });
+  const reply = await aiChatCreate({ projectPath, agent });
   if (!reply.ok) {
     fail(reply.error);
     return undefined;
@@ -675,7 +684,7 @@ export function resumeQueue(chat: ChatId): Promise<void> {
 function enqueue(chat: ChatId, draft: ChatDraft): boolean {
   const queued = state.queue.get(chat) ?? [];
   if (queued.length >= AI_LIMITS.queuedPromptsMax) {
-    fail({ code: 'invalid', message: `Only ${AI_LIMITS.queuedPromptsMax} messages can wait. Send or remove one first.` });
+    fail({ code: 'invalid', ...described('ai.store.queueFull', { count: AI_LIMITS.queuedPromptsMax }) });
     return false;
   }
   const entry: QueuedPrompt = { id: crypto.randomUUID(), text: draftText(draft), draft };
@@ -756,6 +765,30 @@ export async function setChatOption(chat: ChatId, option: string, value: string)
   const reply = await aiSetOption({ projectPath: requireProject(), chat, option, value });
   if (!reply.ok) {
     fail(reply.error);
+    return;
+  }
+  // The main process remembers a change that went through; this copy follows so the next new chat shows it at once.
+  const agent = state.chats.find((candidate) => candidate.id === chat)?.agent;
+  if (agent !== undefined) {
+    update((current) => ({ ...current, remembered: applyRemember(current.remembered, agent, { kind: 'set', option, value }) }));
+  }
+}
+
+/** A choice made before the chat has a session (or any pick in a menu): remembered for `agent`'s next new chats, last writer wins. */
+export async function rememberChoice(agent: AgentId, option: string, value: string): Promise<void> {
+  update((current) => ({ ...current, remembered: applyRemember(current.remembered, agent, { kind: 'set', option, value }) }));
+  const reply = await aiRemember({ projectPath: requireProject(), agent, action: { kind: 'set', option, value } });
+  if (!reply.ok) {
+    fail(reply.error);
+  }
+}
+
+/** "Reset to defaults": forgets what `agent` remembers, so its next new chats start from the agent's own settings. */
+export async function resetRememberedSettings(agent: AgentId): Promise<void> {
+  update((current) => ({ ...current, remembered: applyRemember(current.remembered, agent, { kind: 'reset' }) }));
+  const reply = await aiRemember({ projectPath: requireProject(), agent, action: { kind: 'reset' } });
+  if (!reply.ok) {
+    fail(reply.error);
   }
 }
 
@@ -764,7 +797,7 @@ export function reviewChange(chat: ChatId, turn: TurnId, path: string, action: R
 }
 
 export function dismissAiError(): void {
-  update((current) => ({ ...current, error: undefined }));
+  update((current) => ({ ...current, error: undefined, errorRef: undefined }));
 }
 
 /** Applies one pushed batch; exported for tests, which drive the store without IPC. */
@@ -972,11 +1005,16 @@ function withView(views: ReadonlyMap<ChatId, ChatView>, chat: ChatId, view: Chat
 }
 
 function fail(error: AiFailure): void {
-  update((current) => ({ ...current, error: error.message }));
+  update((current) => ({ ...current, ...failureFields(error) }));
 }
 
-function firstError(...replies: readonly { readonly ok: boolean; readonly error?: AiFailure }[]): string | undefined {
-  return replies.find((reply) => !reply.ok)?.error?.message;
+/** The two fields that show a failure: its English text and the reference the panel translates. */
+function failureFields(error: AiFailure | undefined): Pick<AiState, 'error' | 'errorRef'> {
+  return { error: error?.message, errorRef: error?.messageRef };
+}
+
+function firstFailure(...replies: readonly { readonly ok: boolean; readonly error?: AiFailure }[]): AiFailure | undefined {
+  return replies.find((reply) => !reply.ok)?.error;
 }
 
 function requireProject(): string {
@@ -1005,52 +1043,6 @@ export function preferredAgent(): AgentId {
 export function rememberAgent(agent: AgentId): void {
   try {
     localStorage.setItem(PREFERRED_AGENT_KEY, agent);
-  } catch {
-    // A preference that cannot be stored is only forgotten.
-  }
-}
-
-const SETTINGS_KEY_PREFIX = 'stacki.ai.settings.';
-
-/**
- * The options whose value is never remembered between chats: the mode (and Codex's plan switch). A new chat
- * starts in the mode that asks first; a mode kept from an earlier chat, say "Bypass permissions", must not
- * carry its permissions into a chat the person did not choose them for. Values stored by an older build are ignored.
- */
-function isModeOption(agent: AgentId, option: string): boolean {
-  const modes = AGENT_PRESENTATION[agent].modes;
-  return option === modes.optionId || option === modes.planOptionId;
-}
-
-/** The settings last chosen for `agent` in the new-chat row, as option and value pairs. Never a mode. */
-export function rememberedSettings(agent: AgentId): readonly { readonly option: string; readonly value: string }[] {
-  let stored: unknown;
-  try {
-    stored = JSON.parse(localStorage.getItem(`${SETTINGS_KEY_PREFIX}${agent}`) ?? '{}');
-  } catch {
-    stored = {};
-  }
-  if (typeof stored !== 'object' || stored === null) {
-    return [];
-  }
-  const settings = Object.entries(stored)
-    .filter(
-      (entry): entry is [string, string] =>
-        typeof entry[1] === 'string' && entry[0].length <= AI_LIMITS.idCharsMax && entry[1].length <= AI_LIMITS.idCharsMax && !isModeOption(agent, entry[0]),
-    )
-    .slice(0, AI_LIMITS.configOptionsMax)
-    .map(([option, value]) => ({ option, value }));
-  assert(settings.length <= AI_LIMITS.configOptionsMax, 'rememberedSettings: bounded');
-  return settings;
-}
-
-export function rememberSetting(agent: AgentId, option: string, value: string): void {
-  if (isModeOption(agent, option)) {
-    return; // See isModeOption: a mode belongs to the chat it was chosen in.
-  }
-  const current = Object.fromEntries(rememberedSettings(agent).map((setting) => [setting.option, setting.value]));
-  try {
-    localStorage.setItem(`${SETTINGS_KEY_PREFIX}${agent}`, JSON.stringify({ ...current, [option]: value }));
   } catch {
     // A preference that cannot be stored is only forgotten.
   }
@@ -1155,12 +1147,4 @@ export async function switchProvider(chat: ChatId, agent: AgentId, options: { re
     setDraft(next, () => draft); // What the person had typed moves with them.
   }
   return next;
-}
-
-/** Settings chosen before the chat's session exists: stored with the chat, applied when it starts. */
-export async function updateChatSettings(chat: ChatId, agent: AgentId): Promise<void> {
-  const reply = await aiChatUpdate({ projectPath: requireProject(), chat, settings: rememberedSettings(agent) });
-  if (!reply.ok) {
-    fail(reply.error);
-  }
 }

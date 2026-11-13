@@ -1,14 +1,15 @@
 // The mode chip ("Manual", "Plan", "Bypass permissions") and the Mode menu: one row per mode with the
 // agent's own description, a number to press, a "Recommended" pill where agentPresentation.ts names one
-// and a check on the current mode. A new chat starts in the mode that asks before it changes anything;
-// the mode a person picks is never remembered for the next new chat, so full access is always chosen
-// again on purpose.
+// and a check on the current mode. A new chat starts in the mode the person used last (else the agent's
+// own default); full access comes back only because the person chose it, through the confirmation below.
 //
 // Choosing a mode that gives the agent unrestricted access (isDangerousMode) asks once per chat through
 // the app's confirmation dialog; after the yes, switching away and back in the same chat does not ask again.
 import { agentLabel } from '../../../../shared/properties/ai/agentIds';
 import { isDangerousMode, isRecommendedMode, modeChoices } from '../../../../shared/properties/ai/agentPresentation';
 import type { ChatId } from '../../../../shared/properties/ai/chatModel';
+import type { Translator } from '../../../lib/i18n/localeContext';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
 import Menu, { useMenuTrigger, type MenuEntry } from '../../../ui/Menu';
 import { currentChoiceName, modeOption, planOption, type ComposerSettings } from './composerSettings';
@@ -24,16 +25,15 @@ export function forgetDangerousModeConfirmations(): void {
 
 /** The plan row Codex adds, standing for its separate `collaboration_mode` option. */
 const PLAN_ROW_ID = 'plan';
-const PLAN_DESCRIPTION = 'Create a plan before making changes';
 
 /** Picks a mode, asking first when it is a dangerous one and the chat has not agreed yet. */
-async function chooseMode(settings: ComposerSettings, optionId: string, value: string, label: string): Promise<boolean> {
+async function chooseMode(settings: ComposerSettings, optionId: string, value: string, label: string, translate: Translator): Promise<boolean> {
   if (isDangerousMode(settings.agent, value) && !confirmedChats.has(settings.chat)) {
     const answer = await confirmDialog({
-      title: `Use ${label}?`,
-      body: `${agentLabel(settings.agent)} will change files and run commands without asking first. Files it edits can be kept or undone afterwards; commands it runs cannot be undone.`,
-      confirmLabel: `Use ${label}`,
-      cancelLabel: 'Keep asking',
+      title: translate('ai.composer.mode.confirm.title', { mode: label }),
+      body: translate('ai.composer.mode.confirm.body', { agent: agentLabel(settings.agent) }),
+      confirmLabel: translate('ai.composer.mode.confirm.action', { mode: label }),
+      cancelLabel: translate('ai.composer.mode.confirm.cancel'),
       danger: true,
     });
     if (answer !== true) {
@@ -46,8 +46,8 @@ async function chooseMode(settings: ComposerSettings, optionId: string, value: s
 }
 
 /** The rows of the Mode menu. Pure: the chip below only opens it. */
-export function modeMenuEntries(settings: ComposerSettings): readonly MenuEntry[] {
-  const entries: MenuEntry[] = [{ kind: 'heading', id: 'heading', label: 'Mode' }];
+export function modeMenuEntries(settings: ComposerSettings, translate: Translator): readonly MenuEntry[] {
+  const entries: MenuEntry[] = [{ kind: 'heading', id: 'heading', label: translate('ai.composer.mode') }];
   const option = modeOption(settings);
   if (option === undefined) {
     return entries;
@@ -64,9 +64,9 @@ export function modeMenuEntries(settings: ComposerSettings): readonly MenuEntry[
       ...(choice.description === undefined ? {} : { description: choice.description }),
       numberKey: index + 1,
       checked: choice.value === option.currentValue && !planOn,
-      ...(isRecommendedMode(settings.agent, choice.value) ? { pill: 'Recommended' } : {}),
+      ...(isRecommendedMode(settings.agent, choice.value) ? { pill: translate('ai.composer.recommended') } : {}),
       onSelect: () => {
-        void chooseMode(settings, option.id, choice.value, choice.name).then((picked) => {
+        void chooseMode(settings, option.id, choice.value, choice.name, translate).then((picked) => {
           // Leaving Codex's plan switch is part of choosing another mode, but only once the choice went through.
           if (picked && planning !== undefined && planOn) {
             settings.pick(planning.id, 'default');
@@ -79,8 +79,8 @@ export function modeMenuEntries(settings: ComposerSettings): readonly MenuEntry[
     entries.push({
       kind: 'item',
       id: 'mode:plan',
-      label: 'Plan',
-      description: PLAN_DESCRIPTION,
+      label: translate('ai.composer.mode.plan'),
+      description: translate('ai.composer.mode.planHint'),
       numberKey: choices.length + 1,
       checked: planOn,
       onSelect: () => settings.pick(planning.id, PLAN_ROW_ID),
@@ -90,18 +90,19 @@ export function modeMenuEntries(settings: ComposerSettings): readonly MenuEntry[
 }
 
 /** What the chip says: the current mode's name, or "Plan" while Codex's plan switch is on. */
-export function modeLabel(settings: ComposerSettings): string | undefined {
+export function modeLabel(settings: ComposerSettings, translate: Translator): string | undefined {
   const planning = planOption(settings);
   if (planning?.currentValue === PLAN_ROW_ID) {
-    return 'Plan';
+    return translate('ai.composer.mode.plan');
   }
   return currentChoiceName(modeOption(settings));
 }
 
 export function ModeMenu({ settings }: { readonly settings: ComposerSettings }) {
+  const translate = useTranslate();
   const trigger = useMenuTrigger();
   const option = modeOption(settings);
-  const label = modeLabel(settings);
+  const label = modeLabel(settings, translate);
   if (option === undefined || label === undefined) {
     return undefined;
   }
@@ -113,8 +114,8 @@ export function ModeMenu({ settings }: { readonly settings: ComposerSettings }) 
         open={trigger.open}
         disabled={settings.running}
         tone={dangerous ? 'danger' : 'plain'}
-        ariaLabel="Mode"
-        title={settings.running ? 'The mode changes when the agent is done' : `Mode: ${label}`}
+        ariaLabel={translate('ai.composer.mode')}
+        title={settings.running ? translate('ai.composer.mode.locked') : translate('ai.composer.mode.title', { mode: label })}
         onClick={trigger.toggle}
       >
         <span className="ai-chip-text">{label}</span>
@@ -122,8 +123,8 @@ export function ModeMenu({ settings }: { readonly settings: ComposerSettings }) 
       <Menu
         open={trigger.open}
         anchor={trigger.anchor}
-        entries={modeMenuEntries(settings)}
-        label="Mode"
+        entries={modeMenuEntries(settings, translate)}
+        label={translate('ai.composer.mode')}
         placement="above-start"
         widthPxMin={260}
         onClose={trigger.close}

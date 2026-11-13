@@ -33,9 +33,11 @@ import { createChipEditor } from '../../../ui/chipEditor/chipEditor';
 import { CHIP_CHARACTER } from '../../../ui/chipEditor/chipModel';
 import { chipTrigger, pickerKeymap, type ActiveTrigger, type PickerKey } from '../../../ui/chipEditor/chipTrigger';
 import { FileIcon, InstructionsIcon, SkillIcon } from '../../../ui/Icons';
+import type { Translator } from '../../../lib/i18n/localeContext';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { mentionCandidates } from '../aiStore';
-import { COPIED_LABEL, COPIED_LABEL_MS, copyBuiltinChip } from '../mentions/builtinChips';
-import { chipCountOf, chipFromDrag, chipLook, isFileDrag, MENTION_LIMIT_TEXT, segmentsEqual, textSegments, type PickerRow } from '../mentions/mentionChips';
+import { COPIED_LABEL_MS, copyBuiltinChip } from '../mentions/builtinChips';
+import { chipCountOf, chipFromDrag, chipLook, isFileDrag, segmentsEqual, textSegments, type PickerRow } from '../mentions/mentionChips';
 import { useMentionRows, type MentionSearch } from '../mentions/useMentionRows';
 import '../mentions/mentions.css';
 
@@ -93,7 +95,7 @@ function chipIconMarkup(kind: ChipKind): string {
 const copiedTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
 
 /** Shows "Copied" on a drawn pill for a moment; the pill belongs to the editor, so this changes its DOM directly. */
-function flashCopied(element: HTMLElement): void {
+function flashCopied(element: HTMLElement, copiedText: string): void {
   const label = element.querySelector('.chip-editor-chip-label');
   if (label === null) {
     return;
@@ -104,7 +106,7 @@ function flashCopied(element: HTMLElement): void {
   } else {
     element.dataset['label'] = label.textContent ?? '';
   }
-  label.textContent = COPIED_LABEL;
+  label.textContent = copiedText;
   element.classList.add('is-copied');
   copiedTimers.set(
     element,
@@ -140,6 +142,10 @@ export function ComposerInput(props: ComposerInputProps) {
   assert(props.segments !== undefined || props.value !== undefined, 'ComposerInput: the draft comes as segments or as a string');
   const segments = props.segments ?? textSegments(props.value ?? '');
   const search = props.searchMentions ?? mentionCandidates;
+  const translate = useTranslate();
+  // The editor is built once; its chip callbacks read the language that is current when they run.
+  const translateLatest = useRef(translate);
+  translateLatest.current = translate;
   const listId = useId();
   const [trigger, setTrigger] = useState<ActiveTrigger | undefined>(undefined);
   const [dismissedFrom, setDismissedFrom] = useState<number | undefined>(undefined);
@@ -151,7 +157,7 @@ export function ComposerInput(props: ComposerInputProps) {
   const editor = useMemo(
     () =>
       createChipEditor<MentionChip>({
-        describe: chipLook,
+        describe: (chip) => chipLook(chip, translateLatest.current),
         decorate: (chip, element) => {
           element.insertAdjacentHTML('beforeend', chipIconMarkup(chip.kind));
           if (chip.kind === 'builtin') {
@@ -162,7 +168,7 @@ export function ComposerInput(props: ComposerInputProps) {
           if (chip.kind === 'builtin') {
             void copyBuiltinChip(chip.id).then((done) => {
               if (done) {
-                flashCopied(element);
+                flashCopied(element, translateLatest.current('ai.common.copied'));
               }
             });
             return;
@@ -264,7 +270,7 @@ export function ComposerInput(props: ComposerInputProps) {
     onMenuKey,
   };
 
-  const label = `Message ${AGENTS[props.agent].label}`;
+  const label = translate('ai.composer.messageLabel', { agent: AGENTS[props.agent].label });
   const activeDescendant = mentionOpen && activeRow !== undefined ? chipPickerOptionId(listId, active) : undefined;
   const attributeExtensions = (): Extension => [
     placeholderExtension(props.placeholder),
@@ -301,10 +307,10 @@ export function ComposerInput(props: ComposerInputProps) {
       Prec.highest(
         keymap.of([
           { key: 'Enter', run: sendKey('send') },
-          { key: 'Mod-Enter', run: sendKey('queue') },
-          { key: 'Ctrl-Enter', run: sendKey('queue') },
-          { key: 'Meta-Enter', run: sendKey('queue') },
-          { key: 'Shift-Enter', run: insertNewline },
+          { key: 'Mod-Enter', run: sendKey('queue') }, // i18n-ignore: a CodeMirror key binding, not text.
+          { key: 'Ctrl-Enter', run: sendKey('queue') }, // i18n-ignore: a CodeMirror key binding, not text.
+          { key: 'Meta-Enter', run: sendKey('queue') }, // i18n-ignore: a CodeMirror key binding, not text.
+          { key: 'Shift-Enter', run: insertNewline }, // i18n-ignore: a CodeMirror key binding, not text.
         ]),
       ),
       history(),
@@ -381,7 +387,7 @@ export function ComposerInput(props: ComposerInputProps) {
   return (
     <>
       {commandsOpen && (
-        <div className="ai-commands" role="listbox" aria-label="Commands">
+        <div className="ai-commands" role="listbox" aria-label={translate('ai.composer.commands')}>
           {matches.map((command, index) => (
             <button
               key={command.name}
@@ -408,9 +414,9 @@ export function ComposerInput(props: ComposerInputProps) {
           anchor={trigger.anchor}
           candidates={rows.map((row) => pickerCandidate(row))}
           activeIndex={active}
-          label="Mention a file, skill or instructions"
+          label={translate('ai.composer.mention.label')}
           listId={listId}
-          emptyText={emptyTextFor({ atLimit: atMentionLimit, state: found.state })}
+          emptyText={emptyTextFor({ atLimit: atMentionLimit, state: found.state, translate })}
           onActiveChange={setHighlight}
           onChoose={(candidate) => {
             const row = rows.find((entry) => entry.id === candidate.id);
@@ -435,17 +441,25 @@ function pickerCandidate(row: PickerRow) {
   };
 }
 
-function emptyTextFor({ atLimit, state }: { readonly atLimit: boolean; readonly state: 'searching' | 'ready' | 'failed' }): string {
+function emptyTextFor({
+  atLimit,
+  state,
+  translate,
+}: {
+  readonly atLimit: boolean;
+  readonly state: 'searching' | 'ready' | 'failed';
+  readonly translate: Translator;
+}): string {
   if (atLimit) {
-    return MENTION_LIMIT_TEXT;
+    return translate('ai.composer.mention.limit', { count: AI_LIMITS.mentionsMax });
   }
   switch (state) {
     case 'searching':
-      return 'Searching…';
+      return translate('ai.composer.mention.searching');
     case 'failed':
-      return 'Couldn’t search the project.';
+      return translate('ai.composer.mention.failed');
     case 'ready':
-      return 'No matches.';
+      return translate('ai.composer.mention.none');
     default: {
       const exhaustive: never = state;
       return exhaustive;

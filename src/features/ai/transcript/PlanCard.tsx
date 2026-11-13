@@ -3,6 +3,7 @@
 // not started a quiet ring. The line is pinned above the transcript while a plan exists.
 import { memo, useId } from 'react';
 import { assert } from '../../../../shared/core/assert';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { LoaderDots } from '../../../ui/LoaderDots';
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon } from '../../../ui/Icons';
 import type { ChatView } from '../chatReducer';
@@ -15,6 +16,7 @@ export interface PlanCardProps {
 }
 
 export const PlanCard = memo(function PlanCard({ plan, chat }: PlanCardProps) {
+  const translate = useTranslate();
   const [open, change] = useOpenState(chat ?? '', 'plan', { open: false });
   const bodyId = useId();
   const done = plan.entries.filter((entry) => entry.status === 'completed').length;
@@ -27,7 +29,7 @@ export const PlanCard = memo(function PlanCard({ plan, chat }: PlanCardProps) {
         <span className="ai-plan-count">
           {done}/{plan.entries.length}
         </span>
-        <span className="ai-plan-current">{current?.content ?? 'Plan complete'}</span>
+        <span className="ai-plan-current">{current?.content ?? translate('ai.plan.complete')}</span>
       </button>
       {open && (
         <ol className="ai-plan-entries" id={bodyId}>

@@ -14,6 +14,7 @@
 import { assert } from '../../../shared/core/assert';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import { chatEventChars, type ChatEvent, type ChatId } from '../../../shared/properties/ai/chatModel';
+import { noticeText } from './aiMessages';
 import { coalesceEvents } from './chatEvents';
 
 export interface PumpTarget {
@@ -102,9 +103,7 @@ export class EventPump {
       return;
     }
     const stored = this.target.store(projectPath, chat, events);
-    const delivered: readonly ChatEvent[] = stored
-      ? events
-      : [...events, { kind: 'notice', severity: 'warning', text: 'This chat is full; new messages are no longer saved. Start a new chat.' }];
+    const delivered: readonly ChatEvent[] = stored ? events : [...events, { kind: 'notice', severity: 'warning', ...noticeText('ai.notice.chatFull') }];
     const chars = delivered.reduce((total, event) => total + chatEventChars(event), 0);
     this.target.send('ai:events', { projectPath, chat, events: delivered, chars });
     this.unacked += chars;

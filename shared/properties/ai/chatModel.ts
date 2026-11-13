@@ -8,6 +8,7 @@
 // Chats are private to this computer: they live under userData, never in the
 // project, so nothing here is ever committed.
 import { assert } from '../../core/assert';
+import { parseMessageRef, type MessageRef } from '../../core/i18n/messageReference';
 import type { Brand } from '../../core/brand';
 import { toArray, toRecord } from '../../core/record';
 import { parseAgentId, type AgentId } from './agentIds';
@@ -227,10 +228,20 @@ export type ChatEvent =
   | { readonly kind: 'turn-start'; readonly turn: TurnId; readonly at: number }
   | { readonly kind: 'turn-end'; readonly turn: TurnId; readonly stop: TurnStop; readonly message: string | undefined; readonly at: number }
   | { readonly kind: 'changes'; readonly turn: TurnId; readonly files: readonly ChatFileChange[] }
+  /** The agent changed files in a turn the ledger did not track: by choice (Settings), or because its snapshot failed. */
+  | { readonly kind: 'changes-untracked'; readonly turn: TurnId; readonly reason: UntrackedReason }
   | { readonly kind: 'review'; readonly turn: TurnId; readonly path: string; readonly review: ReviewState }
-  | { readonly kind: 'notice'; readonly severity: 'info' | 'warning' | 'error' | 'sign-in'; readonly text: string }
+  | {
+      readonly kind: 'notice';
+      readonly severity: 'info' | 'warning' | 'error' | 'sign-in';
+      readonly text: string;
+      /** Stacki's own sentence as a reference, for the renderer to translate; absent for text the agent wrote. `text` stays for old readers. */
+      readonly textRef?: MessageRef | undefined;
+    }
   | { readonly kind: 'title'; readonly title: string }
-  | { readonly kind: 'unsupported'; readonly label: string };
+  | { readonly kind: 'unsupported'; readonly label: string; readonly labelRef?: MessageRef | undefined };
+
+export type UntrackedReason = 'off' | 'unavailable';
 
 export type ChatEventKind = ChatEvent['kind'];
 
@@ -238,6 +249,7 @@ const TOOL_KINDS: readonly ToolKindName[] = ['read', 'edit', 'delete', 'move', '
 const TOOL_STATUSES: readonly ToolStatusName[] = ['pending', 'in_progress', 'completed', 'failed'];
 const STOPS: readonly TurnStop[] = ['end_turn', 'max_tokens', 'max_turn_requests', 'refusal', 'cancelled', 'error', 'sign-in'];
 const REVIEWS: readonly ReviewState[] = ['pending', 'kept', 'undone'];
+const UNTRACKED_REASONS: readonly UntrackedReason[] = ['off', 'unavailable'];
 const CHANGES: readonly FileChangeKind[] = ['modified', 'created', 'deleted'];
 const SEVERITIES = ['info', 'warning', 'error', 'sign-in'] as const;
 const PERMISSION_KINDS = ['allow_once', 'allow_always', 'reject_once', 'reject_always'] as const;
@@ -493,14 +505,21 @@ function parseChatEventOfKind(kind: unknown, value: Record<string, unknown>): Ch
           };
         }),
       };
+    case 'changes-untracked':
+      return { kind, turn: turnOf(value), reason: oneOf(value['reason'], UNTRACKED_REASONS, 'changes-untracked.reason') };
     case 'review':
       return { kind, turn: turnOf(value), path: label(value['path']), review: oneOf(value['review'], REVIEWS, 'review.review') };
     case 'notice':
-      return { kind, severity: oneOf(value['severity'], SEVERITIES, 'notice.severity'), text: label(value['text']) };
+      return {
+        kind,
+        severity: oneOf(value['severity'], SEVERITIES, 'notice.severity'),
+        text: label(value['text']),
+        ...optionalRef('textRef', value['textRef']),
+      };
     case 'title':
       return { kind, title: text(value['title'], AI_LIMITS.titleCharsMax, 'title.title') };
     case 'unsupported':
-      return { kind, label: label(value['label']) };
+      return { kind, label: label(value['label']), ...optionalRef('labelRef', value['labelRef']) };
     default:
       throw new Error('ChatEvent: unknown kind');
   }
@@ -592,6 +611,15 @@ function text(input: unknown, max: number, name: string): string {
     throw new Error(`${name}: exceeds limit`);
   }
   return input;
+}
+
+/** An optional `messageRef` beside an English string: kept when well formed, dropped (English shows) when absent or damaged. */
+function optionalRef<Name extends string>(name: Name, input: unknown): { readonly [Key in Name]?: MessageRef } {
+  if (input === undefined) {
+    return {};
+  }
+  const parsed = parseMessageRef(input);
+  return parsed.ok ? ({ [name]: parsed.value } as { readonly [Key in Name]?: MessageRef }) : {};
 }
 
 function label(input: unknown): string {

@@ -30,7 +30,7 @@ test('a pending file’s before and after are readable until it is settled', asy
   fs.writeFileSync(path.join(root, 'gone.md'), 'bye\n');
   const ledger = new ChangeLedger(root, files, noSnapshots, []);
   const turn = toTurnId(`t${'8'.repeat(16)}`);
-  await ledger.begin(turn);
+  await ledger.begin(turn, 'on');
   for (const name of ['edit.md', 'new.md', 'gone.md']) {
     ledger.noteTouch(path.join(root, name));
   }

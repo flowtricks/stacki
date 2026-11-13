@@ -2,8 +2,10 @@
 // fails as values where an agent cannot. Steering a running turn, compacting, forking
 // a session, session modes, usage and the unread mark on the chat record, background
 // commands that outlive their turn, terminal output that is not doubled, duplicate
-// compaction and notice updates, a 401 that becomes the sign-in card, and the exact
-// capabilities Stacki declares.
+// compaction and notice updates, a 401 that becomes the sign-in card, the exact
+// capabilities Stacki declares, and the remembered composer settings: whatever mode, model and other
+// options the person used last start the next new chat, per agent, and anything invalid, damaged or
+// refused leaves the chat on the agent's own settings instead of stopping it.
 // Methodology: real modules from dist/ and the stand-in adapter process
 // (test/fixtures/ai/fakeAdapter.mjs), whose scenarios are chosen by what a prompt says
 // and by environment switches; temporary folders for the project and the store. Each
@@ -20,6 +22,7 @@ import { AgentHost, CLIENT_CAPABILITIES } from '#dist/electron/handlers/ai/agent
 import { forkRecord } from '#dist/electron/handlers/ai/chatStore.js';
 import { ChatStore } from '#dist/electron/handlers/ai/chatStore.js';
 import { parseAiEventsPush } from '#dist/shared/ipc/aiChat.js';
+import { applyRemember, NO_REMEMBERED_SETTINGS, serializeRememberedSettings } from '#dist/shared/properties/ai/rememberedSettings.js';
 import { toChatId, type ChatEvent, type ChatId } from '#dist/shared/properties/ai/chatModel.js';
 import type { AgentId } from '#dist/shared/properties/ai/agentIds.js';
 
@@ -370,7 +373,7 @@ test('modes offered only as session modes get a mode option, set through session
       .at(-1)
       ?.options.find((option) => option.id === 'mode'),
   );
-  assert.equal(mode.currentValue, 'default', 'a new chat asks before it edits');
+  assert.equal(mode.currentValue, 'auto', 'a new chat with nothing remembered keeps the agent’s own mode; nothing forces Manual');
   assert.deepEqual(
     mode.choices.map((choice) => choice.value),
     ['default', 'auto', 'bypassPermissions'],
@@ -431,4 +434,157 @@ test('the diff reads the live ledger, and is gone once the change is kept', asyn
   assert.equal(setup.host.diff(setup.root, chat, turn, 'other.txt'), undefined);
   assert.deepEqual(await setup.host.review(setup.root, chat, turn, 'notes.txt', { kind: 'keep' }), { tag: 'done', review: 'kept' });
   assert.equal(setup.host.diff(setup.root, chat, turn, 'notes.txt'), undefined, 'a settled change keeps no content');
+});
+
+// ---------------------------------------------------------------------------
+// Remembered composer settings
+// ---------------------------------------------------------------------------
+
+type Setup = ReturnType<typeof fakeHost>;
+
+/** The mode and model the chat's session ended up with, read from the last options event after its first turn. */
+function startedWith(setup: Setup): { readonly mode: string | undefined; readonly model: string | undefined } {
+  const options = ofKind(setup.events(), 'options').at(-1)?.options ?? [];
+  return { mode: options.find((option) => option.id === 'mode')?.currentValue, model: options.find((option) => option.id === 'model')?.currentValue };
+}
+
+/** A first chat whose session teaches the host what the agent offers, as the real panel's first use does. */
+async function primed(setup: Setup, agent: AgentId = 'claude'): Promise<ChatId> {
+  const first = setup.chat(agent);
+  await runTurn(setup, first, 'hello');
+  return first;
+}
+
+test('first run: nothing remembered, so a new chat keeps the agent’s own mode instead of being forced to Manual', async (context) => {
+  const setup = fakeHost();
+  context.after(() => setup.host.stopAll());
+  assert.deepEqual(setup.host.rememberedSettings(), NO_REMEMBERED_SETTINGS);
+  await primed(setup);
+  assert.deepEqual(startedWith(setup), { mode: 'auto', model: 'small' }, 'the fake agent starts in auto: that is what the chat gets');
+  assert.deepEqual(setup.host.rememberedSettings(), NO_REMEMBERED_SETTINGS, 'a session that merely started remembers nothing');
+});
+
+test('what the person last chose in one chat starts the next new chat: mode, model, everything the menus set', async (context) => {
+  const setup = fakeHost();
+  context.after(() => setup.host.stopAll());
+  const first = await primed(setup);
+  assert.ok((await setup.host.setOption(setup.root, first, 'model', 'large')).ok);
+  assert.ok((await setup.host.setOption(setup.root, first, 'mode', 'default')).ok);
+  assert.deepEqual(
+    setup.host.rememberedSettings().claude,
+    [
+      { option: 'model', value: 'large' },
+      { option: 'mode', value: 'default' },
+    ],
+    'both were remembered, in the order chosen',
+  );
+  const second = setup.chat();
+  await runTurn(setup, second, 'again');
+  assert.deepEqual(startedWith(setup), { mode: 'default', model: 'large' }, 'chat B started with chat A’s last choices');
+  // Last writer wins, from any chat.
+  assert.ok((await setup.host.setOption(setup.root, second, 'model', 'small')).ok);
+  const third = setup.chat();
+  await runTurn(setup, third, 'and again');
+  assert.deepEqual(startedWith(setup), { mode: 'default', model: 'small' });
+  assert.ok(setup.store.readRememberedSettings() !== undefined, 'the set is on disk for the next launch');
+});
+
+test('each agent keeps its own set: Claude’s choices never reach Codex', async (context) => {
+  const setup = fakeHost();
+  context.after(() => setup.host.stopAll());
+  const claude = await primed(setup);
+  await primed(setup, 'codex');
+  assert.ok((await setup.host.setOption(setup.root, claude, 'model', 'large')).ok);
+  assert.deepEqual(setup.host.rememberedSettings().codex, [], 'nothing remembered for Codex');
+  const codex = setup.chat('codex');
+  await runTurn(setup, codex, 'hello codex');
+  assert.equal(startedWith(setup).model, 'small', 'Codex starts on its own model');
+  const claudeAgain = setup.chat('claude');
+  await runTurn(setup, claudeAgain, 'hello claude');
+  assert.equal(startedWith(setup).model, 'large');
+});
+
+test('Bypass permissions is restored only when the person chose it; an agent that starts there by itself remembers nothing', async (context) => {
+  const byItself = fakeHost({ FAKE_BYPASS: '1' });
+  context.after(() => byItself.host.stopAll());
+  await primed(byItself);
+  assert.equal(startedWith(byItself).mode, 'bypassPermissions', 'the person’s own agent default is respected');
+  assert.deepEqual(byItself.host.rememberedSettings(), NO_REMEMBERED_SETTINGS, 'a default is not a choice, so nothing is remembered');
+
+  const chosen = fakeHost();
+  context.after(() => chosen.host.stopAll());
+  const first = await primed(chosen);
+  assert.equal(startedWith(chosen).mode, 'auto');
+  assert.ok((await chosen.host.setOption(chosen.root, first, 'mode', 'bypassPermissions')).ok);
+  const second = chosen.chat();
+  await runTurn(chosen, second, 'hello');
+  assert.equal(startedWith(chosen).mode, 'bypassPermissions', 'chosen on purpose: restored');
+  const reset = chosen.host.remember('claude', { kind: 'reset' });
+  assert.ok(reset.ok && reset.value.claude.length === 0);
+  const third = chosen.chat();
+  await runTurn(chosen, third, 'hello');
+  assert.equal(startedWith(chosen).mode, 'auto', 'after Reset to defaults it does not come back');
+});
+
+test('a choice the agent does not offer is refused when remembered, and dropped when it was stored earlier', async (context) => {
+  const setup = fakeHost();
+  context.after(() => setup.host.stopAll());
+  await primed(setup);
+  const refused = setup.host.remember('claude', { kind: 'set', option: 'model', value: 'retired' });
+  assert.ok(!refused.ok && refused.error.code === 'invalid');
+  const unknown = setup.host.remember('claude', { kind: 'set', option: 'nothing', value: 'x' });
+  assert.ok(!unknown.ok);
+  assert.deepEqual(setup.host.rememberedSettings(), NO_REMEMBERED_SETTINGS, 'nothing was stored');
+
+  // A file written by an older build or edited by hand: values the agent no longer offers are silently dropped.
+  const stale = fakeHost();
+  context.after(() => stale.host.stopAll());
+  stale.store.writeRememberedSettings(
+    serializeRememberedSettings(
+      applyRemember(
+        applyRemember(applyRemember(NO_REMEMBERED_SETTINGS, 'claude', { kind: 'set', option: 'model', value: 'retired' }), 'claude', {
+          kind: 'set',
+          option: 'mode',
+          value: 'removed',
+        }),
+        'claude',
+        { kind: 'set', option: 'gone', value: 'x' },
+      ),
+    ),
+  );
+  await primed(stale);
+  assert.deepEqual(startedWith(stale), { mode: 'auto', model: 'small' }, 'the chat uses the agent’s own settings');
+  assert.equal(ofKind(stale.events(), 'notice').length, 0, 'dropped without a word');
+});
+
+test('a corrupt store starts every chat from the defaults and never stops it', async (context) => {
+  for (const source of ['{not json', '[]', '{"agents": 12}', '\u0000\u0000']) {
+    const setup = fakeHost();
+    context.after(() => setup.host.stopAll());
+    setup.store.writeRememberedSettings(source);
+    assert.deepEqual(setup.host.rememberedSettings(), NO_REMEMBERED_SETTINGS, source);
+    await primed(setup);
+    assert.deepEqual(startedWith(setup), { mode: 'auto', model: 'small' }, source);
+  }
+});
+
+test('an option the adapter refuses does not block the chat: the rest applies and one quiet notice says so', async (context) => {
+  const setup = fakeHost({ FAKE_REFUSE_MODEL: '1' });
+  context.after(() => setup.host.stopAll());
+  setup.store.writeRememberedSettings(
+    serializeRememberedSettings(
+      applyRemember(applyRemember(NO_REMEMBERED_SETTINGS, 'claude', { kind: 'set', option: 'model', value: 'large' }), 'claude', {
+        kind: 'set',
+        option: 'mode',
+        value: 'default',
+      }),
+    ),
+  );
+  await primed(setup);
+  assert.deepEqual(startedWith(setup), { mode: 'default', model: 'small' }, 'the mode applied, the refused model stayed');
+  const notices = ofKind(setup.events(), 'notice');
+  assert.equal(notices.length, 1);
+  assert.equal(created(notices[0]).severity, 'info', 'quiet');
+  assert.match(created(notices[0]).text, /did not accept your last Model/);
+  assert.equal(ofKind(setup.events(), 'turn-end').length, 1, 'the first prompt still ran');
 });

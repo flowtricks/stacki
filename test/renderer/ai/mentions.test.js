@@ -48,6 +48,7 @@ const full = bundle(
     "export { aiAgentTaskHandler } from './src/features/ai/aiAgentTask';",
     "export { registerAgentTaskHandler, requestAgentTask } from './src/lib/agentTasks';",
     "export { appBuildPrompt, requestBuildApp } from './src/features/apps/appPrompt';",
+    "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
     "export { readStoredDrafts, writeStoredDrafts } from './src/features/ai/draftStorage';",
     "export { subscribeErrorToasts } from './src/ui/errorNotices';",
     "export { findTrigger, TRIGGER_QUERY_CHARS_MAX } from './src/ui/chipEditor/chipModel';",
@@ -79,7 +80,12 @@ Object.defineProperty(global, 'navigator', {
   configurable: true,
 });
 
-const model = require(full);
+const rawModel = require(full);
+const model = {
+  ...rawModel,
+  pickerRows: (builtins, candidates) => rawModel.pickerRows(builtins, candidates, rawModel.ENGLISH_TRANSLATE),
+  chipLook: (chip) => rawModel.chipLook(chip, rawModel.ENGLISH_TRANSLATE),
+};
 const bareStore = require(bare);
 
 const PROJECT = '/site';
@@ -377,7 +383,7 @@ test('with no AI chat to take it, Build an app copies the full instructions and 
   clipboard.length = 0;
   const unregister = model.registerAgentTaskHandler('declines', 50, async () => ({ tag: 'declined' }));
   const notices = [];
-  await model.requestBuildApp((message, kind) => notices.push({ message, kind }));
+  await model.requestBuildApp(model.ENGLISH_TRANSLATE, (message, kind) => notices.push({ message, kind }));
   unregister();
   assert.deepEqual(clipboard, [model.appBuildPrompt()], 'the whole prompt is on the clipboard');
   assert.equal(notices.length, 1);

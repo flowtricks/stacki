@@ -8,6 +8,8 @@
 // The rows are coloured by the history diff's own classes (`history-diff-*`), as Stacki's other
 // diffs are; the diff.css beside this file only lays them out for the narrow panel.
 import { useMemo, useState } from 'react';
+import type { Translator } from '../../../lib/i18n/localeContext';
+import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { CodeTokens, useCodeLines } from '../../../ui/CodeBlock';
 import { languageFor, type CodeLine } from '../../../ui/codeHighlight';
 import { ExpandVerticalIcon } from '../../../ui/Icons';
@@ -48,6 +50,7 @@ export function DiffView({
   /** `compact` is a short window for a permission request; `regular` is the tall one. */
   readonly size?: 'regular' | 'compact';
 }) {
+  const translate = useTranslate();
   const model = useMemo(() => buildFileDiff(diff.oldText, diff.newText), [diff.oldText, diff.newText]);
   const name = relativePath(diff.path, projectPath);
   return (
@@ -57,8 +60,8 @@ export function DiffView({
           <span className="ai-diff-path" title={diff.path}>
             {name}
           </span>
-          {diff.oldText === undefined && <span className="ai-diffview-kind">New file</span>}
-          {diff.newText === undefined && <span className="ai-diffview-kind">Deleted</span>}
+          {diff.oldText === undefined && <span className="ai-diffview-kind">{translate('ai.diff.newFile')}</span>}
+          {diff.newText === undefined && <span className="ai-diffview-kind">{translate('ai.diff.deleted')}</span>}
           {model.kind === 'text' && <span className="ai-diffview-counts">{countsLabel(model)}</span>}
         </div>
       )}
@@ -68,11 +71,12 @@ export function DiffView({
 }
 
 function DiffBody({ model, path, name }: { readonly model: FileDiff; readonly path: string; readonly name: string }) {
+  const translate = useTranslate();
   switch (model.kind) {
     case 'binary':
-      return <p className="ai-diffview-note">Binary file, no preview.</p>;
+      return <p className="ai-diffview-note">{translate('ai.diff.binary')}</p>;
     case 'same':
-      return <p className="ai-diffview-note">{model.lineEndingsChanged ? 'Only line endings changed.' : 'No changes to show.'}</p>;
+      return <p className="ai-diffview-note">{model.lineEndingsChanged ? translate('ai.diff.lineEndings') : translate('ai.diff.noChanges')}</p>;
     case 'text':
       return <TextRows model={model} path={path} name={name} />;
     default: {
@@ -83,6 +87,8 @@ function DiffBody({ model, path, name }: { readonly model: FileDiff; readonly pa
 }
 
 function TextRows({ model, path, name }: { readonly model: TextDiff; readonly path: string; readonly name: string }) {
+  const translate = useTranslate();
+  const { formatNumber } = useFormat();
   const [revealed, setRevealed] = useState<ReadonlyMap<number, number>>(new Map());
   const [extent, setExtent] = useState<'compact' | 'full'>('compact');
   // A very large pair is shown uncoloured: colouring both sides whole is the one cost that grows with the file.
@@ -103,14 +109,14 @@ function TextRows({ model, path, name }: { readonly model: TextDiff; readonly pa
     setRevealed((previous) => new Map(previous).set(block.key, (previous.get(block.key) ?? 0) + block.step));
   };
   return (
-    <div className="ai-diffview-scroll" tabIndex={0} aria-label={`Changes to ${name}`}>
-      {!model.exact && <p className="ai-diffview-note">A large change: shown as the old lines removed and the new ones added.</p>}
+    <div className="ai-diffview-scroll" tabIndex={0} aria-label={translate('ai.diff.changesTo', { name })}>
+      {!model.exact && <p className="ai-diffview-note">{translate('ai.diff.large')}</p>}
       <div className="ai-diffview-lines">
         {visible.blocks.map((block) =>
           block.kind === 'gap' ? (
             <button key={`gap-${block.key}-${block.hidden}`} className="ai-diffview-gap" onClick={() => reveal(block)}>
               <ExpandVerticalIcon size={12} />
-              {gapLabel(block)}
+              {gapLabel(block, translate)}
             </button>
           ) : (
             <Line
@@ -124,19 +130,20 @@ function TextRows({ model, path, name }: { readonly model: TextDiff; readonly pa
       </div>
       {visible.cut > 0 && extent === 'compact' && (
         <button className="ai-diffview-gap" onClick={() => setExtent('full')}>
-          Show full diff
+          {translate('ai.diff.showFull')}
         </button>
       )}
       {visible.cut > 0 && extent === 'full' && (
-        <p className="ai-diffview-note">The diff is cut at {DIFF_VIEW_LIMITS.rowsFullMax.toLocaleString('en-US')} rows. Open the file to see the rest.</p>
+        <p className="ai-diffview-note">{translate('ai.diff.cut', { rows: formatNumber(DIFF_VIEW_LIMITS.rowsFullMax) })}</p>
       )}
     </div>
   );
 }
 
-function gapLabel(block: Extract<DiffBlock, { readonly kind: 'gap' }>): string {
-  const lines = (count: number): string => `${count} line${count === 1 ? '' : 's'}`;
-  return block.hidden <= block.step ? `Show ${lines(block.hidden)}` : `Show ${block.step} of ${lines(block.hidden)}`;
+function gapLabel(block: Extract<DiffBlock, { readonly kind: 'gap' }>, translate: Translator): string {
+  return block.hidden <= block.step
+    ? translate('ai.diff.showLines', { count: block.hidden })
+    : translate('ai.diff.showSome', { step: block.step, count: block.hidden });
 }
 
 function Line({ row, line, marks }: { readonly row: DiffRow; readonly line: CodeLine | undefined; readonly marks: readonly CharRange[] | undefined }) {

@@ -7,6 +7,7 @@
 // and the SHA-256 of the adapter's entry file once installed. A version bump is
 // a deliberate change to this file, the lockfile and both digests together;
 // test/electron/handlers/ai/agentRegistry.test.ts pins the lockfile digests.
+// i18n-ignore-file: the fallback option names stand in for the names the agent's adapter reports (data, shown as the adapter sent them), and model names are not translated.
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';

@@ -1,4 +1,5 @@
 // A reply that failed for a reason other than signing in.
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { WarningTriangleIcon } from '../../../ui/Icons';
 import { useCopy } from './copyText';
 import './chrome.css';
@@ -11,23 +12,24 @@ import './chrome.css';
  */
 export function ErrorRow({ message, onRetry }: { readonly message: string | undefined; readonly onRetry: (() => void) | undefined }) {
   const details = message !== undefined && message.trim() !== '' ? message : undefined;
+  const translate = useTranslate();
   const { state, copy } = useCopy();
   return (
     <div className="ai-error-row">
       <WarningTriangleIcon size={14} />
       <div className="ai-error-body">
-        <span className="ai-error-title">The reply didn’t finish.</span>
+        <span className="ai-error-title">{translate('ai.error.title')}</span>
         {onRetry !== undefined && (
           <button className="ghost" onClick={onRetry}>
-            Retry
+            {translate('ui.retry')}
           </button>
         )}
         {details !== undefined && (
           <details className="ai-details">
-            <summary>Details</summary>
+            <summary>{translate('ai.common.details')}</summary>
             <pre>{details}</pre>
             <button className="ghost ai-error-copy" onClick={() => copy(details)}>
-              {state === 'copied' ? 'Copied' : state === 'failed' ? 'Couldn’t copy' : 'Copy details'}
+              {state === 'copied' ? translate('ai.common.copied') : state === 'failed' ? translate('ai.common.copyFailed') : translate('ai.common.copyDetails')}
             </button>
           </details>
         )}

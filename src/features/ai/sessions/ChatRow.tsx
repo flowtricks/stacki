@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import type { HTMLAttributes, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { agentLabel } from '../../../../shared/properties/ai/agentIds';
 import type { ChatSection, ChatSummary } from '../../../../shared/properties/ai/chatModel';
+import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { ClaudeLogo, CodexLogo } from '../../../ui/agentLogos';
 import { MoreIcon, PinIcon } from '../../../ui/Icons';
 import { LoaderDots } from '../../../ui/LoaderDots';
@@ -14,7 +15,8 @@ import Menu, { useMenuTrigger } from '../../../ui/Menu';
 import { openChat, renameChat } from '../aiStore';
 import { chatMenuEntries, runChatAction } from './chatActions';
 import { RenameField } from './RenameField';
-import { CHAT_TITLE_CHARS_MAX, ageLabel, contextSummary, relativeTime, rowShortcut } from './sessionsModel';
+import { useChatWords } from '../useChatWords';
+import { CHAT_TITLE_CHARS_MAX, ageLabel, contextSummary, rowShortcut } from './sessionsModel';
 
 export interface ChatRowProps {
   readonly chat: ChatSummary;
@@ -30,6 +32,9 @@ export interface ChatRowProps {
 
 export function ChatRow(props: ChatRowProps) {
   const { chat, sections, running, renaming, now, dragProps } = props;
+  const translate = useTranslate();
+  const words = useChatWords();
+  const { formatDate, formatRelativeTime } = useFormat();
   const trigger = useMenuTrigger();
   const archived = chat.archivedAt !== undefined;
   const host = { rename: props.onRenameStart };
@@ -52,7 +57,7 @@ export function ChatRow(props: ChatRowProps) {
         <RenameField
           initial={chat.title}
           limit={CHAT_TITLE_CHARS_MAX}
-          label="Chat name"
+          label={translate('ai.sessions.chatName')}
           onCommit={(title) => {
             props.onRenameEnd();
             void renameChat(chat.id, title);
@@ -75,10 +80,12 @@ export function ChatRow(props: ChatRowProps) {
     const action = rowShortcut(event);
     if (action !== undefined) {
       event.preventDefault();
-      void runChatAction(action, chat, host);
+      void runChatAction(action, chat, host, translate);
     }
   };
-  const detail = [agentLabel(chat.agent), relativeTime(chat.updatedAt, now), contextSummary(chat.context)].filter((part) => part !== undefined).join(' · ');
+  const detail = [agentLabel(chat.agent), formatRelativeTime(chat.updatedAt, now), contextSummary(chat.context, words)]
+    .filter((part) => part !== undefined)
+    .join(' · ');
   return (
     <li
       className={`ai-list-row${chat.unread ? ' is-unread' : ''}${chat.pinned ? ' is-pinned' : ''}${archived ? ' is-archived' : ''}${trigger.open ? ' has-menu' : ''}`}
@@ -92,25 +99,31 @@ export function ChatRow(props: ChatRowProps) {
         <span className="ai-list-open is-static" title={detail}>
           <span className="ai-row-lead" />
           <span className="ai-list-title">{chat.title}</span>
-          <button className="ai-row-restore" onClick={() => void runChatAction('restore', chat, host)}>
-            Restore
+          <button className="ai-row-restore" onClick={() => void runChatAction('restore', chat, host, translate)}>
+            {translate('ai.sessions.restore')}
           </button>
         </span>
       ) : (
         <button {...dragProps} className="ai-list-open" title={chat.title} onClick={() => void openChat(chat.id)} onKeyDown={onKeyDown}>
-          <span className="ai-row-lead">{chat.unread ? <span className="ai-unread-dot" role="img" aria-label="Unread" /> : undefined}</span>
+          <span className="ai-row-lead">
+            {chat.unread ? <span className="ai-unread-dot" role="img" aria-label={translate('ai.sessions.unread')} /> : undefined}
+          </span>
           <span className="ai-list-title">{chat.title}</span>
           <span className="ai-row-meta" title={detail}>
-            {chat.pinned && <PinIcon size={11} aria-label="Pinned" />}
+            {chat.pinned && <PinIcon size={11} aria-label={translate('ai.sessions.pinned')} />}
             {chat.agent === 'claude' ? <ClaudeLogo size={11} /> : <CodexLogo size={11} />}
-            {running ? <LoaderDots label="Running" dotPx={3} /> : <span className="ai-list-time">{ageLabel(chat.updatedAt, now)}</span>}
+            {running ? (
+              <LoaderDots label={translate('ai.sessions.running')} dotPx={3} />
+            ) : (
+              <span className="ai-list-time">{ageLabel(chat.updatedAt, now, { ...words, formatDate })}</span>
+            )}
           </span>
         </button>
       )}
       <button
         ref={trigger.ref}
         className="ai-row-more"
-        aria-label={`Actions for ${chat.title}`}
+        aria-label={translate('ai.sessions.actionsFor', { name: chat.title })}
         aria-haspopup="menu"
         aria-expanded={trigger.open}
         onClick={trigger.toggle}
@@ -120,9 +133,9 @@ export function ChatRow(props: ChatRowProps) {
       <Menu
         open={trigger.open}
         anchor={trigger.anchor}
-        label={`${chat.title} actions`}
+        label={translate('ai.sessions.actionsMenu', { name: chat.title })}
         placement="below-end"
-        entries={trigger.open ? chatMenuEntries(chat, sections, host) : []}
+        entries={trigger.open ? chatMenuEntries(chat, sections, host, translate) : []}
         onClose={trigger.close}
       />
     </li>

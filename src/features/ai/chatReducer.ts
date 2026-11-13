@@ -10,6 +10,7 @@
 // process puts on events, so the fold stays a function of its input and a chat
 // stored before timings simply shows no durations.
 import { assert } from '../../../shared/core/assert';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
 import type {
   ChatAttachmentName,
@@ -27,6 +28,7 @@ import type {
   TurnId,
   TurnStop,
   UserSendMode,
+  UntrackedReason,
 } from '../../../shared/properties/ai/chatModel';
 
 export interface ToolItem {
@@ -107,7 +109,14 @@ export type TranscriptItem =
   | PermissionItem
   | CompactionItem
   | { readonly kind: 'changes'; readonly id: number; readonly turn: TurnId; readonly files: readonly ChatFileChange[] }
-  | { readonly kind: 'notice'; readonly id: number; readonly severity: 'info' | 'warning' | 'error' | 'sign-in'; readonly text: string }
+  | { readonly kind: 'changes-untracked'; readonly id: number; readonly turn: TurnId; readonly reason: UntrackedReason }
+  | {
+      readonly kind: 'notice';
+      readonly id: number;
+      readonly severity: 'info' | 'warning' | 'error' | 'sign-in';
+      readonly text: string;
+      readonly textRef: MessageRef | undefined;
+    }
   | {
       readonly kind: 'turn-end';
       readonly id: number;
@@ -118,7 +127,7 @@ export type TranscriptItem =
       /** When the turn began, when this view saw it begin. */
       readonly startedAt: number | undefined;
     }
-  | { readonly kind: 'unsupported'; readonly id: number; readonly label: string };
+  | { readonly kind: 'unsupported'; readonly id: number; readonly label: string; readonly labelRef: MessageRef | undefined };
 
 /**
  * Work the agent still has going, derived from tool calls (the protocol's background-task data is sent only
@@ -247,6 +256,8 @@ export function applyEvent(view: ChatView, event: ChatEvent): ChatView {
     }
     case 'changes':
       return push(view, (id) => ({ kind: 'changes', id, turn: event.turn, files: event.files }));
+    case 'changes-untracked':
+      return push(view, (id) => ({ kind: 'changes-untracked', id, turn: event.turn, reason: event.reason }));
     case 'review':
       return mapItems(view, (item) =>
         item.kind === 'changes' && item.turn === event.turn
@@ -254,12 +265,14 @@ export function applyEvent(view: ChatView, event: ChatEvent): ChatView {
           : item,
       );
     case 'notice':
-      return push(view, (id) => ({ kind: 'notice', id, severity: event.severity, text: event.text }));
+      return push(view, (id) => ({ kind: 'notice', id, severity: event.severity, text: event.text, textRef: event.textRef }));
     case 'compaction':
       return applyCompaction(view, event);
     case 'unsupported': {
       const last = view.items[view.items.length - 1];
-      return last?.kind === 'unsupported' && last.label === event.label ? view : push(view, (id) => ({ kind: 'unsupported', id, label: event.label }));
+      return last?.kind === 'unsupported' && last.label === event.label
+        ? view
+        : push(view, (id) => ({ kind: 'unsupported', id, label: event.label, labelRef: event.labelRef }));
     }
     default: {
       const exhaustive: never = event;
@@ -316,6 +329,9 @@ function isFinished(status: ToolStatusName): boolean {
   return status === 'completed' || status === 'failed';
 }
 
+/** The stored title of a call the agent did not name; the transcript shows a translated stand-in for it. */
+export const UNNAMED_TOOL_TITLE = 'Tool'; // i18n-ignore: stored data, shown translated by ToolCard.
+
 function applyTool(view: ChatView, event: Extract<ChatEvent, { readonly kind: 'tool' }>): ChatView {
   const index = view.items.findIndex((item) => item.kind === 'tool' && item.call === event.call);
   const existing = index === -1 ? undefined : view.items[index];
@@ -326,7 +342,7 @@ function applyTool(view: ChatView, event: Extract<ChatEvent, { readonly kind: 't
       id,
       turn: event.turn,
       call: event.call,
-      title: event.title ?? 'Tool',
+      title: event.title ?? UNNAMED_TOOL_TITLE,
       toolKind: event.toolKind ?? 'other',
       status,
       paths: event.paths ?? [],

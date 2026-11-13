@@ -2,6 +2,7 @@
 // which key answers what, what an answered request says, and what the request asks for in words.
 // PermissionCard.tsx and PermissionPin.tsx draw what this module decides.
 import type { ToolKindName } from '../../../../shared/properties/ai/chatModel';
+import type { Translator } from '../../../lib/i18n/localeContext';
 import type { PermissionItem } from '../chatReducer';
 
 export type PermissionOption = PermissionItem['options'][number];
@@ -38,26 +39,26 @@ export function optionForKey(options: readonly PermissionOption[], key: string):
 }
 
 /** The answered request's verdict: "Allowed", "Always allowed", "Denied", "Stopped" when the turn was cancelled instead. */
-export function verdictLabel(item: PermissionItem): string | undefined {
+export function verdictLabel(item: PermissionItem, translate: Translator): string | undefined {
   const answer = item.answer;
   if (answer === undefined) {
     return undefined;
   }
   if (answer.outcome === 'cancelled') {
-    return 'Stopped';
+    return translate('ai.permission.verdict.stopped');
   }
   const chosen = item.options.find((option) => option.id === answer.optionId);
   const kind = chosen?.kind;
   switch (kind) {
     case 'allow_once':
-      return 'Allowed';
+      return translate('ai.permission.verdict.allowed');
     case 'allow_always':
-      return 'Always allowed';
+      return translate('ai.permission.verdict.alwaysAllowed');
     case 'reject_once':
     case 'reject_always':
-      return 'Denied';
+      return translate('ai.permission.verdict.denied');
     case undefined:
-      return 'Answered';
+      return translate('ai.permission.verdict.answered');
     default: {
       const exhaustive: never = kind;
       return exhaustive;
@@ -66,27 +67,40 @@ export function verdictLabel(item: PermissionItem): string | undefined {
 }
 
 /** What the request is about, in a few words, from the tool call it asks about. */
-export function askLabel(kind: ToolKindName | undefined): string {
+/** Whether an answered request was refused (a denial or a stopped turn): the card marks it with a cross instead of a check. */
+export function wasRefused(item: PermissionItem): boolean {
+  const answer = item.answer;
+  if (answer === undefined) {
+    return false;
+  }
+  if (answer.outcome === 'cancelled') {
+    return true;
+  }
+  const kind = item.options.find((option) => option.id === answer.optionId)?.kind;
+  return kind === 'reject_once' || kind === 'reject_always';
+}
+
+export function askLabel(kind: ToolKindName | undefined, translate: Translator): string {
   switch (kind) {
     case 'execute':
-      return 'Run a command';
+      return translate('ai.permission.ask.command');
     case 'edit':
-      return 'Edit a file';
+      return translate('ai.permission.ask.edit');
     case 'move':
-      return 'Move a file';
+      return translate('ai.permission.ask.move');
     case 'delete':
-      return 'Delete a file';
+      return translate('ai.permission.ask.delete');
     case 'read':
-      return 'Read a file';
+      return translate('ai.permission.ask.read');
     case 'search':
-      return 'Search the project';
+      return translate('ai.permission.ask.search');
     case 'fetch':
-      return 'Fetch a page';
+      return translate('ai.permission.ask.fetch');
     case 'think':
     case 'switch_mode':
     case 'other':
     case undefined:
-      return 'Needs your answer';
+      return translate('ai.permission.ask.other');
     default: {
       const exhaustive: never = kind;
       return exhaustive;

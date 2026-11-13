@@ -6,6 +6,7 @@
 // `runReview`, which is why the bulk actions wait for one file's review before the next.
 import { useEffect, useRef, useState } from 'react';
 import type { ChatFileChange, ChatId, TurnId } from '../../../../shared/properties/ai/chatModel';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { ChevronDownIcon, ChevronRightIcon, ExternalIcon } from '../../../ui/Icons';
 import { CHANGE_DIFF_LIMITS, loadFileDiff, rememberedCounts, type LoadedDiff } from './changeDiffs';
 import { countsLabel, type ChangeCounts } from './diffModel';
@@ -36,6 +37,7 @@ export function ChangesCard({
   /** Shows a changed file in the editor. Without it the row has no "Open file" button. */
   readonly onOpenFile?: ((path: string) => void) | undefined;
 }) {
+  const translate = useTranslate();
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [working, setWorking] = useState<ReadonlySet<string>>(new Set());
   const loaded = useLoadedDiffs(source, files);
@@ -63,12 +65,10 @@ export function ChangesCard({
     }
   };
   return (
-    <div className="ai-changes-card" aria-label="Changes in this turn">
+    <div className="ai-changes-card" aria-label={translate('ai.changes.label')}>
       <div className="ai-changes-card-head">
         <span className="ai-changes-card-title">
-          <span>
-            {files.length} file{files.length === 1 ? '' : 's'} changed
-          </span>
+          <span>{translate('ai.changes.filesChanged', { count: files.length })}</span>
           {totals !== undefined && <span className="ai-changes-total">{countsLabel(totals)}</span>}
         </span>
         {pending.length > 1 && (
@@ -82,7 +82,7 @@ export function ChangesCard({
                 )
               }
             >
-              Undo all
+              {translate('ai.changes.undoAll')}
             </button>
             <button
               className="ai-changes-keep"
@@ -94,7 +94,7 @@ export function ChangesCard({
                 )
               }
             >
-              Keep all
+              {translate('ai.changes.keepAll')}
             </button>
           </span>
         )}
@@ -146,6 +146,7 @@ function FileRow({
   readonly onReview: (action: ReviewAction) => void;
   readonly onOpenFile: ((path: string) => void) | undefined;
 }) {
+  const translate = useTranslate();
   const relative = relativePath(file.path, projectPath);
   const slash = relative.lastIndexOf('/');
   const name = relative.slice(slash + 1);
@@ -159,7 +160,9 @@ function FileRow({
             <span className="ai-file-line">
               <span className="ai-file-name">{name}</span>
               {file.change !== 'modified' && (
-                <span className={`ai-file-kind ai-file-kind-${file.change}`}>{file.change === 'created' ? 'New' : 'Deleted'}</span>
+                <span className={`ai-file-kind ai-file-kind-${file.change}`}>
+                  {file.change === 'created' ? translate('ai.changes.new') : translate('ai.changes.deleted')}
+                </span>
               )}
             </span>
             {folder !== '' && <span className="ai-file-folder">{folder}</span>}
@@ -173,17 +176,22 @@ function FileRow({
         {file.review === 'pending' ? (
           <span className="ai-file-actions">
             <button disabled={busy} onClick={() => onReview('keep')}>
-              Keep
+              {translate('ai.changes.keep')}
             </button>
             <button disabled={busy} onClick={() => onReview('undo')}>
-              Undo
+              {translate('ai.changes.undo')}
             </button>
           </span>
         ) : (
-          <span className="ai-file-done">{file.review === 'kept' ? 'Kept' : 'Undone'}</span>
+          <span className="ai-file-done">{file.review === 'kept' ? translate('ai.changes.kept') : translate('ai.changes.undone')}</span>
         )}
         {onOpenFile !== undefined && (
-          <button className="ai-file-open-button" title="Open file" aria-label={`Open ${name}`} onClick={() => onOpenFile(file.path)}>
+          <button
+            className="ai-file-open-button"
+            title={translate('ai.changes.openFile')}
+            aria-label={translate('ai.changes.openNamed', { name })}
+            onClick={() => onOpenFile(file.path)}
+          >
             <ExternalIcon size={13} />
           </button>
         )}
@@ -206,15 +214,16 @@ function FileBody({
   readonly diff: LoadedDiff | 'loading' | undefined;
   readonly projectPath: string;
 }) {
+  const translate = useTranslate();
   if (file.review !== 'pending') {
     // The host keeps a file's text only while its change is pending.
-    return <p className="ai-file-gone">The diff is no longer available once a change is {file.review}.</p>;
+    return <p className="ai-file-gone">{file.review === 'kept' ? translate('ai.changes.goneKept') : translate('ai.changes.goneUndone')}</p>;
   }
   if (diff === undefined || diff === 'loading') {
-    return <p className="ai-file-gone">Loading the diff…</p>;
+    return <p className="ai-file-gone">{translate('ai.changes.loading')}</p>;
   }
   if (diff.state === 'unavailable') {
-    return <p className="ai-file-gone">The diff could not be loaded.</p>;
+    return <p className="ai-file-gone">{translate('ai.changes.unavailable')}</p>;
   }
   return <DiffView diff={diff.sides} projectPath={projectPath} header="none" />;
 }

@@ -12,6 +12,7 @@ import {
   type MentionCandidate,
   type MentionChip,
 } from '../../../../shared/properties/ai/mentions';
+import type { Translator } from '../../../lib/i18n/localeContext';
 import type { ChipLook } from '../../../ui/chipEditor/chipEditor';
 import { BUILTIN_CHIPS, type BuiltinMentionChip } from './builtinChips';
 
@@ -20,16 +21,16 @@ export const PICKER_ROWS_MAX = 12;
 /** Files keep at least this many rows when there are that many, so skills never crowd them out. */
 const FILE_ROWS_MIN = 4;
 
-export const PICKER_GROUPS = { builtin: 'Built-in', skill: 'Skills', file: 'Files' } as const;
-
-export const MENTION_LIMIT_TEXT = `Up to ${AI_LIMITS.mentionsMax} mentions per message.`;
+/** The picker's group headings, as catalog keys. */
+export const PICKER_GROUPS = { builtin: 'ai.mention.group.builtin', skill: 'ai.mention.group.skill', file: 'ai.mention.group.file' } as const;
 
 /** One row of the picker: what is shown, and the chip it becomes. */
 export interface PickerRow {
   readonly id: string;
   readonly label: string;
   readonly description: string | undefined;
-  readonly group: (typeof PICKER_GROUPS)[keyof typeof PICKER_GROUPS];
+  /** The heading already translated. */
+  readonly group: string;
   readonly chip: MentionChip;
 }
 
@@ -56,14 +57,14 @@ export function candidateChip(candidate: MentionCandidate): MentionChip {
 }
 
 /** How the editor draws a chip: its label, the hover text, and the kind a stylesheet can mark. */
-export function chipLook(chip: MentionChip): ChipLook {
+export function chipLook(chip: MentionChip, translate: Translator): ChipLook {
   switch (chip.kind) {
     case 'file':
       return { label: chip.name, title: chip.path, kind: 'file' };
     case 'skill':
-      return { label: chip.name, title: `${chip.name} skill (${chip.path})`, kind: 'skill' };
+      return { label: chip.name, title: translate('ai.mention.skillTitle', { name: chip.name, path: chip.path }), kind: 'skill' };
     case 'builtin':
-      return { label: chip.title, title: BUILTIN_CHIPS[chip.id].description, kind: 'builtin' };
+      return { label: translate(BUILTIN_CHIPS[chip.id].titleKey), title: translate(BUILTIN_CHIPS[chip.id].descriptionKey), kind: 'builtin' };
     default: {
       const exhaustive: never = chip;
       return exhaustive;
@@ -80,7 +81,7 @@ export function chipLook(chip: MentionChip): ChipLook {
  * at most `PICKER_ROWS_MAX` in all. Skills are held back to leave files `FILE_ROWS_MIN` rows when the
  * project has that many; the host already ranked each list (AGENTS.md and CLAUDE.md first, then Markdown).
  */
-export function pickerRows(builtins: readonly BuiltinMentionChip[], candidates: readonly MentionCandidate[]): readonly PickerRow[] {
+export function pickerRows(builtins: readonly BuiltinMentionChip[], candidates: readonly MentionCandidate[], translate: Translator): readonly PickerRow[] {
   const skills = candidates.filter(isSkillCandidate);
   const files = candidates.filter(isFileCandidate);
   const builtinRows = builtins.slice(0, PICKER_ROWS_MAX);
@@ -91,23 +92,23 @@ export function pickerRows(builtins: readonly BuiltinMentionChip[], candidates: 
   const rows: PickerRow[] = [
     ...builtinRows.map((chip) => ({
       id: `builtin:${chip.id}`,
-      label: chip.title,
-      description: BUILTIN_CHIPS[chip.id].description,
-      group: PICKER_GROUPS.builtin,
+      label: translate(BUILTIN_CHIPS[chip.id].titleKey),
+      description: translate(BUILTIN_CHIPS[chip.id].descriptionKey),
+      group: translate(PICKER_GROUPS.builtin),
       chip,
     })),
     ...skillRows.map((candidate) => ({
       id: `skill:${candidate.source}:${candidate.name}`,
       label: candidate.name,
       description: candidate.description === '' ? undefined : candidate.description,
-      group: PICKER_GROUPS.skill,
+      group: translate(PICKER_GROUPS.skill),
       chip: candidateChip(candidate),
     })),
     ...fileRows.map((candidate) => ({
       id: `file:${candidate.path}`,
       label: candidate.name,
       description: candidate.path,
-      group: PICKER_GROUPS.file,
+      group: translate(PICKER_GROUPS.file),
       chip: candidateChip(candidate),
     })),
   ];

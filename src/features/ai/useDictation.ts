@@ -7,6 +7,7 @@
 // yet → the system's prompt; off → a notice with a button to the right System Settings pane,
 // which clears itself when the window regains focus with the switch on.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { messageRef, type TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 import { type MicrophoneReport } from '../../../shared/properties/microphone';
 import { openMicrophoneSettings, readMicrophone, requestMicrophone } from '../../ipc/microphoneBridge';
 
@@ -34,7 +35,7 @@ interface SpeechWindow {
 
 /** What the composer shows under the field when dictation cannot run; undefined when there is nothing to say. */
 export type DictationNotice =
-  | { readonly kind: 'message'; readonly text: string }
+  | { readonly kind: 'message'; readonly ref: TypedMessageRef }
   /** The system says the microphone is off for this application: `report` names it and says what can be done. */
   | { readonly kind: 'blocked'; readonly report: MicrophoneReport };
 
@@ -55,12 +56,12 @@ export function noticeForError(error: string, report: MicrophoneReport | undefin
     if (report !== undefined && blocksDictation(report)) {
       return { kind: 'blocked', report };
     }
-    return { kind: 'message', text: 'The microphone was blocked for this window. Restart Stacki and try again.' };
+    return { kind: 'message', ref: messageRef('ai.dictation.blockedWindow') };
   }
   if (error === 'no-speech' || error === 'aborted') {
-    return { kind: 'message', text: 'No speech was heard. Try again.' };
+    return { kind: 'message', ref: messageRef('ai.dictation.noSpeech') };
   }
-  return { kind: 'message', text: `Voice input failed (${error}).` };
+  return { kind: 'message', ref: messageRef('ai.dictation.failed', { error }) };
 }
 
 export function useDictation(append: (text: string) => void) {
@@ -137,7 +138,7 @@ export function useDictation(append: (text: string) => void) {
       current.start();
       setListening(true);
     } catch {
-      setNotice({ kind: 'message', text: 'Could not start the microphone. Try again.' });
+      setNotice({ kind: 'message', ref: messageRef('ai.dictation.startFailed') });
     }
   }, []);
 
@@ -154,7 +155,7 @@ export function useDictation(append: (text: string) => void) {
       return;
     }
     if (report?.status === 'not-determined') {
-      setNotice({ kind: 'message', text: 'Microphone access was not allowed. Press the microphone to try again.' });
+      setNotice({ kind: 'message', ref: messageRef('ai.dictation.notAllowed') });
       return;
     }
     listen(Recognizer);
@@ -166,7 +167,7 @@ export function useDictation(append: (text: string) => void) {
       return;
     }
     if (!Constructor) {
-      setNotice({ kind: 'message', text: 'Voice input is not available here.' });
+      setNotice({ kind: 'message', ref: messageRef('ai.dictation.unavailable') });
       return;
     }
     setNotice(undefined);

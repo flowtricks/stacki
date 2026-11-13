@@ -6,7 +6,10 @@
 // `now` is always passed in: nothing here reads the clock, so a test can fix time and a component
 // can tick it once per second without recomputing anything else.
 import { assert } from '../../../shared/core/assert';
+import type { Formatters } from '../../../shared/core/i18n/format';
 import type { ToolKindName } from '../../../shared/properties/ai/chatModel';
+import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { waitingPermissions, type ChatView, type ToolItem, type TranscriptItem } from './chatReducer';
 
 export type ContextTone = 'unknown' | 'neutral' | 'amber' | 'red';
@@ -36,22 +39,40 @@ export function contextPercent(used: number, size: number): number | undefined {
   return Math.floor((used * 100) / size);
 }
 
-/** A duration as people read it: `1.4s`, `12s`, `1m 17s`, `1h 2m`. Never negative. */
-export function formatDuration(milliseconds: number): string {
+/** What the pure functions here need to write a sentence: the language's messages and its number format. */
+export interface ChatWords {
+  readonly translate: Translator;
+  readonly formatNumber: Formatters['formatNumber'];
+}
+
+/**
+ * A duration as people read it: `1.4s`, `12s`, `1m 17s`, `1h 2m` in English; the unit marks follow the language
+ * (`1,4 Sek.`). Never negative. Units come from `Intl` (narrow unit style), so no unit word is spelled here.
+ */
+export function formatDuration(milliseconds: number, formatNumber: Formatters['formatNumber']): string {
   assert(Number.isFinite(milliseconds), 'formatDuration: a finite number');
   const clamped = Math.max(0, milliseconds);
+  const unit = (value: number, name: 'second' | 'minute' | 'hour', fractionDigits: number): string =>
+    formatNumber(value, { style: 'unit', unit: name, unitDisplay: 'narrow', minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
   if (clamped < 10_000) {
-    return `${(Math.floor(clamped / 100) / 10).toFixed(1)}s`;
+    return unit(Math.floor(clamped / 100) / 10, 'second', 1);
   }
   const seconds = Math.floor(clamped / 1000);
   if (seconds < 60) {
-    return `${seconds}s`;
+    return unit(seconds, 'second', 0);
   }
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) {
-    return `${minutes}m ${seconds % 60}s`;
+    return `${unit(minutes, 'minute', 0)} ${unit(seconds % 60, 'second', 0)}`;
   }
-  return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+  return `${unit(Math.floor(minutes / 60), 'hour', 0)} ${unit(minutes % 60, 'minute', 0)}`;
+}
+
+/** Tokens as people write them, in the language's own short form: `850`, `42K`, `1.2M`. */
+export function formatTokens(tokens: number, formatNumber: ChatWords['formatNumber']): string {
+  assert(Number.isFinite(tokens), 'formatTokens: a finite number');
+  const value = Math.max(0, Math.round(tokens));
+  return formatNumber(value, { notation: 'compact', compactDisplay: 'short' });
 }
 
 export type TurnPhase = 'command' | 'reading' | 'searching' | 'editing' | 'fetching' | 'thinking' | 'waiting' | 'compacting' | 'working';
@@ -63,19 +84,19 @@ export type TurnStatus =
   | { readonly kind: 'worked'; readonly elapsedMs: number };
 
 /** Neutral words for the moments between tool calls, rotated slowly so the line shows life without claiming a step. */
-const IDLE_VERBS = ['Working', 'Thinking it through', 'Looking around'] as const;
+const IDLE_VERBS = ['ai.status.idle.working', 'ai.status.idle.thinking', 'ai.status.idle.looking'] as const satisfies readonly MessageKey[];
 const IDLE_VERB_MS = 4000;
 
-const PHASE_LABELS: Readonly<Record<Exclude<TurnPhase, 'working'>, string>> = {
-  command: 'Running a command',
-  reading: 'Reading files',
-  searching: 'Searching',
-  editing: 'Editing files',
-  fetching: 'Fetching',
-  thinking: 'Thinking',
-  waiting: 'Waiting for you',
-  compacting: 'Compacting conversation',
-};
+const PHASE_LABELS = {
+  command: 'ai.status.phase.command',
+  reading: 'ai.status.phase.reading',
+  searching: 'ai.status.phase.searching',
+  editing: 'ai.status.phase.editing',
+  fetching: 'ai.status.phase.fetching',
+  thinking: 'ai.status.phase.thinking',
+  waiting: 'ai.status.phase.waiting',
+  compacting: 'ai.status.phase.compacting',
+} as const satisfies Readonly<Record<Exclude<TurnPhase, 'working'>, MessageKey>>;
 
 function phaseOfTool(kind: ToolKindName): TurnPhase {
   switch (kind) {
@@ -121,7 +142,7 @@ function phaseOf(view: ChatView): TurnPhase {
 }
 
 /** The line under the transcript: what a running turn is doing and for how long, or how long the last turn took. */
-export function buildTurnStatus(view: ChatView, now: number): TurnStatus {
+export function buildTurnStatus(view: ChatView, now: number, translate: Translator): TurnStatus {
   assert(Number.isFinite(now), 'buildTurnStatus: a finite clock reading');
   if (view.running !== undefined) {
     const phase = phaseOf(view);
@@ -129,7 +150,7 @@ export function buildTurnStatus(view: ChatView, now: number): TurnStatus {
     return {
       kind: 'running',
       phase,
-      label: phase === 'working' ? verb : PHASE_LABELS[phase],
+      label: translate(phase === 'working' ? verb : PHASE_LABELS[phase]),
       elapsedMs: view.turnStartedAt === undefined ? undefined : Math.max(0, now - view.turnStartedAt),
     };
   }
@@ -140,10 +161,6 @@ export function buildTurnStatus(view: ChatView, now: number): TurnStatus {
     }
   }
   return { kind: 'idle' };
-}
-
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
 }
 
 /** Distinct files a call touched, else one per call (a call that names no file still counts once). */
@@ -163,7 +180,7 @@ function fileCount(calls: readonly ToolItem[]): number {
 }
 
 /** "Ran 4 commands, edited 2 files, read 6 files": a group of tool calls in one line. Empty when there is nothing to say. */
-export function activityHeadline(items: readonly TranscriptItem[]): string {
+export function activityHeadline(items: readonly TranscriptItem[], translate: Translator): string {
   const byKind = (...kinds: readonly ToolKindName[]): readonly ToolItem[] =>
     items.filter((item): item is ToolItem => item.kind === 'tool' && kinds.includes(item.toolKind));
   const commands = byKind('execute');
@@ -173,12 +190,12 @@ export function activityHeadline(items: readonly TranscriptItem[]): string {
   const fetches = byKind('fetch');
   const others = byKind('other');
   const phrases = [
-    commands.length === 0 ? '' : `ran ${plural(commands.length, 'command', 'commands')}`,
-    edits.length === 0 ? '' : `edited ${plural(fileCount(edits), 'file', 'files')}`,
-    reads.length === 0 ? '' : `read ${plural(fileCount(reads), 'file', 'files')}`,
-    searches.length === 0 ? '' : `searched ${plural(searches.length, 'time', 'times')}`,
-    fetches.length === 0 ? '' : `fetched ${plural(fetches.length, 'page', 'pages')}`,
-    others.length === 0 ? '' : `used ${plural(others.length, 'tool', 'tools')}`,
+    commands.length === 0 ? '' : translate('ai.activity.ran', { count: commands.length }),
+    edits.length === 0 ? '' : translate('ai.activity.edited', { count: fileCount(edits) }),
+    reads.length === 0 ? '' : translate('ai.activity.read', { count: fileCount(reads) }),
+    searches.length === 0 ? '' : translate('ai.activity.searched', { count: searches.length }),
+    fetches.length === 0 ? '' : translate('ai.activity.fetched', { count: fetches.length }),
+    others.length === 0 ? '' : translate('ai.activity.used', { count: others.length }),
   ].filter((phrase) => phrase !== '');
   const line = phrases.join(', ');
   return line === '' ? '' : `${line.charAt(0).toUpperCase()}${line.slice(1)}`;

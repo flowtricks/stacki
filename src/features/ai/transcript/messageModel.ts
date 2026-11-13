@@ -1,6 +1,7 @@
 // The pure rules of message chrome: when a message is long enough to fold behind "Show more", which
 // user message may be edited or sent again, and how a timestamp reads. Messages.tsx only draws
 // what this module decides.
+import type { Formatters } from '../../../../shared/core/i18n/format';
 
 export const MESSAGE_LIMITS = {
   /** A message with more lines than this folds. */
@@ -40,18 +41,18 @@ export function lastUserMessageId(items: readonly { readonly kind: string; reado
 }
 
 /** "2:14 PM" in the person's locale; undefined for a message with no time (stored before timestamps) or a time that is not a date. */
-export function timeLabel(at: number | undefined): string | undefined {
+export function timeLabel(at: number | undefined, formatDate: Formatters['formatDate']): string | undefined {
   if (at === undefined || !Number.isFinite(at) || at <= 0) {
     return undefined;
   }
   const date = new Date(at);
-  return Number.isNaN(date.getTime()) ? undefined : date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  return Number.isNaN(date.getTime()) ? undefined : formatDate(date, { hour: 'numeric', minute: '2-digit' });
 }
 
 /** The full date and time, for the hover title of a timestamp. */
-export function fullTimeLabel(at: number | undefined): string | undefined {
-  if (timeLabel(at) === undefined || at === undefined) {
+export function fullTimeLabel(at: number | undefined, formatDate: Formatters['formatDate']): string | undefined {
+  if (timeLabel(at, formatDate) === undefined || at === undefined) {
     return undefined;
   }
-  return new Date(at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'medium' });
+  return formatDate(at, { dateStyle: 'medium', timeStyle: 'medium' });
 }

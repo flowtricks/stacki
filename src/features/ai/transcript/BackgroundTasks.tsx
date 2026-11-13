@@ -8,6 +8,7 @@ import { CodeInline } from '../../../ui/CodeBlock';
 import { ChevronDownIcon, ChevronRightIcon, SparkleIcon, TerminalIcon } from '../../../ui/Icons';
 import { LoaderDots } from '../../../ui/LoaderDots';
 import type { BackgroundTask } from '../chatReducer';
+import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { formatDuration } from '../chatStatus';
 import { useNow } from './ticker';
 import type { FinishedTask } from './transcriptModel';
@@ -21,17 +22,16 @@ export interface BackgroundTasksProps {
 }
 
 export const BackgroundTasks = memo(function BackgroundTasks({ tasks, finished, chatId, onStop }: BackgroundTasksProps) {
+  const translate = useTranslate();
+  const { formatNumber } = useFormat();
   const [open, change] = useOpenState(chatId, 'background-tasks', { open: false });
   const bodyId = useId();
   if (tasks.length === 0 && finished.length === 0) {
     return undefined;
   }
-  const label =
-    tasks.length > 0
-      ? `${tasks.length} ${tasks.length === 1 ? 'task' : 'tasks'} running`
-      : `${finished.length} ${finished.length === 1 ? 'task' : 'tasks'} finished`;
+  const label = tasks.length > 0 ? translate('ai.tasks.running', { count: tasks.length }) : translate('ai.tasks.finished', { count: finished.length });
   return (
-    <div className="ai-tasks" role="region" aria-label="Background tasks">
+    <div className="ai-tasks" role="region" aria-label={translate('ai.tasks.label')}>
       <div className="ai-tasks-bar">
         <button className="ai-tasks-head" aria-expanded={open} aria-controls={open ? bodyId : undefined} onClick={() => change({ open: !open })}>
           {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
@@ -40,7 +40,7 @@ export const BackgroundTasks = memo(function BackgroundTasks({ tasks, finished, 
         </button>
         {tasks.length > 0 && (
           <button className="ai-tasks-stop" onClick={onStop}>
-            Stop agent
+            {translate('ai.tasks.stop')}
           </button>
         )}
       </div>
@@ -57,7 +57,11 @@ export const BackgroundTasks = memo(function BackgroundTasks({ tasks, finished, 
             <li key={task.call} className={`ai-task ai-task-finished${task.status === 'failed' ? ' ai-task-failed' : ''}`}>
               <TaskTitle kind={task.kind} title={task.title} />
               <span className="ai-task-time">
-                {task.status === 'failed' ? 'Failed' : task.durationMs === undefined ? 'Done' : formatDuration(task.durationMs)}
+                {task.status === 'failed'
+                  ? translate('ai.tasks.failed')
+                  : task.durationMs === undefined
+                    ? translate('ai.tasks.done')
+                    : formatDuration(task.durationMs, formatNumber)}
               </span>
               {task.lastOutputLine !== undefined && <span className="ai-task-peek">{task.lastOutputLine}</span>}
             </li>
@@ -81,6 +85,7 @@ function TaskTitle({ kind, title }: { readonly kind: BackgroundTask['kind']; rea
 
 /** Mounted per running task and only while the tray is open, so a closed tray ticks nothing. */
 function RunningFor({ startedAt }: { readonly startedAt: number }) {
+  const { formatNumber } = useFormat();
   const elapsed = useNow() - startedAt;
-  return <span className="ai-task-time">{formatDuration(elapsed)}</span>;
+  return <span className="ai-task-time">{formatDuration(elapsed, formatNumber)}</span>;
 }

@@ -12,6 +12,8 @@ import type { WireMergeClash } from '../../../shared/ipc/ipcWire';
 import type { MergeResolution } from '../../../shared/ipc/mergeResolution';
 import { AGENTS, AGENT_IDS, agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
 import type { ChatId, TurnId } from '../../../shared/properties/ai/chatModel';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
 import {
   dismissAiError,
@@ -28,6 +30,7 @@ import {
   type AiState,
 } from './aiStore';
 import { ChatComposer } from './composer/ChatComposer';
+import { usePrewarm } from './prewarm';
 import { agentBadge, type AgentBadge } from './agentSwitch';
 import { AccountRow, SetupCard } from './SetupCard';
 import { SIGNED_IN_MS, SIGNED_IN_RETRY_MS, SignInCard, SignedInStrip, signInStage, useSignedInMoment, type SignInStage } from './SignInCard';
@@ -52,6 +55,8 @@ export interface AiPanelProps {
 }
 
 export default function AiPanel(props: AiPanelProps) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const state = useAiState();
   // Each time the panel opens: read the project's agents and chats, then go straight to a chat.
   useEffect(() => {
@@ -66,9 +71,14 @@ export default function AiPanel(props: AiPanelProps) {
   const header = <ChatHeader chat={chat} />;
   const body = (
     <div className="ai-body">
-      {state.error !== undefined && <ErrorToast message={state.error} recovery={[{ label: 'Dismiss', run: dismissAiError }]} />}
+      {state.error !== undefined && (
+        <ErrorToast
+          message={translateDescribed({ message: state.error, messageRef: state.errorRef })}
+          recovery={[{ label: translate('ai.panel.dismiss'), run: dismissAiError }]}
+        />
+      )}
       {!state.loaded ? (
-        <div className="ai-skeleton" role="status" aria-label="Loading chats">
+        <div className="ai-skeleton" role="status" aria-label={translate('ai.panel.loadingChats')}>
           {[0, 1, 2].map((row) => (
             <span key={row} className="ai-skeleton-row" />
           ))}
@@ -85,6 +95,7 @@ export default function AiPanel(props: AiPanelProps) {
 
 function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chatId: ChatId; readonly agent: AgentId }) {
   const { state, chatId, agent, projectPath } = props;
+  const translate = useTranslate();
   const view = state.views.get(chatId) ?? EMPTY_CHAT;
   const draft = state.drafts.get(chatId) ?? EMPTY_DRAFT;
   const availability = state.agents.find((entry) => entry.agent === agent);
@@ -100,9 +111,15 @@ function ChatPane(props: AiPanelProps & { readonly state: AiState; readonly chat
       return badge === undefined ? [] : [[id, badge]];
     }),
   );
-  const blocked = !state.trusted ? 'Allow agents in this project first' : composerBlock({ agent, availability, stage, started });
+  const blocked = !state.trusted ? translate('ai.panel.trustFirst') : composerBlock({ agent, availability, stage, started, translate });
   const review = (turn: TurnId, path: string, action: 'keep' | 'undo'): Promise<void> => runReview(props, chatId, turn, path, action);
   const retry = retryText === undefined ? undefined : (): void => void sendPrompt(chatId, retryText);
+  // Start the agent early, invisibly, once it is installed, signed in and allowed here; let go when the chat starts or the panel closes.
+  usePrewarm({
+    projectPath,
+    agent,
+    eligible: state.trusted && availability?.state === 'ready' && setup?.step === 'ready' && stage === undefined && !started,
+  });
   // Where the agent's CLI stands is read again each time a chat with it opens, and after each step.
   useEffect(() => {
     void runSetup(agent, { kind: 'detect' });
@@ -156,26 +173,29 @@ function composerBlock({
   availability,
   stage,
   started,
+  translate,
 }: {
   readonly agent: AgentId;
   readonly availability: AgentAvailability | undefined;
   readonly stage: SignInStage | undefined;
   readonly started: boolean;
+  readonly translate: Translator;
 }): string | undefined {
   const label = agentLabel(agent);
   if (stage !== undefined) {
-    return started ? `Sign in to ${label} to keep chatting` : `Sign in to ${label} to start chatting`;
+    return started ? translate('ai.panel.signInToKeep', { agent: label }) : translate('ai.panel.signInToStart', { agent: label });
   }
-  return availability?.state === 'ready' ? undefined : `Set up ${label} to start chatting`;
+  return availability?.state === 'ready' ? undefined : translate('ai.panel.setUpToStart', { agent: label });
 }
 
 function TrustCard() {
+  const translate = useTranslate();
   return (
     <div className="ai-gate">
-      <strong>Let agents work in this project?</strong>
-      <p>Claude and Codex can read, change and run anything in this project. Their edits apply right away, and you keep or undo each file after.</p>
+      <strong>{translate('ai.trust.title')}</strong>
+      <p>{translate('ai.trust.text')}</p>
       <button className="ai-primary" onClick={() => void trustProject()}>
-        Allow in this project
+        {translate('ai.trust.allow')}
       </button>
     </div>
   );
@@ -194,6 +214,9 @@ function AgentGate(
   },
 ) {
   const { availability, agent, setup, stage } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const { formatNumber } = useFormat();
   const label = agentLabel(agent);
   // A sign-in, whatever its cause, is one card (SignInCard): never also a notice, a retry and a second card.
   if (stage !== undefined) {
@@ -210,27 +233,31 @@ function AgentGate(
     case 'missing-cli':
       return (
         <div className="ai-gate">
-          <strong>{label} is not installed</strong>
-          <p>Install {label} on this computer, then sign in to it once. Stacki uses your own installation.</p>
-          <button onClick={() => props.onOpenExternal(AGENTS[agent].installURL)}>How to install {label}</button>
+          <strong>{translate('ai.gate.missing.title', { agent: label })}</strong>
+          <p>{translate('ai.gate.missing.text', { agent: label })}</p>
+          <button onClick={() => props.onOpenExternal(AGENTS[agent].installURL)}>{translate('ai.gate.missing.how', { agent: label })}</button>
         </div>
       );
     case 'needs-install':
       return (
         <div className="ai-gate">
-          <strong>Connect {label}</strong>
+          <strong>{translate('ai.gate.connect.title', { agent: label })}</strong>
           <p>
-            Stacki needs a small connector to talk to {label} (about {availability.downloadMegabytes} MB, version {availability.adapterVersion}).
+            {translate('ai.gate.connect.text', {
+              agent: label,
+              megabytes: formatNumber(availability.downloadMegabytes),
+              version: availability.adapterVersion,
+            })}
           </p>
           <button className="ai-primary" onClick={() => void installAgent(agent)}>
-            Download and connect
+            {translate('ai.gate.connect.action')}
           </button>
         </div>
       );
     case 'installing':
       return (
         <div className="ai-gate" role="status">
-          <strong>Connecting {label}…</strong>
+          <strong>{translate('ai.gate.connecting', { agent: label })}</strong>
         </div>
       );
     case 'sign-in':
@@ -238,9 +265,9 @@ function AgentGate(
     case 'failed':
       return (
         <div className="ai-gate">
-          <strong>{label} could not start</strong>
-          <p>{availability.message}</p>
-          <button onClick={() => void installAgent(agent)}>Try again</button>
+          <strong>{translate('ai.gate.failed.title', { agent: label })}</strong>
+          <p>{translateDescribed({ message: availability.message, messageRef: availability.messageRef })}</p>
+          <button onClick={() => void installAgent(agent)}>{translate('ai.common.tryAgain')}</button>
         </div>
       );
     default: {

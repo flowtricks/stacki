@@ -5,10 +5,11 @@ import { memo } from 'react';
 import { LoaderDots } from '../../../ui/LoaderDots';
 import { CheckIcon, WarningTriangleIcon } from '../../../ui/Icons';
 import type { CompactionItem } from '../chatReducer';
+import { useChatWords } from '../useChatWords';
 import { compactionLine } from './transcriptModel';
 
 export const CompactionRow = memo(function CompactionRow({ item }: { readonly item: CompactionItem }) {
-  const line = compactionLine(item);
+  const line = compactionLine(item, useChatWords());
   return (
     <div className={`ai-compaction ai-compaction-${line.tone}`} role={line.tone === 'running' ? 'status' : undefined}>
       <span className="ai-compaction-mark">

@@ -5,6 +5,7 @@
 // breaking the box.
 import { useEffect, useState } from 'react';
 import type { MentionCandidate, MentionKind } from '../../../../shared/properties/ai/mentions';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import type { AiReply } from '../aiBridge';
 import { matchingBuiltinChips } from './builtinChips';
 import { pickerRows, type PickerRow } from './mentionChips';
@@ -23,6 +24,7 @@ export interface MentionRows {
 
 /** `query` is undefined while the picker is closed: nothing is asked then. */
 export function useMentionRows(query: string | undefined, search: MentionSearch): MentionRows {
+  const translate = useTranslate();
   const [found, setFound] = useState<{ readonly query: string; readonly candidates: readonly MentionCandidate[] | undefined } | undefined>(undefined);
   useEffect(() => {
     if (query === undefined) {
@@ -50,7 +52,7 @@ export function useMentionRows(query: string | undefined, search: MentionSearch)
   // An answer for an older query would list rows that no longer match what is typed; show the built-in ones until the right one lands.
   const fresh = found?.query === query ? found : undefined;
   return {
-    rows: pickerRows(builtins, fresh?.candidates ?? []),
+    rows: pickerRows(builtins, fresh?.candidates ?? [], translate),
     state: fresh === undefined ? 'searching' : fresh.candidates === undefined ? 'failed' : 'ready',
   };
 }

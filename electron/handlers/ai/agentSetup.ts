@@ -33,6 +33,8 @@ import { SETUP_DETAILS_CHARS_MAX, type SetupAccount, type SetupAction, type Setu
 import { AGENTS, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { findCli } from './agentRegistry';
 import { describeAttempt, realFileSystem, resolveWindowsCommand, type CommandFileSystem, type CommandLine, type ResolvedCommand } from './windowsCommand';
+import { described } from './aiMessages';
+import type { Described, TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 
 export const SETUP_LIMITS = {
   outputCharsMax: SETUP_DETAILS_CHARS_MAX,
@@ -194,7 +196,7 @@ export class AgentSetup {
         agent,
         step: 'failed',
         during: 'install',
-        message: installFailure(agent, command, output),
+        ...installFailureText(agent, command, output),
         details: this.attemptDetails(attempt, output),
       });
     }
@@ -204,7 +206,7 @@ export class AgentSetup {
         agent,
         step: 'failed',
         during: 'install',
-        message: `${AGENTS[agent].label} was installed, but Stacki cannot find it yet. Restart Stacki, then try again.`,
+        ...described('ai.setupError.notFoundYet', { agent: AGENTS[agent].label }),
         details: output,
       });
     }
@@ -226,7 +228,7 @@ export class AgentSetup {
         agent,
         step: 'failed',
         during: 'sign-in',
-        message: `The sign-in could not start. ${resolved.error}`,
+        ...described('ai.setupError.signInStartDetail', { detail: resolved.error }),
         details: this.attemptDetails(cli, resolved.error),
       });
     }
@@ -238,7 +240,7 @@ export class AgentSetup {
         agent,
         step: 'failed',
         during: 'sign-in',
-        message: signInStartFailure(String(error)),
+        ...signInStartFailureText(String(error)),
         details: this.attemptDetails(resolved.value.description, String(error)),
       });
     }
@@ -251,7 +253,7 @@ export class AgentSetup {
         agent,
         step: 'failed',
         during: 'sign-in',
-        message: `Sign-in didn’t finish in ${Math.round(SETUP_LIMITS.signInMsMax / 60_000)} minutes. Try again.`,
+        ...described('ai.setupError.signInTimeout', { count: Math.round(SETUP_LIMITS.signInMsMax / 60_000) }),
         details: redactSignInOutput(watch.output),
       });
     }, SETUP_LIMITS.signInMsMax);
@@ -270,12 +272,12 @@ export class AgentSetup {
       if (exitCode !== 0) {
         // No status read: a CLI whose saved sign-in has expired still reports "signed in", which would
         // pass a failed sign-in off as a success.
-        this.set({ agent, step: 'failed', during: 'sign-in', message: signInStopped(exitCode, details), details });
+        this.set({ agent, step: 'failed', during: 'sign-in', ...signInStoppedText(exitCode, details), details });
         return;
       }
       void this.detect(agent).then((state) => {
         if (state.step !== 'ready') {
-          this.set({ agent, step: 'failed', during: 'sign-in', message: 'Sign-in did not finish. Try again.', details });
+          this.set({ agent, step: 'failed', during: 'sign-in', ...described('ai.setupError.signInUnfinished'), details });
         }
       });
     });
@@ -339,7 +341,7 @@ export class AgentSetup {
     }
     const { output, exitCode, attempt } = await this.collect(agent, { command: cli, args: AGENT_SETUP[agent].signOut }, SETUP_LIMITS.statusMsMax);
     if (exitCode !== 0) {
-      return this.set({ agent, step: 'failed', during: 'sign-out', message: 'Signing out did not work.', details: this.attemptDetails(attempt, output) });
+      return this.set({ agent, step: 'failed', during: 'sign-out', ...described('ai.setupError.signOut'), details: this.attemptDetails(attempt, output) });
     }
     return this.detect(agent);
   }
@@ -463,15 +465,20 @@ export function redactSignInOutput(text: string): string {
 
 /** The sentence for a sign-in whose process exited with a failure: the CLI's last line when it said one, else the code. */
 export function signInStopped(exitCode: number, redactedOutput: string): string {
+  return signInStoppedText(exitCode, redactedOutput).message;
+}
+
+/** The sign-in stop as English text plus the reference the renderer translates. */
+export function signInStoppedText(exitCode: number, redactedOutput: string): Described & { readonly messageRef: TypedMessageRef } {
   const lastLine = redactedOutput
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line !== '' && !line.includes('[sign-in link]') && !/paste code here/i.test(line))
     .at(-1);
   if (lastLine !== undefined && lastLine.length <= 140) {
-    return `Sign-in stopped: ${lastLine}`;
+    return described('ai.setupError.stoppedWith', { detail: lastLine });
   }
-  return `Sign-in stopped (code ${exitCode}). Open Details for what the CLI said.`;
+  return described('ai.setupError.stoppedCode', { code: exitCode });
 }
 
 export function stripTerminalCodes(text: string): string {
@@ -525,26 +532,30 @@ export function planName(plan: string): string {
 
 /** Why a sign-in terminal did not start, in words a person can act on. */
 export function signInStartFailure(detail: string): string {
-  if (/posix_spawnp/i.test(detail)) {
-    // node-pty's helper lost its execute bit (an install that skipped scripts); `npm run fix:pty` restores it.
-    return 'The sign-in could not start: the terminal helper is not executable. Run “npm run fix:pty”, restart Stacki, then try again.';
-  }
-  return 'The sign-in could not start.';
+  return signInStartFailureText(detail).message;
 }
 
-function installFailure(agent: AgentId, command: SetupCommand, output: string): string {
+export function signInStartFailureText(detail: string): Described & { readonly messageRef: TypedMessageRef } {
+  if (/posix_spawnp/i.test(detail)) {
+    // node-pty's helper lost its execute bit (an install that skipped scripts); `npm run fix:pty` restores it.
+    return described('ai.setupError.helperNotExecutable');
+  }
+  return described('ai.setupError.signInStart');
+}
+
+function installFailureText(agent: AgentId, command: SetupCommand, output: string): Described & { readonly messageRef: TypedMessageRef } {
   const label = AGENTS[agent].label;
   if (/ENOENT|not found|command not found/i.test(output) && /(^|[\\/])npm(\.cmd)?$/i.test(command.command)) {
-    return `Installing ${label} needs Node.js. Install Node.js from nodejs.org, then try again.`;
+    return described('ai.setupError.needsNode', { agent: label });
   }
   if (/EINVAL/.test(output)) {
     // Windows refused to start a script directly. Stacki starts npm's JavaScript itself, so this means no way to do that was found.
-    return `Stacki could not start the ${label} installer on this computer. Open Details, or install it yourself in a terminal: npm install --global @openai/codex`;
+    return described('ai.setupError.installerStart', { agent: label });
   }
   if (/EACCES|permission denied|password/i.test(output)) {
-    return `Installing ${label} needs permission Stacki does not ask for. Use “Copy details” and run it in Terminal.`;
+    return described('ai.setupError.needsPermission', { agent: label });
   }
-  return `${label} could not be installed. Check your connection and try again.`;
+  return described('ai.setupError.installFailed', { agent: label });
 }
 
 function spawnPipeProcess(command: SetupCommand, environment: Readonly<Record<string, string | undefined>>): SetupProcess {

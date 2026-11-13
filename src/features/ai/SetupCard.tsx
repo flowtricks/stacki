@@ -7,7 +7,8 @@ import { assert } from '../../../shared/core/assert';
 import type { SetupAccount, SetupState } from '../../../shared/ipc/aiChat';
 import { agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
 import type { ChatId } from '../../../shared/properties/ai/chatModel';
-import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ClaudeLogo, CodexLogo } from '../../ui/agentLogos';
 import { ChevronDownIcon } from '../../ui/Icons';
 import Menu, { useMenuTrigger } from '../../ui/Menu';
@@ -17,19 +18,21 @@ import { runSetup } from './aiStore';
 
 export function SetupCard({ setup }: { readonly setup: Exclude<SetupState, { readonly step: 'ready' | 'signed-out' | 'signing-in' }> }) {
   const { agent } = setup;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const label = agentLabel(agent);
   switch (setup.step) {
     case 'missing':
       return (
-        <Card agent={agent} title={`Install ${label}`} text={`${label} isn’t on this computer yet. Stacki installs it for you; it takes a minute.`}>
+        <Card agent={agent} title={translate('ai.setup.install.title', { agent: label })} text={translate('ai.setup.install.text', { agent: label })}>
           <button className="ai-primary" onClick={() => void runSetup(agent, { kind: 'install' })}>
-            Install {label}
+            {translate('ai.setup.install.action', { agent: label })}
           </button>
         </Card>
       );
     case 'installing':
       return (
-        <Card agent={agent} title={`Installing ${label}…`} text="This can take a minute. You can keep working meanwhile." busy>
+        <Card agent={agent} title={translate('ai.setup.installing.title', { agent: label })} text={translate('ai.setup.installing.text')} busy>
           {undefined}
         </Card>
       );
@@ -37,22 +40,37 @@ export function SetupCard({ setup }: { readonly setup: Exclude<SetupState, { rea
       return (
         <Card
           agent={agent}
-          title={setup.during === 'install' ? `${label} wasn’t installed` : setup.during === 'sign-in' ? 'Sign-in didn’t finish' : 'Sign-out didn’t finish'}
-          text={setup.message}
+          title={failedTitle(setup.during, label, translate)}
+          text={translateDescribed({ message: setup.message, messageRef: setup.messageRef })}
         >
           <div className="ai-gate-actions">
             <button
               className="ai-primary"
               onClick={() => void runSetup(agent, { kind: setup.during === 'install' ? 'install' : setup.during === 'sign-in' ? 'signIn' : 'signOut' })}
             >
-              Try again
+              {translate('ai.common.tryAgain')}
             </button>
-            {setup.details !== '' && <button onClick={() => void navigator.clipboard.writeText(setup.details)}>Copy details</button>}
+            {setup.details !== '' && <button onClick={() => void navigator.clipboard.writeText(setup.details)}>{translate('ai.setup.copyDetails')}</button>}
           </div>
         </Card>
       );
     default: {
       const exhaustive: never = setup;
+      return exhaustive;
+    }
+  }
+}
+
+function failedTitle(during: 'install' | 'sign-in' | 'sign-out', label: string, translate: Translator): string {
+  switch (during) {
+    case 'install':
+      return translate('ai.setup.failed.install', { agent: label });
+    case 'sign-in':
+      return translate('ai.setup.failed.signIn');
+    case 'sign-out':
+      return translate('ai.setup.failed.signOut');
+    default: {
+      const exhaustive: never = during;
       return exhaustive;
     }
   }
@@ -73,7 +91,7 @@ export function AccountRow({
 }) {
   const translate = useTranslate();
   const trigger = useMenuTrigger();
-  const label = accountLabel(setup.agent, setup.account);
+  const label = accountLabel(setup.agent, setup.account, translate);
   return (
     <div className="ai-account">
       {/* The mark and the name are one button: the way to change agent, so Codex is one click from the composer. */}
@@ -102,12 +120,12 @@ export function AccountRow({
       />
       <MoreMenu
         className="ghost"
-        title="Account options"
+        title={translate('ai.account.options')}
         width={220}
         items={[
           // The email is context, not an action: a disabled first row names the account.
-          setup.account.email !== undefined && { label: `Account  ${setup.account.email}`, disabled: true },
-          { label: 'Sign out', onSelect: () => void runSetup(setup.agent, { kind: 'signOut' }) },
+          setup.account.email !== undefined && { label: translate('ai.account.email', { email: setup.account.email }), disabled: true },
+          { label: translate('ai.account.signOut'), onSelect: () => void runSetup(setup.agent, { kind: 'signOut' }) },
         ]}
       />
     </div>
@@ -115,12 +133,12 @@ export function AccountRow({
 }
 
 /** "Timothy Ricks · Max"; without a name, "Claude Max"; never the email. */
-export function accountLabel(agent: AgentId, account: SetupAccount): string {
+export function accountLabel(agent: AgentId, account: SetupAccount, translate: Translator): string {
   const product = agent === 'claude' ? 'Claude' : 'ChatGPT';
   if (account.name !== undefined) {
     return account.plan === undefined ? account.name : `${account.name} · ${account.plan}`;
   }
-  return account.plan === undefined ? `Signed in to ${product}` : `${product} ${account.plan}`;
+  return account.plan === undefined ? translate('ai.account.signedInTo', { product }) : `${product} ${account.plan}`;
 }
 
 function Card({

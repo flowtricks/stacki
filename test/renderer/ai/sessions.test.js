@@ -30,6 +30,8 @@ esbuild.buildSync({
       "import { ConfirmHost } from './src/ui/ConfirmDialog';",
       "import { useAiState } from './src/features/ai/aiStore';",
       "export * from './src/features/ai/sessions/sessionsModel';",
+      "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
+      "export { formattersFor } from './shared/core/i18n/format';",
       "export { aiState, resetAiStore, loadAiProject, openChat, receiveEvents, setChatListFilter, DEFAULT_CHAT_FILTER } from './src/features/ai/aiStore';",
       "export * as chatStore from './electron/handlers/ai/chatStore';",
       "export { applyMove, resolveDrop } from './src/ui/sectionedDragModel';",
@@ -76,7 +78,14 @@ dom.window.HTMLElement.prototype.scrollIntoView = function () {};
 const React = require('react');
 const { act } = React;
 const { createRoot } = require('react-dom/client');
-const sessions = require(output);
+const rawSessions = require(output);
+// The English forms of the wording functions, which take the language's messages and formats.
+const enWords = { translate: rawSessions.ENGLISH_TRANSLATE, formatNumber: rawSessions.formattersFor('en').formatNumber };
+const sessions = {
+  ...rawSessions,
+  ageLabel: (at, now) => rawSessions.ageLabel(at, now, { ...enWords, formatDate: rawSessions.formattersFor('en').formatDate }),
+  contextSummary: (context) => rawSessions.contextSummary(context, enWords),
+};
 const { chatStore } = sessions;
 
 const PROJECT = '/site';
@@ -301,8 +310,8 @@ test('ages and context are written short', () => {
   assert.equal(sessions.ageLabel(now - 3 * 3_600_000, now), '3h');
   assert.equal(sessions.ageLabel(now - 2 * 86_400_000, now), '2d');
   assert.equal(sessions.ageLabel(now + 99_000, now), 'now', 'a clock that ran ahead never reads negative');
-  assert.equal(sessions.contextSummary({ used: 41_250, size: 1_000_000 }), '41k of 1M tokens');
-  assert.equal(sessions.contextSummary({ used: 900, size: 200_000 }), '900 of 200k tokens');
+  assert.equal(sessions.contextSummary({ used: 41_250, size: 1_000_000 }), '41K of 1M tokens');
+  assert.equal(sessions.contextSummary({ used: 900, size: 200_000 }), '900 of 200K tokens');
   assert.equal(sessions.contextSummary({ used: 1, size: 0 }), undefined);
   assert.equal(sessions.contextSummary(undefined), undefined);
 });

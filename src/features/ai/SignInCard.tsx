@@ -7,6 +7,8 @@
 // (electron/handlers/ai/agentSetup.ts).
 import { useEffect, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { SETUP_CODE_CHARS_MAX, type SetupState } from '../../../shared/ipc/aiChat';
 import { AGENTS, agentLabel, type AgentId } from '../../../shared/properties/ai/agentIds';
 import { centralIcon } from '../../ui/central/CentralIcon';
@@ -24,7 +26,13 @@ export const SIGNED_IN_RETRY_MS = 12_000;
 export type SignInStage =
   | { readonly kind: 'start'; readonly expired: boolean }
   | { readonly kind: 'waiting'; readonly expired: boolean; readonly url: string | undefined; readonly needsCode: boolean; readonly output: string }
-  | { readonly kind: 'failed'; readonly expired: boolean; readonly message: string; readonly details: string };
+  | {
+      readonly kind: 'failed';
+      readonly expired: boolean;
+      readonly message: string;
+      readonly messageRef: MessageRef | undefined;
+      readonly details: string;
+    };
 
 /**
  * The sign-in stage the agent is in, or undefined when it needs none. `expired`: the agent refused the
@@ -35,7 +43,7 @@ export function signInStage({ setup, expired }: { readonly setup: SetupState | u
     return { kind: 'waiting', expired, url: setup.url, needsCode: setup.needsCode, output: setup.output };
   }
   if (setup?.step === 'failed' && setup.during === 'sign-in') {
-    return { kind: 'failed', expired, message: setup.message, details: setup.details };
+    return { kind: 'failed', expired, message: setup.message, messageRef: setup.messageRef, details: setup.details };
   }
   if (setup?.step === 'signed-out') {
     return { kind: 'start', expired: false };
@@ -57,11 +65,13 @@ export function SignInCard({
   readonly onOpenExternal: (url: string) => void;
   readonly onOpenTerminal: (command: string) => void;
 }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const label = agentLabel(agent);
   assert(label.length > 0, 'SignInCard: the agent has a name');
   const terminal = (
     <button className="ghost" onClick={() => onOpenTerminal(AGENTS[agent].signInCommand)}>
-      <TerminalIcon size={12} /> Use the terminal instead
+      <TerminalIcon size={12} /> {translate('ai.signIn.useTerminal')}
     </button>
   );
   switch (stage.kind) {
@@ -69,13 +79,13 @@ export function SignInCard({
       return (
         <Frame
           icon={<LockGlyph size={16} />}
-          title={`Sign in to ${label}`}
-          text={stage.expired ? 'Your session expired. Sign in again to keep chatting.' : 'Sign in to start chatting.'}
+          title={translate('ai.signIn.title', { agent: label })}
+          text={stage.expired ? translate('ai.signIn.expired') : translate('ai.signIn.toStart')}
           details={details}
         >
           <div className="ai-signin-actions">
             <button className="ai-primary" onClick={() => void runSetup(agent, { kind: 'signIn' })}>
-              Sign in
+              {translate('ai.signIn.action')}
             </button>
             {terminal}
           </div>
@@ -85,12 +95,8 @@ export function SignInCard({
       return (
         <Frame
           icon={<Spinner />}
-          title="Finish signing in in your browser"
-          text={
-            stage.needsCode
-              ? 'When the page shows a code, copy it and paste it below.'
-              : 'When the page says you are signed in, come back here. It ends by itself after five minutes.'
-          }
+          title={translate('ai.signIn.waiting.title')}
+          text={stage.needsCode ? translate('ai.signIn.waiting.code') : translate('ai.signIn.waiting.text')}
           busy
           details={joinDetails(stage.output, details)}
         >
@@ -98,22 +104,27 @@ export function SignInCard({
           <div className="ai-signin-actions">
             {stage.url !== undefined && (
               <button onClick={() => onOpenExternal(stage.url ?? '')}>
-                <ExternalIcon size={12} /> Didn’t open? Open the page again
+                <ExternalIcon size={12} /> {translate('ai.signIn.reopen')}
               </button>
             )}
             {stage.url !== undefined && <CopyLinkButton url={stage.url} />}
             <button className="ghost" onClick={() => void runSetup(agent, { kind: 'cancel' })}>
-              Cancel
+              {translate('ui.cancel')}
             </button>
           </div>
         </Frame>
       );
     case 'failed':
       return (
-        <Frame icon={<LockGlyph size={16} />} title="Sign-in didn’t finish" text={stage.message} details={joinDetails(stage.details, details)}>
+        <Frame
+          icon={<LockGlyph size={16} />}
+          title={translate('ai.setup.failed.signIn')}
+          text={translateDescribed({ message: stage.message, messageRef: stage.messageRef })}
+          details={joinDetails(stage.details, details)}
+        >
           <div className="ai-signin-actions">
             <button className="ai-primary" onClick={() => void runSetup(agent, { kind: 'signIn' })}>
-              Try again
+              {translate('ai.common.tryAgain')}
             </button>
             {terminal}
           </div>
@@ -128,15 +139,16 @@ export function SignInCard({
 
 /** The brief confirmation after signing in; the message the sign-in interrupted can be sent again from here. */
 export function SignedInStrip({ onRetry }: { readonly onRetry: (() => void) | undefined }) {
+  const translate = useTranslate();
   return (
     <div className="ai-signin ai-signin-done" role="status">
       <span className="ai-signin-badge ai-signin-badge-done">
         <CheckIcon size={12} />
       </span>
-      <span className="ai-signin-done-text">Signed in</span>
+      <span className="ai-signin-done-text">{translate('ai.signIn.done')}</span>
       {onRetry !== undefined && (
         <button className="ai-primary" onClick={onRetry}>
-          Retry message
+          {translate('ai.signIn.retryMessage')}
         </button>
       )}
     </div>
@@ -190,6 +202,7 @@ function Frame({
   readonly children: React.ReactNode;
 }) {
   assert(title.length > 0, 'SignInCard: a stage has a title');
+  const translate = useTranslate();
   return (
     <div className="ai-signin" role={busy === true ? 'status' : undefined}>
       <span className="ai-signin-badge">{icon}</span>
@@ -199,7 +212,7 @@ function Frame({
         {children}
         {details !== undefined && details.trim() !== '' && (
           <details className="ai-details">
-            <summary>Details</summary>
+            <summary>{translate('ai.common.details')}</summary>
             <pre>{details}</pre>
           </details>
         )}
@@ -223,6 +236,7 @@ function Spinner() {
 
 /** The sign-in link on the clipboard, for a browser the page will not open in (any browser takes it pasted). */
 function CopyLinkButton({ url }: { readonly url: string }) {
+  const translate = useTranslate();
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) {
@@ -240,12 +254,13 @@ function CopyLinkButton({ url }: { readonly url: string }) {
         );
       }}
     >
-      {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />} {copied ? 'Copied' : 'Copy sign-in link'}
+      {copied ? <CheckIcon size={12} /> : <CopyIcon size={12} />} {copied ? translate('ai.common.copied') : translate('ai.signIn.copyLink')}
     </button>
   );
 }
 
 function CodeField({ agent }: { readonly agent: AgentId }) {
+  const translate = useTranslate();
   const [code, setCode] = useState('');
   return (
     <form
@@ -260,14 +275,14 @@ function CodeField({ agent }: { readonly agent: AgentId }) {
       }}
     >
       <input
-        aria-label="Code from the browser"
-        placeholder="Paste the code from your browser"
+        aria-label={translate('ai.signIn.codeLabel')}
+        placeholder={translate('ai.signIn.codePlaceholder')}
         maxLength={SETUP_CODE_CHARS_MAX}
         value={code}
         onChange={(event) => setCode(event.target.value)}
       />
       <button type="submit" className="ai-primary" disabled={code.trim() === ''}>
-        Continue
+        {translate('ui.continue')}
       </button>
     </form>
   );

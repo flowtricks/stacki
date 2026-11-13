@@ -18,6 +18,7 @@ import {
   parseMentionReply,
   parsePromptTurn,
   parseSetupState,
+  parseRememberedSettings,
   parseReviewOutcome,
   parseSteerReply,
   type AgentAvailability,
@@ -33,6 +34,8 @@ import {
 } from '../../../shared/ipc/aiChat';
 import { parseChatSummary, type ChatList, type ChatSummary, type TurnId } from '../../../shared/properties/ai/chatModel';
 import type { MentionCandidate } from '../../../shared/properties/ai/mentions';
+import type { RememberedSettings } from '../../../shared/properties/ai/rememberedSettings';
+import { described } from '../../../shared/properties/i18n/messageRef';
 import { cleanError } from '../../lib/cleanError';
 
 export type AiReply<T> = Result<T, AiFailure>;
@@ -49,7 +52,7 @@ async function call<T>(run: () => Promise<unknown>, parse: (input: unknown) => T
   } catch (error: unknown) {
     // A reply that does not parse is a failure the panel can show, not an exception that blanks it: the main
     // process and the renderer are built together, so this is a version mismatch or a bug worth a message.
-    return err({ code: 'agent-failed', message: `Unexpected reply from Stacki: ${cleanError(error)}` });
+    return err({ code: 'agent-failed', ...described('ai.bridge.unexpectedReply', { detail: cleanError(error) }) });
   }
 }
 
@@ -72,6 +75,18 @@ export async function aiTrust(projectPath: string): Promise<AiReply<true>> {
   const payload = parseIpcPayload('ai:trust', { projectPath });
   return call(
     () => window.avb.aiTrust(payload),
+    () => true as const,
+  );
+}
+
+/**
+ * Starts the agent early, or lets go of what an earlier start parked. Fire and forget: the reply
+ * says nothing the panel shows, and a failure is the main process's log, never a message.
+ */
+export function aiPrewarm(input: IpcPayloads['ai:prewarm']): Promise<AiReply<true>> {
+  const payload = parseIpcPayload('ai:prewarm', input);
+  return call(
+    () => window.avb.aiPrewarm(payload),
     () => true as const,
   );
 }
@@ -172,10 +187,16 @@ export function aiSetOption(input: IpcPayloads['ai:setOption']): Promise<AiReply
   );
 }
 
+/** Remembers a composer choice for the agent's next new chats, or forgets the agent's whole set; answers the set after the change. */
+export function aiRemember(input: IpcPayloads['ai:remember']): Promise<AiReply<RememberedSettings>> {
+  const payload = parseIpcPayload('ai:remember', input);
+  return callResult(() => window.avb.aiRemember(payload), parseRememberedSettings);
+}
+
 export async function aiReview(input: IpcPayloads['ai:review']): Promise<ReviewOutcome> {
   const payload = parseIpcPayload('ai:review', input);
   const reply = await call(() => window.avb.aiReview(payload), parseReviewOutcome);
-  return reply.ok ? reply.value : { tag: 'failed', message: reply.error.message };
+  return reply.ok ? reply.value : { tag: 'failed', message: reply.error.message, messageRef: reply.error.messageRef };
 }
 
 export function acknowledgeAiEvents(chars: number): void {

@@ -3,6 +3,7 @@
 // Deleting always asks first, with Stacki's own dialog (never a native one).
 import { assert } from '../../../../shared/core/assert';
 import type { ChatSection, ChatSummary, SectionId } from '../../../../shared/properties/ai/chatModel';
+import type { Translator } from '../../../lib/i18n/localeContext';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
 import type { MenuEntry } from '../../../ui/Menu';
 import { archiveChat, createSection, deleteChat, forkChat, markRead, markUnread, moveChat, pinChat, restoreChat } from '../aiStore';
@@ -17,7 +18,7 @@ export interface ChatActionHost {
 }
 
 /** Runs `action` on `chat`. Rename is the host's (it edits in place); the rest go to the store. */
-export async function runChatAction(action: ChatAction, chat: ChatSummary, host: ChatActionHost): Promise<void> {
+export async function runChatAction(action: ChatAction, chat: ChatSummary, host: ChatActionHost, translate: Translator): Promise<void> {
   switch (action) {
     case 'pin':
       await pinChat(chat.id, { pinned: !chat.pinned });
@@ -38,7 +39,7 @@ export async function runChatAction(action: ChatAction, chat: ChatSummary, host:
       await restoreChat(chat.id);
       return;
     case 'delete':
-      await confirmDeleteChat(chat);
+      await confirmDeleteChat(chat, translate);
       return;
     default: {
       const exhaustive: never = action;
@@ -47,11 +48,11 @@ export async function runChatAction(action: ChatAction, chat: ChatSummary, host:
   }
 }
 
-export async function confirmDeleteChat(chat: ChatSummary): Promise<void> {
+export async function confirmDeleteChat(chat: ChatSummary, translate: Translator): Promise<void> {
   const answer = await confirmDialog({
-    title: 'Delete this chat?',
-    body: `“${chat.title}” and its history are removed from this computer. This cannot be undone. Files the agent changed stay as they are. To keep the chat out of the way without losing it, archive it instead.`,
-    confirmLabel: 'Delete chat',
+    title: translate('ai.sessions.deleteChat.title'),
+    body: translate('ai.sessions.deleteChat.body', { title: chat.title }),
+    confirmLabel: translate('ai.sessions.deleteChat.confirm'),
     danger: true,
   });
   if (answer === true) {
@@ -60,11 +61,16 @@ export async function confirmDeleteChat(chat: ChatSummary): Promise<void> {
 }
 
 /** Starts a section with a free default name and returns its id; the caller shows it for naming. */
-export async function addSection(sections: readonly ChatSection[], host: Pick<ChatActionHost, 'sectionCreated'>): Promise<SectionId | undefined> {
+export async function addSection(
+  sections: readonly ChatSection[],
+  host: Pick<ChatActionHost, 'sectionCreated'>,
+  translate: Translator,
+): Promise<SectionId | undefined> {
+  // The default name is written in the person's language once; after that it is theirs, like any name they typed.
   const created = await createSection(
     uniqueSectionName(
       sections.map((section) => section.name),
-      'New section',
+      translate('ai.sessions.newSection'),
     ),
   );
   if (created !== undefined) {
@@ -79,13 +85,13 @@ export async function moveChatToSection(chat: ChatSummary, section: SectionId | 
 }
 
 /** The rows of a chat's menu. Letters work while it is open; the same letters work on a focused row. */
-export function chatMenuEntries(chat: ChatSummary, sections: readonly ChatSection[], host: ChatActionHost): readonly MenuEntry[] {
-  const run = (action: ChatAction) => (): void => void runChatAction(action, chat, host);
+export function chatMenuEntries(chat: ChatSummary, sections: readonly ChatSection[], host: ChatActionHost, translate: Translator): readonly MenuEntry[] {
+  const run = (action: ChatAction) => (): void => void runChatAction(action, chat, host, translate);
   if (chat.archivedAt !== undefined) {
     return [
-      { kind: 'item', id: 'restore', label: 'Restore', shortcut: 'A', accelerator: 'a', onSelect: run('restore') },
+      { kind: 'item', id: 'restore', label: translate('ai.sessions.restore'), shortcut: 'A', accelerator: 'a', onSelect: run('restore') },
       { kind: 'divider', id: 'divider-delete' },
-      { kind: 'item', id: 'delete', label: 'Delete', shortcut: 'D', accelerator: 'd', danger: true, onSelect: run('delete') },
+      { kind: 'item', id: 'delete', label: translate('ai.sessions.delete'), shortcut: 'D', accelerator: 'd', danger: true, onSelect: run('delete') },
     ];
   }
   const placed = sections.find((section) => section.id === chat.section);
@@ -99,14 +105,20 @@ export function chatMenuEntries(chat: ChatSummary, sections: readonly ChatSectio
         checked: placed?.id === section.id,
         onSelect: () => void moveChatToSection(chat, section.id),
       })),
-    { kind: 'item', id: 'section-none', label: 'No section', checked: placed === undefined, onSelect: () => void moveChatToSection(chat, undefined) },
+    {
+      kind: 'item',
+      id: 'section-none',
+      label: translate('ai.sessions.noSection'),
+      checked: placed === undefined,
+      onSelect: () => void moveChatToSection(chat, undefined),
+    },
     { kind: 'divider', id: 'divider-new-section' },
     {
       kind: 'item',
       id: 'section-new',
-      label: 'New section…',
+      label: translate('ai.sessions.newSectionMenu'),
       onSelect: () =>
-        void addSection(sections, host).then((created) => {
+        void addSection(sections, host, translate).then((created) => {
           if (created !== undefined) {
             return moveChat(chat.id, { section: created, before: undefined });
           }
@@ -116,14 +128,34 @@ export function chatMenuEntries(chat: ChatSummary, sections: readonly ChatSectio
   ];
   assert(sectionRows.length <= sections.length + 3, 'chatMenuEntries: one row per section and the fixed rows');
   return [
-    { kind: 'item', id: 'pin', label: chat.pinned ? 'Unpin' : 'Pin', shortcut: 'P', accelerator: 'p', onSelect: run('pin') },
-    { kind: 'item', id: 'unread', label: chat.unread ? 'Mark as read' : 'Mark as unread', shortcut: 'U', accelerator: 'u', onSelect: run('unread') },
-    { kind: 'item', id: 'rename', label: 'Rename', shortcut: 'R', accelerator: 'r', onSelect: run('rename') },
-    { kind: 'item', id: 'fork', label: 'Fork', shortcut: 'F', accelerator: 'f', onSelect: run('fork') },
+    {
+      kind: 'item',
+      id: 'pin',
+      label: chat.pinned ? translate('ai.sessions.unpin') : translate('ai.sessions.pin'),
+      shortcut: 'P',
+      accelerator: 'p',
+      onSelect: run('pin'),
+    },
+    {
+      kind: 'item',
+      id: 'unread',
+      label: chat.unread ? translate('ai.sessions.markRead') : translate('ai.sessions.markUnread'),
+      shortcut: 'U',
+      accelerator: 'u',
+      onSelect: run('unread'),
+    },
+    { kind: 'item', id: 'rename', label: translate('ai.sessions.rename'), shortcut: 'R', accelerator: 'r', onSelect: run('rename') },
+    { kind: 'item', id: 'fork', label: translate('ai.sessions.fork'), shortcut: 'F', accelerator: 'f', onSelect: run('fork') },
     { kind: 'divider', id: 'divider-move' },
-    { kind: 'submenu', id: 'move', label: 'Move to section', value: placed?.name ?? 'No section', entries: sectionRows },
+    {
+      kind: 'submenu',
+      id: 'move',
+      label: translate('ai.sessions.moveToSection'),
+      value: placed?.name ?? translate('ai.sessions.noSection'),
+      entries: sectionRows,
+    },
     { kind: 'divider', id: 'divider-archive' },
-    { kind: 'item', id: 'archive', label: 'Archive', shortcut: 'A', accelerator: 'a', onSelect: run('archive') },
-    { kind: 'item', id: 'delete', label: 'Delete', shortcut: 'D', accelerator: 'd', danger: true, onSelect: run('delete') },
+    { kind: 'item', id: 'archive', label: translate('ai.sessions.archive'), shortcut: 'A', accelerator: 'a', onSelect: run('archive') },
+    { kind: 'item', id: 'delete', label: translate('ai.sessions.delete'), shortcut: 'D', accelerator: 'd', danger: true, onSelect: run('delete') },
   ];
 }

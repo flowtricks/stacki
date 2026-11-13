@@ -14,11 +14,14 @@ import type { ChatId, TurnId, TurnStop } from '../../../../shared/properties/ai/
 import { ArrowDownIcon } from '../../../ui/Icons';
 import { answerPermission, draftWithText, sendPrompt, setDraft, stopChat } from '../aiStore';
 import { waitingPermissions, type ChatView, type ToolItem, type TranscriptItem } from '../chatReducer';
+import { useFormat, useTranslate, useTranslateDescribed } from '../../../lib/i18n/useTranslate';
+import type { Translator } from '../../../lib/i18n/localeContext';
 import { formatDuration } from '../chatStatus';
 import type { SignInReading } from '../signInTranscript';
 import { ActivityGroup } from './ActivityGroup';
 import { BackgroundTasks } from './BackgroundTasks';
 import { ChangesCard } from './ChangesCard';
+import { UntrackedChangesNote } from './UntrackedChangesNote';
 import { CompactionRow } from './CompactionRow';
 import { ErrorRow } from './ErrorRow';
 import { AgentMessage, UserMessage } from './Messages';
@@ -64,6 +67,7 @@ export function Transcript({
   /** Shows a changed file in the editor; without it a changes card has no "Open file". */
   readonly onOpenFile?: ((path: string) => void) | undefined;
 }) {
+  const translate = useTranslate();
   const scroll = useRef<HTMLDivElement>(null);
   const flow = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
@@ -153,7 +157,7 @@ export function Transcript({
       className="ai-transcript"
       ref={scroll}
       role="log"
-      aria-label="Conversation"
+      aria-label={translate('ai.transcript.label')}
       onScroll={(event) => {
         const element = event.currentTarget;
         const near = element.scrollHeight - element.scrollTop - element.clientHeight < NEAR_BOTTOM_PX;
@@ -182,10 +186,10 @@ export function Transcript({
       }}
     >
       <div className="ai-transcript-flow" ref={flow}>
-        {view.items.length === 0 && <p className="ai-empty">Ask for a change, or a question about this project.</p>}
+        {view.items.length === 0 && <p className="ai-empty">{translate('ai.transcript.empty')}</p>}
         {windowed.hidden > 0 && (
           <button className="ai-earlier" onClick={() => setShown((count) => count + ROWS_SHOWN_MAX)}>
-            Show {Math.min(windowed.hidden, ROWS_SHOWN_MAX)} earlier
+            {translate('ai.transcript.showEarlier', { count: Math.min(windowed.hidden, ROWS_SHOWN_MAX) })}
           </button>
         )}
         {windowed.shown.map((row) =>
@@ -210,7 +214,7 @@ export function Transcript({
         <TurnStatus view={view} />
         {standaloneRetry && (
           <button className="ai-retry" onClick={retryLast}>
-            Retry
+            {translate('ui.retry')}
           </button>
         )}
       </div>
@@ -229,7 +233,7 @@ export function Transcript({
           }}
         >
           <ArrowDownIcon size={12} />
-          Jump to latest
+          {translate('ai.transcript.jumpLatest')}
         </button>
       )}
     </div>
@@ -272,6 +276,8 @@ const Item = memo(function Item({
   /** The reply is still arriving: it is drawn whole, never cut to a preview. */
   readonly streaming: boolean;
 }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   switch (item.kind) {
     case 'user':
       return <UserRow item={item} chatId={chatId} resendable={resendable} />;
@@ -300,8 +306,10 @@ const Item = memo(function Item({
           onReview={(path, action) => onReview(item.turn, path, action)}
         />
       );
+    case 'changes-untracked':
+      return <UntrackedChangesNote reason={item.reason} />;
     case 'notice':
-      return <div className={`ai-notice ai-notice-${item.severity}`}>{item.text}</div>;
+      return <div className={`ai-notice ai-notice-${item.severity}`}>{translateDescribed({ message: item.text, messageRef: item.textRef })}</div>;
     case 'turn-end':
       if (item.stop === 'end_turn') {
         return <WorkedFor startedAt={item.startedAt} endedAt={item.at} />;
@@ -310,10 +318,10 @@ const Item = memo(function Item({
       return item.stop === 'error' ? (
         <ErrorRow message={item.message} onRetry={onRetry} />
       ) : (
-        <div className="ai-notice ai-notice-warning">{turnEndText(item.stop, item.message)}</div>
+        <div className="ai-notice ai-notice-warning">{turnEndText(item.stop, item.message, translate)}</div>
       );
     case 'unsupported':
-      return <div className="ai-notice ai-notice-info">{item.label}</div>;
+      return <div className="ai-notice ai-notice-info">{translateDescribed({ message: item.label, messageRef: item.labelRef })}</div>;
     default: {
       const exhaustive: never = item;
       return exhaustive;
@@ -351,28 +359,30 @@ function AgentRow({ item, chatId, streaming }: { readonly item: TextItem; readon
 
 /** "Worked for 2m 14s" after a finished turn; nothing for a turn this view did not see begin or one under a second. */
 function WorkedFor({ startedAt, endedAt }: { readonly startedAt: number | undefined; readonly endedAt: number }) {
+  const translate = useTranslate();
+  const { formatNumber } = useFormat();
   if (startedAt === undefined || endedAt - startedAt < 1000) {
     return undefined;
   }
-  return <div className="ai-worked">Worked for {formatDuration(endedAt - startedAt)}</div>;
+  return <div className="ai-worked">{translate('ai.transcript.workedFor', { duration: formatDuration(endedAt - startedAt, formatNumber) })}</div>;
 }
 
-function turnEndText(stop: TurnStop, message: string | undefined): string {
+function turnEndText(stop: TurnStop, message: string | undefined, translate: Translator): string {
   switch (stop) {
     case 'cancelled':
-      return 'Stopped.';
+      return translate('ai.turn.stopped');
     case 'max_tokens':
-      return 'The reply reached its length limit.';
+      return translate('ai.turn.maxTokens');
     case 'max_turn_requests':
-      return 'The agent reached its step limit for one message.';
+      return translate('ai.turn.maxRequests');
     case 'refusal':
-      return 'The agent declined this request.';
+      return translate('ai.turn.refusal');
     case 'end_turn':
-      return 'Done.';
+      return translate('ai.turn.done');
     case 'sign-in':
-      return message ?? 'Sign in to continue.';
+      return message ?? translate('ai.turn.signIn');
     case 'error':
-      return message ?? 'Something went wrong.';
+      return message ?? translate('ai.turn.error');
     default: {
       const exhaustive: never = stop;
       return exhaustive;

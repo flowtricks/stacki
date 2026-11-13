@@ -11,7 +11,15 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const loadRenderer = require('../../helpers/rendererModule.js');
 
-const { contextTone, contextPercent, formatDuration, buildTurnStatus, activityHeadline } = loadRenderer('src/features/ai/chatStatus.ts');
+const status = loadRenderer('src/features/ai/chatStatus.ts');
+const { contextTone, contextPercent } = status;
+const { ENGLISH_TRANSLATE: translate } = loadRenderer('shared/properties/i18n/englishTranslator.ts');
+const { formattersFor } = loadRenderer('shared/core/i18n/format.ts');
+const { formatNumber } = formattersFor('en');
+// The English forms of the pure wording functions, which take the language's messages and number format.
+const formatDuration = (milliseconds) => status.formatDuration(milliseconds, formatNumber);
+const buildTurnStatus = (view, now) => status.buildTurnStatus(view, now, translate);
+const activityHeadline = (items) => status.activityHeadline(items, translate);
 const { moveInList } = loadRenderer('src/features/ai/moveInList.ts');
 const { EMPTY_CHAT, reduceChat } = loadRenderer('src/features/ai/chatReducer.ts');
 

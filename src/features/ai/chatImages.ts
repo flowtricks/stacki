@@ -4,6 +4,7 @@
 // (studio/src/features/ai/chatImages.ts), producing base64 for an ACP image block.
 import { assert } from '../../../shared/core/assert';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
+import type { Translator } from '../../lib/i18n/localeContext';
 import type { DraftAttachment } from './aiStore';
 
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
@@ -12,12 +13,12 @@ const IMAGE_EDGE_PX_MAX = 1600;
 /** The data URL size a prepared image aims under; well inside AI_LIMITS.imageBase64CharsMax. */
 const IMAGE_URL_CHARS_TARGET = 1_500_000;
 
-export async function prepareImage(file: File): Promise<DraftAttachment> {
+export async function prepareImage(file: File, translate: Translator): Promise<DraftAttachment> {
   if (!IMAGE_TYPES.includes(file.type)) {
-    throw new Error('Choose a PNG, JPEG, WebP or GIF image.');
+    throw new Error(translate('ai.image.type'));
   }
   if (file.size > IMAGE_BYTES_MAX) {
-    throw new Error('Each image must be smaller than 20 MB.');
+    throw new Error(translate('ai.image.size'));
   }
   const bitmap = await createImageBitmap(file);
   try {
@@ -27,7 +28,7 @@ export async function prepareImage(file: File): Promise<DraftAttachment> {
     canvas.height = Math.max(1, Math.round(bitmap.height * scale));
     const context = canvas.getContext('2d');
     if (!context) {
-      throw new Error('Could not prepare this image.');
+      throw new Error(translate('ai.image.prepare'));
     }
     context.fillStyle = '#ffffff';
     context.fillRect(0, 0, canvas.width, canvas.height);
@@ -40,7 +41,7 @@ export async function prepareImage(file: File): Promise<DraftAttachment> {
         return { id: crypto.randomUUID(), preview: url, attachment: { kind: 'image', name: file.name.slice(0, 200) || 'image', mimeType: 'image/jpeg', data } };
       }
     }
-    throw new Error('This image is too detailed. Crop it or choose a smaller one.');
+    throw new Error(translate('ai.image.detailed'));
   } finally {
     bitmap.close();
   }

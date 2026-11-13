@@ -1,3 +1,4 @@
+// i18n-ignore-file: product names are not translated, and `signInHint` is unused by the interface (the sign-in card words its own steps).
 // The coding agents the AI chat panel drives, by the person's own sign-in.
 // Stacki never shows a login form and never reads a token: the agent's own
 // command-line tool owns the sign-in, run in Stacki's terminal (`signInCommand`).

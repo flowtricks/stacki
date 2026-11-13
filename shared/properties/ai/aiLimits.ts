@@ -16,8 +16,23 @@ export const AI_LIMITS = {
   restartsMax: 3,
   /** The first restart's delay; each later one doubles it. */
   restartDelayMsMin: 500,
-  /** An adapter with no turn running is stopped after this long. */
-  idleMsMax: 15 * 60 * 1000,
+  /**
+   * An adapter with no turn running is stopped after this long. Thirty minutes: an adapter holds its CLI,
+   * MCP servers and plugins in memory while it waits, and a restart costs seconds of that loading on
+   * the next message; people pause longer than fifteen minutes between messages far more often than
+   * they leave a project for good.
+   */
+  idleMsMax: 30 * 60 * 1000,
+  /** The shorter idle time while the machine is short on memory or more than `processesComfortableMax` adapters are alive. */
+  idleMsCrowded: 5 * 60 * 1000,
+  /** Adapters that may idle at the long timeout; the ones beyond it use `idleMsCrowded` and are the first evicted. */
+  processesComfortableMax: 2,
+  /** Free over total memory below which idle adapters use `idleMsCrowded` (a ratio from 0 to 1). */
+  memoryFreeRatioMin: 0.03,
+  /** How long a trigger waits for a quieter moment before the agent is started early; the last request wins. */
+  prewarmDebounceMs: 250,
+  /** The renderer repeats a start-early request for the same agent no sooner than this; rapid focus changes cost nothing. */
+  prewarmRepeatMs: 5_000,
   /** Adapter processes alive at once: two agents in the open project, with room for one being replaced. */
   processesMax: 4,
   /** How often batched session events go to the renderer. */

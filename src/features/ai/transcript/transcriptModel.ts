@@ -7,7 +7,9 @@
 // an item without stamps (a chat stored before timings) has no duration, never a wrong one.
 import { assert } from '../../../../shared/core/assert';
 import type { TurnId } from '../../../../shared/properties/ai/chatModel';
-import { activityHeadline, buildTurnStatus, formatDuration, type TurnPhase } from '../chatStatus';
+import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
+import type { Translator } from '../../../lib/i18n/localeContext';
+import { activityHeadline, buildTurnStatus, formatDuration, formatTokens, type ChatWords, type TurnPhase } from '../chatStatus';
 import type { BackgroundTask, ChatView, CompactionItem, ToolItem, TranscriptItem } from '../chatReducer';
 
 /** An item of the kinds an activity group folds: the agent's thoughts and its tool calls. */
@@ -177,29 +179,34 @@ export interface GroupSummary {
 }
 
 /** "Ran 4 commands, edited 2 files" for the calls; "Thought for 12s" or "Thinking" when the group has only thoughts. */
-export function summarizeGroup(items: readonly ActivityItem[]): GroupSummary {
+export function summarizeGroup(items: readonly ActivityItem[], words: ChatWords): GroupSummary {
   const tools = items.filter((item): item is ToolItem => item.kind === 'tool');
   const failed = tools.filter((tool) => tool.status === 'failed').length;
   const open = tools.filter(isOpen).length;
-  const headline = tools.length === 0 ? '' : activityHeadline(tools);
+  const headline = tools.length === 0 ? '' : activityHeadline(tools, words.translate);
   if (headline !== '') {
     return { text: headline, failed, open };
   }
   const thought = items.find((item): item is TextItem => item.kind === 'text');
   if (thought === undefined) {
-    return { text: tools.length === 1 ? 'Used a tool' : `Used ${tools.length} tools`, failed, open };
+    return { text: words.translate('ai.activity.usedTools', { count: tools.length }), failed, open };
   }
   const duration = thoughtDurationMs(thought);
-  return { text: duration === undefined ? 'Thought' : `Thought for ${formatDuration(duration)}`, failed, open };
+  return { text: thoughtText(duration, words), failed, open };
 }
 
 /** The label of a thought's row: "Thought for 12s", "Thinking…" while it streams, plain "Thought" without stamps. */
-export function thoughtLabel(item: TextItem, options: { readonly live: boolean }): string {
+export function thoughtLabel(item: TextItem, options: { readonly live: boolean }, words: ChatWords): string {
   if (options.live) {
-    return 'Thinking…';
+    return words.translate('ai.thought.thinking');
   }
-  const duration = thoughtDurationMs(item);
-  return duration === undefined ? 'Thought' : `Thought for ${formatDuration(duration)}`;
+  return thoughtText(thoughtDurationMs(item), words);
+}
+
+function thoughtText(duration: number | undefined, words: ChatWords): string {
+  return duration === undefined
+    ? words.translate('ai.thought.plain')
+    : words.translate('ai.thought.for', { duration: formatDuration(duration, words.formatNumber) });
 }
 
 // ---------------------------------------------------------------------------
@@ -207,19 +214,23 @@ export function thoughtLabel(item: TextItem, options: { readonly live: boolean }
 // ---------------------------------------------------------------------------
 
 /** Which phases name a count when several calls of that kind are open at once. */
-const COUNTED: Readonly<Partial<Record<TurnPhase, { readonly kinds: readonly ToolItem['toolKind'][]; readonly noun: (count: number) => string }>>> = {
-  reading: { kinds: ['read'], noun: (count) => `Reading ${count} files` },
-  command: { kinds: ['execute'], noun: (count) => `Running ${count} commands` },
-  editing: { kinds: ['edit', 'delete', 'move'], noun: (count) => `Editing ${count} files` },
-  searching: { kinds: ['search'], noun: (count) => `Running ${count} searches` },
+const COUNTED: Readonly<Partial<Record<TurnPhase, { readonly kinds: readonly ToolItem['toolKind'][]; readonly message: MessageKey }>>> = {
+  reading: { kinds: ['read'], message: 'ai.status.counted.reading' },
+  command: { kinds: ['execute'], message: 'ai.status.counted.command' },
+  editing: { kinds: ['edit', 'delete', 'move'], message: 'ai.status.counted.editing' },
+  searching: { kinds: ['search'], message: 'ai.status.counted.searching' },
 };
 
 /**
  * The words under a running turn, from live state only: the phase of the newest event, made specific
  * ("Reading 3 files") when several calls of that kind are open. Nothing here is invented progress.
  */
-export function runningLabel(view: ChatView, now: number): { readonly label: string; readonly elapsedMs: number | undefined } | undefined {
-  const status = buildTurnStatus(view, now);
+export function runningLabel(
+  view: ChatView,
+  now: number,
+  translate: Translator,
+): { readonly label: string; readonly elapsedMs: number | undefined } | undefined {
+  const status = buildTurnStatus(view, now, translate);
   if (status.kind !== 'running') {
     return undefined;
   }
@@ -234,25 +245,14 @@ export function runningLabel(view: ChatView, now: number): { readonly label: str
       open += 1;
     }
   }
-  return { label: open >= 2 ? counted.noun(open) : status.label, elapsedMs: status.elapsedMs };
+  return { label: open >= 2 ? translate(counted.message, { count: open }) : status.label, elapsedMs: status.elapsedMs };
 }
 
 // ---------------------------------------------------------------------------
 // Compaction
 // ---------------------------------------------------------------------------
 
-/** Tokens as people write them: `850`, `42k`, `1.2M`. */
-export function formatTokens(tokens: number): string {
-  assert(Number.isFinite(tokens), 'formatTokens: a finite number');
-  const value = Math.max(0, Math.round(tokens));
-  if (value < 1000) {
-    return String(value);
-  }
-  if (value < 1_000_000) {
-    return `${Math.round(value / 1000)}k`;
-  }
-  return `${(Math.round(value / 100_000) / 10).toFixed(1)}M`;
-}
+export { formatTokens };
 
 export type CompactionTone = 'running' | 'done' | 'failed' | 'stopped';
 
@@ -264,23 +264,23 @@ export interface CompactionLine {
 }
 
 /** What the compaction row says. The saving is derived from the usage before and after, and only claimed when both are known and it is positive. */
-export function compactionLine(item: CompactionItem): CompactionLine {
+export function compactionLine(item: CompactionItem, words: ChatWords): CompactionLine {
   switch (item.status) {
     case 'in_progress':
-      return { tone: 'running', text: 'Compacting conversation…' };
+      return { tone: 'running', text: words.translate('ai.compaction.running') };
     case 'completed': {
       if (item.before === undefined || item.after === undefined) {
-        return { tone: 'done', text: 'Conversation compacted' };
+        return { tone: 'done', text: words.translate('ai.compaction.done') };
       }
       const saved = item.before.used - item.after.used;
       return saved > 0
-        ? { tone: 'done', text: `Conversation compacted · saved ~${formatTokens(saved)} tokens` }
-        : { tone: 'done', text: 'Conversation compacted' };
+        ? { tone: 'done', text: words.translate('ai.compaction.saved', { tokens: formatTokens(saved, words.formatNumber) }) }
+        : { tone: 'done', text: words.translate('ai.compaction.done') };
     }
     case 'failed':
-      return { tone: 'failed', text: 'Compaction failed', detail: item.error };
+      return { tone: 'failed', text: words.translate('ai.compaction.failed'), detail: item.error };
     case 'cancelled':
-      return { tone: 'stopped', text: 'Compaction stopped' };
+      return { tone: 'stopped', text: words.translate('ai.compaction.stopped') };
     default: {
       const exhaustive: never = item.status;
       return exhaustive;

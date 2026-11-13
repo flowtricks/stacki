@@ -35,6 +35,8 @@ esbuild.buildSync({
       "export { default as LeftRail } from './src/app/LeftRail';",
       "export { ConfirmHost } from './src/ui/ConfirmDialog';",
       "export { accountLabel } from './src/features/ai/SetupCard';",
+      "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
+      "export { formattersFor } from './shared/core/i18n/format';",
       "export { readSignInFailures } from './src/features/ai/signInTranscript';",
       "export { switchProvider, setDraft, draftText, draftFromText } from './src/features/ai/aiStore';",
       "export { resetChangeDiffs } from './src/features/ai/transcript/changeDiffs';",
@@ -609,9 +611,9 @@ test('a draft hand-off (Build an app) waits unsent in the composer: ready or not
 });
 
 test('the account line shows a name and plan, falls back to the plan, and keeps the email inside ⋯', async (context) => {
-  assert.equal(ai.accountLabel('claude', { name: 'Timothy Ricks', plan: 'Max', email: 'a@b.c' }), 'Timothy Ricks · Max');
-  assert.equal(ai.accountLabel('claude', { name: undefined, plan: 'Max', email: 'a@b.c' }), 'Claude Max');
-  assert.equal(ai.accountLabel('codex', { name: undefined, plan: undefined, email: undefined }), 'Signed in to ChatGPT');
+  assert.equal(ai.accountLabel('claude', { name: 'Timothy Ricks', plan: 'Max', email: 'a@b.c' }, ai.ENGLISH_TRANSLATE), 'Timothy Ricks · Max');
+  assert.equal(ai.accountLabel('claude', { name: undefined, plan: 'Max', email: 'a@b.c' }, ai.ENGLISH_TRANSLATE), 'Claude Max');
+  assert.equal(ai.accountLabel('codex', { name: undefined, plan: undefined, email: undefined }, ai.ENGLISH_TRANSLATE), 'Signed in to ChatGPT');
   ai.resetAiStore();
   window.localStorage.setItem('stacki.ai.agent', 'codex');
   fakeMain({ trusted: true });

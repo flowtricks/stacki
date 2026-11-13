@@ -3,6 +3,8 @@
 // ("No section") has no stored state, so it has a name only: it cannot fold, rename or be deleted.
 import { useEffect } from 'react';
 import type { ChatSection } from '../../../../shared/properties/ai/chatModel';
+import type { Translator } from '../../../lib/i18n/localeContext';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
 import { ChevronDownIcon, ChevronRightIcon, MoreIcon } from '../../../ui/Icons';
 import Menu, { useMenuTrigger } from '../../../ui/Menu';
@@ -26,6 +28,7 @@ export interface SectionHeaderProps {
 
 export function SectionHeader(props: SectionHeaderProps) {
   const { section } = props;
+  const translate = useTranslate();
   const trigger = useMenuTrigger();
   // Renaming replaces the header, and its menu with it, before the menu can report that it closed.
   const { close: closeMenu } = trigger;
@@ -48,7 +51,7 @@ export function SectionHeader(props: SectionHeaderProps) {
         <RenameField
           initial={section.name}
           limit={SECTION_NAME_CHARS_MAX}
-          label="Section name"
+          label={translate('ai.sessions.sectionName')}
           className="ai-section-rename"
           onCommit={(name) => {
             props.onRenameEnd();
@@ -66,7 +69,7 @@ export function SectionHeader(props: SectionHeaderProps) {
         aria-expanded={!props.collapsed}
         onClick={() => void collapseSection(section.id, { collapsed: !props.collapsed })}
         onDoubleClick={props.onRenameStart}
-        title={props.collapsed ? `Show ${section.name}` : `Hide ${section.name}`}
+        title={props.collapsed ? translate('ai.sessions.showSection', { name: section.name }) : translate('ai.sessions.hideSection', { name: section.name })}
       >
         <span className="ai-section-name">{section.name}</span>
         {props.collapsed ? <ChevronRightIcon size={11} /> : <ChevronDownIcon size={11} />}
@@ -74,7 +77,7 @@ export function SectionHeader(props: SectionHeaderProps) {
       <button
         ref={trigger.ref}
         className="ai-row-more"
-        aria-label={`Actions for ${section.name}`}
+        aria-label={translate('ai.sessions.actionsFor', { name: section.name })}
         aria-haspopup="menu"
         aria-expanded={trigger.open}
         onClick={trigger.toggle}
@@ -84,43 +87,52 @@ export function SectionHeader(props: SectionHeaderProps) {
       <Menu
         open={trigger.open}
         anchor={trigger.anchor}
-        label={`${section.name} actions`}
+        label={translate('ai.sessions.actionsMenu', { name: section.name })}
         placement="below-end"
-        entries={trigger.open ? sectionMenuEntries(props, section) : []}
+        entries={trigger.open ? sectionMenuEntries(props, section, translate) : []}
         onClose={trigger.close}
       />
     </div>
   );
 }
 
-function sectionMenuEntries(props: SectionHeaderProps, section: ChatSection): readonly MenuEntry[] {
+function sectionMenuEntries(props: SectionHeaderProps, section: ChatSection, translate: Translator): readonly MenuEntry[] {
   const up = sectionStep(props.sections, section.id, 'up');
   const down = sectionStep(props.sections, section.id, 'down');
   return [
-    { kind: 'item', id: 'rename', label: 'Rename', shortcut: 'R', accelerator: 'r', onSelect: props.onRenameStart },
-    { kind: 'item', id: 'up', label: 'Move up', disabled: up === undefined, onSelect: () => up !== undefined && void moveSection(section.id, up) },
-    { kind: 'item', id: 'down', label: 'Move down', disabled: down === undefined, onSelect: () => down !== undefined && void moveSection(section.id, down) },
+    { kind: 'item', id: 'rename', label: translate('ai.sessions.rename'), shortcut: 'R', accelerator: 'r', onSelect: props.onRenameStart },
+    {
+      kind: 'item',
+      id: 'up',
+      label: translate('ai.sessions.moveUp'),
+      disabled: up === undefined,
+      onSelect: () => up !== undefined && void moveSection(section.id, up),
+    },
+    {
+      kind: 'item',
+      id: 'down',
+      label: translate('ai.sessions.moveDown'),
+      disabled: down === undefined,
+      onSelect: () => down !== undefined && void moveSection(section.id, down),
+    },
     { kind: 'divider', id: 'divider-delete' },
     {
       kind: 'item',
       id: 'delete',
-      label: 'Delete section',
+      label: translate('ai.sessions.deleteSection'),
       shortcut: 'D',
       accelerator: 'd',
       danger: true,
-      onSelect: () => void confirmDeleteSection(section, props.chatCount),
+      onSelect: () => void confirmDeleteSection(section, props.chatCount, translate),
     },
   ];
 }
 
-export async function confirmDeleteSection(section: ChatSection, chatCount: number): Promise<void> {
+export async function confirmDeleteSection(section: ChatSection, chatCount: number, translate: Translator): Promise<void> {
   const answer = await confirmDialog({
-    title: `Delete the section “${section.name}”?`,
-    body:
-      chatCount === 0
-        ? 'The section is empty. This cannot be undone.'
-        : `Its ${chatCount === 1 ? 'chat moves' : `${chatCount} chats move`} to No section. No chat is deleted. The section itself cannot be brought back.`,
-    confirmLabel: 'Delete section',
+    title: translate('ai.sessions.deleteSection.title', { name: section.name }),
+    body: chatCount === 0 ? translate('ai.sessions.deleteSection.empty') : translate('ai.sessions.deleteSection.body', { count: chatCount }),
+    confirmLabel: translate('ai.sessions.deleteSection'),
     danger: true,
   });
   if (answer === true) {

@@ -8,12 +8,25 @@
 // does, so the caller passes that tool item as `tool` when it has one. Without it the card still
 // works from the request's title.
 import { useEffect, useRef, type ReactNode } from 'react';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { CodeBlock, CodeInline } from '../../../ui/CodeBlock';
 import { CheckIcon, CloseIcon, PencilIcon, SparkleIcon, TerminalIcon, TrashIcon, WarningTriangleIcon } from '../../../ui/Icons';
+import type { Translator } from '../../../lib/i18n/localeContext';
 import type { PermissionItem, ToolItem } from '../chatReducer';
 import { DiffView } from './DiffView';
 import { registerWaiting, requestInFocus, revealRequest, setOnScreen, typesText, usePermissionAttention } from './permissionAttention';
-import { askLabel, denyOption, isAllow, optionForKey, plainTitle, primaryOption, sortedOptions, verdictLabel, type PermissionOption } from './permissionModel';
+import {
+  askLabel,
+  denyOption,
+  isAllow,
+  optionForKey,
+  plainTitle,
+  primaryOption,
+  sortedOptions,
+  verdictLabel,
+  wasRefused,
+  type PermissionOption,
+} from './permissionModel';
 import { relativePath } from './paths';
 import './chrome.css';
 
@@ -37,8 +50,9 @@ export function PermissionCard({
 }
 
 function AnsweredCard({ item, tool, projectPath }: { readonly item: PermissionItem; readonly tool: ToolItem | undefined; readonly projectPath: string }) {
-  const verdict = verdictLabel(item) ?? 'Answered';
-  const denied = verdict === 'Denied' || verdict === 'Stopped';
+  const translate = useTranslate();
+  const verdict = verdictLabel(item, translate) ?? translate('ai.permission.verdict.answered');
+  const denied = wasRefused(item);
   const title = plainTitle(item.title, projectPath);
   return (
     <div className="ai-permission ai-permission-answered ai-ask ai-ask-done">
@@ -63,6 +77,7 @@ function WaitingCard({
   readonly projectPath: string;
   readonly onAnswer: (optionId: string | undefined) => void;
 }) {
+  const translate = useTranslate();
   const root = useRef<HTMLDivElement>(null);
   const answer = useRef(onAnswer);
   useEffect(() => {
@@ -112,21 +127,21 @@ function WaitingCard({
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [request, item.options]);
-  const preview = previewOf(tool, projectPath);
+  const preview = previewOf(tool, projectPath, translate);
   const Icon = askIcon(tool);
   return (
     <div
       ref={root}
       className="ai-permission ai-ask"
       role="group"
-      aria-label="Permission request"
+      aria-label={translate('ai.permission.label')}
       aria-keyshortcuts="1 2 3 Escape"
       tabIndex={-1}
       data-request={request}
     >
       <div className="ai-permission-title ai-ask-head">
         <Icon size={13} />
-        <span className="ai-ask-label">{askLabel(tool?.toolKind)}</span>
+        <span className="ai-ask-label">{askLabel(tool?.toolKind, translate)}</span>
       </div>
       {preview !== undefined ? preview : <div className="ai-ask-title">{plainTitle(item.title, projectPath)}</div>}
       <div className="ai-permission-actions ai-ask-actions">
@@ -147,23 +162,19 @@ function WaitingCard({
 }
 
 /** The command or the edit the request is about; undefined when the transcript has no tool call for it. */
-function previewOf(tool: ToolItem | undefined, projectPath: string): ReactNode | undefined {
+function previewOf(tool: ToolItem | undefined, projectPath: string, translate: Translator): ReactNode | undefined {
   if (tool === undefined) {
     return undefined;
   }
   if (tool.toolKind === 'execute') {
-    return <CodeBlock className="ai-ask-code" text={tool.command ?? tool.title} language="shell" label="Command to run" />;
+    return <CodeBlock className="ai-ask-code" text={tool.command ?? tool.title} language="shell" label={translate('ai.permission.command')} />;
   }
   const first = tool.diffs[0];
   if (first !== undefined) {
     return (
       <div className="ai-ask-diff">
         <DiffView diff={first} projectPath={projectPath} size="compact" />
-        {tool.diffs.length > 1 && (
-          <span className="ai-ask-more">
-            and {tool.diffs.length - 1} more file{tool.diffs.length === 2 ? '' : 's'}
-          </span>
-        )}
+        {tool.diffs.length > 1 && <span className="ai-ask-more">{translate('ai.permission.moreFiles', { count: tool.diffs.length - 1 })}</span>}
       </div>
     );
   }
@@ -183,7 +194,7 @@ function optionClass(option: PermissionOption, primary: PermissionOption | undef
   if (!isAllow(option)) {
     return 'ai-reject';
   }
-  return option.id === primary?.id ? 'ai-allow' : 'ai-allow ai-allow-secondary';
+  return option.id === primary?.id ? 'ai-allow' : 'ai-allow ai-allow-secondary'; // i18n-ignore: CSS class names.
 }
 
 function askIcon(tool: ToolItem | undefined) {
@@ -239,6 +250,7 @@ export function PermissionPin({
   readonly projectPath?: string | undefined;
   readonly onAnswer: (item: PermissionItem, optionId: string) => void;
 }) {
+  const translate = useTranslate();
   const attention = usePermissionAttention();
   const request = attention.waiting[0];
   const item = permissions.find((candidate) => candidate.request === request && candidate.answer === undefined);
@@ -250,7 +262,7 @@ export function PermissionPin({
   return (
     <div className="ai-ask-pin" role="status">
       <WarningTriangleIcon size={13} />
-      <span className="ai-ask-pin-text">Waiting: {plainTitle(item.title, projectPath)}</span>
+      <span className="ai-ask-pin-text">{translate('ai.permission.waiting', { title: plainTitle(item.title, projectPath) })}</span>
       <span className="ai-ask-pin-actions">
         {allow !== undefined && (
           <button className="ai-allow" onClick={() => onAnswer(item, allow.id)}>
@@ -263,7 +275,7 @@ export function PermissionPin({
           </button>
         )}
         <button className="ai-reject" onClick={() => revealRequest(request)}>
-          Show
+          {translate('ai.permission.show')}
         </button>
       </span>
     </div>

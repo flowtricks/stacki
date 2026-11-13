@@ -20,6 +20,8 @@ esbuild.buildSync({
       "export * from './src/features/ai/transcript/diffModel';",
       "export * from './src/features/ai/transcript/messageModel';",
       "export * from './src/features/ai/transcript/permissionModel';",
+      "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
+      "export { formattersFor } from './shared/core/i18n/format';",
     ].join('\n'),
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
     loader: 'ts',
@@ -30,7 +32,13 @@ esbuild.buildSync({
   format: 'cjs',
   logLevel: 'silent',
 });
-const model = require(output);
+const raw = require(output);
+// The English forms of the wording functions, which take the language's messages and date format.
+const model = {
+  ...raw,
+  timeLabel: (at) => raw.timeLabel(at, raw.formattersFor('en').formatDate),
+  verdictLabel: (item) => raw.verdictLabel(item, raw.ENGLISH_TRANSLATE),
+};
 
 const lines = (count, make = (index) => `line ${index + 1}`) => Array.from({ length: count }, (_, index) => make(index)).join('\n');
 

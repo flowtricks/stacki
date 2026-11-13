@@ -4,7 +4,9 @@
 // both, and is remembered. A very long run draws its newest calls and offers the earlier ones.
 import { memo, useId, useState } from 'react';
 import { CheckIcon, ChevronDownIcon, ChevronRightIcon, WarningTriangleIcon } from '../../../ui/Icons';
+import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { formatDuration } from '../chatStatus';
+import { useChatWords } from '../useChatWords';
 import { ThinkingBlock } from './ThinkingBlock';
 import { ToolCard } from './ToolCard';
 import { groupDurationMs, summarizeGroup, type ActivityRun } from './transcriptModel';
@@ -25,11 +27,14 @@ export const ActivityGroup = memo(function ActivityGroup({
   /** The turn this run belongs to is still going. */
   readonly working: boolean;
 }) {
+  const translate = useTranslate();
+  const words = useChatWords();
+  const { formatNumber } = useFormat();
   const live = working && run.last;
   const [open, change] = useOpenState(chatId, `group:${run.key}`, { open: live });
   const [shown, setShown] = useState(GROUP_ITEMS_SHOWN_MAX);
   const bodyId = useId();
-  const summary = summarizeGroup(run.items);
+  const summary = summarizeGroup(run.items, words);
   const duration = live ? undefined : groupDurationMs(run.items);
   const hidden = Math.max(0, run.items.length - shown);
   const visible = hidden === 0 ? run.items : run.items.slice(hidden);
@@ -41,14 +46,14 @@ export const ActivityGroup = memo(function ActivityGroup({
         {open ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
         <span className="ai-group-mark">{live ? undefined : summary.failed > 0 ? <WarningTriangleIcon size={12} /> : <CheckIcon size={12} />}</span>
         <span className="ai-group-title">{summary.text}</span>
-        {summary.failed > 0 && <span className="ai-group-failed">{summary.failed} failed</span>}
-        {duration !== undefined && duration >= 1000 && <span className="ai-group-time">{formatDuration(duration)}</span>}
+        {summary.failed > 0 && <span className="ai-group-failed">{translate('ai.group.failed', { count: summary.failed })}</span>}
+        {duration !== undefined && duration >= 1000 && <span className="ai-group-time">{formatDuration(duration, formatNumber)}</span>}
       </button>
       {open && (
         <div className="ai-group-body" id={bodyId}>
           {hidden > 0 && (
             <button className="ai-group-earlier" onClick={() => setShown((count) => count + GROUP_ITEMS_SHOWN_MAX)}>
-              Show {Math.min(hidden, GROUP_ITEMS_SHOWN_MAX)} earlier
+              {translate('ai.group.showEarlier', { count: Math.min(hidden, GROUP_ITEMS_SHOWN_MAX) })}
             </button>
           )}
           {visible.map((item) =>

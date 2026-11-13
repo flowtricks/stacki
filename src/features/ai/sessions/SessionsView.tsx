@@ -8,6 +8,7 @@
 import { Fragment, useState } from 'react';
 import type { ChatSummary } from '../../../../shared/properties/ai/chatModel';
 import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { DropLine } from '../../../ui/DropLine';
 import { PlusIcon } from '../../../ui/Icons';
 import { SearchField } from '../../../ui/SearchField';
@@ -22,11 +23,12 @@ import { NO_SECTION, applyOrder, dragSectionsOf, groupSessions, isNarrowing, loc
 import type { SessionGroup } from './sessionsModel';
 import './sessions.css';
 
-export { filterChats, relativeTime, sortChats } from './sessionsModel';
+export { filterChats, sortChats } from './sessionsModel';
 
 type Editing = { readonly kind: 'chat'; readonly id: string } | { readonly kind: 'section'; readonly id: string } | undefined;
 
 export function SessionsView({ chats }: { readonly chats: readonly ChatSummary[] }) {
+  const translate = useTranslate();
   const state = useAiState();
   const { filter, sections, views } = state;
   const [editing, setEditing] = useState<Editing>(undefined);
@@ -63,22 +65,27 @@ export function SessionsView({ chats }: { readonly chats: readonly ChatSummary[]
   return (
     <div className="ai-sessions">
       {chats.length > 0 && (
-        <SearchField label="Search chats" className="ai-sessions-search" value={filter.query} onChange={(query) => setChatListFilter({ ...filter, query })} />
+        <SearchField
+          label={translate('ai.sessions.search')}
+          className="ai-sessions-search"
+          value={filter.query}
+          onChange={(query) => setChatListFilter({ ...filter, query })}
+        />
       )}
       <div className="ai-list" ref={drag.containerRef}>
         {live.length === 0 && !narrowing && (
           <div className="ai-empty ai-sessions-empty">
-            <p>No chats yet. Start one and it will be listed here.</p>
+            <p>{translate('ai.sessions.empty')}</p>
             <button className="ai-sessions-start" onClick={() => void newChat(preferredAgent())}>
-              <PlusIcon size={12} /> New chat
+              <PlusIcon size={12} /> {translate('ai.sessions.newChat')}
             </button>
           </div>
         )}
         {live.length > 0 && layout.groups.every((group) => group.chats.length === 0) && narrowing && (
           <div className="ai-empty ai-sessions-empty">
-            <p>No chat matches.</p>
+            <p>{translate('ai.sessions.noMatch')}</p>
             <button className="ai-sessions-start" onClick={() => setChatListFilter({ ...DEFAULT_CHAT_FILTER, showArchived: filter.showArchived })}>
-              Clear search and filters
+              {translate('ai.sessions.clearFilters')}
             </button>
           </div>
         )}
@@ -86,7 +93,7 @@ export function SessionsView({ chats }: { readonly chats: readonly ChatSummary[]
           <section key={group.key} className="ai-section" {...drag.sectionProps(group.key)}>
             {(group.section !== undefined || sections.length > 0) && (
               <SectionHeader
-                name={group.name}
+                name={group.section === undefined ? translate('ai.sessions.noSection') : group.name}
                 section={group.section}
                 sections={sections}
                 chatCount={chats.filter((chat) => chat.section === group.section?.id).length}
@@ -113,10 +120,10 @@ export function SessionsView({ chats }: { readonly chats: readonly ChatSummary[]
         {filter.showArchived && (
           <section className="ai-section ai-archived">
             <div className="ai-section-head is-static">
-              <span className="ai-section-name">Archived</span>
+              <span className="ai-section-name">{translate('ai.sessions.archivedHeading')}</span>
             </div>
             <ul className="ai-list-rows">
-              {layout.archived.length === 0 && <li className="ai-section-empty">No archived chats.</li>}
+              {layout.archived.length === 0 && <li className="ai-section-empty">{translate('ai.sessions.noArchived')}</li>}
               {layout.archived.map((chat) => (
                 <ChatRow
                   key={chat.id}
@@ -137,10 +144,10 @@ export function SessionsView({ chats }: { readonly chats: readonly ChatSummary[]
           <button
             className="ai-new-section"
             disabled={sectionLimit}
-            title={sectionLimit ? `A project has at most ${AI_LIMITS.sectionsMax} sections.` : 'Add a section to group chats'}
-            onClick={() => void addSection(sections, { sectionCreated: (id) => setEditing({ kind: 'section', id }) })}
+            title={sectionLimit ? translate('ai.sessions.sectionLimit', { count: AI_LIMITS.sectionsMax }) : translate('ai.sessions.addSection')}
+            onClick={() => void addSection(sections, { sectionCreated: (id) => setEditing({ kind: 'section', id }) }, translate)}
           >
-            <PlusIcon size={12} /> New section
+            <PlusIcon size={12} /> {translate('ai.sessions.newSection')}
           </button>
         )}
       </div>
@@ -160,10 +167,13 @@ interface GroupRowsProps {
 }
 
 function GroupRows({ group, sections, running, editing, setEditing, now, drag, line }: GroupRowsProps) {
+  const translate = useTranslate();
   const lineHere = line !== undefined && line.sectionId === group.key;
   return (
     <ul className="ai-list-rows">
-      {group.chats.length === 0 && <li className="ai-section-empty">{group.section === undefined ? 'Nothing here.' : 'Drag a chat here.'}</li>}
+      {group.chats.length === 0 && (
+        <li className="ai-section-empty">{group.section === undefined ? translate('ai.sessions.nothingHere') : translate('ai.sessions.dropHere')}</li>
+      )}
       {group.chats.map((chat) => (
         <Fragment key={chat.id}>
           {lineHere && line.beforeId === chat.id && <DropSlot />}

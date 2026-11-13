@@ -5,7 +5,9 @@
 // chat read when it is open on screen and unread otherwise; a message sent while the agent works is
 // steered into the turn, or queued (at most 16), and the queue sends its next message only after a
 // turn that ended normally — held, never auto-sent, after an error or a stop; drafts hold chips,
-// are bounded, survive a reload through storage that may be bad, and build the parts a prompt carries.
+// are bounded, survive a reload through storage that may be bad, and build the parts a prompt carries;
+// the settings last used (mode, model, effort, switches) arrive with the agents, are remembered per agent
+// with the last writer winning, and are forgotten per agent by Reset to defaults.
 // Method: bundle the real store with esbuild and drive it against a fake preload (window.avb) that
 // records every call, with a Map-backed localStorage; push events through receiveEvents as main would.
 const test = require('node:test');
@@ -92,6 +94,8 @@ function install(initial, replies = {}) {
       aiDiff: record('aiDiff', () => ok({ oldText: 'a', newText: 'b' })),
       aiMentions: record('aiMentions', () => ok([{ kind: 'file', path: 'src/a.ts', name: 'a.ts' }])),
       aiCancel: record('aiCancel', { ok: true }),
+      aiSetOption: record('aiSetOption', ok({ set: true })),
+      aiRemember: record('aiRemember', () => ok({ claude: [], codex: [] })),
       aiAck: () => undefined,
       onAiEvents: () => () => undefined,
       onAiAgentStatus: () => () => undefined,
@@ -695,26 +699,91 @@ test('switching provider carries the draft, chips and all, to the new chat', asy
   assert.deepEqual(store.aiState().drafts.get(next).segments, draft.segments);
 });
 
-test('a stored mode never applies to a new chat: remembered settings leave modes out, old values included', () => {
-  storage.clear();
-  // A value an older build stored: Claude's mode and Codex's plan switch beside an ordinary choice.
-  storage.set('stacki.ai.settings.claude', JSON.stringify({ mode: 'bypassPermissions', model: 'opus', effort: 'high' }));
-  storage.set('stacki.ai.settings.codex', JSON.stringify({ mode: 'agent-full-access', collaboration_mode: 'plan', model: 'gpt-5' }));
-  assert.deepEqual(store.rememberedSettings('claude'), [
+const REMEMBERED = {
+  claude: [
+    { option: 'mode', value: 'bypassPermissions' },
     { option: 'model', value: 'opus' },
-    { option: 'effort', value: 'high' },
+  ],
+  codex: [],
+};
+const withRemembered = (remembered) => ({
+  aiAgents: async () => ({
+    trusted: true,
+    agents: [{ agent: 'claude', state: 'ready', adapterVersion: '1.0.0', running: false, downloadMegabytes: 1 }],
+    options: [],
+    remembered,
+  }),
+});
+
+test('the remembered settings arrive with the agents, so a new chat shows them in its first frame', async () => {
+  await start(list([]), withRemembered(REMEMBERED));
+  assert.deepEqual(store.aiState().remembered, REMEMBERED, 'in the same update that loads the panel');
+});
+
+test('first run and a damaged reply: nothing remembered, and the panel still loads', async () => {
+  await start(list([]));
+  assert.deepEqual(store.aiState().remembered, { claude: [], codex: [] }, 'first run');
+  for (const damaged of ['garbage', 7, JSON.parse('null'), { claude: 'x' }, { claude: [{ option: 4 }], codex: [{ option: 'model' }] }]) {
+    await start(list([]), withRemembered(damaged));
+    assert.equal(store.aiState().loaded, true, JSON.stringify(damaged));
+    assert.deepEqual(store.aiState().remembered, { claude: [], codex: [] }, JSON.stringify(damaged));
+  }
+});
+
+test('a new chat sends no settings: the main process applies what was remembered when its session starts', async () => {
+  const fake = await start(list([]), withRemembered(REMEMBERED));
+  await store.newChat('claude');
+  assert.equal('settings' in fake.named('aiChatCreate')[0].payload, false);
+});
+
+test('a choice is remembered at once, per agent, last writer wins; the main process is told', async () => {
+  const fake = await start(list([]), {
+    ...withRemembered(REMEMBERED),
+    aiRemember: async () => ({ ok: true, value: { claude: [], codex: [] } }),
+  });
+  await store.rememberChoice('codex', 'model', 'gpt-5');
+  await store.rememberChoice('claude', 'model', 'sonnet');
+  assert.deepEqual(store.aiState().remembered.codex, [{ option: 'model', value: 'gpt-5' }]);
+  assert.deepEqual(store.aiState().remembered.claude, [
+    { option: 'mode', value: 'bypassPermissions' },
+    { option: 'model', value: 'sonnet' },
   ]);
-  assert.deepEqual(store.rememberedSettings('codex'), [{ option: 'model', value: 'gpt-5' }]);
-  // Choosing a mode is not remembered either, so it cannot come back later.
-  store.rememberSetting('claude', 'mode', 'bypassPermissions');
-  store.rememberSetting('claude', 'model', 'sonnet');
-  assert.deepEqual(JSON.parse(storage.get('stacki.ai.settings.claude')), { model: 'sonnet', effort: 'high' }, 'the stale mode is dropped on the next write');
-  store.rememberSetting('codex', 'collaboration_mode', 'plan');
+  assert.deepEqual(
+    fake.named('aiRemember').map((call) => [call.payload.agent, call.payload.action]),
+    [
+      ['codex', { kind: 'set', option: 'model', value: 'gpt-5' }],
+      ['claude', { kind: 'set', option: 'model', value: 'sonnet' }],
+    ],
+  );
+});
+
+test('a change made in a live chat becomes the default for the next chat, but only once the agent accepted it', async () => {
+  const fake = await start(list([summary(FIRST)]), {
+    ...withRemembered(REMEMBERED),
+    aiSetOption: async (payload) => (payload.value === 'refused' ? failure('agent-failed') : { ok: true, value: { set: true } }),
+  });
+  await store.setChatOption(FIRST, 'effort', 'high');
+  assert.deepEqual(store.aiState().remembered.claude.at(-1), { option: 'effort', value: 'high' });
+  await store.setChatOption(FIRST, 'effort', 'refused');
+  assert.deepEqual(store.aiState().remembered.claude.at(-1), { option: 'effort', value: 'high' }, 'a refused change is not remembered');
+  assert.equal(fake.named('aiRemember').length, 0, 'the main process remembers an accepted change itself');
+});
+
+test('Reset to defaults forgets one agent only', async () => {
+  const fake = await start(list([]), withRemembered({ ...REMEMBERED, codex: [{ option: 'model', value: 'gpt-5' }] }));
+  await store.resetRememberedSettings('claude');
+  assert.deepEqual(store.aiState().remembered.claude, []);
+  assert.deepEqual(store.aiState().remembered.codex, [{ option: 'model', value: 'gpt-5' }]);
+  assert.deepEqual(fake.named('aiRemember').at(-1).payload, { projectPath: PROJECT, agent: 'claude', action: { kind: 'reset' } });
+});
+
+test('the renderer no longer keeps settings in browser storage', async () => {
+  await start(list([]), withRemembered(REMEMBERED));
+  await store.rememberChoice('claude', 'model', 'sonnet');
   assert.equal(
-    store.rememberedSettings('codex').some((setting) => setting.option === 'collaboration_mode'),
+    [...storage.keys()].some((key) => key.startsWith('stacki.ai.settings.')),
     false,
   );
-  storage.clear();
 });
 
 test('one permission answer is sent once however many times it is triggered', async () => {

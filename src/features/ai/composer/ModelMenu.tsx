@@ -33,18 +33,24 @@ export function modelMenuEntries(settings: ComposerSettings, translate: Translat
       });
     });
   }
-  const effort = effortEntries(settings);
+  const effort = effortEntries(settings, translate);
   if (effort !== undefined) {
     if (entries.length > 0) {
       entries.push({ kind: 'divider', id: 'divider-effort' });
     }
-    entries.push({ kind: 'submenu', id: 'effort', label: 'Effort', value: effortLabel(settings) ?? 'Default', entries: effort });
+    entries.push({
+      kind: 'submenu',
+      id: 'effort',
+      label: translate('ai.composer.effort'),
+      value: effortLabel(settings, translate) ?? translate('ai.composer.default'),
+      entries: effort,
+    });
   }
   for (const toggle of toggleOptions(settings.agent, settings.options)) {
     entries.push({
       kind: 'toggle',
       id: `toggle:${toggle.optionId}`,
-      label: toggle.label,
+      label: toggle.labelKey === undefined ? toggle.label : translate(toggle.labelKey),
       on: toggle.on,
       onChange: (next) => settings.pick(toggle.optionId, next ? toggle.onValue : toggle.offValue),
     });
@@ -53,7 +59,7 @@ export function modelMenuEntries(settings: ComposerSettings, translate: Translat
     entries.push({
       kind: 'submenu',
       id: 'more-models',
-      label: 'More models',
+      label: translate('ai.composer.moreModels'),
       entries: split.more.map((choice) => ({
         kind: 'item' as const,
         id: `more:${choice.value}`,
@@ -69,9 +75,19 @@ export function modelMenuEntries(settings: ComposerSettings, translate: Translat
   entries.push({
     kind: 'submenu',
     id: 'agent',
-    label: 'Agent',
+    label: translate('ai.agent.switch.menu'),
     value: agentLabel(settings.agent),
     entries: agentSwitchEntries({ agent: settings.agent, chat: settings.chat, started: settings.started, badges: settings.agentBadges ?? {}, translate }),
+  });
+  // Last, so a slip while choosing a model cannot land on it: forgets the remembered mode, model, effort and switches.
+  entries.push({ kind: 'divider', id: 'divider-reset' });
+  entries.push({
+    kind: 'item',
+    id: 'reset',
+    label: translate('ai.composer.model.reset'),
+    description: translate('ai.composer.model.resetHint', { agent: agentLabel(settings.agent) }),
+    disabled: !settings.canReset,
+    onSelect: settings.reset,
   });
   return entries;
 }
@@ -81,7 +97,7 @@ export function ModelMenu({ settings }: { readonly settings: ComposerSettings })
   const trigger = useMenuTrigger();
   const model = modelOption(settings);
   const modelName = currentChoiceName(model) ?? agentLabel(settings.agent);
-  const level = effortLabel(settings);
+  const level = effortLabel(settings, translate);
   return (
     <>
       <StatusChip
@@ -89,8 +105,14 @@ export function ModelMenu({ settings }: { readonly settings: ComposerSettings })
         open={trigger.open}
         disabled={settings.running}
         tone="plain"
-        ariaLabel="Model"
-        title={settings.running ? 'The model changes when the agent is done' : `${modelName}${level === undefined ? '' : `, ${level} effort`}`}
+        ariaLabel={translate('ai.composer.model')}
+        title={
+          settings.running
+            ? translate('ai.composer.model.locked')
+            : level === undefined
+              ? modelName
+              : translate('ai.composer.model.title', { model: modelName, effort: level })
+        }
         onClick={trigger.toggle}
       >
         <span className="ai-chip-logo">
@@ -103,7 +125,7 @@ export function ModelMenu({ settings }: { readonly settings: ComposerSettings })
         open={trigger.open}
         anchor={trigger.anchor}
         entries={modelMenuEntries(settings, translate)}
-        label="Model"
+        label={translate('ai.composer.model')}
         placement="above-start"
         onClose={trigger.close}
       />

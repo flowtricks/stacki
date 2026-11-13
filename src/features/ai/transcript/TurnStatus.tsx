@@ -5,6 +5,7 @@
 // The ticking part is its own component, mounted only while a turn runs, so a finished chat holds
 // no timer, and the rest of the transcript does not re-render each second.
 import type { ChatView } from '../chatReducer';
+import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import { formatDuration } from '../chatStatus';
 import { LoaderDots } from '../../../ui/LoaderDots';
 import { useNow } from './ticker';
@@ -15,8 +16,10 @@ export function TurnStatus({ view }: { readonly view: ChatView }) {
 }
 
 function RunningLine({ view }: { readonly view: ChatView }) {
+  const translate = useTranslate();
+  const { formatNumber } = useFormat();
   const now = useNow();
-  const status = runningLabel(view, now);
+  const status = runningLabel(view, now, translate);
   if (status === undefined) {
     return undefined;
   }
@@ -28,7 +31,7 @@ function RunningLine({ view }: { readonly view: ChatView }) {
       </span>
       {status.elapsedMs !== undefined && (
         <span className="ai-turn-time" aria-hidden="true">
-          {formatDuration(status.elapsedMs)}
+          {formatDuration(status.elapsedMs, formatNumber)}
         </span>
       )}
     </div>

@@ -232,6 +232,7 @@ export function parseAcpLine(line: string): Result<AcpMessage, AcpWireError> {
   }
   const message = toRecord(value);
   if (message === undefined || message['jsonrpc'] !== '2.0') {
+    // i18n-ignore: a protocol diagnostic for logs.
     return err({ code: 'not-json-rpc', message: 'Expected a JSON-RPC 2.0 object' });
   }
   const parsed = envelope(message);

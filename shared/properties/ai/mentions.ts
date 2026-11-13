@@ -56,6 +56,7 @@ export interface DraftError {
 
 /** The title a built-in chip shows, and what the plain-text fallback says in its place. */
 export const BUILTIN_CHIP_TITLES: Readonly<Record<BuiltinChipId, string>> = {
+  // i18n-ignore: the words the agent receives for the chip; the chip is shown translated.
   'app-builder': 'App builder instructions',
 };
 
@@ -135,10 +136,12 @@ export function parseDraftSegments(input: unknown): Result<ComposerSegments, Dra
     const segments = values.map(parseSegment);
     const chips = segments.filter((segment) => segment.kind === 'chip').length;
     if (chips > AI_LIMITS.mentionsMax) {
+      // i18n-ignore: a diagnostic for a stored draft; the caller treats it as an empty draft.
       return err({ message: 'draft: too many chips' });
     }
     const characters = segments.reduce((total, segment) => total + (segment.kind === 'text' ? segment.text.length : 0), 0);
     if (characters > AI_LIMITS.promptCharsMax) {
+      // i18n-ignore: a diagnostic for a stored draft; the caller treats it as an empty draft.
       return err({ message: 'draft: text exceeds limit' });
     }
     assert(segments.length === values.length, 'parseDraftSegments: one segment per entry');

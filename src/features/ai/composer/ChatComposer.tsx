@@ -33,6 +33,7 @@ import { useDictation } from '../useDictation';
 import { DictationNoticeRow } from './DictationNoticeRow';
 import { ComposerInput, type ComposerHandle, type SendKey } from './ComposerInput';
 import { ComposerStatusLine } from './ComposerStatusLine';
+import type { Translator } from '../../../lib/i18n/localeContext';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { PlusMenu } from './PlusMenu';
 import { QueuedPrompts } from './QueuedPrompts';
@@ -83,11 +84,11 @@ export function ChatComposer({
     const added: DraftAttachment[] = [];
     for (const file of files) {
       if (draft.attachments.length + added.length >= AI_LIMITS.attachmentsMax) {
-        setProblem(`Attach up to ${AI_LIMITS.attachmentsMax} files per message.`);
+        setProblem(translate('ai.composer.attach.limit', { count: AI_LIMITS.attachmentsMax }));
         break;
       }
       try {
-        added.push(await attachmentFor(file, projectPath));
+        added.push(await attachmentFor(file, projectPath, translate));
       } catch (error: unknown) {
         setProblem(error instanceof Error ? error.message : String(error));
       }
@@ -162,7 +163,7 @@ export function ChatComposer({
                 <button
                   type="button"
                   className="ghost"
-                  aria-label="Remove attachment"
+                  aria-label={translate('ai.composer.attach.remove')}
                   onClick={() => setDraft(chat, (current) => ({ ...current, attachments: current.attachments.filter((other) => other.id !== entry.id) }))}
                 >
                   <CloseIcon size={10} />
@@ -178,7 +179,7 @@ export function ChatComposer({
             accept="image/png,image/jpeg,image/webp,image/gif"
             multiple
             hidden
-            aria-label="Attach images"
+            aria-label={translate('ai.composer.attach.images')}
             onChange={(event) => {
               const element = event.currentTarget;
               void attach([...(element.files ?? [])]);
@@ -203,22 +204,34 @@ export function ChatComposer({
           />
           <div className="ai-composer-end">
             {running && (
-              <button type="button" className="ai-send ai-stop" aria-label="Stop" title="Stop the agent (Esc)" onClick={() => void stopChat(chat)}>
+              <button
+                type="button"
+                className="ai-send ai-stop"
+                aria-label={translate('ai.composer.stop')}
+                title={translate('ai.composer.stop.title')}
+                onClick={() => void stopChat(chat)}
+              >
                 <span className="ai-stop-square" />
               </button>
             )}
             <button
               type="button"
               className={`ghost ai-tool-button${voice.listening ? ' is-listening' : ''}`}
-              aria-label={voice.listening ? 'Stop dictation' : 'Dictate'}
+              aria-label={voice.listening ? translate('ai.composer.dictate.stop') : translate('ai.composer.dictate')}
               aria-pressed={voice.listening}
-              title={voice.supported ? 'Dictate a message' : 'Voice input is not available'}
+              title={voice.supported ? translate('ai.composer.dictate.title') : translate('ai.composer.dictate.unavailable')}
               onClick={voice.toggle}
             >
               <MicGlyph />
             </button>
             {!running && hasContent && (
-              <button type="submit" className="ai-send" aria-label="Send" title="Send (Enter)" disabled={disabled !== undefined}>
+              <button
+                type="submit"
+                className="ai-send"
+                aria-label={translate('ai.composer.send')}
+                title={translate('ai.composer.send.title')}
+                disabled={disabled !== undefined}
+              >
                 <ArrowDownIcon size={14} className="ai-send-arrow" />
               </button>
             )}
@@ -230,21 +243,21 @@ export function ChatComposer({
       {problem === undefined && voice.notice !== undefined && (
         <DictationNoticeRow notice={voice.notice} onDismiss={voice.dismiss} onOpenSettings={voice.openSettings} />
       )}
-      {voice.listening && <div className="ai-compose-hint">{voice.interim || 'Listening… click the microphone to finish'}</div>}
+      {voice.listening && <div className="ai-compose-hint">{voice.interim || translate('ai.composer.listening')}</div>}
     </div>
   );
 }
 
-async function attachmentFor(file: File, projectPath: string): Promise<DraftAttachment> {
+async function attachmentFor(file: File, projectPath: string, translate: Translator): Promise<DraftAttachment> {
   const filePath = window.avb.getFilePath(file);
   const root = projectPath.endsWith('/') ? projectPath : `${projectPath}/`;
   if (filePath !== undefined && filePath.startsWith(root) && !file.type.startsWith('image/')) {
     return { id: crypto.randomUUID(), preview: undefined, attachment: { kind: 'file', path: filePath.slice(root.length) } };
   }
   if (file.type.startsWith('image/')) {
-    return prepareImage(file);
+    return prepareImage(file, translate);
   }
-  throw new Error('Attach images, or files from this project.');
+  throw new Error(translate('ai.composer.attach.unsupported'));
 }
 
 const MicGlyph = centralIcon(centralMicrophone);

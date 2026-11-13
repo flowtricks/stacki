@@ -27,6 +27,7 @@ import { err, ok, type Result } from '../../../shared/core/result';
 import { parseChatSettings, type AiFailure, type ChatSetting } from '../../../shared/ipc/aiChat';
 import type { AgentId } from '../../../shared/properties/ai/agentIds';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
+import { described } from './aiMessages';
 import {
   parseChatEvent,
   parseChatSection,
@@ -42,8 +43,18 @@ import {
   type SectionId,
 } from '../../../shared/properties/ai/chatModel';
 
+/**
+ * Where a chat's title came from, which decides what may replace it: the first line of the first
+ * prompt is a placeholder, the agent's own title replaces the placeholder (and a newer agent title
+ * replaces an older one), and a title the person typed is never replaced. Older records have no
+ * source and read as 'first-line'.
+ */
+export const TITLE_SOURCES = ['first-line', 'ai', 'user'] as const;
+export type TitleSource = (typeof TITLE_SOURCES)[number];
+
 /** A chat as the index keeps it: the summary, and the agent session it continues. */
 export interface ChatRecord extends ChatSummary {
+  readonly titleSource: TitleSource;
   readonly sessionId: string | undefined;
   /** Settings chosen before the chat had a session, applied once it has one. */
   readonly settings: readonly ChatSetting[];
@@ -114,7 +125,14 @@ export class ChatStore {
   }
 
   /** A new chat at the top of the unsectioned chats, or undefined when the project has as many as it may. */
-  create(projectPath: string, agent: AgentId, title: string, now: number, settings: readonly ChatSetting[] = []): ChatRecord | undefined {
+  create(
+    projectPath: string,
+    agent: AgentId,
+    title: string,
+    now: number,
+    settings: readonly ChatSetting[] = [],
+    titleSource: TitleSource = 'first-line',
+  ): ChatRecord | undefined {
     const index = this.readIndex(projectPath);
     if (index.chats.length >= AI_LIMITS.chatsMax) {
       return undefined;
@@ -123,6 +141,7 @@ export class ChatStore {
       id: toChatId(`c${randomBytes(12).toString('hex')}`),
       agent,
       title: title.slice(0, AI_LIMITS.titleCharsMax),
+      titleSource,
       pinned: false,
       createdAt: now,
       updatedAt: now,
@@ -248,6 +267,21 @@ export class ChatStore {
     replaceWhole(path.join(this.root, 'agent-options.json'), source);
   }
 
+  /** The composer settings last used, as stored (rememberedSettings.ts reads them); undefined before any were stored or when unreadable. */
+  readRememberedSettings(): unknown {
+    try {
+      const value: unknown = JSON.parse(fs.readFileSync(path.join(this.root, 'remembered-settings.json'), 'utf8'));
+      return value;
+    } catch {
+      return undefined;
+    }
+  }
+
+  writeRememberedSettings(source: string): void {
+    assert(source.length <= AI_LIMITS.chatBytesMax, 'writeRememberedSettings: bounded');
+    replaceWhole(path.join(this.root, 'remembered-settings.json'), source);
+  }
+
   readReviews(projectPath: string, chat: ChatId): unknown {
     try {
       const value: unknown = JSON.parse(fs.readFileSync(this.reviewsFile(projectPath, chat), 'utf8'));
@@ -368,7 +402,46 @@ function withSession(summary: ChatSummary, entry: unknown): ChatRecord {
   } catch {
     settings = []; // Lost settings only mean the agent's own defaults.
   }
-  return { ...summary, sessionId: typeof session === 'string' && session.length <= AI_LIMITS.idCharsMax ? session : undefined, settings };
+  const titleSource = parseTitleSource(toRecord(entry)?.['titleSource']);
+  return { ...summary, titleSource, sessionId: typeof session === 'string' && session.length <= AI_LIMITS.idCharsMax ? session : undefined, settings };
+}
+
+/** A stored title source; a missing or unknown one is 'first-line', so a record from an older build keeps working. */
+export function parseTitleSource(input: unknown): TitleSource {
+  return TITLE_SOURCES.find((source) => source === input) ?? 'first-line';
+}
+
+/** An agent's title as a chat title: control characters and line breaks become spaces, runs of space collapse, trimmed, cut to the title limit. Empty: undefined. */
+export function cleanAgentTitle(raw: string): string | undefined {
+  const cleaned = raw
+    .replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned === '') {
+    return undefined;
+  }
+  return Array.from(cleaned).slice(0, AI_LIMITS.titleCharsMax).join('').trim();
+}
+
+/**
+ * The record with the agent's title, or undefined when nothing changes: the title is empty once cleaned,
+ * the person named the chat (a rename always wins), or the chat already has this title.
+ */
+export function withAgentTitle(record: ChatRecord, raw: string): ChatRecord | undefined {
+  if (record.titleSource === 'user') {
+    return undefined;
+  }
+  const title = cleanAgentTitle(raw);
+  if (title === undefined) {
+    return undefined;
+  }
+  if (title === record.title && record.titleSource === 'ai') {
+    return undefined;
+  }
+  const next: ChatRecord = { ...record, title, titleSource: 'ai' };
+  assert(next.title.length <= AI_LIMITS.titleCharsMax, 'withAgentTitle: within the title limit');
+  assert(next.titleSource === 'ai', 'withAgentTitle: the title is marked as the agent’s');
+  return next;
 }
 
 // ---------------------------------------------------------------------------
@@ -435,16 +508,16 @@ export function chainOperations(index: ChatIndex, operations: readonly ((index: 
 }
 
 function chatMissing(): AiFailure {
-  return { code: 'chat-missing', message: 'This chat no longer exists.' };
+  return { code: 'chat-missing', ...described('ai.error.chatMissing') };
 }
 
 function sectionMissing(): AiFailure {
-  return { code: 'section-missing', message: 'This section no longer exists.' };
+  return { code: 'section-missing', ...described('ai.error.sectionMissing') };
 }
 
-function invalid(message: string): AiFailure {
-  assert(message.length > 0, 'invalid: a refusal says why');
-  return { code: 'invalid', message };
+function invalid(refusal: ReturnType<typeof described>): AiFailure {
+  assert(refusal.message.length > 0, 'invalid: a refusal says why');
+  return { code: 'invalid', ...refusal };
 }
 
 /** Changes one chat's record in the index; a refusal when there is no such chat. */
@@ -466,7 +539,7 @@ export function moveChat(index: ChatIndex, chat: ChatId, section: SectionId | un
     return err(chatMissing());
   }
   if (moved.archivedAt !== undefined) {
-    return err(invalid('An archived chat cannot be moved. Restore it first.'));
+    return err(invalid(described('ai.error.archivedMove')));
   }
   if (section !== undefined && !index.sections.some((candidate) => candidate.id === section)) {
     return err(sectionMissing());
@@ -481,7 +554,7 @@ export function moveChat(index: ChatIndex, chat: ChatId, section: SectionId | un
       return err(chatMissing());
     }
     if (anchor.section !== section) {
-      return err(invalid('The chat to drop before is in another section.'));
+      return err(invalid(described('ai.error.dropOtherSection')));
     }
     rank = anchor.rank - 0.5;
   }
@@ -516,12 +589,14 @@ export function forkRecord(
     return err(chatMissing());
   }
   if (index.chats.length >= AI_LIMITS.chatsMax) {
-    return err({ code: 'read-only', message: `A project keeps at most ${AI_LIMITS.chatsMax} chats. Delete some to start another.` });
+    return err({ code: 'read-only', ...described('ai.error.chatsFull', { count: AI_LIMITS.chatsMax }) });
   }
   const record: ChatRecord = {
     ...source,
     id,
     title: `${source.title} (fork)`.slice(0, AI_LIMITS.titleCharsMax),
+    // The fork's name is derived from the original's; the agent's title for the forked session would lose it.
+    titleSource: 'user',
     pinned: false,
     createdAt: now,
     updatedAt: now,
@@ -560,10 +635,10 @@ function sameName(left: string, right: string): boolean {
 /** A new section after the last. Names are unique, ignoring case. */
 export function createSection(index: ChatIndex, id: SectionId, name: string): ListResult {
   if (index.sections.length >= AI_LIMITS.sectionsMax) {
-    return err(invalid(`A project keeps at most ${AI_LIMITS.sectionsMax} sections.`));
+    return err(invalid(described('ai.error.sectionsFull', { count: AI_LIMITS.sectionsMax })));
   }
   if (index.sections.some((section) => sameName(section.name, name))) {
-    return err(invalid('Another section already has that name.'));
+    return err(invalid(described('ai.error.sectionNameTaken')));
   }
   return ok({ ...index, sections: [...index.sections, { id, name, collapsed: false, rank: index.sections.length }] });
 }
@@ -577,7 +652,7 @@ function changeSection(index: ChatIndex, id: SectionId, change: (section: ChatSe
 
 export function renameSection(index: ChatIndex, id: SectionId, name: string): ListResult {
   if (index.sections.some((section) => section.id !== id && sameName(section.name, name))) {
-    return err(invalid('Another section already has that name.'));
+    return err(invalid(described('ai.error.sectionNameTaken')));
   }
   return changeSection(index, id, (section) => ({ ...section, name }));
 }

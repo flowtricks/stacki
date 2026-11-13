@@ -2,11 +2,12 @@
 // Low to Max (and Ultra for Codex) with a check on the current one, a "Recommended" pill where the
 // table in agentPresentation.ts names one, and an info mark on the levels that spend limits fast.
 import { AGENT_PRESENTATION, effortRows, isRecommendedEffort } from '../../../../shared/properties/ai/agentPresentation';
+import type { Translator } from '../../../lib/i18n/localeContext';
 import type { MenuEntry } from '../../../ui/Menu';
 import { currentChoiceName, effortOption, type ComposerSettings } from './composerSettings';
 
 /** The rows to show under "Effort", or undefined when the agent offers no effort setting. */
-export function effortEntries(settings: ComposerSettings): readonly MenuEntry[] | undefined {
+export function effortEntries(settings: ComposerSettings, translate: Translator): readonly MenuEntry[] | undefined {
   const option = effortOption(settings);
   if (option === undefined) {
     return undefined;
@@ -16,16 +17,16 @@ export function effortEntries(settings: ComposerSettings): readonly MenuEntry[] 
   if (rows.length === 0) {
     return undefined;
   }
-  const entries: MenuEntry[] = [{ kind: 'note', id: 'effort-note', text: presentation.description }];
+  const entries: MenuEntry[] = [{ kind: 'note', id: 'effort-note', text: translate(presentation.description) }];
   for (const row of rows) {
-    const info = presentation.info[row.value];
+    const infoKey = presentation.info[row.value];
     entries.push({
       kind: 'item',
       id: `effort:${row.value}`,
-      label: row.label,
+      label: row.labelKey === undefined ? row.label : translate(row.labelKey),
       checked: row.value === option.currentValue,
-      ...(isRecommendedEffort(settings.agent, row.value) ? { pill: 'Recommended' } : {}),
-      ...(info === undefined ? {} : { info }),
+      ...(isRecommendedEffort(settings.agent, row.value) ? { pill: translate('ai.composer.recommended') } : {}),
+      ...(infoKey === undefined ? {} : { info: translate(infoKey) }),
       onSelect: () => settings.pick(option.id, row.value),
     });
   }
@@ -33,13 +34,13 @@ export function effortEntries(settings: ComposerSettings): readonly MenuEntry[] 
 }
 
 /** The name the chip and the "Effort" row show for the current level; undefined while the agent's own default is in use. */
-export function effortLabel(settings: ComposerSettings): string | undefined {
+export function effortLabel(settings: ComposerSettings, translate: Translator): string | undefined {
   const option = effortOption(settings);
   if (option === undefined) {
     return undefined;
   }
   const row = effortRows(settings.agent, option.choices).find((candidate) => candidate.value === option.currentValue);
-  return row === undefined ? currentChoiceNameIfShown(settings) : row.label;
+  return row === undefined ? currentChoiceNameIfShown(settings) : row.labelKey === undefined ? row.label : translate(row.labelKey);
 }
 
 // A current value the table hides ("default") is the agent's own pick, so no level is named.

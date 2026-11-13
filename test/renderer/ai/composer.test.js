@@ -27,6 +27,8 @@ esbuild.buildSync({
       "export { ConfirmHost } from './src/ui/ConfirmDialog';",
       "export { forgetDangerousModeConfirmations } from './src/features/ai/composer/ModeMenu';",
       "export { contextSentence } from './src/features/ai/composer/ContextRing';",
+      "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
+      "export { formattersFor } from './shared/core/i18n/format';",
       "export { agentBadge } from './src/features/ai/agentSwitch';",
     ].join('\n'),
     resolveDir: repoPath('package.json').replace(/package\.json$/, ''),
@@ -149,7 +151,7 @@ const CODEX_OPTIONS = [
   { id: 'model', name: 'Model', category: 'model', currentValue: 'gpt', choices: [choice('gpt', 'GPT 5')] },
 ];
 
-function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS } = {}) {
+function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS, remembered = { claude: [], codex: [] } } = {}) {
   const calls = [];
   const listeners = { events: undefined };
   const summary = { id: CHAT, agent, title: 'New chat', pinned: false, createdAt: 1, updatedAt: 1, rank: 0, unread: false };
@@ -169,6 +171,7 @@ function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS } = {}) {
         { agent: 'claude', options: agent === 'claude' ? options : [] },
         { agent: 'codex', options: agent === 'codex' ? options : [] },
       ],
+      remembered,
     })),
     // Main lists a created chat from then on; a list that forgot it would close the chat the panel just opened.
     aiChats: record('aiChats', () => ({ chats: [...chats], sections: [] })),
@@ -184,6 +187,7 @@ function fakeMain({ agent = 'claude', options = CLAUDE_OPTIONS } = {}) {
     aiCancel: record('aiCancel', { ok: true }),
     aiSetOption: record('aiSetOption', { ok: true, value: { set: true } }),
     aiChatUpdate: record('aiChatUpdate', { ok: true, value: summary }),
+    aiRemember: record('aiRemember', () => ({ ok: true, value: { claude: [], codex: [] } })),
     aiSetup: record('aiSetup', (payload) => ({
       agent: payload.agent,
       step: 'ready',
@@ -374,7 +378,7 @@ test('the model chip names the model and effort; its menu lists models with numb
   assert.match(chip.textContent, /Medium/);
   await click(chip);
   const labels = rows().map((row) => row.querySelector('.menu-label').textContent);
-  assert.deepEqual(labels, ['Opus 5.5', 'Fable 5.2', 'Sonnet 5.5', 'Haiku 5.5', 'Effort', 'Ultracode', 'More models', 'Agent']);
+  assert.deepEqual(labels, ['Opus 5.5', 'Fable 5.2', 'Sonnet 5.5', 'Haiku 5.5', 'Effort', 'Ultracode', 'More models', 'Agent', 'Reset to defaults']);
   assert.equal(rowNamed('Opus 5.5').querySelector('.menu-key').textContent, '1');
   assert.equal(rowNamed('Haiku 5.5').querySelector('.menu-key').textContent, '4');
   assert.equal(rowNamed('Sonnet 5.5').querySelectorAll('.menu-check svg').length, 1, 'a check on the current model');
@@ -552,27 +556,113 @@ test('Bypass permissions asks through the app’s dialog, once per chat; cancell
   assert.equal(callsNamed(calls, 'aiSetOption').length, before + 1, 'agreed once: the same chat is not asked again');
 });
 
-test('before the chat starts, the mode is stored with the chat and never remembered for the next new chat', async (context) => {
+const chipText = (label) => byLabel(label).textContent;
+const REMEMBERED_CLAUDE = {
+  claude: [
+    { option: 'mode', value: 'plan' },
+    { option: 'model', value: 'opus' },
+    { option: 'effort', value: 'high' },
+  ],
+  codex: [],
+};
+
+test('first run: nothing remembered, so a new chat shows the agent’s own mode and model', async (context) => {
   const { calls } = await mount(context);
-  assert.equal(byLabel('Mode').textContent, 'Manual', 'a new chat shows Manual before the agent has a session');
+  assert.equal(chipText('Mode'), 'Manual', 'the agent’s default, not a forced one');
+  assert.match(chipText('Model'), /Sonnet 5\.5/);
+  assert.equal(callsNamed(calls, 'aiChatCreate')[0].payload.settings, undefined, 'a new chat is created without settings');
+});
+
+test('the first frame shows the remembered mode, model and effort: no default that swaps later', async (context) => {
+  const { calls } = await mount(context, { remembered: REMEMBERED_CLAUDE });
+  assert.equal(callsNamed(calls, 'aiAgents').length, 1, 'one read carries the options and the remembered settings');
+  assert.equal(chipText('Mode'), 'Plan', 'not Manual');
+  assert.match(chipText('Model'), /Opus 5\.5/);
+  assert.match(chipText('Model'), /High/);
+  assert.equal(byLabel('Mode').classList.contains('is-danger'), false);
+});
+
+test('Bypass permissions remembered: the red chip is there at once and the first message is not blocked', async (context) => {
+  const { calls } = await mount(context, { remembered: { claude: [{ option: 'mode', value: 'bypassPermissions' }], codex: [] } });
+  assert.equal(chipText('Mode'), 'Bypass permissions');
+  assert.ok(byLabel('Mode').classList.contains('is-danger'), 'warns in the very first frame, before any session');
+  const box = await setText('Hello');
+  await key(box, { key: 'Enter' });
+  assert.equal(callsNamed(calls, 'aiPrompt').length, 1, 'the message went out');
+  assert.equal(document.querySelector('dialog[open], [role="alertdialog"]') ?? undefined, undefined, 'no confirmation stands in the way');
+});
+
+test('a remembered value the agent no longer offers is dropped without a word', async (context) => {
+  await mount(context, {
+    remembered: {
+      claude: [
+        { option: 'mode', value: 'retired-mode' },
+        { option: 'model', value: 'retired-model' },
+        { option: 'effort', value: 'max' },
+        { option: 'removed-option', value: 'x' },
+      ],
+      codex: [],
+    },
+  });
+  assert.equal(chipText('Mode'), 'Manual', 'the unknown mode falls back to the agent’s own');
+  assert.match(chipText('Model'), /Sonnet 5\.5/);
+  assert.match(chipText('Model'), /Max/, 'the valid part still applies');
+});
+
+test('per agent: what Claude remembers does not show on Codex, and Codex keeps its own', async (context) => {
+  const claudeOnly = { claude: [{ option: 'mode', value: 'plan' }], codex: [] };
+  await mount(context, { agent: 'codex', options: CODEX_OPTIONS, remembered: claudeOnly });
+  assert.equal(chipText('Mode'), 'Read-only', 'Claude’s plan mode does not leak');
+  await mount(context, { agent: 'codex', options: CODEX_OPTIONS, remembered: { claude: [], codex: [{ option: 'mode', value: 'agent-full-access' }] } });
+  assert.equal(chipText('Mode'), 'Full access');
+  assert.ok(byLabel('Mode').classList.contains('is-danger'), 'Codex’s unrestricted mode shows red at once too');
+});
+
+test('before the chat starts, a pick is remembered (mode included), shown at once and never stored on the chat', async (context) => {
+  const { calls } = await mount(context);
   await click(byLabel('Mode'));
   await key(document.activeElement, { key: '3' });
-  let update = callsNamed(calls, 'aiChatUpdate').at(-1);
-  assert.deepEqual(update.payload.settings, [{ option: 'mode', value: 'acceptEdits' }], 'the choice is stored with the chat, to apply when its session starts');
-  assert.equal(byLabel('Mode').textContent, 'Accept edits');
+  let remember = callsNamed(calls, 'aiRemember').at(-1);
+  assert.deepEqual(remember.payload.action, { kind: 'set', option: 'mode', value: 'acceptEdits' });
+  assert.equal(remember.payload.agent, 'claude');
+  assert.equal(chipText('Mode'), 'Accept edits');
   await click(byLabel('Model'));
   await key(document.activeElement, { key: '1' });
-  update = callsNamed(calls, 'aiChatUpdate').at(-1);
-  assert.deepEqual(
-    update.payload.settings,
-    [
-      { option: 'model', value: 'opus' },
-      { option: 'mode', value: 'acceptEdits' },
-    ],
-    'a model chosen later keeps the mode',
-  );
-  const remembered = JSON.parse(window.localStorage.getItem('stacki.ai.settings.claude') ?? '{}');
-  assert.deepEqual(Object.keys(remembered), ['model'], 'the model is remembered for the next chat, the mode is not');
+  remember = callsNamed(calls, 'aiRemember').at(-1);
+  assert.deepEqual(remember.payload.action, { kind: 'set', option: 'model', value: 'opus' });
+  assert.equal(callsNamed(calls, 'aiChatUpdate').length, 0, 'main applies the remembered set itself; nothing is stored per chat');
+  assert.deepEqual(ai.aiState().remembered.claude, [
+    { option: 'mode', value: 'acceptEdits' },
+    { option: 'model', value: 'opus' },
+  ]);
+  assert.equal(callsNamed(calls, 'aiSetOption').length, 0, 'no session yet, so nothing was sent to an agent');
+});
+
+test('a change in a live chat updates what the next chat starts with', async (context) => {
+  const { calls, live } = await mount(context);
+  await live(CLAUDE_OPTIONS);
+  await click(byLabel('Mode'));
+  await key(document.activeElement, { key: '3' });
+  assert.equal(callsNamed(calls, 'aiSetOption').at(-1).payload.value, 'acceptEdits');
+  assert.deepEqual(ai.aiState().remembered.claude, [{ option: 'mode', value: 'acceptEdits' }], 'the mode counts, in any chat');
+});
+
+test('Reset to defaults is the last row of the model menu and forgets the remembered set', async (context) => {
+  const { calls } = await mount(context, { remembered: REMEMBERED_CLAUDE });
+  await click(byLabel('Model'));
+  const all = rows();
+  assert.equal(all.at(-1).querySelector('.menu-label').textContent, 'Reset to defaults', 'at the bottom');
+  await click(all.at(-1));
+  assert.deepEqual(callsNamed(calls, 'aiRemember').at(-1).payload.action, { kind: 'reset' });
+  assert.equal(chipText('Mode'), 'Manual');
+  assert.match(chipText('Model'), /Sonnet 5\.5/);
+  await click(byLabel('Model'));
+  assert.equal(rows().at(-1).disabled, true, 'nothing left to reset');
+});
+
+test('a damaged remembered reply does not stop the panel: the agent’s defaults show', async (context) => {
+  await mount(context, { remembered: 'garbage' });
+  assert.equal(chipText('Mode'), 'Manual');
 });
 
 test('Codex: its own four modes, a Full access confirmation, no Compact', async (context) => {
@@ -610,7 +700,7 @@ test('the context ring: neutral, amber from 70%, red from 90%; the panel says N 
   assert.equal(ring().getAttribute('data-tone'), 'neutral');
   await click(document.querySelector('.ai-ring'));
   assert.match(document.querySelector('.ai-ring-panel').textContent, /41,250 tokens of 1,000,000 · 4%/);
-  assert.equal(ai.contextSentence(undefined), 'The agent has not reported its context window yet.');
+  assert.equal(ai.contextSentence(undefined, ai.ENGLISH_TRANSLATE, ai.formattersFor('en').formatNumber), 'The agent has not reported its context window yet.');
 });
 
 test('Compact: offered to Claude when idle, calls compact, waits while a turn runs', async (context) => {

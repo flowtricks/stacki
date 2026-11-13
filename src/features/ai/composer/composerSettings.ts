@@ -15,6 +15,10 @@ export interface ComposerSettings {
   /** Each option with `currentValue` set to what the chat uses (or will use when it starts). */
   readonly options: readonly ChatOption[];
   readonly pick: (optionId: string, value: string) => void;
+  /** Forgets the settings remembered for this agent: its next new chats start from the agent's own. */
+  readonly reset: () => void;
+  /** Something is remembered for this agent, so "Reset to defaults" has something to do. */
+  readonly canReset: boolean;
   /** Each agent's state for the badge in the agent list; absent where nothing is known. */
   readonly agentBadges?: Readonly<Partial<Record<AgentId, 'ready' | 'sign-in' | 'not-installed' | 'installing'>>>;
 }
@@ -46,7 +50,7 @@ export function currentChoiceName(option: ChatOption | undefined): string | unde
   return option?.choices.find((choice) => choice.value === option.currentValue)?.name;
 }
 
-/** The ids of the options that hold the mode: their value is never remembered for the next new chat. */
+/** The ids of the options that hold the mode (Claude's mode, and Codex's plan switch beside it). */
 export function modeOptionIds(agent: AgentId): readonly string[] {
   const modes = AGENT_PRESENTATION[agent].modes;
   return modes.planOptionId === undefined ? [modes.optionId] : [modes.optionId, modes.planOptionId];

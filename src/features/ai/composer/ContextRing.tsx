@@ -12,6 +12,8 @@ import { assert } from '../../../../shared/core/assert';
 import type { AgentId } from '../../../../shared/properties/ai/agentIds';
 import { canCompact } from '../../../../shared/properties/ai/agentPresentation';
 import type { ChatId } from '../../../../shared/properties/ai/chatModel';
+import type { Translator } from '../../../lib/i18n/localeContext';
+import { useFormat, useTranslate } from '../../../lib/i18n/useTranslate';
 import Popup from '../../../ui/Popup';
 import { ProgressRing, type RingTone } from '../../../ui/ProgressRing';
 import { compactChat } from '../aiStore';
@@ -32,13 +34,13 @@ interface PanelPlace {
 }
 
 /** The sentence in the panel: "41,250 tokens of 1,000,000 · 4%", or what is missing. */
-export function contextSentence(usage: ContextUsage | undefined): string {
+export function contextSentence(usage: ContextUsage | undefined, translate: Translator, formatNumber: (value: number) => string): string {
   if (usage === undefined || usage.size <= 0) {
-    return 'The agent has not reported its context window yet.';
+    return translate('ai.context.unknown');
   }
   const percent = contextPercent(usage.used, usage.size);
   assert(percent !== undefined, 'contextSentence: a window of positive size has a percentage');
-  return `${usage.used.toLocaleString('en-US')} tokens of ${usage.size.toLocaleString('en-US')} · ${percent}%`;
+  return translate('ai.context.sentence', { used: formatNumber(usage.used), size: formatNumber(usage.size), percent });
 }
 
 export function ContextRing({
@@ -55,6 +57,8 @@ export function ContextRing({
   /** A compaction is in progress. */
   readonly compacting: boolean;
 }) {
+  const translate = useTranslate();
+  const { formatNumber } = useFormat();
   const [anchor, setAnchor] = useState<HTMLButtonElement | undefined>(undefined);
   const [place, setPlace] = useState<PanelPlace | undefined>(undefined);
   const [open, setOpen] = useState(false);
@@ -92,14 +96,14 @@ export function ContextRing({
   const ringTone: RingTone = tone === 'unknown' ? 'neutral' : tone;
   const percent = known ? contextPercent(usage.used, usage.size) : undefined;
   const compactable = canCompact(agent);
-  const blocked = running ? 'Wait for the agent to finish' : compacting ? 'Already compacting' : undefined;
+  const blocked = running ? translate('ai.context.wait') : compacting ? translate('ai.context.already') : undefined;
   return (
     <>
       <button
         ref={(element) => setAnchor(element ?? undefined)}
         type="button"
         className="ghost ai-ring"
-        aria-label={percent === undefined ? 'Context usage' : `Context usage, ${percent}% used`}
+        aria-label={percent === undefined ? translate('ai.context.label') : translate('ai.context.labelPercent', { percent })}
         aria-haspopup="dialog"
         aria-expanded={open}
         onMouseEnter={show}
@@ -113,14 +117,14 @@ export function ContextRing({
           value={known ? Math.min(1, usage.used / usage.size) : undefined}
           tone={ringTone}
           sizePx={14}
-          label={percent === undefined ? 'Context' : `Context ${percent}% used`}
+          label={percent === undefined ? translate('ai.context.ring') : translate('ai.context.ringPercent', { percent })}
         />
       </button>
       {place !== undefined && (
         <Popup
           mode="popover"
           role="dialog"
-          label="Context usage"
+          label={translate('ai.context.label')}
           open={open}
           anchor={anchor}
           onClose={close}
@@ -130,21 +134,21 @@ export function ContextRing({
           onMouseLeave={leave}
         >
           <div className="ai-ring-sentence" data-tone={tone}>
-            {contextSentence(usage)}
+            {contextSentence(usage, translate, formatNumber)}
           </div>
-          {compactable && known && <div className="ai-ring-note">Compacting replaces earlier messages with a summary to free up room.</div>}
+          {compactable && known && <div className="ai-ring-note">{translate('ai.context.note')}</div>}
           {compactable && (
             <button
               type="button"
               className="ai-ring-compact"
               disabled={blocked !== undefined}
-              title={blocked ?? 'Summarize the conversation so far to free up context'}
+              title={blocked ?? translate('ai.context.compact.title')}
               onClick={() => {
                 close();
                 void compactChat(chat);
               }}
             >
-              {compacting ? 'Compacting…' : 'Compact'}
+              {compacting ? translate('ai.context.compacting') : translate('ai.context.compact')}
             </button>
           )}
         </Popup>

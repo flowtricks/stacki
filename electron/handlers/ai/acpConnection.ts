@@ -199,6 +199,7 @@ export class AcpConnection {
     } catch (error: unknown) {
       // A handler that throws is a Stacki bug; the agent still hears an answer, so its turn does not hang.
       console.error(`[ai] ${method} handler failed:`, error);
+      // i18n-ignore: a JSON-RPC answer read by the agent, not by a person.
       answer = err({ code: -32603, message: 'Internal error' });
     }
     if (answer.ok) {
@@ -210,4 +211,5 @@ export class AcpConnection {
 }
 
 /** The answer for a method this client does not implement. */
+// i18n-ignore: a JSON-RPC answer read by the agent, not by a person.
 export const METHOD_NOT_FOUND: AcpAnswer = err({ code: JSON_RPC_METHOD_NOT_FOUND, message: 'Method not found' });

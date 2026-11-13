@@ -2,10 +2,12 @@
 // is allowed to do with pinned chats, which key means which action, and how a name or an age is written.
 // Nothing here touches the DOM or the store, so every refusal is a plain function the tests call.
 import { assert } from '../../../../shared/core/assert';
+import type { Formatters } from '../../../../shared/core/i18n/format';
 import type { ChatContext, ChatSection, ChatSummary, SectionId } from '../../../../shared/properties/ai/chatModel';
 import { AI_LIMITS } from '../../../../shared/properties/ai/aiLimits';
 import type { DragSection, DropTarget } from '../../../ui/sectionedDragModel';
 import type { ChatListFilter } from '../aiStore';
+import { formatTokens, type ChatWords } from '../chatStatus';
 
 /** The drag id of the implicit first section (chats with no section). A section id is `s<16 hex>`, so it never collides. */
 export const NO_SECTION = 'none';
@@ -71,7 +73,13 @@ export function groupSessions(chats: readonly ChatSummary[], sections: readonly 
   }
   const ordered = [...sections].sort((left, right) => left.rank - right.rank);
   const everyGroup: readonly SessionGroup[] = [
-    { key: NO_SECTION, section: undefined, name: 'No section', collapsed: false, chats: orderWithinSection(bySection.get(NO_SECTION) ?? []) },
+    {
+      key: NO_SECTION,
+      section: undefined,
+      name: 'No section', // i18n-ignore: the implicit section's identity; SessionsView shows it translated.
+      collapsed: false,
+      chats: orderWithinSection(bySection.get(NO_SECTION) ?? []),
+    },
     ...ordered.map((section) => ({
       key: section.id,
       section,
@@ -230,61 +238,34 @@ export function sectionStep(
   return { before: ordered[index + 2]?.id };
 }
 
-export function relativeTime(at: number, now: number): string {
+/** The short age a row ends with: "now", "5m", "3h", "2d", then a date. The unit marks come from `Intl` (narrow), so they follow the language. */
+export function ageLabel(at: number, now: number, words: ChatWords & Pick<Formatters, 'formatDate'>): string {
+  const unit = (value: number, name: 'minute' | 'hour' | 'day'): string =>
+    words.formatNumber(value, { style: 'unit', unit: name, unitDisplay: 'narrow', maximumFractionDigits: 0 });
   const minutes = Math.floor(Math.max(0, now - at) / 60_000);
   if (minutes < 1) {
-    return 'just now';
+    return words.translate('ai.sessions.now');
   }
   if (minutes < 60) {
-    return `${minutes} min ago`;
+    return unit(minutes, 'minute');
   }
   const hours = Math.floor(minutes / 60);
   if (hours < 24) {
-    return `${hours} h ago`;
-  }
-  return new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-/** The short age a row ends with: "now", "5m", "3h", "2d", then a date. */
-export function ageLabel(at: number, now: number): string {
-  const minutes = Math.floor(Math.max(0, now - at) / 60_000);
-  if (minutes < 1) {
-    return 'now';
-  }
-  if (minutes < 60) {
-    return `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) {
-    return `${hours}h`;
+    return unit(hours, 'hour');
   }
   const days = Math.floor(hours / 24);
   if (days < 7) {
-    return `${days}d`;
+    return unit(days, 'day');
   }
-  return new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return words.formatDate(at, { month: 'short', day: 'numeric' });
 }
 
-/** "41k of 1M tokens"; undefined before the agent reports a window. */
-export function contextSummary(context: ChatContext | undefined): string | undefined {
+/** "41K of 1M tokens"; undefined before the agent reports a window. */
+export function contextSummary(context: ChatContext | undefined, words: ChatWords): string | undefined {
   if (context === undefined || context.size <= 0 || context.used < 0) {
     return undefined;
   }
-  return `${tokenCount(context.used)} of ${tokenCount(context.size)} tokens`;
-}
-
-function tokenCount(value: number): string {
-  if (value >= 1_000_000) {
-    return `${trimTrailingZero(value / 1_000_000)}M`;
-  }
-  if (value >= 1_000) {
-    return `${Math.round(value / 1_000)}k`;
-  }
-  return String(Math.round(value));
-}
-
-function trimTrailingZero(value: number): string {
-  return value.toFixed(1).replace(/\.0$/, '');
+  return words.translate('ai.sessions.context', { used: formatTokens(context.used, words.formatNumber), size: formatTokens(context.size, words.formatNumber) });
 }
 
 export function filterChats(chats: readonly ChatSummary[], query: string): readonly ChatSummary[] {

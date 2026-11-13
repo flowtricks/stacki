@@ -173,6 +173,48 @@ test('the adapter environment carries no Stacki variable and names the CLI', () 
   assert.equal(environment['HOME'], '/home');
 });
 
+test('the adapter environment turns prompt suggestions off and overrides the shell', () => {
+  // The adapter asks the CLI for a next-prompt prediction after every turn; Stacki shows none, so it is pure cost.
+  const fromEmpty = adapterEnvironment({ PATH: '/bin' }, 'CLAUDE_CODE_EXECUTABLE', '/bin/claude');
+  assert.equal(fromEmpty['CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION'], 'false');
+  const fromShell = adapterEnvironment({ PATH: '/bin', CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION: 'true' }, 'CLAUDE_CODE_EXECUTABLE', '/bin/claude');
+  assert.equal(fromShell['CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION'], 'false', "the shell cannot turn it back on for Stacki's adapter");
+});
+
+test("the agent's title replaces the first line, the latest wins, and a rename wins over both", async (context) => {
+  const { root, store, host, events } = fakeHost();
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const chat = store.create(root, 'codex', 'New chat', 1);
+  assert.ok(chat !== undefined);
+  assert.ok((await host.prompt(root, chat.id, 'first line here\nsecond line aititle=Fix_the_hero,A_better__name', [])).ok);
+  await until('the end of the turn', () => ofKind(events(), 'turn-end').length === 1);
+  const titles = ofKind(events(), 'title').map((event) => event.title);
+  assert.deepEqual(titles, ['first line here', 'Fix the hero', 'A better name'], 'the placeholder is instant, then each agent title');
+  const adopted = store.find(root, chat.id);
+  assert.equal(adopted?.title, 'A better name');
+  assert.equal(adopted?.titleSource, 'ai');
+  // The person renames: later agent titles are ignored.
+  store.update(root, chat.id, (record) => ({ ...record, title: 'Mine', titleSource: 'user' }));
+  assert.ok((await host.prompt(root, chat.id, 'again aititle=Overwrite_attempt', [])).ok);
+  await until('the second turn', () => ofKind(events(), 'turn-end').length === 2);
+  assert.equal(store.find(root, chat.id)?.title, 'Mine');
+  assert.equal(store.find(root, chat.id)?.titleSource, 'user');
+  assert.equal(ofKind(events(), 'title').length, 3, 'no title event for an ignored title');
+});
+
+test('an agent that sends no title leaves the first line as the title', async (context) => {
+  const { root, store, host, events } = fakeHost();
+  context.after(() => host.stopAll());
+  store.trust(root);
+  const chat = store.create(root, 'codex', 'New chat', 1);
+  assert.ok(chat !== undefined);
+  assert.ok((await host.prompt(root, chat.id, 'plain question', [])).ok);
+  await until('the end of the turn', () => ofKind(events(), 'turn-end').length === 1);
+  assert.equal(store.find(root, chat.id)?.title, 'plain question');
+  assert.equal(store.find(root, chat.id)?.titleSource, 'first-line');
+});
+
 test('the shipped lockfiles are the pinned ones', () => {
   for (const spec of Object.values(ADAPTERS)) {
     const bytes = fs.readFileSync(path.resolve('resources', spec.lockResource));
@@ -292,8 +334,8 @@ test('the ledger keeps, undoes, creates and deletes, and hands drift to the merg
   fs.writeFileSync(file, 'a\nb\nc\n');
   const ledger = new ChangeLedger(root, plainFiles, noSnapshots, []);
   const turn = toTurnId(`t${'4'.repeat(16)}`);
-  await ledger.begin(turn);
-  await assert.rejects(() => ledger.begin(turn), /one turn at a time per chat/);
+  await ledger.begin(turn, 'on');
+  await assert.rejects(() => ledger.begin(turn, 'on'), /one turn at a time per chat/);
   ledger.noteTouch(file);
   ledger.noteTouch(path.join(root, 'new.txt'));
   ledger.noteTouch('/etc/hosts');
@@ -334,7 +376,7 @@ test('a git snapshot catches a change no tool call named', async () => {
   };
   const ledger = new ChangeLedger(root, plainFiles, snapshots, []);
   const turn = toTurnId(`t${'5'.repeat(16)}`);
-  await ledger.begin(turn);
+  await ledger.begin(turn, 'on');
   fs.writeFileSync(path.join(root, 'shell.txt'), 'after\n'); // A shell command, unannounced.
   const finished = await ledger.finish(turn);
   assert.deepEqual(finished.entries, [{ path: 'shell.txt', before: 'before\n', after: 'after\n', review: 'pending' }]);

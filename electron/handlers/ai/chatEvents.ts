@@ -11,6 +11,7 @@
 import { assert } from '../../../shared/core/assert';
 import type { AcpConfigOption, AcpContent, AcpToolCall, AcpUpdate } from '../../../shared/properties/ai/acpWire';
 import { AI_LIMITS } from '../../../shared/properties/ai/aiLimits';
+import { described } from './aiMessages';
 import type { ChatEvent, ChatOption, CompactionStatus, ToolStatusName, TurnId } from '../../../shared/properties/ai/chatModel';
 
 /**
@@ -77,8 +78,10 @@ export function eventsForUpdate(update: AcpUpdate, turn: TurnId | undefined, con
     case 'mode':
     case 'info':
       return []; // The host folds these into the chat's options and title.
-    case 'unknown-update':
-      return [{ kind: 'unsupported', label: `The agent sent an update Stacki does not show yet (${update.sessionUpdate}).` }];
+    case 'unknown-update': {
+      const unsupported = described('ai.notice.unsupportedUpdate', { update: update.sessionUpdate });
+      return [{ kind: 'unsupported', label: unsupported.message, labelRef: unsupported.messageRef }];
+    }
     default: {
       const exhaustive: never = update;
       return exhaustive;

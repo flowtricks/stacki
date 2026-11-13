@@ -19,6 +19,7 @@ import { buildShellEnv } from '../../lib/shellEnvironment';
 import type { MainHost } from '../mainHost';
 import { AgentHost, NEW_CHAT_TITLE } from './agentHost';
 import { AgentSetup } from './agentSetup';
+import { described } from './aiMessages';
 import { UnreadableFile, type LedgerFiles } from './changeLedger';
 import {
   ChatStore,
@@ -42,12 +43,17 @@ import {
 import { MentionIndex, listProjectFiles } from './mentionIndex';
 import type { ChatSummary } from '../../../shared/properties/ai/chatModel';
 import { GIT_SNAPSHOTS } from './treeSnapshot';
+import { currentBranch } from '../../git/gitParking';
 
 export interface AiHandlerOptions {
   readonly userData: () => string;
   readonly version: () => string;
   /** The Settings toggle: ask before agents work in a new project, or count opening the panel as yes. */
   readonly askBeforeTrust: () => boolean;
+  /** The Settings toggle: take the change ledger's snapshots around each turn. Read at each turn's start, so a toggle applies to the next turn. */
+  readonly trackChanges: () => boolean;
+  /** Whether a window is visible and not minimized: an agent is only started early for a person who is looking at the app. Absent means yes. */
+  readonly isForeground?: () => boolean;
 }
 
 /** Registers the invoke channels; the host itself starts nothing until a prompt asks for it. */
@@ -78,6 +84,9 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
       now: Date.now,
       version: options.version(),
       askBeforeTrust: options.askBeforeTrust,
+      trackChanges: options.trackChanges,
+      currentBranch,
+      ...(options.isForeground === undefined ? {} : { isForeground: options.isForeground }),
     });
     return agents;
   };
@@ -115,12 +124,27 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     chats().trust(open(input.projectPath));
     return { ok: true as const };
   });
+  // Fire and forget from the panel: a project that is no longer the open one is ignored, not an error to show.
+  host.ipcMain.handle('ai:prewarm', (_event, input) => {
+    const root = host.openProject();
+    if (root !== undefined && sameProject(root, input.projectPath)) {
+      agentHost().prewarm(root, input.agent, input.action);
+    }
+    return { ok: true as const };
+  });
   host.ipcMain.handle('ai:chats', (_event, input) => chats().list(open(input.projectPath)));
   host.ipcMain.handle('ai:chatCreate', (_event, input) => {
     const now = Date.now();
-    const record = chats().create(open(input.projectPath), input.agent, input.title ?? NEW_CHAT_TITLE, now, input.settings ?? []);
+    const record = chats().create(
+      open(input.projectPath),
+      input.agent,
+      input.title ?? NEW_CHAT_TITLE,
+      now,
+      input.settings ?? [],
+      input.title === undefined ? 'first-line' : 'user',
+    );
     return record === undefined
-      ? err({ code: 'read-only' as const, message: `A project keeps at most ${AI_LIMITS.chatsMax} chats. Delete some to start another.` })
+      ? err({ code: 'read-only' as const, ...described('ai.error.chatsFull', { count: AI_LIMITS.chatsMax }) })
       : ok(summaryOf(record));
   });
   host.ipcMain.handle('ai:chatUpdate', (_event, input) => {
@@ -132,6 +156,8 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
           updateChat(current, input.chat, (record) => ({
             ...record,
             title: input.title ?? record.title,
+            // A title the person typed is never replaced by the first line or the agent's own.
+            titleSource: input.title === undefined ? record.titleSource : 'user',
             // Settings chosen before the chat's session exists; a running session is changed through ai:setOption.
             settings: input.settings ?? record.settings,
           })),
@@ -160,7 +186,7 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
     const root = open(input.projectPath);
     const record = chats().find(root, input.chat);
     if (record === undefined) {
-      return err({ code: 'chat-missing' as const, message: 'This chat no longer exists.' });
+      return err({ code: 'chat-missing' as const, ...described('ai.error.chatMissing') });
     }
     const transcript = chats().read(root, input.chat);
     return ok({ summary: summaryOf(record), events: transcript.events, full: transcript.full });
@@ -188,14 +214,14 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
   host.ipcMain.handle('ai:diff', (_event, input): Result<{ readonly oldText: string | undefined; readonly newText: string | undefined }, AiFailure> => {
     const root = open(input.projectPath);
     if (chats().find(root, input.chat) === undefined) {
-      return err({ code: 'chat-missing', message: 'This chat no longer exists.' });
+      return err({ code: 'chat-missing', ...described('ai.error.chatMissing') });
     }
     if (!isProjectRelativePath(input.path)) {
-      return err({ code: 'invalid', message: 'A change is named by its project-relative path.' });
+      return err({ code: 'invalid', ...described('ai.error.changePath') });
     }
     // The live ledger, the one Keep and Undo act on: current before the reviews file was ever written.
     const diff = agentHost().diff(root, input.chat, input.turn, input.path);
-    return diff === undefined ? err({ code: 'invalid', message: 'This change is no longer kept for review, so its diff is not available.' }) : ok(diff);
+    return diff === undefined ? err({ code: 'invalid', ...described('ai.error.diffGone') }) : ok(diff);
   });
   host.ipcMain.handle('ai:mentions', async (_event, input) => ok(await mentions.search(open(input.projectPath), input.query, input.kinds)));
   host.ipcMain.handle('ai:cancel', (_event, input) => {
@@ -204,6 +230,10 @@ export function registerAiHandlers(host: Pick<MainHost, 'ipcMain' | 'openProject
   });
   host.ipcMain.handle('ai:permission', (_event, input) => agentHost().answerPermission(open(input.projectPath), input.chat, input.request, input.answer));
   host.ipcMain.handle('ai:setOption', (_event, input) => agentHost().setOption(open(input.projectPath), input.chat, input.option, input.value));
+  host.ipcMain.handle('ai:remember', (_event, input) => {
+    open(input.projectPath);
+    return agentHost().remember(input.agent, input.action);
+  });
   host.ipcMain.handle('ai:review', (_event, input) => agentHost().review(open(input.projectPath), input.chat, input.turn, input.path, input.action));
   return {
     host: agentHost,
@@ -231,7 +261,7 @@ function listResult(result: ListResult): Result<ReturnType<typeof listOf>, AiFai
 
 function summaryResult(index: ChatIndex, chat: ChatSummary['id']): Result<ChatSummary, AiFailure> {
   const record = index.chats.find((candidate) => candidate.id === chat);
-  return record === undefined ? err({ code: 'chat-missing', message: 'This chat no longer exists.' }) : ok(summaryOf(record));
+  return record === undefined ? err({ code: 'chat-missing', ...described('ai.error.chatMissing') }) : ok(summaryOf(record));
 }
 
 function applySectionAction(index: ChatIndex, action: SectionAction): ListResult {

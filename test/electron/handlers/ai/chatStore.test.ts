@@ -7,7 +7,7 @@
 // shape the previous build wrote) goes through `parseChatIndex` and a real
 // ChatStore on a temporary folder (round trip, write-back, read-back assertion);
 // then seeded random sequences of operations check the invariants after each step,
-// and each named behaviour (snap to the pinned boundary, section delete, fork copy)
+// and each named behaviour (snap to the pinned boundary, section delete, fork copy, agent titles)
 // has its own case. Assertion messages are pinned where a violation throws.
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
@@ -18,6 +18,9 @@ import { AI_LIMITS } from '#dist/shared/properties/ai/aiLimits.js';
 import { toChatId, toSectionId, toTurnId, type ChatId, type SectionId } from '#dist/shared/properties/ai/chatModel.js';
 import {
   ChatStore,
+  cleanAgentTitle,
+  parseTitleSource,
+  withAgentTitle,
   chainOperations,
   collapseSection,
   createSection,
@@ -54,6 +57,7 @@ interface RecordChange {
   readonly section?: SectionId | undefined;
   readonly archivedAt?: number;
   readonly title?: string;
+  readonly titleSource?: ChatRecord['titleSource'];
   readonly sessionId?: string;
 }
 
@@ -62,6 +66,7 @@ function record(position: number, change: RecordChange = {}): ChatRecord {
     id: id(position),
     agent: 'claude',
     title: `Chat ${position}`,
+    titleSource: 'first-line',
     pinned: false,
     createdAt: position,
     updatedAt: position,
@@ -541,4 +546,54 @@ test('mutate writes only when the operation succeeds, and the list reply carries
     ['Launch'],
   );
   assert.equal(store.list(project).sections.length, 1);
+});
+
+// Titles: the first line is a placeholder, the agent's title replaces it, a person's title is never replaced.
+test("the agent title replaces a placeholder and an earlier agent title, never a person's", () => {
+  const placeholder = record(1);
+  const first = withAgentTitle(placeholder, 'Fix the hero');
+  assert.equal(first?.title, 'Fix the hero');
+  assert.equal(first?.titleSource, 'ai');
+  assert.equal(withAgentTitle(first ?? placeholder, 'Fix the hero'), undefined, 'the same title again changes nothing');
+  assert.equal(withAgentTitle(first ?? placeholder, 'Another')?.title, 'Another', "the latest agent title wins while it is the agent's");
+  const mine = record(2, { title: 'Mine', titleSource: 'user' });
+  assert.equal(withAgentTitle(mine, 'Fix the hero'), undefined);
+  assert.equal(withAgentTitle(record(3, { titleSource: 'ai' }), '   \n\t '), undefined, 'empty once cleaned is ignored');
+});
+
+test('an agent title is cleaned and bounded', () => {
+  assert.equal(cleanAgentTitle('  Two\nlines\u0000 and\u0007 bell\t\ttab  '), 'Two lines and bell tab');
+  assert.equal(cleanAgentTitle('\u0000\u001f'), undefined);
+  assert.equal(cleanAgentTitle(''), undefined);
+  const long = cleanAgentTitle('x'.repeat(AI_LIMITS.titleCharsMax * 3));
+  assert.equal(long?.length, AI_LIMITS.titleCharsMax);
+});
+
+test('records from before title sources read as first-line, and a bad source does too', () => {
+  assert.equal(parseTitleSource(undefined), 'first-line');
+  assert.equal(parseTitleSource('robot'), 'first-line');
+  assert.equal(parseTitleSource(7), 'first-line');
+  assert.equal(parseTitleSource('ai'), 'ai');
+  assert.equal(parseTitleSource('user'), 'user');
+  const migrated = parseChatIndex(LEGACY_INDEX);
+  assert.ok(migrated.chats.every((chat) => chat.titleSource === 'first-line'));
+  const current = parseChatIndex(
+    JSON.stringify({
+      version: 2,
+      trusted: true,
+      sections: [],
+      chats: [
+        { ...record(5), titleSource: 'ai' },
+        { ...record(6), titleSource: undefined },
+      ],
+    }),
+  );
+  assert.deepEqual(current.chats.map((chat) => chat.titleSource).sort(), ['ai', 'first-line']);
+});
+
+test('a fork keeps its own name against agent titles', () => {
+  const forked = forkRecord(index([record(1)]), id(1), id(9), 50);
+  assert.ok(forked.ok);
+  assert.equal(forked.value.record.titleSource, 'user');
+  assert.equal(withAgentTitle(forked.value.record, 'Something else'), undefined);
 });
