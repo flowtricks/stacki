@@ -4,9 +4,73 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Stacki</title>
+    <!--
+      The first frame, before any script has run: the app's dark surface and one centred ring
+      turning (docs/startup.md). Plain CSS, so it paints with the HTML. It sits beside #root, not
+      in it, so React's first render does not cut it off mid-turn: src/app/startupMarks.ts fades it
+      out once the app has painted and then removes it. #111111 is --bg-panel in
+      src/app/styles.css and the BrowserWindow's backgroundColor (electron/main.ts), so no frame
+      is ever another colour. A test holds the three in step.
+    -->
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        margin: 0;
+        background: #111111;
+      }
+      #boot-spinner {
+        position: fixed;
+        inset: 0;
+        z-index: 2147483647;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #111111;
+        transition: opacity 120ms ease-out;
+        pointer-events: none;
+      }
+      #boot-spinner.is-leaving {
+        opacity: 0;
+      }
+      #boot-spinner .boot-ring {
+        box-sizing: border-box;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.14);
+        border-top-color: rgba(255, 255, 255, 0.7);
+        animation: boot-spin 0.8s linear infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #boot-spinner .boot-ring {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="boot-spinner" aria-hidden="true"><div class="boot-ring"></div></div>
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      performance.mark('stacki:html-parsed');
+    </script>
+    <!--
+      The app starts after the first frame has been produced, not before it. A module script that
+      arrives early runs for most of a second on a slow machine and holds the main thread, so the
+      spinner above would wait behind it and the window would show its empty background instead.
+      One animation frame is what it takes for the spinner to reach the screen.
+    -->
+    <script type="module">
+      requestAnimationFrame(() => {
+        void import('/src/main.tsx');
+      });
+    </script>
   </body>
 </html>
