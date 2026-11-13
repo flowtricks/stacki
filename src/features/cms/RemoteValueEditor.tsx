@@ -8,6 +8,7 @@ import { useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { REMOTE_SCHEMA_LIMITS, remoteObject, type RemoteOption, type RemoteType, type RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import type { RemoteAsset } from '../../../shared/properties/cmsRemote';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import AutoTextarea from '../../ui/AutoTextarea';
 import CalendarField from '../../ui/DateField';
 import DateTimePicker from '../../ui/DateTimePicker';
@@ -86,6 +87,7 @@ function TextControl(
   },
 ) {
   const { kind, value, onChange } = props;
+  const translate = useTranslate();
   // A slug is stored as `{ _type: "slug", current }`; the control edits `current`.
   const text = kind === 'slug' ? remoteObject(value)?.['current'] : value;
   const shown = typeof text === 'string' ? text : '';
@@ -101,7 +103,7 @@ function TextControl(
     return (
       <Dropdown
         value={shown}
-        placeholder="Choose…"
+        placeholder={translate('ui.choose')}
         // Choosing is a click: hovering a choice must not save it.
         livePreview={false}
         menuClassName={pictures ? OPTION_IMAGE_MENU : ''}
@@ -147,10 +149,11 @@ function NumberControl(props: { readonly value: RemoteValue | undefined; readonl
 }
 
 function SwitchControl(props: { readonly on: boolean; readonly onChange: (value: RemoteValue | undefined) => void }) {
+  const translate = useTranslate();
   return (
     <button type="button" className={`cms-toggle ${props.on ? 'on' : ''}`} onClick={() => props.onChange(!props.on)}>
       <span className="cms-toggle-knob" />
-      <span className="cms-toggle-label">{props.on ? 'On' : 'Off'}</span>
+      <span className="cms-toggle-label">{translate(props.on ? 'cmsRemote.common.on' : 'cmsRemote.common.off')}</span>
     </button>
   );
 }
@@ -188,6 +191,7 @@ export function localDateTime(iso: string): string {
 }
 
 function GeopointControl(props: { readonly value: RemoteValue | undefined; readonly onChange: (value: RemoteValue | undefined) => void }) {
+  const translate = useTranslate();
   const point = remoteObject(props.value) ?? {};
   const change = (axis: 'lat' | 'lng', text: string) => {
     const next = Number(text);
@@ -199,7 +203,7 @@ function GeopointControl(props: { readonly value: RemoteValue | undefined; reado
     <div className="remote-cms-geopoint">
       {(['lat', 'lng'] as const).map((axis) => (
         <label key={axis}>
-          <span>{axis === 'lat' ? 'Latitude' : 'Longitude'}</span>
+          <span>{translate(axis === 'lat' ? 'cmsRemote.value.latitude' : 'cmsRemote.value.longitude')}</span>
           <input
             type="number"
             step="any"

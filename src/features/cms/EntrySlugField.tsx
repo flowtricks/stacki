@@ -16,8 +16,7 @@ import { TagIcon } from '../../ui/Icons';
 import { CmsFieldFrame } from './CmsPropField';
 import { committable } from './entrySlugDraft';
 import { FieldChecksContext } from './remoteCmsShared';
-
-const SLUG_HELP = 'The entry’s id: its file name, and what references and getEntry() calls name it by.';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 
 export function EntrySlugField(props: {
   readonly slug: EntrySlug;
@@ -30,26 +29,31 @@ export function EntrySlugField(props: {
   readonly onCommit: (slug: string) => void;
 }) {
   const { slug } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const slugHelp = translate('cms.slug.help');
+  const slugName = translate('cms.slug.name');
   const checks = useContext(FieldChecksContext);
   const [typed, setTyped] = useState(slug.value);
   // A stored slug that changed (a rename, a reload) replaces what was typed.
   useEffect(() => setTyped(slug.value), [slug.value]);
   const text = props.text ?? typed;
   if (slug.rename.kind === 'locked') {
+    const lockedReason = translateDescribed({ message: slug.rename.reason, messageRef: slug.rename.reasonRef });
     return (
       <div className="remote-cms-field entry-slug-field" data-kind="slug">
-        <CmsFieldFrame name="Slug" help={`${SLUG_HELP} ${slug.rename.reason}`} icon={<TagIcon size={12} />} set={slug.value !== ''}>
+        <CmsFieldFrame name={slugName} help={`${slugHelp} ${lockedReason}`} icon={<TagIcon size={12} />} set={slug.value !== ''}>
           <div className="remote-cms-locked">{`${slug.folder}${slug.value}`}</div>
         </CmsFieldFrame>
-        <span className="remote-cms-problem is-note">{slug.rename.reason}</span>
+        <span className="remote-cms-problem is-note">{lockedReason}</span>
       </div>
     );
   }
   const check = checkEntrySlug(text, { taken: slug.taken });
   const blank = text === '' && props.placeholder !== undefined;
   // An entry only held on screen is not being edited, and its slug is not checked.
-  const problem = blank || checks === 'held' ? undefined : slugProblem(check);
-  const note = slugNote(check);
+  const problem = blank || checks === 'held' ? undefined : slugProblem(check, translate);
+  const note = slugNote(check, translate);
   const type = (next: string) => {
     setTyped(next);
     props.onType?.(next);
@@ -62,7 +66,7 @@ export function EntrySlugField(props: {
   };
   return (
     <div className={`remote-cms-field entry-slug-field is-required${problem === undefined ? '' : ' is-invalid'}`} data-kind="slug">
-      <CmsFieldFrame name="Slug" help={SLUG_HELP} icon={<TagIcon size={12} />} set={text !== ''}>
+      <CmsFieldFrame name={slugName} help={slugHelp} icon={<TagIcon size={12} />} set={text !== ''}>
         <div className="entry-slug-input">
           {slug.folder !== '' && <span className="entry-slug-folder">{slug.folder}</span>}
           <input

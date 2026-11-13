@@ -1,0 +1,10 @@
+{
+ "status": 401,
+ "body": {
+  "errors": [
+   {
+    "message": "The email or password provided is incorrect."
+   }
+  ]
+ }
+}

@@ -1,0 +1,15 @@
+{
+ "id": 1,
+ "alt": "A dot",
+ "updatedAt": "2026-11-13T12:01:26.143Z",
+ "createdAt": "2026-11-13T12:01:26.143Z",
+ "url": "/api/media/file/dot.png",
+ "thumbnailURL": null,
+ "filename": "dot.png",
+ "mimeType": "image/png",
+ "filesize": 70,
+ "width": 1,
+ "height": 1,
+ "focalX": 50,
+ "focalY": 50
+}

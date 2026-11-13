@@ -1,0 +1,114 @@
+{
+ "id": 1,
+ "title": {
+  "en": "Post 001 alpha"
+ },
+ "slug": "post-1",
+ "tagline": {
+  "en": "Tagline 1"
+ },
+ "body": {
+  "root": {
+   "type": "root",
+   "format": "",
+   "indent": 0,
+   "version": 1,
+   "direction": "ltr",
+   "children": [
+    {
+     "type": "paragraph",
+     "format": "",
+     "indent": 0,
+     "version": 1,
+     "direction": "ltr",
+     "textFormat": 0,
+     "children": [
+      {
+       "mode": "normal",
+       "text": "Body of post 1",
+       "type": "text",
+       "style": "",
+       "detail": 0,
+       "format": 0,
+       "version": 1
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "views": 1,
+ "featured": false,
+ "kind": "news",
+ "publishedAt": "2024-01-02T06:00:00.000Z",
+ "author": {
+  "id": 1,
+  "name": null,
+  "updatedAt": "2026-11-13T12:01:26.106Z",
+  "createdAt": "2026-11-13T12:01:26.027Z",
+  "enableAPIKey": true,
+  "email": "admin@example.test",
+  "sessions": [
+   {
+    "id": "cd6abc5d-afe5-471f-9762-fd4aebd14425",
+    "createdAt": "2026-11-13T12:38:55.573Z",
+    "expiresAt": "2026-11-13T12:39:55.573Z"
+   }
+  ],
+  "collection": "users",
+  "hasAPIKey": true
+ },
+ "categories": [
+  {
+   "id": 2,
+   "title": "Guides",
+   "updatedAt": "2026-11-13T12:01:26.124Z",
+   "createdAt": "2026-11-13T12:01:26.124Z"
+  }
+ ],
+ "cover": {
+  "id": 1,
+  "alt": "A dot",
+  "updatedAt": "2026-11-13T12:01:26.143Z",
+  "createdAt": "2026-11-13T12:01:26.143Z",
+  "url": "/api/media/file/dot.png",
+  "thumbnailURL": null,
+  "filename": "dot.png",
+  "mimeType": "image/png",
+  "filesize": 70,
+  "width": 1,
+  "height": 1,
+  "focalX": 50,
+  "focalY": 50
+ },
+ "meta": {
+  "description": "Meta desc"
+ },
+ "contact": "a@example.test",
+ "mode": "a",
+ "snippet": "const a = 1;",
+ "extra": {
+  "k": [
+   1,
+   2
+  ]
+ },
+ "where": [
+  10.5,
+  20.5
+ ],
+ "tags": [
+  "x",
+  "z"
+ ],
+ "links": [
+  {
+   "id": "6af6fc1673ae4c05fd86cf0a",
+   "label": "L1",
+   "url": "https://example.test/1"
+  }
+ ],
+ "updatedAt": "2026-11-13T12:01:26.155Z",
+ "createdAt": "2026-11-13T12:01:26.154Z",
+ "_status": "published"
+}

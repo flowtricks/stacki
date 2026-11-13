@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { CMS_REMOTE_LIMITS, type RemoteCell, type RemoteDocumentSummary } from '../../../shared/properties/cmsRemote';
 import type { RemoteSchemaField } from '../../../shared/properties/cmsRemoteSchema';
+import { ENGLISH_REMOTE_TEXT, type RemoteText } from './remoteTime';
 
 /** A field shown as a column: its name in the CMS, and its label. */
 export interface RemoteColumn {
@@ -77,15 +78,15 @@ function compare(left: RemoteCell, right: RemoteCell): number {
 }
 
 /** A cell as text: a switch as Yes or No, a date as people read it, a number as written. */
-export function cellText(cell: RemoteCell | undefined): string {
+export function cellText(cell: RemoteCell | undefined, text: RemoteText = ENGLISH_REMOTE_TEXT): string {
   if (cell === undefined || cell === '') {
     return '—';
   }
   if (typeof cell === 'boolean') {
-    return cell ? 'Yes' : 'No';
+    return text.translate(cell ? 'cmsRemote.common.yes' : 'cmsRemote.common.no');
   }
   if (typeof cell === 'string') {
-    return dateText(cell) ?? cell;
+    return dateText(cell, text) ?? cell;
   }
   return String(cell);
 }
@@ -96,11 +97,11 @@ const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]
 
 // A date as "Aug 17, 2026"; a moment in local time, with its time unless it falls at midnight.
 // A calendar date is read at local midnight: read as UTC it would show the day before west of Greenwich.
-function dateText(value: string): string | undefined {
+function dateText(value: string, text: RemoteText): string | undefined {
   const day = { month: 'short', day: 'numeric', year: 'numeric' } as const;
   if (ISO_DATE.test(value)) {
     const date = new Date(`${value}T00:00:00`);
-    return Number.isNaN(date.getTime()) ? undefined : date.toLocaleDateString(undefined, day);
+    return Number.isNaN(date.getTime()) ? undefined : text.format.formatDate(date, day);
   }
   if (ISO_DATETIME.test(value)) {
     const date = new Date(value);
@@ -108,7 +109,7 @@ function dateText(value: string): string | undefined {
       return undefined;
     }
     const midnight = date.getHours() === 0 && date.getMinutes() === 0;
-    return midnight ? date.toLocaleDateString(undefined, day) : date.toLocaleString(undefined, { ...day, hour: 'numeric', minute: '2-digit' });
+    return text.format.formatDate(date, midnight ? day : { ...day, hour: 'numeric', minute: '2-digit' });
   }
   return undefined;
 }

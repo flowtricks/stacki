@@ -4,6 +4,8 @@
 import { remoteObject, type RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import type { RemoteReferenceOption } from '../../../shared/properties/cmsRemote';
 import { remoteReferenceOptions } from '../../ipc/cmsConnectionsBridge';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import Dropdown from '../../ui/Dropdown';
 import { useRemote } from './remoteCmsShared';
 import { OPTION_IMAGE_MENU } from './projectImages';
@@ -16,6 +18,7 @@ import type { RemoteEditContext, RemoteValueProps } from './RemoteValueEditor';
 const NONE = ' none';
 
 export function RemoteReferenceInput(props: RemoteValueProps & { readonly to: readonly string[] }) {
+  const translate = useTranslate();
   const options = useReferenceOptions(props.context, props.to);
   const icons = typeIcons(props.context.connectionId);
   const object = remoteObject(props.value);
@@ -29,10 +32,10 @@ export function RemoteReferenceInput(props: RemoteValueProps & { readonly to: re
       // Choosing is a click: hovering a document must not point the field at it.
       livePreview={false}
       searchable={true}
-      searchPlaceholder="Search…"
+      searchPlaceholder={translate('ui.search')}
       menuClassName={pictures ? OPTION_IMAGE_MENU : ''}
       options={[
-        { value: NONE, label: 'None', dim: true },
+        { value: NONE, label: translate('cmsRemote.common.none'), dim: true },
         ...options.map((option) => ({
           value: option.id,
           label: option.title,
@@ -60,10 +63,10 @@ export function useReferenceOptions(context: Pick<RemoteEditContext, 'projectPat
 }
 
 /** A reference's document title among loaded options, or its id. */
-export function referenceTitle(value: RemoteValue | undefined, options: readonly RemoteReferenceOption[]): string {
+export function referenceTitle(value: RemoteValue | undefined, options: readonly RemoteReferenceOption[], translate: Translator): string {
   const id = remoteObject(value)?.['_ref'];
   if (typeof id !== 'string') {
-    return 'None';
+    return translate('cmsRemote.common.none');
   }
   return options.find((option) => option.id === id)?.title ?? id;
 }

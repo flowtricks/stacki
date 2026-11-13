@@ -20,6 +20,8 @@ import {
   type RemoteResult,
 } from '../../../shared/properties/cmsRemote';
 import type { RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { DescribedTranslator, Translator } from '../../lib/i18n/localeContext';
 import { ChevronLeftIcon } from '../../ui/Icons';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { RemoteFieldList } from './RemoteFieldList';
@@ -47,6 +49,8 @@ export function RemotePendingItem(props: {
   readonly onCreated: (item: RemoteDocumentSummary) => void;
 }) {
   const { pending } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   // Fields edited so far, and whether Create was pressed: what decides which empty required fields say so.
@@ -69,35 +73,35 @@ export function RemotePendingItem(props: {
     setBusy(true);
     setError(undefined);
     const slug = draftSlugToSave(pending.document.slug, slugText);
-    const made = await createFromDocument(props.projectPath, props.selection, { document: pending.document, slug });
+    const made = await createFromDocument(props.projectPath, props.selection, { document: pending.document, slug }, translate, translateDescribed);
     setBusy(false);
     if (made.ok) {
       props.onCreated(made.value);
     } else {
-      setError(made.message);
+      setError(translateDescribed(made));
     }
   };
   return (
     <div className="cms-detail remote-cms-item is-pending">
       <div className="cms-detail-head remote-cms-item-head">
         {props.onBack && (
-          <button className="ghost cms-back" title="Back to the list" onClick={props.onBack}>
+          <button className="ghost cms-back" title={translate('cmsRemote.item.backToList')} onClick={props.onBack}>
             <ChevronLeftIcon size={13} />
           </button>
         )}
         <span className="cms-detail-title">{pending.title}</span>
         <div className="remote-cms-item-meta">
           <button type="button" disabled={busy} onClick={props.onCancel}>
-            Cancel
+            {translate('ui.cancel')}
           </button>
           <button
             type="button"
             className="primary"
             disabled={busy}
-            title={blocked ? 'Fill in the required fields and a free slug first' : undefined}
+            title={blocked ? translate('cmsRemote.pending.blocked') : undefined}
             onClick={() => void create()}
           >
-            {busy ? 'Creating…' : 'Create'}
+            {busy ? translate('cmsRemote.pending.creating') : translate('cmsRemote.pending.create')}
           </button>
         </div>
       </div>
@@ -108,7 +112,7 @@ export function RemotePendingItem(props: {
             <EntrySlugField
               slug={pending.document.slug}
               text={slugText}
-              placeholder="Made from the name when left empty"
+              placeholder={translate('cmsRemote.pending.slugPlaceholder')}
               onType={(text) => setSlugDraft({ kind: 'typed', text })}
               onCommit={() => undefined}
             />
@@ -129,20 +133,20 @@ export function RemotePendingItem(props: {
 }
 
 /** A copy of an item, ready to edit: its values, its name marked, its slug left to be made. */
-export function duplicateOf(document: RemoteDocument, title: string): PendingItem {
+export function duplicateOf(document: RemoteDocument, title: string, translate: Translator): PendingItem {
   const named = document.fields.find((field) => NAME_FIELDS.includes(field.name));
   const fields = document.fields.map((field): RemoteDocumentField => {
     if (field.type.kind === 'slug') {
       return { ...field, value: undefined };
     }
     if (field === named && typeof field.value === 'string') {
-      return { ...field, value: `${field.value} (copy)` };
+      return { ...field, value: translate('cmsRemote.pending.copy', { title: field.value }) };
     }
     return field;
   });
   assert(fields.length === document.fields.length, 'A copy has every field of its source');
   const copy = document.slug === undefined ? { ...document, fields } : { ...document, fields, slug: copiedSlug(document.slug) };
-  return { title: `${title} (copy)`, document: copy };
+  return { title: translate('cmsRemote.pending.copy', { title }), document: copy };
 }
 
 // The pending item with one field's new value; the title follows its name field.
@@ -160,6 +164,8 @@ async function createFromDocument(
   projectPath: string,
   selection: RemoteCmsSelection,
   request: { readonly document: RemoteDocument; readonly slug: string | undefined },
+  translate: Translator,
+  translateDescribed: DescribedTranslator,
 ): Promise<RemoteResult<RemoteDocumentSummary>> {
   const { document } = request;
   const connectionId = selection.connection.id;
@@ -176,7 +182,7 @@ async function createFromDocument(
     const write = { id: made.value.id, field: field.name, value: field.value };
     const written = await writeRemoteDocument(projectPath, connectionId, write);
     if (!written.ok) {
-      return { ok: false, message: `The item was made, but ${field.title}: ${written.message}` };
+      return { ok: false, message: translate('cmsRemote.pending.fieldFailed', { field: field.title, message: translateDescribed(written) }) };
     }
     if (NAME_FIELDS.includes(field.name) && typeof field.value === 'string') {
       title = field.value;
@@ -193,7 +199,7 @@ async function createFromDocument(
   // Renamed last, once every field is written under the id it was made with.
   const renamed = await renameContentEntry(projectPath, made.value.id, request.slug);
   if (!renamed.ok) {
-    return { ok: false, message: `The item was made, but its slug: ${renamed.message}` };
+    return { ok: false, message: translate('cmsRemote.pending.slugFailed', { message: translateDescribed(renamed) }) };
   }
   return { ok: true, value: { ...made.value, id: renamed.value.id, title } };
 }

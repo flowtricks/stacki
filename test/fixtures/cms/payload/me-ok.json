@@ -1,0 +1,17 @@
+{
+ "user": {
+  "id": 1,
+  "name": null,
+  "updatedAt": "2026-11-13T12:01:26.106Z",
+  "createdAt": "2026-11-13T12:01:26.027Z",
+  "enableAPIKey": true,
+  "email": "admin@example.test",
+  "collection": "users",
+  "hasAPIKey": true,
+  "_strategy": "api-key"
+ },
+ "collection": "users",
+ "strategy": "api-key",
+ "message": "Account",
+ "exp": 0
+}

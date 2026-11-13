@@ -17,6 +17,9 @@ import {
 } from '../../../shared/properties/cmsRemoteSchema';
 import type { RemoteReferenceOption } from '../../../shared/properties/cmsRemote';
 import { uploadRemoteAsset } from '../../ipc/cmsConnectionsBridge';
+import { useFormat, useLocale, useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import type { Formatters } from '../../../shared/core/i18n/format';
 import Dropdown from '../../ui/Dropdown';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { ChevronRightIcon, DragIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
@@ -25,7 +28,8 @@ import { CmsListField } from './CmsListField';
 import { RemoteImageGrid } from './RemoteImageGrid';
 import { hasOptionImage, OPTION_IMAGE_MENU, OptionImage } from './projectImages';
 import { labelize } from './cmsSchema';
-import { fieldTypeOf } from './remoteFieldTypes';
+import { fieldTypeOf, nameInSentence } from './remoteFieldTypes';
+import type { RemoteText } from './remoteTime';
 import { SanityTypeIcon, typeIcons } from './SanityTypeIcon';
 import { pointingAt } from './RemoteAssetInput';
 import { hasReferenceImage, ReferenceIcon, ReferenceImage, referenceTitle, useReferenceOptions } from './RemoteReferenceInput';
@@ -61,6 +65,9 @@ export function RemoteListEditor(props: ListProps) {
 
 function ItemRows(props: ListProps & { readonly items: readonly RemoteValue[] }) {
   const { items } = props;
+  const translate = useTranslate();
+  const format = useFormat();
+  const text = { translate, format };
   const [open, setOpen] = useState<number | undefined>(undefined);
   const [unfolded, setUnfolded] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -89,11 +96,12 @@ function ItemRows(props: ListProps & { readonly items: readonly RemoteValue[] })
           open={open === index}
           rowClass={reorder.rowClass(index)}
           rowProps={reorder.rowProps(index)}
-          subtitle={itemSubtitle(item, memberFor(item, props.of), options)}
+          subtitle={itemSubtitle(item, memberFor(item, props.of), options, text)}
           title={itemTitle(item, memberFor(item, props.of), {
             options,
             assets: props.context.assets,
             index,
+            text,
           })}
           onToggle={() => setOpen(open === index ? undefined : index)}
           onRemove={() => {
@@ -106,7 +114,7 @@ function ItemRows(props: ListProps & { readonly items: readonly RemoteValue[] })
       ))}
       {items.length > LIST_FOLD.rowsMax && (
         <button type="button" className="remote-cms-list-fold" onClick={() => setUnfolded(!unfolded)}>
-          {folded ? `Show all ${items.length}` : 'Show fewer'}
+          {folded ? translate('cmsRemote.list.showAll', { count: items.length }) : translate('cmsRemote.list.showFewer')}
         </button>
       )}
       {error && <ErrorToast message={error} />}
@@ -144,6 +152,7 @@ function ItemRow(
     readonly referenced: RemoteReferenceOption | undefined;
   },
 ) {
+  const translate = useTranslate();
   const member = memberFor(props.item, props.of);
   const { icon: Icon } = fieldTypeOf(member);
   const shape = rowShape(member);
@@ -153,7 +162,7 @@ function ItemRow(
   return (
     <div className={`remote-cms-list-item ${props.rowClass}`}>
       <div className={`remote-cms-list-row is-${shape}`} {...props.rowProps} onClick={shape === 'opens' ? props.onToggle : undefined}>
-        <span className="remote-cms-grip" title="Drag to reorder">
+        <span className="remote-cms-grip" title={translate('cmsRemote.list.dragToReorder')}>
           <DragIcon size={11} />
         </span>
         <span className="remote-cms-list-mark">
@@ -214,11 +223,12 @@ function bodyType(member: RemoteType, item: RemoteValue): RemoteType {
 
 // Removing an item, without also opening or closing its row.
 function RemoveButton(props: { readonly onRemove: () => void }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
       className="ghost"
-      title="Remove"
+      title={translate('ui.remove')}
       onClick={(event) => {
         event.stopPropagation();
         props.onRemove();
@@ -314,6 +324,8 @@ function AddControls(
   },
 ) {
   const { context } = props;
+  const translate = useTranslate();
+  const { locale } = useLocale();
   const upload = async (kind: 'image' | 'file') => {
     props.onError(undefined);
     const uploaded = await uploadRemoteAsset(context.projectPath, context.connectionId, kind);
@@ -328,7 +340,7 @@ function AddControls(
   return (
     <div className="remote-cms-list-add">
       {props.of.map((member, index) => {
-        const name = memberName(member);
+        const name = memberName(member, translate);
         if (member.kind === 'reference') {
           return <AddReference key={index} {...props} to={member.to} name={name} />;
         }
@@ -340,7 +352,7 @@ function AddControls(
         const add = kind ? () => void upload(kind) : () => props.onAdd(blank(member));
         return (
           <button key={index} type="button" className="cms-add" onClick={add}>
-            <PlusIcon size={11} /> Add {name.toLowerCase()}
+            <PlusIcon size={11} /> {translate('cmsRemote.list.add', { name: nameInSentence(name, locale) })}
           </button>
         );
       })}
@@ -355,6 +367,8 @@ function AddOption(
     readonly onAdd: (item: RemoteValue) => void;
   },
 ) {
+  const translate = useTranslate();
+  const { locale } = useLocale();
   const chosen = new Set(remoteList(props.value) ?? []);
   const left = props.options.filter((option) => !chosen.has(option.value));
   if (left.length === 0) {
@@ -364,11 +378,11 @@ function AddOption(
   return (
     <Dropdown
       value=""
-      placeholder={`Add ${singular(props.label.toLowerCase())}…`}
+      placeholder={translate('cmsRemote.list.addPlaceholder', { name: singular(props.label.toLocaleLowerCase(locale)) })}
       // Adding is a click: hovering a choice must not add it.
       livePreview={false}
       searchable={left.length > 8}
-      searchPlaceholder="Search…"
+      searchPlaceholder={translate('ui.search')}
       menuClassName={pictures ? OPTION_IMAGE_MENU : ''}
       options={left.map((option) => ({
         value: option.value,
@@ -387,6 +401,9 @@ function AddReference(
     readonly onAdd: (item: RemoteValue) => void;
   },
 ) {
+  const translate = useTranslate();
+  const { locale } = useLocale();
+  const { formatList } = useFormat();
   const options = useReferenceOptions(props.context, props.to);
   const icons = typeIcons(props.context.connectionId);
   const chosen = new Set((remoteList(props.value) ?? []).map((item) => remoteObject(item)?.['_ref']));
@@ -395,10 +412,10 @@ function AddReference(
     <Dropdown
       value=""
       menuClassName={pictures ? OPTION_IMAGE_MENU : ''}
-      placeholder={`Add ${props.to.map(labelize).join(' or ').toLowerCase() || 'reference'}…`}
+      placeholder={translate('cmsRemote.list.addPlaceholder', { name: referenceName(props.to, translate, formatList, locale) })}
       livePreview={false}
       searchable={true}
-      searchPlaceholder="Search…"
+      searchPlaceholder={translate('ui.search')}
       options={options
         .filter((option) => !chosen.has(option.id))
         .map((option) => ({
@@ -436,11 +453,19 @@ function memberFor(item: RemoteValue, of: readonly RemoteType[]): RemoteType {
   return found ?? fallback;
 }
 
-function memberName(member: RemoteType): string {
+// What an added item is called: a group by its schema name, plain text just an item, any other member by its type.
+function memberName(member: RemoteType, translate: Translator): string {
   if (member.kind === 'object') {
     return labelize(member.name);
   }
-  return fieldTypeOf(member).label === 'Plain text' ? 'Item' : fieldTypeOf(member).label;
+  const { labelKey } = fieldTypeOf(member);
+  return translate(labelKey === 'cmsRemote.fieldType.plainText' ? 'cmsRemote.common.item' : labelKey);
+}
+
+// The documents a reference may point at, named for the "Add …" prompt; "reference" when it names none.
+function referenceName(to: readonly string[], translate: Translator, formatList: Formatters['formatList'], locale: string): string {
+  const named = formatList(to.map(labelize), 'or');
+  return nameInSentence(named === '' ? translate('cmsRemote.fieldType.reference') : named, locale);
 }
 
 function blank(member: RemoteType): RemoteValue {
@@ -493,22 +518,24 @@ function itemTitle(
     readonly options: Parameters<typeof referenceTitle>[1];
     readonly assets: ReadonlyMap<string, { readonly filename: string }>;
     readonly index: number;
+    readonly text: RemoteText;
   },
 ): string {
+  const { translate, format } = known.text;
   if (member.kind === 'reference') {
-    return referenceTitle(item, known.options);
+    return referenceTitle(item, known.options, translate);
   }
   const object = remoteObject(item);
   if (object === undefined) {
     const option = member.kind === 'string' ? member.options.find((entry) => entry.value === item) : undefined;
-    return option?.title ?? (String(item) || `Item ${known.index + 1}`);
+    return option?.title ?? (String(item) || translate('cmsRemote.list.itemNumber', { number: known.index + 1 }));
   }
   const asset = remoteObject(object['asset'])?.['_ref'];
   if (typeof asset === 'string') {
     return known.assets.get(asset)?.filename ?? asset;
   }
   // A group whose schema says how it previews is titled as the Studio titles it.
-  const previewTitle = member.kind === 'object' && member.preview?.title ? pathText(object, member.preview.title, known.options) : undefined;
+  const previewTitle = member.kind === 'object' && member.preview?.title ? pathText(object, member.preview.title, known.options, known.text) : undefined;
   if (previewTitle) {
     return previewTitle;
   }
@@ -516,23 +543,23 @@ function itemTitle(
   const text = fields.find((field) => titled(field.type, object[field.name]));
   const date = fields.find((field) => DATE_KINDS.has(field.type.kind) && filled(object[field.name]));
   const parts = [
-    text === undefined ? undefined : titleText(text.type, object[text.name], known.options),
-    date === undefined ? undefined : shortDate(String(object[date.name]), date.type.kind),
+    text === undefined ? undefined : titleText(text.type, object[text.name], known.options, translate),
+    date === undefined ? undefined : shortDate(String(object[date.name]), date.type.kind, format),
   ].filter((part): part is string => part !== undefined && part !== '');
-  return parts.length > 0 ? parts.join(' · ') : `${memberName(member)} ${known.index + 1}`;
+  return parts.length > 0 ? parts.join(' · ') : translate('cmsRemote.list.namedNumber', { name: memberName(member, translate), number: known.index + 1 });
 }
 
 const TITLE_KINDS: ReadonlySet<RemoteType['kind']> = new Set(['string', 'text', 'email', 'slug']);
 const DATE_KINDS: ReadonlySet<RemoteType['kind']> = new Set(['date', 'datetime']);
 
 /** The line under a group's title, as its schema's preview builds it ("Donaldsonville · 6 PM"). */
-function itemSubtitle(item: RemoteValue, member: RemoteType, options: Parameters<typeof referenceTitle>[1]): string | undefined {
+function itemSubtitle(item: RemoteValue, member: RemoteType, options: Parameters<typeof referenceTitle>[1], text: RemoteText): string | undefined {
   const object = remoteObject(item);
   if (object === undefined || member.kind !== 'object' || member.preview === undefined) {
     return undefined;
   }
   const line = member.preview.parts
-    .map((path) => pathText(object, path, options))
+    .map((path) => pathText(object, path, options, text))
     .filter((part): part is string => part !== undefined && part !== '')
     .join(' · ');
   return line || undefined;
@@ -540,18 +567,23 @@ function itemSubtitle(item: RemoteValue, member: RemoteType, options: Parameters
 
 // A preview path's value as text: a step through a reference reads the
 // referenced document's title; a date reads as a date; a list as its count.
-function pathText(object: { readonly [key: string]: RemoteValue }, path: string, options: Parameters<typeof referenceTitle>[1]): string | undefined {
+function pathText(
+  object: { readonly [key: string]: RemoteValue },
+  path: string,
+  options: Parameters<typeof referenceTitle>[1],
+  text: RemoteText,
+): string | undefined {
   const [first = '', ...rest] = path.split('.');
   let value: RemoteValue | undefined = object[first];
   for (const step of rest) {
     const at = remoteObject(value);
     if (typeof at?.['_ref'] === 'string') {
-      return referenceTitle(value, options);
+      return referenceTitle(value, options, text.translate);
     }
     value = at?.[step];
   }
   if (typeof value === 'string') {
-    return DATE_SHAPE.test(value) ? shortDate(value, 'datetime') : value;
+    return DATE_SHAPE.test(value) ? shortDate(value, 'datetime', text.format) : value;
   }
   if (typeof value === 'number') {
     return String(value);
@@ -570,8 +602,8 @@ function titled(type: RemoteType, value: RemoteValue | undefined): boolean {
   return TITLE_KINDS.has(type.kind) && filled(value);
 }
 
-function titleText(type: RemoteType, value: RemoteValue | undefined, options: Parameters<typeof referenceTitle>[1]): string {
-  return type.kind === 'reference' ? referenceTitle(value, options) : String(value);
+function titleText(type: RemoteType, value: RemoteValue | undefined, options: Parameters<typeof referenceTitle>[1], translate: Translator): string {
+  return type.kind === 'reference' ? referenceTitle(value, options, translate) : String(value);
 }
 
 function referenceTargetsOf(member: RemoteType): readonly string[] {
@@ -589,15 +621,15 @@ function filled(value: RemoteValue | undefined): boolean {
 }
 
 // A date as people read it, in local time; a value that is not one is shown as it is.
-function shortDate(value: string, kind: RemoteType['kind']): string {
+function shortDate(value: string, kind: RemoteType['kind'], format: Formatters): string {
   const date = new Date(kind === 'date' ? `${value}T00:00:00` : value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
   if (kind === 'date') {
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    return format.formatDate(date, { month: 'short', day: 'numeric', year: 'numeric' });
   }
-  return date.toLocaleString(undefined, {
+  return format.formatDate(date, {
     weekday: 'short',
     hour: 'numeric',
     minute: '2-digit',

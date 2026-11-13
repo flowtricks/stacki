@@ -13,13 +13,14 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { ChevronLeftIcon } from '../../ui/Icons';
 import { ErrorToast } from '../../ui/ErrorToast';
+import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { remoteDocument, renameContentEntry, writeRemoteDocument } from '../../ipc/remoteSource';
 import type { RemoteAsset, RemoteDocument, RemoteDocumentField } from '../../../shared/properties/cmsRemote';
 import { RemoteItemActions } from './RemoteItemActions';
 import type { RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import { RemoteFieldList } from './RemoteFieldList';
 import type { RemoteEditContext } from './RemoteValueEditor';
-import { STATUS_LABELS } from './RemoteCmsBrowser';
+import { STATUS_KEYS } from './RemoteCmsBrowser';
 import { FieldChecksContext, Loading, useRemote, type FieldChecks, type RemoteCmsSelection } from './remoteCmsShared';
 import { entryShown, useEntryLoad, type EntryLoad } from './entryLoad';
 import { DOCUMENTS, documentKey } from './remoteCmsCache';
@@ -45,6 +46,7 @@ export function RemoteItemFields(props: {
 }) {
   const { projectPath, selection } = props;
   const { connection } = selection;
+  const translateDescribed = useTranslateDescribed();
   const id = selection.item?.id ?? '';
   // Kept across opens: an item opened before, or pointed at in the list, shows at
   // once and is refreshed behind the view; a save shows the CMS's answer.
@@ -65,7 +67,7 @@ export function RemoteItemFields(props: {
       replaceAt(documentKey(connection.id, target.id), written.value);
       props.onSaved();
     } else {
-      setError({ id: target.id, message: written.message });
+      setError({ id: target.id, message: translateDescribed(written) });
     }
   };
   // One rename moves the file and every reference to it; the item is then named by its new id.
@@ -77,7 +79,7 @@ export function RemoteItemFields(props: {
       const title = selection.item?.title ?? before;
       props.onRenamed({ id: renamed.value.id, title: title === before ? `${slug.folder}${to}` : title });
     } else {
-      setError({ id: target.id, message: renamed.message });
+      setError({ id: target.id, message: translateDescribed(renamed) });
     }
   };
   const renameTo = (target: RemoteDocument, to: string) => {
@@ -179,12 +181,18 @@ function EntryForm(props: {
   readonly onDuplicate: (document: RemoteDocument) => void;
 }) {
   const { document, enforced } = props;
+  const translate = useTranslate();
   // Every required field may say so: an empty one on an entry already saved is a problem now.
   const requiredShown = enforced ? new Set(document.fields.filter((field) => field.required).map((field) => field.name)) : undefined;
   return (
     <FieldChecksContext.Provider value={props.checks}>
       <div className="remote-cms-fields" {...(props.checks === 'held' ? HELD_FORM : {})}>
         {props.error && <ErrorToast message={props.error} />}
+        {document.appliesLive === true && (
+          <p className="remote-cms-live-notice" role="status">
+            {translate('settings.cms.payload.liveNotice')}
+          </p>
+        )}
         {document.slug && <EntrySlugField key={document.id} slug={document.slug} onCommit={props.onRename} />}
         <RemoteFieldList document={document} context={props.context} requiredShown={requiredShown} onSave={props.onSave} />
         <RemoteItemActions
@@ -229,12 +237,13 @@ function ItemHeader(props: {
   readonly onChanged: (document: RemoteDocument | undefined) => void;
 }) {
   const { document } = props;
+  const translate = useTranslate();
   // A project's file has no draft to publish or discard, and its history is git's.
   const files = isAstroContent(props.selection.connection);
   return (
     <div className="cms-detail-head remote-cms-item-head">
       {props.onBack && (
-        <button className="ghost cms-back" title="Back to the list" onClick={props.onBack}>
+        <button className="ghost cms-back" title={translate('cmsRemote.item.backToList')} onClick={props.onBack}>
           <ChevronLeftIcon size={13} />
         </button>
       )}
@@ -243,7 +252,7 @@ function ItemHeader(props: {
         // One group, so a narrow header moves state and actions to the next line together.
         <div className="remote-cms-item-meta">
           <DocumentState document={document} shows={files ? 'times' : 'status'} />
-          {!files && (
+          {!files && document.appliesLive !== true && (
             <RemoteDocumentActions
               projectPath={props.projectPath}
               connectionId={props.selection.connection.id}
@@ -265,16 +274,19 @@ function DocumentState(props: {
   readonly shows: 'status' | 'times';
 }) {
   const { status, editedAt, publishedAt } = props.document;
+  const translate = useTranslate();
+  const format = useFormat();
+  const text = { translate, format };
   const times = [
-    editedAt === undefined ? undefined : `Edited ${relativeTime(editedAt)}`,
-    publishedAt === undefined ? undefined : `Published ${relativeTime(publishedAt)}`,
+    editedAt === undefined ? undefined : translate('cmsRemote.item.edited', { time: relativeTime(editedAt, Date.now(), text) }),
+    publishedAt === undefined ? undefined : translate('cmsRemote.item.publishedAt', { time: relativeTime(publishedAt, Date.now(), text) }),
   ].filter((part): part is string => part !== undefined);
   return (
     <>
       {/* The times are its tooltip too, for a header too narrow to show them. */}
       {props.shows === 'status' && (
         <span className={`remote-cms-status is-${status}`} title={times.join(' · ')}>
-          {STATUS_LABELS[status]}
+          {translate(STATUS_KEYS[status])}
         </span>
       )}
       {times.length > 0 && <span className="remote-cms-times">{times.join(' · ')}</span>}

@@ -13,6 +13,7 @@
 // connection returns (useRemote in remoteCmsShared.tsx).
 
 import { assert } from '../../../shared/core/assert';
+import { described } from '../../../shared/properties/i18n/messageRef';
 import { remoteCollections, remoteDocument, remoteDocuments } from '../../ipc/remoteSource';
 import type { RemoteCollection, RemoteDocument, RemoteDocumentList, RemoteReferenceOption, RemoteResult } from '../../../shared/properties/cmsRemote';
 
@@ -74,9 +75,8 @@ export function createRemoteCache<T>(entriesMax: number): RemoteCache<T> {
   };
 }
 
-/** What a view with nothing kept shows while the system is offline. */
-export const OFFLINE_MESSAGE = 'You’re offline. This CMS’s content shows when you reconnect.';
-const OFFLINE = { ok: false, message: OFFLINE_MESSAGE } as const;
+/** What a view with nothing kept shows while the system is offline: the English text with its translatable reference. */
+const OFFLINE = { ok: false, ...described('cmsRemote.cache.offline') } as const;
 
 /** False only when the platform knows it has no network; unknown counts as online. */
 export function online(): boolean {

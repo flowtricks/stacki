@@ -1,6 +1,8 @@
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS, data as parseData } from '../../../shared/core/boundary';
 import { toArray, toRecord } from '../../../shared/core/record';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 export interface CmsFile {
   readonly rel: string;
   readonly name: string;
@@ -273,11 +275,11 @@ function contentValue(value: unknown, depth: number): boolean {
 const TITLE_KEYS = ['name', 'title', 'label', 'heading', 'headline', 'question', 'slug', 'id', 'key'];
 
 // What to call an item in the list. Falls back to the first short string.
-export function titleOf(item: unknown, index: number): string {
+export function titleOf(item: unknown, index: number, translate: Translator = ENGLISH_TRANSLATE): string {
   if (!isPlainObject(item)) {
     // A list of plain values labels itself; blank ones still need a handle.
     const own = String(item ?? '').trim();
-    return own || `Item ${index + 1}`;
+    return own || translate('cms.item.numbered', { number: index + 1 });
   }
   for (const key of TITLE_KEYS) {
     const value = item[key];
@@ -290,7 +292,7 @@ export function titleOf(item: unknown, index: number): string {
       return value.trim();
     }
   }
-  return `Item ${index + 1}`;
+  return translate('cms.item.numbered', { number: index + 1 });
 }
 
 // A blank value of the same shape, so "New item" arrives with the collection's

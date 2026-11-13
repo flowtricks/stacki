@@ -1460,3 +1460,13 @@
   padding: 0;
   border: 0;
 }
+/* A collection that keeps no drafts: its edits change the live content, so the form says so above its fields. */
+.remote-cms-live-notice {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #3a3017;
+  color: #e6c76a;
+  font-size: 12px;
+  line-height: 1.5;
+}

@@ -12,6 +12,8 @@ import { ChevronLeftIcon, ChevronRightIcon, CmsIcon, FileIcon, FolderDefaultIcon
 import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
 import type { CmsConnection } from '../../../shared/properties/cmsConnections';
 import { ASTRO_CONTENT_ID, ASTRO_CONTENT_SOURCE, type CmsSource } from '../../../shared/properties/astroContent';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { RemoteCmsBrowser } from './RemoteCmsBrowser';
 import { prefetchConnection } from './remoteCmsCache';
 import { ConnectionLogo, type RemoteCmsSelection } from './remoteCmsShared';
@@ -91,6 +93,7 @@ function LocalCmsPanel(
     readonly onOpenRemote: (source: CmsSource) => void;
   },
 ) {
+  const translate = useTranslate();
   const { files, content, refresh, state } = useCmsPanelData(props.project.path, props.refreshKey);
   const [creating, setCreating] = useState(false);
   const collections = useMemo(() => visibleCollections(files, content), [files, content]);
@@ -114,7 +117,7 @@ function LocalCmsPanel(
         )}
         {open && <JsonCollectionList collections={open.items} selected={props.selectedRel} onSelect={props.onSelect} onOpenSettings={props.onOpenSettings} />}
         {/* The content collections' row is always there, so the panel is never empty. */}
-        <PanelReadStatus state={state} label="collections" retry={refresh} />
+        <PanelReadStatus state={state} label={translate('cms.panel.collections')} retry={refresh} />
       </div>
     </div>
   );
@@ -342,20 +345,21 @@ function ConnectionRows(props: {
   readonly content: CmsPanelContent;
   readonly onOpen: (source: CmsSource) => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
       {props.connections.map((connection) => (
         <GroupRow
           key={connection.id}
-          label={CONNECTION_KINDS[connection.kind]}
+          label={connectionKindLabel(connection.kind, translate)}
           title={connection.label}
           onClick={() => props.onOpen(connection)}
           icon={<ConnectionLogo kind={connection.kind} />}
         />
       ))}
       <GroupRow
-        label={ASTRO_CONTENT_SOURCE.label}
-        title={props.content.configPath ? `Declared in ${props.content.configPath}` : 'Astro content'}
+        label={translate('cms.panel.contentCollections')}
+        title={props.content.configPath ? translate('cms.panel.declaredIn', { path: props.content.configPath }) : translate('cms.panel.astroContent')}
         onClick={() => props.onOpen(ASTRO_CONTENT_SOURCE)}
         icon={<ConnectionLogo kind="astro" />}
       />
@@ -363,11 +367,23 @@ function ConnectionRows(props: {
   );
 }
 
-const CONNECTION_KINDS: Readonly<Record<CmsConnection['kind'], string>> = {
-  sanity: 'Sanity',
-  payload: 'Payload',
-  custom: 'Custom CMS',
-};
+// The CMS products are brand names and stay as written; only the generic kind is words.
+function connectionKindLabel(kind: CmsConnection['kind'], translate: Translator): string {
+  switch (kind) {
+    case 'sanity':
+      // i18n-ignore: Sanity is a product name.
+      return 'Sanity';
+    case 'payload':
+      // i18n-ignore: Payload is a product name.
+      return 'Payload';
+    case 'custom':
+      return translate('cms.panel.kindCustom');
+    default: {
+      const exhaustive: never = kind;
+      return exhaustive;
+    }
+  }
+}
 
 function PanelHeader({
   open,
@@ -383,25 +399,26 @@ function PanelHeader({
   /** Where the host adds a CMS connection (Settings, or Studio's dialog). */
   readonly onConnect: (() => void) | undefined;
 }) {
-  const title = open?.label ?? 'CMS Collections';
+  const translate = useTranslate();
+  const title = open?.label ?? translate('cms.panel.title');
   // At the top level the + connects a CMS; inside a folder it adds a collection there.
   const connect = openKey === undefined ? onConnect : undefined;
   return (
     <div className="panel-header">
       <div className="cms-crumb">
         {open && (
-          <button className="ghost" title="All collections" onClick={onBack}>
+          <button className="ghost" title={translate('cms.panel.back')} onClick={onBack}>
             <ChevronLeftIcon size={14} />
           </button>
         )}
         <h2 title={open?.path}>{title}</h2>
       </div>
       {connect ? (
-        <button className="ghost" title="Connect a CMS" onClick={connect}>
+        <button className="ghost" title={translate('cms.panel.connect')} onClick={connect}>
           <PlusIcon size={14} />
         </button>
       ) : (
-        <button className="ghost" title="New collection" onClick={onCreate}>
+        <button className="ghost" title={translate('cms.panel.newCollection')} onClick={onCreate}>
           <PlusIcon size={14} />
         </button>
       )}
@@ -410,12 +427,13 @@ function PanelHeader({
 }
 
 function CreateRow({ onCreate }: { readonly onCreate: (name: string) => Promise<void> }) {
+  const translate = useTranslate();
   return (
     <div className="cms-collection">
       <CmsIcon size={14} />
       <input
         autoFocus
-        placeholder="Collection name"
+        placeholder={translate('cms.panel.collectionName')}
         onBlur={(event) => void onCreate(event.currentTarget.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter') {
@@ -477,11 +495,12 @@ function GroupRow({
   readonly onClick: () => void;
   readonly icon: React.ReactNode;
 }) {
+  const translate = useTranslate();
   return (
     <div className={`cms-collection ${selected ? 'on' : ''}`} onClick={onClick} title={title}>
       {icon}
       <span className="cms-collection-name">{label}</span>
-      {badge && <span className="badge">{badge}</span>}
+      {badge && <span className="badge">{badge === 'this page' ? translate('cms.panel.badgeThisPage') : translate('cms.panel.badgeOpen')}</span>}
       <span className="cms-collection-chevron">
         <ChevronRightIcon size={10} />
       </span>
@@ -500,6 +519,7 @@ function JsonCollectionList({
   readonly onSelect: (rel: string | undefined) => void;
   readonly onOpenSettings: (rel: string) => void;
 }) {
+  const translate = useTranslate();
   return collections.map((collection) => (
     <div
       key={collection.rel}
@@ -512,10 +532,10 @@ function JsonCollectionList({
     >
       <CmsIcon size={14} />
       <span className="cms-collection-name">{collection.label}</span>
-      <span className="cms-collection-count">{jsonItemCount(collection)}</span>
+      <span className="cms-collection-count">{jsonItemCount(collection, translate)}</span>
       <button
         className="ghost row-action"
-        title="Collection settings"
+        title={translate('cms.panel.collectionSettings')}
         onClick={(event) => {
           event.stopPropagation();
           if (collection.error === undefined) {
@@ -537,9 +557,9 @@ function collectionClass(state: { readonly selected: boolean; readonly broken: b
   return `cms-collection ${state.selected ? 'on' : ''} ${state.broken ? 'broken' : ''}`;
 }
 
-function jsonItemCount(collection: Collection): string {
+function jsonItemCount(collection: Collection, translate: Translator): string {
   if (collection.error !== undefined) {
-    return 'unreadable';
+    return translate('cms.collection.unreadable');
   }
-  return collection.single || collection.items.length === 1 ? '1 item' : `${collection.items.length} items`;
+  return translate('cms.itemCount', { count: collection.single ? 1 : collection.items.length });
 }

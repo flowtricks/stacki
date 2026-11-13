@@ -3,7 +3,9 @@
 // come from the collection's template (its fields with no values), read once
 // when the menu first opens.
 import { useRef, useState } from 'react';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
+import { SkeletonRows } from '../../ui/Skeleton';
 import { CheckIcon, PinIcon } from '../../ui/Icons';
 import { remoteTemplate } from '../../ipc/remoteSource';
 import type { RemoteCmsSelection } from './remoteCmsShared';
@@ -18,6 +20,8 @@ export function RemoteColumnPicker(props: {
   readonly columns: readonly RemoteColumn[];
   readonly onColumns: (columns: readonly RemoteColumn[]) => void;
 }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const button = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [fields, setFields] = useState<Fields | undefined>(undefined);
@@ -27,7 +31,7 @@ export function RemoteColumnPicker(props: {
       setFields({ kind: 'loading' });
       const { connection, collection } = props.selection;
       void remoteTemplate(props.projectPath, connection.id, collection).then((template) =>
-        setFields(template.ok ? { kind: 'ready', fields: columnFields(template.value.fields) } : { kind: 'failed', message: template.message }),
+        setFields(template.ok ? { kind: 'ready', fields: columnFields(template.value.fields) } : { kind: 'failed', message: translateDescribed(template) }),
       );
     }
   };
@@ -42,7 +46,7 @@ export function RemoteColumnPicker(props: {
         ref={button}
         type="button"
         className="ghost remote-cms-pin"
-        title="Choose columns"
+        title={translate('cmsRemote.columns.choose')}
         aria-expanded={open}
         onClick={(event) => {
           event.stopPropagation();
@@ -72,15 +76,20 @@ function ColumnMenu(props: {
   readonly chosen: ReadonlySet<string>;
   readonly onToggle: (field: RemoteColumn, all: readonly RemoteColumn[]) => void;
 }) {
+  const translate = useTranslate();
   const { fields } = props;
   if (fields === undefined || fields.kind === 'loading') {
-    return <p className="remote-cms-note">Loading fields…</p>;
+    return (
+      <div className="remote-cms-note">
+        <SkeletonRows count={4} />
+      </div>
+    );
   }
   if (fields.kind === 'failed') {
     return <p className="remote-cms-note remote-cms-failure">{fields.message}</p>;
   }
   if (fields.fields.length === 0) {
-    return <p className="remote-cms-note">No fields to show as columns.</p>;
+    return <p className="remote-cms-note">{translate('cmsRemote.columns.none')}</p>;
   }
   return fields.fields.map((field) => (
     <button

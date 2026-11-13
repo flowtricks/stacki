@@ -7,6 +7,8 @@ import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { ChevronDownIcon, ChevronRightIcon, DragIcon, PencilIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import useListReorder from '../../ui/useListReorder';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 interface Props {
   readonly value: readonly unknown[];
@@ -21,6 +23,7 @@ interface Props {
 
 export function CmsListField({ value, layout = 'collapsible', onChange }: Props) {
   assert(value.length <= BOUNDARY_LIMITS.itemsMax, 'CMS list: item limit exceeded');
+  const translate = useTranslate();
   const [folded, setFolded] = useState(true);
   const open = layout === 'open' || !folded;
   const [renaming, setRenaming] = useState<number | undefined>(undefined);
@@ -31,14 +34,14 @@ export function CmsListField({ value, layout = 'collapsible', onChange }: Props)
       {layout === 'collapsible' && (
         <button type="button" className="cms-option-head" onClick={() => setFolded(!folded)}>
           {open ? <ChevronDownIcon size={11} /> : <ChevronRightIcon size={11} />}
-          <span className="cms-option-summary">{listSummary(value, { open })}</span>
+          <span className="cms-option-summary">{listSummary(value, { open }, translate)}</span>
         </button>
       )}
       {open && (
         <>
           {value.map((entry, index) => (
             <div key={index} className={`cms-option-row ${reorder.rowClass(index)}`} {...reorder.rowProps(index)}>
-              <span className="cms-option-grip" title="Drag to reorder">
+              <span className="cms-option-grip" title={translate('cms.list.dragReorder')}>
                 <DragIcon size={12} />
               </span>
               {renaming === index ? (
@@ -46,13 +49,13 @@ export function CmsListField({ value, layout = 'collapsible', onChange }: Props)
               ) : (
                 <OptionLabel text={optionText(entry)} onRename={() => setRenaming(index)} />
               )}
-              <button type="button" className="ghost cms-option-trash" title="Delete" onClick={() => list.remove(index)}>
+              <button type="button" className="ghost cms-option-trash" title={translate('cms.delete')} onClick={() => list.remove(index)}>
                 <TrashIcon size={13} />
               </button>
             </div>
           ))}
           <button type="button" className="cms-option-add" onClick={list.add}>
-            <PlusIcon size={12} /> Add item
+            <PlusIcon size={12} /> {translate('cms.addItem')}
           </button>
         </>
       )}
@@ -61,12 +64,13 @@ export function CmsListField({ value, layout = 'collapsible', onChange }: Props)
 }
 
 function OptionLabel(props: { readonly text: string; readonly onRename: () => void }) {
+  const translate = useTranslate();
   return (
     <>
       <span className="cms-option-text" onDoubleClick={props.onRename}>
-        {props.text || <em>Empty</em>}
+        {props.text || <em>{translate('cms.list.empty')}</em>}
       </span>
-      <button type="button" className="ghost cms-option-rename" title="Rename" onClick={props.onRename}>
+      <button type="button" className="ghost cms-option-rename" title={translate('cms.list.rename')} onClick={props.onRename}>
         <PencilIcon size={12} />
       </button>
     </>
@@ -142,14 +146,14 @@ function useListEdits(value: readonly unknown[], onChange: (value: unknown[]) =>
 
 // Open, the rows say what is there and the head counts them; collapsed, the
 // head reads the items, one line cut short where it runs out of room (CSS).
-function listSummary(value: readonly unknown[], state: { readonly open: boolean }): string {
+function listSummary(value: readonly unknown[], state: { readonly open: boolean }, translate: Translator): string {
   if (value.length === 0) {
-    return 'No items';
+    return translate('cms.list.noItems');
   }
   if (state.open) {
-    return value.length === 1 ? '1 item' : `${value.length} items`;
+    return translate('cms.itemCount', { count: value.length });
   }
-  return value.map((entry) => optionText(entry) || '(empty)').join(', ');
+  return value.map((entry) => optionText(entry) || translate('cms.list.emptyEntry')).join(', ');
 }
 
 function optionText(entry: unknown): string {

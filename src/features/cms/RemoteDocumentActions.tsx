@@ -7,7 +7,10 @@ import { useEffect, useState } from 'react';
 import type { RemoteDocument, RemoteRevision } from '../../../shared/properties/cmsRemote';
 import type { RemoteDocumentAction } from '../../../shared/properties/cmsRemote';
 import { actOnRemoteDocument, remoteHistory, restoreRemoteRevision } from '../../ipc/cmsConnectionsBridge';
+import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 import { confirmDialog } from '../../ui/ConfirmDialog';
+import { SkeletonRows } from '../../ui/Skeleton';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { CloseIcon, HistoryIcon, ResetIcon, TrashIcon } from '../../ui/Icons';
 import MoreMenu from '../../ui/MoreMenu';
@@ -23,38 +26,47 @@ interface Props {
   readonly onChanged: (document: RemoteDocument | undefined) => void;
 }
 
+// The words of each confirm are keys, translated when the dialog opens.
 const CONFIRMS: Readonly<
   Record<
     Exclude<RemoteDocumentAction, 'publish'>,
     {
-      readonly title: string;
-      readonly body: string;
-      readonly confirmLabel: string;
+      readonly title: MessageKey;
+      readonly body: MessageKey;
+      readonly confirmLabel: MessageKey;
     }
   >
 > = {
   discard: {
-    title: 'Discard changes?',
-    body: 'The unpublished changes to this item are thrown away. Sanity keeps them in its history.',
-    confirmLabel: 'Discard',
+    title: 'cmsRemote.actions.discardTitle',
+    body: 'cmsRemote.actions.discardBody',
+    confirmLabel: 'cmsRemote.actions.discardConfirm',
   },
   unpublish: {
-    title: 'Unpublish this item?',
-    body: 'It leaves the live site. Its content is kept as a draft you can publish again.',
-    confirmLabel: 'Unpublish',
+    title: 'cmsRemote.actions.unpublishTitle',
+    body: 'cmsRemote.actions.unpublishBody',
+    confirmLabel: 'cmsRemote.actions.unpublishConfirm',
   },
 };
 
 export function RemoteDocumentActions(props: Props) {
   const { document } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [busy, setBusy] = useState<RemoteDocumentAction | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const [history, setHistory] = useState(false);
-  const blockers = publishBlockers(document);
+  const blockers = publishBlockers(document, translate);
   const draft = document.editedAt !== undefined || document.status !== 'published';
   const act = async (action: RemoteDocumentAction) => {
     if (action !== 'publish') {
-      const confirmed = await confirmDialog({ ...CONFIRMS[action], danger: true });
+      const confirm = CONFIRMS[action];
+      const confirmed = await confirmDialog({
+        title: translate(confirm.title),
+        body: translate(confirm.body),
+        confirmLabel: translate(confirm.confirmLabel),
+        danger: true,
+      });
       if (!confirmed) {
         return;
       }
@@ -69,25 +81,25 @@ export function RemoteDocumentActions(props: Props) {
     if (result.ok) {
       props.onChanged(result.value);
     } else {
-      setError(result.message);
+      setError(translateDescribed(result));
     }
   };
   return (
     <div className="remote-cms-actions">
       {error && <ErrorToast message={error} />}
       <MoreMenu
-        title="More"
+        title={translate('cmsRemote.actions.more')}
         width={180}
         items={[
-          { label: 'History', icon: <HistoryIcon size={13} />, onSelect: () => setHistory(true) },
+          { label: translate('cmsRemote.actions.history'), icon: <HistoryIcon size={13} />, onSelect: () => setHistory(true) },
           draft && {
-            label: 'Discard changes',
+            label: translate('cmsRemote.actions.discard'),
             icon: <ResetIcon size={13} />,
             danger: true,
             onSelect: () => void act('discard'),
           },
           document.publishedAt !== undefined && {
-            label: 'Unpublish',
+            label: translate('cmsRemote.actions.unpublish'),
             icon: <TrashIcon size={13} />,
             danger: true,
             onSelect: () => void act('unpublish'),
@@ -98,10 +110,10 @@ export function RemoteDocumentActions(props: Props) {
         type="button"
         className="primary"
         disabled={!draft || blockers.length > 0 || busy !== undefined}
-        title={blockers.length > 0 ? `Fix before publishing:\n${blockers.join('\n')}` : undefined}
+        title={blockers.length > 0 ? translate('cmsRemote.actions.fixBeforePublishing', { problems: blockers.join('\n') }) : undefined}
         onClick={() => void act('publish')}
       >
-        {busy === 'publish' ? 'Publishing…' : draft ? 'Publish' : 'Published'}
+        {busy === 'publish' ? translate('cmsRemote.actions.publishing') : translate(draft ? 'cmsRemote.actions.publish' : 'cmsRemote.status.published')}
       </button>
       {history && <HistoryDialog {...props} onClose={() => setHistory(false)} onRestored={props.onChanged} />}
     </div>
@@ -115,13 +127,16 @@ function HistoryDialog(
     readonly onRestored: (document: RemoteDocument) => void;
   },
 ) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const format = useFormat();
   const { revisions, error, setError } = useRevisions(props);
   const restore = async (revision: RemoteRevision, close: () => void) => {
-    const when = relativeTime(revision.timestamp);
+    const when = relativeTime(revision.timestamp, Date.now(), { translate, format });
     const confirmed = await confirmDialog({
-      title: 'Restore this version?',
-      body: `The item as it was ${when} becomes its draft. Publish it to put it live.`,
-      confirmLabel: 'Restore',
+      title: translate('cmsRemote.actions.restoreTitle'),
+      body: translate('cmsRemote.actions.restoreBody', { when }),
+      confirmLabel: translate('cmsRemote.actions.restore'),
     });
     if (!confirmed) {
       return;
@@ -134,23 +149,27 @@ function HistoryDialog(
       props.onRestored(result.value);
       close();
     } else {
-      setError(result.message);
+      setError(translateDescribed(result));
     }
   };
   return (
-    <Popup className="modal remote-cms-history" label="History" onClose={props.onClose} dismissible={true}>
+    <Popup className="modal remote-cms-history" label={translate('cmsRemote.actions.history')} onClose={props.onClose} dismissible={true}>
       {({ close }) => (
         <>
           <div className="modal-header cms-modal-header">
-            <span>History</span>
-            <button className="ghost" title="Close" onClick={close}>
+            <span>{translate('cmsRemote.actions.history')}</span>
+            <button className="ghost" title={translate('ui.close')} onClick={close}>
               <CloseIcon size={12} />
             </button>
           </div>
           <div className="modal-body remote-cms-history-body">
             {error && <ErrorToast message={error} />}
-            {revisions === undefined && <p className="remote-cms-note">Loading…</p>}
-            {revisions?.length === 0 && !error && <p className="remote-cms-note">No history yet.</p>}
+            {revisions === undefined && (
+              <div className="remote-cms-note">
+                <SkeletonRows count={3} />
+              </div>
+            )}
+            {revisions?.length === 0 && !error && <p className="remote-cms-note">{translate('cmsRemote.actions.noHistory')}</p>}
             {revisions?.map((revision, index) => (
               <RevisionRow key={revision.id} revision={revision} current={index === 0} onRestore={() => void restore(revision, close)} />
             ))}
@@ -162,15 +181,18 @@ function HistoryDialog(
 }
 
 function RevisionRow(props: { readonly revision: RemoteRevision; readonly current: boolean; readonly onRestore: () => void }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const format = useFormat();
   return (
     <div className="remote-cms-revision">
-      <span className="remote-cms-revision-time">{relativeTime(props.revision.timestamp)}</span>
-      <span className="remote-cms-revision-author">{props.revision.author}</span>
+      <span className="remote-cms-revision-time">{relativeTime(props.revision.timestamp, Date.now(), { translate, format })}</span>
+      <span className="remote-cms-revision-author">{translateDescribed({ message: props.revision.author, messageRef: props.revision.authorRef })}</span>
       {props.current ? (
-        <span className="remote-cms-revision-now">Current</span>
+        <span className="remote-cms-revision-now">{translate('cmsRemote.actions.current')}</span>
       ) : (
         <button type="button" onClick={props.onRestore}>
-          Restore
+          {translate('cmsRemote.actions.restore')}
         </button>
       )}
     </div>
@@ -178,6 +200,7 @@ function RevisionRow(props: { readonly revision: RemoteRevision; readonly curren
 }
 
 function useRevisions(props: Pick<Props, 'projectPath' | 'connectionId' | 'document'>) {
+  const translateDescribed = useTranslateDescribed();
   const [revisions, setRevisions] = useState<readonly RemoteRevision[] | undefined>(undefined);
   const [error, setError] = useState<string | undefined>(undefined);
   const id = props.document.id;
@@ -186,12 +209,12 @@ function useRevisions(props: Pick<Props, 'projectPath' | 'connectionId' | 'docum
     void remoteHistory(props.projectPath, props.connectionId, id).then((result) => {
       if (active) {
         setRevisions(result.ok ? result.value : []);
-        setError(result.ok ? undefined : result.message);
+        setError(result.ok ? undefined : translateDescribed(result));
       }
     });
     return () => {
       active = false;
     };
-  }, [props.projectPath, props.connectionId, id]);
+  }, [props.projectPath, props.connectionId, id, translateDescribed]);
   return { revisions, error, setError };
 }

@@ -18,10 +18,12 @@ import {
   type RemoteValue,
 } from '../../../shared/properties/cmsRemoteSchema';
 import { CmsFieldFrame, CmsPropField, type CmsScalar, type CmsScalarKind } from './CmsPropField';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { fieldTypeOf } from './remoteFieldTypes';
 import { problemsOf, requiredMessage } from './remoteValidation';
 import { fieldTitle, isEmptyValue } from './remoteValues';
 import { RemoteValueEditor, type RemoteEditContext } from './RemoteValueEditor';
+import { useLocale, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import AssetField from '../../ui/AssetField';
 import MarkdownField from '../../ui/MarkdownField';
 import Dropdown from '../../ui/Dropdown';
@@ -39,17 +41,19 @@ export function RemoteField(props: {
   readonly onChange: (value: RemoteValue | undefined) => void;
 }) {
   const { field, value } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const checks = useContext(FieldChecksContext);
   const missing = checks === 'shown' && props.requiredShown === true && field.required && isEmptyValue(value);
-  const problems = checks === 'shown' ? problemsOf(field, value) : [];
-  const name = fieldTitle(field);
-  const help = field.description;
+  const problems = checks === 'shown' ? problemsOf(field, value, translate) : [];
+  const name = field.titleRef === undefined ? fieldTitle(field) : translateDescribed({ message: field.title, messageRef: field.titleRef });
+  const help = field.descriptionRef === undefined ? field.description : translateDescribed({ message: field.description, messageRef: field.descriptionRef });
   const scalar = scalarOf(field.type);
   const { icon: Icon } = fieldTypeOf(field.type);
   return (
     <div className={`remote-cms-field${field.required ? ' is-required' : ''}`} data-kind={field.type.kind}>
       {isLocked(field, value) ? (
-        <CmsFieldFrame name={name} help={lockedHelp(field)} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
+        <CmsFieldFrame name={name} help={lockedHelp(field, translate)} icon={<Icon size={12} />} set={!isEmptyValue(value)}>
           <LockedValue type={field.type} value={value} context={props.context} />
         </CmsFieldFrame>
       ) : isImagePath(field.type) ? (
@@ -78,10 +82,10 @@ export function RemoteField(props: {
           <RemoteValueEditor type={field.type} label={name} value={value} context={props.context} onChange={props.onChange} />
         </CmsFieldFrame>
       )}
-      {missing && <span className="remote-cms-problem is-error">{requiredMessage(field)}</span>}
+      {missing && <span className="remote-cms-problem is-error">{requiredMessage(field, translate)}</span>}
       {/* Required is the label's asterisk; Publish still waits for it (remoteValidation.ts). */}
       {problems
-        .filter((problem) => problem.message !== 'Required')
+        .filter((problem) => problem.rule !== 'required')
         .map((problem) => (
           <span key={problem.message} className={`remote-cms-problem is-${problem.level}`}>
             {problem.message}
@@ -92,8 +96,8 @@ export function RemoteField(props: {
 }
 
 // Why the field takes no edit, after what it is for.
-function lockedHelp(field: RemoteSchemaField): string {
-  const why = field.readOnly === 'when-set' ? 'Set once: the Studio locks it after it is chosen.' : 'Read-only in the Studio.';
+function lockedHelp(field: RemoteSchemaField, translate: Translator): string {
+  const why = translate(field.readOnly === 'when-set' ? 'cmsRemote.field.lockedOnce' : 'cmsRemote.field.readOnly');
   return field.description === '' ? why : `${field.description} ${why}`;
 }
 
@@ -101,6 +105,7 @@ function lockedHelp(field: RemoteSchemaField): string {
 // value as text, anything larger as its own control with every input disabled.
 function LockedValue(props: { readonly type: RemoteType; readonly value: RemoteValue | undefined; readonly context: RemoteEditContext }) {
   const { type, value } = props;
+  const translate = useTranslate();
   if (type.kind === 'reference') {
     return <LockedReference to={type.to} value={value} context={props.context} />;
   }
@@ -108,8 +113,10 @@ function LockedValue(props: { readonly type: RemoteType; readonly value: RemoteV
   if (scalar !== undefined) {
     const read = scalar.read(value);
     const option = type.kind === 'string' ? type.options.find((entry) => entry.value === read) : undefined;
-    const text = option?.title ?? (typeof read === 'boolean' ? (read ? 'Yes' : 'No') : String(read ?? ''));
-    return <div className="remote-cms-locked">{text === '' ? <span className="remote-cms-locked-empty">Empty</span> : text}</div>;
+    const text = option?.title ?? (typeof read === 'boolean' ? translate(read ? 'cmsRemote.common.yes' : 'cmsRemote.common.no') : String(read ?? ''));
+    return (
+      <div className="remote-cms-locked">{text === '' ? <span className="remote-cms-locked-empty">{translate('cmsRemote.field.empty')}</span> : text}</div>
+    );
   }
   return (
     <fieldset className="remote-cms-locked-control" disabled>
@@ -119,13 +126,14 @@ function LockedValue(props: { readonly type: RemoteType; readonly value: RemoteV
 }
 
 function LockedReference(props: { readonly to: readonly string[]; readonly value: RemoteValue | undefined; readonly context: RemoteEditContext }) {
+  const translate = useTranslate();
   const options = useReferenceOptions(props.context, props.to);
   const id = remoteObject(props.value)?.['_ref'];
   const option = options.find((entry) => entry.id === id);
   return (
     <div className="remote-cms-locked">
       {option && <ReferenceIcon option={option} sanity={typeIcons(props.context.connectionId).get(option.type)} placeholder={false} />}
-      {referenceTitle(props.value, options)}
+      {referenceTitle(props.value, options, translate)}
     </div>
   );
 }
@@ -145,12 +153,14 @@ function TitledChoice(props: {
   readonly value: RemoteValue | undefined;
   readonly onChange: (value: RemoteValue | undefined) => void;
 }) {
+  const translate = useTranslate();
+  const { locale } = useLocale();
   const current = typeof props.value === 'string' ? props.value : '';
   // A value the list does not hold (a removed record) still shows, as itself.
   const known = props.options.some((option) => option.value === current);
   const pictures = hasOptionImage(props.options);
   const options = [
-    { value: '', label: 'None' },
+    { value: '', label: translate('cmsRemote.common.none') },
     ...(known || current === '' ? [] : [{ value: current, label: current, dim: true }]),
     ...props.options.map((option) => ({
       value: option.value,
@@ -164,9 +174,9 @@ function TitledChoice(props: {
       // Choosing is a click: hovering a choice must not save it.
       livePreview={false}
       ariaLabel={props.label}
-      placeholder={`Choose ${props.label.toLowerCase()}…`}
+      placeholder={translate('cmsRemote.field.choose', { field: props.label.toLocaleLowerCase(locale) })}
       searchable={props.options.length > 8}
-      searchPlaceholder="Search…"
+      searchPlaceholder={translate('ui.search')}
       menuClassName={pictures ? OPTION_IMAGE_MENU : ''}
       options={options}
       onChange={(next) => props.onChange(next === '' ? undefined : next)}

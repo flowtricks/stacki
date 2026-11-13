@@ -11,6 +11,7 @@ import { assert } from '../../../shared/core/assert';
 import { remoteObject, type RemoteSchemaField, type RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import type { RemoteAsset } from '../../../shared/properties/cmsRemote';
 import { uploadRemoteAsset } from '../../ipc/cmsConnectionsBridge';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { TrashIcon, UploadIcon } from '../../ui/Icons';
 import { RemoteObjectEditor } from './RemoteField';
@@ -55,6 +56,7 @@ export function RemoteAssetInput(
 
 /** One upload at a time, with its failure kept to show beside the control. */
 export function useAssetUpload(context: RemoteEditContext, kind: 'image' | 'file') {
+  const translateDescribed = useTranslateDescribed();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const run = async (onUploaded: (asset: RemoteAsset) => void) => {
@@ -63,7 +65,7 @@ export function useAssetUpload(context: RemoteEditContext, kind: 'image' | 'file
     const uploaded = await uploadRemoteAsset(context.projectPath, context.connectionId, kind);
     setBusy(false);
     if (!uploaded.ok) {
-      setError(uploaded.message);
+      setError(translateDescribed(uploaded));
     } else if (uploaded.value !== undefined) {
       context.addAsset(uploaded.value);
       onUploaded(uploaded.value);
@@ -85,16 +87,23 @@ export function ImageTile(props: {
   readonly onChoose: () => void;
   readonly onRemove: () => void;
 }) {
+  const translate = useTranslate();
   const [loaded, setLoaded] = useState(false);
   if (props.reference === undefined) {
     return (
-      <button type="button" className="remote-cms-tile is-empty" title="Upload an image" disabled={props.busy} onClick={props.onChoose}>
+      <button
+        type="button"
+        className="remote-cms-tile is-empty"
+        title={translate('cmsRemote.asset.uploadAnImage')}
+        disabled={props.busy}
+        onClick={props.onChoose}
+      >
         {props.busy ? (
-          'Uploading…'
+          translate('cmsRemote.asset.uploading')
         ) : (
           <>
             <UploadIcon size={16} />
-            <span>Upload image</span>
+            <span>{translate('cmsRemote.asset.uploadImage')}</span>
           </>
         )}
       </button>
@@ -125,14 +134,14 @@ export function ImageTile(props: {
         />
       )}
       <div className="remote-cms-tile-actions">
-        <button type="button" title="Replace" disabled={props.busy} onClick={props.onChoose}>
+        <button type="button" title={translate('cmsRemote.asset.replace')} disabled={props.busy} onClick={props.onChoose}>
           <UploadIcon size={12} />
         </button>
-        <button type="button" className="is-remove" title="Remove" onClick={props.onRemove}>
+        <button type="button" className="is-remove" title={translate('ui.remove')} onClick={props.onRemove}>
           <TrashIcon size={12} />
         </button>
       </div>
-      {props.busy && <span className="remote-cms-tile-busy">Uploading…</span>}
+      {props.busy && <span className="remote-cms-tile-busy">{translate('cmsRemote.asset.uploading')}</span>}
     </div>
   );
 }
@@ -144,17 +153,18 @@ function FileRow(props: {
   readonly onChoose: () => void;
   readonly onRemove: () => void;
 }) {
+  const translate = useTranslate();
   const empty = props.reference === undefined;
-  const action = empty ? 'Upload' : 'Replace';
+  const action = translate(empty ? 'cmsRemote.asset.upload' : 'cmsRemote.asset.replace');
   return (
     <div className="remote-cms-asset-row">
-      <span className="remote-cms-asset-name">{empty ? 'No file' : (props.name ?? props.reference)}</span>
+      <span className="remote-cms-asset-name">{empty ? translate('cmsRemote.asset.noFile') : (props.name ?? props.reference)}</span>
       <div className="remote-cms-asset-actions">
         <button type="button" disabled={props.busy} onClick={props.onChoose}>
-          <UploadIcon size={12} /> {props.busy ? 'Uploading…' : action}
+          <UploadIcon size={12} /> {props.busy ? translate('cmsRemote.asset.uploading') : action}
         </button>
         {!empty && (
-          <button type="button" className="ghost" title="Remove" onClick={props.onRemove}>
+          <button type="button" className="ghost" title={translate('ui.remove')} onClick={props.onRemove}>
             <TrashIcon size={12} />
           </button>
         )}

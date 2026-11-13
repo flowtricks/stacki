@@ -5,6 +5,9 @@
 // (RemoteItemFields.tsx). Field edits are drafts; deleting and reordering act as
 // the CMS's own editor does (sanityEdits.ts), deleting only after a confirm.
 import { useMemo, useState, type CSSProperties } from 'react';
+import type { Formatters } from '../../../shared/core/i18n/format';
+import { useFormat, useLocale, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { DescribedTranslator, Translator } from '../../lib/i18n/localeContext';
 import { RemoteColumnPicker } from './RemoteColumnPicker';
 import { RemoteCollectionSettings } from './RemoteCollectionSettings';
 import { cellText, nextSort, sortItems, tableGrid, useColumnChoice, type RemoteColumn, type RemoteSort, type RemoteSortKey } from './remoteColumns';
@@ -19,11 +22,10 @@ import { deleteRemoteDocuments, remoteDocuments, remoteTemplate } from '../../ip
 import { duplicateOf, RemotePendingItem, type PendingItem } from './RemotePendingItem';
 import type { RemoteDocumentList, RemoteDocumentSummary, RemoteResult } from '../../../shared/properties/cmsRemote';
 import { labelize } from './cmsSchema';
-import { STATUS_LABELS } from './RemoteCmsBrowser';
+import { STATUS_KEYS } from './RemoteCmsBrowser';
 import { isAstroContent } from '../../../shared/properties/astroContent';
 import AssetThumb from '../../ui/AssetThumb';
 import { ProjectImagesScope, useProjectImage } from './projectImages';
-import { entryDeletionMessage } from '../../ipc/editorEnvironment';
 import { RemoteItemFields } from './RemoteItemFields';
 import { Loading, useRemote, type RemoteCmsSelection } from './remoteCmsShared';
 import { DOCUMENT_LISTS, listKey, prefetchDocument } from './remoteCmsCache';
@@ -39,6 +41,8 @@ interface Props {
 export function RemoteCmsView(props: Props) {
   const { projectPath, selection } = props;
   const { connection, collection } = selection;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   // Kept across opens and refreshed behind the view: a delete, a drag or a save
   // shows its result at once and never blanks the list (remoteCmsCache.ts).
   // The fields shown as columns: the list is read with their values (remoteColumns.ts).
@@ -59,7 +63,7 @@ export function RemoteCmsView(props: Props) {
     setPending(undefined);
     props.onSelect({ ...selection, item: item && { id: item.id, title: item.title } });
   };
-  const startNew = () => void newItem({ ...props, setPending });
+  const startNew = () => void newItem({ ...props, setPending }, translate, translateDescribed);
   return (
     <ProjectImagesScope projectPath={projectPath} source={connection}>
       <div className={`cms-view remote-cms-view ${props.hidden ? 'hidden' : ''}`}>
@@ -102,6 +106,7 @@ function OpenItem(
   },
 ) {
   const { projectPath, selection, pending, single } = props;
+  const translate = useTranslate();
   const back = single ? undefined : () => props.openItem(undefined);
   return (
     <>
@@ -135,7 +140,7 @@ function OpenItem(
           onBack={back}
           onRemoved={() => props.openItem(undefined)}
           onSaved={props.reload}
-          onDuplicate={(document) => props.setPending(duplicateOf(document, selection.item?.title ?? 'Item'))}
+          onDuplicate={(document) => props.setPending(duplicateOf(document, selection.item?.title ?? translate('cmsRemote.common.item'), translate))}
           onRenamed={(item) => {
             props.reload();
             props.onSelect({ ...selection, item });
@@ -147,14 +152,18 @@ function OpenItem(
 }
 
 // A new item opens as its collection's template: nothing is written until Create.
-async function newItem(context: Props & { readonly setPending: (pending: PendingItem | undefined) => void }) {
+async function newItem(
+  context: Props & { readonly setPending: (pending: PendingItem | undefined) => void },
+  translate: Translator,
+  translateDescribed: DescribedTranslator,
+) {
   const { projectPath, selection } = context;
   const template = await remoteTemplate(projectPath, selection.connection.id, selection.collection);
   if (template.ok) {
-    context.setPending({ title: 'New item', document: template.value });
+    context.setPending({ title: translate('cmsRemote.view.newItem'), document: template.value });
   } else {
     // A config that will not load, a file too large to save: said where the person looks.
-    reportErrorToast(template.message);
+    reportErrorToast(translateDescribed(template));
   }
 }
 
@@ -171,9 +180,11 @@ function ItemTable(
   },
 ) {
   const { selection, list } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const icon = typeIcons(selection.connection.id).get(selection.collection);
   const files = isAstroContent(selection.connection);
-  const table = useItemTable(props);
+  const table = useItemTable(props, translate, translateDescribed);
   const { query, setQuery, chosen, setChosen, error, shown, draggable, lead, reorder } = table;
   const pictures = list.documents.some(hasPicture);
   const shape = { files, lead, columns: props.columns };
@@ -218,6 +229,8 @@ function useItemTable(
     readonly onMoved: (list: RemoteDocumentList) => void;
     readonly reload: () => void;
   },
+  translate: Translator,
+  translateDescribed: DescribedTranslator,
 ) {
   const { list } = props;
   const [query, setQuery] = useState('');
@@ -232,11 +245,11 @@ function useItemTable(
   const reorder = useListReorder({
     count: shown.length,
     disabled: !draggable,
-    onMove: (from, to) => void move({ ...props, from, to, setError }),
+    onMove: (from, to) => void move({ ...props, from, to, setError, translateDescribed }),
   });
   const remove = async () => {
     setChosen(undefined);
-    setError(await deleteChosen({ ...props, ids: [...(chosen ?? [])] }));
+    setError(await deleteChosen({ ...props, ids: [...(chosen ?? [])], translate, translateDescribed }));
   };
   return {
     sort,
@@ -266,17 +279,23 @@ function TableHead(props: {
   readonly onClose: () => void;
 }) {
   const { chosen } = props;
+  const translate = useTranslate();
+  const { locale } = useLocale();
   if (chosen) {
     // Choosing is its own mode: what is chosen, Delete once there is something, and Cancel.
     return (
       <div className="cms-detail-head remote-cms-toolbar is-choosing">
-        <span className="cms-detail-title">{chosen.size === 0 ? `Select ${props.title}…` : `${chosen.size} ${props.title} selected`}</span>
+        <span className="cms-detail-title">
+          {chosen.size === 0
+            ? translate('cmsRemote.view.selectCollection', { collection: props.title })
+            : translate('cmsRemote.view.selected', { count: chosen.size, collection: props.title })}
+        </span>
         {chosen.size > 0 && (
           <button className="danger" onClick={props.onDelete}>
-            <TrashIcon size={12} /> Delete
+            <TrashIcon size={12} /> {translate('cmsRemote.delete.action')}
           </button>
         )}
-        <button onClick={() => props.onChoose(undefined)}>Cancel</button>
+        <button onClick={() => props.onChoose(undefined)}>{translate('ui.cancel')}</button>
       </div>
     );
   }
@@ -284,17 +303,21 @@ function TableHead(props: {
     <div className="cms-detail-head remote-cms-toolbar">
       {/* Beside the collections list, its row closes it again; where the list gives way,
           this is the way back to it (remoteCms.css). */}
-      <button className="ghost cms-back remote-cms-collections-back" title="All collections" onClick={props.onClose}>
+      <button className="ghost cms-back remote-cms-collections-back" title={translate('cmsRemote.collection.allCollections')} onClick={props.onClose}>
         <ChevronLeftIcon size={13} />
       </button>
       <span className="cms-detail-title">{props.title}</span>
       <label className="remote-cms-search">
         <SearchIcon size={12} />
-        <input value={props.query} placeholder={`Search ${props.title.toLowerCase()}…`} onChange={(event) => props.onQuery(event.target.value)} />
+        <input
+          value={props.query}
+          placeholder={translate('cmsRemote.view.search', { collection: props.title.toLocaleLowerCase(locale) })}
+          onChange={(event) => props.onQuery(event.target.value)}
+        />
       </label>
-      <button onClick={() => props.onChoose(new Set())}>Select…</button>
+      <button onClick={() => props.onChoose(new Set())}>{translate('cmsRemote.view.select')}</button>
       <button className="primary" onClick={props.onCreate}>
-        <PlusIcon size={12} /> New item
+        <PlusIcon size={12} /> {translate('cmsRemote.view.newItem')}
       </button>
     </div>
   );
@@ -329,16 +352,17 @@ function TableColumns(
   },
 ) {
   const { shape, table } = props;
+  const translate = useTranslate();
   const sortBy = (key: RemoteSortKey, label: string) => <SortHeader label={label} sortKey={key} sort={table.sort} onSort={table.onSort} />;
   return (
     <div className="remote-cms-row remote-cms-row-head" role="row">
       {shape.lead && <LeadHeader choosing={table.choosing} />}
-      {sortBy('title', 'Name')}
-      {!shape.files && sortBy('status', 'Status')}
+      {sortBy('title', translate('cmsRemote.view.columnName'))}
+      {!shape.files && sortBy('status', translate('cmsRemote.view.columnStatus'))}
       {shape.columns.map((column) => (
         <SortHeader key={column.name} label={column.title} sortKey={`cell:${column.name}`} sort={table.sort} onSort={table.onSort} />
       ))}
-      {sortBy('updated', 'Updated')}
+      {sortBy('updated', translate('cmsRemote.view.columnUpdated'))}
       <RemoteColumnPicker projectPath={props.projectPath} selection={props.selection} columns={shape.columns} onColumns={props.onColumns} />
     </div>
   );
@@ -346,11 +370,19 @@ function TableColumns(
 
 function LeadHeader(props: { readonly choosing: Choosing }) {
   const { chosen, ids } = props.choosing;
+  const translate = useTranslate();
   if (chosen === undefined) {
     return <span />;
   }
   const all = ids.length > 0 && ids.every((id) => chosen.has(id));
-  return <input type="checkbox" aria-label="Choose every item" checked={all} onChange={() => props.choosing.onChoose(new Set(all ? [] : ids))} />;
+  return (
+    <input
+      type="checkbox"
+      aria-label={translate('cmsRemote.view.chooseEvery')}
+      checked={all}
+      onChange={() => props.choosing.onChoose(new Set(all ? [] : ids))}
+    />
+  );
 }
 
 // A column's name, sorting by it: an arrow shows the direction while it does.
@@ -360,12 +392,13 @@ function SortHeader(props: {
   readonly sort: RemoteSort | undefined;
   readonly onSort: (key: RemoteSortKey) => void;
 }) {
+  const translate = useTranslate();
   const active = props.sort?.key === props.sortKey ? props.sort.direction : undefined;
   return (
     <button
       type="button"
       className={`remote-cms-sort ${active ? `is-${active}` : ''}`}
-      title={active === 'ascending' ? 'Largest first' : 'Smallest first'}
+      title={translate(active === 'ascending' ? 'cmsRemote.view.sortLargest' : 'cmsRemote.view.sortSmallest')}
       onClick={() => props.onSort(props.sortKey)}
     >
       <span>{props.label}</span>
@@ -377,20 +410,26 @@ function SortHeader(props: {
 // Nothing to list: a collection with no items yet offers the first one; a search
 // that matched nothing says what was searched and offers to clear it.
 function EmptyTable(props: { readonly title: string; readonly query: string; readonly onCreate: () => void; readonly onClear: () => void }) {
+  const translate = useTranslate();
+  const { locale } = useLocale();
   const searching = props.query.trim().length > 0;
   return (
     <div className="props-empty remote-cms-empty">
       <div className="cms-empty-icon" aria-hidden="true">
         {searching ? <SearchIcon size={22} /> : <CmsIcon size={22} />}
       </div>
-      <h3 className="cms-empty-title">{searching ? `No items match “${props.query.trim()}”` : `No ${props.title.toLowerCase()} yet`}</h3>
-      <p>{searching ? 'Try another word, or clear the search to see every item.' : 'Add the first item to start filling this collection.'}</p>
+      <h3 className="cms-empty-title">
+        {searching
+          ? translate('cmsRemote.view.emptyNoMatch', { query: props.query.trim() })
+          : translate('cmsRemote.view.emptyNone', { collection: props.title.toLocaleLowerCase(locale) })}
+      </h3>
+      <p>{translate(searching ? 'cmsRemote.view.emptySearchBody' : 'cmsRemote.view.emptyFirstBody')}</p>
       <div className="cms-empty-action">
         {searching ? (
-          <button onClick={props.onClear}>Clear search</button>
+          <button onClick={props.onClear}>{translate('cmsRemote.view.clearSearch')}</button>
         ) : (
           <button className="primary" onClick={props.onCreate}>
-            <PlusIcon size={12} /> New item
+            <PlusIcon size={12} /> {translate('cmsRemote.view.newItem')}
           </button>
         )}
       </div>
@@ -401,16 +440,18 @@ function EmptyTable(props: { readonly title: string; readonly query: string; rea
 // A row's preview, status and date.
 function RowCells(props: { readonly item: RemoteDocumentSummary; readonly icon: string | undefined; readonly shape: TableShape; readonly pictures: boolean }) {
   const { item, shape } = props;
+  const translate = useTranslate();
+  const format = useFormat();
   return (
     <>
       <ItemPreview item={item} icon={props.icon} pictures={props.pictures} />
-      {!shape.files && <span className={`remote-cms-status is-${item.status}`}>{STATUS_LABELS[item.status]}</span>}
+      {!shape.files && <span className={`remote-cms-status is-${item.status}`}>{translate(STATUS_KEYS[item.status])}</span>}
       {shape.columns.map((column) => (
         <span key={column.name} className="remote-cms-cell">
-          {cellText(item.cells?.[column.name])}
+          {cellText(item.cells?.[column.name], { translate, format })}
         </span>
       ))}
-      <span className="remote-cms-date">{shortDate(item.updatedAt)}</span>
+      <span className="remote-cms-date">{shortDate(item.updatedAt, format)}</span>
       {/* Under the header's pin, so every row has the same columns. */}
       <span />
     </>
@@ -433,6 +474,7 @@ function ItemColumn(props: {
   readonly onCreate: () => void;
   readonly onClose: () => void;
 }) {
+  const translate = useTranslate();
   const pictures = (props.list?.documents ?? []).some(hasPicture);
   // Built from the table's own parts — its header, its Name row, its rows — so
   // opening an item leaves every name where it was, only narrower.
@@ -440,17 +482,17 @@ function ItemColumn(props: {
     <div className="cms-items remote-cms-column">
       <div className="cms-detail-head remote-cms-toolbar">
         {/* Shown only where the collections list gives way to this one (remoteCms.css). */}
-        <button className="ghost remote-cms-collections-back" title="All collections" onClick={props.onClose}>
+        <button className="ghost remote-cms-collections-back" title={translate('cmsRemote.collection.allCollections')} onClick={props.onClose}>
           <ChevronLeftIcon size={13} />
         </button>
         <span className="cms-detail-title">{labelize(props.selection.collection)}</span>
-        <button className="ghost" title="New item" onClick={props.onCreate}>
+        <button className="ghost" title={translate('cmsRemote.view.newItem')} onClick={props.onCreate}>
           <PlusIcon size={14} />
         </button>
       </div>
       <div className="remote-cms-table" role="table">
         <div className="remote-cms-row remote-cms-row-head" role="row">
-          <span>Name</span>
+          <span>{translate('cmsRemote.view.columnName')}</span>
         </div>
         {(props.list?.documents ?? []).map((item) => (
           <div
@@ -505,6 +547,7 @@ function ItemPreview(props: {
 
 function tableClass(table: TableShape): string {
   const files = table.files ? 'is-files' : '';
+  // i18n-ignore: CSS class names.
   return `remote-cms-table has-grid ${files} ${table.lead ? 'has-lead' : ''}`;
 }
 
@@ -527,6 +570,7 @@ async function move(
     readonly from: number;
     readonly to: number;
     readonly setError: (message: string | undefined) => void;
+    readonly translateDescribed: DescribedTranslator;
   },
 ) {
   const { documents } = context.list;
@@ -544,7 +588,7 @@ async function move(
     after: rest[at - 1]?.id,
     before: rest[at]?.id,
   });
-  context.setError(moved.ok ? undefined : moved.message);
+  context.setError(moved.ok ? undefined : context.translateDescribed(moved));
   context.onMoved(moved.ok ? moved.value : context.list);
 }
 
@@ -554,21 +598,19 @@ async function deleteChosen(
     readonly ids: readonly string[];
     readonly reload: () => void;
     readonly onMoved: (list: RemoteDocumentList) => void;
+    readonly translate: Translator;
+    readonly translateDescribed: DescribedTranslator;
   },
 ): Promise<string | undefined> {
+  const { translate } = context;
   const names = context.list.documents.filter((item) => context.ids.includes(item.id));
   const confirmed = await confirmDialog({
-    title: names.length === 1 ? `Delete “${names[0]?.title}”?` : `Delete ${names.length} items?`,
-    body:
-      `${names
-        .slice(0, 5)
-        .map((item) => item.title)
-        .join(', ')}` +
-      `${names.length > 5 ? ' and more' : ''} will be deleted ` +
-      (isAstroContent(context.selection.connection)
-        ? `from the project. ${entryDeletionMessage}`
-        : `from ${context.selection.connection.label}, published and draft. ` + 'Sanity keeps their history.'),
-    confirmLabel: 'Delete',
+    title:
+      names.length === 1
+        ? translate('cmsRemote.delete.title', { title: names[0]?.title ?? '' })
+        : translate('cmsRemote.delete.titleMany', { count: names.length }),
+    body: deletionBody(names, context.selection.connection, translate),
+    confirmLabel: translate('cmsRemote.delete.action'),
     danger: true,
   });
   if (!confirmed || names.length === 0) {
@@ -585,7 +627,21 @@ async function deleteChosen(
     names.map((item) => item.id),
   );
   context.reload();
-  return deleted.ok ? undefined : deleted.message;
+  return deleted.ok ? undefined : context.translateDescribed(deleted);
+}
+
+// What deleting says it does: the first five titles, "and more" past them, and where they go.
+function deletionBody(names: readonly RemoteDocumentSummary[], connection: RemoteCmsSelection['connection'], translate: Translator): string {
+  const titles = names
+    .slice(0, 5)
+    .map((item) => item.title)
+    .join(', ');
+  const more = names.length > 5;
+  if (isAstroContent(connection)) {
+    const note = translate('cmsRemote.delete.filesToTrash');
+    return translate(more ? 'cmsRemote.delete.bodyProjectMore' : 'cmsRemote.delete.bodyProject', { titles, note });
+  }
+  return translate(more ? 'cmsRemote.delete.bodyCmsMore' : 'cmsRemote.delete.bodyCms', { titles, connection: connection.label });
 }
 
 function matching(items: readonly RemoteDocumentSummary[], query: string): readonly RemoteDocumentSummary[] {
@@ -601,7 +657,7 @@ function toggled(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
   return next;
 }
 
-function shortDate(iso: string): string {
+function shortDate(iso: string, format: Formatters): string {
   const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return Number.isNaN(date.getTime()) ? '' : format.formatDate(date, { month: 'short', day: 'numeric', year: 'numeric' });
 }

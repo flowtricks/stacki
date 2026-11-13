@@ -22,6 +22,7 @@ import type { Attr } from '../../../shared/page/pageNodeTypes';
 import { CodeAccess } from '../../ui/CodeAccess';
 import { BracesIcon, DropletIcon, FieldSwitchIcon, TextIcon } from '../../ui/Icons';
 import { CmsColorInput } from './CmsColorInput';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { CSS_COLOR } from './cmsSchema';
 import PropField from '../props/PropField';
 import PropTip from '../props/PropTip';
@@ -109,6 +110,7 @@ function CmsColorField(props: {
   readonly value: string;
   readonly onChange: (value: CmsScalar | undefined) => void;
 }) {
+  const translate = useTranslate();
   const [plain, setPlain] = useState(false);
   const change = (next: string) => props.onChange(next === '' ? undefined : next);
   return (
@@ -117,7 +119,7 @@ function CmsColorField(props: {
       help={props.help}
       icon={<DropletIcon size={12} />}
       set={props.value !== ''}
-      plain={{ on: plain, onToggle: () => setPlain(!plain), control: 'colour picker' }}
+      plain={{ on: plain, onToggle: () => setPlain(!plain), useTitle: translate('cms.prop.useColourPicker') }}
     >
       {plain ? (
         <input value={props.value} onChange={(event) => change(event.target.value)} />
@@ -160,10 +162,11 @@ function looksLikeColor(name: string, text: string | undefined): boolean {
 
 /** An on/off switch: the knob slides, and the word beside it says which. */
 export function CmsToggle(props: { readonly on: boolean; readonly onChange: (on: boolean) => void }) {
+  const translate = useTranslate();
   return (
     <button type="button" role="switch" aria-checked={props.on} className={`cms-toggle ${props.on ? 'on' : ''}`} onClick={() => props.onChange(!props.on)}>
       <span className="cms-toggle-knob" />
-      <span className="cms-toggle-label">{props.on ? 'On' : 'Off'}</span>
+      <span className="cms-toggle-label">{props.on ? translate('cms.toggle.on') : translate('cms.toggle.off')}</span>
     </button>
   );
 }
@@ -179,11 +182,13 @@ export function CmsFieldFrame(props: {
   readonly plain?: {
     readonly on: boolean;
     readonly onToggle: () => void;
-    readonly control: string;
+    /** The tooltip while `{}` is on: what the field's own control is, so it can be switched back to. */
+    readonly useTitle: string;
   };
   readonly children: ReactNode;
 }) {
   const { plain } = props;
+  const translate = useTranslate();
   return (
     <div className="props-field">
       <label onClick={(event) => event.preventDefault()}>
@@ -196,7 +201,7 @@ export function CmsFieldFrame(props: {
           <button
             type="button"
             className={`prop-expr-toggle${plain.on ? ' on' : ''}`}
-            title={plain.on ? `Use the ${plain.control}` : 'Type any value'}
+            title={plain.on ? plain.useTitle : translate('cms.prop.typeAny')}
             aria-pressed={plain.on}
             onClick={plain.onToggle}
           >

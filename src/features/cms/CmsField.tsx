@@ -20,6 +20,7 @@ import { CmsListField } from './CmsListField';
 import { CmsFieldFrame, CmsPropField, type CmsScalar, type CmsScalarKind } from './CmsPropField';
 import { FIELD_TYPES } from './cmsFieldTypes';
 import { CmsColorInput } from './CmsColorInput';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export interface CmsFieldContext {
   readonly projectPath: string;
@@ -184,12 +185,13 @@ function fieldText(value: unknown): string {
 }
 type ScalarProps = Pick<ValueProps, 'value' | 'onChange'>;
 function CodeField({ value, onChange }: ScalarProps) {
+  const translate = useTranslate();
   const text = isExpr(value) ? value[EXPR_KEY] : fieldText(value);
   return (
     <ExprInput
       value={text}
       syncValue={text}
-      placeholder="expression"
+      placeholder={translate('cms.field.expression')}
       onCommit={(next) => {
         if (next.trim() !== text.trim()) {
           onChange({ [EXPR_KEY]: next.trim() });
@@ -199,10 +201,11 @@ function CodeField({ value, onChange }: ScalarProps) {
   );
 }
 function ToggleField({ value, onChange }: ScalarProps) {
+  const translate = useTranslate();
   return (
     <button type="button" className={`cms-toggle ${value ? 'on' : ''}`} onClick={() => onChange(!value)}>
       <span className="cms-toggle-knob" />
-      <span className="cms-toggle-label">{value ? 'On' : 'Off'}</span>
+      <span className="cms-toggle-label">{value ? translate('cms.toggle.on') : translate('cms.toggle.off')}</span>
     </button>
   );
 }
@@ -261,13 +264,15 @@ function AddressField({
       type={type === 'link' ? 'url' : type === 'email' ? 'email' : 'tel'}
       value={fieldText(value)}
       maxLength={BOUNDARY_LIMITS.textLengthMax}
+      // i18n-ignore: example addresses are literal URL and email syntax, not words.
       placeholder={type === 'link' ? 'https://' : type === 'email' ? 'name@site.com' : ''}
       onChange={(event) => onChange(event.target.value)}
     />
   );
 }
 function ColorField({ value, onChange }: ScalarProps) {
-  return <CmsColorInput value={fieldText(value)} label="colour" onChange={onChange} />;
+  const translate = useTranslate();
+  return <CmsColorInput value={fieldText(value)} label={translate('cms.color.name')} onChange={onChange} />;
 }
 // Plain text and numbers are options to drag, rename and delete; a list holding
 // rich text or dates keeps the editors those values need.
@@ -279,6 +284,7 @@ function ListField(props: ListProps) {
   return rich ? <ListEditor {...props} /> : <CmsListField {...props} />;
 }
 function ListEditor({ value, onChange }: ListProps) {
+  const translate = useTranslate();
   assert(value.length <= BOUNDARY_LIMITS.itemsMax, 'CMS list: item limit exceeded');
   return (
     <div className="cms-list">
@@ -296,7 +302,7 @@ function ListEditor({ value, onChange }: ListProps) {
               onChange(value.map((item, position) => (position === index ? next : item)));
             }}
           />
-          <button className="ghost" title="Remove" onClick={() => onChange(value.filter((_, position) => position !== index))}>
+          <button className="ghost" title={translate('ui.remove')} onClick={() => onChange(value.filter((_, position) => position !== index))}>
             <CloseIcon size={10} />
           </button>
         </div>
@@ -308,7 +314,7 @@ function ListEditor({ value, onChange }: ListProps) {
           onChange([...value, '']);
         }}
       >
-        <PlusIcon size={11} /> Add
+        <PlusIcon size={11} /> {translate('cms.add')}
       </button>
     </div>
   );
@@ -323,6 +329,7 @@ function ListValue({ value, onChange }: { readonly value: string; readonly onCha
   return <input value={value} maxLength={BOUNDARY_LIMITS.textLengthMax} onChange={(event) => onChange(event.target.value)} />;
 }
 function GroupEditor({ value, onChange, ...context }: GroupProps) {
+  const translate = useTranslate();
   const fields = contentFieldsOf([value]);
   return (
     <div className="cms-group-box">
@@ -336,7 +343,7 @@ function GroupEditor({ value, onChange, ...context }: GroupProps) {
           onChange={(next) => onChange({ ...value, [field.key]: next })}
         />
       ))}
-      {fields.length === 0 && <div className="cms-empty-inline">Empty group.</div>}
+      {fields.length === 0 && <div className="cms-empty-inline">{translate('cms.field.emptyGroup')}</div>}
     </div>
   );
 }
@@ -388,6 +395,7 @@ function useRepeater({ value, onChange }: RepeaterProps) {
   return { openIndex, setOpenIndex, removeAt, add, reorder };
 }
 function RepeaterEditor(props: RepeaterProps) {
+  const translate = useTranslate();
   const { value, onChange, ...context } = props;
   const { openIndex, setOpenIndex, removeAt, add, reorder } = useRepeater(props);
   return (
@@ -397,10 +405,10 @@ function RepeaterEditor(props: RepeaterProps) {
           <span className="cms-repeat-grip">
             <DragIcon size={11} />
           </span>
-          <span className="cms-repeat-title">{titleOf(entry, index)}</span>
+          <span className="cms-repeat-title">{titleOf(entry, index, translate)}</span>
           <button
             className="ghost"
-            title="Remove"
+            title={translate('ui.remove')}
             onClick={(event) => {
               event.stopPropagation();
               removeAt(index);
@@ -412,13 +420,13 @@ function RepeaterEditor(props: RepeaterProps) {
         </div>
       ))}
       <button className="cms-add" onClick={add}>
-        <PlusIcon size={11} /> Add item
+        <PlusIcon size={11} /> {translate('cms.addItem')}
       </button>
       {openIndex !== undefined && value[openIndex] !== undefined && (
         <NestedItemDialog
           {...context}
           entry={value[openIndex]}
-          title={titleOf(value[openIndex], openIndex)}
+          title={titleOf(value[openIndex], openIndex, translate)}
           onChange={(next) => onChange(value.map((entry, index) => (index === openIndex ? next : entry)))}
           onDelete={() => removeAt(openIndex)}
           onClose={() => setOpenIndex(undefined)}
@@ -428,6 +436,7 @@ function RepeaterEditor(props: RepeaterProps) {
   );
 }
 function NestedItemDialog({ entry, title, onChange, onDelete, onClose, ...context }: DialogProps) {
+  const translate = useTranslate();
   const value = toRecord(entry) ?? {};
   const fields = contentFieldsOf([entry]);
   return (
@@ -436,7 +445,7 @@ function NestedItemDialog({ entry, title, onChange, onDelete, onClose, ...contex
         <>
           <div className="modal-header cms-modal-header">
             <span>{title}</span>
-            <button className="ghost" title="Close" onClick={close}>
+            <button className="ghost" title={translate('ui.close')} onClick={close}>
               <CloseIcon size={12} />
             </button>
           </div>
@@ -451,14 +460,14 @@ function NestedItemDialog({ entry, title, onChange, onDelete, onClose, ...contex
                 onChange={(next) => onChange({ ...value, [field.key]: next })}
               />
             ))}
-            {fields.length === 0 && <div className="cms-empty-inline">These items have no fields yet — add them in the collection's settings.</div>}
+            {fields.length === 0 && <div className="cms-empty-inline">{translate('cms.field.noFields')}</div>}
           </div>
           <div className="modal-footer cms-modal-footer">
             <button className="ghost danger cms-delete-action" onClick={onDelete}>
-              <TrashIcon size={12} /> Delete
+              <TrashIcon size={12} /> {translate('cms.delete')}
             </button>
             <button className="primary" onClick={close}>
-              Done
+              {translate('cms.settings.done')}
             </button>
           </div>
         </>

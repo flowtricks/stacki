@@ -5,6 +5,8 @@ import type { RemoteCache } from './remoteCmsCache';
 import { AstroIcon, CmsIcon, PayloadIcon, SanityIcon } from '../../ui/Icons';
 import type { CmsSource } from '../../../shared/properties/astroContent';
 import type { RemoteResult } from '../../../shared/properties/cmsRemote';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { SkeletonRows } from '../../ui/Skeleton';
 
 /** The connected-CMS collection open in the main view, and the item in it, if one is open. */
 export interface RemoteCmsSelection {
@@ -69,15 +71,20 @@ export function Loading<T>(props: {
   readonly retry: () => void;
   readonly children: (value: T) => React.ReactNode;
 }) {
+  const translate = useTranslate();
   if (props.result === undefined) {
-    return <p className="remote-cms-note">Loading…</p>;
+    return (
+      <div className="remote-cms-note">
+        <SkeletonRows count={4} />
+      </div>
+    );
   }
   if (!props.result.ok) {
     return (
       <div className="remote-cms-note">
         <p className="remote-cms-failure">{props.result.message}</p>
         <button type="button" onClick={props.retry}>
-          Try again
+          {translate('cmsRemote.common.tryAgain')}
         </button>
       </div>
     );

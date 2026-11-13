@@ -6,11 +6,13 @@
 // collection stays highlighted here.
 import { useEffect, useState } from 'react';
 import { cmsTransport } from '../../ipc/editorEnvironment';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import './remoteCms.css';
 import { AstroIcon, ChevronLeftIcon, ChevronRightIcon, CmsIcon, GearIcon, PlusIcon } from '../../ui/Icons';
 import { SanityTypeIcon } from './SanityTypeIcon';
 import { createContentCollection, remoteCollections, remoteDocuments } from '../../ipc/remoteSource';
-import { ASTRO_CONTENT_SOURCE, isAstroContent, type CmsSource } from '../../../shared/properties/astroContent';
+import { isAstroContent, type CmsSource } from '../../../shared/properties/astroContent';
 import type { RemoteCollection, RemoteStatus } from '../../../shared/properties/cmsRemote';
 import { labelize } from './cmsSchema';
 import { ConnectionLogo, Loading, useRemote, type RemoteCmsSelection } from './remoteCmsShared';
@@ -114,20 +116,21 @@ function BrowserHeader(props: {
   readonly onCreate: (() => void) | undefined;
 }) {
   const { connection } = props;
+  const translate = useTranslate();
   return (
     <div className="panel-header">
       <div className="cms-crumb">
-        <button className="ghost" title="All collections" onClick={props.onBack}>
+        <button className="ghost" title={translate('cmsRemote.collection.allCollections')} onClick={props.onBack}>
           <ChevronLeftIcon size={14} />
         </button>
         <span className="remote-cms-logo">
           <ConnectionLogo kind={connection.kind} />
         </span>
         {/* The CMS's name, as its row in the panel shows it; the dataset's is the tooltip. */}
-        <h2 title={connection.label}>{SOURCE_NAMES[connection.kind]}</h2>
+        <h2 title={connection.label}>{sourceName(connection, translate)}</h2>
       </div>
       {props.onCreate && (
-        <button className="ghost" title="New collection" onClick={props.onCreate}>
+        <button className="ghost" title={translate('cmsRemote.collection.new')} onClick={props.onCreate}>
           <PlusIcon size={14} />
         </button>
       )}
@@ -144,6 +147,7 @@ function CollectionList(props: {
   /** Opens a content collection's settings; a CMS's schema is its own code. */
   readonly onSettings: (collection: RemoteCollection) => void;
 }) {
+  const translate = useTranslate();
   return props.collections.map((collection) => (
     <div
       key={collection.name}
@@ -154,7 +158,7 @@ function CollectionList(props: {
       {/* One label: the name gives way (cut short) before its count does. */}
       <span className="cms-collection-label">
         <span className="cms-collection-name">{labelize(collection.name)}</span>
-        <span className="cms-collection-count">{collection.count === 1 ? '1 item' : `${collection.count} items`}</span>
+        <span className="cms-collection-count">{translate('cmsRemote.collection.itemCount', { count: collection.count })}</span>
       </span>
       <span className="cms-collection-chevron">
         <ChevronRightIcon size={10} />
@@ -164,7 +168,7 @@ function CollectionList(props: {
         <button
           type="button"
           className="ghost cms-collection-settings"
-          title="Collection settings"
+          title={translate('cmsRemote.collection.settings')}
           onClick={(event) => {
             event.stopPropagation();
             props.onSettings(collection);
@@ -184,6 +188,8 @@ function CreateCollectionRow(props: {
   readonly onCreated: (collection: RemoteCollection) => void;
   readonly onCancel: () => void;
 }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
@@ -198,7 +204,7 @@ function CreateCollectionRow(props: {
     if (made.ok) {
       props.onCreated(made.value);
     } else {
-      setFailure(made.message);
+      setFailure(translateDescribed(made));
     }
   };
   return (
@@ -209,7 +215,7 @@ function CreateCollectionRow(props: {
           autoFocus
           value={name}
           disabled={busy}
-          placeholder="Collection name"
+          placeholder={translate('cmsRemote.collection.name')}
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
@@ -226,31 +232,46 @@ function CreateCollectionRow(props: {
 }
 
 function EmptyContent(props: { readonly onCreate: () => void }) {
+  const translate = useTranslate();
   return (
     <div className="props-empty">
       <div className="cms-empty-icon" aria-hidden="true">
         <AstroIcon size={24} />
       </div>
-      <h3 className="cms-empty-title">No content collections yet.</h3>
-      <p>A collection keeps entries as Markdown files in src/content, typed by a schema.</p>
+      <h3 className="cms-empty-title">{translate('cmsRemote.collection.noneTitle')}</h3>
+      <p>{translate('cmsRemote.collection.noneBody')}</p>
       <div className="cms-empty-action">
         <button className="primary" onClick={props.onCreate}>
-          New collection
+          {translate('cmsRemote.collection.new')}
         </button>
       </div>
     </div>
   );
 }
 
-const SOURCE_NAMES: Readonly<Record<CmsSource['kind'], string>> = {
-  sanity: 'Sanity',
-  payload: 'Payload',
-  custom: 'Custom CMS',
-  astro: ASTRO_CONTENT_SOURCE.label,
-};
+// The CMS's name as its row shows it: product names stay as they are, a custom CMS is named in the person's language.
+function sourceName(connection: CmsSource, translate: Translator): string {
+  switch (connection.kind) {
+    case 'sanity':
+      // i18n-ignore: Sanity is a product name.
+      return 'Sanity';
+    case 'payload':
+      // i18n-ignore: Payload is a product name.
+      return 'Payload';
+    case 'custom':
+      return translate('cmsRemote.source.custom');
+    case 'astro':
+      return translate('cmsRemote.source.astro');
+    default: {
+      const exhaustive: never = connection;
+      return exhaustive;
+    }
+  }
+}
 
-export const STATUS_LABELS: Readonly<Record<RemoteStatus, string>> = {
-  draft: 'Draft',
-  changed: 'Edited',
-  published: 'Published',
+/** The key of each document status's name; translated where it is drawn. */
+export const STATUS_KEYS: Readonly<Record<RemoteStatus, MessageKey>> = {
+  draft: 'cmsRemote.status.draft',
+  changed: 'cmsRemote.status.changed',
+  published: 'cmsRemote.status.published',
 };

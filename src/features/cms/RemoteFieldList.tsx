@@ -15,6 +15,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import type { RemoteDocument, RemoteDocumentField, RemoteFieldGroup } from '../../../shared/properties/cmsRemote';
 import type { RemoteValue } from '../../../shared/properties/cmsRemoteSchema';
 import { assert } from '../../../shared/core/assert';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { SyncIcon } from '../../ui/Icons';
 import { RemoteFieldInput } from './RemoteFieldInput';
 import type { RemoteEditContext } from './RemoteValueEditor';
@@ -46,6 +47,7 @@ function DocumentFields(props: {
   readonly onSave: (field: RemoteDocumentField, value: RemoteValue | undefined) => void;
 }) {
   const { document, tab } = props;
+  const translate = useTranslate();
   const pair = slugPairOf(document.fields);
   const sync = useSlugSync(document, pair);
   const fields = tab === ALL_FIELDS ? document.fields : document.fields.filter((field) => field.groups?.includes(tab) === true);
@@ -71,7 +73,7 @@ function DocumentFields(props: {
           type="button"
           className={`remote-cms-sync${sync.on ? ' on' : ''}`}
           aria-pressed={sync.on}
-          title={sync.on ? 'Slug follows the name: click to edit it by hand' : 'Keep in step'}
+          title={translate(sync.on ? 'cmsRemote.fieldList.syncOn' : 'cmsRemote.fieldList.syncOff')}
           onClick={sync.toggle}
         >
           <SyncIcon size={12} />
@@ -105,7 +107,9 @@ interface TabPlace {
 }
 
 function FieldGroupTabs(props: { readonly fieldGroups: readonly RemoteFieldGroup[]; readonly tab: string; readonly onTab: (tab: string) => void }) {
-  const tabs = [{ name: ALL_FIELDS, title: 'All fields' }, ...props.fieldGroups];
+  const translate = useTranslate();
+  // The groups' titles are the schema's own; only the tab that shows every field is ours.
+  const tabs = [{ name: ALL_FIELDS, title: translate('cmsRemote.fieldList.allFields') }, ...props.fieldGroups];
   const list = useRef<HTMLDivElement>(null);
   const [place, setPlace] = useState<TabPlace | undefined>(undefined);
   // Measured after layout, and again whenever the list resizes and its tabs

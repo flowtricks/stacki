@@ -4,6 +4,8 @@ import { writeCms } from './cmsBridge';
 import { assert } from '../../../shared/core/assert';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 import { createCoalescedRun } from '../../lib/coalescedRun';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 export interface CmsUndo {
   readonly label: string;
@@ -18,6 +20,8 @@ interface WriterOptions {
   readonly refresh: () => Promise<void>;
   readonly saved: () => void;
   readonly record: (command: CmsUndo) => void;
+  /** Words the undo label in the person's language; read when the label is made, so a language change applies at once. */
+  readonly translate?: Translator | undefined;
 }
 type Snapshot =
   | { readonly kind: 'empty' }
@@ -116,7 +120,7 @@ class CmsWriter {
   }
   private record(before: unknown, after: unknown): void {
     this.options.record({
-      label: 'content edit',
+      label: (this.options.translate ?? ENGLISH_TRANSLATE)('cms.undo.edit'),
       coalesceKey: `cms:${this.options.rel}`,
       undo: () => this.restore(before, after),
       redo: () => this.restore(after, before),

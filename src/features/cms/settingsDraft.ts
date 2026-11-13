@@ -7,9 +7,10 @@
 // halfway. A field's form works out here what it would change, so the form can
 // say what is wrong beside the field and Save can take a form still open.
 import { assert } from '../../../shared/core/assert';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 import {
   COLLECTION_SETTINGS_LIMITS,
-  fieldNameRefusal,
+  fieldNameProblem,
   pointsAtCollection,
   typedFieldName,
   type CollectionSettings,
@@ -19,7 +20,7 @@ import {
   type SettingsField,
 } from '../../../shared/properties/collectionSettings';
 
-export type DraftResult = { readonly ok: true; readonly value: CollectionSettings } | { readonly ok: false; readonly message: string };
+export type DraftResult = { readonly ok: true; readonly value: CollectionSettings } | ({ readonly ok: false } & Described);
 
 /**
  * What an open field form would save as it stands. `blank` is a new field with
@@ -27,7 +28,7 @@ export type DraftResult = { readonly ok: true; readonly value: CollectionSetting
  * message; `ready` holds the changes, none when an open field is unchanged.
  */
 export type FieldFormState =
-  { readonly kind: 'blank' } | { readonly kind: 'invalid'; readonly message: string } | { readonly kind: 'ready'; readonly changes: readonly SettingsChange[] };
+  { readonly kind: 'blank' } | ({ readonly kind: 'invalid' } & Described) | { readonly kind: 'ready'; readonly changes: readonly SettingsChange[] };
 
 /** The form of a field being added, with `draft.name` as typed. */
 export function newFieldFormState(
@@ -43,10 +44,10 @@ export function newFieldFormState(
       return typed;
     case 'key':
       if (settings.fields.some((field) => field.name === typed.key)) {
-        return { kind: 'invalid', message: `A field named ${typed.key} already exists.` };
+        return { kind: 'invalid', ...described('cms.draft.fieldExists', { name: typed.key }) };
       }
       if (pointing && form.target === '') {
-        return { kind: 'invalid', message: 'Choose the collection the field refers to.' };
+        return { kind: 'invalid', ...described('cms.draft.chooseTarget') };
       }
       return {
         kind: 'ready',
@@ -68,13 +69,13 @@ export function openFieldFormState(settings: CollectionSettings, field: Settings
   switch (typed.kind) {
     case 'blank':
       // An existing field cannot go without a name, so here blank is a mistake.
-      return { kind: 'invalid', message: 'Name the field.' };
+      return { kind: 'invalid', ...described('cms.draft.nameField') };
     case 'invalid':
       return typed;
     case 'key': {
       const name = typed.key;
       if (name !== field.name && settings.fields.some((each) => each.name === name)) {
-        return { kind: 'invalid', message: `A field named ${name} already exists.` };
+        return { kind: 'invalid', ...described('cms.draft.fieldExists', { name }) };
       }
       const renames: readonly SettingsChange[] = name === field.name ? [] : [{ kind: 'renameField', from: field.name, to: name }];
       const update = fieldSettingsOf(draft);
@@ -146,20 +147,20 @@ export function applyDraft(settings: CollectionSettings, change: SettingsChange)
     case 'reorder': {
       const ordered = change.order.flatMap((name) => fields.filter((field) => field.name === name));
       if (ordered.length !== fields.length) {
-        return { ok: false, message: 'The fields changed since they were listed.' };
+        return { ok: false, ...described('cms.draft.fieldsChanged') };
       }
       return { ok: true, value: { ...settings, fields: ordered } };
     }
     case 'renameField': {
-      const refusal = fieldNameRefusal(change.to);
+      const refusal = fieldNameProblem(change.to);
       if (refusal !== undefined) {
-        return { ok: false, message: refusal };
+        return { ok: false, ...refusal };
       }
       if (!has(change.from)) {
-        return { ok: false, message: `There is no field ${change.from}.` };
+        return { ok: false, ...described('cms.draft.noField', { name: change.from }) };
       }
       if (has(change.to)) {
-        return { ok: false, message: `A field named ${change.to} already exists.` };
+        return { ok: false, ...described('cms.draft.fieldExists', { name: change.to }) };
       }
       return withFields(
         settings,
@@ -169,7 +170,7 @@ export function applyDraft(settings: CollectionSettings, change: SettingsChange)
     case 'updateField': {
       const { update } = change;
       if (!has(update.name)) {
-        return { ok: false, message: `There is no field ${update.name}.` };
+        return { ok: false, ...described('cms.draft.noField', { name: update.name }) };
       }
       return withFields(
         settings,
@@ -177,12 +178,12 @@ export function applyDraft(settings: CollectionSettings, change: SettingsChange)
       );
     }
     case 'addField': {
-      const refusal = fieldNameRefusal(change.name);
+      const refusal = fieldNameProblem(change.name);
       if (refusal !== undefined) {
-        return { ok: false, message: refusal };
+        return { ok: false, ...refusal };
       }
       if (has(change.name)) {
-        return { ok: false, message: `A field named ${change.name} already exists.` };
+        return { ok: false, ...described('cms.draft.fieldExists', { name: change.name }) };
       }
       return withFields(settings, [...fields, newField(change)]);
     }
@@ -200,7 +201,7 @@ export function applyDraft(settings: CollectionSettings, change: SettingsChange)
 
 function withFields(settings: CollectionSettings, fields: readonly SettingsField[]): DraftResult {
   if (fields.length > COLLECTION_SETTINGS_LIMITS.fieldsMax) {
-    return { ok: false, message: 'A collection holds at most 200 fields.' };
+    return { ok: false, ...described('cms.draft.fieldsMax', { count: COLLECTION_SETTINGS_LIMITS.fieldsMax }) };
   }
   assert(new Set(fields.map((field) => field.name)).size === fields.length, 'Field names stay unique');
   return { ok: true, value: { ...settings, fields } };

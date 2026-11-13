@@ -1,0 +1,2196 @@
+{
+ "data": {
+  "__schema": {
+   "queryType": {
+    "fields": [
+     {
+      "name": "User",
+      "type": {
+       "name": "User",
+       "kind": "OBJECT",
+       "ofType": null
+      }
+     },
+     {
+      "name": "Users",
+      "type": {
+       "name": "Users",
+       "kind": "OBJECT",
+       "ofType": null
+      }
+     },
+     {
+      "name": "Media",
+      "type": {
+       "name": "Media",
+       "kind": "OBJECT",
+       "ofType": null
+      }
+     },
+     {
+      "name": "allMedia",
+      "type": {
+       "name": "allMedia",
+       "kind": "OBJECT",
+       "ofType": null
+      }
+     },
+     {
+      "name": "Category",
+      "type": {
+       "name": "Category",
+       "kind": "OBJECT",
+       "ofType": null
+      }
+     },
+     {
+      "name": "Categories",
+      "type": {
+       "name": "Categories",
+       "kind": "OBJECT",
+       "ofType": null
+      }
+     },
+     {
+      "name": "Post",
+      "type": {
+       "name": "Post",
+       "kind": "OBJECT",
+       "ofType": null
+      }
+     },
+     {
+      "name": "Posts",
+      "type": {
+       "name": "Posts",
+       "kind": "OBJECT",
+       "ofType": null
+      }
+     },
+     {
+      "name": "Page",
+      "type": {
+       "name": "Page",
+       "kind": "OBJECT",
+       "ofType": null
+      }
+     },
+     {
+      "name": "Pages",
+      "type": {
+       "name": "Pages",
+       "kind": "OBJECT",
+       "ofType": null
+      }
+     }
+    ]
+   },
+   "types": [
+    {
+     "name": "Query",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "User",
+       "type": {
+        "kind": "OBJECT",
+        "name": "User",
+        "ofType": null
+       }
+      },
+      {
+       "name": "Users",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Users",
+        "ofType": null
+       }
+      },
+      {
+       "name": "countUsers",
+       "type": {
+        "kind": "OBJECT",
+        "name": "countUsers",
+        "ofType": null
+       }
+      },
+      {
+       "name": "docAccessUser",
+       "type": {
+        "kind": "OBJECT",
+        "name": "usersDocAccess",
+        "ofType": null
+       }
+      },
+      {
+       "name": "meUser",
+       "type": {
+        "kind": "OBJECT",
+        "name": "usersMe",
+        "ofType": null
+       }
+      },
+      {
+       "name": "initializedUser",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Boolean",
+        "ofType": null
+       }
+      },
+      {
+       "name": "Media",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Media",
+        "ofType": null
+       }
+      },
+      {
+       "name": "allMedia",
+       "type": {
+        "kind": "OBJECT",
+        "name": "allMedia",
+        "ofType": null
+       }
+      },
+      {
+       "name": "countallMedia",
+       "type": {
+        "kind": "OBJECT",
+        "name": "countallMedia",
+        "ofType": null
+       }
+      },
+      {
+       "name": "docAccessMedia",
+       "type": {
+        "kind": "OBJECT",
+        "name": "mediaDocAccess",
+        "ofType": null
+       }
+      },
+      {
+       "name": "Category",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Category",
+        "ofType": null
+       }
+      },
+      {
+       "name": "Categories",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Categories",
+        "ofType": null
+       }
+      },
+      {
+       "name": "countCategories",
+       "type": {
+        "kind": "OBJECT",
+        "name": "countCategories",
+        "ofType": null
+       }
+      },
+      {
+       "name": "docAccessCategory",
+       "type": {
+        "kind": "OBJECT",
+        "name": "categoriesDocAccess",
+        "ofType": null
+       }
+      },
+      {
+       "name": "Post",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Post",
+        "ofType": null
+       }
+      },
+      {
+       "name": "Posts",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Posts",
+        "ofType": null
+       }
+      },
+      {
+       "name": "countPosts",
+       "type": {
+        "kind": "OBJECT",
+        "name": "countPosts",
+        "ofType": null
+       }
+      },
+      {
+       "name": "docAccessPost",
+       "type": {
+        "kind": "OBJECT",
+        "name": "postsDocAccess",
+        "ofType": null
+       }
+      },
+      {
+       "name": "versionPost",
+       "type": {
+        "kind": "OBJECT",
+        "name": "PostVersion",
+        "ofType": null
+       }
+      },
+      {
+       "name": "versionsPosts",
+       "type": {
+        "kind": "OBJECT",
+        "name": "versionsPosts",
+        "ofType": null
+       }
+      },
+      {
+       "name": "Page",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Page",
+        "ofType": null
+       }
+      },
+      {
+       "name": "Pages",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Pages",
+        "ofType": null
+       }
+      },
+      {
+       "name": "countPages",
+       "type": {
+        "kind": "OBJECT",
+        "name": "countPages",
+        "ofType": null
+       }
+      },
+      {
+       "name": "docAccessPage",
+       "type": {
+        "kind": "OBJECT",
+        "name": "pagesDocAccess",
+        "ofType": null
+       }
+      },
+      {
+       "name": "PayloadKv",
+       "type": {
+        "kind": "OBJECT",
+        "name": "PayloadKv",
+        "ofType": null
+       }
+      },
+      {
+       "name": "PayloadKvs",
+       "type": {
+        "kind": "OBJECT",
+        "name": "PayloadKvs",
+        "ofType": null
+       }
+      },
+      {
+       "name": "countPayloadKvs",
+       "type": {
+        "kind": "OBJECT",
+        "name": "countPayloadKvs",
+        "ofType": null
+       }
+      },
+      {
+       "name": "docAccessPayloadKv",
+       "type": {
+        "kind": "OBJECT",
+        "name": "payload_kvDocAccess",
+        "ofType": null
+       }
+      },
+      {
+       "name": "PayloadLockedDocument",
+       "type": {
+        "kind": "OBJECT",
+        "name": "PayloadLockedDocument",
+        "ofType": null
+       }
+      },
+      {
+       "name": "PayloadLockedDocuments",
+       "type": {
+        "kind": "OBJECT",
+        "name": "PayloadLockedDocuments",
+        "ofType": null
+       }
+      },
+      {
+       "name": "countPayloadLockedDocuments",
+       "type": {
+        "kind": "OBJECT",
+        "name": "countPayloadLockedDocuments",
+        "ofType": null
+       }
+      },
+      {
+       "name": "docAccessPayloadLockedDocument",
+       "type": {
+        "kind": "OBJECT",
+        "name": "payload_locked_documentsDocAccess",
+        "ofType": null
+       }
+      },
+      {
+       "name": "PayloadPreference",
+       "type": {
+        "kind": "OBJECT",
+        "name": "PayloadPreference",
+        "ofType": null
+       }
+      },
+      {
+       "name": "PayloadPreferences",
+       "type": {
+        "kind": "OBJECT",
+        "name": "PayloadPreferences",
+        "ofType": null
+       }
+      },
+      {
+       "name": "countPayloadPreferences",
+       "type": {
+        "kind": "OBJECT",
+        "name": "countPayloadPreferences",
+        "ofType": null
+       }
+      },
+      {
+       "name": "docAccessPayloadPreference",
+       "type": {
+        "kind": "OBJECT",
+        "name": "payload_preferencesDocAccess",
+        "ofType": null
+       }
+      },
+      {
+       "name": "Access",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Access",
+        "ofType": null
+       }
+      }
+     ]
+    },
+    {
+     "name": "User",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "id",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "name",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "updatedAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "createdAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "enableAPIKey",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Boolean",
+        "ofType": null
+       }
+      },
+      {
+       "name": "apiKey",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "apiKeyIndex",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "hasAPIKey",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Boolean",
+        "ofType": null
+       }
+      },
+      {
+       "name": "email",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "EmailAddress",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "resetPasswordToken",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "resetPasswordExpiration",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "salt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "hash",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "resetPasswordRequestedAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "loginAttempts",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Float",
+        "ofType": null
+       }
+      },
+      {
+       "name": "lockUntil",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "sessions",
+       "type": {
+        "kind": "LIST",
+        "name": null,
+        "ofType": {
+         "kind": "NON_NULL",
+         "name": null,
+         "ofType": {
+          "kind": "OBJECT",
+          "name": "User_Sessions",
+          "ofType": null
+         }
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "Int",
+     "kind": "SCALAR",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "String",
+     "kind": "SCALAR",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "DateTime",
+     "kind": "SCALAR",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Boolean",
+     "kind": "SCALAR",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "EmailAddress",
+     "kind": "SCALAR",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Float",
+     "kind": "SCALAR",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "LocaleInputType",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "en"
+      },
+      {
+       "name": "fr"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Users",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "docs",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "LIST",
+         "name": null,
+         "ofType": {
+          "kind": "NON_NULL",
+          "name": null,
+          "ofType": {
+           "kind": "OBJECT",
+           "name": "User",
+           "ofType": null
+          }
+         }
+        }
+       }
+      },
+      {
+       "name": "hasNextPage",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Boolean",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "hasPrevPage",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Boolean",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "limit",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "nextPage",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "offset",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "page",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "pagingCounter",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "prevPage",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "totalDocs",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "totalPages",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "Media",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "id",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "alt",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "String",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "updatedAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "createdAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "url",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "thumbnailURL",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "filename",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "mimeType",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "filesize",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Float",
+        "ofType": null
+       }
+      },
+      {
+       "name": "width",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Float",
+        "ofType": null
+       }
+      },
+      {
+       "name": "height",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Float",
+        "ofType": null
+       }
+      },
+      {
+       "name": "focalX",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Float",
+        "ofType": null
+       }
+      },
+      {
+       "name": "focalY",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Float",
+        "ofType": null
+       }
+      }
+     ]
+    },
+    {
+     "name": "allMedia",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "docs",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "LIST",
+         "name": null,
+         "ofType": {
+          "kind": "NON_NULL",
+          "name": null,
+          "ofType": {
+           "kind": "OBJECT",
+           "name": "Media",
+           "ofType": null
+          }
+         }
+        }
+       }
+      },
+      {
+       "name": "hasNextPage",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Boolean",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "hasPrevPage",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Boolean",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "limit",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "nextPage",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "offset",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "page",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "pagingCounter",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "prevPage",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "totalDocs",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "totalPages",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "Category",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "id",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "title",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "String",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "updatedAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "createdAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      }
+     ]
+    },
+    {
+     "name": "Categories",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "docs",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "LIST",
+         "name": null,
+         "ofType": {
+          "kind": "NON_NULL",
+          "name": null,
+          "ofType": {
+           "kind": "OBJECT",
+           "name": "Category",
+           "ofType": null
+          }
+         }
+        }
+       }
+      },
+      {
+       "name": "hasNextPage",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Boolean",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "hasPrevPage",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Boolean",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "limit",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "nextPage",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "offset",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "page",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "pagingCounter",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "prevPage",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "totalDocs",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "totalPages",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "Post",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "id",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "title",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "slug",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "tagline",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "body",
+       "type": {
+        "kind": "SCALAR",
+        "name": "JSON",
+        "ofType": null
+       }
+      },
+      {
+       "name": "views",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Float",
+        "ofType": null
+       }
+      },
+      {
+       "name": "featured",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Boolean",
+        "ofType": null
+       }
+      },
+      {
+       "name": "kind",
+       "type": {
+        "kind": "ENUM",
+        "name": "Post_kind",
+        "ofType": null
+       }
+      },
+      {
+       "name": "publishedAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "author",
+       "type": {
+        "kind": "OBJECT",
+        "name": "User",
+        "ofType": null
+       }
+      },
+      {
+       "name": "categories",
+       "type": {
+        "kind": "LIST",
+        "name": null,
+        "ofType": {
+         "kind": "NON_NULL",
+         "name": null,
+         "ofType": {
+          "kind": "OBJECT",
+          "name": "Category",
+          "ofType": null
+         }
+        }
+       }
+      },
+      {
+       "name": "cover",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Media",
+        "ofType": null
+       }
+      },
+      {
+       "name": "meta",
+       "type": {
+        "kind": "OBJECT",
+        "name": "Post_Meta",
+        "ofType": null
+       }
+      },
+      {
+       "name": "contact",
+       "type": {
+        "kind": "SCALAR",
+        "name": "EmailAddress",
+        "ofType": null
+       }
+      },
+      {
+       "name": "mode",
+       "type": {
+        "kind": "ENUM",
+        "name": "Post_mode",
+        "ofType": null
+       }
+      },
+      {
+       "name": "snippet",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "extra",
+       "type": {
+        "kind": "SCALAR",
+        "name": "JSON",
+        "ofType": null
+       }
+      },
+      {
+       "name": "where",
+       "type": {
+        "kind": "LIST",
+        "name": null,
+        "ofType": {
+         "kind": "NON_NULL",
+         "name": null,
+         "ofType": {
+          "kind": "SCALAR",
+          "name": "Float",
+          "ofType": null
+         }
+        }
+       }
+      },
+      {
+       "name": "tags",
+       "type": {
+        "kind": "LIST",
+        "name": null,
+        "ofType": {
+         "kind": "NON_NULL",
+         "name": null,
+         "ofType": {
+          "kind": "ENUM",
+          "name": "Post_tags",
+          "ofType": null
+         }
+        }
+       }
+      },
+      {
+       "name": "links",
+       "type": {
+        "kind": "LIST",
+        "name": null,
+        "ofType": {
+         "kind": "NON_NULL",
+         "name": null,
+         "ofType": {
+          "kind": "OBJECT",
+          "name": "Post_Links",
+          "ofType": null
+         }
+        }
+       }
+      },
+      {
+       "name": "updatedAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "createdAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "_status",
+       "type": {
+        "kind": "ENUM",
+        "name": "Post__status",
+        "ofType": null
+       }
+      }
+     ]
+    },
+    {
+     "name": "JSON",
+     "kind": "SCALAR",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_kind",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "news"
+      },
+      {
+       "name": "guide"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_Meta",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "description",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      }
+     ]
+    },
+    {
+     "name": "Post_mode",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "a"
+      },
+      {
+       "name": "b"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_tags",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "x"
+      },
+      {
+       "name": "y"
+      },
+      {
+       "name": "z"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_Links",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "label",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "url",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "id",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      }
+     ]
+    },
+    {
+     "name": "Post__status",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "draft"
+      },
+      {
+       "name": "published"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Posts",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "docs",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "LIST",
+         "name": null,
+         "ofType": {
+          "kind": "NON_NULL",
+          "name": null,
+          "ofType": {
+           "kind": "OBJECT",
+           "name": "Post",
+           "ofType": null
+          }
+         }
+        }
+       }
+      },
+      {
+       "name": "hasNextPage",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Boolean",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "hasPrevPage",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Boolean",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "limit",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "nextPage",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "offset",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "page",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "pagingCounter",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "prevPage",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "totalDocs",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "totalPages",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "Post_where",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_title_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_slug_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_tagline_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_body_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_views_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_featured_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_kind_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_kind_Input",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "news"
+      },
+      {
+       "name": "guide"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_publishedAt_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_author_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_categories_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_cover_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_meta__description_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_contact_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_mode_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_mode_Input",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "a"
+      },
+      {
+       "name": "b"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_snippet_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_extra_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_where_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_tags_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_tags_Input",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "x"
+      },
+      {
+       "name": "y"
+      },
+      {
+       "name": "z"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_links__label_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_links__url_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_links__id_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_updatedAt_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_createdAt_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post__status_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post__status_Input",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "draft"
+      },
+      {
+       "name": "published"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_id_operator",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_where_and",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_where_or",
+     "kind": "INPUT_OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Page",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "id",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "name",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "String",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "slug",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "blurb",
+       "type": {
+        "kind": "SCALAR",
+        "name": "String",
+        "ofType": null
+       }
+      },
+      {
+       "name": "layout",
+       "type": {
+        "kind": "LIST",
+        "name": null,
+        "ofType": {
+         "kind": "NON_NULL",
+         "name": null,
+         "ofType": {
+          "kind": "UNION",
+          "name": "Page_Layout",
+          "ofType": null
+         }
+        }
+       }
+      },
+      {
+       "name": "updatedAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      },
+      {
+       "name": "createdAt",
+       "type": {
+        "kind": "SCALAR",
+        "name": "DateTime",
+        "ofType": null
+       }
+      }
+     ]
+    },
+    {
+     "name": "Page_Layout",
+     "kind": "UNION",
+     "enumValues": null,
+     "possibleTypes": [
+      {
+       "name": "Hero"
+      },
+      {
+       "name": "Cta"
+      }
+     ],
+     "fields": null
+    },
+    {
+     "name": "Pages",
+     "kind": "OBJECT",
+     "enumValues": null,
+     "possibleTypes": null,
+     "fields": [
+      {
+       "name": "docs",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "LIST",
+         "name": null,
+         "ofType": {
+          "kind": "NON_NULL",
+          "name": null,
+          "ofType": {
+           "kind": "OBJECT",
+           "name": "Page",
+           "ofType": null
+          }
+         }
+        }
+       }
+      },
+      {
+       "name": "hasNextPage",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Boolean",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "hasPrevPage",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Boolean",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "limit",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "nextPage",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "offset",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "page",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "pagingCounter",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "prevPage",
+       "type": {
+        "kind": "SCALAR",
+        "name": "Int",
+        "ofType": null
+       }
+      },
+      {
+       "name": "totalDocs",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      },
+      {
+       "name": "totalPages",
+       "type": {
+        "kind": "NON_NULL",
+        "name": null,
+        "ofType": {
+         "kind": "SCALAR",
+         "name": "Int",
+         "ofType": null
+        }
+       }
+      }
+     ]
+    },
+    {
+     "name": "Post_kind_MutationInput",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "news"
+      },
+      {
+       "name": "guide"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post_tags_MutationInput",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "x"
+      },
+      {
+       "name": "y"
+      },
+      {
+       "name": "z"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    },
+    {
+     "name": "Post__status_MutationInput",
+     "kind": "ENUM",
+     "enumValues": [
+      {
+       "name": "draft"
+      },
+      {
+       "name": "published"
+      }
+     ],
+     "possibleTypes": null,
+     "fields": null
+    }
+   ]
+  }
+ }
+}

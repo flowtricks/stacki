@@ -1,0 +1,10 @@
+{
+ "status": 400,
+ "body": {
+  "errors": [
+   {
+    "message": "There was a problem while uploading the file."
+   }
+  ]
+ }
+}
