@@ -10,6 +10,8 @@
 
 import { assert } from '../../../shared/core/assert';
 import { err, ok, type Result } from '../../../shared/core/result';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 // The spec's common types, plus `content` and `style` read as a site editor
 // means them. `content` is not in the spec's list at all, and the spec's
@@ -57,16 +59,16 @@ const SCOPE_FORBIDDEN = /[\s():]/;
  * The typed scope, checked where it is typed. Empty means no scope, which is
  * fine; anything git tooling would misread is refused with a reason to show.
  */
-export function parseCommitScope(raw: string): Result<CommitScope | undefined, string> {
+export function parseCommitScope(raw: string, translate: Translator = ENGLISH_TRANSLATE): Result<CommitScope | undefined, string> {
   const scope = raw.trim();
   if (scope.length === 0) {
     return ok(undefined);
   }
   if (scope.length > COMMIT_SCOPE_LENGTH_MAX) {
-    return err(`A scope is at most ${COMMIT_SCOPE_LENGTH_MAX} characters.`);
+    return err(translate('git.type.scopeTooLong', { max: COMMIT_SCOPE_LENGTH_MAX }));
   }
   if (SCOPE_FORBIDDEN.test(scope)) {
-    return err('A scope has no spaces, parentheses or colons.');
+    return err(translate('git.type.scopeInvalid'));
   }
   assert(isCommitScope(scope), 'Commit scope: a checked scope satisfies the scope rules');
   return ok(scope);

@@ -4,6 +4,7 @@
 
 import { definedFields } from '../../shared/core/boundary';
 import type { IpcPayloads } from '../../shared/ipc/ipcPayloads';
+import { described } from '../../shared/properties/i18n/messageRef';
 import * as gitHistory from './gitHistory';
 import { git } from '../lib/nodeTools';
 import { ensureExcluded } from '../lib/projectExclusions';
@@ -75,10 +76,8 @@ export async function unparkBranch(projectPath: string, branch: string | undefin
   // Another tool may have edited the destination. Never apply or unwind a stash
   // over those edits: the recovery below is only safe on an initially clean tree.
   if (await isDirty(projectPath)) {
-    return {
-      restored: false,
-      error: `Your work on "${branch}" is still parked because this branch has local changes.`,
-    };
+    const dirty = described('git.error.unparkDirty', { branch: branch ?? 'HEAD' });
+    return { restored: false, error: dirty.message, errorRef: dirty.messageRef };
   }
   try {
     await git(projectPath, ['stash', 'pop', '--index', ref]);
@@ -96,13 +95,8 @@ export async function unparkBranch(projectPath: string, branch: string | undefin
     } catch {
       /* nothing better to try */
     }
-    return {
-      restored: false,
-      error:
-        `Your work on "${branch}" is still parked — it could not be put back automatically ` +
-        'because the branch has changed underneath it. ' +
-        'It is safe: recover it with `git stash list` and `git stash pop`.',
-    };
+    const failed = described('git.error.unparkFailed', { branch: branch ?? 'HEAD' });
+    return { restored: false, error: failed.message, errorRef: failed.messageRef };
   }
 }
 

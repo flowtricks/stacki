@@ -1,10 +1,10 @@
 import { gitTransport } from '../../ipc/gitTransport';
 import type { IpcResults, WireFileKind, WireGitInfo } from '../../../shared/ipc/ipcResults';
-import type { Result } from '../../../shared/core/result';
 import type { Parser } from '../../../shared/core/boundary';
 import { boolean, count, list, object, optional, pathText, record, text } from '../../../shared/core/boundary';
+import { parseOptionalMessageRef } from '../../../shared/core/i18n/messageReference';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
-import { cleanError } from '../../lib/cleanError';
+import { failureOf, type Failure } from '../../lib/cleanError';
 import { parseMergeResult } from './gitBridge';
 
 const repository = object({
@@ -16,6 +16,7 @@ const repository = object({
   head: optional(text),
   userEmail: optional(text),
   trunk: optional(text),
+  defaultBranch: optional(text),
   dirtyFiles: optional(list(pathText)),
   hasUpstream: optional(boolean),
 });
@@ -99,14 +100,18 @@ export function parseGitCheckout(input: unknown): IpcResults['git:checkout'] {
     parked: boolean(value['parked']),
   };
   const error = optional(text)(value['error']);
-  return error === undefined ? { ok: true, ...common } : { ok: true, ...common, error };
+  const errorRef = parseOptionalMessageRef(value['errorRef']);
+  if (error === undefined) {
+    return { ok: true, ...common };
+  }
+  return errorRef === undefined ? { ok: true, ...common, error } : { ok: true, ...common, error, errorRef };
 }
-async function gitRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
+async function gitRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<{ readonly ok: true; readonly value: Value } | Failure> {
   let response: unknown;
   try {
     response = await invoke();
   } catch (error: unknown) {
-    return { ok: false, error: cleanError(error) };
+    return failureOf(error);
   }
   // Contract bugs remain loud; only transport failures use the operating channel.
   return { ok: true, value: parse(response) };

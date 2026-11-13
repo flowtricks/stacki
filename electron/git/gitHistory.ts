@@ -370,6 +370,7 @@ function describeFile(relPath: unknown): FileDescription {
   if (pageRoute !== undefined) {
     let route = pageRoute;
     if (route === 'index') {
+      // i18n-ignore: The wire label stays English for older readers; the History panel swaps the home page's label for ui.page.home (historyFileLabel).
       return { path: posixPath, kind: 'page', label: 'Home' };
     }
     // "about/index" is the same page as "about" — the folder is the route.

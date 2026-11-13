@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDownIcon, ChevronRightIcon, FolderIcon, FolderOpenIcon } from '../../ui/Icons';
 import FileStatus from './FileStatus';
@@ -154,15 +155,23 @@ interface FileBrowserProps<T extends BrowserFile> {
 }
 
 export default function FileBrowser<T extends BrowserFile>(props: FileBrowserProps<T>) {
-  const { files, selected, onSelect, emptyMessage = 'No files.' } = props;
+  const translate = useTranslate();
+  const { files, selected, onSelect } = props;
+  const emptyMessage = props.emptyMessage ?? translate('git.browser.noFiles');
   const state = useFileBrowser(props);
   const { query, setQuery, inputRef, matches, searching, selectable, tree, onKeyDown } = state;
   return (
     <div className="file-browser">
       <div className="fb-search">
-        <input ref={inputRef} value={query} placeholder="Search files…" onChange={(event) => setQuery(event.target.value)} onKeyDown={onKeyDown} />
+        <input
+          ref={inputRef}
+          value={query}
+          placeholder={translate('git.browser.search')}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={onKeyDown}
+        />
         {query && (
-          <button className="ghost" onClick={() => setQuery('')} title="Clear">
+          <button className="ghost" onClick={() => setQuery('')} title={translate('git.browser.clear')}>
             ×
           </button>
         )}
@@ -173,7 +182,7 @@ export default function FileBrowser<T extends BrowserFile>(props: FileBrowserPro
 
         {searching ? (
           <>
-            {!matches.length && <div className="fb-empty">Nothing matches “{query}”.</div>}
+            {!matches.length && <div className="fb-empty">{translate('git.browser.noMatches', { query })}</div>}
             {matches.map((file, i) => (
               <FileRow state={state} key={file.path} file={file} depth={0} index={i} />
             ))}
@@ -186,11 +195,9 @@ export default function FileBrowser<T extends BrowserFile>(props: FileBrowserPro
       {selectable && (
         <div className="fb-foot">
           <button className="ghost" onClick={() => onSelect?.(selected?.length === files.length ? [] : files.map((file) => file.path))}>
-            {selected?.length === files.length ? 'Clear all' : 'Select all'}
+            {selected?.length === files.length ? translate('git.browser.clearAll') : translate('git.browser.selectAll')}
           </button>
-          <span className="fb-selected">
-            {selected?.length || 0} of {files?.length || 0}
-          </span>
+          <span className="fb-selected">{translate('git.browser.selectedOf', { selected: selected?.length || 0, total: files?.length || 0 })}</span>
         </div>
       )}
     </div>

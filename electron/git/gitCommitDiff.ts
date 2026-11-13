@@ -1,5 +1,6 @@
 import { COMMIT_DIFF_LIMITS } from '../../shared/ipc/gitCommitDiff';
 import type { CommitDiffRequest, CommitDiffResult } from '../../shared/ipc/gitCommitDiff';
+import { described } from '../../shared/properties/i18n/messageRef';
 import { gitErrorDetail } from './git';
 import type { Git } from './git';
 
@@ -37,13 +38,21 @@ export async function readCommitDiff(git: Git, request: CommitDiffRequest): Prom
   try {
     ({ stdout: patch } = await git(request.projectPath, argumentsList));
   } catch (error: unknown) {
-    return { ok: false, error: gitErrorDetail(error) || 'Could not read this commit’s diff.' };
+    // Git's own words when it gave any; our sentence, with its reference, when it said nothing.
+    const detail = gitErrorDetail(error);
+    if (detail) {
+      return { ok: false, error: detail };
+    }
+    const unreadable = described('history.error.diffUnreadable');
+    return { ok: false, error: unreadable.message, errorRef: unreadable.messageRef };
   }
   if (patch.length > COMMIT_DIFF_LIMITS.charactersMax) {
-    return { ok: false, error: 'This file’s diff is too large to display.' };
+    const tooLarge = described('history.error.diffTooLarge');
+    return { ok: false, error: tooLarge.message, errorRef: tooLarge.messageRef };
   }
   if (patch.split('\n').length > COMMIT_DIFF_LIMITS.linesMax) {
-    return { ok: false, error: 'This file’s diff has too many lines to display.' };
+    const tooLong = described('history.error.diffTooManyLines');
+    return { ok: false, error: tooLong.message, errorRef: tooLong.messageRef };
   }
   return { ok: true, value: patch };
 }

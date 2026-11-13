@@ -2,11 +2,14 @@ import type { git } from '../lib/nodeTools';
 import { assert } from '../../shared/core/assert';
 import { parseGitHubRepository } from '../../shared/ipc/githubRepository';
 import type { Result } from '../../shared/core/result';
+import { described, type MessageRef } from '../../shared/properties/i18n/messageRef';
 
-export async function connectRepository(
-  execute: typeof git,
-  options: { readonly projectPath: string; readonly repository: string },
-): Promise<Result<{ readonly url: string; readonly output: string }, string>> {
+/** A failure's English text, plus the reference to our own sentence when git and GitHub did not supply the words. */
+export type ConnectResult =
+  | { readonly ok: true; readonly value: { readonly url: string; readonly output: string } }
+  | { readonly ok: false; readonly error: string; readonly errorRef?: MessageRef | undefined };
+
+export async function connectRepository(execute: typeof git, options: { readonly projectPath: string; readonly repository: string }): Promise<ConnectResult> {
   const repository = parseGitHubRepository(options.repository);
   const url = `https://github.com/${repository}`;
   const command = (args: readonly string[]) => executeCommand(execute, options.projectPath, args);
@@ -17,10 +20,8 @@ export async function connectRepository(
   const remotes = remoteResult.value.stdout.trim().split('\n');
   assert(remotes.length <= 1000, 'Git remote inventory exceeds limit');
   if (remotes.includes('origin')) {
-    return {
-      ok: false,
-      error: 'This project already has an origin remote. It was left unchanged.',
-    };
+    const exists = described('git.error.originExists');
+    return { ok: false, error: exists.message, errorRef: exists.messageRef };
   }
   const branchResult = await command(['symbolic-ref', '--short', 'HEAD']);
   if (!branchResult.ok) {

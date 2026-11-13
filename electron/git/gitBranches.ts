@@ -4,6 +4,8 @@ import path from 'path';
 import { toArray } from '../../shared/core/record';
 import type { MergeResolution, MergeTextResolution } from '../../shared/ipc/mergeResolution';
 import { parseMergeResolution, mergeConflictSnapshot } from '../../shared/ipc/mergeResolution';
+import { described, type MessageRef } from '../../shared/properties/i18n/messageRef';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import { writeProjectText } from '../documents/documentWrites';
 import { parseConflict, renderResolved } from './conflicts';
 import type { ConflictPart } from './conflicts';
@@ -35,6 +37,15 @@ async function currentBranch(git: Git, projectPath: string): Promise<string | un
   } catch {
     return undefined;
   }
+}
+
+/**
+ * What to throw when git refused: its own wording when it gave any (free-form text we do not translate), otherwise our sentence, whose
+ * reference lets the renderer show it in the person's language.
+ */
+function gitFailure(detail: string, fallback: ReferencedError): Error {
+  const words = detail.trim();
+  return words.length > 0 ? new Error(words) : fallback;
 }
 
 export interface MergeClash {
@@ -108,7 +119,7 @@ async function resolveMerge(
   if (clean) {
     if (edited.length > 0) {
       await git(projectPath, ['merge', '--abort']);
-      throw new Error('The merge changed since review. Reopen it to review the new result.');
+      throw new ReferencedError('git.error.mergeChangedSinceReview');
     }
     return { ok: true, into, changed: true, resolved: 0 };
   }
@@ -118,7 +129,7 @@ async function resolveMerge(
     .filter(Boolean);
   try {
     if (edited.length > 0 && (left.length !== Object.keys(resolutions).length || left.some((file) => resolutions[file] === undefined))) {
-      throw new Error('The conflicted files changed. Reopen the merge to review them again.');
+      throw new ReferencedError('git.error.mergeFilesChanged');
     }
     for (const file of left) {
       const choice = resolutions[file] ?? 'ours';
@@ -136,7 +147,7 @@ async function resolveMerge(
     } catch {
       /* already unwound */
     }
-    throw new Error(gitErrorDetail(error).trim() || `Could not finish merging "${branch}".`);
+    throw gitFailure(gitErrorDetail(error), new ReferencedError('git.error.mergeFinishFailed', { branch }));
   }
   return { ok: true, into, changed: true, resolved: left.length };
 }
@@ -157,7 +168,7 @@ async function resolveMergeStart(
 ): Promise<boolean> {
   for (const choice of edited) {
     if (into !== choice.expectedBranch) {
-      throw new Error('The current branch changed. Reopen the merge to review it again.');
+      throw new ReferencedError('git.error.mergeBranchChanged');
     }
   }
   let clean = false;
@@ -181,7 +192,7 @@ async function resolveMergeFile(git: Git, projectPath: string, file: string, cho
   if (typeof choice === 'object' && 'kind' in choice) {
     const parts = parseConflict(fs.readFileSync(path.join(projectPath, file), 'utf8'));
     if (mergeConflictSnapshot(parts) !== choice.expected) {
-      throw new Error('The file changed since review. Reopen the merge to review it again.');
+      throw new ReferencedError('git.error.mergeFileChanged');
     }
     writeProjectText(path.join(projectPath, file), choice.text);
   } else if (perHunk) {
@@ -209,7 +220,7 @@ async function resolveMergeFile(git: Git, projectPath: string, file: string, cho
 async function mergeBranch(git: Git, { projectPath, branch }: { readonly projectPath: string; readonly branch: string }): Promise<MergeOutcome> {
   const into = await currentBranch(git, projectPath);
   if (branch === into) {
-    throw new Error(`"${branch}" is the branch you are on — there is nothing to merge into.`);
+    throw new ReferencedError('git.error.mergeSelf', { branch });
   }
   // No check for uncommitted work here.
   //
@@ -304,13 +315,14 @@ async function mergeBranch(git: Git, { projectPath, branch }: { readonly project
         .filter((line) => line && !/^(error|Please|Aborting|warning|hint|Updating|Merge with)/i.test(line) && !line.endsWith(':'));
       return { ok: false, dirty: true, from: into, branch, files: inTheWay };
     }
-    throw new Error(gitErrorDetail(error).trim() || `Could not merge "${branch}" into "${into}".`);
+    throw gitFailure(gitErrorDetail(error), new ReferencedError('git.error.mergeFailed', { branch, into: into ?? 'HEAD' }));
   }
   const after = (await git(projectPath, ['rev-parse', 'HEAD'])).stdout.trim();
   return { ok: true, into, changed: after !== before };
 }
 
-export type DeleteOutcome = { readonly ok: true } | { readonly ok: false; readonly unmerged: true; readonly message: string };
+export type DeleteOutcome =
+  { readonly ok: true } | { readonly ok: false; readonly unmerged: true; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 /**
  * Delete `branch`.
@@ -338,7 +350,7 @@ async function deleteBranch(
 ): Promise<DeleteOutcome> {
   const here = await currentBranch(git, projectPath);
   if (branch === here) {
-    throw new Error(`"${branch}" is the branch you are on — switch to another one first.`);
+    throw new ReferencedError('git.error.deleteSelf', { branch });
   }
   // Git will delete main as readily as anything else — `git branch -d main`
   // succeeds the moment main is merged into wherever you are standing, which
@@ -348,7 +360,7 @@ async function deleteBranch(
   // (Reaching here at all means another branch is checked out, so there is
   // always somewhere for the trunk's work to have gone — no need to check.)
   if (!allowTrunk && (branch === 'main' || branch === 'master')) {
-    throw new Error(`"${branch}" is the branch everything comes back to. ` + 'Deleting it would leave the project without its main line of work.');
+    throw new ReferencedError('git.error.deleteTrunk', { branch });
   }
   try {
     await git(projectPath, ['branch', force ? '-D' : '-d', branch]);
@@ -358,7 +370,7 @@ async function deleteBranch(
       return {
         ok: false,
         unmerged: true,
-        message: `"${branch}" has commits that aren't on any other branch. Deleting it loses them.`,
+        ...described('git.action.delete.unmerged', { branch }),
       };
     }
     // Checked out somewhere else — another worktree of this same repository.
@@ -367,9 +379,9 @@ async function deleteBranch(
     const worktree = detail.match(/used by worktree at '([^']+)'/);
     const where = worktree?.[1];
     if (where !== undefined) {
-      throw new Error(`"${branch}" is checked out in another worktree (${where}). ` + 'Close or switch that one first.');
+      throw new ReferencedError('git.error.deleteWorktree', { branch, path: where });
     }
-    throw new Error(detail.trim() || `Could not delete "${branch}".`);
+    throw gitFailure(detail, new ReferencedError('git.error.deleteFailed', { branch }));
   }
   return { ok: true };
 }
@@ -431,9 +443,30 @@ async function switchBranch(
         .filter((line) => line && !/^(error|Please|Aborting|warning|hint)/i.test(line) && !line.endsWith(':'));
       return { ok: false, blocked: true, from, branch, files };
     }
-    throw new Error(detail.trim() || `Could not switch to "${branch}".`);
+    throw gitFailure(detail, new ReferencedError('git.error.switchFailed', { branch }));
   }
   return { ok: true, from, parked };
 }
 
-export { mergeBranch, deleteBranch, switchBranch, resolveMerge };
+/** A branch name longer than this is not one git would have made; the answer falls back to the trunk. */
+const DEFAULT_BRANCH_CHARS_MAX = 255;
+
+/**
+ * The branch this project publishes from: the remote's own default (`origin/HEAD`, so a repository whose default is `develop`
+ * is not told it is on the wrong branch), else the trunk (main or master the caller found). Branch names are data: they go to git
+ * as argv entries, never into a shell string. Undefined when neither is known, so the renderer stays quiet rather than guessing.
+ */
+async function readDefaultBranch(git: Git, projectPath: string, trunk: string | undefined): Promise<string | undefined> {
+  try {
+    const named = (await git(projectPath, ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])).stdout.trim();
+    const prefix = 'origin/';
+    if (named.startsWith(prefix) && named.length > prefix.length && named.length <= DEFAULT_BRANCH_CHARS_MAX) {
+      return named.slice(prefix.length);
+    }
+  } catch {
+    /* No remote, or origin/HEAD was never set: fall back to the trunk below. */
+  }
+  return trunk;
+}
+
+export { mergeBranch, deleteBranch, switchBranch, resolveMerge, readDefaultBranch };

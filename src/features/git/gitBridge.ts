@@ -3,6 +3,7 @@ import { gitTransport } from '../../ipc/gitTransport';
 // continue. Payload types share the main-process inventory; responses stay unknown
 // until this boundary because preload does not validate response data.
 import { boolean, count, BOUNDARY_LIMITS, pathText, list, object, optional, record, text } from '../../../shared/core/boundary';
+import { parseOptionalMessageRef, type MessageRef } from '../../../shared/core/i18n/messageReference';
 import type { IpcPayloads } from '../../../shared/ipc/ipcPayloads';
 import type { WireMergeOutcome, WireDeleteOutcome, WireConflictPart } from '../../../shared/ipc/ipcResults';
 
@@ -58,7 +59,11 @@ const parkResult = object({
   branch: optional(text),
   error: optional(text),
 });
-const unparkResult = object({ restored: boolean, error: optional(text) });
+const unparkFields = object({ restored: boolean, error: optional(text) });
+const unparkResult = (input: unknown): { readonly restored: boolean; readonly error?: string | undefined; readonly errorRef?: MessageRef | undefined } => {
+  const fields = unparkFields(input);
+  return { ...fields, errorRef: parseOptionalMessageRef(record(input)['errorRef']) };
+};
 
 export function parseMergeResult(input: unknown): WireMergeOutcome {
   const value = record(input);
@@ -83,7 +88,9 @@ export function parseDeleteResult(input: unknown): WireDeleteOutcome {
     return { ok: true };
   }
   if (value['ok'] === false && value['unmerged'] === true) {
-    return { ok: false, unmerged: true, message: text(value['message']) };
+    const messageRef = parseOptionalMessageRef(value['messageRef']);
+    const message = text(value['message']);
+    return messageRef === undefined ? { ok: false, unmerged: true, message } : { ok: false, unmerged: true, message, messageRef };
   }
   throw new Error('Delete result must declare success or unmerged commits');
 }

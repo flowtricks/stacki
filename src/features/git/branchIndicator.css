@@ -1,0 +1,73 @@
+/* The branch chip beside Publish. Fills only, never a border: quiet on the default branch (dim text, no fill),
+   a clear amber warning anywhere else. The amber text is --amber on its own 16% tint over the title bar, well above 4.5:1. */
+.stacki-publish-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.stacki-branch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  max-width: 160px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  line-height: 1;
+}
+.stacki-branch-chip:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text-dim);
+}
+.stacki-branch-chip > svg {
+  flex: none;
+}
+.stacki-branch-chip > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stacki-branch-chip[data-state='warning'] {
+  background: rgba(255, 214, 10, 0.16);
+  color: var(--amber);
+  font-weight: 600;
+}
+.stacki-branch-chip[data-state='warning']:hover:not(:disabled) {
+  background: rgba(255, 214, 10, 0.24);
+  color: var(--amber);
+}
+.stacki-branch-chip-skeleton {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+}
+
+/* The question asked before publishing from a branch other than the default (the dialog itself is the shared .confirm-dialog). */
+.stacki-branch-warning-problem {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: rgba(255, 214, 10, 0.12);
+  color: var(--amber);
+  font-size: 12px;
+  line-height: 1.45;
+}
+/* Three answers with names in them (German is the longest): wider than a plain confirmation, and the footer wraps rather than clips. */
+.modal.confirm-dialog.stacki-branch-warning {
+  width: 520px;
+}
+.stacki-branch-warning .modal-footer {
+  flex-wrap: wrap;
+}
+.stacki-branch-warning .modal-footer button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

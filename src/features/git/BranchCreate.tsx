@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useId, useState } from 'react';
 import { CloseIcon, PlusIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
@@ -22,6 +23,7 @@ type BranchCreateState =
     };
 
 export default function BranchCreate(props: BranchCreateProps) {
+  const translate = useTranslate();
   const [state, setState] = useState<BranchCreateState>({ kind: 'closed' });
   const popupId = useId();
   const close = (): void => {
@@ -46,13 +48,13 @@ export default function BranchCreate(props: BranchCreateProps) {
         }}
       >
         <PlusIcon size={12} />
-        New branch
+        {translate('git.branch.new')}
       </button>
       {state.kind === 'open' && (
         <Popup
           mode="popover"
           role="dialog"
-          label="New branch"
+          label={translate('git.branch.new')}
           id={popupId}
           anchor={state.anchor}
           className="git-branch-editor"
@@ -67,9 +69,10 @@ export default function BranchCreate(props: BranchCreateProps) {
 }
 
 function BranchCreateForm(props: BranchCreateProps & { readonly onClose: () => void }) {
+  const translate = useTranslate();
   const inputId = useId();
   const errorId = useId();
-  const error = branchNameError(props.name, props.branches);
+  const error = branchNameError(props.name, props.branches, translate);
   const disabled = props.working || !props.name.trim() || Boolean(error);
   return (
     <form
@@ -83,18 +86,18 @@ function BranchCreateForm(props: BranchCreateProps & { readonly onClose: () => v
       }}
     >
       <div className="git-branch-editor-heading">
-        <span>New branch</span>
-        <button type="button" className="ghost" aria-label="Close new branch" onClick={props.onClose}>
+        <span>{translate('git.branch.new')}</span>
+        <button type="button" className="ghost" aria-label={translate('git.branch.closeNew')} onClick={props.onClose}>
           <CloseIcon size={12} />
         </button>
       </div>
       <label className="git-create-branch-label" htmlFor={inputId}>
-        Branch name
+        {translate('git.branch.name')}
       </label>
       <div className="git-create-branch">
         <input
           id={inputId}
-          aria-label="New branch name"
+          aria-label={translate('git.branch.newNameLabel')}
           autoFocus
           autoComplete="off"
           spellCheck={false}
@@ -106,7 +109,7 @@ function BranchCreateForm(props: BranchCreateProps & { readonly onClose: () => v
           onChange={(event) => props.onName(sanitizeBranchName(event.target.value))}
         />
         <button type="submit" className="primary" disabled={disabled}>
-          Create
+          {translate('git.branch.create')}
         </button>
       </div>
       {error && (

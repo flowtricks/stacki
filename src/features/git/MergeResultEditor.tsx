@@ -14,6 +14,8 @@ import type { ConflictDraft } from './conflictDraft';
 import type { Clash } from './gitConflictModel';
 import { conflictHighlights } from './conflictHighlights';
 import { languageFor } from '../../ui/codeHighlight';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 interface MergeEditorProps {
   readonly path: string;
@@ -45,19 +47,20 @@ const markField = StateField.define({
 });
 
 export default function MergeResultEditor(props: MergeEditorProps) {
+  const translate = useTranslate();
   const host = useRef<HTMLDivElement>(null);
   const editor = useRef<EditorView | undefined>(undefined);
   const latest = useRef(props);
   latest.current = props;
   useLayoutEffect(() => {
     assert(host.current !== null, 'Merge editor: mounted host exists');
-    const view = createMergeEditor(host.current, latest);
+    const view = createMergeEditor(host.current, latest, translate);
     editor.current = view;
     return () => {
       view.destroy();
       editor.current = undefined;
     };
-  }, [props.path]);
+  }, [props.path, translate]);
   useLayoutEffect(() => {
     const view = editor.current;
     if (view === undefined) {
@@ -71,8 +74,8 @@ export default function MergeResultEditor(props: MergeEditorProps) {
         annotations: [external.of(true), isolateHistory.of('full')],
       });
     }
-    view.dispatch({ effects: [draftEffect.of(props.draft), marks.of(mergeEditorMarks(props))] });
-  }, [props]);
+    view.dispatch({ effects: [draftEffect.of(props.draft), marks.of(mergeEditorMarks(props, translate))] });
+  }, [props, translate]);
   useLayoutEffect(() => {
     const view = editor.current;
     const region = latest.current.draft.regions[props.active];
@@ -83,7 +86,7 @@ export default function MergeResultEditor(props: MergeEditorProps) {
   return <div className="merge-result-editor" ref={host} />;
 }
 
-function createMergeEditor(parent: HTMLDivElement, latest: MutableRefObject<MergeEditorProps>) {
+function createMergeEditor(parent: HTMLDivElement, latest: MutableRefObject<MergeEditorProps>, translate: Translator) {
   const language = languageFor(latest.current.path);
   return new EditorView({
     parent,
@@ -99,7 +102,7 @@ function createMergeEditor(parent: HTMLDivElement, latest: MutableRefObject<Merg
         markField,
         draftField.init(() => latest.current.draft),
         invertedEffects.of((transaction) => (transaction.docChanged ? [draftEffect.of(transaction.startState.field(draftField))] : [])),
-        EditorView.contentAttributes.of({ 'aria-label': 'Final merged code' }),
+        EditorView.contentAttributes.of({ 'aria-label': translate('git.conflict.finalMerged') }),
         EditorState.transactionFilter.of((transaction) => {
           if (transaction.annotation(external)) {
             return transaction;
@@ -120,14 +123,17 @@ function createMergeEditor(parent: HTMLDivElement, latest: MutableRefObject<Merg
   });
 }
 
-function mergeEditorMarks(props: MergeEditorProps) {
+function mergeEditorMarks(props: MergeEditorProps, translate: Translator) {
   const ranges = conflictHighlights(props.draft, props.clashes)
     .filter((range) => range.to > range.from)
     .map((range) =>
       Decoration.mark({
         class: `merge-code-${range.source}`,
         attributes: {
-          title: range.source === 'custom' ? 'Your edit' : `From ${range.source === 'ours' ? props.ours : props.theirs}`,
+          title:
+            range.source === 'custom'
+              ? translate('git.conflict.yourEdit')
+              : translate('git.conflict.from', { branch: range.source === 'ours' ? props.ours : props.theirs }),
         },
       }).range(range.from, range.to),
     );

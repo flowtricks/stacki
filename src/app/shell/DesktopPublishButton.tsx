@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import { readMetadata } from '../../ipc/projectMetadataBridge';
 import { parsePublishSource } from '../../../shared/properties/publishConfig';
@@ -5,15 +6,23 @@ import { PublishStatus } from '../../features/publishing/PublishStatus';
 import { useEffect, useRef, useState } from 'react';
 import { parsePublishCommitMessage, type PublishTarget } from '../../../shared/properties/publishConfig';
 import type { DesktopPublishState } from '../../../shared/properties/publishState';
+import { described } from '../../../shared/properties/i18n/messageRef';
 import { PublishControl } from '../../features/publishing/PublishControl';
 import { startPublish, readPublishState } from '../../features/publishing/publishBridge';
 import { cleanError } from '../../lib/cleanError';
 import { readGitInfo } from '../../features/git/gitChipBridge';
 import { PublishRepositorySetup } from '../../features/git/PublishRepositorySetup';
+import { BranchIndicator } from '../../features/git/BranchIndicator';
+import { RefreshGitWhenAiTurnEnds } from './RefreshGitWhenAiTurnEnds';
+import { usePublishBranchGate } from '../../features/git/PublishBranchWarning';
 import { createPortal } from 'react-dom';
 import { usePublishAvailability } from './usePublishAvailability';
 import type { SaveState } from '../../editor/saveState';
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
+
+// The step shown before the main process reports one: its reference lets the status panel word it in the language on screen.
+const PREPARING = described('publish.status.preparing');
+const PREPARING_STATE: DesktopPublishState = { kind: 'running', step: PREPARING.message, stepRef: PREPARING.messageRef };
 
 interface Props {
   readonly projectPath: string;
@@ -21,29 +30,39 @@ interface Props {
   readonly refresh: () => Promise<unknown>;
   readonly saveState: SaveState | undefined;
   readonly repository: IpcResults['git:info'] | undefined;
+  /** Opens the panel that holds the branch switcher; the branch chip beside Publish is a button for it. */
+  readonly onOpenBranches?: (() => void) | undefined;
+  /** The app's wrapper around a branch change, and what to reload after one (used when Publish offers to switch first). */
+  readonly withBranchChange?: (<Value>(work: () => Promise<Value>) => Promise<Value>) | undefined;
+  readonly onBranchSwitched?: (() => Promise<unknown>) | undefined;
 }
 
 export function DesktopPublishButton(props: Props) {
   return <DesktopPublishSession key={props.projectPath} {...props} />;
 }
 
-function DesktopPublishSession({ projectPath, flushSave, refresh, saveState, repository }: Props) {
+function DesktopPublishSession({ projectPath, flushSave, refresh, saveState, repository, onOpenBranches, withBranchChange, onBranchSwitched }: Props) {
   const [state, setState] = useState<DesktopPublishState>({ kind: 'idle' });
   const [settingsRevision, setSettingsRevision] = useState(0);
   const action = useDesktopPublishAction({ projectPath, flushSave, refresh }, state, setState);
   const availability = usePublishAvailability(projectPath, state.kind, saveState, repository, settingsRevision);
   usePublishPolling(projectPath, state, setState, refresh);
+  // Every way of starting a publish passes through the gate, so a branch nobody chose is asked about before anything is sent.
+  const gate = usePublishBranchGate({ projectPath, repository, flushSave, refresh, withBranchChange, onBranchSwitched });
   return (
-    <div className="stacki-publish-control">
+    <div className="stacki-publish-control stacki-publish-cluster">
+      <BranchIndicator projectPath={projectPath} info={repository} onOpen={onOpenBranches} />
+      <RefreshGitWhenAiTurnEnds refresh={refresh} />
       <PublishControl
         projectPath={projectPath}
         busy={action.starting || state.kind === 'running' || action.setup !== undefined}
         availability={availability}
         settingsClosed={() => setSettingsRevision((revision) => revision + 1)}
-        publish={(target) => void action.publish(target)}
+        publish={(target) => gate.guard(() => void action.publish(target))}
       />
+      {gate.dialog}
       {(action.visible || state.kind === 'running') && (
-        <PublishStatus state={action.starting ? { kind: 'running', step: 'Preparing publish…' } : state} close={() => action.setVisible(false)} />
+        <PublishStatus state={action.starting ? PREPARING_STATE : state} close={() => action.setVisible(false)} />
       )}
       {action.setup?.kind === 'commit' && (
         <PublishCommitMessage
@@ -134,9 +153,10 @@ async function publishSetup(projectPath: string, target: PublishTarget, message:
 }
 
 export function PublishCommitMessage({ close, submit }: { readonly close: () => void; readonly submit: (message: string) => void }) {
+  const translate = useTranslate();
   const [message, setMessage] = useState('');
   return (
-    <Popup className="modal publish-commit-message" label="Commit changes" onClose={close}>
+    <Popup className="modal publish-commit-message" label={translate('shell.publish.commitTitle')} onClose={close}>
       {({ close: dismiss }) => (
         <form
           onSubmit={(event) => {
@@ -144,28 +164,28 @@ export function PublishCommitMessage({ close, submit }: { readonly close: () => 
             submit(parsePublishCommitMessage(message));
           }}
         >
-          <div className="modal-header">Commit changes</div>
+          <div className="modal-header">{translate('shell.publish.commitTitle')}</div>
           <div className="modal-body">
-            <p>Describe your changes before pushing them to GitHub.</p>
+            <p>{translate('shell.publish.commitBody')}</p>
             <label>
-              Commit message
+              {translate('shell.publish.commitMessage')}
               <textarea
                 autoFocus
                 required
                 maxLength={4000}
                 rows={3}
                 value={message}
-                placeholder="Describe your changes"
+                placeholder={translate('shell.publish.commitPlaceholder')}
                 onChange={(event) => setMessage(event.currentTarget.value)}
               />
             </label>
           </div>
           <div className="modal-footer">
             <button type="button" onClick={dismiss}>
-              Cancel
+              {translate('ui.cancel')}
             </button>
             <button type="submit" className="primary" disabled={message.trim().length === 0}>
-              Commit and push
+              {translate('shell.publish.commitAndPush')}
             </button>
           </div>
         </form>

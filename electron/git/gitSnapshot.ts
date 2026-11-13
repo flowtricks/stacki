@@ -13,6 +13,8 @@
 // the work is recoverable even though the tree no longer shows it. Neither
 // rewrites history — going back is itself something you can come back from.
 
+import { described, type MessageRef } from '../../shared/properties/i18n/messageRef';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import type { Git } from './git';
 
 /**
@@ -37,7 +39,7 @@ async function commit(
   const subject = message || 'Update from Stacki';
   const chosen = Array.isArray(paths) ? paths.filter(Boolean).map(String) : undefined;
   if (chosen && !chosen.length) {
-    throw new Error('Nothing was picked to save — choose at least one file.');
+    throw new ReferencedError('git.error.commitNothingPicked');
   }
   if (!chosen) {
     await git(projectPath, ['add', '-A']);
@@ -72,14 +74,14 @@ async function commit(
 async function restoreFile(
   git: Git,
   { projectPath, ref, path: filePath }: { readonly projectPath: string; readonly ref: string; readonly path: string },
-): Promise<{ ok: boolean; missing?: boolean; message?: string }> {
+): Promise<{ ok: boolean; missing?: boolean; message?: string; messageRef?: MessageRef | undefined }> {
   try {
     await git(projectPath, ['cat-file', '-e', `${ref}:${filePath}`]);
   } catch {
     return {
       ok: false,
       missing: true,
-      message: `That version doesn’t have this file — it was added later.`,
+      ...described('git.error.restoreMissing'),
     };
   }
   await git(projectPath, ['checkout', ref, '--', filePath]);
@@ -107,7 +109,7 @@ async function restoreProject(
   let parked = false;
   if (dirty) {
     if (!park) {
-      throw new Error('There are unsaved changes here. Save them first — going back would write over them.');
+      throw new ReferencedError('git.error.restoreUnsaved');
     }
     parked = await park();
   }

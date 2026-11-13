@@ -1,6 +1,8 @@
 import type { WireMergeClash, WireConflictPart, WireMergeOutcome } from '../../../shared/ipc/ipcResults';
 import type { MergeResolution } from '../../../shared/ipc/mergeResolution';
 import { assert } from '../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
 
 export type Conflict = Extract<WireMergeOutcome, { readonly conflicted: true }>;
@@ -67,12 +69,12 @@ export function conflictHunks(parts: readonly WireConflictPart[]): readonly Conf
   }
   return hunks;
 }
-export function conflictLabel(conflict: Conflict, clash: Clash): string {
+export function conflictLabel(conflict: Conflict, clash: Clash, translate: Translator = ENGLISH_TRANSLATE): string {
   if (clash.merged !== undefined) {
-    return 'Both branches changed this line, in different places';
+    return translate('git.conflict.label.bothDifferent');
   }
   if (clash.changedBy === 'both') {
-    return 'Both branches changed this';
+    return translate('git.conflict.label.both');
   }
-  return `Only ${clash.changedBy === 'theirs' ? conflict.branch : conflict.from} changed this`;
+  return translate('git.conflict.label.only', { branch: clash.changedBy === 'theirs' ? conflict.branch : (conflict.from ?? '') });
 }

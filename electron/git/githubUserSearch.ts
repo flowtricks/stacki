@@ -258,6 +258,7 @@ async function requestAccounts(
 ): Promise<RemoteAnswer> {
   assert(url.startsWith(`${API_ORIGIN}/`), 'GitHub user search: requests go to the GitHub API only');
   const fallback: RemoteAnswer = { kind: 'silenced', until: options.now() + GITHUB_USER_SEARCH_RESOLVER_LIMITS.backoffMsDefault };
+  // i18n-ignore: HTTP User-Agent, not shown to a person.
   const headers: Record<string, string> = { Accept: 'application/vnd.github+json', 'User-Agent': 'Stacki', 'X-GitHub-Api-Version': '2022-11-28' };
   if (token !== undefined) {
     headers['Authorization'] = `Bearer ${token}`;

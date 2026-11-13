@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
 import { readIncomingGitCommits } from './gitChipBridge';
 import { createCoalescedRun } from '../../lib/coalescedRun';
 import { onWindowReturn } from '../../lib/windowReturn';
 
 export type GitIncomingState =
-  { readonly kind: 'checking' } | { readonly kind: 'ready'; readonly commits: number } | { readonly kind: 'unavailable'; readonly message: string };
+  | { readonly kind: 'checking' }
+  | { readonly kind: 'ready'; readonly commits: number }
+  | { readonly kind: 'unavailable'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 const CHECK_INTERVAL_MS = 30_000;
 const checking = { kind: 'checking' } as const;
@@ -36,7 +39,9 @@ export function useGitIncoming(projectPath: string | undefined, info: IpcResults
       }
       setSnapshot({
         key,
-        value: result.ok ? { kind: 'ready', commits: result.value } : { kind: 'unavailable', message: result.error },
+        value: result.ok
+          ? { kind: 'ready', commits: result.value }
+          : { kind: 'unavailable', message: result.error, ...(result.errorRef === undefined ? {} : { messageRef: result.errorRef }) },
       });
     });
     const refresh = (): void => {

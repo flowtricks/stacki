@@ -178,9 +178,11 @@ async function queryCommitAuthors(input: {
     response = await input.fetch(GRAPHQL_ENDPOINT, {
       method: 'POST',
       headers: {
+        // i18n-ignore: HTTP header, not shown to a person.
         Authorization: `Bearer ${input.token}`,
         Accept: 'application/vnd.github+json',
         'Content-Type': 'application/json',
+        // i18n-ignore: HTTP User-Agent, not shown to a person.
         'User-Agent': 'Stacki',
       },
       body: JSON.stringify({ query: commitAuthorsQuery(input.commits), variables: { owner, name } }),

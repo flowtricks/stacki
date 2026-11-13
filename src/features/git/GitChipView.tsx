@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { GitPullControl } from './GitPullControl';
 import type { GitIncomingState } from './useGitIncoming';
 import React from 'react';
@@ -72,11 +73,12 @@ interface CommitProps {
 }
 
 function Branches({ colors, info, working, newBranch, onSwitch, onMerge, onDelete, onNewBranch, onCreateBranch }: BranchesProps) {
+  const translate = useTranslate();
   return (
-    <section className="git-branches" aria-label="Branches">
+    <section className="git-branches" aria-label={translate('git.branch.heading')}>
       <div className="history-branches-heading">
-        <h3>Branches</h3>
-        <span>{info.branches.length} local</span>
+        <h3>{translate('git.branch.heading')}</h3>
+        <span>{translate('git.branch.localCount', { count: info.branches.length })}</span>
       </div>
       <div className="git-branch-list">
         {info.branches.map((branch) => (
@@ -99,6 +101,7 @@ function BranchRow({
 }: Pick<BranchesProps, 'info' | 'colors' | 'working' | 'onSwitch' | 'onMerge' | 'onDelete'> & {
   readonly branch: string;
 }) {
+  const translate = useTranslate();
   const current = branch === info.branch;
   return (
     <div className={`history-branch-row ${current ? 'active' : ''}`}>
@@ -106,7 +109,7 @@ function BranchRow({
         className="history-branch-switch"
         disabled={working || current}
         aria-current={current ? true : undefined}
-        aria-label={current ? `${branch}, current branch` : `Switch to ${branch}`}
+        aria-label={current ? translate('git.branch.currentLabel', { branch }) : translate('git.branch.switchTo', { branch })}
         onClick={() => onSwitch(branch)}
       >
         <span className="history-branch-icon" style={{ color: gitBranchColor(colors.get(branch) ?? 0) }}>
@@ -114,8 +117,8 @@ function BranchRow({
         </span>
         <Tooltip className="history-branch-name" text={branch} />
         {info.parked.includes(branch) && !current && (
-          <span className="branch-parked" title="Changes waiting on this branch">
-            Saved changes
+          <span className="branch-parked" title={translate('git.branch.parkedTitle')}>
+            {translate('git.branch.parkedLabel')}
           </span>
         )}
       </button>
@@ -142,14 +145,15 @@ function CommitControls({
   onCommit,
   error,
 }: CommitProps) {
+  const translate = useTranslate();
   const pickedCount = picked?.length ?? 0;
   const blocked = commitType.state.kind === 'invalid';
-  const label = !dirty ? 'Nothing to commit' : !picking ? 'Commit all changes' : `Commit ${pickedCount} file${pickedCount === 1 ? '' : 's'}`;
+  const label = !dirty ? translate('git.commit.nothing') : !picking ? translate('git.commit.all') : translate('git.commit.files', { count: pickedCount });
   return (
     <>
       <div className="divider" />
       <h3 className="git-commit-destination">
-        Commit to{' '}
+        {translate('git.commit.to')}{' '}
         <span className={`history-graph-color-${color}`} style={{ color: gitBranchColor(color) }}>
           <BranchIcon size={12} />
           {branch}
@@ -157,8 +161,8 @@ function CommitControls({
       </h3>
       <div className="dropdown-row" style={{ flexDirection: 'column', gap: 6 }}>
         <input
-          placeholder="Commit message"
-          aria-label="Commit message"
+          placeholder={translate('git.commit.message')}
+          aria-label={translate('git.commit.message')}
           disabled={working}
           value={message}
           onChange={(event) => onMessage(event.target.value)}
@@ -198,10 +202,11 @@ function CommitControls({
 }
 
 export default function GitChipView(props: GitChipViewProps) {
+  const translate = useTranslate();
   const working = props.busy !== undefined;
   const colors = gitBranchColors(props.info.branches, props.info.trunk ?? 'main');
   return (
-    <div className="git-panel-controls" aria-label="Repository controls">
+    <div className="git-panel-controls" aria-label={translate('git.chip.controls')}>
       {props.busy && (
         <p className="history-note" role="status">
           {props.busy}

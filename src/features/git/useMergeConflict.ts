@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { gitBranchColors, gitBranchColor } from '../../lib/gitBranchColors';
 import type { Conflict, ConflictChoice } from './gitConflictModel';
 import { createConflictDraft, chooseConflictRegion, conflictChoiceText } from './conflictDraft';
 import type { ConflictDraft, ConflictDrafts } from './conflictDraft';
 
 export function useMergeConflict(conflict: Conflict, branches: readonly string[], trunk: string) {
+  const translate = useTranslate();
   const [drafts, setDrafts] = useState<ConflictDrafts>(() =>
     Object.fromEntries(conflict.files.flatMap((file) => (file.parts === undefined ? [] : [[file.path, createConflictDraft(file)]]))),
   );
@@ -18,7 +20,7 @@ export function useMergeConflict(conflict: Conflict, branches: readonly string[]
   const draft = drafts[file.path];
   const clashes = useMemo(() => draft?.regions.map((region) => region.clash) ?? [], [draft]);
   const active = selected[file.path] ?? 0;
-  const ours = conflict.from ?? 'Current branch';
+  const ours = conflict.from ?? translate('git.conflict.currentBranch');
   const colors = gitBranchColors([...branches, ours, conflict.branch], trunk);
   const select = (index: number) => setSelected((current) => ({ ...current, [file.path]: index }));
   const edit = (value: ConflictDraft) => setDrafts((current) => ({ ...current, [file.path]: value }));

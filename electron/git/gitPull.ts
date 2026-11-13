@@ -2,6 +2,7 @@ import type { Git } from './git';
 import { mergeBranch } from './gitBranches';
 import type { MergeOutcome } from './gitBranches';
 import { count } from '../../shared/core/boundary';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 
 /** Discover incoming commits without changing the index or working files. */
 export async function readIncomingCommits(git: Git, options: { readonly projectPath: string; readonly branch: string }): Promise<number> {
@@ -55,6 +56,6 @@ export async function pullBranch(git: Git, options: { readonly projectPath: stri
 async function requireCurrentBranch(git: Git, { projectPath, branch }: { readonly projectPath: string; readonly branch: string }): Promise<void> {
   const current = (await git(projectPath, ['symbolic-ref', '--quiet', '--short', 'HEAD'])).stdout.trim();
   if (current !== branch) {
-    throw new Error('The current branch changed. Refresh Git and try pulling again.');
+    throw new ReferencedError('git.error.pullBranchChanged');
   }
 }

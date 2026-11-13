@@ -15,6 +15,9 @@
 // macOS and Windows, where `feature` and `Feature` are the same file in
 // .git/refs, and that is caught below as the clash it actually is.
 
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+
 // Characters git refuses in a ref: ASCII control codes, space, and the seven
 // it reserves for its own syntax (~ ^ : ? * [ and a backslash). See
 // `git help check-ref-format`.
@@ -43,31 +46,31 @@ export function sanitizeBranchName(text: unknown): string {
  *
  * `existing` is the branches the project already has.
  */
-export function branchNameError(name: unknown, existing: readonly string[] = []): string | undefined {
+export function branchNameError(name: unknown, existing: readonly string[] = [], translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   const trimmed = String(name ?? '').trim();
   if (!trimmed) {
     return undefined;
   }
   if (trimmed === '@') {
-    return '“@” is git’s own name for the current branch.';
+    return translate('git.branch.error.at');
   }
   if (trimmed.endsWith('/')) {
-    return 'A name can’t end with “/”.';
+    return translate('git.branch.error.endsSlash');
   }
   if (trimmed.endsWith('.')) {
-    return 'A name can’t end with “.”.';
+    return translate('git.branch.error.endsDot');
   }
   if (trimmed.split('/').some((part) => part.endsWith('.lock'))) {
-    return '“.lock” is reserved by git.';
+    return translate('git.branch.error.lock');
   }
   const clash = existing.find((branch) => String(branch).toLowerCase() === trimmed.toLowerCase());
   if (clash === trimmed) {
-    return `${trimmed} already exists.`;
+    return translate('git.branch.error.exists', { branch: trimmed });
   }
   if (clash) {
     // Not pedantry: on macOS and Windows these are one file in .git/refs, so
     // git refuses the second one — with a message about a file, not a branch.
-    return `${clash} already exists, and names differing only in case are the same branch here.`;
+    return translate('git.branch.error.existsCase', { branch: clash });
   }
   return undefined;
 }

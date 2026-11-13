@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Conflict, ConflictChoice } from './gitConflictModel';
 import type { MergeConflictModel } from './useMergeConflict';
 import MergeResultEditor from './MergeResultEditor';
@@ -9,21 +10,22 @@ interface DetailProps {
   readonly working: boolean;
 }
 export function MergeConflictDetail({ model, conflict, working }: DetailProps) {
+  const translate = useTranslate();
   const { draft, file } = model;
   if (draft === undefined) {
     return <MergeWhole model={model} conflict={conflict} working={working} />;
   }
   return (
-    <section className="conflict-detail" aria-label="Merge result">
+    <section className="conflict-detail" aria-label={translate('git.conflict.mergeResult')}>
       <div className="merge-result-toolbar">
         <div>
-          <strong>Final code</strong>
+          <strong>{translate('git.conflict.finalCode')}</strong>
           <span title={file.path}>{file.path}</span>
         </div>
         <div className="merge-legend">
           <span className="merge-branch-ours">{model.ours}</span>
           <span className="merge-branch-theirs">{conflict.branch}</span>
-          {draft.mode === 'edited' && <span className="merge-manual-label">Your edits</span>}
+          {draft.mode === 'edited' && <span className="merge-manual-label">{translate('git.conflict.yourEdits')}</span>}
         </div>
       </div>
       <MergeResultEditor
@@ -44,6 +46,7 @@ export function MergeConflictDetail({ model, conflict, working }: DetailProps) {
 }
 
 function MergeChangeInspector({ model, conflict, working }: DetailProps) {
+  const translate = useTranslate();
   const region = model.draft?.regions[model.active];
   const clash = model.clashes[model.active];
   if (region === undefined || clash === undefined) {
@@ -52,25 +55,23 @@ function MergeChangeInspector({ model, conflict, working }: DetailProps) {
   const total = model.clashes.length;
   const status =
     region.choice === 'custom'
-      ? 'Manually edited'
+      ? translate('git.conflict.status.manual')
       : region.review === 'pending'
-        ? 'Choose which version to keep'
+        ? translate('git.conflict.status.choose')
         : clash.merged !== undefined && region.choice === 'merged'
-          ? 'Independent edits combined'
+          ? translate('git.conflict.status.combined')
           : region.choice === 'both'
-            ? 'Keeping both blocks'
-            : `Keeping ${region.choice === 'theirs' ? conflict.branch : model.ours}`;
+            ? translate('git.conflict.status.both')
+            : translate('git.conflict.status.keeping', { branch: region.choice === 'theirs' ? conflict.branch : model.ours });
   return (
     <div className="merge-change-inspector">
       <div className="merge-change-toolbar">
         <div className="merge-change-navigation">
-          <button aria-label="Previous change" disabled={working} onClick={() => model.select((model.active + total - 1) % total)}>
+          <button aria-label={translate('git.conflict.previous')} disabled={working} onClick={() => model.select((model.active + total - 1) % total)}>
             ↑
           </button>
-          <span>
-            Change {model.active + 1} of {total}
-          </span>
-          <button aria-label="Next change" disabled={working} onClick={() => model.select((model.active + 1) % total)}>
+          <span>{translate('git.conflict.changeOf', { index: model.active + 1, total })}</span>
+          <button aria-label={translate('git.conflict.next')} disabled={working} onClick={() => model.select((model.active + 1) % total)}>
             ↓
           </button>
         </div>
@@ -79,10 +80,12 @@ function MergeChangeInspector({ model, conflict, working }: DetailProps) {
       <div className="merge-change-options">
         <SourceChoice model={model} conflict={conflict} working={working} choice="ours" />
         <SourceChoice model={model} conflict={conflict} working={working} choice="theirs" />
-        {clash.merged !== undefined && <ChoiceButton model={model} working={working} choice="merged" label="Combine edits" />}
-        {clash.changedBy === 'both' && clash.merged === undefined && <ChoiceButton model={model} working={working} choice="both" label="Keep both blocks" />}
+        {clash.merged !== undefined && <ChoiceButton model={model} working={working} choice="merged" label={translate('git.conflict.combine')} />}
+        {clash.changedBy === 'both' && clash.merged === undefined && (
+          <ChoiceButton model={model} working={working} choice="both" label={translate('git.conflict.keepBoth')} />
+        )}
       </div>
-      {!region.selectable && <p className="hint-text">Your edit spans multiple changes. Undo in the code editor to restore individual choices.</p>}
+      {!region.selectable && <p className="hint-text">{translate('git.conflict.spansMultiple')}</p>}
     </div>
   );
 }
@@ -95,14 +98,19 @@ function SourceChoice({
 }: DetailProps & {
   readonly choice: 'ours' | 'theirs';
 }) {
+  const translate = useTranslate();
   const clash = model.clashes[model.active];
   const text = clash?.[choice] ?? '';
   const label = choice === 'ours' ? model.ours : conflict.branch;
   return (
     <div className={`merge-source-option merge-source-${choice}`}>
-      <ChoiceButton model={model} working={working} choice={choice} label={`Keep ${label}`} />
+      <ChoiceButton model={model} working={working} choice={choice} label={translate('git.conflict.keep', { branch: label })} />
       <div className="merge-source-preview">
-        {text === '' ? <span className="hint-text">Remove this text</span> : <CodeBlock text={text} filename={model.file.path} className="merge-source-code" />}
+        {text === '' ? (
+          <span className="hint-text">{translate('git.conflict.removeText')}</span>
+        ) : (
+          <CodeBlock text={text} filename={model.file.path} className="merge-source-code" />
+        )}
       </div>
     </div>
   );
@@ -132,10 +140,11 @@ function ChoiceButton({
 }
 
 function MergeWhole({ model, conflict, working }: DetailProps) {
+  const translate = useTranslate();
   return (
     <section className="conflict-detail conflict-whole">
       <h3>{model.file.path}</h3>
-      <p>This file cannot be compared as text. Choose the version to keep.</p>
+      <p>{translate('git.conflict.notText')}</p>
       <div className="conflict-choice">
         {(['ours', 'theirs'] as const).map((choice) => (
           <button key={choice} className={model.whole[model.file.path] === choice ? 'on' : ''} disabled={working} onClick={() => model.setWhole(choice)}>

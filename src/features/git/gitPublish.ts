@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
-import type { Result } from '../../../shared/core/result';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { boolean, optional, record, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { assert } from '../../../shared/core/assert';
-import { cleanError } from '../../lib/cleanError';
+import { failureOf, type Failure } from '../../lib/cleanError';
 
 type GitHubStatus = IpcResults['git:ghStatus'];
 type PreflightState =
-  { readonly kind: 'loading' } | { readonly kind: 'error'; readonly error: string } | { readonly kind: 'ready'; readonly status: GitHubStatus };
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error'; readonly error: string; readonly errorRef?: MessageRef | undefined }
+  | { readonly kind: 'ready'; readonly status: GitHubStatus };
 
 export function parseGitHubStatus(input: unknown): GitHubStatus {
   const value = record(input);
@@ -22,13 +24,13 @@ export function parseGitHubStatus(input: unknown): GitHubStatus {
   }
   return authed ? { installed: true, authed: true, user: optional(text)(value['user']) } : { installed: true, authed: false };
 }
-export async function readGitHubStatus(projectPath: string): Promise<Result<GitHubStatus, string>> {
+export async function readGitHubStatus(projectPath: string): Promise<{ readonly ok: true; readonly value: GitHubStatus } | Failure> {
   const payload = parseIpcPayload('git:ghStatus', projectPath);
   let response: unknown;
   try {
     response = await window.avb.ghStatus(payload);
   } catch (error: unknown) {
-    return { ok: false, error: cleanError(error) };
+    return failureOf(error);
   }
   return { ok: true, value: parseGitHubStatus(response) };
 }
@@ -41,7 +43,7 @@ export function useGitHubStatus(projectPath: string): PreflightState {
       if (lifetime === 'disposed') {
         return;
       }
-      setState(result.ok ? { kind: 'ready', status: result.value } : { kind: 'error', error: result.error });
+      setState(result.ok ? { kind: 'ready', status: result.value } : { kind: 'error', error: result.error, errorRef: result.errorRef });
     });
     return () => {
       lifetime = 'disposed';

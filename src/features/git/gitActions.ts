@@ -1,4 +1,8 @@
 import type { WireMergeOutcome } from '../../../shared/ipc/ipcResults';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import { cleanErrorKeepingReference } from '../../lib/cleanError';
+import { translateErrorText, translateReference } from '../../lib/i18n/translateErrorText';
 type Conflict = Extract<WireMergeOutcome, { readonly conflicted: true }> & {
   readonly deleteAfter: boolean;
 };
@@ -7,6 +11,8 @@ interface ActionOptions {
   readonly branch: string;
   readonly showToast: (message: string, kind: 'error' | 'success' | 'info') => void;
   readonly run: (work: () => Promise<void>, label: string) => void;
+  /** The hook's `translate`; pure code cannot call hooks. English when the caller has none. */
+  readonly translate?: Translator;
 }
 interface MergeOptions extends ActionOptions {
   readonly into: string;
@@ -16,7 +22,7 @@ interface MergeOptions extends ActionOptions {
 interface DeleteOptions extends ActionOptions {
   readonly parked?: boolean;
 }
-interface TidyOptions extends Pick<ActionOptions, 'projectPath' | 'branch' | 'showToast'> {
+interface TidyOptions extends Pick<ActionOptions, 'projectPath' | 'branch' | 'showToast' | 'translate'> {
   readonly into: string;
   readonly changed?: boolean;
 }
@@ -46,7 +52,16 @@ import { gitMerge, gitDeleteBranch, gitPark, gitUnpark } from './gitBridge';
  * The confirm names both branches because the direction is the whole decision
  * and neither an icon on a row nor a menu item can show it.
  */
-export async function mergeBranchAction({ projectPath, branch, into, trunk, run, showToast, onConflict }: MergeOptions): Promise<void> {
+export async function mergeBranchAction({
+  projectPath,
+  branch,
+  into,
+  trunk,
+  run,
+  showToast,
+  onConflict,
+  translate = ENGLISH_TRANSLATE,
+}: MergeOptions): Promise<void> {
   // Once a branch has been folded in, it is usually finished — its work lives
   // on the other branch now and the name is clutter. So the offer to tidy it
   // up belongs WITH the merge, ticked, rather than as a second thing to
@@ -59,14 +74,14 @@ export async function mergeBranchAction({ projectPath, branch, into, trunk, run,
   // side effect of routine housekeeping.
   const isTrunk = !!trunk && branch === trunk;
   const answer = await confirmDialog({
-    title: `Merge “${branch}” into “${into}”?`,
-    confirmLabel: `Merge into ${into}`,
+    title: translate('git.action.merge.title', { branch, into }),
+    confirmLabel: translate('git.action.merge.confirm', { into }),
     ...(isTrunk
       ? {}
       : {
           checkbox: {
-            label: `Delete “${branch}” afterwards`,
-            hint: `Merged changes stay in ${into}.`,
+            label: translate('git.action.merge.deleteAfter', { branch }),
+            hint: translate('git.action.merge.deleteHint', { into }),
             defaultChecked: true,
           },
         }),
@@ -85,7 +100,7 @@ export async function mergeBranchAction({ projectPath, branch, into, trunk, run,
     // stopped without moving anything — so it is offered as the choice it is:
     // set the work aside and go ahead, or leave it and deal with it first.
     if ('dirty' in merged) {
-      await mergeDirtyWork({ projectPath, branch, into, showToast, onConflict, deleteAfter }, merged.files);
+      await mergeDirtyWork({ projectPath, branch, into, showToast, onConflict, deleteAfter, translate }, merged.files);
       return;
     }
     if ('conflicted' in merged) {
@@ -95,15 +110,18 @@ export async function mergeBranchAction({ projectPath, branch, into, trunk, run,
       return;
     }
     if (deleteAfter) {
-      await tidyUp({ projectPath, branch, into, changed: merged?.changed, showToast });
+      await tidyUp({ projectPath, branch, into, changed: merged?.changed, showToast, translate });
       return;
     }
     // Said from in here because the caller's success message has no way to
     // know whether anything actually moved — a merge with nothing to bring is
     // a success, and calling it "merged" would suggest work arrived that was
     // already there.
-    showToast(merged?.changed ? `Merged ${branch} into ${merged.into}` : `${into} already has everything from ${branch}`, 'success');
-  }, 'Merging…');
+    showToast(
+      merged?.changed ? translate('git.action.merge.done', { branch, into: merged.into ?? into }) : translate('git.action.merge.alreadyHas', { branch, into }),
+      'success',
+    );
+  }, translate('git.busy.merging'));
 }
 
 /**
@@ -114,21 +132,22 @@ export async function mergeBranchAction({ projectPath, branch, into, trunk, run,
  * worth hearing rather than forcing past. The merge already worked either way,
  * so a failure here is reported without taking the merge down with it.
  */
-export async function tidyUp({ projectPath, branch, into, changed, showToast }: TidyOptions): Promise<void> {
-  const merged = changed ? `Merged ${branch} into ${into}` : `${into} already had everything from ${branch}`;
+export async function tidyUp({ projectPath, branch, into, changed, showToast, translate = ENGLISH_TRANSLATE }: TidyOptions): Promise<void> {
+  // Each outcome is one whole sentence per case: word order differs between languages, so nothing is stitched together.
+  const params = { branch, into } as const;
   try {
     const deleted = await gitDeleteBranch({ projectPath, branch });
     if (!deleted.ok) {
       // Should not happen straight after a merge, and if it does the branch is
       // holding something the merge did not take — which is a thing to say,
       // not to force past.
-      showToast(`${merged}. ${branch} was kept — it still has commits of its own.`, 'info');
+      showToast(translate(changed ? 'git.action.tidy.keptChanged' : 'git.action.tidy.keptUnchanged', params), 'info');
       return;
     }
-    showToast(`${merged}, and deleted ${branch}`, 'success');
+    showToast(translate(changed ? 'git.action.tidy.deletedChanged' : 'git.action.tidy.deletedUnchanged', params), 'success');
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    showToast(`${merged}. ${branch} could not be deleted: ${message}`, 'info');
+    const message = translateErrorText(cleanErrorKeepingReference(error), translate);
+    showToast(translate(changed ? 'git.action.tidy.failedChanged' : 'git.action.tidy.failedUnchanged', { ...params, message }), 'info');
   }
 }
 
@@ -141,15 +160,12 @@ export async function tidyUp({ projectPath, branch, into, changed, showToast }: 
  * rather than bundled into the first, where it would be a warning about
  * something that usually isn't true.
  */
-export async function deleteBranchAction({ projectPath, branch, parked, run, showToast }: DeleteOptions): Promise<void> {
-  const waiting = parked
-    ? '\n\nChanges are waiting on it. They stay parked and won’t be deleted, but nothing will ' + 'bring them back once the branch is gone.'
-    : '';
+export async function deleteBranchAction({ projectPath, branch, parked, run, showToast, translate = ENGLISH_TRANSLATE }: DeleteOptions): Promise<void> {
   const yes = await confirmDialog({
-    title: `Delete the branch “${branch}”?`,
-    body: `Anything saved only on ${branch} goes with it.${waiting}`,
-    confirmLabel: 'Delete branch',
-    cancelLabel: 'Cancel',
+    title: translate('git.action.delete.title', { branch }),
+    body: translate(parked ? 'git.action.delete.bodyParked' : 'git.action.delete.body', { branch }),
+    confirmLabel: translate('git.action.delete.confirm'),
+    cancelLabel: translate('ui.cancel'),
     danger: true,
   });
   // Deletion requires the affirmative button, never a dismissal or checkbox answer.
@@ -162,9 +178,10 @@ export async function deleteBranchAction({ projectPath, branch, parked, run, sho
       // A different question from the first — "this loses work" rather than
       // "are you sure" — so it is asked in those terms and in its own dialog.
       const anyway = await confirmDialog({
-        title: 'This would lose work',
-        body: deleted.message,
-        confirmLabel: 'Delete anyway',
+        title: translate('git.action.delete.loseTitle'),
+        // The electron refusal text is English; this dialog is shown by the renderer, so it says the same thing in the active language.
+        body: translate('git.action.delete.unmerged', { branch }),
+        confirmLabel: translate('git.action.delete.anyway'),
         danger: true,
       });
       if (anyway !== true) {
@@ -172,26 +189,27 @@ export async function deleteBranchAction({ projectPath, branch, parked, run, sho
       }
       await gitDeleteBranch({ projectPath, branch, force: true });
     }
-    showToast(`Deleted ${branch}`, 'success');
-  }, 'Deleting branch…');
+    showToast(translate('git.action.delete.done', { branch }), 'success');
+  }, translate('git.busy.deleting'));
 }
 
-async function mergeDirtyWork({ projectPath, branch, into, showToast, onConflict, deleteAfter }: DirtyOptions, files: readonly string[]): Promise<void> {
-  const named = files?.length ? files.slice(0, 3).join(', ') : 'a file the merge needs';
+async function mergeDirtyWork(
+  { projectPath, branch, into, showToast, onConflict, deleteAfter, translate = ENGLISH_TRANSLATE }: DirtyOptions,
+  files: readonly string[],
+): Promise<void> {
   const park = await confirmDialog({
-    title: 'You have unsaved work in the way',
-    body:
-      `${named} ${files?.length === 1 ? 'has' : 'have'} changes that aren’t saved, ` +
-      'and the merge needs to write there. Your work can be set aside and put back ' +
-      'afterwards — nothing is lost either way.',
-    confirmLabel: 'Set it aside and merge',
+    title: translate('git.action.dirty.title'),
+    body: files?.length
+      ? translate('git.action.dirty.body', { count: files.length, files: files.slice(0, 3).join(', ') })
+      : translate('git.action.dirty.bodyUnknown'),
+    confirmLabel: translate('git.action.dirty.confirm'),
   });
   if (!park) {
     return;
   }
   const parked = await gitPark({ projectPath });
   if (!parked?.ok) {
-    showToast(parked?.error || 'Could not set your work aside.', 'error');
+    showToast(parked?.error || translate('git.action.dirty.parkFailed'), 'error');
     return;
   }
   const again = await gitMerge({ projectPath, branch });
@@ -204,16 +222,16 @@ async function mergeDirtyWork({ projectPath, branch, into, showToast, onConflict
     return;
   }
   if ('dirty' in again) {
-    showToast('Still blocked — your work is back where it was.', 'error');
+    showToast(translate('git.action.dirty.stillBlocked'), 'error');
     return;
   }
   if (back?.error) {
-    showToast(back.error, 'error');
+    showToast(translateReference(back.error, back.errorRef, translate), 'error');
   }
   if (deleteAfter) {
-    await tidyUp({ projectPath, branch, into, changed: again?.changed, showToast });
+    await tidyUp({ projectPath, branch, into, changed: again?.changed, showToast, translate });
     return;
   }
-  showToast(again?.changed ? `Merged ${branch} into ${into} — your work is back` : `${into} already had everything from ${branch}`, 'success');
+  showToast(again?.changed ? translate('git.action.merge.doneBack', { branch, into }) : translate('git.action.merge.alreadyHad', { branch, into }), 'success');
   return;
 }
