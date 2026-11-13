@@ -7,6 +7,7 @@ import type { AssetRequest } from '../ui/assetPick';
 import type { CoalescedRun } from '../lib/coalescedRun';
 import type { EditsRecord } from '../editor/pageEdits';
 import type { EditorNode } from '../editor/pageView';
+import type { TypedMessageRef } from '../../shared/properties/i18n/messageRef';
 import type { VariableSelection } from '../ipc/variablesBridge';
 
 export interface ProjectIdentity {
@@ -19,6 +20,8 @@ export interface UndoCommand {
   readonly undo: () => unknown | Promise<unknown>;
   redo: () => unknown | Promise<unknown>;
   label?: string;
+  /** The step's name as a reference, so it is worded in the language chosen when it is undone, not when it was made. Wins over `label`. */
+  labelRef?: TypedMessageRef | undefined;
   readonly coalesceKey?: string | undefined;
 }
 

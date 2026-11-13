@@ -12,6 +12,9 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { assert } from '../../../shared/core/assert';
 import { ok, type Result } from '../../../shared/core/result';
 import Popup from '../../ui/Popup';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
+import { messageRef, type TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 import { PanelReadStatus } from '../../ui/PanelReadStatus';
 import { usePanelData } from '../../lib/usePanelData';
 import { onPropertyFilesChanged, onVariablesChanged } from '../../ipc/editorEnvironment';
@@ -55,7 +58,12 @@ import './selectors.css';
 export interface SelectorsPanelProps {
   readonly project: { readonly path: string };
   readonly showToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
-  readonly onRecordUndo: (command: { readonly label: string; readonly undo: () => Promise<void>; redo: () => Promise<void> }) => void;
+  readonly onRecordUndo: (command: {
+    readonly label: string;
+    readonly labelRef?: TypedMessageRef | undefined;
+    readonly undo: () => Promise<void>;
+    redo: () => Promise<void>;
+  }) => void;
 }
 
 // The panel keeps itself current: any project file change (markup, scripts,
@@ -75,10 +83,11 @@ export default function SelectorsPanel(props: SelectorsPanelProps) {
 }
 
 function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelProps) {
-  const read = useCallback(() => readSelectorReport(project.path), [project.path]);
+  const translate = useTranslate();
+  const read = useCallback(() => readSelectorReport(project.path, 'search', translate), [project.path, translate]);
   const { state, refresh } = usePanelData(selectorReportCache, project.path, read, onProjectChanged);
-  const early = useEarlyReport(project.path, { loading: state.kind === 'loading' });
-  const keep = useKeepList(project.path, showToast, onRecordUndo, refresh);
+  const early = useEarlyReport(project.path, { loading: state.kind === 'loading' }, translate);
+  const keep = useKeepList(project.path, showToast, onRecordUndo, translate, refresh);
   const [chosen, setFilter] = useState<SelectorFilter | undefined>(undefined);
   const [search, setSearch] = useState('');
   // Long lists draw a page at a time; a new tab or search starts from the top.
@@ -116,6 +125,7 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
       targets.map((entry) => entry.id),
       report.files.filter((file) => rels.has(file.rel)),
       reach,
+      translate,
     );
     setBusy(false);
     setConfirming(false);
@@ -126,11 +136,12 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
     }
     const { changes, removed } = result.value;
     onRecordUndo({
-      label: 'Remove unused styles',
-      undo: () => restoreSelectors(project.path, changes, 'before').finally(() => void refresh()),
-      redo: () => restoreSelectors(project.path, changes, 'after').finally(() => void refresh()),
+      label: translate('selectors.cleanup.title'),
+      labelRef: messageRef('selectors.cleanup.title'),
+      undo: () => restoreSelectors(project.path, changes, 'before', translate).finally(() => void refresh()),
+      redo: () => restoreSelectors(project.path, changes, 'after', translate).finally(() => void refresh()),
     });
-    showToast(removed === 1 ? 'Removed 1 unused style' : `Removed ${removed} unused styles`, 'success');
+    showToast(translate('selectors.cleanup.removed', { count: removed }), 'success');
     await refresh();
   };
   const cleanUp = (): Promise<void> => removeEntries(unused);
@@ -180,7 +191,7 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
     return (
       <div className="panel-section grow selectors-panel">
         <div className="panel-header">
-          <h2>Remove unused styles</h2>
+          <h2>{translate('selectors.cleanup.title')}</h2>
         </div>
         <CleanupConfirm entries={unused} busy={busy} onCancel={() => setConfirming(false)} onDelete={() => void cleanUp()} />
       </div>
@@ -189,11 +200,11 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
   return (
     <div className="panel-section grow selectors-panel">
       <div className="panel-header">
-        <h2>Style selectors</h2>
-        <span className="tip-anchor" title={unused.length === 0 ? 'No unused styles to clean up' : 'Clean up unused styles'}>
+        <h2>{translate('selectors.title')}</h2>
+        <span className="tip-anchor" title={unused.length === 0 ? translate('selectors.cleanup.none') : translate('selectors.cleanup.action')}>
           <button
             className="ghost selectors-clean"
-            aria-label="Clean up unused styles"
+            aria-label={translate('selectors.cleanup.action')}
             disabled={unused.length === 0 || checking || busy}
             onClick={() => setConfirming(true)}
           >
@@ -203,7 +214,7 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
       </div>
       {report === undefined ? (
         <div className="panel-body">
-          <PanelReadStatus state={state} label="style selectors" retry={refresh} />
+          <PanelReadStatus state={state} label={translate('selectors.panelLabel')} retry={refresh} />
         </div>
       ) : (
         <>
@@ -211,7 +222,13 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
             <FilterTabs report={report} filter={filter} onFilter={setFilter} />
             <label className="selectors-search">
               <SearchIcon size={13} />
-              <input value={search} placeholder="Search" spellCheck={false} aria-label="Search styles" onChange={(event) => setSearch(event.target.value)} />
+              <input
+                value={search}
+                placeholder={translate('selectors.search.placeholder')}
+                spellCheck={false}
+                aria-label={translate('selectors.search.label')}
+                onChange={(event) => setSearch(event.target.value)}
+              />
             </label>
           </div>
           <div className="panel-body selectors-body">
@@ -235,7 +252,7 @@ function ProjectSelectors({ project, showToast, onRecordUndo }: SelectorsPanelPr
                 locks={sheetLocks}
                 limit={limit}
                 onMore={more}
-                empty={emptyText(report, filter)}
+                empty={emptyText(report, filter, translate)}
                 keepList={keep.stored}
                 transitions={transitions}
                 onToggleKeep={toggleKeep}
@@ -315,7 +332,12 @@ function SelectorTip({ tip, onClose }: { readonly tip: HoverTip | undefined; rea
   );
 }
 
-const FILTER_LABELS: Readonly<Record<SelectorFilter, string>> = { unused: 'Unused', unknown: 'Can’t tell', kept: 'Locked', all: 'All' };
+const FILTER_LABELS: Readonly<Record<SelectorFilter, MessageKey>> = {
+  unused: 'selectors.filter.unused',
+  unknown: 'selectors.filter.unknown',
+  kept: 'selectors.filter.kept',
+  all: 'selectors.filter.all',
+};
 
 function FilterTabs({
   report,
@@ -326,13 +348,14 @@ function FilterTabs({
   readonly filter: SelectorFilter;
   readonly onFilter: (filter: SelectorFilter) => void;
 }) {
+  const translate = useTranslate();
   const counts = selectorCounts(report);
   // Can't tell and Locked appear only when they hold something (or are open),
   // so the tabs that matter always fit.
   const shown = SELECTOR_FILTERS.filter((option) => option === 'unused' || option === 'all' || option === filter || counts[option] > 0);
   const indicator = useTabIndicator(filter, shown.join(' '));
   return (
-    <div className="selectors-tabs" role="tablist" aria-label="Show selectors" ref={indicator.list}>
+    <div className="selectors-tabs" role="tablist" aria-label={translate('selectors.filter.label')} ref={indicator.list}>
       <span className="selectors-tab-indicator" aria-hidden="true" style={indicator.style} />
       {shown.map((option) => (
         <button
@@ -343,7 +366,7 @@ function FilterTabs({
           className={`selectors-tab ${filter === option ? 'on' : ''}`}
           onClick={() => onFilter(option)}
         >
-          {FILTER_LABELS[option]}
+          {translate(FILTER_LABELS[option])}
           <span className="selectors-tab-count">{counts[option]}</span>
         </button>
       ))}
@@ -381,13 +404,14 @@ function useTabIndicator(filter: SelectorFilter, layoutKey: string) {
 // A line above the list only where the list needs explaining: while packages
 // are being searched, and why "Can't tell" styles are never removed.
 function Banner({ filter, report, checking }: { readonly filter: SelectorFilter; readonly report: SelectorReport; readonly checking: boolean }) {
+  const translate = useTranslate();
   const counts = selectorCounts(report);
   if (checking) {
-    return <p className="selectors-banner">Checking installed packages…</p>;
+    return <p className="selectors-banner">{translate('selectors.banner.checking')}</p>;
   }
   switch (filter) {
     case 'unknown':
-      return counts.unknown === 0 ? undefined : <p className="selectors-banner">These may be in use, so they are never removed.</p>;
+      return counts.unknown === 0 ? undefined : <p className="selectors-banner">{translate('selectors.banner.unknown')}</p>;
     case 'unused':
     case 'kept':
     case 'all':
@@ -399,7 +423,7 @@ function Banner({ filter, report, checking }: { readonly filter: SelectorFilter;
   }
 }
 
-function useEarlyReport(projectPath: string, options: { readonly loading: boolean }): SelectorReport | undefined {
+function useEarlyReport(projectPath: string, options: { readonly loading: boolean }, translate: Translator): SelectorReport | undefined {
   const wanted = options.loading;
   const [early, setEarly] = useState<SelectorReport | undefined>(undefined);
   useEffect(() => {
@@ -407,7 +431,7 @@ function useEarlyReport(projectPath: string, options: { readonly loading: boolea
       return undefined;
     }
     let active = true;
-    void readSelectorReport(projectPath, 'cached').then((result) => {
+    void readSelectorReport(projectPath, 'cached', translate).then((result) => {
       if (active && result.ok) {
         setEarly(result.value);
       }
@@ -415,7 +439,7 @@ function useEarlyReport(projectPath: string, options: { readonly loading: boolea
     return () => {
       active = false;
     };
-  }, [projectPath, wanted]);
+  }, [projectPath, wanted, translate]);
   return early;
 }
 
@@ -423,6 +447,7 @@ function useKeepList(
   projectPath: string,
   showToast: SelectorsPanelProps['showToast'],
   onRecordUndo: SelectorsPanelProps['onRecordUndo'],
+  translate: Translator,
   refresh: () => Promise<unknown>,
 ) {
   // The kept list draws the lock controls in the first frame; the read below refreshes it.
@@ -438,12 +463,12 @@ function useKeepList(
           setStored(value);
         }
       },
-      (error: unknown) => showToast(`Could not read .stacki/styles.json: ${String(error)}`, 'error'),
+      (error: unknown) => showToast(translate('selectors.keepList.readError', { error: String(error) }), 'error'),
     );
     return () => {
       active = false;
     };
-  }, [projectPath, showToast]);
+  }, [projectPath, showToast, translate]);
   const toggle = async (entry: SelectorEntry): Promise<void> => {
     const names = verdictNames(entry.verdict);
     if (names.length === 0) {
@@ -464,7 +489,7 @@ function useKeepList(
   // One write and one undo step per stylesheet lock change, however many
   // entries it touches; undo writes the earlier file back if no one else has
   // changed it since.
-  const apply = async (label: string, plan: (current: StoredKeepList) => Result<KeepListChange, string>): Promise<void> => {
+  const apply = async (label: MessageKey, plan: (current: StoredKeepList) => Result<KeepListChange, string>): Promise<void> => {
     try {
       const current = await readKeepList(projectPath);
       const change = plan(current);
@@ -478,7 +503,8 @@ function useKeepList(
       const after = saved.source;
       assert(after !== undefined, 'useKeepList: a written keep list has bytes');
       onRecordUndo({
-        label,
+        label: translate(label),
+        labelRef: messageRef(label),
         undo: async () => {
           setStored(await replaceKeepList(projectPath, after, before));
           await refresh();
@@ -495,26 +521,26 @@ function useKeepList(
   // `target` is a stylesheet or a folder ending in `/`; only its own entry is
   // toggled, so a sheet locked through its folder is unlocked at the folder.
   const toggleSheet = (report: SelectorReport, target: string): Promise<void> =>
-    apply('Change stylesheet lock', (current) =>
+    apply('selectors.lock.changeSheet', (current) =>
       ok(current.keepList.lockedStylesheets.includes(target) ? unlockSheetChange(current.keepList, target) : lockSheetChange(report, current.keepList, target)),
     );
   const unlockOne = (report: SelectorReport, entry: SelectorEntry): Promise<void> =>
-    apply('Unlock style', (current) => unlockOneChange(report, current.keepList, entry));
+    apply('selectors.lock.unlockStyle', (current) => unlockOneChange(report, current.keepList, entry, translate));
   return { stored, toggle, toggleSheet, unlockOne };
 }
 
-function emptyText(report: SelectorReport, filter: SelectorFilter): string {
+function emptyText(report: SelectorReport, filter: SelectorFilter, translate: Translator): string {
   if (report.entries.length === 0) {
-    return 'No class or id selectors in this project’s stylesheets.';
+    return translate('selectors.empty.noSelectors');
   }
   switch (filter) {
     case 'unused':
-      return 'No unused styles. Every style is used, locked, or might be in use.';
+      return translate('selectors.empty.noUnused');
     case 'kept':
-      return 'No locked styles. Lock a style from its row, or a stylesheet from its heading, to keep it through every clean-up.';
+      return translate('selectors.empty.noLocked');
     case 'unknown':
     case 'all':
-      return 'No selectors match.';
+      return translate('selectors.empty.noMatch');
     default: {
       const exhaustive: never = filter;
       return exhaustive;
@@ -606,7 +632,8 @@ function SelectorGroups({
 
 // A folder's heading sits in its own slot so it closes and opens with the stylesheets under it.
 function FolderHeading({ folder, locks, motion }: { readonly folder: string; readonly locks: SheetLocks | undefined; readonly motion: SlotMotion }) {
-  const name = folder === '' ? 'Project root' : folder;
+  const translate = useTranslate();
+  const name = folder === '' ? translate('selectors.folder.root') : folder;
   return (
     <div className={`selectors-folder-slot ${slotClass(motion)}`} aria-hidden={motion === 'collapsing' ? true : undefined}>
       <div className="selectors-heading selectors-folder">
@@ -665,10 +692,15 @@ function SheetLock({
   readonly covering: string | undefined;
   readonly onToggle: (target: string) => void;
 }) {
+  const translate = useTranslate();
   const own = covering === target;
   const inherited = covering !== undefined && !own;
-  const label = own ? `Unlock ${name}` : inherited ? `Locked with ${covering}` : `Lock ${name} from cleanup`;
-  const tip = own ? 'Unlock' : label;
+  const label = own
+    ? translate('selectors.sheet.unlock', { name })
+    : inherited
+      ? translate('selectors.sheet.lockedWith', { name: covering })
+      : translate('selectors.sheet.lock', { name });
+  const tip = own ? translate('selectors.sheet.unlockTip') : label;
   return (
     <span className="tip-anchor selectors-sheet-lock-anchor" title={tip}>
       <button
@@ -697,9 +729,11 @@ function ReasonList({
   hover,
   onRemove,
 }: { readonly report: SelectorReport; readonly search: string } & RowActions & Paging) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const all = unknownReasons(report, search, transitions?.reasons ?? NO_REASONS);
   if (all.length === 0) {
-    return <p className="selectors-empty">Nothing is uncertain: every style was checked.</p>;
+    return <p className="selectors-empty">{translate('selectors.empty.certain')}</p>;
   }
   const { groups: reasons, total } = firstRows(all, limit);
   return (
@@ -709,7 +743,7 @@ function ReasonList({
         return (
           <section key={group.reason} className={`selectors-group ${slotClass(motion)}`} aria-hidden={motion === 'collapsing' ? true : undefined}>
             <div className="selectors-group-body">
-              <p className="selectors-reason">{sentence(group.reason)}</p>
+              <p className="selectors-reason">{sentence(translateDescribed({ message: group.reason, messageRef: group.reasonRef }))}</p>
               {group.entries.map((entry) => (
                 <SelectorRow
                   key={entry.id}
@@ -734,6 +768,7 @@ function ReasonList({
 // little before the bottom so the list never visibly runs out. Without an
 // IntersectionObserver it is a button.
 function MoreRows({ onMore }: { readonly onMore: () => void }) {
+  const translate = useTranslate();
   const marker = useRef<HTMLDivElement>(null);
   const watching = typeof IntersectionObserver !== 'undefined';
   useEffect(() => {
@@ -756,7 +791,7 @@ function MoreRows({ onMore }: { readonly onMore: () => void }) {
     <div ref={marker} className="selectors-more">
       {!watching && (
         <button className="ghost" onClick={onMore}>
-          Show more
+          {translate('selectors.more')}
         </button>
       )}
     </div>
@@ -816,6 +851,7 @@ function SelectorRow({
   hover,
   onRemove,
 }: { readonly entry: SelectorEntry; readonly sheetLocked?: boolean; readonly nameKept?: boolean } & RowActions) {
+  const translate = useTranslate();
   const { verdict } = entry;
   const names = verdictNames(verdict);
   const locked = verdict.kind === 'kept';
@@ -854,14 +890,20 @@ function SelectorRow({
           // The trash comes first: the lock ends the row, in the same column as every other lock.
           <span className="selectors-actions">
             {removable && (
-              <button className="ghost selectors-remove-one" aria-label={`Remove ${entry.selector}`} onClick={() => onRemove(entry)}>
+              <button
+                className="ghost selectors-remove-one"
+                aria-label={translate('selectors.row.remove', { selector: entry.selector })}
+                onClick={() => onRemove(entry)}
+              >
                 <TrashIcon size={12} />
               </button>
             )}
             {lockable && (
               <button
                 className={`ghost selectors-lock ${closed ? 'on' : ''}`}
-                aria-label={locked ? `Unlock ${names.join(', ')}` : `Lock ${names.join(', ')} so clean-ups keep it`}
+                aria-label={
+                  locked ? translate('selectors.row.unlock', { names: names.join(', ') }) : translate('selectors.row.lock', { names: names.join(', ') })
+                }
                 disabled={locked && !unlockable}
                 onClick={() => onToggleKeep(entry)}
               >
@@ -904,6 +946,7 @@ function CleanupConfirm({
   readonly onCancel: () => void;
   readonly onDelete: () => void;
 }) {
+  const translate = useTranslate();
   // Each selector once per file, though every rule it is written in is removed.
   const files = new Map<string, SelectorEntry[]>();
   for (const entry of entries) {
@@ -917,8 +960,7 @@ function CleanupConfirm({
     <>
       <div className="panel-body selectors-body">
         <p className="selectors-banner">
-          {shown === 1 ? 'This style' : `These ${shown} styles`} will be removed from {files.size === 1 ? '1 file' : `${files.size} files`}. Undo puts{' '}
-          {shown === 1 ? 'it' : 'them'} back.
+          {translate('selectors.cleanup.confirm', { count: shown, files: translate('selectors.fileCount', { count: files.size }) })}
         </p>
         <SelectorGroups
           report={undefined}
@@ -936,10 +978,10 @@ function CleanupConfirm({
       </div>
       <div className="selectors-confirm-actions">
         <button className="selectors-cancel" onClick={onCancel} disabled={busy}>
-          Cancel
+          {translate('ui.cancel')}
         </button>
         <button className="selectors-delete" onClick={onDelete} disabled={busy}>
-          {busy ? 'Removing…' : shown === 1 ? 'Remove style' : `Remove ${shown} styles`}
+          {busy ? translate('selectors.cleanup.removing') : translate('selectors.cleanup.confirmButton', { count: shown })}
         </button>
       </div>
     </>
@@ -947,16 +989,18 @@ function CleanupConfirm({
 }
 
 function ReportNotes({ report }: { readonly report: SelectorReport }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   if (report.notes.length === 0) {
     return undefined;
   }
   return (
     <details className="selectors-notes">
-      <summary>{report.notes.length === 1 ? '1 file not checked' : `${report.notes.length} files not checked`}</summary>
+      <summary>{translate('selectors.notes', { count: report.notes.length })}</summary>
       {report.notes.map((note, index) => (
         <p key={`${note.rel}-${index}`}>
           <span className="selectors-note-file">{note.rel}</span>
-          {note.message.replace(/^Its styles were not checked: /, '')}
+          {note.messageRef === undefined ? note.message.replace(/^Its styles were not checked: /, '') : translateDescribed(note)}
         </p>
       ))}
     </details>

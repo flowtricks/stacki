@@ -43,6 +43,7 @@ import {
 import {
   APP_LIMITS,
   APP_SDK_FILE,
+  appsFailure,
   parseAppId,
   parseAppVersion,
   parseGitHubSource,
@@ -56,6 +57,7 @@ import { requestRole } from '../roles/serverAccess';
 import { record } from '../../shared/validation';
 
 import { APP_FILES_PREFIX_PATH } from './appsPaths';
+import { appsRefusal } from './appsRefusal';
 
 /** Where app frames load from: `/studio/api/apps/files/<id>/<path>`. */
 const APP_FILES_PREFIX = APP_FILES_PREFIX_PATH;
@@ -150,7 +152,7 @@ export function appsRoutes(root: string) {
       return true;
     }
     if (!(await requestRole(root, request)).isAdmin) {
-      send(response, { ok: false, message: 'Only an admin can install, update or remove apps.' });
+      send(response, appsRefusal('apps.error.adminOnly'));
       return true;
     }
     send(response, await adminAction(root, service, action, request, readBody));
@@ -170,7 +172,7 @@ async function adminAction(
     try {
       return service.stageFile(root, await bodyBytes(request, APP_LIMITS.archiveBytesMax), name);
     } catch (error: unknown) {
-      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+      return { ok: false, ...appsFailure(error) };
     }
   }
   const input = record(JSON.parse((await readBody()) || '{}'));
@@ -201,12 +203,12 @@ async function adminAction(
       return service.applyUpdate(root, parseAppId(input['id']));
     case 'auto-update': {
       if (typeof input['autoUpdate'] !== 'boolean') {
-        return { ok: false, message: 'autoUpdate must be true or false' };
+        return { ok: false, message: 'autoUpdate must be true or false' }; // i18n-ignore: protocol or programmer error answered to the Studio client, not text for the person.
       }
       return service.setAutoUpdate(root, parseAppId(input['id']), { autoUpdate: input['autoUpdate'] });
     }
     default:
-      return { ok: false, message: 'Unknown app action' };
+      return { ok: false, message: 'Unknown app action' }; // i18n-ignore: protocol or programmer error answered to the Studio client, not text for the person.
   }
 }
 
@@ -222,12 +224,12 @@ async function marketplaceAction(
   const input = record(JSON.parse((await readBody()) || '{}'));
   if (action === 'marketplace') {
     if (!can(role, 'marketplace:view')) {
-      return { ok: false, message: 'Your role cannot see the marketplace.' };
+      return appsRefusal('apps.error.noMarketplace');
     }
     return service.marketplace(input['refresh'] === true ? 'fresh' : 'cached');
   }
   if (!can(role, 'marketplace:install')) {
-    return { ok: false, message: 'Your role cannot install from the marketplace.' };
+    return appsRefusal('apps.error.noMarketplaceInstall');
   }
   return service.installMarketplace(root, parseAppId(input['id']), parseAppVersion(input['version']));
 }
@@ -247,7 +249,7 @@ async function publishAction(
   switch (action) {
     case 'scan': {
       if (!mayShare && !mayPublish) {
-        return { ok: false, message: 'Your role cannot share or publish apps.' };
+        return appsRefusal('apps.error.noShareOrPublish');
       }
       const target = parseAppScanTarget(input['target']);
       return target.kind === 'installed'
@@ -256,36 +258,32 @@ async function publishAction(
     }
     case 'status': {
       if (!mayShare && !mayPublish) {
-        return { ok: false, message: 'Your role cannot share or publish apps.' };
+        return appsRefusal('apps.error.noShareOrPublish');
       }
       const ref = parseAppRepositoryRef(input['repository']);
       return publishing.status(ref.owner, ref.repository, ref.account);
     }
     case 'share':
-      return mayShare ? publishing.share(root, parseAppShareRequest(input['share']), () => undefined) : refused('share apps');
+      return mayShare ? publishing.share(root, parseAppShareRequest(input['share']), () => undefined) : appsRefusal('apps.error.noShare');
     case 'switch-source':
-      return mayShare ? publishing.switchSource(root, parseAppId(input['id']), parseSharedReleaseSource(input['source'])) : refused('share apps');
+      return mayShare ? publishing.switchSource(root, parseAppId(input['id']), parseSharedReleaseSource(input['source'])) : appsRefusal('apps.error.noShare');
     case 'make-public': {
       const ref = parseAppRepositoryRef(input['repository']);
-      return mayPublish ? publishing.makePublic(ref.owner, ref.repository, ref.account) : refused('publish apps');
+      return mayPublish ? publishing.makePublic(ref.owner, ref.repository, ref.account) : appsRefusal('apps.error.noPublish');
     }
     case 'add-license': {
       const ref = parseAppRepositoryRef(input['repository']);
-      return mayPublish ? publishing.addLicense(ref.owner, ref.repository, ref.account) : refused('publish apps');
+      return mayPublish ? publishing.addLicense(ref.owner, ref.repository, ref.account) : appsRefusal('apps.error.noPublish');
     }
     case 'check': {
       const ref = parseAppRepositoryRef(input['repository']);
-      return mayPublish ? publishing.precheck(ref.owner, ref.repository, ref.account) : refused('publish apps');
+      return mayPublish ? publishing.precheck(ref.owner, ref.repository, ref.account) : appsRefusal('apps.error.noPublish');
     }
     case 'submit':
-      return mayPublish ? publishing.submit(parseMarketplaceSubmission(input['submission'])) : refused('publish apps');
+      return mayPublish ? publishing.submit(parseMarketplaceSubmission(input['submission'])) : appsRefusal('apps.error.noPublish');
     default:
-      return { ok: false, message: 'Unknown publish action' };
+      return { ok: false, message: 'Unknown publish action' }; // i18n-ignore: protocol or programmer error answered to the Studio client, not text for the person.
   }
-}
-
-function refused(what: string) {
-  return { ok: false, message: `Your role cannot ${what}.` };
 }
 
 // One installed app's settings: anyone who can open apps reads and fills in theirs.
@@ -298,14 +296,14 @@ async function settingsAction(
 ) {
   const role = await requestRole(root, request);
   if (!can(role, 'panel:apps')) {
-    return { ok: false, message: 'Your role cannot use apps.' };
+    return appsRefusal('apps.error.noApps');
   }
   const input = record(JSON.parse((await readBody()) || '{}'));
   const id = parseAppId(input['id']);
   try {
     const app = listInstalledApps(root).find((summary) => summary.manifest.id === id);
     if (app === undefined) {
-      return { ok: false, message: `The app "${id}" is not installed.` };
+      return appsRefusal('apps.error.notInstalled', { id });
     }
     if (action === 'settings/read') {
       return { ok: true, value: readAppSettings(root, vault, app.manifest) };
@@ -316,7 +314,7 @@ async function settingsAction(
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
       throw error;
     }
-    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    return { ok: false, ...appsFailure(error) };
   }
 }
 

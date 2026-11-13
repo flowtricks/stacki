@@ -372,7 +372,7 @@ export function parseRawPolygon(value: string): RawClipPathShape | undefined {
   return {
     kind: 'raw',
     value: value.trim(),
-    preset: 'Polygon',
+    preset: 'Polygon', // i18n-ignore: preset id.
     ...(editable ? { editable } : {}),
   };
 }
@@ -399,7 +399,7 @@ export function parseRawCircle(value: string): RawClipPathShape | undefined {
   return {
     kind: 'raw',
     value: value.trim(),
-    preset: 'Circle',
+    preset: 'Circle', // i18n-ignore: preset id.
     ...(editable ? { editable } : {}),
   };
 }
@@ -426,7 +426,7 @@ export function parseRawEllipse(value: string): RawClipPathShape | undefined {
   return {
     kind: 'raw',
     value: value.trim(),
-    preset: 'Ellipse',
+    preset: 'Ellipse', // i18n-ignore: preset id.
     ...(editable ? { editable } : {}),
   };
 }
@@ -466,7 +466,7 @@ export function parseRawInset(value: string): RawClipPathShape | undefined {
   return {
     kind: 'raw',
     value: value.trim(),
-    preset: 'Inset',
+    preset: 'Inset', // i18n-ignore: preset id.
     ...(editable ? { editable } : {}),
   };
 }

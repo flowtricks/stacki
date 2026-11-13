@@ -22,6 +22,8 @@
 
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../shared/properties/i18n/messageRef';
 import { isLinkName, isMediaName } from './fieldNames';
 
 /** What one field of an item holds, in the order the menu lists them. */
@@ -68,24 +70,49 @@ export type ItemFieldDeclaration =
 /** One default item: each field's value as typed (`"3"` for a number, `"true"` for a switch, array or object code for a list or a group). */
 export type ListItemValues = Readonly<Record<string, string>>;
 
-/** What each kind is called in the form. */
+/** The message that names each kind in the form: a table of keys, so the name is translated where it is drawn. */
+export const ITEM_FIELD_TITLE_KEYS: Readonly<Record<ItemFieldKind, MessageKey>> = {
+  text: 'editor.itemFields.kind.text',
+  longText: 'editor.itemFields.kind.longText',
+  richText: 'editor.itemFields.kind.richText',
+  number: 'editor.itemFields.kind.number',
+  switch: 'editor.itemFields.kind.switch',
+  image: 'editor.itemFields.kind.image',
+  video: 'editor.itemFields.kind.video',
+  file: 'editor.itemFields.kind.file',
+  link: 'editor.itemFields.kind.link',
+  email: 'editor.itemFields.kind.email',
+  phone: 'editor.itemFields.kind.phone',
+  color: 'editor.itemFields.kind.color',
+  date: 'editor.itemFields.kind.date',
+  option: 'editor.itemFields.kind.option',
+  list: 'editor.itemFields.kind.list',
+  group: 'editor.itemFields.kind.group',
+};
+
+/** What a kind is called in the form, in the language `translate` speaks. */
+export function itemFieldTitle(kind: ItemFieldKind, translate: Translator = ENGLISH_TRANSLATE): string {
+  return translate(ITEM_FIELD_TITLE_KEYS[kind]);
+}
+
+/** What each kind is called in the form, in English (logs, tests, search). Drawn text uses `itemFieldTitle`. */
 export const ITEM_FIELD_TITLES: Readonly<Record<ItemFieldKind, string>> = {
-  text: 'Text',
-  longText: 'Long text',
-  richText: 'Rich text',
-  number: 'Number',
-  switch: 'Switch',
-  image: 'Image',
-  video: 'Video link',
-  file: 'File',
-  link: 'Link',
-  email: 'Email',
-  phone: 'Phone',
-  color: 'Color',
-  date: 'Date',
-  option: 'Option',
-  list: 'List',
-  group: 'Group',
+  text: ENGLISH_TRANSLATE('editor.itemFields.kind.text'),
+  longText: ENGLISH_TRANSLATE('editor.itemFields.kind.longText'),
+  richText: ENGLISH_TRANSLATE('editor.itemFields.kind.richText'),
+  number: ENGLISH_TRANSLATE('editor.itemFields.kind.number'),
+  switch: ENGLISH_TRANSLATE('editor.itemFields.kind.switch'),
+  image: ENGLISH_TRANSLATE('editor.itemFields.kind.image'),
+  video: ENGLISH_TRANSLATE('editor.itemFields.kind.video'),
+  file: ENGLISH_TRANSLATE('editor.itemFields.kind.file'),
+  link: ENGLISH_TRANSLATE('editor.itemFields.kind.link'),
+  email: ENGLISH_TRANSLATE('editor.itemFields.kind.email'),
+  phone: ENGLISH_TRANSLATE('editor.itemFields.kind.phone'),
+  color: ENGLISH_TRANSLATE('editor.itemFields.kind.color'),
+  date: ENGLISH_TRANSLATE('editor.itemFields.kind.date'),
+  option: ENGLISH_TRANSLATE('editor.itemFields.kind.option'),
+  list: ENGLISH_TRANSLATE('editor.itemFields.kind.list'),
+  group: ENGLISH_TRANSLATE('editor.itemFields.kind.group'),
 };
 
 /** The `@format` word that tells each string kind. */
@@ -120,17 +147,17 @@ const RESERVED_NAMES: ReadonlySet<string> = new Set(['__proto__', 'constructor',
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
 /** Why `name` cannot name an item field, or undefined when it can. */
-export function fieldNameProblem(name: string): string | undefined {
+export function fieldNameProblem(name: string, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   if (name === '') {
-    return 'Each field needs a name.';
+    return translate('editor.itemFields.name.empty');
   }
   if (name.length > ITEM_FIELD_LIMITS.nameCharsMax) {
-    return 'A field name is too long.';
+    return translate('editor.itemFields.name.tooLong');
   }
   if (!IDENTIFIER.test(name)) {
-    return `${name} is not a field name: use letters and numbers, starting with a letter.`;
+    return translate('editor.itemFields.name.invalid', { name });
   }
-  return RESERVED_NAMES.has(name) ? `${name} is reserved: JavaScript gives it a meaning of its own.` : undefined;
+  return RESERVED_NAMES.has(name) ? translate('editor.itemFields.name.reserved', { name }) : undefined;
 }
 
 /** Whether a kind is a string, a number or a switch: one value, no fields of its own. */
@@ -255,47 +282,47 @@ export function fieldDepth(fields: readonly ItemFieldDeclaration[], depth = 1): 
  * when they can. `depth` is the level the fields sit on: the item's own are 1,
  * and a list or group on the last level has no room for fields of its own.
  */
-export function fieldsProblem(fields: readonly ItemFieldDeclaration[], depth = 1): string | undefined {
+export function fieldsProblem(fields: readonly ItemFieldDeclaration[], depth = 1, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   assert(depth >= 1, 'fieldsProblem: levels count from 1');
   if (depth > ITEM_FIELD_LIMITS.depthMax) {
-    return `A list can hold lists ${ITEM_FIELD_LIMITS.depthMax} levels deep, no more.`;
+    return translate('editor.itemFields.fields.tooDeep', { depth: ITEM_FIELD_LIMITS.depthMax });
   }
   if (fields.length === 0) {
-    return 'Add at least one field to each item.';
+    return translate('editor.itemFields.fields.none');
   }
   if (fields.length > ITEM_FIELD_LIMITS.fieldsPerLevelMax) {
-    return 'That is too many fields.';
+    return translate('editor.itemFields.fields.tooMany');
   }
   const names = fields.map((field) => field.name);
   for (const name of names) {
-    const problem = fieldNameProblem(name);
+    const problem = fieldNameProblem(name, translate);
     if (problem !== undefined) {
       return problem;
     }
   }
   if (new Set(names).size !== names.length) {
-    return 'Each field has to have its own name.';
+    return translate('editor.itemFields.fields.duplicateName');
   }
   for (const field of fields) {
-    const problem = fieldProblem(field, depth);
+    const problem = fieldProblem(field, depth, translate);
     if (problem !== undefined) {
       return problem;
     }
   }
   if (depth === 1 && fieldCount(fields) > ITEM_FIELD_LIMITS.fieldsTotalMax) {
-    return 'That is too many fields in all.';
+    return translate('editor.itemFields.fields.tooManyInAll');
   }
   return undefined;
 }
 
 // What is wrong with one field's own settings: its choices, or the fields beneath it.
-function fieldProblem(field: ItemFieldDeclaration, depth: number): string | undefined {
+function fieldProblem(field: ItemFieldDeclaration, depth: number, translate: Translator): string | undefined {
   switch (field.kind) {
     case 'option':
-      return optionsProblem(field);
+      return optionsProblem(field, translate);
     case 'list':
     case 'group':
-      return fieldsProblem(field.fields, depth + 1);
+      return fieldsProblem(field.fields, depth + 1, translate);
     case 'text':
     case 'longText':
     case 'richText':
@@ -317,21 +344,21 @@ function fieldProblem(field: ItemFieldDeclaration, depth: number): string | unde
   }
 }
 
-function optionsProblem(field: Extract<ItemFieldDeclaration, { kind: 'option' }>): string | undefined {
+function optionsProblem(field: Extract<ItemFieldDeclaration, { kind: 'option' }>, translate: Translator): string | undefined {
   const { options } = field;
   if (options.length < 2) {
-    return `${field.name} needs at least two options.`;
+    return translate('editor.itemFields.options.tooFew', { name: field.name });
   }
   if (options.length > ITEM_FIELD_LIMITS.optionsMax) {
-    return `${field.name} has too many options.`;
+    return translate('editor.itemFields.options.tooMany', { name: field.name });
   }
   if (options.some((option) => option.trim() === '')) {
-    return `An option of ${field.name} is empty.`;
+    return translate('editor.itemFields.options.empty', { name: field.name });
   }
   if (options.some((option) => option.length > ITEM_FIELD_LIMITS.optionCharsMax)) {
-    return `An option of ${field.name} is too long.`;
+    return translate('editor.itemFields.options.tooLong', { name: field.name });
   }
-  return new Set(options).size === options.length ? undefined : `${field.name} has an option twice.`;
+  return new Set(options).size === options.length ? undefined : translate('editor.itemFields.options.duplicate', { name: field.name });
 }
 
 /** The nested fields a list or group starts with: one text, as a new list does. */

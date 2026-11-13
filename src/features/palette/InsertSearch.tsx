@@ -26,6 +26,8 @@ import {
   type PaletteAppsSource,
 } from './paletteApps';
 import { InsertAppRow, InsertAppsEmpty, InsertMarketplaceRow } from './InsertAppRows';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import {
   elementIcon,
@@ -43,17 +45,17 @@ import {
 
 export type { InsertChoice, InsertItem } from './insertItem';
 
-type TabEntry = { readonly key: InsertTab; readonly label: string };
+type TabEntry = { readonly key: InsertTab; readonly labelKey: MessageKey };
 
 const TABS: ReadonlyArray<TabEntry> = [
-  { key: 'all', label: 'All results' },
-  { key: 'components', label: 'Components' },
-  { key: 'elements', label: 'Elements' },
-  { key: 'other', label: 'Other' },
+  { key: 'all', labelKey: 'palette.tab.all' },
+  { key: 'components', labelKey: 'palette.tab.components' },
+  { key: 'elements', labelKey: 'palette.tab.elements' },
+  { key: 'other', labelKey: 'palette.tab.other' },
 ];
 
 /** The tabs with Apps, for a host that lists apps and a role that sees the Apps panel. */
-const TABS_WITH_APPS: ReadonlyArray<TabEntry> = [...TABS, { key: 'apps', label: 'Apps' }];
+const TABS_WITH_APPS: ReadonlyArray<TabEntry> = [...TABS, { key: 'apps', labelKey: 'palette.tab.apps' }];
 
 /** What the palette lists: something to insert, an app to open, or a marketplace app to show in the Apps panel. */
 type PaletteEntry = InsertItem | PaletteAppItem | PaletteMarketplaceItem;
@@ -88,6 +90,7 @@ interface InsertSearchProps {
 export default function InsertSearch(props: InsertSearchProps) {
   const { onClose } = props;
   const state = useInsertSearch(props);
+  const translate = useTranslate();
   const { query, setQuery, tab, setTab, pickFolder, highlight, setHighlight, listRef, view } = state;
   // An app opens rather than inserts; either way the palette's work is done.
   const choose = (entry: PaletteEntry): void => {
@@ -118,7 +121,7 @@ export default function InsertSearch(props: InsertSearchProps) {
           <input
             autoFocus
             value={query}
-            placeholder={state.tabs === TABS ? 'Search components, elements…' : 'Search components, elements, apps…'}
+            placeholder={translate(state.tabs === TABS ? 'palette.search.placeholder' : 'palette.search.placeholderApps')}
             spellCheck={false}
             onChange={(event) => setQuery(event.target.value)}
           />
@@ -170,9 +173,10 @@ export default function InsertSearch(props: InsertSearchProps) {
 // Nothing to list. On the Apps tab with no app to open, a short section on what apps are and the ways to
 // get one, as rows the keys move through and Enter runs; while the apps load or when they failed to, the reason.
 function InsertEmpty({ state, onClose }: { readonly state: InsertState; readonly onClose: () => void }) {
+  const translate = useTranslate();
   const empty = state.appsEmpty;
   if (empty === undefined) {
-    return <div className="props-empty">No matches.</div>;
+    return <div className="props-empty">{translate('palette.search.noMatches')}</div>;
   }
   return (
     <InsertAppsEmpty
@@ -198,13 +202,14 @@ function runEmptyAction(action: PaletteAppsAction, onClose: () => void): void {
 // one (the shared segment indicator, src/ui/segmentIndicator.ts), whatever changed the tab: a click,
 // the Tab key, or the preference the palette reopened on.
 function InsertTabs({ tabs, tab, onPick }: { readonly tabs: ReadonlyArray<TabEntry>; readonly tab: InsertTab; readonly onPick: (tab: InsertTab) => void }) {
+  const translate = useTranslate();
   const trackRef = useRef<HTMLDivElement>(null);
   const buttonsRef = useRef<Array<HTMLButtonElement | undefined>>([]);
   const selectedIndex = tabs.findIndex((entry) => entry.key === tab);
   assert(selectedIndex >= 0, 'InsertSearch: the tab is one of the tabs');
   const { indicator, animated } = useSegmentIndicator({ trackRef, buttonsRef, selectedIndex, layoutKey: String(tabs.length) });
   return (
-    <div ref={trackRef} className="insert-tabs" role="tablist" aria-label="Insert results">
+    <div ref={trackRef} className="insert-tabs" role="tablist" aria-label={translate('palette.tab.aria')}>
       <span className={`insert-tab-indicator${animated ? ' is-animated' : ''}`} aria-hidden="true" style={segmentIndicatorStyle(indicator)} />
       {tabs.map((entry, index) => (
         <button
@@ -218,7 +223,7 @@ function InsertTabs({ tabs, tab, onPick }: { readonly tabs: ReadonlyArray<TabEnt
           className={`insert-tab ${tab === entry.key ? 'on' : ''}`}
           onClick={() => onPick(entry.key)}
         >
-          {entry.label}
+          {translate(entry.labelKey)}
         </button>
       ))}
     </div>
@@ -544,9 +549,9 @@ function insertTags({ allowSlot }: { readonly allowSlot: boolean | undefined }):
     tag,
     label: `<${tag}>`,
     search: tagSearchText(tag),
-    ...(tag === 'slot' ? { sub: 'what the caller passes in' } : {}),
-    ...(tag === 'Fragment' ? { sub: 'group without a wrapper element' } : {}),
-    ...(tag === 'Content' ? { sub: 'rendered Markdown entry' } : {}),
+    ...(tag === 'slot' ? { sub: 'what the caller passes in', subKey: 'palette.element.slot' } : {}),
+    ...(tag === 'Fragment' ? { sub: 'group without a wrapper element', subKey: 'palette.element.fragment' } : {}),
+    ...(tag === 'Content' ? { sub: 'rendered Markdown entry', subKey: 'palette.element.content' } : {}),
     cat: 'elements',
     icon: elementIcon(tag, 14),
   }));
@@ -554,7 +559,8 @@ function insertTags({ allowSlot }: { readonly allowSlot: boolean | undefined }):
 export const OTHER_ITEMS: readonly InsertItem[] = [
   {
     type: 'map',
-    label: 'Loop',
+    label: 'Loop', // i18n-ignore: English source and search text; the row draws labelKey.
+    labelKey: 'palette.other.loop',
     sub: 'items.map',
     // What a builder calls it: Webflow's Collection List, a CMS list.
     search: 'loop map repeat repeater each for list collection list cms collection items iterate',
@@ -563,24 +569,39 @@ export const OTHER_ITEMS: readonly InsertItem[] = [
   },
   {
     type: 'cond',
-    label: 'Condition',
+    label: 'Condition', // i18n-ignore: English source and search text; the row draws labelKey.
+    labelKey: 'palette.other.condition',
     sub: 'if / else',
     search: 'condition if else ternary show hide',
     cat: 'other',
     icon: <BranchIcon size={14} style={{ color: '#c4afff' }} />,
   },
-  { type: 'text', label: 'Text', cat: 'other', icon: <TextIcon size={14} /> },
-  { type: 'comment', label: 'Comment', cat: 'other', icon: <CommentIcon size={14} /> },
+  {
+    type: 'text',
+    label: 'Text', // i18n-ignore: English source and search text; the row draws labelKey.
+    labelKey: 'palette.other.text',
+    cat: 'other',
+    icon: <TextIcon size={14} />,
+  },
+  {
+    type: 'comment',
+    label: 'Comment', // i18n-ignore: English source and search text; the row draws labelKey.
+    labelKey: 'palette.other.comment',
+    cat: 'other',
+    icon: <CommentIcon size={14} />,
+  },
   {
     type: 'expr',
-    label: 'Code Expression',
+    label: 'Code Expression', // i18n-ignore: English source and search text; the row draws labelKey.
+    labelKey: 'palette.other.expression',
     sub: '{ }',
     cat: 'other',
     icon: <BracesIcon size={14} />,
   },
   {
     type: 'doctype',
-    label: 'Doctype',
+    label: 'Doctype', // i18n-ignore: English source and search text; the row draws labelKey.
+    labelKey: 'palette.other.doctype',
     sub: '<!doctype html>',
     search: 'doctype html',
     cat: 'other',
@@ -588,14 +609,16 @@ export const OTHER_ITEMS: readonly InsertItem[] = [
   },
   {
     type: 'style',
-    label: 'Style Block',
+    label: 'Style Block', // i18n-ignore: English source and search text; the row draws labelKey.
+    labelKey: 'palette.other.style',
     sub: '<style>',
     cat: 'other',
     icon: elementIcon('style', 14),
   },
   {
     type: 'script',
-    label: 'Script Block',
+    label: 'Script Block', // i18n-ignore: English source and search text; the row draws labelKey.
+    labelKey: 'palette.other.script',
     sub: '<script>',
     cat: 'other',
     icon: <CodeIcon size={14} />,

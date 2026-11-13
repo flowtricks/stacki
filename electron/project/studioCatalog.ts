@@ -33,6 +33,7 @@ export async function boundedText(response: Response, maximum: number): Promise<
 }
 export async function latestRelease() {
   const response = await fetch(`https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/latest`, {
+    // i18n-ignore: a package name written into the project, not interface text.
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Stacki-Studio' },
     signal: AbortSignal.timeout(15_000),
   });

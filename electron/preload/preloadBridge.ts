@@ -31,6 +31,7 @@ function cmsBridge() {
     cmsConnections: invoke('cmsConnections:list'),
     saveCmsConnection: invoke('cmsConnections:save'),
     removeCmsConnection: invoke('cmsConnections:remove'),
+    checkCmsConnection: invoke('cmsConnections:check'),
     sanityLogin: invoke('cmsConnections:sanityLogin'),
     remoteCollections: invoke('cmsRemote:collections'),
     remoteDocuments: invoke('cmsRemote:documents'),
@@ -370,6 +371,7 @@ function aiBridge() {
     aiAgents: invoke('ai:agents'),
     aiInstallAgent: invoke('ai:installAgent'),
     aiTrust: invoke('ai:trust'),
+    aiPrewarm: invoke('ai:prewarm'),
     aiChats: invoke('ai:chats'),
     aiChatCreate: invoke('ai:chatCreate'),
     aiChatUpdate: invoke('ai:chatUpdate'),
@@ -386,6 +388,7 @@ function aiBridge() {
     aiCancel: invoke('ai:cancel'),
     aiPermission: invoke('ai:permission'),
     aiSetOption: invoke('ai:setOption'),
+    aiRemember: invoke('ai:remember'),
     aiReview: invoke('ai:review'),
     aiSetup: invoke('ai:setup'),
     onAiSetup: (callback: (data: unknown) => void) => {
@@ -485,6 +488,7 @@ function eventBridge() {
     // App preferences — read once on load; the menu pushes changes as they happen.
     settings: invoke('settings:get'),
     setPreference: invoke('settings:set'),
+    setLocale: invoke('locale:set'),
 
     // Application menu events (macOS menu accelerators never reach the DOM)
     onMenu: (channel: string, callback: (data?: unknown) => void) => {

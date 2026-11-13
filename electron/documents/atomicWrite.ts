@@ -45,6 +45,7 @@ import { toDigest, type Digest } from '../../shared/core/brand';
 import { LIMITS } from '../../shared/core/limits';
 import { err, ok, type Result } from '../../shared/core/result';
 import { prepareAtomicDirectory } from './atomicDirectory';
+import { translateMain } from '../lib/mainLocale';
 
 /** Why a write did not happen, or did without a durability promise. */
 export type AtomicWriteError =
@@ -105,7 +106,7 @@ export function writeTargetOf(file: string): Result<string, AtomicWriteError> {
     return ok(fs.realpathSync(absolute));
   } catch (error: unknown) {
     if (isMissing(error)) {
-      return err({ code: 'filesystem', message: `${file} is a symlink to a missing file` });
+      return err({ code: 'filesystem', message: translateMain('error.documents.symlinkMissing', { file }) });
     }
     return filesystemError(file, error);
   }
@@ -115,7 +116,7 @@ export function writeTargetOf(file: string): Result<string, AtomicWriteError> {
  * what the file holds afterwards; this reports only what it did. */
 export function replaceFileAtomic(file: string, bytes: Uint8Array): Result<void, AtomicWriteError> {
   if (bytes.length > LIMITS.sourceBytesMax) {
-    return err({ code: 'filesystem', message: `${file} would exceed the 10 MB source limit` });
+    return err({ code: 'filesystem', message: translateMain('error.documents.sourceLimit', { file }) });
   }
   const target = writeTargetOf(file);
   if (!target.ok) {
@@ -161,7 +162,7 @@ export function replaceFileAtomic(file: string, bytes: Uint8Array): Result<void,
  * file; no existing bytes are ever at risk. */
 export function createFileExclusive(file: string, bytes: Uint8Array): Result<void, AtomicWriteError> {
   if (bytes.length > LIMITS.sourceBytesMax) {
-    return err({ code: 'filesystem', message: `${file} would exceed the 10 MB source limit` });
+    return err({ code: 'filesystem', message: translateMain('error.documents.sourceLimit', { file }) });
   }
   const target = path.resolve(file);
   let descriptor: number | undefined;
@@ -171,7 +172,7 @@ export function createFileExclusive(file: string, bytes: Uint8Array): Result<voi
     fs.fsyncSync(descriptor);
   } catch (error: unknown) {
     if (errorCode(error) === 'EEXIST') {
-      return err({ code: 'exists', message: `${file} already exists` });
+      return err({ code: 'exists', message: translateMain('error.documents.exists', { file }) });
     }
     return filesystemError(file, error);
   } finally {
@@ -238,7 +239,7 @@ function flushDirectory(directory: string, file: string): Result<void, AtomicWri
     }
     return err({
       code: 'not-durable',
-      message: `${file} was saved, but its folder could not be flushed: ${errorMessage(error)}`,
+      message: translateMain('error.documents.flushFailed', { file, reason: errorMessage(error) }),
     });
   } finally {
     if (descriptor !== undefined) {
@@ -254,14 +255,14 @@ function discardTemporary(temporary: string, file: string, reason: string): Resu
   } catch (error: unknown) {
     return err({
       code: 'filesystem',
-      message: `Could not save ${file} or remove temporary file ${temporary}: ` + `${reason}; ${errorMessage(error)}`,
+      message: translateMain('error.documents.saveFailedTemporary', { file, temporary, reason, detail: errorMessage(error) }),
     });
   }
-  return err({ code: 'filesystem', message: `Could not save ${file}: ${reason}` });
+  return err({ code: 'filesystem', message: translateMain('error.documents.saveFailed', { file, reason }) });
 }
 
 function filesystemError(file: string, error: unknown): Result<never, AtomicWriteError> {
-  return err({ code: 'filesystem', message: `Could not save ${file}: ${errorMessage(error)}` });
+  return err({ code: 'filesystem', message: translateMain('error.documents.saveFailed', { file, reason: errorMessage(error) }) });
 }
 
 export function isMissing(error: unknown): boolean {

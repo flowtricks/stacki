@@ -48,7 +48,7 @@ export interface StackiConnectionProvider {
 /** Must match worker/oauth/providers.ts in the marketing site. */
 export const STACKI_CONNECTION_PROVIDERS: { readonly [P in StackiConnectionProviderId]: StackiConnectionProvider } = {
   google: {
-    label: 'Google',
+    label: 'Google', // i18n-ignore: brand name of the provider.
     authorizeURL: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenURL: 'https://oauth2.googleapis.com/token',
     pkce: true,
@@ -57,7 +57,7 @@ export const STACKI_CONNECTION_PROVIDERS: { readonly [P in StackiConnectionProvi
     scopes: ['openid', 'email', 'profile', 'https://www.googleapis.com/auth/analytics.readonly', 'https://www.googleapis.com/auth/webmasters.readonly'],
   },
   hubspot: {
-    label: 'HubSpot',
+    label: 'HubSpot', // i18n-ignore: brand name of the provider.
     authorizeURL: 'https://app.hubspot.com/oauth/authorize',
     tokenURL: 'https://api.hubapi.com/oauth/v1/token',
     pkce: false,

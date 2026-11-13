@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { PlayIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { request, routeFor, type Project } from '../project/projectClient';
@@ -219,12 +220,14 @@ export type InteractivePreviewState = ReturnType<typeof useInteractivePreview>;
 // The preview's frame. A page picked in the switcher replaces the frame's history entry
 // (frameAddress.ts): the address's own entry is the one back steps to.
 function PreviewFrame({ preview, target }: { readonly preview: InteractivePreviewState; readonly target: PreviewTarget }) {
+  const translate = useTranslate();
   const src = useFrameAddress(preview.frame, target.url, target.request);
-  return <iframe ref={preview.frame} src={src} title="Site preview (interactive)" onLoad={preview.loaded} />;
+  return <iframe ref={preview.frame} src={src} title={translate('preview.studio.frameTitle')} onLoad={preview.loaded} />;
 }
 
 export function PreviewButton({ preview }: { readonly preview: InteractivePreviewState }) {
-  const label = preview.active ? 'Exit preview (Esc)' : 'Preview the site';
+  const translate = useTranslate();
+  const label = preview.active ? translate('preview.studio.exit') : translate('preview.studio.start');
   return (
     <button
       type="button"
@@ -240,6 +243,7 @@ export function PreviewButton({ preview }: { readonly preview: InteractivePrevie
 }
 
 export function PreviewWorkspace({ preview, children }: { readonly preview: InteractivePreviewState; readonly children: ReactNode }) {
+  const translate = useTranslate();
   return (
     <div className="studio-workspace">
       <div
@@ -258,7 +262,7 @@ export function PreviewWorkspace({ preview, children }: { readonly preview: Inte
             <PreviewFrame preview={preview} target={preview.target} />
           ) : (
             <div role="status">
-              <span className="panel-loading-label">Loading preview…</span>
+              <span className="panel-loading-label">{translate('preview.studio.loading')}</span>
             </div>
           )}
         </div>

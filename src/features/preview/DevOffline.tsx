@@ -1,6 +1,8 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import { reportErrorToast } from '../../ui/errorNotices';
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { NO_LIVE_TEXT, useLiveValue, type LiveValue } from '../../ui/liveValue';
 
 const NODE_URL = 'https://nodejs.org/en/download';
@@ -15,24 +17,23 @@ export function DevOffline({
   readonly devDiag?: DevDiagnosis | undefined;
   readonly onRestart?: () => void;
 }) {
+  const translate = useTranslate();
   const log = useLiveValue(devLog ?? NO_LIVE_TEXT);
-  const message = offlineMessage(devDiag);
+  const message = offlineMessage(devDiag, translate);
   return (
     <>
-      <div>Preview is offline.</div>
+      <div>{translate('preview.offline.title')}</div>
       <ErrorToast message={message.known ? `${message.title} ${message.detail ?? ''}` : undefined} />
       <div className="offline-actions">
-        <button onClick={onRestart}>Start dev server</button>
+        <button onClick={onRestart}>{translate('preview.offline.start')}</button>
         <OfflineAction action={message.action} />
       </div>
       {devDiag?.nodePath && (
-        <div className="offline-meta">
-          Using Node {devDiag.nodeVersion ?? '?'} — {devDiag.nodePath}
-        </div>
+        <div className="offline-meta">{translate('preview.offline.usingNode', { version: devDiag.nodeVersion ?? '?', path: devDiag.nodePath })}</div>
       )}
       {log && (
         <button className="ghost" onClick={() => reportErrorToast(log)}>
-          Show diagnostics
+          {translate('preview.offline.diagnostics')}
         </button>
       )}
     </>
@@ -57,37 +58,30 @@ interface OfflineMessage {
   readonly action: { readonly label: string; readonly url: string } | undefined;
 }
 
-function offlineMessage(diagnosis: DevDiagnosis | undefined): OfflineMessage {
+function offlineMessage(diagnosis: DevDiagnosis | undefined, translate: Translator): OfflineMessage {
   if (diagnosis?.kind === 'no-node') {
     return {
       known: true,
-      title: "Node.js isn't installed — or isn't where this app can see it.",
-      detail:
-        'Astro needs Node.js to run. Stacki looks on the system path, your login shell’s path, ' +
-        'and the usual Homebrew, nvm, fnm, volta, asdf and mise locations, and found nothing. ' +
-        'Install Node, then start the server again.',
-      action: { label: 'Get Node.js', url: NODE_URL },
+      title: translate('preview.offline.noNode.title'),
+      detail: translate('preview.offline.noNode.detail'),
+      action: { label: translate('preview.offline.getNode'), url: NODE_URL },
     };
   }
   if (diagnosis?.kind === 'node-too-old') {
     return {
       known: true,
-      title: `Node ${diagnosis.nodeVersion} is too old for this project.`,
-      detail:
-        `astro ${diagnosis.astroVersion} needs Node ${diagnosis.requires}. Install a newer ` +
-        "Node — if you use a version manager, the one it picks in this project's folder is " +
-        'the one Stacki will use.',
-      action: { label: 'Get Node.js', url: NODE_URL },
+      title: translate('preview.offline.nodeOld.title', { version: diagnosis.nodeVersion ?? '?' }),
+      detail: translate('preview.offline.nodeOld.detail', { astroVersion: diagnosis.astroVersion ?? '?', requires: diagnosis.requires ?? '?' }),
+      action: { label: translate('preview.offline.getNode'), url: NODE_URL },
     };
   }
   if (diagnosis?.kind === 'no-deps') {
     return {
       known: true,
-      title: "This project's dependencies aren't installed.",
-      detail:
-        'Astro was not found in node_modules. Starting the server installs them automatically — ' + 'if that keeps failing, use Show diagnostics for details.',
+      title: translate('preview.offline.noDeps.title'),
+      detail: translate('preview.offline.noDeps.detail'),
       action: undefined,
     };
   }
-  return { known: false, title: 'Preview is offline.', detail: undefined, action: undefined };
+  return { known: false, title: translate('preview.offline.title'), detail: undefined, action: undefined };
 }

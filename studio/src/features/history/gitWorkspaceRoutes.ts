@@ -17,6 +17,8 @@ import { setGitWorkspaceBusy, gitWorkspaceNeedsRecovery } from './gitWorkspaceLe
 import { emptyAssetState } from '../assets/assetStateTypes';
 import { saveAssetState } from '../assets/assetState';
 import { record } from '../../shared/validation';
+import { ReferencedError, errorWire } from '../../shared/referencedError';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 export function gitWorkspaceRoutes(
   root: string,
@@ -29,7 +31,7 @@ export function gitWorkspaceRoutes(
       ? repository.historyConnection()
       : Promise.resolve({
           ok: false,
-          error: { code: 'repository', message: 'Connect GitHub first.' },
+          error: { code: 'repository', ...described('git.studio.connectGitHub') },
         }),
   );
   return async (request: IncomingMessage, response: ServerResponse, pathname: string, readBody: () => Promise<string>) => {
@@ -46,7 +48,7 @@ export function gitWorkspaceRoutes(
       }
       const value = await workspace.queue.run(async () => {
         if (publishing()) {
-          throw new Error('Wait for publishing to finish before changing Git.');
+          throw new ReferencedError('git.studio.publishingBusy');
         }
         return rooms.coordinator.run(async () => {
           setGitWorkspaceBusy(root, 'working');
@@ -65,7 +67,9 @@ export function gitWorkspaceRoutes(
       response.end(JSON.stringify(value));
     } catch (error: unknown) {
       response.statusCode = 409;
-      response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Git failed.' }));
+      // The reference lets the browser show our own sentences in the person's language; git's raw text has none and shows as received.
+      const failure = errorWire(error, 'git.studio.commandFailed');
+      response.end(JSON.stringify({ error: failure.message, ...(failure.messageRef === undefined ? {} : { messageRef: failure.messageRef }) }));
     }
     return true;
   };
@@ -161,11 +165,11 @@ async function resolveGitWorkspaceCommand(workspace: GitWorkspace, state: GitWor
   const review = workspace.review;
   const remoteReview = branch.startsWith('refs/remotes/origin/');
   if (remoteReview && (review.kind !== 'pending' || review.branch !== branch || review.head !== gitWorkspaceBranch(state.manifest).head)) {
-    throw new Error('The pull review changed. Pull again to review its current conflicts.');
+    throw new ReferencedError('git.studio.pullReviewChanged');
   }
   const target = remoteReview && review.kind === 'pending' ? review.target : state.manifest.branches.find((entry) => entry.name === branch)?.head;
   if (!target) {
-    throw new Error('This branch no longer exists.');
+    throw new ReferencedError('git.studio.branchGone');
   }
   const choices = command === 'resolveMerge' ? parseIpcPayload('git:resolveMerge', data).choices : undefined;
   const merged = await mergeGitWorkspace(state, branch, target, choices);

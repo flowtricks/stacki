@@ -5,17 +5,17 @@
 import { err, ok, type AppError, type Result } from '../../../shared/core/result';
 import { parseCatalog, type Catalog } from '../../../shared/core/i18n/catalog';
 import type { Locale } from '../../../shared/core/i18n/locales';
-import { messages as english } from '../../../shared/properties/i18n/messages/en';
+import { messages as english } from '../../../shared/properties/i18n/messages/en/index';
 
 export type CatalogImporters = Readonly<Record<Locale, () => Promise<unknown>>>;
 
 /** The importers the app ships. Each `import()` is a split point the bundler turns into a chunk. */
 const SHIPPED_IMPORTERS: CatalogImporters = {
   en: () => Promise.resolve(english),
-  es: () => import('../../../shared/properties/i18n/messages/es'),
-  fr: () => import('../../../shared/properties/i18n/messages/fr'),
-  de: () => import('../../../shared/properties/i18n/messages/de'),
-  'pt-BR': () => import('../../../shared/properties/i18n/messages/ptBR'),
+  es: () => import('../../../shared/properties/i18n/messages/es/index'),
+  fr: () => import('../../../shared/properties/i18n/messages/fr/index'),
+  de: () => import('../../../shared/properties/i18n/messages/de/index'),
+  'pt-BR': () => import('../../../shared/properties/i18n/messages/ptBR/index'),
 };
 
 export type CatalogLoader = (locale: Locale) => Promise<Result<Catalog, AppError>>;
@@ -55,6 +55,7 @@ async function importCatalog(importers: CatalogImporters, locale: Locale): Promi
   try {
     loaded = await importers[locale]();
   } catch (failure: unknown) {
+    // i18n-ignore: a developer diagnostic about a catalog that could not load, so it cannot itself be translated.
     return err({ code: 'catalog-import-failed', message: `Could not load the ${locale} catalog: ${String(failure)}` });
   }
   // A module namespace holds the catalog under `messages`; the English importer hands it over directly.
@@ -63,5 +64,6 @@ async function importCatalog(importers: CatalogImporters, locale: Locale): Promi
   if (parsed.ok) {
     return parsed;
   }
+  // i18n-ignore: a developer diagnostic, as above.
   return err({ code: parsed.error.code, message: `The ${locale} catalog is invalid: ${parsed.error.message}` });
 }

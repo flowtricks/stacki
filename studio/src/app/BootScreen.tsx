@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StackiLogo } from '../shared/ui/StackiLogo';
+import { useTranslate } from '../../vendor/stacki/src/lib/i18n/useTranslate';
 
 export function BootScreen({
   attempt,
@@ -12,6 +13,7 @@ export function BootScreen({
   readonly authenticated: boolean;
   readonly retry: () => void;
 }) {
+  const translate = useTranslate();
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
     const started = Date.now();
@@ -19,18 +21,18 @@ export function BootScreen({
     return () => clearInterval(timer);
   }, []);
   const stage = !authenticated
-    ? 'Checking your session…'
+    ? translate('studio.boot.checkingSession')
     : attempt > 1
-      ? `Reconnecting to your workspace… (attempt ${attempt} of 3)`
-      : 'Loading your pages and components…';
+      ? translate('studio.boot.reconnecting', { attempt })
+      : translate('studio.boot.loading');
   return (
     <div className="boot" aria-busy={!failure}>
       <div className="studio-brand">
         <StackiLogo />
       </div>
-      {!failure && <p>Opening your studio…</p>}
+      {!failure && <p>{translate('studio.boot.opening')}</p>}
       {!failure && (
-        <div className="boot-progress" role="progressbar" aria-label="Opening Studio" aria-valuetext={stage}>
+        <div className="boot-progress" role="progressbar" aria-label={translate('studio.boot.openingLabel')} aria-valuetext={stage}>
           <span />
         </div>
       )}
@@ -39,8 +41,8 @@ export function BootScreen({
           {stage}
         </p>
       )}
-      {!failure && seconds >= 10 && <p className="boot-detail">This is taking longer than usual. {seconds}s elapsed.</p>}
-      {(failure || seconds >= 10) && <button onClick={retry}>Retry opening Studio</button>}
+      {!failure && seconds >= 10 && <p className="boot-detail">{translate('studio.boot.slow', { seconds })}</p>}
+      {(failure || seconds >= 10) && <button onClick={retry}>{translate('studio.boot.retry')}</button>}
     </div>
   );
 }

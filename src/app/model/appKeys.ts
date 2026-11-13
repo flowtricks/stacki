@@ -3,12 +3,14 @@
 // page, copying the selection as a trail, layout and import gestures, and
 // whether focus is in an editable field (App.tsx).
 
+import type { Translator } from '../../lib/i18n/localeContext';
+import { REJECTION_KEYS } from '../rejectionMessages';
 import { canvasTextHasFocus } from '../../editor/canvasTextFocus';
 import React from 'react';
 import type { ScanComponent, ScanResult } from '../../../shared/properties/projectScan';
 import { readPage } from '../../ipc/bridge';
 import { type AppliedEdit, type PageOrigin } from '../../editor/pageEdits';
-import { describeRejection, type RejectionReason } from '../../../shared/engine/intent';
+import type { RejectionReason } from '../../../shared/engine/intent';
 import { assert } from '../../../shared/core/assert';
 import { type InsertPlace, insertGesture } from '../../editor/editGestures';
 import type { PageEditError, PageEdited } from '../../../shared/ipc/pageSave';
@@ -253,10 +255,10 @@ export interface UndoRefusal {
 }
 
 // The refusal for a revert main did not apply (revertedSteps).
-export function undoRefusal(error: PageEditError): UndoRefusal {
+export function undoRefusal(error: PageEditError, translate: Translator): UndoRefusal {
   const refusal: UndoRefusal =
     error.code === 'rejected'
-      ? { message: describeRejection(error.reason), kind: rejectionToastKind(error.reason) }
+      ? { message: translate(REJECTION_KEYS[error.reason]), kind: rejectionToastKind(error.reason) }
       : { message: error.message, kind: writeFailureToastKind(error.code) };
   assert(refusal.message.length > 0, 'An undo refusal says why');
   return refusal;
@@ -309,6 +311,7 @@ export async function revertedSteps(
   path: string,
   applied: readonly AppliedEdit[],
   startOrigin: PageOrigin | undefined,
+  translate: Translator,
 ): Promise<{
   readonly done: readonly AppliedEdit[];
   readonly written: PageEdited | undefined;
@@ -329,7 +332,7 @@ export async function revertedSteps(
       edit: { tag: 'revert', hunks },
     });
     if (!answer.ok) {
-      return { done, written, origin, refusal: undoRefusal(answer.error) };
+      return { done, written, origin, refusal: undoRefusal(answer.error, translate) };
     }
     done.push({ checksum: answer.value.checksum, inverse: answer.value.inverse });
     written = answer.value;
@@ -388,6 +391,7 @@ export async function reloadChangedPage(
 
 // ⇧⌘C — the selection's file:line trail, for pasting into an AI chat.
 export async function copySelectionTrail(context: {
+  readonly translate: Translator;
   readonly flushSave: () => Promise<void>;
   readonly showToast: (message: string, kind?: ToastKind) => void;
   readonly projectRef: React.MutableRefObject<ProjectIdentity | undefined>;
@@ -398,7 +402,7 @@ export async function copySelectionTrail(context: {
   try {
     await context.flushSave();
   } catch (error: unknown) {
-    context.showToast(`Couldn’t copy the selection: ${cleanError(error)}`, 'error');
+    context.showToast(context.translate('shell.copy.failed', { message: cleanError(error) }), 'error');
     return;
   }
   const projectPath = context.projectRef.current?.path;
@@ -407,15 +411,16 @@ export async function copySelectionTrail(context: {
   }
   const copied = await copyEditorSelection(projectPath, [...context.selectionKeysRef.current]);
   if (copied) {
-    context.showToast('Selection copied — paste it into your AI chat.');
+    context.showToast(context.translate('shell.copy.done'));
   } else {
-    context.showToast('Nothing selected to copy.', 'error');
+    context.showToast(context.translate('shell.copy.nothing'), 'error');
   }
 }
 
 // Saves what is pending before a navigation goes on. False when the save failed —
 // said only while this navigation is still the latest — or a newer one took over.
 export async function savedForNavigation(
+  translate: Translator,
   flushSave: () => Promise<void>,
   latestRequest: () => boolean,
   showToast: (message: string, kind?: ToastKind) => void,
@@ -424,7 +429,7 @@ export async function savedForNavigation(
     await flushSave();
   } catch (error: unknown) {
     if (latestRequest()) {
-      showToast(`Save failed: ${cleanError(error)}`, 'error');
+      showToast(translate('shell.save.failed', { message: cleanError(error) }), 'error');
     }
     return false;
   }
@@ -475,12 +480,12 @@ export function pastedInScope(
 }
 
 // What a paste brought across from the page it was copied from, if anything.
-export function broughtMessage(needs: PasteNeeds): string | undefined {
+export function broughtMessage(needs: PasteNeeds, translate: Translator): string | undefined {
   const brought = [...needs.carriedImports.map((i) => i.name), ...needs.carried.statements.map((statement) => statement.name)];
   if (!brought.length) {
     return undefined;
   }
-  return `Brought ${brought.map((name) => `\`${name}\``).join(', ')} ` + 'across from the page it was copied from.';
+  return translate('shell.paste.brought', { names: brought.map((name) => `\`${name}\``).join(', ') });
 }
 
 // What the menu's Copy and Paste act on when no field has focus: see the menu effect in App.

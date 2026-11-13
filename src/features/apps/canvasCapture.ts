@@ -10,6 +10,7 @@
 // running releases it. Pure state over two callbacks, so tests drive it without
 // frames; the runtime (appsRuntime.ts) owns the one instance.
 import { assert } from '../../../shared/core/assert';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import {
   APP_RPC_LIMITS,
   type AppCanvasClick,
@@ -71,7 +72,7 @@ export function createCanvasCapture(deps: CanvasCaptureDeps): CanvasCapture {
     set: (app, on, { cursor, mode, reason }) => {
       if (on) {
         if (!deps.running(app.id)) {
-          return { applied: false, reason: 'Only a running app captures the canvas' };
+          return { applied: false, reason: 'Only a running app captures the canvas' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
         }
         const previous = owner;
         publish({ appId: app.id, appName: app.name, cursor, mode, reason });
@@ -123,12 +124,14 @@ export function createCanvasCapture(deps: CanvasCaptureDeps): CanvasCapture {
 }
 
 /** The capture chip's text: the app's name, then its reason or the mode's own words; a capture offers Escape. */
-export function captureChipText(owner: Pick<CanvasCaptureOwner, 'appName' | 'mode' | 'reason'>): string {
+export function captureChipText(owner: Pick<CanvasCaptureOwner, 'appName' | 'mode' | 'reason'>, translate: Translator): string {
   if (owner.mode === 'observe') {
     // An observing app leaves Escape to the editor (leaving a component), so its chip does not offer it.
-    return owner.reason === undefined ? `${owner.appName} is listening for clicks` : `${owner.appName}: ${owner.reason}`;
+    return owner.reason === undefined
+      ? translate('apps.capture.listening', { name: owner.appName })
+      : translate('apps.capture.reason', { name: owner.appName, reason: owner.reason });
   }
-  return `${owner.appName}: ${owner.reason ?? 'Click to place'} · Esc to cancel`;
+  return translate('apps.capture.cancelable', { name: owner.appName, reason: owner.reason ?? translate('apps.capture.clickToPlace') });
 }
 
 /**

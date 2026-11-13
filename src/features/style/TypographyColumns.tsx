@@ -18,12 +18,16 @@ import { displayOf, displayText, withImportant } from './model/styleDisplay';
 import ImportantMark from './components/ImportantMark';
 import { DecorNoneIcon } from './TypographyIcons';
 import { type Props, LiveInput, StackedField, type Seg, SegBar, MoreIcon } from './TypographyKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 // ─────────────────────────── Columns advanced options ───────────────────────────
 
 // The multi-column properties owned by the "…" popover — used to light the trigger
 // when any is set on the picked selector (they're also excluded from the generic
 // row list in EmbedEditor's TYPOGRAPHY_CONTROL_PROPS).
+const AUTO_KEYWORD = 'Auto'; // i18n-ignore: the CSS keyword `auto`, shown as the empty value.
+
 export const COLUMN_MORE_PROPS = ['column-gap', 'column-rule-style', 'column-rule-width', 'column-rule-color', 'column-span'] as const;
 // column-rule-style glyphs — a vertical divider drawn solid / dashed / dotted.
 export function RuleSolidIcon() {
@@ -51,11 +55,11 @@ export function RuleDottedIcon() {
   );
 }
 
-export const RULE_STYLE_SEGS: readonly Seg[] = [
-  { value: 'none', icon: <DecorNoneIcon />, label: 'None' },
-  { value: 'solid', icon: <RuleSolidIcon />, label: 'Solid' },
-  { value: 'dashed', icon: <RuleDashedIcon />, label: 'Dashed' },
-  { value: 'dotted', icon: <RuleDottedIcon />, label: 'Dotted' },
+export const ruleStyleSegments = (translate: Translator): readonly Seg[] => [
+  { value: 'none', icon: <DecorNoneIcon />, label: translate('style.typographyColumns.ruleNone') },
+  { value: 'solid', icon: <RuleSolidIcon />, label: translate('style.typographyColumns.ruleSolid') },
+  { value: 'dashed', icon: <RuleDashedIcon />, label: translate('style.typographyColumns.ruleDashed') },
+  { value: 'dotted', icon: <RuleDottedIcon />, label: translate('style.typographyColumns.ruleDotted') },
 ];
 
 // The clearable label for popover rows — same provenance behavior as the panel's
@@ -80,6 +84,7 @@ export function PopLabel({
   active?: boolean;
   onClear?: () => void;
 } & Pick<Props, 'read' | 'busy' | 'clearProp' | 'onProvenance' | 'onSelectSelector'>) {
+  const translate = useTranslate();
   const resolved = read(prop);
   const display = displayOf(resolved);
   if (display.present && !display.isSelected) {
@@ -92,9 +97,9 @@ export function PopLabel({
       {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={onClear ?? (() => clearProp(prop))}
-      resetLabel="Clear"
+      resetLabel={translate('style.typographyColumns.clear')}
       tooltip={<PropTip props={[prop]} />}
-      {...(display.overridden ? { title: `Overridden by ${display.winnerSelector}` } : {})}
+      {...(display.overridden ? { title: translate('style.typographyColumns.overriddenBy', { selector: display.winnerSelector }) } : {})}
       menuNote={(close) => (
         <ProvenanceList
           contributors={resolved?.contributors ?? []}
@@ -158,19 +163,21 @@ export function RuleStyleRow({
   onProvenance,
   onSelectSelector,
 }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
+  const translate = useTranslate();
+  const ruleSegments = ruleStyleSegments(translate);
   const display = displayOf(read('column-rule-style'));
   const current = useHighlight(
     // The flag rides in the text, so a flagged value opens the bar's custom
     // field, which shows it (TypographyKit.tsx SegBar).
     displayText(display).trim().toLowerCase(),
     'column-rule-style',
-    RULE_STYLE_SEGS.map((segment) => segment.value),
+    ruleSegments.map((segment) => segment.value),
     'none',
   );
   return (
     <div className="embed-editor_size-row">
       <PopLabel
-        label="Style"
+        label={translate('style.typographyColumns.style')}
         prop="column-rule-style"
         read={read}
         busy={busy}
@@ -179,9 +186,9 @@ export function RuleStyleRow({
         onSelectSelector={onSelectSelector}
       />
       <SegBar
-        segs={RULE_STYLE_SEGS}
+        segs={ruleSegments}
         current={current}
-        ariaLabel="Divider style"
+        ariaLabel={translate('style.typographyColumns.dividerStyle')}
         prop="column-rule-style"
         busy={busy}
         onCommit={(value, important) => setProp('column-rule-style', value, important)}
@@ -201,6 +208,7 @@ export function RuleColorRow({
   onProvenance,
   onSelectSelector,
 }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onProvenance' | 'onSelectSelector'>) {
+  const translate = useTranslate();
   const display = displayOf(read('column-rule-color'));
   const external = displayText(display);
   // A live drag writes to the canvas, not to the model this row reads — so the
@@ -212,7 +220,7 @@ export function RuleColorRow({
     <ColorSwatch
       value={shown}
       busy={busy}
-      ariaLabel="Divider color"
+      ariaLabel={translate('style.typographyColumns.dividerColor')}
       onChange={(color, live) => {
         // The swatch picks a colour, not the flag: a flagged colour stays so.
         noteLive(live ? withImportant({ value: color, important: display.important }) : undefined);
@@ -227,7 +235,7 @@ export function RuleColorRow({
   return (
     <div className="embed-editor_size-row">
       <PopLabel
-        label="Color"
+        label={translate('style.typographyColumns.color')}
         prop="column-rule-color"
         read={read}
         busy={busy}
@@ -240,8 +248,8 @@ export function RuleColorRow({
         <LiveInput
           value={shown}
           busy={busy}
-          placeholder="Set a color"
-          ariaLabel="Divider color"
+          placeholder={translate('style.typographyColumns.setColor')}
+          ariaLabel={translate('style.typographyColumns.dividerColor')}
           className="u-input embed-editor_size-input"
           dataProp="column-rule-color"
           prop="column-rule-color"
@@ -262,21 +270,30 @@ export function SpanRow({
   onProvenance,
   onSelectSelector,
 }: Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'onProvenance' | 'onSelectSelector'>) {
+  const translate = useTranslate();
   const display = displayOf(read('column-span'));
   const value = useHighlight(display.present ? display.value.trim().toLowerCase() : '', 'column-span', ['none', 'all'], 'none') === 'all' ? 'all' : 'none';
   return (
     <div className="embed-editor_size-row">
-      <PopLabel label="Span" prop="column-span" read={read} busy={busy} clearProp={clearProp} onProvenance={onProvenance} onSelectSelector={onSelectSelector} />
+      <PopLabel
+        label={translate('style.typographyColumns.span')}
+        prop="column-span"
+        read={read}
+        busy={busy}
+        clearProp={clearProp}
+        onProvenance={onProvenance}
+        onSelectSelector={onSelectSelector}
+      />
       {/* No custom field: a flagged value is marked, and picks keep the flag. */}
       <ImportantMark important={display.important}>
         <SegmentedControl
           options={[
-            { value: 'none', label: "Don't" },
-            { value: 'all', label: 'Do' },
+            { value: 'none', label: translate('style.typographyColumns.spanNo') },
+            { value: 'all', label: translate('style.typographyColumns.spanYes') },
           ]}
           value={value}
           onChange={(next) => setProp('column-span', next, display.important)}
-          ariaLabel="Column span"
+          ariaLabel={translate('style.typographyColumns.columnSpan')}
           disabled={busy}
         />
       </ImportantMark>
@@ -291,6 +308,7 @@ export const CloseIcon = centralIcon(centralClose);
 // the caller's row wrapper — so it spans the full row and never overflows the
 // panel. Reused by the Columns and Decoration advanced controls.
 export function MorePopover({ title, active, busy, children }: { title: string; active: boolean; busy: boolean; children: ReactNode }) {
+  const translate = useTranslate();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   return (
@@ -310,7 +328,7 @@ export function MorePopover({ title, active, busy, children }: { title: string; 
         <Popup mode="popover" portal={false} onClose={() => setOpen(false)} className="embed-editor_more-popover" role="dialog" label={title}>
           <div className="embed-editor_more-head">
             <span className="embed-editor_more-title">{title}</span>
-            <button type="button" className="embed-editor_more-close" aria-label="Close" onClick={() => setOpen(false)}>
+            <button type="button" className="embed-editor_more-close" aria-label={translate('style.typographyColumns.close')} onClick={() => setOpen(false)}>
               <CloseIcon />
             </button>
           </div>
@@ -327,19 +345,20 @@ export function MorePopover({ title, active, busy, children }: { title: string; 
 // (style / width / color), and the child column-span. Every field reads/writes
 // through the same resolved model as the rest of the panel; unset props read empty.
 export function ColumnsPopover(props: Props) {
+  const translate = useTranslate();
   return (
     <>
       <div className="embed-editor_more-group">
-        <LengthRow prop="column-gap" label="Gap" placeholder="0px" {...props} />
+        <LengthRow prop="column-gap" label={translate('style.typographyColumns.gap')} placeholder="0px" {...props} />
       </div>
       <div className="embed-editor_more-group">
-        <p className="embed-editor_more-heading">Divider settings</p>
+        <p className="embed-editor_more-heading">{translate('style.typographyColumns.dividerSettings')}</p>
         <RuleStyleRow {...props} />
-        <LengthRow prop="column-rule-width" label="Width" placeholder="0px" {...props} />
+        <LengthRow prop="column-rule-width" label={translate('style.typographyColumns.width')} placeholder="0px" {...props} />
         <RuleColorRow {...props} />
       </div>
       <div className="embed-editor_more-group">
-        <p className="embed-editor_more-heading">Column child</p>
+        <p className="embed-editor_more-heading">{translate('style.typographyColumns.columnChild')}</p>
         <SpanRow {...props} />
       </div>
     </>
@@ -349,15 +368,16 @@ export function ColumnsPopover(props: Props) {
 // The Letter spacing / Text indent / Columns three-up row, with a trailing "…"
 // button opening the advanced-columns popover (mirrors Webflow's Columns UI).
 export function ColumnsRow(props: Props) {
+  const translate = useTranslate();
   const anySet = COLUMN_MORE_PROPS.some((prop) => props.read(prop)?.source === 'selected');
   return (
     <div className="embed-editor_columns">
       <div className="embed-editor_type-triple">
-        <StackedField prop="letter-spacing" label="Letter spacing" placeholder="0em" {...props} />
-        <StackedField prop="text-indent" label="Text indent" placeholder="0px" {...props} />
-        <StackedField prop="column-count" label="Columns" placeholder="Auto" {...props} />
+        <StackedField prop="letter-spacing" label={translate('style.typographyColumns.letterSpacing')} placeholder="0em" {...props} />
+        <StackedField prop="text-indent" label={translate('style.typographyColumns.textIndent')} placeholder="0px" {...props} />
+        <StackedField prop="column-count" label={translate('style.typographyColumns.columns')} placeholder={AUTO_KEYWORD} {...props} />
       </div>
-      <MorePopover title="Columns" active={anySet} busy={props.busy}>
+      <MorePopover title={translate('style.typographyColumns.columns')} active={anySet} busy={props.busy}>
         <ColumnsPopover {...props} />
       </MorePopover>
     </div>

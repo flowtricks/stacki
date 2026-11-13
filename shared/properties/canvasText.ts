@@ -69,7 +69,8 @@ export type CanvasTextEvent =
       readonly key: string;
       readonly value: string;
     }
-  | { readonly type: 'avb:text-refused'; readonly message: string };
+  /** `reason` is the stable code of `message`, which the editor words in the person's language; the frame has no catalog. */
+  | { readonly type: 'avb:text-refused'; readonly message: string; readonly reason?: CanvasTextRefusal | undefined };
 
 export const CANVAS_TEXT_LIMIT = 10_000;
 export const CANVAS_TARGET_LIMIT = 2_000;
@@ -174,7 +175,7 @@ export function parseCanvasTextEvent(input: unknown): CanvasTextEvent | undefine
         value: canvasTextValue(data['value']),
       };
     case 'avb:text-refused':
-      return { type: 'avb:text-refused', message: pathText(data['message']) };
+      return { type: 'avb:text-refused', message: pathText(data['message']), reason: canvasTextRefusal(data['reason']) };
     default:
       return undefined;
   }
@@ -259,4 +260,12 @@ export function canvasTextUnfolded(text: string, folded: number, edge: 'start' |
     }
   }
   return undefined;
+}
+
+/** Why the canvas frame refused a text edit; each code has a catalog sentence in the editor (useCanvasText). */
+export const CANVAS_TEXT_REFUSALS = ['waiting-render', 'selection-reaches', 'unsafe', 'page-changed'] as const;
+export type CanvasTextRefusal = (typeof CANVAS_TEXT_REFUSALS)[number];
+
+function canvasTextRefusal(input: unknown): CanvasTextRefusal | undefined {
+  return CANVAS_TEXT_REFUSALS.find((reason) => reason === input);
 }

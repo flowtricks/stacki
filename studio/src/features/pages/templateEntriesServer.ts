@@ -28,6 +28,7 @@ export function templateEntriesReader(server: ViteDevServer, root: string) {
       const loaded: Record<string, unknown> = await server.ssrLoadModule(absolute);
       const getStaticPaths = loaded['getStaticPaths'];
       if (typeof getStaticPaths !== 'function') {
+        // i18n-ignore: Studio server text; the server has no language provider.
         return { entries: [], error: `${path.basename(file)} has no getStaticPaths` };
       }
       const result: unknown = await withinTime(Promise.resolve(Reflect.apply(getStaticPaths, undefined, [])));

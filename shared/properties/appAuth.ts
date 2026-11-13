@@ -389,9 +389,9 @@ export function appConnectHosts(network: readonly AppNetworkHost[], providers: r
 /** "Uses external services: a (why), b (why)" or "Works fully offline", as every place that lists them says it. */
 export function networkSummary(network: readonly AppNetworkHost[]): string {
   if (network.length === 0) {
-    return 'Works fully offline';
+    return 'Works fully offline'; // i18n-ignore: English one-line summary kept for logs and tests; the editor draws its own translated line (AppConnections.tsx).
   }
-  return `Uses external services: ${network.map((entry) => `${entry.host} (${entry.purpose})`).join(', ')}`;
+  return `Uses external services: ${network.map((entry) => `${entry.host} (${entry.purpose})`).join(', ')}`; // i18n-ignore: English one-line summary kept for logs and tests; the editor draws its own translated line (AppConnections.tsx).
 }
 
 // ---------------------------------------------------------------------------

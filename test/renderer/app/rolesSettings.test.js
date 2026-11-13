@@ -114,6 +114,19 @@ async function click(element) {
   await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
 }
 
+// The "…" menu of a card: its rows (Rename, Delete) by label.
+const menuRows = () => [...document.querySelectorAll('.more-menu-item')];
+async function openMenu(name) {
+  await click(card(name).querySelector(`button[aria-label="More actions for ${name}"]`));
+}
+async function chooseMenu(name, label) {
+  await openMenu(name);
+  const row = menuRows().find((item) => item.textContent === label);
+  assert.ok(row, `${name}'s menu offers ${label}`);
+  await click(row);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+}
+
 const saved = () => roles.parseProjectRolesSource(stored);
 const notice = (scope) => scope.querySelector('.app-settings-notice')?.textContent ?? '';
 const permission = (name, label) => card(name).querySelector(`[role="switch"][aria-label="${label}"]`);
@@ -134,7 +147,7 @@ test('each change saves at once: the first creates the file, and each writes a v
   assert.equal(writes.length, 0, 'opening the tab writes nothing');
   assert.equal(document.querySelectorAll('button.primary').length, 0, 'there is no Save button');
   const admin = card('Admin');
-  assert.match(admin.textContent, /Full access/);
+  assert.doesNotMatch(admin.textContent, /Full access/, 'Admin carries no badge');
   assert.equal(admin.querySelectorAll('[role="switch"]').length, 0, 'admin access is not editable');
   assert.ok(admin.querySelector('button[aria-label="Rename Admin"]') === null, 'Admin is always Admin');
   assert.match(admin.textContent, /owner/, 'a new file names the signed-in person as admin');
@@ -600,13 +613,39 @@ test('Delete asks first, Cancel keeps the role, and a deleted default or View as
   const hostRoot = createRoot(hostContainer);
   await act(async () => hostRoot.render(React.createElement(roles.ConfirmHost)));
   await mount();
-  assert.equal(card('Admin').querySelector('button[aria-label="Delete Admin"]') ?? undefined, undefined, 'Admin has no Delete');
-  assert.equal(card('Client').querySelector('button[aria-label="Delete Client"]') ?? undefined, undefined, 'the parser always restores Client');
+  assert.equal(
+    card('Admin').querySelector('button[aria-label="More actions for Admin"]') ?? undefined,
+    undefined,
+    'Admin is always Admin and cannot be deleted: no menu',
+  );
+  await openMenu('Client');
+  assert.deepEqual(
+    menuRows().map((item) => item.textContent),
+    ['Rename'],
+    'the parser always restores Client: it can be renamed, never deleted',
+  );
+  await click(menuRows()[0]);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+  assert.equal(document.activeElement, card('Client').querySelector('input[aria-label="Role name"]'), 'Rename in the menu opens the name field');
+  await act(async () =>
+    card('Client')
+      .querySelector('input[aria-label="Role name"]')
+      .dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })),
+  );
+  await openMenu('Writer');
+  assert.deepEqual(
+    menuRows().map((item) => item.textContent),
+    ['Rename', 'Delete'],
+    'a custom role can be renamed and deleted',
+  );
+  // The same button closes the menu again.
+  await openMenu('Writer');
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
   const dialog = () => document.querySelector('[role="alertdialog"]') ?? document.querySelector('.confirm-dialog');
   const dialogButton = (label) => [...dialog().querySelectorAll('button')].find((item) => item.textContent === label);
 
   // Ask to delete Writer, then cancel: nothing changes.
-  await click(card('Writer').querySelector('button[aria-label="Delete Writer"]'));
+  await chooseMenu('Writer', 'Delete');
   assert.match(dialog().textContent, /Delete Writer\?/);
   assert.match(dialog().textContent, /Its 2 members \(sam, kim\) become people in no role\./);
   assert.match(dialog().textContent, /role for people in no role, so that becomes Admin/);
@@ -617,7 +656,7 @@ test('Delete asks first, Cancel keeps the role, and a deleted default or View as
   assert.ok(card('Writer'), 'the role stays');
 
   // Confirm: the role and its members go, the default and the view fall back to Admin.
-  await click(card('Writer').querySelector('button[aria-label="Delete Writer"]'));
+  await chooseMenu('Writer', 'Delete');
   await click(dialogButton('Delete role'));
   await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
   assert.equal(writes.length, 1, 'deleting saves at once');

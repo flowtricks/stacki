@@ -2,6 +2,7 @@
 // labels, the marks on rendered nodes, the selection's paths and the
 // overlay's info (appViewModel.ts).
 
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { requestCanvasReports } from '../../editor/canvasQuery';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { isFragmentNode, liveClassesById as classesByNodeId } from '../../editor/liveClasses';
@@ -18,17 +19,17 @@ import { isOpenFile } from '../../editor/pageState';
 import { type EditorNode } from '../../editor/pageView';
 import { writeProjectFile, checkPreviewRender } from '../../ipc/appBridge';
 import { judgeCanvasEvent, type CheckRender, type ShownFile } from '../../features/preview/previewGate';
-import { describePreviewStale, type PreviewVerdict } from '../../../shared/page/previewToken';
+import { type PreviewVerdict } from '../../../shared/page/previewToken';
 import { PreviewOrigins, judgeRememberedClick } from '../../features/preview/previewSelection';
 import type { JudgeCanvasEvent } from '../../features/preview/previewRuntime';
-import { describePreviewReload, type PreviewReloadReason } from '../../features/preview/previewMessages';
+import { describePreviewReload, describeStaleClick, type PreviewReloadReason } from '../../features/preview/previewMessages';
 import { trailOf } from '../model/pageGestures';
 import { emptyNodeIdsOf } from '../model/pageQueries';
 import { useCoreState } from './appLifecycle';
 import { useLifecycle } from './appNavigation';
 import { useShortcuts } from './appPageOps';
 import type { useCodeWindow, usePageOps } from './appViewModel';
-import { pageDisplayName } from '../../lib/pageName';
+import { pageDisplayLabel } from '../../lib/pageName';
 
 // Asset file edits, and the preview-token gate.
 export function useCanvasGate(
@@ -129,6 +130,7 @@ export function useCanvasNotices(
   shortcuts: ReturnType<typeof useShortcuts>,
 ) {
   const { showToast } = lifecycle;
+  const translate = useTranslate();
   const { editStack, nodeClasses, project } = coreState;
   const { model } = shortcuts;
 
@@ -137,9 +139,9 @@ export function useCanvasNotices(
       // Visible, never silent — and never a claim that anything was lost: the
       // click simply did not select. The canvas catches up on its own.
       const where = verdict.file ? ` (${verdict.file})` : '';
-      showToast(`Click not applied: ${describePreviewStale(verdict.reason)}${where}`);
+      showToast(translate('shell.canvas.clickNotApplied', { reason: describeStaleClick(verdict.reason, translate), where }));
     },
-    [showToast],
+    [showToast, translate],
   );
 
   // Past the patcher's caps the canvas reloads instead of patching (step 7):
@@ -148,12 +150,12 @@ export function useCanvasNotices(
   // are what the canvas always did, and stay quiet.
   const onPreviewReload = useCallback(
     (reason: PreviewReloadReason) => {
-      const why = describePreviewReload(reason);
+      const why = describePreviewReload(reason, translate);
       if (why !== undefined) {
         showToast(why);
       }
     },
-    [showToast],
+    [showToast, translate],
   );
 
   const editedRel =
@@ -274,6 +276,7 @@ export function useCanvasMarks(
   canvasNotices: ReturnType<typeof useCanvasNotices>,
 ) {
   const { currentPage, nodeStates, renderedPaths, selectedId } = coreState;
+  const translate = useTranslate();
   const { model } = shortcuts;
   const { selectedAncestors, tree } = pageOps;
   const { crumbLabel } = crumbLabels;
@@ -284,11 +287,11 @@ export function useCanvasMarks(
     const page = coreState.scan.pages.find((entry) => entry.path === currentPage.path);
     crumbs.push({
       id: undefined,
-      label: page ? pageDisplayName(page) : currentPage.name.replace(/\.(astro|mdx?)$/i, ''),
+      label: page ? pageDisplayLabel(page, translate) : currentPage.name.replace(/\.(astro|mdx?)$/i, ''),
     });
   }
   if (model && selectedId === 'frontmatter') {
-    crumbs.push({ id: 'frontmatter', label: 'Frontmatter' });
+    crumbs.push({ id: 'frontmatter', label: 'Frontmatter' }); // i18n-ignore: the file format's own word, shown as written.
   } else if (model && selectedId) {
     const chain = selectedAncestors;
     // A then has no row in the navigator, so the trail doesn't name it either —

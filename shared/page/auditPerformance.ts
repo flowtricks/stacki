@@ -7,7 +7,7 @@
 // sizes run high, so the panel labels them approximations.
 import { assert } from '../core/assert';
 import { toArray, toRecord } from '../core/record';
-import { auditFinding, type AuditFinding } from './auditFindings';
+import { auditFinding, detailText, labelText, type AuditFinding } from './auditFindings';
 import { parseMarker, type RenderedSource } from './auditRendered';
 
 export const MEASUREMENT_LIMITS = {
@@ -155,9 +155,9 @@ export function performanceFindings(measurement: Measurement, page: { readonly f
   const findings: AuditFinding[] = [];
   const add = (
     check: AuditFinding['check'],
-    detail: string,
+    detail: string | ReturnType<typeof detailText>,
     measured: MeasuredElement | undefined,
-    fix?: { readonly label: string; readonly name: string; readonly value: string },
+    fix?: { readonly label: ReturnType<typeof labelText>; readonly name: string; readonly value: string },
   ): void => {
     const source: RenderedSource | undefined = measured?.marker === undefined ? undefined : parseMarker(measured.marker, page.file);
     const file = source?.file ?? page.file;
@@ -167,13 +167,13 @@ export function performanceFindings(measurement: Measurement, page: { readonly f
         file,
         fileKind: file === page.file ? 'page' : 'component',
         element: source === undefined || measured === undefined ? undefined : { path: source.path, tag: measured.tag, line: undefined },
-        detail: `${detail} (on ${page.route})`,
+        ...onRoute(detail, page.route),
         source: 'rendered',
         fix:
           fix === undefined || source === undefined || measured?.tag !== 'img'
             ? undefined
             : {
-                label: fix.label,
+                ...fix.label,
                 before: '<img …>',
                 after: `<img … ${fix.name}="${fix.value}">`,
                 file,
@@ -183,16 +183,24 @@ export function performanceFindings(measurement: Measurement, page: { readonly f
     );
   };
   if (measurement.lcpMs !== undefined && measurement.lcpMs > 2_500) {
-    add('perf-lcp', `${(measurement.lcpMs / 1000).toFixed(1)} s to the largest paint`, measurement.lcpElement);
+    add('perf-lcp', detailText('audits.detail.perfLcp', { seconds: (measurement.lcpMs / 1000).toFixed(1), route: page.route }), measurement.lcpElement);
   }
   if (measurement.cls > 0.1) {
     add('perf-cls', `CLS ${measurement.cls.toFixed(2)}`, measurement.shifts[0]);
   }
   if (measurement.tbtMs > 200) {
-    add('perf-tbt', `${Math.round(measurement.tbtMs)} ms of blocking script`, undefined);
+    add('perf-tbt', detailText('audits.detail.perfTbt', { milliseconds: Math.round(measurement.tbtMs), route: page.route }), undefined);
   }
   if (measurement.transferBytes > 2_000_000 || measurement.requests > 150) {
-    add('perf-weight', `${(measurement.transferBytes / 1_000_000).toFixed(1)} MB in ${measurement.requests} requests (dev server)`, undefined);
+    add(
+      'perf-weight',
+      detailText('audits.detail.perfWeight', {
+        megabytes: (measurement.transferBytes / 1_000_000).toFixed(1),
+        requests: measurement.requests,
+        route: page.route,
+      }),
+      undefined,
+    );
   }
   for (const url of measurement.blocking.slice(0, 10)) {
     add('perf-blocking', shortUrl(url), undefined);
@@ -203,33 +211,45 @@ export function performanceFindings(measurement: Measurement, page: { readonly f
   for (const family of measurement.fontsWithoutDisplay.slice(0, 10)) {
     add('perf-font-display', `@font-face "${family}"`, undefined);
   }
-  imageFindings(measurement, add);
+  imageFindings(measurement, add, page.route);
   return findings;
 }
 
 type Add = (
   check: AuditFinding['check'],
-  detail: string,
+  detail: string | ReturnType<typeof detailText>,
   measured: MeasuredElement | undefined,
-  fix?: { readonly label: string; readonly name: string; readonly value: string },
+  fix?: { readonly label: ReturnType<typeof labelText>; readonly name: string; readonly value: string },
 ) => void;
 
-function imageFindings(measurement: Measurement, add: Add): void {
+/** A performance detail names its page: a sentence carries the route as a parameter, code-like text gets the suffix. */
+function onRoute(detail: string | ReturnType<typeof detailText>, route: string): ReturnType<typeof detailText> {
+  if (typeof detail === 'string') {
+    return detailText('audits.detail.perfOnRoute', { detail, route });
+  }
+  return detail;
+}
+
+function imageFindings(measurement: Measurement, add: Add, route: string): void {
   const lcpMarker = measurement.lcpElement?.marker;
   for (const image of measurement.images) {
     const name = shortUrl(image.url);
     const wanted = image.displayWidth * measurement.devicePixelRatio;
     if (image.displayWidth > 0 && image.naturalWidth > wanted * 1.5 && image.naturalWidth - wanted > 200) {
-      add('perf-image-size', `${name}: ${image.naturalWidth}px wide, shown at ${Math.round(image.displayWidth)}px`, image.element);
+      add(
+        'perf-image-size',
+        detailText('audits.detail.perfImageSize', { name, natural: image.naturalWidth, shown: Math.round(image.displayWidth), route }),
+        image.element,
+      );
     }
     if (!MODERN_FORMAT.test(image.url) && !image.url.startsWith('data:')) {
       add('perf-image-format', name, image.element);
     }
     if (image.belowFold && image.loading !== 'lazy') {
-      add('perf-lazy', name, image.element, { label: 'Add loading="lazy"', name: 'loading', value: 'lazy' });
+      add('perf-lazy', name, image.element, { label: labelText('audits.fix.addLazy'), name: 'loading', value: 'lazy' });
     }
     if (lcpMarker !== undefined && image.element.marker === lcpMarker && image.fetchPriority !== 'high') {
-      add('perf-fetchpriority', name, image.element, { label: 'Add fetchpriority="high"', name: 'fetchpriority', value: 'high' });
+      add('perf-fetchpriority', name, image.element, { label: labelText('audits.fix.addFetchpriority'), name: 'fetchpriority', value: 'high' });
     }
   }
 }

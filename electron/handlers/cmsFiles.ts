@@ -2,6 +2,7 @@
 // frontmatter, its asset imports, and the panel's own field metadata.
 
 import { MAIN_LIMITS, readSource } from '../lib/mainLimits';
+import { translateMain } from '../lib/mainLocale';
 import { isPathWithin } from '../lib/platform';
 import { parseContentConfig } from '../app/mainValidation';
 import type { CmsFile } from '../lib/mainTypes';
@@ -168,13 +169,13 @@ export function readCmsJson(full: string, entryRel: string, rel: string, name: s
     const stat = fs.statSync(full);
     file = { ...file, size: stat.size };
     if (stat.size > MAIN_LIMITS.cmsFileBytesMax) {
-      return { ...file, error: 'This file is too large to edit here (over 2 MB).' };
+      return { ...file, error: translateMain('error.cms.fileTooLarge') };
     }
     return { ...file, data: parseData(readJson(full)) };
   } catch (error: unknown) {
     return {
       ...file,
-      error: `Not valid JSON — ${errorMessage(error).replace(/\s+in JSON.*$/, '')}`,
+      error: translateMain('error.cms.invalidJson', { detail: errorMessage(error).replace(/\s+in JSON.*$/, '') }),
     };
   }
 }

@@ -45,6 +45,8 @@ import { entryImage, projectImage, withInferredReferences, type RecordCollection
 export { projectImage };
 import { globToRegExp, listEntries, writeEntry, type ContentCollection, type Entry } from './contentEntries';
 import { applyRename, entryRenameLock, planRename } from './contentRefs';
+import { DescribedError } from '../../shared/properties/describedError';
+import { described, messageRef, type Described } from '../../shared/properties/i18n/messageRef';
 import { ENTRY_SLUG_LIMITS, splitEntryId, type EntrySlug } from '../../shared/properties/entrySlug';
 
 export interface AstroRemoteService {
@@ -344,8 +346,10 @@ function bodyField(entry: Pick<Entry, 'hasBody' | 'body'>, declared: readonly Re
   }
   return {
     name: BODY_FIELD,
-    title: 'Body',
-    description: 'The entry’s Markdown, below its frontmatter.',
+    title: described('cmsBackend.body.title').message,
+    titleRef: messageRef('cmsBackend.body.title'),
+    description: described('cmsBackend.body.description').message,
+    descriptionRef: messageRef('cmsBackend.body.description'),
     required: false,
     rules: [],
     type: { kind: 'text', options: [], format: 'markdown' },
@@ -412,16 +416,27 @@ function entrySlugOf(collection: Collection, context: { readonly entry: Entry | 
   const lock = entry === undefined ? collectionRenameLock(collection) : entryRenameLock(renameable(collection), entry);
   assert(taken.length <= ENTRY_SLUG_LIMITS.takenMax, 'Taken slugs are bounded');
   assert(own.folder === '' || own.folder.endsWith('/'), 'A folder ends with its slash');
-  return { ...own, taken, rename: lock === undefined ? { kind: 'editable' } : { kind: 'locked', reason: lock.slice(0, ENTRY_SLUG_LIMITS.reasonCharsMax) } };
+  return {
+    ...own,
+    taken,
+    rename:
+      lock === undefined
+        ? { kind: 'editable' }
+        : {
+            kind: 'locked',
+            reason: lock.message.slice(0, ENTRY_SLUG_LIMITS.reasonCharsMax),
+            ...(lock.messageRef === undefined ? {} : { reasonRef: lock.messageRef }),
+          },
+  };
 }
 
 // Why a new entry of the collection could not be given its slug, before it exists.
-function collectionRenameLock(collection: Collection): string | undefined {
+function collectionRenameLock(collection: Collection): Described | undefined {
   if (collection.loader?.parser) {
-    return `${collection.name} is parsed by a function in the content config, so its ids are not in the file.`;
+    return described('cmsBackend.entry.parsed', { collection: collection.name });
   }
   if (collection.loader?.generateId) {
-    return `${collection.name} builds its ids in its loader, so its id cannot be changed by renaming a file.`;
+    return described('cmsBackend.entry.generated', { collection: collection.name });
   }
   return undefined;
 }
@@ -430,7 +445,7 @@ function collectionRenameLock(collection: Collection): string | undefined {
 function renamedId(collection: Collection, entry: Entry, slug: string): string {
   const lock = entryRenameLock(renameable(collection), entry);
   if (lock !== undefined) {
-    throw new Error(lock);
+    throw new DescribedError(lock);
   }
   const { folder } = splitEntryId(entry.id);
   const to = `${folder}${slug}`;
@@ -606,6 +621,7 @@ function starter(extension: string, options: { readonly titled: boolean }): stri
     case 'toml':
       return title === undefined ? '' : `title = "${title}"\n`;
     default:
+      // i18n-ignore: File contents written to the user's project, not interface text.
       return title === undefined ? '---\n---\n' : `---\ntitle: ${title}\n---\n`;
   }
 }

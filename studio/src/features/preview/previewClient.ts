@@ -125,7 +125,7 @@ function target(id: string, occurrence?: number): OutlineTarget | undefined {
   return id
     ? {
         id: scope + id,
-        label: labels[id]?.label ?? 'Element',
+        label: labels[id]?.label ?? 'Element', // i18n-ignore: runs inside the preview frame, which has no catalog; the label is a fallback outline name.
         component: labels[id]?.component ?? false,
         nodeKind: labels[id]?.nodeKind ?? 'element',
         ...(occurrence === undefined ? {} : { occurrence }),

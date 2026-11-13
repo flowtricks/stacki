@@ -2,6 +2,8 @@
 // body read up to a stated size and no further, and a host's refusal turned
 // into a sentence the Assets panel can show.
 
+import { DescribedError } from '../../../shared/properties/describedError';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 import { assert } from '../../../shared/core/assert';
 
 /** The platform fetch, injected so tests can play a host without a network. */
@@ -20,13 +22,13 @@ export const MEDIA_HTTP_LIMITS = {
   errorCharsMax: 300,
 } as const satisfies Record<string, number>;
 
-/** A failure the host reported; its message is what the panel shows. */
-export class MediaHostError extends Error {
+/** A failure the host reported; its message is what the panel shows, and its reference what the renderer translates. */
+export class MediaHostError extends DescribedError {
   constructor(
-    message: string,
+    problem: Described | string,
     readonly status: number,
   ) {
-    super(message);
+    super(typeof problem === 'string' ? { message: problem } : problem);
   }
 }
 
@@ -54,7 +56,10 @@ export async function send(fetcher: MediaFetch, request: MediaRequest): Promise<
     return await fetcher(request.url, init);
   } catch (error: unknown) {
     const reason = error instanceof Error ? error.message : String(error);
-    throw new MediaHostError(`Could not reach ${new URL(request.url).host}: ${reason}`.slice(0, MEDIA_HTTP_LIMITS.errorCharsMax), 0);
+    throw new MediaHostError(
+      described('cmsBackend.media.unreachable', { host: new URL(request.url).host, reason: reason.slice(0, MEDIA_HTTP_LIMITS.errorCharsMax) }),
+      0,
+    );
   }
 }
 
@@ -71,7 +76,7 @@ export async function readBounded(response: Response, bytesMax: number): Promise
   const declared = Number(response.headers.get('content-length') ?? '0');
   if (declared > bytesMax) {
     await response.body?.cancel();
-    throw new MediaHostError(`The host sent more than ${Math.floor(bytesMax / 1024 / 1024)} MB.`, response.status);
+    throw new MediaHostError(described('cmsBackend.media.bodyTooLarge', { size: Math.floor(bytesMax / 1024 / 1024) }), response.status);
   }
   const stream = response.body;
   if (stream === null) {
@@ -90,7 +95,7 @@ export async function readBounded(response: Response, bytesMax: number): Promise
     total += chunk.length;
     if (total > bytesMax) {
       await reader.cancel();
-      throw new MediaHostError(`The host sent more than ${Math.floor(bytesMax / 1024 / 1024)} MB.`, response.status);
+      throw new MediaHostError(described('cmsBackend.media.bodyTooLarge', { size: Math.floor(bytesMax / 1024 / 1024) }), response.status);
     }
     chunks.push(chunk);
   }
@@ -114,7 +119,7 @@ function streamChunk(result: unknown): Uint8Array | undefined {
   }
   const value: unknown = Reflect.get(result, 'value');
   if (!(value instanceof Uint8Array)) {
-    throw new MediaHostError('The host sent a body that is not bytes.', 0);
+    throw new MediaHostError(described('cmsBackend.media.bodyNotBytes'), 0);
   }
   return value;
 }
@@ -124,7 +129,7 @@ export async function readText(response: Response): Promise<string> {
 }
 
 /** Throws the host's refusal unless the response succeeded; a 404 is allowed when asked. */
-export async function expectOk(response: Response, describe: (status: number, body: string) => string): Promise<void> {
+export async function expectOk(response: Response, describe: (status: number, body: string) => Described | string): Promise<void> {
   if (response.ok) {
     return;
   }
@@ -134,22 +139,31 @@ export async function expectOk(response: Response, describe: (status: number, bo
   } catch {
     // An unreadable error body still reports its status.
   }
-  throw new MediaHostError(describe(response.status, body).slice(0, MEDIA_HTTP_LIMITS.errorCharsMax), response.status);
+  throw new MediaHostError(describe(response.status, body), response.status);
 }
 
-/** What a status means to the person, before the host's own words. */
-export function statusSentence(status: number): string {
+/**
+ * What a status means to the person, before the host's own words. `detail` is what the host added (already phrased, with its leading
+ * space) and is appended by the message itself, so a translation keeps the sentence whole.
+ */
+export function statusProblem(status: number, detail = ''): Described {
+  const said = detail.slice(0, MEDIA_HTTP_LIMITS.errorCharsMax);
   if (status === 401 || status === 403) {
-    return 'The host refused the keys. Check them, and that they may read and write this bucket.';
+    return described('cmsBackend.media.status.refusedKeys', { detail: said });
   }
   if (status === 404) {
-    return 'The host has no such bucket, zone or file.';
+    return described('cmsBackend.media.status.notFound', { detail: said });
   }
   if (status === 429) {
-    return 'The host is limiting requests. Try again in a moment.';
+    return described('cmsBackend.media.status.limited', { detail: said });
   }
   if (status >= 500) {
-    return `The host had a problem (${status}). Try again in a moment.`;
+    return described('cmsBackend.media.status.server', { status, detail: said });
   }
-  return `The host refused the request (${status}).`;
+  return described('cmsBackend.media.status.refused', { status, detail: said });
+}
+
+/** The English sentence of `statusProblem` without the host's words. */
+export function statusSentence(status: number): string {
+  return statusProblem(status).message;
 }

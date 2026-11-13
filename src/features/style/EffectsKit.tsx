@@ -20,6 +20,8 @@ import { commitInPlace } from './model/commitInPlace';
 import { openAfterRemoval, useExternalDraft } from './model/fieldHooks';
 import { displayOf, displayText, keepImportant, parseImportant } from './model/styleDisplay';
 import ImportantMark from './components/ImportantMark';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -202,6 +204,7 @@ export function useLayerRows<T>({
 // The property label: blue/active when the picked selector sets it (with a clear
 // menu + provenance), orange when it's set through another selector.
 export function EffLabel({ label, prop, props }: { label: string; prop: string; props: Props }) {
+  const translate = useTranslate();
   const { read, busy, clearProp, onProvenance, onSelectSelector } = props;
   const display = displayOf(read(prop));
   const contributors: Contributor[] = read(prop)?.contributors ?? [];
@@ -215,9 +218,9 @@ export function EffLabel({ label, prop, props }: { label: string; prop: string; 
       {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={() => clearProp(prop)}
-      resetLabel="Clear"
+      resetLabel={translate('style.effectsKit.clear')}
       tooltip={<PropTip props={[prop]} />}
-      {...(display.overridden ? { title: `Overridden by ${display.winnerSelector}` } : {})}
+      {...(display.overridden ? { title: translate('style.effectsKit.overriddenBy', { selector: display.winnerSelector }) } : {})}
       menuNote={(close) => (
         <ProvenanceList
           contributors={contributors}
@@ -236,6 +239,7 @@ export function EffLabel({ label, prop, props }: { label: string; prop: string; 
 
 // A live text field bound to one property (raw CSS value editors).
 export function LiveText({ prop, placeholder, props, dragging }: { prop: string; placeholder: string; props: Props; dragging?: string }) {
+  const translate = useTranslate();
   const { read, busy, setProp, clearProp, liveSetProp } = props;
   const display = displayOf(read(prop));
   // `dragging` is what a swatch beside this field is showing mid-drag.
@@ -275,7 +279,7 @@ export function LiveText({ prop, placeholder, props, dragging }: { prop: string;
     <VariableConnect
       code
       className="is-fill"
-      ariaLabel={`Connect ${prop} to a variable`}
+      ariaLabel={translate('style.effectsKit.connect', { name: prop })}
       disabled={busy}
       prop={prop}
       onPick={(binding) => {
@@ -300,6 +304,7 @@ export function LiveText({ prop, placeholder, props, dragging }: { prop: string;
 
 // ─────────────────────────── Option lists ───────────────────────────
 
+// The labels are the CSS blend-mode keywords, which designers read untranslated.
 export const BLEND_MODES: SelectOption<string>[] = [
   'normal',
   'darken',
@@ -319,6 +324,7 @@ export const BLEND_MODES: SelectOption<string>[] = [
   'luminosity',
 ].map((mode) => ({
   value: mode,
+  // i18n-ignore: the CSS blend-mode keywords, kept as designers write them.
   label:
     mode === 'color-burn'
       ? 'Color burn'
@@ -333,17 +339,19 @@ export const BLEND_MODES: SelectOption<string>[] = [
 
 // Grouped like Webflow's cursor menu: a non-selectable heading per group, each
 // cursor indented and shown with its Webflow glyph.
-export const CURSOR_GROUPS: ReadonlyArray<{ heading: string; values: string[] }> = [
-  { heading: 'General', values: ['auto', 'default', 'none'] },
+export const CURSOR_GROUPS: ReadonlyArray<{ id: string; headingKey: MessageKey; values: string[] }> = [
+  { id: 'general', headingKey: 'style.effectsKit.cursorGeneral', values: ['auto', 'default', 'none'] },
   {
-    heading: 'Links & Status',
+    id: 'links',
+    headingKey: 'style.effectsKit.cursorLinks',
     values: ['pointer', 'not-allowed', 'wait', 'progress', 'help', 'context-menu'],
   },
-  { heading: 'Selection', values: ['cell', 'crosshair', 'text', 'vertical-text'] },
-  { heading: 'Drag & Drop', values: ['grab', 'grabbing', 'alias', 'copy', 'move'] },
-  { heading: 'Zoom', values: ['zoom-in', 'zoom-out'] },
+  { id: 'selection', headingKey: 'style.effectsKit.cursorSelection', values: ['cell', 'crosshair', 'text', 'vertical-text'] },
+  { id: 'drag', headingKey: 'style.effectsKit.cursorDrag', values: ['grab', 'grabbing', 'alias', 'copy', 'move'] },
+  { id: 'zoom', headingKey: 'style.effectsKit.cursorZoom', values: ['zoom-in', 'zoom-out'] },
   {
-    heading: 'Resize',
+    id: 'resize',
+    headingKey: 'style.effectsKit.cursorResize',
     values: [
       'col-resize',
       'row-resize',
@@ -362,40 +370,41 @@ export const CURSOR_GROUPS: ReadonlyArray<{ heading: string; values: string[] }>
     ],
   },
 ];
-export const CURSORS: SelectOption<string>[] = CURSOR_GROUPS.flatMap((group) => [
-  { value: `__${group.heading}`, label: group.heading, heading: true },
-  ...group.values.map((cursor) => ({
-    value: cursor,
-    label: cursor,
-    icon: CURSOR_ICONS[cursor],
-    indent: true,
-  })),
-]);
+export const cursorOptions = (translate: Translator): SelectOption<string>[] =>
+  CURSOR_GROUPS.flatMap((group) => [
+    { value: `__${group.id}`, label: translate(group.headingKey), heading: true },
+    ...group.values.map((cursor) => ({
+      value: cursor,
+      label: cursor,
+      icon: CURSOR_ICONS[cursor],
+      indent: true,
+    })),
+  ]);
 
-export const OUTLINE_OPTIONS: readonly SegOption[] = [
-  { value: 'none', label: '✕', menuLabel: 'None', ariaLabel: 'None' },
+export const outlineOptions = (translate: Translator): readonly SegOption[] => [
+  { value: 'none', label: '✕', menuLabel: translate('style.effectsKit.outlineNone'), ariaLabel: translate('style.effectsKit.outlineNone') },
   {
     value: 'solid',
     label: <span className="embed-editor_border-style-line is-solid" />,
-    menuLabel: 'Solid',
-    ariaLabel: 'Solid',
+    menuLabel: translate('style.effectsKit.outlineSolid'),
+    ariaLabel: translate('style.effectsKit.outlineSolid'),
   },
   {
     value: 'dashed',
     label: <span className="embed-editor_border-style-line is-dashed" />,
-    menuLabel: 'Dashed',
-    ariaLabel: 'Dashed',
+    menuLabel: translate('style.effectsKit.outlineDashed'),
+    ariaLabel: translate('style.effectsKit.outlineDashed'),
   },
   {
     value: 'dotted',
     label: <span className="embed-editor_border-style-line is-dotted" />,
-    menuLabel: 'Dotted',
-    ariaLabel: 'Dotted',
+    menuLabel: translate('style.effectsKit.outlineDotted'),
+    ariaLabel: translate('style.effectsKit.outlineDotted'),
   },
 ];
-export const EVENTS_OPTIONS: readonly SegOption[] = [
-  { value: 'auto', label: 'Auto', menuLabel: 'Auto' },
-  { value: 'none', label: 'None', menuLabel: 'None' },
+export const eventsOptions = (translate: Translator): readonly SegOption[] => [
+  { value: 'auto', label: translate('style.effectsKit.eventsAuto'), menuLabel: translate('style.effectsKit.eventsAuto') },
+  { value: 'none', label: translate('style.effectsKit.eventsNone'), menuLabel: translate('style.effectsKit.eventsNone') },
 ];
 
 // The "Custom…" sentinel + preset value sets (values that ARE listed in the dropdown,
@@ -419,6 +428,7 @@ export interface CustomInputProps {
   onExit: () => void;
 }
 export function CustomInput(props: CustomInputProps) {
+  const translate = useTranslate();
   const { prop, value, placeholder, busy, setProp, liveSetProp, clearProp, onExit } = props;
   const computed = useStyleHint(value ? '' : prop);
   const { draft, setDraft, focused } = useExternalDraft(value);
@@ -441,7 +451,7 @@ export function CustomInput(props: CustomInputProps) {
   };
   return (
     <VariableConnect
-      ariaLabel={`Connect ${prop} to a variable`}
+      ariaLabel={translate('style.effectsKit.connect', { name: prop })}
       disabled={busy}
       prop={prop}
       onPick={(binding) => {
@@ -495,6 +505,7 @@ export interface PresetSelectRowProps {
 }
 export function PresetSelectRow(row: PresetSelectRowProps) {
   const { prop, label, options, presets, props, allowCustom = true } = row;
+  const translate = useTranslate();
   const { read, busy, setProp, liveSetProp, clearProp } = props;
   const display = displayOf(read(prop));
   const current = display.present ? display.value.trim() : '';
@@ -528,6 +539,7 @@ export function PresetSelectRow(row: PresetSelectRowProps) {
   const selectOptions = presetSelectOptions({
     options,
     allowCustom,
+    translate,
     stray: display.present && !isPreset ? current : undefined,
   });
   return (
@@ -569,13 +581,15 @@ export function presetSelectOptions({
   options,
   allowCustom,
   stray,
+  translate,
 }: {
   options: SelectOption<string>[];
   allowCustom: boolean;
+  translate: Translator;
   stray: string | undefined;
 }): SelectOption<string>[] {
   if (allowCustom) {
-    return [...options, { value: CUSTOM, label: 'Custom…' }];
+    return [...options, { value: CUSTOM, label: translate('style.effectsKit.custom') }];
   }
   if (stray !== undefined) {
     return [...options, { value: stray, label: stray }];

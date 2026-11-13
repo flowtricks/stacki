@@ -19,6 +19,8 @@
 // written as typed (PropDeclaration.defaultExpression).
 
 import { useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { CloseIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import AutoTextarea from '../../ui/AutoTextarea';
 import AssetField from '../../ui/AssetField';
@@ -46,7 +48,7 @@ import { type NumberSettings } from '../../editor/propDocumentation';
 import {
   boundPath,
   FIT_KINDS,
-  KIND_TITLES,
+  KIND_TITLE_KEYS,
   propNameProblem,
   seedName,
   suggestedPropName,
@@ -65,23 +67,24 @@ export interface NewPropFormProps {
 }
 
 export default function NewPropForm(props: NewPropFormProps) {
+  const translate = useTranslate();
   const form = useNewPropForm(props);
   const { name, setName, problem, kind, created } = form;
   return (
-    <div className="loop-bind-dialog loop-property-settings new-prop-form" role="dialog" aria-label="Property settings">
+    <div className="loop-bind-dialog loop-property-settings new-prop-form" role="dialog" aria-label={translate('props.newProp.form.settings')}>
       <div className="loop-property-head">
-        <span className="loop-bind-title">Property settings</span>
-        <button type="button" className="loop-settings-remove" aria-label="Close" title="Close" onClick={props.onCancel}>
+        <span className="loop-bind-title">{translate('props.newProp.form.settings')}</span>
+        <button type="button" className="loop-settings-remove" aria-label={translate('ui.close')} title={translate('ui.close')} onClick={props.onCancel}>
           <CloseIcon size={12} />
         </button>
       </div>
       <label className="loop-bind-name">
-        <span className="loop-settings-editor-label">Name</span>
+        <span className="loop-settings-editor-label">{translate('props.newProp.form.name')}</span>
         <input
           value={name}
           spellCheck={false}
           autoFocus={true}
-          aria-label="Name"
+          aria-label={translate('props.newProp.form.name')}
           aria-invalid={form.nameProblem !== undefined}
           onChange={(event) => setName(event.target.value)}
           onKeyDown={(event) => {
@@ -93,18 +96,18 @@ export default function NewPropForm(props: NewPropFormProps) {
       </label>
       {form.nameProblem !== undefined && <div className="loop-bind-problem">{form.nameProblem}</div>}
       <label className="loop-bind-name top">
-        <span className="loop-settings-editor-label">Tooltip</span>
+        <span className="loop-settings-editor-label">{translate('props.newProp.form.tooltip')}</span>
         <AutoTextarea
           value={form.tooltip}
-          aria-label="Tooltip"
-          placeholder="Describe how to use this property…"
+          aria-label={translate('props.newProp.form.tooltip')}
+          placeholder={translate('props.newProp.form.tooltipPlaceholder')}
           onChange={(event) => form.setTooltip(event.target.value)}
         />
       </label>
       {form.kinds.length > 1 && (
         <div className="loop-bind-name">
-          <span className="loop-settings-editor-label">Type</span>
-          <SegSwitch options={form.kinds.map((value) => ({ value, label: KIND_TITLES[value] }))} current={kind} onPick={form.setKind} />
+          <span className="loop-settings-editor-label">{translate('props.newProp.form.type')}</span>
+          <SegSwitch options={form.kinds.map((value) => ({ value, label: translate(KIND_TITLE_KEYS[value]) }))} current={kind} onPick={form.setKind} />
         </div>
       )}
       <KindSettings form={form} />
@@ -124,17 +127,17 @@ export default function NewPropForm(props: NewPropFormProps) {
         <ListDefaultField fields={form.listFields} code={form.listItems} projectPath={props.host.projectPath} onChange={form.setListItems} />
       ) : (
         <div className="loop-property-default">
-          <div className="loop-bind-title">{`Default ${KIND_TITLES[kind]}`}</div>
+          <div className="loop-bind-title">{translate('props.newProp.form.defaultKind', { kind: translate(KIND_TITLE_KEYS[kind]) })}</div>
           <DefaultEditor form={form} host={props.host} />
         </div>
       )}
       {problem !== undefined && form.nameProblem === undefined && <div className="loop-bind-problem">{problem}</div>}
       <div className="loop-bind-actions">
         <button type="button" className="loop-bind-button" onClick={props.onCancel}>
-          Cancel
+          {translate('ui.cancel')}
         </button>
         <button type="button" className="loop-bind-button primary" disabled={problem !== undefined || created} onClick={form.create}>
-          Create
+          {translate('props.newProp.form.create')}
         </button>
       </div>
     </div>
@@ -142,6 +145,7 @@ export default function NewPropForm(props: NewPropFormProps) {
 }
 
 function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
+  const translate = useTranslate();
   const kinds = FIT_KINDS[seed.fit];
   const first = kinds[0];
   assert(first !== undefined, 'NewPropForm: a field offers at least one kind');
@@ -149,21 +153,21 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
   const [name, setName] = useState(() => (first === 'attributes' ? suggestedRestName(host) : suggestedPropName(seedName(seed), host)));
   const [tooltip, setTooltip] = useState('');
   const [defaultText, setDefaultText] = useState(() => initialDefault(first, seed.value));
-  const [options, setOptions] = useState<readonly string[]>(() => [seed.value.trim() === '' ? 'Option 1' : seed.value]);
+  const [options, setOptions] = useState<readonly string[]>(() => [seed.value.trim() === '' ? 'Option 1' : seed.value]); // i18n-ignore: a starting option written into the user's file, like any option they type.
   const [number, setNumber] = useState<NumberSettings>({ min: undefined, max: undefined, decimals: undefined });
   const [attributes, setAttributes] = useState<readonly AttributeDefault[]>([]);
   // A list field of a child component starts from its items' fields and the items it holds now.
   const [listFields, setListFields] = useState<readonly ItemFieldDeclaration[]>(() => (seed.itemFields?.length ? seed.itemFields : LIST_STARTER_FIELDS));
   const [listItems, setListItems] = useState(() => (seed.fit === 'list' && arrayItems(seed.value) !== undefined ? seed.value.trim() : '[]'));
   // An image field that already shows a file or a URL starts from it.
-  const [image, setImage] = useState(() => (seed.fit === 'image' && imageDefaultOf(seed.value).ok ? seed.value.trim() : ''));
+  const [image, setImage] = useState(() => (seed.fit === 'image' && imageDefaultOf(seed.value, translate).ok ? seed.value.trim() : ''));
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const [created, setCreated] = useState(false);
   const [flags, setFlags] = useState<PropertyFlags>({ required: false, readonly: false });
   const [codeType, setCodeType] = useState('');
   const [codeOpen, setCodeOpen] = useState(false);
   const key = name.trim();
-  const nameProblem = propNameProblem(key, host);
+  const nameProblem = propNameProblem(key, host, translate);
   // The default items as items when the list can show them; as code, written as typed, when not.
   // A field bound to data reads as an item but is code: as a value it would be quoted into words.
   const parsedItems = arrayItems(listItems);
@@ -185,8 +189,8 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
     defaultExpression: listExpression,
   };
   // Without the component's frontmatter here, a list's item type is shown inline.
-  const kindTyped = typeText(declaration);
-  const problem = nameProblem ?? settingsProblem(declaration) ?? refusal;
+  const kindTyped = typeText(declaration, '', translate);
+  const problem = nameProblem ?? settingsProblem(declaration, translate) ?? refusal;
   const setKind = (next: NewPropKind): void => {
     setKindState(next);
     setDefaultText(initialDefault(next, seed.value));
@@ -200,7 +204,7 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
     if (answer.ok) {
       setCreated(true);
       // An imported image bound where a URL is wanted reads its `.src`.
-      const picked = kind === 'image' ? imageDefaultOf(image) : undefined;
+      const picked = kind === 'image' ? imageDefaultOf(image, translate) : undefined;
       onCreated(boundPath(answer.value, picked?.ok === true ? picked.value.kind : undefined, seed.reference), declaration);
     } else {
       setRefusal(answer.error);
@@ -243,7 +247,7 @@ function useNewPropForm({ host, seed, onCreated }: NewPropFormProps) {
     setListItems: edit(setListItems),
     image,
     setImage: edit(setImage),
-    problem: key === '' ? 'Give the property a name.' : problem,
+    problem: key === '' ? translate('props.newProp.name.empty') : problem,
     created,
     create,
   };
@@ -272,18 +276,18 @@ function initialDefault(kind: NewPropKind, value: string): string {
   }
 }
 
-function settingsProblem(declaration: PropDeclaration): string | undefined {
+function settingsProblem(declaration: PropDeclaration, translate: Translator): string | undefined {
   switch (declaration.kind) {
     case 'number':
-      return numberSettingsProblem(declaration.number) ?? defaultProblem(declaration);
+      return numberSettingsProblem(declaration.number, translate) ?? defaultProblem(declaration, translate);
     case 'option':
-      return optionsProblem(declaration.options) ?? defaultProblem(declaration);
+      return optionsProblem(declaration.options, translate) ?? defaultProblem(declaration, translate);
     case 'attributes':
-      return attributeDefaultsProblem(declaration.attributes);
+      return attributeDefaultsProblem(declaration.attributes, translate);
     case 'list':
-      return listSettingsProblem(declaration.list);
+      return listSettingsProblem(declaration.list, translate);
     case 'image': {
-      const image = imageDefaultOf(declaration.image);
+      const image = imageDefaultOf(declaration.image, translate);
       return image.ok ? undefined : image.error;
     }
     case 'boolean':
@@ -296,12 +300,13 @@ function settingsProblem(declaration: PropDeclaration): string | undefined {
   }
 }
 
-function defaultProblem(declaration: PropDeclaration): string | undefined {
-  const code = defaultCode(declaration);
+function defaultProblem(declaration: PropDeclaration, translate: Translator): string | undefined {
+  const code = defaultCode(declaration, translate);
   return code.ok ? undefined : code.error;
 }
 
 function KindSettings({ form }: { readonly form: FormState }) {
+  const translate = useTranslate();
   switch (form.kind) {
     case 'number':
       return <NumberSettingsEditor settings={form.number} onChange={form.setNumber} />;
@@ -309,7 +314,7 @@ function KindSettings({ form }: { readonly form: FormState }) {
       // The same list editor the Properties panel's Options use (PropertyOptions), over the words themselves.
       return (
         <div className="property-options props-field">
-          <span>Options</span>
+          <span>{translate('props.newProp.form.options')}</span>
           <ListField
             value={arrayText(form.options.map((option) => ({ text: option, quote: '"' })))}
             itemsMin={1}
@@ -348,16 +353,24 @@ function optionWords(text: string): readonly string[] {
 }
 
 function DefaultEditor({ form, host }: { readonly form: FormState; readonly host: NewPropHost }) {
+  const translate = useTranslate();
   switch (form.kind) {
     case 'string':
-      return <AutoTextarea value={form.defaultText} aria-label="Default" placeholder="None" onChange={(event) => form.setDefaultText(event.target.value)} />;
+      return (
+        <AutoTextarea
+          value={form.defaultText}
+          aria-label={translate('props.newProp.form.default')}
+          placeholder={translate('props.newProp.form.none')}
+          onChange={(event) => form.setDefaultText(event.target.value)}
+        />
+      );
     case 'number':
       return (
         <input
           className="new-prop-input"
           inputMode="decimal"
-          aria-label="Default"
-          placeholder="None"
+          aria-label={translate('props.newProp.form.default')}
+          placeholder={translate('props.newProp.form.none')}
           value={form.defaultText}
           onChange={(event) => form.setDefaultText(event.target.value)}
         />
@@ -366,8 +379,8 @@ function DefaultEditor({ form, host }: { readonly form: FormState; readonly host
       return (
         <SegSwitch
           options={[
-            { value: 'true', label: 'True' },
-            { value: 'false', label: 'False' },
+            { value: 'true', label: translate('props.newProp.form.true') },
+            { value: 'false', label: translate('props.newProp.form.false') },
           ]}
           current={form.defaultText}
           onPick={form.setDefaultText}
@@ -376,9 +389,9 @@ function DefaultEditor({ form, host }: { readonly form: FormState; readonly host
     case 'option':
       return (
         <Dropdown
-          ariaLabel="Default"
+          ariaLabel={translate('props.newProp.form.default')}
           value={form.defaultText}
-          options={[{ value: '', label: 'None' }, ...form.options.map((option) => ({ value: option, label: option }))]}
+          options={[{ value: '', label: translate('props.newProp.form.none') }, ...form.options.map((option) => ({ value: option, label: option }))]}
           livePreview={false}
           onChange={form.setDefaultText}
         />
@@ -393,8 +406,8 @@ function DefaultEditor({ form, host }: { readonly form: FormState; readonly host
       return host.projectPath === undefined ? (
         <input
           className="new-prop-input"
-          aria-label="Default"
-          placeholder="https://… or ../assets/image.png"
+          aria-label={translate('props.newProp.form.default')}
+          placeholder={translate('props.newProp.form.imagePlaceholder')}
           value={form.image}
           onChange={(event) => form.setImage(event.target.value)}
         />
@@ -417,6 +430,7 @@ function DefaultEditor({ form, host }: { readonly form: FormState; readonly host
 
 /** Min, Max and Decimals for a number prop; an empty box is None (Auto for decimals). */
 export function NumberSettingsEditor(props: { readonly settings: NumberSettings; readonly onChange: (settings: NumberSettings) => void }) {
+  const translate = useTranslate();
   const field = (label: string, key: keyof NumberSettings, placeholder: string) => (
     <label className="loop-bind-name">
       <span className="loop-settings-editor-label">{label}</span>
@@ -435,10 +449,10 @@ export function NumberSettingsEditor(props: { readonly settings: NumberSettings;
   );
   return (
     <div className="new-prop-settings">
-      <div className="loop-bind-title">Number settings</div>
-      {field('Min', 'min', 'None')}
-      {field('Max', 'max', 'None')}
-      {field('Decimals', 'decimals', 'Auto')}
+      <div className="loop-bind-title">{translate('props.newProp.form.numberSettings')}</div>
+      {field(translate('props.newProp.form.min'), 'min', translate('props.newProp.form.none'))}
+      {field(translate('props.newProp.form.max'), 'max', translate('props.newProp.form.none'))}
+      {field(translate('props.newProp.form.decimals'), 'decimals', translate('props.newProp.form.auto'))}
     </div>
   );
 }
@@ -448,6 +462,7 @@ export function AttributeDefaultsEditor(props: {
   readonly defaults: readonly AttributeDefault[];
   readonly onChange: (defaults: readonly AttributeDefault[]) => void;
 }) {
+  const translate = useTranslate();
   const { defaults, onChange } = props;
   const set = (index: number, entry: AttributeDefault): void => onChange(defaults.map((current, at) => (at === index ? entry : current)));
   return (
@@ -456,8 +471,8 @@ export function AttributeDefaultsEditor(props: {
         <div className="new-prop-attribute" key={index}>
           <input
             className="new-prop-input"
-            aria-label="Attribute name"
-            placeholder="name"
+            aria-label={translate('props.newProp.form.attributeName')}
+            placeholder={translate('props.newProp.form.attributeNameHint')}
             spellCheck={false}
             value={entry.name}
             onChange={(event) => set(index, { ...entry, name: event.target.value.replace(/[^\w@:.-]/g, '') })}
@@ -465,8 +480,8 @@ export function AttributeDefaultsEditor(props: {
           <span className="attr-eq">=</span>
           <input
             className="new-prop-input"
-            aria-label="Attribute value"
-            placeholder="value"
+            aria-label={translate('props.newProp.form.attributeValue')}
+            placeholder={translate('props.newProp.form.attributeValueHint')}
             spellCheck={false}
             value={entry.value}
             onChange={(event) => set(index, { ...entry, value: event.target.value })}
@@ -474,8 +489,8 @@ export function AttributeDefaultsEditor(props: {
           <button
             type="button"
             className="loop-settings-remove"
-            aria-label="Remove attribute"
-            title="Remove"
+            aria-label={translate('props.newProp.form.removeAttribute')}
+            title={translate('ui.remove')}
             onClick={() => onChange(defaults.filter((_, at) => at !== index))}
           >
             <TrashIcon size={12} />
@@ -483,7 +498,7 @@ export function AttributeDefaultsEditor(props: {
         </div>
       ))}
       <button type="button" className="loop-bind-button new-prop-add" onClick={() => onChange([...defaults, { name: '', value: '' }])}>
-        <PlusIcon size={11} /> Add attribute
+        <PlusIcon size={11} /> {translate('props.attributes.add')}
       </button>
     </div>
   );

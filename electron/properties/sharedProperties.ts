@@ -22,6 +22,8 @@ import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
 import { err, ok, type Result } from '../../shared/core/result';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
+import { inFile, refusal } from '../../shared/properties/propertyErrors';
 import type {
   ComponentProperties,
   ComponentProperty,
@@ -137,10 +139,7 @@ export function planSharedPropertyChange(location: SharedLocation, source: strin
   }
   switch (change.kind) {
     case 'remove':
-      return err({
-        code: 'shared',
-        message: `${name} is declared in ${type.typeName} (${toPosix(path.relative(location.projectPath, type.file))}). Delete it there in source.`,
-      });
+      return err(refusal('shared', 'props.shared.declared', { name, type: type.typeName, path: toPosix(path.relative(location.projectPath, type.file)) }));
     case 'options':
     case 'save':
       return planSharedSave(location, source, type, sharedSaveOf(change, type, local));
@@ -220,7 +219,7 @@ function planSharedSave(location: SharedLocation, source: string, type: SharedTy
   if (property.name !== originalName) {
     const collision = sharedNameCollision(location.projectPath, type, users.value, property.name);
     if (collision !== undefined) {
-      return err({ code: 'duplicate', message: collision });
+      return err({ code: 'duplicate', ...collision });
     }
     const renamed = planSharedRename(location.projectPath, users.value, texts, { from: originalName, to: property.name });
     if (!renamed.ok) {
@@ -272,7 +271,7 @@ function sharedDeclarationEdit(type: SharedType, member: ts.PropertySignature, p
   const output = applySourceEdits(type.source, edits);
   const error = syntaxError(output);
   if (error !== undefined) {
-    return err({ code: 'syntax', message: `${path.basename(type.file)}: ${error}` });
+    return err(inFile(path.basename(type.file), { code: 'syntax', message: error }));
   }
   assert(output !== type.source, 'A changed shared declaration writes its change');
   return ok(output);
@@ -296,11 +295,14 @@ function sharedDefaultEdit(
   const binding = propsBindings(document.syntax).find((item) => propertyKey(item.propertyName ?? item.name) === previous.name);
   if (binding === undefined) {
     const where = sharedDefaults(location.projectPath, users, previous.name).map((entry) => `${entry.path} (${entry.expression})`);
-    const elsewhere = where.length > 0 ? ` It has one in ${where.join(', ')}.` : '';
-    return err({
-      code: 'default',
-      message: `This component passes ${previous.name} on to ${type.typeName}'s other users without destructuring it, so it has no default of its own.${elsewhere}`,
-    });
+    const names = { name: previous.name, type: type.typeName };
+    return err(
+      refusal(
+        'default',
+        where.length > 0 ? 'props.shared.noDefaultElsewhere' : 'props.shared.noDefault',
+        where.length > 0 ? { ...names, where: where.join(', ') } : names,
+      ),
+    );
   }
   const edits = bindingEdits(binding, previous, { ...previous, defaultValue: property.defaultValue });
   const frontmatter = applySourceEdits(document.frontmatter, edits);
@@ -311,13 +313,13 @@ function sharedDefaultEdit(
   return ok(replaceFrontmatter(document, frontmatter));
 }
 
-function sharedNameCollision(projectPath: string, type: SharedType, users: readonly SharedUser[], name: string): string | undefined {
+function sharedNameCollision(projectPath: string, type: SharedType, users: readonly SharedUser[], name: string): Described | undefined {
   if (type.members.some((member) => propertyKey(member.name) === name)) {
-    return `${type.typeName} already declares ${name}.`;
+    return described('props.shared.duplicateType', { type: type.typeName, name });
   }
   for (const user of users) {
     if (localMemberNames(readPropertySyntax(user.source).syntax).includes(name)) {
-      return `${toPosix(path.relative(projectPath, user.file))} already declares a prop named ${name}.`;
+      return described('props.shared.duplicateUser', { file: toPosix(path.relative(projectPath, user.file)), name });
     }
   }
   return undefined;
@@ -340,7 +342,7 @@ function planSharedRename(
     }
     const renamed = renameSharedUser(text.value, rename, forwarded.get(user.file) ?? new Set());
     if (!renamed.ok) {
-      return err({ code: renamed.error.code, message: `${toPosix(path.relative(projectPath, user.file))}: ${renamed.error.message}` });
+      return err(inFile(toPosix(path.relative(projectPath, user.file)), renamed.error));
     }
     setText(texts, user.file, renamed.value);
   }
@@ -360,7 +362,7 @@ function planSharedRename(
       const spreads = [...forwarded.entries()].find(([file]) => sameFilesystemPath(file, consumer.file))?.[1] ?? new Set<string>();
       const renamed = renameComponentReferences(text.value, consumer.names, rename, 'consumer', spreads);
       if (!renamed.ok) {
-        return err({ code: renamed.error.code, message: `${toPosix(path.relative(projectPath, consumer.file))}: ${renamed.error.message}` });
+        return err(inFile(toPosix(path.relative(projectPath, consumer.file)), renamed.error));
       }
       setText(texts, consumer.file, renamed.value);
     }
@@ -438,7 +440,7 @@ function renameRestReads(source: string, rename: { readonly from: string; readon
     if (ts.isSpreadAssignment(parent) || ts.isSpreadElement(parent)) {
       continue;
     }
-    return err({ code: 'rest', message: `${node.text} is used in code in a way a rename cannot follow. Rename ${rename.from} there in source.` });
+    return err(refusal('rest', 'props.rename.restInCode', { rest: node.text, from: rename.from }));
   }
   const template = source.slice(document.end);
   const offset = document.end;
@@ -453,10 +455,10 @@ function renameRestReads(source: string, rename: { readonly from: string; readon
         if (before.endsWith('...')) {
           continue;
         }
-        return err({ code: 'rest', message: `${rest} is used in the template in a way a rename cannot follow. Rename ${rename.from} there in source.` });
+        return err(refusal('rest', 'props.rename.restInTemplate', { rest, from: rename.from }));
       }
       if (key === undefined) {
-        return err({ code: 'computed', message: `${rest} is read with a computed key. Make that read explicit before renaming ${rename.from}.` });
+        return err(refusal('computed', 'props.rename.restComputed', { rest, from: rename.from }));
       }
       if (key === rename.from) {
         const start = offset + match.index + match[0].length - key.length;
@@ -478,11 +480,11 @@ function planSharedOptionRenames(
   const before = literalOptions(previous.type);
   const after = literalOptions(property.type);
   if (before === undefined || after === undefined) {
-    return err({ code: 'option', message: 'Option renames require an editable literal union.' });
+    return err(refusal('option', 'props.edit.optionNeedsUnion'));
   }
   for (const rename of renames) {
     if (!before.includes(rename.from) || !after.includes(rename.to)) {
-      return err({ code: 'option', message: 'An option rename does not match the saved union.' });
+      return err(refusal('option', 'props.edit.optionMismatch'));
     }
   }
   for (const user of users) {
@@ -500,7 +502,7 @@ function planSharedOptionRenames(
       }
       const renamed = renameComponentOptionValues(text.value, consumer.names, property.name, renames);
       if (!renamed.ok) {
-        return err({ code: renamed.error.code, message: `${toPosix(path.relative(projectPath, consumer.file))}: ${renamed.error.message}` });
+        return err(inFile(toPosix(path.relative(projectPath, consumer.file)), renamed.error));
       }
       setText(texts, consumer.file, renamed.value);
     }
@@ -662,7 +664,7 @@ function sharedTypeUsers(projectPath: string, type: SharedType): Result<readonly
     }
     total += read.value.length;
     if (total > PROPERTY_LIMITS.totalCharsMax) {
-      return err({ code: 'limit', message: 'Project exceeds the shared property source limit.' });
+      return err(refusal('limit', 'props.shared.sourceLimit'));
     }
     if (!read.value.includes(type.typeName)) {
       continue;

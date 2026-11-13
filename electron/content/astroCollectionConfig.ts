@@ -11,7 +11,9 @@ import path from 'node:path';
 
 import { assert } from '../../shared/core/assert';
 import { CODE_INDENT_UNIT, indentUnitOf, withIndentUnit } from '../../shared/core/indent';
-import type { Result } from '../../shared/core/result';
+import { err, type Result } from '../../shared/core/result';
+import { DescribedError } from '../../shared/properties/describedError';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { createProjectText, writeProjectText } from '../documents/documentWrites';
 import { cmsSourcePath } from '../lib/contentPaths';
 import { configPathOf } from './contentConfig';
@@ -33,34 +35,31 @@ export interface CollectionPatch {
  * The config with collection `name` added, or why it cannot be. `source` is
  * the config's text, or undefined when the project has none yet.
  */
-export function addCollectionToConfig(source: string | undefined, name: string): Result<CollectionPatch, string> {
+export function addCollectionToConfig(source: string | undefined, name: string): Result<CollectionPatch, Described> {
   assert(/^[a-z][A-Za-z0-9]*$/.test(name), 'A collection name is an identifier');
   const folder = `src/content/${kebab(name)}`;
   if (source === undefined) {
     return { ok: true, value: { text: newConfig(name, folder), folder } };
   }
   if (source.length > CONFIG_CHARS_MAX) {
-    return { ok: false, error: 'The content config is too large to edit here.' };
+    return err(described('cmsBackend.config.tooLarge'));
   }
   const opening = COLLECTIONS_EXPORT.exec(source);
   if (opening === null) {
-    return {
-      ok: false,
-      error: 'Stacki could not find `export const collections = { … }` in the content config.',
-    };
+    return err(described('cmsBackend.config.noCollections'));
   }
   const open = opening.index + opening[0].length - 1;
   const close = closingBrace(source, open);
   if (close === undefined) {
-    return { ok: false, error: 'The content config’s collections export is not closed.' };
+    return err(described('cmsBackend.config.collectionsNotClosed'));
   }
   const listed = source.slice(open + 1, close);
   if (new RegExp(`(^|[\\s,{])['"]?${name}['"]?\\s*[:,}]|(^|[\\s,])${name}\\s*$`).test(listed)) {
-    return { ok: false, error: `A collection named “${name}” already exists.` };
+    return err(described('cmsBackend.config.collectionExists', { name }));
   }
   const constant = freeIdentifier(source, name);
   if (constant === undefined) {
-    return { ok: false, error: `“${name}” is already used in the content config.` };
+    return err(described('cmsBackend.config.nameUsed', { name }));
   }
   const entry = constant === name ? name : `${name}: ${constant}`;
   const patched =
@@ -87,7 +86,7 @@ export function createAstroCollection(projectPath: string, name: string): Collec
   const before = found === undefined ? undefined : fs.readFileSync(file, 'utf8');
   const patch = addCollectionToConfig(before, name);
   if (!patch.ok) {
-    throw new Error(patch.error);
+    throw new DescribedError(patch.error);
   }
   // The folder first: it makes src/ too, where a project with no config may have none.
   fs.mkdirSync(cmsSourcePath(projectPath, patch.value.folder), { recursive: true });

@@ -11,7 +11,9 @@
 import { assert } from '../core/assert';
 import { count, digest, list, object, pathText, record, text } from '../core/boundary';
 import type { Digest } from '../core/brand';
+import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 import { err, ok, type Result } from '../core/result';
+import { parseRefusal, type PropertyError } from './propertyErrors';
 
 export const SELECTOR_USAGE_LIMITS = {
   /** Selector entries in one report. A large site holds a few thousand. */
@@ -40,7 +42,8 @@ export type SelectorVerdict =
   | { readonly kind: 'unused'; readonly names: readonly string[] }
   /** Would be unused, but the keep list protects `names`. */
   | { readonly kind: 'kept'; readonly names: readonly string[] }
-  | { readonly kind: 'unknown'; readonly names: readonly string[]; readonly reason: string }
+  /** `reasonRef` is `reason` as a message reference, for the renderer to word in the person's language; `reason` stays the English fallback and the grouping key. */
+  | { readonly kind: 'unknown'; readonly names: readonly string[]; readonly reason: string; readonly reasonRef?: MessageRef | undefined }
   /** Not found in the project; installed packages are still being searched for `names`. */
   | { readonly kind: 'checking'; readonly names: readonly string[] };
 
@@ -60,6 +63,8 @@ export interface SelectorEntry {
 export interface SelectorNote {
   readonly rel: string;
   readonly message: string;
+  /** `message` as a message reference (absent for text from the operating system and for older producers). */
+  readonly messageRef?: MessageRef | undefined;
 }
 
 export interface SelectorFileDigest {
@@ -93,7 +98,7 @@ export function parseSelectorReport(input: unknown): SelectorReport {
   if (entries.length > SELECTOR_USAGE_LIMITS.entriesMax) {
     throw new Error('Selector report exceeds its entry limit');
   }
-  const notes = list(object({ rel: pathText, message: text }))(value['notes']);
+  const notes = list(parseNote)(value['notes']);
   if (notes.length > SELECTOR_USAGE_LIMITS.notesMax) {
     throw new Error('Selector report exceeds its note limit');
   }
@@ -108,7 +113,7 @@ export function parseSelectorReportResult(input: unknown): Result<SelectorReport
   return parseResult(input, parseSelectorReport);
 }
 
-export function parseSelectorRemovalResult(input: unknown): Result<SelectorRemoval> {
+export function parseSelectorRemovalResult(input: unknown): Result<SelectorRemoval, PropertyError> {
   return parseResult(input, parseSelectorRemoval);
 }
 
@@ -217,11 +222,19 @@ function parseVerdict(input: unknown): SelectorVerdict {
     case 'unknown': {
       const names = parseNames(value['names']);
       const reason = text(value['reason']);
-      return { kind, names, reason };
+      const reasonRef = parseOptionalMessageRef(value['reasonRef']);
+      return reasonRef === undefined ? { kind, names, reason } : { kind, names, reason, reasonRef };
     }
     default:
       throw new Error('Unknown selector verdict');
   }
+}
+
+function parseNote(input: unknown): SelectorNote {
+  const value = record(input);
+  const note = { rel: pathText(value['rel']), message: text(value['message']) };
+  const messageRef = parseOptionalMessageRef(value['messageRef']);
+  return messageRef === undefined ? note : { ...note, messageRef };
 }
 
 function parseNames(input: unknown): readonly string[] {
@@ -245,13 +258,13 @@ function selectorId(input: unknown): string {
   return value;
 }
 
-function parseResult<T>(input: unknown, parse: (value: unknown) => T): Result<T> {
+function parseResult<T>(input: unknown, parse: (value: unknown) => T): Result<T, PropertyError> {
   const value = record(input);
   if (value['ok'] === true) {
     return ok(parse(value['value']));
   }
   if (value['ok'] === false) {
-    return err(object({ code: text, message: text })(value['error']));
+    return err(parseRefusal(value['error']));
   }
   throw new Error('Expected a result');
 }

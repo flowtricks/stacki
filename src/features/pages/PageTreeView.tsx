@@ -9,7 +9,8 @@ import type { ScanPage } from '../../../shared/properties/projectScan';
 import type { PageTreeNode, PageTreePage } from './pageTree';
 import { isCollectionRoute } from './pageOrder';
 import { countTreePages } from './pageTree';
-import { pageDisplayName, pageFolderDisplayName } from '../../lib/pageName';
+import { pageDisplayLabel, pageFolderDisplayName } from '../../lib/pageName';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { CmsIcon, FileIcon, FolderIcon, FolderOpenIcon, TrashIcon } from '../../ui/Icons';
 import { allowDragEffect } from '../../editor/dragState';
 import { can } from '../../../shared/properties/projectRoles';
@@ -66,6 +67,7 @@ function PageRow({ page, props }: { readonly page: PageTreePage; readonly props:
   const editing = props.editing.kind === 'page' && props.editing.key === page.path;
   const collection = isCollectionRoute(page.name);
   // Rename and delete appear only for a role that may do them (shared/properties/projectRoles.ts).
+  const translate = useTranslate();
   const role = useCurrentRole();
   const renamable = can(role, 'page:rename');
   const deletable = can(role, 'page:delete');
@@ -95,14 +97,14 @@ function PageRow({ page, props }: { readonly page: PageTreePage; readonly props:
     >
       <span className="icon">{collection ? <CmsIcon size={13} /> : <FileIcon size={13} />}</span>
       <span className="page-list-copy">
-        <span className="label">{pageDisplayName(page)}</span>
+        <span className="label">{pageDisplayLabel(page, translate)}</span>
         <span className="sub">{page.route}</span>
       </span>
       {renamable && <PageRenameButton kind="page" rename={() => props.actions.setEditing({ kind: 'page', key: page.path })} />}
       {deletable && (
         <button
           className="row-action"
-          title="Delete page"
+          title={translate('pages.delete.page')}
           onClick={(event) => {
             event.stopPropagation();
             props.actions.removePage(page);
@@ -152,6 +154,7 @@ function FolderRow({
   readonly editing: boolean;
   readonly props: PageTreeViewProps;
 }) {
+  const translate = useTranslate();
   const role = useCurrentRole();
   const renamable = can(role, 'page:rename');
   const deletable = can(role, 'page:delete');
@@ -181,16 +184,12 @@ function FolderRow({
         <span className="label">{pageFolderDisplayName(name)}</span>
         <span className="sub">/{rel}</span>
       </span>
-      {collapsed && count > 0 && (
-        <span className="sub folder-count">
-          {count} page{count === 1 ? '' : 's'}
-        </span>
-      )}
+      {collapsed && count > 0 && <span className="sub folder-count">{translate('pages.folder.count', { count })}</span>}
       {renamable && <PageRenameButton kind="folder" rename={() => props.actions.setEditing({ kind: 'folder', key: rel })} />}
       {deletable && (
         <button
           className="row-action"
-          title="Delete folder"
+          title={translate('pages.delete.folder')}
           onClick={(event) => {
             event.stopPropagation();
             props.actions.removeFolder(rel, count);

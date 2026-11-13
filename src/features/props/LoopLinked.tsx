@@ -14,11 +14,12 @@ import { useCallback, useState } from 'react';
 import type { ReactNode, RefCallback } from 'react';
 import { CheckIcon, ChevronDownIcon, CloseIcon, ComponentIcon, GearIcon, PlusIcon, UnlinkIcon } from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
-import { SETTING_TITLES } from '../../editor/optionsBinding';
+import { settingTitle } from '../../editor/optionsBinding';
 import type { LoopSetting } from '../../editor/optionsQuery';
 import { titled } from './loopCatalog';
 import { RowPopup } from './LoopRows';
 import AutoTextarea from '../../ui/AutoTextarea';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { NewProperty, settingIcon, type BindingContext, type DraftEditor } from './LoopBinding';
 
 const SETTINGS_HEIGHT_PX_MAX = 560;
@@ -34,13 +35,14 @@ export function LinkedSetting(props: {
   /** The same editor over a draft, for a new property's default. */
   readonly draft: DraftEditor;
 }) {
+  const translate = useTranslate();
   const { binding, setting } = props;
   const home = binding.settings[setting];
   assert(home.kind === 'prop', 'A linked setting names its property');
   const [panel, setPanel] = useState<Panel>(undefined);
   const [bar, setBar] = useState<HTMLButtonElement | undefined>(undefined);
   const attach = useCallback<RefCallback<HTMLButtonElement>>((element) => setBar(element ?? undefined), []);
-  const title = SETTING_TITLES[setting];
+  const title = settingTitle(setting, translate);
   const close = (): void => setPanel(undefined);
   return (
     <div className="props-field loop-settings-row loop-linked-row">
@@ -53,7 +55,7 @@ export function LinkedSetting(props: {
         className="loop-linked-bar"
         aria-haspopup="menu"
         aria-expanded={panel !== undefined}
-        title={`${title} come from the ${home.key} property`}
+        title={translate('props.loop.binding.comesFrom', { title, name: home.key })}
         onClick={() => setPanel(panel === undefined ? 'menu' : undefined)}
       >
         <span className="loop-linked-icon">{settingIcon(setting)}</span>
@@ -61,17 +63,17 @@ export function LinkedSetting(props: {
         <ChevronDownIcon size={11} />
       </button>
       {panel === 'menu' && (
-        <RowPopup anchor={bar} heightPxMax={SETTINGS_HEIGHT_PX_MAX} label={`${title} property`} onClose={close}>
+        <RowPopup anchor={bar} heightPxMax={SETTINGS_HEIGHT_PX_MAX} label={translate('props.loop.binding.propertyOf', { title })} onClose={close}>
           <LinkedMenu setting={setting} binding={binding} current={home.key} onPanel={setPanel} />
         </RowPopup>
       )}
       {panel === 'new' && (
-        <RowPopup anchor={bar} label={`New ${title} property`} onClose={close}>
+        <RowPopup anchor={bar} label={translate('props.loop.binding.newProperty', { title })} onClose={close}>
           <NewProperty setting={setting} binding={binding} draft={props.draft} onDone={close} />
         </RowPopup>
       )}
       {panel === 'settings' && (
-        <RowPopup anchor={bar} heightPxMax={SETTINGS_HEIGHT_PX_MAX} label="Property settings" onClose={close}>
+        <RowPopup anchor={bar} heightPxMax={SETTINGS_HEIGHT_PX_MAX} label={translate('props.loop.binding.settings')} onClose={close}>
           <PropertySettings setting={setting} binding={binding} propKey={home.key} editor={props.editor} onClose={close} />
         </RowPopup>
       )}
@@ -85,8 +87,9 @@ function LinkedMenu(props: {
   readonly current: string;
   readonly onPanel: (panel: Panel) => void;
 }) {
+  const translate = useTranslate();
   const { binding, setting } = props;
-  const title = SETTING_TITLES[setting];
+  const title = settingTitle(setting, translate);
   const choose = (action: () => void): void => {
     props.onPanel(undefined);
     action();
@@ -95,17 +98,17 @@ function LinkedMenu(props: {
     <div className="loop-linked-menu" role="menu">
       <button type="button" role="menuitem" className="loop-linked-item" onClick={() => props.onPanel('settings')}>
         <GearIcon size={14} />
-        Edit settings
+        {translate('props.loop.binding.editSettings')}
       </button>
       <button type="button" role="menuitem" className="loop-linked-item" onClick={() => choose(() => binding.onChange({ kind: 'unbind', setting }))}>
         <UnlinkIcon size={14} />
-        Disconnect
+        {translate('props.loop.binding.disconnect')}
       </button>
       <button type="button" role="menuitem" className="loop-linked-item accent" onClick={() => props.onPanel('new')}>
         <PlusIcon size={14} />
-        New {title} property
+        {translate('props.loop.binding.newProperty', { title })}
       </button>
-      <div className="loop-linked-heading">Connect</div>
+      <div className="loop-linked-heading">{translate('props.loop.binding.connect')}</div>
       <div className="loop-linked-component">
         <ComponentIcon size={13} />
         {binding.componentName}
@@ -138,19 +141,26 @@ function PropertySettings(props: {
   readonly editor: ReactNode;
   readonly onClose: () => void;
 }) {
+  const translate = useTranslate();
   const identity = usePropertyIdentity(props.binding, props.propKey);
   const { name, tooltip, state, save } = identity;
   const locked = props.binding.onEditProperty === undefined || state.kind === 'saving';
   return (
     <div className="loop-bind-dialog loop-property-settings">
       <div className="loop-property-head">
-        <span className="loop-bind-title">Property settings</span>
-        <button type="button" className="loop-settings-remove" aria-label="Close property settings" title="Close" onClick={props.onClose}>
+        <span className="loop-bind-title">{translate('props.loop.binding.settings')}</span>
+        <button
+          type="button"
+          className="loop-settings-remove"
+          aria-label={translate('props.loop.binding.closeSettings')}
+          title={translate('ui.close')}
+          onClick={props.onClose}
+        >
           <CloseIcon size={12} />
         </button>
       </div>
       <label className="loop-bind-name">
-        <span className="loop-settings-editor-label">Name</span>
+        <span className="loop-settings-editor-label">{translate('props.loop.binding.name')}</span>
         <input
           value={name}
           spellCheck={false}
@@ -165,19 +175,19 @@ function PropertySettings(props: {
         />
       </label>
       <label className="loop-bind-name top">
-        <span className="loop-settings-editor-label">Tooltip</span>
+        <span className="loop-settings-editor-label">{translate('props.loop.binding.tooltip')}</span>
         <AutoTextarea
           value={tooltip}
-          placeholder="Describe how to use this property…"
+          placeholder={translate('props.loop.binding.tooltipPlaceholder')}
           disabled={locked}
           onChange={(event) => identity.setTooltip(event.target.value)}
           onBlur={save}
         />
       </label>
       {state.kind === 'error' && <div className="loop-bind-problem">{state.message}</div>}
-      {name.trim() !== props.propKey && state.kind !== 'error' && <div className="loop-bind-note">Renaming updates every page that sets this property.</div>}
+      {name.trim() !== props.propKey && state.kind !== 'error' && <div className="loop-bind-note">{translate('props.loop.binding.renameNote')}</div>}
       <div className="loop-property-default">
-        <div className="loop-bind-title">Default {SETTING_TITLES[props.setting]}</div>
+        <div className="loop-bind-title">{translate('props.loop.binding.default', { title: settingTitle(props.setting, translate) })}</div>
         {props.editor}
       </div>
     </div>

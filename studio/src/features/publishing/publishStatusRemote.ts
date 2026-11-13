@@ -1,3 +1,4 @@
+// i18n-ignore-file: server-side diagnostics the Studio server returns as received text; the server has no language provider and the browser shows them as the failure detail (docs/i18n-playbook.md section 3, text from a server).
 import { boundedText } from '../updates/catalog';
 import { record, string } from '../../shared/validation';
 import type { PublishConnection } from '../../shared/publishConnection';

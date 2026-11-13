@@ -1,5 +1,5 @@
 // The collapsible permissions section of a non-admin role card: a disclosure row
-// ("Permissions · 9 of 22 on") that opens the access grid with a height animation.
+// ("Permissions", "On 9 of 22" dim, a chevron at the end; the whole row is the button) that opens the access grid with a height animation.
 // Collapsed by default, so a card reads as its name and members first. Whether a
 // role's section is open is remembered for the window's session (sessionStorage,
 // with an in-memory copy when storage is unavailable), keyed by project and role.
@@ -8,6 +8,7 @@ import { useId, useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { ACCESS_GROUPS, APP_ACCESS_ALL, type ProjectRole } from '../../../shared/properties/projectRoles';
 import { ChevronRightIcon } from '../../ui/Icons';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 const STORAGE_PREFIX = 'stacki-role-permissions:';
 type Disclosure = 'open' | 'closed';
@@ -28,6 +29,7 @@ export function RolePermissions(props: { readonly role: ProjectRole; readonly pr
   const [disclosure, setDisclosure] = useState<Disclosure>(() => readDisclosure(key));
   const open = disclosure === 'open';
   const bodyId = useId();
+  const translate = useTranslate();
   const { granted, total } = permissionCounts(props.role);
   const toggle = () => {
     const next: Disclosure = open ? 'closed' : 'open';
@@ -37,10 +39,9 @@ export function RolePermissions(props: { readonly role: ProjectRole; readonly pr
   return (
     <div className="app-role-permissions" data-open={open ? 'true' : 'false'}>
       <button type="button" className="app-role-permissions-toggle" aria-expanded={open} aria-controls={bodyId} onClick={toggle}>
+        <span className="app-role-permissions-title">{translate('settings.roles.permissions.title')}</span>
+        <span className="app-role-permissions-count">{translate('settings.roles.permissions.count', { granted, total })}</span>
         <ChevronRightIcon size={12} />
-        <span>
-          Permissions · {granted} of {total} on
-        </span>
       </button>
       {/* The body stays mounted so the height can animate; collapsed, it is inert to focus and assistive tech. */}
       <div id={bodyId} className="app-role-permissions-body" {...(open ? {} : { inert: '', 'aria-hidden': true })}>

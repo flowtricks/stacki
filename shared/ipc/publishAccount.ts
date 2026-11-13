@@ -1,5 +1,6 @@
 import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
+import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 
 export const ACCOUNT_PROVIDERS = ['github', 'cloudflare', 'vercel'] as const;
 export type AccountProvider = (typeof ACCOUNT_PROVIDERS)[number];
@@ -15,7 +16,7 @@ export type AccountState =
   | { readonly kind: 'browser'; readonly url: string }
   | { readonly kind: 'complete' }
   | { readonly kind: 'cancelled' }
-  | { readonly kind: 'failed'; readonly message: string };
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 export const ACCOUNT_SIGN_IN_TIMEOUT_MS = 5 * 60_000;
 export const ACCOUNT_INSTALL_TIMEOUT_MS = 10 * 60_000;
@@ -56,7 +57,8 @@ export function parseAccountState(input: unknown): AccountState {
       if (message.length === 0 || message.length > 1000) {
         throw new Error('Invalid GitHub sign-in message.');
       }
-      return { kind: 'failed', message };
+      const messageRef = parseOptionalMessageRef(value['messageRef']);
+      return messageRef === undefined ? { kind: 'failed', message } : { kind: 'failed', message, messageRef };
     }
     default:
       throw new Error('Invalid GitHub sign-in state.');

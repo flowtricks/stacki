@@ -3,14 +3,19 @@
 // no override. Each one names its file and line with a masked excerpt, and the
 // report shows how to move the key into an app setting, which every installer
 // fills in with their own. "I've removed it, rescan" reads the files again.
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
-import { secretRuleLabel, type AppSecretScan } from '../../../shared/properties/appSecrets';
+import { secretRuleRef, type AppSecretScan } from '../../../shared/properties/appSecrets';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import { useTranslate, useTranslateDescribed, useTranslateRef, useTranslateRich } from '../../lib/i18n/useTranslate';
 import { CodeBlock, CodeInline } from '../../ui/CodeBlock';
 import { CheckIcon, ChevronDownIcon, RefreshIcon, WarningTriangleIcon } from '../../ui/Icons';
 
 export type ScanLoad =
-  { readonly kind: 'loading' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'ready'; readonly scan: AppSecretScan };
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined }
+  | { readonly kind: 'ready'; readonly scan: AppSecretScan };
 
 /** Whether a scan lets the next step run: only a clean one does. */
 export function scanPassed(load: ScanLoad): boolean {
@@ -24,17 +29,19 @@ const READ_EXAMPLE = `const settings = await stacki.settings.get();
 fetch(url, { headers: { Authorization: \`Bearer \${settings['api-key']}\` } });`;
 
 export function SecretScanReport({ load, onRescan }: { readonly load: ScanLoad; readonly onRescan: () => void }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   switch (load.kind) {
     case 'loading':
       return (
         <p className="apps-note apps-scan" role="status">
-          Scanning the app’s files for secrets…
+          {translate('apps.scan.scanning')}
         </p>
       );
     case 'failed':
       return (
-        <ScanBlocked title="The secret scan could not run" onRescan={onRescan}>
-          {load.message}
+        <ScanBlocked title={translate('apps.scan.couldNotRun')} onRescan={onRescan}>
+          {translateDescribed(load)}
         </ScanBlocked>
       );
     case 'ready':
@@ -53,23 +60,25 @@ export interface ScanSummary {
 }
 
 /** What the compact scan row says for each state; a blocked scan always has details to expand. */
-export function scanSummary(load: ScanLoad): ScanSummary {
+export function scanSummary(load: ScanLoad, translate: Translator): ScanSummary {
   switch (load.kind) {
     case 'loading':
-      return { tone: 'pending', text: 'Scanning the app’s files for secrets…' };
+      return { tone: 'pending', text: translate('apps.scan.scanning') };
     case 'failed':
-      return { tone: 'blocked', text: 'The secret scan could not run' };
+      return { tone: 'blocked', text: translate('apps.scan.couldNotRun') };
     case 'ready': {
       const { scan } = load;
       switch (scan.kind) {
         case 'clean':
-          return { tone: 'clean', text: `No secrets found in ${scan.filesScanned} ${scan.filesScanned === 1 ? 'file' : 'files'}` };
+          return { tone: 'clean', text: translate('apps.scan.noneFound', { count: scan.filesScanned }) };
         case 'too-large':
-          return { tone: 'blocked', text: 'The app is too large to scan' };
+          return { tone: 'blocked', text: translate('apps.scan.tooLarge') };
         case 'found': {
           assert(scan.findings.length > 0, 'A scan that found something lists it');
-          const one = scan.findings.length === 1 && !scan.truncated;
-          return { tone: 'blocked', text: `${scan.findings.length}${scan.truncated ? '+' : ''} possible ${one ? 'secret' : 'secrets'} found` };
+          return {
+            tone: 'blocked',
+            text: translate('apps.scan.possibleFound', { count: scan.findings.length, total: `${scan.findings.length}${scan.truncated ? '+' : ''}` }),
+          };
         }
         default: {
           const exhaustive: never = scan;
@@ -90,8 +99,9 @@ export function scanSummary(load: ScanLoad): ScanSummary {
  * finish) and offers a rescan. A blocked scan still blocks Share.
  */
 export function SecretScanStatus({ load, onRescan }: { readonly load: ScanLoad; readonly onRescan: () => void }) {
+  const translate = useTranslate();
   const [open, setOpen] = useState(false);
-  const summary = scanSummary(load);
+  const summary = scanSummary(load, translate);
   const blocked = summary.tone === 'blocked';
   return (
     <div className={`apps-share-scan ${summary.tone}`} role={blocked ? 'alert' : 'status'}>
@@ -109,58 +119,68 @@ export function SecretScanStatus({ load, onRescan }: { readonly load: ScanLoad; 
         {blocked && (
           <>
             <button type="button" className="apps-share-scan-action" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-              {open ? 'Hide' : 'Details'}
+              {open ? translate('apps.scan.hide') : translate('apps.scan.details')}
               <ChevronDownIcon size={10} className={open ? 'apps-share-scan-chevron open' : 'apps-share-scan-chevron'} />
             </button>
             <button type="button" className="apps-share-scan-action" onClick={onRescan}>
-              <RefreshIcon size={10} /> Rescan
+              <RefreshIcon size={10} /> {translate('apps.scan.rescan')}
             </button>
           </>
         )}
       </div>
-      {blocked && open && <div className="apps-share-scan-detail">{scanDetail(load)}</div>}
+      {blocked && open && (
+        <div className="apps-share-scan-detail">
+          <ScanDetail load={load} />
+        </div>
+      )}
     </div>
   );
 }
 
-function scanDetail(load: ScanLoad): ReactNode {
+function ScanDetail({ load }: { readonly load: ScanLoad }): ReactNode {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   if (load.kind === 'failed') {
-    return <p className="apps-note">{load.message}</p>;
+    return <p className="apps-note">{translateDescribed(load)}</p>;
   }
   assert(load.kind === 'ready', 'Only a finished scan has details');
   const { scan } = load;
   if (scan.kind === 'too-large') {
-    return <p className="apps-note">{scan.reason}. A scan that cannot finish does not pass.</p>;
+    return (
+      <p className="apps-note">{translate('apps.scan.cannotFinish', { reason: translateDescribed({ message: scan.reason, messageRef: scan.reasonRef }) })}</p>
+    );
   }
   assert(scan.kind === 'found', 'A clean scan has no details');
   return <ScanFindings scan={scan} />;
 }
 
 function ScanResult({ scan, onRescan }: { readonly scan: AppSecretScan; readonly onRescan: () => void }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   switch (scan.kind) {
     case 'clean':
       return (
         <p className="apps-scan apps-scan-clean" role="status">
-          <CheckIcon size={13} /> No secrets found in {scan.filesScanned} {scan.filesScanned === 1 ? 'file' : 'files'}.
+          <CheckIcon size={13} /> {translate('apps.scan.noneFoundSentence', { count: scan.filesScanned })}
         </p>
       );
     case 'too-large':
       return (
-        <ScanBlocked title="The app is too large to scan" onRescan={onRescan}>
-          {scan.reason}. A scan that cannot finish does not pass.
+        <ScanBlocked title={translate('apps.scan.tooLarge')} onRescan={onRescan}>
+          {translate('apps.scan.cannotFinish', { reason: translateDescribed({ message: scan.reason, messageRef: scan.reasonRef }) })}
         </ScanBlocked>
       );
     case 'found': {
       assert(scan.findings.length > 0, 'A scan that found something lists it');
-      const count = `${scan.findings.length}${scan.truncated ? '+' : ''}`;
       return (
         <div className="apps-scan apps-scan-found" role="alert">
           <p className="apps-scan-title">
-            <WarningTriangleIcon size={14} /> Found {count} possible {scan.findings.length === 1 && !scan.truncated ? 'secret' : 'secrets'}
+            <WarningTriangleIcon size={14} />{' '}
+            {translate('apps.scan.foundTitle', { count: scan.findings.length, total: `${scan.findings.length}${scan.truncated ? '+' : ''}` })}
           </p>
           <ScanFindings scan={scan} />
           <button type="button" className="apps-button" onClick={onRescan}>
-            <RefreshIcon size={12} /> I’ve removed it, rescan
+            <RefreshIcon size={12} /> {translate('apps.scan.removedRescan')}
           </button>
         </div>
       );
@@ -175,38 +195,37 @@ function ScanResult({ scan, onRescan }: { readonly scan: AppSecretScan; readonly
 /** What a scan found and how to fix it: each finding, then how to move a key into an app setting. */
 function ScanFindings({ scan }: { readonly scan: Extract<AppSecretScan, { readonly kind: 'found' }> }) {
   assert(scan.findings.length > 0, 'A scan that found something lists it');
+  const translate = useTranslate();
+  const translateRef = useTranslateRef();
+  const translateRich = useTranslateRich();
   return (
     <>
-      <p className="apps-note">Everyone who installs the app would get these keys. Remove each one before it leaves this computer.</p>
+      <p className="apps-note">{translate('apps.scan.everyone')}</p>
       <ul className="apps-scan-findings">
         {scan.findings.map((finding) => (
           <li key={`${finding.file}:${finding.line}:${finding.excerpt}`} className="apps-scan-finding">
             <span className="apps-scan-where">
               <CodeInline text={`${finding.file}:${finding.line}`} />
-              <span className="apps-note">{secretRuleLabel(finding.rule)}</span>
+              <span className="apps-note">{translateRef(secretRuleRef(finding.rule))}</span>
             </span>
             <CodeInline text={finding.excerpt} filename={finding.file} />
-            <span className="apps-note">
-              Line hash <CodeInline text={finding.lineSha256} />
-            </span>
+            <span className="apps-note">{translateRich('apps.scan.lineHash', { hash: <CodeInline text={finding.lineSha256} /> })}</span>
           </li>
         ))}
       </ul>
+      <p className="apps-note">{translateRich('apps.scan.moveKey', { file: <CodeInline text="stacki-app.json" /> })}</p>
+      <CodeBlock text={SETTING_EXAMPLE} language="json" label={translate('apps.scan.declare')} />
+      <p className="apps-note">{translate('apps.scan.thenRead')}</p>
+      <CodeBlock text={READ_EXAMPLE} language="javascript" label={translate('apps.scan.readSetting')} />
       <p className="apps-note">
-        Move each key into an app setting: declare it in <CodeInline text="stacki-app.json" />, and each person fills in their own in the app’s details.
-      </p>
-      <CodeBlock text={SETTING_EXAMPLE} language="json" label="Declare a secret setting" />
-      <p className="apps-note">Then read it in the app:</p>
-      <CodeBlock text={READ_EXAMPLE} language="javascript" label="Read the setting" />
-      <p className="apps-note">
-        A line that only looks like a key, such as a test fixture, can be listed in the manifest’s <CodeInline text="secretsAllowlist" /> by its file and{' '}
-        <CodeInline text="lineSha256" />, where reviewers see it.
+        {translateRich('apps.scan.allowlist', { field: <CodeInline text="secretsAllowlist" />, hash: <CodeInline text="lineSha256" /> })}
       </p>
     </>
   );
 }
 
 function ScanBlocked(props: { readonly title: string; readonly onRescan: () => void; readonly children: ReactNode }) {
+  const translate = useTranslate();
   return (
     <div className="apps-scan apps-scan-found" role="alert">
       <p className="apps-scan-title">
@@ -214,7 +233,7 @@ function ScanBlocked(props: { readonly title: string; readonly onRescan: () => v
       </p>
       <p className="apps-note">{props.children}</p>
       <button type="button" className="apps-button" onClick={props.onRescan}>
-        <RefreshIcon size={12} /> Scan again
+        <RefreshIcon size={12} /> {translate('apps.scan.again')}
       </button>
     </div>
   );

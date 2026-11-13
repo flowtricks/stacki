@@ -623,11 +623,14 @@ export function scanStateFor(
 export function resolveStatus(content: Content, model: RuleModel): string {
   const count = model.matchedRuleCount;
   if (content.partial) {
+    // i18n-ignore: write-only status (useScanState discards it); nothing renders this text.
     return count > 0 ? `${count} matching rule${count === 1 ? '' : 's'} so far — scanning components…` : 'Scanning component embeds…';
   }
   if (count > 0) {
+    // i18n-ignore: write-only status (useScanState discards it); nothing renders this text.
     return `${count} matching rule${count === 1 ? '' : 's'}.`;
   }
+  // i18n-ignore: write-only status (useScanState discards it); nothing renders this text.
   return content.embedCount ? 'No embed styles target this element.' : 'No HTML embeds with <style> blocks found.';
 }
 

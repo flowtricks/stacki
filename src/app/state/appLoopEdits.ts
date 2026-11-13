@@ -5,6 +5,7 @@
 // plan is made against the frontmatter with the prop in it, so the loop reads
 // it and nothing the plan writes takes the declaration back out.
 
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { childrenFingerprint, planLoop, targetKey, type LoopTarget } from '../../editor/loopQueryPlan';
@@ -22,6 +23,7 @@ import type { useHistory } from './appNodeEdits';
 type LoopMemory = Map<string, { readonly produced: string; readonly snapshots: Map<string, readonly EditorNode[]> }>;
 
 export function useLoopEdits(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
+  const translate = useTranslate();
   const { pageStateRef } = coreState;
   const { commitEdit } = history;
 
@@ -35,10 +37,10 @@ export function useLoopEdits(coreState: ReturnType<typeof useCoreState>, history
     (nodeId: string, requested: LoopTarget, sanityClient: 'available' | 'unavailable', declaration?: PropDeclaration): LoopApplyResult => {
       const state = pageStateRef.current.pageState;
       if (!state?.editable) {
-        return { ok: false, message: 'This page can’t be edited right now.' };
+        return { ok: false, message: translate('shell.loop.notEditable') };
       }
       // A new List property: declared first, and the loop goes over it by the name it is read by.
-      const declared = declaration === undefined ? undefined : newPropGesture(state.model, declaration);
+      const declared = declaration === undefined ? undefined : newPropGesture(state.model, declaration, translate);
       if (declared !== undefined && !declared.ok) {
         return { ok: false, message: declared.error };
       }
@@ -46,7 +48,7 @@ export function useLoopEdits(coreState: ReturnType<typeof useCoreState>, history
       const target: LoopTarget = declared === undefined ? requested : { kind: 'value', data: declared.value.local };
       const loop = findNodeById(model.nodes, nodeId);
       if (loop?.kind !== 'map') {
-        return { ok: false, message: 'That loop is no longer on the page.' };
+        return { ok: false, message: translate('shell.loop.gone') };
       }
       const children = loop.children ?? [];
       const memory = loopMemoryRef.current.get(nodeId);
@@ -82,7 +84,7 @@ export function useLoopEdits(coreState: ReturnType<typeof useCoreState>, history
       assert(declared === undefined || edits.length > 0, 'A declared list prop is committed');
       return { ok: true, unbound: plan.unbound, lost: plan.lost, restored: plan.restored };
     },
-    [commitEdit, pageStateRef],
+    [commitEdit, pageStateRef, translate],
   );
   return { setLoopSource };
 }

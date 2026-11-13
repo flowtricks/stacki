@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import {
   CLASS_NAME_REFUSAL,
@@ -457,6 +458,7 @@ function ClassCaret({ state }: { readonly state: ClassState }) {
   );
 }
 function ClassTokens({ state }: { readonly state: ClassState }) {
+  const translate = useTranslate();
   const { tokens, at, family, suggestions, setCaret, inputRef, closeFamily, famOriginal, famPreview, setFamHighlight, setFamily } = state;
   // Tag i is at CSS order 2i and the input at 2·at − 1, just before the tag
   // after the caret, while the input stays last in the DOM (ClassCaret).
@@ -468,7 +470,7 @@ function ClassTokens({ state }: { readonly state: ClassState }) {
         key={`${token}-${i}`}
         className={`class-tag${family?.index === i ? ' open' : ''}`}
         style={{ order: 2 * i }}
-        title={classFamilyOf(token, suggestions, tokens).length > 1 ? 'Click to switch to a related class' : 'Click to place the caret after this class'}
+        title={classFamilyOf(token, suggestions, tokens).length > 1 ? translate('props.classInput.switchTitle') : translate('props.classInput.caretTitle')}
         onMouseDown={(event) => {
           // preventDefault keeps the inline input from blurring.
           event.preventDefault();
@@ -502,6 +504,7 @@ function ClassTokens({ state }: { readonly state: ClassState }) {
   return items;
 }
 function ClassSuggestions({ state }: { readonly state: ClassState }) {
+  const translate = useTranslate();
   const { list, highlight, setHighlight, addToken, focused, wrapRef, draft, refusal } = state;
   const popupPosition = useClassPopup(wrapRef, list.rows.length + (refusal ? 1 : 0), { open: focused });
   const popupRef = useRef<HTMLDivElement>(null);
@@ -521,7 +524,11 @@ function ClassSuggestions({ state }: { readonly state: ClassState }) {
           onMouseEnter={() => setHighlight(i)}
           onClick={() => addToken(classRowText(row))}
         >
-          {row.kind === 'create' ? <span className="dd-option-label">Create {row.name}</span> : <ClassMatchLabel name={row.item} draft={draft} />}
+          {row.kind === 'create' ? (
+            <span className="dd-option-label">{translate('props.classInput.create', { name: row.name })}</span>
+          ) : (
+            <ClassMatchLabel name={row.item} draft={draft} />
+          )}
         </div>
       ))}
       {/* Last, so a row's place among the children stays its index in the list. */}

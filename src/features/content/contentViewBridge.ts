@@ -1,3 +1,4 @@
+import { parseOptionalMessageRef } from '../../../shared/core/i18n/messageReference';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import type { IpcResults, WireCollection, WireEntry, WireImageEdit, WireMove, WirePointer, WireValidationIssue } from '../../../shared/ipc/ipcResults';
 import type { Parser } from '../../../shared/core/boundary';
@@ -65,11 +66,14 @@ export function parseContentEntries(input: unknown): ContentEntries {
     collection: parseContentCollection(value['collection']),
     ...optionalFields({
       reason: optional(text)(value['reason']),
+      reasonRef: parseOptionalMessageRef(value['reasonRef']),
       idsAreGuesses: optional(boolean)(value['idsAreGuesses']),
       idNote: optional(text)(value['idNote']),
+      idNoteRef: parseOptionalMessageRef(value['idNoteRef']),
       shape: optional(text)(value['shape']),
       parsed: optional(boolean)(value['parsed']),
       parserNote: optional(text)(value['parserNote']),
+      parserNoteRef: parseOptionalMessageRef(value['parserNoteRef']),
     }),
   };
 }
@@ -91,7 +95,7 @@ function parseMove(input: unknown): WireMove {
   switch (value['kind']) {
     case 'generated':
     case 'unknown':
-      return { kind: value['kind'], note: text(value['note']) };
+      return { kind: value['kind'], note: text(value['note']), noteRef: parseOptionalMessageRef(value['noteRef']) };
     case 'file':
       return { kind: 'file', from: pathText(value['from']), to: pathText(value['to']) };
     case 'key':

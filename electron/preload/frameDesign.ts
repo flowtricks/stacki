@@ -182,6 +182,7 @@ function forwardShortcut(event: KeyboardEvent): void {
   if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.altKey && commandDigit !== undefined) {
     event.preventDefault();
     try {
+      // i18n-ignore: a keyboard chord prefix; key names are not translated.
       window.parent.postMessage({ type: 'avb:shortcut', name: 'appCommand', shortcut: `Mod+Alt+Shift+${commandDigit}` }, '*');
     } catch {
       /* ignore */

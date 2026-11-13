@@ -16,6 +16,7 @@
 // with its password (what the Storage API takes), region and linked pull zones.
 
 import { assert } from '../../../shared/core/assert';
+import { described } from '../../../shared/properties/i18n/messageRef';
 import {
   MEDIA_ACCOUNT_LIMITS,
   bunnyRegionOf,
@@ -27,7 +28,7 @@ import {
   type MediaAccountKey,
 } from '../../../shared/properties/mediaAccounts';
 import { parseMediaConnectionDraft, type MediaConnectionDraft } from '../../../shared/properties/mediaHosting';
-import { MEDIA_HTTP_LIMITS, MediaHostError, expectOk, readText, send, statusSentence, type MediaFetch } from './mediaHttp';
+import { MEDIA_HTTP_LIMITS, MediaHostError, expectOk, readText, send, statusProblem, type MediaFetch } from './mediaHttp';
 
 const CLOUDFLARE_API = 'https://api.cloudflare.com/client/v4';
 const BUNNY_API = 'https://api.bunny.net';
@@ -66,7 +67,7 @@ export async function accountConnectionDraft(fetcher: MediaFetch, connect: Media
     case 'bunny': {
       const zone = (await bunnyZones(fetcher, connect.apiKey)).find((entry) => entry.choice.name === connect.storageZone);
       if (zone === undefined) {
-        throw new MediaHostError(`This Bunny account has no storage zone named ${connect.storageZone}.`, 404);
+        throw new MediaHostError(described('cmsBackend.media.bunnyNoZone', { name: connect.storageZone }), 404);
       }
       return parseMediaConnectionDraft({
         kind: 'bunny',
@@ -103,13 +104,14 @@ async function cloudflare(fetcher: MediaFetch, token: string, path: string): Pro
   const response = await send(fetcher, {
     method: 'GET',
     url: `${CLOUDFLARE_API}${path}`,
+    // i18n-ignore: HTTP header value, not interface text.
     headers: { authorization: `Bearer ${token}`, accept: 'application/json' },
     timeoutMs: MEDIA_HTTP_LIMITS.requestTimeoutMs,
   });
-  await expectOk(response, (status, body) => `${statusSentence(status)}${cloudflareError(body)}`);
+  await expectOk(response, (status, body) => statusProblem(status, cloudflareError(body)));
   const body: unknown = JSON.parse(await readText(response));
   if (field(body, 'success') !== true) {
-    throw new MediaHostError(`Cloudflare refused the request.${cloudflareError(JSON.stringify(body))}`, response.status);
+    throw new MediaHostError(described('cmsBackend.media.cloudflareRefused', { detail: cloudflareError(JSON.stringify(body)) }), response.status);
   }
   return field(body, 'result');
 }
@@ -119,10 +121,10 @@ async function verifyCloudflareToken(fetcher: MediaFetch, token: string): Promis
   const result = await cloudflare(fetcher, token, '/user/tokens/verify');
   const id = field(result, 'id');
   if (typeof id !== 'string' || !/^[A-Za-z0-9]{8,128}$/.test(id)) {
-    throw new MediaHostError('Cloudflare did not say which token this is.', 0);
+    throw new MediaHostError(described('cmsBackend.media.cloudflareNoToken'), 0);
   }
   if (field(result, 'status') !== 'active') {
-    throw new MediaHostError('This Cloudflare token is not active. Create a new one and paste it again.', 0);
+    throw new MediaHostError(described('cmsBackend.media.cloudflareInactive'), 0);
   }
   return id;
 }
@@ -187,6 +189,7 @@ function cloudflareError(body: string): string {
     const parsed: unknown = JSON.parse(body);
     const [first] = list(field(parsed, 'errors'), 10);
     const message = field(first, 'message');
+    // i18n-ignore: The host's own words, appended to the translated sentence.
     return typeof message === 'string' ? ` Cloudflare said: ${message.slice(0, 200)}` : '';
   } catch {
     return '';
@@ -207,9 +210,7 @@ async function bunnyZones(fetcher: MediaFetch, apiKey: string): Promise<readonly
     headers: { AccessKey: apiKey, accept: 'application/json' },
     timeoutMs: MEDIA_HTTP_LIMITS.requestTimeoutMs,
   });
-  await expectOk(response, (status) =>
-    status === 401 ? 'Bunny refused this API key. Use the account API key (Account settings → API key), not a storage zone password.' : statusSentence(status),
-  );
+  await expectOk(response, (status) => (status === 401 ? described('cmsBackend.media.bunnyRefusedKey') : statusProblem(status)));
   const body: unknown = JSON.parse(await readText(response));
   const zones: BunnyZone[] = [];
   for (const zone of list(body, MEDIA_ACCOUNT_LIMITS.zonesMax)) {

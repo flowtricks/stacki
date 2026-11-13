@@ -2,6 +2,7 @@
 // read the same: one slim box with the "+" menu, the chip input, dictation and send/stop, and under it the status
 // line with the model chip. What Desktop adds on top (effort and mode menus, the context ring, queue and steer) needs
 // a long-lived agent session; Studio sends one request per message, so those controls are absent, not disabled.
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import { FileIcon, PaperclipIcon, PlusIcon } from '../../../vendor/stacki/src/ui/Icons';
 import Menu, { useMenuTrigger } from '../../../vendor/stacki/src/ui/Menu';
@@ -24,6 +25,7 @@ interface ComposerProps {
   readonly config: ModelConfiguration;
 }
 export function ChatComposer({ chat, file, files, config }: ComposerProps) {
+  const translate = useTranslate();
   const { loading, attach } = useChatAttachments(chat.id);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -41,7 +43,7 @@ export function ChatComposer({ chat, file, files, config }: ComposerProps) {
       void sendChat(chat.id, file);
     }
   };
-  const placeholder = !connected ? 'Connect a model to start' : dragging ? 'Drop images here' : '⏎ to send, @ to mention a file';
+  const placeholder = !connected ? translate('ai.studio.connectModel') : dragging ? translate('ai.studio.dropImages') : translate('ai.studio.placeholder');
   return (
     <div className="ai-compose chat-compose-area">
       <form
@@ -77,7 +79,7 @@ export function ChatComposer({ chat, file, files, config }: ComposerProps) {
                 <button
                   type="button"
                   className="ghost"
-                  aria-label={`Remove ${image.name}`}
+                  aria-label={translate('ai.studio.removeImage', { name: image.name })}
                   onClick={() => updateChat(chat.id, (thread) => ({ ...thread, images: thread.images.filter((item) => item.id !== image.id) }))}
                 >
                   <ChatIcon name="close" />
@@ -93,7 +95,7 @@ export function ChatComposer({ chat, file, files, config }: ComposerProps) {
             accept="image/png,image/jpeg,image/webp,image/gif"
             multiple
             hidden
-            aria-label="Attach image files"
+            aria-label={translate('ai.studio.attachFiles')}
             onChange={(event) => {
               void attach([...(event.target.files ?? [])]);
               event.target.value = '';
@@ -116,15 +118,21 @@ export function ChatComposer({ chat, file, files, config }: ComposerProps) {
             <button
               type="button"
               className={`ghost ai-tool-button${voice.listening ? ' is-listening' : ''}`}
-              aria-label={voice.listening ? 'Stop dictation' : 'Voice input'}
+              aria-label={voice.listening ? translate('ai.composer.dictate.stop') : translate('ai.studio.voiceInput')}
               aria-pressed={voice.listening}
-              title={voice.supported ? 'Dictate a message' : 'Voice input is unavailable in this browser'}
+              title={voice.supported ? translate('ai.composer.dictate.title') : translate('ai.studio.voiceUnavailable')}
               onClick={voice.toggle}
             >
               <ChatIcon name="mic" />
             </button>
             {working && (
-              <button type="button" className="ai-send ai-stop" aria-label="Stop response" title="Stop the response" onClick={() => stopChat(chat.id)}>
+              <button
+                type="button"
+                className="ai-send ai-stop"
+                aria-label={translate('ai.studio.stopResponse')}
+                title={translate('ai.studio.stopResponseTitle')}
+                onClick={() => stopChat(chat.id)}
+              >
                 <span className="ai-stop-square" />
               </button>
             )}
@@ -132,8 +140,8 @@ export function ChatComposer({ chat, file, files, config }: ComposerProps) {
               <button
                 type="submit"
                 className="ai-send"
-                aria-label="Send message"
-                title="Send (Enter)"
+                aria-label={translate('ai.studio.sendMessage')}
+                title={translate('ai.composer.send.title')}
                 disabled={loading || voice.listening || !connected || chat.status !== 'idle'}
               >
                 <ChatIcon name="send" />
@@ -145,13 +153,13 @@ export function ChatComposer({ chat, file, files, config }: ComposerProps) {
       <div className="ai-status-line">
         <ModelChip chat={chat} config={config} />
         <span className="ai-status-spacer" />
-        <span className="ai-chip-quiet" title={`Changes are proposed against ${file}`}>
+        <span className="ai-chip-quiet" title={translate('ai.studio.proposedAgainst', { file })}>
           {baseName(file)}
         </span>
       </div>
       <ErrorToast message={voice.error} />
       {(voice.listening || loading) && (
-        <div className="ai-compose-hint">{voice.listening ? voice.interim || 'Listening… click the microphone to finish' : 'Preparing images…'}</div>
+        <div className="ai-compose-hint">{voice.listening ? voice.interim || translate('ai.composer.listening') : translate('ai.studio.preparingImages')}</div>
       )}
     </div>
   );
@@ -166,6 +174,7 @@ function PlusMenu({
   readonly onPickImages: () => void;
   readonly onInsertMention: () => void;
 }) {
+  const translate = useTranslate();
   const trigger = useMenuTrigger();
   return (
     <>
@@ -173,10 +182,10 @@ function PlusMenu({
         ref={trigger.ref}
         type="button"
         className={`ghost ai-plus${trigger.open ? ' is-open' : ''}`}
-        aria-label="Add to message"
+        aria-label={translate('ai.composer.add.label')}
         aria-haspopup="menu"
         aria-expanded={trigger.open}
-        title="Add images, or type @ to mention a file"
+        title={translate('ai.studio.addTitle')}
         onClick={trigger.toggle}
       >
         <PlusIcon size={14} />
@@ -184,13 +193,13 @@ function PlusMenu({
       <Menu
         open={trigger.open}
         anchor={trigger.anchor}
-        label="Add to message"
+        label={translate('ai.composer.add.label')}
         placement="above-start"
         onClose={trigger.close}
         entries={[
-          { kind: 'item', id: 'images', label: 'Add image', icon: <PaperclipIcon size={14} />, disabled, onSelect: onPickImages },
-          { kind: 'item', id: 'mention', label: 'Mention a file', icon: <FileIcon size={14} />, shortcut: '@', onSelect: onInsertMention },
-          { kind: 'note', id: 'note', text: 'You can also drop or paste images on the box.' },
+          { kind: 'item', id: 'images', label: translate('ai.composer.add.images'), icon: <PaperclipIcon size={14} />, disabled, onSelect: onPickImages },
+          { kind: 'item', id: 'mention', label: translate('ai.studio.mentionFile'), icon: <FileIcon size={14} />, shortcut: '@', onSelect: onInsertMention },
+          { kind: 'note', id: 'note', text: translate('ai.studio.addNote') },
         ]}
       />
     </>
@@ -199,9 +208,10 @@ function PlusMenu({
 
 /** The model chip and its menu. The model is fixed for a request, so it cannot change while one runs. */
 function ModelChip({ chat, config }: { readonly chat: ChatThread; readonly config: ModelConfiguration }) {
+  const translate = useTranslate();
   const trigger = useMenuTrigger();
   const running = chat.status !== 'idle';
-  const label = chat.model || 'No model connected';
+  const label = chat.model || translate('ai.studio.noModel');
   return (
     <>
       <StatusChip
@@ -209,8 +219,8 @@ function ModelChip({ chat, config }: { readonly chat: ChatThread; readonly confi
         open={trigger.open}
         disabled={running || config.models.length === 0}
         tone="plain"
-        ariaLabel="Choose model"
-        title={running ? 'The model changes when the response is done' : label}
+        ariaLabel={translate('ai.studio.chooseModel')}
+        title={running ? translate('ai.studio.modelLocked') : label}
         onClick={trigger.toggle}
       >
         <span className="ai-chip-text">{label}</span>
@@ -218,7 +228,7 @@ function ModelChip({ chat, config }: { readonly chat: ChatThread; readonly confi
       <Menu
         open={trigger.open}
         anchor={trigger.anchor}
-        label="Model"
+        label={translate('ai.composer.model')}
         placement="above-start"
         onClose={trigger.close}
         entries={config.models.map((model, index) => ({

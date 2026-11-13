@@ -15,6 +15,8 @@
 // author's words and stay in the tooltip, where the designer can see them.
 
 import { assert } from '../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { NUMBER_DECIMALS_MAX, readPropDocumentation, type NumberSettings } from '../../editor/propDocumentation';
 
@@ -100,16 +102,16 @@ export function withoutLegacyTags(description: string): string {
 }
 
 /** Why a number setting as typed cannot be written, or undefined when it can. */
-export function numberSettingProblem(settings: NumberSettings): string | undefined {
+export function numberSettingProblem(settings: NumberSettings, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   if (settings.min !== undefined && settings.max !== undefined && settings.min > settings.max) {
-    return 'The minimum is above the maximum.';
+    return translate('componentProps.problem.minAboveMax');
   }
   if (settings.decimals !== undefined) {
     if (!Number.isSafeInteger(settings.decimals)) {
-      return 'Decimals is a whole number.';
+      return translate('componentProps.problem.decimalsWhole');
     }
     if (settings.decimals < 0 || settings.decimals > NUMBER_DECIMALS_MAX) {
-      return `Decimals is between 0 and ${NUMBER_DECIMALS_MAX}.`;
+      return translate('componentProps.problem.decimalsRange', { max: NUMBER_DECIMALS_MAX });
     }
   }
   return undefined;

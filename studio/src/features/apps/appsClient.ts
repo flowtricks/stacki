@@ -18,6 +18,7 @@ import {
   type AppsResult,
 } from '../../../vendor/stacki/shared/properties/apps';
 import { parseInstalledAppList, parseReadableAppSummaries, type InstalledAppList } from '../../../vendor/stacki/shared/properties/appFolders';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import { request } from '../project/projectClient';
 import { APP_FILES_PREFIX_PATH } from './appsPaths';
 
@@ -25,7 +26,7 @@ export function appFrameURL(appId: string, filePath: string): string {
   return `${APP_FILES_PREFIX_PATH}${appId}/${filePath.split('/').map(encodeURIComponent).join('/')}`;
 }
 
-export const APPS_UNAVAILABLE_MESSAGE = 'This Studio has no server for Apps. Run Studio from your project to use them.';
+export const APPS_UNAVAILABLE = described('apps.error.studioNoServer');
 
 async function post(url: string, body: unknown): Promise<unknown> {
   return request(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -43,7 +44,7 @@ export async function listInstalledAppList(_projectPath: string): Promise<AppsRe
   try {
     reply = await request('/studio/api/apps');
   } catch {
-    return { ok: false, message: APPS_UNAVAILABLE_MESSAGE };
+    return { ok: false, ...APPS_UNAVAILABLE };
   }
   return parseAppsResult(reply, parseInstalledAppList);
 }
@@ -68,7 +69,7 @@ export async function stageGitHubApp(_projectPath: string, source: AppGitHubSour
 
 /** Studio has no personal GitHub sign-in; the chooser never asks (it takes a pasted public repository), and this answers in kind. */
 export async function listAppRepositories(_projectPath: string, _account: string): Promise<AppRepositoryListing> {
-  return { kind: 'failed', message: 'Paste a public GitHub repository to connect its releases.' };
+  return { kind: 'failed', ...described('apps.connect.pasteToConnect') };
 }
 
 export async function listAppReleases(_projectPath: string, source: AppGitHubSource): Promise<AppsResult<readonly AppRelease[]>> {

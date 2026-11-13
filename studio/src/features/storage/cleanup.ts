@@ -1,3 +1,4 @@
+import { studioTranslate } from '../../shared/studioTranslate';
 import { readFile, rm, stat } from 'node:fs/promises';
 import { MEDIA_EXT } from '../assets/assetStateTypes';
 import path from 'node:path';
@@ -118,7 +119,7 @@ export class StorageCleanup {
         return {
           removed,
           freedBytes,
-          warning: error instanceof Error ? error.message : 'Cleanup stopped; scan again',
+          warning: error instanceof Error ? error.message : studioTranslate('studio.storage.cleanupStopped'),
         };
       }
     }

@@ -313,11 +313,6 @@
   flex-direction: column;
   gap: 16px;
 }
-.studio-project-settings .studio-project-settings-intro {
-  margin: 0;
-  color: var(--text-dim);
-  font-size: 12px;
-}
 .studio-project-settings .studio-install-actions {
   padding: 16px;
   border-radius: 10px;

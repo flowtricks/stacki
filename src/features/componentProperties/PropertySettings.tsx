@@ -9,6 +9,7 @@
 
 import { useState } from 'react';
 import AutoTextarea from '../../ui/AutoTextarea';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { NUMBER_DECIMALS_MAX, numberNote } from '../../editor/propDocumentation';
@@ -43,25 +44,26 @@ export function PropertyKindSettings({ property, onChange }: SettingsProps) {
 // Legacy `@onLabel`/`@offLabel` tags stay as written until the person edits
 // these docs; then the field offers to take them out.
 export function PropertyTooltip({ property, onChange }: SettingsProps) {
+  const translate = useTranslate();
   const [editing, setEditing] = useState(false);
   const legacy = legacyTagsOf(property.description);
   return (
     <>
       <label>
-        Tooltip
+        {translate('componentProps.settings.tooltip')}
         <AutoTextarea
           value={tooltipOf(property.description)}
           maxLength={PROPERTY_LIMITS.textCharsMax}
-          placeholder="Describe how to use this property…"
+          placeholder={translate('componentProps.settings.tooltipPlaceholder')}
           onFocus={() => setEditing(true)}
           onChange={(event) => onChange(withTooltip(property.description, event.target.value))}
         />
       </label>
       {editing && legacy.length > 0 && (
         <p className="property-help property-legacy-tags">
-          This doc has {legacy.length === 1 ? 'an unused switch label tag' : 'unused switch label tags'} nothing reads.{' '}
+          {translate('componentProps.settings.legacyTags', { count: legacy.length })}{' '}
           <button type="button" className="property-legacy-remove" onClick={() => onChange(withoutLegacyTags(property.description))}>
-            Remove {legacy.length === 1 ? 'it' : 'them'}
+            {translate('componentProps.settings.legacyRemove', { count: legacy.length })}
           </button>
         </p>
       )}
@@ -71,18 +73,20 @@ export function PropertyTooltip({ property, onChange }: SettingsProps) {
 
 /** Why the default sits outside a number's settings, or nothing when it fits. */
 export function PropertyDefaultNote({ property }: { readonly property: ComponentProperty }) {
+  const translate = useTranslate();
   if (propertyKind(property) !== 'number' || property.defaultValue.trim() === '') {
     return undefined;
   }
   const value = Number(property.defaultValue);
-  const note = Number.isFinite(value) ? numberNote(value, numberSettingsOf(property.description)) : undefined;
-  return note === undefined ? undefined : <p className="property-help property-default-note">The default: {note}</p>;
+  const note = Number.isFinite(value) ? numberNote(value, numberSettingsOf(property.description), translate) : undefined;
+  return note === undefined ? undefined : <p className="property-help property-default-note">{translate('componentProps.settings.defaultNote', { note })}</p>;
 }
 
 type NumberTag = Extract<SettingTagName, 'min' | 'max' | 'decimals'>;
 const NUMBER_TEXT = /^-?\d+(\.\d+)?$/;
 
 function NumberSettingsFields({ property, onChange }: SettingsProps) {
+  const translate = useTranslate();
   const [texts, setTexts] = useState<Readonly<Record<NumberTag, string>>>(() => ({
     min: tagValue(property.description, 'min') ?? '',
     max: tagValue(property.description, 'max') ?? '',
@@ -94,27 +98,37 @@ function NumberSettingsFields({ property, onChange }: SettingsProps) {
     decimals: numberText(texts.decimals),
   };
   const malformed = (['min', 'max', 'decimals'] as const).some((name) => texts[name].trim() !== '' && typed[name] === undefined);
-  const problem = malformed ? 'Enter a number, or leave it empty for none.' : numberSettingProblem(typed);
+  const problem = malformed ? translate('componentProps.settings.numberMalformed') : numberSettingProblem(typed, translate);
   const change = (name: NumberTag, text: string): void => {
     const next = { ...texts, [name]: text };
     setTexts(next);
     const settings = { min: numberText(next.min), max: numberText(next.max), decimals: numberText(next.decimals) };
     const value = numberText(text);
     // Only a setting that reads back is written; the field keeps what was typed meanwhile.
-    if ((text.trim() === '' || value !== undefined) && numberSettingProblem(settings) === undefined) {
+    if ((text.trim() === '' || value !== undefined) && numberSettingProblem(settings, translate) === undefined) {
       onChange(withTag(property.description, name, value === undefined ? undefined : String(value)));
     }
   };
   return (
-    <div className="property-settings" role="group" aria-label="Number settings">
+    <div className="property-settings" role="group" aria-label={translate('componentProps.settings.numberGroup')}>
       <div className="property-settings-row">
-        <NumberSettingField label="Min" placeholder="None" text={texts.min} onChange={(text) => change('min', text)} />
-        <NumberSettingField label="Max" placeholder="None" text={texts.max} onChange={(text) => change('max', text)} />
         <NumberSettingField
-          label="Decimals"
-          placeholder="Auto"
+          label={translate('componentProps.settings.min')}
+          placeholder={translate('componentProps.settings.none')}
+          text={texts.min}
+          onChange={(text) => change('min', text)}
+        />
+        <NumberSettingField
+          label={translate('componentProps.settings.max')}
+          placeholder={translate('componentProps.settings.none')}
+          text={texts.max}
+          onChange={(text) => change('max', text)}
+        />
+        <NumberSettingField
+          label={translate('componentProps.settings.decimals')}
+          placeholder={translate('componentProps.settings.auto')}
           text={texts.decimals}
-          title={`How many decimals the number keeps: 0 is a whole number, at most ${NUMBER_DECIMALS_MAX}.`}
+          title={translate('componentProps.settings.decimalsHint', { max: NUMBER_DECIMALS_MAX })}
           onChange={(text) => change('decimals', text)}
         />
       </div>

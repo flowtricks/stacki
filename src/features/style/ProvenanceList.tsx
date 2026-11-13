@@ -3,10 +3,13 @@ import { code as centralCode } from '../../ui/central/centralGeometry';
 import { createContext, useContext } from 'react';
 import type { Contributor } from './model/resolved';
 import { withImportant } from './model/styleDisplay';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // Lets any ProvenanceList rendered under it name a contributor's source embed
 // (its full label, like "Global Styles #1") and select it on the Webflow canvas —
 // without threading callbacks through every property row / label menu / popover.
+const WEBFLOW_BRAND = 'Webflow'; // i18n-ignore: a product name.
+
 export type EmbedNav = {
   open: (embedKey: string) => void;
   labelFor: (embedKey: string) => string;
@@ -34,6 +37,7 @@ export default function ProvenanceList({
   onSelect?: (selectorText: string, prop?: string) => void;
 }) {
   const nav = useContext(ProvenanceEmbedNav);
+  const translate = useTranslate();
   if (!contributors.length) {
     return undefined;
   }
@@ -67,7 +71,7 @@ export default function ProvenanceList({
               <button
                 type="button"
                 className={`${className} is-clickable`}
-                title={`Edit ${contributor.selectorText}`}
+                title={translate('style.provenanceList.edit', { selector: contributor.selectorText })}
                 onClick={() => select(contributor.selectorText, prop)}
               >
                 {body}
@@ -85,12 +89,13 @@ export default function ProvenanceList({
 // Where a contributor's value comes from: a plain "Webflow" tag for a native
 // class, or the source embed as a chip that selects it on the canvas.
 function ProvenanceOrigin({ contributor, nav }: { contributor: Contributor; nav: EmbedNav | undefined }) {
+  const translate = useTranslate();
   if (contributor.origin === 'native') {
-    return <span className="embed-editor_provenance-origin">Webflow</span>;
+    return <span className="embed-editor_provenance-origin">{WEBFLOW_BRAND}</span>;
   }
   if (contributor.origin === 'inline') {
     // The element's own style attribute: no stylesheet to open.
-    return <span className="embed-editor_provenance-origin">Style attribute</span>;
+    return <span className="embed-editor_provenance-origin">{translate('style.provenanceList.styleAttribute')}</span>;
   }
   const embedKey = contributor.embedKey;
   if (!embedKey || !nav) {
@@ -107,7 +112,7 @@ function ProvenanceOrigin({ contributor, nav }: { contributor: Contributor; nav:
     <span
       className={`embed-editor_provenance-embed ${componentClass}`}
       role="button"
-      title={`Select ${embedName} on the canvas`}
+      title={translate('style.provenanceList.selectOnCanvas', { name: embedName })}
       onClick={(event) => {
         event.stopPropagation();
         nav.open(embedKey);

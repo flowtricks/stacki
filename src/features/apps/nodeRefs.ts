@@ -105,11 +105,11 @@ export async function resolveNodeRefSteps(host: NodeRefHost, ref: AppNodeRef): P
   for (const step of ref.steps) {
     const tree = await trees(step.file);
     if (tree === undefined) {
-      return { found: false, reason: `Stacki cannot read ${step.file}` };
+      return { found: false, reason: `Stacki cannot read ${step.file}` }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
     const found = findView(tree, (view) => (step.key === undefined ? view.id === step.nodeId : ownKey(view) === step.key));
     if (found === undefined) {
-      return { found: false, reason: `${step.file} has no element ${step.key ?? step.nodeId ?? ''} any more` };
+      return { found: false, reason: `${step.file} has no element ${step.key ?? step.nodeId ?? ''} any more` }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
     const space = step.file === canvasPage ? '' : `${step.file}|`;
     chain.push({ path: `${space}${found.trail.join('.')}`, copy: step.copy });
@@ -132,7 +132,7 @@ export async function resolveNodeRef(host: NodeRefHost, ref: AppNodeRef): Promis
   }
   const report = await host.locate(steps.chain);
   if (report?.path === undefined) {
-    return { reason: 'That element is not drawn on the canvas' };
+    return { reason: 'That element is not drawn on the canvas' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   assert(report.path === steps.chain.at(-1)?.path, 'resolveNodeRef: the canvas answers for the innermost step');
   const box = report.box === undefined ? undefined : { x: report.box.x, y: report.box.y, width: Math.max(0, report.box.w), height: Math.max(0, report.box.h) };
@@ -151,7 +151,7 @@ export async function resolveHighlight(
   }
   const report = await host.locate(steps.chain);
   if (report?.path === undefined) {
-    return { reason: 'That element is not drawn on the canvas' };
+    return { reason: 'That element is not drawn on the canvas' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   const inner = steps.inner;
   const node: DeepHoverNode =

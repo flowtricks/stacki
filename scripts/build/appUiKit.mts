@@ -24,7 +24,7 @@ const sources: KitSources = {
   switch: read(KIT_SOURCE_FILES.switch),
   kitHost: read(KIT_SOURCE_FILES.kitHost),
 };
-const expected = appUiKitModule(buildAppUiKit(sources, bundleAppUiKit(fileURLToPath(new URL('../..', import.meta.url)))));
+const expected = appUiKitModule(buildAppUiKit(sources, await bundleAppUiKit(fileURLToPath(new URL('../..', import.meta.url)))));
 if (process.argv.includes('--check')) {
   let current = '';
   try {

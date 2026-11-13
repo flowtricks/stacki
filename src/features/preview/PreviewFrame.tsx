@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { parsePreviewMessage } from './previewMessages';
 
 interface FrameSource {
@@ -17,6 +18,7 @@ interface PreviewFrameProps {
 /** Keep at most two documents: the last ready page and its replacement.
  * Distinct windows keep the old page's messages out of the new editor session. */
 export function PreviewFrame({ url, refreshKey, title, frameRef, onLoad }: PreviewFrameProps) {
+  const translate = useTranslate();
   const target = useMemo(() => ({ key: JSON.stringify([url, refreshKey]), url }), [url, refreshKey]);
   const latest = useRef(target.key);
   latest.current = target.key;
@@ -34,7 +36,7 @@ export function PreviewFrame({ url, refreshKey, title, frameRef, onLoad }: Previ
             key={source.key}
             ref={current ? attach : undefined}
             src={`${source.url}#avb-design`}
-            title={current ? title : `${title} (previous page)`}
+            title={current ? title : translate('preview.frame.previous', { title })}
             aria-hidden={!current}
             tabIndex={current ? undefined : -1}
             style={{
@@ -53,7 +55,7 @@ export function PreviewFrame({ url, refreshKey, title, frameRef, onLoad }: Previ
       })}
       {loading && (
         <div className="preview-page-loading" role="status">
-          Loading page…
+          {translate('preview.frame.loading')}
         </div>
       )}
     </>

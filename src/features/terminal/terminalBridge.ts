@@ -38,7 +38,10 @@ export function closeTerminal(id: string) {
 
 export function saveTerminalClipboardImage(bytes: Uint8Array, mime: string) {
   if (bytes.byteLength > TERMINAL_IMAGE_BYTES_MAX) {
-    return Promise.resolve({ ok: false, error: 'Clipboard image exceeds 20 MB.' } as const);
+    return Promise.resolve(
+      // i18n-ignore: the caller only branches on `ok`; the text is never shown.
+      { ok: false, error: 'Clipboard image exceeds 20 MB.' } as const,
+    );
   }
   return terminalRequest(parseClipboardResult, () => window.avb.terminalClipboardImage(bytes, text(mime)));
 }

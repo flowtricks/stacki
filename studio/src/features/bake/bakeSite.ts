@@ -1,3 +1,4 @@
+// i18n-ignore-file: the bake is the `astro-studio build-demo` command line tool; its messages are developer diagnostics in a terminal, not Studio interface text.
 // `astro-studio build-demo`: builds a project into a static site Studio can edit
 // with no server. It runs the project's own `astro build` with markers and section
 // fences added in memory, so no project file changes, and writes the snapshot the

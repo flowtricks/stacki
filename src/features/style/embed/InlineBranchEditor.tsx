@@ -4,6 +4,7 @@
 // over it and a delete takes it whole, so it is moved or removed, never typed into.
 // A short pause commits the branch, as the rule editor does.
 
+import { useTranslate, useTranslateRef } from '../../../lib/i18n/useTranslate';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemirror/view';
 import { RangeSetBuilder, type Extension } from '@codemirror/state';
@@ -32,22 +33,29 @@ export interface InlineBranchView {
 
 /** The branch picker, for the CSS code section's header. */
 export function InlineBranchPicker({ view, busy }: { readonly view: InlineBranchView; readonly busy: boolean }): ReactNode {
+  const translate = useTranslate();
+  const translateRef = useTranslateRef();
   if (view.branches.length < 2) {
     return undefined;
   }
   return (
     <Dropdown
       className="embed-editor_inline-branch"
-      ariaLabel="Branch of the style attribute to edit"
+      ariaLabel={translate('styleModel.embed.branch.pickerLabel')}
       disabled={busy}
       value={view.selected.key}
-      options={view.branches.map((branch) => ({ value: branch.key, label: `Editing: ${branch.label}` }))}
+      options={view.branches.map((branch) => ({
+        value: branch.key,
+        label: translate('styleModel.embed.branch.editing', { branch: translateRef(branch.labelRef) }),
+      }))}
       onChange={view.onSelect}
     />
   );
 }
 
 export function InlineBranchEditor({ view, busy }: { readonly view: InlineBranchView; readonly busy: boolean }): ReactNode {
+  const translate = useTranslate();
+  const translateRef = useTranslateRef();
   // The branch's text inside a locked `element.style { … }`, as dev tools show an
   // element's inline style; only the text between the edges is edited and written.
   const body = view.selected.body;
@@ -89,7 +97,7 @@ export function InlineBranchEditor({ view, busy }: { readonly view: InlineBranch
         key={view.selected.key}
         value={draft}
         language="css"
-        ariaLabel={`Style declarations ${view.selected.label}; changes save automatically`}
+        ariaLabel={translate('styleModel.embed.branch.declarations', { branch: translateRef(view.selected.labelRef) })}
         variables={{ kind: 'declarations' }}
         minHeight="64px"
         lineOverflow="wrap"

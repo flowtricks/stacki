@@ -143,7 +143,7 @@ export default function AssetThumb({ file, className = '', onImageLoad, onClick 
         />
       ) : isFont && fontFamily ? (
         <span className="asset-font" style={{ fontFamily: `"${fontFamily}"` }}>
-          Aa
+          Aa{/* i18n-ignore: a glyph sample for the font, not a word. */}
         </span>
       ) : (
         <span className="asset-ext">

@@ -5,7 +5,7 @@
 // "Saved" indicator (SettingsLayout.tsx), so there is nothing to lose on close.
 import { ErrorToast } from '../../ui/ErrorToast';
 import { CmsConnections } from '../../features/cmsConnections/CmsConnections';
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import Popup from '../../ui/Popup';
 import StudioSetup from '../../features/studioSetup/StudioSetup';
@@ -26,7 +26,7 @@ import { FeatureIcon } from '../featureIcons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { LanguageSetting } from './LanguageSetting';
-import { SettingsEmpty, SettingsIntro, SettingsRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
+import { SettingsEmpty, SettingsRow, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 
 interface Props {
   readonly projectPath: string | undefined;
@@ -313,12 +313,11 @@ function Preferences() {
   const { value, busy, error, change, saving } = usePreferences();
   return (
     <section className="app-preferences" aria-label={translate('settings.editor.preferences')}>
-      <SettingsIntro saving={saving}>{translate('settings.editor.intro')}</SettingsIntro>
+      <SettingsSaveRow saving={saving} />
       <SettingsSection title={translate('settings.editor.section.general')}>
         <LanguageSetting />
         <PreferenceToggle
           label={translate('settings.editor.sound.label')}
-          description={translate('settings.editor.sound.description')}
           checked={value?.sound ?? false}
           disabled={!value || busy}
           onToggle={() => void change({ setting: 'sound', enabled: !value?.sound })}
@@ -327,16 +326,23 @@ function Preferences() {
       <SettingsSection title={translate('settings.editor.section.ai')}>
         <PreferenceToggle
           label={translate('settings.editor.ai.askBeforeTrust.label')}
-          description={translate('settings.editor.ai.askBeforeTrust.description')}
+          info={translate('settings.editor.ai.askBeforeTrust.info')}
           checked={value?.aiAskBeforeTrust ?? false}
           disabled={!value || busy}
           onToggle={() => void change({ setting: 'aiAskBeforeTrust', enabled: !value?.aiAskBeforeTrust })}
+        />
+        <PreferenceToggle
+          label={translate('settings.editor.ai.trackChanges.label')}
+          info={translate('settings.editor.ai.trackChanges.info')}
+          checked={value?.aiTrackChanges ?? true}
+          disabled={!value || busy}
+          onToggle={() => void change({ setting: 'aiTrackChanges', enabled: !value?.aiTrackChanges })}
         />
       </SettingsSection>
       <SettingsSection title={translate('settings.editor.section.privacy')}>
         <PreferenceToggle
           label={translate('settings.editor.privacy.usageCounts.label')}
-          description={translate('settings.editor.privacy.usageCounts.description')}
+          info={translate('settings.editor.privacy.usageCounts.info')}
           checked={value?.usageCountsEnabled ?? false}
           disabled={!value || busy}
           onToggle={() =>
@@ -348,7 +354,7 @@ function Preferences() {
         />
         <PreferenceToggle
           label={translate('settings.editor.privacy.hideDetails.label')}
-          description={translate('settings.editor.privacy.hideDetails.description')}
+          info={translate('settings.editor.privacy.hideDetails.info')}
           checked={value?.appsPersonHidden ?? false}
           disabled={!value || busy}
           onToggle={() => void change({ setting: 'appsPersonHidden', enabled: !value?.appsPersonHidden })}
@@ -366,15 +372,15 @@ function Preferences() {
 
 function PreferenceToggle(props: {
   readonly label: string;
-  readonly description: string;
+  /** The longer explanation, behind an (i) beside the label. */
+  readonly info?: string;
   readonly checked: boolean;
   readonly disabled: boolean;
   readonly onToggle: () => void;
 }) {
-  const descriptionId = useId();
   return (
-    <SettingsRow label={props.label} description={props.description} descriptionId={descriptionId}>
-      <Switch label={props.label} checked={props.checked} disabled={props.disabled} describedBy={descriptionId} onToggle={props.onToggle} />
+    <SettingsRow label={props.label} {...(props.info === undefined ? {} : { info: props.info })}>
+      <Switch label={props.label} checked={props.checked} disabled={props.disabled} onToggle={props.onToggle} />
     </SettingsRow>
   );
 }

@@ -3,6 +3,8 @@
 // every request has a deadline, a size limit and no redirect: a redirect could
 // carry a custom key header to a host the designer never typed.
 
+import { DescribedError } from '../../shared/properties/describedError';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { assert } from '../../shared/core/assert';
 import { toArray, toRecord } from '../../shared/core/record';
 import {
@@ -108,6 +110,7 @@ export function sanityQueryURL(
 }
 
 function sanityHeaders(target: SanityTarget): Readonly<Record<string, string>> {
+  // i18n-ignore: HTTP header value, not interface text.
   return { Authorization: `Bearer ${target.token}` };
 }
 
@@ -157,7 +160,7 @@ async function sampleDataJSON(url: string, headers: Readonly<Record<string, stri
   }
   const bytes = await sampleDataBytes(response);
   if (!response.ok) {
-    throw new Error(failureMessage(response.status, bytes));
+    throw new DescribedError(failureMessage(response.status, bytes));
   }
   try {
     const reply: unknown = JSON.parse(new TextDecoder().decode(bytes));
@@ -203,22 +206,19 @@ async function sampleDataBytes(response: Response): Promise<Uint8Array> {
     size += value.length;
   }
   await reader.cancel();
-  throw new Error(`That reply is larger than ${Math.floor(DATA_SAMPLE_FETCH.bytesMax / (1024 * 1024))} MB, which is too much to sample.`);
+  throw new DescribedError(described('cmsBackend.sample.tooLarge', { size: Math.floor(DATA_SAMPLE_FETCH.bytesMax / (1024 * 1024)) }));
 }
 
-function failureMessage(status: number, bytes: Uint8Array): string {
-  if (status === 401) {
-    return 'That address refused the request (401). Check the header and its value.';
-  }
-  if (status === 403) {
-    return 'That address refused the request (403). Check the header and its value.';
+function failureMessage(status: number, bytes: Uint8Array): Described {
+  if (status === 401 || status === 403) {
+    return described('cmsBackend.sample.refused', { status });
   }
   if (status === 404) {
-    return 'Nothing was found at that address (404).';
+    return described('cmsBackend.sample.notFound');
   }
   // Sanity says what was wrong, such as a dataset that does not exist.
   const detail = sanityErrorText(bytes);
-  return detail === undefined ? `That address answered ${status}.` : `That address answered ${status}: ${detail}`;
+  return detail === undefined ? described('cmsBackend.sample.answered', { status }) : described('cmsBackend.sample.answeredWith', { status, detail });
 }
 
 function sanityErrorText(bytes: Uint8Array): string | undefined {

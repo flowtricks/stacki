@@ -62,7 +62,9 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
       let stopSelection = () => {};
       const editor = openNativeText(match, space, event, {
         changed: (value) => post({ type: 'avb:text-draft', session: current.session, key: target.key, value }),
-        refused: () => post({ type: 'avb:text-refused', message: 'This selection reaches text that cannot be changed along with it.' }),
+        refused: () =>
+          // i18n-ignore: the English fallback beside the stable `reason` code, which the editor words in the person's language (useCanvasText); a frame older than the editor sends only this text.
+          post({ type: 'avb:text-refused', message: 'This selection reaches text that cannot be changed along with it.', reason: 'selection-reaches' }),
         done: (result) => {
           active = undefined;
           stopSelection();
@@ -78,7 +80,8 @@ export function createCanvasTextSession(post: (message: unknown) => void) {
         stopSelection = reportTextSelection({ catalog: current, opened, root: textEditorRoot(match), editor }, post);
         post({ type: 'avb:text-active', session: current.session, key: target.key });
       } else {
-        post({ type: 'avb:text-refused', message: 'This text cannot be edited safely.' });
+        // i18n-ignore: the English fallback beside the stable `reason` code, which the editor words in the person's language (useCanvasText); a frame older than the editor sends only this text.
+        post({ type: 'avb:text-refused', message: 'This text cannot be edited safely.', reason: 'unsafe' });
       }
     },
   };
@@ -225,7 +228,9 @@ function commitCanvasText(
   if (!result.restored || !unchanged || !canvasTextSourceMatches(entry.catalog.file, entry.catalog.checksum)) {
     post({
       type: 'avb:text-refused',
+      // i18n-ignore: the English fallback beside the stable `reason` code, which the editor words in the person's language (useCanvasText); a frame older than the editor sends only this text.
       message: 'The page changed while editing. The text was not saved; select it again.',
+      reason: 'page-changed',
     });
     return;
   }

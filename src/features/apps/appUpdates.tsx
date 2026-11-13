@@ -12,6 +12,8 @@
 import { useSyncExternalStore } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { APP_LIMITS, type AppAvailableUpdate, type AppSummary, type AppUpdateOutcome } from '../../../shared/properties/apps';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { Switch } from '../../ui/Switch';
 import { AppsRailCount } from './appBadges';
 import { AppDetailsItem } from './AppDetailsLayout';
@@ -95,17 +97,18 @@ export function AppsRailBadge({ admin }: { readonly admin: boolean }) {
 }
 
 function UpdateDot() {
+  const translate = useTranslate();
   const count = useWaitingUpdateCount();
   if (count === 0) {
     return undefined;
   }
-  return <span className="apps-rail-badge" role="status" aria-label={count === 1 ? 'An app update is available' : `${count} app updates are available`} />;
+  return <span className="apps-rail-badge" role="status" aria-label={translate('apps.updates.available', { count })} />;
 }
 
 /** How a row names a waiting update. */
-export function updateAvailableLabel(update: AppAvailableUpdate): string {
+export function updateAvailableLabel(update: AppAvailableUpdate, translate: Translator): string {
   assert(update.version.length > 0, 'An update names its version');
-  return `Update available · v${update.version}`;
+  return translate('apps.updates.availableVersion', { version: update.version });
 }
 
 /**
@@ -139,13 +142,13 @@ export function appUpdateStatus(lock: AppSummary['lock']): AppUpdateStatus {
 }
 
 /** The row's and the details' words for a status: "Update available · v1.2.0" or "Update needs your OK · v1.2.0". */
-export function updateStatusLabel(status: Exclude<AppUpdateStatus, { readonly kind: 'none' }>): string {
+export function updateStatusLabel(status: Exclude<AppUpdateStatus, { readonly kind: 'none' }>, translate: Translator): string {
   assert(status.update.version.length > 0, 'An update names its version');
   switch (status.kind) {
     case 'available':
-      return updateAvailableLabel(status.update);
+      return updateAvailableLabel(status.update, translate);
     case 'needs-approval':
-      return `Update needs your OK · v${status.update.version}`;
+      return translate('apps.updates.needsApproval', { version: status.update.version });
     default: {
       const exhaustive: never = status;
       return exhaustive;
@@ -154,11 +157,11 @@ export function updateStatusLabel(status: Exclude<AppUpdateStatus, { readonly ki
 }
 
 /** The one line under an update that asks for more: what is new in it, or undefined when nothing is. */
-export function updateAdditionsNote(update: AppAvailableUpdate): string | undefined {
+export function updateAdditionsNote(update: AppAvailableUpdate, translate: Translator): string | undefined {
   if (update.additions.length === 0) {
     return undefined;
   }
-  return `New in v${update.version}: ${update.additions.join(', ')}.`;
+  return translate('apps.updates.additions', { version: update.version, additions: update.additions.join(', ') });
 }
 
 /**
@@ -177,14 +180,15 @@ export function AutoUpdateSetting({
   readonly busy: boolean;
   readonly onChange: (policy: { readonly autoUpdate: boolean }) => void;
 }) {
+  const translate = useTranslate();
   const { lock } = app;
   if (!appUpdatable(lock.source)) {
     return undefined;
   }
   return (
-    <AppDetailsItem label="Update automatically" hint={AUTO_UPDATE_HINT}>
+    <AppDetailsItem label={translate('apps.updates.automatically')} hint={translate('apps.updates.automaticallyHint')}>
       <Switch
-        label={`Update ${app.manifest.name} automatically`}
+        label={translate('apps.updates.automaticallyNamed', { name: app.manifest.name })}
         checked={lock.autoUpdate}
         disabled={!admin || busy}
         onToggle={() => onChange({ autoUpdate: !lock.autoUpdate })}
@@ -192,9 +196,6 @@ export function AutoUpdateSetting({
     </AppDetailsItem>
   );
 }
-
-/** What the switch does, and for whom; a version that asks for more still waits for a person's OK (appUpdateStatus). */
-export const AUTO_UPDATE_HINT = 'Install new versions of this app as they are released. Only turn this on for a publisher you trust.';
 
 /** Whether an app has somewhere to update from: an uploaded app, or one added to the project folder, has not. */
 export function appUpdatable(source: AppSummary['lock']['source']): boolean {

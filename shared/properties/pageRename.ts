@@ -1,4 +1,6 @@
 import { pathText, record } from '../core/boundary';
+import { DescribedError } from './describedError';
+import { described } from './i18n/messageRef';
 
 export interface PageRename {
   readonly kind: 'page' | 'folder';
@@ -11,18 +13,18 @@ export function parsePageRename(input: unknown): PageRename {
   const value = record(input);
   const kind = value['kind'];
   if (kind !== 'page' && kind !== 'folder') {
-    throw new Error('Choose a page or folder to rename.');
+    throw new DescribedError(described('pages.rename.error.nothingChosen'));
   }
   const from = renamePath(value['from']);
   const to = renamePath(value['to']);
   if (kind === 'page') {
     if (!/\.(astro|md|mdx)$/i.test(from) || !/\.(astro|md|mdx)$/i.test(to)) {
-      throw new Error('Pages must keep an Astro or Markdown extension.');
+      throw new DescribedError(described('pages.rename.error.pageExtension'));
     }
   }
   const parameters = (file: string) => file.match(/\[[^\]]+\]/g)?.join('/') ?? '';
   if (parameters(from) !== parameters(to)) {
-    throw new Error('Keep dynamic route parameters unchanged; rename their surrounding folders.');
+    throw new DescribedError(described('pages.rename.error.dynamicParameters'));
   }
   return { kind, from, to };
 }
@@ -30,14 +32,14 @@ export function parsePageRename(input: unknown): PageRename {
 export function renamePath(input: unknown): string {
   const value = pathText(input);
   if (value.length === 0 || value.length > 500 || /[\\?#%\x00-\x1f]/.test(value)) {
-    throw new Error('Enter a valid page or folder path.');
+    throw new DescribedError(described('pages.rename.error.invalidPath'));
   }
   const parts = value.split('/');
   if (parts.length > 32 || parts.some((part) => ['', '.', '..'].includes(part))) {
-    throw new Error('Page paths must stay inside the pages folder.');
+    throw new DescribedError(described('pages.rename.error.outsidePages'));
   }
   if (parts.some((part) => !/^[\w.\[\] -]+$/.test(part))) {
-    throw new Error('Use letters, numbers, spaces or dashes in page paths.');
+    throw new DescribedError(described('pages.rename.error.pathCharacters'));
   }
   return value;
 }

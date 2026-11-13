@@ -6,6 +6,7 @@ import { GroupLabel } from './TypographySection';
 import { parseAreas, serializeAreas, areaLabel, nextAreaName, type GridArea, type GridAreaPatch } from './model/gridTemplate';
 import { type SetProp, type ClearProp, type LabelProps, resolvedValue, PlusIcon, TrashIcon } from './GridSettingsKit';
 import { TrackPopover } from './TrackEditor';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // A crosshair marker for area rows (Webflow's area glyph).
 export const AreaIcon = () => (
@@ -19,6 +20,7 @@ export const AreaIcon = () => (
 // Grid area names are single idents, so whitespace is stripped as you type (a typed
 // space would split the name into two cells in grid-template-areas).
 export function AreaNameInput({ value, busy, onCommit }: { value: string; busy: boolean; onCommit: (v: string) => void }) {
+  const translate = useTranslate();
   const [text, setText] = useState(value);
   const focused = useRef(false);
   useEffect(() => {
@@ -40,7 +42,7 @@ export function AreaNameInput({ value, busy, onCommit }: { value: string; busy: 
       value={text}
       spellCheck={false}
       disabled={busy}
-      aria-label="Area name"
+      aria-label={translate('style.gridAreas.areaName')}
       onChange={(event) => setText(event.target.value.replace(/\s+/g, ''))}
       onFocus={() => {
         focused.current = true;
@@ -111,28 +113,49 @@ export function AreaNumberInput({ value, ariaLabel, busy, onCommit }: { value: n
 
 // The area editor popover body: Name + Position (Column start/end, Row start/end).
 export function AreaEditor({ area, busy, onChange }: { area: GridArea; busy: boolean; onChange: (patch: GridAreaPatch) => void }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_grid-track-editor">
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Name</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gridAreas.name')}</span>
         <AreaNameInput value={area.name} busy={busy} onCommit={(name) => onChange({ name })} />
       </div>
       <div className="embed-editor_size-row embed-editor_grid-area-pos">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Position</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gridAreas.position')}</span>
         <div className="embed-editor_grid-area-fields">
           <div className="embed-editor_grid-area-pair">
             <div className="embed-editor_grid-area-inputs">
-              <AreaNumberInput value={area.colStart} ariaLabel="Column start" busy={busy} onCommit={(cell) => onChange({ colStart: cell })} />
-              <AreaNumberInput value={area.colEnd} ariaLabel="Column end" busy={busy} onCommit={(cell) => onChange({ colEnd: cell })} />
+              <AreaNumberInput
+                value={area.colStart}
+                ariaLabel={translate('style.gridAreas.columnStart')}
+                busy={busy}
+                onCommit={(cell) => onChange({ colStart: cell })}
+              />
+              <AreaNumberInput
+                value={area.colEnd}
+                ariaLabel={translate('style.gridAreas.columnEnd')}
+                busy={busy}
+                onCommit={(cell) => onChange({ colEnd: cell })}
+              />
             </div>
-            <span className="embed-editor_grid-area-cap">Column: start/end</span>
+            <span className="embed-editor_grid-area-cap">{translate('style.gridAreas.columnCaption')}</span>
           </div>
           <div className="embed-editor_grid-area-pair">
             <div className="embed-editor_grid-area-inputs">
-              <AreaNumberInput value={area.rowStart} ariaLabel="Row start" busy={busy} onCommit={(cell) => onChange({ rowStart: cell })} />
-              <AreaNumberInput value={area.rowEnd} ariaLabel="Row end" busy={busy} onCommit={(cell) => onChange({ rowEnd: cell })} />
+              <AreaNumberInput
+                value={area.rowStart}
+                ariaLabel={translate('style.gridAreas.rowStart')}
+                busy={busy}
+                onCommit={(cell) => onChange({ rowStart: cell })}
+              />
+              <AreaNumberInput
+                value={area.rowEnd}
+                ariaLabel={translate('style.gridAreas.rowEnd')}
+                busy={busy}
+                onCommit={(cell) => onChange({ rowEnd: cell })}
+              />
             </div>
-            <span className="embed-editor_grid-area-cap">Row: start/end</span>
+            <span className="embed-editor_grid-area-cap">{translate('style.gridAreas.rowCaption')}</span>
           </div>
         </div>
       </div>
@@ -144,6 +167,7 @@ export function AreaEditor({ area, busy, onChange }: { area: GridArea; busy: boo
 // serialized to grid-template-areas. Keyed by name so a reposition doesn't jump the
 // open editor.
 export function AreasSection({ setProp, labels }: { setProp: SetProp; labels: LabelProps }) {
+  const translate = useTranslate();
   const { read, busy, clearProp, onProvenance, onSelectSelector } = labels;
   const areas = parseAreas(resolvedValue(read, 'grid-template-areas'));
   const edits = useAreaEdits({ areas, setProp, clearProp });
@@ -153,7 +177,7 @@ export function AreasSection({ setProp, labels }: { setProp: SetProp; labels: La
       <div className="embed-editor_grid-section-head">
         <span className="embed-editor_grid-section-title">
           <GroupLabel
-            label="Areas"
+            label={translate('style.gridAreas.areas')}
             props={['grid-template-areas']}
             read={read}
             busy={busy}
@@ -163,7 +187,14 @@ export function AreasSection({ setProp, labels }: { setProp: SetProp; labels: La
           />
           <span className="embed-editor_grid-section-count">({areas.length})</span>
         </span>
-        <button type="button" className="embed-editor_icon-btn" onClick={edits.add} disabled={busy} title="Add an area" aria-label="Add an area">
+        <button
+          type="button"
+          className="embed-editor_icon-btn"
+          onClick={edits.add}
+          disabled={busy}
+          title={translate('style.gridAreas.addArea')}
+          aria-label={translate('style.gridAreas.addArea')}
+        >
           <PlusIcon />
         </button>
       </div>
@@ -174,7 +205,7 @@ export function AreasSection({ setProp, labels }: { setProp: SetProp; labels: La
           ))}
         </ul>
       ) : (
-        <div className="embed-editor_grid-empty">No Areas</div>
+        <div className="embed-editor_grid-empty">{translate('style.gridAreas.noAreas')}</div>
       )}
       {openArea && edits.anchorElement ? (
         <TrackPopover anchorElement={edits.anchorElement} onClose={() => edits.setOpenName(undefined)}>
@@ -237,6 +268,7 @@ export function useAreaEdits({ areas, setProp, clearProp }: { areas: GridArea[];
 }
 
 export function AreaRow({ area, busy, edits }: { area: GridArea; busy: boolean; edits: AreaEdits }) {
+  const translate = useTranslate();
   const isOpen = edits.openName === area.name;
   return (
     <li className={`embed-editor_grid-track ${isOpen ? 'is-open' : ''}`}>
@@ -245,7 +277,7 @@ export function AreaRow({ area, busy, edits }: { area: GridArea; busy: boolean; 
           <span className="embed-editor_grid-track-glyph" aria-hidden="true">
             <AreaIcon />
           </span>
-          <span className="embed-editor_grid-track-label">{areaLabel(area)}</span>
+          <span className="embed-editor_grid-track-label">{areaLabel(area, translate)}</span>
         </button>
         <div className="embed-editor_grid-track-actions">
           <button
@@ -253,8 +285,8 @@ export function AreaRow({ area, busy, edits }: { area: GridArea; busy: boolean; 
             className={'embed-editor_grid-track-action ' + 'embed-editor_grid-track-action-danger'}
             onClick={() => edits.remove(area.name)}
             disabled={busy}
-            title="Remove area"
-            aria-label="Remove area"
+            title={translate('style.gridAreas.removeArea')}
+            aria-label={translate('style.gridAreas.removeArea')}
           >
             <TrashIcon />
           </button>

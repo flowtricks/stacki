@@ -120,16 +120,16 @@ export function createInsertDrag(deps: InsertDragDeps): InsertDrag {
     move: async (appId, x, y) => (await aim(appId, x, y))?.view.target !== undefined,
     drop: async (appId, x, y) => {
       if (state?.appId !== appId) {
-        return { kind: 'refused', reason: 'The drag was cancelled' };
+        return { kind: 'refused', reason: 'The drag was cancelled' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       const aimed = await aim(appId, x, y);
       if (aimed === undefined) {
-        return { kind: 'refused', reason: 'The drag was cancelled' };
+        return { kind: 'refused', reason: 'The drag was cancelled' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       become(undefined);
       const target = aimed.view.target;
       if (target === undefined) {
-        return { kind: 'refused', reason: 'Nothing on the canvas there takes the drop' };
+        return { kind: 'refused', reason: 'Nothing on the canvas there takes the drop' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       assert(state === undefined, 'A drop ends the drag');
       return { kind: 'insert', item: aimed.item, label: aimed.label, place: target.place };

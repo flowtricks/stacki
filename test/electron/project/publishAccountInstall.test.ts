@@ -118,6 +118,7 @@ test('a missing package manager reports which one to install', async (context) =
   assert.deepEqual(account.request(directory, { ...request, action: 'status' }), {
     kind: 'failed',
     message: 'Could not run pnpm to install Wrangler. Install pnpm, then try again.',
+    messageRef: { key: 'publish.account.error.launchInstall', params: { manager: 'pnpm', tool: 'Wrangler' } },
   });
 });
 
@@ -132,11 +133,13 @@ test('a package manager that cannot be resolved fails without a session', () => 
   assert.deepEqual(account.request(root, { ...request, action: 'start' }), {
     kind: 'failed',
     message: 'Could not run Bun to install Wrangler. Install Bun, then try again.',
+    messageRef: { key: 'publish.account.error.launchInstall', params: { manager: 'Bun', tool: 'Wrangler' } },
   });
   // No session was left pending, so a retry reports the same cause, not a sign-in in progress.
   assert.deepEqual(account.request(root, { ...request, id: other, action: 'start' }), {
     kind: 'failed',
     message: 'Could not run Bun to install Wrangler. Install Bun, then try again.',
+    messageRef: { key: 'publish.account.error.launchInstall', params: { manager: 'Bun', tool: 'Wrangler' } },
   });
 });
 
@@ -149,6 +152,7 @@ test('cancelling installation skips login but lets the installer finish', async 
   assert.deepEqual(account.request(root, { ...request, id: other, action: 'start' }), {
     kind: 'failed',
     message: 'Wrangler is still installing in the background. Try again in a moment.',
+    messageRef: { key: 'publish.account.error.stillInstalling', params: { tool: 'Wrangler' } },
   });
   await once(installer, 'close');
   assert.equal(installer.exitCode, 0);
@@ -180,6 +184,7 @@ test('installation timeout stops the process without starting login', async (con
   assert.deepEqual(account.request(root, { ...request, action: 'status' }), {
     kind: 'failed',
     message: 'Wrangler installation timed out. Check your connection and try again.',
+    messageRef: { key: 'publish.account.error.installTimedOut', params: { tool: 'Wrangler' } },
   });
 });
 
@@ -190,6 +195,7 @@ test('installation discards and bounds output', async (context) => {
   assert.deepEqual(account.request(root, { ...request, action: 'status' }), {
     kind: 'failed',
     message: 'Wrangler installation returned too much output.',
+    messageRef: { key: 'publish.account.error.installOutputLarge', params: { tool: 'Wrangler' } },
   });
 });
 

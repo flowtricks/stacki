@@ -33,6 +33,9 @@ import { sanityRestore, sanityRevisions } from './sanityHistory';
 import { sanityConstantLists, sanityDocumentSchema, sanityNamedTypes, sanityTypeIcons } from './sanitySchema';
 import { inStructureOrder, sanityStructureOrder } from './sanityStructure';
 import { sanityUploadBytes } from './sanityUpload';
+import { cmsNetworkProblem } from './cmsNetworkFailure';
+import { DescribedError } from '../../shared/properties/describedError';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 
 export interface CmsRemoteService {
   readonly collections: () => Promise<RemoteCollection[]>;
@@ -48,8 +51,11 @@ export interface CmsRemoteService {
   readonly act: (id: string, action: RemoteDocumentAction) => Promise<RemoteDocument | undefined>;
   readonly history: (id: string) => Promise<RemoteRevision[]>;
   readonly restore: (id: string, revision: string) => Promise<RemoteDocument>;
-  readonly references: (types: readonly string[]) => Promise<RemoteReferenceOption[]>;
+  /** The documents a reference may point at; `query` narrows them by title where the CMS can search. */
+  readonly references: (types: readonly string[], query?: string) => Promise<RemoteReferenceOption[]>;
   readonly upload: (kind: RemoteAssetKind, file: { readonly name: string; readonly bytes: Uint8Array }) => Promise<RemoteAsset>;
+  /** The largest file `upload` accepts, when the CMS's limit differs from Sanity's. */
+  readonly uploadBytesMax?: number;
 }
 
 export function cmsRemoteService(root: string, target: SanityDataset): CmsRemoteService {
@@ -110,16 +116,23 @@ export function cmsRemoteService(root: string, target: SanityDataset): CmsRemote
 /**
  * No network and a timed-out request read as what they are, not as fetch's own
  * words ("fetch failed"): Stacki works offline, and only the CMS waits for it.
+ * The reference travels beside the English text so the panel can say it in the language on screen.
  */
-export function cmsFailureMessage(error: unknown): string {
-  if (error instanceof Error) {
-    if (error.name === 'TimeoutError') {
-      return 'The CMS took too long to answer. Check your connection and try again.';
-    }
-    if (error instanceof TypeError && error.message === 'fetch failed') {
-      return 'Can’t reach the CMS. Check your internet connection and try again.';
-    }
-    return error.message || 'The CMS request failed.';
+export function cmsFailureProblem(error: unknown): Described {
+  if (error instanceof DescribedError) {
+    return error.problem;
   }
-  return String(error) || 'The CMS request failed.';
+  if (error instanceof Error) {
+    if (error.name === 'TimeoutError' || error instanceof TypeError) {
+      return cmsNetworkProblem(error, undefined);
+    }
+    return error.message.length > 0 ? { message: error.message } : described('cmsBackend.network.failed');
+  }
+  const text = String(error);
+  return text.length > 0 ? { message: text } : described('cmsBackend.network.failed');
+}
+
+/** The English sentence of `cmsFailureProblem`. */
+export function cmsFailureMessage(error: unknown): string {
+  return cmsFailureProblem(error).message;
 }

@@ -4,6 +4,8 @@ import path from 'node:path';
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
+import { refusal } from '../../shared/properties/propertyErrors';
+import type { MessageKey } from '../../shared/properties/i18n/messageRef';
 import { err, ok, type Result } from '../../shared/core/result';
 import { aliasMap, resolveSpec, type Alias } from '../content/cmsRefs';
 import { importsOf } from './componentUsage';
@@ -30,7 +32,7 @@ export function readPropertyConsumers(location: { readonly projectPath: string; 
     }
     total += read.value.length;
     if (total > PROPERTY_LIMITS.totalCharsMax) {
-      return err({ code: 'limit', message: 'Project exceeds the prop rename source limit.' });
+      return err(refusal('limit', 'props.rename.sourceLimit'));
     }
     const names = readConsumerNames(read.value, file, location.file, aliases);
     if (!names.ok) {
@@ -50,7 +52,7 @@ export function readPropertyConsumers(location: { readonly projectPath: string; 
 export function readBoundedSource(file: string): Result<string> {
   try {
     if (fs.statSync(file).size > PROPERTY_LIMITS.sourceCharsMax) {
-      return err({ code: 'limit', message: `${file} exceeds the component source limit.` });
+      return err(refusal('limit', 'props.rename.fileTooLarge', { file }));
     }
     return ok(fs.readFileSync(file, 'utf8'));
   } catch (error: unknown) {
@@ -81,7 +83,7 @@ function readConsumerNames(source: string, file: string, target: string, aliases
       ts.isStringLiteral(statement.moduleSpecifier) &&
       resolves(statement.moduleSpecifier.text)
     ) {
-      return unsupportedConsumer(file, 're-exports this component');
+      return unsupportedConsumer(file, 'props.rename.consumerReExport');
     }
     if (ts.isImportDeclaration(statement)) {
       continue;
@@ -90,29 +92,26 @@ function readConsumerNames(source: string, file: string, target: string, aliases
       // Runtime aliases and ComponentProps type queries need a semantic project refactor.
       // Refuse them rather than silently leave a second API spelling behind.
       if (!file.endsWith('.mdx')) {
-        return unsupportedConsumer(file, 'uses this component in frontmatter or JavaScript');
+        return unsupportedConsumer(file, 'props.rename.consumerUsesInCode');
       }
     }
   }
   for (const match of source.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]/g)) {
     if (match[1] && resolves(match[1])) {
-      return unsupportedConsumer(file, 'imports it dynamically');
+      return unsupportedConsumer(file, 'props.rename.consumerDynamicImport');
     }
   }
   const layout = /^layout:\s*["']?([^\s"']+)/m.exec(source)?.[1];
   if (/\.mdx?$/.test(file) && layout && resolves(layout)) {
-    return unsupportedConsumer(file, 'passes layout props through Markdown frontmatter');
+    return unsupportedConsumer(file, 'props.rename.consumerLayout');
   }
   if (names.size > 0 && !/\.(astro|mdx)$/.test(file)) {
-    return unsupportedConsumer(file, 'uses this component outside Astro or MDX');
+    return unsupportedConsumer(file, 'props.rename.consumerOutsideAstro');
   }
   return ok(names);
 }
-function unsupportedConsumer(file: string, reason: string): Result<never> {
-  return err({
-    code: 'consumer',
-    message: `${file} ${reason}. Update that consumer explicitly before changing the prop name.`,
-  });
+function unsupportedConsumer(file: string, key: MessageKey): Result<never> {
+  return err(refusal('consumer', key, { file }));
 }
 
 export function projectSources(projectPath: string): Result<readonly string[]> {
@@ -127,10 +126,7 @@ export function projectSources(projectPath: string): Result<readonly string[]> {
     }
     for (const entry of entries.value) {
       if (entry.isSymbolicLink()) {
-        return err({
-          code: 'symlink',
-          message: 'Project sources contain a symbolic link. Resolve it before a project-wide rename.',
-        });
+        return err(refusal('symlink', 'props.rename.symlink'));
       }
       const full = path.join(directory, entry.name);
       if (entry.isDirectory()) {
@@ -139,7 +135,7 @@ export function projectSources(projectPath: string): Result<readonly string[]> {
         files.push(full);
       }
       if (pending.length + files.length > PROPERTY_LIMITS.filesMax) {
-        return err({ code: 'limit', message: 'Project exceeds the prop rename file limit.' });
+        return err(refusal('limit', 'props.rename.fileLimit'));
       }
     }
   }

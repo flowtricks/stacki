@@ -38,11 +38,11 @@ export function createCursorEditor(root: ShadowRoot) {
   const { element, label, name, text } = createRemoteCursor(root);
   element.classList.add('cursor-editor');
   element.hidden = true;
-  name.textContent = 'You';
+  name.textContent = 'You'; // i18n-ignore: runs inside the preview iframe bundle, which has no language provider; see the report.
   const input = document.createElement('textarea');
   input.maxLength = 160;
-  input.placeholder = 'Say something…';
-  input.setAttribute('aria-label', 'Cursor message');
+  input.placeholder = 'Say something…'; // i18n-ignore: same preview iframe bundle, no language provider.
+  input.setAttribute('aria-label', 'Cursor message'); // i18n-ignore: same preview iframe bundle, no language provider.
   input.autocomplete = 'off';
   input.rows = 1;
   const measure = document.createElement('span');

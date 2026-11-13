@@ -1,3 +1,4 @@
+// i18n-ignore-file: AUDIT_CHECKS is the English source beside each check's titleRef and whyRef; the renderer translates by reference (useAuditText).
 // The audit model: what the Audits panel finds in a project's pages and
 // components, how it ranks it, and the fixes it can make on its own. Every
 // check is named once in AUDIT_CHECKS, with its title, priority, category and
@@ -13,7 +14,15 @@
 // nodes named by path. The renderer turns a plan into edit gestures, so every
 // byte still goes through the intent path (src/features/audits/auditFixes.ts).
 import { assert } from '../core/assert';
+import type { MessageParams } from '../core/i18n/catalog';
+import type { MessageRef } from '../core/i18n/messageReference';
+import { auditSentence, type AuditTextKey } from './auditText';
 import type { Attr } from './pageNodeTypes';
+
+/** A check's reference: the catalog key of its title or reason, with the parameters its sentence needs. */
+function checkRef(key: string, params?: MessageParams): MessageRef {
+  return params === undefined ? { key } : { key, params };
+}
 
 /** Bounds of one audit run, enforced where findings accumulate. */
 export const AUDIT_LIMITS = {
@@ -106,10 +115,13 @@ export type AuditCheckId = (typeof AUDIT_CHECK_IDS)[number];
 
 export interface AuditCheckInfo {
   readonly title: string;
+  /** The translatable form of `title`: the renderer shows it with `useTranslateRef`; `title` stays for logs, search and the prompt. */
+  readonly titleRef: MessageRef;
   readonly category: AuditCategory;
   readonly priority: AuditPriority;
   /** One line: why it matters, for the row. */
   readonly why: string;
+  readonly whyRef: MessageRef;
   /** The WCAG success criterion, or the SEO reason, the hand-off prompt cites. */
   readonly reference: string;
 }
@@ -118,387 +130,497 @@ export interface AuditCheckInfo {
 export const AUDIT_CHECKS: Readonly<Record<AuditCheckId, AuditCheckInfo>> = {
   'img-alt': {
     title: 'Missing alt text',
+    titleRef: checkRef('audits.check.imgAlt.title'),
     category: 'accessibility',
     priority: 'high',
     why: 'Screen readers announce the file name, or nothing, instead of what the image shows.',
+    whyRef: checkRef('audits.check.imgAlt.why'),
     reference: 'WCAG 2.2 SC 1.1.1 Non-text Content (A)',
   },
   'img-decorative': {
     title: 'Decorative image has alt',
+    titleRef: checkRef('audits.check.imgDecorative.title'),
     category: 'accessibility',
     priority: 'low',
     why: 'An image marked decorative is still announced while its alt text is not empty.',
+    whyRef: checkRef('audits.check.imgDecorative.why'),
     reference: 'WCAG 2.2 SC 1.1.1 Non-text Content (A)',
   },
   'link-name': {
     title: 'Unnamed link',
+    titleRef: checkRef('audits.check.linkName.title'),
     category: 'accessibility',
     priority: 'high',
     why: 'Assistive technology announces only "link", so nobody can tell where it goes.',
+    whyRef: checkRef('audits.check.linkName.why'),
     reference: 'WCAG 2.2 SC 2.4.4 Link Purpose (A), SC 4.1.2 Name, Role, Value (A)',
   },
   'button-name': {
     title: 'Unnamed button',
+    titleRef: checkRef('audits.check.buttonName.title'),
     category: 'accessibility',
     priority: 'high',
     why: 'A button with no text or label is announced as "button" with no purpose.',
+    whyRef: checkRef('audits.check.buttonName.why'),
     reference: 'WCAG 2.2 SC 4.1.2 Name, Role, Value (A)',
   },
   'svg-button-label': {
     title: 'Unlabelled icon button',
+    titleRef: checkRef('audits.check.svgButtonLabel.title'),
     category: 'accessibility',
     priority: 'high',
     why: 'The icon is drawn, not read: without a label the control has no name.',
+    whyRef: checkRef('audits.check.svgButtonLabel.why'),
     reference: 'WCAG 2.2 SC 1.1.1 Non-text Content (A), SC 4.1.2 Name, Role, Value (A)',
   },
   'control-label': {
     title: 'Unlabelled field',
+    titleRef: checkRef('audits.check.controlLabel.title'),
     category: 'accessibility',
     priority: 'high',
     why: 'People using screen readers or voice control cannot tell what to enter.',
+    whyRef: checkRef('audits.check.controlLabel.why'),
     reference: 'WCAG 2.2 SC 1.3.1 Info and Relationships (A), SC 3.3.2 Labels or Instructions (A)',
   },
   'heading-order': {
     title: 'Skipped heading level',
+    titleRef: checkRef('audits.check.headingOrder.title'),
     category: 'accessibility',
     priority: 'medium',
     why: 'Skipping levels breaks the outline people navigate a page by.',
+    whyRef: checkRef('audits.check.headingOrder.why'),
     reference: 'WCAG 2.2 SC 1.3.1 Info and Relationships (A)',
   },
   'h1-count': {
     title: 'Missing or extra h1',
+    titleRef: checkRef('audits.check.h1Count.title'),
     category: 'accessibility',
     priority: 'medium',
     why: 'One top heading tells readers and search engines what the page is about.',
+    whyRef: checkRef('audits.check.h1Count.why'),
     reference: 'WCAG 2.2 SC 2.4.6 Headings and Labels (AA); search engines read the h1 as the main topic',
   },
   'html-lang': {
     title: 'Missing lang',
+    titleRef: checkRef('audits.check.htmlLang.title'),
     category: 'accessibility',
     priority: 'high',
     why: 'Screen readers pick the wrong voice and pronunciation without a lang attribute.',
+    whyRef: checkRef('audits.check.htmlLang.why'),
     reference: 'WCAG 2.2 SC 3.1.1 Language of Page (A)',
   },
   'duplicate-id': {
     title: 'Duplicate id',
+    titleRef: checkRef('audits.check.duplicateId.title'),
     category: 'accessibility',
     priority: 'medium',
     why: 'Labels, anchors and ARIA references point at the first element only.',
+    whyRef: checkRef('audits.check.duplicateId.why'),
     reference: 'WCAG 2.2 SC 4.1.2 Name, Role, Value (A); HTML requires unique ids',
   },
   'aria-role': {
     title: 'Invalid role',
+    titleRef: checkRef('audits.check.ariaRole.title'),
     category: 'accessibility',
     priority: 'medium',
     why: 'An unknown role is ignored, or misleads assistive technology about the element.',
+    whyRef: checkRef('audits.check.ariaRole.why'),
     reference: 'WCAG 2.2 SC 4.1.2 Name, Role, Value (A)',
   },
   'aria-hidden-focusable': {
     title: 'Hidden but focusable',
+    titleRef: checkRef('audits.check.ariaHiddenFocusable.title'),
     category: 'accessibility',
     priority: 'high',
     why: 'Keyboard focus lands on something screen readers were told does not exist.',
+    whyRef: checkRef('audits.check.ariaHiddenFocusable.why'),
     reference: 'WCAG 2.2 SC 4.1.2 Name, Role, Value (A), SC 2.4.3 Focus Order (A)',
   },
   'tabindex-positive': {
     title: 'Positive tabindex',
+    titleRef: checkRef('audits.check.tabindexPositive.title'),
     category: 'accessibility',
     priority: 'medium',
     why: 'A positive tabindex jumps the element ahead of the page’s reading order.',
+    whyRef: checkRef('audits.check.tabindexPositive.why'),
     reference: 'WCAG 2.2 SC 2.4.3 Focus Order (A)',
   },
   'video-autoplay': {
     title: 'Autoplaying video',
+    titleRef: checkRef('audits.check.videoAutoplay.title'),
     category: 'accessibility',
     priority: 'medium',
     why: 'Sound that starts on its own, or motion with no way to stop it, gets in the way.',
+    whyRef: checkRef('audits.check.videoAutoplay.why'),
     reference: 'WCAG 2.2 SC 1.4.2 Audio Control (A), SC 2.2.2 Pause, Stop, Hide (A)',
   },
   contrast: {
     title: 'Low contrast',
+    titleRef: checkRef('audits.check.contrast.title'),
     category: 'accessibility',
     priority: 'high',
     why: 'Low-contrast text is hard to read, in sunlight and for people with low vision.',
+    whyRef: checkRef('audits.check.contrast.why'),
     reference: 'WCAG 2.2 SC 1.4.3 Contrast (Minimum) (AA)',
   },
   'iframe-title': {
     title: 'Untitled iframe',
+    titleRef: checkRef('audits.check.iframeTitle.title'),
     category: 'accessibility',
     priority: 'medium',
     why: 'Screen readers list frames by title; an untitled frame is a mystery.',
+    whyRef: checkRef('audits.check.iframeTitle.why'),
     reference: 'WCAG 2.2 SC 4.1.2 Name, Role, Value (A)',
   },
   'title-missing': {
     title: 'Missing title',
+    titleRef: checkRef('audits.check.titleMissing.title'),
     category: 'seo',
     priority: 'high',
     why: 'The title is the tab name, the bookmark and the search result headline.',
+    whyRef: checkRef('audits.check.titleMissing.why'),
     reference: 'Search engines show <title> as the result headline; WCAG 2.2 SC 2.4.2 Page Titled (A)',
   },
   'title-duplicate': {
     title: 'Duplicate title',
+    titleRef: checkRef('audits.check.titleDuplicate.title'),
     category: 'seo',
     priority: 'medium',
     why: 'Pages with the same title compete with each other in search results.',
+    whyRef: checkRef('audits.check.titleDuplicate.why'),
     reference: 'Unique titles help search engines tell pages apart',
   },
   'description-missing': {
     title: 'Missing description',
+    titleRef: checkRef('audits.check.descriptionMissing.title'),
     category: 'seo',
     priority: 'medium',
     why: 'Without one, search engines pick a snippet from the page, often a poor one.',
+    whyRef: checkRef('audits.check.descriptionMissing.why'),
     reference: 'The meta description is the search result snippet',
   },
   'description-duplicate': {
     title: 'Duplicate description',
+    titleRef: checkRef('audits.check.descriptionDuplicate.title'),
     category: 'seo',
     priority: 'low',
     why: 'The same snippet on many pages makes every result look alike.',
+    whyRef: checkRef('audits.check.descriptionDuplicate.why'),
     reference: 'Unique descriptions help search engines tell pages apart',
   },
   'description-short': {
     title: 'Description too short',
+    titleRef: checkRef('audits.check.descriptionShort.title'),
     category: 'seo',
     priority: 'low',
     why: 'Search results pad a short description with text taken from the page.',
+    whyRef: checkRef('audits.check.descriptionShort.why'),
     reference: 'Search snippets show roughly 50 to 160 characters',
   },
   'description-long': {
     title: 'Description too long',
+    titleRef: checkRef('audits.check.descriptionLong.title'),
     category: 'seo',
     priority: 'low',
     why: 'Search results cut a long description off mid-sentence.',
+    whyRef: checkRef('audits.check.descriptionLong.why'),
     reference: 'Search snippets show roughly 50 to 160 characters',
   },
   canonical: {
     title: 'Canonical link',
+    titleRef: checkRef('audits.check.canonical.title'),
     category: 'seo',
     priority: 'low',
     why: 'Without a canonical URL, duplicate addresses split a page’s ranking.',
+    whyRef: checkRef('audits.check.canonical.why'),
     reference: 'rel="canonical" names the preferred URL for search engines',
   },
   'social-tags': {
     title: 'Missing social tags',
+    titleRef: checkRef('audits.check.socialTags.title'),
     category: 'seo',
     priority: 'low',
     why: 'Shared links show no title, description or image in social previews.',
+    whyRef: checkRef('audits.check.socialTags.why'),
     reference: 'Open Graph and Twitter card metadata drive link previews',
   },
   noindex: {
     title: 'Hidden from search',
+    titleRef: checkRef('audits.check.noindex.title'),
     category: 'seo',
     priority: 'high',
     why: 'A noindex robots tag keeps the page out of every search engine.',
+    whyRef: checkRef('audits.check.noindex.why'),
     reference: '<meta name="robots" content="noindex"> removes a page from search results',
   },
   'img-dimensions': {
     title: 'Image without size',
+    titleRef: checkRef('audits.check.imgDimensions.title'),
     category: 'seo',
     priority: 'medium',
     why: 'The page jumps when the image loads (layout shift), which hurts Core Web Vitals.',
+    whyRef: checkRef('audits.check.imgDimensions.why'),
     reference: 'Cumulative Layout Shift (Core Web Vitals)',
   },
   'link-broken': {
     title: 'Broken link',
+    titleRef: checkRef('audits.check.linkBroken.title'),
     category: 'seo',
     priority: 'high',
     why: 'Visitors and crawlers land on a 404.',
+    whyRef: checkRef('audits.check.linkBroken.why'),
     reference: 'Broken internal links waste crawl budget and lose visitors',
   },
   sitemap: {
     title: 'No sitemap',
+    titleRef: checkRef('audits.check.sitemap.title'),
     category: 'seo',
     priority: 'medium',
     why: 'A sitemap tells search engines which pages exist.',
+    whyRef: checkRef('audits.check.sitemap.why'),
     reference: '@astrojs/sitemap generates sitemap-index.xml at build',
   },
   robots: {
     title: 'No robots.txt',
+    titleRef: checkRef('audits.check.robots.title'),
     category: 'seo',
     priority: 'low',
     why: 'Crawlers look for robots.txt first, and for the sitemap it names.',
+    whyRef: checkRef('audits.check.robots.why'),
     reference: 'robots.txt points crawlers at the sitemap',
   },
   'link-text': {
     title: 'Vague link text',
+    titleRef: checkRef('audits.check.linkText.title'),
     category: 'seo',
     priority: 'low',
     why: '"Click here" says nothing out of context, to people or to search engines.',
+    whyRef: checkRef('audits.check.linkText.why'),
     reference: 'WCAG 2.2 SC 2.4.4 Link Purpose (A); link text is a ranking signal',
   },
   'structured-data': {
     title: 'No structured data',
+    titleRef: checkRef('audits.check.structuredData.title'),
     category: 'seo',
     priority: 'low',
     why: 'Schema markup can earn rich results such as breadcrumbs and articles.',
+    whyRef: checkRef('audits.check.structuredData.why'),
     reference: 'schema.org JSON-LD in <script type="application/ld+json">',
   },
   'img-large': {
     title: 'Large image',
+    titleRef: checkRef('audits.check.imgLarge.title'),
     category: 'seo',
     priority: 'medium',
     why: 'Large images slow the page’s first paint, most of all on mobile.',
+    whyRef: checkRef('audits.check.imgLarge.why'),
     reference: 'Largest Contentful Paint (Core Web Vitals)',
   },
   'link-noopener': {
     title: 'New tab without noopener',
+    titleRef: checkRef('audits.check.linkNoopener.title'),
     category: 'seo',
     priority: 'low',
     why: 'A page opened in a new tab can reach back into this one through window.opener.',
+    whyRef: checkRef('audits.check.linkNoopener.why'),
     reference: 'rel="noopener" cuts the opener reference',
   },
   'placeholder-text': {
     title: 'Placeholder text',
+    titleRef: checkRef('audits.check.placeholderText.title'),
     category: 'content',
     priority: 'high',
     why: 'Lorem ipsum and template copy look unfinished and say nothing to readers or search engines.',
+    whyRef: checkRef('audits.check.placeholderText.why'),
     reference: 'Pages should ship with their real copy',
   },
   'placeholder-image': {
     title: 'Placeholder image',
+    titleRef: checkRef('audits.check.placeholderImage.title'),
     category: 'content',
     priority: 'medium',
     why: 'A stock placeholder image is not the picture the page needs.',
+    whyRef: checkRef('audits.check.placeholderImage.why'),
     reference: 'Pages should ship with their real images',
   },
   'launch-favicon': {
     title: 'No favicon',
+    titleRef: checkRef('audits.check.launchFavicon.title'),
     category: 'seo',
     priority: 'medium',
     why: 'Tabs, bookmarks and search results show a blank icon.',
+    whyRef: checkRef('audits.check.launchFavicon.why'),
     reference: 'Launch checklist: <link rel="icon">',
   },
   'launch-404': {
     title: 'No 404 page',
+    titleRef: checkRef('audits.check.launch404.title'),
     category: 'seo',
     priority: 'medium',
     why: 'A missing page shows the host’s bare error instead of a way back into the site.',
+    whyRef: checkRef('audits.check.launch404.why'),
     reference: 'Launch checklist: src/pages/404',
   },
   'launch-social-image': {
     title: 'No social image',
+    titleRef: checkRef('audits.check.launchSocialImage.title'),
     category: 'seo',
     priority: 'medium',
     why: 'Links shared on social media show no picture, or a broken one.',
+    whyRef: checkRef('audits.check.launchSocialImage.why'),
     reference: 'Launch checklist: og:image / twitter:image that loads',
   },
   'launch-analytics': {
     title: 'No analytics',
+    titleRef: checkRef('audits.check.launchAnalytics.title'),
     category: 'seo',
     priority: 'low',
     why: 'Without analytics nobody can tell how the site is used after launch.',
+    whyRef: checkRef('audits.check.launchAnalytics.why'),
     reference: 'Launch checklist: an analytics snippet or integration',
   },
   'token-color': {
     title: 'Raw colour',
+    titleRef: checkRef('audits.check.tokenColor.title'),
     category: 'tokens',
     priority: 'medium',
     why: 'A colour written by hand drifts from the palette; a variable keeps every use in step.',
+    whyRef: checkRef('audits.check.tokenColor.why'),
     reference: 'Design tokens: colours come from variables',
   },
   'token-value': {
     title: 'Raw value',
+    titleRef: checkRef('audits.check.tokenValue.title'),
     category: 'tokens',
     priority: 'low',
     why: 'Spacing, radius and type written by hand drift from the scale the variables define.',
+    whyRef: checkRef('audits.check.tokenValue.why'),
     reference: 'Design tokens: sizes come from variables',
   },
   'token-unit': {
     title: 'Unit outside a variable',
+    titleRef: checkRef('audits.check.tokenUnit.title'),
     category: 'tokens',
     priority: 'low',
     why: 'The project keeps this unit inside variable definitions only.',
+    whyRef: checkRef('audits.check.tokenUnit.why'),
     reference: 'Design tokens: unit rules from .stacki/audits.json',
   },
   'style-global': {
     title: 'Style block not global',
+    titleRef: checkRef('audits.check.styleGlobal.title'),
     category: 'tokens',
     priority: 'medium',
     why: 'A scoped <style> only reaches this file’s own markup; the project writes global styles.',
+    whyRef: checkRef('audits.check.styleGlobal.why', { style: '<style>' }),
     reference: 'Stacki projects write <style is:global>',
   },
   'style-layer': {
     title: 'Global styles outside @layer',
+    titleRef: checkRef('audits.check.styleLayer.title'),
     category: 'tokens',
     priority: 'low',
     why: 'Unlayered global rules outrank every layer, so components cannot override them.',
+    whyRef: checkRef('audits.check.styleLayer.why'),
     reference: 'Global styles sit inside an @layer',
   },
   'perf-lcp': {
     title: 'Slow largest paint',
+    titleRef: checkRef('audits.check.perfLcp.title'),
     category: 'performance',
     priority: 'high',
     why: 'The biggest element takes long to appear, so the page feels slow to load.',
+    whyRef: checkRef('audits.check.perfLcp.why'),
     reference: 'Largest Contentful Paint (Core Web Vitals): good under 2.5 s',
   },
   'perf-cls': {
     title: 'Layout shift',
+    titleRef: checkRef('audits.check.perfCls.title'),
     category: 'performance',
     priority: 'high',
     why: 'Content jumps as the page loads, and people click the wrong thing.',
+    whyRef: checkRef('audits.check.perfCls.why'),
     reference: 'Cumulative Layout Shift (Core Web Vitals): good under 0.1',
   },
   'perf-tbt': {
     title: 'Long tasks',
+    titleRef: checkRef('audits.check.perfTbt.title'),
     category: 'performance',
     priority: 'medium',
     why: 'Script work blocks the page from answering clicks and typing.',
+    whyRef: checkRef('audits.check.perfTbt.why'),
     reference: 'Total Blocking Time: good under 200 ms',
   },
   'perf-weight': {
     title: 'Heavy page',
+    titleRef: checkRef('audits.check.perfWeight.title'),
     category: 'performance',
     priority: 'medium',
     why: 'Many or large downloads slow the page on mobile connections.',
+    whyRef: checkRef('audits.check.perfWeight.why'),
     reference: 'Page weight and request count',
   },
   'perf-blocking': {
     title: 'Render-blocking resource',
+    titleRef: checkRef('audits.check.perfBlocking.title'),
     category: 'performance',
     priority: 'medium',
     why: 'A stylesheet or script in the head holds back the first paint.',
+    whyRef: checkRef('audits.check.perfBlocking.why'),
     reference: 'Render-blocking resources delay First Contentful Paint',
   },
   'perf-image-size': {
     title: 'Oversized image',
+    titleRef: checkRef('audits.check.perfImageSize.title'),
     category: 'performance',
     priority: 'medium',
     why: 'The file has far more pixels than the page shows.',
+    whyRef: checkRef('audits.check.perfImageSize.why'),
     reference: 'Serve images at their displayed size (times the screen’s density)',
   },
   'perf-image-format': {
     title: 'Image not AVIF or WebP',
+    titleRef: checkRef('audits.check.perfImageFormat.title'),
     category: 'performance',
     priority: 'low',
     why: 'Modern formats are much smaller for the same picture.',
+    whyRef: checkRef('audits.check.perfImageFormat.why'),
     reference: 'Serve images in AVIF or WebP',
   },
   'perf-lazy': {
     title: 'Offscreen image loads eagerly',
+    titleRef: checkRef('audits.check.perfLazy.title'),
     category: 'performance',
     priority: 'low',
     why: 'Images below the fold compete with what people see first.',
+    whyRef: checkRef('audits.check.perfLazy.why'),
     reference: 'loading="lazy" for images below the fold',
   },
   'perf-fetchpriority': {
     title: 'Largest image not prioritised',
+    titleRef: checkRef('audits.check.perfFetchpriority.title'),
     category: 'performance',
     priority: 'medium',
     why: 'The browser fetches the most important image no sooner than the rest.',
+    whyRef: checkRef('audits.check.perfFetchpriority.why'),
     reference: 'fetchpriority="high" on the LCP image',
   },
   'perf-font-display': {
     title: 'Font without font-display',
+    titleRef: checkRef('audits.check.perfFontDisplay.title'),
     category: 'performance',
     priority: 'low',
     why: 'Text stays invisible while the font downloads.',
+    whyRef: checkRef('audits.check.perfFontDisplay.why'),
     reference: 'font-display: swap on @font-face',
   },
   'perf-third-party': {
     title: 'Third-party script',
+    titleRef: checkRef('audits.check.perfThirdParty.title'),
     category: 'performance',
     priority: 'low',
     why: 'Scripts from other origins add requests and work you do not control.',
+    whyRef: checkRef('audits.check.perfThirdParty.why'),
     reference: 'Audit third-party scripts',
   },
 };
@@ -569,6 +691,8 @@ export interface AuditNewElement {
 export interface AuditFix {
   /** The button's words: "Add lang", "Add width and height". */
   readonly label: string;
+  /** The translatable form of `label` (the renderer shows it); `label` stays English: undo history, choices and old readers key on it. */
+  readonly labelRef?: MessageRef;
   /** The markup before and after, for the preview the row shows before applying. */
   readonly before: string;
   readonly after: string;
@@ -590,12 +714,15 @@ export interface AuditFinding {
   readonly element: AuditElementRef | undefined;
   /** What this occurrence is: `src="/hero.png"`, `h2 → h4`. */
   readonly detail: string;
+  /** The translatable form of `detail` when it holds a sentence (not when it is code such as `src="/a.png"`). The id keys on the English `detail`, never on this. */
+  readonly detailRef?: MessageRef;
   readonly source: AuditSource;
   readonly fix: AuditFix | undefined;
   /** The text the finding is about, when rewriting it is the fix (a description to shorten): quoted to the agent. */
   readonly excerpt?: string;
   /** A short measurement the row shows beside the name: `35 characters`. */
   readonly measure?: string;
+  readonly measureRef?: MessageRef;
   /** On a component instance found by tracing a value to where it is written: the prop to edit there. */
   readonly prop?: string;
   /** Other fixes to choose from, when several are equally right (two variables hold the same value). */
@@ -625,6 +752,30 @@ export interface AuditCssContext {
 export type AuditCssPlace =
   { readonly tag: 'style-block'; readonly path: readonly number[]; readonly offset: number } | { readonly tag: 'stylesheet'; readonly offset: number };
 
+/**
+ * Tag names that appear inside messages. A catalog message cannot hold a literal `<tag>` (it reads as a rich-text mark), so a
+ * sentence takes the tag as a parameter: `detailText('audits.detail.headNoTitle', { head: AUDIT_TAGS.head, title: AUDIT_TAGS.title })`.
+ */
+export const AUDIT_TAGS = { head: '<head>', html: '<html>', title: '<title>', h1: '<h1>', style: '<style>', styleGlobal: '<style is:global>' } as const;
+
+/** A finding's detail sentence: the English text it always had, with the reference the renderer translates. Spread into a finding. */
+export function detailText(key: AuditTextKey, params?: MessageParams): { readonly detail: string; readonly detailRef: MessageRef } {
+  const sentence = auditSentence(key, params);
+  return { detail: sentence.text, detailRef: sentence.ref };
+}
+
+/** A fix's button words, in English and as a reference. Spread into a fix. */
+export function labelText(key: AuditTextKey, params?: MessageParams): { readonly label: string; readonly labelRef: MessageRef } {
+  const sentence = auditSentence(key, params);
+  return { label: sentence.text, labelRef: sentence.ref };
+}
+
+/** A finding's measurement words, in English and as a reference. Spread into a finding. */
+export function measureText(key: AuditTextKey, params?: MessageParams): { readonly measure: string; readonly measureRef: MessageRef } {
+  const sentence = auditSentence(key, params);
+  return { measure: sentence.text, measureRef: sentence.ref };
+}
+
 /** The id a finding is ignored by: the check, the file, the element's path and the detail. */
 export function findingId(input: Pick<AuditFinding, 'check' | 'file' | 'element' | 'detail'>): string {
   assert(input.file.length > 0, 'findingId: a finding names a file');
@@ -642,7 +793,9 @@ export function auditFinding(input: Omit<AuditFinding, 'id'>): AuditFinding {
     assert(input.fix.edits.length > 0, 'auditFinding: a fix makes at least one edit');
     assert(input.fix.edits.length <= AUDIT_LIMITS.fixEditsMax, 'auditFinding: a fix is bounded');
   }
-  const bounded = { ...input, detail };
+  // A truncated detail no longer matches its sentence, so the reference is dropped and the English shows.
+  const { detailRef, ...rest } = input;
+  const bounded = detail === input.detail && detailRef !== undefined ? { ...rest, detailRef, detail } : { ...rest, detail };
   return { ...bounded, id: findingId(bounded) };
 }
 

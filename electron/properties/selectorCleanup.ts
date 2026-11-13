@@ -14,6 +14,7 @@ import selectorParser from 'postcss-selector-parser';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { err, ok, type Result } from '../../shared/core/result';
+import { refusal } from '../../shared/properties/propertyErrors';
 import type { SelectorFileChange, SelectorFileDigest } from '../../shared/properties/selectorUsage';
 import { parseCss, readRegionRules, shapeOf, type RuleSelector, type StyleRegion } from './selectorSheets';
 import type { UsageAnalysis } from './selectorUsage';
@@ -28,17 +29,17 @@ export function planSelectorRemoval(
   const digests = new Map(analysis.report.files.map((file) => [file.rel, file.digest]));
   for (const file of expected) {
     if (digests.get(file.rel) !== file.digest) {
-      return err({ code: 'stale', message: `${file.rel} changed since it was checked. Check again before cleaning up.` });
+      return err(refusal('stale', 'props.cleanup.changedSince', { file: file.rel }));
     }
   }
   const byRegion = new Map<StyleRegion, RuleSelector[]>();
   for (const id of new Set(ids)) {
     const selector = analysis.selectors.get(id);
     if (selector === undefined || verdicts.get(id)?.kind !== 'unused') {
-      return err({ code: 'changed', message: 'A selector is no longer unused. Check again before cleaning up.' });
+      return err(refusal('changed', 'props.cleanup.noLongerUnused'));
     }
     if (!expected.some((file) => file.rel === selector.region.rel)) {
-      return err({ code: 'stale', message: `${selector.region.rel} was not part of the checked files.` });
+      return err(refusal('stale', 'props.cleanup.notChecked', { file: selector.region.rel }));
     }
     const list = byRegion.get(selector.region) ?? [];
     list.push(selector);

@@ -6,6 +6,7 @@ import type { MainHost } from './mainHost';
 import { assert } from '../../shared/core/assert';
 import { createProjectText } from '../documents/documentWrites';
 import { ensureExcluded } from '../lib/projectExclusions';
+import { translateMain } from '../lib/mainLocale';
 
 export function registerProjectMetadataHandlers(host: Pick<MainHost, 'ipcMain' | 'assertInProject' | 'send' | 'showOpenDialog'>): void {
   const root = (projectPath: string, kind: MetadataKind): string => {
@@ -30,7 +31,7 @@ export function registerProjectMetadataHandlers(host: Pick<MainHost, 'ipcMain' |
     const project = fs.realpathSync(input.projectPath);
     const file = input.target === 'file';
     const picked = await host.showOpenDialog({
-      title: file ? 'Choose a file in this project' : 'Choose a folder in this project',
+      title: translateMain(file ? 'dialog.open.projectFile.title' : 'dialog.open.projectFolder.title'),
       defaultPath: project,
       properties: [file ? 'openFile' : 'openDirectory'],
     });
@@ -86,14 +87,14 @@ export function projectFolderOf(
   try {
     real = fs.realpathSync(chosen);
   } catch {
-    return { kind: 'outside', message: 'That is no longer there.' };
+    return { kind: 'outside', message: translateMain('error.project.gone') };
   }
   const relative = path.relative(project, real);
   if (relative === '') {
-    return { kind: 'outside', message: 'Choose something inside the project, not the project itself.' };
+    return { kind: 'outside', message: translateMain('error.project.chooseInside') };
   }
   if (relative.startsWith('..') || path.isAbsolute(relative)) {
-    return { kind: 'outside', message: 'That is outside the project.' };
+    return { kind: 'outside', message: translateMain('error.project.outside') };
   }
   const folder = relative.split(path.sep).join('/');
   assert(!folder.startsWith('/'), 'projectFolderOf: the folder is project-relative');

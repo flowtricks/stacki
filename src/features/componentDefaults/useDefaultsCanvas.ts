@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { createDefaultsCanvas, removeDefaultsCanvas } from '../../ipc/projectMetadataBridge';
 import { CANVAS_DIRECTORY, type DefaultsCanvasSession } from '../../../shared/properties/defaultsCanvas';
 import { parseComponentDefaults, resolveComponentRecipe } from '../../../shared/properties/componentDefaults';
@@ -29,6 +31,7 @@ export interface CanvasHost {
 }
 
 export function useDefaultsCanvas(host: CanvasHost) {
+  const translate = useTranslate();
   const [state, setState] = useState<CanvasState>({ kind: 'idle' });
   const active = useRef<DefaultsCanvasSession>();
   const operation = useRef(false);
@@ -53,7 +56,7 @@ export function useDefaultsCanvas(host: CanvasHost) {
     const prepared = prepareDefaultsCanvas(CANVAS_DIRECTORY + crypto.randomUUID() + '.astro', snapshot, context);
     await startCanvas(host, control, prepared.session, prepared.source);
   };
-  const run = (kind: CanvasAction) => runCanvas(host, control, kind);
+  const run = (kind: CanvasAction) => runCanvas(host, control, kind, translate);
   return { state, start, run, isOpen: host.isOpen };
 }
 
@@ -80,7 +83,7 @@ async function startCanvas(host: CanvasHost, control: CanvasControl, session: De
   }
 }
 
-async function runCanvas(host: CanvasHost, control: CanvasControl, kind: CanvasAction) {
+async function runCanvas(host: CanvasHost, control: CanvasControl, kind: CanvasAction, translate: Translator) {
   const session = control.active.current;
   if (!session || control.operation.current) {
     return;
@@ -100,7 +103,7 @@ async function runCanvas(host: CanvasHost, control: CanvasControl, kind: CanvasA
       control.setState({
         kind: 'editing',
         session: next,
-        message: 'Defaults saved to this project.',
+        message: translate('componentProps.defaults.saved'),
       });
     } else {
       await host.leave();
@@ -112,7 +115,7 @@ async function runCanvas(host: CanvasHost, control: CanvasControl, kind: CanvasA
     control.setState({
       kind: 'editing',
       session: control.active.current ?? session,
-      message: error instanceof Error ? error.message : 'Could not save component defaults.',
+      message: error instanceof Error ? error.message : translate('componentProps.defaults.saveFailed'),
     });
   } finally {
     operation.current = false;

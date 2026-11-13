@@ -1,3 +1,4 @@
+// i18n-ignore-file: the returned words are variable type ids (Color, Size, FontFamily, …) that pickers compare, never shown as text here.
 // The project's variables, fonts and image assets, as the style panel's
 // pickers offer them, and the two facts about a rule they are read by: its
 // selector and whether it is global (webflow.ts).

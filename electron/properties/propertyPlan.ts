@@ -3,6 +3,7 @@ import { readPropertyConsumers } from './propertyConsumers';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import type { PropertyChange, PropertyOptionRename } from '../../shared/properties/propertyEditing';
+import { inFile, refusal } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
 import { literalOptions } from '../../shared/properties/propertyOptions';
 import { sameFilesystemPath } from '../lib/platform';
@@ -34,10 +35,7 @@ export function planPropertyChanges(request: PropertyEditRequest, source: string
     return ok([first]);
   }
   if (change.kind !== 'save' || !change.originalName) {
-    return err({
-      code: 'option',
-      message: 'Only an existing property can rename options.',
-    });
+    return err(refusal('option', 'props.edit.optionNeedsExisting'));
   }
   const valid = validateOptionRenames(request.source, source, change, optionRenames);
   if (!valid.ok) {
@@ -55,10 +53,7 @@ export function planPropertyChanges(request: PropertyEditRequest, source: string
     const owner = own ? 'definition' : 'consumer';
     const changed = planConsumerChange(original, names, change, propertyRename, optionRenames, owner);
     if (!changed.ok) {
-      return err({
-        code: changed.error.code,
-        message: `${path.relative(request.projectPath, file)}: ${changed.error.message}`,
-      });
+      return err(inFile(path.relative(request.projectPath, file), changed.error));
     }
     if (own || changed.value !== original) {
       changes.push({
@@ -111,17 +106,11 @@ function validateOptionRenames(
   const beforeOptions = before ? literalOptions(before.type) : undefined;
   const afterOptions = after ? literalOptions(after.type) : undefined;
   if (!beforeOptions || !afterOptions) {
-    return err({
-      code: 'option',
-      message: 'Option renames require an editable literal union.',
-    });
+    return err(refusal('option', 'props.edit.optionNeedsUnion'));
   }
   for (const rename of renames) {
     if (!beforeOptions.includes(rename.from) || !afterOptions.includes(rename.to)) {
-      return err({
-        code: 'option',
-        message: 'An option rename does not match the saved union.',
-      });
+      return err(refusal('option', 'props.edit.optionMismatch'));
     }
   }
   return ok(undefined);
@@ -138,10 +127,7 @@ function planPropertyRemoval(request: PropertyEditRequest, change: FileChange, n
       return result;
     }
     if (result.value !== consumer.source) {
-      return err({
-        code: 'in-use',
-        message: `${consumer.file} still passes ${name}. ` + 'Remove that instance value before deleting the prop.',
-      });
+      return err(refusal('in-use', 'props.edit.stillPasses', { file: consumer.file, name }));
     }
   }
   return ok([change]);

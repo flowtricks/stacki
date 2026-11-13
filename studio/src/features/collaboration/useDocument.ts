@@ -1,3 +1,4 @@
+import { studioTranslate, studioWireText } from '../../shared/studioTranslate';
 import { documentStorageName } from '../../shared/workspaceIdentity';
 import { EditorHistory } from './editorHistory';
 import { SelectionIntent } from './selectionIntent';
@@ -8,7 +9,7 @@ import { receiveSharedPublish } from '../publishing/sharedPublish';
 import { getEditorRole, subscribeRole } from '../roles/roleStore';
 import { assertClientAction, assertClientSourceChange } from '../roles/clientPolicy';
 import { occurrenceOf, parsePeer, type Peer } from './presence';
-import { selectionOwner, selectionLockedMessage } from './selectionLock';
+import { selectionOwner } from './selectionLock';
 import { CursorChannel, participantId } from './cursorChannel';
 import { ActionableNotice } from '../notifications/notice';
 import * as Y from 'yjs';
@@ -109,7 +110,7 @@ export class SharedDocument {
         this.connect();
       })
       .catch((error: unknown) => {
-        this.error = 'Offline storage unavailable: ' + String(error);
+        this.error = studioTranslate('studio.collab.offlineStorage', { message: String(error) });
         this.connect();
       });
   }
@@ -154,7 +155,7 @@ export class SharedDocument {
       this.saves.reset();
       if (event.code === 4001) {
         this.status = 'Sign-in required';
-        this.error = 'Your session expired or repository access changed. Your local edits are preserved. Sign in again.';
+        this.error = studioTranslate('studio.collab.sessionExpired');
         this.emit();
         return;
       }
@@ -194,7 +195,7 @@ export class SharedDocument {
     } else {
       this.disconnectConnection();
       this.status = 'Needs attention';
-      this.error = 'Save confirmation did not arrive. Your local edits are preserved. Reload Studio to retry.';
+      this.error = studioTranslate('studio.collab.saveUnconfirmed');
       this.emit();
     }
   }
@@ -208,7 +209,7 @@ export class SharedDocument {
         if (message['type'] === 'sync') {
           const epoch = string(message['epoch'], 100);
           if (this.epoch && this.epoch !== epoch) {
-            this.error = 'The server draft was replaced. This browser still has the previous draft; export its source before clearing this site’s stored data.';
+            this.error = studioTranslate('studio.collab.draftReplaced');
             // A different document identity cannot converge by reconnecting. Keep
             // the local draft intact and stop transport recovery until it is resolved.
             this.ready = false;
@@ -254,7 +255,7 @@ export class SharedDocument {
         this.receiveSelection(message);
       } else if (message['type'] === 'error') {
         this.refuseAction();
-        this.error = string(message['message']);
+        this.error = studioWireText(message);
         this.status = 'Needs attention';
       } else if (message['type'] === 'presence' && Array.isArray(message['peers'])) {
         this.peers = message['peers'].slice(0, 3000).map((peer: unknown) => parsePeer(peer, this.file));
@@ -345,7 +346,7 @@ export class SharedDocument {
     }
     this.selection = this.selected = string(message['selection'], 500);
     this.selectedOccurrence = occurrenceOf(message['occurrence']);
-    this.error = typeof message['message'] === 'string' ? message['message'] : '';
+    this.error = typeof message['message'] === 'string' ? studioWireText(message) : '';
   }
   select(selection: string, page = this.file, occurrence = 0) {
     if (this.socket?.readyState !== WebSocket.OPEN) {
@@ -370,13 +371,13 @@ export class SharedDocument {
     return !selectionOwner(this.peers, this.selfId, this.file, selection);
   }
   private lockNotice(owner: Peer, selection: string, page: string, occurrence: number) {
-    return new ActionableNotice(selectionLockedMessage(owner), {
+    return new ActionableNotice(studioTranslate('studio.collab.selectionLocked', { name: owner.name }), {
       person: { id: owner.githubId, name: owner.name },
       action: {
-        label: 'Take over',
+        label: studioTranslate('studio.collab.takeOver'),
         run: () => {
           if (this.closed || this.socket?.readyState !== WebSocket.OPEN) {
-            throw new Error('The session changed. Select the element again.');
+            throw new Error(studioTranslate('studio.collab.sessionChanged'));
           }
           this.page = page;
           this.occurrence = occurrence;
@@ -399,7 +400,7 @@ export class SharedDocument {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         off();
-        reject(new Error('The save did not finish.'));
+        reject(new Error(studioTranslate('studio.collab.saveUnfinished')));
       }, 15000);
       const off = this.subscribe(() => {
         if (this.status === 'Saved') {
@@ -447,7 +448,7 @@ export class SharedDocument {
   private async sendAction(action: TreeAction): Promise<boolean> {
     if (getEditorRole() === 'client') {
       if (!this.file.startsWith('src/pages/')) {
-        throw new Error('Component source is protected in Client mode.');
+        throw new Error(studioTranslate('studio.collab.sourceProtected'));
       }
       assertClientAction(this.text.toString(), action);
     }
@@ -455,12 +456,12 @@ export class SharedDocument {
       return false;
     }
     if (!this.synchronized || this.socket?.readyState !== WebSocket.OPEN) {
-      throw new Error('Reconnect before rearranging the page');
+      throw new Error(studioTranslate('studio.collab.reconnectFirst'));
     }
     const source = this.text.toString();
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(source));
     if (source !== this.text.toString()) {
-      throw new Error('The page changed; repeat the action');
+      throw new Error(studioTranslate('studio.collab.pageChanged'));
     }
     const checksum = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
     this.send({ type: 'action', epoch: this.epoch, checksum, action });

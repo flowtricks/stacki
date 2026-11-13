@@ -9,6 +9,7 @@
 // disconnects it, which writes the words back — the prop's default when it is
 // a plain string, the text it held before it was connected.
 
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import React, { useState } from 'react';
 import AutoTextarea from '../../ui/AutoTextarea';
 import { ResetMenu } from '../../ui/ResetLabel';
@@ -42,6 +43,7 @@ export function isTextConnection(expression: string, context: RichContext | unde
 }
 
 export default function TextConnectField(props: TextConnectFieldProps) {
+  const translate = useTranslate();
   const { node, bindContext, onSetText, onSetTextPieces } = props;
   const [picker, setPicker] = useState<FieldPickerAt | undefined>(undefined);
   const [menu, setMenu] = useState<FieldPosition | undefined>(undefined);
@@ -64,7 +66,7 @@ export default function TextConnectField(props: TextConnectFieldProps) {
       <label onClick={(event) => event.preventDefault()}>
         <span
           className={`prop-label${path === undefined ? '' : ' set'}`}
-          title={path === undefined ? undefined : 'Click to disconnect, ⌥-click disconnects at once'}
+          title={path === undefined ? undefined : translate('props.textConnect.disconnectHint')}
           onClick={(event) => {
             event.preventDefault();
             if (path === undefined) {
@@ -79,7 +81,7 @@ export default function TextConnectField(props: TextConnectFieldProps) {
           }}
         >
           <VariableTextSizeIcon size={12} className="prop-label-icon" />
-          Content
+          {translate('props.element.content')}
         </span>
         {onSetTextPieces !== undefined && (
           <BindHandle
@@ -100,7 +102,7 @@ export default function TextConnectField(props: TextConnectFieldProps) {
       {path === undefined ? (
         <AutoTextarea key={node.id} minRows={3} value={words} onChange={(event) => onSetText(event.target.value)} />
       ) : (
-        <div className="bind-input text-connection" role="textbox" aria-readonly="true" aria-label="Content">
+        <div className="bind-input text-connection" role="textbox" aria-readonly="true" aria-label={translate('props.element.content')}>
           <span className="expr-chip" data-expr={path}>
             {path}
           </span>
@@ -112,13 +114,22 @@ export default function TextConnectField(props: TextConnectFieldProps) {
           bindContext={bindContext}
           current={path}
           // A prop made for the text is read where a picked one would be: its words are the prop's default.
+          // i18n-ignore: the label seeds a prop name (text), written as code.
           seed={{ fit: 'content', label: 'Text', value: words.trim() }}
           onBindNew={place}
           onPick={place}
           onClose={() => setPicker(undefined)}
         />
       )}
-      {menu && <ResetMenu position={menu} resetLabel="Disconnect" onReset={disconnect} unbindLabel="" onClose={() => setMenu(undefined)} />}
+      {menu && (
+        <ResetMenu
+          position={menu}
+          resetLabel={translate('props.attributesBinding.disconnect')}
+          onReset={disconnect}
+          unbindLabel=""
+          onClose={() => setMenu(undefined)}
+        />
+      )}
     </div>
   );
 }

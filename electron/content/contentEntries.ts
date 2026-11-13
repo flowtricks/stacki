@@ -3,6 +3,8 @@ import fs from 'fs';
 import path from 'path';
 
 import { LIMITS } from '../../shared/core/limits';
+import type { MessageRef } from '../../shared/core/i18n/messageReference';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { toRecord, toArray } from '../../shared/core/record';
 import { MAIN_LIMITS } from '../lib/mainLimits';
 import { writeProjectText } from '../documents/documentWrites';
@@ -159,11 +161,22 @@ export interface ListResult {
   readonly entries: Entry[];
   readonly readOnly: boolean;
   readonly reason?: string | undefined;
+  readonly reasonRef?: MessageRef | undefined;
   readonly idsAreGuesses?: boolean;
   readonly idNote?: string | undefined;
+  readonly idNoteRef?: MessageRef | undefined;
   readonly shape?: string;
   readonly parsed?: boolean;
   readonly parserNote?: string | undefined;
+  readonly parserNoteRef?: MessageRef | undefined;
+}
+
+function idNoteFields(problem: Described): Pick<ListResult, 'idNote' | 'idNoteRef'> {
+  return { idNote: problem.message, ...(problem.messageRef === undefined ? {} : { idNoteRef: problem.messageRef }) };
+}
+
+function parserNoteFields(problem: Described): Pick<ListResult, 'parserNote' | 'parserNoteRef'> {
+  return { parserNote: problem.message, ...(problem.messageRef === undefined ? {} : { parserNoteRef: problem.messageRef }) };
 }
 
 /**
@@ -177,19 +190,21 @@ function listEntries(projectPath: string, collection: ContentCollection): ListRe
   if (loader.kind === 'file') {
     return fileEntries(projectPath, collection);
   }
-  return { entries: [], readOnly: true, reason: readOnlyReason(collection) };
+  return { entries: [], readOnly: true, ...readOnlyReason(collection) };
 }
 
-function readOnlyReason(collection: ContentCollection): string | undefined {
+function readOnlyReason(collection: ContentCollection): ReasonFields {
   const loader = collection.loader ?? {};
   if (loader.kind === 'custom') {
-    return (
-      `${collection.name} is built by a loader in this project, not stored in a file. ` +
-      'Its entries are rebuilt from scratch on every sync, so anything written here would be ' +
-      'overwritten.'
-    );
+    return reasonFields(described('cmsBackend.entries.customLoader', { collection: collection.name }));
   }
-  return undefined;
+  return {};
+}
+
+// A reason as the English text beside the reference the renderer translates.
+type ReasonFields = { readonly reason?: string; readonly reasonRef?: MessageRef };
+function reasonFields(problem: Described): ReasonFields {
+  return { reason: problem.message, ...(problem.messageRef === undefined ? {} : { reasonRef: problem.messageRef }) };
 }
 
 const patternsOf = (pattern: LoaderInfo['pattern']): RegExp[] => {
@@ -251,10 +266,7 @@ function globEntries(projectPath: string, collection: ContentCollection): ListRe
     // rule it uses — so an id shown here is a guess, and renaming the file is
     // not what renames the entry.
     idsAreGuesses: !!generated,
-    idNote: generated
-      ? `${collection.name} builds its ids in the loader, from the entry's own fields. ` +
-        'The ids shown are the file paths, which is not what other collections reference.'
-      : undefined,
+    ...(generated ? idNoteFields(described('cmsBackend.entries.idsGenerated', { collection: collection.name })) : {}),
   };
 }
 
@@ -354,20 +366,20 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
     return {
       entries: [],
       readOnly: true,
-      reason: `Stacki cannot read ${path.extname(rel)} data files yet.`,
+      ...reasonFields(described('cmsBackend.data.unreadableFormat', { extension: path.extname(rel) })),
     };
   }
   let text = '';
   try {
     if (fs.statSync(abs).size > MAIN_LIMITS.contentDataFileBytesMax) {
-      return { entries: [], readOnly: true, reason: `${rel} is too large to edit here.` };
+      return { entries: [], readOnly: true, ...reasonFields(described('cmsBackend.data.tooLarge', { file: rel })) };
     }
     text = fs.readFileSync(abs, 'utf8');
   } catch (error: unknown) {
     return {
       entries: [],
       readOnly: true,
-      reason: `Could not read ${rel} — ${errorMessage(error)}`,
+      ...reasonFields(described('cmsBackend.data.readFailed', { file: rel, detail: errorMessage(error) })),
     };
   }
 
@@ -378,7 +390,7 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
     return {
       entries: [],
       readOnly: true,
-      reason: `${rel} could not be parsed — ${errorMessage(error)}`,
+      ...reasonFields(described('cmsBackend.data.parseFailed', { file: rel, detail: errorMessage(error) })),
     };
   }
 
@@ -402,11 +414,7 @@ function fileEntries(projectPath: string, collection: ContentCollection): ListRe
     // entry holds was never in the file — and the fields it invented cannot be
     // written back through it.
     parsed: !!loader.parser,
-    parserNote: loader.parser
-      ? `${collection.name} is parsed by a function in the content config before Astro sees it. ` +
-        'Fields that are not in the file itself were made by that parser: they are shown, ' +
-        'but editing one here would have nowhere to go.'
-      : undefined,
+    ...(loader.parser ? parserNoteFields(described('cmsBackend.entries.parserNote', { collection: collection.name })) : {}),
   };
 }
 

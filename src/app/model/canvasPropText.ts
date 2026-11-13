@@ -31,6 +31,8 @@ import { formatInlineSelection, inlineStatesAt, inlineWithValue } from './canvas
 export { propName, type ComponentSource } from './canvasPropSites';
 
 export interface PropTextContext extends PropSiteContext {
+  /** The canvas badge for this text, already in the person's language: "Component text · this instance". */
+  readonly label: string;
   /** The open page's file, against which its imports resolve. */
   readonly file: string;
   readonly nodes: readonly PropNode[];
@@ -40,7 +42,6 @@ export interface PropTextContext extends PropSiteContext {
 
 // Instances considered per page.
 const INSTANCES_MAX = 64;
-const LABEL = 'Component text · this instance';
 
 export async function canvasPropEdits(document: CanvasTextDocument, context: PropTextContext): Promise<CanvasTextEdit[]> {
   const sites = propSiteReader(context);
@@ -62,7 +63,7 @@ export async function canvasPropEdits(document: CanvasTextDocument, context: Pro
       if (value === undefined) {
         continue;
       }
-      const shown = { instance, site, value, scope, setProp: context.setProp };
+      const shown = { instance, site, value, scope, setProp: context.setProp, label: context.label };
       edits.push(...(site.kind === 'text' ? [textEdit(shown, site)] : htmlEdits(shown, site)));
     }
   }
@@ -76,6 +77,7 @@ interface ShownProp {
   readonly value: string;
   readonly scope: string;
   readonly setProp: PropTextContext['setProp'];
+  readonly label: string;
 }
 
 // `{prop}`: the editor holds the rendered words with the template's whitespace
@@ -90,7 +92,7 @@ function textEdit(shown: ShownProp, site: PropTextSite & { readonly kind: 'text'
       path: site.path,
       parent: site.parent,
       value,
-      label: LABEL,
+      label: shown.label,
       tag: site.tag,
       siblings: site.siblings,
       nested: false,
@@ -134,7 +136,7 @@ function htmlEdits(shown: ShownProp, site: PropTextSite & { readonly kind: 'html
         path,
         parent: site.parent,
         value,
-        label: LABEL,
+        label: shown.label,
         tag: site.tag,
         siblings: [],
         nested: trail.length > 1,

@@ -1,3 +1,4 @@
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
 import PropertyReadOnlyFields from './PropertyReadOnlyFields';
 import { PropertyConditions, PropertyDeclarationInfo } from './PropertyDeclarationInfo';
@@ -62,6 +63,8 @@ export function propertyIsEditable(property: ComponentProperty, data: Pick<Compo
 }
 
 export function PropertyEditor(props: PropertyEditorProps) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const editorRef = useRef<HTMLDivElement>(null);
   const draft = usePropertyEditorDraft(props);
   return (
@@ -84,16 +87,18 @@ export function PropertyEditor(props: PropertyEditorProps) {
         <>
           <header>
             <div className="property-editor-title">
-              <strong>{draft.exists ? 'Property settings' : 'New property'}</strong>
+              <strong>{draft.exists ? translate('componentProps.dialog.title') : translate('componentProps.editor.newProperty')}</strong>
               <PropertyDeclarationInfo property={props.property} />
             </div>
-            <button aria-label="Close property settings" disabled={props.access === 'saving'} onClick={close}>
+            <button aria-label={translate('componentProps.dialog.close')} disabled={props.access === 'saving'} onClick={close}>
               ×
             </button>
           </header>
           <PropertyConditions property={props.property} />
           <PropertyShareNotice property={props.property} onOpenFile={props.onOpenFile} />
-          {props.property.editing?.kind === 'override' && <p className="property-help">{props.property.editing.reason}</p>}
+          {props.property.editing?.kind === 'override' && (
+            <p className="property-help">{translateDescribed({ message: props.property.editing.reason, messageRef: props.property.editing.reasonRef })}</p>
+          )}
           {props.access === 'readonly' ? (
             <PropertyReadOnlyFields property={draft.property} />
           ) : (
@@ -140,6 +145,7 @@ export function PropertySettingsFields(props: {
 }
 
 function usePropertyEditorDraft(props: Pick<PropertyEditorProps, 'property' | 'originalName' | 'frontmatter' | 'onSave' | 'saveHost'>) {
+  const translate = useTranslate();
   // The list setting's own type is written with the first save, not on opening.
   const [initial] = useState(() => ({ property: withListSettingType(props.property, listPropsOf(props.frontmatter)), optionRenames: [] }));
   // A new prop saves nothing itself until it exists (submit, below).
@@ -162,13 +168,13 @@ function usePropertyEditorDraft(props: Pick<PropertyEditorProps, 'property' | 'o
   // There is no Save button.
   // Enter and the blur after it would both create it; the first one does.
   const creating = useRef<'new' | 'sending' | 'created'>(props.originalName === '' ? 'new' : 'created');
-  const ready = (): boolean => creating.current === 'new' && property.name.trim() !== '' && propertyProblem(property) === undefined;
+  const ready = (): boolean => creating.current === 'new' && property.name.trim() !== '' && propertyProblem(property, translate) === undefined;
   const submit = (after: 'edit' | 'close'): void => {
     assert(props.originalName === '', 'submit: only a new prop is created');
     if (creating.current !== 'new') {
       return;
     }
-    const problem = propertyProblem(property);
+    const problem = propertyProblem(property, translate);
     if (problem !== undefined) {
       report({ error: problem, notice: '' });
       return;
@@ -302,12 +308,18 @@ function placeOf(type: string): 'kind' | 'options' {
 // Delete, for a prop that has one to lose. Nothing here saves: an existing prop
 // saves itself, and a new one is created when its name is committed.
 function PropertyActions({ name, removable, onRemove }: { readonly name: string; readonly removable: boolean; readonly onRemove: (name: string) => void }) {
+  const translate = useTranslate();
   if (name === '' || !removable) {
     return undefined;
   }
   return (
     <div className="property-actions">
-      <button className="danger" aria-label={`Delete ${name}`} title="Delete property" onClick={() => onRemove(name)}>
+      <button
+        className="danger"
+        aria-label={translate('componentProps.editor.deleteNamed', { name })}
+        title={translate('componentProps.editor.delete')}
+        onClick={() => onRemove(name)}
+      >
         <TrashIcon size={14} />
       </button>
     </div>
@@ -315,10 +327,11 @@ function PropertyActions({ name, removable, onRemove }: { readonly name: string;
 }
 
 function PropertyIdentity({ form, creating, inherited }: { readonly form: PropertyForm; readonly creating: boolean; readonly inherited: boolean }) {
+  const translate = useTranslate();
   return (
     <>
       <label>
-        Name
+        {translate('componentProps.editor.name')}
         <input
           value={form.nameText}
           maxLength={PROPERTY_LIMITS.nameCharsMax}
@@ -358,13 +371,14 @@ function commit(form: PropertyForm, { creating }: { readonly creating: boolean }
 
 // What a rename rewrites. A shared prop's reaches every file its type does, so they are listed before it is applied.
 function RenameHelp({ property }: { readonly property: ComponentProperty }) {
+  const translate = useTranslate();
   const share = property.shared;
   if (share === undefined) {
-    return <p className="property-help">Renaming updates this component’s prop, the variable that reads it, and its instances across the website.</p>;
+    return <p className="property-help">{translate('componentProps.editor.renameHelp')}</p>;
   }
   return (
     <div className="property-help" role="status">
-      Renaming rewrites {share.typeName} and every read of it, in these files:
+      {translate('componentProps.editor.renameShared', { typeName: share.typeName })}
       <ul className="property-rename-files">
         {shareRenameFiles(share).map((file) => (
           <li key={file}>{file}</li>

@@ -1,6 +1,7 @@
-/* Settings → Roles: one card per role on a soft fill, its members as chips and
-   its access as switches grouped by area. Cards and rows are separated by space
-   and fills, never lines; a chip is a fill, not an outline. */
+/* Settings → Roles: one card per role on a soft fill: a header, then MEMBERS, SIDEBAR APPS and the
+   collapsed permissions as sections. Rhythm: 16px card padding, 20px between sections, 8px inside a
+   section, 12px between cards. Cards and rows are separated by space and fills, never lines; a chip
+   is a fill, not an outline. */
 .app-roles {
   display: flex;
   flex-direction: column;
@@ -22,20 +23,56 @@
 .app-role {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: 20px;
+  padding: 16px;
   border-radius: 8px;
   background: var(--bg-hover);
+}
+/* Cards sit 12px apart: the section's own 8px gap plus this. */
+.app-role + .app-role {
+  margin-top: 4px;
 }
 .app-role-heading {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 24px;
 }
 .app-role-heading h3 {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
+}
+/* The member count: dim, beside the name. */
+.app-role-count {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A small uppercase dim label opens every section; a count may follow it. */
+.app-role-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.app-role-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 16px;
+  color: var(--text-dim);
+}
+.app-role-section-heading h4 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 .app-role-name {
   flex: 1 1 auto;
@@ -45,19 +82,11 @@
   border-radius: 6px;
   background: #ffffff10;
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
-.app-role-badge {
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--accent-soft);
-  color: var(--text-dim);
-  font-size: 11px;
-  font-weight: 500;
-}
 .app-role-icon {
-  margin-left: auto;
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -70,61 +99,123 @@
   background: transparent;
   color: var(--text-dim);
 }
-/* Delete turns red on hover, as the editor's other destructive buttons do. */
-.app-role-icon.is-danger:hover:not(:disabled) {
-  background: rgba(255, 90, 90, 0.16);
-  color: #ff9b9b;
-}
-/* Duplicate and Delete sit together at the end of the heading. */
-.app-role-icon + .app-role-icon {
-  margin-left: 0;
+/* A role card is itself the hover fill, so its "…" brightens on a lighter wash. */
+.app-settings .app-role .more-menu-button:hover:not(:disabled),
+.app-settings .app-role .more-menu-button:focus-visible,
+.app-settings .app-role .more-menu-button.is-open {
+  background: #ffffff14;
 }
 .app-role-icon:hover:not(:disabled) {
   background: #ffffff14;
   color: var(--text);
 }
-.app-role-members ul {
+.app-role-members {
+  position: relative;
+}
+/* One inset card holds the people as rows and, as its last row, the add field. Three surface steps, no lines:
+   the role card, then this card a clear step darker, then the add row a step lighter than the inset. The custom
+   properties are solid so their text contrast is exact (test/renderer/app/rolesContrast.test.js). Rows are 36px; the list scrolls inside ~6 rows
+   with a soft fade at its foot. */
+.app-role-people {
+  --people-inset: #121212;
+  --people-add: #202020;
+  --people-add-focus: #2b2b2b;
+  --people-button-off: #3a3a3a;
+  --people-button-on: #006fba;
+  --people-button-hover: #0077c7;
+  --people-you: #1b4a73;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--people-inset);
+}
+.app-role-people-list {
+  display: flex;
+  flex-direction: column;
   margin: 0;
   padding: 0;
   list-style: none;
 }
+.app-role-people-list.is-scrolling {
+  max-height: 216px;
+  overflow-y: auto;
+  -webkit-mask-image: linear-gradient(#000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(#000 calc(100% - 24px), transparent);
+}
 .app-role-chip {
-  display: inline-flex;
+  display: flex;
+  flex: none;
   align-items: center;
-  gap: 4px;
-  min-height: 24px;
+  gap: 10px;
+  min-height: 36px;
   padding: 0 4px 0 8px;
   border-radius: 6px;
-  background: #ffffff10;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 500;
 }
-.app-role-chip:not(:has(button)) {
-  padding-right: 8px;
+.app-role-chip:hover {
+  background: var(--bg-hover);
 }
+.app-role-chip .history-avatar {
+  width: 24px;
+  height: 24px;
+  margin-left: 0;
+  font-size: 10px;
+  line-height: 24px;
+}
+.app-role-person-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The signed-in person's own row says so quietly. */
+.app-role-you {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--people-you);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 500;
+}
+/* The remove × sits at the row's end and shows on hover and keyboard focus only. */
 .app-role-chip button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  flex: none;
+  width: 26px;
+  height: 26px;
   min-height: 0;
+  margin-left: auto;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text-dim);
+  opacity: 0;
+}
+.app-role-chip:hover button,
+.app-role-chip button:focus-visible {
+  opacity: 1;
 }
 .app-role-chip button:hover {
   background: #ffffff14;
   color: var(--text);
 }
+/* The empty state is one dim line inside the card, above the add row. */
 .app-role-none {
-  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 8px;
+  color: var(--text-faint);
   font-size: 12px;
 }
+/* The new-role form (RolesSettings.tsx) and, inside a card, the compact member field (MemberPicker.tsx). */
 .app-role-add {
   display: flex;
   justify-content: flex-start;
@@ -159,6 +250,65 @@
 .app-role-add button:disabled {
   opacity: 0.45;
 }
+/* In a card the add field is the card's last row, a step lighter than the people above it: a person-plus mark,
+   the input, and the Add button at the row's end, quiet until there is text and accent once it can add. */
+.app-role-members .app-role-add {
+  margin-top: 0;
+}
+.app-role-members .app-role-member-field {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 4px 0 10px;
+  border-radius: 6px;
+  background: var(--people-add);
+}
+.app-role-members .app-role-member-field:focus-within {
+  background: var(--people-add-focus);
+}
+.app-role-add-icon {
+  flex: none;
+  color: var(--text-dim);
+}
+.app-role-members .app-role-add input::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+.app-role-members .app-role-add input {
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 34px;
+  padding: 0;
+  background: transparent;
+  font-size: 13px;
+}
+.app-role-members .app-role-add input:focus-visible {
+  outline: none;
+}
+.app-role-members .app-role-add .app-role-add-button {
+  flex: none;
+  min-height: 26px;
+  padding: 0 12px;
+  border-radius: 6px;
+  background: var(--people-button-off);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 600;
+}
+.app-role-members .app-role-add .app-role-add-button:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.app-role-members .app-role-add .app-role-add-button:not(:disabled) {
+  background: var(--people-button-on);
+  color: #fff;
+}
+.app-role-members .app-role-add .app-role-add-button:hover:not(:disabled) {
+  background: var(--people-button-hover);
+}
 /* The permission grid: one group under another, each a heading over its
    switches in two even columns, so every group reads the same way down the
    card instead of groups of different heights packed side by side. */
@@ -169,7 +319,8 @@
 }
 .app-role-group {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* Two columns while each is at least 210px wide (the dialog is wide), one at the narrowest. */
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: 0 24px;
 }
 .app-role-group > :not(.app-role-toggle) {
@@ -262,11 +413,6 @@
 button.app-role-name-button:hover:not(:disabled) {
   background: #ffffff10;
 }
-@media (max-width: 560px) {
-  .app-role-group {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 .app-role button:focus-visible,
 .app-role input:focus-visible,
 .app-roles-new button:focus-visible,
@@ -280,6 +426,10 @@ button.app-role-name-button:hover:not(:disabled) {
 .app-role-pins {
   display: flex;
   flex-direction: column;
+  gap: 8px;
+}
+.app-role-pins-skeleton {
+  display: flex;
   gap: 6px;
 }
 .app-role-pin-list {
@@ -292,15 +442,31 @@ button.app-role-name-button:hover:not(:disabled) {
 }
 .app-role-pin {
   position: relative;
+  width: fit-content;
+  min-width: 200px;
+  max-width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 28px;
+  min-height: 26px;
   padding: 0 4px;
   border-radius: 6px;
   background: #ffffff10;
   font-size: 12px;
   cursor: grab;
+}
+/* The grip and the remove × show on hover and keyboard focus; at rest a pin reads as its logo and name. */
+.app-role-pin .app-role-pin-grip,
+.app-role-pin .app-role-pin-remove {
+  opacity: 0;
+}
+.app-role-pin:hover .app-role-pin-grip,
+.app-role-pin:hover .app-role-pin-remove,
+.app-role-pin:focus-visible .app-role-pin-grip,
+.app-role-pin:focus-visible .app-role-pin-remove,
+.app-role-pin .app-role-pin-remove:focus-visible {
+  opacity: 1;
 }
 .app-role-pin:focus-visible {
   outline: none;
@@ -362,8 +528,32 @@ button.app-role-name-button:hover:not(:disabled) {
   background: #ffffff14;
   color: var(--text);
 }
-.app-role-pins-dropdown {
-  width: 220px;
+/* "+ Add app": a ghost trigger sized to its content, after the pins, not a full-width field. */
+.app-role-pins-add {
+  display: flex;
+}
+.app-role-pins-dropdown.dd-trigger {
+  width: auto;
+  min-height: 24px;
+  padding: 0 8px 0 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.app-role-pins-dropdown.dd-trigger::before {
+  content: '+';
+  font-size: 14px;
+  line-height: 1;
+}
+.app-role-pins-dropdown.dd-trigger:hover {
+  background: #ffffff10;
+  color: var(--text);
+}
+.app-role-pins-dropdown .dd-label.dim {
+  flex: none;
+  color: inherit;
+}
+.app-role-pins-dropdown .dd-chevron {
+  display: none;
 }
 .app-role-pins-empty {
   margin: 0;

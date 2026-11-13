@@ -14,6 +14,7 @@ import { isAstroProject } from '../project/projectFiles';
 import { detectPackageManager, installArguments } from '../project/packageManager';
 import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
 import type { MainHost } from './mainHost';
+import { translateMain } from '../lib/mainLocale';
 
 export function registerProjectHandlers(host: Pick<MainHost, 'ipcMain' | 'send' | 'showOpenDialog'>): void {
   registerProjectOpenDialogHandlers(host);
@@ -24,7 +25,7 @@ export function registerProjectHandlers(host: Pick<MainHost, 'ipcMain' | 'send' 
 function registerProjectOpenDialogHandlers({ ipcMain, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
   ipcMain.handle('project:openDialog', async () => {
     const result = await showOpenDialog({
-      title: 'Open an Astro project',
+      title: translateMain('dialog.open.project.title'),
       properties: ['openDirectory'],
     });
     if (result.canceled || !result.filePaths.length) {
@@ -78,7 +79,7 @@ function registerProjectCreateAstroHandlers({ ipcMain, send, showOpenDialog }: P
       install,
       manager: packageManager,
       history: git,
-      label: 'Astro',
+      label: 'Astro', // i18n-ignore: the framework's name.
     });
     return { ok: true as const, installed: install, projectPath: directory };
   });
@@ -87,7 +88,7 @@ function registerProjectCreateAstroHandlers({ ipcMain, send, showOpenDialog }: P
   // starter arrives as a directory of its own, named by the user.
   ipcMain.handle('project:parentDialog', async () => {
     const result = await showOpenDialog({
-      title: 'Choose where the site should go',
+      title: translateMain('dialog.open.siteTarget.title'),
       properties: ['openDirectory', 'createDirectory'],
     });
     if (result.canceled || !result.filePaths.length) {

@@ -2,6 +2,8 @@
 // URL, reloading, opening a component, previewing a commit, git info, and
 // composing the lifecycle (App.tsx).
 
+import { markRenderer } from '../startupMarks';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ScanResult } from '../../../shared/properties/projectScan';
 import type { WireCommitInfo, WireInjectedRoute } from '../../../shared/ipc/ipcResults';
@@ -64,6 +66,7 @@ export function useLifecycle(coreState: ReturnType<typeof useCoreState>) {
 
 // Opening a page, and opening a project.
 export function useSelectPage(lifecycle: ReturnType<typeof useLifecycle>, coreState: ReturnType<typeof useCoreState>) {
+  const translate = useTranslate();
   const { openFile, rescan, showToast, startPreview } = lifecycle;
   const { setDevice, setLeftTab, setProject } = coreState;
 
@@ -96,16 +99,17 @@ export function useSelectPage(lifecycle: ReturnType<typeof useLifecycle>, coreSt
       void watchProject(projectPath)
         .then((started) => {
           if (!started) {
-            showToast('Couldn’t watch project files. External edits may need a refresh.', 'error');
+            showToast(translate('shell.navigation.watchFailedHint'), 'error');
           }
         })
         .catch((error: unknown) => {
-          showToast(`Couldn’t watch project files: ${cleanError(error)}`, 'error');
+          showToast(translate('shell.navigation.watchFailed', { message: cleanError(error) }), 'error');
         });
       // Enter loading before the scan yields so opening never flashes offline.
       // Main owns dependency installation and reports the final startup failure.
       void startPreview(projectPath);
       const result = await rescan(projectPath);
+      markRenderer('stacki:project-ready');
 
       const first = result.pages.find((page) => page.name === 'index.astro') || result.pages[0] || undefined;
       if (first) {
@@ -113,7 +117,7 @@ export function useSelectPage(lifecycle: ReturnType<typeof useLifecycle>, coreSt
         void selectPage(first);
       }
     },
-    [rescan, startPreview, selectPage, showToast, setDevice, setLeftTab, setProject],
+    [rescan, startPreview, selectPage, showToast, setDevice, setLeftTab, setProject, translate],
   );
 
   // A window can come up owing a project: one was picked from the menu and the
@@ -144,6 +148,7 @@ export function useProjectMenu(
   lifecycle: ReturnType<typeof useLifecycle>,
   selectPageScope: ReturnType<typeof useSelectPage>,
 ) {
+  const translate = useTranslate();
   const { projectRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState } = coreState;
   const { setSelectedId } = coreState;
   const { flushSave, leaveProject, pageLoadRef, reportFailure, showToast } = lifecycle;
@@ -185,7 +190,7 @@ export function useProjectMenu(
       const request = {};
       pageLoadRef.current = request;
       const latestRequest = () => request === pageLoadRef.current;
-      if (!(await savedForNavigation(flushSave, latestRequest, showToast))) {
+      if (!(await savedForNavigation(translate, flushSave, latestRequest, showToast))) {
         return;
       }
       setEditStack([]);
@@ -194,7 +199,7 @@ export function useProjectMenu(
       setSelectedId(undefined);
       setHoverNodeId(undefined);
     },
-    [flushSave, showToast, pageLoadRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState, setSelectedId],
+    [flushSave, showToast, pageLoadRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState, setSelectedId, translate],
   );
   return { selectRoute };
 }
@@ -205,6 +210,7 @@ export function useGoToUrl(
   coreState: ReturnType<typeof useCoreState>,
   lifecycle: ReturnType<typeof useLifecycle>,
 ) {
+  const translate = useTranslate();
   const { selectPage, setUrlDraft } = selectPageScope;
   const { scan } = coreState;
   const { showToast } = lifecycle;
@@ -237,9 +243,9 @@ export function useGoToUrl(
         void selectPage(page);
         return;
       }
-      showToast(`No page matches ${route}`, 'error');
+      showToast(translate('shell.navigation.noPageMatches', { route }), 'error');
     },
-    [scan.pages, showToast, selectPage, setUrlDraft],
+    [scan.pages, showToast, selectPage, setUrlDraft, translate],
   );
   return { goToUrl };
 }
@@ -321,6 +327,7 @@ export function useReload(coreState: ReturnType<typeof useCoreState>, lifecycle:
 
 // Drilling into a component.
 export function useOpenComponent(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
+  const translate = useTranslate();
   const { editStackRef, pageStateRef, projectRef, scan } = coreState;
   const { openFile, pageLoadRef, showToast } = lifecycle;
 
@@ -334,7 +341,7 @@ export function useOpenComponent(coreState: ReturnType<typeof useCoreState>, lif
       // page's own import first, and fall back to matching by filename.
       const { currentPage: host, pageState: state } = pageStateRef.current;
       if (host?.path?.includes('/.stacki/canvas/')) {
-        showToast('Edit this instance’s props and children, then save its defaults.', 'info');
+        showToast(translate('shell.navigation.editDefaults'), 'info');
         return;
       }
       const request = pageLoadRef.current;
@@ -361,13 +368,13 @@ export function useOpenComponent(coreState: ReturnType<typeof useCoreState>, lif
           comp = { name: fileName.replace(/\.astro$/i, ''), path: file };
         } else if (file) {
           // A framework island (.jsx/.svelte/…) has no Astro tree to show.
-          showToast(`<${name}> is a ${file.split('.').pop()} component — edit it in code.`, 'error');
+          showToast(translate('shell.navigation.islandComponent', { name, extension: file.split('.').pop() ?? '' }), 'error');
           return;
         }
       }
       comp = comp || componentNamed(scan, name);
       if (!comp) {
-        showToast(`Can't find a file for <${name}>.`, 'error');
+        showToast(translate('shell.navigation.noComponentFile', { name }), 'error');
         return;
       }
       const nodes = state?.editable ? state.model.nodes : [];
@@ -375,13 +382,14 @@ export function useOpenComponent(coreState: ReturnType<typeof useCoreState>, lif
       const entry = componentEntry(editStackRef.current, nodes, comp, instance);
       await openFile(entry, { nextStack: stackWith(entry), selectionPath: undefined });
     },
-    [scan, openFile, showToast, editStackRef, pageLoadRef, pageStateRef, projectRef],
+    [scan, openFile, showToast, editStackRef, pageLoadRef, pageStateRef, projectRef, translate],
   );
   return { openComponent };
 }
 
 // Backing out of a component, and previewing an earlier version.
 export function useCommitPreview(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
+  const translate = useTranslate();
   const { editStackRef, project, setBusy, setPreviewInfo, setPreviewRef } = coreState;
   const { openFile, showToast } = lifecycle;
 
@@ -427,7 +435,7 @@ export function useCommitPreview(coreState: ReturnType<typeof useCoreState>, lif
         return;
       }
       assert(commit.hash, 'Previewed commit must have a hash');
-      setBusy('Getting that version ready…');
+      setBusy(translate('shell.navigation.versionReady'));
       try {
         const preview = await previewProjectCommit(project.path, commit.hash);
         setPreviewRef(commit.hash);
@@ -438,7 +446,7 @@ export function useCommitPreview(coreState: ReturnType<typeof useCoreState>, lif
         setBusy(undefined);
       }
     },
-    [project, showToast, setBusy, setPreviewInfo, setPreviewRef],
+    [project, showToast, setBusy, setPreviewInfo, setPreviewRef, translate],
   );
 
   // Named apart from exitPreview below, which is the app's own interactive

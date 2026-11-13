@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { studioTranslate } from './studioWords';
 import { record, string } from '../../shared/validation';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { parseDraftSegments, plainTextOf, type ComposerSegments } from '../../../vendor/stacki/shared/properties/ai/mentions';
@@ -59,7 +60,7 @@ interface ChatState {
 export function newThread(model = ''): ChatThread {
   return {
     id: crypto.randomUUID(),
-    title: 'New chat',
+    title: studioTranslate()('ai.sessions.newChat'),
     draft: '',
     segments: [],
     images: [],
@@ -193,7 +194,7 @@ function storageError() {
   state = {
     ...state,
     ready: true,
-    notice: 'Chat history could not be saved on this device. Keep this tab open.',
+    notice: studioTranslate()('ai.studio.storageFailed'),
   };
   emit();
 }
@@ -277,7 +278,7 @@ function parseThread(value: unknown): ChatThread {
     model: string(chat['model'], 160),
     messages: messages.map(parseMessage),
     status: 'idle',
-    error: chat['status'] === 'idle' ? '' : 'This request was interrupted by a reload. Check the draft before retrying.',
+    error: chat['status'] === 'idle' ? '' : studioTranslate()('ai.studio.interrupted'),
     pinned: chat['pinned'] === true,
     updatedAt: typeof chat['updatedAt'] === 'number' && Number.isSafeInteger(chat['updatedAt']) && chat['updatedAt'] >= 0 ? chat['updatedAt'] : 0,
   };

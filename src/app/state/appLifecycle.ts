@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useErrorToasts } from '../../ui/errorNotices';
 import { usePageTitles } from '../../features/pages/usePageTitles';
 import { astroChangeMessages } from '../../../shared/properties/astroFileChanges';
@@ -18,6 +19,7 @@ import { createEntrySender } from '../../editor/pageSender';
 import { createCoalescedRun } from '../../lib/coalescedRun';
 import { EditDrafts } from '../../editor/pageEdits';
 import { type RejectionReason } from '../../../shared/engine/intent';
+import { REJECTION_KEYS } from '../rejectionMessages';
 import { cleanError, stripAnsi } from '../../lib/cleanError';
 import { type AppHistory, type ProjectScans, type ToastKind } from '../appTypes';
 import { toEditorPageState, type CurrentPage, type EditorPageState, type OpenFile } from '../../editor/pageState';
@@ -357,6 +359,7 @@ export function usePreviewStart(
   const { setTrailingSlash } = coreState;
   const { showToast } = toasts;
   const { diagnose } = assetPickScope;
+  const translate = useTranslate();
 
   const startPreview = useCallback(
     async (projectPath: string) => {
@@ -372,24 +375,20 @@ export function usePreviewStart(
         setDevStatus('on');
         setDevDiag(undefined);
         if ('external' in started && started.external) {
-          showToast(
-            `Reusing the dev server already running for this project (${url}) — ` +
-              "canvas outlines need the app's own server, so stop that one to enable them.",
-            'info',
-          );
+          showToast(translate('shell.preview.reusing', { url }), 'info');
         }
       } catch (error: unknown) {
         setDevStatus('off');
         setDevUrl(undefined);
         setBusy(undefined);
         const message = cleanError(error);
-        showToast(`Preview failed to start: ${message}`, 'error');
+        showToast(translate('shell.preview.failedToStart', { message }), 'error');
         devLogRef.current = message;
         setDevLog(message);
         diagnose();
       }
     },
-    [showToast, diagnose, devLogRef, setBusy, setDevDiag, setDevLog, setDevStatus, setDevUrl, setTrailingSlash],
+    [showToast, diagnose, devLogRef, setBusy, setDevDiag, setDevLog, setDevStatus, setDevUrl, setTrailingSlash, translate],
   );
   return { startPreview };
 }
@@ -422,6 +421,10 @@ export function useBranchPreview(coreState: ReturnType<typeof useCoreState>, sta
 export function useSavers(toasts: ReturnType<typeof useToasts>, coreState: ReturnType<typeof useCoreState>) {
   const { showToast } = toasts;
   const { pageStateRef, setPageState } = coreState;
+  // The file saver is built once, so it reads the language through a ref rather than closing over the first render's.
+  const translate = useTranslate();
+  const translateRef = useRef(translate);
+  translateRef.current = translate;
 
   // ----------------------------------------------------------------
   // Page loading & saving
@@ -430,7 +433,7 @@ export function useSavers(toasts: ReturnType<typeof useToasts>, coreState: Retur
   const fileSaverRef = useRef<ReturnType<typeof createFileSaver> | undefined>(undefined);
   if (!fileSaverRef.current) {
     fileSaverRef.current = createFileSaver({
-      onError: (error) => showToast(`Save failed: ${cleanError(error)}`, 'error'),
+      onError: (error) => showToast(translateRef.current('shell.save.failed', { message: cleanError(error) }), 'error'),
     });
   }
   // The open page's unsent edit requests (step 6, pageEdits.ts).
@@ -461,7 +464,7 @@ export function useSavers(toasts: ReturnType<typeof useToasts>, coreState: Retur
         state: () => pageStateRef.current.pageState,
         update: updatePage,
         conflict: (reason) => setConflictReason(reason),
-        notice: (message) => showToast(message, 'error'),
+        notice: (reason) => showToast(translateRef.current('shell.rejection.couldntApply', { reason: translateRef.current(REJECTION_KEYS[reason]) }), 'error'),
         onAppliedUrgentEdit: () => {
           tellCanvas({ type: 'avb:patch-now' });
         },
@@ -492,6 +495,7 @@ export function useFlushing(savers: ReturnType<typeof useSavers>, coreState: Ret
   const { fileSaver, pageSaver } = savers;
   const { pageStateRef, saveTimer } = coreState;
   const { showToast } = toasts;
+  const translate = useTranslate();
 
   // Autosave: a conflicted page simply stays unsaved (plan §7).
   const autosave = useCallback(() => Promise.all([pageSaver.flush(), fileSaver.flush()]), [fileSaver, pageSaver]);
@@ -504,10 +508,10 @@ export function useFlushing(savers: ReturnType<typeof useSavers>, coreState: Ret
     saveTimer.current = undefined; // Flushed now: nothing is pending for a live request to keep.
     const [page] = await autosave();
     if (page === 'conflicted') {
-      const name = pageStateRef.current.currentPage?.name ?? 'This page';
-      throw new Error(`${name} has unsaved edits that conflict with a change on disk. ` + 'Reload it or review it in code first.');
+      const name = pageStateRef.current.currentPage?.name;
+      throw new Error(name === undefined ? translate('shell.flush.conflictPage') : translate('shell.flush.conflictNamed', { name }));
     }
-  }, [autosave, pageStateRef, saveTimer]);
+  }, [autosave, pageStateRef, saveTimer, translate]);
 
   // Only the most recent navigation is allowed to install its read result.
   // The latest navigation, as an identity token: a read that finds another
@@ -540,12 +544,12 @@ export function useFlushing(savers: ReturnType<typeof useSavers>, coreState: Ret
       try {
         await flushSave();
       } catch (error: unknown) {
-        showToast(`Couldn’t close the project: ${cleanError(error)}`, 'error');
+        showToast(translate('shell.project.closeFailed', { message: cleanError(error) }), 'error');
         return;
       }
       await closeProject(next);
     },
-    [flushSave, showToast],
+    [flushSave, showToast, translate],
   );
   return { autosave, dropPageHistory, flushSave, historyRef, leaveProject, pageLoadRef };
 }
@@ -559,6 +563,7 @@ export function useOpenFile(
 ) {
   const { dropPageHistory, flushSave, pageLoadRef } = flushing;
   const { showToast } = toasts;
+  const translate = useTranslate();
   const { pageStateRef, projectRef, setCurrentPage, setEditStack, setHoverNodeId, setPageState } = coreState;
   const { setSelectedId } = coreState;
   const { rescan } = scans;
@@ -574,7 +579,7 @@ export function useOpenFile(
       const request = {};
       pageLoadRef.current = request;
       const latestRequest = () => request === pageLoadRef.current;
-      if (!(await savedForNavigation(flushSave, latestRequest, showToast))) {
+      if (!(await savedForNavigation(translate, flushSave, latestRequest, showToast))) {
         return;
       }
       const beforeRead = pageStateRef.current;
@@ -584,7 +589,7 @@ export function useOpenFile(
         result = toEditorPageState(read);
       } catch (error: unknown) {
         if (request === pageLoadRef.current) {
-          showToast(`Couldn’t open ${entry.name}: ${cleanError(error)}`, 'error');
+          showToast(translate('shell.project.openFailed', { name: entry.name, message: cleanError(error) }), 'error');
         }
         return;
       }
@@ -593,7 +598,7 @@ export function useOpenFile(
       }
       // The existing editor stays mounted while reading. Save anything typed
       // in that interval before handing the editor to the destination file.
-      if (!(await savedForNavigation(flushSave, latestRequest, showToast))) {
+      if (!(await savedForNavigation(translate, flushSave, latestRequest, showToast))) {
         return;
       }
       // The scan is what every instance of a component reads its props and
@@ -646,6 +651,7 @@ export function useOpenFile(
       setHoverNodeId,
       setPageState,
       setSelectedId,
+      translate,
     ],
   );
   return { openFile };

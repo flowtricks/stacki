@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { componentFileOf, componentReference } from '../model/componentReference';
 import { useListProps } from './useListProps';
 // Page operations: changing the layout, creating, moving and deleting pages
@@ -168,6 +169,7 @@ export function usePageCreation(
   lifecycle: ReturnType<typeof useLifecycle>,
   navigation: ReturnType<typeof useNavigation>,
 ) {
+  const translate = useTranslate();
   const { currentPage, devStatus, devUrl, projectRef, scan, setCurrentPage, setPageState } = coreState;
   const { rescan, showToast } = lifecycle;
   const { selectPage } = navigation;
@@ -191,12 +193,12 @@ export function usePageCreation(
           // Opening a page reports its own failures.
           void selectPage(page);
         }
-        showToast(`Created ${name}.astro`, 'success');
+        showToast(translate('shell.pages.created', { name: `${name}.astro` }), 'success');
       } catch (error: unknown) {
         showToast(cleanError(error), 'error');
       }
     },
-    [scan.layouts, rescan, selectPage, showToast, projectRef],
+    [scan.layouts, rescan, selectPage, showToast, projectRef, translate],
   );
 
   // Answers what went wrong for the form to show, and keeps the form open for it.
@@ -204,7 +206,7 @@ export function usePageCreation(
     async (draft: PageTemplateDraft, keyCopy: ConnectionKeyCopy | undefined): Promise<string | undefined> => {
       const projectPath = projectRef.current?.path;
       if (!projectPath) {
-        return 'Open a project first.';
+        return translate('shell.pages.openProjectFirst');
       }
       const created = await createPageTemplate(projectPath, draft, devStatus === 'on' ? devUrl : undefined, keyCopy);
       if (!created.ok) {
@@ -216,19 +218,19 @@ export function usePageCreation(
         // Opening a page reports its own failures.
         void selectPage(page);
       }
-      showToast(`Created ${draft.route}`, 'success');
+      showToast(translate('shell.pages.created', { name: draft.route }), 'success');
       return undefined;
     },
-    [devStatus, devUrl, rescan, selectPage, showToast, projectRef],
+    [devStatus, devUrl, rescan, selectPage, showToast, projectRef, translate],
   );
 
   const deletePage = useCallback(
     async (page: ScanPage) => {
       if (
         !(await confirmDialog({
-          title: `Delete ${page.name}?`,
-          body: 'This removes the file from disk. ' + 'It can be brought back from History if it was saved in a version.',
-          confirmLabel: 'Delete page',
+          title: translate('shell.pages.deleteTitle', { name: page.name }),
+          body: translate('shell.pages.deleteBody'),
+          confirmLabel: translate('shell.pages.deleteConfirm'),
           danger: true,
         }))
       ) {
@@ -250,9 +252,9 @@ export function usePageCreation(
           setPageState(undefined);
         }
       }
-      showToast(`Deleted ${page.name}`, 'success');
+      showToast(translate('shell.pages.deleted', { name: page.name }), 'success');
     },
-    [currentPage, rescan, selectPage, showToast, projectRef, setCurrentPage, setPageState],
+    [currentPage, rescan, selectPage, showToast, projectRef, setCurrentPage, setPageState, translate],
   );
   return { createPage, createTemplate, deletePage };
 }
@@ -263,6 +265,7 @@ export function usePageMoves(
   lifecycle: ReturnType<typeof useLifecycle>,
   navigation: ReturnType<typeof useNavigation>,
 ) {
+  const translate = useTranslate();
   const { pageStateRef, projectRef, scan } = coreState;
   const { rescan, showToast, flushSave } = lifecycle;
   const { selectPage } = navigation;
@@ -273,7 +276,7 @@ export function usePageMoves(
     async (page: ScanPage, to: string) => {
       const projectPath = projectRef.current?.path;
       if (!projectPath) {
-        throw new Error('Open a project before renaming.');
+        throw new Error(translate('shell.pages.openProjectToRename'));
       }
       await flushSave();
       const newPath = await moveProjectPage(projectPath, page.path, to);
@@ -287,7 +290,7 @@ export function usePageMoves(
         }
       }
     },
-    [rescan, selectPage, pageStateRef, projectRef, flushSave],
+    [rescan, selectPage, pageStateRef, projectRef, flushSave, translate],
   );
 
   // Creates an (empty) folder with a placeholder name; the panel opens a
@@ -320,6 +323,7 @@ export function useRenamePageFolder(
   lifecycle: ReturnType<typeof useLifecycle>,
   navigation: ReturnType<typeof useNavigation>,
 ) {
+  const translate = useTranslate();
   const { pageStateRef, projectRef } = coreState;
   const { rescan, flushSave } = lifecycle;
   const { selectPage } = navigation;
@@ -328,7 +332,7 @@ export function useRenamePageFolder(
     async (from: string, to: string) => {
       const projectPath = projectRef.current?.path;
       if (!projectPath) {
-        throw new Error('Open a project before renaming.');
+        throw new Error(translate('shell.pages.openProjectToRename'));
       }
       await flushSave();
       await renameProjectPageFolder(projectPath, from, to);
@@ -345,7 +349,7 @@ export function useRenamePageFolder(
         }
       }
     },
-    [rescan, selectPage, pageStateRef, projectRef, flushSave],
+    [rescan, selectPage, pageStateRef, projectRef, flushSave, translate],
   );
   return { renamePageFolder };
 }
@@ -356,18 +360,18 @@ export function useDeletePageFolder(
   lifecycle: ReturnType<typeof useLifecycle>,
   navigation: ReturnType<typeof useNavigation>,
 ) {
+  const translate = useTranslate();
   const { pageStateRef, projectRef, setCurrentPage, setPageState } = coreState;
   const { rescan, showToast } = lifecycle;
   const { selectPage } = navigation;
 
   const deletePageFolder = useCallback(
     async (directory: string, pageCount: number) => {
-      const inside = pageCount ? `the ${pageCount} page${pageCount === 1 ? '' : 's'} inside it and ` : '';
       if (
         !(await confirmDialog({
-          title: `Delete the folder “${directory}”?`,
-          body: `This removes ${inside}the folder from disk.`,
-          confirmLabel: 'Delete folder',
+          title: translate('shell.pages.deleteFolderTitle', { directory }),
+          body: pageCount ? translate('shell.pages.deleteFolderBodyPages', { count: pageCount }) : translate('shell.pages.deleteFolderBody'),
+          confirmLabel: translate('shell.pages.deleteFolderConfirm'),
           danger: true,
         }))
       ) {
@@ -395,7 +399,7 @@ export function useDeletePageFolder(
         showToast(cleanError(error), 'error');
       }
     },
-    [rescan, selectPage, showToast, pageStateRef, projectRef, setCurrentPage, setPageState],
+    [rescan, selectPage, showToast, pageStateRef, projectRef, setCurrentPage, setPageState, translate],
   );
   return { deletePageFolder };
 }
@@ -406,6 +410,7 @@ export function useSelectionModel(
   coreState: ReturnType<typeof useCoreState>,
   history: ReturnType<typeof useHistory>,
 ) {
+  const translate = useTranslate();
   const { model } = shortcuts;
   const { devStatus, devUrl, sampleAskedRef, selectedId, setCollectionSamples } = coreState;
   const { holdForNextEdit } = history;
@@ -483,9 +488,9 @@ export function useSelectionModel(
   // with the name the field binds.
   const createBoundProp = (declaration: PropDeclaration): Result<string, string> => {
     if (!model) {
-      return err('Open the component first.');
+      return err(translate('shell.loop.openComponent'));
     }
-    const made = newPropGesture(model, declaration);
+    const made = newPropGesture(model, declaration, translate);
     if (!made.ok) {
       return made;
     }
@@ -510,6 +515,7 @@ export function useCreateFrom(
   selectionModel: ReturnType<typeof useSelectionModel>,
   nodeEdits: ReturnType<typeof useNodeEdits>,
 ) {
+  const translate = useTranslate();
   const { model } = shortcuts;
   const { classesForRef, classesTick, pseudoPick, selectedId, setSelectedClasses } = coreState;
   const { frontmatterCode, tree } = selectionModel;
@@ -525,30 +531,30 @@ export function useCreateFrom(
   // for the selected element, or why there's nothing to make a component from.
   const createFrom = useMemo<ComponentCreationSource>(() => {
     if (!model) {
-      return { kind: 'unavailable', reason: 'Open a page to make components from it.' };
+      return { kind: 'unavailable', reason: translate('shell.create.openPage') };
     }
     // A pseudo-element's selection names its element, whose markup would move.
     const pseudo = selectedPseudo(selectedId, pseudoPick);
     if (pseudo !== undefined) {
-      return { kind: 'unavailable', reason: `::${pseudo} is drawn by CSS. Select its element to make a component.` };
+      return { kind: 'unavailable', reason: translate('shell.create.pseudo', { pseudo }) };
     }
     // The frontmatter row is no element to make a component from.
     const selectionId = structuralSelection(selectedId, pseudoPick);
     const node = selectionId === undefined ? undefined : tree.node(selectionId);
     if (!node) {
-      return { kind: 'unavailable', reason: 'Select an element on the canvas first.' };
+      return { kind: 'unavailable', reason: translate('shell.create.selectElement') };
     }
     if (node.kind === 'text' || node.kind === 'expr') {
       return {
         kind: 'unavailable',
-        reason: 'Select the element around this, not the text itself.',
+        reason: translate('shell.create.selectAround'),
       };
     }
     if (node.id === 'layout') {
-      return { kind: 'unavailable', reason: 'A layout is already a component of its own.' };
+      return { kind: 'unavailable', reason: translate('shell.create.layout') };
     }
     if (node.kind !== 'element' && node.kind !== 'component') {
-      return { kind: 'unavailable', reason: 'Select an element on the canvas first.' };
+      return { kind: 'unavailable', reason: translate('shell.create.selectElement') };
     }
     // Its first class is the name it already goes by — `.project-card` is a
     // better guess at a component name than `Div`. The tag is the fallback.
@@ -558,6 +564,7 @@ export function useCreateFrom(
     let read: ExtractionRead | undefined;
     return {
       kind: 'ready',
+      // i18n-ignore: a component name used as an identifier, not interface text.
       name: toComponentName(first) || toComponentName(node.name) || 'Component',
       label: `<${node.name}>`,
       plan: (asProp) => {
@@ -565,7 +572,7 @@ export function useCreateFrom(
         return planExtraction(read, asProp);
       },
     };
-  }, [pseudoPick, selectedId, tree, model, extractionFor]);
+  }, [pseudoPick, selectedId, tree, model, extractionFor, translate]);
 
   // Rendered classes describe one element, and the canvas can only say what the
   // NEW selection's are a frame or two later. Two ways to spend that gap, and

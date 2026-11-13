@@ -1,6 +1,7 @@
 // Inherited chips are a visual hint beside the editable field, never content
 // inside it. Token serialization therefore cannot turn inheritance into a write.
 import { tokenGlyph, type Chip } from './TokenField';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 type HintPart = { readonly kind: 'text'; readonly text: string } | { readonly kind: 'chip'; readonly chip: Chip };
 
@@ -17,6 +18,7 @@ export default function VariableHint({
   readonly disabled: boolean;
   readonly onPick: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <span className={`${className} embed-editor_varconnect-hint`}>
       {hintParts(value, chips).map((part, index) =>
@@ -27,8 +29,8 @@ export default function VariableHint({
             key={index}
             type="button"
             className="embed-editor_varconnect-token"
-            title={`Inherited: ${part.chip.text}`}
-            aria-label={`Inherited ${part.chip.name}: choose variable`}
+            title={translate('style.variableHint.inheritedTitle', { value: part.chip.text })}
+            aria-label={translate('style.variableHint.inheritedAria', { name: part.chip.name })}
             disabled={disabled}
             onMouseDown={(event) => event.preventDefault()}
             onClick={onPick}

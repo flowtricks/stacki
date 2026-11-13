@@ -5,6 +5,7 @@
 // same call a click on a row makes; `default` shows Stacki's picker; `cancel`
 // closes it. Alt held at the press, or "Use Stacki's picker" while waiting, skips
 // the app.
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useEffect, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { APP_RPC_LIMITS, type AppOverrideContexts } from '../../../shared/properties/appsRpc';
@@ -108,11 +109,12 @@ export function useBindOverrideOnPress(): {
 
 /** What the picker shows while an app answers it. */
 export function BindOverrideWaiting({ owner, onStacki }: { readonly owner: string; readonly onStacki: () => void }) {
+  const translate = useTranslate();
   return (
     <div className="dp-override" role="status">
-      <span>Choosing in {owner}…</span>
+      <span>{translate('props.override.choosing', { owner })}</span>
       <button type="button" className="dp-new-prop" onClick={onStacki}>
-        Use Stacki’s picker
+        {translate('props.override.useStacki')}
       </button>
     </div>
   );

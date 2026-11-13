@@ -536,7 +536,7 @@ test('a field written as a method is listed but not rewritten', () => {
     update: { ...title, required: true },
   });
   assert.equal(refused.ok, false);
-  assert.match(refused.error, /written as a method/);
+  assert.match(refused.error.message, /written as a method/);
 });
 
 test('a new field is written with its settings in one change', () => {

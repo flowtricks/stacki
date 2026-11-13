@@ -16,7 +16,9 @@ import ExprInput from '../../ui/ExprInput';
 import { useCodeAccess } from '../../ui/CodeAccess';
 import { BracesIcon } from '../../ui/Icons';
 import { AppliedLabel } from './LoopRows';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { LoopSection, LoopSections } from '../../editor/loopSections';
+import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
 
 /** What a list's sections need to be edited as code. */
 export interface SectionCodeContext {
@@ -31,7 +33,11 @@ export interface SectionCodeContext {
   readonly placeholder: (section: LoopSection) => string;
 }
 
-const SECTION_TITLES: Readonly<Record<LoopSection, string>> = { filter: 'Filters', sort: 'Sort', limit: 'Limit items' };
+const SECTION_TITLE_KEYS: Readonly<Record<LoopSection, MessageKey>> = {
+  filter: 'props.loop.filters.title',
+  sort: 'props.loop.sort.title',
+  limit: 'props.loop.limit.title',
+};
 
 export interface SectionCodeView {
   /** The `{}` for the section's heading; undefined where the section has no code. */
@@ -42,6 +48,7 @@ export interface SectionCodeView {
 
 /** The section's `{}` and, while it is on, its code box. */
 export function useSectionCode(section: LoopSection, context: SectionCodeContext | undefined): SectionCodeView {
+  const translate = useTranslate();
   const access = useCodeAccess();
   const reading = context?.sections[section];
   const code = reading?.code ?? '';
@@ -98,7 +105,7 @@ export function useSectionCode(section: LoopSection, context: SectionCodeContext
           <span className="loop-settings-label">
             {/* Reset clears the section's code as typing it away and leaving the box would. */}
             <AppliedLabel
-              title={SECTION_TITLES[section]}
+              title={translate(SECTION_TITLE_KEYS[section])}
               reset={{
                 applied: code.trim() !== '',
                 onReset: () => {
@@ -136,14 +143,15 @@ export function useSectionCode(section: LoopSection, context: SectionCodeContext
 }
 
 function SectionCodeToggle(props: { readonly section: LoopSection; readonly on: boolean; readonly onPress: () => void }) {
-  const title = SECTION_TITLES[props.section];
+  const translate = useTranslate();
+  const title = translate(SECTION_TITLE_KEYS[props.section]);
   return (
     <button
       type="button"
       className={`prop-expr-toggle${props.on ? ' on' : ''}`}
-      title={props.on ? 'Use the controls' : 'Write as code'}
+      title={props.on ? translate('props.loop.section.useControls') : translate('props.loop.section.writeCode')}
       aria-pressed={props.on}
-      aria-label={`${title} as code`}
+      aria-label={translate('props.loop.section.asCode', { title })}
       onClick={props.onPress}
     >
       <BracesIcon size={12} />

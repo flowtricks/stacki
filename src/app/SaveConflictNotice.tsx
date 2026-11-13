@@ -2,10 +2,9 @@ import { ErrorToast } from '../ui/ErrorToast';
 // The notice for a refused save (plan §7, rejection UX contract). It never
 // blocks: the page stays editable underneath and keeps every local edit. A
 // refused edit request (step 6) names the actor's reason.
-import { describeRejection, type RejectionReason } from '../../shared/engine/intent';
-
-// Nothing is discarded and nothing is written over the outside change until the
-// user picks an action — reloading and saving over are deliberate acts.
+import type { RejectionReason } from '../../shared/engine/intent';
+import { useTranslate } from '../lib/i18n/useTranslate';
+import { REJECTION_KEYS } from './rejectionMessages';
 
 interface SaveConflictNoticeProps {
   readonly fileName: string;
@@ -19,13 +18,14 @@ interface SaveConflictNoticeProps {
 }
 
 export default function SaveConflictNotice({ fileName, reason, reviewing, onReload, onReview, onKeep }: SaveConflictNoticeProps) {
-  const detail = reason === undefined ? 'changed on disk while you were editing.' : describeRejection(reason);
+  const translate = useTranslate();
+  const detail = reason === undefined ? translate('shell.saveConflict.changedOnDisk') : translate(REJECTION_KEYS[reason]);
   return (
     <ErrorToast
-      message={`${fileName}: ${detail} Your edits are kept here and are not being saved.`}
+      message={translate('shell.saveConflict.message', { fileName, detail })}
       recovery={[
-        { label: 'Reload from disk', run: onReload },
-        reviewing ? { label: 'Save this version', run: onKeep } : { label: 'Review in code', run: onReview },
+        { label: translate('shell.saveConflict.reload'), run: onReload },
+        reviewing ? { label: translate('shell.saveConflict.keep'), run: onKeep } : { label: translate('shell.saveConflict.review'), run: onReview },
       ]}
     />
   );

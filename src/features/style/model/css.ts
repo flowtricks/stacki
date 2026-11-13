@@ -12,6 +12,7 @@ import { parseSelectorList, selectorListMembers } from './selectors';
 import { ruleChainLevels, ruleHead, ruleLayout, sourceTextFromEditor } from './cssRuleText';
 import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
+import { failureOf, type Failure } from './failureMessage';
 import {
   type DeclarationValue,
   squash,
@@ -793,7 +794,7 @@ export function reorderDeclarations(rule: ParsedRule, orderedDeclIds: string[]) 
  * block's indentation and the file's own indent unit go back before parsing, and the
  * rule keeps the whitespace that led up to it, so the file keeps its layout.
  */
-export function replaceRuleCss(rule: ParsedRule, editorCss: string): { ok: true } | { ok: false; error: string } {
+export function replaceRuleCss(rule: ParsedRule, editorCss: string): { ok: true } | Failure {
   const before = rule.node.raws.before;
   const sourceCss = sourceTextFromEditor(editorCss, ruleLayout(rule.node));
   try {
@@ -801,7 +802,7 @@ export function replaceRuleCss(rule: ParsedRule, editorCss: string): { ok: true 
     // A nested query's own declarations are a rule bound to the at-rule itself.
     const nodes = parsed.nodes.filter((node) => node.type === rule.node.type);
     if (!nodes.length) {
-      return { ok: false, error: 'No CSS rule found in the edited text.' };
+      return failureOf('styleModel.css.noRule');
     }
     const first = parsed.first;
     assert(first !== undefined, 'replaceRuleCss: a parse with a rule has a first node');

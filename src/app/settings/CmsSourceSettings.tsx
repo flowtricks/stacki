@@ -13,7 +13,7 @@ import { BracesIcon, CloseIcon, CmsIcon, PlusIcon } from '../../ui/Icons';
 import { cleanError } from '../../lib/cleanError';
 import { assert } from '../../../shared/core/assert';
 import {
-  addCmsFile,
+  addCmsFileDescribed,
   cmsDataFiles,
   cmsFilesFor,
   isCollectionHidden,
@@ -28,6 +28,9 @@ import {
 import { readCmsFiles, readContentCollections } from '../../features/cms/cmsPanelBridge';
 import { pickProjectPath } from './foldersBridge';
 import { Switch } from '../../ui/Switch';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Described } from '../../../shared/properties/i18n/messageRef';
+import InfoHint from '../../ui/InfoHint';
 import { FolderTitle } from './FolderSettings';
 import { dataFileExports, type DataFileExport } from '../../features/props/projectDataSources';
 
@@ -58,9 +61,10 @@ export function CmsSources(props: {
   readonly config: ProjectFolders | undefined;
   readonly busy: boolean;
   readonly onSave: (next: ProjectFolders) => void;
-  readonly onNotice: (message: string | undefined) => void;
+  readonly onNotice: (notice: Described | undefined) => void;
   readonly onOpenFile?: (rel: string) => void;
 }) {
+  const translate = useTranslate();
   const [sources, setSources] = useState<Sources>({ kind: 'loading' });
   // Detection only changes with the project, never with these settings: once a
   // list is chosen, the panel reads the chosen files instead.
@@ -94,7 +98,7 @@ export function CmsSources(props: {
   if (sources.kind === 'loading') {
     return (
       <p className="app-settings-status" role="status">
-        Loading CMS sources…
+        {translate('settings.folders.cms.loading')}
       </p>
     );
   }
@@ -116,17 +120,17 @@ export function CmsSources(props: {
     try {
       picked = await pickProjectPath(props.projectPath, 'file');
     } catch (failure: unknown) {
-      props.onNotice(cleanError(failure));
+      props.onNotice({ message: cleanError(failure) });
       return;
     }
     switch (picked.kind) {
       case 'canceled':
         return;
       case 'outside':
-        props.onNotice(picked.message);
+        props.onNotice({ message: picked.message });
         return;
       case 'picked': {
-        const next = addCmsFile(props.config, picked.path, sources.detected);
+        const next = addCmsFileDescribed(props.config, picked.path, sources.detected);
         if (next.ok) {
           props.onSave(next.value);
         } else {
@@ -143,12 +147,15 @@ export function CmsSources(props: {
 
   return (
     <>
-      <div className="app-folder-row" aria-label="CMS collections">
+      <div className="app-folder-row" aria-label={translate('settings.folders.cms.collections')}>
         <div className="app-folder-heading">
           <CmsIcon size={14} />
-          <span className="app-folder-title">CMS collections</span>
+          <span className="app-folder-title">
+            {translate('settings.folders.cms.collections')}
+            <InfoHint text={translate('settings.folders.collections.info')} />
+          </span>
         </div>
-        {sources.collections.length === 0 && <p className="app-folder-fixed">The content config declares no collections.</p>}
+        {sources.collections.length === 0 && <p className="app-folder-fixed">{translate('settings.folders.cms.collectionsNone')}</p>}
         <ul className="app-folder-toggles">
           {sources.collections.map((name) => {
             const shown = !isCollectionHidden(props.config, name);
@@ -156,7 +163,7 @@ export function CmsSources(props: {
               <li key={name} className="app-folder-toggle">
                 <CodeInline text={name} />
                 <Switch
-                  label={`Show ${name} in the CMS panel`}
+                  label={translate('settings.folders.cms.showCollection', { name })}
                   checked={shown}
                   disabled={props.busy}
                   onToggle={() => props.onSave(withCollectionShown(props.config, name, { shown: !shown }))}
@@ -166,30 +173,29 @@ export function CmsSources(props: {
           })}
         </ul>
         <p className="app-folder-fixed">
-          Read from the content config, where Astro looks for them.
           {configPath !== undefined && open !== undefined && (
             <>
               {' '}
               <button type="button" className="app-folder-link" onClick={() => open(configPath)}>
-                Open content config
+                {translate('settings.folders.cms.openConfig')}
               </button>
             </>
           )}
         </p>
       </div>
-      <div className="app-folder-row" aria-label="CMS data files">
+      <div className="app-folder-row" aria-label={translate('settings.folders.cms.dataFiles')}>
         <div className="app-folder-heading">
           <CmsIcon size={14} />
           <FolderTitle
-            label="CMS data files"
+            label={translate('settings.folders.cms.dataFiles')}
             customized={chosen !== undefined}
             busy={props.busy}
             onReset={() => props.onSave(withCmsFiles(props.config, undefined))}
           />
           <div className="app-folder-actions">
-            <button type="button" disabled={props.busy} onClick={() => void addFile()} title="A .ts, .js, .json or .astro file under src/">
+            <button type="button" disabled={props.busy} onClick={() => void addFile()} title={translate('settings.folders.cms.addFileTip')}>
               <PlusIcon size={12} />
-              <span>Add file</span>
+              <span>{translate('settings.folders.cms.addFile')}</span>
             </button>
           </div>
         </div>
@@ -199,7 +205,7 @@ export function CmsSources(props: {
               <CodeInline text={file} />
               <button
                 type="button"
-                aria-label={`Remove ${file} from CMS data files`}
+                aria-label={translate('settings.folders.cms.removeFile', { file })}
                 disabled={props.busy}
                 onClick={() => props.onSave(removeCmsFile(props.config, file, sources.detected))}
               >
@@ -207,7 +213,7 @@ export function CmsSources(props: {
               </button>
             </li>
           ))}
-          {files.length === 0 && <li className="app-folder-none">No data files: the CMS panel lists only collections.</li>}
+          {files.length === 0 && <li className="app-folder-none">{translate('settings.folders.cms.noFiles')}</li>}
         </ul>
       </div>
       <PickerSources
@@ -247,25 +253,29 @@ function PickerSources(props: {
   readonly config: ProjectFolders | undefined;
   readonly busy: boolean;
   readonly onSave: (next: ProjectFolders) => void;
-  readonly onNotice: (message: string | undefined) => void;
+  readonly onNotice: (notice: Described | undefined) => void;
 }) {
+  const translate = useTranslate();
   const toggle = (source: PickerExclusion, now: { readonly shown: boolean }): void => {
     props.onNotice(undefined);
     try {
       props.onSave(withPickerShown(props.config, source, { shown: !now.shown }));
     } catch (failure: unknown) {
-      props.onNotice(cleanError(failure));
+      props.onNotice({ message: cleanError(failure) });
     }
   };
   const files = exportsByFile(props.exports);
   const empty = files.length === 0 && props.collections.length === 0;
   return (
-    <div className="app-folder-row" aria-label="Data picker sources">
+    <div className="app-folder-row" aria-label={translate('settings.folders.cms.pickerAria')}>
       <div className="app-folder-heading">
         <BracesIcon size={14} />
-        <span className="app-folder-title">Data picker</span>
+        <span className="app-folder-title">
+          {translate('settings.folders.cms.picker')}
+          <InfoHint text={translate('settings.folders.picker.info')} />
+        </span>
       </div>
-      {empty && <p className="app-folder-fixed">No data files or collections to bind to.</p>}
+      {empty && <p className="app-folder-fixed">{translate('settings.folders.cms.pickerNone')}</p>}
       <ul className="app-folder-toggles">
         {files.map(([file, names]) => {
           const fileShown = isPickerShown(props.config, { kind: 'file', file });
@@ -294,7 +304,6 @@ function PickerSources(props: {
           return <PickerToggle key={name} text={name} shown={shown} busy={props.busy} onToggle={() => toggle({ kind: 'collection', name }, { shown })} />;
         })}
       </ul>
-      <p className="app-folder-fixed">Switched off, a source leaves the binding picker only; the CMS panel still lists it.</p>
     </div>
   );
 }
@@ -306,10 +315,16 @@ function PickerToggle(props: {
   readonly busy: boolean;
   readonly onToggle: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <li className={props.nested === true ? 'app-folder-toggle is-nested' : 'app-folder-toggle'}>
       <CodeInline text={props.text} />
-      <Switch label={`Show ${props.text} in data picker`} checked={props.shown} disabled={props.busy} onToggle={props.onToggle} />
+      <Switch
+        label={translate('settings.folders.cms.showInPicker', { name: props.text })}
+        checked={props.shown}
+        disabled={props.busy}
+        onToggle={props.onToggle}
+      />
     </li>
   );
 }

@@ -30,6 +30,7 @@ import {
 import { blockShortcut, cleanPastedHTML, inlineShortcut, linkAddress, textCounts } from './richTextModel';
 import './contentInputs.css';
 import './richText.css';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 interface Props {
   readonly value: string;
@@ -56,7 +57,9 @@ interface Editor {
   readonly restore: () => HTMLDivElement | undefined;
 }
 
-export default function HtmlField({ value, label = 'Rich text', sourceView, onChange }: Props) {
+export default function HtmlField({ value, label, sourceView, onChange }: Props) {
+  const translate = useTranslate();
+  const fieldLabel = label ?? translate('ui.htmlField.label');
   const [source, setSource] = useState(false);
   const [formatCount, setFormatCount] = useState(0);
   const projection = editableHTML(value, document);
@@ -79,7 +82,7 @@ export default function HtmlField({ value, label = 'Rich text', sourceView, onCh
           setSource(!source);
         }}
       />
-      <HtmlBody {...{ value, label, source, sourceView, projection, editor, formatCount }} onAction={state.run} onChange={onChange} />
+      <HtmlBody {...{ value, label: fieldLabel, source, sourceView, projection, editor, formatCount }} onAction={state.run} onChange={onChange} />
       {bubble && !source && (
         <HtmlLinkEditor
           bubble={bubble}
@@ -169,16 +172,19 @@ interface BodyProps extends Props {
 }
 
 function HtmlBody(props: BodyProps) {
+  const translate = useTranslate();
   const { editor } = props;
   if (props.source && props.sourceView !== undefined) {
     return <>{props.sourceView.render()}</>;
   }
   if (props.source) {
-    return <HtmlSourceEditor value={props.value} label={props.label ?? 'Rich text'} formatCount={props.formatCount} onChange={props.onChange} />;
+    return (
+      <HtmlSourceEditor value={props.value} label={props.label ?? translate('ui.htmlField.label')} formatCount={props.formatCount} onChange={props.onChange} />
+    );
   }
   return (
     <>
-      {props.projection.restricted && <div className="html-notice">This HTML includes markup that cannot be edited visually. Use HTML to preserve it.</div>}
+      {props.projection.restricted && <div className="html-notice">{translate('ui.htmlField.restricted')}</div>}
       <div
         ref={(element) => {
           editor.host.current = element ?? undefined;
@@ -188,7 +194,7 @@ function HtmlBody(props: BodyProps) {
         aria-label={props.label}
         aria-multiline="true"
         aria-readonly={props.projection.restricted}
-        data-placeholder="Write, or type ## for a heading…"
+        data-placeholder={translate('ui.htmlField.placeholder')}
         contentEditable={!props.projection.restricted}
         suppressContentEditableWarning
         onFocus={() => document.execCommand('defaultParagraphSeparator', false, 'p')}
@@ -209,11 +215,12 @@ function HtmlBody(props: BodyProps) {
 }
 
 function HtmlFooter(props: { readonly words: number; readonly characters: number }) {
+  const translate = useTranslate();
   return (
     <div className="html-footer" aria-hidden="true">
-      <span className="html-footer-hint">## heading · - list · &gt; quote · **bold** · `code` · {MOD}K link</span>
+      <span className="html-footer-hint">{translate('ui.htmlField.hint', { shortcut: `${MOD}K` })}</span>
       <span className="html-footer-counts">
-        {props.words} {props.words === 1 ? 'word' : 'words'} · {props.characters} characters
+        {translate('ui.htmlField.words', { count: props.words })} · {translate('ui.htmlField.characters', { count: props.characters })}
       </span>
     </div>
   );

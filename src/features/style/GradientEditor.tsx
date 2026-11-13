@@ -14,6 +14,7 @@ import {
 import { commitInPlace } from './model/commitInPlace';
 import { PositionGrid, NumberField } from './components/PositionGrid';
 import { RadialSizeControl, RepeatIcon, type WriteOptions, AngleControl } from './GradientControls';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 export { AngleControl } from './GradientControls';
 
 function gradientBarStyle(image: string): CSSProperties & { readonly '--grad-image': string } {
@@ -206,12 +207,13 @@ function isTextEntry(element: Element | undefined): boolean {
 // Radial = position grid + size presets; linear = the angle control; conic = its
 // `from` angle.
 function GradientGeometry({ gradient, busy, patch }: { gradient: Gradient; busy: boolean; patch: Patch }) {
+  const translate = useTranslate();
   if (gradient.type === 'radial') {
     return (
       <>
         <RadialPosition gradient={gradient} busy={busy} patch={patch} />
         <div className="embed-editor_size-row">
-          <span className="embed-editor_size-label embed-editor_bg-caption">Size</span>
+          <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientEditor.size')}</span>
           <RadialSizeControl value={gradient.size.trim() || 'farthest-corner'} busy={busy} onChange={(size) => patch({ size })} />
         </div>
       </>
@@ -220,18 +222,18 @@ function GradientGeometry({ gradient, busy, patch }: { gradient: Gradient; busy:
   if (gradient.type === 'linear') {
     return (
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Angle</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientEditor.angle')}</span>
         <AngleControl angle={gradient.angle} busy={busy} onChange={(angle, live) => patch({ angle }, { live })} />
       </div>
     );
   }
   return (
     <div className="embed-editor_size-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Angle</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientEditor.angle')}</span>
       <NumberField
         value={gradient.from.replace(/deg$/i, '') || '0'}
         unit="deg"
-        label="Gradient angle"
+        label={translate('style.gradientEditor.gradientAngle')}
         busy={busy}
         onLive={(next) => patch({ from: next }, { live: true })}
         onCommit={(next) => patch({ from: next })}
@@ -241,10 +243,11 @@ function GradientGeometry({ gradient, busy, patch }: { gradient: Gradient; busy:
 }
 
 function RadialPosition({ gradient, busy, patch }: { gradient: Gradient; busy: boolean; patch: Patch }) {
+  const translate = useTranslate();
   const center = gradientCenter(gradient);
   return (
     <div className="embed-editor_size-row embed-editor_grad-pos-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Position</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientEditor.position')}</span>
       <div className="embed-editor_grad-pos">
         <PositionGrid x={center.x} y={center.y} busy={busy} onPick={(px, py) => patch({ posX: px, posY: py })} />
         <div className="embed-editor_grad-pos-fields">
@@ -255,22 +258,22 @@ function RadialPosition({ gradient, busy, patch }: { gradient: Gradient; busy: b
               into one you cannot. The caption is decorative; the input carries its
               own aria-label. */}
           <div className="embed-editor_grad-pos-field">
-            <span>Left</span>
+            <span>{translate('style.gradientEditor.left')}</span>
             <NumberField
               value={center.x}
               unit="%"
-              label="Position left"
+              label={translate('style.gradientEditor.positionLeft')}
               busy={busy}
               onLive={(next) => patch({ posX: next }, { live: true })}
               onCommit={(next) => patch({ posX: next })}
             />
           </div>
           <div className="embed-editor_grad-pos-field">
-            <span>Top</span>
+            <span>{translate('style.gradientEditor.top')}</span>
             <NumberField
               value={center.y}
               unit="%"
-              label="Position top"
+              label={translate('style.gradientEditor.positionTop')}
               busy={busy}
               onLive={(next) => patch({ posY: next }, { live: true })}
               onCommit={(next) => patch({ posY: next })}
@@ -306,6 +309,7 @@ function StopsBar({
   sortStops: (keep: number) => void;
   removeStop: (index: number) => void;
 }) {
+  const translate = useTranslate();
   const barRef = useRef<HTMLDivElement>(null);
   const drag = useStopDrag({ barRef, busy, editingRef, setSelected, setStop, sortStops });
   // Click the bar background → insert a stop there (color = nearest stop's).
@@ -334,7 +338,7 @@ function StopsBar({
           className={`embed-editor_grad-handle ${i === selectedIndex ? 'is-active' : ''}`}
           style={stopStyle(stopPercent(stops, i), stop.color.trim() || 'transparent')}
           disabled={busy}
-          aria-label={`Stop ${i + 1} at ${stopPercent(stops, i)}%`}
+          aria-label={translate('style.gradientEditor.stopAt', { number: i + 1, percent: stopPercent(stops, i) })}
           onClick={(event) => {
             event.stopPropagation();
             setSelected(i);
@@ -401,19 +405,20 @@ function useStopDrag({
 
 // The repeat toggle and the reverse-stops button.
 function RepeatRow({ gradient, busy, patch, patchStops }: { gradient: Gradient; busy: boolean; patch: Patch; patchStops: PatchStops }) {
+  const translate = useTranslate();
   const stops = gradient.stops;
   return (
     <div className="embed-editor_size-row embed-editor_grad-repeat">
       <label className="embed-editor_grad-check">
         <input type="checkbox" checked={gradient.repeating} disabled={busy} onChange={(event) => patch({ repeating: event.target.checked })} />
-        <span>Repeat</span>
+        <span>{translate('style.gradientEditor.repeat')}</span>
       </label>
       <button
         type="button"
         className="embed-editor_icon-btn"
         disabled={busy}
-        title="Reverse stops"
-        aria-label="Reverse gradient stops"
+        title={translate('style.gradientEditor.reverseStops')}
+        aria-label={translate('style.gradientEditor.reverseGradientStops')}
         onClick={() =>
           patchStops(
             [...stops].reverse().map((stop, i) => ({
@@ -447,14 +452,15 @@ function StopFields({
   setStop: SetStop;
   sortStops: (keep: number) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_size-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Color</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientEditor.color')}</span>
       <div className="embed-editor_grad-stop">
         <ColorSwatch
           value={stop.color}
           busy={busy}
-          ariaLabel="Stop color"
+          ariaLabel={translate('style.gradientEditor.stopColor')}
           onChange={(color, live) => {
             editingRef.current = live;
             setStop(selectedIndex, { color }, { live });
@@ -465,7 +471,7 @@ function StopFields({
           value={stop.color}
           spellCheck={false}
           disabled={busy}
-          aria-label="Stop color"
+          aria-label={translate('style.gradientEditor.stopColor')}
           onFocus={() => {
             editingRef.current = true;
           }}
@@ -483,7 +489,7 @@ function StopFields({
         <NumberField
           value={stop.pos || `${Math.round(stopPercent(stops, selectedIndex))}%`}
           unit="%"
-          label="Stop position"
+          label={translate('style.gradientEditor.stopPosition')}
           busy={busy}
           onLive={(next) => setStop(selectedIndex, { pos: next }, { live: true })}
           onCommit={(next) => {

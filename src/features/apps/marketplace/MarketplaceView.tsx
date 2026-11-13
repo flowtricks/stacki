@@ -11,13 +11,14 @@
 // keeps the technical reason to one small muted line; an index with no apps
 // invites a submission instead. Shared by Desktop and Studio, like the panel
 // around it.
+import type { MessageRef } from '../../../../shared/core/i18n/messageReference';
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type ReactNode, type RefObject, type SetStateAction } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { can, type RoleView } from '../../../../shared/properties/projectRoles';
-import { appsFailureMessage, stackiVersionProblem, type AppSummary } from '../../../../shared/properties/apps';
+import { appsFailureMessage, stackiVersionProblemDescribed, type AppSummary } from '../../../../shared/properties/apps';
 import {
   latestApprovedVersion,
-  MARKETPLACE_DISCLAIMER,
+  MARKETPLACE_DISCLAIMER_REF,
   MARKETPLACE_LIMITS,
   MARKETPLACE_SUBMIT_URL,
   type MarketplaceApp,
@@ -25,7 +26,9 @@ import {
 } from '../../../../shared/properties/appMarketplace';
 import { installMarketplaceApp, loadMarketplace, readStackiVersion } from '../../../ipc/appMarketplaceBridge';
 import { rankInsertItems } from '../../../lib/insertRank';
+import { useTranslate, useTranslateDescribed, useTranslateRef } from '../../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../../ui/ConfirmDialog';
+import type { MessageKey } from '../../../lib/i18n/localeContext';
 import { SegmentedTabs } from '../../../ui/SegmentedTabs';
 import { SearchField } from '../../../ui/SearchField';
 import { Skeleton, SkeletonRows } from '../../../ui/Skeleton';
@@ -38,7 +41,9 @@ import './marketplace.css';
 import { AppNetworkNote } from '../AppConnections';
 
 type IndexLoad =
-  { readonly kind: 'loading' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'ready'; readonly index: MarketplaceIndex };
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined }
+  | { readonly kind: 'ready'; readonly index: MarketplaceIndex };
 
 /** A marketplace app as a row the palette's ranking reads: the name first, then its description, author, id and categories. */
 interface MarketplaceSearchItem {
@@ -58,9 +63,9 @@ const MARKETPLACE_SKELETON_ROWS = 5;
 export type AppsView = 'installed' | 'marketplace';
 
 const APPS_VIEWS = [
-  { view: 'installed', label: 'Installed', icon: <AppsIcon size={13} /> },
-  { view: 'marketplace', label: 'Marketplace', icon: <MarketplaceIcon size={13} /> },
-] as const satisfies ReadonlyArray<{ readonly view: AppsView; readonly label: string; readonly icon: ReactNode }>;
+  { view: 'installed', label: 'apps.panel.installedHeading', icon: <AppsIcon size={13} /> },
+  { view: 'marketplace', label: 'apps.place.marketplace', icon: <MarketplaceIcon size={13} /> },
+] as const satisfies ReadonlyArray<{ readonly view: AppsView; readonly label: MessageKey; readonly icon: ReactNode }>;
 
 /**
  * The Installed / Marketplace switch at the top of the panel, for a role that may
@@ -70,15 +75,16 @@ const APPS_VIEWS = [
  * halves (`layout="equal"`); other tab rows size each tab to its label.
  */
 export function AppsViewTabs({ view, onPick }: { readonly view: AppsView; readonly onPick: (view: AppsView) => void }) {
+  const translate = useTranslate();
   assert(
     APPS_VIEWS.some((entry) => entry.view === view),
     'AppsViewTabs: the view is one of the tabs',
   );
   return (
     <SegmentedTabs
-      tabs={APPS_VIEWS.map((entry) => ({ value: entry.view, label: entry.label, icon: entry.icon }))}
+      tabs={APPS_VIEWS.map((entry) => ({ value: entry.view, label: translate(entry.label), icon: entry.icon }))}
       value={view}
-      label="Apps"
+      label={translate('apps.panel.title')}
       // The panel's two views, across the panel's width: equal halves, not two labels at the left.
       layout="equal"
       className={{ track: 'apps-view-tabs', indicator: 'apps-view-tab-indicator', tab: 'apps-view-tab' }}
@@ -104,6 +110,9 @@ export function MarketplaceView({
   readonly onInstalled: (summary: AppSummary) => void;
 }) {
   assert(can(role, 'marketplace:view'), 'MarketplaceView: only a role that may see the marketplace gets the tab');
+  const translate = useTranslate();
+  const translateRef = useTranslateRef();
+  const translateDescribed = useTranslateDescribed();
   const [load, setLoad] = useState<IndexLoad>({ kind: 'loading' });
   const [query, setQuery] = useState('');
   // How many pages of the results are rendered; a new search or a new read starts again at one.
@@ -132,7 +141,7 @@ export function MarketplaceView({
       setPageCount(1);
       try {
         const answer = await loadMarketplace(projectPath, freshness);
-        setLoad(answer.ok ? { kind: 'ready', index: answer.value } : { kind: 'failed', message: answer.message });
+        setLoad(answer.ok ? { kind: 'ready', index: answer.value } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef });
       } catch (error: unknown) {
         setLoad({ kind: 'failed', message: appsFailureMessage(error) });
       }
@@ -168,9 +177,9 @@ export function MarketplaceView({
   const install = async (app: MarketplaceApp): Promise<void> => {
     const approved = latestApprovedVersion(app);
     const answer = await confirmDialog({
-      title: `Install ${app.name} ${approved.version}?`,
-      body: `By ${app.author}. ${MARKETPLACE_DISCLAIMER}`,
-      confirmLabel: 'Install',
+      title: translate('apps.market.installTitle', { name: app.name, version: approved.version }),
+      body: translate('apps.market.installBody', { author: app.author, disclaimer: translateRef(MARKETPLACE_DISCLAIMER_REF) }),
+      confirmLabel: translate('apps.panel.install'),
     });
     if (answer !== true) {
       return;
@@ -180,10 +189,10 @@ export function MarketplaceView({
       .then(
         (answer) => {
           if (answer.ok) {
-            notify(`${answer.value.manifest.name} ${answer.value.manifest.version} is installed.`, 'success');
+            notify(translate('apps.panel.installed', { name: answer.value.manifest.name, version: answer.value.manifest.version }), 'success');
             onInstalled(answer.value);
           } else {
-            notify(answer.message, 'error');
+            notify(translateDescribed(answer), 'error');
           }
         },
         (error: unknown) => notify(appsFailureMessage(error), 'error'),
@@ -195,7 +204,7 @@ export function MarketplaceView({
     <>
       <SearchField
         className="apps-search"
-        label="Search the marketplace"
+        label={translate('apps.market.search')}
         value={query}
         onChange={(next) => {
           // A new search, or a cleared one, starts again at the top of its first page.
@@ -208,7 +217,7 @@ export function MarketplaceView({
         }}
       />
       <div ref={bodyRef} className="panel-body apps-body">
-        <p className="apps-market-disclaimer">{MARKETPLACE_DISCLAIMER}</p>
+        <p className="apps-market-disclaimer">{translateRef(MARKETPLACE_DISCLAIMER_REF)}</p>
         <MarketplaceBody
           load={load}
           shown={shown}
@@ -248,6 +257,8 @@ function MarketplaceBody(props: {
   readonly onRetry: () => void;
 }) {
   const { load } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   switch (load.kind) {
     case 'loading':
       return (
@@ -256,7 +267,7 @@ function MarketplaceBody(props: {
         </div>
       );
     case 'failed':
-      return <MarketplaceUnavailable detail={load.message} onRetry={props.onRetry} />;
+      return <MarketplaceUnavailable detail={translateDescribed(load)} onRetry={props.onRetry} />;
     case 'ready':
       if (props.shown.length === 0) {
         if (props.query.trim() === '') {
@@ -264,12 +275,12 @@ function MarketplaceBody(props: {
         }
         return (
           <div className="apps-message">
-            <p>No marketplace app matches “{props.query.trim()}”.</p>
+            <p>{translate('apps.market.noMatch', { query: props.query.trim() })}</p>
           </div>
         );
       }
       return (
-        <ul className="apps-list" aria-label="Marketplace apps">
+        <ul className="apps-list" aria-label={translate('apps.market.apps')}>
           {props.shown.map((app) => (
             <MarketplaceRow
               key={app.id}
@@ -392,16 +403,17 @@ function MarketplaceSkeletonRow() {
  */
 function MarketplaceUnavailable({ detail, onRetry }: { readonly detail: string; readonly onRetry: () => void }) {
   assert(detail.length > 0, 'MarketplaceUnavailable: a failed read has a reason');
+  const translate = useTranslate();
   return (
-    <div className="apps-market-state" role="status" aria-label="Marketplace unavailable">
+    <div className="apps-market-state" role="status" aria-label={translate('apps.market.unavailable')}>
       <span className="apps-market-state-icon" aria-hidden="true">
         <MarketplaceIcon size={18} />
       </span>
-      <p className="apps-market-state-title">Marketplace isn’t available right now</p>
-      <p className="apps-market-state-text">Your installed apps keep working. Try again in a moment.</p>
+      <p className="apps-market-state-title">{translate('apps.market.unavailableTitle')}</p>
+      <p className="apps-market-state-text">{translate('apps.market.unavailableText')}</p>
       <button type="button" className="apps-button apps-market-retry" onClick={onRetry}>
         <RefreshIcon size={12} />
-        Retry
+        {translate('ui.retry')}
       </button>
       <p className="apps-market-state-detail">{detail}</p>
     </div>
@@ -410,15 +422,16 @@ function MarketplaceUnavailable({ detail, onRetry }: { readonly detail: string; 
 
 /** The index loaded and lists nothing yet: invite the first submission. */
 function MarketplaceEmpty() {
+  const translate = useTranslate();
   return (
-    <div className="apps-market-state" role="status" aria-label="Marketplace empty">
+    <div className="apps-market-state" role="status" aria-label={translate('apps.market.emptyLabel')}>
       <span className="apps-market-state-icon" aria-hidden="true">
         <MarketplaceIcon size={18} />
       </span>
-      <p className="apps-market-state-title">No apps in the marketplace yet</p>
-      <p className="apps-market-state-text">Built an app? Send it for review and it can be listed here.</p>
+      <p className="apps-market-state-title">{translate('apps.market.emptyTitle')}</p>
+      <p className="apps-market-state-text">{translate('apps.market.emptyText')}</p>
       <a className="apps-market-submit" href={MARKETPLACE_SUBMIT_URL} target="_blank" rel="noopener noreferrer">
-        Submit an app
+        {translate('apps.market.submitApp')}
         <ExternalIcon size={11} />
       </a>
     </div>
@@ -437,6 +450,7 @@ function MarketplaceRow(props: {
   readonly onInstall: (app: MarketplaceApp) => void;
 }) {
   const { app, focused, onFocusShown } = props;
+  const translate = useTranslate();
   const latest = latestApprovedVersion(app);
   const row = useRef<HTMLLIElement>(null);
   // The description and the facts behind a row open in a popup from its ⋯, so a list of apps reads as names.
@@ -458,9 +472,13 @@ function MarketplaceRow(props: {
         {/* One quiet line under the name: who, and which version. The licence and the Stacki minimum are in the details. */}
         <span className="apps-market-byline">
           <span className="apps-row-avatar">{props.avatar}</span>
-          <span className="apps-market-author">by {app.author}</span>
+          <span className="apps-market-author">{translate('apps.market.byAuthor', { author: app.author })}</span>
           {/* An installed app says so here, in the version's place; the version is in its details. */}
-          {props.installed ? <span className="apps-badge muted">Installed</span> : <span className="apps-market-version">v{latest.version}</span>}
+          {props.installed ? (
+            <span className="apps-badge muted">{translate('apps.market.installed')}</span>
+          ) : (
+            <span className="apps-market-version">v{latest.version}</span>
+          )}
         </span>
         {app.network !== undefined && <AppNetworkNote network={app.network} />}
       </span>
@@ -469,8 +487,8 @@ function MarketplaceRow(props: {
           <button
             type="button"
             className="apps-icon-button"
-            title="App details"
-            aria-label={`${app.name} details`}
+            title={translate('apps.market.appDetails')}
+            aria-label={translate('apps.details.popupLabel', { name: app.name })}
             aria-haspopup="dialog"
             onClick={() => setDetailsOpen(true)}
           >
@@ -502,6 +520,8 @@ function MarketplaceAction(props: {
   readonly installing: string | undefined;
   readonly onInstall: (app: MarketplaceApp) => void;
 }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   if (props.installed) {
     return undefined;
   }
@@ -510,18 +530,24 @@ function MarketplaceAction(props: {
   }
   const latest = latestApprovedVersion(props.app);
   // The host refuses it too (appService.ts); the row says so first, so Install is never a dead end.
-  const tooOld = stackiVersionProblem(latest.stackiVersionMin, props.stackiVersion);
+  const tooOld = stackiVersionProblemDescribed(latest.stackiVersionMin, props.stackiVersion);
   return (
     <button
       type="button"
       className="apps-button primary apps-market-install"
-      title={tooOld ?? `Install ${props.app.name} ${latest.version}, approved with SHA-256 ${latest.sha256.slice(0, 12)}…`}
+      title={
+        tooOld === undefined
+          ? translate('apps.market.installTip', { name: props.app.name, version: latest.version, hash: latest.sha256.slice(0, 12) })
+          : translateDescribed(tooOld)
+      }
       disabled={props.installing !== undefined || tooOld !== undefined}
       onClick={() => props.onInstall(props.app)}
     >
       <span className="apps-header-actions">
         <MarketplaceInstallIcon size={12} />
-        <span className="apps-market-install-label">{props.installing === props.app.id ? 'Installing…' : 'Install'}</span>
+        <span className="apps-market-install-label">
+          {props.installing === props.app.id ? translate('apps.market.installing') : translate('apps.panel.install')}
+        </span>
       </span>
     </button>
   );

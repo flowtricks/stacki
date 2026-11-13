@@ -1,17 +1,20 @@
 import { canConvertAssets } from '../../ipc/editorEnvironment';
 import { useEffect, useRef, useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { IMAGE_BATCH_MAX, type ImageFormat } from '../../../shared/ipc/assetConversion';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { convertAsset, deleteAsset } from './assetPanelBridge';
 import type { AssetFile } from './assetPaths';
 import AssetCompressionDialog from './AssetCompressionDialog';
 import { AssetSelectionToolbar } from './AssetSelection';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 export function useAssetBatch(projectPath: string, showToast: (message: string, kind: 'error') => void) {
+  const translate = useTranslate();
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [compression, setCompression] = useState<readonly AssetFile[]>();
-  const execution = useBatchExecution(projectPath, { showToast, setSelected });
+  const execution = useBatchExecution(projectPath, { showToast, setSelected, translate });
   const toggle = (rel: string) =>
     setSelected((previous) => {
       if (previous.has(rel)) {
@@ -39,7 +42,9 @@ function useBatchExecution(
   {
     showToast,
     setSelected,
+    translate,
   }: {
+    readonly translate: Translator;
     readonly showToast: (message: string, kind: 'error') => void;
     readonly setSelected: React.Dispatch<React.SetStateAction<ReadonlySet<string>>>;
   },
@@ -59,7 +64,7 @@ function useBatchExecution(
       return;
     }
     if (files.length > IMAGE_BATCH_MAX) {
-      showToast('Select at most 100 files.', 'error');
+      showToast(translate('assets.batch.limit', { count: IMAGE_BATCH_MAX }), 'error');
       return;
     }
     running.current = true;
@@ -67,9 +72,9 @@ function useBatchExecution(
     try {
       if (operation === 'delete') {
         const confirmed = await confirmDialog({
-          title: `Delete ${files.length} assets?`,
-          body: 'Moves selected assets to the trash. Site references are kept.',
-          confirmLabel: 'Delete',
+          title: translate('assets.batch.deleteTitle', { count: files.length }),
+          body: translate('assets.batch.deleteBody'),
+          confirmLabel: translate('assets.delete.action'),
           danger: true,
         });
         if (!confirmed) {
@@ -80,18 +85,20 @@ function useBatchExecution(
         return;
       }
       for (const [index, file] of files.entries()) {
-        setProgress(`${index + 1} of ${files.length} · ${file.name}`);
+        setProgress(translate('assets.batch.progress', { index: index + 1, total: files.length, name: file.name }));
         const result = operation === 'delete' ? await deleteAsset(projectPath, file.rel) : await convertAsset(projectPath, file.rel, operation);
         if (!active.current) {
           return;
         }
         if (!result.ok) {
-          showToast(`${file.name}: ${result.error}`, 'error');
+          showToast(translate('assets.batch.failed', { name: file.name, error: result.error }), 'error');
           return;
         }
         setSelected((previous) => new Set([...previous].filter((item) => item !== file.rel)));
       }
-      setNotice(`${files.length} ${operation === 'delete' ? 'assets deleted' : 'images compressed'}.`);
+      setNotice(
+        operation === 'delete' ? translate('assets.batch.deleted', { count: files.length }) : translate('assets.batch.compressed', { count: files.length }),
+      );
     } finally {
       setProgress(undefined);
       running.current = false;

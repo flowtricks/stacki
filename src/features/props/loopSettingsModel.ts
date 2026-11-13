@@ -5,6 +5,8 @@
 // without a DOM (test/renderer/props/loopSettings.test.js).
 
 import { assert } from '../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../shared/properties/i18n/messageRef';
 import type { LoopReading } from '../../editor/loopQueryRead';
 import type { LoopSection, LoopSections } from '../../editor/loopSections';
 import { parseExpression } from '../../editor/loopSyntax';
@@ -28,23 +30,24 @@ import {
 import type { CatalogField } from './loopCatalog';
 import { titled } from './loopCatalog';
 
-const OPERATOR_LABELS: Readonly<Record<LoopOperator, string>> = {
-  is: 'Equals',
-  isNot: 'Does not equal',
-  contains: 'Contains',
-  has: 'Includes',
-  isSet: 'Is set',
-  isEmpty: 'Is not set',
-  isTrue: 'Is on',
-  isFalse: 'Is off',
-  greater: 'Greater than',
-  less: 'Less than',
-  atLeast: 'At least',
-  atMost: 'At most',
-  before: 'Is before',
-  after: 'Is after',
-  inPast: 'Is in the past',
-  inFuture: 'Is in the future',
+/** The message that names each operator: translate it where it is drawn. */
+const OPERATOR_KEYS: Readonly<Record<LoopOperator, MessageKey>> = {
+  is: 'props.loop.operator.is',
+  isNot: 'props.loop.operator.isNot',
+  contains: 'props.loop.operator.contains',
+  has: 'props.loop.operator.has',
+  isSet: 'props.loop.operator.isSet',
+  isEmpty: 'props.loop.operator.isEmpty',
+  isTrue: 'props.loop.operator.isTrue',
+  isFalse: 'props.loop.operator.isFalse',
+  greater: 'props.loop.operator.greater',
+  less: 'props.loop.operator.less',
+  atLeast: 'props.loop.operator.atLeast',
+  atMost: 'props.loop.operator.atMost',
+  before: 'props.loop.operator.before',
+  after: 'props.loop.operator.after',
+  inPast: 'props.loop.operator.inPast',
+  inFuture: 'props.loop.operator.inFuture',
 };
 
 const OPERATOR_SYMBOLS: Partial<Readonly<Record<LoopOperator, string>>> = {
@@ -56,29 +59,29 @@ const OPERATOR_SYMBOLS: Partial<Readonly<Record<LoopOperator, string>>> = {
   atMost: '≤',
 };
 
-export function operatorLabel(operator: LoopOperator): string {
-  return OPERATOR_LABELS[operator];
+export function operatorLabel(operator: LoopOperator, translate: Translator = ENGLISH_TRANSLATE): string {
+  return translate(OPERATOR_KEYS[operator]);
 }
 
 /** The ways to order a field's values, named for what they are. */
-export function orderLabels(order: LoopSortOrder): { readonly ascending: string; readonly descending: string } {
+export function orderLabels(order: LoopSortOrder, translate: Translator = ENGLISH_TRANSLATE): { readonly ascending: string; readonly descending: string } {
   switch (order) {
     case 'text':
-      return { ascending: 'A to Z', descending: 'Z to A' };
+      return { ascending: translate('props.loop.order.text.ascending'), descending: translate('props.loop.order.text.descending') };
     case 'number':
-      return { ascending: 'Smallest to largest', descending: 'Largest to smallest' };
+      return { ascending: translate('props.loop.order.number.ascending'), descending: translate('props.loop.order.number.descending') };
     case 'date':
-      return { ascending: 'Oldest to newest', descending: 'Newest to oldest' };
+      return { ascending: translate('props.loop.order.date.ascending'), descending: translate('props.loop.order.date.descending') };
     case 'boolean':
-      return { ascending: 'Is Off First', descending: 'Is On First' };
+      return { ascending: translate('props.loop.order.boolean.ascending'), descending: translate('props.loop.order.boolean.descending') };
     case 'natural':
-      return { ascending: 'A to Z, numbers in order', descending: 'Z to A, numbers in order' };
+      return { ascending: translate('props.loop.order.natural.ascending'), descending: translate('props.loop.order.natural.descending') };
     case 'length':
-      return { ascending: 'Shortest first', descending: 'Longest first' };
+      return { ascending: translate('props.loop.order.length.ascending'), descending: translate('props.loop.order.length.descending') };
     case 'count':
-      return { ascending: 'Fewest items first', descending: 'Most items first' };
+      return { ascending: translate('props.loop.order.count.ascending'), descending: translate('props.loop.order.count.descending') };
     case 'fileSize':
-      return { ascending: 'Smallest file first', descending: 'Largest file first' };
+      return { ascending: translate('props.loop.order.fileSize.ascending'), descending: translate('props.loop.order.fileSize.descending') };
     default: {
       const exhaustive: never = order;
       return exhaustive;
@@ -164,14 +167,16 @@ export function conditionParts(
   condition: LoopCondition,
   fields: readonly CatalogField[] | undefined,
   choices: readonly { readonly title: string; readonly value: string }[],
+  translate: Translator = ENGLISH_TRANSLATE,
+  locale?: string,
 ): RowParts {
   if (condition.kind === 'custom') {
-    return { lead: 'Custom', rest: condition.code.replace(/\s+/g, ' ') };
+    return { lead: translate('props.loop.condition.custom'), rest: condition.code.replace(/\s+/g, ' ') };
   }
   const field = fieldTitle(fields, condition.field);
   const symbol = OPERATOR_SYMBOLS[condition.operator];
-  const verb = symbol ?? OPERATOR_LABELS[condition.operator].toLowerCase();
-  const value = 'value' in condition ? valueText(condition.value, fieldNamed(fields, condition.field), choices) : '';
+  const verb = symbol ?? translate(OPERATOR_KEYS[condition.operator]).toLowerCase();
+  const value = 'value' in condition ? valueText(condition.value, fieldNamed(fields, condition.field), choices, locale) : '';
   assert(field.length > 0, 'A condition names its field');
   return { lead: field, rest: value === '' ? verb : `${verb} ${value}` };
 }
@@ -181,8 +186,10 @@ export function conditionSummary(
   condition: LoopCondition,
   fields: readonly CatalogField[] | undefined,
   choices: readonly { readonly title: string; readonly value: string }[],
+  translate: Translator = ENGLISH_TRANSLATE,
+  locale?: string,
 ): string {
-  const parts = conditionParts(condition, fields, choices);
+  const parts = conditionParts(condition, fields, choices, translate, locale);
   return condition.kind === 'custom' ? `${parts.lead}: ${parts.rest}` : `${parts.lead} ${parts.rest}`;
 }
 
@@ -190,12 +197,13 @@ function valueText(
   value: LoopLiteral | string | number,
   field: CatalogField | undefined,
   choices: readonly { readonly title: string; readonly value: string }[],
+  locale: string | undefined,
 ): string {
   if (typeof value === 'number') {
     return String(value);
   }
   if (typeof value === 'string') {
-    return isDateValue(value) ? dateText(value) : value;
+    return isDateValue(value) ? dateText(value, locale) : value;
   }
   switch (value.kind) {
     case 'number':
@@ -211,17 +219,17 @@ function valueText(
   }
 }
 
-function dateText(value: string): string {
+function dateText(value: string, locale: string | undefined): string {
   const date = new Date(`${value}T00:00:00Z`);
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+  return date.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 }
 
-export function sortParts(sort: LoopSort, fields: readonly CatalogField[] | undefined): RowParts {
-  return { lead: fieldTitle(fields, sort.field), rest: orderLabels(sort.order)[sort.direction] };
+export function sortParts(sort: LoopSort, fields: readonly CatalogField[] | undefined, translate: Translator = ENGLISH_TRANSLATE): RowParts {
+  return { lead: fieldTitle(fields, sort.field), rest: orderLabels(sort.order, translate)[sort.direction] };
 }
 
-export function sortSummary(sort: LoopSort, fields: readonly CatalogField[] | undefined): string {
-  const parts = sortParts(sort, fields);
+export function sortSummary(sort: LoopSort, fields: readonly CatalogField[] | undefined, translate: Translator = ENGLISH_TRANSLATE): string {
+  const parts = sortParts(sort, fields, translate);
   return `${parts.lead} · ${parts.rest}`;
 }
 
@@ -394,38 +402,38 @@ export function sectionFieldPaths(
  * for a Sanity type. Checked before it is written, so the page never holds
  * code that does not parse.
  */
-export function customFilterProblem(code: string, source: LoopSourceKind): string | undefined {
+export function customFilterProblem(code: string, source: LoopSourceKind, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   const text = code.trim();
   if (text === '') {
-    return 'Type a condition.';
+    return translate('props.loop.problem.filterEmpty');
   }
   if (text.length > LOOP_QUERY_LIMITS.customCodeCharsMax) {
-    return 'This condition is too long.';
+    return translate('props.loop.problem.filterTooLong');
   }
   if (source === 'sanity') {
     // Read as a clause of the query it joins, the way the writer places it.
     const reading = readGroq(`*[_type == "item" && (${text})]`);
-    return reading === undefined ? 'This is not a GROQ condition.' : undefined;
+    return reading === undefined ? translate('props.loop.problem.filterNotGroq') : undefined;
   }
-  return parseExpression(text) === undefined ? 'This is not one JavaScript expression.' : undefined;
+  return parseExpression(text) === undefined ? translate('props.loop.problem.notExpression') : undefined;
 }
 
 /** Why a custom sort cannot be written: it must be a comparator, `(a, b) => …`. */
-export function customSortProblem(code: string): string | undefined {
+export function customSortProblem(code: string, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   const text = code.trim();
   if (text === '') {
-    return 'Type a comparator, such as (a, b) => a.data.order - b.data.order.';
+    return translate('props.loop.problem.sortEmpty');
   }
   if (text.length > LOOP_QUERY_LIMITS.customCodeCharsMax) {
-    return 'This sort is too long.';
+    return translate('props.loop.problem.sortTooLong');
   }
   const parsed = parseExpression(text);
   if (parsed === undefined) {
-    return 'This is not one JavaScript expression.';
+    return translate('props.loop.problem.notExpression');
   }
   const expression = parsed.expression;
   if (expression.kind !== 'function' || expression.parameters.length !== 2) {
-    return 'A sort compares two items: write (a, b) => …';
+    return translate('props.loop.problem.sortNotComparator');
   }
   return undefined;
 }

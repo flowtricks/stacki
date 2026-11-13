@@ -15,6 +15,8 @@ import { assert } from '../../shared/core/assert';
 import { record, text } from '../../shared/core/boundary';
 import { toArray } from '../../shared/core/record';
 import { APP_LIMITS } from '../../shared/properties/apps';
+import { englishText, messageRef, type TypedMessageRef } from '../../shared/properties/i18n/messageRef';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import type { BundleFile } from '../../shared/properties/appBundle';
 import {
   APP_PUBLISH_LIMITS,
@@ -68,24 +70,29 @@ export async function shareToGitHub(fetcher: GitHubFetch, token: string, plan: S
   assert(plan.files.length > 0, 'A share commits the bundle’s files');
   assert(plan.files.length <= APP_LIMITS.filesMax, 'A share commits a bounded bundle');
   assert((plan.visibility === 'public') === (plan.licenseHolder !== undefined), 'Only a public share adds the MIT license');
-  const created: string[] = [];
+  const created: TypedMessageRef[] = [];
   const full = `${plan.owner}/${plan.name}`;
   let step: AppShareStep = 'create-repository';
   try {
     onStep(step);
     const repository = await createRepository(fetcher, token, plan);
-    created.push(`The ${plan.visibility} repository ${full}, with a README on ${repository.branch}`);
+    created.push(
+      messageRef(plan.visibility === 'public' ? 'apps.share.created.repositoryPublic' : 'apps.share.created.repositoryPrivate', {
+        repository: full,
+        branch: repository.branch,
+      }),
+    );
     step = 'add-topic';
     onStep(step);
     await addStackiAppTopic(fetcher, token, plan.owner, plan.name);
-    created.push(`The ${STACKI_APP_TOPIC} topic on ${full}`);
+    created.push(messageRef('apps.share.created.topic', { topic: STACKI_APP_TOPIC, repository: full }));
     step = 'commit-files';
     onStep(step);
     const license =
       plan.licenseHolder === undefined ? [] : [{ path: 'LICENSE', bytes: new TextEncoder().encode(mitLicenseText(plan.year, plan.licenseHolder)) }];
     const files = [...plan.files, ...license];
     await commitFiles(fetcher, token, { owner: plan.owner, repository: plan.name, branch: repository.branch }, files, `Add ${plan.releaseName} ${plan.tag}`);
-    created.push(`A commit of ${files.length} files on ${repository.branch}`);
+    created.push(messageRef('apps.share.created.commit', { count: files.length, branch: repository.branch }));
     step = 'create-release';
     onStep(step);
     const release = await createRelease(fetcher, token, {
@@ -95,15 +102,21 @@ export async function shareToGitHub(fetcher: GitHubFetch, token: string, plan: S
       tag: plan.tag,
       name: `${plan.releaseName} ${plan.tag}`,
     });
-    created.push(`The release ${plan.tag}, without its asset yet`);
+    created.push(messageRef('apps.share.created.releaseWithoutAsset', { tag: plan.tag }));
     await uploadReleaseAsset(fetcher, token, { owner: plan.owner, repository: plan.name, releaseId: release.id }, plan.asset);
-    created[created.length - 1] = `The release ${plan.tag} with ${plan.asset.name}`;
+    created[created.length - 1] = messageRef('apps.share.created.releaseWithAsset', { tag: plan.tag, asset: plan.asset.name });
   } catch (error: unknown) {
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
       throw error;
     }
     assert(created.length <= APP_PUBLISH_LIMITS.createdMax, 'A share creates a bounded number of things');
-    return { kind: 'failed', step, message: describe(error), created };
+    return {
+      kind: 'failed',
+      step,
+      ...describe(error),
+      created: created.map((entry) => englishText(entry)),
+      createdRefs: created,
+    };
   }
   assert(created.length === 4, 'A finished share created its four things');
   return {
@@ -126,17 +139,15 @@ export async function createRepository(
     auto_init: true,
   });
   if (response.status === 422) {
-    throw new Error(`${plan.owner}/${plan.name} already exists, or GitHub refused the name. Choose another name.`);
+    throw new ReferencedError('apps.error.repositoryExists', { repository: `${plan.owner}/${plan.name}` });
   }
   if (response.status === 403 || response.status === 404) {
-    throw new Error(
-      `This account cannot create repositories under ${plan.owner}. Ask an owner of ${plan.owner} for that permission, or choose your own account.`,
-    );
+    throw new ReferencedError('apps.error.cannotCreateUnder', { owner: plan.owner });
   }
-  const body = record(await expectJSON(response, 'create the repository'));
+  const body = record(await expectJSON(response, 'createRepository'));
   const branch = text(body['default_branch']);
   if (branch.length === 0 || branch.length > 255) {
-    throw new Error('GitHub created the repository without a branch.');
+    throw new ReferencedError('apps.error.repositoryNoBranch');
   }
   return { branch };
 }
@@ -144,15 +155,15 @@ export async function createRepository(
 /** Adds the `stacki-app` topic, keeping any the repository has. Two requests. */
 export async function addStackiAppTopic(fetcher: GitHubFetch, token: string, owner: string, repository: string): Promise<void> {
   const base = repositoryAPI(owner, repository);
-  const current = record(await expectJSON(await send(fetcher, token, 'GET', `${base}/topics`, undefined), 'read the topics'));
+  const current = record(await expectJSON(await send(fetcher, token, 'GET', `${base}/topics`, undefined), 'readTopics'));
   const names = (toArray(current['names']) ?? []).slice(0, APP_GITHUB_LIMITS.topicsMax).filter((name): name is string => typeof name === 'string');
   if (names.includes(STACKI_APP_TOPIC)) {
     return;
   }
   if (names.length >= APP_GITHUB_LIMITS.topicsMax) {
-    throw new Error(`${owner}/${repository} already has ${APP_GITHUB_LIMITS.topicsMax} topics; remove one to add ${STACKI_APP_TOPIC}.`);
+    throw new ReferencedError('apps.error.topicsFull', { repository: `${owner}/${repository}`, count: APP_GITHUB_LIMITS.topicsMax, topic: STACKI_APP_TOPIC });
   }
-  await expectJSON(await send(fetcher, token, 'PUT', `${base}/topics`, { names: [...names, STACKI_APP_TOPIC] }), 'add the topic');
+  await expectJSON(await send(fetcher, token, 'PUT', `${base}/topics`, { names: [...names, STACKI_APP_TOPIC] }), 'addTopic');
 }
 
 /** One commit of `files` on `branch`, over what is there: a blob per file, a tree, the commit, the ref. */
@@ -167,26 +178,26 @@ export async function commitFiles(
   assert(files.length <= APP_GITHUB_WRITE_LIMITS.blobsMax, 'A commit writes a bounded number of files');
   const base = repositoryAPI(target.owner, target.repository);
   const ref = `${base}/git/ref/heads/${encodeURIComponent(target.branch)}`;
-  const head = text(record(record(await expectJSON(await send(fetcher, token, 'GET', ref, undefined), 'read the branch'))['object'])['sha']);
-  const parent = record(await expectJSON(await send(fetcher, token, 'GET', `${base}/git/commits/${head}`, undefined), 'read the last commit'));
+  const head = text(record(record(await expectJSON(await send(fetcher, token, 'GET', ref, undefined), 'readBranch'))['object'])['sha']);
+  const parent = record(await expectJSON(await send(fetcher, token, 'GET', `${base}/git/commits/${head}`, undefined), 'readLastCommit'));
   const baseTree = text(record(parent['tree'])['sha']);
   const tree: { path: string; mode: string; type: string; sha: string }[] = [];
   for (const file of files) {
     const blob = record(
       await expectJSON(
         await send(fetcher, token, 'POST', `${base}/git/blobs`, { content: Buffer.from(file.bytes).toString('base64'), encoding: 'base64' }),
-        'upload a file',
+        'uploadFile',
       ),
     );
     tree.push({ path: file.path, mode: '100644', type: 'blob', sha: text(blob['sha']) });
   }
   assert(tree.length === files.length, 'Every file has a blob');
-  const made = record(await expectJSON(await send(fetcher, token, 'POST', `${base}/git/trees`, { base_tree: baseTree, tree }), 'write the tree'));
+  const made = record(await expectJSON(await send(fetcher, token, 'POST', `${base}/git/trees`, { base_tree: baseTree, tree }), 'writeTree'));
   const commit = record(
-    await expectJSON(await send(fetcher, token, 'POST', `${base}/git/commits`, { message, tree: text(made['sha']), parents: [head] }), 'write the commit'),
+    await expectJSON(await send(fetcher, token, 'POST', `${base}/git/commits`, { message, tree: text(made['sha']), parents: [head] }), 'writeCommit'),
   );
   const sha = text(commit['sha']);
-  await expectJSON(await send(fetcher, token, 'PATCH', `${base}/git/refs/heads/${encodeURIComponent(target.branch)}`, { sha }), 'move the branch');
+  await expectJSON(await send(fetcher, token, 'PATCH', `${base}/git/refs/heads/${encodeURIComponent(target.branch)}`, { sha }), 'moveBranch');
   return { sha };
 }
 
@@ -205,11 +216,11 @@ export async function createRelease(
     prerelease: false,
   });
   if (response.status === 422) {
-    throw new Error(`The release ${release.tag} already exists.`);
+    throw new ReferencedError('apps.error.releaseExists', { tag: release.tag });
   }
-  const id = record(await expectJSON(response, 'create the release'))['id'];
+  const id = record(await expectJSON(response, 'createRelease'))['id'];
   if (typeof id !== 'number' || !Number.isSafeInteger(id)) {
-    throw new Error('GitHub created the release without an id.');
+    throw new ReferencedError('apps.error.releaseNoId');
   }
   return { id };
 }
@@ -224,7 +235,7 @@ export async function uploadReleaseAsset(
   assert(asset.bytes.byteLength <= APP_LIMITS.archiveBytesMax, 'A released bundle is within the archive bound');
   const url = `${UPLOADS_ORIGIN}/repos/${encodeURIComponent(release.owner)}/${encodeURIComponent(release.repository)}/releases/${release.releaseId}/assets?name=${encodeURIComponent(asset.name)}`;
   const response = await send(fetcher, token, 'POST', url, asset.bytes);
-  await expectJSON(response, 'upload the app bundle');
+  await expectJSON(response, 'uploadBundle');
 }
 
 /**
@@ -249,7 +260,7 @@ export async function makeRepositoryPublic(fetcher: GitHubFetch, token: string, 
   if (response.status === 422) {
     return { kind: 'forbidden', reason: 'policy', settingsURL };
   }
-  throw new Error(`GitHub answered ${response.status} when making ${owner}/${repository} public.`);
+  throw new ReferencedError('apps.error.makePublicStatus', { status: response.status, repository: `${owner}/${repository}` });
 }
 
 /** What the marketplace checklist needs: visibility, topic, license, latest release and the copyright holder. Three requests. */
@@ -262,9 +273,9 @@ export async function repositoryStatus(
   const base = repositoryAPI(owner, repository);
   const repoResponse = await send(fetcher, token, 'GET', base, undefined);
   if (repoResponse.status === 404) {
-    throw new Error(`${owner}/${repository} was not found, or this account cannot read it.`);
+    throw new ReferencedError('apps.error.repositoryNotFound', { repository: `${owner}/${repository}` });
   }
-  const repo = record(await expectJSON(repoResponse, 'read the repository'));
+  const repo = record(await expectJSON(repoResponse, 'readRepository'));
   const topics = (toArray(repo['topics']) ?? []).slice(0, APP_GITHUB_LIMITS.topicsMax);
   const spdx = fieldOf(repo['license'], 'spdx_id');
   const ownerValue = record(repo['owner']);
@@ -272,7 +283,7 @@ export async function repositoryStatus(
   const releaseResponse = await send(fetcher, token, 'GET', `${base}/releases/latest`, undefined);
   let release: AppRepositoryStatus['release'];
   if (releaseResponse.ok) {
-    const latest = record(await expectJSON(releaseResponse, 'read the latest release'));
+    const latest = record(await expectJSON(releaseResponse, 'readLatestRelease'));
     const zip = (toArray(latest['assets']) ?? [])
       .slice(0, APP_GITHUB_LIMITS.assetsMax)
       .map((asset) => record(asset))
@@ -302,7 +313,7 @@ export async function ownerName(fetcher: GitHubFetch, token: string | undefined,
     await response.body?.cancel();
     return login;
   }
-  const name = record(await expectJSON(response, 'read the owner'))['name'];
+  const name = record(await expectJSON(response, 'readOwner'))['name'];
   const holder = typeof name === 'string' && name.trim() !== '' ? name.trim().slice(0, APP_PUBLISH_LIMITS.holderCharsMax) : login;
   assert(holder.length > 0, 'A copyright holder is never empty');
   return holder;
@@ -327,6 +338,7 @@ function fieldOf(value: unknown, key: string): unknown {
 }
 
 function repositoryAPI(owner: string, repository: string): string {
+  // i18n-ignore: HTTP header value or request path, protocol text.
   return `${API_ORIGIN}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`;
 }
 
@@ -336,7 +348,9 @@ function send(fetcher: GitHubFetch, token: string | undefined, method: string, u
   const headers: Record<string, string> = {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': '2022-11-28',
+    // i18n-ignore: HTTP header value or request path, protocol text.
     'User-Agent': 'Stacki',
+    // i18n-ignore: HTTP header value or request path, protocol text.
     ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
     ...(body === undefined ? {} : { 'Content-Type': bytes === undefined ? 'application/json' : 'application/zip' }),
   };
@@ -349,7 +363,24 @@ function send(fetcher: GitHubFetch, token: string | undefined, method: string, u
   });
 }
 
-async function expectJSON(response: Response, what: string): Promise<unknown> {
+/** The GitHub request that failed, as the end of an `apps.error.gitHubWrite.*` key: the message names what was asked. */
+type GitHubWriteAction =
+  | 'addTopic'
+  | 'createRelease'
+  | 'createRepository'
+  | 'moveBranch'
+  | 'readBranch'
+  | 'readLastCommit'
+  | 'readLatestRelease'
+  | 'readOwner'
+  | 'readRepository'
+  | 'readTopics'
+  | 'uploadBundle'
+  | 'uploadFile'
+  | 'writeCommit'
+  | 'writeTree';
+
+async function expectJSON(response: Response, what: GitHubWriteAction): Promise<unknown> {
   if (!response.ok) {
     let detail = '';
     try {
@@ -359,7 +390,7 @@ async function expectJSON(response: Response, what: string): Promise<unknown> {
     } catch {
       detail = '';
     }
-    throw new Error(`GitHub answered ${response.status} when asked to ${what}${detail}.`);
+    throw new ReferencedError(`apps.error.gitHubWrite.${what}`, { status: response.status, detail });
   }
   if (response.status === 204) {
     return {};
@@ -369,7 +400,11 @@ async function expectJSON(response: Response, what: string): Promise<unknown> {
   return parsed;
 }
 
-function describe(error: unknown): string {
+// The failure as the share outcome carries it: the bounded English reason, and its reference when the error raised one.
+function describe(error: unknown): { readonly message: string; readonly messageRef?: TypedMessageRef } {
+  if (error instanceof ReferencedError) {
+    return { message: error.message.slice(0, APP_LIMITS.messageCharsMax), messageRef: error.messageRef };
+  }
   const message = error instanceof Error ? error.message : String(error);
-  return (message.trim() || 'GitHub refused the request.').slice(0, APP_LIMITS.messageCharsMax);
+  return { message: (message.trim() || 'GitHub refused the request.').slice(0, APP_LIMITS.messageCharsMax) }; // i18n-ignore: fallback for an error that carries no text; GitHub's own words normally show.
 }

@@ -14,6 +14,7 @@
 // a file every teammate pulls, and Studio and Desktop both have the storage.
 import { useSyncExternalStore } from 'react';
 import { assert } from '../../../shared/core/assert';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { record } from '../../../shared/core/boundary';
 import { can, type RoleView } from '../../../shared/properties/projectRoles';
 import { APP_LIMITS, type AppSummary } from '../../../shared/properties/apps';
@@ -209,7 +210,7 @@ export function platformShortcutLabel(shortcut: string): string {
  * The hint a shortcut field shows for a key outside the reserved range, read from
  * the range itself so the two cannot drift: "Use ⌘⌥⇧ with a number from 1 to 9".
  */
-export function commandShortcutHint(platform: 'mac' | 'other'): string {
+export function commandShortcutHint(platform: 'mac' | 'other', translate: Translator): string {
   const keys = APP_RESERVED_SHORTCUTS.map((shortcut) => shortcut.split('+').at(-1) ?? '');
   const modifiers = APP_RESERVED_SHORTCUTS[0].split('+').slice(0, -1).join('+');
   assert(
@@ -220,7 +221,7 @@ export function commandShortcutHint(platform: 'mac' | 'other'): string {
     keys.every((key) => /^[0-9]$/.test(key)),
     'The reserved range is digits; the hint says numbers',
   );
-  return `Use ${shortcutLabel(modifiers, platform)} with a number from ${keys[0] ?? ''} to ${keys.at(-1) ?? ''}`;
+  return translate('apps.commands.reservedHint', { modifiers: shortcutLabel(modifiers, platform), first: keys[0] ?? '', last: keys.at(-1) ?? '' });
 }
 
 /**
@@ -228,7 +229,7 @@ export function commandShortcutHint(platform: 'mac' | 'other'): string {
  * Heat map"), or undefined when the key is free or this command already holds it.
  * Another app's command is named by its app; one of the same app's by its title.
  */
-export function shortcutHolder(bound: readonly BoundCommand[], appId: string, commandId: string, shortcut: string): string | undefined {
+export function shortcutHolder(bound: readonly BoundCommand[], appId: string, commandId: string, shortcut: string, translate: Translator): string | undefined {
   assert(appId.length > 0, 'A command belongs to an app');
   const holder = bound.find((entry) => entry.shortcut === shortcut);
   if (holder === undefined) {
@@ -238,10 +239,10 @@ export function shortcutHolder(bound: readonly BoundCommand[], appId: string, co
     if (holder.command.id === commandId) {
       return undefined;
     }
-    return `Used by ${holder.command.title}`;
+    return translate('apps.commands.usedBy', { name: holder.command.title });
   }
   assert(holder.app.manifest.name.length > 0, 'An installed app has a name');
-  return `Used by ${holder.app.manifest.name}`;
+  return translate('apps.commands.usedBy', { name: holder.app.manifest.name });
 }
 
 /**

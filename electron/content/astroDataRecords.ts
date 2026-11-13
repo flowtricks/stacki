@@ -103,6 +103,7 @@ function placeOrder(entry: Entry): number {
 function freeId(entries: readonly Entry[]): string {
   const taken = new Set(entries.map((entry) => entry.id));
   for (let index = 1; index <= RECORD_IDS_MAX; index += 1) {
+    // i18n-ignore: Entry ids written to disk, not interface text.
     const id = index === 1 ? 'untitled' : `untitled-${index}`;
     if (!taken.has(id)) {
       return id;

@@ -6,8 +6,9 @@
 // no order, so mediaOrder.ts keeps one.
 
 import { assert } from '../../../shared/core/assert';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 import { MEDIA_HOSTING_LIMITS, parseMediaName, type BunnyRegion, type MediaConnection } from '../../../shared/properties/mediaHosting';
-import { MEDIA_HTTP_LIMITS, MediaHostError, expectOk, readBounded, readText, send, statusSentence, type MediaFetch, type MediaRequest } from './mediaHttp';
+import { MEDIA_HTTP_LIMITS, MediaHostError, expectOk, readBounded, readText, send, statusProblem, type MediaFetch, type MediaRequest } from './mediaHttp';
 import { contentTypeOf, publicURLOf, type MediaStore, type StoredFile } from './mediaStore';
 import { sha256Hex } from './sigV4';
 
@@ -45,6 +46,7 @@ export function bunnyStore(connection: Pick<BunnyConnection, 'storageZone' | 're
     return parseBunnyListing(parsed);
   };
   return {
+    // i18n-ignore: Brand name of the media host.
     host: 'Bunny Storage',
     async list(folder) {
       const listed = await entries(folder);
@@ -65,7 +67,7 @@ export function bunnyStore(connection: Pick<BunnyConnection, 'storageZone' | 're
       for (let visited = 0; visited < queue.length; visited++) {
         const relative = queue[visited] ?? '';
         if (relative.split('/').length > MEDIA_HOSTING_LIMITS.folderDepthMax) {
-          throw new MediaHostError('This folder is nested too deeply to change here.', 0);
+          throw new MediaHostError(described('cmsBackend.media.nestedTooDeep'), 0);
         }
         for (const entry of await entries(relative === '' ? folder : `${folder}/${relative}`)) {
           const key = relative === '' ? entry.name : `${relative}/${entry.name}`;
@@ -74,7 +76,7 @@ export function bunnyStore(connection: Pick<BunnyConnection, 'storageZone' | 're
             queue.push(key);
           }
           if (keys.length > keysMax) {
-            throw new MediaHostError(`This folder holds more than ${keysMax} files; change it in Bunny's own dashboard.`, 0);
+            throw new MediaHostError(described('cmsBackend.media.tooManyFilesBunny', { count: keysMax }), 0);
           }
         }
       }
@@ -100,7 +102,7 @@ export function bunnyStore(connection: Pick<BunnyConnection, 'storageZone' | 're
       assert(fromKey !== toKey, 'A copy goes somewhere else');
       const bytes = await this.read(fromKey, MEDIA_HTTP_LIMITS.fileBytesMax);
       if (bytes === undefined) {
-        throw new MediaHostError('That file is no longer there.', 404);
+        throw new MediaHostError(described('cmsBackend.media.fileGone'), 404);
       }
       await this.write(toKey, bytes, contentTypeOf(toKey));
     },
@@ -130,22 +132,23 @@ export function bunnyStore(connection: Pick<BunnyConnection, 'storageZone' | 're
   };
 }
 
-function describeFailure(status: number, body: string): string {
+function describeFailure(status: number, body: string): Described {
   let detail = '';
   try {
     const parsed: unknown = JSON.parse(body);
     const message: unknown = typeof parsed === 'object' && parsed !== null ? Reflect.get(parsed, 'Message') : undefined;
+    // i18n-ignore: The host's own words, appended to the translated sentence.
     detail = typeof message === 'string' ? ` Bunny said: ${message}` : '';
   } catch {
     // Not every refusal has a JSON body.
   }
-  return `${statusSentence(status)}${detail}`;
+  return statusProblem(status, detail);
 }
 
 /** Bunny's folder listing: an array of objects, one per file or folder. */
 export function parseBunnyListing(input: unknown): readonly BunnyEntry[] {
   if (!Array.isArray(input)) {
-    throw new MediaHostError('Bunny Storage sent a listing that is not a list.', 0);
+    throw new MediaHostError(described('cmsBackend.media.bunnyNotList'), 0);
   }
   // One more than a folder's bound, so a fuller folder still reads as truncated.
   const bounded: readonly unknown[] = input.slice(0, 2 * MEDIA_HOSTING_LIMITS.entriesPerFolderMax + 1);
@@ -164,15 +167,15 @@ function nameable(name: string): boolean {
 // Every entry, nameable or not: a folder's tree is moved and deleted whole.
 function parseBunnyEntry(input: unknown): BunnyEntry {
   if (typeof input !== 'object' || input === null) {
-    throw new MediaHostError('Bunny Storage sent an unreadable listing.', 0);
+    throw new MediaHostError(described('cmsBackend.media.bunnyUnreadable'), 0);
   }
   const name: unknown = Reflect.get(input, 'ObjectName');
   const directory: unknown = Reflect.get(input, 'IsDirectory');
   if (typeof name !== 'string' || typeof directory !== 'boolean') {
-    throw new MediaHostError('Bunny Storage sent an unreadable listing.', 0);
+    throw new MediaHostError(described('cmsBackend.media.bunnyUnreadable'), 0);
   }
   if (name === '' || name.includes('/')) {
-    throw new MediaHostError('Bunny Storage sent an unreadable listing.', 0);
+    throw new MediaHostError(described('cmsBackend.media.bunnyUnreadable'), 0);
   }
   const length: unknown = Reflect.get(input, 'Length');
   const changed: unknown = Reflect.get(input, 'LastChanged');

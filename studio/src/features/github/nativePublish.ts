@@ -82,6 +82,7 @@ async function fetchPublishParent(git: PublishGit, remote: string, branch: strin
     return head;
   }
   if (head.value !== expectedHead) {
+    // i18n-ignore: Studio server reply with a stable code, relayed as received.
     return err({ code: 'github_changed', message: 'GitHub changed before publishing.' });
   }
   return publishGit(git, ['rev-parse', expectedHead + '^{tree}']);

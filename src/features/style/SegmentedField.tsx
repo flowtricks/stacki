@@ -2,6 +2,7 @@ import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import { useHighlight } from './model/computedStyle';
 import type { ReactNode } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import SegmentPill from './components/SegmentPill';
 import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { useCustomFocus } from './model/fieldHooks';
@@ -30,6 +31,7 @@ function CustomField({
   inputRef: React.RefObject<HTMLInputElement>;
   onCommit: (value: string, important: boolean) => void;
 }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(withImportant({ value, important }));
   const focused = useRef(false);
   useEffect(() => {
@@ -63,8 +65,8 @@ function CustomField({
       }}
       disabled={busy}
       spellCheck={false}
-      aria-label="Value"
-      placeholder="custom value"
+      aria-label={translate('style.segmentedField.value')}
+      placeholder={translate('style.segmentedField.customValuePlaceholder')}
     />
   );
 }
@@ -154,6 +156,7 @@ function SegmentMenu({
   onPick: (value: string) => void;
   onEnterCustom: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <button
@@ -161,7 +164,7 @@ function SegmentMenu({
         className="embed-editor_display-arrow"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="More options"
+        aria-label={translate('style.segmentedField.moreOptions')}
         disabled={busy}
         onClick={onToggle}
       >
@@ -175,7 +178,7 @@ function SegmentMenu({
               <MenuItem key={option.value} label={option.menuLabel} selected={current === option.value} onClick={() => onPick(option.value)} />
             ))
           ) : (
-            <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
+            <MenuItem label={translate('style.segmentedField.custom')} selected={false} onClick={onEnterCustom} />
           )}
         </Popup>
       ) : undefined}

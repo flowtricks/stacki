@@ -23,8 +23,8 @@ buildSync({
     contents: `export { LocaleProvider } from './src/lib/i18n/LocaleProvider.tsx';
       export { useTranslate, useLocale } from './src/lib/i18n/useTranslate.ts';
       export { writeLocalePreference } from './src/lib/i18n/localeStore.ts';
-      export { messages as spanish } from './shared/properties/i18n/messages/es.ts';
-      export { messages as french } from './shared/properties/i18n/messages/fr.ts';`,
+      export { messages as spanish } from './shared/properties/i18n/messages/es/index.ts';
+      export { messages as french } from './shared/properties/i18n/messages/fr/index.ts';`,
     resolveDir: ROOT,
   },
   outfile: output,

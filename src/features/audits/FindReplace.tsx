@@ -6,6 +6,7 @@
 // scripts, style blocks, frontmatter) is found only when asked and never rewritten,
 // and nothing outside the project's own pages, components and CMS data is read.
 import { useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { readPage } from '../../ipc/bridge';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import { record } from '../../../shared/core/boundary';
@@ -46,6 +47,7 @@ interface DataResult {
 const SEARCH_FILES_MAX = 2_000;
 
 export function FindReplace(props: Pick<AuditsPanelProps, 'project' | 'fixDeps' | 'onReveal' | 'showToast' | 'sources'> & { readonly onClose: () => void }) {
+  const translate = useTranslate();
   const [query, setQuery] = useState('');
   const [replacement, setReplacement] = useState('');
   const [options, setOptions] = useState<Omit<FindOptions, 'query'>>({ caseSensitive: false, wholeWord: false, includeCode: false });
@@ -88,7 +90,7 @@ export function FindReplace(props: Pick<AuditsPanelProps, 'project' | 'fixDeps' 
     }
     const findings = files.flatMap((result) => result.matches.flatMap((match) => replacementFinding(result.file, match, pattern, replacement) ?? []));
     if (findings.length === 0) {
-      props.showToast('Only code matched; code is found, not rewritten.', 'info');
+      props.showToast(translate('auditsUi.find.onlyCode'), 'info');
       return;
     }
     setBusy(true);
@@ -96,7 +98,7 @@ export function FindReplace(props: Pick<AuditsPanelProps, 'project' | 'fixDeps' 
     setBusy(false);
     const [failure] = outcome.failures;
     props.showToast(
-      failure === undefined ? `Replaced in ${outcome.files} ${outcome.files === 1 ? 'file' : 'files'}.` : `${failure.file}: ${failure.message}`,
+      failure === undefined ? translate('auditsUi.find.replacedFiles', { count: outcome.files }) : `${failure.file}: ${failure.message}`,
       failure === undefined ? 'success' : 'error',
     );
     await search();
@@ -112,8 +114,8 @@ export function FindReplace(props: Pick<AuditsPanelProps, 'project' | 'fixDeps' 
       }
     };
     await write('after');
-    props.fixDeps().pushCommand({ label: 'Replace in CMS entries', undo: () => write('before'), redo: () => write('after') });
-    props.showToast(`Replaced in ${writes.length} CMS ${writes.length === 1 ? 'file' : 'files'}.`, 'success');
+    props.fixDeps().pushCommand({ label: translate('auditsUi.find.replaceCmsLabel'), undo: () => write('before'), redo: () => write('after') });
+    props.showToast(translate('auditsUi.find.replacedCmsFiles', { count: writes.length }), 'success');
     await search();
   };
   const count =
@@ -121,56 +123,61 @@ export function FindReplace(props: Pick<AuditsPanelProps, 'project' | 'fixDeps' 
     (results?.data ?? []).reduce((total, entry) => total + entry.matches.length, 0);
   return (
     <div className="audits-find">
-      <SearchField label="Find" value={query} onChange={setQuery} />
+      <SearchField label={translate('auditsUi.find.find')} value={query} onChange={setQuery} />
       <input
         className="audits-reason"
-        aria-label="Replace with"
-        placeholder="Replace with"
+        aria-label={translate('auditsUi.find.replaceWith')}
+        placeholder={translate('auditsUi.find.replaceWith')}
         value={replacement}
         onChange={(event) => setReplacement(event.currentTarget.value)}
         onKeyDown={(event) => event.key === 'Enter' && void search()}
       />
       <div className="audits-find-options">
         <SegmentedTabs<Scope>
-          label="Where"
+          label={translate('auditsUi.find.where')}
           value={scope}
           tabs={[
-            { value: 'current', label: 'This page' },
-            { value: 'site', label: 'Site' },
+            { value: 'current', label: translate('auditsUi.scope.page') },
+            { value: 'site', label: translate('auditsUi.scope.site') },
           ]}
           onPick={setScope}
         />
         <Toggle
-          label="Aa"
-          title="Match case"
+          label="Aa" // i18n-ignore: the match-case glyph, the same in every language.
+          title={translate('auditsUi.find.matchCase')}
           on={options.caseSensitive}
           onToggle={() => setOptions((current) => ({ ...current, caseSensitive: !current.caseSensitive }))}
         />
-        <Toggle label="W" title="Whole word" on={options.wholeWord} onToggle={() => setOptions((current) => ({ ...current, wholeWord: !current.wholeWord }))} />
+        <Toggle
+          label="W"
+          title={translate('auditsUi.find.wholeWord')}
+          on={options.wholeWord}
+          onToggle={() => setOptions((current) => ({ ...current, wholeWord: !current.wholeWord }))}
+        />
         <Toggle
           label="{ }"
-          title="Include code"
+          title={translate('auditsUi.find.includeCode')}
           on={options.includeCode}
           onToggle={() => setOptions((current) => ({ ...current, includeCode: !current.includeCode }))}
         />
       </div>
       <div className="audits-ready">
-        <span>{busy ? 'Searching…' : results === undefined ? '' : `${count} ${count === 1 ? 'match' : 'matches'}`}</span>
+        <span>{busy ? translate('auditsUi.find.searching') : results === undefined ? '' : translate('auditsUi.find.matches', { count })}</span>
         <span>
           <button className="audits-link" disabled={pattern === undefined || busy} onClick={() => void search()}>
-            Find
+            {translate('auditsUi.find.find')}
           </button>
           {results !== undefined && count > 0 && (
             <button
               className="audits-link"
               disabled={busy}
-              onClick={() => void replaceFiles(results.files, `Replace “${query}”`).then(() => replaceData(results.data))}
+              onClick={() => void replaceFiles(results.files, translate('auditsUi.find.replaceLabel', { query })).then(() => replaceData(results.data))}
             >
-              Replace all
+              {translate('auditsUi.find.replaceAll')}
             </button>
           )}
           <button className="audits-link muted" onClick={props.onClose}>
-            Close
+            {translate('ui.close')}
           </button>
         </span>
       </div>
@@ -190,29 +197,39 @@ export function FindReplace(props: Pick<AuditsPanelProps, 'project' | 'fixDeps' 
                   onClick={() => props.onReveal(result.file, match.path, undefined)}
                 >
                   <span className="label audits-title">{snippet(match.value, query)}</span>
-                  <span className="audits-tag">{match.place.kind === 'attribute' ? match.place.name : match.place.kind === 'code' ? 'code' : 'text'}</span>
+                  <span className="audits-tag">
+                    {match.place.kind === 'attribute'
+                      ? match.place.name
+                      : match.place.kind === 'code'
+                        ? translate('auditsUi.find.placeCode')
+                        : translate('auditsUi.find.placeText')}
+                  </span>
                   {match.place.kind !== 'code' && (
                     <span className="audits-hover-actions" onClick={(event) => event.stopPropagation()}>
                       <button className="audits-link" onClick={() => setPreviewing(previewing === key ? undefined : key)}>
-                        Replace
+                        {translate('auditsUi.find.replace')}
                       </button>
                     </span>
                   )}
                 </div>
                 {previewing === key && (
                   <div className="audits-inset">
-                    <CodeBlock text={match.value} language="html" className="audits-code audits-before" label="Before" />
-                    <CodeBlock text={after} language="html" className="audits-code" label="After" />
+                    <CodeBlock text={match.value} language="html" className="audits-code audits-before" label={translate('auditsUi.before')} />
+                    <CodeBlock text={after} language="html" className="audits-code" label={translate('auditsUi.after')} />
                     <div className="audits-actions">
                       <button
                         className="audits-link"
                         disabled={busy}
-                        onClick={() => void replaceFiles([{ file: result.file, matches: [match] }], `Replace “${query}”`).then(() => setPreviewing(undefined))}
+                        onClick={() =>
+                          void replaceFiles([{ file: result.file, matches: [match] }], translate('auditsUi.find.replaceLabel', { query })).then(() =>
+                            setPreviewing(undefined),
+                          )
+                        }
                       >
-                        Replace
+                        {translate('auditsUi.find.replace')}
                       </button>
                       <button className="audits-link muted" onClick={() => setPreviewing(undefined)}>
-                        Cancel
+                        {translate('ui.cancel')}
                       </button>
                     </div>
                   </div>

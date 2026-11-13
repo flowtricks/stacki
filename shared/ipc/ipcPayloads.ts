@@ -1,6 +1,7 @@
+import { parseLocaleSet } from './localeChannel';
 import { parseMergeResolution } from './mergeResolution';
 import { parseAccountRequest } from './publishAccount';
-import { parseCmsConnectionDraft, parseConnectionId, parseSanityLoginRequest } from '../properties/cmsConnections';
+import { parseCmsCheckRequest, parseCmsConnectionDraft, parseConnectionId, parseSanityLoginRequest } from '../properties/cmsConnections';
 import {
   parseRemoteCollectionName,
   parseRemoteColumns,
@@ -435,6 +436,7 @@ export const IPC_PAYLOADS = {
   'cmsConnections:list': object({ ...project }),
   'cmsConnections:save': object({ ...project, draft: parseCmsConnectionDraft }),
   'cmsConnections:remove': object({ ...project, id: parseConnectionId }),
+  'cmsConnections:check': object({ ...project, request: parseCmsCheckRequest }),
   'cmsConnections:sanityLogin': object({ ...project, request: parseSanityLoginRequest }),
   'cmsRemote:collections': object({ ...project, connectionId: parseRemoteConnection }),
   'cmsRemote:documents': object({
@@ -586,6 +588,7 @@ export const IPC_PAYLOADS = {
   'git:status': object({ ...project }),
   'git:unpark': object({ ...project }),
   'git:worktrees': object({ ...project }),
+  'locale:set': parseLocaleSet,
   'microphone:openSettings': nothing,
   'microphone:request': nothing,
   'microphone:status': nothing,

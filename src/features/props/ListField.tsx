@@ -1,3 +1,6 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { itemFieldTitle } from '../../editor/itemFields';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
 import type { Item, ItemField } from './arrayValue';
@@ -58,6 +61,7 @@ interface ItemEditorProps {
   readonly onClose: () => void;
 }
 function ItemEditor({ item: given, shape, projectPath, bindContext, dataContext, position, trigger, onChange, onClose }: ItemEditorProps) {
+  const translate = useTranslate();
   const ref = useListEditorDismiss(trigger, onClose);
 
   useEffect(() => {
@@ -82,9 +86,9 @@ function ItemEditor({ item: given, shape, projectPath, bindContext, dataContext,
       onKeyDown={(event) => closeOnEnter(event, onClose)}
     >
       <div className="var-src-head">
-        <span className="var-src-name">{item.fields ? 'Item' : 'Value'}</span>
+        <span className="var-src-name">{item.fields ? translate('props.list.item') : translate('props.list.value')}</span>
         <span style={{ flex: 1 }} />
-        <button className="ghost" title="Close" onClick={onClose}>
+        <button className="ghost" title={translate('ui.close')} onClick={onClose}>
           <CloseIcon size={12} />
         </button>
       </div>
@@ -195,25 +199,28 @@ function NestedFieldEditor(props: {
   readonly dataContext: SourceContext | undefined;
   readonly onSet: (field: ItemField) => void;
 }) {
+  const translate = useTranslate();
   const { field, declaration, onSet } = props;
   const [open, setOpen] = useState(false);
   const nested = field.quote === undefined ? nestedItems(field.text) : undefined;
   const Chevron = open ? ChevronDownIcon : ChevronRightIcon;
-  const summary = declaration.kind === 'list' ? countLabel(nested?.length ?? 0) : '';
+  const summary = declaration.kind === 'list' ? countLabel(nested?.length ?? 0, translate) : '';
   return (
     <div className="props-field list-item-nested" data-kind={declaration.kind}>
       <button
         type="button"
         className="list-item-nested-head"
         aria-expanded={open}
-        aria-label={`${field.key}, ${declaration.kind}`}
+        aria-label={translate('props.list.nestedLabel', { key: field.key, kind: itemFieldTitle(declaration.kind, translate) })}
         onClick={() => setOpen(!open)}
       >
         <Chevron size={12} />
         <span className="list-item-nested-name">{field.key}</span>
         {summary !== '' && <span className="list-item-nested-count">{summary}</span>}
       </button>
-      {open && nested === undefined && <div className="list-item-note">This {declaration.kind} is set in code.</div>}
+      {open && nested === undefined && (
+        <div className="list-item-note">{translate(declaration.kind === 'list' ? 'props.list.listInCode' : 'props.list.groupInCode')}</div>
+      )}
       {open && nested !== undefined && declaration.kind === 'list' && (
         <ListField
           value={field.text}
@@ -267,8 +274,8 @@ function GroupFields(props: {
 }
 
 // "No items", "1 item", "3 items".
-function countLabel(count: number): string {
-  return count === 0 ? 'No items' : count === 1 ? '1 item' : `${count} items`;
+function countLabel(count: number, translate: Translator): string {
+  return count === 0 ? translate('props.list.noItems') : translate('props.list.itemCount', { count });
 }
 
 // What a refused value is held as. As code, a number on its way (`-`) reads as
@@ -284,10 +291,17 @@ function heldDraft(value: Attr | undefined, kind: ItemShapeField['kind']): Attr 
 // A list of words holds no fields to bind: an item that is code is a program
 // rather than a row (arrayValue.ts), so its one field stays a box for words.
 function WordItemInput(props: { readonly text: string; readonly onSet: (text: string) => void }) {
+  const translate = useTranslate();
   return (
     <label className="list-item-field">
       <span>value</span>
-      <input value={props.text} aria-label="value" spellCheck={false} maxLength={LIMITS.attrCharsMax} onChange={(event) => props.onSet(event.target.value)} />
+      <input
+        value={props.text}
+        aria-label={translate('props.list.value')}
+        spellCheck={false}
+        maxLength={LIMITS.attrCharsMax}
+        onChange={(event) => props.onSet(event.target.value)}
+      />
     </label>
   );
 }
@@ -383,6 +397,7 @@ type Drag =
     };
 
 export default function ListField(props: ListFieldProps) {
+  const translate = useTranslate();
   const state = useListField(props);
   const note = state.fallback ? '' : emptyNote(props.placeholder);
   const { itemsRef, scrolls } = useItemsScroll(state.items.length);
@@ -409,7 +424,7 @@ export default function ListField(props: ListFieldProps) {
         }}
       >
         <PlusIcon size={12} />
-        Add item
+        {translate('props.list.addItem')}
       </button>
       <ListEditor state={state} />
     </div>
@@ -578,6 +593,7 @@ function listPopupPosition(element: HTMLElement): Position {
 type ListState = ReturnType<typeof useListField>;
 
 function ListRow({ item, index, state }: { readonly item: Item; readonly index: number; readonly state: ListState }) {
+  const translate = useTranslate();
   const { drag, editor, setDrag, remove, drop } = state;
   const dragging = drag.kind === 'dragging' ? drag.index : undefined;
   const gap = drag.kind === 'dragging' ? drag.gap : undefined;
@@ -609,11 +625,11 @@ function ListRow({ item, index, state }: { readonly item: Item; readonly index: 
       expanded={open}
       disabled={state.disabled}
       removeDisabled={state.disabled || state.items.length <= state.itemsMin}
-      removeLabel={`Remove ${itemLabel(item) || 'item'}`}
+      removeLabel={translate('props.list.removeItem', { item: itemLabel(item) || translate('props.list.item') })}
       onOpen={(event) => toggleListRow(event, state, index, item)}
       onRemove={() => remove(index)}
     >
-      {itemLabel(item) || <span className="list-field-blank">Empty</span>}
+      {itemLabel(item) || <span className="list-field-blank">{translate('props.conditional.empty')}</span>}
     </ListFieldRow>
   );
 }

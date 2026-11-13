@@ -5,6 +5,8 @@ import { HistoryRepository } from './historyRepository';
 import { createCommitAvatarResolver } from '../../../vendor/stacki/electron/git/commitAvatars';
 import { parseCommitAvatarRequest } from '../../../vendor/stacki/shared/ipc/commitAvatars';
 import type { NativeRepository } from '../github/nativeRepository';
+import { errorWire } from '../../shared/referencedError';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 export function historyRoutes(root: string, repository: NativeRepository | undefined) {
   const history = new HistoryRepository(root, () =>
@@ -12,10 +14,7 @@ export function historyRoutes(root: string, repository: NativeRepository | undef
       ? repository.historyConnection()
       : Promise.resolve({
           ok: false,
-          error: {
-            code: 'repository',
-            message: 'Connect a GitHub repository to view published history.',
-          },
+          error: { code: 'repository', ...described('git.studio.historyNotConnected') },
         }),
   );
   // Author pictures for the shared history panel. Studio's history is always a GitHub
@@ -65,15 +64,14 @@ export function historyRoutes(root: string, repository: NativeRepository | undef
         response.end(JSON.stringify(await history.diff(query)));
       } else {
         response.statusCode = 405;
+        // A request the client never makes, so a developer sees this text, not a person.
+        // i18n-ignore: Unsupported route or method is a client bug, not an interface message.
         response.end(JSON.stringify({ error: 'Unsupported history request.' }));
       }
     } catch (error: unknown) {
       response.statusCode = 409;
-      response.end(
-        JSON.stringify({
-          error: error instanceof Error ? error.message : 'Could not read repository history.',
-        }),
-      );
+      const failure = errorWire(error, 'git.studio.historyUnreadable');
+      response.end(JSON.stringify({ error: failure.message, ...(failure.messageRef === undefined ? {} : { messageRef: failure.messageRef }) }));
     }
     return true;
   };

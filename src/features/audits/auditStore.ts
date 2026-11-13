@@ -7,6 +7,7 @@ import { useSyncExternalStore } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { AuditFinding } from '../../../shared/page/auditFindings';
 import { EMPTY_AUDIT_IGNORES } from '../../../shared/properties/auditIgnores';
+import type { Described } from '../../../shared/properties/i18n/messageRef';
 import type { AuditProgress, AuditReport } from './auditRunner';
 import { parseAuditScope, type AuditScope } from './auditScope';
 import type { StoredIgnores } from './auditsBridge';
@@ -47,7 +48,8 @@ export interface PerformanceState {
   /** Each measured page's score and headline numbers; dev-server numbers, so approximations. */
   readonly results: readonly MeasuredPage[];
   readonly findings: readonly AuditFinding[];
-  readonly problem: string | undefined;
+  /** Why the last measurement failed, in words (the renderer translates the reference). */
+  readonly problem: Described | undefined;
   /** When the last measurement finished, and which audit run it belongs to (a new run means files changed). */
   readonly measuredAt?: number;
   readonly stamp?: number;

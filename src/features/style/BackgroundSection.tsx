@@ -10,6 +10,8 @@ import ImportantMark from './components/ImportantMark';
 import { type Props, BgLabel, BgField, LayerEditorModal } from './BackgroundKit';
 import { imageUrlOf, assetSourceCandidates, FallbackImg } from './BackgroundLayerFields';
 import { LayerEditor } from './BackgroundLayerEditor';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 // The Backgrounds section — Webflow parity. `background` is a stack of layers
 // (images + gradients) painted over a single background-color. The layer list
@@ -23,8 +25,11 @@ import { LayerEditor } from './BackgroundLayerEditor';
 
 // ─────────────────────────── Section ───────────────────────────
 
+const TRANSPARENT_KEYWORD = 'transparent'; // i18n-ignore: the CSS keyword shown as the empty color.
+
 export default function BackgroundSection(props: Props) {
   const { read, busy, setProp, clearProp, onProvenance, onSelectSelector } = props;
+  const translate = useTranslate();
   const stack = useLayerStack(props);
   const { layers, applyLayers, openLayer, setOpenLayer } = stack;
   // The layers come from the `background` shorthand when no `background-image`
@@ -36,7 +41,7 @@ export default function BackgroundSection(props: Props) {
       {/* Image & gradient — the layer stack (top layer first). */}
       <div className="embed-editor_bg-layers-head">
         <BgLabel
-          label="Image & gradient"
+          label={translate('style.backgroundSection.imageAndGradient')}
           prop={labelProp}
           d={displayOf(read(labelProp))}
           contributors={read(labelProp)?.contributors ?? []}
@@ -50,8 +55,8 @@ export default function BackgroundSection(props: Props) {
           className="embed-editor_icon-btn"
           onClick={stack.addLayer}
           disabled={busy}
-          title="Add a layer"
-          aria-label="Add a background layer"
+          title={translate('style.backgroundSection.addLayer')}
+          aria-label={translate('style.backgroundSection.addBackgroundLayer')}
         >
           <PlusIcon />
         </button>
@@ -60,11 +65,11 @@ export default function BackgroundSection(props: Props) {
       <LayerList
         count={layers.length}
         busy={busy}
-        ariaLabel="Background layers"
+        ariaLabel={translate('style.backgroundSection.backgroundLayers')}
         onOpen={(i) => setOpenLayer((current) => (current === i ? undefined : i))}
         onReorder={stack.reorder}
         onRemove={stack.removeLayer}
-        renderRow={(i) => layerRow(layers, i)}
+        renderRow={(i) => layerRow(layers, i, translate)}
       />
 
       {openLayer !== undefined && layers[openLayer] ? (
@@ -83,7 +88,13 @@ export default function BackgroundSection(props: Props) {
 
       {/* Colour — painted behind every layer. */}
       <div className="embed-editor_size-row">
-        <BgField {...props} prop="background-color" label="Color" placeholder="transparent" swatchLabel="Background color" />
+        <BgField
+          {...props}
+          prop="background-color"
+          label={translate('style.backgroundSection.color')}
+          placeholder={TRANSPARENT_KEYWORD}
+          swatchLabel={translate('style.backgroundSection.backgroundColor')}
+        />
       </div>
 
       <ClippingRow {...props} />
@@ -94,12 +105,13 @@ export default function BackgroundSection(props: Props) {
 // Clipping — background-clip. "None" writes border-box explicitly.
 function ClippingRow(props: Props) {
   const { read, busy, setProp, clearProp } = props;
+  const translate = useTranslate();
   const clipDisplay = displayOf(read('background-clip'));
   const clip = clipDisplay.present ? clipDisplay.value.trim() : 'border-box';
   return (
     <div className="embed-editor_size-row">
       <BgLabel
-        label="Clipping"
+        label={translate('style.backgroundSection.clipping')}
         prop="background-clip"
         d={clipDisplay}
         contributors={read('background-clip')?.contributors ?? []}
@@ -112,10 +124,10 @@ function ClippingRow(props: Props) {
       <ImportantMark important={clipDisplay.important}>
         <Select
           value={clip}
-          options={CLIP_OPTIONS}
+          options={clipOptions(translate)}
           onChange={(next) => setProp('background-clip', next, clipDisplay.important)}
           onPreview={(next) => props.liveSetProp('background-clip', next ?? undefined, clipDisplay.important)}
-          ariaLabel="Background clipping"
+          ariaLabel={translate('style.backgroundSection.backgroundClipping')}
           disabled={busy}
         />
       </ImportantMark>
@@ -123,11 +135,11 @@ function ClippingRow(props: Props) {
   );
 }
 
-const CLIP_OPTIONS = [
-  { value: 'border-box', label: 'None' },
-  { value: 'padding-box', label: 'Clip background to padding' },
-  { value: 'content-box', label: 'Clip background to content' },
-  { value: 'text', label: 'Clip background to text' },
+const clipOptions = (translate: Translator) => [
+  { value: 'border-box', label: translate('style.backgroundSection.clipNone') },
+  { value: 'padding-box', label: translate('style.backgroundSection.clipPadding') },
+  { value: 'content-box', label: translate('style.backgroundSection.clipContent') },
+  { value: 'text', label: translate('style.backgroundSection.clipText') },
 ];
 
 /** The property the layer stack is read from: `background-image`, or the
@@ -141,12 +153,12 @@ export function layerSourceProp(read: Props['read']): 'background-image' | 'back
 }
 
 // A row of the layer list: its thumbnail and its label.
-function layerRow(layers: BgLayer[], i: number) {
+function layerRow(layers: BgLayer[], i: number, translate: Translator) {
   const layer = layers[i];
   if (layer === undefined) {
     throw new Error(`Background layer ${i} is missing`);
   }
-  return { preview: <LayerPreview layer={layer} />, label: layerLabel(layer.image) };
+  return { preview: <LayerPreview layer={layer} />, label: layerLabel(layer.image, translate) };
 }
 
 // A layer's thumbnail in the list.

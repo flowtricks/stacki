@@ -10,6 +10,7 @@
 // released build ignores the variable, so nobody can be steered to another index
 // by their environment. There is no setting for it in the UI.
 import { assert } from '../../shared/core/assert';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import {
   MARKETPLACE_INDEX_URL,
   MARKETPLACE_LIMITS,
@@ -65,6 +66,7 @@ function developmentOverride(environment: Readonly<Record<string, string | undef
   if (url.protocol === 'http:' && local) {
     return url.toString();
   }
+  // i18n-ignore: a development-only environment variable is misconfigured; release builds never read it.
   throw new Error(`${variable} must be an https: address, or http: on localhost`);
 }
 
@@ -72,13 +74,14 @@ function developmentOverride(environment: Readonly<Record<string, string | undef
 export async function fetchMarketplaceIndex(fetcher: GitHubFetch, url: string): Promise<MarketplaceIndex> {
   assert(url.length > 0, 'The marketplace has an address');
   const response = await fetcher(url, {
+    // i18n-ignore: HTTP header value or request path, protocol text.
     headers: { Accept: 'application/json', 'User-Agent': 'Stacki' },
     redirect: 'error',
     signal: AbortSignal.timeout(APP_MARKETPLACE_LIMITS.requestMsMax),
   });
   if (!response.ok) {
     // The panel shows its own calm wording; this detail is for the small print and the logs.
-    throw new Error(`The marketplace index answered HTTP ${response.status}.`);
+    throw new ReferencedError('apps.error.marketplaceIndexStatus', { status: response.status });
   }
   const body = await readBounded(response, MARKETPLACE_LIMITS.indexBytesMax);
   const index = parseMarketplaceIndexSource(new TextDecoder().decode(body));
@@ -96,7 +99,7 @@ export async function downloadApprovedVersion(fetcher: GitHubFetch, app: Marketp
   const asset = await releaseAsset(fetcher, app.source, { tag: approved.tag, token: undefined });
   const downloaded = await downloadReleaseAsset(fetcher, asset, undefined);
   if (downloaded.sha256 !== approved.sha256) {
-    throw new Error(`${app.name} ${approved.version} does not match the SHA-256 the marketplace approved; nothing was installed.`);
+    throw new ReferencedError('apps.error.marketplaceDigestMismatch', { name: app.name, version: approved.version });
   }
   assert(downloaded.sha256 === approved.sha256, 'An approved download carries the approved digest');
   return downloaded;

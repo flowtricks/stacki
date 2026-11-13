@@ -7,6 +7,7 @@
 // before keeping it (the hosts' signing runs in the container); a wrong key
 // shows on the panel's first listing instead.
 
+// i18n-ignore-file: HTTP API fallback text on the Studio server: it has no language, and the editor shows its own sentence for a failed request.
 import { canEdit } from '../features/auth/repositoryAccess';
 import type { Identity } from '../features/auth/session';
 import { publicMediaList, secretText, withMediaConnection, withoutMediaConnection } from '../features/assets/mediaConnectionBook';

@@ -258,6 +258,7 @@ async function capture(userDataPath: string, projectPath: string, url: string): 
     }
     const image = captured.value;
     if (image.isEmpty()) {
+      // i18n-ignore: log detail for a failed thumbnail capture; the thumbnail simply stays missing.
       return { ok: false, error: 'the capture came back empty' };
     }
 

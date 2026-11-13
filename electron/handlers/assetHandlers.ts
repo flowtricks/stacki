@@ -8,7 +8,8 @@ import { toPosix } from '../lib/mainHelpers';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { MainHost } from './mainHost';
-import { replacementRefusal } from '../../shared/properties/mediaHosting';
+import { translateMain, translateMainDescribed } from '../lib/mainLocale';
+import { describeReplacementRefusal } from '../../shared/properties/mediaHosting';
 import { rootOfRel, assetAbs, assetWriteRefusal, uniqueTarget, imageSizeOf, listAssetEntries } from '../project/assetFiles';
 
 export function registerAssetHandlers(host: Pick<MainHost, 'assertInProject' | 'ipcMain' | 'noteAppWrite' | 'send' | 'shell' | 'showOpenDialog'>): void {
@@ -33,7 +34,7 @@ function registerAssetsListHandlers({
   // Opens a picker and copies the chosen files into public/<destRel>.
   ipcMain.handle('assets:pickUpload', async (_event, { projectPath, destRel: targetRel }) => {
     const result = await showOpenDialog({
-      title: 'Upload assets',
+      title: translateMain('dialog.open.assets.title'),
       properties: ['openFile', 'multiSelections'],
     });
     if (result.canceled || !result.filePaths.length) {
@@ -63,18 +64,14 @@ function registerAssetsMoveHandlers({
     // it would have to be rewritten in place. Until that rewrite exists, refuse
     // — moving the file alone would leave the site pointing at nothing, quietly.
     if (rootOfRel(fromRel) !== rootOfRel(toDirectoryRel)) {
-      throw new Error(
-        'Moving between public/ and src/ changes how the file is referenced ' +
-          '(URL vs import), so it needs the references updated too. Not supported yet — ' +
-          'move it outside the app and fix the references by hand.',
-      );
+      throw new Error(translateMain('assets.error.moveAcrossRoots'));
     }
     if (!fs.existsSync(from)) {
       return { ok: false as const };
     }
     // Refuse moving a folder into itself/its own subtree.
     if (fs.statSync(from).isDirectory() && isPathWithin(from, toDirectory)) {
-      throw new Error('Cannot move a folder into itself.');
+      throw new Error(translateMain('assets.error.moveIntoItself'));
     }
     const target = uniqueTarget(toDirectory, path.basename(from));
     noteAppWrite();
@@ -88,7 +85,7 @@ function registerAssetsMoveHandlers({
   ipcMain.handle('assets:rename', async (_event, { projectPath, rel, newName }) => {
     const clean = String(newName).trim().replace(/[/\\]/g, '');
     if (!clean) {
-      throw new Error('Invalid name');
+      throw new Error(translateMain('assets.error.invalidName'));
     }
     const from = assetAbs(projectPath, rel);
     const target = path.join(path.dirname(from), clean);
@@ -101,12 +98,12 @@ function registerAssetsMoveHandlers({
       for (const side of [from, target]) {
         const refusal = assetWriteRefusal(toPosix(path.relative(path.resolve(projectPath), side)));
         if (refusal !== undefined) {
-          throw new Error(refusal);
+          throw new Error(translateMainDescribed(refusal));
         }
       }
     }
     if (fs.existsSync(target)) {
-      throw new Error('Something with that name already exists.');
+      throw new Error(translateMain('assets.error.nameTaken'));
     }
     noteAppWrite();
     noteAppWrite();
@@ -122,23 +119,23 @@ function registerAssetsMoveHandlers({
   ipcMain.handle('assets:replace', async (_event, { projectPath, rel }) => {
     const target = assetAbs(projectPath, rel);
     if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
-      return { ok: false as const, message: `${path.basename(rel)} is no longer there.` };
+      return { ok: false as const, message: translateMain('error.assets.missing', { name: path.basename(rel) }) };
     }
     // Under src/ only media is an asset; everything else there is code (pages,
     // components, stylesheets) that only the document actors write, so a raw
     // byte copy must never reach it (test/electron/documents/singleWriter.test.ts).
     const refusal = assetWriteRefusal(toPosix(path.relative(path.resolve(projectPath), target)));
     if (refusal !== undefined) {
-      return { ok: false as const, message: refusal };
+      return { ok: false as const, message: refusal.message, messageRef: refusal.messageRef };
     }
-    const picked = await showOpenDialog({ title: `Replace ${path.basename(rel)}`, properties: ['openFile'] });
+    const picked = await showOpenDialog({ title: translateMain('dialog.open.replace.title', { name: path.basename(rel) }), properties: ['openFile'] });
     const source = picked.filePaths[0];
     if (picked.canceled || source === undefined) {
       return { ok: true as const, value: false };
     }
-    const mismatch = replacementRefusal(path.basename(target), path.basename(source));
+    const mismatch = describeReplacementRefusal(path.basename(target), path.basename(source));
     if (mismatch !== undefined) {
-      return { ok: false as const, message: mismatch };
+      return { ok: false as const, message: mismatch.message, messageRef: mismatch.messageRef };
     }
     noteAppWrite();
     fs.copyFileSync(source, target);
@@ -173,7 +170,7 @@ function registerAssetsReadTextHandlers({
     const abs = assetAbs(projectPath, rel);
     const stat = fs.statSync(abs);
     if (stat.size > MAIN_LIMITS.editableFileBytesMax) {
-      throw new Error('That file is too large to edit in the app (over 5 MB).');
+      throw new Error(translateMain('assets.error.tooLarge'));
     }
     return { text: readSource(abs) };
   });
@@ -187,7 +184,7 @@ function registerAssetsReadTextHandlers({
   ipcMain.handle('assets:mkdir', async (_event, { projectPath, parentRel, name }) => {
     const clean = String(name).trim().replace(/[/\\]/g, '');
     if (!clean) {
-      throw new Error('Invalid folder name');
+      throw new Error(translateMain('assets.error.invalidFolderName'));
     }
     const directory = path.join(assetAbs(projectPath, parentRel), clean);
     noteAppWrite();

@@ -10,6 +10,7 @@ import { EMPTY_KEEP_LIST, parseStyleKeepList, type StyleKeepList } from '../../s
 import { readProjectMetadata } from '../project/projectMetadata';
 import { checkSelectorUsage, removeUnusedSelectors, restoreSelectorFiles } from '../properties/selectorRemoval';
 import type { MainHost } from './mainHost';
+import { translateMain } from '../lib/mainLocale';
 
 export function registerSelectorHandlers(host: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
   const root = (projectPath: string): string => {
@@ -63,6 +64,9 @@ function readKeepList(project: string): Result<StyleKeepList> {
     const input: unknown = JSON.parse(stored.value.source);
     return ok(parseStyleKeepList(input));
   } catch (error: unknown) {
-    return err({ code: 'keep-list', message: `.stacki/styles.json is invalid: ${error instanceof Error ? error.message : String(error)}` });
+    return err({
+      code: 'keep-list',
+      message: translateMain('error.selectors.stylesInvalid', { reason: error instanceof Error ? error.message : String(error) }),
+    });
   }
 }

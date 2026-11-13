@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, PointerEvent as ReactPointerEvent, SetStateAction } from 'react';
 import { assert } from '../../../shared/core/assert';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import Dropdown from '../../ui/Dropdown';
 import type { DropdownOption } from '../../ui/Dropdown';
 import { ChevronDownIcon, CloseIcon, PlusIcon } from '../../ui/Icons';
@@ -39,12 +41,17 @@ interface TerminalDockProps {
   readonly onClose: () => void;
 }
 
-const AUTO_LAUNCH_OPTIONS = [
-  { value: 'none', label: 'Shell only' },
-  { value: 'claude', label: 'Claude Code' },
-  { value: 'codex', label: 'Codex' },
-  { value: 'custom', label: 'Custom…' },
-] as const satisfies readonly DropdownOption<LaunchMode>[];
+// Claude Code and Codex are product names; the other two choices are words of the interface.
+function autoLaunchOptions(translate: Translator): readonly DropdownOption<LaunchMode>[] {
+  return [
+    { value: 'none', label: translate('workspace.terminal.shellOnly') },
+    // i18n-ignore: Claude Code and Codex are product names.
+    { value: 'claude', label: 'Claude Code' },
+    // i18n-ignore: Codex is a product name.
+    { value: 'codex', label: 'Codex' },
+    { value: 'custom', label: translate('workspace.terminal.custom') },
+  ];
+}
 
 export function tabLabel(tab: TerminalTab, index: number): string {
   assert(Number.isSafeInteger(index), 'Terminal tab index must be an integer');
@@ -64,6 +71,7 @@ export function tabLabels(tabs: readonly TerminalTab[]): readonly string[] {
 }
 
 export default function TerminalDock(props: TerminalDockProps) {
+  const translate = useTranslate();
   const settings = useDockSettings();
   const terminals = useTerminalTabs(props.projectPath, { open: props.open });
   const onHandleDown = useDockResize(settings.height, settings.setHeight, settings.setDragging);
@@ -71,7 +79,7 @@ export default function TerminalDock(props: TerminalDockProps) {
   const autoLaunch = launchCommand(settings.mode, settings.custom);
   return (
     <div className={`term-dock ${props.open ? 'on' : ''}`} style={{ height: props.open ? settings.height : 0 }}>
-      <div className={`term-resize ${settings.dragging ? 'on' : ''}`} onPointerDown={onHandleDown} title="Drag to resize" />
+      <div className={`term-resize ${settings.dragging ? 'on' : ''}`} onPointerDown={onHandleDown} title={translate('workspace.terminal.resize')} />
       <TerminalBar
         tabs={terminals.tabs}
         activeId={terminals.activeId}
@@ -84,7 +92,7 @@ export default function TerminalDock(props: TerminalDockProps) {
       <div className="term-panes">
         {terminals.tabs.map((tab) => (
           <div key={tab.id} className="term-pane-wrap" style={{ display: tab.id === terminals.activeId ? 'block' : 'none' }}>
-            <Suspense fallback={<div className="term-pane">Loading terminal…</div>}>
+            <Suspense fallback={<div className="term-pane" role="status" aria-busy="true" aria-label={translate('workspace.terminal.loading')} />}>
               <TerminalPane
                 ref={(pane) => terminals.setPaneRef(tab.id, pane ?? undefined)}
                 terminalId={tab.id}
@@ -270,6 +278,7 @@ interface TerminalBarProps {
 }
 
 function TerminalBar(props: TerminalBarProps) {
+  const translate = useTranslate();
   const labels = tabLabels(props.tabs);
   return (
     <div className="term-bar">
@@ -285,7 +294,7 @@ function TerminalBar(props: TerminalBarProps) {
             {props.tabs.length > 1 && (
               <span
                 className="term-tab-x"
-                title="Close terminal"
+                title={translate('workspace.terminal.close')}
                 onClick={(event) => {
                   event.stopPropagation();
                   props.closeTab(tab.id);
@@ -296,7 +305,12 @@ function TerminalBar(props: TerminalBarProps) {
             )}
           </button>
         ))}
-        <button className="ghost term-add" title="New terminal" onClick={() => props.createTab()} disabled={props.tabs.length >= TERMINAL_TABS_MAX}>
+        <button
+          className="ghost term-add"
+          title={translate('workspace.terminal.new')}
+          onClick={() => props.createTab()}
+          disabled={props.tabs.length >= TERMINAL_TABS_MAX}
+        >
           <PlusIcon size={13} />
         </button>
       </div>
@@ -307,6 +321,7 @@ function TerminalBar(props: TerminalBarProps) {
 
 function TerminalSettings(props: Pick<TerminalBarProps, 'settings' | 'onClose'>) {
   const { settings } = props;
+  const translate = useTranslate();
   return (
     <div className="term-bar-right">
       {settings.mode === 'custom' && (
@@ -314,8 +329,8 @@ function TerminalSettings(props: Pick<TerminalBarProps, 'settings' | 'onClose'>)
           className="term-custom"
           value={settings.custom}
           maxLength={CUSTOM_COMMAND_CHARS_MAX}
-          placeholder="e.g. bun run watch"
-          title="Run once in each new terminal"
+          placeholder={translate('workspace.terminal.customPlaceholder')}
+          title={translate('workspace.terminal.customTitle')}
           onChange={(event) => {
             settings.setCustom(event.target.value);
             storeSetting(CUSTOM_KEY, event.target.value);
@@ -325,14 +340,18 @@ function TerminalSettings(props: Pick<TerminalBarProps, 'settings' | 'onClose'>)
       <Dropdown
         className="term-launch"
         value={settings.mode}
-        options={AUTO_LAUNCH_OPTIONS}
+        options={autoLaunchOptions(translate)}
         livePreview={false}
         onChange={(mode) => {
           settings.setMode(mode);
           storeSetting(MODE_KEY, mode);
         }}
       />
-      <button className="ghost" title={`Hide terminal (${shortcutLabel('J', 'primary', currentDesktopPlatform())})`} onClick={props.onClose}>
+      <button
+        className="ghost"
+        title={translate('workspace.terminal.hide', { shortcut: shortcutLabel('J', 'primary', currentDesktopPlatform()) })}
+        onClick={props.onClose}
+      >
         <ChevronDownIcon size={13} />
       </button>
     </div>

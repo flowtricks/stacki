@@ -16,7 +16,8 @@
 import ts from 'typescript';
 
 import { assert } from '../../shared/core/assert';
-import type { Result } from '../../shared/core/result';
+import { err, type Result } from '../../shared/core/result';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { readChain, writeChain, type Chain, type ChainStep } from './astroSchemaChecks';
 import {
   CHAIN_STEPS_MAX,
@@ -51,7 +52,7 @@ export interface SchemaEdit {
   readonly move: { readonly from: string; readonly to: string } | undefined;
 }
 
-export function readCollectionSchema(source: string, collection: string): Result<SchemaRead, string> {
+export function readCollectionSchema(source: string, collection: string): Result<SchemaRead, Described> {
   const located = locate(source, collection);
   if (!located.ok) {
     return located;
@@ -62,7 +63,7 @@ export function readCollectionSchema(source: string, collection: string): Result
 }
 
 /** The config with `change` made to `collection`'s schema, or why it cannot be. */
-export function editCollectionSchema(source: string, collection: string, change: SettingsChange): Result<SchemaEdit, string> {
+export function editCollectionSchema(source: string, collection: string, change: SettingsChange): Result<SchemaEdit, Described> {
   const located = locate(source, collection);
   if (!located.ok) {
     return located;
@@ -75,10 +76,7 @@ export function editCollectionSchema(source: string, collection: string, change:
   }
   const { object } = located.value;
   if (object === undefined) {
-    return {
-      ok: false,
-      error: `${collection} has no z.object({ … }) schema in the config to edit.`,
-    };
+    return err(described('cmsBackend.schema.noObject', { collection }));
   }
   const edits = fieldEdits(located.value, object, change);
   if (!edits.ok) {
@@ -91,7 +89,7 @@ function fieldEdits(
   located: Located,
   object: ts.ObjectLiteralExpression,
   change: Exclude<SettingsChange, { readonly kind: 'renameCollection' | 'deleteCollection' }>,
-): Result<readonly SpanEdit[], string> {
+): Result<readonly SpanEdit[], Described> {
   const { file } = located;
   const named = (name: string) => object.properties.find((property) => propertyName(property) === name);
   switch (change.kind) {
@@ -100,10 +98,10 @@ function fieldEdits(
     case 'renameField': {
       const property = named(change.from);
       if (property === undefined || property.name === undefined) {
-        return { ok: false, error: `There is no field ${change.from}.` };
+        return err(described('cmsBackend.schema.noField', { name: change.from }));
       }
       if (named(change.to) !== undefined) {
-        return { ok: false, error: `A field named ${change.to} already exists.` };
+        return err(described('cmsBackend.schema.fieldExists', { name: change.to }));
       }
       const key = keyText(change.to, { quoted: ts.isStringLiteral(property.name) });
       // A shorthand field names its schema's constant: that name stays as its value.
@@ -120,7 +118,7 @@ function fieldEdits(
     case 'removeField': {
       const kept = object.properties.filter((property) => propertyName(property) !== change.name);
       if (kept.length === object.properties.length) {
-        return { ok: false, error: `There is no field ${change.name}.` };
+        return err(described('cmsBackend.schema.noField', { name: change.name }));
       }
       return {
         ok: true,
@@ -140,11 +138,11 @@ function fieldEdits(
   }
 }
 
-function reorderFields(object: ts.ObjectLiteralExpression, file: ts.SourceFile, order: readonly string[]): Result<readonly SpanEdit[], string> {
+function reorderFields(object: ts.ObjectLiteralExpression, file: ts.SourceFile, order: readonly string[]): Result<readonly SpanEdit[], Described> {
   const byName = new Map(object.properties.map((property) => [propertyName(property), property]));
   const known = order.every((name) => byName.has(name));
   if (!known || order.length !== object.properties.length) {
-    return { ok: false, error: 'The fields changed since they were listed. Reopen the settings.' };
+    return err(described('cmsBackend.schema.fieldsChanged'));
   }
   const texts = order.map((name) => byName.get(name)?.getText(file) ?? '');
   assert(
@@ -154,17 +152,14 @@ function reorderFields(object: ts.ObjectLiteralExpression, file: ts.SourceFile, 
   return { ok: true, value: [propertyList(object, file, texts)] };
 }
 
-function updateField(property: ts.ObjectLiteralElementLike | undefined, file: ts.SourceFile, update: FieldUpdate): Result<readonly SpanEdit[], string> {
+function updateField(property: ts.ObjectLiteralElementLike | undefined, file: ts.SourceFile, update: FieldUpdate): Result<readonly SpanEdit[], Described> {
   if (property === undefined) {
-    return { ok: false, error: `There is no field ${update.name}.` };
+    return err(described('cmsBackend.schema.noField', { name: update.name }));
   }
   const schema = schemaOf(property);
   const chain = schema === undefined ? undefined : chainOf(schema, file);
   if (schema === undefined || chain === undefined) {
-    return {
-      ok: false,
-      error: `${update.name} is written as a method or a very long chain; edit it in the config.`,
-    };
+    return err(described('cmsBackend.schema.tooComplex', { name: update.name }));
   }
   const text = writeChain(chain, update);
   assert(text.length > 0, 'A field is written with a schema');
@@ -197,15 +192,15 @@ function addField(
     readonly settings: FieldSettings;
   },
   existing: ts.ObjectLiteralElementLike | undefined,
-): Result<readonly SpanEdit[], string> {
+): Result<readonly SpanEdit[], Described> {
   const { file } = located;
   if (existing !== undefined) {
-    return { ok: false, error: `A field named ${field.name} already exists.` };
+    return err(described('cmsBackend.schema.fieldExists', { name: field.name }));
   }
   const target = field.target ?? '';
   const pointing = field.fieldKind === 'reference' || field.fieldKind === 'multiReference';
   if (pointing && !collectionsObject(file)?.properties.some((property) => propertyName(property) === target)) {
-    return { ok: false, error: `${target} is not a collection in the content config.` };
+    return err(described('cmsBackend.schema.notCollection', { name: target }));
   }
   const key = keyText(field.name, { quoted: false });
   const added = `${key}: ${settledFieldText(field.fieldKind, target, field.settings)}`;
@@ -265,11 +260,11 @@ export function newFieldText(kind: NewFieldKind, target: string): string {
 
 // `image()` comes from the schema's function: a schema written as an object becomes
 // one, and a function that does not take `image` takes it too.
-function imageScope(located: Located): Result<readonly SpanEdit[], string> {
+function imageScope(located: Located): Result<readonly SpanEdit[], Described> {
   const { file } = located;
   const schema = schemaProperty(located.call);
   if (schema === undefined) {
-    return { ok: false, error: 'This collection has no schema to add an image field to.' };
+    return err(described('cmsBackend.schema.noImageSchema'));
   }
   const value = schema.initializer;
   if (!ts.isArrowFunction(value)) {
@@ -287,10 +282,7 @@ function imageScope(located: Located): Result<readonly SpanEdit[], string> {
     };
   }
   if (!ts.isObjectBindingPattern(parameter.name)) {
-    return {
-      ok: false,
-      error: 'Add `image` to the schema’s function by hand, then add the field.',
-    };
+    return err(described('cmsBackend.schema.imageByHand'));
   }
   const names = parameter.name.elements.map((element) => element.name.getText(file));
   if (names.includes('image')) {
@@ -322,18 +314,19 @@ function referenceImport(file: ts.SourceFile): readonly SpanEdit[] {
     }
     const last = bindings.elements.at(-1);
     if (last !== undefined) {
+      // i18n-ignore: Source code written into the user's content config.
       return [{ start: last.getEnd(), end: last.getEnd(), text: ', reference' }];
     }
   }
   return [{ start: 0, end: 0, text: "import { reference } from 'astro:content';\n" }];
 }
 
-function renameCollection(source: string, located: Located, rename: { readonly from: string; readonly to: string }): Result<SchemaEdit, string> {
+function renameCollection(source: string, located: Located, rename: { readonly from: string; readonly to: string }): Result<SchemaEdit, Described> {
   const { entry, file, call } = located;
   const collections = entry.parent;
   assert(ts.isObjectLiteralExpression(collections), 'A collection is listed in an object');
   if (collections.properties.some((property) => propertyName(property) === rename.to)) {
-    return { ok: false, error: `A collection named ${rename.to} already exists.` };
+    return err(described('cmsBackend.schema.collectionExists', { name: rename.to }));
   }
   const edits: SpanEdit[] = [];
   if (ts.isShorthandPropertyAssignment(entry)) {
@@ -376,14 +369,11 @@ function renameCollection(source: string, located: Located, rename: { readonly f
  * collection that points at it (so nothing is left referring to it), then its
  * entry in `collections`, and the const that declared it when nothing else uses it.
  */
-function deleteCollection(source: string, name: string): Result<SchemaEdit, string> {
+function deleteCollection(source: string, name: string): Result<SchemaEdit, Described> {
   const first = ts.createSourceFile('content.config.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const collections = collectionsObject(first);
   if (collections === undefined) {
-    return {
-      ok: false,
-      error: 'Stacki could not find `export const collections = { … }` in the content config.',
-    };
+    return err(described('cmsBackend.config.noCollections'));
   }
   const unlinked: SpanEdit[] = [];
   for (const entry of collections.properties) {

@@ -4,15 +4,11 @@ import { calendarValue } from '../../../vendor/stacki/src/ui/dateFieldModel';
 import { containsHTML } from '../../../vendor/stacki/src/ui/htmlFieldModel';
 import Dropdown, { type DropdownOption } from '../../../vendor/stacki/src/ui/Dropdown';
 import { useId } from 'react';
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { DndContext, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { record } from '../validation';
-
-const BOOLEAN_OPTIONS: readonly DropdownOption<boolean>[] = [
-  { value: true, label: 'True' },
-  { value: false, label: 'False' },
-];
 
 interface Props {
   readonly value: unknown;
@@ -22,8 +18,13 @@ interface Props {
   readonly template?: unknown;
 }
 export function ValueFields({ value, change, label, depth = 0, template }: Props) {
+  const translate = useTranslate();
+  const booleanOptions: readonly DropdownOption<boolean>[] = [
+    { value: true, label: translate('props.newProp.form.true') },
+    { value: false, label: translate('props.newProp.form.false') },
+  ];
   if (depth > 8) {
-    return <p>Open source to edit deeply nested content.</p>;
+    return <p>{translate('studio.values.deeplyNested')}</p>;
   }
   if (Array.isArray(value)) {
     return <ListFields value={value} change={change} label={label} depth={depth} template={template} />;
@@ -44,7 +45,7 @@ export function ValueFields({ value, change, label, depth = 0, template }: Props
     );
   }
   if (typeof value === 'boolean') {
-    return <Dropdown ariaLabel={label} value={value} options={BOOLEAN_OPTIONS} livePreview={false} onChange={change} />;
+    return <Dropdown ariaLabel={label} value={value} options={booleanOptions} livePreview={false} onChange={change} />;
   }
   if (typeof value === 'number') {
     return (
@@ -74,6 +75,7 @@ function StringField({ value, label, change }: Pick<Props, 'value' | 'label' | '
   return <textarea aria-label={label} rows={2} value={typeof value === 'string' ? value : ''} onChange={(event) => change(event.target.value)} />;
 }
 function ListFields({ value, change, label, depth = 0, template }: Props & { value: unknown[] }) {
+  const translate = useTranslate();
   const prefix = useId();
   const ids = value.map((_, index) => `${prefix}-${index}`);
   const sensors = useSensors(
@@ -112,12 +114,13 @@ function ListFields({ value, change, label, depth = 0, template }: Props & { val
         </SortableContext>
       </DndContext>
       <button type="button" disabled={value.length >= 200} onClick={() => change([...value, template ?? emptyValue(value[0])])}>
-        Add item
+        {translate('cms.addItem')}
       </button>
     </div>
   );
 }
 function ListItem({ id, label, remove, children }: { id: string; label: string; remove: () => void; children: React.ReactNode }) {
+  const translate = useTranslate();
   const sortable = useSortable({ id });
   return (
     <div
@@ -130,10 +133,16 @@ function ListItem({ id, label, remove, children }: { id: string; label: string; 
       }}
     >
       <div className="value-list-controls">
-        <button type="button" aria-label={`Drag ${label}`} style={{ touchAction: 'none' }} {...sortable.attributes} {...sortable.listeners}>
+        <button
+          type="button"
+          aria-label={translate('studio.values.drag', { label })}
+          style={{ touchAction: 'none' }}
+          {...sortable.attributes}
+          {...sortable.listeners}
+        >
           ⠿
         </button>
-        <button type="button" aria-label={`Remove ${label}`} onClick={remove}>
+        <button type="button" aria-label={translate('ui.multiSelect.remove', { label })} onClick={remove}>
           ×
         </button>
       </div>

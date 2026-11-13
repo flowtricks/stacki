@@ -27,7 +27,7 @@ import {
   type AppFileOperation,
   type AppFileState,
 } from '../../shared/properties/appFiles';
-import { appsFailureMessage, type AppsResult } from '../../shared/properties/apps';
+import { appsFailure, type AppsResult } from '../../shared/properties/apps';
 
 /** How a host writes one file: its save path. `text` is the bytes as UTF-8 when they are text. */
 export type AppFileWriter = (absolute: string, bytes: Uint8Array, text: string | undefined) => void;
@@ -85,7 +85,7 @@ export function runAppFileOperation(
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
       throw error;
     }
-    return { ok: false, message: appsFailureMessage(error) };
+    return { ok: false, ...appsFailure(error) };
   }
 }
 

@@ -2,6 +2,7 @@
 // pasting components, the insert palette, the canvas's messages, and
 // composing the history (App.tsx).
 
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { tellCanvas } from '../../editor/canvasQuery';
 import { planCanvasMove } from '../../../shared/page/canvasMove';
@@ -252,6 +253,7 @@ export function useCreateComponent(
   lifecycle: ReturnType<typeof useLifecycle>,
   history: ReturnType<typeof useHistory>,
 ) {
+  const translate = useTranslate();
   const { pageStateRef, projectRef, pseudoPickRef, selectedIdRef, setSelectedId } = coreState;
   const { extractionFor } = componentQueries;
   const { rescan, showToast } = lifecycle;
@@ -307,10 +309,10 @@ export function useCreateComponent(
           create: async () => (await createProjectComponent(input)).checksum,
           confirmDelete: async () =>
             (await confirmDialog({
-              title: `Delete ${created.rel}?`,
-              body: 'It has changed since it was created. Undo has restored the page either way.',
-              confirmLabel: 'Delete file',
-              cancelLabel: 'Keep file',
+              title: translate('shell.component.deleteTitle', { rel: created.rel }),
+              body: translate('shell.component.deleteBody'),
+              confirmLabel: translate('shell.component.deleteConfirm'),
+              cancelLabel: translate('shell.component.deleteKeep'),
               danger: true,
             })) === true,
           rescan: async () => {
@@ -335,7 +337,7 @@ export function useCreateComponent(
         // The plan took code out of a frontmatter that has changed since, and
         // writing it would put the old text back over the new.
         await files.undo();
-        showToast('The page’s code changed while the component was being made. Try again.', 'error');
+        showToast(translate('shell.component.codeChanged'), 'error');
         return;
       }
       const place = { parentId: found.parent?.id ?? undefined, index: found.index };
@@ -352,15 +354,16 @@ export function useCreateComponent(
       // person who just moved it knows what it needs.
       const movedCount = plan.values.filter((value) => value.kind === 'move').length;
       const stranded = usesPageScope(node) && plan.values.length === 0;
-      showToast(createdComponentMessage(created.rel, { props: props.length, moved: movedCount }, { stranded }));
+      showToast(createdComponentMessage(created.rel, { props: props.length, moved: movedCount }, { stranded }, translate));
     },
-    [commitEdit, extractionFor, rescan, showToast, pageStateRef, projectRef, pseudoPickRef, selectedIdRef, setSelectedId],
+    [commitEdit, extractionFor, rescan, showToast, pageStateRef, projectRef, pseudoPickRef, selectedIdRef, setSelectedId, translate],
   );
   return { createComponentFromSelection };
 }
 
 // Moving a node.
 export function useMoveNode(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>, lifecycle: ReturnType<typeof useLifecycle>) {
+  const translate = useTranslate();
   const { canvasPathForRef, insertables, pageStateRef } = coreState;
   const { commitEdit } = history;
   const { showToast } = lifecycle;
@@ -407,16 +410,17 @@ export function useMoveNode(coreState: ReturnType<typeof useCoreState>, history:
         tellCanvas({ type: 'avb:optimistic-move', move: canvasMove });
       }
       if (removed) {
-        showToast(`Removed ${removed} binding${removed === 1 ? '' : 's'} that referenced ${lost.join(', ')}.`, 'info');
+        showToast(translate('shell.paste.bindingsRemoved', { count: removed, names: lost.join(', ') }), 'info');
       }
     },
-    [insertables, commitEdit, showToast, canvasPathForRef, pageStateRef],
+    [insertables, commitEdit, showToast, canvasPathForRef, pageStateRef, translate],
   );
   return { moveNode };
 }
 
 // Removing a node.
 export function useRemoveNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const translate = useTranslate();
   const { canvasPathForRef, pageStateRef, projectRef, setSelectedId } = coreState;
   const { showToast } = lifecycle;
   const { commitEdit, pushCommand } = history;
@@ -429,7 +433,7 @@ export function useRemoveNode(coreState: ReturnType<typeof useCoreState>, lifecy
       }
       const target = findNodeById(state.model.nodes, nodeId);
       if (target?.kind === 'chunk-group') {
-        showToast('This section comes from the page frontmatter — remove it from the code instead.', 'error');
+        showToast(translate('shell.remove.fromFrontmatter'), 'error');
         return;
       }
       // Worked out against the tree as it stands, before the node is gone.
@@ -457,21 +461,17 @@ export function useRemoveNode(coreState: ReturnType<typeof useCoreState>, lifecy
       if (committed && target && projectPath) {
         // Styles only this element used are offered for removal once it is saved.
         const host = { projectPath, showToast, pushCommand, saved: () => pageStateRef.current.pageState?.save.tag === 'clean' };
-        void offerStyleCleanup(host, namesInSubtree(target));
+        void offerStyleCleanup(host, namesInSubtree(target), translate);
       }
       if (removed.dropped.length) {
         const names = removed.dropped;
-        showToast(
-          `Also removed ${names.map((name) => `\`${name}\``).join(', ')} from the frontmatter — ` +
-            `nothing was reading ${names.length === 1 ? 'it' : 'them'} any more.`,
-          'info',
-        );
+        showToast(translate('shell.remove.alsoRemoved', { count: names.length, names: names.map((name) => `\`${name}\``).join(', ') }), 'info');
       }
       // Only the selection that just vanished moves — deleting some other row
       // (navigator menu, canvas) leaves what you were working on alone.
       setSelectedId((id) => (id === nodeId ? nextId : id));
     },
-    [commitEdit, pushCommand, showToast, canvasPathForRef, pageStateRef, projectRef, setSelectedId],
+    [commitEdit, pushCommand, showToast, canvasPathForRef, pageStateRef, projectRef, setSelectedId, translate],
   );
 
   // ----------------------------------------------------------------
@@ -489,6 +489,7 @@ export function useCopyNode(
   lifecycle: ReturnType<typeof useLifecycle>,
   history: ReturnType<typeof useHistory>,
 ) {
+  const translate = useTranslate();
   const { pageStateRef, setSelectedId } = coreState;
   const { nodeClipboardRef } = removeNodeScope;
   const { showToast } = lifecycle;
@@ -536,7 +537,7 @@ export function useCopyNode(
         return;
       }
       if (sourceNode.kind === 'chunk-group' || sourceNode.chunkFile) {
-        showToast('Chunk sections are defined in the page frontmatter and cannot be duplicated here.', 'error');
+        showToast(translate('shell.duplicate.chunkSections'), 'error');
         return;
       }
       const clone = withNewIds(sourceNode);
@@ -545,7 +546,7 @@ export function useCopyNode(
       commitEdit(duplicateGesture(nodeId, clone, { urgency: true }));
       setSelectedId(clone.id);
     },
-    [commitEdit, showToast, pageStateRef, setSelectedId],
+    [commitEdit, showToast, pageStateRef, setSelectedId, translate],
   );
   return { copyNode, duplicateNode };
 }
@@ -558,6 +559,7 @@ export function usePasteNode(
   lifecycle: ReturnType<typeof useLifecycle>,
   history: ReturnType<typeof useHistory>,
 ) {
+  const translate = useTranslate();
   const { nodeClipboardRef } = removeNodeScope;
   const { insertables, pageStateRef, selectedIdRef, setSelectedId } = coreState;
   const { resolveImportPath } = addComponentScope;
@@ -595,17 +597,17 @@ export function usePasteNode(
     const place = pastePlace(withImports, selectionId, insertables);
     const { pasted, removed, lost } = pastedInScope(withImports, clone, place, clip.vars || []);
     if (removed) {
-      showToast(`Removed ${removed} binding${removed === 1 ? '' : 's'} that referenced ${lost.join(', ')}.`, 'info');
+      showToast(translate('shell.paste.bindingsRemoved', { count: removed, names: lost.join(', ') }), 'info');
     }
     const insert = insertGesture(withImports, pasted, place, { urgency: true });
     const options = { coalesceKey: undefined, urgency: true };
     commitEdit(frontmatterOf(withImports) === frontmatterOf(shown) ? insert : sequence(frontmatterGesture(shown, options, imported), insert));
     setSelectedId(clone.id);
-    const brought = broughtMessage(needs);
+    const brought = broughtMessage(needs, translate);
     if (brought !== undefined) {
       showToast(brought, 'info');
     }
-  }, [commitEdit, insertables, resolveImportPath, showToast, nodeClipboardRef, pageStateRef, selectedIdRef, setSelectedId]);
+  }, [commitEdit, insertables, resolveImportPath, showToast, nodeClipboardRef, pageStateRef, selectedIdRef, setSelectedId, translate]);
   return { pasteNode };
 }
 
@@ -697,6 +699,7 @@ export function useCanvasMessages(coreState: ReturnType<typeof useCoreState>, in
         // ⌥P from the canvas or the live preview, replayed as the physical
         // key so the one handler (usePreviewKey) decides what it does.
         case 'preview':
+          // i18n-ignore: a physical key code in a replayed keyboard event.
           document.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP', altKey: true, bubbles: true, cancelable: true }));
           return;
         // Arrow keys pressed while the canvas iframe holds focus: replay them

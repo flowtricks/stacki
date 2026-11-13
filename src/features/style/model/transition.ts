@@ -1,8 +1,11 @@
+// i18n-ignore-file: property names and groups are English next to their `labelKey`/`headingKey`, which the panel translates.
 // The `transition` property is a comma-separated list of transitions, each
 // `<property> <duration> <timing-function> <delay>` (property first, the two times
 // in order). We parse it into an ordered list (index 0 = first) and serialize back,
 // splitting on TOP-LEVEL commas/spaces so cubic-bezier()/steps() survive.
 
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
 import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
 
 export type Transition = { property: string; duration: string; timing: string; delay: string };
@@ -10,110 +13,126 @@ export type Transition = { property: string; duration: string; timing: string; d
 // explicit update surface rather than `Partial<T>` (AGENTS.md §4).
 export type TransitionPatch = Pick<Transition, 'property'> | Pick<Transition, 'duration'> | Pick<Transition, 'timing'>;
 
-export type TransitionProp = { value: string; label: string };
+// `label` is the English text (search, logs); `labelKey` is what the panel translates.
+export type TransitionProp = { value: string; label: string; labelKey: MessageKey };
 
 // Webflow's grouped Type dropdown — label shown, CSS property written.
 export const TRANSITION_GROUPS: ReadonlyArray<{
   heading: string;
+  headingKey: MessageKey;
   items: ReadonlyArray<TransitionProp>;
 }> = [
   {
     heading: 'Common',
+    headingKey: 'styleModel.transition.group.common',
     items: [
-      { value: 'opacity', label: 'Opacity' },
-      { value: 'margin', label: 'Margin' },
-      { value: 'padding', label: 'Padding' },
-      { value: 'border', label: 'Border' },
-      { value: 'transform', label: 'Transform' },
-      { value: 'filter', label: 'Filter' },
-      { value: 'flex', label: 'Flex' },
+      { value: 'opacity', label: 'Opacity', labelKey: 'styleModel.transition.prop.opacity' },
+      { value: 'margin', label: 'Margin', labelKey: 'styleModel.transition.prop.margin' },
+      { value: 'padding', label: 'Padding', labelKey: 'styleModel.transition.prop.padding' },
+      { value: 'border', label: 'Border', labelKey: 'styleModel.transition.prop.border' },
+      { value: 'transform', label: 'Transform', labelKey: 'styleModel.transition.prop.transform' },
+      { value: 'filter', label: 'Filter', labelKey: 'styleModel.transition.prop.filter' },
+      { value: 'flex', label: 'Flex', labelKey: 'styleModel.transition.prop.flex' },
     ],
   },
   {
     heading: 'Background',
+    headingKey: 'styleModel.transition.group.background',
     items: [
-      { value: 'background-color', label: 'Background Color' },
-      { value: 'background-position', label: 'Background Position' },
-      { value: 'text-shadow', label: 'Text Shadow' },
-      { value: 'box-shadow', label: 'Box Shadow' },
+      { value: 'background-color', label: 'Background Color', labelKey: 'styleModel.transition.prop.backgroundColor' },
+      { value: 'background-position', label: 'Background Position', labelKey: 'styleModel.transition.prop.backgroundPosition' },
+      { value: 'text-shadow', label: 'Text Shadow', labelKey: 'styleModel.transition.prop.textShadow' },
+      { value: 'box-shadow', label: 'Box Shadow', labelKey: 'styleModel.transition.prop.boxShadow' },
     ],
   },
   {
     heading: 'Size',
+    headingKey: 'styleModel.transition.group.size',
     items: [
-      { value: 'width', label: 'Width' },
-      { value: 'height', label: 'Height' },
-      { value: 'max-height', label: 'Max Height' },
-      { value: 'max-width', label: 'Max Width' },
-      { value: 'min-height', label: 'Min Height' },
-      { value: 'min-width', label: 'Min Width' },
+      { value: 'width', label: 'Width', labelKey: 'styleModel.transition.prop.width' },
+      { value: 'height', label: 'Height', labelKey: 'styleModel.transition.prop.height' },
+      { value: 'max-height', label: 'Max Height', labelKey: 'styleModel.transition.prop.maxHeight' },
+      { value: 'max-width', label: 'Max Width', labelKey: 'styleModel.transition.prop.maxWidth' },
+      { value: 'min-height', label: 'Min Height', labelKey: 'styleModel.transition.prop.minHeight' },
+      { value: 'min-width', label: 'Min Width', labelKey: 'styleModel.transition.prop.minWidth' },
     ],
   },
   {
     heading: 'Borders',
+    headingKey: 'styleModel.transition.group.borders',
     items: [
-      { value: 'border-radius', label: 'Border Radius' },
-      { value: 'border-color', label: 'Border Color' },
-      { value: 'border-width', label: 'Border Width' },
+      { value: 'border-radius', label: 'Border Radius', labelKey: 'styleModel.transition.prop.borderRadius' },
+      { value: 'border-color', label: 'Border Color', labelKey: 'styleModel.transition.prop.borderColor' },
+      { value: 'border-width', label: 'Border Width', labelKey: 'styleModel.transition.prop.borderWidth' },
     ],
   },
   {
     heading: 'Typography',
+    headingKey: 'styleModel.transition.group.typography',
     items: [
-      { value: 'color', label: 'Font Color' },
-      { value: 'font-size', label: 'Font Size' },
-      { value: 'line-height', label: 'Line Height' },
-      { value: 'letter-spacing', label: 'Letter Spacing' },
-      { value: 'text-indent', label: 'Text Indent' },
-      { value: 'word-spacing', label: 'Word Spacing' },
-      { value: 'font-variation-settings', label: 'Font Variations' },
-      { value: '-webkit-text-stroke-color', label: 'Text Stroke Color' },
-      { value: 'text-underline-offset', label: 'Text Underline Offset' },
-      { value: 'text-decoration-color', label: 'Text Decoration Color' },
+      { value: 'color', label: 'Font Color', labelKey: 'styleModel.transition.prop.color' },
+      { value: 'font-size', label: 'Font Size', labelKey: 'styleModel.transition.prop.fontSize' },
+      { value: 'line-height', label: 'Line Height', labelKey: 'styleModel.transition.prop.lineHeight' },
+      { value: 'letter-spacing', label: 'Letter Spacing', labelKey: 'styleModel.transition.prop.letterSpacing' },
+      { value: 'text-indent', label: 'Text Indent', labelKey: 'styleModel.transition.prop.textIndent' },
+      { value: 'word-spacing', label: 'Word Spacing', labelKey: 'styleModel.transition.prop.wordSpacing' },
+      { value: 'font-variation-settings', label: 'Font Variations', labelKey: 'styleModel.transition.prop.fontVariationSettings' },
+      { value: '-webkit-text-stroke-color', label: 'Text Stroke Color', labelKey: 'styleModel.transition.prop.webkitTextStrokeColor' },
+      { value: 'text-underline-offset', label: 'Text Underline Offset', labelKey: 'styleModel.transition.prop.textUnderlineOffset' },
+      { value: 'text-decoration-color', label: 'Text Decoration Color', labelKey: 'styleModel.transition.prop.textDecorationColor' },
     ],
   },
   {
     heading: 'Position',
+    headingKey: 'styleModel.transition.group.position',
     items: [
-      { value: 'top', label: 'Top' },
-      { value: 'left', label: 'Left' },
-      { value: 'bottom', label: 'Bottom' },
-      { value: 'right', label: 'Right' },
-      { value: 'z-index', label: 'z-Index' },
+      { value: 'top', label: 'Top', labelKey: 'styleModel.transition.prop.top' },
+      { value: 'left', label: 'Left', labelKey: 'styleModel.transition.prop.left' },
+      { value: 'bottom', label: 'Bottom', labelKey: 'styleModel.transition.prop.bottom' },
+      { value: 'right', label: 'Right', labelKey: 'styleModel.transition.prop.right' },
+      { value: 'z-index', label: 'z-Index', labelKey: 'styleModel.transition.prop.zIndex' },
     ],
   },
   {
     heading: 'Margin',
+    headingKey: 'styleModel.transition.group.margin',
     items: [
-      { value: 'margin-bottom', label: 'Margin Bottom' },
-      { value: 'margin-left', label: 'Margin Left' },
-      { value: 'margin-right', label: 'Margin Right' },
-      { value: 'margin-top', label: 'Margin Top' },
+      { value: 'margin-bottom', label: 'Margin Bottom', labelKey: 'styleModel.transition.prop.marginBottom' },
+      { value: 'margin-left', label: 'Margin Left', labelKey: 'styleModel.transition.prop.marginLeft' },
+      { value: 'margin-right', label: 'Margin Right', labelKey: 'styleModel.transition.prop.marginRight' },
+      { value: 'margin-top', label: 'Margin Top', labelKey: 'styleModel.transition.prop.marginTop' },
     ],
   },
   {
     heading: 'Padding',
+    headingKey: 'styleModel.transition.group.padding',
     items: [
-      { value: 'padding-bottom', label: 'Padding Bottom' },
-      { value: 'padding-left', label: 'Padding Left' },
-      { value: 'padding-right', label: 'Padding Right' },
-      { value: 'padding-top', label: 'Padding Top' },
+      { value: 'padding-bottom', label: 'Padding Bottom', labelKey: 'styleModel.transition.prop.paddingBottom' },
+      { value: 'padding-left', label: 'Padding Left', labelKey: 'styleModel.transition.prop.paddingLeft' },
+      { value: 'padding-right', label: 'Padding Right', labelKey: 'styleModel.transition.prop.paddingRight' },
+      { value: 'padding-top', label: 'Padding Top', labelKey: 'styleModel.transition.prop.paddingTop' },
     ],
   },
   {
     heading: 'Flex',
+    headingKey: 'styleModel.transition.group.flex',
     items: [
-      { value: 'flex-grow', label: 'Flex Grow' },
-      { value: 'flex-shrink', label: 'Flex Shrink' },
-      { value: 'flex-basis', label: 'Flex Basis' },
+      { value: 'flex-grow', label: 'Flex Grow', labelKey: 'styleModel.transition.prop.flexGrow' },
+      { value: 'flex-shrink', label: 'Flex Shrink', labelKey: 'styleModel.transition.prop.flexShrink' },
+      { value: 'flex-basis', label: 'Flex Basis', labelKey: 'styleModel.transition.prop.flexBasis' },
     ],
   },
-  { heading: 'Advanced', items: [{ value: 'all', label: 'All Properties' }] },
+  {
+    heading: 'Advanced',
+    headingKey: 'styleModel.transition.group.advanced',
+    items: [{ value: 'all', label: 'All Properties', labelKey: 'styleModel.transition.prop.all' }],
+  },
 ];
 
-const PROP_LABEL = new Map(TRANSITION_GROUPS.flatMap((group) => group.items).map((i) => [i.value, i.label]));
-export function transitionPropLabel(prop: string): string {
-  return PROP_LABEL.get(prop.trim().toLowerCase()) ?? prop.trim();
+const PROP_LABEL_KEY = new Map(TRANSITION_GROUPS.flatMap((group) => group.items).map((i) => [i.value, i.labelKey]));
+export function transitionPropLabel(prop: string, translate: Translator = ENGLISH_TRANSLATE): string {
+  const key = PROP_LABEL_KEY.get(prop.trim().toLowerCase());
+  return key === undefined ? prop.trim() : translate(key);
 }
 
 const TIMING_KEYWORDS = new Set(['ease', 'linear', 'ease-in', 'ease-out', 'ease-in-out', 'step-start', 'step-end']);
@@ -187,8 +206,8 @@ export function blankTransition(): Transition {
 }
 
 /** A collapsed-row label ("Opacity: 200ms"). */
-export function transitionLabel(transition: Transition): string {
-  return `${transitionPropLabel(transition.property)}: ${transition.duration || '0s'}`;
+export function transitionLabel(transition: Transition, translate: Translator = ENGLISH_TRANSLATE): string {
+  return `${transitionPropLabel(transition.property, translate)}: ${transition.duration || '0s'}`;
 }
 
 // ─────────────────────────── Easing ───────────────────────────

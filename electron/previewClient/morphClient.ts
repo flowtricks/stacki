@@ -53,7 +53,7 @@ if (host === 'browser') {
 // one prop changed is painted like any other, and cancel pulls the real one.
 // Made before fetchDocument can run: the page's first pull, at load, asks it for
 // headers, and a const declared below that pull would not exist yet.
-const variantPreview = createVariantPreview({ paint: paintRendering, restore: () => void update() });
+const variantPreview = createVariantPreview({ paint: paintRendering, restore: () => void update(), supersede: () => activePull?.abort() });
 
 function fetchDocument(initialHTML?: string, signal?: AbortSignal): Promise<FetchedDocument> {
   const rendering =

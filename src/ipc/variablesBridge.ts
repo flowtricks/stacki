@@ -2,6 +2,7 @@ import type { Parser } from '../../shared/core/boundary';
 import type { Result } from '../../shared/core/result';
 import type { WireCell, WireColumn, WireVariableScope } from '../../shared/ipc/ipcResults';
 import { boolean, count, dictionary, object, optional, pathText, record, text } from '../../shared/core/boundary';
+import { parseOptionalMessageRef, type MessageRef } from '../../shared/core/i18n/messageReference';
 import { toArray } from '../../shared/core/record';
 import { readVariables } from './editorEnvironment';
 
@@ -44,6 +45,8 @@ export interface VariableFile {
   readonly name: string;
   readonly groups: readonly VariableGroup[];
   readonly error?: string;
+  /** The reference `error` is translated from; absent for text that is not ours. */
+  readonly errorRef?: MessageRef | undefined;
   readonly count?: number;
 }
 export interface VariablesSnapshot {
@@ -258,6 +261,8 @@ function variableFileParser(budget: VariablesBudget): Parser<VariableFile> {
     name: variableText,
     groups: budget.list(group),
     error: optional(variableText),
+    // JSON transports an absent reference as null; a malformed one is dropped and the English `error` shows.
+    errorRef: (input) => parseOptionalMessageRef(input ?? undefined),
     count: optional(count),
   });
 }

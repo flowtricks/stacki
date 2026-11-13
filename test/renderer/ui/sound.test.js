@@ -573,9 +573,14 @@ function fakeAudio() {
   );
 
   const main = fs.readFileSync(repoPath('dist/electron/main.js'), 'utf8');
-  check('settings opens from the menu', /label: 'Settings…'/.test(main));
+  const menuSource = fs.readFileSync(repoPath('dist/electron/app/applicationMenu.js'), 'utf8');
+  const menuCatalog = fs.readFileSync(repoPath('shared/properties/i18n/messages/en/menu.ts'), 'utf8');
+  check(
+    'settings opens from the menu',
+    /menu\.file\.settings/.test(menuSource) && /'menu\.file\.settings': 'Settings…'/.test(menuCatalog) && /menu:settings/.test(menuSource),
+  );
   const preferences = fs.readFileSync(repoPath('src/app/settings/Settings.tsx'), 'utf8');
-  const catalog = fs.readFileSync(repoPath('shared/properties/i18n/messages/en.ts'), 'utf8');
+  const catalog = fs.readFileSync(repoPath('shared/properties/i18n/messages/en/settings.ts'), 'utf8');
   check('sound is in settings', /settings\.editor\.sound\.label/.test(preferences) && /Interface sounds/.test(catalog));
   // The row draws the app's one switch component (src/ui/Switch.tsx), which carries the role.
   const switchSource = fs.readFileSync(repoPath('src/ui/Switch.tsx'), 'utf8');

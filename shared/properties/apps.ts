@@ -17,6 +17,9 @@ import { assert } from '../core/assert';
 import { record, text } from '../core/boundary';
 import { toArray } from '../core/record';
 import { parseGitHubLogin } from './projectRoles';
+import { parseMessageRef, parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
+import { described, type Described, type TypedMessageRef } from './i18n/messageRef';
+import { ReferencedError } from './i18n/referencedError';
 
 /** Where a project keeps its apps; tracked, so every editor of the project sees the same ones. */
 export const APPS_DIRECTORY = '.stacki/apps';
@@ -215,13 +218,16 @@ export interface AppStaged {
 }
 
 /** An app operation's expected failure: a bad bundle, a refused download, a missing app. */
-export type AppsResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };
+export type AppsResult<T> =
+  | { readonly ok: true; readonly value: T }
+  /** `messageRef` is the same sentence as a reference the renderer translates (docs/i18n-playbook.md); producers that have none leave it out. */
+  | { readonly ok: false; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 /** What an update check did, app by app. */
 export type AppUpdateOutcome =
   | { readonly kind: 'current'; readonly id: string }
   | { readonly kind: 'available'; readonly id: string; readonly version: string }
-  | { readonly kind: 'failed'; readonly id: string; readonly message: string }
+  | { readonly kind: 'failed'; readonly id: string; readonly message: string; readonly messageRef?: MessageRef | undefined }
   /** Auto-update was on, but this version asks for more than the installed one did: it waits for a person's OK. */
   | { readonly kind: 'needs-approval'; readonly id: string; readonly version: string; readonly additions: readonly string[] }
   /** Auto-update was on, and the check installed this version. */
@@ -308,10 +314,15 @@ function parseManifestStackiVersionMin(value: Readonly<Record<string, unknown>>)
   return parsed === undefined ? undefined : parseStackiVersionMin(parsed);
 }
 
-/** What Stacki says when an app needs a newer Stacki than the one running. */
-export function stackiVersionMessage(minimum: string): string {
+/** What Stacki says when an app needs a newer Stacki than the one running, with the reference the renderer translates. */
+export function stackiVersionDescribed(minimum: string): Described & { readonly messageRef: TypedMessageRef } {
   assert(minimum.length > 0, 'A minimum Stacki version is never empty');
-  return `Needs Stacki ${minimum} or later. Update Stacki.`;
+  return described('apps.market.needsStacki', { minimum });
+}
+
+/** What Stacki says when an app needs a newer Stacki than the one running, in English. */
+export function stackiVersionMessage(minimum: string): string {
+  return stackiVersionDescribed(minimum).message;
 }
 
 /**
@@ -320,6 +331,14 @@ export function stackiVersionMessage(minimum: string): string {
  * too old to say) is not judged: the bundle's other checks still hold it.
  */
 export function stackiVersionProblem(minimum: string | undefined, running: string): string | undefined {
+  return stackiVersionProblemDescribed(minimum, running)?.message;
+}
+
+/** `stackiVersionProblem` with the reference the renderer translates beside the English text. */
+export function stackiVersionProblemDescribed(
+  minimum: string | undefined,
+  running: string,
+): (Described & { readonly messageRef: TypedMessageRef }) | undefined {
   if (minimum === undefined) {
     return undefined;
   }
@@ -329,9 +348,9 @@ export function stackiVersionProblem(minimum: string | undefined, running: strin
   if (compareAppVersions(running, minimum) >= 0) {
     return undefined;
   }
-  const message = stackiVersionMessage(minimum);
-  assert(message.includes(minimum), 'The message names the version needed');
-  return message;
+  const problem = stackiVersionDescribed(minimum);
+  assert(problem.message.includes(minimum), 'The message names the version needed');
+  return problem;
 }
 
 /** Orders two app versions: negative when `left` is older. A prerelease is older than its release. */
@@ -647,7 +666,7 @@ export function parseGitHubSource(input: unknown): AppGitHubSource {
  */
 export type AppRepositoryListing =
   | { readonly kind: 'ready'; readonly repositories: readonly AppRepository[] }
-  | { readonly kind: 'failed'; readonly message: string }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined }
   | { readonly kind: 'rate-limited'; readonly resetAtMs: number | undefined }
   | { readonly kind: 'restart' };
 
@@ -659,7 +678,7 @@ const RATE_LIMIT_MESSAGE = /^GitHub is limiting requests(?: until (\d{4}-\d{2}-\
 /** The failure message for GitHub's rate limit, with the time it lifts when GitHub said. */
 export function rateLimitMessage(resetAtMs: number | undefined): string {
   if (resetAtMs === undefined) {
-    return 'GitHub is limiting requests.';
+    return 'GitHub is limiting requests.'; // i18n-ignore: wire message parsed back by RATE_LIMIT_MESSAGE; the editor draws its own translated text for a rate limit.
   }
   assert(Number.isSafeInteger(resetAtMs), 'A rate-limit reset is a whole millisecond time');
   assert(resetAtMs >= 0, 'A rate-limit reset is after 1970');
@@ -1121,7 +1140,13 @@ export function parseAppUpdateOutcome(input: unknown): AppUpdateOutcome {
     case 'available':
       return { kind: 'available', id, version: parseAppVersion(value['version']) };
     case 'failed':
-      return { kind: 'failed', id, message: boundedText(value['message'], APP_LIMITS.messageCharsMax, 'Failure message') };
+      return {
+        kind: 'failed',
+        id,
+        message: boundedText(value['message'], APP_LIMITS.messageCharsMax, 'Failure message'),
+        // A reference that does not parse is dropped: the English message still shows.
+        ...optionalRef(value['messageRef']),
+      };
     case 'needs-approval':
       return { kind: 'needs-approval', id, version: parseAppVersion(value['version']), additions: parseUpdateAdditions(value['additions']) };
     case 'updated':
@@ -1177,7 +1202,13 @@ export function parseAppsResult<T>(input: unknown, parse: (value: unknown) => T)
     return { ok: true, value: parse(value['value']) };
   }
   if (value['ok'] === false) {
-    return { ok: false, message: boundedText(value['message'], APP_LIMITS.messageCharsMax, 'Failure message') };
+    const reference = parseMessageRef(value['messageRef']);
+    return {
+      ok: false,
+      message: boundedText(value['message'], APP_LIMITS.messageCharsMax, 'Failure message'),
+      // A reference that does not parse is dropped: the English message still shows.
+      ...(value['messageRef'] !== undefined && reference.ok ? { messageRef: reference.value } : {}),
+    };
   }
   throw new Error('An apps result says ok');
 }
@@ -1196,4 +1227,18 @@ export function appsFailureMessage(error: unknown): string {
   const bounded = (message.trim() || 'The app operation failed.').slice(0, APP_LIMITS.messageCharsMax);
   assert(bounded.length > 0, 'A failure message is never empty');
   return bounded;
+}
+
+/**
+ * A failure as the wire carries it: the bounded English message plus, when the error was raised with a reference (ReferencedError), the
+ * reference the renderer translates. Any other error carries the message alone.
+ */
+export function appsFailure(error: unknown): { readonly message: string; readonly messageRef?: TypedMessageRef } {
+  const message = appsFailureMessage(error);
+  return error instanceof ReferencedError ? { message, messageRef: error.messageRef } : { message };
+}
+
+function optionalRef(input: unknown): { readonly messageRef?: MessageRef } {
+  const messageRef = parseOptionalMessageRef(input);
+  return messageRef === undefined ? {} : { messageRef };
 }

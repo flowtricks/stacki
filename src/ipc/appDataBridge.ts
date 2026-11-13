@@ -166,6 +166,7 @@ export async function captureCanvasSnapshot(
   widthMax: number,
 ): Promise<AppSnapshotOutcome> {
   if (typeof window.avb.appCanvasSnapshot !== 'function') {
+    // i18n-ignore: the reason goes to the app that asked, a developer, not to a person using the editor.
     return { applied: false, reason: 'Restart Stacki to take canvas snapshots' };
   }
   const input = parseIpcPayload('apps:canvasSnapshot', { rect, widthMax });

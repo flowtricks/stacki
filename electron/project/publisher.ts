@@ -1,7 +1,8 @@
 import { rm, realpath } from 'node:fs/promises';
 import { submitPublishReview } from './publishReview';
 import { assert } from '../../shared/core/assert';
-import { err, ok, type Result } from '../../shared/core/result';
+import { err, ok, type AppError, type Result } from '../../shared/core/result';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { readPublishConfig } from './publishConfig';
 import { ensureToolPath } from '../lib/nodeTools';
 import { parsePublishCommitMessage, type PublishConfig, type PublishTarget } from '../../shared/properties/publishConfig';
@@ -12,6 +13,7 @@ import { publishingGitEnvironment, publishingGitRemote, recordPublishedGitHub } 
 import { deploymentConfiguration, recordDeployment } from './publishReceipt';
 import { publishFilesystemFailure, runPublishGit } from './publishGitCommand';
 import { checkPublishIncoming, commitPublishSource, requirePublishMessage, type PublishRepository } from './publishCommit';
+import { translateMain } from '../lib/mainLocale';
 
 type PublishPlan =
   { readonly kind: 'github'; readonly repository: PublishRepository } | { readonly kind: 'hosting'; readonly repository: PublishRepository | undefined };
@@ -25,7 +27,7 @@ interface PublishJob {
 }
 
 interface PublishPush {
-  readonly warning: string | undefined;
+  readonly warning: Described | undefined;
 }
 
 // One job per desktop process bounds concurrency and prevents overlapping commits and pushes.
@@ -42,11 +44,12 @@ export class DesktopPublisher {
       if (this.project === root) {
         return this.current;
       }
-      throw new Error('Another project is publishing. Wait for it to finish.');
+      throw new Error(translateMain('error.publish.anotherRunning'));
     }
     const message = commitMessage === undefined ? undefined : parsePublishCommitMessage(commitMessage);
     this.project = root;
-    this.current = { kind: 'running', step: 'Preparing publish…' };
+    const preparing = described('error.publish.preparing');
+    this.current = { kind: 'running', step: preparing.message, stepRef: preparing.messageRef };
     void this.publish(root, target, message);
     return this.current;
   }
@@ -55,13 +58,13 @@ export class DesktopPublisher {
     ensureToolPath();
     const prepared = await preparePublishJob(root, target, message);
     if (!prepared.ok) {
-      this.fail(prepared.error.message, { github: false, hosting: false });
+      this.fail(prepared.error, { github: false, hosting: false });
       return;
     }
     const job = prepared.value;
     const captured = job.plan.kind === 'github' ? await createPublishSource(job.root, 'github') : await createPublishSnapshot(job.root);
     if (!captured.ok) {
-      this.fail(captured.error.message, { github: false, hosting: false });
+      this.fail(captured.error, { github: false, hosting: false });
       return;
     }
     try {
@@ -71,14 +74,14 @@ export class DesktopPublisher {
         if (review.ok) {
           this.current = { kind: 'review-open', ...review.value };
         } else {
-          this.fail(review.error.message, { github: false, hosting: false });
+          this.fail(review.error, { github: false, hosting: false });
         }
         return;
       }
       if (job.plan.kind === 'github') {
         const pushed = await this.push(job, captured.value, job.plan.repository);
         if (!pushed.ok) {
-          this.fail(pushed.error.message, { github: false, hosting: false });
+          this.fail(pushed.error, { github: false, hosting: false });
         } else if (pushed.value.warning !== undefined) {
           this.fail(pushed.value.warning, { github: true, hosting: false });
         } else {
@@ -94,8 +97,12 @@ export class DesktopPublisher {
       if (!cleanup.ok) {
         const completed = this.current;
         assert(completed.kind === 'done' || completed.kind === 'failed' || completed.kind === 'review-open', 'Cleanup follows publishing');
-        const message = completed.kind === 'failed' ? `${completed.message} ` : '';
-        this.fail(`${message}Temporary publish files could not be removed.`, completed.kind === 'review-open' ? { github: false, hosting: false } : completed);
+        // The earlier failure's English text travels as a parameter of the cleanup sentence: a composite cannot reuse its reference.
+        const problem =
+          completed.kind === 'failed'
+            ? described('publish.status.cleanupFailedAfter', { message: completed.message })
+            : described('publish.status.cleanupFailed');
+        this.fail(problem, completed.kind === 'review-open' ? { github: false, hosting: false } : completed);
       }
     }
   }
@@ -106,12 +113,12 @@ export class DesktopPublisher {
       return message;
     }
     const total = job.plan.kind === 'github' ? 3 : 5;
-    this.current = runningState('Checking GitHub for incoming changes…', 1, total);
+    this.current = runningState(described('publish.status.step.checkingIncoming'), 1, total);
     const incoming = await checkPublishIncoming(job.root, repository, source.head);
     if (!incoming.ok) {
       return incoming;
     }
-    this.current = runningState('Committing and pushing to GitHub…', 2, total);
+    this.current = runningState(described('publish.status.step.committingAndPushing'), 2, total);
     const committed = await commitPublishSource(job.root, source, repository.branch, job.message);
     if (!committed.ok) {
       return committed;
@@ -126,7 +133,7 @@ export class DesktopPublisher {
     // A bookkeeping failure must not pretend the external push failed or retry that push.
     const recorded = await recordPublishedGitHub(job.root, repository.branch, committed.value).then(ok, publishFilesystemFailure);
     return ok({
-      warning: recorded.ok ? undefined : 'Saved to GitHub, but local push status could not be updated. Refresh Git.',
+      warning: recorded.ok ? undefined : described('error.publish.localStatusStale'),
     });
   }
 
@@ -136,20 +143,20 @@ export class DesktopPublisher {
     if (repository !== undefined) {
       const message = await requirePublishMessage(job.root, snapshot, job.message);
       if (!message.ok) {
-        this.fail(message.error.message, completed);
+        this.fail(message.error, completed);
         return;
       }
     }
-    this.current = runningState('Running hooks and building website…', 1, 5);
+    this.current = runningState(described('publish.status.step.runningHooks'), 1, 5);
     const built = await buildPublishSnapshot(job, snapshot);
     if (!built.ok) {
-      this.fail(built.error.message, completed);
+      this.fail(built.error, completed);
       return;
     }
     if (repository !== undefined) {
       const pushed = await this.push(job, snapshot, repository);
       if (!pushed.ok) {
-        this.fail(pushed.error.message, completed);
+        this.fail(pushed.error, completed);
         return;
       }
       completed.github = true;
@@ -158,10 +165,10 @@ export class DesktopPublisher {
         return;
       }
     }
-    this.current = runningState(`Deploying to ${job.config.hosting.provider}…`, 3, 5);
+    this.current = runningState(described('publish.status.step.deployingTo', { provider: job.config.hosting.provider }), 3, 5);
     const deployed = await deployHosting(snapshot.root, job.config).then(ok, publishFilesystemFailure);
     if (!deployed.ok) {
-      this.fail(deployed.error.message, completed);
+      this.fail(deployed.error, completed);
       return;
     }
     completed.hosting = true;
@@ -171,32 +178,38 @@ export class DesktopPublisher {
       configuration: deploymentConfiguration(job.config),
     }).then(ok, publishFilesystemFailure);
     if (!recorded.ok) {
-      this.fail(recorded.error.message, completed);
+      this.fail(recorded.error, completed);
       return;
     }
-    this.current = runningState('Running after-publish scripts…', 4, 5);
+    this.current = runningState(described('publish.status.step.afterScripts'), 4, 5);
     const after = await runPublishScripts(snapshot.root, job.config.afterPublish, {
       STACKI_PUBLISH_TARGET: job.target,
     }).then(ok, publishFilesystemFailure);
     if (!after.ok) {
-      this.fail(after.error.message, completed);
+      this.fail(after.error, completed);
       return;
     }
     this.current = { kind: 'done', ...completed };
   }
 
-  private fail(message: string, completed: { readonly github: boolean; readonly hosting: boolean }): void {
+  private fail(problem: Pick<AppError, 'message' | 'messageRef'>, completed: { readonly github: boolean; readonly hosting: boolean }): void {
     this.current = {
       kind: 'failed',
-      message,
+      message: problem.message,
+      ...(problem.messageRef === undefined ? {} : { messageRef: problem.messageRef }),
       github: completed.github,
       hosting: completed.hosting,
     };
   }
 }
 
-function runningState(step: string, completed: number, total: number): DesktopPublishState {
-  return { kind: 'running', step, progress: parseDesktopPublishProgress({ completed, total }) };
+function runningState(step: Described, completed: number, total: number): DesktopPublishState {
+  return {
+    kind: 'running',
+    step: step.message,
+    ...(step.messageRef === undefined ? {} : { stepRef: step.messageRef }),
+    progress: parseDesktopPublishProgress({ completed, total }),
+  };
 }
 
 async function preparePublishJob(root: string, target: PublishTarget, message: string | undefined): Promise<Result<PublishJob>> {
@@ -215,13 +228,13 @@ async function preparePublishJob(root: string, target: PublishTarget, message: s
     if (config.githubWorkflow?.kind === 'pull-request') {
       return err({
         code: 'review-required',
-        message: 'Submit changes for review and deploy the merged branch ' + 'through your repository workflow.',
+        ...described('error.publish.reviewHint'),
       });
     }
     if (config.hosting.provider === 'none') {
       return err({
         code: 'hosting-required',
-        message: 'Choose a hosting provider in Publish settings.',
+        ...described('error.publish.chooseHosting'),
       });
     }
     return ok({
@@ -257,7 +270,7 @@ async function preparePublishRepository(root: string, config: PublishConfig): Pr
   }
   const branch = await runPublishGit(root, ['symbolic-ref', '--short', 'HEAD']);
   if (!branch.ok) {
-    return err({ code: 'detached-head', message: 'Choose a branch before publishing to GitHub.' });
+    return err({ code: 'detached-head', ...described('error.publish.chooseBranch') });
   }
   return ok({ branch: branch.value.trim(), remote: remote.value, environment: environment.value });
 }

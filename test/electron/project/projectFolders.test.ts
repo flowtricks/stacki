@@ -154,12 +154,17 @@ test('assets list both roots by default, only the chosen folders when set, and w
   // Even a project that lists src/ itself cannot reach code through the panel.
   writeFolders(root, { assets: ['src'] });
   assert.equal(listAssetEntries(root).hasPublic, false);
-  assert.match(assetWriteRefusal('src/pages/index.astro') ?? '', /index.astro is source code, not an asset/);
-  assert.match(assetWriteRefusal('src/styles/global.css') ?? '', /source code/);
+  assert.match(assetWriteRefusal('src/pages/index.astro')?.message ?? '', /index.astro is source code, not an asset/);
+  assert.deepEqual(assetWriteRefusal('src/pages/index.astro')?.messageRef, { key: 'assets.error.sourceCode', params: { name: 'index.astro' } });
+  assert.match(assetWriteRefusal('src/styles/global.css')?.message ?? '', /source code/);
   assert.equal(assetWriteRefusal('src/assets/hero.png'), undefined);
   assert.equal(assetWriteRefusal('public/robots.txt'), undefined, 'public/ is served as-is: every file is an asset');
   const replaced = toRecord(await harness.invoke('assets:replace', { projectPath: root, rel: 'src/pages/index.astro' }));
-  assert.deepEqual(replaced, { ok: false, message: 'index.astro is source code, not an asset; edit it in the project instead.' });
+  assert.deepEqual(replaced, {
+    ok: false,
+    message: 'index.astro is source code, not an asset; edit it in the project instead.',
+    messageRef: { key: 'assets.error.sourceCode', params: { name: 'index.astro' } },
+  });
   await assert.rejects(harness.invoke('assets:rename', { projectPath: root, rel: 'src/assets/hero.png', newName: 'hero.astro' }), /hero.astro is source code/);
   await assert.rejects(harness.invoke('assets:rename', { projectPath: root, rel: 'src/styles/global.css', newName: 'old.css' }), /global.css is source code/);
   assert.equal(fs.readFileSync(path.join(root, 'src/pages/index.astro'), 'utf8'), '<h1>Home</h1>');

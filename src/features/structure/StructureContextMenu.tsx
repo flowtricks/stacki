@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import Popup from '../../ui/Popup';
 import { ChevronRightIcon } from '../../ui/Icons';
@@ -30,6 +31,7 @@ interface MenuProps {
 }
 
 export function ContextMenu(props: MenuProps) {
+  const translate = useTranslate();
   const ref = useRef<HTMLDivElement>(null);
   useMenuPosition(ref, props.position);
   const shortcut = (key: string): string => shortcutLabel(key, 'primary', currentDesktopPlatform());
@@ -43,7 +45,7 @@ export function ContextMenu(props: MenuProps) {
       ref={ref}
       role="menu"
       tabIndex={-1}
-      label="Element actions"
+      label={translate('structure.menu.label')}
       className="ctx-menu"
       style={{ left: props.position.left, top: props.position.top, width: 220 }}
       onKeyDown={(event) => {
@@ -56,12 +58,17 @@ export function ContextMenu(props: MenuProps) {
       {props.component && <ComponentMenuHeader {...props} />}
       {props.plainText ? <ConvertMenu {...props} /> : <WrapMenu {...props} />}
       <div className="ctx-divider" role="separator" />
-      <MenuItem label="Cut" disabled={!props.canCut} onSelect={() => props.onAction('cut')} />
-      <MenuItem label="Copy" shortcut={shortcut('C')} disabled={!props.canChange} onSelect={() => props.onAction('copy')} />
-      <MenuItem label="Paste" shortcut={shortcut('V')} disabled={!props.canPaste} onSelect={() => props.onAction('paste')} />
-      <MenuItem label="Duplicate" shortcut={shortcut('D')} disabled={!props.canChange} onSelect={() => props.onAction('duplicate')} />
+      <MenuItem label={translate('structure.menu.cut')} disabled={!props.canCut} onSelect={() => props.onAction('cut')} />
+      <MenuItem label={translate('structure.menu.copy')} shortcut={shortcut('C')} disabled={!props.canChange} onSelect={() => props.onAction('copy')} />
+      <MenuItem label={translate('structure.menu.paste')} shortcut={shortcut('V')} disabled={!props.canPaste} onSelect={() => props.onAction('paste')} />
       <MenuItem
-        label="Delete"
+        label={translate('structure.menu.duplicate')}
+        shortcut={shortcut('D')}
+        disabled={!props.canChange}
+        onSelect={() => props.onAction('duplicate')}
+      />
+      <MenuItem
+        label={translate('structure.menu.delete')}
         shortcut={currentDesktopPlatform() === 'darwin' ? '⌫' : 'Del'}
         disabled={!props.canChange}
         onSelect={() => props.onAction('delete')}
@@ -69,7 +76,7 @@ export function ContextMenu(props: MenuProps) {
       {props.component && (
         <>
           <div className="ctx-divider" role="separator" />
-          <MenuItem label="Set component defaults" disabled={!props.canSetDefaults} onSelect={() => props.onAction('defaults')} />
+          <MenuItem label={translate('structure.menu.setDefaults')} disabled={!props.canSetDefaults} onSelect={() => props.onAction('defaults')} />
         </>
       )}
     </Popup>
@@ -77,9 +84,10 @@ export function ContextMenu(props: MenuProps) {
 }
 
 function ComponentMenuHeader(props: Pick<MenuProps, 'canOpen' | 'onAction'>) {
+  const translate = useTranslate();
   return (
     <>
-      <MenuItem label="Open component" disabled={!props.canOpen} onSelect={() => props.onAction('open')} />
+      <MenuItem label={translate('structure.menu.openComponent')} disabled={!props.canOpen} onSelect={() => props.onAction('open')} />
       <div className="ctx-divider" role="separator" />
     </>
   );
@@ -107,8 +115,9 @@ function MenuItem({
 }
 
 function WrapMenu(props: MenuProps) {
+  const translate = useTranslate();
   return (
-    <Submenu label="Wrap in" disabled={!props.canWrapBox && !props.canWrapLink}>
+    <Submenu label={translate('structure.menu.wrapIn')} disabled={!props.canWrapBox && !props.canWrapLink}>
       <MenuItem label="div" disabled={!props.canWrapBox} onSelect={() => props.onAction('div')} />
       <MenuItem label="<a>" disabled={!props.canWrapLink} onSelect={() => props.onAction('a')} />
     </Submenu>
@@ -116,8 +125,9 @@ function WrapMenu(props: MenuProps) {
 }
 
 function ConvertMenu(props: MenuProps) {
+  const translate = useTranslate();
   return (
-    <Submenu label="Convert to" disabled={!props.canConvertDiv && !props.canConvertSpan}>
+    <Submenu label={translate('structure.menu.convertTo')} disabled={!props.canConvertDiv && !props.canConvertSpan}>
       <MenuItem label="div" disabled={!props.canConvertDiv} onSelect={() => props.onAction('convert-div')} />
       <MenuItem label="span" disabled={!props.canConvertSpan} onSelect={() => props.onAction('convert-span')} />
     </Submenu>

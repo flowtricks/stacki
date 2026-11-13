@@ -1,3 +1,4 @@
+// i18n-ignore-file: HTTP API fallback text on the Studio server: it has no language, and the editor shows its own sentence for a failed request.
 import { GitHubRepository } from '../features/github/github';
 import { boundedText, downloadRelease, latestRelease } from '../features/updates/catalog';
 import { record, string } from '../shared/validation';

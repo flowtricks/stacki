@@ -3,6 +3,7 @@
 // (ipcResults.ts).
 
 import type { Data } from '../core/boundary';
+import type { MessageRef } from '../core/i18n/messageReference';
 
 export type WireAssetEntry =
   | ({
@@ -92,10 +93,12 @@ export type WireMove =
   | {
       readonly kind: 'generated';
       readonly note: string;
+      readonly noteRef?: undefined | MessageRef;
     }
   | {
       readonly kind: 'unknown';
       readonly note: string;
+      readonly noteRef?: undefined | MessageRef;
     }
   | {
       readonly kind: 'file';
@@ -143,6 +146,7 @@ export type WireFileModel = {
   readonly name: string;
   readonly groups: ReadonlyArray<WireGroup>;
   readonly error?: string;
+  readonly errorRef?: MessageRef | undefined;
   readonly count?: number;
   readonly declarations?: ReadonlyArray<WireRule>;
 };
@@ -173,6 +177,7 @@ export type WireDeleteOutcome =
       readonly ok: false;
       readonly unmerged: true;
       readonly message: string;
+      readonly messageRef?: MessageRef | undefined;
     };
 
 export type WireGitInfo = {
@@ -186,6 +191,8 @@ export type WireGitInfo = {
   readonly head?: undefined | string;
   readonly userEmail?: undefined | string;
   readonly trunk?: undefined | string;
+  /** The remote's default branch (origin/HEAD), else main or master: what publishing is expected to send. */
+  readonly defaultBranch?: undefined | string;
   readonly dirtyFiles?: ReadonlyArray<string>;
   readonly hasUpstream?: boolean;
 };

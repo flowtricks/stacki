@@ -118,7 +118,8 @@ test('Dirty changes prompt after saving and use the entered message', async (con
   const view = await desktopFixture(context, true);
   await view.show();
   await clickGitHubPush();
-  assert.deepEqual(view.order, ['saved', 'checked']);
+  // The branch gate reads git first (nothing is saved or sent before the person knows which branch this is), then the publish saves and checks as before.
+  assert.deepEqual(view.order, ['checked', 'saved', 'checked']);
   assert.equal(view.starts.length, 0);
   assert.equal(document.querySelector('.publish-commit-message button[type="submit"]').disabled, true);
   const input = document.querySelector('.publish-commit-message textarea');

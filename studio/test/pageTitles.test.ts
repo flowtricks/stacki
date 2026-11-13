@@ -9,6 +9,7 @@ import { scanProject } from '../src/features/project/projectServer';
 import { parseProject } from '../src/features/project/projectClient';
 import { livePageTitles, projectPageLabel } from '../src/features/project/pageLabels';
 import { parsePage } from '../src/features/source/source';
+import { ENGLISH_TRANSLATE } from '../vendor/stacki/shared/properties/i18n/englishTranslator';
 import { LIMITS } from '../vendor/stacki/shared/core/limits';
 
 const file = 'src/pages/resources.astro';
@@ -37,7 +38,7 @@ import Layout from './Base.astro';
 <Layout title="The Church Resources"><slot /></Layout>`,
     );
     const project = parseProject(await scanProject(root));
-    assert.equal(projectPageLabel(project, file), 'The Church Resources');
+    assert.equal(projectPageLabel(project, file, ENGLISH_TRANSLATE), 'The Church Resources');
     assert.equal(project.pageMetadata?.[0]?.path, file);
     for (const [props, title] of [
       ['', 'The Church Resources'],
@@ -51,7 +52,7 @@ import Layout from './Base.astro';
         editable: true,
         nodes: parsed.model.nodes,
       });
-      assert.equal(projectPageLabel(updated, file), title);
+      assert.equal(projectPageLabel(updated, file, ENGLISH_TRANSLATE), title);
       assert.deepEqual(updated.pages, project.pages);
     }
   } finally {
@@ -87,6 +88,6 @@ test('Studio uses shared collection template display names', () => {
     classes: [],
     components: [],
   });
-  assert.equal(projectPageLabel(project, template), 'Spiritual Development Courses Template');
+  assert.equal(projectPageLabel(project, template, ENGLISH_TRANSLATE), 'Spiritual Development Courses Template');
   assert.deepEqual(project.pages, [template]);
 });

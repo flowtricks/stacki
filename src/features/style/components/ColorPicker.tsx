@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Popup from '../../../ui/Popup';
 import { colorMode, formatColor, formatHex, hsvaToRgba, parseColor, rgbaToHsl, rgbaToHsva, type ColorMode, type HSVA, type RGBA } from '../model/colorSpace';
@@ -138,6 +139,7 @@ const EyedropperIcon = () => (
 );
 
 export default function ColorPicker({ value, anchor, trigger, onChange, onClose }: Props) {
+  const translate = useTranslate();
   const initial = useRef<RGBA>(parseColor(value) ?? { r: 0, g: 0, b: 0, a: value.trim() ? 1 : 0 });
   const [hsva, setHsva] = useState<HSVA>(() => rgbaToHsva(initial.current));
   const notation = useNotation(value, hsva, onChange);
@@ -191,7 +193,7 @@ export default function ColorPicker({ value, anchor, trigger, onChange, onClose 
       className="u-color-picker"
       style={position ? { top: position.top, left: position.left } : { visibility: 'hidden' }}
       role="dialog"
-      label="Color picker"
+      label={translate('styleModel.components.colorPicker.title')}
     >
       <PickerSurfaces hsva={hsva} alpha={alpha} emit={emit} onPicked={setFromColor} />
       <PickerInputs hsva={hsva} channel={notation.channel} onColor={setFromColor} onNumber={setNumber} />
@@ -349,6 +351,7 @@ function PickerSurfaces({
 type DragStart = (element: HTMLElement, event: React.PointerEvent) => void;
 
 function PickerSliders({ hsva, dragHue, dragAlpha, onPicked }: { hsva: HSVA; dragHue: DragStart; dragAlpha: DragStart; onPicked: (color: string) => void }) {
+  const translate = useTranslate();
   const eyedrop = () => {
     const EyeDropper = readEyeDropper();
     if (!EyeDropper) {
@@ -368,8 +371,8 @@ function PickerSliders({ hsva, dragHue, dragAlpha, onPicked }: { hsva: HSVA; dra
         type="button"
         className={`u-color-eyedrop ${readEyeDropper() ? '' : 'is-hidden'}`}
         onClick={eyedrop}
-        title="Pick a color from the screen"
-        aria-label="Eyedropper"
+        title={translate('styleModel.components.colorPicker.eyedropperTitle')}
+        aria-label={translate('styleModel.components.colorPicker.eyedropper')}
       >
         <EyedropperIcon />
       </button>
@@ -454,6 +457,7 @@ function PickerInputs({
 // in hex the HEX label lights and the letters stay honest. Two buttons, two jobs: HEX
 // picks hex, the pill toggles rgb and hsl.
 function NotationRow({ notation }: { notation: Notation }) {
+  const translate = useTranslate();
   const { asHex, channel, mode } = notation;
   return (
     <div className="u-color-modes">
@@ -462,7 +466,7 @@ function NotationRow({ notation }: { notation: Notation }) {
         className={`u-color-mode is-hex ${asHex ? 'is-on' : ''}`}
         onClick={notation.chooseHex}
         aria-pressed={asHex}
-        title="Write this colour as hex"
+        title={translate('styleModel.components.colorPicker.hexTitle')}
       >
         HEX
       </button>
@@ -471,8 +475,8 @@ function NotationRow({ notation }: { notation: Notation }) {
         className={`u-color-mode is-channel ${asHex ? 'is-off' : ''}`}
         onClick={notation.toggleChannel}
         aria-pressed={!asHex}
-        aria-label={`Written as ${mode}. Press for ${channel === 'rgb' ? 'hsl' : 'rgb'}`}
-        title="Toggle rgb() / hsl()"
+        aria-label={translate('styleModel.components.colorPicker.channelLabel', { mode, other: channel === 'rgb' ? 'hsl' : 'rgb' })}
+        title={translate('styleModel.components.colorPicker.channelTitle')}
       >
         {channelLabels(channel).map((lab, i) => (
           <span key={i}>{lab}</span>

@@ -82,14 +82,17 @@ export function parseComponentDefaults(input: unknown): ComponentDefaults {
 
 export function parseDefaultsSource(source: string): Result<ComponentDefaults> {
   if (source.length > DEFAULT_LIMITS.sourceCharsMax) {
+    // i18n-ignore: a refusal about a hand-edited .stacki/components.json recipe; callers throw it into the generic error path, which has no reference channel (leftover for the defaults area).
     return err({ code: 'invalid-defaults', message: 'Component defaults file exceeds 256 KiB.' });
   }
   try {
     const input: unknown = JSON.parse(source);
     return ok(parseComponentDefaults(input));
   } catch (error: unknown) {
+    // i18n-ignore: a refusal about a hand-edited .stacki/components.json recipe; callers throw it into the generic error path, which has no reference channel (leftover for the defaults area).
     return err({
       code: 'invalid-defaults',
+      // i18n-ignore: the fallback for a thrown value that is not an Error, reached only by a hand-edited .stacki/components.json.
       message: error instanceof Error ? error.message : 'Invalid component defaults',
     });
   }
@@ -227,6 +230,7 @@ export function resolveComponentRecipe(file: string, config: ComponentDefaults, 
       return resolve(child.component, child, ancestors, depth);
     }
     if (depth > DEFAULT_LIMITS.depthMax || remaining-- <= 0) {
+      // i18n-ignore: a refusal about a hand-edited .stacki/components.json recipe; callers throw it into the generic error path, which has no reference channel (leftover for the defaults area).
       return err({ code: 'recipe-limit', message: 'Default children exceed the insertion limit.' });
     }
     if ('literal' in child) {
@@ -241,13 +245,16 @@ export function resolveComponentRecipe(file: string, config: ComponentDefaults, 
     depth: number,
   ): Result<ResolvedRecipe> => {
     if (depth > DEFAULT_LIMITS.depthMax || remaining-- <= 0) {
+      // i18n-ignore: a refusal about a hand-edited .stacki/components.json recipe; callers throw it into the generic error path, which has no reference channel (leftover for the defaults area).
       return err({ code: 'recipe-limit', message: 'Default children exceed the insertion limit.' });
     }
     if (override.inherit !== false && ancestors.includes(target) && override.children === undefined && override.text === undefined) {
+      // i18n-ignore: a refusal about a hand-edited .stacki/components.json recipe; callers throw it into the generic error path, which has no reference channel (leftover for the defaults area).
       return err({ code: 'recipe-cycle', message: `Default children form a cycle at ${target}.` });
     }
     const component = catalog.find((item) => item.file === target);
     if (!component) {
+      // i18n-ignore: a refusal about a hand-edited .stacki/components.json recipe; callers throw it into the generic error path, which has no reference channel (leftover for the defaults area).
       return err({ code: 'missing-component', message: `Component defaults reference ${target}.` });
     }
     const base = override.inherit === false ? {} : (config.components[target] ?? {});
@@ -255,6 +262,7 @@ export function resolveComponentRecipe(file: string, config: ComponentDefaults, 
     const props = recipe.props ?? {};
     if (recipe.text !== undefined) {
       if (!component.slots.includes('default')) {
+        // i18n-ignore: a refusal about a hand-edited .stacki/components.json recipe; callers throw it into the generic error path, which has no reference channel (leftover for the defaults area).
         return err({ code: 'missing-slot', message: `${target} has no default slot for text.` });
       }
       return ok({ component: target, props, content: { kind: 'text', text: recipe.text } });
@@ -289,6 +297,7 @@ function resolveComponentChildren(
     }
     const slot = 'literal' in resolved.value ? 'default' : (resolved.value.props['slot'] ?? 'default');
     if (typeof slot !== 'string' || !slots.includes(slot)) {
+      // i18n-ignore: a refusal about a hand-edited .stacki/components.json recipe; callers throw it into the generic error path, which has no reference channel (leftover for the defaults area).
       return err({ code: 'missing-slot', message: `${target} has no slot "${String(slot)}".` });
     }
     children.push(resolved.value);
@@ -345,6 +354,7 @@ export function relinkDefaults(config: ComponentDefaults, from: string, to: stri
   if (from !== to && config.components[to] !== undefined) {
     return err({
       code: 'duplicate-defaults',
+      // i18n-ignore: no caller shows this refusal to a person yet (relinkDefaults has none outside tests); translate it with the caller that does.
       message: 'The target already has component defaults.',
     });
   }

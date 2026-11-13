@@ -244,7 +244,7 @@ export function useScanWithoutSelection(
     async (seq: number, options: { force?: boolean }) => {
       setPhase('no-selection');
       setScan(undefined);
-      setStatus('No element selected — type a selector to style it directly.');
+      setStatus('No element selected — type a selector to style it directly.'); // i18n-ignore: write-only status, never rendered.
       const showContent = (content: Content) => {
         if (seq !== seqRef.current || selectedRef.current) {
           return;
@@ -317,7 +317,7 @@ export function useScanSelection(
       // First load, a context switch, or a forced rescan → rebuild content.
       // Stream: render page-level rules as soon as the page scan finishes.
       setPhase('scanning');
-      setStatus(cached ? 'Loading this view…' : 'Scanning embeds…');
+      setStatus(cached ? 'Loading this view…' : 'Scanning embeds…'); // i18n-ignore: write-only status, never rendered.
       try {
         const content = await rebuildAndStore({ rescanComponents: options.force }, (partial) => {
           if (seq === seqRef.current) {
@@ -454,7 +454,7 @@ export function useSelectionSubscriptions(
     const api = webflowApi();
     if (!api?.getSelectedElement) {
       setPhase('unsupported');
-      setStatus('The Webflow selection API is unavailable. Open this inside the Designer.');
+      setStatus('The Webflow selection API is unavailable. Open this inside the Designer.'); // i18n-ignore: write-only status, never rendered.
       return;
     }
     void api.getSelectedElement().then((element) => refresh(element));

@@ -17,10 +17,11 @@
 // shared with Studio and a feature does not reach into the Desktop app shell.
 // Every section of the details, the ones other features add included, is built
 // from these, which is what keeps the popup one calm column.
-import { useId, useState, type FocusEvent, type MouseEvent, type ReactNode } from 'react';
+import { useId, useRef, useState, type FocusEvent, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { assert } from '../../../shared/core/assert';
-import { tooltipPointBelow, useDelayedTooltip, type TooltipPoint } from '../../ui/delayedTooltip';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { tooltipHost, tooltipPointBelow, useDelayedTooltip, type TooltipPoint } from '../../ui/delayedTooltip';
 import { HelpCircleIcon } from '../../ui/Icons';
 import './appDetails.css';
 
@@ -69,6 +70,7 @@ export function AppDetailsItem(props: {
   readonly tone?: 'warning';
   readonly children?: ReactNode;
 }) {
+  const translate = useTranslate();
   const title = props.title ?? (typeof props.label === 'string' ? props.label : undefined);
   return (
     <li className="apps-details-item" data-tone={props.tone}>
@@ -77,7 +79,7 @@ export function AppDetailsItem(props: {
         <span className="apps-details-item-text" title={title}>
           {props.label}
         </span>
-        {props.hint !== undefined && <AppDetailsHint label={title ?? 'this row'} text={props.hint} />}
+        {props.hint !== undefined && <AppDetailsHint label={title ?? translate('apps.details.thisRow')} text={props.hint} />}
       </span>
       {props.children !== undefined && <span className="apps-details-item-value">{props.children}</span>}
     </li>
@@ -116,16 +118,19 @@ export function AppDetailsRow(props: {
 export function AppDetailsHint({ label, text }: { readonly label: string; readonly text: string }) {
   assert(label.length > 0, 'A hint names what it explains');
   assert(text.length > 0, 'A hint has something to say');
+  const translate = useTranslate();
   const id = useId();
   const tooltip = useDelayedTooltip();
+  const hintButton = useRef<HTMLButtonElement>(null);
   const [focused, setFocused] = useState<TooltipPoint | undefined>(undefined);
   const shown = focused ?? tooltip.value;
   return (
     <>
       <button
+        ref={hintButton}
         type="button"
         className="apps-details-hint"
-        aria-label={`About ${label}`}
+        aria-label={translate('apps.details.aboutNamed', { name: label })}
         aria-describedby={id}
         onMouseEnter={(event: MouseEvent<HTMLElement>) => tooltip.show(event)}
         onMouseLeave={tooltip.hide}
@@ -142,7 +147,7 @@ export function AppDetailsHint({ label, text }: { readonly label: string; readon
           <div className="rail-tooltip below apps-details-tip" role="tooltip" style={shown}>
             {text}
           </div>,
-          document.body,
+          tooltipHost(hintButton.current ?? undefined),
         )}
     </>
   );

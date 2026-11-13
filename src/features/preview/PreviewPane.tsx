@@ -1,6 +1,7 @@
 import { useCanvasText, type CanvasTextDocument } from './useCanvasText';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import React, { useEffect } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewSource } from './usePreviewSource';
 import { PreviewFrame } from './PreviewFrame';
@@ -205,6 +206,7 @@ function DesignPreview({
   readonly sizing: Sizing;
   readonly shownGuide: ShownGuide | undefined;
 }) {
+  const translate = useTranslate();
   const width = sizing.width;
   const scale = sizing.viewport.scale;
   return (
@@ -225,7 +227,7 @@ function DesignPreview({
             refreshKey={props.refreshKey ?? ''}
             frameRef={runtime.iframeRef}
             url={url}
-            title="Site preview"
+            title={translate('preview.pane.title')}
             onLoad={() => {
               runtime.registerFrame();
               runtime.sendTrack();
@@ -292,6 +294,7 @@ function ResizeHandles({ sizing }: { readonly sizing: Sizing }) {
 }
 
 function PreviewPlaceholder({ props }: { readonly props: PreviewPaneProps }) {
+  const translate = useTranslate();
   // The app overlay owns progress while visible; another status would show through it.
   if (props.coveredByBusyOverlay) {
     return undefined;
@@ -301,10 +304,10 @@ function PreviewPlaceholder({ props }: { readonly props: PreviewPaneProps }) {
       {props.devStatus === 'starting' ? (
         <>
           <div className="spinner" />
-          <div>Starting Astro dev server…</div>
+          <div>{translate('preview.pane.starting')}</div>
         </>
       ) : props.devStatus === 'on' ? (
-        <div className="offline-title">Nothing selected to preview. Pick a page on the left.</div>
+        <div className="offline-title">{translate('preview.pane.empty')}</div>
       ) : (
         <DevOffline
           {...(props.devLog === undefined ? {} : { devLog: props.devLog })}

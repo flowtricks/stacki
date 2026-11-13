@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PropHoverPreviewContext, PropValuePolicyContext } from './propValuePolicy';
 import { PropPreviewContext } from './propPreviewContext';
 // The control a prop field shows for its kind of value: a binding, style,
@@ -111,6 +112,7 @@ export function StyleControl({ state }: { readonly state: PropControlState }) {
       {label}
       <StyleEditor
         value={attrText(value) || ''}
+        // i18n-ignore: CSS example.
         placeholder="color: red;"
         onChange={(text) => {
           const flat = collapseDeclarations(text);
@@ -189,6 +191,7 @@ export function SlotControl({ state }: { readonly state: PropControlState }) {
   );
 }
 export function EnumControl({ state }: { readonly state: PropControlState }) {
+  const translate = useTranslate();
   const preview = useContext(PropPreviewContext);
   const policy = useContext(PropValuePolicyContext);
   const hoverPreview = useContext(PropHoverPreviewContext);
@@ -241,7 +244,7 @@ export function EnumControl({ state }: { readonly state: PropControlState }) {
         // Says what happens when nothing is picked. For a conditional
         // default that's the condition itself — better than naming one of
         // the two answers as if it were the only one.
-        placeholder={renderedDefault ?? (placeholderFor(field) || '(not set)')}
+        placeholder={renderedDefault ?? (placeholderFor(field) || translate('props.field.notSet'))}
         options={choices.map((option) => ({
           value: option === omittedDefault ? '' : option,
           label: option,
@@ -280,6 +283,7 @@ function enumPreview(
 }
 
 export function BooleanControl({ state }: { readonly state: PropControlState }) {
+  const translate = useTranslate();
   const policy = useContext(PropValuePolicyContext);
   const { field, value, onChange, label } = state;
 
@@ -293,8 +297,8 @@ export function BooleanControl({ state }: { readonly state: PropControlState }) 
       {label}
       <SegSwitch
         options={[
-          { value: true, label: 'True' },
-          { value: false, label: 'False' },
+          { value: true, label: translate('props.newProp.form.true') },
+          { value: false, label: translate('props.newProp.form.false') },
         ]}
         current={current}
         onPick={(next) =>
@@ -403,6 +407,7 @@ export function numberControlState(
   return { ...state, numberText, commit, onType, onStepKey, step };
 }
 export function NumberControlView({ state }: { readonly state: ReturnType<typeof numberControlState> }) {
+  const translate = useTranslate();
   const { label, numberText, placeholderFor, field, onStepKey, commit, onType, step } = state;
 
   return (
@@ -419,8 +424,8 @@ export function NumberControlView({ state }: { readonly state: ReturnType<typeof
           placeholder={placeholderFor(field)}
           onKeyDown={onStepKey}
           onBlur={commit}
-          title={boundsHint(field)}
-          aria-label={boundsHint(field)}
+          title={boundsHint(field, translate)}
+          aria-label={boundsHint(field, translate)}
           onChange={(event) => onType(event.target.value)}
         />
         <span className="num-steppers">
@@ -429,8 +434,8 @@ export function NumberControlView({ state }: { readonly state: ReturnType<typeof
               key={direction}
               type="button"
               tabIndex={-1}
-              aria-label={direction > 0 ? 'Increase' : 'Decrease'}
-              title={`${direction > 0 ? 'Increase' : 'Decrease'} — ⇧ by 10, ⌥ by 0.1`}
+              aria-label={direction > 0 ? translate('props.number.increase') : translate('props.number.decrease')}
+              title={direction > 0 ? translate('props.number.increaseTitle') : translate('props.number.decreaseTitle')}
               onClick={(event) => step(direction, event, numberText)}
             >
               <ChevronDownIcon size={11} style={direction > 0 ? { transform: 'rotate(180deg)' } : undefined} />
@@ -577,14 +582,15 @@ export function ExpressionControl({ state }: { readonly state: PropControlState 
 // type no field can fill in. Read-only — what the prop takes and what it holds
 // now are shown as code, and the label's menu can still clear a value set.
 export function CodeControl({ state }: { readonly state: PropControlState }) {
+  const translate = useTranslate();
   const { field, value, label } = state;
   const action = field.codeKind === 'function';
   const shown = codeRowValue(field, value);
-  const note = action ? 'Action, set in code' : 'Set in code';
+  const note = action ? translate('props.field.actionInCode') : translate('props.field.setInCode');
   return (
     <div className="props-field">
       {label}
-      <div className="props-code-row" title={field.typeText === undefined ? note : `${note}: ${field.typeText}`}>
+      <div className="props-code-row" title={field.typeText === undefined ? note : translate('props.field.noteWithType', { note, type: field.typeText })}>
         <span className="props-code-row-note">{note}</span>
         {field.typeText !== undefined && <CodeInline className="props-code-row-type" language="typescript" text={field.typeText} />}
         {shown !== undefined && <CodeInline className="props-code-row-value" language="typescript" text={shown} />}
@@ -598,6 +604,7 @@ export function CodeControl({ state }: { readonly state: PropControlState }) {
 // swatch is the platform's. Unset, both show the component's default, dimmed,
 // and nothing is written until a colour is picked or typed.
 export function ColorControl({ state }: { readonly state: PropControlState }) {
+  const translate = useTranslate();
   const { field, value, onChange, name, placeholderFor, label } = state;
   const text = attrText(value) ?? '';
   const fallback = placeholderFor(field);
@@ -613,7 +620,7 @@ export function ColorControl({ state }: { readonly state: PropControlState }) {
           <span className="prop-color-fill" style={paint === undefined ? undefined : { background: paint }} />
           <input
             type="color"
-            aria-label={`Choose the colour for ${name}`}
+            aria-label={translate('props.field.chooseColor', { name })}
             value={hexOfColor(shown) ?? '#000000'}
             // A drag through the picker is one stream of edits, saved as one step.
             onChange={(event) => onChange({ type: 'string', value: event.target.value })}

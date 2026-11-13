@@ -9,6 +9,7 @@
 // answered against the editor's state at that moment.
 import { useMemo, useSyncExternalStore } from 'react';
 import { assert } from '../../../shared/core/assert';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import type { RoleView } from '../../../shared/properties/projectRoles';
 import type { AppSummary, AppWindowMode } from '../../../shared/properties/apps';
 import {
@@ -73,10 +74,13 @@ export interface RunningApp {
    * running (appFolderChanges.ts); absent while the folder is valid. Its window shows it.
    */
   readonly folderError?: string;
+  /** `folderError` as a reference the window translates, when the host sent one. */
+  readonly folderErrorRef?: MessageRef | undefined;
 }
 
 /** What a running app's folder read as once it settled: its new summary, or the reason it is broken. */
-export type RunningAppFolder = { readonly kind: 'valid'; readonly app: AppSummary } | { readonly kind: 'broken'; readonly message: string };
+export type RunningAppFolder =
+  { readonly kind: 'valid'; readonly app: AppSummary } | { readonly kind: 'broken'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 /** A custom frame an app opened (`ui.openFrame`), drawn by AppWindows.tsx. */
 export interface CustomFrame extends AppOpenFrame {
@@ -394,7 +398,7 @@ export function settleRunningApp(appId: string, folder: RunningAppFolder): boole
       break;
     case 'broken':
       assert(folder.message.length > 0, 'A broken folder says why');
-      settled = { ...current, folderError: folder.message };
+      settled = { ...current, folderError: folder.message, folderErrorRef: folder.messageRef };
       break;
     default: {
       const exhaustive: never = folder;
@@ -590,11 +594,11 @@ const customFrames: AppCustomFrames = {
   close: (session, frameId, result): AppEditOutcome => {
     const id = frameId ?? session.frame?.id;
     if (id === undefined) {
-      return { applied: false, reason: 'Name the frame to close: this is not a custom frame' };
+      return { applied: false, reason: 'Name the frame to close: this is not a custom frame' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
     const frame = snapshot.frames.find((entry) => entry.id === id);
     if (frame === undefined || frame.appId !== session.app.manifest.id) {
-      return { applied: false, reason: 'This app has no open frame with that id' };
+      return { applied: false, reason: 'This app has no open frame with that id' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
     closeCustomFrame(id, result);
     return { applied: true };

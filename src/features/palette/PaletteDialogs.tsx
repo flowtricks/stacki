@@ -1,11 +1,14 @@
+import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 import { CodeInline } from '../../ui/CodeBlock';
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 import type { ExtractionPlan, ExtractionValue } from '../../editor/extractFrontmatter';
 import type { ComponentUsageFile } from './paletteModel';
-import { componentNameError, toComponentName } from './componentName';
+import { componentNameProblem, toComponentName } from './componentName';
 import { prettyComponentName, usageFileLabel } from './paletteModel';
 import { CloseIcon, ElementComponentIcon, FileIcon, LayoutIcon } from '../../ui/Icons';
 
@@ -17,7 +20,7 @@ export type ComponentCreationSource =
       /** What creating would do with these values passed in as props and the rest moved. */
       readonly plan: (asProp: ReadonlySet<string>) => ExtractionPlan;
     }
-  | { readonly kind: 'unavailable'; readonly reason: string };
+  | { readonly kind: 'unavailable'; readonly reason: string; readonly reasonRef?: TypedMessageRef | undefined };
 
 export interface UsageAnchor {
   readonly left: number;
@@ -58,11 +61,14 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
     inputRef.current?.focus();
     inputRef.current?.select();
   }, []);
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const name = toComponentName(text);
-  const error = componentNameError(text, props.taken);
+  const problem = componentNameProblem(text, props.taken);
+  const error = problem === undefined ? undefined : translateDescribed(problem);
   const shown = text.trim() ? error : undefined;
   const submit = (): void => {
-    if (!error) {
+    if (problem === undefined) {
       props.onCreate(name, { asProp: [...asProp] });
     }
   };
@@ -70,7 +76,7 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
     <Popup className="modal" onClose={props.onClose} dismissible={true}>
       {({ close }) => (
         <>
-          <div className="modal-header">Create component</div>
+          <div className="modal-header">{translate('palette.create.title')}</div>
           <div className="modal-body">
             <ComponentNameField
               inputRef={inputRef}
@@ -85,9 +91,9 @@ export function CreateComponentModal(props: CreateComponentModalProps) {
             <ValueChoices values={plan.values} asProp={asProp} onChange={setAsProp} />
           </div>
           <div className="modal-footer">
-            <button onClick={close}>Cancel</button>
-            <button className="primary" disabled={Boolean(error)} onClick={submit}>
-              Create
+            <button onClick={close}>{translate('ui.cancel')}</button>
+            <button className="primary" disabled={problem !== undefined} onClick={submit}>
+              {translate('palette.create.submit')}
             </button>
           </div>
         </>
@@ -115,13 +121,16 @@ function ComponentNameField({
   readonly submit: () => void;
   readonly onClose: () => void;
 }) {
+  const translateRich = useTranslateRich();
+  const translate = useTranslate();
   return (
     <div>
-      <label>Name</label>
+      <label>{translate('palette.create.name')}</label>
       <input
         ref={inputRef}
         value={text}
         spellCheck={false}
+        // i18n-ignore: an example component identifier, not prose.
         placeholder="Card"
         onChange={(event) => setText(event.currentTarget.value)}
         onKeyDown={(event) => {
@@ -136,7 +145,11 @@ function ComponentNameField({
         <ErrorToast message={error} />
       ) : (
         <div className="hint-text component-name-hint">
-          {source.label} becomes <code>&lt;{name || 'Name'} /&gt;</code>, saved as <code>src/components/{name || 'Name'}.astro</code>
+          {translateRich('palette.create.hint', {
+            label: source.label,
+            tag: <code>&lt;{name || 'Name'} /&gt;</code>,
+            file: <code>src/components/{name || 'Name'}.astro</code>,
+          })}
         </div>
       )}
     </div>
@@ -145,10 +158,10 @@ function ComponentNameField({
 
 type ValueChoice = 'move' | 'prop';
 
-const VALUE_CHOICES: readonly DropdownOption<ValueChoice>[] = [
-  { value: 'move', label: 'Move into this component' },
-  { value: 'prop', label: 'Pass in as a prop' },
-];
+const VALUE_CHOICE_KEYS: Readonly<Record<ValueChoice, MessageKey>> = {
+  move: 'palette.create.value.move',
+  prop: 'palette.create.value.prop',
+};
 
 // What the page does with each value the piece reads. Move leads because the
 // section and its data belong together; a value that can't move says why, in place
@@ -162,6 +175,7 @@ function ValueChoices({
   readonly asProp: ReadonlySet<string>;
   readonly onChange: (asProp: ReadonlySet<string>) => void;
 }) {
+  const translate = useTranslate();
   if (values.length === 0) {
     return undefined;
   }
@@ -176,7 +190,7 @@ function ValueChoices({
   };
   return (
     <div className="extract-values">
-      <label>{values.length === 1 ? 'The value it reads' : 'The values it reads'}</label>
+      <label>{translate('palette.create.value.reads', { count: values.length })}</label>
       <div className="extract-value-list">
         {values.map((value) => (
           <ValueRow key={value.name} value={value} onChoose={choose} />
@@ -187,19 +201,24 @@ function ValueChoices({
 }
 
 function ValueRow({ value, onChoose }: { readonly value: ExtractionValue; readonly onChoose: (name: string, choice: ValueChoice) => void }) {
+  const translate = useTranslate();
   const note = valueNote(value);
+  const choices: readonly DropdownOption<ValueChoice>[] = [
+    { value: 'move', label: translate(VALUE_CHOICE_KEYS.move) },
+    { value: 'prop', label: translate(VALUE_CHOICE_KEYS.prop) },
+  ];
   return (
     <div className="extract-value">
       <div className="extract-value-row">
         <CodeInline className="extract-value-name" text={value.name} language="typescript" />
         {value.kind === 'locked' ? (
-          <span className="extract-value-fixed">Passed in as a prop</span>
+          <span className="extract-value-fixed">{translate('palette.create.value.passed')}</span>
         ) : (
           <Dropdown<ValueChoice>
-            ariaLabel={`What to do with ${value.name}`}
+            ariaLabel={translate('palette.create.value.choiceAria', { name: value.name })}
             className="extract-value-choice"
             value={value.kind}
-            options={VALUE_CHOICES}
+            options={choices}
             onChange={(choice) => onChoose(value.name, choice)}
           />
         )}
@@ -234,6 +253,7 @@ interface InstancesPopupProps {
 }
 
 export function InstancesPopup({ popupRef, usage, here, onClose, onOpen, onSelect }: InstancesPopupProps) {
+  const translate = useTranslate();
   const place = usePopupPlacement(usage, here.length, popupRef);
   return (
     <Popup
@@ -247,8 +267,8 @@ export function InstancesPopup({ popupRef, usage, here, onClose, onOpen, onSelec
       ref={popupRef}
     >
       <div className="instances-head">
-        <span>{prettyComponentName(usage.name)} instances</span>
-        <button className="ghost" aria-label="Close" onClick={onClose}>
+        <span>{translate('palette.instances.title', { name: prettyComponentName(usage.name) })}</span>
+        <button className="ghost" aria-label={translate('ui.close')} onClick={onClose}>
           <CloseIcon size={12} />
         </button>
       </div>
@@ -297,12 +317,13 @@ function CurrentInstances({
   readonly instances: readonly { readonly id: string }[];
   readonly onSelect: (id: string) => void;
 }) {
+  const translate = useTranslate();
   if (instances.length === 0) {
     return undefined;
   }
   return (
     <div className="instances-group">
-      <div className="instances-label">On this page</div>
+      <div className="instances-label">{translate('palette.instances.onPage')}</div>
       {instances.map((instance, index) => (
         <button key={instance.id} type="button" className="instances-row" onClick={() => onSelect(instance.id)}>
           <span className="icon">
@@ -326,15 +347,16 @@ function UsageFiles({
   readonly hasCurrent: boolean;
   readonly onOpen: (file: ComponentUsageFile) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="instances-group">
-      <div className="instances-label">{hasCurrent ? 'Other files with instances' : 'Used in'}</div>
+      <div className="instances-label">{translate(hasCurrent ? 'palette.instances.otherFiles' : 'palette.instances.usedIn')}</div>
       {usage.kind === 'error' ? (
-        <ErrorToast message={`Couldn’t read the project — ${usage.message}`} />
+        <ErrorToast message={translate('palette.instances.readFailed', { message: usage.message })} />
       ) : usage.kind === 'loading' ? (
-        <div className="instances-empty">Looking…</div>
+        <div className="instances-empty">{translate('palette.instances.looking')}</div>
       ) : usage.files.length === 0 ? (
-        <div className="instances-empty">{hasCurrent ? 'Nowhere else.' : 'Not used anywhere yet.'}</div>
+        <div className="instances-empty">{translate(hasCurrent ? 'palette.instances.nowhereElse' : 'palette.instances.unused')}</div>
       ) : (
         usage.files.map((file) => <UsageFileRow key={file.rel} file={file} onOpen={onOpen} />)
       )}

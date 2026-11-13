@@ -8,6 +8,8 @@ import type { createRooms } from '../collaboration/rooms';
 import { safePath } from '../project/projectServer';
 import { record, sourcePath, string } from '../../shared/validation';
 import { PropertyBatches, commitProperties } from './propertyBatches';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
+import { ReferencedError } from '../../shared/referencedError';
 
 type Rooms = ReturnType<typeof createRooms>;
 export function propertyRoutes(root: string, rooms: Rooms) {
@@ -35,7 +37,7 @@ export function propertyRoutes(root: string, rooms: Rooms) {
 function componentFile(input: unknown) {
   const file = sourcePath(string(input, 500));
   if (!file.startsWith('src/') || file.startsWith('src/pages/') || !file.endsWith('.astro')) {
-    throw new Error('Select an Astro component inside this project');
+    throw new ReferencedError('props.edit.badPath');
   }
   return file;
 }
@@ -43,7 +45,7 @@ async function editProperties(root: string, rooms: Rooms, batches: PropertyBatch
   const file = componentFile(input['file']);
   const source = string(input['source']);
   if ((await rooms.read(file)) !== source) {
-    return err({ code: 'conflict', message: 'This component changed. Reload before saving.' });
+    return err({ code: 'conflict', ...described('publish.studio.error.componentChanged') });
   }
   const change = parsePropertyChange(input['change']);
   const edited = editPropertyDefinition(source, change);

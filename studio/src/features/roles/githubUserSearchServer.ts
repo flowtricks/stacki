@@ -26,11 +26,13 @@ export function githubUserSearchRoute(root: string, repository: NativeRepository
     response.setHeader('Cache-Control', 'no-store');
     if (request.method !== 'GET') {
       response.statusCode = 405;
+      // i18n-ignore: an API refusal read by the member picker, which shows its own translated sentence instead of this text.
       response.end(JSON.stringify({ error: 'Unsupported GitHub user request.' }));
       return true;
     }
     if (!can(await requestRole(root, request), 'settings:roles')) {
       response.statusCode = 403;
+      // i18n-ignore: an API refusal read by the member picker, which shows its own translated sentence instead of this text.
       response.end(JSON.stringify({ error: 'Only admins can search for role members.' }));
       return true;
     }
@@ -40,6 +42,7 @@ export function githubUserSearchRoute(root: string, repository: NativeRepository
       query = parseGitHubUserSearchRequest({ projectPath: root, query: search.get('q') ?? '' }).query;
     } catch (error: unknown) {
       response.statusCode = 400;
+      // i18n-ignore: an API refusal read by the member picker, which shows its own translated sentence instead of this text.
       response.end(JSON.stringify({ error: error instanceof Error ? error.message : 'Invalid GitHub user search.' }));
       return true;
     }

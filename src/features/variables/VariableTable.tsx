@@ -12,6 +12,7 @@ import Cell from './VariableCell';
 import useListReorder from '../../ui/useListReorder';
 import MoreMenu from '../../ui/MoreMenu';
 import VariableTypeIcon from './VariableTypeIcon';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PencilIcon, CopyIcon, TrashIcon, DragIcon, PlusIcon } from '../../ui/Icons';
 import { CodeInline } from '../../ui/CodeBlock';
 import { labelParts, labelPlainText } from '../../../shared/page/commentLabel';
@@ -87,14 +88,15 @@ function sheetOffset(offsets: readonly SlotOffset[], index: number): SlotOffset 
 }
 
 function SectionMenu({ onRename, onDuplicate, onDelete }: SectionMenuProps) {
+  const translate = useTranslate();
   return (
     <MoreMenu
       className="vars-section-menu"
-      title="Group options"
+      title={translate('variables.group.options')}
       items={[
-        { label: 'Rename', icon: <PencilIcon size={13} />, onSelect: onRename },
-        { label: 'Duplicate', icon: <CopyIcon size={13} />, onSelect: onDuplicate },
-        { label: 'Delete', icon: <TrashIcon size={13} />, danger: true, onSelect: onDelete },
+        { label: translate('variables.menu.rename'), icon: <PencilIcon size={13} />, onSelect: onRename },
+        { label: translate('variables.menu.duplicate'), icon: <CopyIcon size={13} />, onSelect: onDuplicate },
+        { label: translate('variables.menu.delete'), icon: <TrashIcon size={13} />, danger: true, onSelect: onDelete },
       ]}
     />
   );
@@ -165,6 +167,7 @@ function EditableName(props: EditableNameProps) {
   return <EditableNameView state={state} />;
 }
 function EditableNameView({ state }: { readonly state: ReturnType<typeof useEditableName> }) {
+  const translate = useTranslate();
   const { value, className, title, children } = state;
   const { editing, setEditing, text, setText, inputRef, commit, cancel } = state;
   if (!editing) {
@@ -175,7 +178,7 @@ function EditableNameView({ state }: { readonly state: ReturnType<typeof useEdit
         // The name fills the row, so it is also where a drag starts. Press and
         // move to drag the row; press and release to rename it.
         data-drag-through=""
-        title={title ? `${title} — drag to move, click to rename` : 'Click to rename'}
+        title={title ? translate('variables.name.dragOrRename', { name: title }) : translate('variables.name.clickToRename')}
         onClick={() => {
           setText(value);
           setEditing(true);
@@ -282,6 +285,7 @@ export default function Sheet(props: SheetProps) {
   return <SheetView state={state} />;
 }
 function SheetView({ state }: { readonly state: ReturnType<typeof useSheet> }) {
+  const translate = useTranslate();
   const { blocks, group, onSave, onAdd, onRename, onRetitle, onDuplicateSection, onDeleteSection, fluidOf, onDraft } = state;
   const { slotOffsets, rowsDrag, scrollLanes } = state;
   return (
@@ -313,7 +317,7 @@ function SheetView({ state }: { readonly state: ReturnType<typeof useSheet> }) {
             showHead={block.kind === 'matrix'}
           />
         ))}
-        {!blocks.length && <div className="props-empty">Nothing matches the search.</div>}
+        {!blocks.length && <div className="props-empty">{translate('variables.noMatches')}</div>}
       </div>
       <VariableScrollBar scroll={state.scroll} />
     </div>
@@ -352,6 +356,7 @@ function NewVariable(props: NewVariableProps) {
   return <NewVariableView state={state} />;
 }
 function NewVariableView({ state }: { readonly state: ReturnType<typeof useNewVariable> }) {
+  const translate = useTranslate();
   const { block, template, slotProps, dropping } = state;
   const { typing, setTyping, word, setWord, inputRef, commit } = state;
   if (!typing) {
@@ -359,7 +364,7 @@ function NewVariableView({ state }: { readonly state: ReturnType<typeof useNewVa
       <div className={`vars-row vars-add ${dropping ? 'drop-before' : ''}`} style={{ gridTemplateColumns: template }} {...(slotProps || {})}>
         <span />
         <button className="vars-add-btn" onClick={() => setTyping(true)}>
-          <PlusIcon size={11} /> New variable
+          <PlusIcon size={11} /> {translate('variables.new')}
         </button>
       </div>
     );
@@ -519,13 +524,14 @@ function TableView({ state }: { readonly state: ReturnType<typeof useVariableTab
 }
 
 function SheetHeader({ state }: { readonly state: ReturnType<typeof useSheet> }) {
+  const translate = useTranslate();
   const { group, headRef, headStripRef, single } = state;
   return (
     <div className="vars-table vars-sheet-head" ref={headRef}>
       <div className="vars-fixed">
         <div className="vars-row is-head" style={{ gridTemplateColumns: LABEL_TRACKS }}>
           <div />
-          <div className="vars-head">Name</div>
+          <div className="vars-head">{translate('variables.head.name')}</div>
         </div>
       </div>
       <div className="vars-scroll">
@@ -533,7 +539,7 @@ function SheetHeader({ state }: { readonly state: ReturnType<typeof useSheet> })
           <div className="vars-row is-head" style={{ gridTemplateColumns: valueTracks(group.columns.length) }}>
             {group.columns.map((column) => (
               <div key={column.id} className="vars-head" title={column.selector || column.label}>
-                {single && group.kind === 'single' ? 'Value' : column.label}
+                {single && group.kind === 'single' ? translate('variables.head.value') : column.label}
               </div>
             ))}
           </div>
@@ -585,6 +591,7 @@ function CommentTitle({ title }: { readonly title: string }) {
 }
 
 function TableTitle({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
+  const translate = useTranslate();
   const { block, onRename, sectionDrag, labelTemplate, prefix } = state;
   return (
     <>
@@ -592,7 +599,7 @@ function TableTitle({ state }: { readonly state: ReturnType<typeof useVariableTa
         // The heading lines up with the names under it, and drags the same way
         // a row does — a group is a run of lines in the file like any other.
         <h3 className={`vars-row vars-section ${sectionDrag?.className || ''}`} style={{ gridTemplateColumns: labelTemplate }} {...(sectionDrag?.props || {})}>
-          <span className="vars-grip" title="Drag to reorder">
+          <span className="vars-grip" title={translate('variables.dragToReorder')}>
             <DragIcon size={11} />
           </span>
           {prefix ? (
@@ -632,6 +639,7 @@ function TableTitle({ state }: { readonly state: ReturnType<typeof useVariableTa
 }
 
 function TableFixedHead({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
+  const translate = useTranslate();
   const { showHead, labelTemplate } = state;
   return (
     <div className="vars-fixed-head">
@@ -639,7 +647,7 @@ function TableFixedHead({ state }: { readonly state: ReturnType<typeof useVariab
       {showHead && (
         <div className="vars-row is-head" style={{ gridTemplateColumns: labelTemplate }}>
           <div />
-          <div className="vars-head">Name</div>
+          <div className="vars-head">{translate('variables.head.name')}</div>
         </div>
       )}
     </div>
@@ -647,6 +655,7 @@ function TableFixedHead({ state }: { readonly state: ReturnType<typeof useVariab
 }
 
 function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
+  const translate = useTranslate();
   const { block, onRename, labelTemplate, reorder, rowProps } = state;
   return (
     <>
@@ -660,7 +669,7 @@ function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariabl
           {...reorder.rowProps(index)}
           {...rowProps(index)}
         >
-          <span className="vars-grip" title="Drag to reorder">
+          <span className="vars-grip" title={translate('variables.dragToReorder')}>
             <DragIcon size={11} />
           </span>
           <div className="vars-name" title={row.name || row.label}>
@@ -679,6 +688,7 @@ function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariabl
 }
 
 function TableScrollHead({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
+  const translate = useTranslate();
   const { block, group, showHead, columns, single, valueTemplate, headRef } = state;
   return (
     <div className="vars-scroll-head" ref={headRef} data-scroll-lane={columns.length}>
@@ -693,7 +703,7 @@ function TableScrollHead({ state }: { readonly state: ReturnType<typeof useVaria
         <div className="vars-row is-head" style={{ gridTemplateColumns: valueTemplate }}>
           {columns.map((column) => (
             <div key={column.id} className="vars-head" title={column.selector || column.label}>
-              {single && group.kind === 'single' ? 'Value' : column.label}
+              {single && group.kind === 'single' ? translate('variables.head.value') : column.label}
             </div>
           ))}
         </div>

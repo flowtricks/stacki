@@ -2,8 +2,9 @@ import { PageRenameButton } from '../../../vendor/stacki/src/features/pages/Page
 import { PageOrderGap } from '../../../vendor/stacki/src/features/pages/PageOrderGap';
 import { PageSearchPath } from '../../../vendor/stacki/src/features/pages/PageSearchPath';
 import { Fragment, useMemo, useState } from 'react';
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { buildPageTree, type PageTreeNode } from '../../../vendor/stacki/src/features/pages/pageTree';
-import { pageDisplayName, pageFolderDisplayName, stripPageExtension } from '../../../vendor/stacki/src/lib/pageName';
+import { pageDisplayLabel, pageFolderDisplayName, stripPageExtension } from '../../../vendor/stacki/src/lib/pageName';
 import { orderedPageTree } from '../../../vendor/stacki/src/features/pages/pageTreeOrder';
 import { type PageOrderDrag } from '../../../vendor/stacki/src/features/pages/usePageOrderDrag';
 import type { PageOrder } from '../../../vendor/stacki/shared/properties/pageOrder';
@@ -28,6 +29,7 @@ interface Props {
   readonly reorder: PageOrderDrag;
 }
 export function PageFileList(props: Props) {
+  const translate = useTranslate();
   const pages = useMemo(() => {
     const metadata = new Map(props.pageMetadata?.map((page) => [page.path, page]));
     return props.items.map((path) => ({
@@ -40,7 +42,7 @@ export function PageFileList(props: Props) {
   const tree = useMemo(() => buildPageTree(pages, props.folders ?? []), [pages, props.folders]);
   const query = props.query.trim().toLowerCase();
   const results = pages
-    .filter((page) => [page.name, pageDisplayName(page)].some((name) => name.toLowerCase().includes(query)))
+    .filter((page) => [page.name, pageDisplayLabel(page, translate)].some((name) => name.toLowerCase().includes(query)))
     .sort((a, b) => comparePageNames(a.name, b.name));
   return (
     <div className="panel-body studio-page-list">
@@ -49,7 +51,7 @@ export function PageFileList(props: Props) {
       ) : (
         <PageBranch tree={tree} relative="" depth={0} props={props} />
       )}
-      {query && !results.length && <div className="props-empty">No matching {props.collection ? 'items' : 'pages'}</div>}
+      {query && !results.length && <div className="props-empty">{translate(props.collection ? 'pages.studio.noMatchItems' : 'pages.studio.noMatchPages')}</div>}
     </div>
   );
 }
@@ -141,6 +143,7 @@ function FileRow({
   readonly props: Props;
   readonly siblings: readonly string[];
 }) {
+  const translate = useTranslate();
   const collection = props.collection || isCollectionRoute(page.path);
   const reorder = props.reorder;
   return (
@@ -166,7 +169,9 @@ function FileRow({
     >
       <span className="icon">{collection ? <CollectionIcon size={13} /> : <FileIcon size={13} />}</span>
       <span className="page-list-copy">
-        <span className="label file-row-name">{props.collection ? stripPageExtension(page.name.split('/').at(-1) ?? page.name) : pageDisplayName(page)}</span>
+        <span className="label file-row-name">
+          {props.collection ? stripPageExtension(page.name.split('/').at(-1) ?? page.name) : pageDisplayLabel(page, translate)}
+        </span>
         {!props.collection && <PageSearchPath path={page.route} query={props.query} />}
       </span>
       {!props.collection && <PagePresence peers={props.peers} page={page.path} />}

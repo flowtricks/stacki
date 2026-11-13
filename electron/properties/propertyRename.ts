@@ -12,9 +12,11 @@ import ts from 'typescript';
 import { readPropertyContracts } from './propertyContracts';
 import { parsePage } from '../parse/astroParser';
 import { assert } from '../../shared/core/assert';
-import { planVariableRename } from '../../shared/engine/variableRename';
+import { planVariableRename, type RenameProblem } from '../../shared/engine/variableRename';
 import { parsePageResult } from '../../shared/page/pageNode';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
+import { messageRef, type TypedMessageRef } from '../../shared/properties/i18n/messageRef';
+import { refusal } from '../../shared/properties/propertyErrors';
 import type { PropertyOptionRename } from '../../shared/properties/propertyEditing';
 import { err, ok, type Result } from '../../shared/core/result';
 import { applySourceEdits, isAstroProps, propertyKey, readPropertySyntax, syntaxNodes } from './propertySyntax';
@@ -77,14 +79,51 @@ export function renamePropertyLocal(source: string, rename: PropertyRename): Res
   assert(rename.from !== rename.to, 'A local rename changes the name');
   const parsed = parsePageResult(parsePage(source, { locs: true }));
   if (!parsed.editable) {
-    return err({ code: 'name', message: `This component can’t be read to rename “${rename.from}” safely. ${parsed.reason}` });
+    return err(refusal('name', 'props.rename.unreadable', { name: rename.from, detail: parsed.reason }));
   }
   const plan = planVariableRename({ source, model: parsed.model }, rename);
   if (!plan.ok) {
-    return err({ code: 'name', message: plan.message });
+    // The plan's English sentence stays the message; the code it returned is worded by the editor's rename keys.
+    return err({ code: 'name', message: plan.message, messageRef: renameProblemRef(plan.problem) });
   }
   assert(plan.text !== source, 'A planned rename changes the file');
   return ok(plan.text);
+}
+
+/** The catalog message for a refused variable rename (the same keys the editor words it with, src/editor/renameProblems.ts). */
+function renameProblemRef(problem: RenameProblem): TypedMessageRef {
+  switch (problem.code) {
+    case 'invalid-name':
+      return messageRef('editor.rename.invalidName', { name: problem.name });
+    case 'reserved-word':
+      return messageRef('editor.rename.reservedWord', { name: problem.name });
+    case 'not-declared':
+      return messageRef('editor.rename.notDeclared', { name: problem.name });
+    case 'exists':
+      return messageRef(problem.choose === 'source-menu' ? 'editor.rename.existsSourceMenu' : 'editor.rename.exists', { name: problem.name });
+    case 'frontmatter-invalid':
+      return messageRef('editor.rename.frontmatterInvalid');
+    case 'partial':
+      return messageRef('editor.rename.partial');
+    case 'exported':
+      return messageRef('editor.rename.exported', { name: problem.name });
+    case 'used-as-tag':
+      return messageRef('editor.rename.usedAsTag', { name: problem.name });
+    case 'unreadable-code':
+      return messageRef('editor.rename.unreadableCode', { excerpt: problem.excerpt });
+    case 'captured':
+      return messageRef('editor.rename.captured', { from: problem.from, to: problem.to });
+    case 'undeclared-in-head':
+      return messageRef('editor.rename.undeclaredInHead', { name: problem.name });
+    case 'head-unparsed':
+      return messageRef('editor.rename.headUnparsed');
+    case 'too-large':
+      return messageRef('editor.rename.tooLarge');
+    default: {
+      const exhaustive: never = problem;
+      return exhaustive;
+    }
+  }
 }
 
 export function renameComponentOptionValues(
@@ -140,17 +179,11 @@ function parseOptionRenames(renames: readonly PropertyOptionRename[]): Result<re
     const from = optionScalar(rename.from);
     const to = optionScalar(rename.to);
     if (!from || !to) {
-      return err({
-        code: 'option',
-        message: 'Option renames require literal values.',
-      });
+      return err(refusal('option', 'props.rename.optionLiterals'));
     }
     const key = optionScalarKey(from);
     if (sources.has(key)) {
-      return err({
-        code: 'option',
-        message: 'An option value is renamed more than once.',
-      });
+      return err(refusal('option', 'props.rename.optionDuplicate'));
     }
     sources.add(key);
     parsed.push({ from, to, replacement: rename.to });
@@ -233,10 +266,7 @@ function renameOptionSpread(
   const syntax = ts.createSourceFile('spread.ts', prefix + attribute.name + ');', ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const object = syntaxNodes(syntax).find(ts.isObjectLiteralExpression);
   if (!object || optionSpreadIsDynamic(object)) {
-    return err({
-      code: 'spread',
-      message: 'An instance uses a dynamic prop spread. ' + 'Make its props explicit before renaming this option.',
-    });
+    return err(refusal('spread', 'props.rename.dynamicSpreadOption'));
   }
   const start = source.indexOf(attribute.name, Math.max(0, position - attribute.name.length - 4));
   if (start < 0 || start > position + attribute.name.length + 4) {
@@ -377,10 +407,7 @@ function editComponentReferences(
   edits.push(...nodes.value);
   if (rename.kind === 'default' && edits.length > 0) {
     if (edits.some((edit) => edit.start < rename.declarationEnd)) {
-      return err({
-        code: 'default-order',
-        message: 'A prop read precedes its default. ' + 'Move the Astro.props binding before that read in source.',
-      });
+      return err(refusal('default-order', 'props.rename.defaultOrder'));
     }
     // A unique alias prevents a template loop variable from shadowing the defaulted prop.
     edits.push({
@@ -440,10 +467,7 @@ function renameNode(
   if ('attributes' in node) {
     const target = rename.kind === 'rename' && node.type === 'component' && names.has(node.name);
     if (target && rename.kind === 'rename' && node.attributes.some((attribute) => attribute.name === rename.to)) {
-      return err({
-        code: 'collision',
-        message: `An instance already passes ${rename.to}.`,
-      });
+      return err(refusal('collision', 'props.rename.instanceCollision', { name: rename.to }));
     }
     for (const attribute of node.attributes) {
       if (target && rename.kind === 'rename') {
@@ -486,10 +510,7 @@ function offset(source: string, node: { readonly position?: Node['position'] }):
   return Buffer.from(source).subarray(0, position).toString('utf8').length;
 }
 function positionError(): Result<never> {
-  return err({
-    code: 'position',
-    message: 'Could not locate a source range safely; no files changed.',
-  });
+  return err(refusal('position', 'props.rename.position'));
 }
 
 function renameAttribute(source: string, attribute: AttributeNode, rename: PropertyRename): Result<readonly SourceEdit[]> {
@@ -522,20 +543,14 @@ function renameSpread(source: string, attribute: AttributeNode, rename: Property
   const prefix = 'const spread = (';
   const object = literalSpreadObject(attribute.name, prefix);
   if (!object) {
-    return err({
-      code: 'spread',
-      message: 'An instance uses a dynamic prop spread. ' + 'Make its props explicit before editing this property.',
-    });
+    return err(refusal('spread', 'props.rename.dynamicSpreadEdit'));
   }
   const start = source.indexOf(attribute.name, Math.max(0, position - attribute.name.length - 4));
   if (start < 0 || start > position + attribute.name.length + 4) {
     return positionError();
   }
   if (object.properties.some((property) => propertyKey(property.name) === rename.to)) {
-    return err({
-      code: 'collision',
-      message: `A spread already contains ${rename.to}.`,
-    });
+    return err(refusal('collision', 'props.rename.spreadCollision', { name: rename.to }));
   }
   const edits: SourceEdit[] = [];
   for (const property of object.properties) {
@@ -594,10 +609,7 @@ function renameAstroAccess(source: string, start: number, rename: PropertyRefere
       }
     } else if (ts.isElementAccessExpression(parent)) {
       if (!ts.isStringLiteral(parent.argumentExpression)) {
-        return err({
-          code: 'computed',
-          message: 'Astro.props has a computed key. ' + 'Make that access explicit before editing this property.',
-        });
+        return err(refusal('computed', 'props.rename.computed'));
       }
       if (parent.argumentExpression.text === rename.from) {
         edits.push(astroReferenceEdit(parent, parent.argumentExpression, start, rename));
@@ -606,10 +618,7 @@ function renameAstroAccess(source: string, start: number, rename: PropertyRefere
       // The declaration editor already renamed keys and retained local aliases.
       continue;
     } else {
-      return err({
-        code: 'alias',
-        message: 'Astro.props is forwarded or aliased. ' + 'Update that code explicitly before editing this property.',
-      });
+      return err(refusal('alias', 'props.rename.aliased'));
     }
   }
   return ok(edits);

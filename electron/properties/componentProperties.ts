@@ -12,8 +12,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
+import { described } from '../../shared/properties/i18n/messageRef';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import type { ComponentProperties, PropertyChange, PropertyOptionRename } from '../../shared/properties/propertyEditing';
+import { inFile, refusal, withLead, type PropertyError } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
 import { literalOptions } from '../../shared/properties/propertyOptions';
 import { sameFilesystemPath } from '../lib/platform';
@@ -94,7 +96,7 @@ export class PropertyUndoStore {
 export function revertComponentProperties(token: string, store: PropertyUndoStore, writer: PropertyWriter): Result<{ readonly undo: string }> {
   const changes = store.take(token);
   if (changes === undefined) {
-    return err({ code: 'expired', message: 'This property change can no longer be undone.' });
+    return err(refusal('expired', 'props.edit.expired'));
   }
   const committed = commitPropertyChanges(changes, writer);
   if (!committed.ok) {
@@ -106,7 +108,7 @@ export function revertComponentProperties(token: string, store: PropertyUndoStor
 /** Why a batch write failed, before the rollback decides what to report. */
 interface WriteFailure {
   readonly code: 'conflict' | 'filesystem' | 'write-race';
-  readonly message: string;
+  readonly error: PropertyError;
 }
 
 export function loadComponentProperties(location: PropertyLocation): Result<ComponentProperties> {
@@ -131,10 +133,7 @@ export function updateComponentProperties(request: PropertyEditRequest, writer: 
     return source;
   }
   if (source.value !== request.source) {
-    return err({
-      code: 'conflict',
-      message: 'This component changed on disk. Reload before saving.',
-    });
+    return err(refusal('conflict', 'props.edit.conflict'));
   }
   const plan = planComponentPropertyChanges({ ...request, ...target.value }, source.value);
   if (!plan.ok) {
@@ -175,10 +174,7 @@ function validateLocation(location: PropertyLocation): Result<PropertyLocation> 
   }
   const relative = path.relative(root, file);
   if (relative.startsWith('..') || path.isAbsolute(relative) || !file.endsWith('.astro')) {
-    return err({
-      code: 'path',
-      message: 'Select an Astro component inside this project’s src folder.',
-    });
+    return err(refusal('path', 'props.edit.badPath'));
   }
   return ok({ projectPath: path.dirname(root), file });
 }
@@ -194,10 +190,7 @@ function planPropertyChanges(request: PropertyEditRequest, source: string): Resu
     return ok([first]);
   }
   if (change.kind !== 'save' || !change.originalName) {
-    return err({
-      code: 'option',
-      message: 'Only an existing property can rename options.',
-    });
+    return err(refusal('option', 'props.edit.optionNeedsExisting'));
   }
   const valid = validateOptionRenames(request.source, source, change, optionRenames);
   if (!valid.ok) {
@@ -215,10 +208,7 @@ function planPropertyChanges(request: PropertyEditRequest, source: string): Resu
     const owner = own ? 'definition' : 'consumer';
     const changed = planConsumerChange(original, names, change, propertyRename, optionRenames, owner);
     if (!changed.ok) {
-      return err({
-        code: changed.error.code,
-        message: `${path.relative(request.projectPath, file)}: ${changed.error.message}`,
-      });
+      return err(inFile(path.relative(request.projectPath, file), changed.error));
     }
     if (own || changed.value !== original) {
       changes.push({
@@ -271,17 +261,11 @@ function validateOptionRenames(
   const beforeOptions = before ? literalOptions(before.type) : undefined;
   const afterOptions = after ? literalOptions(after.type) : undefined;
   if (!beforeOptions || !afterOptions) {
-    return err({
-      code: 'option',
-      message: 'Option renames require an editable literal union.',
-    });
+    return err(refusal('option', 'props.edit.optionNeedsUnion'));
   }
   for (const rename of renames) {
     if (!beforeOptions.includes(rename.from) || !afterOptions.includes(rename.to)) {
-      return err({
-        code: 'option',
-        message: 'An option rename does not match the saved union.',
-      });
+      return err(refusal('option', 'props.edit.optionMismatch'));
     }
   }
   return ok(undefined);
@@ -305,10 +289,7 @@ function commitLeased(changes: readonly FileChange[], writer: PropertyWriter): R
       return err({ code: 'filesystem', message: current.error.message });
     }
     if (current.value.checksum !== digestOf(change.before)) {
-      return err({
-        code: 'conflict',
-        message: `${change.file} changed during the rename. Try again.`,
-      });
+      return err(refusal('conflict', 'props.edit.changedDuringRename', { file: change.file }));
     }
   }
   const written: FileChange[] = [];
@@ -332,11 +313,12 @@ function failureOf(file: string, report: Exclude<WriteReport, { tag: 'applied' }
     case 'rejected':
       switch (report.reason) {
         case 'region-externally-modified':
-          return { code: 'conflict', message: `${file} changed during the rename.` };
+          return { code: 'conflict', error: refusal('conflict', 'props.edit.changedWhileRenaming', { file }) };
         case 'write-race':
+          // The document actors' own text (free-form, English) is shown as received; without it, our sentence names the file.
           return {
             code: 'write-race',
-            message: report.message || `${file} was changed by another writer during the save`,
+            error: report.message ? { code: 'write-race', message: report.message } : refusal('write-race', 'props.edit.raced', { file }),
           };
         case 'anchor-moved':
         case 'anchor-ambiguous':
@@ -345,14 +327,22 @@ function failureOf(file: string, report: Exclude<WriteReport, { tag: 'applied' }
         case 'resource-limit':
         case 'write-failed':
         case 'merge-conflict':
-          return { code: 'filesystem', message: report.message || `Could not save ${file}` };
+          return {
+            code: 'filesystem',
+            error: report.message ? { code: 'filesystem', message: report.message } : refusal('filesystem', 'props.edit.couldNotSave', { file }),
+          };
         default: {
           const exhaustive: never = report.reason;
           return exhaustive;
         }
       }
     case 'uncertain':
-      return { code: 'filesystem', message: `${file} may not have been saved. ${report.message}` };
+      return {
+        code: 'filesystem',
+        error: report.message
+          ? refusal('filesystem', 'props.edit.uncertain', { file, detail: report.message })
+          : refusal('filesystem', 'props.edit.uncertainBare', { file }),
+      };
     case 'backpressured':
       throw new Error('Assertion failed: a leased actor holds no other intent to push back with');
     default: {
@@ -379,16 +369,16 @@ function rollbackPropertyChanges(written: readonly FileChange[], cause: WriteFai
     }
   }
   if (failed.length > 0 || changed.length > 0) {
-    const parts = [
-      failed.length > 0 ? `recovery failed for: ${failed.join(', ')}` : '',
-      changed.length > 0 ? `changed by another program, left as is: ${changed.join(', ')}` : '',
-    ].filter((part) => part !== '');
-    return err({
-      code: 'rollback',
-      message: `Save failed and ${parts.join('; ')}. ${cause.message}`,
-    });
+    // Each combination is one whole sentence, so a language can order its clauses its own way.
+    const lead =
+      changed.length === 0
+        ? described('props.edit.rollbackFailed', { failed: failed.join(', ') })
+        : failed.length === 0
+          ? described('props.edit.rollbackChanged', { changed: changed.join(', ') })
+          : described('props.edit.rollbackBoth', { failed: failed.join(', '), changed: changed.join(', ') });
+    return err(withLead(lead, { ...cause.error, code: 'rollback' }));
   }
-  return err({ code: cause.code, message: `Save failed; changes restored. ${cause.message}` });
+  return err(withLead(described('props.edit.restored'), cause.error));
 }
 
 function restorePropertyFile(change: FileChange, writer: PropertyWriter): 'restored' | 'changed' | 'failed' {
@@ -420,10 +410,7 @@ function planPropertyRemoval(request: PropertyEditRequest, change: FileChange, n
       return result;
     }
     if (result.value !== consumer.source) {
-      return err({
-        code: 'in-use',
-        message: `${consumer.file} still passes ${name}. ` + 'Remove that instance value before deleting the prop.',
-      });
+      return err(refusal('in-use', 'props.edit.stillPasses', { file: consumer.file, name }));
     }
   }
   return ok([change]);

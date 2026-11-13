@@ -1,15 +1,23 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
 import { droplet as centralDroplet, font as centralFont, number as centralNumber, ruler as centralRuler } from '../../ui/central/centralGeometry';
 import type { IconProps } from '../../ui/IconBase';
+import type { MessageKey } from '../../lib/i18n/localeContext';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
-const sizeType = { Icon: centralIcon(centralRuler), label: 'Size' };
-const TYPES: ReadonlyMap<string, typeof sizeType> = new Map([
-  ['color', { Icon: centralIcon(centralDroplet), label: 'Colour' }],
-  ['number', { Icon: centralIcon(centralNumber), label: 'Number' }],
-  ['font', { Icon: centralIcon(centralFont), label: 'Text' }],
+interface TypeEntry {
+  readonly Icon: ReturnType<typeof centralIcon>;
+  readonly label: MessageKey;
+}
+
+const sizeType: TypeEntry = { Icon: centralIcon(centralRuler), label: 'variables.type.size' };
+const TYPES: ReadonlyMap<string, TypeEntry> = new Map([
+  ['color', { Icon: centralIcon(centralDroplet), label: 'variables.type.color' }],
+  ['number', { Icon: centralIcon(centralNumber), label: 'variables.type.number' }],
+  ['font', { Icon: centralIcon(centralFont), label: 'variables.type.text' }],
 ]);
 
 export default function VariableTypeIcon({ kind = 'size', size, className }: Pick<IconProps, 'size' | 'className'> & { readonly kind?: string }) {
+  const translate = useTranslate();
   const { Icon, label } = TYPES.get(kind) ?? sizeType;
-  return <Icon size={size} className={className} title={label} />;
+  return <Icon size={size} className={className} title={translate(label)} />;
 }

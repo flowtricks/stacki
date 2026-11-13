@@ -8,7 +8,8 @@ import ts from 'typescript';
 
 import { assert } from '../../shared/core/assert';
 import { indentUnitOf } from '../../shared/core/indent';
-import type { Result } from '../../shared/core/result';
+import { err, type Result } from '../../shared/core/result';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 
 export interface SpanEdit {
   readonly start: number;
@@ -69,21 +70,18 @@ export function referenceTarget(property: ts.ObjectLiteralElementLike): string |
 }
 
 // Finding the collection: the `collections` export, its key, and the schema's z.object.
-export function locate(source: string, collection: string): Result<Located, string> {
+export function locate(source: string, collection: string): Result<Located, Described> {
   if (source.length > CONFIG_CHARS_MAX) {
-    return { ok: false, error: 'The content config is too large to edit here.' };
+    return err(described('cmsBackend.config.tooLarge'));
   }
   const file = ts.createSourceFile('content.config.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const collections = collectionsObject(file);
   if (collections === undefined) {
-    return {
-      ok: false,
-      error: 'Stacki could not find `export const collections = { … }` in the content config.',
-    };
+    return err(described('cmsBackend.config.noCollections'));
   }
   const entry = collections.properties.find((property) => propertyName(property) === collection);
   if (entry === undefined) {
-    return { ok: false, error: `${collection} is not in the content config’s collections.` };
+    return err(described('cmsBackend.config.notListed', { collection }));
   }
   const call = defineCall(entry, file);
   return { ok: true, value: { file, entry, call, object: schemaObject(call) } };

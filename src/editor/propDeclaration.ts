@@ -38,6 +38,8 @@ import { assert } from '../../shared/core/assert';
 import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import { LIMITS } from '../../shared/core/limits';
 import { err, ok, type Result } from '../../shared/core/result';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../shared/properties/i18n/messageRef';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { destructureEnd, freeLocal, propNamed, propsInterfaceBody, propsInterfaceEnd, propsPattern, readPropsDestructure } from './loopProps';
 import { NUMBER_DECIMALS_MAX, type NumberSettings } from './propDocumentation';
@@ -212,10 +214,10 @@ export function restTooltip(frontmatter: string): string {
 }
 
 /** The frontmatter with the attributes prop's tooltip replaced, or removed when empty. */
-export function withRestTooltip(frontmatter: string, tooltip: string): Result<string, string> {
+export function withRestTooltip(frontmatter: string, tooltip: string, translate: Translator = ENGLISH_TRANSLATE): Result<string, string> {
   const head = interfaceHead(frontmatter);
   if (head === undefined) {
-    return err('This component has no interface Props to describe its attributes on.');
+    return err(translate('editor.propDeclaration.noInterface'));
   }
   const text = tooltipText(tooltip);
   const comment = interfaceComment(frontmatter);
@@ -240,6 +242,7 @@ export function withRestTooltip(frontmatter: string, tooltip: string): Result<st
  */
 export function defaultCode(
   declaration: Pick<PropDeclaration, 'kind' | 'defaultText' | 'options' | 'number' | 'list' | 'image' | 'defaultExpression'>,
+  translate: Translator = ENGLISH_TRANSLATE,
 ): Result<string | undefined, string> {
   // Code typed in the default's code view is the default, exactly as typed.
   const expression = declaration.defaultExpression?.trim() ?? '';
@@ -249,11 +252,11 @@ export function defaultCode(
   }
   // A list and an image always have a default, whatever was typed as text.
   if (declaration.kind === 'list') {
-    const problem = listSettingsProblem(declaration.list);
+    const problem = listSettingsProblem(declaration.list, translate);
     return problem === undefined ? ok(listDefaultCode(declaration.list)) : err(problem);
   }
   if (declaration.kind === 'image') {
-    const image = imageDefaultOf(declaration.image);
+    const image = imageDefaultOf(declaration.image, translate);
     return image.ok ? ok(imageDefaultCode(image.value, image.value.kind === 'asset' ? image.value.base : '')) : image;
   }
   const text = declaration.defaultText.trim();
@@ -265,7 +268,7 @@ export function defaultCode(
     case 'string':
       return ok(JSON.stringify(declaration.defaultText));
     case 'number':
-      return numberDefault(text, declaration.number);
+      return numberDefault(text, declaration.number, translate);
     case 'boolean':
       if (text === 'true') {
         return ok('true');
@@ -273,12 +276,12 @@ export function defaultCode(
       if (text === 'false') {
         return ok('false');
       }
-      return err('The default is on or off.');
+      return err(translate('editor.propDeclaration.default.onOrOff'));
     case 'option':
       if (declaration.options.includes(declaration.defaultText)) {
         return ok(JSON.stringify(declaration.defaultText));
       }
-      return err('The default has to be one of the options.');
+      return err(translate('editor.propDeclaration.default.oneOfOptions'));
     case 'attributes':
       return ok(undefined);
     default: {
@@ -303,43 +306,47 @@ function imageDefaultCode(image: ImageDefault, local: string): string {
   }
 }
 
-function numberDefault(text: string, settings: NumberSettings): Result<string, string> {
+function numberDefault(text: string, settings: NumberSettings, translate: Translator): Result<string, string> {
   const value = Number(text);
   if (!Number.isFinite(value)) {
-    return err('The default has to be a number.');
+    return err(translate('editor.propDeclaration.default.notNumber'));
   }
   const { min, max, decimals } = settings;
   if (min !== undefined && value < min) {
-    return err(`The default has to be at least ${min}.`);
+    return err(translate('editor.propDeclaration.default.atLeast', { min }));
   }
   if (max !== undefined && value > max) {
-    return err(`The default has to be at most ${max}.`);
+    return err(translate('editor.propDeclaration.default.atMost', { max }));
   }
   if (decimals !== undefined && Number(value.toFixed(decimals)) !== value) {
-    return err(decimals === 0 ? 'The default has to be a whole number.' : `The default has at most ${decimals} decimals.`);
+    return err(decimals === 0 ? translate('editor.propDeclaration.default.whole') : translate('editor.propDeclaration.default.decimals', { count: decimals }));
   }
   return ok(String(value));
 }
 
 /** The TypeScript type a prop is declared with; a list reuses a type `frontmatter` declares for its items. */
-export function typeText(declaration: Pick<PropDeclaration, 'kind' | 'options' | 'list' | 'image'>, frontmatter = ''): Result<string, string> {
+export function typeText(
+  declaration: Pick<PropDeclaration, 'kind' | 'options' | 'list' | 'image'>,
+  frontmatter = '',
+  translate: Translator = ENGLISH_TRANSLATE,
+): Result<string, string> {
   switch (declaration.kind) {
     case 'string':
     case 'number':
     case 'boolean':
       return ok(declaration.kind);
     case 'option': {
-      const problem = optionsProblem(declaration.options);
+      const problem = optionsProblem(declaration.options, translate);
       return problem === undefined ? ok(declaration.options.map((option) => JSON.stringify(option)).join(' | ')) : err(problem);
     }
     case 'attributes':
       return ok(ATTRIBUTES_TYPE.name);
     case 'list': {
-      const problem = listSettingsProblem(declaration.list);
+      const problem = listSettingsProblem(declaration.list, translate);
       return problem === undefined ? ok(listTypeText(frontmatter, declaration.list.fields)) : err(problem);
     }
     case 'image': {
-      const image = imageDefaultOf(declaration.image);
+      const image = imageDefaultOf(declaration.image, translate);
       return image.ok ? ok(imageTypeText(image.value)) : image;
     }
     default: {
@@ -350,60 +357,62 @@ export function typeText(declaration: Pick<PropDeclaration, 'kind' | 'options' |
 }
 
 /** Why an option list cannot type a prop, or undefined when it can. */
-export function optionsProblem(options: readonly string[]): string | undefined {
+export function optionsProblem(options: readonly string[], translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   if (options.length === 0) {
-    return 'Add at least one option.';
+    return translate('editor.propDeclaration.options.none');
   }
   if (options.length > DECLARATION_LIMITS.optionsMax) {
-    return 'That is too many options.';
+    return translate('editor.propDeclaration.options.tooMany');
   }
   if (options.some((option) => option.trim() === '')) {
-    return 'An option needs some words.';
+    return translate('editor.propDeclaration.options.empty');
   }
   if (options.some((option) => option.length > DECLARATION_LIMITS.optionCharsMax)) {
-    return 'An option is too long.';
+    return translate('editor.propDeclaration.options.tooLong');
   }
-  return new Set(options).size === options.length ? undefined : 'Each option has to be different.';
+  return new Set(options).size === options.length ? undefined : translate('editor.propDeclaration.options.duplicate');
 }
 
 /** Why number settings cannot be written, or undefined when they can. */
-export function numberSettingsProblem(settings: NumberSettings): string | undefined {
+export function numberSettingsProblem(settings: NumberSettings, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   const { min, max, decimals } = settings;
   if (min !== undefined && !Number.isFinite(min)) {
-    return 'Min has to be a number.';
+    return translate('editor.propDeclaration.number.minNotNumber');
   }
   if (max !== undefined && !Number.isFinite(max)) {
-    return 'Max has to be a number.';
+    return translate('editor.propDeclaration.number.maxNotNumber');
   }
   if (min !== undefined && max !== undefined && min > max) {
-    return 'Min has to be no more than Max.';
+    return translate('editor.propDeclaration.number.minAboveMax');
   }
   if (decimals !== undefined) {
     if (!Number.isSafeInteger(decimals)) {
-      return 'Decimals has to be a whole number.';
+      return translate('editor.propDeclaration.number.decimalsNotWhole');
     }
     if (decimals < 0 || decimals > NUMBER_DECIMALS_MAX) {
-      return `Decimals goes from 0 to ${NUMBER_DECIMALS_MAX}.`;
+      return translate('editor.propDeclaration.number.decimalsRange', { max: NUMBER_DECIMALS_MAX });
     }
   }
   return undefined;
 }
 
 /** Why an attribute default cannot be written on an element, or undefined when every one can. */
-export function attributeDefaultsProblem(defaults: readonly AttributeDefault[]): string | undefined {
+export function attributeDefaultsProblem(defaults: readonly AttributeDefault[], translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   if (defaults.length > DECLARATION_LIMITS.attributesMax) {
-    return 'That is too many attributes.';
+    return translate('editor.propDeclaration.attributes.tooMany');
   }
   for (const entry of defaults) {
     if (!ATTRIBUTE_NAME.test(entry.name)) {
-      return entry.name === '' ? 'Each default attribute needs a name.' : `${entry.name} is not an attribute name.`;
+      return entry.name === ''
+        ? translate('editor.propDeclaration.attributes.nameEmpty')
+        : translate('editor.propDeclaration.attributes.nameInvalid', { name: entry.name });
     }
     if (entry.value.length > LIMITS.attrCharsMax) {
-      return `The value of ${entry.name} is too long.`;
+      return translate('editor.propDeclaration.attributes.valueTooLong', { name: entry.name });
     }
   }
   const names = defaults.map((entry) => entry.name);
-  return new Set(names).size === names.length ? undefined : 'Each default attribute has to have its own name.';
+  return new Set(names).size === names.length ? undefined : translate('editor.propDeclaration.attributes.nameDuplicate');
 }
 
 /**
@@ -419,22 +428,23 @@ export function declaredProp(
   declaration: PropDeclaration,
   taken: ReadonlySet<string>,
   existing: readonly ExistingImport[] = [],
+  translate: Translator = ENGLISH_TRANSLATE,
 ): Result<DeclaredProp, string> {
   assert(IDENTIFIER.test(declaration.key), 'declaredProp: a new prop is named by an identifier');
   assert(declaration.key.length <= PROPERTY_LIMITS.nameCharsMax, 'declaredProp: a prop name is bounded');
-  const refused = declarationProblem(frontmatter, declaration);
+  const refused = declarationProblem(frontmatter, declaration, translate);
   if (refused !== undefined) {
     return err(refused);
   }
   // A code type stated in the form is the type; the kind's own otherwise.
   const codeType = declaration.typing?.codeType.trim() ?? '';
-  const type = codeType === '' ? typeText(declaration, frontmatter) : ok(codeType);
+  const type = codeType === '' ? typeText(declaration, frontmatter, translate) : ok(codeType);
   if (!type.ok) {
     return type;
   }
   const local = taken.has(declaration.key) || RESERVED.has(declaration.key) ? freeLocal(declaration.key, taken) : declaration.key;
   const needed = neededImports(declaration, new Set([...taken, local]), existing);
-  const fallback = needed.defaultCode === undefined ? defaultCode(declaration) : ok(needed.defaultCode);
+  const fallback = needed.defaultCode === undefined ? defaultCode(declaration, translate) : ok(needed.defaultCode);
   if (!fallback.ok) {
     return fallback;
   }
@@ -492,49 +502,49 @@ function neededImports(
 }
 
 // Why the declaration cannot be added to this frontmatter at all.
-function declarationProblem(frontmatter: string, declaration: PropDeclaration): string | undefined {
+function declarationProblem(frontmatter: string, declaration: PropDeclaration, translate: Translator): string | undefined {
   if (frontmatter.length > PROPERTY_LIMITS.sourceCharsMax) {
-    return 'This component’s frontmatter is too long to edit here.';
+    return translate('editor.propDeclaration.frontmatter.tooLong');
   }
   if (/\btype\s+Props\s*=/.test(frontmatter)) {
-    return 'This component declares its props as a type. Add the property in the code.';
+    return translate('editor.propDeclaration.frontmatter.typeProps');
   }
   const codeType = declaration.typing?.codeType ?? '';
   if (codeType.length > PROPERTY_LIMITS.textCharsMax) {
-    return 'The code type is too long.';
+    return translate('editor.propDeclaration.codeType.tooLong');
   }
   if (/[;\n]/.test(codeType)) {
     // One member's type: a semicolon or a line break would end the member and start another.
-    return 'Write the code type on one line, without a semicolon.';
+    return translate('editor.propDeclaration.codeType.multiline');
   }
   const rest = readRestBinding(frontmatter);
-  const kindProblem = kindSettingsProblem(declaration, rest);
+  const kindProblem = kindSettingsProblem(declaration, rest, translate);
   if (kindProblem !== undefined) {
     return kindProblem;
   }
   const destructured = readPropsDestructure(frontmatter)?.entries.some((entry) => entry.key === declaration.key) ?? false;
   if (destructured || hasMember(frontmatter, declaration.key) || rest?.local === declaration.key) {
-    return `This component already has a ${declaration.key} property.`;
+    return translate('editor.propDeclaration.frontmatter.exists', { name: declaration.key });
   }
   return undefined;
 }
 
-function kindSettingsProblem(declaration: PropDeclaration, rest: RestBinding | undefined): string | undefined {
+function kindSettingsProblem(declaration: PropDeclaration, rest: RestBinding | undefined, translate: Translator): string | undefined {
   switch (declaration.kind) {
     case 'attributes':
       if (rest !== undefined) {
-        return `This component already passes its other attributes on as ${rest.local}.`;
+        return translate('editor.propDeclaration.attributes.restTaken', { name: rest.local });
       }
       if (!TAG_NAME.test(declaration.tag)) {
-        return 'Only an HTML element can take an attributes property.';
+        return translate('editor.propDeclaration.attributes.htmlOnly');
       }
-      return attributeDefaultsProblem(declaration.attributes);
+      return attributeDefaultsProblem(declaration.attributes, translate);
     case 'number':
-      return numberSettingsProblem(declaration.number);
+      return numberSettingsProblem(declaration.number, translate);
     case 'list':
-      return listSettingsProblem(declaration.list);
+      return listSettingsProblem(declaration.list, translate);
     case 'image': {
-      const image = imageDefaultOf(declaration.image);
+      const image = imageDefaultOf(declaration.image, translate);
       return image.ok ? undefined : image.error;
     }
     case 'boolean':

@@ -1,8 +1,10 @@
 // Editing a node's properties: its comment, classes, asset props, renames,
 // kind and tag, text, branches and content (App.tsx).
 
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import type { ClassOutcome, StyleBlockRequest } from '../../features/style/model/host';
-import { fileLayoutOf, styleBlockFileSupported, styleBlockInner, UNSUPPORTED_FILE_MESSAGE } from '../../features/style/model/firstStyleBlock';
+import { fileLayoutOf, styleBlockFileSupported, styleBlockInner, UNSUPPORTED_FILE } from '../../features/style/model/firstStyleBlock';
 import { useCallback, useRef } from 'react';
 import { labelsNode } from '../../../shared/page/leadingNote';
 import type { Attr } from '../../../shared/page/pageNode';
@@ -36,6 +38,7 @@ import type { InlineNode } from '../../features/props/RichContent';
 import type { TextPiece } from '../../features/props/textConnect';
 import { textPiecesGesture } from '../model/textPieces';
 import type { Rename } from '../../features/props/propNodeEditors';
+import { renameProblemText } from '../../editor/renameProblems';
 import { checkLoopHead, planVariableRename, type VariableRename } from '../../../shared/engine/variableRename';
 import type { PropValues } from '../../features/props/propRules';
 import { findEditorNodeById as findNodeById } from '../../editor/pageState';
@@ -165,6 +168,7 @@ export function useClassEdits(coreState: ReturnType<typeof useCoreState>, lifecy
 }
 
 function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const translate = useTranslate();
   const { pageStateRef } = coreState;
   const { flushSave, showToast } = lifecycle;
   const { commitEdit } = history;
@@ -181,13 +185,13 @@ function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle
       const clean = String(className || '').trim();
       const state = pageStateRef.current.pageState;
       if (!nodeId || !clean || !state?.editable) {
-        return { tag: 'refused', message: 'no element is selected' };
+        return { tag: 'refused', message: translate('shell.refusal.noElement') };
       }
       const node = findNodeById(state.model.nodes, nodeId);
       if (!node) {
-        return { tag: 'refused', message: 'the element is gone' };
+        return { tag: 'refused', message: translate('shell.refusal.elementGone') };
       }
-      const plan = planClassEdit(nodeId, node, clean, placement);
+      const plan = planClassEdit(nodeId, node, clean, placement, translate);
       if (plan.tag === 'present') {
         return { tag: 'applied' };
       }
@@ -196,7 +200,7 @@ function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle
         return { tag: 'refused', message: plan.message };
       }
       if (!commitEdit(plan.gesture)) {
-        return { tag: 'refused', message: 'the edit could not be queued' };
+        return { tag: 'refused', message: translate('shell.refusal.notQueued') };
       }
       previewAddedClass(previewPath, clean);
       try {
@@ -206,7 +210,7 @@ function useAddClassToNode(coreState: ReturnType<typeof useCoreState>, lifecycle
         return { tag: 'refused', message: cleanError(error) };
       }
     },
-    [commitEdit, flushSave, showToast, pageStateRef],
+    [commitEdit, flushSave, showToast, pageStateRef, translate],
   );
 }
 
@@ -215,18 +219,18 @@ type ClassPlan = { readonly tag: 'present' } | { readonly tag: 'refused'; readon
 // The page edit that puts `clean` on a node, or why it cannot be: shared by the class typed in
 // the selector box and the first styles of a page (useAddStyleBlock), so both put a class on
 // an element the same way.
-function planClassEdit(nodeId: string, node: EditorNode, clean: string, placement: ClassPlacement): ClassPlan {
+function planClassEdit(nodeId: string, node: EditorNode, clean: string, placement: ClassPlacement, translate: Translator): ClassPlan {
   // Bare text has no tag to hold the class. Refused here, so the panel can
   // say why and the page never queues an edit it cannot state.
   if (!isAttributeHost(node.kind)) {
-    return { tag: 'refused', message: 'Plain text has no tag to hold a class. Right-click it and use Convert to first.' };
+    return { tag: 'refused', message: translate('shell.refusal.plainText') };
   }
   if (hasClass(node.props, clean)) {
     return { tag: 'present' };
   }
   const edit = withClass(node.props, clean, placement);
   if (!edit) {
-    return { tag: 'refused', message: `Stacki couldn’t add the class “${clean}”. Check the class name and retry.` };
+    return { tag: 'refused', message: translate('shell.refusal.classAdd', { name: clean }) };
   }
   // Step 6, attribute: the class attribute, as its own edit request.
   const patch = { [edit.key]: edit.value, ...(edit.remove ? { class: undefined } : {}) };
@@ -241,6 +245,8 @@ function planClassEdit(nodeId: string, node: EditorNode, clean: string, placemen
 // element. Both are ONE gesture, so one edit on disk and one undo step: undoing the block
 // leaves no class behind that styles nothing, and undoing the class leaves no orphan rule.
 function useAddStyleBlock(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { pageStateRef } = coreState;
   const { flushSave } = lifecycle;
   const { commitEdit } = history;
@@ -248,24 +254,25 @@ function useAddStyleBlock(coreState: ReturnType<typeof useCoreState>, lifecycle:
     async (nodeId: string, request: StyleBlockRequest, previewPath?: string): Promise<ClassOutcome> => {
       const { currentPage, pageState: state } = pageStateRef.current;
       if (!nodeId || !state?.editable) {
-        return { tag: 'refused', message: 'no element is selected' };
+        return { tag: 'refused', message: translate('shell.refusal.noElement') };
       }
       if (!styleBlockFileSupported(currentPage?.path)) {
-        return { tag: 'refused', message: UNSUPPORTED_FILE_MESSAGE };
+        return { tag: 'refused', message: translateDescribed(UNSUPPORTED_FILE) };
       }
       const node = findNodeById(state.model.nodes, nodeId);
       if (!node) {
-        return { tag: 'refused', message: 'the element is gone' };
+        return { tag: 'refused', message: translate('shell.refusal.elementGone') };
       }
       // The class is planned before anything is queued: a refusal must leave the page as it was.
-      const plan = request.className === undefined ? ({ tag: 'present' } as const) : planClassEdit(nodeId, node, request.className, request.placement);
+      const plan =
+        request.className === undefined ? ({ tag: 'present' } as const) : planClassEdit(nodeId, node, request.className, request.placement, translate);
       if (plan.tag === 'refused') {
         return { tag: 'refused', message: plan.message };
       }
       const block = globalStyleNode(newId(), styleBlockInner(request.css, fileLayoutOf(state.source)));
       const insert = insertGesture(state.model, block, undefined, { urgency: true });
       if (!commitEdit(plan.tag === 'edit' ? sequence(insert, plan.gesture) : insert)) {
-        return { tag: 'refused', message: 'the edit could not be queued' };
+        return { tag: 'refused', message: translate('shell.refusal.notQueued') };
       }
       if (request.className !== undefined) {
         previewAddedClass(previewPath, request.className);
@@ -277,7 +284,7 @@ function useAddStyleBlock(coreState: ReturnType<typeof useCoreState>, lifecycle:
         return { tag: 'refused', message: cleanError(error) };
       }
     },
-    [commitEdit, flushSave, pageStateRef],
+    [commitEdit, flushSave, pageStateRef, translate, translateDescribed],
   );
 }
 
@@ -286,6 +293,7 @@ function useAddStyleBlock(coreState: ReturnType<typeof useCoreState>, lifecycle:
 // undo step). What decides whether that is safe is selectorRemoval.ts; a refusal
 // is shown as a toast and nothing is written.
 function useRemoveFromNode(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>, history: ReturnType<typeof useHistory>) {
+  const translate = useTranslate();
   const { pageStateRef } = coreState;
   const { flushSave, showToast } = lifecycle;
   const { commitEdit } = history;
@@ -297,11 +305,11 @@ function useRemoveFromNode(coreState: ReturnType<typeof useCoreState>, lifecycle
     ): Promise<ClassOutcome> => {
       const state = pageStateRef.current.pageState;
       if (!nodeId || !state?.editable) {
-        return { tag: 'refused', message: 'no element is selected' };
+        return { tag: 'refused', message: translate('shell.refusal.noElement') };
       }
       const node = findNodeById(state.model.nodes, nodeId);
       if (!node) {
-        return { tag: 'refused', message: 'the element is gone' };
+        return { tag: 'refused', message: translate('shell.refusal.elementGone') };
       }
       assert(node.id === nodeId, 'removeFromNode: the node found is the one named');
       const removal = plan(node.props);
@@ -312,7 +320,7 @@ function useRemoveFromNode(coreState: ReturnType<typeof useCoreState>, lifecycle
       assert(removal.key.length > 0, 'removeFromNode: an edit names the prop it writes');
       const patch = { [removal.key]: removal.value };
       if (!commitEdit(propsGesture(nodeId, patch, { coalesceKey: undefined, urgency: true }))) {
-        return { tag: 'refused', message: 'the edit could not be queued' };
+        return { tag: 'refused', message: translate('shell.refusal.notQueued') };
       }
       // The canvas drops the class at once rather than after the save's re-render.
       previewClassProps(previewPath, node, patch);
@@ -323,15 +331,15 @@ function useRemoveFromNode(coreState: ReturnType<typeof useCoreState>, lifecycle
         return { tag: 'refused', message: cleanError(error) };
       }
     },
-    [commitEdit, flushSave, showToast, pageStateRef],
+    [commitEdit, flushSave, showToast, pageStateRef, translate],
   );
   const removeClassFromNode = useCallback(
-    (nodeId: string, className: string, previewPath?: string) => removeFromNode(nodeId, previewPath, (props) => classRemoval(props, className)),
-    [removeFromNode],
+    (nodeId: string, className: string, previewPath?: string) => removeFromNode(nodeId, previewPath, (props) => classRemoval(props, className, translate)),
+    [removeFromNode, translate],
   );
   const removeAttributeFromNode = useCallback(
-    (nodeId: string, attributeName: string) => removeFromNode(nodeId, undefined, (props) => attributeRemoval(props, attributeName)),
-    [removeFromNode],
+    (nodeId: string, attributeName: string) => removeFromNode(nodeId, undefined, (props) => attributeRemoval(props, attributeName, translate)),
+    [removeFromNode, translate],
   );
   return { removeClassFromNode, removeAttributeFromNode };
 }
@@ -541,6 +549,7 @@ export function useElementTag(coreState: ReturnType<typeof useCoreState>, histor
 
 // A node’s text, and the frontmatter.
 export function useNodeText(coreState: ReturnType<typeof useCoreState>, history: ReturnType<typeof useHistory>) {
+  const translate = useTranslate();
   const { pageStateRef } = coreState;
   const { commitEdit, scheduleSave } = history;
 
@@ -614,15 +623,15 @@ export function useNodeText(coreState: ReturnType<typeof useCoreState>, history:
       const state = pageStateRef.current.pageState;
       const origin = state?.editable ? state.origin : undefined;
       if (origin === undefined) {
-        return 'Wait for the current code change to finish saving, then try again.';
+        return translate('shell.history.waitForSave');
       }
       const plan = planVariableRename(origin, rename);
       if (!plan.ok) {
-        return plan.message;
+        return renameProblemText(plan.problem, translate);
       }
-      return commitEdit(variableRenameGesture(origin, rename, plan.hunks)) ? undefined : 'This page can’t be edited right now.';
+      return commitEdit(variableRenameGesture(origin, rename, plan.hunks)) ? undefined : translate('shell.loop.notEditable');
     },
-    [commitEdit, pageStateRef],
+    [commitEdit, pageStateRef, translate],
   );
 
   // The Code row: checked first, because this text compiles into the page and a
@@ -633,12 +642,12 @@ export function useNodeText(coreState: ReturnType<typeof useCoreState>, history:
       const state = pageStateRef.current.pageState;
       const node = state?.editable ? findNodeById(state.model.nodes, nodeId) : undefined;
       if (node?.kind !== 'map') {
-        return 'That loop is no longer on the page.';
+        return translate('shell.loop.gone');
       }
       const origin = state?.editable ? state.origin : undefined;
       const checked = origin === undefined ? undefined : checkLoopHead(origin, { id: nodeId, before: node.head, after: value });
       if (checked?.kind === 'problem') {
-        return checked.message;
+        return renameProblemText(checked.problem, translate);
       }
       if (checked?.kind === 'rename') {
         return renameVariable(checked.rename);
@@ -646,7 +655,7 @@ export function useNodeText(coreState: ReturnType<typeof useCoreState>, history:
       setNodeText(nodeId, value, renames);
       return undefined;
     },
-    [pageStateRef, renameVariable, setNodeText],
+    [pageStateRef, renameVariable, setNodeText, translate],
   );
   return { renameVariable, setFrontmatter, setLoopHead, setNodeText };
 }

@@ -11,6 +11,9 @@
 
 import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
+import { parseMessageRef, type MessageRef } from '../core/i18n/messageReference';
+import { MediaInputError } from './mediaInputError';
+import { described, type Described, type MessageKey } from './i18n/messageRef';
 
 export const MEDIA_HOSTING_LIMITS = {
   connectionsPerProjectMax: 16,
@@ -96,7 +99,8 @@ export interface MediaConnectionList {
   readonly connections: readonly MediaConnection[];
 }
 
-export type MediaSaveResult = { readonly ok: true; readonly list: MediaConnectionList } | { readonly ok: false; readonly message: string };
+export type MediaSaveResult =
+  { readonly ok: true; readonly list: MediaConnectionList } | { readonly ok: false; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 /** What a file previews as in the panel. */
 export type MediaFileKind = 'image' | 'video' | 'audio' | 'file';
@@ -130,7 +134,8 @@ export interface MediaListing {
 }
 
 /** An expected failure — offline, a revoked key, a missing bucket — is an answer, not a crash. */
-export type MediaResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };
+export type MediaResult<T> =
+  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 
@@ -150,25 +155,25 @@ export function parseMediaConnectionId(input: unknown): string {
 export function parseMediaURL(input: unknown, what: string): string {
   const raw = text(input).trim();
   if (raw.length === 0 || raw.length > MEDIA_HOSTING_LIMITS.urlCharsMax) {
-    throw new Error(`Enter the ${what}.`);
+    throw new MediaInputError('assets.input.url.enter', { what });
   }
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
-    throw new Error(`The ${what} is not a URL.`);
+    throw new MediaInputError('assets.input.url.notUrl', { what });
   }
   const local = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
   if (url.protocol !== 'https:') {
     if (!(url.protocol === 'http:' && local)) {
-      throw new Error(`The ${what} must use https (http only for localhost).`);
+      throw new MediaInputError('assets.input.url.https', { what });
     }
   }
   if (url.username !== '' || url.password !== '') {
-    throw new Error(`The ${what} cannot hold a login.`);
+    throw new MediaInputError('assets.input.url.login', { what });
   }
   if (url.search !== '' || url.hash !== '') {
-    throw new Error(`The ${what} cannot hold a query or a fragment.`);
+    throw new MediaInputError('assets.input.url.queryFragment', { what });
   }
   const parsed = url.toString().replace(/\/+$/, '');
   assert(!parsed.endsWith('/'), 'A parsed address has no trailing slash');
@@ -180,7 +185,7 @@ export function parseMediaURL(input: unknown, what: string): string {
 function parseEndpoint(input: unknown): string {
   const parsed = parseMediaURL(input, 'S3 endpoint');
   if (new URL(parsed).pathname !== '/') {
-    throw new Error('The S3 endpoint is the API address alone, without a path.');
+    throw new MediaInputError('assets.input.url.endpointPath');
   }
   assert(!parsed.endsWith('/'), 'An endpoint has no trailing slash');
   return parsed;
@@ -189,7 +194,7 @@ function parseEndpoint(input: unknown): string {
 function parseLabel(input: unknown): string {
   const label = text(input).trim();
   if (label.length === 0 || label.length > MEDIA_HOSTING_LIMITS.labelCharsMax) {
-    throw new Error(`A connection name is 1–${MEDIA_HOSTING_LIMITS.labelCharsMax} characters.`);
+    throw new MediaInputError('assets.input.label', { max: MEDIA_HOSTING_LIMITS.labelCharsMax });
   }
   return label;
 }
@@ -197,7 +202,7 @@ function parseLabel(input: unknown): string {
 function parseAccountId(input: unknown): string {
   const id = text(input).trim().toLowerCase();
   if (!/^[a-f0-9]{32}$/.test(id)) {
-    throw new Error('A Cloudflare account id is 32 letters and digits (a–f, 0–9).');
+    throw new MediaInputError('assets.input.accountId');
   }
   return id;
 }
@@ -207,7 +212,7 @@ function parseAccountId(input: unknown): string {
 function parseBucket(input: unknown): string {
   const bucket = text(input).trim();
   if (!/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/.test(bucket)) {
-    throw new Error('A bucket name is 3–63 lower-case letters, digits, dots and hyphens.');
+    throw new MediaInputError('assets.input.bucket');
   }
   assert(!bucket.includes('/'), 'A bucket name is one path segment');
   return bucket;
@@ -216,7 +221,7 @@ function parseBucket(input: unknown): string {
 function parseStorageZone(input: unknown): string {
   const zone = text(input).trim();
   if (!/^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/.test(zone)) {
-    throw new Error('A storage zone name is letters, digits and hyphens.');
+    throw new MediaInputError('assets.input.storageZone');
   }
   return zone;
 }
@@ -224,7 +229,7 @@ function parseStorageZone(input: unknown): string {
 function parseRegion(input: unknown): string {
   const region = text(input).trim();
   if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(region)) {
-    throw new Error('A region is lower-case letters, digits and hyphens, e.g. us-east-1.');
+    throw new MediaInputError('assets.input.region');
   }
   return region;
 }
@@ -249,10 +254,10 @@ function parseAddressing(input: unknown): BucketAddressing {
 function parseKey(input: unknown, what: string, charsMax: number): string {
   const key = text(input).trim();
   if (key.length === 0 || key.length > charsMax) {
-    throw new Error(`Paste the ${what}.`);
+    throw new MediaInputError('assets.input.key.paste', { what });
   }
   if (!/^[\x21-\x7e]+$/.test(key)) {
-    throw new Error(`The ${what} is printable characters on one line.`);
+    throw new MediaInputError('assets.input.key.printable', { what });
   }
   assert(!/\s/.test(key), 'A key never holds whitespace');
   return key;
@@ -289,10 +294,10 @@ export function parseMediaConnectionDraft(input: unknown): MediaConnectionDraft 
   // Each provider signs with its own kind of key; a mismatch is a broken form.
   if (fields.kind === 'bunny') {
     if (secret.kind !== 'accessKey') {
-      throw new Error('Bunny Storage takes its storage zone password.');
+      throw new MediaInputError('assets.input.secret.bunny');
     }
   } else if (secret.kind !== 'keyPair') {
-    throw new Error('This host takes an access key ID and a secret access key.');
+    throw new MediaInputError('assets.input.secret.keyPair');
   }
   return { ...fields, secret };
 }
@@ -357,7 +362,7 @@ export function parseMediaSaveResult(input: unknown): MediaSaveResult {
   if (value['ok'] !== false) {
     throw new Error('Expected a save result.');
   }
-  return { ok: false, message: parseMediaMessage(value['message']) };
+  return { ok: false, message: parseMediaMessage(value['message']), ...parseOptionalRef(value['messageRef']) };
 }
 
 export function parseMediaResult<T>(input: unknown, parseValue: (value: unknown) => T): MediaResult<T> {
@@ -368,7 +373,16 @@ export function parseMediaResult<T>(input: unknown, parseValue: (value: unknown)
   if (value['ok'] !== false) {
     throw new Error('Expected a media result.');
   }
-  return { ok: false, message: parseMediaMessage(value['message']) };
+  return { ok: false, message: parseMediaMessage(value['message']), ...parseOptionalRef(value['messageRef']) };
+}
+
+/** A reference that came with a failure: kept when well formed, dropped (the English message shows) when not. */
+function parseOptionalRef(input: unknown): { readonly messageRef?: MessageRef } {
+  if (input === undefined) {
+    return {};
+  }
+  const parsed = parseMessageRef(input);
+  return parsed.ok ? { messageRef: parsed.value } : {};
 }
 
 export function parseMediaMessage(input: unknown): string {
@@ -567,18 +581,34 @@ function parseOptionalTime(input: unknown): string | undefined {
  * lie about what it holds.
  */
 export function replacementRefusal(currentName: string, replacementName: string): string | undefined {
+  return describeReplacementRefusal(currentName, replacementName)?.message;
+}
+
+/** `replacementRefusal` with the reference the renderer translates beside the English sentence. */
+export function describeReplacementRefusal(currentName: string, replacementName: string): Described | undefined {
   const currentKind = mediaKindOf(currentName);
   const replacementKind = mediaKindOf(replacementName);
   if (currentKind !== replacementKind) {
-    return `${currentName} is ${KIND_ARTICLES[currentKind]}; replace it with ${KIND_ARTICLES[currentKind]} too, not ${KIND_ARTICLES[replacementKind]}.`;
+    const key = REPLACE_KIND_KEYS[currentKind][replacementKind];
+    assert(key !== undefined, 'describeReplacementRefusal: every pair of different kinds has a sentence');
+    return described(key, { name: currentName });
   }
   if (currentKind === 'file' && extensionOf(currentName) !== extensionOf(replacementName)) {
-    return `${currentName} must be replaced with another ${extensionOf(currentName) || 'extensionless'} file.`;
+    const extension = extensionOf(currentName);
+    return extension === ''
+      ? described('assets.error.replaceExtensionless', { name: currentName })
+      : described('assets.error.replaceExtension', { name: currentName, extension });
   }
   return undefined;
 }
 
-const KIND_ARTICLES: Readonly<Record<MediaFileKind, string>> = { image: 'an image', video: 'a video', audio: 'an audio file', file: 'a file' };
+/** Which sentence says "a <current> must be replaced by a <current>, not a <replacement>": one per pair, since the nouns differ in every language. */
+const REPLACE_KIND_KEYS: Readonly<Record<MediaFileKind, Readonly<Partial<Record<MediaFileKind, MessageKey>>>>> = {
+  image: { video: 'assets.error.replaceImageNotVideo', audio: 'assets.error.replaceImageNotAudio', file: 'assets.error.replaceImageNotFile' },
+  video: { image: 'assets.error.replaceVideoNotImage', audio: 'assets.error.replaceVideoNotAudio', file: 'assets.error.replaceVideoNotFile' },
+  audio: { image: 'assets.error.replaceAudioNotImage', video: 'assets.error.replaceAudioNotVideo', file: 'assets.error.replaceAudioNotFile' },
+  file: { image: 'assets.error.replaceFileNotImage', video: 'assets.error.replaceFileNotVideo', audio: 'assets.error.replaceFileNotAudio' },
+};
 
 function extensionOf(name: string): string {
   const dot = name.lastIndexOf('.');

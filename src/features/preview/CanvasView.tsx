@@ -4,12 +4,14 @@ import { PreviewFrame } from './PreviewFrame';
 import { parsePreviewMessage } from './previewMessages';
 import { usePointerDrag } from '../../ui/usePointerDrag';
 import { panelDragPhase, subscribePanelDragPhase } from '../../ui/panelDragPhase';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 
 const BREAKPOINTS = [
-  { key: 'desktop', label: 'Desktop', width: 1_440, viewportHeight: 900 },
-  { key: 'tablet', label: 'Tablet', width: 768, viewportHeight: 1_024 },
-  { key: 'phone', label: 'Phone', width: 375, viewportHeight: 812 },
-] as const;
+  { key: 'desktop', labelKey: 'preview.canvas.desktop', width: 1_440, viewportHeight: 900 },
+  { key: 'tablet', labelKey: 'preview.canvas.tablet', width: 768, viewportHeight: 1_024 },
+  { key: 'phone', labelKey: 'preview.canvas.phone', width: 375, viewportHeight: 812 },
+] as const satisfies ReadonlyArray<{ readonly key: string; readonly labelKey: MessageKey; readonly width: number; readonly viewportHeight: number }>;
 const GAP_PX = 120;
 const PAGE_HEIGHT_PX_MAX = 30_000;
 const PAGE_HEIGHT_PX_MIN = 200;
@@ -333,12 +335,13 @@ function CanvasFrames({
   readonly iframesRef: React.MutableRefObject<FrameElements>;
   readonly onPreviewLoaded?: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="canvas-world" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
       {frames.map((frame) => (
         <div key={frame.key} className="canvas-frame" style={{ left: frame.x, top: 0, width: frame.width, height: frame.height }}>
           <div className="canvas-frame-label" style={{ fontSize: 13 / view.scale, paddingBottom: 8 / view.scale }}>
-            {frame.label} · {frame.width}px
+            {translate('preview.canvas.frameLabel', { device: translate(frame.labelKey), width: frame.width })}
           </div>
           <PreviewFrame
             refreshKey={refreshKey}
@@ -350,7 +353,7 @@ function CanvasFrames({
               }
             }}
             url={url}
-            title={`${frame.label} preview`}
+            title={translate('preview.canvas.frameTitle', { device: translate(frame.labelKey) })}
             onLoad={(event) => {
               event.currentTarget.contentWindow?.postMessage({ type: 'avb:set-vh', px: frame.viewportHeight }, new URL(url, window.location.href).origin);
               onPreviewLoaded?.();
@@ -364,19 +367,20 @@ function CanvasFrames({
 }
 
 function CanvasControls({ view, onZoom, onFit }: { readonly view: ViewState; readonly onZoom: (scale: number) => void; readonly onFit: () => void }) {
+  const translate = useTranslate();
   return (
     <div className="canvas-controls" onPointerDown={(event) => event.stopPropagation()}>
-      <button title="Zoom out" onClick={() => onZoom(view.scale / 1.25)}>
+      <button title={translate('preview.canvas.zoomOut')} onClick={() => onZoom(view.scale / 1.25)}>
         −
       </button>
-      <button className="pct" title="Zoom to 100%" onClick={() => onZoom(1)}>
+      <button className="pct" title={translate('preview.canvas.zoomReset')} onClick={() => onZoom(1)}>
         {Math.round(view.scale * 100)}%
       </button>
-      <button title="Zoom in" onClick={() => onZoom(view.scale * 1.25)}>
+      <button title={translate('preview.canvas.zoomIn')} onClick={() => onZoom(view.scale * 1.25)}>
         +
       </button>
-      <button title="Fit all breakpoints" onClick={onFit}>
-        Fit
+      <button title={translate('preview.canvas.fitAll')} onClick={onFit}>
+        {translate('preview.canvas.fit')}
       </button>
     </div>
   );

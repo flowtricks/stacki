@@ -1,3 +1,4 @@
+import { studioTranslate } from '../../shared/studioTranslate';
 import { request } from '../project/projectClient';
 
 export async function assetOperation(body: Readonly<Record<string, string>>) {
@@ -11,7 +12,7 @@ export async function assetOperation(body: Readonly<Record<string, string>>) {
 }
 export async function uploadFiles(destination: string, files: readonly File[]) {
   if (files.length > 20) {
-    throw new Error('Upload at most 20 files at once.');
+    throw new Error(studioTranslate('assets.error.uploadMax', { count: 20 }));
   }
   let added = 0;
   try {

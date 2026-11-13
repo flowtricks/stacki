@@ -2,6 +2,7 @@
 // the native target, a component's own source, the resolved properties, the
 // selector chips and changing context (EmbedEditor.tsx).
 
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { chipStyleOf, inlineResolveInput, inlineTargetOf, type InlineState } from './useInlineTarget';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -110,6 +111,7 @@ export function useStyleContexts(
   embedContexts: ReturnType<typeof useEmbedContexts>,
   wrapperReachHook: ReturnType<typeof useWrapperReach>,
 ) {
+  const translate = useTranslate();
   const { context, setContext, stickyContextRef } = selectionState;
   const { nativeModel } = nativeState;
   const { allContextKeys } = contextKeys;
@@ -122,7 +124,9 @@ export function useStyleContexts(
   const styleContexts = useMemo<StyleContext[]>(() => {
     // A query nested inside a rule is listed only where it can reach the element
     // (model/queryReach.ts): undecided ones stay, misses go.
-    const list = buildStyleContexts(allContextKeys, nativeModel, styledEmbedContexts, sourceContexts).filter((entry) => reachOf(entry.key).kind !== 'misses');
+    const list = buildStyleContexts(allContextKeys, nativeModel, styledEmbedContexts, sourceContexts, translate).filter(
+      (entry) => reachOf(entry.key).kind !== 'misses',
+    );
     // Keep the manually-selected query available on any element — even one with no
     // styles there yet — so switching elements stays on it and you can add a style.
     // Only needed for custom @media/@container (breakpoints are always built). A
@@ -133,15 +137,15 @@ export function useStyleContexts(
       list.push(sticky);
     }
     return list;
-  }, [allContextKeys, nativeModel, styledEmbedContexts, sourceContexts, context, stickyContextRef, reachOf]);
+  }, [allContextKeys, nativeModel, styledEmbedContexts, sourceContexts, context, stickyContextRef, reachOf, translate]);
   const currentContext = useMemo<StyleContext>(
     () =>
       styleContexts.find((entry) => entry.key === context) ??
       // A typed query, once written, is listed under its stylesheet: the typed key
       // names no stylesheet, so it is the written row's place that matches.
       styleContexts.find((entry) => splitSourcedKey(context).source === undefined && entry.key !== '' && splitSourcedKey(entry.key).placed === context) ??
-      styleContexts[0] ?? { key: '', label: 'Base', breakpoint: 'main', embedAtContext: '' },
-    [styleContexts, context],
+      styleContexts[0] ?? { key: '', label: translate('styleModel.breakpoint.main'), breakpoint: 'main', embedAtContext: '' },
+    [styleContexts, context, translate],
   );
   // Remember the selected context object so it survives an element switch (the list
   // rebuilds per element; a custom query the new element lacks gets re-injected above).

@@ -8,6 +8,7 @@
 //
 // The rail shows a pin only while the app is installed and the role may use it
 // (`app:<id>` or `app:*`, with `panel:apps`); other pins stay in the file, ignored.
+import { useTranslate } from '../lib/i18n/useTranslate';
 import { useEffect, useState } from 'react';
 import { assert } from '../../shared/core/assert';
 import { APP_LIMITS, type AppSummary } from '../../shared/properties/apps';
@@ -107,11 +108,12 @@ export function RailAppFace({ app }: { readonly app: AppSummary }) {
 
 function RailAppCount({ appId, name }: { readonly appId: string; readonly name: string }) {
   const count = useAppBadgeCount(appId);
+  const translate = useTranslate();
   if (count === 0) {
     return undefined;
   }
   return (
-    <span className="apps-rail-count" role="status" aria-label={`${name}: ${count} waiting`}>
+    <span className="apps-rail-count" role="status" aria-label={translate('rail.appWaiting', { name, count })}>
       {badgeText(count)}
     </span>
   );

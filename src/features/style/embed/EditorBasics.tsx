@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import {
   check as centralCheck,
@@ -166,6 +167,7 @@ export const SpinnerIcon = centralIcon(centralSpinner);
 export const CheckIcon = centralIcon(centralCheck);
 export const UnsavedIcon = centralIcon(centralCircle, 12);
 export function SaveIndicator({ busy, error, pending }: { busy: boolean; error: string | undefined; pending: string | undefined }) {
+  const translate = useTranslate();
   const [target, setTarget] = useState<HTMLElement | undefined>(undefined);
   // Re-acquire the slot every render (no dep array) so the indicator follows it if the
   // selector row remounts; the functional update no-ops when it's unchanged, so there's
@@ -181,12 +183,12 @@ export function SaveIndicator({ busy, error, pending }: { busy: boolean; error: 
   // Native `title` tooltips are unreliable inside the Designer iframe, so we
   // render our own hover/focus tooltip (styled to match the dark UI).
   const state = busy
-    ? { cls: 'is-saving', tip: 'Saving…', icon: <SpinnerIcon /> }
+    ? { cls: 'is-saving', tip: translate('styleModel.embed.save.saving'), icon: <SpinnerIcon /> }
     : error
-      ? { cls: 'is-unsaved', tip: 'Unsaved changes', icon: <UnsavedIcon /> }
+      ? { cls: 'is-unsaved', tip: translate('styleModel.embed.save.unsaved'), icon: <UnsavedIcon /> }
       : pending
         ? { cls: 'is-unsaved', tip: pending, icon: <UnsavedIcon /> }
-        : { cls: 'is-saved', tip: 'All changes saved', icon: <CheckIcon /> };
+        : { cls: 'is-saved', tip: translate('styleModel.embed.save.saved'), icon: <CheckIcon /> };
   const node = (
     <span className={`embed-editor_save ${state.cls}`} tabIndex={0} aria-label={state.tip}>
       {state.icon}

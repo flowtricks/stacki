@@ -1,0 +1,139 @@
+/* Settings → Instructions: the hidden paths are one filled card, a list (or the empty state) above and
+   the add control in the footer. Backgrounds, never borders. 16px card padding, 8px inside. */
+.instructions-hidden-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.instructions-hidden-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.instructions-hidden-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 4px 0 12px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.instructions-hidden-row:hover,
+.instructions-hidden-row:focus-within {
+  background: var(--bg-active);
+}
+.instructions-hidden-row code {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.instructions-hidden-remove {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  opacity: 0;
+}
+.instructions-hidden-row:hover .instructions-hidden-remove,
+.instructions-hidden-remove:focus-visible {
+  opacity: 1;
+}
+.instructions-hidden-remove:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.instructions-hidden-chip {
+  min-height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--instructions-chip);
+  color: var(--text-dim);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+}
+.instructions-hidden-chip:hover {
+  color: var(--text);
+}
+
+/* The add control: a field darker than the card, so it reads as a place to type, with the button
+   attached at its right end. Colours are solid steps so each text/fill pair keeps 4.5:1 or better
+   (test/renderer/app/instructionsContrast.test.js lists the pairs and checks them). */
+.instructions-hidden-card {
+  --instructions-chip: #393939;
+  --instructions-field: #121212;
+  --instructions-button-off: #303030;
+  --instructions-button-on: #006fba;
+  --instructions-button-hover: #0077c7;
+}
+.instructions-hidden-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 8px;
+  background: var(--instructions-field);
+}
+.instructions-hidden-add input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.instructions-hidden-add input::placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+.instructions-hidden-add:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.instructions-hidden-add button {
+  flex: none;
+  min-width: 56px;
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  box-shadow: none;
+  background: var(--instructions-button-on);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+}
+.instructions-hidden-add button:hover:not(:disabled) {
+  background: var(--instructions-button-hover);
+}
+.instructions-hidden-add button:disabled {
+  background: var(--instructions-button-off);
+  color: var(--text-dim);
+  opacity: 1;
+}
+.instructions-hidden-problem {
+  padding: 0 4px;
+  color: var(--red);
+  font-size: 11px;
+  line-height: 16px;
+}

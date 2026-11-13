@@ -408,7 +408,7 @@ class StackiTabs extends KitElement {
       <SegmentedTabs
         tabs={tabs}
         value={value}
-        label={this.attribute('label') ?? 'Tabs'}
+        label={this.attribute('label') ?? 'Tabs'} // i18n-ignore: default label of a UI-kit element that runs inside the app's own frame, which has no language provider; apps pass `label` to translate it.
         layout={this.hasAttribute('fill') ? 'equal' : 'content'}
         onPick={(picked) => {
           if (picked !== this.value) {
@@ -444,7 +444,7 @@ class StackiSearch extends KitElement {
     const placeholder = this.attribute('placeholder');
     return (
       <SearchField
-        label={this.attribute('label') ?? 'Search'}
+        label={this.attribute('label') ?? 'Search'} // i18n-ignore: default label of a UI-kit element that runs inside the app's own frame, which has no language provider; apps pass `label` to translate it.
         value={this.value}
         {...(placeholder === undefined ? {} : { placeholder })}
         onChange={(value) => {
@@ -573,7 +573,7 @@ class StackiMenu extends KitElement {
     return (
       <KitMenu
         items={items}
-        label={this.attribute('label') ?? 'Options'}
+        label={this.attribute('label') ?? 'Options'} // i18n-ignore: default label of a UI-kit element that runs inside the app's own frame, which has no language provider; apps pass `label` to translate it.
         icon={kitIcon(this.attribute('icon'))}
         disabled={this.hasAttribute('disabled') || !items.some((entry) => entry.kind === 'item')}
         onSelect={(value) => this.dispatchEvent(new CustomEvent('select', { bubbles: true, detail: { value } }))}
@@ -636,7 +636,7 @@ class StackiPopover extends KitElement {
     return (
       <KitPopover
         open={this.open}
-        label={this.attribute('label') ?? 'Options'}
+        label={this.attribute('label') ?? 'Options'} // i18n-ignore: default label of a UI-kit element that runs inside the app's own frame, which has no language provider; apps pass `label` to translate it.
         icon={kitIcon(this.attribute('icon'))}
         disabled={this.hasAttribute('disabled')}
         body={body}

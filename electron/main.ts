@@ -1,3 +1,4 @@
+import './lib/compileCache';
 import { registerPublishHandlers } from './handlers/publishHandlers';
 import { registerCmsConnectionHandlers } from './handlers/cmsConnectionHandlers';
 import { CmsConnectionStore } from './content/cmsConnectionStore';
@@ -21,7 +22,7 @@ import { isAtomicTemporary } from './documents/atomicWrite';
 import { createNodeDocumentActors } from './documents/documentActors';
 import { documentHost, installDocumentHost } from './documents/documentWrites';
 import { isPathDescendant, sameFilesystemPath } from './lib/platform';
-import type { BrowserWindow as Window, MenuItemConstructorOptions, MessageBoxOptions, OpenDialogOptions } from 'electron';
+import type { BrowserWindow as Window, MessageBoxOptions, OpenDialogOptions } from 'electron';
 import { toRecord } from '../shared/core/record';
 import { parseOptionalString, parseRecents, parseSettings } from './app/mainValidation';
 import type { AppSettings } from './app/mainValidation';
@@ -49,8 +50,14 @@ import { pathToFileURL } from 'url';
 import { stopAllServices } from './content/contentConfig';
 import * as thumbs from './project/thumbs';
 import { openingBounds } from './app/windowBounds';
+import { revealWhenPainted } from './app/windowReveal';
+import { describeStartup, markStartup } from './app/startupTiming';
 import { isAppPage, isAllowedMedia, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
+import { buildApplicationMenuTemplate } from './app/applicationMenu';
+import { loadMainLocale, setMainLocale, translateMain } from './lib/mainLocale';
 import { openMicrophoneSettings, microphoneStatus, requestMicrophone, type MicrophoneSystem } from './app/microphoneAccess';
+import { LOCALE_PREFERENCE_DEFAULT } from '../shared/core/i18n/locales';
+import { resolveLocale } from '../shared/core/i18n/parseLocale';
 import { registerTerminalHandlers, cleanupTerminals } from './terminal/terminal';
 import { watchProject } from './project/projectWatcher';
 import { watchInstructions } from './project/instructionsWatcher';
@@ -264,7 +271,7 @@ function appPageUrl(): string {
 function microphoneSystem(): MicrophoneSystem {
   return {
     platform: process.platform,
-    appName: app.isPackaged ? app.getName() : 'Electron',
+    appName: app.isPackaged ? app.getName() : 'Electron', // i18n-ignore: the development host's real name.
     mediaAccessStatus: () => systemPreferences.getMediaAccessStatus('microphone'),
     askForAccess: () => systemPreferences.askForMediaAccess('microphone'),
     openExternal: (url) => shell.openExternal(url),
@@ -336,8 +343,11 @@ function createWindow() {
   }
   mainWindow = new BrowserWindow({
     ...bounds,
-    title: 'Stacki',
+    title: 'Stacki', // i18n-ignore: the product name.
+    // The app's panel surface (--bg-panel), so the window is never white or another black before the page paints.
     backgroundColor: '#111111',
+    // Shown on its first painted frame (windowReveal.ts), which is the skeleton in index.html.
+    show: false,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : isWin ? 'hidden' : 'default',
     ...(isWin
       ? {
@@ -361,6 +371,13 @@ function createWindow() {
     },
   });
 
+  markStartup('windowCreated');
+  revealWhenPainted(mainWindow, () => markStartup('windowShown'));
+  mainWindow.webContents.once('did-start-loading', () => markStartup('rendererLoading'));
+  mainWindow.webContents.once('did-finish-load', () => {
+    markStartup('rendererLoaded');
+    console.debug(describeStartup());
+  });
   listenForPreviewFailures(mainWindow.webContents, () => devServers.current()?.url);
   keepPreviewsOnSite(mainWindow.webContents, openExternalLink);
   keepAppFramesHome(mainWindow.webContents, openExternalLink);
@@ -423,75 +440,38 @@ ipcMain.handle('shell:openExternal', async (_event, url) => {
 
 // Custom menu: on macOS the native menu consumes ⌘Z/⌘C/⌘V before the page
 // sees them, so Undo/Redo/Copy/Paste forward to the renderer, which decides
-// between app-level actions (nodes) and native ones (text fields).
+// between app-level actions (nodes) and native ones (text fields). The items
+// and their words are electron/app/applicationMenu.ts; this only supplies the actions.
 function buildMenu() {
-  const isMac = process.platform === 'darwin';
-  const template: MenuItemConstructorOptions[] = [
-    ...(isMac ? [{ role: 'appMenu' as const }] : []),
-    {
-      // Spelled out rather than `role: 'fileMenu'`, which takes no additions.
-      // What that role provides is one item — Close Window on macOS, Quit
-      // everywhere else — so the menu keeps exactly what it had, with the
-      // update check above it.
-      label: 'File',
-      submenu: [
-        {
-          label: 'Settings…',
-          accelerator: 'CmdOrCtrl+,',
-          click: () => send('menu:settings'),
-        },
-        { type: 'separator' },
-        // Until now the only way out of a project was to close the app, and on
-        // macOS closing the app is not what people think it is: the window goes
-        // and the process stays, so coming back lands on the same project and
-        // there is nothing to press that says otherwise.
-        {
-          label: 'Open Project…',
-          accelerator: 'CmdOrCtrl+O',
-          click: () => send('menu:openProject'),
-        },
-        {
-          label: 'Close Project',
-          accelerator: 'Shift+CmdOrCtrl+W',
-          click: () => send('menu:closeProject'),
-        },
-        { type: 'separator' },
-        { label: 'Check for Updates…', click: () => void autoUpdates.checkFromMenu() },
-        { type: 'separator' },
-        isMac ? { role: 'close' } : { role: 'quit' },
-      ],
-    },
-    {
-      label: 'Edit',
-      submenu: [
-        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: () => send('menu:undo') },
-        { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z', click: () => send('menu:redo') },
-        { type: 'separator' },
-        { role: 'cut' },
-        { label: 'Copy', accelerator: 'CmdOrCtrl+C', click: () => send('menu:copy') },
-        { label: 'Paste', accelerator: 'CmdOrCtrl+V', click: () => send('menu:paste') },
-        { role: 'selectAll' },
-        { type: 'separator' },
-        {
-          label: 'Copy Selection',
-          accelerator: 'Shift+CmdOrCtrl+C',
-          click: () => send('menu:copySelection'),
-        },
-        { label: 'Insert Element…', accelerator: 'CmdOrCtrl+E', click: () => send('menu:insert') },
-      ],
-    },
-    // In dev ⌘R has to mean "restart the process". main.js, astroParser.js and
-    // the rest of this side are bound in at require time, so the stock reload
-    // repaints the renderer while silently going on running the old code —
-    // the failure mode is an edit that appears to do nothing. The plain window
-    // reload keeps its usual behaviour one item down. A packaged build has no
-    // supervisor to restart it and no source to pick up, so it keeps the stock
-    // menu.
-    buildViewMenu(),
-    { role: 'windowMenu' },
-  ];
+  const template = buildApplicationMenuTemplate({
+    isMac: process.platform === 'darwin',
+    isDev,
+    translate: translateMain,
+    send: (channel) => send(channel),
+    checkForUpdates: () => void autoUpdates.checkFromMenu(),
+    reloadAllCode: () => relaunchApp(),
+    reloadWindow: () => mainWindow?.webContents.reload(),
+  });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
+
+// The language of the menu and native dialogs: the stored choice (mirrored from the renderer over `locale:set`) or, for
+// "System default", the operating system's languages. Loading is a dynamic import of two small files, never a reason to fail.
+async function refreshMainLocale(): Promise<void> {
+  const systemLanguages = typeof app.getPreferredSystemLanguages === 'function' ? app.getPreferredSystemLanguages() : [app.getLocale()];
+  setMainLocale(await loadMainLocale(resolveLocale(settings.localePreference, systemLanguages)));
+}
+
+ipcMain.handle('locale:set', async (_event, { preference }) => {
+  if (preference === settings.localePreference) {
+    return { saved: true };
+  }
+  settings = { ...settings, localePreference: preference };
+  const saved = writeSettings();
+  await refreshMainLocale();
+  buildMenu();
+  return { saved };
+});
 
 // A project the app has been asked to open in the window it is about to load —
 // set by `project:close` when somebody picks a different project, since letting
@@ -562,20 +542,47 @@ ipcMain.handle('native:redo', () => {
   return { ok: true as const };
 });
 
+// How long after the window is on screen the first update check waits.
+const UPDATE_CHECK_DELAY_MS = 5_000;
+
+// Runs `task` once the main window is visible: now if it is, else on its first show.
+function afterWindowShown(task: () => void): void {
+  const window = mainWindow;
+  if (window === undefined || window.isDestroyed()) {
+    return;
+  }
+  if (window.isVisible()) {
+    setTimeout(task, 0);
+  } else {
+    window.once('show', () => setTimeout(task, 0));
+  }
+}
+
 // Electron resolves whenReady once; were it ever refused, there is no window
 // to report that to, so the log says it.
 app.whenReady().then(
-  () => {
+  async () => {
     // Before the menu, which draws the sound item's tick from it.
+    markStartup('appReady');
     settings = readSettings();
-    setApplicationIcon();
+    markStartup('settingsRead');
     registerAssetProtocol();
     protocol.handle(APP_SCHEME, (request) => serveAppRequest(request.url, openProjectRoot));
     refusePrivatePermissions();
-    buildMenu();
+    // The window first: it starts the renderer loading while this process does the rest of its
+    // start (language, icon, menu), instead of the renderer waiting for all of it.
     createWindow();
-    autoUpdates.start();
-    void showUsageNotice();
+    await refreshMainLocale();
+    setApplicationIcon();
+    buildMenu();
+    markStartup('menuBuilt');
+    // Neither belongs to the first frame: the notice is a sheet on the window, which must be on screen
+    // first, and the update check is a network call that would compete with the renderer's load.
+    afterWindowShown(() => void showUsageNotice());
+    afterWindowShown(() => {
+      const timer = setTimeout(() => autoUpdates.start(), UPDATE_CHECK_DELAY_MS);
+      timer.unref();
+    });
     // Version 1.0.22 kept photographs of components in userData; the palette now shows live frames.
     removeLegacyComponentShots(app.getPath('userData')).then(
       (removed) => {
@@ -695,6 +702,9 @@ const SETTINGS_DEFAULTS: AppSettings = {
   usageNoticeVersion: 0,
   appsPersonHidden: false,
   aiAskBeforeTrust: false,
+  // On: the change ledger's snapshots are what the AI panel's Changes cards are made of, and what people had before this setting.
+  aiTrackChanges: true,
+  localePreference: LOCALE_PREFERENCE_DEFAULT,
 };
 let settings: AppSettings = { ...SETTINGS_DEFAULTS };
 let usageCountInFlight: AbortController | undefined;
@@ -729,6 +739,7 @@ const publicSettings = () => ({
   usageCountsEnabled: settings.usageCountsEnabled,
   appsPersonHidden: settings.appsPersonHidden,
   aiAskBeforeTrust: settings.aiAskBeforeTrust,
+  aiTrackChanges: settings.aiTrackChanges,
 });
 ipcMain.handle('settings:get', publicSettings);
 ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
@@ -739,6 +750,9 @@ ipcMain.handle('settings:set', (_event, { setting, enabled }) => {
     send('menu:sound', enabled);
   } else if (setting === 'aiAskBeforeTrust') {
     settings = { ...settings, aiAskBeforeTrust: enabled };
+    saved = writeSettings();
+  } else if (setting === 'aiTrackChanges') {
+    settings = { ...settings, aiTrackChanges: enabled };
     saved = writeSettings();
   } else if (setting === 'appsPersonHidden') {
     settings = { ...settings, appsPersonHidden: enabled };
@@ -760,9 +774,9 @@ function setUsageCountsEnabled(enabled: boolean): boolean {
   if (!saved) {
     void showMessageBox(mainWindow, {
       type: 'warning',
-      title: 'Privacy Setting Not Saved',
-      message: 'Stacki could not save your usage-count preference.',
-      detail: 'The change applies for this session. Check available disk space and try again.',
+      title: translateMain('dialog.privacy.notSaved.title'),
+      message: translateMain('dialog.privacy.notSaved.message'),
+      detail: translateMain('dialog.privacy.notSaved.detail'),
     });
   }
   if (enabled && watcher) {
@@ -808,15 +822,11 @@ function noteUsageActivity(): void {
 function usageNoticeOptions(): MessageBoxOptions {
   return {
     type: 'info',
-    title: 'Anonymous Usage Counts',
-    message: 'Help us understand how many Stacki installations are active.',
-    detail:
-      'Stacki sends one count on days you open a project. It sends no project names, ' +
-      'file contents, device identifier, or activity history. Daily totals are kept ' +
-      'on Cloudflare for up to 366 days; its network sees the connection IP, but the ' +
-      'usage database does not store it. Turn this off any time in File → Settings.',
-    buttons: ['Continue'],
-    checkboxLabel: 'Turn off anonymous usage counts',
+    title: translateMain('dialog.usage.title'),
+    message: translateMain('dialog.usage.message'),
+    detail: translateMain('dialog.usage.detail'),
+    buttons: [translateMain('dialog.usage.continue')],
+    checkboxLabel: translateMain('dialog.usage.optOut'),
     checkboxChecked: !settings.usageCountsEnabled,
   };
 }
@@ -1017,30 +1027,6 @@ function stopWatchingProject() {
   documents.clear();
 }
 
-function buildViewMenu(): MenuItemConstructorOptions {
-  return isDev
-    ? {
-        label: 'View',
-        submenu: [
-          { label: 'Reload All Code', accelerator: 'CmdOrCtrl+R', click: () => relaunchApp() },
-          {
-            label: 'Reload Window Only',
-            accelerator: 'Shift+CmdOrCtrl+R',
-            click: () => mainWindow?.webContents.reload(),
-          },
-          { type: 'separator' },
-          { role: 'toggleDevTools' },
-          { type: 'separator' },
-          { role: 'resetZoom' },
-          { role: 'zoomIn' },
-          { role: 'zoomOut' },
-          { type: 'separator' },
-          { role: 'togglefullscreen' },
-        ],
-      }
-    : { role: 'viewMenu' };
-}
-
 // ---------------------------------------------------------------------------
 // IPC handler modules
 //
@@ -1068,6 +1054,8 @@ const aiServices = registerAiHandlers(host, {
   userData: () => app.getPath('userData'),
   version: () => app.getVersion(),
   askBeforeTrust: () => settings.aiAskBeforeTrust,
+  trackChanges: () => settings.aiTrackChanges,
+  isForeground: () => mainWindow !== undefined && !mainWindow.isDestroyed() && mainWindow.isVisible() && !mainWindow.isMinimized(),
 });
 registerAuditHandlers(host, { openMeasureWindow: (options) => new BrowserWindow(options) });
 registerCmsHandlers(host);

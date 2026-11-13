@@ -1,3 +1,4 @@
+// i18n-ignore-file: the refusals here are answers returned to the calling app (read by apps and agents), not text a person reads.
 // Desktop's commands for Stacki Apps (src/features/apps/appRpcHost.ts): each RPC
 // method, as the editor's own UI does it. Selection is `setSelectedId` with the
 // navigator's reveal; panels are the rail's `setLeftTab` and the right tabs;
@@ -43,12 +44,17 @@ import { cleanError } from '../../lib/cleanError';
 import { readPage } from '../../ipc/bridge';
 import { appFileStamps } from '../../ipc/appPageFilesBridge';
 import { desktopAppAuth, desktopAppFiles, desktopAppNet } from './desktopAppAccess';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import type { ShellView } from '../App';
 import type { HistoryEntry, LeftTab } from '../appTypes';
 
 const APPLIED: AppEditOutcome = { applied: true };
 
-export function desktopAppHost(appRef: React.MutableRefObject<ShellView>): AppHostCommands {
+export function desktopAppHost(
+  appRef: React.MutableRefObject<ShellView>,
+  translateRef: React.MutableRefObject<Translator> = { current: ENGLISH_TRANSLATE },
+): AppHostCommands {
   const app = () => appRef.current;
   const editableNode = (nodeId: string): EditorNode | undefined => {
     const state = app().pageState;
@@ -235,7 +241,7 @@ export function desktopAppHost(appRef: React.MutableRefObject<ShellView>): AppHo
       watch: (listener) => watchAppStorage(app().project.path, listener),
     },
     // Project files and sign-ins, through main (desktopAppAccess.ts): a file change is one undo step.
-    files: desktopAppFiles(appRef),
+    files: desktopAppFiles(appRef, translateRef),
     auth: desktopAppAuth(appRef),
     net: desktopAppNet(appRef),
     // Pages and components read from disk with the parser an opened page uses; ids as opening it would give them.

@@ -1,16 +1,9 @@
 /* Settings → Roles: member pictures, the username field's suggestions, and the app picker.
    Fills only, never lines: a highlighted row is the accent fill, as in the app's menus. */
-.app-role-chip .history-avatar {
-  margin-left: -4px;
-}
 .app-role-member-field {
   position: relative;
   display: flex;
   flex: 0 1 220px;
-}
-.app-role-add .app-role-member-field input {
-  flex: 1 1 auto;
-  min-width: 0;
 }
 .app-role-suggestions {
   position: absolute;
@@ -97,23 +90,35 @@
 /* The permissions disclosure. Height animates through a grid row (0fr to 1fr), so
    the grid inside keeps its own layout; reduced motion opens it at once. */
 .app-role-permissions-toggle {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 26px;
-  padding: 0 8px 0 4px;
+  gap: 8px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 8px 0 10px;
   border: 0;
   border-radius: 6px;
-  background: transparent;
+  background: #ffffff08;
   color: var(--text-dim);
   font-size: 12px;
   font-weight: 600;
+  text-align: left;
 }
 .app-role-permissions-toggle:hover {
   background: #ffffff10;
   color: var(--text);
 }
+/* The title takes the row; the count is dim and the chevron ends the row. */
+.app-role-permissions-title {
+  flex: 1 1 auto;
+}
+.app-role-permissions-count {
+  color: var(--text-faint);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
 .app-role-permissions-toggle svg {
+  flex: none;
   transition: transform 160ms ease;
 }
 .app-role-permissions[data-open='true'] .app-role-permissions-toggle svg {
@@ -132,7 +137,7 @@
   overflow: hidden;
 }
 .app-role-permissions[data-open='true'] .app-role-permissions-inner > .app-role-access {
-  padding-top: 8px;
+  padding-top: 12px;
 }
 @media (prefers-reduced-motion: reduce) {
   .app-role-suggestions,

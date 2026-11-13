@@ -180,6 +180,35 @@ test('defaults show, and add, remove, reset and refusals all go through the file
   await act(async () => root.unmount());
 });
 
+test('the screen carries no intro sentence, and typing the defaults back unchanges a row', async () => {
+  stored = undefined;
+  await mount();
+  const text = document.body.textContent;
+  assert.doesNotMatch(text, /saved in \.stacki\/folders\.json/, 'the intro sentence is gone: no prose under the title');
+  assert.doesNotMatch(text, /have not changed uses its defaults/, 'the defaults sentence is gone');
+  assert.doesNotMatch(text, /Changes save as you make them/, 'and so is the autosave sentence');
+
+  picks.push({ kind: 'picked', path: 'src/ui' });
+  await click(button('Components', 'Add folder'));
+  assert.equal(changed('Components'), true);
+  assert.equal(changed('Layouts'), false, 'only the edited group turns blue');
+  await click(row('Components').querySelector('[aria-label="Remove src/components from Components"]'));
+  picks.push({ kind: 'picked', path: 'src/components' });
+  await click(button('Components', 'Add folder'));
+  await click(row('Components').querySelector('[aria-label="Remove src/ui from Components"]'));
+  assert.deepEqual(chips('Components'), ['src/components']);
+  assert.equal(changed('Components'), false, 'the default list added back is unchanged again');
+  assert.ok(title('Components').getAttribute('role') === null, 'and offers no reset');
+  await act(async () => root.unmount());
+});
+
+test('the CMS connections tab carries no intro paragraph', () => {
+  // The component needs a live bridge to render, so the pin reads its source: the intro was removed, not moved.
+  const source = fs.readFileSync(repoPath('src/features/cmsConnections/CmsConnections.tsx'), 'utf8');
+  assert.doesNotMatch(source, /Connect the CMS this site/);
+  assert.doesNotMatch(source, /cms-connections-intro/);
+});
+
 test('an unreadable file is reported, the defaults show, and a stale save is refused', async () => {
   stored = '{"version":1,"folders":{"assets":["../outside"]}}';
   await mount();

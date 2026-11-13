@@ -8,7 +8,8 @@ import { actionSelection } from '../navigator/actionSelection';
 import { captureSelectionPositions } from './selectionPositions';
 import type { PublishState } from '../publishing/publish';
 import { occurrenceOf, type Peer } from './presence';
-import { selectionOwner, selectionLockedMessage, releaseSelectionOwners } from './selectionLock';
+import { selectionOwner, releaseSelectionOwners } from './selectionLock';
+import { ReferencedError, errorWire } from '../../shared/referencedError';
 import type { GitHubProfile } from '../auth/profile';
 import * as Y from 'yjs';
 import { WebSocket, WebSocketServer, type RawData } from 'ws';
@@ -114,6 +115,7 @@ export class Room {
     this.clients.set(socket, {
       id,
       color: this.colors.acquire(key),
+      // i18n-ignore: the default display name of an anonymous collaborator, sent to other editors as data.
       name: identity?.login ?? 'Editor',
       selection: '',
       file: this.file,
@@ -151,16 +153,13 @@ export class Room {
           await this.coordinator.run(() => this.handle(socket, message));
         })
         .catch((error) => {
-          this.send(socket, {
-            type: 'error',
-            message: error instanceof Error ? error.message : 'Edit failed',
-          });
+          this.send(socket, { type: 'error', ...errorWire(error, 'studio.collab.editFailed') });
         })
         .finally(() => {
           this.queued--;
         });
     } catch {
-      this.send(socket, { type: 'error', message: 'Invalid collaboration message' });
+      this.send(socket, { type: 'error', ...errorWire(undefined, 'studio.collab.invalidMessage') });
     }
   }
   private detach(socket: WebSocket, key: string) {
@@ -247,7 +246,7 @@ export class Room {
       () =>
         this.broadcast({
           type: 'error',
-          message: 'Draft persistence failed. Keep the studio open and reconnect to retry.',
+          ...errorWire(undefined, 'studio.collab.draftFailed'),
         }),
     );
   }
@@ -269,7 +268,7 @@ export class Room {
     const client = this.clients.get(socket);
     const owner = selectionOwner(this.clients.values(), client?.id ?? '', this.file, 'node' in action ? action.node : '');
     if (owner) {
-      throw new Error(selectionLockedMessage(owner));
+      throw new ReferencedError('studio.collab.selectionLocked', { name: owner.name });
     }
     const settings = action.kind === 'insert' ? await loadInsertionDefaults(this.root) : undefined;
     if (message['checksum'] !== checksum(this.text.toString())) {
@@ -416,7 +415,7 @@ export class Room {
       const client = this.clients.get(socket);
       const owner = selectionOwner(this.clients.values(), client?.id ?? '', this.file, client?.selection ?? '');
       if (owner && probe.getText('source').toString() !== this.text.toString()) {
-        throw new Error(selectionLockedMessage(owner));
+        throw new ReferencedError('studio.collab.selectionLocked', { name: owner.name });
       }
       if (probe.getMap('metadata').get('epoch') !== this.document.getMap('metadata').get('epoch')) {
         throw new Error('Invalid document identity');
@@ -650,7 +649,7 @@ async function removeRoom(root: string, rooms: Map<string, Promise<Room>>, ready
     const room = await pending;
     room.broadcast({
       type: 'error',
-      message: 'This file was removed on GitHub. Open another page.',
+      ...errorWire(undefined, 'studio.collab.fileRemoved'),
     });
     for (const client of room.clients.keys()) {
       client.close(1000, 'File removed');

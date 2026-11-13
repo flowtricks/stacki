@@ -258,6 +258,7 @@ export type MarkdownParse =
  * is), never cut short. */
 function parseMarkdownPage(source: string, { mdx = false }: { readonly mdx?: boolean } = {}): MarkdownParse {
   if (source.length > LIMITS.ipcFieldCharsMax) {
+    // i18n-ignore: diagnostic for a page that is not editable (carried for logs and tests); the code view states it in its own words.
     return { editable: false, reason: 'The page exceeds the source limit.', bail: undefined };
   }
   // A leading byte-order mark is not content (plan §3.2); it stays in the
@@ -277,6 +278,7 @@ function parseMarkdownPage(source: string, { mdx = false }: { readonly mdx?: boo
   const nodes = parseBlocks(lines, env, 0);
   const size = assignPathIds(nodes);
   if (size.nodes > LIMITS.treeNodesMax || size.depth > LIMITS.treeDepthMax) {
+    // i18n-ignore: diagnostic for a page that is not editable (carried for logs and tests); the code view states it in its own words.
     return { editable: false, reason: 'The page exceeds the tree limits.', bail: undefined };
   }
   return {

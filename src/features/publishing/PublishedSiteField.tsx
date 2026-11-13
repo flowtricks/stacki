@@ -1,14 +1,16 @@
 import type { PublishConfig } from '../../../shared/properties/publishConfig';
 import { savedPublishedSite } from '../../../shared/properties/publishSite';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export function PublishedSiteField({ config, change }: { readonly config: PublishConfig; readonly change: (config: PublishConfig) => void }) {
+  const translate = useTranslate();
   const hosting = config.hosting;
   if (hosting.provider === 'none') {
     return undefined;
   }
   return (
     <label className="publish-field">
-      <span className="publish-label">Published site URL</span>
+      <span className="publish-label">{translate('publish.site.label')}</span>
       <input
         type="url"
         value={savedPublishedSite(config)?.url ?? ''}
@@ -21,7 +23,7 @@ export function PublishedSiteField({ config, change }: { readonly config: Publis
           change(url === '' ? withoutSite : { ...withoutSite, publishedSite: { hosting, source: 'manual', url } });
         }}
       />
-      <small>Optional. Used by the open-site arrow, even when hosting discovery is unavailable.</small>
+      <small>{translate('publish.site.hint')}</small>
     </label>
   );
 }

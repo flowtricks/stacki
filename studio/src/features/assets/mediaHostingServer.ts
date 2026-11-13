@@ -215,6 +215,7 @@ async function attempt<T>(run: () => Promise<T>): Promise<MediaResult<T>> {
     return { ok: true, value: await run() };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // i18n-ignore: the Studio server has no language; this reply is relayed to the client as received.
     return { ok: false, message: message.slice(0, MESSAGE_CHARS_MAX) || 'The media host did not answer.' };
   }
 }

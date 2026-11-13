@@ -1,4 +1,6 @@
 import type { Result } from '../../../shared/core/result';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import { messageRef, type MessageKey, type Translator, type TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { variableEdit } from '../../ipc/variableEditBridge';
@@ -6,7 +8,9 @@ import { restoreVariableTexts } from '../../../../../src/features/variables/vari
 
 // One undoable variable edit, as the app's history records it.
 export interface VariableUndo {
+  /** The step's name in the language the edit was made in; `labelRef` words it again when the step is undone. */
   readonly label: string;
+  readonly labelRef: TypedMessageRef;
   readonly coalesceKey?: string | undefined;
   readonly undo: () => Promise<void>;
   readonly redo: () => Promise<void>;
@@ -18,12 +22,15 @@ interface HistoryOptions {
   readonly refresh: () => Promise<void>;
   readonly report: (message: string) => void;
   readonly record?: ((command: VariableUndo) => void) | undefined;
+  /** Accepted for parity with Desktop's options; Studio's restore words its failures on the server. */
+  readonly translate?: Translator | undefined;
 }
 
 export function createVariableHistory(options: HistoryOptions) {
   return async (
     files: string | undefined | readonly string[],
-    label: string,
+    // The key of the step's name (a `variables.undo.*` phrase), so the app can word it in the language in force when it is undone.
+    label: MessageKey,
     // Edits sharing a key collapse into one undo step; undefined keeps each its own.
     coalesceKey: string | undefined,
     run: () => Promise<boolean | void>,
@@ -53,7 +60,8 @@ export function createVariableHistory(options: HistoryOptions) {
     const previous = selectTexts(before.value, changed);
     const next = selectTexts(after.value, changed);
     options.record?.({
-      label,
+      label: (options.translate ?? ENGLISH_TRANSLATE)(label),
+      labelRef: messageRef(label),
       coalesceKey,
       undo: () => restoreTexts(options, previous, next),
       redo: () => restoreTexts(options, next, previous),

@@ -7,6 +7,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { useToastInteraction } from './useToastInteraction';
 import { TOAST_LIMIT, type ToastNotice } from './useToastStack';
 import { useToastLayout } from './useToastLayout';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import './toasts.css';
 
 const CloseIcon = centralIcon(centralClose);
@@ -22,6 +23,7 @@ interface ToastStackProps<Notice extends ToastNotice> {
 }
 
 export function ToastStack<Notice extends ToastNotice>(props: ToastStackProps<Notice>) {
+  const translate = useTranslate();
   const host = useToastHost();
   const layout = useToastLayout(props.notices);
   const style: CSSProperties & Record<string, string> = {
@@ -34,7 +36,7 @@ export function ToastStack<Notice extends ToastNotice>(props: ToastStackProps<No
       style={style}
       data-expanded={layout.expanded}
       data-scrollable={layout.scrollable}
-      aria-label="Notifications"
+      aria-label={translate('workspace.notifications.label')}
       aria-live="polite"
       aria-relevant="additions"
       onMouseEnter={layout.onMouseEnter}
@@ -46,7 +48,9 @@ export function ToastStack<Notice extends ToastNotice>(props: ToastStackProps<No
         <div className="toast-list" style={{ height: layout.height }}>
           {layout.expanded && layout.overflow && (
             <button type="button" className="toast-more" onClick={layout.showAll ? layout.showLess : layout.loadMore}>
-              {layout.showAll ? 'Show fewer' : `Load more (${props.notices.length - layout.visibleCount})`}
+              {layout.showAll
+                ? translate('workspace.notifications.showFewer')
+                : translate('workspace.notifications.loadMore', { count: props.notices.length - layout.visibleCount })}
             </button>
           )}
           {props.notices.slice(0, TOAST_LIMIT).map((notice, index) => (
@@ -130,8 +134,9 @@ function ToastCard({
 }
 
 function ToastClose({ close }: { readonly close: () => void }) {
+  const translate = useTranslate();
   return (
-    <button type="button" className="toast-close" aria-label="Dismiss notification" onClick={close}>
+    <button type="button" className="toast-close" aria-label={translate('workspace.notifications.dismiss')} onClick={close}>
       <CloseIcon />
     </button>
   );

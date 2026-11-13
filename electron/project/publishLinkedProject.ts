@@ -19,6 +19,7 @@ export async function linkedPublishProject(root: string, provider: DiscoveryProv
     const value = record(input);
     return [
       {
+        // i18n-ignore: a project name written into the Vercel link file, not interface text.
         name: 'Linked Vercel project',
         hosting: {
           provider: 'vercel',

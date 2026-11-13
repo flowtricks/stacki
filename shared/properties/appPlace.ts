@@ -11,6 +11,7 @@
 // reads (shared/properties/appMarketplace.ts), so it costs no extra request.
 import { assert } from '../core/assert';
 import { record } from '../core/boundary';
+import { described, type MessageKey, type TypedMessageRef } from './i18n/messageRef';
 import { parseGitHubSource, type AppInstallSource } from './apps';
 import { marketplaceApp, type MarketplaceIndex } from './appMarketplace';
 
@@ -52,8 +53,22 @@ export type AppPillKind = 'local' | 'github' | 'marketplace';
 export interface AppPill {
   readonly kind: AppPillKind;
   readonly label: string;
+  /** The label as a reference the renderer translates; `label` stays the English text for logs and tests. */
+  readonly labelRef: TypedMessageRef;
   /** What hovering the pill explains. */
   readonly tooltip: string;
+  readonly tooltipRef: TypedMessageRef;
+}
+
+// A pill whose texts are catalog messages: the English text beside the reference (docs/i18n-playbook.md, "Shared-layer strings").
+function pill(
+  kind: AppPillKind,
+  label: { readonly key: MessageKey },
+  tooltip: { readonly key: MessageKey; readonly params?: Readonly<Record<string, string>> },
+): AppPill {
+  const labelText = described(label.key);
+  const tooltipText = tooltip.params === undefined ? described(tooltip.key) : described(tooltip.key, tooltip.params);
+  return { kind, label: labelText.message, labelRef: labelText.messageRef, tooltip: tooltipText.message, tooltipRef: tooltipText.messageRef };
 }
 
 /** `{ place: { owner, repository, visibility? } | undefined }`, checked and bounded. */
@@ -151,7 +166,7 @@ export function appPlacePills(
   // app is also on GitHub and a listed local copy is also in the marketplace; the row says the most specific.
   const pills: readonly AppPill[] =
     source.kind === 'marketplace' || facts.listed
-      ? [{ kind: 'marketplace', label: 'Marketplace', tooltip: 'Listed in the Stacki marketplace' }]
+      ? [pill('marketplace', { key: 'apps.place.marketplace' }, { key: 'apps.place.marketplaceTip' })]
       : [appHomePill(source, facts.place)];
   assert(pills.length === 1, 'A row says where the app comes from with one pill');
   return pills;
@@ -160,9 +175,9 @@ export function appPlacePills(
 function appHomePill(source: AppInstallSource, place: AppRepositoryPlace | undefined): AppPill {
   switch (source.kind) {
     case 'file':
-      return { kind: 'local', label: 'Local', tooltip: `Uploaded as ${source.fileName}; only in this project's .stacki/apps folder` };
+      return pill('local', { key: 'apps.place.local' }, { key: 'apps.place.uploadedTip', params: { fileName: source.fileName } });
     case 'local':
-      return { kind: 'local', label: 'Local', tooltip: "Only in this project's .stacki/apps folder" };
+      return pill('local', { key: 'apps.place.local' }, { key: 'apps.place.localTip' });
     case 'github':
     case 'marketplace':
       return githubPill(place);
@@ -175,16 +190,16 @@ function appHomePill(source: AppInstallSource, place: AppRepositoryPlace | undef
 
 function githubPill(place: AppRepositoryPlace | undefined): AppPill {
   if (place === undefined) {
-    return { kind: 'github', label: 'GitHub', tooltip: 'Installed from a GitHub release' };
+    return pill('github', { key: 'apps.place.github' }, { key: 'apps.place.githubReleaseTip' });
   }
   const repository = `${place.owner}/${place.repository}`;
   switch (place.visibility) {
     case 'private':
-      return { kind: 'github', label: 'GitHub · Private', tooltip: `Installed from ${repository}, a private GitHub repository` };
+      return pill('github', { key: 'apps.place.githubPrivate' }, { key: 'apps.place.githubPrivateTip', params: { repository } });
     case 'public':
-      return { kind: 'github', label: 'GitHub · Public', tooltip: `Installed from ${repository}, a public GitHub repository` };
+      return pill('github', { key: 'apps.place.githubPublic' }, { key: 'apps.place.githubPublicTip', params: { repository } });
     case undefined:
-      return { kind: 'github', label: 'GitHub', tooltip: `Installed from ${repository} on GitHub` };
+      return pill('github', { key: 'apps.place.github' }, { key: 'apps.place.githubRepositoryTip', params: { repository } });
     default: {
       const exhaustive: never = place.visibility;
       return exhaustive;

@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import { dataPickerPosition } from './dataPickerPosition';
 import { useEffect, useRef, useState } from 'react';
@@ -290,6 +291,7 @@ function BindFieldSource({ state }: { readonly state: BindingState }) {
   );
 }
 function BindFieldView({ state }: { readonly state: BindingViewState }) {
+  const translate = useTranslate();
   const { showInput, wrapRef, inputRef, parts, placeholder, onChange, numeric, field, mode, open, setEditing, expr, exprApiRef, codeChips, wrapCode } = state;
   const list = <BindFieldMenu state={state} />;
   const sourceEditor = <BindFieldSource state={state} />;
@@ -299,7 +301,7 @@ function BindFieldView({ state }: { readonly state: BindingViewState }) {
         <BindInput
           ref={inputRef}
           parts={parts}
-          placeholder={placeholder || 'Type, or insert data'}
+          placeholder={placeholder || translate('props.attributes.typeOrInsert')}
           // A code prop's parts join as code: text beside a chip is an
           // expression with a value in it, not a sentence with one quoted into
           // it, so `[...items, other]` stays what was typed.

@@ -12,6 +12,7 @@ import * as path from 'path';
 import { parsePage, locateSelection, resolveChunks } from '../parse/astroParser';
 import { parseMarkdownPage } from '../parse/markdownParser';
 import { toPosix } from '../lib/mainHelpers';
+import { translateMain } from '../lib/mainLocale';
 
 // The page formats Astro routes from a file: .astro, plus markdown when the
 // project has the integration for it (.md always, .mdx via @astrojs/mdx).
@@ -51,7 +52,7 @@ export function pageWriteFailure(file: string, report: Extract<WriteReport, { re
     case 'uncertain':
       return {
         code: 'uncertain',
-        message: `${name} may not have been saved (${report.reconciliation ?? 'unreadable'}).`,
+        message: translateMain('error.documents.saveUncertainCheck', { file: name, check: report.reconciliation ?? 'unreadable' }),
       };
     case 'backpressured':
       return { code: 'backpressured', message: describeWriteReport(name, report) };

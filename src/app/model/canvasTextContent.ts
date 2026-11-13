@@ -5,7 +5,7 @@ import { readContentEntries, validateContentEntry, writeContentEntry, type Conte
 
 import type { CanvasTextEdit } from '../../features/preview/canvasTextSource';
 
-export async function canvasContentEdits(document: CanvasTextDocument): Promise<CanvasTextEdit[]> {
+export async function canvasContentEdits(document: CanvasTextDocument, label: string): Promise<CanvasTextEdit[]> {
   const edits: CanvasTextEdit[] = [];
   const candidates = canvasTextNodes(document.nodes)
     .filter((entry) => !entry.scoped)
@@ -35,7 +35,7 @@ export async function canvasContentEdits(document: CanvasTextDocument): Promise<
       if (typeof value !== 'string') {
         continue;
       }
-      const target = canvasTextTarget(node, parent, value, 'Shared CMS content · changes other uses too', document.pathFor);
+      const target = canvasTextTarget(node, parent, value, label, document.pathFor);
       if (target) {
         edits.push({ target, apply: (next) => saveContentText(document, entry, binding, next) });
       }

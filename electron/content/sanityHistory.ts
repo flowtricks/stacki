@@ -10,6 +10,8 @@
 //              replace-draft action. Nothing is published.
 
 import { assert } from '../../shared/core/assert';
+import type { MessageRef } from '../../shared/core/i18n/messageReference';
+import { described } from '../../shared/properties/i18n/messageRef';
 import { CMS_REMOTE_LIMITS, type RemoteRevision } from '../../shared/properties/cmsRemote';
 import { SANITY_API_VERSION, sanityGet, sanityRequest, type SanityDataset } from './sanityContent';
 
@@ -34,11 +36,16 @@ export async function sanityRevisions(target: SanityDataset, id: string): Promis
   });
   const names = await authorNames(target, [...new Set(transactions.map((entry) => entry.author))]);
   assert(transactions.length <= CMS_REMOTE_LIMITS.revisionsMax, 'History stays within its bound');
-  return transactions.map((entry) => ({
-    id: entry.id,
-    timestamp: entry.timestamp,
-    author: names.get(entry.author) ?? 'Someone',
-  }));
+  return transactions.map((entry) => {
+    const name = names.get(entry.author);
+    // An author Sanity could not name is ours to describe, in the language on screen.
+    return name === undefined ? { id: entry.id, timestamp: entry.timestamp, ...anonymous() } : { id: entry.id, timestamp: entry.timestamp, author: name };
+  });
+}
+
+function anonymous(): { readonly author: string; readonly authorRef: MessageRef } {
+  const someone = described('cmsBackend.sanity.someone');
+  return { author: someone.message, authorRef: someone.messageRef };
 }
 
 export async function sanityRestore(target: SanityDataset, id: string, revision: string): Promise<void> {

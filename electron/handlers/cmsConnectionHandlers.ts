@@ -7,11 +7,17 @@ import fs, { realpathSync } from 'node:fs';
 import type { MainHost } from './mainHost';
 import type { CmsConnectionStore } from '../content/cmsConnectionStore';
 import type { SanityLogin } from '../content/sanityLogin';
-import type { CmsSaveResult } from '../../shared/properties/cmsConnections';
+import type { CmsCheckRequest, CmsCheckResult, CmsSaveResult } from '../../shared/properties/cmsConnections';
 import type { RemoteResult } from '../../shared/properties/cmsRemote';
-import { cmsFailureMessage, cmsRemoteService } from '../content/cmsRemoteService';
+import { cmsFailureMessage, cmsFailureProblem, cmsRemoteService } from '../content/cmsRemoteService';
 import { fetchLinkPreview } from '../content/linkPreview';
+import { forgetPayloadSession, PayloadError } from '../content/payloadClient';
+import { checkPayload, payloadTargetOf } from '../content/payloadAccess';
+import { clearPayloadSchemas } from '../content/payloadSchema';
+import { payloadRemoteService } from '../content/payloadService';
 import { IMAGE_EXTENSIONS, SANITY_UPLOAD_BYTES_MAX } from '../content/sanityUpload';
+import { translateMain } from '../lib/mainLocale';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 export function registerCmsConnectionHandlers(
   host: Pick<MainHost, 'ipcMain' | 'assertInProject' | 'showOpenDialog'>,
@@ -25,21 +31,39 @@ export function registerCmsConnectionHandlers(
     return canonical;
   };
   host.ipcMain.handle('cmsConnections:list', (_event, input) => store.list(root(input.projectPath)));
-  host.ipcMain.handle('cmsConnections:save', (_event, input): CmsSaveResult => {
+  host.ipcMain.handle('cmsConnections:save', async (_event, input): Promise<CmsSaveResult> => {
     const project = root(input.projectPath);
+    // A Payload account is tried against the server first: a wrong address, key or password is told now.
+    if (input.draft.kind === 'payload') {
+      const check = await checkPayload(input.draft, input.draft.secret);
+      if (!check.ok) {
+        return check;
+      }
+      // A saved-again connection starts a fresh login and a fresh look at the server.
+      forgetPayloadSession(payloadTargetOf(input.draft, input.draft.secret));
+      clearPayloadSchemas();
+    }
     try {
       store.save(project, input.draft);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
-      return { ok: false, message: message.slice(0, 900) || 'Could not save the connection.' };
+      return { ok: false, message: message.slice(0, 900) || translateMain('error.cms.connectionSaveFailed') };
     }
     return { ok: true, list: store.list(project) };
   });
   host.ipcMain.handle('cmsConnections:remove', (_event, input) => {
     const project = root(input.projectPath);
+    // A removed Payload connection leaves no login behind in memory.
+    const removed = store.list(project).connections.find((entry) => entry.id === input.id);
+    const secret = removed?.kind === 'payload' ? store.secret(project, removed.id) : undefined;
+    if (removed?.kind === 'payload' && secret !== undefined) {
+      forgetPayloadSession(payloadTargetOf(removed, secret));
+    }
     store.remove(project, input.id);
+    clearPayloadSchemas();
     return store.list(project);
   });
+  host.ipcMain.handle('cmsConnections:check', (_event, input) => checkConnection(store, root(input.projectPath), input.request));
   host.ipcMain.handle('cmsConnections:sanityLogin', (_event, input) => login.request(root(input.projectPath), input.request));
   registerCmsRemoteHandlers(host, store, root);
   // A video link's card in a CMS field; the payload parser admits video host links only.
@@ -71,15 +95,15 @@ function registerCmsRemoteHandlers(host: Pick<MainHost, 'ipcMain' | 'showOpenDia
     remote(async () => {
       const target = service(input.projectPath, input.connectionId);
       const picked = await host.showOpenDialog({
-        title: input.kind === 'image' ? 'Choose an image' : 'Choose a file',
+        title: translateMain(input.kind === 'image' ? 'dialog.open.cmsImage.title' : 'dialog.open.cmsFile.title'),
         properties: ['openFile'],
-        filters: input.kind === 'image' ? [{ name: 'Images', extensions: IMAGE_EXTENSIONS }] : [],
+        filters: input.kind === 'image' ? [{ name: translateMain('dialog.open.cmsImage.filter'), extensions: IMAGE_EXTENSIONS }] : [],
       });
       const file = picked.filePaths[0];
       if (picked.canceled || file === undefined) {
         return undefined;
       }
-      if (fs.statSync(file).size > SANITY_UPLOAD_BYTES_MAX) {
+      if (fs.statSync(file).size > (target.uploadBytesMax ?? SANITY_UPLOAD_BYTES_MAX)) {
         throw new Error('This file is larger than 100 MB.');
       }
       return target.upload(input.kind, { name: path.basename(file), bytes: fs.readFileSync(file) });
@@ -95,12 +119,16 @@ function connectionService(store: CmsConnectionStore, root: (projectPath: string
     if (!connection) {
       throw new Error('This CMS connection was removed. Reconnect it in Settings.');
     }
-    if (connection.kind !== 'sanity') {
+    if (connection.kind === 'custom') {
+      // A custom CMS saves canvas edits to its own endpoint; it has no content to browse.
       throw new Error('Browsing this CMS in Stacki is not available yet.');
     }
     const token = store.secret(project, connection.id);
     if (token === undefined) {
       throw new Error('Stacki could not read this connection’s key. Reconnect it in Settings.');
+    }
+    if (connection.kind === 'payload') {
+      return payloadRemoteService(payloadTargetOf(connection, token), { named: connection.collections });
     }
     return cmsRemoteService(project, {
       projectId: connection.projectId,
@@ -116,8 +144,28 @@ async function remote<T>(run: () => Promise<T>): Promise<RemoteResult<T>> {
   try {
     return { ok: true, value: await run() };
   } catch (error: unknown) {
-    return { ok: false, message: failureMessage(error).slice(0, 900) };
+    if (error instanceof PayloadError) {
+      return { ok: false, message: error.message.slice(0, 900), messageRef: error.messageRef };
+    }
+    const problem = cmsFailureProblem(error);
+    return { ok: false, message: problem.message.slice(0, 900), ...(problem.messageRef === undefined ? {} : { messageRef: problem.messageRef }) };
   }
+}
+
+// Test connection (a saved Payload connection) or Detect (the form's, not yet saved).
+async function checkConnection(store: CmsConnectionStore, project: string, request: CmsCheckRequest): Promise<CmsCheckResult> {
+  if (request.action === 'detect') {
+    return checkPayload(request.draft, request.draft.secret);
+  }
+  const connection = store.list(project).connections.find((entry) => entry.id === request.id);
+  if (connection?.kind !== 'payload') {
+    return { ok: false, ...described('cmsBackend.connection.cannotTest') };
+  }
+  const secret = store.secret(project, connection.id);
+  if (secret === undefined) {
+    return { ok: false, ...described('settings.cms.payload.noSecrets') };
+  }
+  return checkPayload(connection, secret);
 }
 
 /** A failure as the panel says it (cmsRemoteService.ts). */

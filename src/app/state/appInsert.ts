@@ -4,6 +4,7 @@
 // node to replace. Each insert is one gesture (appInsertGesture.ts), so it is one
 // undo step and one save, a replaced node's removal and the imports included.
 
+// i18n-ignore-file: refusals returned to the app that asked for the insert (read by apps and agents), not text a person reads.
 import { useCallback } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { AppInsert, AppInsertOutcome, AppInsertPlace } from '../../../shared/properties/appsRpc';

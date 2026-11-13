@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
+import type { MessageKey } from '../../lib/i18n/localeContext';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { TrailingSlash } from '../../editor/pageState';
 import { componentPreviewURL, prettyComponentName, type ComponentPreviewGesture, type ComponentPreviewMessage } from './paletteModel';
 import { useResolvedPreviewURL, usePreviewGestures, usePreviewMessages } from './previewSource';
@@ -19,7 +21,10 @@ interface PreviewEntry {
 const previewFramesMax = 4;
 
 /** What a preview frame reports about the URL it loaded: the component rendered, or there was nothing to show, and why. */
-export type PreviewStatusHandler = (url: string, status: 'ready' | 'empty', reason?: string) => void;
+export type PreviewStatusHandler = (url: string, status: 'ready' | 'empty', reason?: PreviewReason) => void;
+
+/** Why a preview is empty: one of our own sentences (translated where drawn) or the route's text, shown as received. */
+export type PreviewReason = { readonly key: MessageKey } | { readonly text: string };
 
 /**
  * How long a loaded preview page may stay silent. The route reports as soon as its script runs, before
@@ -28,11 +33,10 @@ export type PreviewStatusHandler = (url: string, status: 'ready' | 'empty', reas
 export const previewSilenceMs = 3000;
 
 /** What a card says on hover when the route's page loaded but never answered. */
-export const PREVIEW_SILENT_REASON =
-  'The preview page loaded but did not render the component; it may have thrown an error. Open it on a page to see the error.';
+export const PREVIEW_SILENT_REASON: PreviewReason = { key: 'palette.preview.silent' };
 
 /** What a card says on hover when the host could not give the preview an address (an expired draft session). */
-export const PREVIEW_UNRESOLVED_REASON = 'The preview could not be opened: the preview session is not available.';
+export const PREVIEW_UNRESOLVED_REASON: PreviewReason = { key: 'palette.preview.unresolved' };
 
 export function ComponentPreviewPopup({
   preview,
@@ -52,6 +56,7 @@ export function ComponentPreviewPopup({
   const url = componentPreviewURL(devURL, preview.component, trailingSlash);
   const name = preview.component.name;
   const target = useMemo(() => ({ url, name }), [url, name]);
+  const translate = useTranslate();
   const { frames, receive } = usePreviewCache(target);
   const active = frames.find((frame) => frame.target.url === url);
   assert(active, 'The hovered preview must be cached');
@@ -68,7 +73,7 @@ export function ComponentPreviewPopup({
       <div className="comp-preview-content">
         {loading && (
           <div className="comp-preview-loading" role="status">
-            <span className="panel-loading-label">Loading preview…</span>
+            <span className="panel-loading-label">{translate('palette.preview.loading')}</span>
           </div>
         )}
         {frames.map((frame) => (
@@ -152,7 +157,7 @@ export function ComponentPreviewFrame({
   const receive = useCallback(
     (message: ComponentPreviewMessage): void => {
       answered.current = true;
-      onStatus(url, message.status, message.reason);
+      onStatus(url, message.status, message.reason === undefined ? undefined : { text: message.reason });
     },
     [url, onStatus],
   );

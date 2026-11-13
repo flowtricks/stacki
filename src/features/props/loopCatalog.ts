@@ -198,7 +198,9 @@ function connectionOf(catalog: LoopCatalog, kind: LoopSourceKind): string | unde
 // Sanity documents carry these on every type, as visual builders show
 // "Created on" and "Updated on" beside a collection's own fields.
 const SANITY_SYSTEM_FIELDS: readonly CatalogField[] = [
+  // i18n-ignore: Sanity's own labels for its system fields, stored as catalog data beside the schema's titles.
   { path: '_createdAt', title: 'Created on', kind: 'date', options: [], references: [] },
+  // i18n-ignore: as above.
   { path: '_updatedAt', title: 'Updated on', kind: 'date', options: [], references: [] },
 ];
 
@@ -291,7 +293,9 @@ function innerFields(field: RemoteSchemaField): readonly RemoteSchemaField[] {
   if (type.kind === 'geopoint') {
     const number = { kind: 'number' as const, options: [] };
     return [
+      // i18n-ignore: Sanity's geopoint field names, catalog data like the schema's own titles.
       { name: 'lat', title: 'Latitude', type: number },
+      // i18n-ignore: as above.
       { name: 'lng', title: 'Longitude', type: number },
     ].map((inner) => ({ ...field, ...inner }));
   }
@@ -339,6 +343,7 @@ function listField(field: RemoteSchemaField, members: readonly RemoteType[], bas
 export function titled(name: string): string {
   if (name === ITEM_FIELD) {
     // A list of plain values, filtered or sorted by each value itself.
+    // i18n-ignore: catalog data; the title of a plain-value list's single field, drawn with the schema's own field titles.
     return 'Item';
   }
   const words = name

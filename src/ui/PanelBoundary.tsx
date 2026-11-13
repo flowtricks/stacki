@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
+import { LocaleContext } from '../lib/i18n/localeContext';
 
 // A render error inside one panel stays inside that panel.
 //
@@ -15,7 +16,9 @@ import type { ErrorInfo, ReactNode } from 'react';
 // picking another element brings the panel back without a click.
 
 interface PanelBoundaryProps {
+  /** The panel's name for the log; `label` is what a person reads, and callers translate it. */
   readonly name: string;
+  readonly label?: string | undefined;
   readonly resetKey?: string | undefined;
   readonly children: ReactNode;
 }
@@ -44,6 +47,10 @@ export default class PanelBoundary extends React.Component<PanelBoundaryProps, P
     return undefined;
   }
 
+  // A class cannot call a hook: the context gives it the same translator.
+  static override contextType = LocaleContext;
+  declare context: React.ContextType<typeof LocaleContext>;
+
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
     // React has already logged the error; this names the panel it stayed in.
     console.error(`[${this.props.name}] render error contained by its panel`, error, info.componentStack);
@@ -56,10 +63,10 @@ export default class PanelBoundary extends React.Component<PanelBoundaryProps, P
     }
     return (
       <div className="panel-boundary" role="alert">
-        <div className="panel-boundary-title">{this.props.name} hit an error</div>
+        <div className="panel-boundary-title">{this.context.translate('ui.panelBoundary.title', { name: this.props.label ?? this.props.name })}</div>
         <div className="panel-boundary-message">{failure.message}</div>
         <button type="button" className="panel-boundary-retry" onClick={() => this.setState({ failure: undefined })}>
-          Try again
+          {this.context.translate('ui.panelBoundary.retry')}
         </button>
       </div>
     );

@@ -2,6 +2,8 @@
 // them. Keep bounds and parsing separate from handlers so failures are testable.
 import { boolean, count, data, dictionary, list, nullable, object, optional, pathText, record, text } from '../../shared/core/boundary';
 import type { Data } from '../../shared/core/boundary';
+import type { LocalePreference } from '../../shared/core/i18n/locales';
+import { parseLocalePreferenceValue } from '../../shared/ipc/localeChannel';
 import type { ContentCollection } from '../content/contentEntries';
 import type { DynamicEntry } from '../lib/mainTypes';
 
@@ -16,6 +18,10 @@ export interface AppSettings {
   readonly appsPersonHidden: boolean;
   /** Ask before AI agents may work in a project opened for the first time; off: opening the panel allows it. */
   readonly aiAskBeforeTrust: boolean;
+  /** Snapshot the project before and after each AI turn so the panel can show and undo its changes; on unless turned off. */
+  readonly aiTrackChanges: boolean;
+  /** The interface language the renderer last chose (docs/i18n-playbook.md, "Main process"); "system" follows the operating system. */
+  readonly localePreference: LocalePreference;
 }
 
 export function parseSettings(input: unknown): AppSettings {
@@ -26,6 +32,8 @@ export function parseSettings(input: unknown): AppSettings {
     usageLastAttemptDay: optional(text),
     appsPersonHidden: optional(boolean),
     aiAskBeforeTrust: optional(boolean),
+    aiTrackChanges: optional(boolean),
+    localePreference: optional(parseLocalePreferenceValue),
   })(input);
   if (value.usageNoticeVersion !== undefined && value.usageNoticeVersion > 10) {
     throw new Error('Settings: invalid usage notice version');
@@ -39,6 +47,8 @@ export function parseSettings(input: unknown): AppSettings {
     usageNoticeVersion: value.usageNoticeVersion ?? 0,
     appsPersonHidden: value.appsPersonHidden ?? false,
     aiAskBeforeTrust: value.aiAskBeforeTrust ?? false,
+    aiTrackChanges: value.aiTrackChanges ?? true,
+    localePreference: value.localePreference ?? 'system',
     ...(value.usageLastAttemptDay === undefined ? {} : { usageLastAttemptDay: value.usageLastAttemptDay }),
   };
 }

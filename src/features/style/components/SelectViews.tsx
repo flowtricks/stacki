@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { check as centralCheck, chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
@@ -220,6 +221,7 @@ export type SelectListProps<T extends string> = {
 export const optionId = (baseId: string, index: number) => `${baseId}-opt-${index}`;
 
 export function SelectList<T extends string>(list: SelectListProps<T>) {
+  const translate = useTranslate();
   const { props, displayed } = list;
   const { ariaLabel, labelId, searchable = false } = props;
   // Read from the whole option list, not the filtered rows, so typing a search
@@ -247,11 +249,13 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
             ref={list.searchRef}
             type="text"
             className="u-select-search-input"
-            placeholder={props.searchPlaceholder ?? 'Search…'}
+            placeholder={props.searchPlaceholder ?? translate('ui.search')}
             value={list.query}
             onChange={(event) => list.onQuery(event.target.value)}
             onKeyDown={list.onSearchKeyDown}
-            aria-label={ariaLabel ? `Search ${ariaLabel}` : 'Search'}
+            aria-label={
+              ariaLabel ? translate('styleModel.components.select.searchNamed', { label: ariaLabel }) : translate('styleModel.components.select.search')
+            }
             spellCheck={false}
             autoComplete="off"
           />
@@ -259,7 +263,7 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
       ) : undefined}
       {displayed.length === 0 ? (
         <div className="u-select-empty" role="presentation">
-          No matches
+          {translate('styleModel.components.select.noMatches')}
         </div>
       ) : (
         displayed.map((option, index) => (

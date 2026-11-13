@@ -10,6 +10,7 @@ const { BOUNDARY_LIMITS } = require('#dist/shared/core/boundary.js');
 // code never writes a null.
 const PLATFORM_NULL = JSON.parse('null');
 const schema = loadRenderer('src/features/content/contentSchema.ts');
+const { ENGLISH_TRANSLATE } = loadRenderer('shared/properties/i18n/englishTranslator.ts');
 const cms = loadRenderer('src/features/cms/cmsSchema.ts');
 const { parseContentSchema } = loadRenderer('src/features/content/contentSchemaBoundary.ts');
 const fixture = {
@@ -30,9 +31,9 @@ const fields = schema.collectionFields(fixture).fields;
 assert.equal(fields[0].required, true);
 assert.equal(fields[0].default, 'Untitled');
 assert.equal(fields[1].nullable, true);
-assert.equal(schema.fieldIssue(fields[0], ''), 'Required');
-assert.equal(schema.fieldIssue(fields[1], PLATFORM_NULL), undefined);
-assert.equal(schema.fieldIssue(fields[2], 0), 'At least 1');
+assert.equal(schema.fieldIssue(fields[0], '', ENGLISH_TRANSLATE), 'Required');
+assert.equal(schema.fieldIssue(fields[1], PLATFORM_NULL, ENGLISH_TRANSLATE), undefined);
+assert.equal(schema.fieldIssue(fields[2], 0, ENGLISH_TRANSLATE), 'At least 1');
 assert.equal('max' in fields[2].constraints, false);
 assert.equal(fields[3].control, 'image');
 assert.equal(fields[4].item.fields[0].key, 'name');

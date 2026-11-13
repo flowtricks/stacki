@@ -41,6 +41,7 @@ export async function sanityUploadBytes(target: SanityDataset, kind: RemoteAsset
     `?filename=${encodeURIComponent(filename)}`;
   const response = await fetch(url, {
     method: 'POST',
+    // i18n-ignore: HTTP header value, not interface text.
     headers: { Authorization: `Bearer ${target.token}`, 'Content-Type': mimeOf(extension) },
     // A copy on its own ArrayBuffer: what fetch takes as a body in every runtime.
     body: new Uint8Array(bytes),

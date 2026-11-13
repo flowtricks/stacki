@@ -3,7 +3,8 @@ import type { ComponentPreviewGesture } from './paletteModel';
 import { assert } from '../../../shared/core/assert';
 import { insertFolderLabel, type InsertFolderKey } from './insertFolders';
 import type { InsertPill } from './insertGrid';
-import type { InsertItem } from './insertItem';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { insertItemLabel, insertItemSub, type InsertItem } from './insertItem';
 import { InsertPreviewSurface, useReportVisibility, type InsertPreviewSource } from './InsertPreview';
 
 // The pieces of the insert palette: a card with a live picture of the component (Components tab), a row of the
@@ -40,6 +41,7 @@ export function InsertCard({
   readonly onInsert: () => void;
 }) {
   assert(item.card !== undefined, 'Only a card item renders as a card');
+  const translate = useTranslate();
   const ref = useRef<HTMLDivElement>(null);
   useReportVisibility(ref, scrollRoot, itemKey, onVisible);
   const uses = item.instances ?? 0;
@@ -51,7 +53,7 @@ export function InsertCard({
       <InsertPreviewSurface source={{ ...host, component: item.preview }} mounted={mounted} icon={item.icon} onSettled={settle} onGesture={gesture} />
       <div className="insert-card-foot">
         <span className="insert-item-icon">{item.icon}</span>
-        <span className="insert-item-label">{item.label}</span>
+        <span className="insert-item-label">{insertItemLabel(item, translate)}</span>
         {folder !== undefined && <span className="insert-card-folder">· {folder}</span>}
         {uses > 0 && <span className="insert-item-uses">{uses}×</span>}
       </div>
@@ -98,11 +100,12 @@ export function InsertRow({
   readonly onHover: () => void;
   readonly onInsert: () => void;
 }) {
-  const where = item.card?.folder === undefined ? item.sub : insertFolderLabel(item.card.folder);
+  const translate = useTranslate();
+  const where = item.card?.folder === undefined ? insertItemSub(item, translate) : insertFolderLabel(item.card.folder);
   return (
     <div className={`insert-item ${highlighted ? 'highlight' : ''}`} onMouseMove={highlighted ? undefined : onHover} onClick={onInsert}>
       <span className="insert-item-icon">{item.icon}</span>
-      <span className="insert-item-label">{item.label}</span>
+      <span className="insert-item-label">{insertItemLabel(item, translate)}</span>
       {where !== undefined && where !== '' && <span className="insert-item-sub">{where}</span>}
     </div>
   );
@@ -122,8 +125,9 @@ export function InsertPills({
   readonly selected: InsertFolderKey | undefined;
   readonly onPick: (folder: InsertFolderKey) => void;
 }) {
+  const translate = useTranslate();
   return (
-    <div className="insert-pills" role="group" aria-label="Component folders">
+    <div className="insert-pills" role="group" aria-label={translate('palette.insert.folders')}>
       {pills.map((pill) => {
         const on = pill.key === selected;
         return (
@@ -147,10 +151,11 @@ export function InsertPills({
 }
 
 export function InsertHints() {
+  const translate = useTranslate();
   return (
     <div className="insert-footer">
       <span className="insert-hint">
-        <kbd>↵</kbd> insert
+        <kbd>↵</kbd> {translate('palette.insert.hint')}
       </span>
     </div>
   );

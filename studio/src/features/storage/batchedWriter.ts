@@ -1,3 +1,4 @@
+import { studioTranslate } from '../../shared/studioTranslate';
 // Coalesce durable snapshots without delaying collaboration or preview updates.
 // Every caller resolves only after a snapshot containing its edit is durable.
 export class BatchedWriter<T = Uint8Array> {
@@ -11,7 +12,7 @@ export class BatchedWriter<T = Uint8Array> {
   ) {}
   save(bytes: T, immediately = false): Promise<void> {
     if (this.waiting.length >= 200) {
-      return Promise.reject(new Error('Draft save queue is full. Pause typing and retry.'));
+      return Promise.reject(new Error(studioTranslate('studio.draft.queueFull')));
     }
     this.latest = bytes;
     const result = new Promise<void>((resolve, reject) => {

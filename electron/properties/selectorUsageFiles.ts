@@ -12,6 +12,7 @@ import { assert } from '../../shared/core/assert';
 import { MAIN_LIMITS } from '../lib/mainLimits';
 import { isStudioDirectory } from '../lib/studioDirectory';
 import { DEFAULT_PROJECT_FOLDERS, folderHolding } from '../../shared/properties/projectFolders';
+import { described, type Described, type MessageRef } from '../../shared/properties/i18n/messageRef';
 import type { SelectorNote } from '../../shared/properties/selectorUsage';
 import type { StyleKeepList } from '../../shared/properties/styleKeepList';
 import { emptyHits, scanMentions, type MentionHits, type MentionInterest } from './selectorMentions';
@@ -147,7 +148,7 @@ export async function readSelectorUsageInput(
           continue;
         }
         if (next.depth + 1 > MAIN_LIMITS.directoryDepthMax) {
-          unreadable.push({ rel, message: 'Folder nesting exceeds the limit' });
+          unreadable.push({ rel, ...described('selectors.problem.nesting') });
           continue;
         }
         queue.push({ directory: full, rel, depth: next.depth + 1, site: next.depth === 0 ? SITE_FOLDERS.has(entry.name) : next.site });
@@ -161,13 +162,13 @@ export async function readSelectorUsageInput(
         continue;
       }
       if (budget.full()) {
-        unreadable.push({ rel, message: `The project has more than ${SELECTOR_FILE_LIMITS.projectFilesMax} files to check` });
+        unreadable.push({ rel, ...described('selectors.problem.fileCount', { count: SELECTOR_FILE_LIMITS.projectFilesMax }) });
         return { stylesheets, astro, others, keepList, unreadable };
       }
       const text = await budget.read(full);
       if (typeof text !== 'string') {
         if (text.kind === 'failed') {
-          unreadable.push({ rel, message: text.message });
+          unreadable.push({ rel, message: text.message, ...(text.messageRef === undefined ? {} : { messageRef: text.messageRef }) });
         }
         continue;
       }
@@ -205,7 +206,8 @@ const runningSearches = new Map<string, Promise<unknown>>();
 export async function scanInstalledPackages(root: string, interest: MentionInterest, mode: PackageSearch = 'search'): Promise<PackageScan> {
   const directories = packageDirectories(root);
   if (directories.length === 0) {
-    return { kind: 'incomplete', reason: 'Dependencies are not installed, so packages could not be checked' };
+    const missing = described('selectors.reason.packagesMissing');
+    return { kind: 'incomplete', reason: missing.message, reasonRef: missing.messageRef };
   }
   const running = runningSearches.get(root);
   if (running !== undefined && mode === 'search') {
@@ -223,7 +225,7 @@ export async function scanInstalledPackages(root: string, interest: MentionInter
   const scanned = emptyHits();
   const search = walkPackages(directories, missing, scanned);
   runningSearches.set(root, search);
-  let walk: string | undefined;
+  let walk: Described | undefined;
   try {
     walk = await search;
   } finally {
@@ -232,7 +234,7 @@ export async function scanInstalledPackages(root: string, interest: MentionInter
     }
   }
   if (walk !== undefined) {
-    return { kind: 'incomplete', reason: walk };
+    return { kind: 'incomplete', reason: walk.message, reasonRef: walk.messageRef };
   }
   remember(missing, scanned, cache);
   for (const word of scanned.words) {
@@ -252,12 +254,12 @@ export async function scanInstalledPackages(root: string, interest: MentionInter
 // batch can pass the byte budget by at most its own size.
 const PACKAGE_READS_PARALLEL = 32;
 
-async function walkPackages(directories: readonly string[], interest: MentionInterest, hits: MentionHits): Promise<string | undefined> {
+async function walkPackages(directories: readonly string[], interest: MentionInterest, hits: MentionHits): Promise<Described | undefined> {
   const budget = new ReadBudget(SELECTOR_FILE_LIMITS.packageFilesMax, SELECTOR_FILE_LIMITS.packageBytesMax);
   const seen = new Set<string>();
   const queue = directories.map((directory) => ({ directory, depth: 0 }));
   let files: string[] = [];
-  const drain = async (): Promise<string | undefined> => {
+  const drain = async (): Promise<Described | undefined> => {
     const batch = files;
     files = [];
     const texts = await Promise.all(batch.map((file) => budget.read(file)));
@@ -265,7 +267,7 @@ async function walkPackages(directories: readonly string[], interest: MentionInt
       if (typeof text === 'string') {
         scanMentions(text, interest, hits);
       } else if (text.kind === 'failed') {
-        return `An installed package file could not be read: ${text.message}`;
+        return described('selectors.reason.packageFile', { detail: text.message });
       }
     }
     return undefined;
@@ -283,7 +285,7 @@ async function walkPackages(directories: readonly string[], interest: MentionInt
       seen.add(real);
       entries = await fs.promises.readdir(real, { withFileTypes: true });
     } catch (error: unknown) {
-      return `Installed packages could not be read: ${errorText(error)}`;
+      return described('selectors.reason.packagesUnreadable', { detail: errorText(error) });
     }
     for (const entry of entries) {
       const full = path.join(real, entry.name);
@@ -294,7 +296,7 @@ async function walkPackages(directories: readonly string[], interest: MentionInt
           continue;
         }
         if (next.depth + 1 > MAIN_LIMITS.directoryDepthMax) {
-          return 'Installed packages are nested too deeply to check';
+          return described('selectors.reason.packagesDeep');
         }
         queue.push({ directory: full, depth: next.depth + 1 });
         continue;
@@ -303,7 +305,7 @@ async function walkPackages(directories: readonly string[], interest: MentionInt
         continue;
       }
       if (budget.full(files.length)) {
-        return `Installed packages hold more than ${SELECTOR_FILE_LIMITS.packageFilesMax} files to check`;
+        return described('selectors.reason.packagesMany', { count: SELECTOR_FILE_LIMITS.packageFilesMax });
       }
       files.push(full);
       if (files.length >= PACKAGE_READS_PARALLEL) {
@@ -333,7 +335,7 @@ function isDirectory(full: string): boolean {
   }
 }
 
-type ReadFailure = { readonly kind: 'binary' } | { readonly kind: 'failed'; readonly message: string };
+type ReadFailure = { readonly kind: 'binary' } | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef };
 
 // One walk's reading allowance. The counters are private so only read() can
 // spend them, and every read is checked against both bounds before it happens.
@@ -365,10 +367,13 @@ class ReadBudget {
     try {
       const stat = await fs.promises.stat(full);
       if (stat.size > SELECTOR_FILE_LIMITS.fileBytesMax) {
-        return { kind: 'failed', message: `${path.basename(full)} is larger than ${Math.floor(SELECTOR_FILE_LIMITS.fileBytesMax / 1024 / 1024)} MB` };
+        return {
+          kind: 'failed',
+          ...described('selectors.problem.fileLarge', { name: path.basename(full), size: Math.floor(SELECTOR_FILE_LIMITS.fileBytesMax / 1024 / 1024) }),
+        };
       }
       if (this.bytes + stat.size > this.bytesMax) {
-        return { kind: 'failed', message: `There is more than ${Math.floor(this.bytesMax / 1024 / 1024)} MB to check` };
+        return { kind: 'failed', ...described('selectors.problem.bytesBudget', { size: Math.floor(this.bytesMax / 1024 / 1024) }) };
       }
       bytes = await fs.promises.readFile(full);
     } catch (error: unknown) {

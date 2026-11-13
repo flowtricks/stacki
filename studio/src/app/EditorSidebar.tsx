@@ -1,3 +1,4 @@
+import { useTranslate } from '../../vendor/stacki/src/lib/i18n/useTranslate';
 import { GitPanel } from '../features/history/GitPanel';
 import type { useStudioDefaultsCanvas } from '../features/settings/useStudioDefaultsCanvas';
 import { CmsNavigation } from '../features/cms/CmsWorkspace';
@@ -26,6 +27,7 @@ interface SidebarProps {
   readonly model: ReturnType<typeof useEditor>;
 }
 export function EditorSidebar({ panel, close, props, model, openCode, showNavigator, defaultsCanvas }: SidebarProps) {
+  const translate = useTranslate();
   const { project, file, open, refresh, report } = props;
   const { selected, document, openComponent } = model;
   // Desktop's resize handle and stored widths. Collapsed, the panel floats at that width.
@@ -37,7 +39,7 @@ export function EditorSidebar({ panel, close, props, model, openCode, showNaviga
       style={{ width: resize.width }}
       data-variable-selected={(panel === 'variables' && !!props.view.variable) || (panel === 'collections' && !!props.view.cms)}
     >
-      <PanelCloseButton label="Close panel" close={close} />
+      <PanelCloseButton label={translate('studio.panel.close')} close={close} />
       {panel === 'navigator' && <DefaultsNavigator props={props} model={model} defaultsCanvas={defaultsCanvas} openCode={openCode} />}
       {panel === 'collections' && <CmsNavigation props={props} />}
       {panel === 'pages' && (

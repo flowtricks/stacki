@@ -14,7 +14,7 @@ import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import type { PageNode } from '../../../shared/page/pageNode';
 import { nodeAt } from '../../../shared/page/auditTrace';
 import { describeNode } from '../../ui/navigatorLabel';
-import { AUDIT_CHECKS, type AuditFinding, type AuditPriority, type AuditRuleGroup } from '../../../shared/page/auditFindings';
+import { type AuditFinding, type AuditPriority, type AuditRuleGroup } from '../../../shared/page/auditFindings';
 import { auditPrompt, promptBatches, AUDIT_PROMPT_FINDINGS_MAX } from '../../../shared/page/auditPrompt';
 import { linkFix } from '../../../shared/page/auditRepairs';
 import { agentTask } from '../../../shared/properties/agentTask';
@@ -33,7 +33,10 @@ import type { AuditScope } from './auditScope';
 import { SegmentedTabs } from '../../ui/SegmentedTabs';
 import { saveAuditIgnores } from './auditsBridge';
 import { allFindings, auditState, updateAuditState, useAuditState } from './auditStore';
-import { useTranslate } from '../../lib/i18n/useTranslate';
+import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import { useAuditText, type AuditText } from './useAuditText';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../shared/properties/i18n/messageRef';
 import { IgnoredList } from './IgnoredList';
 import { FindReplace } from './FindReplace';
 import { PerformanceBar } from './PerformanceBar';
@@ -90,6 +93,7 @@ interface ShownRule extends AuditRuleGroup {
 
 export default function AuditsPanel(props: AuditsPanelProps) {
   const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const state = useAuditState();
   const [filter, setFilter] = useState<AuditFilter>(() => storedFilter(props.project.path));
   const [reviewing, setReviewing] = useState<readonly AuditFinding[] | undefined>(undefined);
@@ -120,9 +124,12 @@ export default function AuditsPanel(props: AuditsPanelProps) {
         const outcome = await applyFixes(targets, props.fixDeps(), label);
         const [failure] = outcome.failures;
         if (failure === undefined) {
-          props.showToast(outcome.fixed === 1 ? 'Fixed.' : `Fixed ${outcome.fixed} in ${outcome.files} ${outcome.files === 1 ? 'file' : 'files'}.`, 'success');
+          props.showToast(
+            outcome.fixed === 1 ? translate('auditsUi.fixed.one') : translate('auditsUi.fixed.many', { fixed: outcome.fixed, count: outcome.files }),
+            'success',
+          );
         } else {
-          props.showToast(`${failure.file.split('/').pop() ?? failure.file}: ${failure.message}`, 'error');
+          props.showToast(`${failure.file.split('/').pop() ?? failure.file}: ${translateDescribed(failure)}`, 'error');
         }
       } catch (error: unknown) {
         props.showToast(error instanceof Error ? error.message : String(error), 'error');
@@ -136,17 +143,18 @@ export default function AuditsPanel(props: AuditsPanelProps) {
       if (batch === undefined) {
         return;
       }
-      const { message, kind } = agentTaskMessage(await requestAgentTask(agentTask(auditPrompt(batch, props.project.name))));
+      const { message, kind } = agentTaskMessage(await requestAgentTask(agentTask(auditPrompt(batch, props.project.name))), translate);
       const rest = targets.length - batch.length;
-      props.showToast(rest > 0 ? `${message} The first ${AUDIT_PROMPT_FINDINGS_MAX} went; send the rest after.` : message, kind);
+      props.showToast(rest > 0 ? translate('auditsUi.handOff.partial', { message, count: AUDIT_PROMPT_FINDINGS_MAX }) : message, kind);
     },
-    ignore: (finding, reason) => writeIgnores(props, (value) => withIgnore(value, { id: finding.id, reason })),
-    ignoreAll: (findings, reason) => writeIgnores(props, (value) => findings.reduce((file, finding) => withIgnore(file, { id: finding.id, reason }), value)),
-    ignorePage: (file, reason) => writeIgnores(props, (value) => withIgnoredPage(value, { file, reason })),
-    unignorePage: (file) => writeIgnores(props, (value) => withoutIgnoredPage(value, file)),
-    unignoreIds: (ids) => writeIgnores(props, (value) => ids.reduce(withoutIgnore, value)),
-    unignoreAll: () => writeIgnores(props, withoutAnyIgnores),
-    restore: (finding) => writeIgnores(props, (value) => withoutIgnore(value, finding.id)),
+    ignore: (finding, reason) => writeIgnores(props, translate, (value) => withIgnore(value, { id: finding.id, reason })),
+    ignoreAll: (findings, reason) =>
+      writeIgnores(props, translate, (value) => findings.reduce((file, finding) => withIgnore(file, { id: finding.id, reason }), value)),
+    ignorePage: (file, reason) => writeIgnores(props, translate, (value) => withIgnoredPage(value, { file, reason })),
+    unignorePage: (file) => writeIgnores(props, translate, (value) => withoutIgnoredPage(value, file)),
+    unignoreIds: (ids) => writeIgnores(props, translate, (value) => ids.reduce(withoutIgnore, value)),
+    unignoreAll: () => writeIgnores(props, translate, withoutAnyIgnores),
+    restore: (finding) => writeIgnores(props, translate, (value) => withoutIgnore(value, finding.id)),
     reasonOf: (finding) => reasons.get(finding.id),
   };
   const open = view.shown.filter((finding) => !ignoredIds.has(finding.id));
@@ -155,49 +163,52 @@ export default function AuditsPanel(props: AuditsPanelProps) {
     <div className="panel-section grow audits-panel">
       <div className="panel-header">
         <h2 className="audits-heading">
-          Audits
+          {translate('auditsUi.title')}
           {view.counts.all > 0 && (
-            <span className="audits-pill" title={state.scope === 'page' ? 'Findings on the open page and the components it uses' : 'Findings across the site'}>
-              {state.scope === 'page' ? `${view.counts.all} on this page` : view.counts.all}
+            <span className="audits-pill" title={state.scope === 'page' ? translate('auditsUi.pill.pageTitle') : translate('auditsUi.pill.siteTitle')}>
+              {state.scope === 'page' ? translate('auditsUi.pill.page', { count: view.counts.all }) : view.counts.all}
             </span>
           )}
         </h2>
         <div className="audits-header-tools">
           <button
             className="ghost"
-            aria-label="Audit again"
-            title="Audit again"
+            aria-label={translate('auditsUi.again')}
+            title={translate('auditsUi.again')}
             disabled={state.running}
             onClick={() => updateAuditState((current) => ({ ...current, request: current.request + 1 }))}
           >
             <RefreshIcon size={14} className={state.running ? 'audits-spin' : undefined} />
           </button>
           <MoreMenu
-            title="Audit options"
+            title={translate('auditsUi.options')}
             width={200}
             items={[
-              { label: searching ? 'Hide search' : 'Search findings', onSelect: () => setSearching((value) => !value) },
-              { label: findOpen ? 'Close find & replace' : 'Find & replace…', onSelect: () => setFindOpen((value) => !value) },
-              { label: 'Configure checks…', onSelect: props.onConfigure },
               {
-                label: showIgnored ? 'Hide ignored' : `Show ignored (${view.ignoredCount})`,
+                label: searching ? translate('auditsUi.menu.hideSearch') : translate('auditsUi.searchFindings'),
+                onSelect: () => setSearching((value) => !value),
+              },
+              { label: findOpen ? translate('auditsUi.menu.closeFind') : translate('auditsUi.menu.find'), onSelect: () => setFindOpen((value) => !value) },
+              { label: translate('auditsUi.menu.configure'), onSelect: props.onConfigure },
+              {
+                label: showIgnored ? translate('auditsUi.menu.hideIgnored') : translate('auditsUi.menu.showIgnored', { count: view.ignoredCount }),
                 disabled: view.ignoredCount === 0 && !showIgnored,
                 onSelect: () => setShowIgnored((value) => !value),
               },
-              open.length > 0 && { label: 'Send all to AI', icon: <SparkleIcon size={12} />, onSelect: () => void actions.handOff(open) },
+              open.length > 0 && { label: translate('auditsUi.menu.sendAll'), icon: <SparkleIcon size={12} />, onSelect: () => void actions.handOff(open) },
             ]}
           />
         </div>
       </div>
       <div className="audits-toolbar">
         <Dropdown<AuditFilter>
-          ariaLabel="Category"
+          ariaLabel={translate('auditsUi.category')}
           className="audits-category"
           menuWidthMin={200}
           value={filter}
           options={AUDIT_FILTERS.map((value) => ({
             value,
-            label: `${FILTER_LABELS[value]}${view.counts[value] > 0 ? `  ${view.counts[value]}` : ''}`,
+            label: `${translate(FILTER_LABELS[value])}${view.counts[value] > 0 ? `  ${view.counts[value]}` : ''}`,
             icon: <FilterIcon filter={value} />,
           }))}
           onChange={(value) => {
@@ -206,10 +217,13 @@ export default function AuditsPanel(props: AuditsPanelProps) {
           }}
         />
         <SegmentedTabs<PanelScope>
-          label="Audit scope"
+          label={translate('auditsUi.scope.label')}
           className={{ track: 'audits-scope' }}
           value={state.scope === 'page' ? 'page' : 'site'}
-          tabs={SCOPE_TABS}
+          tabs={[
+            { value: 'site', label: translate('auditsUi.scope.site') },
+            { value: 'page', label: translate('auditsUi.scope.page') },
+          ]}
           onPick={(scope) => updateAuditState((current) => ({ ...current, scope }))}
         />
         <button
@@ -222,11 +236,14 @@ export default function AuditsPanel(props: AuditsPanelProps) {
           {translate('audits.ignored.chip')}
           {ignoredEntryCount(state.ignores.value) > 0 && <span className="audits-count">{ignoredEntryCount(state.ignores.value)}</span>}
         </button>
-        {searching && <SearchField label="Search findings" value={search} onChange={setSearch} />}
+        {searching && <SearchField label={translate('auditsUi.searchFindings')} value={search} onChange={setSearch} />}
       </div>
       {state.running && state.report === undefined && state.progress !== undefined && (
         <p className="audits-progress" role="status">
-          {state.progress.stage === 'files' ? 'Reading files' : 'Checking pages'} · {state.progress.done} of {state.progress.total}
+          {translate(state.progress.stage === 'files' ? 'auditsUi.progress.files' : 'auditsUi.progress.pages', {
+            done: state.progress.done,
+            total: state.progress.total,
+          })}
         </p>
       )}
       {reviewing !== undefined && (
@@ -247,11 +264,9 @@ export default function AuditsPanel(props: AuditsPanelProps) {
         {!ignoredView && filter === 'performance' && <PerformanceBar measure={props.measure} />}
         {!ignoredView && fixes > 0 && (
           <div className="audits-ready">
-            <span>
-              {fixes} {fixes === 1 ? 'fix' : 'fixes'} ready
-            </span>
-            <button className="audits-apply" disabled={busy} onClick={() => void actions.fix(view.fixable, 'Fix audit findings')}>
-              Apply
+            <span>{translate('auditsUi.fixesReady', { count: fixes })}</span>
+            <button className="audits-apply" disabled={busy} onClick={() => void actions.fix(view.fixable, translate('auditsUi.fixAllLabel'))}>
+              {translate('ui.apply')}
             </button>
           </div>
         )}
@@ -292,40 +307,42 @@ export interface Actions {
 
 // Speed with nothing to fix: said positively once a measurement has finished, and nothing while one runs.
 function SpeedClear() {
+  const translate = useTranslate();
   const performance = useAuditState().performance;
   if (performance.running || performance.results.length === 0) {
     return undefined;
   }
   return (
     <p className="audits-note audits-clean">
-      <CheckIcon size={12} /> No speed issues found
+      <CheckIcon size={12} /> {translate('auditsUi.speedClear')}
     </p>
   );
 }
 
 // Nothing to list: why, in one muted line.
 function EmptyState({ filtered }: { readonly filtered: boolean }) {
+  const translate = useTranslate();
+  const { formatDate } = useFormat();
   const state = useAuditState();
   const report = state.report;
   if (state.problem !== undefined) {
     return <p className="audits-note">{state.problem}</p>;
   }
   if (report === undefined) {
-    return <p className="audits-note">{state.running ? 'Auditing…' : 'Open a page to audit it.'}</p>;
+    return <p className="audits-note">{state.running ? translate('auditsUi.empty.auditing') : translate('auditsUi.empty.open')}</p>;
   }
   if (filtered) {
-    return <p className="audits-note">Nothing here.</p>;
+    return <p className="audits-note">{translate('auditsUi.empty.nothing')}</p>;
   }
-  const time = new Date(report.checkedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  const offline = report.rendered.tag === 'offline' ? ' Start the preview to check contrast too.' : '';
+  const time = formatDate(report.checkedAt, { hour: 'numeric', minute: '2-digit' });
   return (
     <p className="audits-note audits-clean">
-      <CheckIcon size={12} /> No issues · checked {time}.{offline}
+      <CheckIcon size={12} /> {translate(report.rendered.tag === 'offline' ? 'auditsUi.empty.cleanOffline' : 'auditsUi.empty.clean', { time })}
     </p>
   );
 }
 
-async function writeIgnores(props: AuditsPanelProps, change: (value: AuditIgnores) => AuditIgnores): Promise<void> {
+async function writeIgnores(props: AuditsPanelProps, translate: Translator, change: (value: AuditIgnores) => AuditIgnores): Promise<void> {
   const base = auditState().ignores;
   let next: AuditIgnores;
   try {
@@ -338,7 +355,7 @@ async function writeIgnores(props: AuditsPanelProps, change: (value: AuditIgnore
   if (saved.ok) {
     updateAuditState((current) => ({ ...current, ignores: saved.value }));
   } else {
-    props.showToast(`Couldn’t update .stacki/audits.json: ${saved.error}`, 'error');
+    props.showToast(translate('auditsUi.ignoreWriteFailed', { error: saved.error }), 'error');
   }
 }
 
@@ -359,8 +376,9 @@ function RuleRow(props: {
   readonly actions: Actions;
   readonly panel: AuditsPanelProps;
 }) {
+  const translate = useTranslate();
   const { rule } = props;
-  const check = AUDIT_CHECKS[rule.check];
+  const auditText = useAuditText();
   const Icon = AUDIT_ICONS[rule.check];
   const reviewable = rule.findings.some((finding) => finding.css !== undefined);
   const files = byFile(rule.findings);
@@ -378,8 +396,8 @@ function RuleRow(props: {
         <span className={`icon audits-icon audits-${rule.priority}`}>
           <Icon size={14} />
         </span>
-        <span className="label audits-title">{check.title}</span>
-        {reviewable && <span className="audits-breakdown">{breakdown(rule.findings)}</span>}
+        <span className="label audits-title">{auditText.checkTitle(rule.check)}</span>
+        {reviewable && <span className="audits-breakdown">{breakdown(rule.findings, translate)}</span>}
         {reviewable && props.open && (
           <button
             className="audits-review-button"
@@ -388,7 +406,7 @@ function RuleRow(props: {
               props.onReview(rule.findings);
             }}
           >
-            Review
+            {translate('auditsUi.review.button')}
           </button>
         )}
         <span className="audits-count">{rule.findings.length}</span>
@@ -414,7 +432,7 @@ export function byFile(findings: readonly AuditFinding[]): readonly (readonly [s
 }
 
 /** "12 colours · 9 spacing · 7 radius": what kinds of raw values a rule holds, most first. */
-export function breakdown(findings: readonly AuditFinding[]): string {
+export function breakdown(findings: readonly AuditFinding[], translate: Translator = ENGLISH_TRANSLATE): string {
   const counts = new Map<string, number>();
   for (const finding of findings) {
     const group = finding.css?.group;
@@ -425,8 +443,26 @@ export function breakdown(findings: readonly AuditFinding[]): string {
   return [...counts]
     .sort((left, right) => right[1] - left[1])
     .slice(0, 3)
-    .map(([group, count]) => `${count} ${group === 'colour' && count !== 1 ? 'colours' : group}`)
+    .map(([group, count]) => translate(breakdownKey(group), { count }))
     .join(' · ');
+}
+
+/** The kind's count phrase, "12 colours": a plural message per known kind. */
+function breakdownKey(group: string): MessageKey {
+  switch (group) {
+    case 'colour':
+      return 'auditsUi.breakdown.colour';
+    case 'spacing':
+      return 'auditsUi.breakdown.spacing';
+    case 'radius':
+      return 'auditsUi.breakdown.radius';
+    case 'type':
+      return 'auditsUi.breakdown.type';
+    case 'size':
+      return 'auditsUi.breakdown.size';
+    default:
+      return 'auditsUi.breakdown.unit';
+  }
 }
 
 /** Groups with at most this many occurrences start open; larger ones start closed. */
@@ -536,10 +572,11 @@ function ElementGroup(props: {
   readonly panel: AuditsPanelProps;
 }) {
   const [open, setOpen] = useState(props.findings.length <= GROUP_OPEN_MAX);
+  const auditText = useAuditText();
   const toggle = (): void => setOpen((value) => !value);
   const [first] = props.findings;
   assert(first !== undefined, 'An element group has findings');
-  const view = occurrenceView(first, props.nodes);
+  const view = occurrenceView(first, props.nodes, auditText);
   const element = first.element;
   return (
     <div className={`audits-file-group audits-element-group ${open ? 'open' : ''}`}>
@@ -573,18 +610,14 @@ function ElementGroup(props: {
 
 /** The two scopes the panel offers: the whole site (the default) or the open page and what it uses. */
 type PanelScope = Extract<AuditScope, 'site' | 'page'>;
-const SCOPE_TABS: readonly { readonly value: PanelScope; readonly label: string }[] = [
-  { value: 'site', label: 'Site' },
-  { value: 'page', label: 'This page' },
-];
 
-const FILTER_LABELS: Readonly<Record<AuditFilter, string>> = {
-  all: 'All',
-  accessibility: 'Accessibility',
-  seo: 'SEO and launch',
-  content: 'Placeholders',
-  tokens: 'Design tokens',
-  performance: 'Speed',
+const FILTER_LABELS: Readonly<Record<AuditFilter, MessageKey>> = {
+  all: 'auditsUi.filter.all',
+  accessibility: 'auditsUi.filter.accessibility',
+  seo: 'auditsUi.filter.seo',
+  content: 'auditsUi.filter.content',
+  tokens: 'auditsUi.filter.tokens',
+  performance: 'auditsUi.filter.performance',
 };
 
 function FilterIcon({ filter }: { readonly filter: AuditFilter }) {
@@ -650,10 +683,14 @@ export function fixTarget(finding: Pick<AuditFinding, 'file' | 'fix'>): readonly
 }
 
 /** What an occurrence row shows: the Navigator's icon and label for its element, or the file's for a finding about the whole file. */
-export function occurrenceView(finding: AuditFinding, nodes: readonly PageNode[] | undefined): { readonly icon: ReactNode; readonly label: string } {
+export function occurrenceView(
+  finding: AuditFinding,
+  nodes: readonly PageNode[] | undefined,
+  auditText: AuditText,
+): { readonly icon: ReactNode; readonly label: string } {
   const element = finding.element;
   if (element === undefined) {
-    return { icon: <FileKindIcon file={finding.file} kind={finding.fileKind} />, label: AUDIT_CHECKS[finding.check].title };
+    return { icon: <FileKindIcon file={finding.file} kind={finding.fileKind} />, label: auditText.checkTitle(finding.check) };
   }
   const node = nodes === undefined ? undefined : nodeAt(nodes, element.path);
   const described = node === undefined ? { icon: elementIcon(element.tag, 14), label: element.tag } : describeNode(node, undefined);
@@ -661,17 +698,21 @@ export function occurrenceView(finding: AuditFinding, nodes: readonly PageNode[]
 }
 
 /** A finding under its element's row: a raw CSS value reads as `padding: 12px`; anything else keeps its detail. */
-function nestedLabel(finding: AuditFinding, fallback: string): string {
+function nestedLabel(finding: AuditFinding, fallback: string, auditText: AuditText): string {
   if (finding.css !== undefined) {
     return `${finding.css.property}: ${finding.css.value}`;
   }
-  return finding.detail.length > 0 ? finding.detail : fallback;
+  return finding.detail.length > 0 ? auditText.detail(finding) : fallback;
 }
 
 /** The muted second line: the text in the finding's detail (`"Button Text"`, `href="/x"`), or why it is ignored. */
-export function occurrenceNote(finding: Pick<AuditFinding, 'detail' | 'excerpt'>, reason: string | undefined): string | undefined {
+export function occurrenceNote(
+  finding: Pick<AuditFinding, 'detail' | 'excerpt'>,
+  reason: string | undefined,
+  translate: Translator = ENGLISH_TRANSLATE,
+): string | undefined {
   if (reason !== undefined) {
-    return `Ignored: ${reason}`;
+    return translate('auditsUi.ignoredNote', { reason });
   }
   if (finding.excerpt !== undefined) {
     return finding.excerpt;
@@ -688,6 +729,7 @@ function Occurrence(props: {
   /** Under its element's own row (ElementGroup): the row says what is wrong, not which element, which the parent row says. */
   readonly nested?: boolean;
 }) {
+  const translate = useTranslate();
   const { finding, actions, panel } = props;
   const [mode, setMode] = useState<'idle' | 'preview' | 'ignore' | 'relink'>('idle');
   const [reason, setReason] = useState('');
@@ -697,10 +739,13 @@ function Occurrence(props: {
   const go = (): void => panel.onReveal(finding.file, element?.path ?? fixTarget(finding), finding.prop);
   const href = /href="([^"]*)"/.exec(finding.detail)?.[1];
   const brokenRoute = finding.check === 'link-broken' && href !== undefined ? href.split(/[?#]/)[0] : undefined;
-  const whole = occurrenceView(finding, props.nodes);
-  const view = props.nested === true ? { icon: <span className="audits-occurrence-icon" />, label: nestedLabel(finding, whole.label) } : whole;
+  const auditText = useAuditText();
+  const whole = occurrenceView(finding, props.nodes, auditText);
+  const view = props.nested === true ? { icon: <span className="audits-occurrence-icon" />, label: nestedLabel(finding, whole.label, auditText) } : whole;
   const note =
-    props.nested === true && finding.css !== undefined && ignoredBecause === undefined ? finding.css.selector : occurrenceNote(finding, ignoredBecause);
+    props.nested === true && finding.css !== undefined && ignoredBecause === undefined
+      ? finding.css.selector
+      : occurrenceNote(finding, ignoredBecause, translate);
   return (
     <div className="audits-occurrence">
       <div
@@ -717,26 +762,31 @@ function Occurrence(props: {
           <span className="label audits-title">{view.label}</span>
           {note !== undefined && <span className="audits-note-line">{note}</span>}
         </span>
-        {finding.measure !== undefined && <span className="audits-tag">{finding.measure}</span>}
+        {finding.measure !== undefined && <span className="audits-tag">{auditText.measure(finding)}</span>}
         <span className="audits-hover-actions" onClick={(event) => event.stopPropagation()}>
           {fix !== undefined && (
-            <button className="audits-link" title={fix.label} onClick={() => setMode(mode === 'preview' ? 'idle' : 'preview')}>
-              Fix
+            <button className="audits-link" title={auditText.fixLabel(fix)} onClick={() => setMode(mode === 'preview' ? 'idle' : 'preview')}>
+              {translate('auditsUi.fix')}
             </button>
           )}
-          <button className="ghost audits-icon-button" aria-label="Fix with AI" title="Fix with AI" onClick={() => void actions.handOff([finding])}>
+          <button
+            className="ghost audits-icon-button"
+            aria-label={translate('auditsUi.fixWithAI')}
+            title={translate('auditsUi.fixWithAI')}
+            onClick={() => void actions.handOff([finding])}
+          >
             <SparkleIcon size={12} />
           </button>
           <MoreMenu
             className="audits-icon-button"
-            title="More"
+            title={translate('auditsUi.more')}
             width={180}
             items={[
-              brokenRoute !== undefined && { label: `Create ${brokenRoute}`, onSelect: () => panel.onCreatePage(brokenRoute) },
-              brokenRoute !== undefined && element !== undefined && { label: 'Change link…', onSelect: () => setMode('relink') },
+              brokenRoute !== undefined && { label: translate('auditsUi.createPage', { route: brokenRoute }), onSelect: () => panel.onCreatePage(brokenRoute) },
+              brokenRoute !== undefined && element !== undefined && { label: translate('auditsUi.changeLink'), onSelect: () => setMode('relink') },
               ignoredBecause === undefined
-                ? { label: 'Ignore…', onSelect: () => setMode('ignore') }
-                : { label: 'Stop ignoring', onSelect: () => void actions.restore(finding) },
+                ? { label: translate('auditsUi.ignoreMenu'), onSelect: () => setMode('ignore') }
+                : { label: translate('auditsUi.stopIgnoring'), onSelect: () => void actions.restore(finding) },
             ]}
           />
         </span>
@@ -744,7 +794,7 @@ function Occurrence(props: {
       {mode === 'preview' && fix !== undefined && finding.choices !== undefined && (
         <div className="audits-inset">
           <Dropdown<string>
-            ariaLabel="Variable to use"
+            ariaLabel={translate('auditsUi.variableToUse')}
             value={fix.label}
             options={finding.choices.map((choice) => ({ value: choice.label, label: choice.label.replace(/^Use /, '') }))}
             onChange={(label) => {
@@ -758,14 +808,14 @@ function Occurrence(props: {
       )}
       {mode === 'preview' && fix !== undefined && (
         <div className="audits-inset">
-          <CodeBlock text={fix.before} language="astro" className="audits-code audits-before" label="Before" />
-          <CodeBlock text={fix.after} language="astro" className="audits-code" label="After" />
+          <CodeBlock text={fix.before} language="astro" className="audits-code audits-before" label={translate('auditsUi.before')} />
+          <CodeBlock text={fix.after} language="astro" className="audits-code" label={translate('auditsUi.after')} />
           <div className="audits-actions">
             <button className="audits-link" disabled={actions.busy} onClick={() => void actions.fix([finding], fix.label).then(() => setMode('idle'))}>
-              {fix.label}
+              {auditText.fixLabel(fix)}
             </button>
             <button className="audits-link muted" onClick={() => setMode('idle')}>
-              Cancel
+              {translate('ui.cancel')}
             </button>
           </div>
         </div>
@@ -773,13 +823,16 @@ function Occurrence(props: {
       {mode === 'relink' && element !== undefined && (
         <div className="audits-inset">
           <Dropdown<string>
-            ariaLabel="Link to"
-            placeholder="Pick a page…"
+            ariaLabel={translate('auditsUi.linkTo')}
+            placeholder={translate('auditsUi.pickPage')}
             value=""
             options={panel.routes.map((route) => ({ value: route, label: route }))}
             onChange={(route) => {
               setMode('idle');
-              void actions.fix([{ ...finding, fix: linkFix({ file: finding.file, path: element.path, href: href ?? '' }, route) }], `Link to ${route}`);
+              void actions.fix(
+                [{ ...finding, fix: linkFix({ file: finding.file, path: element.path, href: href ?? '' }, route) }],
+                translate('auditsUi.linkToLabel', { route }),
+              );
             }}
           />
         </div>
@@ -788,8 +841,8 @@ function Occurrence(props: {
         <div className="audits-inset audits-actions">
           <input
             className="audits-reason"
-            placeholder="Why ignore it?"
-            aria-label="Reason for ignoring"
+            placeholder={translate('auditsUi.ignoreWhy')}
+            aria-label={translate('auditsUi.ignoreReason')}
             value={reason}
             maxLength={500}
             autoFocus
@@ -803,10 +856,10 @@ function Occurrence(props: {
             }}
           />
           <button className="audits-link" disabled={reason.trim().length === 0} onClick={() => void actions.ignore(finding, reason)}>
-            Ignore
+            {translate('auditsUi.ignoreButton')}
           </button>
           <button className="audits-link muted" onClick={() => setMode('idle')}>
-            Cancel
+            {translate('ui.cancel')}
           </button>
         </div>
       )}

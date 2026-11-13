@@ -174,21 +174,45 @@ test('values are judged as addresses: as they are, slugified, or not at all', ()
   assert.deepEqual(addressFitOf(['25%', '99.9%']), { kind: 'slugified', example: '25' });
   assert.deepEqual(addressFitOf(['Uptime (copy)', 'Uptime']), { kind: 'slugified', example: 'uptime-copy' });
   assert.deepEqual(addressFitOf(['Café', 'Crème brûlée']), { kind: 'slugified', example: 'cafe' });
-  assert.deepEqual(addressFitOf(['25%', '25 %']), { kind: 'unusable', reason: 'Two entries would share the address 25' });
-  assert.deepEqual(addressFitOf(['same', 'same']), { kind: 'unusable', reason: 'Two entries would share the address same' });
+  assert.deepEqual(addressFitOf(['25%', '25 %']), {
+    kind: 'unusable',
+    reason: 'Two entries would share the address 25',
+    reasonRef: { key: 'pages.template.address.repeated', params: { address: '25' } },
+  });
+  assert.deepEqual(addressFitOf(['same', 'same']), {
+    kind: 'unusable',
+    reason: 'Two entries would share the address same',
+    reasonRef: { key: 'pages.template.address.repeated', params: { address: 'same' } },
+  });
   assert.deepEqual(
     addressFitOf(['One', 'one']),
-    { kind: 'unusable', reason: 'Two entries would share the address one' },
+    { kind: 'unusable', reason: 'Two entries would share the address one', reasonRef: { key: 'pages.template.address.repeated', params: { address: 'one' } } },
     'case is no difference on every disk',
   );
   for (const value of ['', '   ', undefined, { current: 'x' }]) {
-    assert.deepEqual(addressFitOf(['ok', value]), { kind: 'unusable', reason: 'Some entries have no value' });
+    assert.deepEqual(addressFitOf(['ok', value]), {
+      kind: 'unusable',
+      reason: 'Some entries have no value',
+      reasonRef: { key: 'pages.template.address.noValue' },
+    });
   }
-  assert.deepEqual(addressFitOf([]), { kind: 'unusable', reason: 'Some entries have no value' });
-  assert.deepEqual(addressFitOf(['%%%', 'ok']), { kind: 'unusable', reason: 'Some values have no letters or numbers' });
-  assert.deepEqual(addressFitOf(['日本語']), { kind: 'unusable', reason: 'Some values have no letters or numbers' });
+  assert.deepEqual(addressFitOf([]), { kind: 'unusable', reason: 'Some entries have no value', reasonRef: { key: 'pages.template.address.noValue' } });
+  assert.deepEqual(addressFitOf(['%%%', 'ok']), {
+    kind: 'unusable',
+    reason: 'Some values have no letters or numbers',
+    reasonRef: { key: 'pages.template.address.noLetters' },
+  });
+  assert.deepEqual(addressFitOf(['日本語']), {
+    kind: 'unusable',
+    reason: 'Some values have no letters or numbers',
+    reasonRef: { key: 'pages.template.address.noLetters' },
+  });
   assert.deepEqual(addressFitOf(['a'.repeat(ADDRESS_LIMITS.valueCharsMax)]), { kind: 'exact' });
-  assert.deepEqual(addressFitOf(['a'.repeat(ADDRESS_LIMITS.valueCharsMax + 1)]), { kind: 'unusable', reason: 'Too long for a page address' });
+  assert.deepEqual(addressFitOf(['a'.repeat(ADDRESS_LIMITS.valueCharsMax + 1)]), {
+    kind: 'unusable',
+    reason: 'Too long for a page address',
+    reasonRef: { key: 'pages.template.address.tooLong' },
+  });
   assert.equal(slugifyAddress('  Déjà  Vu! '), 'deja-vu');
 });
 
@@ -227,7 +251,11 @@ test('sample requests and replies are parsed on the way across', () => {
   const lists = { kind: 'lists', lists: [{ path: '', count: 2, fields: [{ path: 'slug.current', kind: 'string', example: 'one' }] }] };
   assert.deepEqual(parseDataSample(lists), lists);
   const fitted = (address: unknown) => ({ kind: 'lists', lists: [{ path: '', count: 1, fields: [{ path: 'a', kind: 'string', example: 'x', address }] }] });
-  for (const address of [{ kind: 'exact' }, { kind: 'slugified', example: '25' }, { kind: 'unusable', reason: 'Too long for a page address' }]) {
+  for (const address of [
+    { kind: 'exact' },
+    { kind: 'slugified', example: '25' },
+    { kind: 'unusable', reason: 'Too long for a page address', reasonRef: { key: 'pages.template.address.tooLong' } },
+  ]) {
     assert.deepEqual(parseDataSample(fitted(address)), fitted(address));
   }
   for (const address of [{ kind: 'maybe' }, { kind: 'slugified' }, { kind: 'unusable', reason: 'x'.repeat(ADDRESS_LIMITS.reasonCharsMax + 1) }]) {

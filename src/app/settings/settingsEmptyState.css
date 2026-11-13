@@ -1,0 +1,38 @@
+/* The empty state inside a Settings card. Fills only, no borders; the icon is a quiet disc like
+   .app-settings-empty-icon, so the two empty states read as one family. */
+.settings-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 24px 16px 16px;
+  text-align: center;
+}
+.settings-empty-state-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-dim);
+}
+.settings-empty-state-title {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+.settings-empty-state-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  line-height: 16px;
+}
+.settings-empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}

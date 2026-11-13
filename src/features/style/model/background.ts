@@ -1,3 +1,5 @@
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
 import { assert } from '../../../../shared/core/assert';
 // Multi-layer `background` model. CSS backgrounds are parallel comma-separated
 // lists — background-image holds the layers (index 0 = the TOP layer), and
@@ -309,20 +311,20 @@ export function urlFileName(image: string): string | undefined {
 }
 
 /** A short human label for a layer (Webflow-style). */
-export function layerLabel(image: string): string {
+export function layerLabel(image: string, translate: Translator = ENGLISH_TRANSLATE): string {
   switch (layerKind(image)) {
     case 'image':
-      return urlFileName(image) ?? 'Image';
+      return urlFileName(image) ?? translate('styleModel.background.layer.image');
     case 'color':
-      return colorOverlayOf(image) ?? 'Color overlay';
+      return colorOverlayOf(image) ?? translate('styleModel.background.layer.colorOverlay');
     case 'linear':
-      return 'Linear gradient';
+      return translate('styleModel.background.layer.linear');
     case 'radial':
-      return 'Radial gradient';
+      return translate('styleModel.background.layer.radial');
     case 'conic':
-      return 'Conic gradient';
+      return translate('styleModel.background.layer.conic');
     case 'other':
-      return image.trim() || 'Layer';
+      return image.trim() || translate('styleModel.background.layer.other');
   }
 }
 

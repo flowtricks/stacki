@@ -1,3 +1,4 @@
+import type { MessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
 import * as css from '../../../vendor/stacki/electron/project/cssVars';
 import { parseIpcPayload } from '../../../vendor/stacki/shared/ipc/ipcPayloads';
 import { VARIABLE_ROOT } from './variableWorkspace';
@@ -29,7 +30,7 @@ export function applyVariableOperation(operation: string, input: unknown) {
       throw new Error('Unknown variable operation');
   }
 }
-function batch<T>(items: readonly T[], apply: (item: T) => { ok: boolean; error?: string }) {
+function batch<T>(items: readonly T[], apply: (item: T) => { ok: boolean; error?: string; errorRef?: MessageRef | undefined }) {
   if (items.length > 1000) {
     throw new Error('Too many variable edits');
   }

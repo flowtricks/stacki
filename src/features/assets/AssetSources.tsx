@@ -11,6 +11,7 @@
 // lists the project alone; a host without media hosting (MEDIA_HOSTING_HOST)
 // shows no hosts and no connector action.
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { AssetRequest } from '../../ui/assetPick';
 import type { MediaConnection } from '../../../shared/properties/mediaHosting';
 import { MEDIA_HOSTING_HOST, listMediaConnections, removeMediaConnection } from '../../ipc/mediaHostingBridge';
@@ -57,6 +58,7 @@ type Connecting = { readonly kind: 'closed' } | { readonly kind: 'new' } | { rea
 
 export function AssetSources(props: SourcesProps) {
   const { projectPath, showToast } = props;
+  const translate = useTranslate();
   const [connections, setConnectionsState] = useState<readonly MediaConnection[]>(() => knownConnections.get(projectPath) ?? []);
   const [source, setSourceState] = useState<string>(() => rememberedSources.get(projectPath) ?? PROJECT);
   const [connecting, setConnecting] = useState<Connecting>({ kind: 'closed' });
@@ -94,9 +96,9 @@ export function AssetSources(props: SourcesProps) {
   const remove = useCallback(
     async (connection: MediaConnection) => {
       const confirmed = await confirmDialog({
-        title: `Remove ${connection.label}?`,
-        body: 'Stacki forgets this host and its keys. The files on the host are not touched, and links to them keep working.',
-        confirmLabel: 'Remove',
+        title: translate('assets.source.removeTitle', { label: connection.label }),
+        body: translate('assets.source.removeBody'),
+        confirmLabel: translate('ui.remove'),
         danger: true,
       });
       if (!confirmed) {
@@ -109,7 +111,7 @@ export function AssetSources(props: SourcesProps) {
         showToast(error instanceof Error ? error.message : String(error), 'error');
       }
     },
-    [projectPath, setConnections, setSource, showToast],
+    [projectPath, setConnections, setSource, showToast, translate],
   );
   const hostedAllowed = MEDIA_HOSTING_HOST.available && (props.pick === undefined || props.pick.onPickURL !== undefined);
   const listed = hostedAllowed ? connections : [];
@@ -171,21 +173,22 @@ function SourcePicker(props: {
   readonly canConnect: boolean;
   readonly onPick: (value: string) => void;
 }) {
+  const translate = useTranslate();
   const options = [
-    { value: PROJECT, label: 'Project', icon: <FolderIcon size={13} /> },
+    { value: PROJECT, label: translate('assets.source.project'), icon: <FolderIcon size={13} /> },
     ...props.connections.map((connection) => ({
       value: connection.id,
       label: connectionDetail(connection),
       icon: <ProviderIcon kind={connection.kind} size={13} />,
     })),
-    ...(props.canConnect ? [{ value: ADD_CONNECTOR, label: 'Add connector', icon: <PlusIcon size={12} />, dim: true }] : []),
+    ...(props.canConnect ? [{ value: ADD_CONNECTOR, label: translate('assets.source.addConnector'), icon: <PlusIcon size={12} />, dim: true }] : []),
   ];
   return (
     <h2 className="asset-source-heading">
       <Dropdown
         value={props.current}
         options={options}
-        ariaLabel="Switch source"
+        ariaLabel={translate('assets.source.switch')}
         className="asset-source-switch"
         menuClassName="asset-source-menu"
         menuWidthMin={200}

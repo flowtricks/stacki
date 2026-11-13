@@ -1,6 +1,8 @@
 import { projectAliases } from '../../../vendor/stacki/electron/properties/importPaths';
 import { studioRenameWriter } from './pageRenameWriter';
 import { randomUUID } from 'node:crypto';
+import { DescribedError } from '../../../vendor/stacki/shared/properties/describedError';
+import { ReferencedError } from '../../shared/referencedError';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { parsePageRename } from '../../../vendor/stacki/shared/properties/pageRename';
 import { planPageRename, type PageRenamePlan } from '../../../vendor/stacki/electron/project/pageRenamePlan';
@@ -31,12 +33,12 @@ export async function pageRenameRoute(
     await rooms.persist();
     const planned = planPageRename(root, change, projectAliases(root));
     if (!planned.ok) {
-      throw new Error(planned.error.message);
+      throw new DescribedError(planned.error);
     }
     const state = await renameWorkspace(root);
     const applied = applyPageRename(planned.value, studioRenameWriter);
     if (!applied.ok) {
-      throw new Error(applied.error.message);
+      throw new DescribedError(applied.error);
     }
     await persistPageRename(planned.value, state);
     // Old CRDT identities must never write back to a moved source path.
@@ -53,7 +55,7 @@ async function renameWorkspace(root: string): Promise<GitWorkspaceState | undefi
   }
   const repository = githubFromEnvironment(root);
   if (!repository) {
-    throw new Error('Reconnect the project repository before renaming pages.');
+    throw new ReferencedError('pages.rename.error.reconnect');
   }
   return new GitWorkspace(root, () => repository.historyConnection()).load();
 }
@@ -80,7 +82,7 @@ export async function persistPageRename(plan: PageRenamePlan, state: GitWorkspac
       const restored = undoPageRename(plan, studioRenameWriter);
       if (!restored.ok) {
         setGitWorkspaceBusy(plan.root, 'recovery');
-        throw new Error(restored.error.message);
+        throw new DescribedError(restored.error);
       }
     }
     throw error;

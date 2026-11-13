@@ -13,6 +13,7 @@ import { appListedInMarketplace, appPlacePills, type AppPill, type AppRepository
 import { latestApprovedVersion, marketplaceApp, type MarketplaceIndex } from '../../../shared/properties/appMarketplace';
 import { loadAppRepositoryPlace, loadMarketplace } from '../../ipc/appMarketplaceBridge';
 import { appPublication, type AppPublication } from './publishFlow';
+import { useTranslateRef } from '../../lib/i18n/useTranslate';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
 
 /** What the pills of one app say beyond its lockfile. */
@@ -110,16 +111,17 @@ export function AppPlacePills({ app, facts }: { readonly app: AppSummary; readon
 
 function AppPlacePill({ pill }: { readonly pill: AppPill }) {
   const tooltip = useDelayedTooltip();
+  const translateRef = useTranslateRef();
   return (
     <>
       <span className="apps-badge muted apps-place-pill" data-place={pill.kind} onMouseEnter={tooltip.show} onMouseLeave={tooltip.hide}>
-        {pill.label}
+        {translateRef(pill.labelRef)}
       </span>
       {/* The pill sits inside the row's button, where a block is invalid; the tip goes to the body. */}
       {tooltip.value !== undefined &&
         createPortal(
           <div className="rail-tooltip below" role="tooltip" style={tooltip.value}>
-            {pill.tooltip}
+            {translateRef(pill.tooltipRef)}
           </div>,
           document.body,
         )}

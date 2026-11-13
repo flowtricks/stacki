@@ -27,6 +27,7 @@ import { readComparator } from './loopSortRead';
 import { LOOP_QUERY_LIMITS, assertLoopQuery, emptyQuery } from './loopQuery';
 import type { AstroItemParameter, LoopCondition, LoopFieldKind, LoopQuery, LoopSort, LoopSortOrder, LoopSource } from './loopQuery';
 import { namePath, parseExpression, parseFrontmatter, textOf, type Js, type ParsedFrontmatter } from './loopSyntax';
+import { issue, type Issue } from './issue';
 import { listPropOf } from './propDeclaration';
 
 export interface LoopImport {
@@ -61,7 +62,7 @@ export type LoopReading =
       /** Where its settings live when they are not a query Stacki writes itself. */
       readonly home?: QueryHome | undefined;
     }
-  | { readonly kind: 'partial'; readonly source: LoopSource; readonly chain: readonly string[]; readonly reason: string }
+  | { readonly kind: 'partial'; readonly source: LoopSource; readonly chain: readonly string[]; readonly reason: string; readonly reasonIssue: Issue }
   | { readonly kind: 'value'; readonly root: string; readonly origin: LoopValueOrigin; readonly chain: readonly string[] }
   | { readonly kind: 'code' };
 
@@ -540,7 +541,7 @@ function queryOf(pipeline: Extract<Pipeline, { readonly kind: 'collection' }>, c
     return sanityQueryOf(base, pipeline, context);
   }
   if (!COLLECTION_NAME.test(source.collection)) {
-    return partial(source, pipeline, 'The collection is named by code.');
+    return partial(source, pipeline, issue('editor.loopRead.collectionNamed'));
   }
   if (base.selection !== undefined) {
     return selectedOf(base, pipeline);
@@ -574,33 +575,29 @@ function stepsReading(
   const pipeline = { chain: list.chain };
   const order = stepOrder(list.steps);
   if (order === undefined) {
-    return partial(source, pipeline, 'Its items are changed by code the list settings cannot show.');
+    return partial(source, pipeline, issue('editor.loopRead.itemsChanged'));
   }
   const filters = [...(list.filter ? [list.filter] : []), ...order.filters];
   const conditions = astroConditions(filters, source, context, itemPath);
   if (conditions === undefined) {
-    return partial(source, pipeline, 'Its filter is written in a way the list settings cannot show.');
+    return partial(source, pipeline, issue('editor.loopRead.filterShape'));
   }
   const sorting =
     order.sort === undefined ? { sorts: [], random: false } : readComparator(order.sort, itemPath, source.kind === 'list' ? 'field' : 'not-field');
   // A comparator no sort key can say is kept as code: a custom sort.
   const customSort = sorting === undefined && order.sort !== undefined ? customSortOf(order.sort) : undefined;
   if (sorting === undefined && customSort === undefined) {
-    return partial(source, pipeline, 'Its sort order is computed by code.');
+    return partial(source, pipeline, issue('editor.loopRead.sortComputed'));
   }
   if (order.reversed && customSort !== undefined) {
-    return partial(source, pipeline, 'Its sort order is computed by code, then reversed.');
+    return partial(source, pipeline, issue('editor.loopRead.sortComputedReversed'));
   }
   // The schema knows better than the syntax: `+b.data.date` is a date read as a number.
   const typed = (sorting?.sorts ?? []).map((sort) => withOrder(sort, source, context.input.fieldKind));
   const sorts = order.reversed ? typed.map(flipped) : typed;
   const random = sorting?.random === true;
   if (order.reversed && sorts.length === 0 && !random) {
-    return partial(
-      source,
-      pipeline,
-      source.kind === 'list' ? 'It is shown in reverse of the list’s own order.' : 'It is shown in reverse of the collection’s own order.',
-    );
+    return partial(source, pipeline, source.kind === 'list' ? issue('editor.loopRead.reversedList') : issue('editor.loopRead.reversedCollection'));
   }
   const query: LoopQuery = {
     source,
@@ -612,7 +609,7 @@ function stepsReading(
     projection: undefined,
     ...(customSort === undefined ? {} : { customSort }),
   };
-  return checked(query, pipeline, undefined) ?? partial(source, pipeline, 'Its settings are outside what the list settings can show.');
+  return checked(query, pipeline, undefined) ?? partial(source, pipeline, issue('editor.loopRead.settingsOutside'));
 }
 
 // Picked items. Filters after them only drop ids no longer found (getEntries
@@ -620,7 +617,7 @@ function stepsReading(
 function selectedOf(base: Extract<Base, { readonly kind: 'astro' }>, pipeline: Extract<Pipeline, { readonly kind: 'collection' }>): LoopReading {
   const source: LoopSource = { kind: 'astro', collection: base.collection };
   if (pipeline.steps.some((step) => step.kind !== 'filter')) {
-    return partial(source, pipeline, 'Its picked items are changed by code.');
+    return partial(source, pipeline, issue('editor.loopRead.pickedChanged'));
   }
   const query: LoopQuery = { ...emptyQuery(source), selection: base.selection };
   const read = checked(query, pipeline, undefined);
@@ -644,27 +641,27 @@ function sanityQueryOf(
     const reordered = pipeline.steps.length === 0 || (pipeline.steps.length === 1 && pipeline.steps[0]?.kind === 'sort');
     const picked: LoopQuery = { ...emptyQuery(source), selection: groq.selection, projection: groq.projection };
     return reordered
-      ? (checked(picked, pipeline, base.client) ?? partial(source, pipeline, 'Its picked items are outside the list settings.'))
-      : partial(source, pipeline, 'Its picked documents are changed by code after they are fetched.');
+      ? (checked(picked, pipeline, base.client) ?? partial(source, pipeline, issue('editor.loopRead.pickedOutside')))
+      : partial(source, pipeline, issue('editor.loopRead.pickedDocsChanged'));
   }
   const order = stepOrder(pipeline.steps);
   if (order === undefined || order.filters.length > 0 || order.reversed) {
-    return partial(source, pipeline, 'Its items are changed by code after they are fetched.');
+    return partial(source, pipeline, issue('editor.loopRead.itemsChangedAfterFetch'));
   }
   const random = order.sort === undefined ? false : readComparator(order.sort, [], 'not-field')?.random === true;
   // A sort after the fetch that is not a shuffle is a custom sort: GROQ's own
   // order and a slice before it would both be undone by it.
   const customSort = order.sort !== undefined && !random ? customSortOf(order.sort) : undefined;
   if (order.sort !== undefined && !random && customSort === undefined) {
-    return partial(source, pipeline, 'It is sorted by code after it is fetched.');
+    return partial(source, pipeline, issue('editor.loopRead.sortedAfterFetch'));
   }
   const sliced = order.offset > 0 || order.limit !== undefined;
   const groqSliced = groq.offset > 0 || groq.limit !== undefined;
   if (sliced && groqSliced) {
-    return partial(source, pipeline, 'It is sliced twice.');
+    return partial(source, pipeline, issue('editor.loopRead.slicedTwice'));
   }
   if (customSort !== undefined && (groq.sorts.length > 0 || groqSliced)) {
-    return partial(source, pipeline, 'It is ordered by GROQ, then again by code.');
+    return partial(source, pipeline, issue('editor.loopRead.groqThenCode'));
   }
   const fieldKinds = context.input.fieldKind;
   const conditions = groq.conditions;
@@ -680,7 +677,7 @@ function sanityQueryOf(
     parameter: { kind: 'data' },
     ...(customSort === undefined ? {} : { customSort }),
   };
-  return checked(query, pipeline, base.client) ?? partial(source, pipeline, 'Its settings are outside what the list settings can show.');
+  return checked(query, pipeline, base.client) ?? partial(source, pipeline, issue('editor.loopRead.settingsOutside'));
 }
 
 function checked(query: LoopQuery, pipeline: { readonly chain: readonly string[] }, client: string | undefined): LoopReading | undefined {
@@ -701,8 +698,8 @@ function withinLimits(query: LoopQuery): boolean {
   return query.limit === undefined || (query.limit >= 1 && query.limit <= LOOP_QUERY_LIMITS.limitMax);
 }
 
-function partial(source: LoopSource, pipeline: { readonly chain: readonly string[] }, reason: string): LoopReading {
-  return { kind: 'partial', source, chain: pipeline.chain, reason };
+function partial(source: LoopSource, pipeline: { readonly chain: readonly string[] }, reason: Issue): LoopReading {
+  return { kind: 'partial', source, chain: pipeline.chain, reason: reason.message, reasonIssue: reason };
 }
 
 interface StepOrder {

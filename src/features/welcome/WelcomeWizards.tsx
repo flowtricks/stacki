@@ -5,19 +5,21 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createAstroProject, createStarterProject, subscribeCreateLog, type ProjectTemplate } from './welcomeBridge';
 import { CREATE_PACKAGE_MANAGERS, packageManagerLabel, type CreatePackageManager } from '../../../shared/properties/packageManager';
 import Dropdown from '../../ui/Dropdown';
+import type { MessageKey } from '../../lib/i18n/localeContext';
+import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
 
 const CREATE_LOG_CHARS_MAX = 20_000;
 const SITE_NAME_DEFAULT = 'my-site';
 const SITE_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
 const TEMPLATES = [
-  { value: 'basics', label: 'Basics', hint: 'A basic, helpful starter project' },
-  { value: 'blog', label: 'Blog', hint: 'Content collections and post routing' },
-  { value: 'starlight', label: 'Docs (Starlight)', hint: "Astro's documentation theme" },
-  { value: 'minimal', label: 'Empty', hint: 'Nothing but the essentials' },
+  { value: 'basics', labelKey: 'welcome.template.basics.label', hintKey: 'welcome.template.basics.hint' },
+  { value: 'blog', labelKey: 'welcome.template.blog.label', hintKey: 'welcome.template.blog.hint' },
+  { value: 'starlight', labelKey: 'welcome.template.starlight.label', hintKey: 'welcome.template.starlight.hint' },
+  { value: 'minimal', labelKey: 'welcome.template.minimal.label', hintKey: 'welcome.template.minimal.hint' },
 ] as const satisfies readonly {
   readonly value: ProjectTemplate;
-  readonly label: string;
-  readonly hint: string;
+  readonly labelKey: MessageKey;
+  readonly hintKey: MessageKey;
 }[];
 
 type RunState = { readonly kind: 'idle' } | { readonly kind: 'running' } | { readonly kind: 'error'; readonly message: string };
@@ -28,6 +30,8 @@ interface WizardProps {
 }
 
 export function StarterWizard({ parentPath, onClose, onDone }: WizardProps & { readonly parentPath: string }) {
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
   const [name, setName] = useState(SITE_NAME_DEFAULT);
   const [manager, setManager] = useState<CreatePackageManager>('npm');
   const [state, setState] = useState<RunState>({ kind: 'idle' });
@@ -42,23 +46,23 @@ export function StarterWizard({ parentPath, onClose, onDone }: WizardProps & { r
     if (!result.ok) {
       setState({ kind: 'error', message: result.error });
     } else if (!result.value.ok) {
-      setState({ kind: 'error', message: 'The starter did not finish.' });
+      setState({ kind: 'error', message: translate('welcome.starter.unfinished') });
     } else {
       onDone(result.value.projectPath);
     }
   };
   return (
     <WizardFrame
-      title="Start from Lumos"
+      title={translate('welcome.starter.title')}
       running={running}
       onClose={onClose}
       footer={(close) => (
         <>
           <button className="ghost" onClick={close} disabled={running}>
-            Cancel
+            {translate('ui.cancel')}
           </button>
           <button className="primary" onClick={() => void run()} disabled={running || invalid}>
-            {running ? 'Creating…' : 'Create site'}
+            {running ? translate('welcome.creating') : translate('welcome.starter.submit')}
           </button>
         </>
       )}
@@ -66,13 +70,10 @@ export function StarterWizard({ parentPath, onClose, onDone }: WizardProps & { r
       <SiteNameField parentPath={parentPath} name={name} running={running} change={setName} submit={() => void run()} />
       <PackageManagerField value={manager} disabled={running} change={setManager} />
       <div className="starter-note">
-        Runs <CodeInline language="shell" text="npm create lumos@latest" />
-        {manager !== 'npm' && (
-          <>
-            , installs it with <CodeInline language="shell" text={manager} />
-          </>
-        )}
-        , then starts a git history of its own — so publishing it later publishes your site, not a fork of the starter.
+        {translateRich(manager === 'npm' ? 'welcome.starter.note' : 'welcome.starter.noteWithManager', {
+          command: <CodeInline language="shell" text="npm create lumos@latest" />,
+          manager: <CodeInline language="shell" text={manager} />,
+        })}
       </div>
       {(running || log.text) && <CreateLog log={log.text} running={running} elementRef={log.elementRef} />}
       {state.kind === 'error' && <ErrorToast message={state.message} />}
@@ -81,6 +82,7 @@ export function StarterWizard({ parentPath, onClose, onDone }: WizardProps & { r
 }
 
 export function NewProjectWizard({ parentPath, onClose, onDone }: WizardProps & { readonly parentPath: string }) {
+  const translate = useTranslate();
   const [name, setName] = useState(SITE_NAME_DEFAULT);
   const [template, setTemplate] = useState<ProjectTemplate>('basics');
   const [install, setInstall] = useState(true);
@@ -104,16 +106,16 @@ export function NewProjectWizard({ parentPath, onClose, onDone }: WizardProps & 
   };
   return (
     <WizardFrame
-      title="New Astro Project"
+      title={translate('welcome.project.title')}
       running={running}
       onClose={onClose}
       footer={(close) => (
         <>
           <button onClick={close} disabled={running}>
-            {state.kind === 'error' ? 'Close' : 'Cancel'}
+            {state.kind === 'error' ? translate('ui.close') : translate('ui.cancel')}
           </button>
           <button className="primary" onClick={() => void run()} disabled={running || invalid}>
-            {running ? 'Creating…' : state.kind === 'error' ? 'Try again' : 'Create Project'}
+            {running ? translate('welcome.creating') : state.kind === 'error' ? translate('welcome.project.tryAgain') : translate('welcome.project.submit')}
           </button>
         </>
       )}
@@ -133,7 +135,7 @@ export function NewProjectWizard({ parentPath, onClose, onDone }: WizardProps & 
           setAi={setAi}
         />
       )}
-      {state.kind !== 'idle' && <CreateLog log={log.text || 'Starting…'} running={running} elementRef={log.elementRef} />}
+      {state.kind !== 'idle' && <CreateLog log={log.text || translate('welcome.project.starting')} running={running} elementRef={log.elementRef} />}
       {state.kind === 'error' && <ErrorToast message={state.message} />}
     </WizardFrame>
   );
@@ -157,11 +159,12 @@ function SiteNameField(props: {
   readonly change: (name: string) => void;
   readonly submit: () => void;
 }) {
+  const translate = useTranslate();
   const folder = `${props.parentPath}/${props.name.trim() || SITE_NAME_DEFAULT}`;
   return (
     <>
       <label className="starter-field">
-        <span>Site name</span>
+        <span>{translate('welcome.siteName')}</span>
         <input
           autoFocus
           value={props.name}
@@ -192,11 +195,12 @@ function PackageManagerField(props: {
   readonly disabled: boolean;
   readonly change: (manager: CreatePackageManager) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="starter-field">
-      <span>Package manager</span>
+      <span>{translate('welcome.packageManager')}</span>
       <Dropdown
-        ariaLabel="Package manager"
+        ariaLabel={translate('welcome.packageManager')}
         value={props.value}
         disabled={props.disabled}
         livePreview={false}
@@ -262,10 +266,11 @@ interface ProjectChoicesProps {
 }
 
 function ProjectChoices(props: ProjectChoicesProps) {
+  const translate = useTranslate();
   return (
     <>
       <div>
-        <label>How would you like to start your new project?</label>
+        <label>{translate('welcome.project.question')}</label>
         <div className="template-list">
           {TEMPLATES.map((template) => (
             <div
@@ -273,16 +278,16 @@ function ProjectChoices(props: ProjectChoicesProps) {
               className={`template-option ${props.template === template.value ? 'on' : ''}`}
               onClick={() => props.setTemplate(template.value)}
             >
-              <div className="template-name">{template.label}</div>
-              <div className="template-hint">{template.hint}</div>
+              <div className="template-name">{translate(template.labelKey)}</div>
+              <div className="template-hint">{translate(template.hintKey)}</div>
             </div>
           ))}
         </div>
       </div>
       <PackageManagerField value={props.manager} disabled={!props.install} change={props.setManager} />
-      <CheckRow label="Install dependencies" checked={props.install} change={props.setInstall} />
-      <CheckRow label="Initialize a new git repository" checked={props.git} change={props.setGit} />
-      <CheckRow label="Add AI agent files" checked={props.ai} change={props.setAi} />
+      <CheckRow label={translate('welcome.project.install')} checked={props.install} change={props.setInstall} />
+      <CheckRow label={translate('welcome.project.git')} checked={props.git} change={props.setGit} />
+      <CheckRow label={translate('welcome.project.ai')} checked={props.ai} change={props.setAi} />
     </>
   );
 }
@@ -299,10 +304,11 @@ function CheckRow({ label, checked, change }: { readonly label: string; readonly
 // While it runs, dots animate after the last line, as a terminal shows work in progress:
 // installs and downloads can print nothing for a long time.
 function CreateLog({ log, running, elementRef }: { readonly log: string; readonly running: boolean; readonly elementRef: React.RefObject<HTMLPreElement> }) {
+  const translate = useTranslate();
   return (
     <pre className="create-log" ref={elementRef}>
       {running ? log.trimEnd() : log}
-      {running && <span className="create-log-dots" aria-label="Working" />}
+      {running && <span className="create-log-dots" aria-label={translate('welcome.working')} />}
     </pre>
   );
 }

@@ -20,7 +20,8 @@ import { createChipEditor } from '../../../vendor/stacki/src/ui/chipEditor/chipE
 import { CHIP_CHARACTER } from '../../../vendor/stacki/src/ui/chipEditor/chipModel';
 import { chipTrigger, pickerKeymap, type ActiveTrigger, type PickerKey } from '../../../vendor/stacki/src/ui/chipEditor/chipTrigger';
 import { FileIcon } from '../../../vendor/stacki/src/ui/Icons';
-import { baseName, chipCountOf, fileChip, matchFiles, MENTION_LIMIT_TEXT, sameDraft } from './mentionFiles';
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
+import { baseName, chipCountOf, fileChip, matchFiles, sameDraft } from './mentionFiles';
 import '../../../vendor/stacki/src/features/ai/mentions/mentions.css';
 
 export interface PromptHandle {
@@ -63,6 +64,7 @@ interface Live {
 }
 
 export function PromptInput(props: PromptInputProps) {
+  const translate = useTranslate();
   const listId = useId();
   const [trigger, setTrigger] = useState<ActiveTrigger | undefined>(undefined);
   const [dismissedFrom, setDismissedFrom] = useState<number | undefined>(undefined);
@@ -181,6 +183,7 @@ export function PromptInput(props: PromptInputProps) {
               return true;
             },
           },
+          // i18n-ignore: a CodeMirror key binding, not text.
           { key: 'Shift-Enter', run: insertNewline },
         ]),
       ),
@@ -252,9 +255,9 @@ export function PromptInput(props: PromptInputProps) {
           anchor={trigger.anchor}
           candidates={rows.map((path) => ({ id: path, label: baseName(path), description: path, icon: <FileIcon size={14} /> }))}
           activeIndex={active}
-          label="Mention a project file"
+          label={translate('ai.studio.mentionLabel')}
           listId={listId}
-          emptyText={atLimit ? MENTION_LIMIT_TEXT : 'No matching files.'}
+          emptyText={atLimit ? translate('ai.composer.mention.limit', { count: AI_LIMITS.mentionsMax }) : translate('ai.studio.noFiles')}
           onActiveChange={setHighlight}
           onChoose={(candidate) => {
             chooseFile(candidate.id);

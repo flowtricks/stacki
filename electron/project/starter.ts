@@ -27,6 +27,7 @@ interface Starter {
 
 const STARTERS: Record<string, Starter> = {
   lumos: {
+    // i18n-ignore: starter template name: a product term.
     label: 'Lumos',
     // Pinned to `@latest` rather than a version: the scaffolder is downloaded
     // per run, and a site started today should be started from today's.

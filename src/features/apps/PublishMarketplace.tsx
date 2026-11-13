@@ -13,6 +13,7 @@
 // one without the MIT license offers "Add MIT license". Once every check passes,
 // a summary with Notes, Contact and the terms checkbox, then Submit. A
 // marketplace that cannot take submissions yet gets its own state and the web form.
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { AppSummary } from '../../../shared/properties/apps';
@@ -35,6 +36,7 @@ import {
   scanAppSecrets,
   submitMarketplaceApp,
 } from '../../ipc/appPublishBridge';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import Dropdown from '../../ui/Dropdown';
 import { AppsIcon, CheckIcon, ExternalIcon, GitHubIcon, SearchIcon, UploadCloudIcon, WarningTriangleIcon } from '../../ui/Icons';
@@ -89,9 +91,9 @@ export interface PublishMarketplaceProps {
   readonly preselect?: { readonly owner: string; readonly repository: string; readonly account: string | undefined } | undefined;
 }
 
-const TITLE = 'Publish to marketplace';
-
 export function PublishMarketplace(props: PublishMarketplaceProps) {
+  const translate = useTranslate();
+  const title = translate('apps.publish.title');
   const [signingIn, setSigningIn] = useState(false);
   const [discovery, setDiscovery] = useState(0);
   const { accounts, account, setAccount } = usePublishAccounts(props.projectPath, discovery);
@@ -120,24 +122,22 @@ export function PublishMarketplace(props: PublishMarketplaceProps) {
     retry: () => setAttempt((count) => count + 1),
   });
   return (
-    <Popup className="modal apps-connect apps-publish" label={TITLE} onClose={props.onClose} dismissible={true}>
+    <Popup className="modal apps-connect apps-publish" label={title} onClose={props.onClose} dismissible={true}>
       {({ close }) => (
-        <ConnectFrame onCancel={close} title={TITLE} icon={<UploadCloudIcon size={16} />}>
+        <ConnectFrame onCancel={close} title={title} icon={<UploadCloudIcon size={16} />}>
           {listAccount === undefined && accounts.kind === 'ready' ? (
             <ChooserEmpty
               icon={<GitHubIcon size={20} />}
-              title={props.renderSignIn === undefined ? 'Publishing needs Stacki Desktop' : 'Sign in with GitHub to publish'}
+              title={props.renderSignIn === undefined ? translate('apps.publish.needsDesktop') : translate('apps.publish.signInTitle')}
               action={
                 props.renderSignIn === undefined ? undefined : (
                   <button type="button" className="apps-button primary" onClick={() => setSigningIn(true)}>
-                    <GitHubIcon size={14} /> Sign in with GitHub
+                    <GitHubIcon size={14} /> {translate('apps.connect.signIn')}
                   </button>
                 )
               }
             >
-              {props.renderSignIn === undefined
-                ? 'The marketplace confirms who submits with your GitHub sign-in, which Studio does not hold. Publish from Stacki Desktop, or use the web form.'
-                : 'The marketplace confirms who submits with the account you publish with.'}
+              {props.renderSignIn === undefined ? translate('apps.publish.studioDetail') : translate('apps.publish.signInDetail')}
             </ChooserEmpty>
           ) : pick === undefined || listAccount === undefined ? (
             <PublishChooser
@@ -197,6 +197,7 @@ function PublishChooser(props: {
   readonly onAccount: (account: string) => void;
   readonly onPick: (row: PublishPickable) => void;
 }) {
+  const translate = useTranslate();
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const scroll = useRef<HTMLDivElement>(null);
@@ -230,7 +231,7 @@ function PublishChooser(props: {
           <SearchIcon size={14} className="apps-connect-field-icon" />
         ) : (
           <Dropdown
-            ariaLabel="GitHub account"
+            ariaLabel={translate('apps.connect.account')}
             className="apps-connect-account"
             value={props.account}
             options={props.accounts.map((login) => ({ value: login, label: login, icon: props.renderAvatar(login, login) }))}
@@ -240,12 +241,12 @@ function PublishChooser(props: {
         <input
           type="search"
           role="combobox"
-          aria-label="Search your apps or paste a GitHub URL"
+          aria-label={translate('apps.publish.searchLabel')}
           aria-expanded={true}
           aria-controls="apps-publish-sources"
           aria-activedescendant={activeKey === undefined ? undefined : optionId(highlighted)}
           aria-autocomplete="list"
-          placeholder="Search your apps or paste a GitHub URL"
+          placeholder={translate('apps.publish.searchLabel')}
           spellCheck={false}
           autoComplete="off"
           value={query}
@@ -257,7 +258,7 @@ function PublishChooser(props: {
         />
       </div>
       <div ref={scroll} className="apps-connect-scroll" data-edge-top={edges.top} data-edge-bottom={edges.bottom}>
-        <ul className="apps-choice-list" id="apps-publish-sources" role="listbox" aria-label="Apps to publish">
+        <ul className="apps-choice-list" id="apps-publish-sources" role="listbox" aria-label={translate('apps.publish.appsToPublish')}>
           {rows.map((row) =>
             row.kind === 'uploaded' ? (
               <UploadedRow
@@ -295,6 +296,7 @@ function UploadedRow(props: {
   readonly onHover: () => void;
   readonly onChoose: () => void;
 }) {
+  const translate = useTranslate();
   const { manifest } = props.app;
   return (
     <li role="presentation">
@@ -313,27 +315,31 @@ function UploadedRow(props: {
         </span>
         <span className="apps-choice-text">
           <span className="apps-choice-title">{manifest.name}</span>
-          <span className="apps-choice-meta">Version {manifest.version} · Share it to GitHub first</span>
+          <span className="apps-choice-meta">{translate('apps.publish.shareFirst', { version: manifest.version })}</span>
         </span>
-        <span className="apps-badge muted">{props.app.lock.source.kind === 'local' ? 'Project folder' : 'Uploaded'}</span>
+        <span className="apps-badge muted">{props.app.lock.source.kind === 'local' ? translate('apps.source.local') : translate('apps.publish.uploaded')}</span>
       </button>
     </li>
   );
 }
 
 type StatusLoad =
-  { readonly kind: 'loading' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'ready'; readonly status: AppRepositoryStatus };
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined }
+  | { readonly kind: 'ready'; readonly status: AppRepositoryStatus };
 
 type Action =
   | { readonly kind: 'idle' }
   | { readonly kind: 'making-public' }
   | { readonly kind: 'refused'; readonly outcome: Extract<AppVisibilityOutcome, { readonly kind: 'forbidden' }> }
   | { readonly kind: 'licensing' }
-  | { readonly kind: 'failed'; readonly message: string };
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 /** One repository's way to the marketplace: the checklist, its fixes, then the submission. */
 export function RepositoryPublish(props: { readonly projectPath: string; readonly target: AppRepositoryRef; readonly onBack: () => void }) {
   const { target } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [status, setStatus] = useState<StatusLoad>({ kind: 'loading' });
   const [scan, setScan] = useState<ScanLoad>({ kind: 'loading' });
   const [tick, setTick] = useState(0);
@@ -344,11 +350,13 @@ export function RepositoryPublish(props: { readonly projectPath: string; readonl
     setStatus({ kind: 'loading' });
     setScan({ kind: 'loading' });
     void appRepositoryStatus(props.projectPath, target).then(
-      (answer) => active && setStatus(answer.ok ? { kind: 'ready', status: answer.value } : { kind: 'failed', message: answer.message }),
+      (answer) =>
+        active && setStatus(answer.ok ? { kind: 'ready', status: answer.value } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef }),
       (error: unknown) => active && setStatus({ kind: 'failed', message: String(error) }),
     );
     void scanAppSecrets(props.projectPath, { kind: 'repository', ...target }).then(
-      (answer) => active && setScan(answer.ok ? { kind: 'ready', scan: answer.value } : { kind: 'failed', message: answer.message }),
+      (answer) =>
+        active && setScan(answer.ok ? { kind: 'ready', scan: answer.value } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef }),
       (error: unknown) => active && setScan({ kind: 'failed', message: String(error) }),
     );
     return () => {
@@ -357,14 +365,14 @@ export function RepositoryPublish(props: { readonly projectPath: string; readonl
   }, [props.projectPath, target, tick]);
   const name = `${target.owner}/${target.repository}`;
   const makePublic = async () => {
-    const confirmation = makePublicConfirmation(target.owner, target.repository);
+    const confirmation = makePublicConfirmation(target.owner, target.repository, translate);
     if ((await confirmDialog({ ...confirmation, danger: true })) !== true) {
       return;
     }
     setAction({ kind: 'making-public' });
     const answer = await makeRepositoryPublic(props.projectPath, target);
     if (!answer.ok) {
-      setAction({ kind: 'failed', message: answer.message });
+      setAction({ kind: 'failed', message: answer.message, messageRef: answer.messageRef });
       return;
     }
     if (answer.value.kind === 'forbidden') {
@@ -375,14 +383,14 @@ export function RepositoryPublish(props: { readonly projectPath: string; readonl
     reload();
   };
   const addLicense = async (holder: string) => {
-    const confirmation = licenseConfirmation(target.owner, target.repository, holder, new Date().getFullYear());
+    const confirmation = licenseConfirmation(target.owner, target.repository, holder, new Date().getFullYear(), translate);
     if ((await confirmDialog(confirmation)) !== true) {
       return;
     }
     setAction({ kind: 'licensing' });
     const answer = await addAppLicense(props.projectPath, target);
     if (!answer.ok) {
-      setAction({ kind: 'failed', message: answer.message });
+      setAction({ kind: 'failed', message: answer.message, messageRef: answer.messageRef });
       return;
     }
     setAction({ kind: 'idle' });
@@ -393,10 +401,15 @@ export function RepositoryPublish(props: { readonly projectPath: string; readonl
       <button type="button" className="apps-link" onClick={props.onBack}>
         ← {name}
       </button>
-      {status.kind === 'loading' && <p className="apps-note">Reading {name}…</p>}
+      {status.kind === 'loading' && <p className="apps-note">{translate('apps.publish.reading', { name })}</p>}
       {status.kind === 'failed' && (
-        <ChooserEmpty icon={<WarningTriangleIcon size={20} />} title={`Couldn’t read ${name}`} action={<RetryButton onRetry={reload} />} alert>
-          {status.message}
+        <ChooserEmpty
+          icon={<WarningTriangleIcon size={20} />}
+          title={translate('apps.publish.readFailed', { name })}
+          action={<RetryButton onRetry={reload} />}
+          alert
+        >
+          {translateDescribed(status)}
         </ChooserEmpty>
       )}
       {status.kind === 'ready' && (
@@ -426,61 +439,63 @@ function ReadyChecks(props: {
   readonly onAddLicense: () => void;
 }) {
   const { status, action } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const clean = scanPassed(props.scan);
   const readiness = marketplaceReadiness(status, { clean });
   return (
     <>
-      <ul className="apps-checklist" aria-label="Marketplace requirements">
+      <ul className="apps-checklist" aria-label={translate('apps.publish.requirements')}>
         {readiness.checks.map((entry) => (
           <li key={entry.check} className={`apps-check${entry.passed ? ' passed' : ''}`}>
             <span className="apps-step-mark" aria-hidden="true">
               {entry.passed ? <CheckIcon size={11} /> : <WarningTriangleIcon size={11} />}
             </span>
-            {marketplaceCheckLabel(entry.check)}
+            {marketplaceCheckLabel(entry.check, translate)}
           </li>
         ))}
       </ul>
       <SecretScanReport load={props.scan} onRescan={props.onRescan} />
       {status.private && (
-        <Requirement title="This repository is private. The marketplace needs it public.">
+        <Requirement title={translate('apps.publish.private')}>
           {action.kind === 'refused' ? (
             <VisibilityRefused outcome={action.outcome} />
           ) : (
             <button type="button" className="apps-button primary" disabled={!clean || action.kind === 'making-public'} onClick={props.onMakePublic}>
-              {action.kind === 'making-public' ? 'Making public…' : 'Make public'}
+              {action.kind === 'making-public' ? translate('apps.publish.makingPublic') : translate('apps.makePublic.confirm')}
             </button>
           )}
-          {!clean && <p className="apps-note">The secret scan must be clean before the repository is made public.</p>}
+          {!clean && <p className="apps-note">{translate('apps.publish.scanFirst')}</p>}
         </Requirement>
       )}
       {status.license !== MARKETPLACE_LICENSE && (
-        <Requirement title="Marketplace apps must use the MIT license">
-          {status.license !== undefined && <p className="apps-note">GitHub reads this repository’s license as {status.license}.</p>}
+        <Requirement title={translate('apps.publish.mitRequired')}>
+          {status.license !== undefined && <p className="apps-note">{translate('apps.publish.licenseReadAs', { license: status.license })}</p>}
           {action.kind === 'licensing' ? (
-            <StepList states={[{ step: 'commit-license', status: 'running' }]} visibility={undefined} label={() => 'Commit the MIT LICENSE'} />
+            <StepList states={[{ step: 'commit-license', status: 'running' }]} visibility={undefined} label={() => translate('apps.publish.commitLicense')} />
           ) : (
             <button type="button" className="apps-button primary" disabled={status.license !== undefined} onClick={props.onAddLicense}>
-              Add MIT license
+              {translate('apps.license.confirm')}
             </button>
           )}
-          {status.license !== undefined && <p className="apps-note">Replace the LICENSE file with the MIT license on GitHub, then come back.</p>}
+          {status.license !== undefined && <p className="apps-note">{translate('apps.publish.replaceLicense')}</p>}
         </Requirement>
       )}
       {!status.topic && (
-        <Requirement title="Add the stacki-app topic">
+        <Requirement title={translate('apps.share.step.addTopic')}>
           <a className="apps-connect-empty-link" href={repositoryURL(status.owner, status.repository)} target="_blank" rel="noopener noreferrer">
-            Open the repository <ExternalIcon size={11} />
+            {translate('apps.publish.openRepository')} <ExternalIcon size={11} />
           </a>
         </Requirement>
       )}
       {status.release === undefined && (
-        <Requirement title="Release the app first">
-          <p className="apps-note">Attach the app’s .zip to a GitHub release, then come back.</p>
+        <Requirement title={translate('apps.publish.releaseFirst')}>
+          <p className="apps-note">{translate('apps.publish.attachZip')}</p>
         </Requirement>
       )}
       {action.kind === 'failed' && (
         <p className="apps-error" role="alert">
-          {action.message}
+          {translateDescribed(action)}
         </p>
       )}
       {readiness.ready && status.release !== undefined && <SubmitStep projectPath={props.projectPath} target={props.target} release={status.release} />}
@@ -500,14 +515,15 @@ function Requirement(props: { readonly title: string; readonly children: ReactNo
 }
 
 function VisibilityRefused({ outcome }: { readonly outcome: Extract<AppVisibilityOutcome, { readonly kind: 'forbidden' }> }) {
-  const text = visibilityRefusal(outcome);
+  const translate = useTranslate();
+  const text = visibilityRefusal(outcome, translate);
   assert(outcome.settingsURL.startsWith('https://github.com/'), 'A refusal links to GitHub');
   return (
     <div className="apps-refused" role="alert">
       <p className="apps-requirement-title">{text.title}</p>
       <p className="apps-note">{text.detail}</p>
       <a className="apps-connect-empty-link" href={outcome.settingsURL} target="_blank" rel="noopener noreferrer">
-        Open repository settings <ExternalIcon size={11} />
+        {translate('apps.publish.openSettings')} <ExternalIcon size={11} />
       </a>
     </div>
   );
@@ -517,10 +533,12 @@ type Submission =
   | { readonly kind: 'idle' }
   | { readonly kind: 'sending' }
   | { readonly kind: 'done'; readonly outcome: MarketplaceSubmissionOutcome }
-  | { readonly kind: 'failed'; readonly message: string };
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 type Precheck =
-  { readonly kind: 'loading' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'ready'; readonly precheck: MarketplacePrecheck };
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined }
+  | { readonly kind: 'ready'; readonly precheck: MarketplacePrecheck };
 
 /**
  * The summary, the marketplace's own check of the repository, and the terms;
@@ -532,6 +550,7 @@ export function SubmitStep(props: {
   readonly target: AppRepositoryRef;
   readonly release: NonNullable<AppRepositoryStatus['release']>;
 }) {
+  const translate = useTranslate();
   const [accepted, setAccepted] = useState(false);
   const [state, setState] = useState<Submission>({ kind: 'idle' });
   const [check, setCheck] = useState<Precheck>({ kind: 'loading' });
@@ -539,7 +558,8 @@ export function SubmitStep(props: {
   useEffect(() => {
     let active = true;
     void checkMarketplaceApp(projectPath, target).then(
-      (answer) => active && setCheck(answer.ok ? { kind: 'ready', precheck: answer.value } : { kind: 'failed', message: answer.message }),
+      (answer) =>
+        active && setCheck(answer.ok ? { kind: 'ready', precheck: answer.value } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef }),
       (error: unknown) => active && setCheck({ kind: 'failed', message: String(error) }),
     );
     return () => {
@@ -557,7 +577,7 @@ export function SubmitStep(props: {
     }
     setState({ kind: 'sending' });
     void submitMarketplaceApp(projectPath, { ...target, acceptedTerms: true }).then(
-      (answer) => setState(answer.ok ? { kind: 'done', outcome: answer.value } : { kind: 'failed', message: answer.message }),
+      (answer) => setState(answer.ok ? { kind: 'done', outcome: answer.value } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef }),
       (error: unknown) => setState({ kind: 'failed', message: String(error) }),
     );
   };
@@ -570,18 +590,19 @@ export function SubmitStep(props: {
       }}
     >
       <dl className="apps-submit-summary">
-        <dt>Repository</dt>
+        <dt>{translate('apps.share.repository')}</dt>
         <dd>{name}</dd>
-        <dt>Release</dt>
+        <dt>{translate('apps.publish.release')}</dt>
         <dd>
           {props.release.tag} · {props.release.asset}
         </dd>
-        <dt>License</dt>
+        <dt>{translate('apps.publish.license')}</dt>
         <dd>{MARKETPLACE_LICENSE}</dd>
       </dl>
       <PrecheckLine check={check} />
       <label className="apps-share-switch">
         <input type="checkbox" required checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
+        {/* i18n-ignore: the consent wording is the marketplace web form's own, word for word (appPublish.ts), so it is shown as written. */}
         <span>{MARKETPLACE_TERMS}</span>
       </label>
       {state.kind === 'failed' && (
@@ -591,7 +612,7 @@ export function SubmitStep(props: {
       )}
       <div className="apps-actions">
         <button type="submit" className="apps-button primary" disabled={!accepted || !ready || state.kind === 'sending'}>
-          {state.kind === 'sending' ? 'Submitting…' : 'Submit for review'}
+          {state.kind === 'sending' ? translate('apps.publish.submitting') : translate('apps.publish.submit')}
         </button>
       </div>
     </form>
@@ -600,13 +621,15 @@ export function SubmitStep(props: {
 
 /** What the marketplace's check said: "Ready to submit: <name> v<version>", or its message as is. */
 function PrecheckLine({ check }: { readonly check: Precheck }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   if (check.kind === 'loading') {
-    return <p className="apps-note">Asking the marketplace about this release…</p>;
+    return <p className="apps-note">{translate('apps.publish.asking')}</p>;
   }
   if (check.kind === 'failed') {
     return (
       <p className="apps-error" role="alert">
-        {check.message}
+        {translateDescribed(check)}
       </p>
     );
   }
@@ -615,17 +638,17 @@ function PrecheckLine({ check }: { readonly check: Precheck }) {
     case 'ready':
       return (
         <p className="apps-scan apps-scan-clean" role="status">
-          <CheckIcon size={13} /> Ready to submit: {precheck.name} v{precheck.version}
+          <CheckIcon size={13} /> {translate('apps.publish.readyToSubmit', { name: precheck.name, version: precheck.version })}
         </p>
       );
     case 'refused':
       return (
         <p className="apps-error" role="alert">
-          {precheck.message}
+          {translateDescribed(precheck)}
         </p>
       );
     case 'unavailable':
-      return <SubmissionResult outcome={{ kind: 'unavailable', message: precheck.message }} />;
+      return <SubmissionResult outcome={precheck} />;
     default: {
       const exhaustive: never = precheck;
       return exhaustive;
@@ -634,16 +657,21 @@ function PrecheckLine({ check }: { readonly check: Precheck }) {
 }
 
 function SubmissionResult({ outcome }: { readonly outcome: MarketplaceSubmissionOutcome }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   switch (outcome.kind) {
     case 'submitted':
       return (
-        <ChooserEmpty icon={<CheckIcon size={20} />} title={outcome.updated ? 'Updated your submission' : 'Submitted for review'}>
-          {outcome.updated ? 'The marketplace already had this app; it now has your latest release.' : 'The app is in the review queue.'}
+        <ChooserEmpty
+          icon={<CheckIcon size={20} />}
+          title={outcome.updated ? translate('apps.publish.updatedTitle') : translate('apps.publish.submittedTitle')}
+        >
+          {outcome.updated ? translate('apps.publish.updatedDetail') : translate('apps.publish.submittedDetail')}
         </ChooserEmpty>
       );
     case 'refused':
       return (
-        <ChooserEmpty icon={<WarningTriangleIcon size={20} />} title="The marketplace refused the submission" alert>
+        <ChooserEmpty icon={<WarningTriangleIcon size={20} />} title={translate('apps.publish.refused')} alert>
           {outcome.message}
         </ChooserEmpty>
       );
@@ -651,16 +679,16 @@ function SubmissionResult({ outcome }: { readonly outcome: MarketplaceSubmission
       return (
         <ChooserEmpty
           icon={<AppsIcon size={20} />}
-          title="The marketplace isn’t taking submissions right now"
+          title={translate('apps.publish.unavailable')}
           action={
             <a className="apps-button" href={MARKETPLACE_SUBMIT_URL} target="_blank" rel="noopener noreferrer">
-              Open the web form <ExternalIcon size={11} />
+              {translate('apps.publish.webForm')} <ExternalIcon size={11} />
             </a>
           }
-          hint={outcome.message}
+          hint={translateDescribed(outcome)}
           alert
         >
-          Nothing was sent. Try again later, or submit with the web form.
+          {translate('apps.publish.nothingSent')}
         </ChooserEmpty>
       );
     default: {

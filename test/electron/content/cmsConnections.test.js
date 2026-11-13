@@ -47,6 +47,26 @@ test('a key is stored encrypted, listed without its value, and given to the prev
     assert.deepEqual(store.list('/site').connections, []);
   }));
 
+test('a Payload API key is given to the preview; a password never is', () =>
+  withFolder((folder) => {
+    const store = new CmsConnectionStore(crypt(), () => folder);
+    const payload = { kind: 'payload', label: 'CMS', baseUrl: 'https://cms.example.com', collection: 'users', collections: [] };
+    store.save('/site', { ...payload, auth: 'apiKey', email: undefined, secret: 'payload-key-1' });
+    assert.deepEqual(cmsPreviewEnvironment(store, '/site'), {
+      STACKI_PAYLOAD_PREVIEW: '1',
+      STACKI_PAYLOAD_URL: 'https://cms.example.com',
+      STACKI_PAYLOAD_COLLECTION: 'users',
+      STACKI_PAYLOAD_API_KEY: 'payload-key-1',
+    });
+    store.save('/site', { ...SANITY, secret: 'sk-1' });
+    assert.equal(Object.keys(cmsPreviewEnvironment(store, '/site')).length, 8, 'a site may use both CMSs');
+    store.save('/site', { ...payload, auth: 'password', email: 'a@b.test', secret: 'my password' });
+    const environment = cmsPreviewEnvironment(store, '/site');
+    assert.equal(JSON.stringify(environment).includes('my password'), false, 'a password is not passed on');
+    assert.equal(environment.STACKI_PAYLOAD_PREVIEW, undefined);
+    assert.equal(store.list('/site').connections.filter((connection) => connection.kind === 'payload').length, 1, 'one connection per address');
+  }));
+
 test('nothing is saved where keys cannot be encrypted; a damaged file reads as empty', () =>
   withFolder((folder) => {
     const store = new CmsConnectionStore(crypt(false), () => folder);

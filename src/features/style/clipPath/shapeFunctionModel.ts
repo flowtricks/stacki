@@ -59,6 +59,7 @@ export function formatShapeValueFromCssSubpaths(subpaths: ShapeCssSubpath[]) {
 
   const commandToShapeValue = (command: ShapeCssCommand) => {
     if (command.kind === 'line') {
+      // i18n-ignore: shape() CSS syntax written into the value, not interface text.
       return `line to ${formatShapeCssPoint(command.to)}`;
     }
     if (command.kind === 'curve') {

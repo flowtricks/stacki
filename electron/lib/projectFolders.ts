@@ -3,6 +3,7 @@
 // Synchronous and small on purpose: the scanners that ask are synchronous, and
 // the file is bounded (PROJECT_FOLDER_LIMITS.fileCharsMax) before it is read.
 import * as fs from 'node:fs';
+import { englishText, messageRef } from '../../shared/properties/i18n/messageRef';
 import * as path from 'node:path';
 import { assert } from '../../shared/core/assert';
 import {
@@ -29,15 +30,15 @@ export function readProjectFolders(projectPath: string): ProjectFoldersRead {
     return { kind: 'invalid', message: error instanceof Error ? error.message : String(error) };
   }
   if (stat.isSymbolicLink()) {
-    return { kind: 'invalid', message: 'Folder settings cannot be a symbolic link' };
+    return { kind: 'invalid', message: englishText(messageRef('error.folderSettings.symlink')) };
   }
   if (!stat.isFile()) {
-    return { kind: 'invalid', message: 'Folder settings must be a file' };
+    return { kind: 'invalid', message: englishText(messageRef('error.folderSettings.notFile')) };
   }
   // Characters are at most bytes, so a file over the character bound in bytes may still fit; four
   // bytes per character is UTF-8's widest. The text parser applies the exact bound after this.
   if (stat.size > PROJECT_FOLDER_LIMITS.fileCharsMax * 4) {
-    return { kind: 'invalid', message: `Folder settings exceed ${PROJECT_FOLDER_LIMITS.fileCharsMax} characters` };
+    return { kind: 'invalid', message: englishText(messageRef('error.folderSettings.tooLong', { limit: PROJECT_FOLDER_LIMITS.fileCharsMax })) };
   }
   let source: string;
   try {

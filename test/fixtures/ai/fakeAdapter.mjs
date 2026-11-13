@@ -20,7 +20,9 @@
 // Environment switches: FAKE_PLAIN=1 advertises no steering and no fork; FAKE_COMPACTION=tool
 // reports /compact as a tool call titled "Compact conversation" (toolName "compact") instead of
 // compaction_update, and FAKE_COMPACTION=silent reports nothing at all; FAKE_LEGACY_MODES=1 offers modes as session modes only (no `mode` option);
-// FAKE_BYPASS=1 starts every new session in the "bypassPermissions" mode.
+// FAKE_BYPASS=1 starts every new session in the "bypassPermissions" mode; FAKE_TRACE_FILE=<path> logs every method called;
+// FAKE_COMMANDS=1 announces a slash command after each new session;
+// FAKE_NEW_FAILS_FILE=<path> fails every new session while that file exists.
 import fs from 'node:fs';
 import readline from 'node:readline';
 
@@ -43,6 +45,9 @@ const MODES = [
   { id: 'auto', name: 'Auto' },
   { id: 'bypassPermissions', name: 'Bypass permissions' },
 ];
+// The model the session reports; a `model` change moves it, and FAKE_REFUSE_MODEL makes the adapter refuse that change.
+let modelValue = 'small';
+let lastMode = startMode;
 const options = (mode) => [
   ...(legacyModes
     ? []
@@ -56,7 +61,7 @@ const options = (mode) => [
           options: MODES.map((entry) => ({ value: entry.id, name: entry.name })),
         },
       ]),
-  { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'small', options: [{ value: 'small', name: 'Small' }, { value: 'large', name: 'Large' }] },
+  { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: modelValue, options: [{ value: 'small', name: 'Small' }, { value: 'large', name: 'Large' }] },
 ];
 const modesOf = (mode) => (legacyModes ? { modes: { currentModeId: mode, availableModes: MODES } } : {});
 let clientCapabilities;
@@ -79,6 +84,10 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
     return;
   }
   const { id, method, params } = message;
+  // FAKE_TRACE_FILE: every method the client calls, one per line, so a test can count `session/new` calls.
+  if (process.env.FAKE_TRACE_FILE !== undefined) {
+    fs.appendFileSync(process.env.FAKE_TRACE_FILE, `${method}\n`);
+  }
   if (method === 'initialize') {
     clientCapabilities = params.clientCapabilities;
     send({
@@ -90,12 +99,34 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
         ...(plain ? {} : { _meta: { steering: { supported: true } } }),
       },
     });
+  } else if (method === 'session/new' && process.env.FAKE_NEW_FAILS_FILE !== undefined && fs.existsSync(process.env.FAKE_NEW_FAILS_FILE)) {
+    // FAKE_NEW_FAILS_FILE=<path>: while that file exists, every new session fails (a start-early failure test removes it afterwards).
+    send({ id, error: { code: -32603, message: 'Internal error' } });
   } else if (method === 'session/new') {
-    send({ id, result: { sessionId: `s${next++}`, configOptions: options(startMode), ...modesOf(startMode) } });
+    modelValue = 'small';
+    lastMode = startMode;
+    const sessionId = `s${next++}`;
+    send({ id, result: { sessionId, configOptions: options(startMode), ...modesOf(startMode) } });
+    // FAKE_COMMANDS=1: slash commands arrive just after the session, as a real adapter announces them.
+    if (process.env.FAKE_COMMANDS === '1') {
+      update(sessionId, { sessionUpdate: 'available_commands_update', availableCommands: [{ name: 'review', description: 'Review the change' }] });
+    }
+  } else if (method === 'session/delete') {
+    send({ id, result: {} });
   } else if (method === 'session/fork') {
     send({ id, result: { sessionId: `fork-of-${params.sessionId}`, configOptions: options('bypassPermissions'), ...modesOf('bypassPermissions') } });
   } else if (method === 'session/set_config_option') {
-    send({ id, result: { configOptions: options(params.value) } });
+    if (params.configId === 'model') {
+      if (process.env.FAKE_REFUSE_MODEL === '1') {
+        send({ id, error: { code: -32602, message: 'Model refused' } });
+      } else {
+        modelValue = params.value;
+        send({ id, result: { configOptions: options(lastMode) } });
+      }
+    } else {
+      lastMode = params.value;
+      send({ id, result: { configOptions: options(params.value) } });
+    }
   } else if (method === 'session/set_mode') {
     send({ id, result: {} });
     update(params.sessionId, { sessionUpdate: 'current_mode_update', currentModeId: params.modeId });
@@ -166,6 +197,13 @@ readline.createInterface({ input: process.stdin }).on('line', async (line) => {
         update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'run1', _meta: { terminal_output_delta: { terminal_id: 't1', data } } });
       }
       update(sessionId, { sessionUpdate: 'tool_call_update', toolCallId: 'run1', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'ab' } }] });
+    }
+    // `aititle=One_two,Three`: session_info_update titles (underscores are spaces), as the Claude adapter sends its generated title.
+    const titles = text.match(/aititle=(\S+)/)?.[1];
+    if (titles !== undefined) {
+      for (const title of titles.split(',')) {
+        update(sessionId, { sessionUpdate: 'session_info_update', title: title.replaceAll('_', ' ') });
+      }
     }
     if (text.includes('notice')) {
       for (let count = 0; count < 2; count++) {

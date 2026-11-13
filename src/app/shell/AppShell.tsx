@@ -10,7 +10,6 @@ import { ToastStack } from '../../features/notifications/ToastStack';
 // tabs (App.tsx).
 
 import ComponentPropertiesPanel from '../../features/componentProperties/ComponentPropertiesPanel';
-import WelcomeScreen from '../../features/welcome/WelcomeScreen';
 import PagesPanel from '../../features/pages/PagesPanel';
 import { ConnectSanity } from '../../features/cmsConnections/ConnectSanity';
 import PalettePanel from '../../features/palette/PalettePanel';
@@ -25,15 +24,18 @@ import DynamicPicker from '../DynamicPicker';
 import { DesktopInsertSearch } from './DesktopInsertSearch';
 import AssetsPanel from '../../features/assets/AssetsPanel';
 import TerminalDock from '../../features/terminal/TerminalDock';
-import { cleanError } from '../../lib/cleanError';
-import { PlayIcon, RefreshIcon, ExternalIcon, ChevronLeftIcon, ElementComponentIcon, TerminalIcon, GearIcon } from '../../ui/Icons';
-import { openAppSettings } from '../settings/Settings';
-import { AssetPickOverlay, assetPickTitle } from '../../ui/AssetPickOverlay';
+import { cleanError, cleanErrorKeepingReference } from '../../lib/cleanError';
+import { translateErrorText, translateReference } from '../../lib/i18n/translateErrorText';
+import { historyFileLabel } from '../../features/history/historyModel';
+import { PlayIcon, RefreshIcon, ExternalIcon, ChevronLeftIcon, ElementComponentIcon, TerminalIcon } from '../../ui/Icons';
+import { openAppSettings } from '../settings/LazySettings';
+import { AssetPickOverlay } from '../../ui/AssetPickOverlay';
 import type { HistoryCommit, HistoryCommitFile } from '../../features/history/historyBridge';
 import { currentDesktopPlatform, shortcutLabel } from '../../lib/shortcutLabel';
 import { useDelayedTooltip } from '../../ui/delayedTooltip';
 import { type LeftTab } from '../appTypes';
 import { openExternalURL, restoreProjectFile, restoreProjectVersion } from '../../ipc/appBridge';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { CmsPanel, VariablesPanel, CodePanel, SelectorsPanel, InstructionsPanel, ProjectSettingsPanel, preloadPanels } from '../appPanels';
 import { canvasPageOf } from '../../editor/pageState';
 import { projectRelative, type VariablePlace } from '../../editor/variablePlace';
@@ -46,7 +48,7 @@ import { useEffect } from 'react';
 import { prefetchPanels, prefetchTimeline } from './panelPrefetch';
 import { CanvasPane, CanvasCovers, OldVersionCover, RightPanel, CodeWindowHost, ConflictNotice, BusyOverlay, pickPseudo } from './AppPanes';
 import { selectedPseudo } from '../model/selectionStructure';
-import type { AppView, ShellView } from '../App';
+import type { ShellView } from '../App';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { canPanel } from '../../lib/roleAccess';
 import { can } from '../../../shared/properties/projectRoles';
@@ -56,27 +58,11 @@ import { AuditsHost, AuditsTab } from './DesktopAudits';
 import { AiHost, AiTab, useAiRailButton } from './DesktopAi';
 import { selectFromPanel } from './panelSelection';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-
-// The start screen, before a project is open.
-export function WelcomeView({ app }: { readonly app: AppView }) {
-  // The welcome mode floats the title bar over the start screen so the
-  // interactive backdrop runs edge to edge, behind the window controls.
-  return (
-    <div className="app welcome-mode">
-      <div className="titlebar">
-        <span className="spacer" />
-        <SettingsButton />
-      </div>
-      <WelcomeScreen onOpen={app.onOpenProject} showToast={app.showToast} />
-      {app.busy && <BusyOverlay message={app.busy} />}
-      <ToastStack notices={app.notices} dismiss={app.dismissToast} />
-      <ConfirmHost />
-    </div>
-  );
-}
+import { SettingsButton } from './WelcomeView';
 
 // The editor around an open project.
 export function AppShell({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const projectPath = app.project.path;
   // The style selectors check reads every project file and installed package;
   // done once in the background, opening its panel shows a finished report.
@@ -96,7 +82,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
     <div className="app">
       {app.propertySave.phase === 'saving' && (
         <div className="property-saving-overlay" role="status">
-          Saving component properties…
+          {translate('shell.saving.properties')}
         </div>
       )}
       <TitleBar app={app} />
@@ -115,7 +101,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
           <CanvasCovers app={app} />
         </div>
         {app.assetPick?.presentation === 'overlay' && (
-          <AssetPickOverlay title={assetPickTitle(app.assetPick.mediaKind)} onClose={() => app.endAssetPick(false)}>
+          <AssetPickOverlay mediaKind={app.assetPick.mediaKind} onClose={() => app.endAssetPick(false)}>
             <AssetsPanel
               project={app.project}
               showToast={app.showToast}
@@ -127,7 +113,7 @@ export function AppShell({ app }: { readonly app: ShellView }) {
         )}
         {app.inPreview && app.previewSource && (
           <div className="preview-mode">
-            <iframe ref={app.previewIframeRef} src={app.previewSource} title="Site preview (interactive)" />
+            <iframe ref={app.previewIframeRef} src={app.previewSource} title={translate('shell.preview.interactiveTitle')} />
           </div>
         )}
         <OldVersionCover app={app} />
@@ -170,6 +156,7 @@ function cmsCovering(app: ShellView): boolean {
 // What floats over the editor: the terminal, the code window, the insert palette,
 // the conflict notice, the busy overlay and the toast.
 export function AppOverlays({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const canCode = can(useCurrentRole(), 'code:edit');
   return (
     <>
@@ -183,8 +170,14 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
       {app.insertOpen && <DesktopInsertSearch app={app} />}
       <ConflictNotice app={app} />
       <ErrorToast
-        message={app.pageState?.save.tag === 'failed' ? `${app.currentPage?.name ?? 'This file'} has not been saved. ` + app.pageState.save.message : undefined}
-        recovery={[{ label: 'Retry save', run: app.flushSave }]}
+        message={
+          app.pageState?.save.tag === 'failed'
+            ? app.currentPage === undefined
+              ? translate('shell.save.failedFile', { message: app.pageState.save.message })
+              : translate('shell.save.failedNamed', { name: app.currentPage.name, message: app.pageState.save.message })
+            : undefined
+        }
+        recovery={[{ label: translate('shell.save.retry'), run: app.flushSave }]}
       />
       {app.busy && <BusyOverlay message={app.busy} />}
       <DesktopAppsHost app={app} />
@@ -195,17 +188,18 @@ export function AppOverlays({ app }: { readonly app: ShellView }) {
 }
 
 export function TitleBar({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const canPublish = can(useCurrentRole(), 'publish');
   return (
     <div className="titlebar">
       <button
         className="app-title project-back"
-        title="Back to all projects"
-        aria-label="Back to all projects"
+        title={translate('shell.titleBar.backToProjects')}
+        aria-label={translate('shell.titleBar.backToProjects')}
         disabled={app.propertySave.phase === 'saving' || app.defaultsCanvas.state.kind !== 'idle'}
         onClick={() => {
           void app.leaveProject().catch((error: unknown) => {
-            app.showToast(`Could not return to projects: ${cleanError(error)}`, 'error');
+            app.showToast(translate('shell.titleBar.backToProjectsFailed', { message: cleanError(error) }), 'error');
           });
         }}
       >
@@ -216,18 +210,18 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
       {app.defaultsCanvas.state.kind !== 'idle' ? (
         <button
           className="page-switch-btn comp-back"
-          title="Close defaults"
-          aria-label="Close defaults"
+          title={translate('shell.titleBar.closeDefaults')}
+          aria-label={translate('shell.titleBar.closeDefaults')}
           disabled={app.defaultsCanvas.state.kind === 'saving'}
           onClick={() => void app.defaultsCanvas.run('done')}
         >
           <ChevronLeftIcon size={13} />
-          <span>Close defaults</span>
+          <span>{translate('shell.titleBar.closeDefaults')}</span>
         </button>
       ) : app.editStack.length > 1 ? (
         <button
           className="page-switch-btn comp-back"
-          title="Back (Esc)"
+          title={translate('shell.titleBar.back')}
           onClick={() => {
             // Opening the parent file reports its own failures.
             void app.closeComponent();
@@ -252,6 +246,9 @@ export function TitleBar({ app }: { readonly app: ShellView }) {
           refresh={app.refreshGit}
           saveState={app.pageState?.save}
           repository={app.gitInfo}
+          onOpenBranches={() => app.setLeftTab('history')}
+          withBranchChange={app.withBranchChange}
+          onBranchSwitched={app.reloadFromDisk}
         />
       )}
     </div>
@@ -280,7 +277,7 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
           className="url"
           spellCheck={false}
           value={app.urlDraft ?? liveUrl ?? ''}
-          placeholder={app.devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline'}
+          placeholder={app.devStatus === 'starting' ? translate('shell.preview.starting') : translate('shell.preview.offline')}
           readOnly={!liveUrl}
           onFocus={(event) => event.currentTarget.select()}
           onChange={(event) => app.setUrlDraft(event.target.value)}
@@ -311,11 +308,12 @@ export function UrlGroup({ app }: { readonly app: ShellView }) {
 }
 
 function OpenBrowserButton({ liveUrl }: { readonly liveUrl: ShellView['liveUrl'] }) {
+  const translate = useTranslate();
   return (
     <button
       className="titlebar-btn url-open"
-      title="Open in browser"
-      aria-label="Open in browser"
+      title={translate('shell.titleBar.openInBrowser')}
+      aria-label={translate('shell.titleBar.openInBrowser')}
       disabled={!liveUrl}
       onClick={() => {
         if (liveUrl) {
@@ -328,23 +326,9 @@ function OpenBrowserButton({ liveUrl }: { readonly liveUrl: ShellView['liveUrl']
   );
 }
 
-// Settings, where the platform has no menu bar to hold File > Settings…: Windows
-// draws its own title bar (no menu bar), and Linux may hide it. On macOS the menu
-// bar is always there, so the button would only repeat it.
-function SettingsButton() {
-  const platform = currentDesktopPlatform();
-  if (platform === 'darwin') {
-    return undefined;
-  }
-  return (
-    <button className="titlebar-btn" title={`Settings (${shortcutLabel(',', 'primary', platform)})`} aria-label="Settings" onClick={() => openAppSettings()}>
-      <GearIcon size={14} />
-    </button>
-  );
-}
-
 // Terminal and interactive preview controls.
 export function TitleActions({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const terminalKey = shortcutLabel('J', 'primary', currentDesktopPlatform());
   // The terminal runs anything in the project: it belongs to code editing.
   const canCode = can(useCurrentRole(), 'code:edit');
@@ -353,7 +337,7 @@ export function TitleActions({ app }: { readonly app: ShellView }) {
       {canCode && (
         <button
           className={`titlebar-btn ${app.termOpen ? 'on' : ''}`}
-          title={`${app.termOpen ? 'Hide' : 'Show'} terminal (${terminalKey})`}
+          title={translate(app.termOpen ? 'shell.titleBar.terminalHide' : 'shell.titleBar.terminalShow', { shortcut: terminalKey })}
           onClick={() => app.setTermOpen((open) => !open)}
         >
           <TerminalIcon size={14} />
@@ -372,8 +356,9 @@ export function TitleActions({ app }: { readonly app: ShellView }) {
 // Lit for either kind of looking-not-working (see TitleActions). Its tip waits for
 // a resting pointer and names ⌥P, the key that does the same from anywhere.
 function PreviewButton({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const tooltip = useDelayedTooltip();
-  const label = previewButtonLabel(app, currentDesktopPlatform());
+  const label = previewButtonLabel(app, currentDesktopPlatform(), translate);
   return (
     <>
       <button
@@ -399,12 +384,12 @@ function PreviewButton({ app }: { readonly app: ShellView }) {
 }
 
 // What the preview button does now, with the key for it.
-function previewButtonLabel(app: Pick<ShellView, 'inPreview' | 'previewRef'>, platform: NodeJS.Platform): string {
+function previewButtonLabel(app: Pick<ShellView, 'inPreview' | 'previewRef'>, platform: NodeJS.Platform, translate: Translator): string {
   const key = platform === 'darwin' ? '⌥P' : 'Alt+P';
   if (app.previewRef) {
-    return `Back to now (${key})`;
+    return translate('shell.preview.backToNow', { shortcut: key });
   }
-  return app.inPreview ? `Exit preview (${key})` : `Preview (${key})`;
+  return translate(app.inPreview ? 'shell.preview.exit' : 'shell.preview.enter', { shortcut: key });
 }
 
 // The preview button: back from an older version, out of the preview, or into it.
@@ -497,6 +482,7 @@ export function PropertiesTab({ app }: { readonly app: ShellView }) {
 }
 
 export function PagesTab({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   return (
     <PagesPanel
       projectPath={app.project.path}
@@ -517,7 +503,7 @@ export function PagesTab({ app }: { readonly app: ShellView }) {
         } else {
           const page = app.scan.pages.find((entry) => entry.name === change.from);
           if (!page) {
-            throw new Error('This page no longer exists.');
+            throw new Error(translate('shell.pages.noLongerExists'));
           }
           await app.movePageTo(page, change.to);
         }
@@ -529,6 +515,7 @@ export function PagesTab({ app }: { readonly app: ShellView }) {
 }
 
 export function NavigatorTab({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const page = app.currentPage;
   const selectNavigatorNode = (id: string | undefined): void => selectFromPanel(app, id);
   // A ::before or ::after row selects its element, and asks the Style panel
@@ -539,7 +526,7 @@ export function NavigatorTab({ app }: { readonly app: ShellView }) {
     pickPseudo(app, id, pseudo);
   };
   return (
-    <PanelBoundary name="The Navigator" resetKey={page?.path}>
+    <PanelBoundary name="The Navigator" label={translate('shell.navigator.panelName')} resetKey={page?.path}>
       <StructurePanel
         key={page?.path}
         pageState={app.pageState}
@@ -689,6 +676,7 @@ export function CodeTab({ app }: { readonly app: ShellView }) {
 }
 
 export function HistoryTab({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   return (
     <HistoryPanel
       project={app.project}
@@ -699,11 +687,11 @@ export function HistoryTab({ app }: { readonly app: ShellView }) {
       onExitPreview={app.onExitCommitPreview}
       onRestoreFile={(commit, file) => {
         // Restoring reports its own failures.
-        void restoreHistoryFile(app, commit, file);
+        void restoreHistoryFile(app, commit, file, translate);
       }}
       onRestoreProject={(commit) => {
         // Restoring reports its own failures.
-        void restoreHistoryProject(app, commit);
+        void restoreHistoryProject(app, commit, translate);
       }}
     />
   );
@@ -731,12 +719,11 @@ function HistoryGitControls({ app }: { readonly app: ShellView }) {
   );
 }
 
-export async function restoreHistoryFile(app: ShellView, commit: HistoryCommit, file: HistoryCommitFile): Promise<void> {
+export async function restoreHistoryFile(app: ShellView, commit: HistoryCommit, file: HistoryCommitFile, translate: Translator): Promise<void> {
   const confirmed = await confirmDialog({
-    title: `Put ${file.label} back?`,
-    body:
-      `It goes back to how it was in “${commit.subject}”, ` + 'and lands as an unsaved change — ' + 'so you can look at it and undo it like any other edit.',
-    confirmLabel: 'Put it back',
+    title: translate('shell.restore.fileTitle', { name: historyFileLabel(file, translate) }),
+    body: translate('shell.restore.fileBody', { subject: commit.subject }),
+    confirmLabel: translate('shell.restore.fileConfirm'),
   });
   if (!confirmed) {
     return;
@@ -747,30 +734,27 @@ export async function restoreHistoryFile(app: ShellView, commit: HistoryCommit, 
     }
     const restored = await restoreProjectFile(app.project.path, commit.hash, file.path);
     if (restored.missing) {
-      app.showToast(restored.message ?? 'That version no longer contains the file.', 'error');
+      app.showToast(translateReference(restored.message ?? translate('shell.restore.fileMissing'), restored.messageRef, translate), 'error');
       return;
     }
     await app.refreshGit();
     await app.reloadFromDisk();
-    app.showToast(`${file.label} is back to how it was`, 'success');
+    app.showToast(translate('shell.restore.fileDone', { name: historyFileLabel(file, translate) }), 'success');
   } catch (error: unknown) {
-    app.showToast(cleanError(error), 'error');
+    app.showToast(translateErrorText(cleanErrorKeepingReference(error), translate), 'error');
   }
 }
 
-export async function restoreHistoryProject(app: ShellView, commit: HistoryCommit): Promise<void> {
+export async function restoreHistoryProject(app: ShellView, commit: HistoryCommit, translate: Translator): Promise<void> {
   const confirmed = await confirmDialog({
-    title: `Take everything back to “${commit.subject}”?`,
-    body:
-      'Anything you haven’t saved is put aside first, so nothing is lost. ' +
-      'Your saved history stays exactly as it is — ' +
-      'this lands as a set of unsaved changes you can look over, keep, or undo.',
-    confirmLabel: 'Take it back',
+    title: translate('shell.restore.projectTitle', { subject: commit.subject }),
+    body: translate('shell.restore.projectBody'),
+    confirmLabel: translate('shell.restore.projectConfirm'),
   });
   if (!confirmed) {
     return;
   }
-  app.setBusy('Going back…');
+  app.setBusy(translate('shell.restore.going'));
   try {
     if (!commit.hash) {
       throw new Error('History commit has no hash');
@@ -778,9 +762,9 @@ export async function restoreHistoryProject(app: ShellView, commit: HistoryCommi
     const restored = await restoreProjectVersion(app.project.path, commit.hash);
     await app.refreshGit();
     await app.reloadFromDisk();
-    app.showToast(restored?.parked ? 'The project is back — your unsaved work is waiting on this branch' : 'The project is back to how it was', 'success');
+    app.showToast(translate(restored?.parked ? 'shell.restore.projectParked' : 'shell.restore.projectDone'), 'success');
   } catch (error: unknown) {
-    app.showToast(cleanError(error), 'error');
+    app.showToast(translateErrorText(cleanErrorKeepingReference(error), translate), 'error');
   } finally {
     app.setBusy(undefined);
   }

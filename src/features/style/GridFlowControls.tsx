@@ -1,4 +1,5 @@
 import Popup from '../../ui/Popup';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 // The grid's flow controls: direction and density, the custom value input and
 // its menu, content distribution, and the column and row counts
 // (GridControls.tsx).
@@ -8,7 +9,7 @@ import SegmentedControl from './components/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
 import { commitInPlace } from './model/commitInPlace';
 import { parseFlow, buildFlow, isPresetFlow } from './gridTracks';
-import { GRID_FLOW, GRID_CONTENT, GRID_SYNONYMS, gridKeyword, LABELS, cap, contentOptions, ChevUp, ChevDown, DenseIcon } from './GridIcons';
+import { gridFlowOptions, GRID_CONTENT, GRID_SYNONYMS, gridKeyword, contentLabels, cap, contentOptions, ChevUp, ChevDown, DenseIcon } from './GridIcons';
 
 export function parseImportant(input: string): { value: string; important: boolean } {
   const match = input.match(/!\s*important\s*$/i);
@@ -25,6 +26,7 @@ export interface GridDirectionControlProps {
   onCommitCustom: (value: string, important: boolean) => void;
 }
 export function GridDirectionControl({ value, busy, onSet, onCommitCustom }: GridDirectionControlProps) {
+  const translate = useTranslate();
   const { direction, dense } = value ? parseFlow(value) : { direction: 'row', dense: false };
   const [forceCustom, setForceCustom] = useState(false);
   const customMode = forceCustom || (!!value.trim() && !isPresetFlow(value));
@@ -52,20 +54,20 @@ export function GridDirectionControl({ value, busy, onSet, onCommitCustom }: Gri
             value={value}
             busy={busy}
             inputRef={menu.inputRef}
-            placeholder="e.g. row dense"
-            ariaLabel="Grid auto flow"
+            placeholder={translate('style.gridFlowControls.autoFlowPlaceholder')}
+            ariaLabel={translate('style.gridFlowControls.autoFlow')}
             onCommitCustom={onCommitCustom}
           />
         ) : (
           <SegmentedControl
             value={direction}
-            options={GRID_FLOW}
-            ariaLabel="Grid direction"
+            options={gridFlowOptions(translate)}
+            ariaLabel={translate('style.gridFlowControls.gridDirection')}
             disabled={busy}
             onChange={(next) => onSet(buildFlow({ direction: next, dense }))}
           />
         )}
-        <MenuArrow open={menu.open} busy={busy} ariaLabel="More direction options" onToggle={menu.toggle} />
+        <MenuArrow open={menu.open} busy={busy} ariaLabel={translate('style.gridFlowControls.moreDirectionOptions')} onToggle={menu.toggle} />
         {menu.open ? (
           <DirectionMenu onClose={() => menu.setOpen(false)} customMode={customMode} pickPreset={pickPreset} enterCustom={enterCustom} />
         ) : undefined}
@@ -87,28 +89,30 @@ export function DirectionMenu({
   enterCustom: () => void;
   readonly onClose: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <Popup mode="popover" portal={false} onClose={onClose} className="embed-editor_display-menu" role="menu">
       {customMode ? (
         <>
-          <MenuButton label="Horizontal" onClick={() => pickPreset('row')} />
-          <MenuButton label="Vertical" onClick={() => pickPreset('column')} />
+          <MenuButton label={translate('style.gridFlowControls.horizontal')} onClick={() => pickPreset('row')} />
+          <MenuButton label={translate('style.gridFlowControls.vertical')} onClick={() => pickPreset('column')} />
         </>
       ) : (
-        <MenuButton label="Custom" onClick={enterCustom} />
+        <MenuButton label={translate('style.gridFlowControls.custom')} onClick={enterCustom} />
       )}
     </Popup>
   );
 }
 
 export function DenseToggle({ dense, busy, onToggle }: { dense: boolean; busy: boolean; onToggle: () => void }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
       className={`embed-editor_icon-btn ${dense ? 'is-active' : ''}`}
       disabled={busy}
       aria-pressed={dense}
-      title="Dense — backfill earlier gaps in the grid"
+      title={translate('style.gridFlowControls.dense')}
       onClick={onToggle}
     >
       <DenseIcon />
@@ -240,6 +244,7 @@ export interface GridContentControlProps {
   onCommitCustom: (value: string, important: boolean) => void;
 }
 export function GridContentControl(props: GridContentControlProps) {
+  const translate = useTranslate();
   const { value, prop, vertical, ariaLabel, busy, onSet, onCommitCustom } = props;
   const current = gridKeyword(value.trim().toLowerCase());
   const shownContent = gridKeyword(useHighlight('', current ? '' : prop, [...GRID_CONTENT, ...Object.keys(GRID_SYNONYMS)], 'stretch'));
@@ -263,11 +268,18 @@ export function GridContentControl(props: GridContentControlProps) {
   return (
     <div ref={menu.rootRef} className={`embed-editor_grid-dir-bar ${customMode ? 'is-custom' : ''}`}>
       {customMode ? (
-        <GridCustomInput value={value} busy={busy} inputRef={menu.inputRef} placeholder="custom value" ariaLabel={ariaLabel} onCommitCustom={onCommitCustom} />
+        <GridCustomInput
+          value={value}
+          busy={busy}
+          inputRef={menu.inputRef}
+          placeholder={translate('style.gridFlowControls.customValuePlaceholder')}
+          ariaLabel={ariaLabel}
+          onCommitCustom={onCommitCustom}
+        />
       ) : (
-        <SegmentedControl value={segValue} options={contentOptions({ vertical })} ariaLabel={ariaLabel} disabled={busy} onChange={onSet} />
+        <SegmentedControl value={segValue} options={contentOptions({ vertical }, translate)} ariaLabel={ariaLabel} disabled={busy} onChange={onSet} />
       )}
-      <MenuArrow open={menu.open} busy={busy} ariaLabel={`More ${ariaLabel} options`} onToggle={menu.toggle} />
+      <MenuArrow open={menu.open} busy={busy} ariaLabel={translate('style.gridFlowControls.moreOptions', { name: ariaLabel })} onToggle={menu.toggle} />
       {menu.open ? (
         <GridContentMenu customMode={customMode} pickPreset={pickPreset} enterCustom={enterCustom} onClose={() => menu.setOpen(false)} />
       ) : undefined}
@@ -277,7 +289,8 @@ export function GridContentControl(props: GridContentControlProps) {
 
 // From custom mode: every preset, to switch back to the bar.
 export function ContentPresetItems({ pickPreset }: { pickPreset: (option: string) => void }) {
-  return GRID_CONTENT.map((option) => <MenuButton key={option} label={LABELS[option] ?? cap(option)} onClick={() => pickPreset(option)} />);
+  const labels = contentLabels(useTranslate());
+  return GRID_CONTENT.map((option) => <MenuButton key={option} label={labels[option] ?? cap(option)} onClick={() => pickPreset(option)} />);
 }
 
 // A track count stays between 1 and 500.
@@ -348,12 +361,13 @@ export function CountField({ value, busy, ariaLabel, onCommit }: { value: number
 }
 
 export function CountSteppers({ busy, step }: { busy: boolean; step: (delta: number) => void }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_grid-count-steppers">
-      <button type="button" tabIndex={-1} disabled={busy} aria-label="Increase" onClick={() => step(1)}>
+      <button type="button" tabIndex={-1} disabled={busy} aria-label={translate('style.gridFlowControls.increase')} onClick={() => step(1)}>
         <ChevUp />
       </button>
-      <button type="button" tabIndex={-1} disabled={busy} aria-label="Decrease" onClick={() => step(-1)}>
+      <button type="button" tabIndex={-1} disabled={busy} aria-label={translate('style.gridFlowControls.decrease')} onClick={() => step(-1)}>
         <ChevDown />
       </button>
     </div>
@@ -371,9 +385,10 @@ function GridContentMenu({
   readonly enterCustom: () => void;
   readonly onClose: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <Popup mode="popover" portal={false} onClose={onClose} className="embed-editor_display-menu" role="menu">
-      {customMode ? <ContentPresetItems pickPreset={pickPreset} /> : <MenuButton label="Custom" onClick={enterCustom} />}
+      {customMode ? <ContentPresetItems pickPreset={pickPreset} /> : <MenuButton label={translate('style.gridFlowControls.custom')} onClick={enterCustom} />}
     </Popup>
   );
 }

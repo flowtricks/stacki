@@ -7,29 +7,15 @@ import { angleToDegrees, degreesToAngle } from './model/gradient';
 import { NumberField } from './components/PositionGrid';
 import { assert } from '../../../shared/core/assert';
 import { tooltipArrowStyle } from './components/MenuParts';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 
 export const RADIAL_SIZES = [
-  {
-    value: 'closest-side',
-    label: 'Closest side',
-    tip: 'Closest side extends the gradient from the defined position to the closest side.',
-  },
-  {
-    value: 'closest-corner',
-    label: 'Closest corner',
-    tip: 'Closest corner extends the gradient from the defined position to the closest corner.',
-  },
-  {
-    value: 'farthest-side',
-    label: 'Farthest side',
-    tip: 'Farthest side extends the gradient from the defined position to the farthest side.',
-  },
-  {
-    value: 'farthest-corner',
-    label: 'Farthest corner',
-    tip: 'Farthest corner extends the gradient from the defined position to the farthest corner.',
-  },
-] as const;
+  { value: 'closest-side', labelKey: 'style.gradientControls.closestSide', tipKey: 'style.gradientControls.tipClosestSide' },
+  { value: 'closest-corner', labelKey: 'style.gradientControls.closestCorner', tipKey: 'style.gradientControls.tipClosestCorner' },
+  { value: 'farthest-side', labelKey: 'style.gradientControls.farthestSide', tipKey: 'style.gradientControls.tipFarthestSide' },
+  { value: 'farthest-corner', labelKey: 'style.gradientControls.farthestCorner', tipKey: 'style.gradientControls.tipFarthestCorner' },
+] as const satisfies ReadonlyArray<{ value: string; labelKey: MessageKey; tipKey: MessageKey }>;
 
 export const RADIAL_SIZE_FARTHEST_SIDE_SECOND_PATH = 'M13.85 5a7.465 7.465 0 00-1.35-3H2v10.5A7.503 7.503 0 0013.85 8H8.5a2.5 2.5 0 110-3h5.35z';
 
@@ -89,6 +75,7 @@ export const RADIAL_SIZE_ICONS: Record<string, ReactNode> = {
 
 // Radial extent presets with Webflow's icons + delayed description tooltips.
 export function RadialSizeControl({ value, busy, onChange }: { value: string; busy: boolean; onChange: (value: string) => void }) {
+  const translate = useTranslate();
   const rootRef = useRef<HTMLDivElement>(null);
   const [hovered, setHovered] = useState<string | undefined>(undefined);
   const [arrowRight, setArrowRight] = useState(0);
@@ -117,9 +104,10 @@ export function RadialSizeControl({ value, busy, onChange }: { value: string; bu
     clearTimer();
     setHovered(undefined);
   };
-  const tip = RADIAL_SIZES.find((size) => size.value === hovered)?.tip;
+  const tipKey = RADIAL_SIZES.find((size) => size.value === hovered)?.tipKey;
+  const tip = tipKey === undefined ? undefined : translate(tipKey);
   return (
-    <div ref={rootRef} className="embed-editor_grad-sizes" role="group" aria-label="Gradient size">
+    <div ref={rootRef} className="embed-editor_grad-sizes" role="group" aria-label={translate('style.gradientControls.gradientSize')}>
       {RADIAL_SIZES.map((size) => {
         const active = value === size.value;
         return (
@@ -128,7 +116,7 @@ export function RadialSizeControl({ value, busy, onChange }: { value: string; bu
             type="button"
             className={`embed-editor_grad-size ${active ? 'is-active' : ''}`}
             disabled={busy}
-            aria-label={size.label}
+            aria-label={translate(size.labelKey)}
             aria-pressed={active}
             onClick={() => {
               end();
@@ -178,6 +166,7 @@ export const RotateCwIcon = () => (
 // The angle dial (linear): drag the dot around the circle to set the gradient's
 // direction (0° = up, 90° = right — CSS convention), matching Webflow's control.
 export function AngleDial({ deg, busy, onChange }: { deg: number; busy: boolean; onChange: (deg: number, live: boolean) => void }) {
+  const translate = useTranslate();
   const ref = useRef<HTMLButtonElement>(null);
   const dragging = useRef(false);
   const angleFrom = (event: React.PointerEvent) => {
@@ -221,8 +210,8 @@ export function AngleDial({ deg, busy, onChange }: { deg: number; busy: boolean;
       onPointerMove={onMove}
       onPointerUp={onUp}
       onPointerCancel={onUp}
-      aria-label="Gradient angle"
-      title="Drag to set the angle"
+      aria-label={translate('style.gradientControls.gradientAngle')}
+      title={translate('style.gradientControls.dragAngle')}
     >
       <span className="embed-editor_grad-dial-dot" style={{ left: `${50 + 38 * Math.sin(rad)}%`, top: `${50 - 38 * Math.cos(rad)}%` }} />
     </button>
@@ -236,6 +225,7 @@ export interface WriteOptions {
 
 // Linear angle control: the dial + ±45° rotate buttons + a DEG number field.
 export function AngleControl({ angle, busy, onChange }: { angle: string; busy: boolean; onChange: (angle: string, live: boolean) => void }) {
+  const translate = useTranslate();
   const deg = angleToDegrees(angle);
   const set = (degrees: number, options: WriteOptions) => onChange(degreesToAngle(degrees), options.live);
   return (
@@ -245,8 +235,8 @@ export function AngleControl({ angle, busy, onChange }: { angle: string; busy: b
         type="button"
         className="embed-editor_grad-rotate"
         disabled={busy}
-        title="Rotate −45°"
-        aria-label="Rotate counterclockwise"
+        title={translate('style.gradientControls.rotateCcwTitle')}
+        aria-label={translate('style.gradientControls.rotateCcw')}
         onClick={() => set(deg - 45, { live: false })}
       >
         <RotateCcwIcon />
@@ -255,8 +245,8 @@ export function AngleControl({ angle, busy, onChange }: { angle: string; busy: b
         type="button"
         className="embed-editor_grad-rotate"
         disabled={busy}
-        title="Rotate +45°"
-        aria-label="Rotate clockwise"
+        title={translate('style.gradientControls.rotateCwTitle')}
+        aria-label={translate('style.gradientControls.rotateCw')}
         onClick={() => set(deg + 45, { live: false })}
       >
         <RotateCwIcon />
@@ -264,7 +254,7 @@ export function AngleControl({ angle, busy, onChange }: { angle: string; busy: b
       <NumberField
         value={String(Math.round(deg))}
         unit="deg"
-        label="Gradient angle"
+        label={translate('style.gradientControls.gradientAngle')}
         busy={busy}
         onLive={(next) => set(angleToDegrees(next), { live: true })}
         onCommit={(next) => set(angleToDegrees(next), { live: false })}

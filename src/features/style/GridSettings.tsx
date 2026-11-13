@@ -34,6 +34,7 @@ import { TrackIcon, type AutoFit, TrackSizeEditor, TrackPopover } from './TrackE
 import { AreasSection } from './GridAreas';
 import { type TrackSectionProps, AutoSection, Modal } from './GridAutoSection';
 import { withImportant } from './model/styleDisplay';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // The "Grid settings" modal (Webflow's Configure-grid popup): the Columns and Rows
 // track lists — drag to reorder, click a track to size it (a single Default size or a
@@ -42,6 +43,8 @@ import { withImportant } from './model/styleDisplay';
 
 // The expression toggle's glyph: the braces you write one in.
 const BracesIcon = centralIcon(centralBraces);
+
+const EXPRESSION_EXAMPLE = 'repeat(auto-fit, minmax(12rem, 1fr))'; // i18n-ignore: CSS example value.
 
 // The whole track list as one field, for a value the list cannot hold: a
 // variable standing in for every track (`var(--columns)`), an !important, a
@@ -65,6 +68,7 @@ function ExpressionField({
   busy: boolean;
   onCommit: (v: string, important: boolean) => void;
 }) {
+  const translate = useTranslate();
   const [text, setText] = useState(value);
   const focused = useRef(false);
   useEffect(() => {
@@ -98,8 +102,8 @@ function ExpressionField({
         spellCheck={false}
         rows={3}
         disabled={busy}
-        aria-label={`${title} expression`}
-        placeholder="repeat(auto-fit, minmax(12rem, 1fr))"
+        aria-label={translate('style.gridSettings.expressionAria', { title })}
+        placeholder={EXPRESSION_EXAMPLE}
         onChange={(event) => setText(event.target.value)}
         onFocus={() => {
           focused.current = true;
@@ -133,27 +137,25 @@ function RepeatSwitch({
   can,
   why,
   busy,
-  title,
+  axis,
   onChange,
 }: {
   on: boolean;
   can: boolean;
   why: string;
   busy: boolean;
-  title: string;
+  axis: 'column' | 'row';
   onChange: (on: boolean) => void;
 }) {
+  const translate = useTranslate();
   return (
-    <label
-      className={`embed-editor_switch ${on ? 'is-on' : ''} ${can ? '' : 'is-disabled'}`}
-      title={can ? why : `Tracks that differ can’t be written as repeat()`}
-    >
+    <label className={`embed-editor_switch ${on ? 'is-on' : ''} ${can ? '' : 'is-disabled'}`} title={can ? why : translate('style.gridSettings.noRepeat')}>
       <input
         type="checkbox"
         role="switch"
         checked={on}
         disabled={busy || !can}
-        aria-label={`Use repeat() for ${title.toLowerCase()}`}
+        aria-label={axis === 'column' ? translate('style.gridSettings.repeatColumns') : translate('style.gridSettings.repeatRows')}
         onChange={(event) => onChange(event.target.checked)}
       />
       <span className="embed-editor_switch-label">repeat()</span>
@@ -167,6 +169,7 @@ const sameTracks = (list: string[]) => list.length > 1 && list.every((x) => x ==
 // A reorderable track list (Columns / Rows). Drag the grip to reorder, click a row to
 // open its size editor (popup), trash to remove, + to append a 1fr track.
 function TrackSection({ title, prop, axis, setProp, labels }: TrackSectionProps) {
+  const translate = useTranslate();
   const { busy, clearProp } = labels;
   const list = useTrackList({ prop, setProp, labels });
   const { tracks, rawTemplate, important } = list;
@@ -186,6 +189,7 @@ function TrackSection({ title, prop, axis, setProp, labels }: TrackSectionProps)
     <section className="embed-editor_grid-section">
       <TrackSectionHead
         title={title}
+        axis={axis}
         prop={prop}
         labels={labels}
         list={list}
@@ -216,7 +220,7 @@ function TrackSection({ title, prop, axis, setProp, labels }: TrackSectionProps)
           ))}
         </ul>
       ) : (
-        <div className="embed-editor_grid-empty">No {title.toLowerCase()}</div>
+        <div className="embed-editor_grid-empty">{axis === 'column' ? translate('style.gridSettings.noColumns') : translate('style.gridSettings.noRows')}</div>
       )}
       {open !== undefined && edits.anchorElement && openTrack ? (
         <TrackPopover anchorElement={edits.anchorElement} onClose={() => edits.setOpen(undefined)}>
@@ -368,6 +372,7 @@ function useTrackEdits({ tracks, axis, write }: { tracks: string[]; axis: 'colum
 // gap between them. The + stays where every other section keeps its add.
 function TrackSectionHead({
   title,
+  axis,
   prop,
   labels,
   list,
@@ -378,6 +383,7 @@ function TrackSectionHead({
   onAdd,
 }: {
   title: string;
+  axis: 'column' | 'row';
   prop: string;
   labels: LabelProps;
   list: TrackList;
@@ -389,6 +395,7 @@ function TrackSectionHead({
 }) {
   const { read, busy, clearProp, onProvenance, onSelectSelector } = labels;
   const { tracks, repeatOn } = list;
+  const translate = useTranslate();
   return (
     <div className="embed-editor_grid-section-head">
       <span className="embed-editor_grid-section-title">
@@ -406,20 +413,20 @@ function TrackSectionHead({
       <RepeatSwitch
         on={repeatOn}
         can={list.canRepeat && !asExpression}
-        why={repeatOn ? `Written as repeat(${tracks.length}, …)` : 'Write these tracks as repeat()'}
+        why={repeatOn ? translate('style.gridSettings.writtenAsRepeat', { tracks: tracks.length }) : translate('style.gridSettings.writeAsRepeat')}
         busy={busy}
-        title={title}
+        axis={axis}
         onChange={(next) => switchRepeat({ next, prop, list, setProp })}
       />
-      <ExpressionToggle title={title} busy={busy} tracksCanHold={tracksCanHold} asExpression={asExpression} onToggle={onToggleExpression} />
+      <ExpressionToggle title={title} axis={axis} busy={busy} tracksCanHold={tracksCanHold} asExpression={asExpression} onToggle={onToggleExpression} />
       {asExpression ? undefined : (
         <button
           type="button"
           className="embed-editor_icon-btn"
           onClick={onAdd}
           disabled={busy}
-          title={`Add a ${title.toLowerCase().replace(/s$/, '')}`}
-          aria-label={`Add a ${title}`}
+          title={axis === 'column' ? translate('style.gridSettings.addColumn') : translate('style.gridSettings.addRow')}
+          aria-label={axis === 'column' ? translate('style.gridSettings.addColumn') : translate('style.gridSettings.addRow')}
         >
           <PlusIcon />
         </button>
@@ -443,26 +450,34 @@ function switchRepeat({ next, prop, list, setProp }: { next: boolean; prop: stri
 
 // The braces: edit the whole value as an expression, or back to tracks.
 function ExpressionToggle({
-  title,
+  axis,
   busy,
   tracksCanHold,
   asExpression,
   onToggle,
 }: {
   title: string;
+  axis: 'column' | 'row';
   busy: boolean;
   tracksCanHold: boolean;
   asExpression: boolean;
   onToggle: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
       className={`embed-editor_icon-btn ${asExpression ? 'is-active' : ''}`}
       disabled={busy || !tracksCanHold}
       aria-pressed={asExpression}
-      aria-label={`Edit ${title.toLowerCase()} as an expression`}
-      title={!tracksCanHold ? 'This value can’t be shown as tracks' : asExpression ? 'Back to tracks' : 'Edit the whole value as an expression'}
+      aria-label={axis === 'column' ? translate('style.gridSettings.editColumnsAsExpression') : translate('style.gridSettings.editRowsAsExpression')}
+      title={
+        !tracksCanHold
+          ? translate('style.gridSettings.cannotShowAsTracks')
+          : asExpression
+            ? translate('style.gridSettings.backToTracks')
+            : translate('style.gridSettings.editWholeValue')
+      }
       onClick={onToggle}
     >
       <BracesIcon />
@@ -473,6 +488,7 @@ function ExpressionToggle({
 // One track row: the drag grip, the track (click to open its size popover), and its
 // duplicate / remove actions. The row is also the drop target while dragging.
 function TrackRow({ track, index, axis, busy, edits }: { track: string; index: number; axis: 'column' | 'row'; busy: boolean; edits: TrackEdits }) {
+  const translate = useTranslate();
   const { dragFrom, dragOver, setDragFrom, setDragOver } = edits.drag;
   const isOpen = edits.open === index;
   return (
@@ -507,8 +523,8 @@ function TrackRow({ track, index, axis, busy, edits }: { track: string; index: n
             setDragFrom(undefined);
             setDragOver(undefined);
           }}
-          title="Drag to reorder"
-          aria-label="Drag to reorder"
+          title={translate('style.gridSettings.dragToReorder')}
+          aria-label={translate('style.gridSettings.dragToReorder')}
         >
           <GripIcon />
         </span>
@@ -516,7 +532,7 @@ function TrackRow({ track, index, axis, busy, edits }: { track: string; index: n
           <span className="embed-editor_grid-track-glyph" aria-hidden="true">
             <TrackIcon track={track} axis={axis} />
           </span>
-          <span className="embed-editor_grid-track-label">{trackLabel(track)}</span>
+          <span className="embed-editor_grid-track-label">{trackLabel(track, translate)}</span>
         </button>
         <TrackActions index={index} busy={busy} edits={edits} />
       </div>
@@ -525,6 +541,7 @@ function TrackRow({ track, index, axis, busy, edits }: { track: string; index: n
 }
 
 function TrackActions({ index, busy, edits }: { index: number; busy: boolean; edits: TrackEdits }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_grid-track-actions">
       <button
@@ -532,8 +549,8 @@ function TrackActions({ index, busy, edits }: { index: number; busy: boolean; ed
         className="embed-editor_grid-track-action"
         onClick={() => edits.duplicate(index)}
         disabled={busy}
-        title="Duplicate track"
-        aria-label="Duplicate track"
+        title={translate('style.gridSettings.duplicateTrack')}
+        aria-label={translate('style.gridSettings.duplicateTrack')}
       >
         <DuplicateIcon />
       </button>
@@ -542,8 +559,8 @@ function TrackActions({ index, busy, edits }: { index: number; busy: boolean; ed
         className={'embed-editor_grid-track-action ' + 'embed-editor_grid-track-action-danger'}
         onClick={() => edits.remove(index)}
         disabled={busy}
-        title="Remove track"
-        aria-label="Remove track"
+        title={translate('style.gridSettings.removeTrack')}
+        aria-label={translate('style.gridSettings.removeTrack')}
       >
         <TrashIcon />
       </button>
@@ -569,12 +586,13 @@ export default function GridSettings({
   onClose: () => void;
 }) {
   const labels: LabelProps = { read, busy, clearProp, onProvenance, onSelectSelector };
+  const translate = useTranslate();
   return (
     <Modal onClose={onClose}>
-      <TrackSection title="Columns" prop="grid-template-columns" axis="column" setProp={setProp} labels={labels} />
-      <AutoSection title="Auto-generated columns" prop="grid-auto-columns" axis="column" setProp={setProp} labels={labels} />
-      <TrackSection title="Rows" prop="grid-template-rows" axis="row" setProp={setProp} labels={labels} />
-      <AutoSection title="Auto-generated rows" prop="grid-auto-rows" axis="row" setProp={setProp} labels={labels} />
+      <TrackSection title={translate('style.gridSettings.columns')} prop="grid-template-columns" axis="column" setProp={setProp} labels={labels} />
+      <AutoSection title={translate('style.gridSettings.autoColumns')} prop="grid-auto-columns" axis="column" setProp={setProp} labels={labels} />
+      <TrackSection title={translate('style.gridSettings.rows')} prop="grid-template-rows" axis="row" setProp={setProp} labels={labels} />
+      <AutoSection title={translate('style.gridSettings.autoRows')} prop="grid-auto-rows" axis="row" setProp={setProp} labels={labels} />
       <AreasSection setProp={setProp} labels={labels} />
     </Modal>
   );

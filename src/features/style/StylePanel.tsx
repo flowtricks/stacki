@@ -7,6 +7,7 @@ import { setHost } from './model/host';
 import { prefetchComponentSources } from './model/componentSourceCache';
 import { PX_LENGTHS, sameLengthUnit, type LengthUnit } from '../../../shared/properties/lengthUnit';
 import EmbedEditor from './EmbedEditor';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import './tokens.css';
 import './utilities.css';
 import './embedEditor.css';
@@ -59,6 +60,7 @@ const NO_PATHS: readonly string[] = [];
 
 export default function StylePanel(props: StylePanelProps) {
   const files = useStyleFiles(props.project?.path, undefined, readStyleFiles);
+  const translate = useTranslate();
   const astroFiles = useStyleFiles(props.project?.path, props.openFilePath, readAstroStyleFiles);
   const lengthUnit = useStableLengthUnit(props.lengthUnit ?? PX_LENGTHS);
   const host = hostState(props, files.files, astroFiles.files, lengthUnit);
@@ -79,8 +81,10 @@ export default function StylePanel(props: StylePanelProps) {
   return (
     <SoundHere>
       <div className={`style-panel-host ${popupOpen ? 'is-locked' : ''}`} ref={hostRef} onClick={playButtonNote}>
-        {files.error || astroFiles.error ? <ErrorToast message={`Could not load stylesheet sources. ${files.error || astroFiles.error}`} /> : undefined}
-        {props.node ? <EmbedEditor /> : <div className="props-empty">Select an element to style it.</div>}
+        {files.error || astroFiles.error ? (
+          <ErrorToast message={translate('style.stylePanel.loadError', { error: files.error || astroFiles.error || '' })} />
+        ) : undefined}
+        {props.node ? <EmbedEditor /> : <div className="props-empty">{translate('style.stylePanel.selectElement')}</div>}
       </div>
     </SoundHere>
   );

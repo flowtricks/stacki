@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { ErrorToast } from '../../ui/ErrorToast';
 import CloneRepositoryModal from './CloneRepositoryModal';
 import WelcomeSplitButton from './WelcomeSplitButton';
@@ -23,6 +24,7 @@ interface WelcomeScreenProps {
 }
 
 export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps) {
+  const translate = useTranslate();
   const [cloning, setCloning] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   const [newProjectParent, setNewProjectParent] = useState<string | undefined>(undefined);
@@ -57,7 +59,7 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
           onClose={() => setStarterDirectory(undefined)}
           onDone={(directory) => {
             setStarterDirectory(undefined);
-            showToast('Site created', 'success');
+            showToast(translate('welcome.siteCreated'), 'success');
             onOpen(directory);
           }}
         />
@@ -68,7 +70,7 @@ export default function WelcomeScreen({ onOpen, showToast }: WelcomeScreenProps)
           onClose={() => setNewProjectParent(undefined)}
           onDone={(directory) => {
             setNewProjectParent(undefined);
-            showToast('Project created', 'success');
+            showToast(translate('welcome.projectCreated'), 'success');
             onOpen(directory);
           }}
         />
@@ -206,6 +208,7 @@ function WelcomeHero({
   readonly createNew: () => void;
   readonly cloneRepository: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="welcome-hero">
       <StackiLogo width={320} className="welcome-logo" />
@@ -213,21 +216,21 @@ function WelcomeHero({
         <div className="actions-row">
           <WelcomeSplitButton
             className={hasRecents ? 'primary' : ''}
-            label="Open from folder"
+            label={translate('welcome.hero.openFolder')}
             icon={<FolderIcon size={12} />}
-            menuLabel="Open from GitHub"
+            menuLabel={translate('welcome.hero.openGitHub')}
             menuIcon={<GitHubIcon size={15} />}
-            menuTitle="More ways to open a project"
+            menuTitle={translate('welcome.hero.moreOpen')}
             onClick={openExisting}
             onMenuSelect={cloneRepository}
           />
           <WelcomeSplitButton
             className={hasRecents ? '' : 'primary'}
-            label="Start from Lumos"
+            label={translate('welcome.hero.startLumos')}
             icon={<LumosIcon size={15} />}
-            menuLabel="Start from Astro"
+            menuLabel={translate('welcome.hero.startAstro')}
             menuIcon={<AstroIcon size={15} />}
-            menuTitle="More ways to start a project"
+            menuTitle={translate('welcome.hero.moreStart')}
             onClick={startFromLumos}
             onMenuSelect={createNew}
           />
@@ -249,6 +252,7 @@ function RecentRail({
   readonly open: (projectPath: string) => void;
   readonly remove: (projectPath: string) => void;
 }) {
+  const translate = useTranslate();
   if (projects.length === 0) {
     return undefined;
   }
@@ -259,7 +263,7 @@ function RecentRail({
           <div key={project.path} className="recent-card" title={project.path} onClick={() => open(project.path)}>
             <button
               className="recent-remove"
-              title="Remove from recent projects"
+              title={translate('welcome.recent.remove')}
               onClick={(event) => {
                 event.stopPropagation();
                 remove(project.path);

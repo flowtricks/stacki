@@ -186,8 +186,16 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // --- what main does with it -------------------------------------------------------------
   const main = readSource('electron/main.ts');
-  check('the File menu offers a way in', /label: 'Open Project…'/.test(main), 'no Open Project item');
-  check('and a way out', /label: 'Close Project'/.test(main), 'no Close Project item');
+  // The menu lives in applicationMenu.ts and its labels in the menu catalog.
+  const menuSource = readSource('electron/app/applicationMenu.ts');
+  const menuCatalog = readSource('shared/properties/i18n/messages/en/menu.ts');
+  check('the File menu offers a way in', /label: translate\('menu\.file\.openProject'\)/.test(menuSource), 'no Open Project item');
+  check('and a way out', /label: translate\('menu\.file\.closeProject'\)/.test(menuSource), 'no Close Project item');
+  check(
+    'named Open Project… and Close Project',
+    /'menu\.file\.openProject': 'Open Project…'/.test(menuCatalog) && /'menu\.file\.closeProject': 'Close Project'/.test(menuCatalog),
+    'the labels changed',
+  );
   const close = main.slice(main.indexOf("ipcMain.handle('project:close'"), main.indexOf("app.on('window-all-closed'"));
   check('letting go stops the dev server', /devServers\.stop\(\)/.test(close), close.slice(0, 200));
   check('and the shells, which outlive a window', /cleanupTerminals\(\)/.test(close), close.slice(0, 200));

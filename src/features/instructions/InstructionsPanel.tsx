@@ -10,16 +10,17 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { assert } from '../../../shared/core/assert';
 import { can } from '../../../shared/properties/projectRoles';
 import {
-  fileNameProblem,
+  fileNameProblemDescribed,
   parseInstructionFilePath,
   ruleScaffold,
-  skillNameProblem,
+  skillNameProblemDescribed,
   skillScaffold,
   slugName,
   withHidden,
   type InstructionListing,
 } from '../../../shared/properties/instructions';
 import { useCurrentRole } from '../../lib/useCurrentRole';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { instructionsListingCache } from './instructionsListingCache';
 import Dropdown from '../../ui/Dropdown';
 import MoreMenu, { type MenuItem } from '../../ui/MoreMenu';
@@ -62,6 +63,7 @@ type Creating =
 type SectionId = 'skills' | 'rules' | 'docs';
 
 export default function InstructionsPanel({ projectPath, showToast }: Props) {
+  const translate = useTranslate();
   const role = useCurrentRole();
   const editable = can(role, 'instructions:edit');
   const listing = useListing(projectPath);
@@ -87,7 +89,7 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
       if (selected !== undefined && (selected === pattern || selected.startsWith(`${pattern}/`))) {
         selectInstruction(undefined);
       }
-      showToast?.(`Hidden ${pattern}. Settings → Instructions shows it again.`, 'success');
+      showToast?.(translate('instructionsPanel.hidden', { pattern }), 'success');
     } catch (failure: unknown) {
       report(failure instanceof Error ? failure.message : String(failure));
     }
@@ -95,10 +97,10 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
   const menuFor = (path: string, options: { readonly folder: boolean }): readonly MenuItem[] => {
     const parent = options.folder ? path : folderOf(path);
     return [
-      { label: 'Reveal in Finder', onSelect: () => void revealInstruction(projectPath, path) },
-      { label: 'Copy path', onSelect: () => void navigator.clipboard.writeText(path) },
-      ...(editable && !options.folder ? [{ label: 'Hide file', onSelect: () => void hide(path) }] : []),
-      ...(editable && parent !== undefined ? [{ label: 'Hide folder', onSelect: () => void hide(parent) }] : []),
+      { label: translate('instructionsPanel.menu.reveal'), onSelect: () => void revealInstruction(projectPath, path) },
+      { label: translate('instructionsPanel.menu.copyPath'), onSelect: () => void navigator.clipboard.writeText(path) },
+      ...(editable && !options.folder ? [{ label: translate('instructionsPanel.menu.hideFile'), onSelect: () => void hide(path) }] : []),
+      ...(editable && parent !== undefined ? [{ label: translate('instructionsPanel.menu.hideFolder'), onSelect: () => void hide(parent) }] : []),
     ];
   };
   const toggleFolder = (folder: string): void =>
@@ -144,31 +146,31 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
   return (
     <div className="panel-section grow instructions-panel">
       <div className="panel-header">
-        <h2>Instructions</h2>
+        <h2>{translate('instructionsPanel.title')}</h2>
         <div className="instructions-header-actions">
           <button
             type="button"
             className="ghost"
-            title={expanded ? 'Collapse all' : 'Expand all'}
-            aria-label={expanded ? 'Collapse all' : 'Expand all'}
+            title={expanded ? translate('instructionsPanel.collapseAll') : translate('instructionsPanel.expandAll')}
+            aria-label={expanded ? translate('instructionsPanel.collapseAll') : translate('instructionsPanel.expandAll')}
             onClick={() => (expanded ? collapseAll() : expandAll())}
           >
             {expanded ? <CollapseVerticalIcon size={13} /> : <ExpandVerticalIcon size={13} />}
           </button>
           <MoreMenu
             className="ghost"
-            title="Instructions options"
+            title={translate('instructionsPanel.options')}
             width={170}
             items={[
-              { label: 'Expand all', onSelect: expandAll },
-              { label: 'Collapse all', onSelect: collapseAll },
-              { label: 'Refresh', onSelect: listing.refresh },
+              { label: translate('instructionsPanel.expandAll'), onSelect: expandAll },
+              { label: translate('instructionsPanel.collapseAll'), onSelect: collapseAll },
+              { label: translate('instructionsPanel.refresh'), onSelect: listing.refresh },
             ]}
           />
         </div>
       </div>
       <div className="panel-body instructions-body">
-        {listing.state.kind === 'loading' && <div className="props-empty">Reading the project…</div>}
+        {listing.state.kind === 'loading' && <div className="props-empty">{translate('instructionsPanel.reading')}</div>}
         {listing.state.kind === 'error' && (
           <div className="props-empty" role="alert">
             {listing.state.message}
@@ -178,15 +180,23 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
           <>
             <Section
               id="skills"
-              title="Skills"
+              title={translate('instructionsPanel.skills.title')}
               count={sections.skills.length}
               open={!closedSections.has('skills')}
               onToggle={toggleSection}
-              actions={editable && <IconButton label="New skill" icon={<PlusIcon size={13} />} onClick={() => startCreating({ kind: 'skill' }, 'skills')} />}
+              actions={
+                editable && (
+                  <IconButton
+                    label={translate('instructionsPanel.skills.new')}
+                    icon={<PlusIcon size={13} />}
+                    onClick={() => startCreating({ kind: 'skill' }, 'skills')}
+                  />
+                )
+              }
             >
               {creating.kind === 'skill' && <SkillForm home={skillHome(listing.state.listing)} projectPath={projectPath} onDone={created} onError={report} />}
               {sections.skills.length === 0 && creating.kind !== 'skill' && (
-                <div className="instructions-empty">No skills yet. Create your first skill to give AI the context it needs to do its best work.</div>
+                <div className="instructions-empty">{translate('instructionsPanel.skills.empty')}</div>
               )}
               {sections.skills.map((skill) => (
                 <SkillItem key={skill.path} skill={skill} selected={selected === skill.path} onOpen={open} menu={menuFor(skill.path, { folder: false })} />
@@ -194,15 +204,23 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
             </Section>
             <Section
               id="rules"
-              title="Rules"
+              title={translate('instructionsPanel.rules.title')}
               count={countFiles(sections.rules)}
               open={!closedSections.has('rules')}
               onToggle={toggleSection}
               actions={
                 editable && (
                   <>
-                    <IconButton label="New rule folder" icon={<FolderPlusIcon size={13} />} onClick={() => startCreating({ kind: 'rule-folder' }, 'rules')} />
-                    <IconButton label="New rule" icon={<PlusIcon size={13} />} onClick={() => startCreating({ kind: 'rule' }, 'rules')} />
+                    <IconButton
+                      label={translate('instructionsPanel.rules.newFolder')}
+                      icon={<FolderPlusIcon size={13} />}
+                      onClick={() => startCreating({ kind: 'rule-folder' }, 'rules')}
+                    />
+                    <IconButton
+                      label={translate('instructionsPanel.rules.new')}
+                      icon={<PlusIcon size={13} />}
+                      onClick={() => startCreating({ kind: 'rule' }, 'rules')}
+                    />
                   </>
                 )
               }
@@ -211,27 +229,31 @@ export default function InstructionsPanel({ projectPath, showToast }: Props) {
                 <RuleForm kind={creating.kind} homes={ruleHomes(listing.state.listing)} projectPath={projectPath} onDone={created} onError={report} />
               )}
               {sections.rules.length === 0 && creating.kind !== 'rule' && creating.kind !== 'rule-folder' && (
-                <div className="instructions-empty">No rules yet. Add an AGENTS.md or a rule file to tell AI how this project is built.</div>
+                <div className="instructions-empty">{translate('instructionsPanel.rules.empty')}</div>
               )}
               <Tree nodes={sections.rules} depth={0} openFolders={openFolders} selected={selected} onToggle={toggleFolder} onOpen={open} menuFor={menuFor} />
             </Section>
             <Section
               id="docs"
-              title="Docs"
+              title={translate('instructionsPanel.docs.title')}
               count={countFiles(sections.docs)}
               open={!closedSections.has('docs')}
               onToggle={toggleSection}
-              actions={editable && <IconButton label="New doc" icon={<PlusIcon size={13} />} onClick={() => startCreating({ kind: 'doc' }, 'docs')} />}
+              actions={
+                editable && (
+                  <IconButton
+                    label={translate('instructionsPanel.docs.new')}
+                    icon={<PlusIcon size={13} />}
+                    onClick={() => startCreating({ kind: 'doc' }, 'docs')}
+                  />
+                )
+              }
             >
               {creating.kind === 'doc' && <DocumentForm projectPath={projectPath} onDone={created} onError={report} />}
-              {sections.docs.length === 0 && creating.kind !== 'doc' && <div className="instructions-empty">No other Markdown files in this project.</div>}
+              {sections.docs.length === 0 && creating.kind !== 'doc' && <div className="instructions-empty">{translate('instructionsPanel.docs.empty')}</div>}
               <Tree nodes={sections.docs} depth={0} openFolders={openFolders} selected={selected} onToggle={toggleFolder} onOpen={open} menuFor={menuFor} />
             </Section>
-            {listing.state.listing.truncated && (
-              <div className="instructions-empty">
-                This project has more Markdown than the panel lists. Hide folders in Settings → Instructions to see the rest.
-              </div>
-            )}
+            {listing.state.listing.truncated && <div className="instructions-empty">{translate('instructionsPanel.truncated')}</div>}
           </>
         )}
       </div>
@@ -337,6 +359,7 @@ function Row(props: {
   readonly detail?: ReactNode;
   readonly onActivate: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <div
       className={`list-item instructions-row ${props.folder === undefined ? '' : 'folder'} ${props.selected ? 'active' : ''}`}
@@ -366,7 +389,7 @@ function Row(props: {
         <span className="label instructions-row-label">{props.label}</span>
         {props.detail}
       </span>
-      <MoreMenu className="row-action rename-action" title={`${props.label} options`} items={props.menu} width={170} />
+      <MoreMenu className="row-action rename-action" title={translate('instructionsPanel.rowOptions', { label: props.label })} items={props.menu} width={170} />
     </div>
   );
 }
@@ -453,18 +476,20 @@ interface FormProps {
 }
 
 function SkillForm(props: FormProps & { readonly home: string }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [problem, setProblem] = useState<string>();
   const submit = async (): Promise<void> => {
     const slug = slugName(name);
-    const nameProblem = skillNameProblem(slug);
+    const nameProblem = skillNameProblemDescribed(slug);
     if (nameProblem !== undefined) {
-      setProblem(nameProblem);
+      setProblem(translateDescribed(nameProblem));
       return;
     }
     if (description.trim() === '') {
-      setProblem('Say when an agent should use this skill.');
+      setProblem(translate('instructionsPanel.form.skillNeedsWhen'));
       return;
     }
     const file = skillPath(props.home, slug);
@@ -478,21 +503,28 @@ function SkillForm(props: FormProps & { readonly home: string }) {
   };
   return (
     <CreateForm
-      label="New skill"
+      label={translate('instructionsPanel.skills.new')}
       problem={problem}
       onSubmit={() => void submit().catch((failure: unknown) => props.onError(String(failure)))}
       onCancel={() => props.onDone(undefined)}
     >
-      <input type="text" aria-label="Skill name" placeholder="skill-name" autoFocus value={name} onChange={(event) => setName(event.target.value)} />
+      <input
+        type="text"
+        aria-label={translate('instructionsPanel.form.skillName')}
+        placeholder="skill-name"
+        autoFocus
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+      />
       <textarea
-        aria-label="Skill description"
-        placeholder="What it does, and when an agent should use it"
+        aria-label={translate('instructionsPanel.form.skillDescription')}
+        placeholder={translate('instructionsPanel.form.skillPlaceholder')}
         rows={3}
         value={description}
         onChange={(event) => setDescription(event.target.value)}
       />
       <span className="instructions-form-hint">
-        Saved as {props.home}/{slugName(name) || 'skill-name'}/SKILL.md
+        {translate('instructionsPanel.form.savedAs', { path: `${props.home}/${slugName(name) || 'skill-name'}/SKILL.md` })}
       </span>
     </CreateForm>
   );
@@ -501,17 +533,19 @@ function SkillForm(props: FormProps & { readonly home: string }) {
 const ROOT_FOLDER = '';
 
 function RuleForm(props: FormProps & { readonly kind: 'rule' | 'rule-folder'; readonly homes: readonly string[] }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [name, setName] = useState('');
   const [folder, setFolder] = useState(props.homes[0] ?? ROOT_FOLDER);
   const [problem, setProblem] = useState<string>();
   const folderOptions = [
-    ...(props.kind === 'rule' ? [{ value: ROOT_FOLDER, label: 'Project root' }] : []),
+    ...(props.kind === 'rule' ? [{ value: ROOT_FOLDER, label: translate('instructionsPanel.form.projectRoot') }] : []),
     ...props.homes.map((home) => ({ value: home, label: home })),
   ];
   const submit = async (): Promise<void> => {
-    const nameProblem = fileNameProblem(name);
+    const nameProblem = fileNameProblemDescribed(name);
     if (nameProblem !== undefined) {
-      setProblem(nameProblem);
+      setProblem(translateDescribed(nameProblem));
       return;
     }
     if (props.kind === 'rule-folder') {
@@ -536,25 +570,26 @@ function RuleForm(props: FormProps & { readonly kind: 'rule' | 'rule-folder'; re
   };
   return (
     <CreateForm
-      label={props.kind === 'rule' ? 'New rule' : 'New rule folder'}
+      label={props.kind === 'rule' ? translate('instructionsPanel.rules.new') : translate('instructionsPanel.rules.newFolder')}
       problem={problem}
       onSubmit={() => void submit().catch((failure: unknown) => props.onError(String(failure)))}
       onCancel={() => props.onDone(undefined)}
     >
       <input
         type="text"
-        aria-label={props.kind === 'rule' ? 'Rule name' : 'Folder name'}
+        aria-label={props.kind === 'rule' ? translate('instructionsPanel.form.ruleName') : translate('instructionsPanel.form.folderName')}
         placeholder={props.kind === 'rule' ? 'testing.md' : 'frontend'}
         autoFocus
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
-      <Dropdown ariaLabel="Folder" value={folder} options={folderOptions} onChange={setFolder} />
+      <Dropdown ariaLabel={translate('instructionsPanel.form.folder')} value={folder} options={folderOptions} onChange={setFolder} />
     </CreateForm>
   );
 }
 
 function DocumentForm(props: FormProps) {
+  const translate = useTranslate();
   const [path, setPath] = useState('docs/');
   const [problem, setProblem] = useState<string>();
   const submit = async (): Promise<void> => {
@@ -576,12 +611,19 @@ function DocumentForm(props: FormProps) {
   };
   return (
     <CreateForm
-      label="New doc"
+      label={translate('instructionsPanel.docs.new')}
       problem={problem}
       onSubmit={() => void submit().catch((failure: unknown) => props.onError(String(failure)))}
       onCancel={() => props.onDone(undefined)}
     >
-      <input type="text" aria-label="Doc path" placeholder="docs/guide.md" autoFocus value={path} onChange={(event) => setPath(event.target.value)} />
+      <input
+        type="text"
+        aria-label={translate('instructionsPanel.form.docPath')}
+        placeholder="docs/guide.md"
+        autoFocus
+        value={path}
+        onChange={(event) => setPath(event.target.value)}
+      />
     </CreateForm>
   );
 }
@@ -593,6 +635,7 @@ function CreateForm(props: {
   readonly onCancel: () => void;
   readonly children: ReactNode;
 }) {
+  const translate = useTranslate();
   return (
     <form
       className="instructions-form"
@@ -615,10 +658,10 @@ function CreateForm(props: {
       )}
       <div className="instructions-form-actions">
         <button type="button" onClick={props.onCancel}>
-          Cancel
+          {translate('ui.cancel')}
         </button>
         <button type="submit" className="primary">
-          Create
+          {translate('instructionsPanel.form.create')}
         </button>
       </div>
     </form>

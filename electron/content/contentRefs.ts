@@ -3,6 +3,8 @@ import fs from 'fs';
 import path from 'path';
 
 import { LIMITS } from '../../shared/core/limits';
+import type { MessageRef } from '../../shared/core/i18n/messageReference';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { toRecord, toArray } from '../../shared/core/record';
 import { listEntries, writeEntry } from './contentEntries';
 import type { Entry as ListedEntry } from './contentEntries';
@@ -217,8 +219,8 @@ interface CollectionLike {
 }
 
 type Move =
-  | { readonly kind: 'generated'; readonly note: string }
-  | { readonly kind: 'unknown'; readonly note: string }
+  | { readonly kind: 'generated'; readonly note: string; readonly noteRef: MessageRef }
+  | { readonly kind: 'unknown'; readonly note: string; readonly noteRef: MessageRef }
   | { readonly kind: 'file'; readonly from: string; readonly to: string }
   | { readonly kind: 'key'; readonly file: string; readonly locator: readonly (string | number)[] }
   | {
@@ -323,10 +325,8 @@ function entryMove(
 ): Move {
   if (collection.loader.kind === 'glob') {
     if (collection.loader.generateId) {
-      return {
-        kind: 'generated',
-        note: `${name} builds its ids in its loader, ` + 'so its id cannot be changed by renaming a file.',
-      };
+      const problem = described('cmsBackend.entry.generated', { collection: name });
+      return { kind: 'generated', note: problem.message, noteRef: problem.messageRef };
     }
     const extension = path.extname(entry.file);
     const pathPrefix = entry.file.slice(0, entry.file.length - extension.length - from.length);
@@ -338,7 +338,8 @@ function entryMove(
   if (isPlainObject(entry.data) && typeof toRecord(entry.data)?.['id'] === 'string') {
     return { kind: 'field', file: entry.file, locator: entry.locator };
   }
-  return { kind: 'unknown', note: `Nothing in ${entry.file} says what this entry's id is.` };
+  const problem = described('cmsBackend.entry.noId', { file: entry.file });
+  return { kind: 'unknown', note: problem.message, noteRef: problem.messageRef };
 }
 
 /**
@@ -346,15 +347,15 @@ function entryMove(
  * that builds ids in code, a parser between the file and the entry, or a
  * record that does not write its id down.
  */
-function entryRenameLock(collection: CollectionLike & { readonly loader: { readonly parser?: unknown } }, entry: ListedEntry): string | undefined {
+function entryRenameLock(collection: CollectionLike & { readonly loader: { readonly parser?: unknown } }, entry: ListedEntry): Described | undefined {
   if (collection.loader.parser) {
-    return `${collection.name} is parsed by a function in the content config, so its ids are not in the file.`;
+    return described('cmsBackend.entry.parsed', { collection: collection.name });
   }
   const move = entryMove(collection, entry, { name: collection.name, from: entry.id, to: entry.id });
   switch (move.kind) {
     case 'generated':
     case 'unknown':
-      return move.note;
+      return { message: move.note, messageRef: move.noteRef };
     case 'file':
     case 'key':
     case 'field':

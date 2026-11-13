@@ -1,4 +1,6 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import React, { useRef, useState } from 'react';
 import type { Data, DataRecord } from '../../../shared/core/boundary';
 import { data } from '../../../shared/core/boundary';
@@ -40,33 +42,33 @@ interface FieldProps {
 }
 
 function ReferenceField({ field, value, context, onChange }: FieldProps) {
+  const translate = useTranslate();
   const targets = useTargets(context.projectPath, field.target);
   const selected = typeof value === 'string' ? value : '';
   const known = targets?.some((target) => target.id === selected);
   return (
     <div className="content-ref">
       <Dropdown
-        ariaLabel={fieldName(field)}
+        ariaLabel={fieldName(field, translate)}
         value={selected}
         options={[
-          { value: '', label: field.nullable ? 'None' : 'Choose an entry…', dim: true, pinned: true },
+          { value: '', label: field.nullable ? translate('contentUi.field.none') : translate('contentUi.field.chooseEntry'), dim: true, pinned: true },
           ...(targets ?? []).map((target) => ({ value: target.id, label: targetLabel(target) })),
-          ...(selected && targets && !known ? [{ value: selected, label: `${selected} (missing)` }] : []),
+          ...(selected && targets && !known ? [{ value: selected, label: translate('contentUi.field.missing', { id: selected }) }] : []),
         ]}
         searchable={(targets ?? []).length > 6}
         livePreview={false}
         onChange={(next) => onChange(next === '' ? (field.nullable ? NULL_DATA : undefined) : next)}
       />
       {selected && targets && !known && (
-        <div className="content-warn">
-          Nothing in {field.target} has the id “{selected}”.
-        </div>
+        <div className="content-warn">{translate('contentUi.field.nothingIn', { target: field.target ?? '', id: selected })}</div>
       )}
     </div>
   );
 }
 
 function ReferenceList({ field, value, context, onChange }: FieldProps) {
+  const translate = useTranslate();
   const targets = useTargets(context.projectPath, field.target);
   const values = Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
   const remaining = (targets ?? []).filter((target) => !values.includes(target.id));
@@ -76,18 +78,18 @@ function ReferenceList({ field, value, context, onChange }: FieldProps) {
         const target = (targets ?? []).find((entry) => entry.id === id);
         return (
           <div key={`${id}-${index}`} className="content-chip">
-            <span className={target ? '' : 'missing'}>{target ? target.title : `${id} (missing)`}</span>
-            <button className="ghost" title="Remove" onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}>
+            <span className={target ? '' : 'missing'}>{target ? target.title : translate('contentUi.field.missing', { id })}</span>
+            <button className="ghost" title={translate('ui.remove')} onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}>
               <CloseIcon size={9} />
             </button>
           </div>
         );
       })}
       <Dropdown
-        ariaLabel={`Add to ${fieldName(field)}`}
+        ariaLabel={translate('contentUi.field.addTo', { name: fieldName(field, translate) })}
         value=""
         options={remaining.map((target) => ({ value: target.id, label: targetLabel(target) }))}
-        placeholder={remaining.length ? 'Add…' : 'Nothing left to add'}
+        placeholder={remaining.length ? translate('contentUi.field.addPlaceholder') : translate('contentUi.field.nothingLeft')}
         disabled={remaining.length === 0}
         searchable={remaining.length > 6}
         livePreview={false}
@@ -98,6 +100,7 @@ function ReferenceList({ field, value, context, onChange }: FieldProps) {
 }
 
 function TagsField({ value, onChange }: Pick<FieldProps, 'value' | 'onChange'>) {
+  const translate = useTranslate();
   const values = Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
   const [draft, setDraft] = useState('');
   const add = (): void => {
@@ -112,14 +115,14 @@ function TagsField({ value, onChange }: Pick<FieldProps, 'value' | 'onChange'>) 
       {values.map((tag, index) => (
         <span key={`${tag}-${index}`} className="content-chip">
           {tag}
-          <button className="ghost" title="Remove" onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}>
+          <button className="ghost" title={translate('ui.remove')} onClick={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))}>
             <CloseIcon size={9} />
           </button>
         </span>
       ))}
       <input
         value={draft}
-        placeholder="Add…"
+        placeholder={translate('contentUi.field.addPlaceholder')}
         onChange={(event) => setDraft(event.target.value)}
         onBlur={add}
         onKeyDown={(event) => handleTagKey(event, draft, values, add, onChange)}
@@ -144,6 +147,7 @@ function handleTagKey(
 }
 
 function RecordField(props: FieldProps) {
+  const translate = useTranslate();
   const values = isPlainObject(props.value) ? props.value : {};
   const [adding, setAdding] = useState('');
   const item = props.field.value;
@@ -153,7 +157,7 @@ function RecordField(props: FieldProps) {
         <div key={key} className="content-record-row">
           <div className="content-record-head">
             <input className="content-key" value={key} onChange={(event) => props.onChange(renameRecordKey(values, key, event.target.value))} />
-            <button className="ghost danger" title="Remove" onClick={() => props.onChange(omitField(values, key))}>
+            <button className="ghost danger" title={translate('ui.remove')} onClick={() => props.onChange(omitField(values, key))}>
               <TrashIcon size={11} />
             </button>
           </div>
@@ -171,7 +175,7 @@ function RecordField(props: FieldProps) {
       <div className="content-record-add">
         <input
           value={adding}
-          placeholder="New key…"
+          placeholder={translate('contentUi.field.newKey')}
           onChange={(event) => setAdding(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
@@ -180,7 +184,7 @@ function RecordField(props: FieldProps) {
           }}
         />
         <button className="cms-add" disabled={!adding.trim()} onClick={() => addRecordItem(values, item, adding, setAdding, props.onChange)}>
-          <PlusIcon size={11} /> Add
+          <PlusIcon size={11} /> {translate('contentUi.field.add')}
         </button>
       </div>
     </div>
@@ -314,6 +318,7 @@ interface ListProps extends FieldProps {
 }
 
 function SimpleList(props: ListProps) {
+  const translate = useTranslate();
   return (
     <div className="content-simple-list">
       {props.values.map((value, index) => (
@@ -329,7 +334,7 @@ function SimpleList(props: ListProps) {
           )}
           <button
             className="ghost danger"
-            title="Remove"
+            title={translate('ui.remove')}
             disabled={props.values.length <= props.minimum}
             onClick={() => props.onChange(props.values.filter((_, itemIndex) => itemIndex !== index))}
           >
@@ -349,6 +354,7 @@ interface ComplexListProps extends ListProps {
 }
 
 function ComplexList(props: ComplexListProps) {
+  const translate = useTranslate();
   const openValue = props.openIndex === undefined ? undefined : props.values[props.openIndex];
   return (
     <div className="cms-repeater">
@@ -362,10 +368,10 @@ function ComplexList(props: ComplexListProps) {
           <span className="cms-repeat-grip">
             <DragIcon size={11} />
           </span>
-          <span className="cms-repeat-title">{listTitle(props.item, value, index)}</span>
+          <span className="cms-repeat-title">{listTitle(props.item, value, index, translate)}</span>
           <button
             className="ghost"
-            title="Remove"
+            title={translate('ui.remove')}
             disabled={props.values.length <= props.minimum}
             onClick={(event) => {
               event.stopPropagation();
@@ -395,6 +401,7 @@ function ComplexList(props: ComplexListProps) {
 }
 
 function AddListButton(props: ListProps & { readonly onAdded?: (index: number) => void }) {
+  const translate = useTranslate();
   return (
     <button
       className="cms-add"
@@ -404,14 +411,17 @@ function AddListButton(props: ListProps & { readonly onAdded?: (index: number) =
         props.onAdded?.(props.values.length);
       }}
     >
-      <PlusIcon size={11} /> Add {props.field.label ? props.field.label.replace(/s$/, '').toLowerCase() : 'item'}
+      <PlusIcon size={11} />{' '}
+      {props.field.label
+        ? translate('contentUi.field.addNamed', { name: props.field.label.replace(/s$/, '').toLowerCase() })
+        : translate('contentUi.field.addItem')}
     </button>
   );
 }
 
-function listTitle(item: FieldDescriptor | undefined, value: Data, index: number): string {
+function listTitle(item: FieldDescriptor | undefined, value: Data, index: number, translate: Translator): string {
   if (!isPlainObject(value)) {
-    return String(value ?? `Item ${index + 1}`);
+    return String(value ?? translate('contentUi.field.itemNumber', { number: index + 1 }));
   }
   if (item?.control === 'union' && item.discriminator) {
     const member = item.members?.find((entry) => entry.value === value[item.discriminator ?? '']);
@@ -424,17 +434,18 @@ function listTitle(item: FieldDescriptor | undefined, value: Data, index: number
       return String(value[key]);
     }
   }
-  return `Item ${index + 1}`;
+  return translate('contentUi.field.itemNumber', { number: index + 1 });
 }
 
 function ScalarControl(props: FieldProps) {
+  const translate = useTranslate();
   const { field, value, onChange } = props;
   switch (field.control) {
     case 'boolean':
       return (
         <button type="button" className={`cms-toggle ${value ? 'on' : ''}`} onClick={() => onChange(!value)}>
           <span className="cms-toggle-knob" />
-          <span className="cms-toggle-label">{value ? 'On' : 'Off'}</span>
+          <span className="cms-toggle-label">{value ? translate('contentUi.field.on') : translate('contentUi.field.off')}</span>
         </button>
       );
     case 'number':
@@ -479,12 +490,13 @@ function NumberField({ field, value, onChange }: FieldProps) {
 }
 
 function EnumField({ field, value, onChange }: FieldProps) {
+  const translate = useTranslate();
   return (
     <Dropdown
-      ariaLabel={fieldName(field)}
+      ariaLabel={fieldName(field, translate)}
       value={value === null || value === undefined ? '' : String(value)}
       options={[
-        ...(field.required ? [] : [{ value: '', label: 'Not set', dim: true }]),
+        ...(field.required ? [] : [{ value: '', label: translate('contentUi.field.notSet'), dim: true }]),
         ...(field.options ?? []).map((option) => ({ value: String(option), label: labelize(String(option)) })),
       ]}
       livePreview={false}
@@ -595,9 +607,12 @@ function ObjectField(props: FieldProps) {
 }
 
 export function FieldRow(props: FieldProps) {
+  const translate = useTranslate();
   const present = props.value !== undefined;
-  const issue = props.context.issueAt(props.path) ?? (present ? fieldIssue(props.field, props.value) : props.field.required ? 'Required' : undefined);
-  const hint = hintFor(props.field);
+  const issue =
+    props.context.issueAt(props.path) ??
+    (present ? fieldIssue(props.field, props.value, translate) : props.field.required ? translate('contentUi.field.required') : undefined);
+  const hint = hintFor(props.field, translate);
   const synthesized = props.context.parsed && !props.context.inFile(props.path);
   const pathKey = props.path.join('.');
   if (!present && !props.field.required && !props.context.expanded.has(pathKey)) {
@@ -606,24 +621,28 @@ export function FieldRow(props: FieldProps) {
   return (
     <div className={`cms-field ${props.field.control} ${issue ? 'has-issue' : ''}`}>
       <FieldHeader {...props} present={present} synthesized={synthesized} />
-      {props.value === null ? <div className="content-null">None</div> : <FieldControl {...props} />}
+      {props.value === null ? <div className="content-null">{translate('contentUi.field.none')}</div> : <FieldControl {...props} />}
       {issue ? <ErrorToast message={issue} /> : hint ? <div className="content-hint">{hint}</div> : undefined}
     </div>
   );
 }
 
 function AddOptionalField(props: FieldProps & { readonly pathKey: string }) {
+  const translate = useTranslate();
   return (
     <div className="content-add-field">
       <button className="ghost" onClick={() => props.context.expand(props.pathKey)}>
         <PlusIcon size={10} /> {props.field.label}
       </button>
-      {'default' in props.field && <span className="content-default">defaults to {JSON.stringify(props.field.default)}</span>}
+      {'default' in props.field && (
+        <span className="content-default">{translate('contentUi.field.defaultsTo', { value: JSON.stringify(props.field.default) })}</span>
+      )}
     </div>
   );
 }
 
 function FieldHeader(props: FieldProps & { readonly present: boolean; readonly synthesized: boolean }) {
+  const translate = useTranslate();
   return (
     <div className="cms-field-head">
       <label>
@@ -634,7 +653,7 @@ function FieldHeader(props: FieldProps & { readonly present: boolean; readonly s
           onReset={() => props.onChange(undefined)}
         />
         {props.field.required && (
-          <span className="content-required" title="Required">
+          <span className="content-required" title={translate('contentUi.field.required')}>
             {' '}
             *
           </span>
@@ -643,15 +662,15 @@ function FieldHeader(props: FieldProps & { readonly present: boolean; readonly s
       {props.field.nullable && (
         <button
           className={`content-none ${props.value === null ? 'on' : ''}`}
-          title="Write null — the key stays, with no value"
+          title={translate('contentUi.field.noneTitle')}
           onClick={() => props.onChange(props.value === null ? blankFor(props.field) : NULL_DATA)}
         >
-          None
+          {translate('contentUi.field.none')}
         </button>
       )}
       {props.synthesized && (
         <span className="content-note" title={props.context.parserNote}>
-          from the parser
+          {translate('contentUi.field.fromParser')}
         </span>
       )}
     </div>
@@ -669,9 +688,9 @@ function targetLabel(target: Target): string {
 }
 
 // What a field's dropdown is called to a screen reader: its label, else its key.
-function fieldName(field: FieldDescriptor): string {
+function fieldName(field: FieldDescriptor, translate: Translator): string {
   if (field.label !== undefined) {
     return field.label;
   }
-  return field.key === undefined ? 'Value' : labelize(field.key);
+  return field.key === undefined ? translate('contentUi.field.value') : labelize(field.key);
 }

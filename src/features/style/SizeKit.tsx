@@ -16,6 +16,8 @@ import { commitInPlace } from './model/commitInPlace';
 import { useDebouncedLive } from './model/fieldHooks';
 import { displayOf, displayText, keepImportant, parseImportant, withImportant, type Display } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -58,6 +60,7 @@ export function SizeLabel({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   if (display.present && !display.isSelected) {
     return <ProvenanceLabel label={label} props={[prop]} busy={busy} onProvenance={onProvenance} />;
   }
@@ -68,9 +71,9 @@ export function SizeLabel({
       {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={onClear}
-      resetLabel="Clear"
+      resetLabel={translate('style.sizeKit.clear')}
       tooltip={<PropTip props={[prop]} />}
-      {...(display.overridden ? { title: `Overridden by ${display.winnerSelector}` } : {})}
+      {...(display.overridden ? { title: translate('style.sizeKit.overriddenBy', { selector: display.winnerSelector }) } : {})}
       menuNote={(close) => (
         <ProvenanceList
           contributors={contributors}
@@ -106,6 +109,7 @@ export function LivePropField({
   label: string;
   placeholder: string;
 } & Props) {
+  const translate = useTranslate();
   const display = displayOf(read(prop));
   const field = useLivePropEditing({ prop, display, busy, setProp, clearProp, liveSetProp });
   const computed = useStyleHint(display.present ? '' : prop);
@@ -124,7 +128,7 @@ export function LivePropField({
       />
       <VariableConnect
         code
-        ariaLabel={`Connect ${label} to a variable`}
+        ariaLabel={translate('style.sizeKit.connect', { name: label })}
         disabled={busy}
         prop={prop}
         onPick={(binding) => {
@@ -255,11 +259,12 @@ export function stepSizeKey(event: ReactKeyboardEvent<HTMLInputElement>): string
   return stepped.text;
 }
 
-export const LENGTH_FIELDS: ReadonlyArray<{ prop: string; label: string; placeholder: string }> = [
-  { prop: 'width', label: 'Width', placeholder: 'Auto' },
-  { prop: 'height', label: 'Height', placeholder: 'Auto' },
-  { prop: 'min-width', label: 'Min W', placeholder: '0px' },
-  { prop: 'min-height', label: 'Min H', placeholder: '0px' },
-  { prop: 'max-width', label: 'Max W', placeholder: 'None' },
-  { prop: 'max-height', label: 'Max H', placeholder: 'None' },
+// The placeholders are the CSS keywords and values the empty field stands for.
+export const LENGTH_FIELDS: ReadonlyArray<{ prop: string; labelKey: MessageKey; placeholder: string }> = [
+  { prop: 'width', labelKey: 'style.sizeKit.width', placeholder: 'Auto' }, // i18n-ignore: CSS keyword.
+  { prop: 'height', labelKey: 'style.sizeKit.height', placeholder: 'Auto' }, // i18n-ignore: CSS keyword.
+  { prop: 'min-width', labelKey: 'style.sizeKit.minWidth', placeholder: '0px' },
+  { prop: 'min-height', labelKey: 'style.sizeKit.minHeight', placeholder: '0px' },
+  { prop: 'max-width', labelKey: 'style.sizeKit.maxWidth', placeholder: 'None' }, // i18n-ignore: CSS keyword.
+  { prop: 'max-height', labelKey: 'style.sizeKit.maxHeight', placeholder: 'None' }, // i18n-ignore: CSS keyword.
 ];

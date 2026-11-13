@@ -5,7 +5,9 @@ import { comparePageNames, isCollectionRoute } from './pageOrder';
 import { FileIcon, CmsIcon, ChevronDownIcon, CheckIcon } from '../../ui/Icons';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
-import { pageDisplayName } from '../../lib/pageName';
+import { pageDisplayLabel } from '../../lib/pageName';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 interface Page {
   readonly name: string;
@@ -18,27 +20,27 @@ interface PageSwitcherProps<T extends Page> {
   readonly currentPage?: T | undefined;
   readonly onSelect: (page: T) => void;
 }
-const pretty = pageDisplayName;
 const PageGlyph = ({ page, size }: { readonly page: Page | undefined; readonly size: number }) =>
   isCollectionRoute(page?.name) ? <CmsIcon size={size} /> : <FileIcon size={size} />;
 
 // Keep the selected page object intact: callers may carry source metadata beyond this projection.
 export default function PageSwitcher<T extends Page>(props: PageSwitcherProps<T>) {
+  const translate = useTranslate();
   const state = usePageSwitcher(props);
   return (
     <>
       <button
         ref={state.buttonRef}
         className={`page-switch-btn ${isCollectionRoute(props.currentPage?.name) ? 'collection' : ''}`}
-        title="Switch page"
-        aria-label="Current page"
+        title={translate('pages.switcher.switch')}
+        aria-label={translate('pages.switcher.current')}
         aria-haspopup="listbox"
         aria-expanded={state.open}
         data-file={props.currentPage?.path}
         onClick={() => state.setOpen((open) => !open)}
       >
         <PageGlyph page={props.currentPage} size={12} />
-        <span className="page-switch-label">{props.currentPage ? pretty(props.currentPage) : 'No page'}</span>
+        <span className="page-switch-label">{props.currentPage ? pageDisplayLabel(props.currentPage, translate) : translate('pages.switcher.none')}</span>
         <ChevronDownIcon size={10} className="page-switch-chevron" />
       </button>
       {state.open && state.position && <PageMenu state={state} currentPage={props.currentPage} />}
@@ -48,6 +50,7 @@ export default function PageSwitcher<T extends Page>(props: PageSwitcherProps<T>
 
 function usePageSwitcher<T extends Page>({ pages, currentPage, onSelect }: PageSwitcherProps<T>) {
   assert((pages?.length ?? 0) <= LIMITS.scanEntriesMax, 'PageSwitcher: page limit exceeded');
+  const translate = useTranslate();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [highlight, setHighlight] = useState(0);
@@ -55,7 +58,7 @@ function usePageSwitcher<T extends Page>({ pages, currentPage, onSelect }: PageS
   const popupRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const position = usePagePosition(buttonRef, { open });
-  const filtered = pageSwitcherFilter(pages, query);
+  const filtered = pageSwitcherFilter(pages, query, translate);
   // Read when the menu opens, not as effect dependencies: a page list that
   // changes while the menu is open must not clear the search the user typed.
   const opening = useRef({ pages, currentPage });
@@ -67,10 +70,10 @@ function usePageSwitcher<T extends Page>({ pages, currentPage, onSelect }: PageS
     setQuery('');
     // Open on the page being edited, not the first row, so the highlight and
     // the check agree and Enter keeps the current page.
-    setHighlight(pageSwitcherOpeningIndex(pageSwitcherFilter(opening.current.pages, ''), opening.current.currentPage));
+    setHighlight(pageSwitcherOpeningIndex(pageSwitcherFilter(opening.current.pages, '', translate), opening.current.currentPage));
     const timer = setTimeout(() => inputRef.current?.focus(), 0);
     return () => clearTimeout(timer);
-  }, [open]);
+  }, [open, translate]);
   const pick = (page: T | undefined): void => {
     setOpen(false);
     if (page && page.path !== currentPage?.path) {
@@ -110,6 +113,7 @@ function usePagePosition(buttonRef: RefObject<HTMLButtonElement>, { open }: { re
 
 type PageState<T extends Page> = ReturnType<typeof usePageSwitcher<T>>;
 function PageMenu<T extends Page>({ state, currentPage }: { readonly state: PageState<T>; readonly currentPage: T | undefined }) {
+  const translate = useTranslate();
   const onInputKey = (event: React.KeyboardEvent<HTMLInputElement>): void => {
     switch (event.key) {
       case 'ArrowDown':
@@ -133,9 +137,9 @@ function PageMenu<T extends Page>({ state, currentPage }: { readonly state: Page
       <input
         ref={state.inputRef}
         className="page-menu-search"
-        aria-label="Search pages"
+        aria-label={translate('pages.switcher.search')}
         value={state.query}
-        placeholder="Search pages…"
+        placeholder={translate('pages.switcher.searchPlaceholder')}
         spellCheck={false}
         onChange={(event) => {
           state.setQuery(event.target.value);
@@ -143,7 +147,7 @@ function PageMenu<T extends Page>({ state, currentPage }: { readonly state: Page
         }}
         onKeyDown={onInputKey}
       />
-      <div className="page-menu-list" role="listbox" aria-label="Pages">
+      <div className="page-menu-list" role="listbox" aria-label={translate('pages.title')}>
         {state.filtered.map((page, index) => (
           <PageRow
             key={page.path}
@@ -154,7 +158,7 @@ function PageMenu<T extends Page>({ state, currentPage }: { readonly state: Page
             onPick={() => state.pick(page)}
           />
         ))}
-        {state.filtered.length === 0 && <div className="page-menu-empty">No matching pages</div>}
+        {state.filtered.length === 0 && <div className="page-menu-empty">{translate('pages.switcher.empty')}</div>}
       </div>
     </Popup>
   );
@@ -173,6 +177,7 @@ function PageRow({
   readonly onHover: () => void;
   readonly onPick: () => void;
 }) {
+  const translate = useTranslate();
   const collection = isCollectionRoute(page.name) ? 'collection' : '';
   return (
     <div
@@ -190,7 +195,7 @@ function PageRow({
       onClick={onPick}
     >
       <PageGlyph page={page} size={12} />
-      <span className="page-menu-name">{pretty(page)}</span>
+      <span className="page-menu-name">{pageDisplayLabel(page, translate)}</span>
       <span className="page-menu-route">{page.route}</span>
       {current && <CheckIcon size={11} />}
     </div>
@@ -206,11 +211,15 @@ export function pageSwitcherOpeningIndex(pages: readonly Page[], currentPage: Pa
   return opening;
 }
 
-function pageSwitcherFilter<T extends Page>(pages: readonly T[] | undefined, query: string): T[] {
+function pageSwitcherFilter<T extends Page>(pages: readonly T[] | undefined, query: string, translate: Translator): T[] {
   const search = query.trim().toLowerCase();
   return (pages || [])
     .filter(
-      (page) => !search || page.name.toLowerCase().includes(search) || pretty(page).toLowerCase().includes(search) || page.route.toLowerCase().includes(search),
+      (page) =>
+        !search ||
+        page.name.toLowerCase().includes(search) ||
+        pageDisplayLabel(page, translate).toLowerCase().includes(search) ||
+        page.route.toLowerCase().includes(search),
     )
     .sort((left, right) => comparePageNames(left.name, right.name));
 }

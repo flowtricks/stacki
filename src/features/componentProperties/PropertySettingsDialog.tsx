@@ -9,6 +9,7 @@
 // (NewPropHost.propSettings).
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { CloseIcon } from '../../ui/Icons';
 import { ok } from '../../../shared/core/result';
 import { PropertyConditions } from './PropertyDeclarationInfo';
@@ -24,15 +25,19 @@ type DialogState =
 
 export default function PropertySettingsDialog(props: { readonly propertyKey: string; readonly saver: PropertySaver; readonly onClose: () => void }) {
   const { propertyKey, saver, onClose } = props;
+  const translate = useTranslate();
   const [state, setState] = useState<DialogState>({ kind: 'loading' });
   // The app builds a new saver on every render; the form reads once, on opening.
   const saverRef = useRef(saver);
   saverRef.current = saver;
+  // Read once on opening, like the saver, so a language change does not read the file again.
+  const translateRef = useRef(translate);
+  translateRef.current = translate;
   useEffect(() => {
     let active = true;
     const read = async (): Promise<DialogState> => {
       try {
-        const loaded = await loadProperty(saverRef.current, propertyKey);
+        const loaded = await loadProperty(saverRef.current, propertyKey, translateRef.current);
         return loaded.ok ? { kind: 'ready', loaded: loaded.value } : { kind: 'failed', message: loaded.error };
       } catch (caught: unknown) {
         return { kind: 'failed', message: String(caught) };
@@ -48,10 +53,10 @@ export default function PropertySettingsDialog(props: { readonly propertyKey: st
     };
   }, [propertyKey]);
   return (
-    <div className="property-editor property-settings-dialog" role="dialog" aria-label="Property settings">
+    <div className="property-editor property-settings-dialog" role="dialog" aria-label={translate('componentProps.dialog.title')}>
       <header>
-        <strong>Property settings</strong>
-        <button type="button" aria-label="Close property settings" title="Close" onClick={onClose}>
+        <strong>{translate('componentProps.dialog.title')}</strong>
+        <button type="button" aria-label={translate('componentProps.dialog.close')} title={translate('ui.close')} onClick={onClose}>
           <CloseIcon size={12} />
         </button>
       </header>
@@ -61,9 +66,10 @@ export default function PropertySettingsDialog(props: { readonly propertyKey: st
 }
 
 function DialogBody({ state, saverRef }: { readonly state: DialogState; readonly saverRef: { readonly current: PropertySaver } }) {
+  const translate = useTranslate();
   switch (state.kind) {
     case 'loading':
-      return <p className="property-help">Loading property…</p>;
+      return <p className="property-help">{translate('componentProps.dialog.loading')}</p>;
     case 'failed':
       // Nothing else is in the form, so the reason is said here rather than in a toast.
       return <p className="property-error">{state.message}</p>;
@@ -77,11 +83,13 @@ function DialogBody({ state, saverRef }: { readonly state: DialogState; readonly
 }
 
 function EditableBody({ loaded, saverRef }: { readonly loaded: LoadedProperty; readonly saverRef: { readonly current: PropertySaver } }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   // Each save is checked against the source the one before left.
   const source = useRef(loaded.source);
   const saveHost: PropertySaveHost = {
     save: async (change) => {
-      const outcome = await saveProperty(saverRef.current, source.current, change).catch((caught: unknown) => ({
+      const outcome = await saveProperty(saverRef.current, source.current, change, translate).catch((caught: unknown) => ({
         kind: 'refused' as const,
         message: String(caught),
       }));
@@ -91,7 +99,7 @@ function EditableBody({ loaded, saverRef }: { readonly loaded: LoadedProperty; r
       return outcome;
     },
     reload: async (name) => {
-      const fresh = await loadProperty(saverRef.current, name);
+      const fresh = await loadProperty(saverRef.current, name, translate);
       if (!fresh.ok) {
         return fresh;
       }
@@ -103,7 +111,9 @@ function EditableBody({ loaded, saverRef }: { readonly loaded: LoadedProperty; r
     <>
       <PropertyConditions property={loaded.property} />
       <PropertyShareNotice property={loaded.property} onOpenFile={saverRef.current.openFile} />
-      {loaded.property.editing?.kind === 'override' && <p className="property-help">{loaded.property.editing.reason}</p>}
+      {loaded.property.editing?.kind === 'override' && (
+        <p className="property-help">{translateDescribed({ message: loaded.property.editing.reason, messageRef: loaded.property.editing.reasonRef })}</p>
+      )}
       <PropertySettingsFields property={loaded.property} frontmatter={loaded.frontmatter} projectPath={saverRef.current.projectPath} saveHost={saveHost} />
     </>
   );

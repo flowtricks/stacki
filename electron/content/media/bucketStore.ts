@@ -6,9 +6,10 @@
 // S3 consoles make them. S3 holds no order of its own; mediaOrder.ts keeps one.
 
 import { assert } from '../../../shared/core/assert';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 import { MEDIA_HOSTING_LIMITS, parseMediaName, type BucketAddressing } from '../../../shared/properties/mediaHosting';
 import { EMPTY_PAYLOAD_HASH, sha256Hex, signRequest, uriEncode, type SigningKeys } from './sigV4';
-import { MEDIA_HTTP_LIMITS, MediaHostError, expectOk, readBounded, readText, send, statusSentence, type MediaRequest } from './mediaHttp';
+import { MEDIA_HTTP_LIMITS, MediaHostError, expectOk, readBounded, readText, send, statusProblem, type MediaRequest } from './mediaHttp';
 import { MEDIA_FOLDER_KEYS_MAX, publicURLOf, type MediaStore, type StoreOptions, type StoredFile, type StoredListing } from './mediaStore';
 
 export interface BucketTarget {
@@ -73,7 +74,7 @@ export function bucketStore(target: BucketTarget, keys: SigningKeys, options: St
       const { pages, truncated } = await listPages(prefix, 'tree', keysMax);
       const keys = pages.flatMap((xml) => xmlBlocks(xml, 'Contents').map((block) => xmlValue(block, 'Key') ?? ''));
       if (truncated || keys.length > keysMax) {
-        throw new MediaHostError(`This folder holds more than ${keysMax} files; change it in the host's own dashboard.`, 0);
+        throw new MediaHostError(described('cmsBackend.media.tooManyFiles', { count: keysMax }), 0);
       }
       return keys
         .filter((key) => key.startsWith(prefix))
@@ -194,11 +195,12 @@ function nameable(name: string): boolean {
   }
 }
 
-function describeFailure(host: string, status: number, body: string): string {
+function describeFailure(host: string, status: number, body: string): Described {
   const code = xmlValue(body, 'Code');
   const message = xmlValue(body, 'Message');
+  // i18n-ignore: The host's own words, appended to the translated sentence.
   const detail = code === undefined ? '' : ` ${host} said ${code}${message === undefined ? '' : `: ${message}`}`;
-  return `${statusSentence(status)}${detail}`;
+  return statusProblem(status, detail);
 }
 
 // --- The little XML S3 answers in -------------------------------------------

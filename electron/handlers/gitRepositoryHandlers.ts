@@ -11,8 +11,12 @@ import { isAstroProject } from '../project/projectFiles';
 import { connectRepository } from '../git/githubRepository';
 import { git } from '../lib/nodeTools';
 import type { MainHost } from './mainHost';
+import { translateMain } from '../lib/mainLocale';
+import { described } from '../../shared/properties/i18n/messageRef';
+import { referencingIpc } from '../lib/referencingIpc';
 
-export function registerGitRepositoryHandlers({ ipcMain, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
+export function registerGitRepositoryHandlers({ ipcMain: plainIpcMain, showOpenDialog }: Pick<MainHost, 'ipcMain' | 'showOpenDialog'>): void {
+  const ipcMain = referencingIpc(plainIpcMain);
   ipcMain.handle('git:repositories', async () => {
     const response = await run('gh', ['api', 'user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator,organization_member'], homedir(), {
       timeout: 30000,
@@ -22,7 +26,7 @@ export function registerGitRepositoryHandlers({ ipcMain, showOpenDialog }: Pick<
   });
   ipcMain.handle('git:clone', async (_event, { repository }) => {
     const result = await showOpenDialog({
-      title: 'Choose where to download the repository',
+      title: translateMain('dialog.open.repositoryTarget.title'),
       properties: ['openDirectory', 'createDirectory'],
     });
     if (result.canceled) {
@@ -39,10 +43,8 @@ export function registerGitRepositoryHandlers({ ipcMain, showOpenDialog }: Pick<
       timeout: 180000,
     });
     if (!isAstroProject(projectPath)) {
-      return {
-        canceled: false as const,
-        error: `Downloaded to ${projectPath}, but its root is not an Astro project. ` + 'Use Open Project to choose the Astro folder inside it.',
-      };
+      const cloneNotAstro = described('git.error.cloneNotAstro', { path: projectPath });
+      return { canceled: false as const, error: cloneNotAstro.message, errorRef: cloneNotAstro.messageRef };
     }
     return { canceled: false as const, projectPath };
   });
@@ -50,7 +52,8 @@ export function registerGitRepositoryHandlers({ ipcMain, showOpenDialog }: Pick<
     const environment = await publishingGitEnvironment(payload.projectPath, readPublishConfig(payload.projectPath));
     const result = await connectRepository((root, argumentsList) => git(root, argumentsList, { env: environment }), payload);
     if (!result.ok) {
-      throw new Error(result.error);
+      // The reference rides on the error object; `referencingIpc` appends it to the message the renderer receives.
+      throw Object.assign(new Error(result.error), { messageRef: result.errorRef });
     }
     return { ok: true as const, ...result.value };
   });

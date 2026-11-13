@@ -10,6 +10,7 @@
 
 import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
+import { described, type Described } from './i18n/messageRef';
 import { parseFieldChecks, parseFieldDefault, parseFieldOptions, type FieldChecks, type FieldDefault } from './fieldChecks';
 
 export const COLLECTION_SETTINGS_LIMITS = {
@@ -146,20 +147,24 @@ export function parseSettingsFieldName(input: unknown): string {
   return name;
 }
 
-/** Why `name` cannot be a field's key, or nothing when it can. */
-export function fieldNameRefusal(name: string): string | undefined {
+/** Why `name` cannot be a field's key, or nothing when it can: the English sentence and the reference the panel translates. */
+export function fieldNameProblem(name: string): Described | undefined {
   if (name.length === 0) {
-    return 'Name the field.';
+    return described('cmsBackend.fieldName.empty');
   }
   if (name.length > COLLECTION_SETTINGS_LIMITS.fieldNameCharsMax) {
-    return `A field name is at most ${String(COLLECTION_SETTINGS_LIMITS.fieldNameCharsMax)} characters.`;
+    return described('cmsBackend.fieldName.tooLong', { count: COLLECTION_SETTINGS_LIMITS.fieldNameCharsMax });
   }
-  return FIELD_NAME.test(name) ? undefined : 'A field name starts with a letter and holds letters, digits, - and _.';
+  return FIELD_NAME.test(name) ? undefined : described('cmsBackend.fieldName.invalid');
+}
+
+/** The English sentence of `fieldNameProblem`, for the boundary parser that throws it. */
+export function fieldNameRefusal(name: string): string | undefined {
+  return fieldNameProblem(name)?.message;
 }
 
 /** What a field's name box holds, as the form reads it. */
-export type TypedFieldName =
-  { readonly kind: 'blank' } | { readonly kind: 'invalid'; readonly message: string } | { readonly kind: 'key'; readonly key: string };
+export type TypedFieldName = { readonly kind: 'blank' } | ({ readonly kind: 'invalid' } & Described) | { readonly kind: 'key'; readonly key: string };
 
 /**
  * What a typed name is saved as, the way a collection's name is: kept as written
@@ -174,8 +179,8 @@ export function typedFieldName(typed: string): TypedFieldName {
   }
   const key = FIELD_NAME.test(trimmed) ? trimmed : dashedWords(trimmed);
   // A label of no words leaves no key, which is a bad name and not a missing one.
-  const refusal = fieldNameRefusal(key === '' ? trimmed : key);
-  return refusal === undefined ? { kind: 'key', key } : { kind: 'invalid', message: refusal };
+  const refusal = fieldNameProblem(key === '' ? trimmed : key);
+  return refusal === undefined ? { kind: 'key', key } : { kind: 'invalid', ...refusal };
 }
 
 export function parseSettingsChange(input: unknown): SettingsChange {

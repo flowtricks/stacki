@@ -166,7 +166,7 @@ export function chipsOf(root: HTMLElement): Chip[] {
   return [...root.querySelectorAll<HTMLElement>('[data-chip]')].map((element) => ({
     text: element.dataset['binding'] ?? '',
     name: element.querySelector('.embed-editor_varconnect-token-name')?.textContent ?? '',
-    type: element.dataset['type'] ?? 'Size',
+    type: element.dataset['type'] ?? 'Size', // i18n-ignore: a variable type id.
   }));
 }
 

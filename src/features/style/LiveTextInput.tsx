@@ -9,6 +9,7 @@ import VariableConnect from './VariableConnect';
 import { commitInPlace } from './model/commitInPlace';
 import { parseImportant } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // ─────────────────────────── Live text input ───────────────────────────
 
@@ -28,13 +29,14 @@ export function LiveInput({
   onLiveCommit,
   onClear,
 }: LiveInputProps) {
+  const translate = useTranslate();
   const field = useLiveInputEditing({ value, busy, onCommit, onLiveCommit, onClear });
   // A computed value is a hint, never a draft that blur could write into CSS.
   const computed = useStyleHint(value.trim() ? '' : (prop ?? ''));
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${ariaLabel || 'value'} to a variable`}
+      ariaLabel={translate('style.liveTextInput.connect', { name: ariaLabel || translate('style.liveTextInput.value') })}
       disabled={busy}
       {...(prop === undefined ? {} : { prop })}
       onPick={(binding) => onCommit(binding, false)}

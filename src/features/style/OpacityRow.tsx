@@ -9,6 +9,7 @@ import { useExternalDraft } from './model/fieldHooks';
 import { displayOf, keepImportant, parseImportant, withImportant } from './model/styleDisplay';
 import { assert } from '../../../shared/core/assert';
 import { type SetProp, type Props, stepInPlace, EffLabel } from './EffectsKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // ─────────────────────────── Rows ───────────────────────────
 
@@ -73,6 +74,7 @@ export function opacityText(opacity: OpacityValue): string {
 
 export function OpacityRow({ props }: { props: Props }) {
   const { read, busy, setProp, liveSetProp } = props;
+  const translate = useTranslate();
   const display = displayOf(read('opacity'));
   const raw = display.present ? display.value.trim() : '';
   const authored = parseOpacity(raw);
@@ -98,7 +100,7 @@ export function OpacityRow({ props }: { props: Props }) {
 
   return (
     <div className="embed-editor_size-row">
-      <EffLabel label="Opacity" prop="opacity" props={props} />
+      <EffLabel label={translate('style.opacityRow.opacity')} prop="opacity" props={props} />
       <div className="embed-editor_shadow-field">
         <DragSlider
           value={opacity.value}
@@ -106,7 +108,7 @@ export function OpacityRow({ props }: { props: Props }) {
           max={1}
           step={0.01}
           disabled={busy}
-          ariaLabel="Opacity"
+          ariaLabel={translate('style.opacityRow.opacity')}
           onPreview={(value) => {
             if (!field.focused.current) {
               field.setDraft(sliderText(value));
@@ -154,6 +156,7 @@ export interface OpacityFieldProps {
 }
 
 export function OpacityNumberField(props: OpacityFieldProps) {
+  const translate = useTranslate();
   const { text, setText, focusedRef, busy, live, setProp, important } = props;
   // Typing and stepping preview what the text names, flag and all.
   const liveText = (next: string) => {
@@ -167,7 +170,7 @@ export function OpacityNumberField(props: OpacityFieldProps) {
     <div className="embed-editor_field embed-editor_grad-num embed-editor_opacity-num">
       <VariableConnect
         className="is-fill"
-        ariaLabel="Connect Opacity to a variable"
+        ariaLabel={translate('style.opacityRow.connectOpacity')}
         disabled={busy}
         prop="opacity"
         onPick={(binding) => {
@@ -182,7 +185,7 @@ export function OpacityNumberField(props: OpacityFieldProps) {
           inputMode="decimal"
           spellCheck={false}
           disabled={busy}
-          aria-label="Opacity"
+          aria-label={translate('style.opacityRow.opacity')}
           onFocus={() => {
             focusedRef.current = true;
           }}

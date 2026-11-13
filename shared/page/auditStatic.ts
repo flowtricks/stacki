@@ -16,6 +16,10 @@ import {
   DESCRIPTION_CHARS_MIN,
   auditFinding,
   descriptionLengthCheck,
+  AUDIT_TAGS,
+  detailText,
+  labelText,
+  measureText,
   type AuditCssContext,
   type AuditCssPlace,
   type AuditEdit,
@@ -24,6 +28,7 @@ import {
   type AuditFix,
   type AuditNewElement,
 } from './auditFindings';
+import type { MessageRef } from '../core/i18n/messageReference';
 import {
   accessibleName,
   attrState,
@@ -338,9 +343,11 @@ function add(
   finding: {
     readonly check: AuditFinding['check'];
     readonly detail: string;
+    readonly detailRef?: MessageRef;
     readonly fix?: AuditFix | undefined;
     readonly excerpt?: string;
     readonly measure?: string;
+    readonly measureRef?: MessageRef;
     readonly choices?: readonly AuditFix[];
     readonly css?: AuditCssContext;
     readonly prop?: string;
@@ -357,10 +364,12 @@ function add(
       fileKind: run.input.kind,
       element: { path: visit.path, tag, line },
       detail: finding.detail,
+      ...(finding.detailRef === undefined ? {} : { detailRef: finding.detailRef }),
       source: 'static',
       fix: finding.fix,
       ...(finding.excerpt === undefined ? {} : { excerpt: finding.excerpt }),
       ...(finding.measure === undefined ? {} : { measure: finding.measure }),
+      ...(finding.measureRef === undefined ? {} : { measureRef: finding.measureRef }),
       ...(finding.choices === undefined ? {} : { choices: finding.choices }),
       ...(finding.css === undefined ? {} : { css: finding.css }),
       ...(finding.prop === undefined ? {} : { prop: finding.prop }),
@@ -369,13 +378,13 @@ function add(
 }
 
 /** A fix that patches the visited element's attributes, with its before and after tags. */
-function attributeFix(run: FileRun, visit: Visit, label: string, patch: Readonly<Record<string, Attr | undefined>>): AuditFix {
+function attributeFix(run: FileRun, visit: Visit, label: ReturnType<typeof labelText>, patch: Readonly<Record<string, Attr | undefined>>): AuditFix {
   const node = visit.node;
   assert(node.kind === 'element' || node.kind === 'component' || node.kind === 'raw', 'attributeFix: patches a tag');
   const props = nodeProps(node);
   const edits: readonly AuditEdit[] = [{ tag: 'attributes', path: visit.path, expect: node.name, patch }];
   return {
-    label,
+    ...label,
     before: openingTag(node.name, props),
     after: openingTag(node.name, patchedAttributes(props, patch)),
     file: run.input.file,
@@ -414,13 +423,13 @@ function checkGlobalAttributes(run: FileRun, visit: Visit): void {
       add(run, visit, {
         check: 'tabindex-positive',
         detail: `tabindex="${tabindex.value}"`,
-        fix: attributeFix(run, visit, focusable ? 'Remove tabindex' : 'Set tabindex="0"', patch),
+        fix: attributeFix(run, visit, labelText(focusable ? 'audits.fix.removeTabindex' : 'audits.fix.setTabindexZero'), patch),
       });
     }
   }
   const hidden = attrState(props, 'aria-hidden');
   if (hidden.tag === 'value' && hidden.value === 'true' && focusableNow(visit)) {
-    add(run, visit, { check: 'aria-hidden-focusable', detail: 'aria-hidden="true" on a focusable element' });
+    add(run, visit, { check: 'aria-hidden-focusable', ...detailText('audits.detail.ariaHiddenFocusable') });
   }
 }
 
@@ -432,19 +441,23 @@ function checkId(run: FileRun, visit: Visit, id: AttrState): void {
   run.idsSeen.set(id.value, seen);
   if (visit.insideLoop) {
     // One written id, repeated once per item the loop renders.
-    add(run, visit, { check: 'duplicate-id', detail: `id="${id.value}" repeats on every item of a loop` });
+    add(run, visit, { check: 'duplicate-id', ...detailText('audits.detail.idRepeatsInLoop', { id: id.value }) });
     return;
   }
   if (seen === 1) {
     return;
   }
   if (run.referenced.has(id.value)) {
-    add(run, visit, { check: 'duplicate-id', detail: `id="${id.value}" (referenced, so renaming needs a choice)` });
+    add(run, visit, { check: 'duplicate-id', ...detailText('audits.detail.idReferenced', { id: id.value }) });
     return;
   }
   const renamed = freeId(run, id.value, seen);
   const patch = { [writtenName(nodeProps(visit.node), 'id')]: stringValue(renamed) };
-  add(run, visit, { check: 'duplicate-id', detail: `id="${id.value}"`, fix: attributeFix(run, visit, `Rename to "${renamed}"`, patch) });
+  add(run, visit, {
+    check: 'duplicate-id',
+    detail: `id="${id.value}"`,
+    fix: attributeFix(run, visit, labelText('audits.fix.renameTo', { name: renamed }), patch),
+  });
 }
 
 // The first `<id>-<n>` no element of the file holds, from the occurrence's own number.
@@ -490,8 +503,8 @@ function checkHtml(run: FileRun, visit: Visit): void {
   const patch = { [writtenName(props, 'lang')]: stringValue(value) };
   add(run, visit, {
     check: 'html-lang',
-    detail: lang.tag === 'absent' ? '<html> has no lang' : 'lang is empty',
-    fix: attributeFix(run, visit, `Add lang="${value}"`, patch),
+    ...detailText(lang.tag === 'absent' ? 'audits.detail.htmlNoLang' : 'audits.detail.langEmpty', { html: AUDIT_TAGS.html }),
+    fix: attributeFix(run, visit, labelText('audits.fix.addLang', { value }), patch),
   });
 }
 
@@ -558,18 +571,22 @@ function checkHead(run: FileRun, visit: Visit): void {
   const head = headContents(visit.node);
   if (head.title === undefined) {
     if (!head.opaque) {
-      add(run, visit, { check: 'title-missing', detail: '<head> has no <title>', fix: headInsertFix(run, visit, 'title') });
+      add(run, visit, {
+        check: 'title-missing',
+        ...detailText('audits.detail.headNoTitle', { head: AUDIT_TAGS.head, title: AUDIT_TAGS.title }),
+        fix: headInsertFix(run, visit, 'title'),
+      });
     }
   } else if (contentState(head.title) === 'blank') {
-    add(run, visit, { check: 'title-missing', detail: '<title> is empty' });
+    add(run, visit, { check: 'title-missing', ...detailText('audits.detail.titleEmpty', { title: AUDIT_TAGS.title }) });
   }
   checkDescription(run, visit, head);
   if (!head.canonical && !head.opaque) {
-    add(run, visit, { check: 'canonical', detail: '<head> has no canonical link', fix: canonicalFix(run, visit) });
+    add(run, visit, { check: 'canonical', ...detailText('audits.detail.headNoCanonical', { head: AUDIT_TAGS.head }), fix: canonicalFix(run, visit) });
   }
   const missingSocial = ['og:title', 'og:description', 'og:image', 'twitter:card'].filter((key) => !head.social.has(key));
   if (missingSocial.length > 0 && !head.opaque) {
-    add(run, visit, { check: 'social-tags', detail: `Missing ${missingSocial.join(', ')}` });
+    add(run, visit, { check: 'social-tags', ...detailText('audits.detail.socialMissing', { tags: missingSocial.join(', ') }) });
   }
   checkRobots(run, visit, head.robots);
 }
@@ -577,7 +594,11 @@ function checkHead(run: FileRun, visit: Visit): void {
 function checkDescription(run: FileRun, visit: Visit, head: HeadContents): void {
   if (head.description === undefined) {
     if (!head.opaque) {
-      add(run, visit, { check: 'description-missing', detail: '<head> has no meta description', fix: headInsertFix(run, visit, 'description') });
+      add(run, visit, {
+        check: 'description-missing',
+        ...detailText('audits.detail.headNoDescription', { head: AUDIT_TAGS.head }),
+        fix: headInsertFix(run, visit, 'description'),
+      });
     }
     return;
   }
@@ -587,15 +608,15 @@ function checkDescription(run: FileRun, visit: Visit, head: HeadContents): void 
   }
   const length = content.value.trim().length;
   if (length === 0) {
-    add(run, visit, { check: 'description-missing', detail: 'The meta description is empty' });
+    add(run, visit, { check: 'description-missing', ...detailText('audits.detail.descriptionEmpty') });
   } else {
     const check = descriptionLengthCheck(length);
     if (check !== undefined) {
       add(run, visit, {
         check,
-        detail: `${length} characters (aim for ${DESCRIPTION_CHARS_MIN}–${DESCRIPTION_CHARS_MAX})`,
+        ...detailText('audits.detail.descriptionLength', { length, min: DESCRIPTION_CHARS_MIN, max: DESCRIPTION_CHARS_MAX }),
         excerpt: content.value.trim(),
-        measure: `${length} characters`,
+        ...measureText('audits.measure.characters', { count: length }),
       });
     }
   }
@@ -615,7 +636,7 @@ function checkRobots(run: FileRun, visit: Visit, robots: PageNode | undefined): 
   }
   add(run, visit, {
     check: 'noindex',
-    detail: run.input.kind === 'page' ? `content="${content.value}"` : `content="${content.value}" hides every page using this layout`,
+    ...(run.input.kind === 'page' ? { detail: `content="${content.value}"` } : detailText('audits.detail.noindexLayout', { content: content.value })),
   });
 }
 
@@ -644,7 +665,7 @@ function headInsertFix(run: FileRun, visit: Visit, item: 'title' | 'description'
   const printed =
     item === 'title' ? `<title>${value.kind === 'expr' ? `{${value.value}}` : value.value}</title>` : openingTag('meta', element.props, { selfClosing: true });
   return {
-    label: item === 'title' ? 'Add <title>' : 'Add meta description',
+    ...labelText(item === 'title' ? 'audits.fix.addTitle' : 'audits.fix.addMetaDescription', { title: AUDIT_TAGS.title }),
     before: '<head> … </head>',
     after: `<head> … ${printed} </head>`,
     file: run.input.file,
@@ -682,7 +703,7 @@ function canonicalFix(run: FileRun, visit: Visit): AuditFix {
   const href: Attr = { type: 'expr', value: 'new URL(Astro.url.pathname, Astro.site ?? Astro.url)' };
   const element: AuditNewElement = { name: 'link', props: { rel: stringValue('canonical'), href }, content: undefined };
   return {
-    label: 'Add canonical link',
+    ...labelText('audits.fix.addCanonical'),
     before: '<head> … </head>',
     after: `<head> … ${openingTag('link', element.props, { selfClosing: true })} </head>`,
     file: run.input.file,
@@ -727,7 +748,7 @@ function checkImage(run: FileRun, visit: Visit): void {
   checkDimensions(run, visit, props, url);
   const bytes = run.facts.publicFiles.get(url);
   if (bytes !== undefined && bytes >= IMAGE_BYTES_LARGE_MIN) {
-    add(run, visit, { check: 'img-large', detail: `${imageSource.value} is ${Math.round(bytes / 1024)} KB` });
+    add(run, visit, { check: 'img-large', ...detailText('audits.detail.imageSize', { source: imageSource.value, kilobytes: Math.round(bytes / 1024) }) });
   }
 }
 
@@ -747,12 +768,16 @@ function checkAlt(run: FileRun, visit: Visit, props: Readonly<Record<string, Att
     if (attrState(props, 'role').tag === 'absent') {
       patch['role'] = stringValue('presentation');
     }
-    add(run, visit, { check: 'img-alt', detail: `${imageDetail(props)} (marked decorative)`, fix: attributeFix(run, visit, 'Add alt=""', patch) });
+    add(run, visit, {
+      check: 'img-alt',
+      ...detailText('audits.detail.imageMarkedDecorative', { detail: imageDetail(props) }),
+      fix: attributeFix(run, visit, labelText('audits.fix.addAltEmpty'), patch),
+    });
     return;
   }
   if (decorative && alt.value.length > 0) {
     const patch = { [writtenName(props, 'alt')]: stringValue('') };
-    add(run, visit, { check: 'img-decorative', detail: `alt="${alt.value}"`, fix: attributeFix(run, visit, 'Set alt=""', patch) });
+    add(run, visit, { check: 'img-decorative', detail: `alt="${alt.value}"`, fix: attributeFix(run, visit, labelText('audits.fix.setAltEmpty'), patch) });
   }
 }
 
@@ -786,7 +811,7 @@ function dimensionFix(
   assert(size.height > 0, 'dimensionFix: an image is at least a pixel tall');
   if (written.width.tag === 'absent' && written.height.tag === 'absent') {
     const patch = { width: stringValue(String(size.width)), height: stringValue(String(size.height)) };
-    return attributeFix(run, visit, `Add width="${size.width}" height="${size.height}"`, patch);
+    return attributeFix(run, visit, labelText('audits.fix.addDimensions', { width: size.width, height: size.height }), patch);
   }
   const known = written.width.tag === 'value' ? written.width.value : written.height.tag === 'value' ? written.height.value : '';
   const pixels = /^\d+$/.test(known.trim()) ? Number.parseInt(known, 10) : undefined;
@@ -795,10 +820,10 @@ function dimensionFix(
   }
   if (written.width.tag === 'value') {
     const height = Math.round((pixels * size.height) / size.width);
-    return attributeFix(run, visit, `Add height="${height}"`, { height: stringValue(String(height)) });
+    return attributeFix(run, visit, labelText('audits.fix.addHeight', { height }), { height: stringValue(String(height)) });
   }
   const width = Math.round((pixels * size.width) / size.height);
-  return attributeFix(run, visit, `Add width="${width}"`, { width: stringValue(String(width)) });
+  return attributeFix(run, visit, labelText('audits.fix.addWidth', { width }), { width: stringValue(String(width)) });
 }
 
 /** A same-site path the dev server serves from the project: `/images/a.png`, not `//cdn…` or `https:`. */
@@ -902,7 +927,7 @@ function checkOpener(run: FileRun, visit: Visit, props: Readonly<Record<string, 
     return; // Either cuts window.opener.
   }
   const patch = { [writtenName(props, 'rel')]: stringValue([...tokens, 'noopener'].join(' ')) };
-  add(run, visit, { check: 'link-noopener', detail: `href="${href}"`, fix: attributeFix(run, visit, 'Add rel="noopener"', patch) });
+  add(run, visit, { check: 'link-noopener', detail: `href="${href}"`, fix: attributeFix(run, visit, labelText('audits.fix.addNoopener'), patch) });
 }
 
 function checkButton(run: FileRun, visit: Visit): void {
@@ -934,6 +959,16 @@ function checkControl(run: FileRun, visit: Visit, name: 'input' | 'select' | 'te
   add(run, visit, { check: 'control-label', detail });
 }
 
+/** A video's autoplay detail: which of muted and controls it lacks, as one sentence with its reference. */
+function autoplayText(missing: readonly string[]): ReturnType<typeof detailText> {
+  assert(missing.length > 0, 'autoplayText: something is missing');
+  assert(missing.length <= 2, 'autoplayText: muted and controls at most');
+  return detailText(missing.length === 1 ? 'audits.detail.autoplayWithoutOne' : 'audits.detail.autoplayWithoutTwo', {
+    first: missing[0] ?? '',
+    second: missing[1] ?? '',
+  });
+}
+
 function checkVideo(run: FileRun, visit: Visit): void {
   const props = nodeProps(visit.node);
   const autoplay = attrState(props, 'autoplay');
@@ -953,8 +988,13 @@ function checkVideo(run: FileRun, visit: Visit): void {
   }
   add(run, visit, {
     check: 'video-autoplay',
-    detail: `Autoplays without ${missing.join(' or ')}`,
-    fix: attributeFix(run, visit, `Add ${missing.join(' and ')}`, patch),
+    ...autoplayText(missing),
+    fix: attributeFix(
+      run,
+      visit,
+      labelText(missing.length === 1 ? 'audits.fix.addOne' : 'audits.fix.addTwo', { first: missing[0] ?? '', second: missing[1] ?? '' }),
+      patch,
+    ),
   });
 }
 
@@ -969,7 +1009,7 @@ function checkFrame(run: FileRun, visit: Visit): void {
   const fix =
     host === undefined
       ? undefined
-      : attributeFix(run, visit, 'Add title from its source', { [writtenName(props, 'title')]: stringValue(`Embedded content from ${host}`) });
+      : attributeFix(run, visit, labelText('audits.fix.addTitleFromSource'), { [writtenName(props, 'title')]: stringValue(`Embedded content from ${host}`) });
   add(run, visit, { check: 'iframe-title', detail: imageSource.tag === 'value' ? `src="${imageSource.value}"` : '<iframe>', fix });
 }
 
@@ -997,7 +1037,7 @@ function checkHeading(run: FileRun, visit: Visit, name: string): void {
   const previous = run.levels.at(-1);
   run.levels.push(level);
   if (level === 1 && run.levels.filter((written) => written === 1).length === 2) {
-    add(run, visit, { check: 'h1-count', detail: 'A second <h1> in this file' });
+    add(run, visit, { check: 'h1-count', ...detailText('audits.detail.secondH1', { h1: AUDIT_TAGS.h1 }) });
   }
   if (previous !== undefined && level > previous + 1) {
     add(run, visit, { check: 'heading-order', detail: `h${previous} → h${level}` });
@@ -1050,13 +1090,13 @@ function checkStyleBlock(run: FileRun, visit: Visit): void {
   if (visit.insideInert) {
     // A <style> in <noscript>, <template> or an <svg> is that element's own, not a stylesheet to scope or layer.
   } else if (!global) {
-    add(run, visit, { check: 'style-global', detail: '<style> without is:global or is:inline' });
+    add(run, visit, { check: 'style-global', ...detailText('audits.detail.styleNotGlobal', { style: AUDIT_TAGS.style }) });
   } else if (!/@layer\b/.test(node.inner) && node.inner.trim().length > 0) {
-    add(run, visit, { check: 'style-layer', detail: '<style is:global> with no @layer' });
+    add(run, visit, { check: 'style-layer', ...detailText('audits.detail.styleNoLayer', { styleGlobal: AUDIT_TAGS.styleGlobal }) });
   }
   for (const issue of lintCss(node.inner, run.facts.tokens)) {
     const fixes = variablesFor(issue.token, run.facts.variables).map((name): AuditFix => ({
-      label: `Use var(${name})`,
+      ...labelText('audits.fix.useVariable', { variable: `var(${name})` }),
       before: `${issue.property}: ${issue.value};`,
       after: `${issue.property}: ${swapped(issue, name)};`,
       file: run.input.file,
@@ -1075,7 +1115,7 @@ function checkInlineStyle(run: FileRun, visit: Visit, value: string): void {
   for (const issue of lintCss(`${value};`, run.facts.tokens)) {
     const fixes = variablesFor(issue.token, run.facts.variables).map((name): AuditFix => {
       const next = `${value.slice(0, issue.offset)}var(${name})${value.slice(issue.offset + issue.token.length)}`;
-      return attributeFix(run, visit, `Use var(${name})`, { [writtenName(props, 'style')]: stringValue(next) });
+      return attributeFix(run, visit, labelText('audits.fix.useVariable', { variable: `var(${name})` }), { [writtenName(props, 'style')]: stringValue(next) });
     });
     addToken(run, visit, { ...issue, selector: 'style=""' }, fixes, undefined, undefined);
   }

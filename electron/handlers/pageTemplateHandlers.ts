@@ -12,12 +12,14 @@ import type { CmsConnectionStore } from '../content/cmsConnectionStore';
 import { sampleData, type SanityTarget } from '../content/dataSample';
 import { applyPageTemplate, planPageTemplate, type PageTemplateHost } from '../content/pageTemplatePlan';
 import { readProjectEnv, writeProjectSecret } from '../content/projectEnv';
+import { DescribedError } from '../../shared/properties/describedError';
 import { errorMessage, toPosix } from '../lib/mainHelpers';
 import { git } from '../lib/nodeTools';
 import { realpathSync } from 'node:fs';
 import path from 'node:path';
 import { collectionOf } from './cmsFiles';
 import type { MainHost } from './mainHost';
+import { translateMain } from '../lib/mainLocale';
 
 /** What the handlers ask of the running preview (DevServers). */
 export interface TemplatePreview {
@@ -84,10 +86,10 @@ function sanityConnection(connections: CmsConnectionStore, projectPath: string, 
   const connection = connections.list(root).connections.find((candidate) => candidate.id === id);
   const token = connections.secret(root, id);
   if (connection?.kind !== 'sanity') {
-    throw new Error('That Sanity connection is no longer there. Connect Sanity again.');
+    throw new Error(translateMain('error.pageTemplate.connectionGone'));
   }
   if (token === undefined) {
-    throw new Error('Stacki could not read this connection’s key. Connect Sanity again.');
+    throw new Error(translateMain('error.pageTemplate.keyUnreadable'));
   }
   return { projectId: connection.projectId, dataset: connection.dataset, token };
 }
@@ -127,7 +129,14 @@ async function answered<T>(run: () => Promise<T>): Promise<RemoteResult<T>> {
   try {
     return { ok: true, value: await run() };
   } catch (error: unknown) {
+    if (error instanceof DescribedError) {
+      return {
+        ok: false,
+        message: error.problem.message.slice(0, 900),
+        ...(error.problem.messageRef === undefined ? {} : { messageRef: error.problem.messageRef }),
+      };
+    }
     const message = errorMessage(error).slice(0, 900);
-    return { ok: false, message: message || 'Stacki could not finish that.' };
+    return { ok: false, message: message || translateMain('error.pageTemplate.generic') };
   }
 }

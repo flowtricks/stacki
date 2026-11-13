@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useSyncExternalStore } from 'react';
 import type { KeyboardEvent, PointerEvent, ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
@@ -57,6 +58,7 @@ export function usePanelWidths(): PanelWidths {
 // React does not re-render whoever called this hook (Studio calls it from its whole
 // editor) at every pointer move; release commits the width to state and storage once.
 export function usePanelResize(kind: PanelKind): PanelResize {
+  const translate = useTranslate();
   const widths = usePanelWidths();
   const startDrag = usePointerDrag();
   const width = widths[kind];
@@ -109,14 +111,14 @@ export function usePanelResize(kind: PanelKind): PanelResize {
       className="panel-resize"
       role="separator"
       tabIndex={0}
-      aria-label={`Resize ${side} panel`}
+      aria-label={translate(side === 'left' ? 'shell.panel.resizeLeft' : 'shell.panel.resizeRight')}
       aria-orientation="vertical"
       aria-valuemin={PANEL_WIDTH_PX_MIN[kind]}
       aria-valuemax={PANEL_WIDTH_PX_MAX}
       aria-valuenow={width}
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
-      title="Drag to resize; use arrow keys when focused"
+      title={translate('shell.panel.resizeHint')}
     />
   );
   return { width, handle };

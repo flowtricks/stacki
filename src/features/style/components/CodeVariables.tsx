@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { useRef, useState } from 'react';
 import type { MutableRefObject, ReactNode, RefObject } from 'react';
 import type { Extension } from '@codemirror/state';
@@ -36,6 +37,7 @@ const CLOSED: ChooserState = { kind: 'closed' };
 
 /** The variables of a code editor whose text is `scope`; nothing is offered while it is read-only. */
 export function useCodeVariables(scope: CodeVariableScope, access: { readonly readOnly: boolean }): CodeVariables {
+  const translate = useTranslate();
   const frameRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLButtonElement>(null);
   const viewRef = useRef<EditorView | undefined>(undefined);
@@ -75,7 +77,7 @@ export function useCodeVariables(scope: CodeVariableScope, access: { readonly re
         <ConnectDot
           dotRef={dotRef}
           disabled={false}
-          ariaLabel={`Connect ${scope.prop} to a variable`}
+          ariaLabel={translate('styleModel.shared.connectVariable', { label: scope.prop })}
           open={chooser.kind === 'bind'}
           onPress={() => undefined}
           onToggle={() => setChooser(chooserRef.current.kind === 'bind' ? CLOSED : { kind: 'bind' })}

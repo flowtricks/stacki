@@ -10,17 +10,22 @@ import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { MenuSurface, menuBoxBelow, type MenuItem } from '../../../ui/MoreMenu';
 import { MoreIcon } from '../../../ui/Icons';
-import { INLINE_STYLE_LABEL } from '../model/inlineTarget';
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
+import { INLINE_STYLE_LABEL_KEY } from '../model/inlineTarget';
 import type { InlineChip } from './useInlineTarget';
 
 const MENU_WIDTH_PX = 170;
 
 export function InlineStyleChip({ chip, busy }: { readonly chip: InlineChip; readonly busy: boolean }): ReactNode {
+  const translate = useTranslate();
   const [box, setBox] = useState<CSSProperties | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const chipRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const items: readonly MenuItem[] = chip.onClear === undefined ? [] : [{ label: 'Clear inline styles', danger: true, onSelect: chip.onClear }];
+  const items: readonly MenuItem[] =
+    chip.onClear === undefined ? [] : [{ label: translate('styleModel.embed.chip.clear'), danger: true, onSelect: chip.onClear }];
   assert(items.length <= 1, 'InlineStyleChip: one action');
   const openAt = (rect: DOMRect): void => {
     if (items.length === 0) {
@@ -37,8 +42,8 @@ export function InlineStyleChip({ chip, busy }: { readonly chip: InlineChip; rea
         className={inlineChipClassName(chip)}
         disabled={busy}
         aria-pressed={chip.active}
-        aria-label={inlineChipLabel(chip)}
-        title={inlineChipTitle(chip)}
+        aria-label={inlineChipLabel(chip, translate)}
+        title={inlineChipTitle(chip, translate)}
         onClick={() => {
           if (chip.active) {
             chip.onDeselect();
@@ -55,14 +60,14 @@ export function InlineStyleChip({ chip, busy }: { readonly chip: InlineChip; rea
         }}
       >
         {chip.state === 'code' ? <CodeGlyph className="embed-editor_inline-chip-icon" /> : <StyleGlyph className="embed-editor_inline-chip-icon" />}
-        <span className="embed-editor_selector-chip-text">{INLINE_STYLE_LABEL}</span>
+        <span className="embed-editor_selector-chip-text">{translate(INLINE_STYLE_LABEL_KEY)}</span>
       </button>
       {items.length > 0 ? (
         <button
           type="button"
           className="embed-editor_inline-chip-more"
-          title="Inline styles options"
-          aria-label="Inline styles options"
+          title={translate('styleModel.embed.chip.options')}
+          aria-label={translate('styleModel.embed.chip.options')}
           aria-haspopup="menu"
           aria-expanded={open}
           disabled={busy}
@@ -98,15 +103,17 @@ export function inlineChipClassName(chip: Pick<InlineChip, 'state' | 'active'>):
   return ['embed-editor_selector-chip', 'is-inline', chip.state === 'code' && 'is-code', chip.active && 'is-active'].filter(Boolean).join(' ');
 }
 
-export function inlineChipTitle(chip: Pick<InlineChip, 'state' | 'active'>): string {
+export function inlineChipTitle(chip: Pick<InlineChip, 'state' | 'active'>, translate: Translator = ENGLISH_TRANSLATE): string {
+  const label = translate(INLINE_STYLE_LABEL_KEY);
   if (chip.state === 'code') {
-    return `${INLINE_STYLE_LABEL} — written as code, edited in Settings`;
+    return translate('styleModel.embed.chip.titleCode', { label });
   }
-  return chip.active ? `${INLINE_STYLE_LABEL} — click to deselect` : `${INLINE_STYLE_LABEL} — this element’s style attribute`;
+  return chip.active ? translate('styleModel.embed.chip.titleActive', { label }) : translate('styleModel.embed.chip.titleIdle', { label });
 }
 
-function inlineChipLabel(chip: Pick<InlineChip, 'state'>): string {
-  return chip.state === 'code' ? `${INLINE_STYLE_LABEL}, written as code` : INLINE_STYLE_LABEL;
+function inlineChipLabel(chip: Pick<InlineChip, 'state'>, translate: Translator): string {
+  const label = translate(INLINE_STYLE_LABEL_KEY);
+  return chip.state === 'code' ? translate('styleModel.embed.chip.labelCode', { label }) : label;
 }
 
 // A brush: styles written on the element itself.

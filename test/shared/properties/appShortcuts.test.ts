@@ -263,7 +263,7 @@ function canonicalOrRaw(shortcut: string): string {
 }
 
 test('no Stacki, menu, browser or OS shortcut is in the reserved app range', () => {
-  const main = readFileSync(join(ROOT, 'electron/main.ts'), 'utf8');
+  const main = readFileSync(join(ROOT, 'electron/app/applicationMenu.ts'), 'utf8');
   // Punctuation (`CmdOrCtrl+,`) is no shortcut text an app can write, so it is compared as written.
   const accelerators = [...main.matchAll(/accelerator:\s*'([^']+)'/g)].map((match) => canonicalOrRaw((match[1] ?? '').replace('CmdOrCtrl', 'Mod')));
   assert.ok(accelerators.includes('Mod+Z'), 'the menu accelerators were read');

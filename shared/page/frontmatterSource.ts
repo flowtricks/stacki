@@ -253,6 +253,7 @@ function importLines<Import extends SerializableImport>(imports: readonly Import
           .join(', ') +
         ' }'
       : first.name;
+    // i18n-ignore: generated source code written into the project, not interface text.
     return `import ${names} from ${quote}${specifier}${quote}${tail}`;
   });
 }

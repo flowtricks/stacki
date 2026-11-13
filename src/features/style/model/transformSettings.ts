@@ -1,3 +1,4 @@
+// i18n-ignore-file: origin names are English next to their `labelKey`, which the panel translates.
 // The settings behind the transform list: where a transform pivots, whether the
 // back of a turned element shows, and the two perspectives.
 //
@@ -18,6 +19,7 @@
 // perspective left in the value would disappear the next time a layer moved.
 // Hence it is lifted out before the layers are parsed and put back in front on
 // the way out.
+import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
 
 /** An origin as the pad and its two fields hold it: x, y, and a z we only carry. */
 export type Origin = { x: string; y: string; z: string };
@@ -107,16 +109,16 @@ export function serializeOrigin(origin: Origin): string {
 }
 
 /** The nine positions of the pad, in reading order (top-left first). */
-export const ORIGIN_PRESETS: ReadonlyArray<{ x: string; y: string; label: string }> = [
-  { x: '0%', y: '0%', label: 'Top left' },
-  { x: '50%', y: '0%', label: 'Top' },
-  { x: '100%', y: '0%', label: 'Top right' },
-  { x: '0%', y: '50%', label: 'Left' },
-  { x: '50%', y: '50%', label: 'Center' },
-  { x: '100%', y: '50%', label: 'Right' },
-  { x: '0%', y: '100%', label: 'Bottom left' },
-  { x: '50%', y: '100%', label: 'Bottom' },
-  { x: '100%', y: '100%', label: 'Bottom right' },
+export const ORIGIN_PRESETS: ReadonlyArray<{ x: string; y: string; label: string; labelKey: MessageKey }> = [
+  { x: '0%', y: '0%', label: 'Top left', labelKey: 'styleModel.transform.origin.topLeft' },
+  { x: '50%', y: '0%', label: 'Top', labelKey: 'styleModel.transform.origin.top' },
+  { x: '100%', y: '0%', label: 'Top right', labelKey: 'styleModel.transform.origin.topRight' },
+  { x: '0%', y: '50%', label: 'Left', labelKey: 'styleModel.transform.origin.left' },
+  { x: '50%', y: '50%', label: 'Center', labelKey: 'styleModel.transform.origin.center' },
+  { x: '100%', y: '50%', label: 'Right', labelKey: 'styleModel.transform.origin.right' },
+  { x: '0%', y: '100%', label: 'Bottom left', labelKey: 'styleModel.transform.origin.bottomLeft' },
+  { x: '50%', y: '100%', label: 'Bottom', labelKey: 'styleModel.transform.origin.bottom' },
+  { x: '100%', y: '100%', label: 'Bottom right', labelKey: 'styleModel.transform.origin.bottomRight' },
 ];
 
 // `0` and `0%` are the same place, and a field showing `0` should still light up

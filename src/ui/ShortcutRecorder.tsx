@@ -17,6 +17,7 @@ import { assert } from '../../shared/core/assert';
 import { shortcutOfPress, type AppKeyPress } from '../../shared/properties/appShortcuts';
 import { ResetIcon } from './Icons';
 import './shortcutRecorder.css';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 export type ShortcutPlatform = 'mac' | 'other';
 
@@ -115,6 +116,7 @@ export function recorderStep(press: AppKeyPress, platform: ShortcutPlatform, rul
 }
 
 export function ShortcutRecorder(props: ShortcutRecorderProps) {
+  const translate = useTranslate();
   assert(props.ariaLabel.length > 0, 'A shortcut field is labelled');
   assert(props.emptyLabel.length > 0, 'A shortcut field says what having no key means');
   const [state, setState] = useState<RecorderState>({ kind: 'idle' });
@@ -167,7 +169,7 @@ export function ShortcutRecorder(props: ShortcutRecorderProps) {
           onBlur={() => setState({ kind: 'idle' })}
           onKeyDown={onKeyDown}
         >
-          {recording ? 'Press keys…' : props.value === undefined ? props.emptyLabel : props.format(props.value)}
+          {recording ? translate('ui.shortcutRecorder.pressKeys') : props.value === undefined ? props.emptyLabel : props.format(props.value)}
         </button>
         {props.reset !== undefined && (
           <button

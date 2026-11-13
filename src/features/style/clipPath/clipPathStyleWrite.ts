@@ -393,12 +393,3 @@ export async function latestInStylesheet(topTier: CascadeCandidate[], api: Webfl
   }
   return winner;
 }
-
-// The keyboard and pointer hints read out after each canvas handle's name.
-export const HANDLE_ADJUST_HINT = 'Drag or use arrow keys to adjust.';
-export const POINT_HANDLE_HINT = 'Drag to move, double-click to remove. Use arrow keys to move when selected.';
-export const INSET_EDGE_HANDLE_HINT = 'Drag or use arrow keys to resize. ' + 'Hold Shift for all sides or Option for this side and the opposite side.';
-export const INSET_RADIUS_HANDLE_HINT =
-  'Drag or use arrow keys to adjust. ' +
-  'Hold U to unlock separate horizontal and vertical radii. ' +
-  'Hold Shift for all corners or Option for this corner and the opposite corner.';

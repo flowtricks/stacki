@@ -2,7 +2,6 @@
 // process to search the project; Studio already holds the project's page, component and asset lists, so the picker
 // searches those, and the server's model reads the named file itself (the chip is sent as the text `@path`).
 import { assert } from '../../../vendor/stacki/shared/core/assert';
-import { AI_LIMITS } from '../../../vendor/stacki/shared/properties/ai/aiLimits';
 import { isProjectRelativePath, plainTextOf, type ComposerSegments, type MentionChip } from '../../../vendor/stacki/shared/properties/ai/mentions';
 import type { Project } from '../project/projectClient';
 
@@ -58,5 +57,3 @@ export function sameDraft(left: ComposerSegments, right: ComposerSegments): bool
 export function textSegments(text: string): ComposerSegments {
   return text === '' ? [] : [{ kind: 'text', text }];
 }
-
-export const MENTION_LIMIT_TEXT = `Up to ${AI_LIMITS.mentionsMax} mentions per message.`;

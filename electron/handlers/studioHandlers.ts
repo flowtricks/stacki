@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { installStudio, automaticStudio, readStudioRelease, studioStatus, type StudioReleaseEnvironment } from '../project/studioSetup';
 import { errorMessage } from '../lib/mainHelpers';
 import type { MainHost } from './mainHost';
+import { translateMain } from '../lib/mainLocale';
 import type { StudioInstallResult } from '../../shared/ipc/studioSetup';
 import { createStudioProgress } from '../project/studioProgress';
 
@@ -21,7 +22,7 @@ export function registerStudioHandlers(
       if (status.kind !== 'missing') {
         return {
           kind: 'error',
-          message: 'Studio already exists. Setup does not replace existing files.',
+          message: translateMain('error.studio.exists'),
         };
       }
       progress.update({ kind: 'stage', stage: 'release' });
@@ -46,9 +47,9 @@ async function selectRelease(host: Pick<MainHost, 'showOpenDialog'>, source: 'pu
     return automaticStudio(version, environment);
   }
   const selection = await host.showOpenDialog({
-    title: 'Choose a trusted Stacki Studio release bundle',
+    title: translateMain('dialog.open.studioRelease.title'),
     properties: ['openFile'],
-    filters: [{ name: 'Studio release', extensions: ['json'] }],
+    filters: [{ name: translateMain('dialog.open.studioRelease.filter'), extensions: ['json'] }],
   });
   const file = selection.filePaths[0];
   return selection.canceled || !file ? undefined : readStudioRelease(file);

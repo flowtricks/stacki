@@ -12,7 +12,7 @@
 //   first at the smallest level — is set to h1.
 // - A broken link: its href set to the route the person picked.
 import { assert } from '../core/assert';
-import type { AuditEdit, AuditFix } from './auditFindings';
+import { labelText, type AuditEdit, type AuditFix } from './auditFindings';
 import { attrState, nodeChildren, nodeProps, openingTag, patchedAttributes } from './auditMarkup';
 import type { AuditFileInput } from './auditStatic';
 import type { Attr, PageNode } from './pageNodeTypes';
@@ -119,7 +119,7 @@ export function instanceIdFix(input: AuditFileInput, path: readonly number[], ex
     patchedAttributes(nodeProps(target.node), { id: { type: 'expr', value: `\`${id.value}-\${${INSTANCE_KEY_NAME}}\`` } }),
   );
   return {
-    label: 'Make ids unique per instance',
+    ...labelText('audits.fix.makeIdsUnique'),
     before: openingTag(target.node.name, nodeProps(target.node)),
     after: `${INSTANCE_KEY_CODE}\n${after}`,
     file: input.file,
@@ -161,7 +161,7 @@ export function headingPromotionFix(page: AuditFileInput, headingProps: Readonly
   const patch = { [best.prop]: { type: 'string', value } satisfies Attr };
   assert(best.level >= 1, 'headingPromotionFix: a heading level is at least 1');
   return {
-    label: 'Make this heading an h1',
+    ...labelText('audits.fix.makeHeadingH1'),
     before: openingTag(best.entry.node.name, props),
     after: openingTag(best.entry.node.name, patchedAttributes(props, patch)),
     file: page.file,
@@ -175,7 +175,7 @@ export function linkFix(input: { readonly file: string; readonly path: readonly 
   assert(input.path.length > 0, 'linkFix: names the link');
   const patch = { href: { type: 'string', value: route } satisfies Attr };
   return {
-    label: `Link to ${route}`,
+    ...labelText('audits.fix.linkTo', { route }),
     before: `<a href="${input.href}">`,
     after: `<a href="${route}">`,
     file: input.file,

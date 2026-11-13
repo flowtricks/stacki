@@ -21,19 +21,21 @@
 // details popup (AppDetails.tsx): about, App settings, commands, updates and
 // Uninstall. Shared by Desktop and Studio: the host supplies its role, how to
 // draw a GitHub picture and its GitHub sign-in.
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { can, type RoleView } from '../../../shared/properties/projectRoles';
 import { appAuthorLogin, type AppStaged, type AppSummary, type AppsResult } from '../../../shared/properties/apps';
 import { appAccessFeature } from '../../../shared/properties/appsRpc';
 import { applyAppUpdate, commitApp, discardApp, listInstalledAppList, uninstallApp } from '../../ipc/appsBridge';
 import { setAppAutoUpdate } from '../../ipc/appMarketplaceBridge';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { AppsIcon, GitHubIcon, PlusIcon, SparkleIcon, RefreshIcon, WarningTriangleIcon } from '../../ui/Icons';
 import { SearchField } from '../../ui/SearchField';
 import MoreMenu from '../../ui/MoreMenu';
 import { AppTile } from './AppTile';
 import { AppRowCount, keepAppBadges } from './appBadges';
 import { ConnectGitHub, type ConnectGitHubProps } from './ConnectGitHub';
-import { BUILD_APP_LABEL, requestBuildApp } from './appPrompt';
+import { requestBuildApp } from './appPrompt';
 import { useAppsPanelRequest } from './appsDirectory';
 import { useAppDetailsRequest } from './appDetailsRequests';
 import { launchApp, stopApp, useAppsRuntime } from './appsRuntime';
@@ -50,7 +52,6 @@ import { AppsViewTabs, MarketplaceView, type AppsView } from './marketplace/Mark
 import { PublishMarketplace, type PublishMarketplaceProps } from './PublishMarketplace';
 import { ShareApp } from './ShareApp';
 import { marketplaceSubmitRoute, uploadedApps } from './publishFlow';
-import { LOAD_FROM_GITHUB_LABEL } from './repositoryChooser';
 import type { AppRepositoryRef } from '../../../shared/properties/appPublish';
 import './apps.css';
 import { AppNetworkNote } from './AppConnections';
@@ -68,7 +69,9 @@ export interface AppsPanelProps {
 }
 
 type Load =
-  { readonly kind: 'loading' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'ready'; readonly apps: readonly AppSummary[] };
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined }
+  | { readonly kind: 'ready'; readonly apps: readonly AppSummary[] };
 
 function keptInstalledApps(projectPath: string): KeptInstalledApps | undefined {
   const kept = installedAppsCache.get(projectPath);
@@ -77,6 +80,8 @@ function keptInstalledApps(projectPath: string): KeptInstalledApps | undefined {
 
 export default function AppsPanel(props: AppsPanelProps) {
   const { projectPath } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   // The kept list (installedAppsCache.ts) draws in the first frame; reload refreshes it in place.
   const [kept] = useState(() => keptInstalledApps(projectPath));
   const [load, setLoad] = useState<Load>(() => (kept === undefined ? { kind: 'loading' } : { kind: 'ready', apps: kept.list.apps }));
@@ -115,7 +120,7 @@ export default function AppsPanel(props: AppsPanelProps) {
         const list = answer.value;
         void folders.then((brokenFolders) => installedAppsCache.set(projectPath, { list, brokenFolders }));
       }
-      setLoad(answer.ok ? { kind: 'ready', apps: answer.value.apps } : { kind: 'failed', message: answer.message });
+      setLoad(answer.ok ? { kind: 'ready', apps: answer.value.apps } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef });
     } catch (error: unknown) {
       setLoad({ kind: 'failed', message: error instanceof Error ? error.message : String(error) });
     }
@@ -131,7 +136,7 @@ export default function AppsPanel(props: AppsPanelProps) {
       if (answer.ok) {
         done(answer.value);
       } else {
-        props.notify(answer.message, 'error');
+        props.notify(translateDescribed(answer), 'error');
       }
     } catch (error: unknown) {
       props.notify(error instanceof Error ? error.message : String(error), 'error');
@@ -153,7 +158,7 @@ export default function AppsPanel(props: AppsPanelProps) {
       setView('installed');
       setConnecting(true);
     },
-    buildApp: () => void requestBuildApp(props.notify),
+    buildApp: () => void requestBuildApp(translate, props.notify),
   };
   usePanelRequests(install);
   // An app asking for its own settings (`app.openSettings`): its details open at that section.
@@ -207,7 +212,9 @@ export default function AppsPanel(props: AppsPanelProps) {
         () => setAppAutoUpdate(projectPath, app.manifest.id, policy),
         () => {
           props.notify(
-            policy.autoUpdate ? `${app.manifest.name} now installs updates by itself.` : `${app.manifest.name} now waits for you to choose Update.`,
+            policy.autoUpdate
+              ? translate('apps.panel.autoUpdateOn', { name: app.manifest.name })
+              : translate('apps.panel.autoUpdateOff', { name: app.manifest.name }),
             'info',
           );
           void reload();
@@ -218,7 +225,7 @@ export default function AppsPanel(props: AppsPanelProps) {
         () => applyAppUpdate(projectPath, app.manifest.id),
         (summary) => {
           stopApp(app.manifest.id);
-          props.notify(`${summary.manifest.name} updated to ${summary.manifest.version}.`, 'success');
+          props.notify(translate('apps.panel.updated', { name: summary.manifest.name, version: summary.manifest.version }), 'success');
           void reload();
         },
       ),
@@ -227,7 +234,7 @@ export default function AppsPanel(props: AppsPanelProps) {
         () => uninstallApp(projectPath, app.manifest.id),
         () => {
           stopApp(app.manifest.id);
-          props.notify(`${app.manifest.name} was removed.`, 'info');
+          props.notify(translate('apps.panel.removed', { name: app.manifest.name }), 'info');
           void reload();
         },
       ),
@@ -262,7 +269,7 @@ export default function AppsPanel(props: AppsPanelProps) {
   return (
     <div className="apps-panel">
       <div className="panel-header apps-header">
-        <h2>Apps</h2>
+        <h2>{translate('apps.panel.title')}</h2>
         <span className="apps-header-actions">
           <InstallMenu install={install} />
         </span>
@@ -277,7 +284,7 @@ export default function AppsPanel(props: AppsPanelProps) {
           notify={props.notify}
           onClose={() => setSharing(undefined)}
           onSwitched={(summary) => {
-            props.notify(`${summary.manifest.name} now installs updates from its GitHub release.`, 'success');
+            props.notify(translate('apps.panel.switchedToRelease', { name: summary.manifest.name }), 'success');
             void reload();
           }}
           onSubmitToMarketplace={
@@ -304,7 +311,7 @@ export default function AppsPanel(props: AppsPanelProps) {
             setPublishing(undefined);
             setSharing(mayShare ? { app } : undefined);
             if (!mayShare) {
-              props.notify('Your role cannot share apps to GitHub; ask an admin to share this one.', 'info');
+              props.notify(translate('apps.panel.roleCannotShare'), 'info');
             }
           }}
         />
@@ -335,7 +342,7 @@ export default function AppsPanel(props: AppsPanelProps) {
                   () => commitApp(projectPath, staged.token),
                   (summary) => {
                     setStaged(undefined);
-                    props.notify(`${summary.manifest.name} ${summary.manifest.version} is installed.`, 'success');
+                    props.notify(translate('apps.panel.installed', { name: summary.manifest.name, version: summary.manifest.version }), 'success');
                     void reload();
                   },
                 )
@@ -354,7 +361,7 @@ export default function AppsPanel(props: AppsPanelProps) {
               }}
             />
           )}
-          {hasApps && <SearchField className="apps-search" label="Search installed apps" value={query} onChange={setQuery} />}
+          {hasApps && <SearchField className="apps-search" label={translate('apps.panel.search')} value={query} onChange={setQuery} />}
           <AppsBody load={load} apps={visible} broken={broken} query={query} install={install} actions={appActions} avatar={avatar} places={places} />
           {/* The details of an app no longer listed (removed, or out of the role's reach) close with it. */}
           {detailsPopup}
@@ -416,16 +423,17 @@ interface AppActions extends AppItemActions {
  * is the panel's Marketplace tab.
  */
 export function InstallMenu({ install }: { readonly install: InstallActions }) {
+  const translate = useTranslate();
   return (
     <MoreMenu
       className="ghost"
-      title="Add an app"
+      title={translate('apps.panel.add')}
       icon={<PlusIcon size={13} />}
       width={240}
       items={[
         // The same sparkle as the AI chat's rail button: the item opens that chat. First, because building is the common start.
-        { label: BUILD_APP_LABEL, icon: <SparkleIcon size={14} />, onSelect: install.buildApp },
-        install.admin && { label: LOAD_FROM_GITHUB_LABEL, icon: <GitHubIcon size={14} />, disabled: install.busy, onSelect: install.connect },
+        { label: translate('apps.build.label'), icon: <SparkleIcon size={14} />, onSelect: install.buildApp },
+        install.admin && { label: translate('apps.loadFromGitHub'), icon: <GitHubIcon size={14} />, disabled: install.busy, onSelect: install.connect },
       ]}
     />
   );
@@ -450,9 +458,11 @@ function AppsBody({
   readonly avatar: (login: string | undefined, name: string) => ReactNode;
   readonly places: ReadonlyMap<string, AppPlaceFacts>;
 }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   if (load.kind === 'loading') {
     return (
-      <div className="panel-body apps-body" role="status" aria-label="Loading apps">
+      <div className="panel-body apps-body" role="status" aria-label={translate('apps.panel.loading')}>
         {[0, 1, 2].map((index) => (
           <div key={index} className="apps-skeleton">
             <span className="apps-skeleton-tile" />
@@ -470,7 +480,7 @@ function AppsBody({
       <div className="panel-body apps-body">
         <div className="apps-message" role="alert">
           <WarningTriangleIcon size={20} />
-          <p>{load.message}</p>
+          <p>{translateDescribed(load)}</p>
         </div>
       </div>
     );
@@ -489,15 +499,15 @@ function AppsBody({
   const rows = [
     ...shown.map((app) => ({ key: app.manifest.id, app, broken: undefined })),
     ...broken
-      .filter((folder) => `${folder.folder} ${folder.message}`.toLowerCase().includes(needle))
+      .filter((folder) => `${folder.folder} ${folder.message} ${translateDescribed(folder)}`.toLowerCase().includes(needle))
       .map((folder) => ({ key: folder.folder, app: undefined, broken: folder })),
   ].sort((left, right) => (left.key < right.key ? -1 : 1));
   return (
     <div className="panel-body apps-body">
-      <div className="apps-section-title">Installed</div>
+      <div className="apps-section-title">{translate('apps.panel.installedHeading')}</div>
       {rows.length === 0 && (
         <div className="apps-message">
-          <p>No installed app matches “{query.trim()}”.</p>
+          <p>{translate('apps.panel.noMatch', { query: query.trim() })}</p>
         </div>
       )}
       <ul className="apps-list">
@@ -520,13 +530,16 @@ function AppsBody({
 }
 
 export function EmptyApps({ install }: { readonly install: InstallActions }) {
+  const translate = useTranslate();
   return (
     <div className="apps-empty">
       <span className="apps-empty-icon" aria-hidden="true">
         <AppsIcon size={24} />
       </span>
-      <p>Add tools to Stacki with apps.</p>
-      <p className="apps-note">{install.admin ? 'Use + to add an app.' : 'Use + for Build an app, and ask an admin to install apps for this project.'}</p>
+      <p>{translate('apps.panel.emptyTitle')}</p>
+      <p className="apps-note">
+        {install.admin ? translate('apps.panel.emptyAdmin') : translate('apps.panel.emptyMember', { action: translate('apps.build.label') })}
+      </p>
     </div>
   );
 }
@@ -553,6 +566,7 @@ export function AppRow({
   /** What the host said about where the app lives; absent shows what the lockfile alone tells. */
   readonly place?: AppPlaceFacts | undefined;
 }) {
+  const translate = useTranslate();
   const { manifest, lock } = app;
   // No author, no picture: an initial made up from the app's name says nothing (the details' rule too).
   const author = appAuthorLogin(app);
@@ -565,7 +579,7 @@ export function AppRow({
         <button
           type="button"
           className="apps-row-select"
-          aria-label={`Open ${manifest.name}`}
+          aria-label={translate('apps.panel.openNamed', { name: manifest.name })}
           aria-current={open ? 'true' : undefined}
           onClick={() => actions.open(app)}
         >
@@ -581,10 +595,10 @@ export function AppRow({
               {author !== undefined && <span className="apps-row-avatar">{avatar}</span>}
               {updating.kind !== 'none' ? (
                 <span className="apps-row-description apps-row-update" data-needs-ok={updating.kind === 'needs-approval'}>
-                  {updateStatusLabel(updating)}
+                  {updateStatusLabel(updating, translate)}
                 </span>
               ) : (
-                <span className="apps-row-description">{manifest.description || `Version ${manifest.version}`}</span>
+                <span className="apps-row-description">{manifest.description || translate('apps.details.versionNamed', { version: manifest.version })}</span>
               )}
             </span>
           </span>
@@ -597,8 +611,8 @@ export function AppRow({
             <button
               type="button"
               className="apps-icon-button"
-              title={`Update to ${updating.update.version}`}
-              aria-label={`Update ${manifest.name}`}
+              title={translate('apps.menu.updateTo', { version: updating.update.version })}
+              aria-label={translate('apps.panel.updateNamed', { name: manifest.name })}
               disabled={actions.busy}
               onClick={() => actions.update(app)}
             >
@@ -606,12 +620,17 @@ export function AppRow({
             </button>
           )}
           <button type="button" className="apps-open primary" onClick={() => actions.open(app)}>
-            Open
+            {translate('ui.open')}
           </button>
           <MoreMenu
-            title={`${manifest.name} options`}
+            title={translate('apps.details.options', { name: manifest.name })}
             width={200}
-            items={appMenuItems(app, actions, { details: () => actions.showDetails(app), finish: (action) => action(), place: place ?? NO_APP_PLACE_FACTS })}
+            items={appMenuItems(
+              app,
+              actions,
+              { details: () => actions.showDetails(app), finish: (action) => action(), place: place ?? NO_APP_PLACE_FACTS },
+              translate,
+            )}
           />
         </span>
       </div>
@@ -632,16 +651,17 @@ function InstallReview({
   readonly onCancel: () => void;
   readonly onInstall: () => void;
 }) {
+  const translate = useTranslate();
   const { manifest } = staged;
   return (
-    <div className="apps-card" role="dialog" aria-label={`Install ${manifest.name}`}>
+    <div className="apps-card" role="dialog" aria-label={translate('apps.panel.installNamed', { name: manifest.name })}>
       <div className="apps-card-head">
         <AppTile manifest={manifest} size={40} />
         <span className="apps-card-title">
           <strong>{manifest.name}</strong>
           <span>
             {manifest.version}
-            {staged.replaces !== undefined ? ` · replaces ${staged.replaces}` : ''}
+            {staged.replaces !== undefined ? ` · ${translate('apps.panel.replaces', { name: staged.replaces })}` : ''}
           </span>
         </span>
         <span className="apps-row-avatar">{avatar}</span>
@@ -651,10 +671,10 @@ function InstallReview({
       <p className="apps-note">SHA-256 {staged.sha256.slice(0, 16)}…</p>
       <div className="apps-actions">
         <button type="button" className="apps-button primary" disabled={busy} onClick={onInstall}>
-          Install
+          {translate('apps.panel.install')}
         </button>
         <button type="button" className="apps-button" disabled={busy} onClick={onCancel}>
-          Cancel
+          {translate('ui.cancel')}
         </button>
       </div>
     </div>

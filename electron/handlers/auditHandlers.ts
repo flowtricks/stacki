@@ -6,6 +6,7 @@
 import { AUDIT_LIMITS } from '../../shared/page/auditFindings';
 import type { MainHost } from './mainHost';
 import { measurePage, type OpenMeasureWindow } from './auditMeasure';
+import { translateMain } from '../lib/mainLocale';
 
 const RENDER_TIMEOUT_MS = 15_000;
 
@@ -23,7 +24,7 @@ export function registerAuditHandlers(host: Pick<MainHost, 'ipcMain'>, options: 
       const response = await fetch(url, { headers: { accept: 'text/html' }, signal: AbortSignal.timeout(RENDER_TIMEOUT_MS) });
       const html = await response.text();
       if (html.length > AUDIT_LIMITS.renderedHtmlCharsMax) {
-        return { ok: false as const, message: `${input.route} renders more than ${AUDIT_LIMITS.renderedHtmlCharsMax} characters` };
+        return { ok: false as const, message: translateMain('error.audit.renderTooLarge', { route: input.route, limit: AUDIT_LIMITS.renderedHtmlCharsMax }) };
       }
       return { ok: true as const, status: response.status, html };
     } catch (error: unknown) {

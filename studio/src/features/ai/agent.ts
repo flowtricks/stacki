@@ -92,6 +92,7 @@ export async function propose(
     const context = await Promise.all(
       requested.map(async (file) => {
         if (!files.includes(file)) {
+          // i18n-ignore: an answer returned to the model, not shown to a person.
           return { file, error: 'File does not exist' };
         }
         read.add(file);
@@ -107,6 +108,7 @@ async function completion(options: Options, messages: readonly Message[], signal
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      // i18n-ignore: an HTTP header.
       ...(options.apiKey ? { Authorization: `Bearer ${options.apiKey}` } : {}),
       ...(options.containerToken ? { 'x-studio-token': options.containerToken } : {}),
     },

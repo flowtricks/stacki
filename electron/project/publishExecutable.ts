@@ -6,6 +6,8 @@ import { record, text } from '../../shared/core/boundary';
 import { mergeToolPaths, pathEnvironmentValue, setPathEnvironment } from '../lib/platform';
 import type { PublishCommand } from '../../shared/properties/publishCommands';
 import type { PackageManager } from '../../shared/properties/packageManager';
+import { described } from '../../shared/properties/i18n/messageRef';
+import { DescribedError } from '../../shared/properties/describedError';
 
 export function projectHasWrangler(root: string): boolean {
   const resolver = createRequire(path.join(root, 'package.json'));
@@ -110,7 +112,7 @@ export function resolvePublishExecutable(
       return { executable: 'node.exe', arguments: [publishEntry(directory), ...command.arguments] };
     }
   }
-  throw new Error(`Install ${command.executable} in this project's development dependencies.`);
+  throw new DescribedError(described('publish.command.installTool', { executable: command.executable }));
 }
 
 function publishEntry(directory: string): string {

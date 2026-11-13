@@ -7,6 +7,8 @@ import { parseFlexShorthand } from './model/webflow';
 import { splitTopLevelSpaces } from './model/background';
 import SegmentPill from './components/SegmentPill';
 import { displayOf, displayText } from './model/styleDisplay';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 // The Flex Child section — the controls that apply to the selected element when it
 // is a child of a flex (or grid) container: its sizing (the `flex` shorthand), its
@@ -116,40 +118,58 @@ function AlignSelfBaselineIcon() {
 
 // Sizing writes the `flex` shorthand — the three presets mirror Webflow's own
 // Flex Child sizing (Shrink if needed / Grow if possible / Don't shrink or grow).
-const FLEX_SEGS: readonly Seg[] = [
-  { value: '0 1 auto', icon: <FlexShrinkIcon />, label: 'Shrink if needed' },
-  { value: '1 1 0%', icon: <FlexGrowIcon />, label: 'Grow if possible' },
-  { value: '0 0 auto', icon: <FlexNoneIcon />, label: "Don't shrink or grow" },
-];
+function flexSegs(translate: Translator): readonly Seg[] {
+  return [
+    { value: '0 1 auto', icon: <FlexShrinkIcon />, label: translate('style.flexChildSection.shrinkIfNeeded') },
+    { value: '1 1 0%', icon: <FlexGrowIcon />, label: translate('style.flexChildSection.growIfPossible') },
+    { value: '0 0 auto', icon: <FlexNoneIcon />, label: translate('style.flexChildSection.noShrinkOrGrow') },
+  ];
+}
 
-const ALIGN_SELF_SEGS: readonly Seg[] = [
-  { value: 'auto', icon: <CloseIcon />, label: 'Auto' },
-  { value: 'flex-start', icon: <AlignSelfStartIcon />, label: 'Start' },
-  { value: 'center', icon: <AlignSelfCenterIcon />, label: 'Center' },
-  { value: 'flex-end', icon: <AlignSelfEndIcon />, label: 'End' },
-  { value: 'stretch', icon: <AlignSelfStretchIcon />, label: 'Stretch' },
-  { value: 'baseline', icon: <AlignSelfBaselineIcon />, label: 'Baseline' },
-];
+function alignSelfSegs(translate: Translator): readonly Seg[] {
+  return [
+    { value: 'auto', icon: <CloseIcon />, label: translate('style.flexChildSection.auto') },
+    { value: 'flex-start', icon: <AlignSelfStartIcon />, label: translate('style.flexChildSection.start') },
+    { value: 'center', icon: <AlignSelfCenterIcon />, label: translate('style.flexChildSection.center') },
+    { value: 'flex-end', icon: <AlignSelfEndIcon />, label: translate('style.flexChildSection.end') },
+    { value: 'stretch', icon: <AlignSelfStretchIcon />, label: translate('style.flexChildSection.stretch') },
+    { value: 'baseline', icon: <AlignSelfBaselineIcon />, label: translate('style.flexChildSection.baseline') },
+  ];
+}
 
 // justify-self = the item's INLINE-axis self alignment (grid items). Same glyphs as
 // align-self, but box-alignment keywords (start/end, not flex-start/flex-end).
-const JUSTIFY_SELF_SEGS: readonly Seg[] = [
-  { value: 'auto', icon: <CloseIcon />, label: 'Auto' },
-  { value: 'start', icon: <AlignSelfStartIcon />, label: 'Start' },
-  { value: 'center', icon: <AlignSelfCenterIcon />, label: 'Center' },
-  { value: 'end', icon: <AlignSelfEndIcon />, label: 'End' },
-  { value: 'stretch', icon: <AlignSelfStretchIcon />, label: 'Stretch' },
-  { value: 'baseline', icon: <AlignSelfBaselineIcon />, label: 'Baseline' },
-];
+function justifySelfSegs(translate: Translator): readonly Seg[] {
+  return [
+    { value: 'auto', icon: <CloseIcon />, label: translate('style.flexChildSection.auto') },
+    { value: 'start', icon: <AlignSelfStartIcon />, label: translate('style.flexChildSection.start') },
+    { value: 'center', icon: <AlignSelfCenterIcon />, label: translate('style.flexChildSection.center') },
+    { value: 'end', icon: <AlignSelfEndIcon />, label: translate('style.flexChildSection.end') },
+    { value: 'stretch', icon: <AlignSelfStretchIcon />, label: translate('style.flexChildSection.stretch') },
+    { value: 'baseline', icon: <AlignSelfBaselineIcon />, label: translate('style.flexChildSection.baseline') },
+  ];
+}
 
 // Order presets: a lower order floats an item ahead of its siblings, a higher order
 // sinks it behind. The X writes the explicit default (`order: 0`); the label's Clear
 // removes the property.
-const ORDER_SEGS: readonly Seg[] = [
-  { value: '0', icon: <CloseIcon />, label: 'Default order' },
-  { value: '-1', icon: <span className="embed-editor_seg-text">First</span>, label: 'First' },
-  { value: '1', icon: <span className="embed-editor_seg-text">Last</span>, label: 'Last' },
-];
+function orderSegs(translate: Translator): readonly Seg[] {
+  return [
+    { value: '0', icon: <CloseIcon />, label: translate('style.flexChildSection.defaultOrder') },
+    {
+      value: '-1',
+      icon: <span className="embed-editor_seg-text">{translate('style.flexChildSection.first')}</span>,
+      label: translate('style.flexChildSection.first'),
+    },
+    {
+      value: '1',
+      icon: <span className="embed-editor_seg-text">{translate('style.flexChildSection.last')}</span>,
+      label: translate('style.flexChildSection.last'),
+    },
+  ];
+}
+
+const SPAN_ONE_PLACEHOLDER = 'span 1'; // i18n-ignore: CSS grid-line syntax, not prose.
 
 // Canonicalize a flex-basis token so a zero in ANY unit (0 / 0px / 0%) compares equal
 // — Webflow may normalize the basis we write (`0%`) to a different zero on read-back.
@@ -182,7 +202,7 @@ function flexCurrent(read: Props['read']): string {
     const shrinkDisplay = displayOf(read('flex-shrink'));
     const basisDisplay = displayOf(read('flex-basis'));
     if (!growDisplay.present && !shrinkDisplay.present && !basisDisplay.present) {
-      return '0 1 auto';
+      return '0 1 auto'; // i18n-ignore: the flex shorthand default, CSS.
     }
     grow = growDisplay.present ? norm(growDisplay.value) : '0';
     shrink = shrinkDisplay.present ? norm(shrinkDisplay.value) : '1';
@@ -250,9 +270,11 @@ function orderCurrent(read: Props['read']): string {
 // the Grow / Shrink / Basis longhand inputs below (Webflow's "Customize grow and shrink
 // behavior"), and a dropdown arrow to switch the whole `flex` to a single custom value
 // (`unset`, `var(…)`) that can't be split into longhands.
-const FLEX_SEG_VALUES = new Set(FLEX_SEGS.map((segment) => segment.value));
+// Values only, so no wording is needed to tell whether the current value is a preset.
+const FLEX_SEG_VALUES = new Set(['0 1 auto', '1 1 0%', '0 0 auto']);
 
 function SizingControl(props: Props) {
+  const translate = useTranslate();
   const { read, busy, setProp, liveSetProp, onProvenance, onSelectSelector } = props;
   const sizing = useFlexSizing(props);
   const { current, showSingle, showPanel, clearFlex, pickPreset } = sizing;
@@ -262,7 +284,7 @@ function SizingControl(props: Props) {
     <>
       <div className="embed-editor_size-row">
         <PropLabel
-          label="Sizing"
+          label={translate('style.flexChildSection.sizing')}
           prop={flexProp}
           display={displayOf(read(flexProp))}
           contributors={read(flexProp)?.contributors ?? []}
@@ -271,14 +293,19 @@ function SizingControl(props: Props) {
           onProvenance={onProvenance}
           onSelectSelector={onSelectSelector}
         />
-        <div ref={sizing.rootRef} className={`embed-editor_display ${showSingle ? 'is-custom' : ''}`} role="group" aria-label="Flex sizing">
+        <div
+          ref={sizing.rootRef}
+          className={`embed-editor_display ${showSingle ? 'is-custom' : ''}`}
+          role="group"
+          aria-label={translate('style.flexChildSection.flexSizing')}
+        >
           <SegmentPill />
           {showSingle ? (
             <LiveInput
               value={current}
               busy={busy}
               placeholder="unset, var(…)"
-              ariaLabel="Flex sizing"
+              ariaLabel={translate('style.flexChildSection.flexSizing')}
               className="embed-editor_value-input embed-editor_display-input"
               prop="flex"
               onCommit={(value, important) => setProp('flex', value, important)}
@@ -300,9 +327,9 @@ function SizingControl(props: Props) {
       </div>
       {showPanel ? (
         <div className="embed-editor_type-triple embed-editor_flex-custom">
-          <StackedField prop="flex-grow" label="Grow" placeholder="0" {...props} />
-          <StackedField prop="flex-shrink" label="Shrink" placeholder="1" {...props} />
-          <StackedField prop="flex-basis" label="Basis" placeholder="auto" {...props} />
+          <StackedField prop="flex-grow" label={translate('style.flexChildSection.grow')} placeholder="0" {...props} />
+          <StackedField prop="flex-shrink" label={translate('style.flexChildSection.shrink')} placeholder="1" {...props} />
+          <StackedField prop="flex-basis" label={translate('style.flexChildSection.basis')} placeholder="auto" {...props} />
         </div>
       ) : undefined}
     </>
@@ -378,9 +405,10 @@ function FlexSegments({
   pickPreset: (value: string) => void;
   togglePanel: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
-      {FLEX_SEGS.map((seg) => (
+      {flexSegs(translate).map((seg) => (
         <button
           key={seg.value}
           type="button"
@@ -400,8 +428,8 @@ function FlexSegments({
         className={'embed-editor_display-seg ' + (customized ? 'is-selected' : '')}
         disabled={busy}
         aria-pressed={customized}
-        aria-label="Customize grow and shrink behavior"
-        title="Customize grow and shrink behavior"
+        aria-label={translate('style.flexChildSection.customizeGrowShrink')}
+        title={translate('style.flexChildSection.customizeGrowShrink')}
         onClick={togglePanel}
       >
         <MoreDotsIcon />
@@ -427,6 +455,7 @@ function FlexSizingMenu({
   pickPreset: (value: string) => void;
   enterSingleCustom: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <button
@@ -434,7 +463,7 @@ function FlexSizingMenu({
         className="embed-editor_display-arrow"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label="More flex sizing options"
+        aria-label={translate('style.flexChildSection.moreSizingOptions')}
         disabled={busy}
         onClick={onToggle}
       >
@@ -443,9 +472,9 @@ function FlexSizingMenu({
       {open ? (
         <Popup mode="popover" portal={false} onClose={onToggle} className="embed-editor_display-menu" role="menu">
           {showSingle ? (
-            FLEX_SEGS.map((seg) => <MenuItem key={seg.value} label={seg.label} onClick={() => pickPreset(seg.value)} />)
+            flexSegs(translate).map((seg) => <MenuItem key={seg.value} label={seg.label} onClick={() => pickPreset(seg.value)} />)
           ) : (
-            <MenuItem label="Custom" onClick={enterSingleCustom} />
+            <MenuItem label={translate('style.flexChildSection.custom')} onClick={enterSingleCustom} />
           )}
         </Popup>
       ) : undefined}
@@ -483,6 +512,7 @@ function buildLine(start: string, end: string): string {
 // axis name (Column / Row) is a plain caption on the left.
 function AxisRow({ axis, label, props: sp }: { axis: 'column' | 'row'; label: string; props: Props }) {
   const { read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = sp;
+  const translate = useTranslate();
   const startProp = `grid-${axis}-start`;
   const endProp = `grid-${axis}-end`;
   const shortProp = `grid-${axis}`;
@@ -544,8 +574,8 @@ function AxisRow({ axis, label, props: sp }: { axis: 'column' | 'row'; label: st
         onSelectSelector={onSelectSelector}
       />
       <div className="embed-editor_line-cells">
-        <LineCell which="start" caption="Start" value={startValue} {...cellProps} />
-        <LineCell which="end" caption="End" value={endValue} {...cellProps} />
+        <LineCell which="start" caption={translate('style.flexChildSection.start')} value={startValue} {...cellProps} />
+        <LineCell which="end" caption={translate('style.flexChildSection.end')} value={endValue} {...cellProps} />
       </div>
     </div>
   );
@@ -575,13 +605,14 @@ function LineCell({
   busy: boolean;
   commit: (which: 'start' | 'end', value: string, options: CommitOptions) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_line-cell">
       <LiveInput
         value={value}
         busy={busy}
-        placeholder={which === 'end' ? 'span 1' : 'auto'}
-        ariaLabel={`${axisLabel} ${caption}`}
+        placeholder={which === 'end' ? SPAN_ONE_PLACEHOLDER : 'auto'}
+        ariaLabel={translate('style.flexChildSection.lineAria', { axis: axisLabel, caption })}
         className="u-input embed-editor_size-input"
         onCommit={(next, important) => commit(which, next, { important, live: false })}
         onLiveCommit={(next, important) => commit(which, next, { important, live: true })}
@@ -595,10 +626,11 @@ function LineCell({
 // Grid-item Position: the Column / Row line placement (start / end each), which read
 // the longhands or split the axis shorthand.
 function PositionControl(props: Props) {
+  const translate = useTranslate();
   return (
     <>
-      <AxisRow axis="column" label="Column" props={props} />
-      <AxisRow axis="row" label="Row" props={props} />
+      <AxisRow axis="column" label={translate('style.flexChildSection.column')} props={props} />
+      <AxisRow axis="row" label={translate('style.flexChildSection.row')} props={props} />
     </>
   );
 }
@@ -607,13 +639,36 @@ function PositionControl(props: Props) {
 
 export default function FlexChildSection(props: Props) {
   const { read } = props;
+  const translate = useTranslate();
   return (
     <>
       <SizingControl {...props} />
       <PositionControl {...props} />
-      <SelfRow label="Align" prop="align-self" segs={ALIGN_SELF_SEGS} current={alignSelfCurrent(read)} ariaLabel="Align self" props={props} />
-      <SelfRow label="Justify" prop="justify-self" segs={JUSTIFY_SELF_SEGS} current={justifySelfCurrent(read)} ariaLabel="Justify self" props={props} />
-      <SelfRow label="Order" prop="order" segs={ORDER_SEGS} current={orderCurrent(read)} ariaLabel="Order" more={{ value: '2' }} props={props} />
+      <SelfRow
+        label={translate('style.flexChildSection.align')}
+        prop="align-self"
+        segs={alignSelfSegs(translate)}
+        current={alignSelfCurrent(read)}
+        ariaLabel={translate('style.flexChildSection.alignSelf')}
+        props={props}
+      />
+      <SelfRow
+        label={translate('style.flexChildSection.justify')}
+        prop="justify-self"
+        segs={justifySelfSegs(translate)}
+        current={justifySelfCurrent(read)}
+        ariaLabel={translate('style.flexChildSection.justifySelf')}
+        props={props}
+      />
+      <SelfRow
+        label={translate('style.flexChildSection.order')}
+        prop="order"
+        segs={orderSegs(translate)}
+        current={orderCurrent(read)}
+        ariaLabel={translate('style.flexChildSection.order')}
+        more={{ value: '2' }}
+        props={props}
+      />
     </>
   );
 }

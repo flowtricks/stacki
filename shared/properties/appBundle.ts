@@ -286,7 +286,7 @@ export function remoteCodeMessage(findings: readonly RemoteCodeFinding[]): strin
 /** `index.html loads remote code from https://…: vendor it into the bundle`. */
 export function remoteFindingSentence(finding: RemoteCodeFinding): string {
   const what = finding.kind === 'code' ? 'remote code' : 'a remote file';
-  return `${finding.path} loads ${what} from ${finding.url}: vendor it into the bundle`;
+  return `${finding.path} loads ${what} from ${finding.url}: vendor it into the bundle`; // i18n-ignore: validation error for the app's developer, read in the bundle check, not drawn as interface text.
 }
 
 type RemoteLoad = Pick<RemoteCodeFinding, 'url' | 'kind'>;

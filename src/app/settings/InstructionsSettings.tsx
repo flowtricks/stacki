@@ -7,8 +7,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { parseHiddenPattern, withHidden, withoutHidden, type InstructionSettings } from '../../../shared/properties/instructions';
 import { can } from '../../../shared/properties/projectRoles';
 import { useCurrentRole } from '../../lib/useCurrentRole';
-import { CloseIcon } from '../../ui/Icons';
+import { CloseIcon, HideIcon } from '../../ui/Icons';
+import { Skeleton } from '../../ui/Skeleton';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { SettingsEmptyState } from './SettingsEmptyState';
+import { SettingsSection } from './SettingsLayout';
 import '../../features/instructions/instructions.css';
+import './instructionsSettings.css';
 import {
   onInstructionsChanged,
   readInstructionSettings,
@@ -19,7 +24,16 @@ import {
 type State =
   { readonly kind: 'loading' } | { readonly kind: 'error'; readonly message: string } | { readonly kind: 'ready'; readonly stored: StoredInstructionSettings };
 
+/** Common cases offered in the empty state. node_modules and build output are always hidden already (shared/properties/instructions.ts), so they are not offered. */
+const SUGGESTIONS = ['docs/archive', '**/CHANGELOG.md', 'docs/drafts'] as const;
+
+/** Rows the loading card draws: two, so the card is about as tall as the empty state it becomes. */
+const SKELETON_ROWS = 2;
+
+type Draft = { readonly kind: 'empty' } | { readonly kind: 'valid'; readonly pattern: string } | { readonly kind: 'invalid'; readonly message: string };
+
 export function InstructionsSettings({ projectPath }: { readonly projectPath: string }) {
+  const translate = useTranslate();
   const role = useCurrentRole();
   const editable = can(role, 'settings:instructions') || can(role, 'instructions:edit');
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -35,7 +49,18 @@ export function InstructionsSettings({ projectPath }: { readonly projectPath: st
   useEffect(() => onInstructionsChanged(load), [load]);
 
   if (state.kind === 'loading') {
-    return <div className="props-empty">Reading the hidden paths…</div>;
+    // Skeleton rows in the card's own shape, so nothing jumps when the list arrives.
+    return (
+      <div className="instructions-settings">
+        <SettingsSection title={translate('settings.instructions.hidden.title')} info={translate('settings.instructions.hidden.info')}>
+          <div className="instructions-hidden-card" role="status" aria-busy="true">
+            {Array.from({ length: SKELETON_ROWS }, (_, index) => (
+              <Skeleton key={index} height="36px" radius="6px" />
+            ))}
+          </div>
+        </SettingsSection>
+      </div>
+    );
   }
   if (state.kind === 'error') {
     return (
@@ -44,6 +69,23 @@ export function InstructionsSettings({ projectPath }: { readonly projectPath: st
       </div>
     );
   }
+  const hidden = state.stored.settings.hidden;
+  // One check serves the live message, the Hide button and Enter: what is typed is valid, or says why not.
+  const check = (text: string): Draft => {
+    if (text.trim() === '') {
+      return { kind: 'empty' };
+    }
+    let pattern: string;
+    try {
+      pattern = parseHiddenPattern(text);
+    } catch (failure: unknown) {
+      return { kind: 'invalid', message: failure instanceof Error ? failure.message : String(failure) };
+    }
+    if (hidden.includes(pattern)) {
+      return { kind: 'invalid', message: translate('settings.instructions.hidden.duplicate', { pattern }) };
+    }
+    return { kind: 'valid', pattern };
+  };
   const save = async (next: InstructionSettings): Promise<void> => {
     try {
       const stored = await writeInstructionSettings(projectPath, next, state.stored.source);
@@ -54,80 +96,88 @@ export function InstructionsSettings({ projectPath }: { readonly projectPath: st
       load();
     }
   };
-  const add = (): void => {
-    let pattern: string;
-    try {
-      pattern = parseHiddenPattern(draft);
-    } catch (failure: unknown) {
-      setProblem(failure instanceof Error ? failure.message : String(failure));
-      return;
-    }
-    if (state.stored.settings.hidden.includes(pattern)) {
-      setProblem(`${pattern} is already hidden.`);
-      return;
-    }
+  const hide = (pattern: string): void => {
     const next = withHidden(state.stored.settings, pattern);
-    if (!next.ok) {
+    if (next.ok) {
+      setDraft('');
+      void save(next.value);
+    } else {
       setProblem(next.error);
-      return;
     }
-    setDraft('');
-    void save(next.value);
   };
-  const hidden = state.stored.settings.hidden;
+  const draftState = check(draft);
+  const message = draftState.kind === 'invalid' ? draftState.message : problem;
+  const suggestions = SUGGESTIONS.filter((suggestion) => !hidden.includes(suggestion));
   return (
-    <div className="app-settings-section instructions-settings" aria-label="Hidden instructions">
-      <p className="app-settings-help">
-        Files and folders the Instructions panel leaves out. Paths start at the project root: <code>docs/archive</code> hides that folder,{' '}
-        <code>**/CHANGELOG.md</code> every changelog. Saved in <code>.stacki/instructions.json</code>, shared with everyone on the project.
-      </p>
-      {hidden.length === 0 ? (
-        <div className="instructions-empty">Nothing is hidden. Build output and node_modules are never listed.</div>
-      ) : (
-        <ul className="instructions-hidden-list">
-          {hidden.map((pattern) => (
-            <li key={pattern} className="instructions-hidden-row">
-              <code>{pattern}</code>
-              {editable && (
-                <button
-                  type="button"
-                  className="ghost"
-                  aria-label={`Show ${pattern} again`}
-                  title="Show again"
-                  onClick={() => void save(withoutHidden(state.stored.settings, pattern))}
-                >
-                  <CloseIcon size={12} />
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {editable && (
-        <form
-          className="instructions-hidden-add"
-          onSubmit={(event) => {
-            event.preventDefault();
-            add();
-          }}
-        >
-          <input
-            type="text"
-            aria-label="Path or pattern to hide"
-            placeholder="docs/archive or **/CHANGELOG.md"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-          />
-          <button type="submit" disabled={draft.trim() === ''}>
-            Hide
-          </button>
-        </form>
-      )}
-      {problem !== undefined && (
-        <div className="instructions-form-problem" role="alert">
-          {problem}
+    <div className="instructions-settings">
+      <SettingsSection title={translate('settings.instructions.hidden.title')} info={translate('settings.instructions.hidden.info')}>
+        <div className="instructions-hidden-card">
+          {hidden.length === 0 ? (
+            <SettingsEmptyState
+              icon={<HideIcon size={16} />}
+              title={translate('settings.instructions.hidden.empty.title')}
+              hint={translate('settings.instructions.hidden.empty.hint')}
+            >
+              {editable &&
+                suggestions.map((suggestion) => (
+                  <button key={suggestion} type="button" className="instructions-hidden-chip" onClick={() => hide(suggestion)}>
+                    {suggestion}
+                  </button>
+                ))}
+            </SettingsEmptyState>
+          ) : (
+            <ul className="instructions-hidden-list">
+              {hidden.map((pattern) => (
+                <li key={pattern} className="instructions-hidden-row">
+                  <code>{pattern}</code>
+                  {editable && (
+                    <button
+                      type="button"
+                      className="instructions-hidden-remove"
+                      aria-label={translate('settings.instructions.hidden.show', { pattern })}
+                      title={translate('settings.instructions.hidden.show.title')}
+                      onClick={() => void save(withoutHidden(state.stored.settings, pattern))}
+                    >
+                      <CloseIcon size={12} />
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {editable && (
+            <form
+              className="instructions-hidden-add"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (draftState.kind === 'valid') {
+                  hide(draftState.pattern);
+                }
+              }}
+            >
+              <input
+                type="text"
+                aria-label={translate('settings.instructions.hidden.input')}
+                placeholder={translate('settings.instructions.hidden.placeholder')}
+                spellCheck={false}
+                value={draft}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  setProblem(undefined);
+                }}
+              />
+              <button type="submit" disabled={draftState.kind !== 'valid'}>
+                {translate('settings.instructions.hidden.hide')}
+              </button>
+            </form>
+          )}
+          {message !== undefined && (
+            <div className="instructions-hidden-problem" role="alert">
+              {message}
+            </div>
+          )}
         </div>
-      )}
+      </SettingsSection>
     </div>
   );
 }

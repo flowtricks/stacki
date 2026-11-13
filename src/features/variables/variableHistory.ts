@@ -1,11 +1,15 @@
 import type { Result } from '../../../shared/core/result';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import { messageRef, type MessageKey, type Translator, type TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 import { variableEdit } from '../../ipc/variableEditBridge';
 
 // One undoable variable edit, as the app's history records it.
 export interface VariableUndo {
+  /** The step's name in the language the edit was made in; `labelRef` words it again when the step is undone. */
   readonly label: string;
+  readonly labelRef: TypedMessageRef;
   readonly coalesceKey?: string | undefined;
   readonly undo: () => Promise<void>;
   readonly redo: () => Promise<void>;
@@ -17,12 +21,15 @@ interface HistoryOptions {
   readonly refresh: () => Promise<void>;
   readonly report: (message: string) => void;
   readonly record?: ((command: VariableUndo) => void) | undefined;
+  /** The language for messages this module words itself; English when absent (tests, callers with no language). */
+  readonly translate?: Translator | undefined;
 }
 
 export function createVariableHistory(options: HistoryOptions) {
   return async (
     files: string | undefined | readonly string[],
-    label: string,
+    // The key of the step's name (a `variables.undo.*` phrase), so the app can word it in the language in force when it is undone.
+    label: MessageKey,
     // Edits sharing a key collapse into one undo step; undefined keeps each its own.
     coalesceKey: string | undefined,
     run: () => Promise<boolean | void>,
@@ -52,7 +59,8 @@ export function createVariableHistory(options: HistoryOptions) {
     const previous = selectTexts(before.value, changed);
     const next = selectTexts(after.value, changed);
     options.record?.({
-      label,
+      label: (options.translate ?? ENGLISH_TRANSLATE)(label),
+      labelRef: messageRef(label),
       coalesceKey,
       undo: () => restoreTexts(options, previous),
       redo: () => restoreTexts(options, next),
@@ -96,7 +104,7 @@ async function restoreTexts(options: HistoryOptions, texts: FileTexts): Promise<
       announce: true,
     });
     if (!result.ok) {
-      options.report(result.error || 'Could not restore that stylesheet.');
+      options.report(result.error || (options.translate ?? ENGLISH_TRANSLATE)('variables.error.restoreStylesheet'));
       break;
     }
   }

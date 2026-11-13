@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
 import { BracesIcon } from '../../ui/Icons';
 import { ExpressionBindingField, type EditPace } from '../props/propBindings';
@@ -12,14 +13,15 @@ interface DefaultProps {
   readonly onChange: (value: string, pace: EditPace) => void;
 }
 export function PropertyDefault({ property, frontmatter, onChange }: DefaultProps) {
+  const translate = useTranslate();
   const simple = ['string', 'number', 'boolean'].includes(property.type) || literalOptions(property.type) !== undefined;
   const [mode, setMode] = useState<'value' | 'expression'>(simple && isLiteralDefault(property) ? 'value' : 'expression');
   const expression = mode === 'expression';
-  const action = expression ? 'Use the default value control' : 'Write a default expression';
+  const action = expression ? translate('componentProps.default.useControl') : translate('componentProps.default.writeExpression');
   return (
-    <div className="property-default" role="group" aria-label="Default value">
+    <div className="property-default" role="group" aria-label={translate('componentProps.default.value')}>
       <div className="property-default-title">
-        <span>Default value</span>
+        <span>{translate('componentProps.default.value')}</span>
         {simple && (
           <button
             type="button"
@@ -51,6 +53,7 @@ export function PropertyDefault({ property, frontmatter, onChange }: DefaultProp
   );
 }
 function DefaultControl({ property, onChange }: DefaultProps) {
+  const translate = useTranslate();
   const options = literalOptions(property.type);
   if (options || property.type === 'boolean') {
     const choices = [...new Set(options ?? ['true', 'false'])];
@@ -58,7 +61,7 @@ function DefaultControl({ property, onChange }: DefaultProps) {
       <Dropdown
         value={defaultChoice(choices, property.defaultValue)}
         options={[
-          { value: '', label: 'No default' },
+          { value: '', label: translate('componentProps.default.none') },
           ...choices.map((choice) => ({
             value: choice,
             label: propertyDefaultText(choice) ?? choice,
@@ -67,14 +70,14 @@ function DefaultControl({ property, onChange }: DefaultProps) {
         onChange={(value) => onChange(value, 'at-once')}
         livePreview={false}
         searchable
-        searchPlaceholder="Search defaults…"
+        searchPlaceholder={translate('componentProps.default.search')}
       />
     );
   }
   if (property.type === 'number') {
     return (
       <input
-        aria-label="Default number"
+        aria-label={translate('componentProps.default.number')}
         type="number"
         step="any"
         value={Number.isFinite(Number(property.defaultValue)) ? property.defaultValue : ''}
@@ -84,7 +87,7 @@ function DefaultControl({ property, onChange }: DefaultProps) {
   }
   return (
     <input
-      aria-label="Default text"
+      aria-label={translate('componentProps.default.text')}
       value={propertyDefaultText(property.defaultValue) ?? ''}
       maxLength={PROPERTY_LIMITS.textCharsMax - 2}
       onChange={(event) => onChange(JSON.stringify(event.target.value), 'typing')}

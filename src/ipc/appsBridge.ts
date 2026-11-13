@@ -22,6 +22,7 @@ import {
   type AppUpdateOutcome,
   type AppsResult,
 } from '../../shared/properties/apps';
+import { described } from '../../shared/properties/i18n/messageRef';
 import { parseInstalledAppList, parseReadableAppSummaries, type InstalledAppList } from '../../shared/properties/appFolders';
 
 /** Where app frames load from: one origin per app. */
@@ -30,7 +31,10 @@ export function appFrameURL(appId: string, filePath: string): string {
 }
 
 /** What the panel says when the main process predates Apps (a renderer reloaded without a restart). */
-export const APPS_UNAVAILABLE_MESSAGE = 'Restart Stacki to use Apps.';
+export const APPS_UNAVAILABLE = described('apps.error.restartForApps');
+
+/** The failed result every Apps bridge returns in that case: the English sentence and the reference the panel translates. */
+export const APPS_UNAVAILABLE_FAILURE = { ok: false, ...APPS_UNAVAILABLE } as const;
 
 /** The installed apps this editor can run; an app it cannot read is left out here and listed as broken by `listInstalledAppList`. */
 export async function listApps(projectPath: string): Promise<AppsResult<readonly AppSummary[]>> {
@@ -42,7 +46,7 @@ export async function listApps(projectPath: string): Promise<AppsResult<readonly
 export async function listInstalledAppList(projectPath: string): Promise<AppsResult<InstalledAppList>> {
   // An older preload has no method; an older main has no handler. Both mean the same to the person: restart.
   if (typeof window.avb.listApps !== 'function') {
-    return { ok: false, message: APPS_UNAVAILABLE_MESSAGE };
+    return APPS_UNAVAILABLE_FAILURE;
   }
   const input = parseIpcPayload('apps:list', { projectPath });
   let reply: unknown;
@@ -50,7 +54,7 @@ export async function listInstalledAppList(projectPath: string): Promise<AppsRes
     reply = await window.avb.listApps(input);
   } catch (error: unknown) {
     if (String(error).includes('No handler registered')) {
-      return { ok: false, message: APPS_UNAVAILABLE_MESSAGE };
+      return APPS_UNAVAILABLE_FAILURE;
     }
     throw error;
   }

@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { useLayoutEffect, useState } from 'react';
 
 // Readiness belongs to the document the frame is showing, not to the URL Studio
@@ -72,11 +73,12 @@ function readyPath(input: unknown): string | undefined {
 }
 
 export function PreviewLoading({ slow, retry }: { readonly slow: boolean; readonly retry: () => void }) {
+  const translate = useTranslate();
   return (
     <div className="studio-preview-loading" role="status">
       <span className="studio-preview-spinner" aria-hidden="true" />
-      <p>{slow ? 'Your preview is taking a little longer to start…' : 'Loading your preview…'}</p>
-      {slow && <button onClick={retry}>Retry preview</button>}
+      <p>{slow ? translate('preview.studio.slow') : translate('preview.studio.loadingYours')}</p>
+      {slow && <button onClick={retry}>{translate('preview.studio.retry')}</button>}
     </div>
   );
 }

@@ -5,6 +5,8 @@
 
 import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
 import { assert } from '../../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
 
 export type TransformType = 'move' | 'scale' | 'rotate' | 'skew';
 /** One transform layer: a type + its per-axis values (skew ignores z). */
@@ -26,11 +28,12 @@ export const IDENTITY: Record<TransformType, string> = {
   rotate: '0deg',
   skew: '0deg',
 };
-const LABEL: Record<TransformType, string> = {
-  move: 'Move',
-  scale: 'Scale',
-  rotate: 'Rotate',
-  skew: 'Skew',
+/** The message for each type's name; the panel's type switch and the collapsed row both show it. */
+export const TRANSFORM_TYPE_LABEL_KEY: Record<TransformType, MessageKey> = {
+  move: 'styleModel.transform.type.move',
+  scale: 'styleModel.transform.type.scale',
+  rotate: 'styleModel.transform.type.rotate',
+  skew: 'styleModel.transform.type.skew',
 };
 
 /** Whether a type exposes a Z axis (skew is 2D only). */
@@ -200,8 +203,8 @@ export function retypeTransform(type: TransformType): Transform {
 }
 
 /** A short label for a collapsed row ("Move: 0px, 0px, 0px"). */
-export function transformLabel(transform: Transform): string {
+export function transformLabel(transform: Transform, translate: Translator = ENGLISH_TRANSLATE): string {
   const axes = hasZ(transform.type) ? [transform.x, transform.y, transform.z] : [transform.x, transform.y];
   const shown = axes.map((axis) => axis.trim() || IDENTITY[transform.type]);
-  return `${LABEL[transform.type]}: ${shown.join(', ')}`;
+  return `${translate(TRANSFORM_TYPE_LABEL_KEY[transform.type])}: ${shown.join(', ')}`;
 }

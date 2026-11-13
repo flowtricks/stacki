@@ -6,6 +6,8 @@ import { assert } from '../../../shared/core/assert';
 import type { AssetRequest } from '../../ui/assetPick';
 import type { MediaConnection, MediaFileKind, MediaProviderKind } from '../../../shared/properties/mediaHosting';
 
+// i18n-ignore-file: host product names (Cloudflare R2, Bunny) are not translated.
+
 export const PROVIDER_NAMES: Readonly<Record<MediaProviderKind, string>> = {
   r2: 'Cloudflare R2',
   bunny: 'Bunny Storage',

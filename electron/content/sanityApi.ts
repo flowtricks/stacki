@@ -9,6 +9,8 @@
 
 import { CMS_CONNECTION_LIMITS, type SanityProjectChoice } from '../../shared/properties/cmsConnections';
 import { assert } from '../../shared/core/assert';
+import { DescribedError } from '../../shared/properties/describedError';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 
 const API = 'https://api.sanity.io';
 const AUTH_VERSION = 'v2025-09-23';
@@ -17,12 +19,13 @@ const REQUEST_TIMEOUT_MS = 15_000;
 // Dataset lists fetched at once while building the project list.
 const DATASET_REQUESTS_PARALLEL = 5;
 
-export class SanityRequestError extends Error {
+/** A Sanity request that was refused: Sanity's own words when it gave any, else our sentence with its reference. */
+export class SanityRequestError extends DescribedError {
   constructor(
-    message: string,
+    problem: Described,
     readonly status: number,
   ) {
-    super(message);
+    super(problem);
   }
 }
 
@@ -117,6 +120,7 @@ async function sanityJSON(url: string, token: string | undefined, body?: object)
   const response = await fetch(url, {
     method: body === undefined ? 'GET' : 'POST',
     headers: {
+      // i18n-ignore: HTTP header value, not interface text.
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
@@ -135,15 +139,16 @@ async function sanityJSON(url: string, token: string | undefined, body?: object)
   return parsed;
 }
 
-function sanityErrorMessage(text: string, status: number): string {
+function sanityErrorMessage(text: string, status: number): Described {
   try {
     const parsed: unknown = JSON.parse(text);
     const message: unknown = typeof parsed === 'object' && parsed !== null ? Reflect.get(parsed, 'message') : undefined;
     if (typeof message === 'string' && message.length > 0) {
-      return message.slice(0, 300);
+      // Sanity's own words are not ours to translate.
+      return { message: message.slice(0, 300) };
     }
   } catch {
     // Not JSON: the status says enough.
   }
-  return `Sanity answered ${status}.`;
+  return described('cmsBackend.sanity.answered', { status });
 }

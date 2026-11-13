@@ -12,10 +12,6 @@ export function selectionOwner(peers: Iterable<Peer>, selfId: string, file: stri
   return undefined;
 }
 
-export function selectionLockedMessage(owner: Peer): string {
-  return `${owner.name} is editing this element. You can select it and add elements inside it. Take over to edit its settings.`;
-}
-
 // Keep inspection separate from editing. When an owner leaves, one remaining
 // inspector inherits editing so two viewers never both become owners.
 export function releaseSelectionOwners<Key>(clients: Map<Key, Peer>) {

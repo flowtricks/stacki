@@ -1,6 +1,7 @@
 // The asset folders a Studio write may touch. Kept apart from assetStateTypes.ts,
 // which the Cloudflare worker also loads: this one reads the project's
 // `.stacki/folders.json` from disk, which only the Node server can.
+import { ReferencedError } from '../../shared/referencedError';
 import { filePath } from '../../shared/validation';
 import { projectFoldersFor } from '../../../vendor/stacki/electron/lib/projectFolders';
 import { folderHolding } from '../../../vendor/stacki/shared/properties/projectFolders';
@@ -14,7 +15,7 @@ import { folderHolding } from '../../../vendor/stacki/shared/properties/projectF
 export function assetFolderPath(root: string, value: unknown): string {
   const file = filePath(value);
   if (folderHolding(projectFoldersFor(root, 'assets'), file) === undefined) {
-    throw new Error(`${file} is not in one of the project's asset folders`);
+    throw new ReferencedError('assets.error.folderOutside', { file });
   }
   return file;
 }

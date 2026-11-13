@@ -44,6 +44,7 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const { RepositoryChooser, rateLimitWait } = bundle('src/features/apps/ConnectGitHub.tsx');
 const { repositoryListing, listAppRepositories } = bundle('src/ipc/appsBridge.ts');
+const { ENGLISH_TRANSLATE } = bundle('shared/properties/i18n/englishTranslator.ts');
 
 const noop = () => {};
 const REPOSITORY = { owner: 'octocat', name: 'heat-map', private: false, updatedAt: '2026-11-01T00:00:00Z', stackiApp: true, organization: false };
@@ -115,9 +116,9 @@ test('rate limited: says GitHub is limiting requests and when to try again', () 
     actions: ['Retry'],
     alert: true,
   });
-  assert.equal(rateLimitWait(60_000, 0), 'Try again in 1 minute.');
-  assert.equal(rateLimitWait(0, 60_000), 'Try again in 1 minute.', 'a reset already past still says a minute');
-  assert.equal(rateLimitWait(10 * 60_000 + 1, 0), 'Try again in 11 minutes.', 'rounded up');
+  assert.equal(rateLimitWait(60_000, 0, ENGLISH_TRANSLATE), 'Try again in 1 minute.');
+  assert.equal(rateLimitWait(0, 60_000, ENGLISH_TRANSLATE), 'Try again in 1 minute.', 'a reset already past still says a minute');
+  assert.equal(rateLimitWait(10 * 60_000 + 1, 0, ENGLISH_TRANSLATE), 'Try again in 11 minutes.', 'rounded up');
 });
 
 test('signed out: the publish sign-in, or (Studio) the paste hint', () => {

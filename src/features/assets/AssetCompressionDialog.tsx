@@ -1,5 +1,6 @@
 import Popup from '../../ui/Popup';
 import { useId, useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { ImageFormat } from '../../../shared/ipc/assetConversion';
 import { CloseIcon } from '../../ui/Icons';
 import type { AssetFile } from './assetPaths';
@@ -13,6 +14,7 @@ export default function AssetCompressionDialog({
   readonly onClose: () => void;
   readonly onCompress: (files: readonly AssetFile[], format: ImageFormat) => void;
 }) {
+  const translate = useTranslate();
   const [format, setFormat] = useState<ImageFormat>('avif');
   const titleId = useId();
   const targets = files.filter((file) => !file.name.toLowerCase().endsWith('.' + format));
@@ -22,24 +24,22 @@ export default function AssetCompressionDialog({
       {({ close }) => (
         <>
           <div className="modal-header">
-            <h2 id={titleId}>
-              Compress {files.length} {files.length === 1 ? 'image' : 'images'}
-            </h2>
-            <button className="ghost" aria-label="Close compression dialog" onClick={close}>
+            <h2 id={titleId}>{translate('assets.compress.title', { count: files.length })}</h2>
+            <button className="ghost" aria-label={translate('assets.compress.close')} onClick={close}>
               <CloseIcon size={16} />
             </button>
           </div>
           <div className="modal-body">
-            <p>Resize to 95% and convert at 95% quality. Site references update automatically, and originals move to Trash after success.</p>
+            <p>{translate('assets.compress.description')}</p>
             <CompressionFormats format={format} setFormat={setFormat} />
-            {skipped > 0 && <p className="hint-text">{skipped} already in this format will be skipped.</p>}
+            {skipped > 0 && <p className="hint-text">{translate('assets.compress.skipped', { count: skipped })}</p>}
           </div>
           <div className="modal-footer">
             <button autoFocus onClick={close}>
-              Cancel
+              {translate('ui.cancel')}
             </button>
             <button className="primary" disabled={targets.length === 0} onClick={() => onCompress(targets, format)}>
-              Compress
+              {translate('assets.compress.action')}
             </button>
           </div>
         </>
@@ -49,13 +49,15 @@ export default function AssetCompressionDialog({
 }
 
 function CompressionFormats({ format, setFormat }: { readonly format: ImageFormat; readonly setFormat: (format: ImageFormat) => void }) {
+  const translate = useTranslate();
   const radioName = useId();
   return (
     <fieldset>
-      <legend>Select a file format</legend>
+      <legend>{translate('assets.compress.format')}</legend>
       {(['avif', 'webp'] as const).map((value) => (
         <label key={value}>
           <input type="radio" name={radioName} value={value} checked={format === value} onChange={() => setFormat(value)} />
+          {/* i18n-ignore: image format names. */}
           {value === 'avif' ? 'AVIF' : 'WebP'}
         </label>
       ))}

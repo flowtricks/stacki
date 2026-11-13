@@ -12,6 +12,7 @@ import { withImportant } from './spacingValue';
 import { parseImportant } from './model/styleDisplay';
 import { ImportantBadge } from './components/ImportantMark';
 import { useStyleHint } from './model/computedStyle';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 
 /** Label text: the value with its unit (the empty placeholder when unset), sans
  *  !important — the band has no room for the word, so the label carries the
@@ -36,8 +37,28 @@ export function variableFor(value: string, variables: ProjectVariable[]): Projec
   });
 }
 
-/** `margin-top` -> `Margin top`, `top` -> `Top` for the click editor label. */
-export function humanLabel(prop: string): string {
+const SIDE_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
+  'margin-top': 'style.spacingLabel.marginTop',
+  'margin-right': 'style.spacingLabel.marginRight',
+  'margin-bottom': 'style.spacingLabel.marginBottom',
+  'margin-left': 'style.spacingLabel.marginLeft',
+  'padding-top': 'style.spacingLabel.paddingTop',
+  'padding-right': 'style.spacingLabel.paddingRight',
+  'padding-bottom': 'style.spacingLabel.paddingBottom',
+  'padding-left': 'style.spacingLabel.paddingLeft',
+  top: 'style.spacingLabel.top',
+  right: 'style.spacingLabel.right',
+  bottom: 'style.spacingLabel.bottom',
+  left: 'style.spacingLabel.left',
+};
+
+/** `margin-top` -> `Margin top`, `top` -> `Top` for the click editor label, in the active language. */
+export function humanLabel(prop: string, translate: Translator): string {
+  const key = SIDE_LABEL_KEYS[prop];
+  if (key !== undefined) {
+    return translate(key);
+  }
+  // Any other property keeps the English wording derived from its CSS name.
   const spaced = prop.replace('-', ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }

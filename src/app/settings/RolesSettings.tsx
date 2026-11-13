@@ -49,15 +49,19 @@ import {
   orderPinnedApps,
   setPinnedApp,
 } from './rolesEdits';
-import { CodeInline } from '../../ui/CodeBlock';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import { DescribedError } from '../../../shared/properties/describedError';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Described, Translator } from '../../../shared/properties/i18n/messageRef';
 import { assert } from '../../../shared/core/assert';
-import { SettingsIntro, SettingsNotice, SettingsRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
+import { SettingsSaveRow, SettingsNotice, SettingsRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 import './roles.css';
 
 type Loaded = { readonly kind: 'loading' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'ready'; readonly stored: StoredRoles };
 
 export function RolesSettings(props: { readonly projectPath: string }) {
   const { projectPath } = props;
+  const translate = useTranslate();
   const [loaded, setLoaded] = useState<Loaded>({ kind: 'loading' });
   const [login, setLogin] = useState<string | undefined>(undefined);
   useEffect(() => {
@@ -83,7 +87,7 @@ export function RolesSettings(props: { readonly projectPath: string }) {
     case 'loading':
       return (
         <p className="app-settings-status" role="status">
-          Loading roles…
+          {translate('settings.roles.loading')}
         </p>
       );
     case 'failed':
@@ -114,15 +118,20 @@ export type RolesNoticeScope = { readonly kind: 'role'; readonly id: string } | 
 type RolesNotice =
   | { readonly kind: 'none' }
   // The change was not saved and never showed; the control is at its saved value.
-  | { readonly kind: 'refused'; readonly scope: RolesNoticeScope; readonly message: string }
+  | { readonly kind: 'refused'; readonly scope: RolesNoticeScope; readonly problem: Described }
   // The save failed; the controls went back to the saved roles, and Retry saves `roles` again.
-  | { readonly kind: 'failed'; readonly scope: RolesNoticeScope; readonly message: string; readonly roles: ProjectRoles };
+  | { readonly kind: 'failed'; readonly scope: RolesNoticeScope; readonly detail: string; readonly roles: ProjectRoles };
 
 /** Saves waiting behind the one under way: only the latest is kept, so this never grows past one. */
 const ROLES_SAVE_ROUNDS_MAX = 64;
 
+/** A refusal that carries a reference keeps it; any other failure is shown as its cleaned message. */
+function refusalOf(failure: unknown): Described {
+  return failure instanceof DescribedError ? failure.problem : { message: cleanError(failure) };
+}
+
 /** Why `next` cannot be saved, or undefined when it can. */
-export function rolesRefusal(next: ProjectRoles, login: string | undefined): string | undefined {
+export function rolesRefusal(next: ProjectRoles, login: string | undefined): Described | undefined {
   const lockout = selfLockout(next, login);
   if (lockout !== undefined) {
     return lockout;
@@ -131,12 +140,14 @@ export function rolesRefusal(next: ProjectRoles, login: string | undefined): str
     serializeProjectRoles(next);
     return undefined;
   } catch (failure: unknown) {
-    return cleanError(failure);
+    return refusalOf(failure);
   }
 }
 
 function RolesEditor(props: { readonly projectPath: string; readonly stored: StoredRoles; readonly login: string | undefined }) {
   const { stored, login } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const role = useCurrentRole();
   const editable = can(role, 'settings:roles');
   const [shown, setShown] = useState<ProjectRoles>(() => initialRoles(stored, login));
@@ -170,7 +181,7 @@ function RolesEditor(props: { readonly projectPath: string; readonly stored: Sto
         // A change waiting behind this one was built on it, so it goes too.
         waiting.current = undefined;
         setShown(saved.current);
-        setNotice({ kind: 'failed', scope: next.scope, message: `Not saved: ${cleanError(failure)}`, roles: next.roles });
+        setNotice({ kind: 'failed', scope: next.scope, detail: cleanError(failure), roles: next.roles });
       }
     }
     writing.current = 'idle';
@@ -181,12 +192,12 @@ function RolesEditor(props: { readonly projectPath: string; readonly stored: Sto
     try {
       next = change(shown);
     } catch (failure: unknown) {
-      setNotice({ kind: 'refused', scope, message: cleanError(failure) });
+      setNotice({ kind: 'refused', scope, problem: refusalOf(failure) });
       return false;
     }
     const refusal = rolesRefusal(next, login);
     if (refusal !== undefined) {
-      setNotice({ kind: 'refused', scope, message: refusal });
+      setNotice({ kind: 'refused', scope, problem: refusal });
       return false;
     }
     setShown(next);
@@ -201,9 +212,9 @@ function RolesEditor(props: { readonly projectPath: string; readonly stored: Sto
     assert(role !== undefined, 'A deleted role exists');
     assert(role.id !== ADMIN_ROLE_ID, 'Admin is never deleted');
     const answer = await confirmDialog({
-      title: `Delete ${role.name}?`,
-      body: deleteRoleSummary(role, { defaultRole: shown.defaultRole, viewing: viewingAs()?.id }),
-      confirmLabel: 'Delete role',
+      title: translate('settings.roles.delete.title', { name: role.name }),
+      body: deleteRoleSummary(role, { defaultRole: shown.defaultRole, viewing: viewingAs()?.id }, translate),
+      confirmLabel: translate('settings.roles.delete.confirm'),
       danger: true,
     });
     if (answer !== true) {
@@ -220,12 +231,12 @@ function RolesEditor(props: { readonly projectPath: string; readonly stored: Sto
       return undefined;
     }
     if (notice.kind === 'refused') {
-      return <SettingsNotice message={notice.message} />;
+      return <SettingsNotice message={translateDescribed(notice.problem)} />;
     }
     const retry = notice.roles;
     return (
       <SettingsNotice
-        message={notice.message}
+        message={translate('settings.roles.notSaved', { message: notice.detail })}
         onRetry={() => {
           setShown(retry);
           setNotice({ kind: 'none' });
@@ -235,30 +246,29 @@ function RolesEditor(props: { readonly projectPath: string; readonly stored: Sto
     );
   };
   return (
-    <section className="app-roles" aria-label="Project roles">
-      <SettingsIntro saving={indicator.state}>
-        Choose what each role can use in this project. Roles are saved in <CodeInline text=".stacki/roles.json" /> as you change them, and apply on Desktop and
-        in Stacki Studio.
-        {login === undefined ? ' Sign in to GitHub to be matched to a role; until then you are an admin here.' : ` You are signed in as ${login}.`}
-      </SettingsIntro>
-      {stored.kind === 'invalid' && <ErrorToast message={`The roles file could not be read: ${stored.message}. Your next change replaces it.`} />}
-      {!editable && <p className="app-roles-notice">Only admins can change roles.</p>}
-      <SettingsSection title="Access">
+    <section className="app-roles" aria-label={translate('settings.roles.screen.label')}>
+      <SettingsSaveRow saving={indicator.state} />
+      {login === undefined && <p className="app-roles-notice">{translate('settings.roles.signedOut')}</p>}
+      {stored.kind === 'invalid' && <ErrorToast message={translate('settings.roles.fileUnreadable', { message: stored.message })} />}
+      {!editable && <p className="app-roles-notice">{translate('settings.roles.readOnly')}</p>}
+      <SettingsSection title={translate('settings.roles.section.access')}>
         <ViewAs roles={shown} />
         <DefaultRole roles={shown} editable={editable} change={(id) => apply({ kind: 'access' }, (roles) => setDefaultRole(roles, id))} />
         {noticeFor({ kind: 'access' })}
       </SettingsSection>
-      <SettingsSection title="Roles" description="Members are GitHub usernames. Admin always has full access.">
+      <SettingsSection title={translate('settings.roles.section.roles')} info={translate('settings.roles.members.info')}>
         {shown.roles.map((item) => (
           <RoleCard
             key={item.id}
             role={item}
             editable={editable}
             projectPath={props.projectPath}
+            currentLogin={login}
             notice={noticeFor({ kind: 'role', id: item.id })}
             naming={item.id === naming ? 'rename' : undefined}
             actions={cardActions(
               item.id,
+              translate,
               (change) => apply({ kind: 'role', id: item.id }, change),
               (copyId) => setNaming(copyId),
               () => void removeRole(item.id),
@@ -275,9 +285,14 @@ function RolesEditor(props: { readonly projectPath: string; readonly stored: Sto
               }
             }}
           >
-            <input aria-label="New role name" placeholder="New role name" value={newName} onChange={(event) => setNewName(event.target.value)} />
+            <input
+              aria-label={translate('settings.roles.newRole.label')}
+              placeholder={translate('settings.roles.newRole.label')}
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+            />
             <button type="submit" disabled={newName.trim() === ''}>
-              <PlusIcon size={12} /> Add role
+              <PlusIcon size={12} /> {translate('settings.roles.newRole.add')}
             </button>
           </form>
         )}
@@ -288,20 +303,21 @@ function RolesEditor(props: { readonly projectPath: string; readonly stored: Sto
 }
 
 /** What deleting `role` does, for its confirmation: its members, and any fallback to Admin. */
-export function deleteRoleSummary(role: ProjectRole, context: { readonly defaultRole: string; readonly viewing: string | undefined }): string {
+export function deleteRoleSummary(
+  role: ProjectRole,
+  context: { readonly defaultRole: string; readonly viewing: string | undefined },
+  translate: Translator = ENGLISH_TRANSLATE,
+): string {
   assert(role.id !== ADMIN_ROLE_ID, 'Admin is never deleted');
   assert(role.members.length <= ROLE_LIMITS.membersMax, 'Members are bounded');
   const count = role.members.length;
-  const members =
-    count === 0
-      ? 'It has no members.'
-      : `Its ${count === 1 ? 'member' : `${count} members`} (${role.members.join(', ')}) ${count === 1 ? 'becomes a person' : 'become people'} in no role.`;
+  const members = count === 0 ? translate('roles.delete.noMembers') : translate('roles.delete.members', { count, members: role.members.join(', ') });
   const parts = [members];
   if (context.defaultRole === role.id) {
-    parts.push('It is the role for people in no role, so that becomes Admin.');
+    parts.push(translate('roles.delete.defaultRole'));
   }
   if (context.viewing === role.id) {
-    parts.push('You are viewing as it, so the view goes back to Admin.');
+    parts.push(translate('roles.delete.viewing'));
   }
   return parts.join(' ');
 }
@@ -315,6 +331,7 @@ function sameScope(left: RolesNoticeScope, right: RolesNoticeScope): boolean {
 
 function cardActions(
   id: string,
+  translate: Translator,
   apply: (change: (roles: ProjectRoles) => ProjectRoles) => boolean,
   named: (copyId: string) => void,
   remove: () => void,
@@ -333,7 +350,7 @@ function cardActions(
     duplicate: () => {
       let copyId: string | undefined;
       const saved = apply((roles) => {
-        const copy = duplicateRole(roles, id);
+        const copy = duplicateRole(roles, id, translate);
         copyId = copy.id;
         return copy.roles;
       });
@@ -346,6 +363,7 @@ function cardActions(
 
 // "View as": an admin previews another role. The choice lives in the renderer only.
 function ViewAs(props: { readonly roles: ProjectRoles }) {
+  const translate = useTranslate();
   const actual = useActualRole();
   useCurrentRole();
   const viewing = viewingAs();
@@ -353,9 +371,9 @@ function ViewAs(props: { readonly roles: ProjectRoles }) {
     return undefined;
   }
   return (
-    <SettingsRow label="View as" description="See Stacki as someone in another role would. Only this window changes.">
+    <SettingsRow label={translate('settings.roles.viewAs.label')} info={translate('settings.roles.viewAs.info')}>
       <Dropdown
-        ariaLabel="View as"
+        ariaLabel={translate('settings.roles.viewAs.label')}
         className="app-roles-dropdown"
         value={viewing?.id ?? 'admin'}
         options={roleOptions(props.roles)}
@@ -366,10 +384,11 @@ function ViewAs(props: { readonly roles: ProjectRoles }) {
 }
 
 function DefaultRole(props: { readonly roles: ProjectRoles; readonly editable: boolean; readonly change: (id: string) => void }) {
+  const translate = useTranslate();
   return (
-    <SettingsRow label="People in no role" description="The role Stacki Studio gives anyone who is not a member of any role.">
+    <SettingsRow label={translate('settings.roles.defaultRole.label')} info={translate('settings.roles.defaultRole.info')}>
       <Dropdown
-        ariaLabel="Role for people in no role"
+        ariaLabel={translate('settings.roles.defaultRole.aria')}
         className="app-roles-dropdown"
         value={props.roles.defaultRole}
         disabled={!props.editable}

@@ -7,6 +7,7 @@ import { useSyncExternalStore } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { APP_LIMITS } from '../../../shared/properties/apps';
 import { APP_RPC_LIMITS } from '../../../shared/properties/appsRpc';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { AppBadgeRegistry } from './appRpcHost';
 
 /** The most a badge draws; a larger count reads as this and a plus. */
@@ -92,12 +93,13 @@ export function badgeText(count: number): string {
 
 /** The count on the Apps rail button: every app's, summed. */
 export function AppsRailCount() {
+  const translate = useTranslate();
   const count = useAppBadgeCount(undefined);
   if (count === 0) {
     return undefined;
   }
   return (
-    <span className="apps-rail-count" role="status" aria-label={count === 1 ? 'Apps: 1 waiting' : `Apps: ${count} waiting`}>
+    <span className="apps-rail-count" role="status" aria-label={translate('apps.badge.waiting', { count })}>
       {badgeText(count)}
     </span>
   );
@@ -105,12 +107,13 @@ export function AppsRailCount() {
 
 /** The count on an app's row in the Apps panel. */
 export function AppRowCount({ appId, name }: { readonly appId: string; readonly name: string }) {
+  const translate = useTranslate();
   const count = useAppBadgeCount(appId);
   if (count === 0) {
     return undefined;
   }
   return (
-    <span className="apps-row-count" aria-label={`${name}: ${count}`}>
+    <span className="apps-row-count" aria-label={translate('apps.badge.rowCount', { name, count })}>
       {badgeText(count)}
     </span>
   );

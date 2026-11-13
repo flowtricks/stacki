@@ -2,6 +2,7 @@
 // escape keys, routes, collections and their sample entries, cleaning up
 // queries, and composing the node edits (App.tsx).
 
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useRef } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { data, type Data } from '../../../shared/core/boundary';
@@ -220,6 +221,7 @@ export function useMenuShortcuts(
   history: ReturnType<typeof useHistory>,
 ) {
   const { flushSave, reportFailure, showToast } = lifecycle;
+  const translate = useTranslate();
   const { pageStateRef, projectRef, pseudoPickRef, selectedIdRef, selectionKeysRef } = coreState;
   const { cmsOpenRef } = insertItemScope;
   const { copyNode, nodeClipboardRef, pasteNode } = nodeEdits;
@@ -230,7 +232,7 @@ export function useMenuShortcuts(
   // paste route to the focused text field when one is active, otherwise to
   // the selected node.
   useEffect(() => {
-    const copying = { flushSave, showToast, projectRef, selectionKeysRef };
+    const copying = { flushSave, showToast, projectRef, selectionKeysRef, translate };
     const copySelection = (): Promise<void> => copySelectionTrail(copying);
     const menu: MenuEdits = {
       selectedIdRef,
@@ -306,6 +308,7 @@ export function useMenuShortcuts(
     ];
     return () => offs.forEach((off) => off());
   }, [
+    translate,
     undo,
     redo,
     copyNode,

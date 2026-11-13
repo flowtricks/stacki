@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { TrailingSlash } from '../../editor/pageState';
-import { ComponentPreviewFrame } from './ComponentPreviewPopup';
+import { ComponentPreviewFrame, type PreviewReason } from './ComponentPreviewPopup';
 import { componentPreviewURL, type ComponentPreviewGesture } from './paletteModel';
 
 // The picture of a component in the insert grid: the same live rendering the Components panel's
@@ -11,14 +12,14 @@ import { componentPreviewURL, type ComponentPreviewGesture } from './paletteMode
 // where it has one, and with its own prop defaults where it does not
 // (electron/previewServer/componentPreviewRecipe.ts), then fits it into the frame.
 
-type FrameState = { readonly kind: 'loading' } | { readonly kind: 'ready' } | { readonly kind: 'empty'; readonly reason: string };
+type FrameState = { readonly kind: 'loading' } | { readonly kind: 'ready' } | { readonly kind: 'empty'; readonly reason: PreviewReason };
 
 /** Why a card has no preview, shown on hover; the route's own reason wins when it gives one. */
 export const PREVIEW_REASONS = {
-  noServer: 'The project dev server is not running.',
-  noFile: 'This component has no file the preview can load.',
-  rendered: 'The component rendered nothing.',
-} as const satisfies Record<string, string>;
+  noServer: { key: 'palette.preview.noServer' },
+  noFile: { key: 'palette.preview.noFile' },
+  rendered: { key: 'palette.preview.rendered' },
+} as const satisfies Record<string, PreviewReason>;
 
 export interface InsertPreviewSource {
   /** Undefined when the component has no file the preview route can address. */
@@ -99,10 +100,10 @@ function CardFrame({
 }) {
   const [state, setState] = useState<FrameState>({ kind: 'loading' });
   const receive = useCallback(
-    (reportedURL: string, status: 'ready' | 'empty', reason?: string): void => {
+    (reportedURL: string, status: 'ready' | 'empty', reason?: PreviewReason): void => {
       assert(reportedURL === url, 'A card frame reports its own URL');
       onSettled?.();
-      setState(status === 'ready' ? { kind: 'ready' } : { kind: 'empty', reason: reason ?? PREVIEW_REASONS.rendered });
+      setState(status === 'ready' ? { kind: 'ready' } : { kind: 'empty', reason: reason === undefined ? PREVIEW_REASONS.rendered : reason });
     },
     [url, onSettled],
   );
@@ -123,20 +124,22 @@ function CardFrame({
 }
 
 function PreviewNote({ icon, state }: { readonly icon: ReactNode; readonly state: Exclude<FrameState, { readonly kind: 'ready' }> }) {
+  const translate = useTranslate();
   if (state.kind === 'loading') {
     return (
       <div className="insert-surface-note" role="status">
         <span className="insert-surface-note-icon">{icon}</span>
-        <span className="panel-loading-label">Loading preview…</span>
+        <span className="panel-loading-label">{translate('palette.preview.loading')}</span>
       </div>
     );
   }
-  assert(state.reason.length > 0, 'An empty preview says why');
+  const reason = 'key' in state.reason ? translate(state.reason.key) : state.reason.text;
+  assert(reason.length > 0, 'An empty preview says why');
   // The reason is the hover text: the card stays one short line, and the cause is a pointer away.
   return (
-    <div className="insert-surface-note" title={state.reason}>
+    <div className="insert-surface-note" title={reason}>
       <span className="insert-surface-note-icon">{icon}</span>
-      <span>No preview available</span>
+      <span>{translate('palette.preview.unavailable')}</span>
     </div>
   );
 }

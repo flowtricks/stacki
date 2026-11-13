@@ -2,16 +2,19 @@ import Select, { type SelectOption } from './components/Select';
 import { ShadowColorRow, ShadowLength } from './ShadowFields';
 import { AngleControl } from './GradientEditor';
 import { FILTER_GROUPS, FILTER_META, retypeFilter, type Filter, type FilterPatch, type FilterType } from './model/filter';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 // The per-filter editor (Webflow's Filters): a grouped Filter-type dropdown, then the
 // controls for that type — Amount (%/px/…, any unit), Hue rotate's Angle dial, or Drop
 // shadow's X / Y / Blur / Color. Reuses the shadow number/color rows (value + unit shown
 // inline, any unit accepted) and the gradient angle control.
 
-const TYPE_OPTIONS = FILTER_GROUPS.flatMap<SelectOption<string>>((group) => [
-  { value: `__h_${group.heading}`, label: group.heading, heading: true },
-  ...group.types.map((type) => ({ value: type, label: FILTER_META[type].label, indent: true })),
-]);
+const typeOptions = (translate: Translator) =>
+  FILTER_GROUPS.flatMap<SelectOption<string>>((group) => [
+    { value: `__h_${group.heading}`, label: translate(group.headingKey), heading: true },
+    ...group.types.map((type) => ({ value: type, label: translate(FILTER_META[type].labelKey), indent: true })),
+  ]);
 
 function isFilterType(value: string): value is FilterType {
   return value in FILTER_META;
@@ -24,21 +27,22 @@ interface SetOptions {
 type SetFilter = (patch: FilterPatch, options: SetOptions) => void;
 
 export default function FilterEditor({ filter, busy, onChange }: { filter: Filter; busy: boolean; onChange: (next: Filter, live: boolean) => void }) {
+  const translate = useTranslate();
   const meta = FILTER_META[filter.type];
   const set: SetFilter = (patch, options) => onChange({ ...filter, ...patch }, options.live);
   return (
     <div className="embed-editor_filter-editor">
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Filter</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.filterFields.filter')}</span>
         <Select
           value={filter.type}
-          options={TYPE_OPTIONS}
+          options={typeOptions(translate)}
           onChange={(value) => {
             if (isFilterType(value)) {
               onChange(retypeFilter(value), false);
             }
           }}
-          ariaLabel="Filter type"
+          ariaLabel={translate('style.filterFields.filterType')}
           disabled={busy}
           searchable
         />
@@ -46,7 +50,7 @@ export default function FilterEditor({ filter, busy, onChange }: { filter: Filte
 
       {meta.control === 'amount' ? (
         <ShadowLength
-          label="Amount"
+          label={translate('style.filterFields.amount')}
           value={filter.amount}
           range={{ min: meta.min, max: meta.max }}
           defaultUnit={meta.unit}
@@ -56,7 +60,7 @@ export default function FilterEditor({ filter, busy, onChange }: { filter: Filte
         />
       ) : meta.control === 'angle' ? (
         <div className="embed-editor_size-row">
-          <span className="embed-editor_size-label embed-editor_bg-caption">Angle</span>
+          <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.filterFields.angle')}</span>
           <AngleControl angle={filter.amount || '0deg'} busy={busy} onChange={(angle, live) => set({ amount: angle }, { live })} />
         </div>
       ) : (
@@ -68,6 +72,7 @@ export default function FilterEditor({ filter, busy, onChange }: { filter: Filte
 
 // Drop shadow's X / Y / Blur / Color rows.
 function DropShadowFields({ filter, busy, set }: { filter: Filter; busy: boolean; set: SetFilter }) {
+  const translate = useTranslate();
   return (
     <>
       <ShadowLength
@@ -85,7 +90,7 @@ function DropShadowFields({ filter, busy, set }: { filter: Filter; busy: boolean
         onCommit={(value) => set({ y: value }, { live: false })}
       />
       <ShadowLength
-        label="Blur"
+        label={translate('style.filterFields.blur')}
         value={filter.blur}
         busy={busy}
         onLive={(value) => set({ blur: value }, { live: true })}

@@ -54,7 +54,7 @@ test('all variable edit contracts accept valid replies and reject malformed repl
     };
     assert.deepEqual(await variableEdit(name, payload), { ok: false, error: 'disk unavailable' });
     delete window.avb[name];
-    assert.deepEqual(await variableEdit(name, payload), { ok: false, error: restart });
+    assert.deepEqual(await variableEdit(name, payload), { ok: false, error: restart, errorRef: { key: 'variables.error.restart' } });
   }
 });
 
@@ -136,7 +136,7 @@ function historyFixture() {
 test('history deduplicates every touched file and restores both directions', async () => {
   const state = historyFixture();
   assert.equal(
-    await state.history(['a.css', 'b.css', 'a.css'], 'the move', 'move', async () => {
+    await state.history(['a.css', 'b.css', 'a.css'], 'variables.undo.move', 'move', async () => {
       state.files.set('/project/a.css', 'new a');
       state.files.set('/project/b.css', 'new b');
       return true;
@@ -147,6 +147,7 @@ test('history deduplicates every touched file and restores both directions', asy
   assert.deepEqual(state.reads, ['/project/a.css', '/project/b.css', '/project/a.css', '/project/b.css']);
   const command = state.records[0];
   assert.equal(command.label, 'the move');
+  assert.deepEqual(command.labelRef, { key: 'variables.undo.move' });
   assert.equal(command.coalesceKey, 'move');
   await command.undo();
   assert.deepEqual([...state.files.values()], ['a', 'b']);
@@ -265,4 +266,20 @@ test('refresh surfaces operating failures and rejects malformed data', async () 
   window.avb.cssVariables = async () => PLATFORM_NULL;
   await assert.rejects(reader.refresh(), /Expected object/);
   reader.dispose();
+});
+
+test('a refused edit carries the producer’s message reference, and a malformed reference is dropped', async () => {
+  const reply = (response) => {
+    global.window = { avb: { setCssVariable: async () => response } };
+    return variableEdit('setCssVariable', calls.setCssVariable);
+  };
+  const good = { key: 'variables.error.notDeclared', params: { name: '--a' } };
+  assert.deepEqual(await reply({ ok: false, error: '--a is no longer declared there.', errorRef: good }), {
+    ok: false,
+    error: '--a is no longer declared there.',
+    errorRef: good,
+  });
+  for (const bad of [42, { key: 'not a key' }, { key: 'variables.error.notDeclared', params: { name: { nested: true } } }, [], 'null']) {
+    assert.deepEqual(await reply({ ok: false, error: 'plain', errorRef: bad }), { ok: false, error: 'plain' });
+  }
 });

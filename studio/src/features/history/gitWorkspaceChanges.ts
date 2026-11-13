@@ -4,6 +4,7 @@ import type { PublishGit } from '../publishing/publishGit';
 import { describeFiles } from '../../../vendor/stacki/electron/git/gitHistory';
 import { gitRevision } from './gitWorkspaceContract';
 import { gitWorkspaceFile, gitWorkspaceRun, type GitWorkspaceRun } from './gitWorkspaceObjects';
+import { ReferencedError } from '../../shared/referencedError';
 
 export async function gitWorkspaceChanges(run: GitWorkspaceRun, head: string, tree: string) {
   const output = await run(['diff', '--name-status', '--no-renames', '-z', head, tree]);
@@ -26,7 +27,7 @@ export async function gitWorkspaceChanges(run: GitWorkspaceRun, head: string, tr
 }
 export async function gitSelectedTree(git: PublishGit, head: string, draft: string, selection: readonly string[]): Promise<string> {
   if (selection.length === 0 || selection.length > 100_000) {
-    throw new Error('Select at least one changed file.');
+    throw new ReferencedError('git.studio.selectFile');
   }
   const run = gitWorkspaceRun(git);
   const changes = await gitWorkspaceChanges(run, head, draft);
@@ -34,7 +35,7 @@ export async function gitSelectedTree(git: PublishGit, head: string, draft: stri
   const files = new Map((await gitWorkspaceTree(run, draft)).map((file) => [file.path, file]));
   const entries = selection.map((file) => {
     if (!changed.has(file)) {
-      throw new Error('A selected file changed. Refresh the file list before committing.');
+      throw new ReferencedError('git.studio.fileChanged');
     }
     const entry = files.get(file);
     return entry ? `${entry.mode} ${entry.sha}\t${file}\0` : `0 ${'0'.repeat(40)}\t${file}\0`;

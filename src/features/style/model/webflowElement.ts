@@ -371,6 +371,7 @@ export async function buildSnapshot(element: AnyElement): Promise<ElementSnapsho
     // A component instance renders markup we can't see from here, so it has
     // no tag of its own — selectors match it by class only.
     tag: node?.kind === 'element' ? String(node.name || '').toLowerCase() : undefined,
+    // i18n-ignore: the Webflow node type name used for matching, not text shown to a person.
     webflowType: node?.kind === 'component' ? 'Component' : node?.kind || 'Element',
     id: id || undefined,
     classes,

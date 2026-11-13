@@ -23,6 +23,8 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import type { ReactNode } from 'react';
 import type { Result } from '../../../shared/core/result';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../shared/properties/i18n/messageRef';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import { memberTypes, type NewPropKind, type PropDeclaration } from '../../editor/propDeclaration';
 import { readPropsDestructure } from '../../editor/loopProps';
@@ -103,34 +105,34 @@ export const FIT_KINDS: Readonly<Record<FieldFit, readonly NewPropKind[]>> = {
   list: ['list'],
 };
 
-/** What each kind is called in the menu and the form: `New Text property`. */
-export const KIND_TITLES: Readonly<Record<NewPropKind, string>> = {
-  string: 'Text',
-  number: 'Number',
-  boolean: 'Switch',
-  option: 'Option',
-  attributes: 'Attributes',
-  list: 'List',
-  image: 'Image',
+/** What each kind is called in the menu and the form (`New Text property`): the message key of its name. */
+export const KIND_TITLE_KEYS: Readonly<Record<NewPropKind, MessageKey>> = {
+  string: 'props.newProp.kind.string',
+  number: 'props.newProp.kind.number',
+  boolean: 'props.newProp.kind.boolean',
+  option: 'props.newProp.kind.option',
+  attributes: 'props.newProp.kind.attributes',
+  list: 'props.newProp.kind.list',
+  image: 'props.newProp.kind.image',
 };
 
 /** The word in a field's `New … property` row. */
-export function newPropTitle(fit: FieldFit): string {
+export function newPropTitle(fit: FieldFit, translate: Translator = ENGLISH_TRANSLATE): string {
   switch (fit) {
     case 'content':
-      return 'Text';
+      return translate('props.newProp.title.content');
     case 'text':
-      return 'Plain Text';
+      return translate('props.newProp.title.text');
     case 'number':
-      return 'Number';
+      return translate('props.newProp.title.number');
     case 'boolean':
-      return 'Switch';
+      return translate('props.newProp.title.boolean');
     case 'attributes':
-      return 'Attributes';
+      return translate('props.newProp.title.attributes');
     case 'image':
-      return 'Image';
+      return translate('props.newProp.title.image');
     case 'list':
-      return 'List';
+      return translate('props.newProp.title.list');
     default: {
       const exhaustive: never = fit;
       return exhaustive;
@@ -259,18 +261,18 @@ export function propKeysByLocal(
 }
 
 /** Why `key` cannot name a new prop of this component, or undefined when it can. */
-export function propNameProblem(key: string, host: Pick<NewPropHost, 'propKeys' | 'restLocal'>): string | undefined {
+export function propNameProblem(key: string, host: Pick<NewPropHost, 'propKeys' | 'restLocal'>, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   if (key === '') {
-    return 'Give the property a name.';
+    return translate('props.newProp.name.empty');
   }
   if (key.length > PROPERTY_LIMITS.nameCharsMax) {
-    return 'That name is too long.';
+    return translate('props.newProp.name.tooLong');
   }
   if (!/^[A-Za-z_$][\w$]*$/.test(key)) {
-    return 'Use letters and numbers, starting with a letter.';
+    return translate('props.newProp.name.invalid');
   }
   if (host.propKeys.includes(key) || host.restLocal === key) {
-    return `This component already has a ${key} property.`;
+    return translate('props.newProp.name.taken', { name: key });
   }
   return undefined;
 }

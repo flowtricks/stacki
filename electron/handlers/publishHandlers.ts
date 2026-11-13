@@ -9,6 +9,7 @@ import { DesktopPublisher } from '../project/publisher';
 import { readPublishAvailability } from '../project/publishAvailability';
 import { readProjectMetadata } from '../project/projectMetadata';
 import { publishedProjectSiteURL } from '../project/publishSite';
+import { translateMain } from '../lib/mainLocale';
 
 export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assertInProject'>): void {
   const publisher = new DesktopPublisher();
@@ -28,7 +29,7 @@ export function registerPublishHandlers(host: Pick<MainHost, 'ipcMain' | 'assert
     const project = root(input.projectPath);
     await ensureToolPath();
     if (input.request.action !== 'list' && publisher.state(project).kind === 'running') {
-      return { ok: false, error: 'Wait for publishing to finish before changing repositories.' };
+      return { ok: false, error: translateMain('error.publish.repositoriesBusy') };
     }
     return publishingRepositories(project, input.request);
   });

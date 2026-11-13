@@ -18,6 +18,7 @@
 // `getCollection("campus")` (filtered and reshaped on the way, which only
 // changes how an item is shaped, not which collection it is).
 
+import { issue, type Issue } from './issue';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import {
@@ -440,19 +441,19 @@ export function optionsLiteral(query: LoopQuery): string {
 }
 
 /** Why a query cannot be kept as data, or undefined when it can. */
-export function dataFormProblem(query: LoopQuery): string | undefined {
+export function dataFormProblem(query: LoopQuery): Issue | undefined {
   if (query.source.kind !== 'astro') {
-    return 'Only content collection lists can link their settings to properties.';
+    return issue('editor.optionsQuery.onlyCollections');
   }
   if (query.random) {
-    return 'A shuffled list can’t link its settings to properties.';
+    return issue('editor.optionsQuery.shuffled');
   }
   for (const condition of query.conditions) {
     if (condition.kind === 'custom') {
-      return 'A filter written as code can’t be linked to a property. Remove it first.';
+      return issue('editor.optionsQuery.customFilter');
     }
     if (condition.operator === 'inPast' || condition.operator === 'inFuture') {
-      return 'A filter comparing with today’s date can’t be linked to a property.';
+      return issue('editor.optionsQuery.dateFilter');
     }
   }
   return undefined;

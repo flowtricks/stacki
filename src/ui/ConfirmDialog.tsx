@@ -1,6 +1,7 @@
 import Popup from './Popup';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 // A confirmation stays inside the app, with action-specific labels. Destructive
 // questions focus Cancel so a stray Return key cannot authorize deletion.
@@ -21,22 +22,16 @@ type ConfirmAnswer = boolean | { readonly checked: boolean };
 interface Question {
   readonly title: ReactNode;
   readonly body: ReactNode;
-  readonly confirmLabel: string;
-  readonly cancelLabel: string;
+  /** Undefined: the window's own "Continue" and "Cancel", in the language on screen. */
+  readonly confirmLabel: string | undefined;
+  readonly cancelLabel: string | undefined;
   readonly danger: boolean;
   readonly checkbox: Checkbox | undefined;
   readonly resolve: (answer: ConfirmAnswer) => void;
 }
 let open: ((question: Question) => void) | undefined;
 
-export function confirmDialog({
-  title,
-  body,
-  confirmLabel = 'Continue',
-  cancelLabel = 'Cancel',
-  danger = false,
-  checkbox,
-}: ConfirmOptions = {}): Promise<ConfirmAnswer> {
+export function confirmDialog({ title, body, confirmLabel, cancelLabel, danger = false, checkbox }: ConfirmOptions = {}): Promise<ConfirmAnswer> {
   return new Promise((resolve) => {
     if (!open) {
       console.error('confirmDialog: no <ConfirmHost /> is mounted; answering no.');
@@ -96,6 +91,7 @@ interface SurfaceProps {
   readonly cancelRef: RefObject<HTMLButtonElement>;
 }
 function ConfirmSurface({ ask, checked, setChecked, answer, confirmRef, cancelRef }: SurfaceProps) {
+  const translate = useTranslate();
   return (
     <Popup className="modal confirm-dialog" role="alertdialog" onClose={() => answer(false)}>
       {({ close, finish }) => (
@@ -117,10 +113,10 @@ function ConfirmSurface({ ask, checked, setChecked, answer, confirmRef, cancelRe
           )}
           <div className="modal-footer">
             <button ref={cancelRef} onClick={close}>
-              {ask.cancelLabel}
+              {ask.cancelLabel ?? translate('ui.cancel')}
             </button>
             <button ref={confirmRef} className={ask.danger ? 'danger' : 'primary'} onClick={() => finish(() => answer(true))}>
-              {ask.confirmLabel}
+              {ask.confirmLabel ?? translate('ui.continue')}
             </button>
           </div>
         </>

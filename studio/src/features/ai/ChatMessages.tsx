@@ -4,6 +4,7 @@
 // tasks) never reaches Studio: its model answers with one proposal, so the running line says it is working and how
 // long, and the finished reply says how long it took.
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFormat, useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { ErrorToast } from '../../../vendor/stacki/src/ui/ErrorToast';
 import { ChevronDownIcon, ChevronRightIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { LoaderDots } from '../../../vendor/stacki/src/ui/LoaderDots';
@@ -21,6 +22,7 @@ import { type ChatThread, type ChatMessage, type ChatProposal } from './chatStat
 const PROJECT_ROOT = '';
 
 export function ChatMessages({ chat, refresh }: { readonly chat: ChatThread; readonly refresh: () => void }) {
+  const translate = useTranslate();
   const scroll = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const [unread, setUnread] = useState(false);
@@ -36,7 +38,7 @@ export function ChatMessages({ chat, refresh }: { readonly chat: ChatThread; rea
       className="ai-transcript chat-transcript"
       ref={scroll}
       role="log"
-      aria-label="Conversation"
+      aria-label={translate('ai.transcript.label')}
       aria-live="polite"
       onScroll={(event) => {
         const element = event.currentTarget;
@@ -62,7 +64,7 @@ export function ChatMessages({ chat, refresh }: { readonly chat: ChatThread; rea
             setUnread(false);
           }}
         >
-          Latest response
+          {translate('ai.studio.latest')}
         </button>
       )}
     </div>
@@ -71,13 +73,15 @@ export function ChatMessages({ chat, refresh }: { readonly chat: ChatThread; rea
 
 /** The line under a running request: the loader, what is happening, and the seconds counted live. */
 function RunningLine({ chat }: { readonly chat: ChatThread }) {
+  const translate = useTranslate();
+  const { formatNumber } = useFormat();
   const now = useNow();
-  const elapsed = chat.startedAt === undefined ? undefined : formatDuration(now - chat.startedAt);
+  const elapsed = chat.startedAt === undefined ? undefined : formatDuration(now - chat.startedAt, formatNumber);
   return (
     <div className="ai-turn-status">
       <LoaderDots dotPx={4} />
       <span className="ai-turn-label" role="status">
-        {chat.status === 'working' ? 'Thinking through your request…' : 'Applying changes to the draft…'}
+        {chat.status === 'working' ? translate('ai.studio.thinking') : translate('ai.studio.applying')}
       </span>
       {elapsed !== undefined && chat.status === 'working' && (
         <span className="ai-turn-time" aria-hidden="true">
@@ -89,10 +93,12 @@ function RunningLine({ chat }: { readonly chat: ChatThread }) {
 }
 
 function MessageItem({ chat, message, refresh }: { readonly chat: ChatThread; readonly message: ChatMessage; readonly refresh: () => void }) {
+  const translate = useTranslate();
+  const { formatNumber } = useFormat();
   const images = message.images.length > 0 && (
     <div className="chat-message-images">
       {message.images.map((image) => (
-        <a key={image.id} href={image.url} download={image.name} title={`Download ${image.name}`}>
+        <a key={image.id} href={image.url} download={image.name} title={translate('ai.studio.download', { name: image.name })}>
           <img src={image.url} alt={image.name} />
         </a>
       ))}
@@ -112,7 +118,9 @@ function MessageItem({ chat, message, refresh }: { readonly chat: ChatThread; re
       {message.content && <ChatText text={message.content} />}
       {message.proposal && <ProposalCard chat={chat} message={message} proposal={message.proposal} refresh={refresh} />}
       {message.outcome && <p className="chat-outcome">{message.outcome}</p>}
-      {message.durationMs !== undefined && <div className="ai-worked">Worked for {formatDuration(message.durationMs)}</div>}
+      {message.durationMs !== undefined && (
+        <div className="ai-worked">{translate('ai.transcript.workedFor', { duration: formatDuration(message.durationMs, formatNumber) })}</div>
+      )}
     </article>
   );
 }
@@ -129,25 +137,24 @@ function ProposalCard({
   readonly proposal: ChatProposal;
   readonly refresh: () => void;
 }) {
+  const translate = useTranslate();
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const counts = useMemo(() => proposal.changes.map((change) => countsOf(buildFileDiff(change.before || undefined, change.after))), [proposal.changes]);
   const total = totalOf(counts);
   const idle = chat.status === 'idle';
   return (
-    <div className="ai-changes-card" aria-label="Proposed changes">
+    <div className="ai-changes-card" aria-label={translate('ai.studio.proposed')}>
       <div className="ai-changes-card-head">
         <span className="ai-changes-card-title">
-          <span>
-            {proposal.changes.length} file{proposal.changes.length === 1 ? '' : 's'} to change
-          </span>
+          <span>{translate('ai.studio.filesToChange', { count: proposal.changes.length })}</span>
           {total !== undefined && <span className="ai-changes-total">{countsLabel(total)}</span>}
         </span>
         <span className="ai-changes-bulk">
           <button disabled={!idle} onClick={() => discardProposal(chat.id, message.id)}>
-            Discard
+            {translate('ai.studio.discard')}
           </button>
           <button className="ai-changes-keep" disabled={!idle} onClick={() => void applyProposal(chat.id, message.id, refresh)}>
-            Apply to draft
+            {translate('ai.studio.applyDraft')}
           </button>
         </span>
       </div>
@@ -176,7 +183,7 @@ function ProposalCard({
                 <span className="ai-file-text">
                   <span className="ai-file-line">
                     <span className="ai-file-name">{change.file.slice(slash + 1)}</span>
-                    {!change.before && <span className="ai-file-kind ai-file-kind-created">New</span>}
+                    {!change.before && <span className="ai-file-kind ai-file-kind-created">{translate('ai.changes.new')}</span>}
                   </span>
                   {slash >= 0 && <span className="ai-file-folder">{change.file.slice(0, slash)}</span>}
                 </span>

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { GitWorkspaceState } from './gitWorkspace';
 import { gitBranchName, gitWorkspaceBranch, type GitWorkspaceManifest } from './gitWorkspaceContract';
 import { gitWorkspaceRun, snapshotGitWorkspace, gitWorkspaceCommit } from './gitWorkspaceObjects';
+import { ReferencedError } from '../../shared/referencedError';
 
 export async function switchGitWorkspace(
   state: GitWorkspaceState,
@@ -12,10 +13,10 @@ export async function switchGitWorkspace(
   const current = gitWorkspaceBranch(manifest);
   const target = manifest.branches.find((branch) => branch.name === name);
   if (input.create ? target !== undefined : target === undefined) {
-    throw new Error(input.create ? 'This branch already exists.' : 'This branch no longer exists.');
+    throw new ReferencedError(input.create ? 'git.studio.branchExists' : 'git.studio.branchGone');
   }
   if (input.create && manifest.branches.length >= 64) {
-    throw new Error('Studio supports at most 64 branches.');
+    throw new ReferencedError('git.studio.branchLimit', { max: 64 });
   }
   const run = gitWorkspaceRun(git);
   const tree = await snapshotGitWorkspace(git, current.head);

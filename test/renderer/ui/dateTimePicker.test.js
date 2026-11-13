@@ -97,9 +97,9 @@ test('values show as the picker writes them, and unknown text shows as it is', (
 });
 
 test('a chosen day is named in words, and only a real day is', () => {
-  assert.equal(picker.longDay('2026-08-14'), 'Friday, August 14, 2026');
-  assert.equal(picker.longDay('2028-02-29'), 'Tuesday, February 29, 2028');
-  assert.throws(() => picker.longDay('2026-02-30'), /Only a real day is named/);
+  assert.equal(picker.longDay('2026-08-14', 'en'), 'Friday, August 14, 2026');
+  assert.equal(picker.longDay('2028-02-29', 'en'), 'Tuesday, February 29, 2028');
+  assert.throws(() => picker.longDay('2026-02-30', 'en'), /Only a real day is named/);
 });
 
 test('typed text becomes a value only when it names a real day and time', () => {

@@ -7,6 +7,7 @@ import { publishGit, publishObject, type PublishGit } from './publishGit';
 import { publishTreeFiles } from './publishSource';
 import { publishDisk } from './publishInventory';
 import { publishFailure } from './publishFailure';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 /** Git writes its download to disk; neither the Worker nor Node buffers a repository archive. */
 export async function restorePublishRepository(root: string, input: unknown): Promise<Result<string>> {
@@ -15,7 +16,7 @@ export async function restorePublishRepository(root: string, input: unknown): Pr
     return connection;
   }
   if (typeof input !== 'object' || input === null || !('sha' in input) || typeof input.sha !== 'string') {
-    return err({ code: 'baseline', message: 'Missing repository baseline.' });
+    return err({ code: 'baseline', ...described('publish.studio.error.baselineMissing') });
   }
   const baseline = publishObject(input.sha);
   if (!baseline.ok) {
@@ -51,7 +52,7 @@ async function restorePublishCheckout(git: PublishGit, repository: string, basel
     return files;
   }
   if (files.value.some((file) => isStudioLocalPath(file.path.toLowerCase()))) {
-    return err({ code: 'path', message: 'Repository cannot contain Studio runtime state.' });
+    return err({ code: 'path', ...described('publish.studio.error.runtimeState') });
   }
   const bytes = files.value.reduce((total, file) => total + file.size, 0);
   const disk = await publishDisk(git.root, bytes);

@@ -1,5 +1,7 @@
 import { git, run } from '../lib/nodeTools';
 import type { PublishConfig } from '../../shared/properties/publishConfig';
+import { described } from '../../shared/properties/i18n/messageRef';
+import { DescribedError } from '../../shared/properties/describedError';
 
 /** URL-based pushes need an explicit tracking update so availability sees the confirmed commit. */
 export async function recordPublishedGitHub(root: string, branch: string, commit: string): Promise<void> {
@@ -33,10 +35,10 @@ export async function publishingGitEnvironment(root: string, config: PublishConf
     const result = await run('gh', ['auth', 'token', '--hostname', 'github.com', '--user', config.githubAccount], root, { env: environment });
     token = result.stdout.trim();
   } catch {
-    throw new Error(`Sign in once with gh auth login for ${config.githubAccount}.`);
+    throw new DescribedError(described('publish.github.signInOnce', { account: config.githubAccount }));
   }
   if (!/^[\w-]{10,512}$/.test(token)) {
-    throw new Error('GitHub CLI returned an invalid credential.');
+    throw new DescribedError(described('publish.github.invalidCredential'));
   }
   // The token lives only in the child environment, never in argv or repository config.
   return {
@@ -58,7 +60,7 @@ export async function publishingGitRemote(root: string, config: PublishConfig): 
   const remote = (await git(root, ['config', '--get', 'remote.origin.url'])).stdout.trim();
   const match = /^(?:https:\/\/github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(remote);
   if (!match?.[1]) {
-    throw new Error('Connect a github.com repository from the branch menu before publishing.');
+    throw new DescribedError(described('publish.github.connectRepository'));
   }
   // HTTPS lets a pinned account override an unrelated SSH identity without rewriting origin.
   return config.githubAccount ? `https://github.com/${match[1]}.git` : remote;

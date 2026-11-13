@@ -17,6 +17,7 @@ import { hasDependencies } from '../project/projectFiles';
 import { serverAlive } from '../preview/devServerChecks';
 import type { DevServers } from './devServers';
 import type { MainHost } from './mainHost';
+import { translateMain } from '../lib/mainLocale';
 
 export interface ThumbnailHost {
   readonly devServers: Pick<DevServers, 'current'>;
@@ -98,7 +99,7 @@ export class Thumbnails {
       }
     }
     if (!hasDependencies(projectPath)) {
-      return { ok: false as const, error: 'This project has no dependencies installed yet.' };
+      return { ok: false as const, error: translateMain('error.thumbnails.noDependencies') };
     }
     return withTemporaryServer(projectPath, signal, (url) => thumbs.capture(userData, projectPath, url + '/'));
   }
@@ -166,7 +167,7 @@ async function withTemporaryServer(projectPath: string, signal: AbortSignal, cap
     if (state === 'down') {
       return {
         ok: false as const,
-        error: cleanDevLog(log) || 'the dev server did not start in time',
+        error: cleanDevLog(log) || translateMain('error.thumbnails.devServerSlow'),
       };
     }
     return await capture(url);

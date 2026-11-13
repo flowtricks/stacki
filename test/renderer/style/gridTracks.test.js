@@ -207,8 +207,8 @@ const check = (what, condition, detail) => {
     // is written, not a one-time conversion.
     written.length = 0;
     await show('repeat(2, minmax(0, 1fr))');
-    check('the settings can add a column', !!button('Add a Columns'), 'no add button');
-    await press('Add a Columns');
+    check('the settings can add a column', !!button('Add a column'), 'no add button');
+    await press('Add a column');
     // The new track is another of what is already there, not the generic
     // default — one that differed by a character would break the repeat().
     check(
@@ -219,7 +219,7 @@ const check = (what, condition, detail) => {
 
     written.length = 0;
     await show('minmax(0, 1fr) minmax(0, 1fr)');
-    await press('Add a Columns');
+    await press('Add a column');
     check(
       'and with the switch off the same edit writes them out',
       JSON.stringify(written[0]) === '["grid-template-columns","minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr)",false]',
@@ -231,8 +231,8 @@ const check = (what, condition, detail) => {
     written.length = 0;
     await show('');
     check('a grid with no tracks starts with it on', sw()?.checked === true, 'a new grid would be written out');
-    await press('Add a Columns');
-    await press('Add a Columns');
+    await press('Add a column');
+    await press('Add a column');
     check(
       'so adding two writes a repeat',
       JSON.stringify(written[1]) === '["grid-template-columns","repeat(2, minmax(0px, 1fr))",false]',
@@ -273,7 +273,7 @@ const check = (what, condition, detail) => {
     );
     check('holding what the property holds', field()?.value === 'repeat(2, minmax(0, 1fr))', field()?.value);
     check('the repeat switch is not offered while it is open', sw()?.disabled === true);
-    check('nor is adding a track', !button('Add a Columns'), 'the + is still there');
+    check('nor is adding a track', !button('Add a column'), 'the + is still there');
 
     // Typed the way React hears it: through the value setter it patches, and
     // leaving the field is a focusout (blur does not bubble).

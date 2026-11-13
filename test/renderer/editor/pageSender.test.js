@@ -312,7 +312,8 @@ test('a failed request preserves undo for earlier writes in the same gesture', a
   });
   assert.ok(undone.ok);
   assert.equal(disk.text, PAGE, 'undo restores the bytes before the partial save');
-  assert.deepEqual(box.notices, ['Stacki couldn’t apply this edit. ' + 'Stacki encountered an editor error while applying the change.']);
+  // The notice is the refusal's reason; the app words it ('shell.rejection.couldntApply' with REJECTION_KEYS) in the person's language.
+  assert.deepEqual(box.notices, ['unsupported-operation']);
 });
 
 test('refused over changed bytes: the conflict notice with the reason', async () => {

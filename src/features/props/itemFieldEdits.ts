@@ -50,6 +50,7 @@ export function fieldAtPath(fields: readonly ItemFieldDeclaration[], path: Field
 /** `field`, then `field2`: a name no sibling has. */
 export function freeFieldName(siblings: readonly ItemFieldDeclaration[]): string {
   for (let suffix = 1; suffix <= ITEM_FIELD_LIMITS.fieldsPerLevelMax + 1; suffix++) {
+    // i18n-ignore: a starting identifier written into the user's code, like any name they type.
     const name = suffix === 1 ? 'field' : `field${suffix}`;
     if (!siblings.some((field) => field.name === name)) {
       return name;

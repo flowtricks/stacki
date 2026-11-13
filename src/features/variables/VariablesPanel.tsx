@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PanelReadStatus } from '../../ui/PanelReadStatus';
 import { usePanelData } from '../../lib/usePanelData';
 import { variableCache } from './variableCache';
@@ -26,6 +27,7 @@ export default function VariablesPanel(props: VariablesPanelProps) {
 }
 
 function VariableFilesPanel(props: VariablesPanelProps) {
+  const translate = useTranslate();
   const { selected, onSelect, project, place } = props;
   const { state, refresh, files } = useVariableFiles(project.path, place);
   // The first frame opens the file the selection (or the default one) is in: opening
@@ -53,7 +55,7 @@ function VariableFilesPanel(props: VariablesPanelProps) {
           {open && (
             <button
               className="ghost"
-              title="All files"
+              title={translate('variables.panel.allFiles')}
               onClick={() => {
                 setOpenFile(undefined);
                 onSelect(undefined);
@@ -62,7 +64,7 @@ function VariableFilesPanel(props: VariablesPanelProps) {
               <ChevronLeftIcon size={14} />
             </button>
           )}
-          <h2 title={open ? open.rel : undefined}>{open ? open.name : 'Variables'}</h2>
+          <h2 title={open ? open.rel : undefined}>{open ? open.name : translate('variables.title')}</h2>
         </div>
       </div>
       <div className="panel-body">
@@ -71,10 +73,8 @@ function VariableFilesPanel(props: VariablesPanelProps) {
           open.groups.map((group, index) => (
             <VariableGroupRow key={`${group.label}-${index}`} group={group} file={open.rel} index={index} selected={selected} onSelect={onSelect} />
           ))}
-        <PanelReadStatus state={state} label="CSS variables" retry={refresh} />
-        {state.kind === 'ready' && files.length === 0 && (
-          <div className="props-empty">No CSS custom properties found in this project&rsquo;s stylesheets or &lt;style&gt; tags.</div>
-        )}
+        <PanelReadStatus state={state} label={translate('variables.panel.cssVariables')} retry={refresh} />
+        {state.kind === 'ready' && files.length === 0 && <div className="props-empty">{translate('variables.panel.empty', { tag: '<style>' })}</div>}
       </div>
     </div>
   );
@@ -126,6 +126,7 @@ interface FileRowProps {
   readonly onSelect: VariablesPanelProps['onSelect'];
 }
 function VariableFileRow({ file, selected, onOpen, onSelect }: FileRowProps) {
+  const translate = useTranslate();
   return (
     <div
       className={`cms-collection ${file.error ? 'broken' : ''} ${onlyGroup(file) && selected?.file === file.rel ? 'on' : ''}`}
@@ -143,7 +144,7 @@ function VariableFileRow({ file, selected, onOpen, onSelect }: FileRowProps) {
       <FileIcon size={14} />
       <span className="cms-collection-name">{file.name}</span>
       {onlyGroup(file) && <VariableScopeBadge scope={file.groups[0]?.scope} />}
-      <span className="cms-collection-count">{file.error ? '' : file.count === 1 ? '1 variable' : `${file.count} variables`}</span>
+      <span className="cms-collection-count">{file.error ? '' : translate('variables.count', { count: file.count ?? 0 })}</span>
       {!onlyGroup(file) && (
         <span className="cms-collection-chevron">
           <ChevronRightIcon size={10} />
@@ -160,6 +161,7 @@ interface GroupRowProps {
   readonly onSelect: VariablesPanelProps['onSelect'];
 }
 function VariableGroupRow({ group, file, index, selected, onSelect }: GroupRowProps) {
+  const translate = useTranslate();
   return (
     <div
       className={`cms-collection ${selected && selected.file === file && selected.index === index ? 'on' : ''}`}
@@ -170,7 +172,7 @@ function VariableGroupRow({ group, file, index, selected, onSelect }: GroupRowPr
       <span className="cms-collection-name">{group.label}</span>
       <VariableScopeBadge scope={group.scope} />
       <span className="cms-collection-count">
-        {group.kind === 'modes' ? `${group.columns.length} modes` : countOf(group) === 1 ? '1 variable' : `${countOf(group)} variables`}
+        {group.kind === 'modes' ? translate('variables.modes', { count: group.columns.length }) : translate('variables.count', { count: countOf(group) })}
       </span>
       <span className="cms-collection-chevron">
         <ChevronRightIcon size={10} />

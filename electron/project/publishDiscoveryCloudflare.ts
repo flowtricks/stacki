@@ -74,6 +74,7 @@ export function cloudflareHeaders(credentials: Record<string, unknown>): Readonl
   if (credentials['type'] !== 'oauth' && credentials['type'] !== 'api_token') {
     throw new Error('Unsupported Cloudflare authentication. Sign in with wrangler login.');
   }
+  // i18n-ignore: HTTP header value or request path, protocol text.
   return { Authorization: `Bearer ${credential(credentials['token'])}` };
 }
 function credential(input: unknown): string {

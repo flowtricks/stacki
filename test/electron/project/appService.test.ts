@@ -258,7 +258,12 @@ test('an app that needs a newer Stacki is refused on upload, install and update;
   release.current = { tag: 'v1.1.0', bytes: second, digest: `sha256:${sha256(second)}` };
   const checked = await service.checkUpdates(root, true);
   assert.deepEqual(checked.ok ? checked.value : checked.message, [
-    { kind: 'failed', id: 'heat-map', message: 'Heat map 1.1.0: Needs Stacki 1.1.0 or later. Update Stacki.' },
+    {
+      kind: 'failed',
+      id: 'heat-map',
+      message: 'Heat map 1.1.0: Needs Stacki 1.1.0 or later. Update Stacki.',
+      messageRef: { key: 'apps.error.versionTooOld', params: { name: 'Heat map', version: '1.1.0', minimum: '1.1.0' } },
+    },
   ]);
   assert.equal(readAppsLock(root).apps[0]?.version, '1.0.0');
   assert.equal(readAppsLock(root).apps[0]?.update, undefined);

@@ -6,6 +6,7 @@ import type { PublishGit } from '../publishing/publishGit';
 import { gitWorkspaceRun } from './gitWorkspaceObjects';
 import { gitWorkspaceLimits, parseGitWorkspaceManifest, type GitWorkspaceManifest } from './gitWorkspaceContract';
 import { saveGitWorkspace } from './gitWorkspaceStorage';
+import { ReferencedError } from '../../shared/referencedError';
 
 /** Immutable objects upload first; one conditional manifest write publishes the checkpoint. */
 export async function checkpointGitWorkspace(
@@ -17,7 +18,7 @@ export async function checkpointGitWorkspace(
   await replaceGitWorkspaceReferences(git, next);
   const count = Number(await run(['rev-list', '--count', '--branches', '--glob=refs/studio/*', '--not', '--remotes=origin']));
   if (!Number.isSafeInteger(count) || count < 0 || count > 20_000) {
-    throw new Error('Too many unpublished Git commits. Push your changes first.');
+    throw new ReferencedError('git.studio.tooManyCommits');
   }
   const bundle = path.join(git.directory, 'checkpoint.bundle');
   let digest: string | undefined;
@@ -68,7 +69,7 @@ async function gitCheckpointDigest(file: string): Promise<string> {
   const handle = await open(file, 'r');
   try {
     if ((await handle.stat()).size > gitWorkspaceLimits.bundleBytes) {
-      throw new Error('Unpublished Git work exceeds 96 MiB. Push your changes first.');
+      throw new ReferencedError('git.studio.unpublishedTooLarge', { size: '96 MiB' });
     }
     return createHash('sha256')
       .update(await handle.readFile())

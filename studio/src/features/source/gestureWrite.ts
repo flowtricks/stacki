@@ -14,10 +14,12 @@
 // A batch is all or nothing, as page:editBatch is: a refusal leaves the page as
 // it was and says why. Studio's document is shared text, so the result is the
 // page's new text, which the caller hands to the shared document.
+import { studioTranslate } from '../../shared/studioTranslate';
+import { REJECTION_KEYS } from '../../../vendor/stacki/src/app/rejectionMessages';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 import { toByteString } from '../../../vendor/stacki/shared/core/span';
 import { EDIT_BATCH_EDITS_MAX, type Edit } from '../../../vendor/stacki/shared/engine/editRequest';
-import { describeRejection, type RejectionReason } from '../../../vendor/stacki/shared/engine/intent';
+import type { RejectionReason } from '../../../vendor/stacki/shared/engine/intent';
 import { parsePageResult } from '../../../vendor/stacki/shared/page/pageNode';
 import { parsePage } from '../../../vendor/stacki/electron/parse/astroParser';
 import { previewEdits } from '../../../vendor/stacki/electron/documents/editPreview';
@@ -93,5 +95,5 @@ function planned(source: string, edits: readonly Edit[]): Planned {
 
 /** What the panel says for a refused write: the planner's own reason, and where to go. */
 function refusal(reason: RejectionReason): string {
-  return `${describeRejection(reason)} Make this change in Code.`;
+  return studioTranslate('studio.source.refused', { reason: studioTranslate(REJECTION_KEYS[reason]) });
 }

@@ -1,5 +1,6 @@
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 
 // What a component may be called.
 //
@@ -38,25 +39,26 @@ const RESERVED = new Set(['Fragment', 'Astro', 'Component', 'Props', 'Slot']);
 /**
  * Why this name can't be used, or undefined when it can. `taken` is every name
  * already spoken for — components and layouts both, since the palette lists
- * them together and an import can only mean one of them.
+ * them together and an import can only mean one of them. The English text and
+ * the reference the renderer translates travel together.
  */
-export function componentNameError(input: unknown, taken: readonly string[] = []): string | undefined {
+export function componentNameProblem(input: unknown, taken: readonly string[] = []): Described | undefined {
   const raw = String(input ?? '').trim();
   if (!raw) {
-    return 'Give the component a name.';
+    return described('palette.name.empty');
   }
   const name = toComponentName(raw);
   if (!name) {
-    return 'Use letters or numbers for the name.';
+    return described('palette.name.noLetters');
   }
   if (/^[0-9]/.test(name)) {
-    return "A name can't start with a number.";
+    return described('palette.name.startsWithNumber');
   }
   if (!/^[A-Za-z][A-Za-z0-9]*$/.test(name)) {
-    return 'Use letters and numbers only.';
+    return described('palette.name.lettersOnly');
   }
   if (RESERVED.has(name)) {
-    return `${name} already means something in Astro.`;
+    return described('palette.name.reserved', { name });
   }
   // Case-insensitively: two files whose names differ only in case can't both
   // exist on a Mac, and two imports that differ only in case are a trap even
@@ -64,7 +66,12 @@ export function componentNameError(input: unknown, taken: readonly string[] = []
   assert(taken.length <= LIMITS.scanEntriesMax, 'Component list exceeds scan limit');
   const clash = taken.find((other) => String(other).toLowerCase() === name.toLowerCase());
   if (clash) {
-    return `There's already a component called ${clash}.`;
+    return described('palette.name.taken', { name: clash });
   }
   return undefined;
+}
+
+/** The English sentence of `componentNameProblem`: for tests and logs. */
+export function componentNameError(input: unknown, taken: readonly string[] = []): string | undefined {
+  return componentNameProblem(input, taken)?.message;
 }

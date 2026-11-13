@@ -1,5 +1,5 @@
 import { boolean, list, record, text } from '../core/boundary';
-import type { Result } from '../core/result';
+import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 import { parseGitHubRepository } from './githubRepository';
 
 export type RepositoryRequest =
@@ -22,8 +22,11 @@ export interface PublishingRepositories {
   readonly repositories: readonly string[];
   readonly mode: 'editable' | 'managed';
   readonly notice: string;
+  /** The translatable form of `notice` when Stacki wrote the sentence; absent from older producers, which show the English `notice`. */
+  readonly noticeRef?: MessageRef | undefined;
 }
-export type RepositoryResult = Result<PublishingRepositories, string>;
+export type RepositoryResult =
+  { readonly ok: true; readonly value: PublishingRepositories } | { readonly ok: false; readonly error: string; readonly errorRef?: MessageRef | undefined };
 export const REPOSITORIES_MAX = 500;
 
 export function parseRepositoryRequest(input: unknown): RepositoryRequest {
@@ -55,7 +58,9 @@ export function parseRepositoryRequest(input: unknown): RepositoryRequest {
 export function parseRepositoryResult(input: unknown): RepositoryResult {
   const result = record(input);
   if (!boolean(result['ok'])) {
-    return { ok: false, error: message(result['error']) };
+    const errorRef = parseOptionalMessageRef(result['errorRef']);
+    const error = message(result['error']);
+    return errorRef === undefined ? { ok: false, error } : { ok: false, error, errorRef };
   }
   const value = record(result['value']);
   const connected = text(value['connected']);
@@ -67,6 +72,7 @@ export function parseRepositoryResult(input: unknown): RepositoryResult {
   if (mode !== 'editable' && mode !== 'managed') {
     throw new Error('Invalid repository connection mode.');
   }
+  const noticeRef = parseOptionalMessageRef(value['noticeRef']);
   return {
     ok: true,
     value: {
@@ -75,6 +81,7 @@ export function parseRepositoryResult(input: unknown): RepositoryResult {
       repositories,
       mode,
       notice: message(value['notice']),
+      ...(noticeRef === undefined ? {} : { noticeRef }),
     },
   };
 }

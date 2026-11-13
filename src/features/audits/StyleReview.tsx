@@ -9,6 +9,8 @@
 // are ever swapped: selectors and scoping stay exactly as written.
 import { useState } from 'react';
 import { assert } from '../../../shared/core/assert';
+import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { AuditFinding, AuditFix } from '../../../shared/page/auditFindings';
 import { TOKEN_GROUPS } from '../../../shared/page/auditTokens';
 import { CodeBlock, CodeInline } from '../../ui/CodeBlock';
@@ -23,6 +25,16 @@ import { FileKindIcon, type Actions, type AuditsPanelProps } from './AuditsPanel
 /** Rows the window draws before it asks to narrow the filters. */
 const ROWS_MAX = 600;
 type KindFilter = 'all' | (typeof TOKEN_GROUPS)[number] | 'style-block';
+
+/** The kinds of raw value as the Kind menu names them. */
+export const GROUP_LABEL_KEYS: Readonly<Record<(typeof TOKEN_GROUPS)[number], MessageKey>> = {
+  colour: 'auditsUi.group.colour',
+  spacing: 'auditsUi.group.spacing',
+  radius: 'auditsUi.group.radius',
+  type: 'auditsUi.group.type',
+  size: 'auditsUi.group.size',
+  unit: 'auditsUi.group.unit',
+};
 
 export interface ReviewRow {
   readonly key: string;
@@ -62,6 +74,7 @@ export function StyleReview(props: {
   readonly panel: AuditsPanelProps;
   readonly onClose: () => void;
 }) {
+  const translate = useTranslate();
   const [mode, setMode] = useState<WindowMode>('floating');
   const [kind, setKind] = useState<KindFilter>('all');
   const [file, setFile] = useState('all');
@@ -86,18 +99,18 @@ export function StyleReview(props: {
     <DockableWindow
       mode={mode}
       onModeChange={(next) => setMode(next === 'docked' ? 'floating' : next)}
-      label="Review raw values"
+      label={translate('auditsUi.review.window')}
       className="audits-review"
       minimumSize={{ width: 480, height: 320 }}
       initialSize={{ width: 760, height: 560 }}
       storageKey="stacki.window.auditsReview"
       header={
         <span className="audits-review-title">
-          Raw values <span className="audits-count">{shown.length}</span>
+          {translate('auditsUi.review.title')} <span className="audits-count">{shown.length}</span>
         </span>
       }
       trailing={
-        <button className="ghost" aria-label="Close" title="Close" onClick={props.onClose}>
+        <button className="ghost" aria-label={translate('ui.close')} title={translate('ui.close')} onClick={props.onClose}>
           <CloseIcon size={14} />
         </button>
       }
@@ -105,30 +118,33 @@ export function StyleReview(props: {
       <div className="audits-review-filters">
         <Dropdown<KindFilter>
           className="audits-review-filter"
-          ariaLabel="Kind of value"
+          ariaLabel={translate('auditsUi.review.kindOfValue')}
           menuWidthMin={160}
           value={kind}
           options={[
-            { value: 'all', label: 'Kind' },
-            ...TOKEN_GROUPS.map((group) => ({ value: group, label: group[0]?.toUpperCase() + group.slice(1) })),
-            { value: 'style-block', label: 'Style blocks' },
+            { value: 'all', label: translate('auditsUi.review.kind') },
+            ...TOKEN_GROUPS.map((group) => ({ value: group, label: translate(GROUP_LABEL_KEYS[group]) })),
+            { value: 'style-block', label: translate('auditsUi.review.styleBlocks') },
           ]}
           onChange={setKind}
         />
         <Dropdown<string>
           className="audits-review-filter"
-          ariaLabel="File"
+          ariaLabel={translate('auditsUi.review.file')}
           menuWidthMin={240}
           value={file}
-          options={[{ value: 'all', label: 'File' }, ...files.map((name) => ({ value: name, label: name.split('/').pop() ?? name, description: name }))]}
+          options={[
+            { value: 'all', label: translate('auditsUi.review.file') },
+            ...files.map((name) => ({ value: name, label: name.split('/').pop() ?? name, description: name })),
+          ]}
           onChange={setFile}
         />
-        <Pill label="Has a fix" on={fixable} onToggle={() => setFixable((value) => !value)} />
-        <Pill label="Group identical" on={collapse} onToggle={() => setCollapse((value) => !value)} />
+        <Pill label={translate('auditsUi.review.hasFix')} on={fixable} onToggle={() => setFixable((value) => !value)} />
+        <Pill label={translate('auditsUi.review.groupIdentical')} on={collapse} onToggle={() => setCollapse((value) => !value)} />
         <span className="audits-spacer" />
         {exact.length > 0 && (
           <button className="audits-apply" onClick={() => setConfirming(true)}>
-            Apply {exact.length} exact {exact.length === 1 ? 'fix' : 'fixes'}
+            {translate('auditsUi.review.applyExact', { count: exact.length })}
           </button>
         )}
       </div>
@@ -141,28 +157,28 @@ export function StyleReview(props: {
               .join('\n')}
             language="css"
             className="audits-code"
-            label="Changes"
+            label={translate('auditsUi.review.changes')}
           />
           <div className="audits-actions">
             <button
               className="audits-link"
               disabled={props.actions.busy}
-              onClick={() => void props.actions.fix(exact, 'Use variables').then(() => setConfirming(false))}
+              onClick={() => void props.actions.fix(exact, translate('auditsUi.review.useVariables')).then(() => setConfirming(false))}
             >
-              Apply {exact.length}
+              {translate('auditsUi.review.applyCount', { count: exact.length })}
             </button>
             <button className="audits-link muted" onClick={() => setConfirming(false)}>
-              Cancel
+              {translate('ui.cancel')}
             </button>
           </div>
         </div>
       )}
-      <div className="audits-review-body" role="table" aria-label="Raw values">
+      <div className="audits-review-body" role="table" aria-label={translate('auditsUi.review.title')}>
         <div className="audits-review-row audits-review-columns" role="row">
-          <span role="columnheader">Selector</span>
-          <span role="columnheader">Declaration</span>
-          <span role="columnheader">Suggestion</span>
-          <span role="columnheader">Line</span>
+          <span role="columnheader">{translate('auditsUi.review.selector')}</span>
+          <span role="columnheader">{translate('auditsUi.review.declaration')}</span>
+          <span role="columnheader">{translate('auditsUi.review.suggestion')}</span>
+          <span role="columnheader">{translate('auditsUi.review.line')}</span>
           <span />
         </div>
         {grouped.map(([name, list]) => (
@@ -184,8 +200,8 @@ export function StyleReview(props: {
               })}
           </section>
         ))}
-        {drawn > ROWS_MAX && <p className="audits-note">Showing the first {ROWS_MAX}; narrow the filters to see the rest.</p>}
-        {shown.length === 0 && <p className="audits-note">Nothing matches these filters.</p>}
+        {drawn > ROWS_MAX && <p className="audits-note">{translate('auditsUi.review.rowsMax', { count: ROWS_MAX })}</p>}
+        {shown.length === 0 && <p className="audits-note">{translate('auditsUi.review.noMatch')}</p>}
       </div>
     </DockableWindow>
   );
@@ -252,6 +268,7 @@ function ReviewLine(props: {
   readonly panel: AuditsPanelProps;
   readonly nested?: boolean;
 }) {
+  const translate = useTranslate();
   const { finding, actions } = props;
   const css = finding.css;
   const go = (): void => props.panel.onReveal(finding.file, finding.element?.path, undefined);
@@ -278,7 +295,7 @@ function ReviewLine(props: {
           </>
         )}
         {props.uses !== undefined && (
-          <button className="audits-uses" title="Show each use" onClick={props.onExpand}>
+          <button className="audits-uses" title={translate('auditsUi.review.showUses')} onClick={props.onExpand}>
             {props.uses}×
           </button>
         )}
@@ -286,11 +303,11 @@ function ReviewLine(props: {
       <span className="audits-review-cell audits-review-fix">
         {finding.choices !== undefined && finding.fix !== undefined ? (
           <Dropdown<string>
-            ariaLabel="Variable to use"
+            ariaLabel={translate('auditsUi.variableToUse')}
             className="audits-review-choice"
             menuWidthMin={220}
             value=""
-            placeholder="Use variable"
+            placeholder={translate('auditsUi.review.useVariable')}
             options={finding.choices.map((choice) => ({ value: choice.label, label: choice.label.replace(/^Use /, '') }))}
             onChange={(label) => {
               const chosen = finding.choices?.find((choice) => choice.label === label);
@@ -314,28 +331,36 @@ function ReviewLine(props: {
       </span>
       <span className="audits-review-cell audits-review-line">{css?.line === undefined ? '' : css.line}</span>
       <span className="audits-review-cell audits-review-actions">
-        <button className="ghost audits-icon-button" aria-label="Go to the rule" title="Go to the rule" onClick={go}>
+        <button
+          className="ghost audits-icon-button"
+          aria-label={translate('auditsUi.review.goToRule')}
+          title={translate('auditsUi.review.goToRule')}
+          onClick={go}
+        >
           <CrosshairIcon size={13} />
         </button>
         <MoreMenu
           className="audits-icon-button"
-          title="More"
+          title={translate('auditsUi.more')}
           width={200}
           items={[
-            { label: 'Go to the rule', onSelect: go },
+            { label: translate('auditsUi.review.goToRule'), onSelect: go },
             {
-              label: props.all.length > 1 ? `Ignore these ${props.all.length}` : 'Ignore this value',
+              label: props.all.length > 1 ? translate('auditsUi.review.ignoreThese', { count: props.all.length }) : translate('auditsUi.review.ignoreThis'),
               onSelect: () => void actions.ignoreAll(props.all, `Raw value kept: ${css?.token ?? finding.detail}`),
             },
             css !== undefined && {
-              label: `Ignore ${css.property} in this file`,
+              label: translate('auditsUi.review.ignoreProperty', { property: css.property }),
               onSelect: () =>
                 void actions.ignoreAll(
                   sameFile(props.reviewed, finding).filter((each) => each.css?.property === css.property),
                   `${css.property} kept as written`,
                 ),
             },
-            { label: 'Ignore this file', onSelect: () => void actions.ignoreAll(sameFile(props.reviewed, finding), 'Raw values kept in this file') },
+            {
+              label: translate('auditsUi.review.ignoreFile'),
+              onSelect: () => void actions.ignoreAll(sameFile(props.reviewed, finding), 'Raw values kept in this file'),
+            },
           ]}
         />
       </span>
@@ -343,6 +368,7 @@ function ReviewLine(props: {
   );
 }
 
+// Ignore reasons are written to the tracked .stacki/audits.json for the whole team, so they stay English (i18n-ignore: stored project data).
 // Every reviewed finding of the same rule in the same file.
 function sameFile(reviewed: readonly AuditFinding[], finding: AuditFinding): readonly AuditFinding[] {
   return reviewed.filter((each) => each.check === finding.check && each.file === finding.file);

@@ -843,6 +843,13 @@ A failed disk write applies only to the current session and is shown in the popu
 Disabling usage counts still aborts in-flight counting. Studio setup is available
 in the same popup when a project is open.
 
+## Interface language in the main process
+
+`locale:set` takes `{ preference }` (`"system"` or a shipped locale; anything else is refused) and returns `{ saved }`. The renderer sends its stored
+choice at startup and on every change; main keeps it as `localePreference` in `settings.json` (absent means `"system"`), rebuilds the application
+menu, and translates native dialogs with the same catalogs (`menu`, `dialog`, `error` namespaces). A failed disk write applies for the session only.
+Failure results may carry an optional `messageRef` (`{ key, params? }`, `parseMessageRef`) next to their English `message`; readers that do not know the key show the message.
+
 ## Shared project editor metadata
 
 `.stacki/components.json` (version 1) stores insertion recipes keyed by project-relative
@@ -1401,6 +1408,26 @@ in). Addresses are https, or http on localhost only, with no login or fragment. 
 of printable ASCII, at most 4,096 characters; it crosses the boundary once, in
 `cmsConnections:save`, and no reply ever carries it. At most 16 connections per project.
 
+A Payload connection signs in with an API key (`Authorization: <auth collection> API-Key <key>`) or
+with an email and password (`auth: 'password'`: the secret is then the password, any characters on one
+line). It may name collection slugs (`collections`, at most 50) for servers that hide their access
+list. A connection saved before logins existed has neither field and reads as an API-key connection.
+Saving checks the account against the server first (`/api/<collection>/me`, which is HTTP 200 with
+`{"user":null}` for a credential Payload does not accept). A login's token lives in main-process
+memory only, never on disk, never in a reply or a log; a failed login is remembered for a minute (ten
+for a locked account) so a wrong password is sent once, not in a loop. `cmsConnections:check` is
+"Test connection" for a saved connection and "Detect" for the form's draft (`{ action: 'test', id }`
+or `{ action: 'detect', draft }`); it returns the account, its collections (with whether each keeps
+drafts and whether it takes uploads), the locales and whether GraphQL answered, never the secret.
+Failures carry a `messageRef` the interface translates beside the English `message`.
+
+Payload content in the CMS panel (`electron/content/payloadService.ts`): a document is named
+`<collection>.<id>`; lists are read 100 at a time and stop at 500; every write is
+`PATCH ?draft=true` (without it Payload publishes); a collection without drafts is edited live and
+its documents say `appliesLive`; a localized top-level field is one entry per locale; rich text is
+editable only while it is plain paragraphs. docs/cms-testing.md lists what was proved against a real
+server.
+
 Desktop keeps connections in `userData/cms-connections.json`, keyed by the project's real path,
 never in `.stacki/` (which is committed). Keys are encrypted with Electron `safeStorage`; where it
 is unavailable nothing is saved, and a key that cannot be decrypted reads as absent. The file is
@@ -1541,7 +1568,7 @@ project-relative with no `..`, absolute, backslash or empty segments). New bound
 
 **Channels.** `ai:agents`, `ai:installAgent`, `ai:trust`, `ai:chats`, `ai:chatCreate`,
 `ai:chatUpdate` (rename, pin), `ai:chatDelete`, `ai:chatRead`, `ai:prompt`, `ai:cancel`,
-`ai:permission`, `ai:setOption` (an agent's session setting: model, mode, effort), `ai:review` (keep,
+`ai:permission`, `ai:setOption` (an agent's session setting: model, mode, effort), `ai:remember` (the composer settings last used: one choice, or a reset for one agent; answers the whole set), `ai:review` (keep,
 undo or resolve one file's change), and, for chat management and the composer: `ai:steer`,
 `ai:compact`, `ai:chatFork`, `ai:chatMove`, `ai:sections`, `ai:diff`, `ai:mentions`. `ai:chats`,
 `ai:chatMove` and `ai:sections` answer the whole `ChatList { chats, sections }` (chats in display
@@ -1567,14 +1594,33 @@ roles with `panel:ai` and `code:edit`.
 shipped lockfile (its SHA-256 pinned), the entry's SHA-256 checked, then renamed into place; the
 digest is checked again at every start. `agentHost.ts` runs one adapter per agent per project as
 Electron-as-Node, with the person's shell environment minus Stacki's and any host agent session's
-variables; it starts on the first prompt, stops after `idleMsMax`, restarts after a crash with
-doubling delays at most `restartsMax` times, and stops on project close and quit. A chat is one ACP
+variables; it starts on the first prompt (or earlier, see "Starting early" below), stops after `idleMsMax`
+(30 minutes; `idleMsCrowded`, 5 minutes, while more than `processesComfortableMax` adapters are alive or free
+memory is under `memoryFreeRatioMin`; at `processesMax` the idle process used longest ago is evicted first),
+restarts after a crash with doubling delays at most `restartsMax` times, and stops on project close and quit. A chat is one ACP
 session: resumed (`session/resume`), else loaded (`session/load`, replay ignored), else started
 anew with a notice. Nothing starts before the person trusts the project (`ai:trust`, remembered in
-the chat index); each new session is put in the agent's asking mode (Claude `default`, Codex
-`read-only`). `acpConnection.ts` frames lines (at most `lineBytesMax`, past which the connection
+the chat index); a new session starts with the composer settings last used for its agent
+("Remembered settings" below), else the agent's own defaults (the person's own Claude `defaultMode`
+included); nothing forces the asking mode any more. `acpConnection.ts` frames lines (at most `lineBytesMax`, past which the connection
 closes) and bounds pending requests (`pendingRequestsMax`, each with a timeout).
 `permissionBroker.ts` holds requests until answered (bounded; a stopped turn answers `cancelled`).
+
+**Starting early** (`ai:prewarm`, `{ projectPath, agent, action: 'warm' | 'release' }`, reply `{ ok: true }`;
+`sessionPool.ts`, `shared/properties/ai/prewarmGate.ts`). The panel sends `warm` when it opens for an agent that
+is installed, signed in and allowed here, and when the composer takes focus; `release` when the panel closes or
+the agent changes. The renderer sends at most one `warm` per agent per `prewarmRepeatMs`; main debounces
+(`prewarmDebounceMs`, last request wins) and is single-flight. A start spawns the agent's process if needed and asks it
+for one empty session with the parameters a new chat uses (`cwd`, `mcpServers: []`): no chat record, no
+transcript event, no ledger snapshot, no model call. One session is parked app-wide (`WarmSlot`); a start for another
+agent or project replaces it (the old one is deleted), `release`, a sign-in change and the process leaving (idle
+expiry, crash, quit) discard it. The first prompt of a new chat adopts the parked session through `bindSession`, the
+same binding `session/new` gets, and then applies remembered and chat settings, so a setting changed meanwhile is
+applied before the prompt. A start is skipped (debug log, no error) when the app is in the background, the agent is
+not ready, the project is untrusted, the agent crashed, or the process limit would be exceeded; a start never evicts
+a process. The startup probe that learns an agent's settings parks its session in the same slot when free.
+The debug log carries `process: spawnMs initializeMs` and `startup: session=prewarmed|cold|resumed spawnMs
+initializeMs sessionNewMs firstTokenMs`: durations only.
 `eventPump.ts` batches events every `eventBatchMs`, joins streamed text, appends each chat's batch in
 one write and sends one push; above `flowHighWatermark` unacknowledged characters it stops reading
 every adapter until acks bring it under `flowLowWatermark` (the terminal's scheme).
@@ -1585,6 +1631,20 @@ turn and records a `user` event with `mode: 'steer'`; with no turn running the m
 prompt (`startedNewTurn`); an agent that did not advertise `_meta.steering.supported` answers
 `unsupported`, an adapter that refuses answers its failure (`agent-failed`), and in both cases nothing
 was sent, so the renderer queues the message. A plain `ai:prompt` while a turn runs stays `busy`.
+Change snapshots (a hidden git tree, never a commit in the project history): the app preference `aiTrackChanges` (Settings > Editor > AI, "Snapshot before & after each AI change"; `settings:get`
+and `settings:set`, default on, kept in `settings.json`) decides whether the change ledger snapshots the
+project (`git add --all` against a temporary index, `git write-tree`) before and after a turn. The agent host
+asks `trackChanges()` once when a turn begins and the ledger keeps the answer on that turn, so a toggle applies
+from the next turn and never splits one. Off, the turn takes no snapshot, reads no file for the ledger and
+keeps no entries; when the agent still announced an edit, delete or move, the turn records a
+`changes-untracked` event (`reason: 'off'`) and the transcript shows one line, "Snapshots are off", with
+a "Turn on" button. A snapshot that throws, or outlasts `AI_LIMITS.snapshotMsMax`, never blocks the turn: it
+runs without it and (when edits were announced and nothing was kept) records `reason: 'unavailable'`. Chats
+recorded while on keep their stored changes. Per turn, the main-process log gets one debug line with the mode
+and `snapshotBeforeMs` / `snapshotAfterMs` (durations only, no prompt text, no paths). The start-of-turn
+snapshot is not run beside the model call: the agent's own tools edit files without asking Stacki (auto-accept
+modes), so only finishing the snapshot first guarantees it sees the tree as the turn found it. Stacki Studio
+has no ledger and no such setting.
 Compaction: `ai:compact` sends `/compact` as an ordinary prompt in a turn of its own (no `user` event,
 no change ledger) for agents whose presentation says `canCompact` (Claude; Codex answers `unsupported`),
 only while idle and only for a chat that has a session (`invalid` otherwise). Both the
@@ -1604,8 +1664,8 @@ session or a failed fork starts a new session and says so in a notice (the copie
 Modes and settings: everything is `session/set_config_option`, except an agent that offers modes only as
 session modes (no `mode` config option): the host builds a `mode` option from them and sets it with
 `session/set_mode`. Choosing an unrestricted mode (`isDangerousMode`: Claude `bypassPermissions`, Codex
-`agent-full-access`) is confirmed by the renderer once per choice; the host does not enforce it, and
-every new chat still starts in the asking mode. Record: the last `usage` of a turn is written to the
+`agent-full-access`) is confirmed by the renderer once per choice; the host does not enforce it. A
+fork whose original was unrestricted still starts asking again. Record: the last `usage` of a turn is written to the
 chat's `context` when the turn ends (at once when it arrives outside a turn), `unread` is set when a
 turn ends other than cancelled or by the sign-in card (before the `turn-end` event is sent, so the
 renderer's clear comes later), and `text` and `tool` events carry `at` from the host's clock. Background
@@ -1642,6 +1702,22 @@ editor, and `resolve` writes the person's answer. Text files only; a binary file
 replaced whole), `chats/<id>.jsonl` (append-only, every line parsed on read, a torn or bad line
 skipped), `reviews/<id>.json` (pending reviews, settled entries keep no content). Bounded by
 `chatsMax`, `chatEventsMax`, `chatBytesMax`, `ledgerFilesMax`, `ledgerBytesMax`, `ledgerTurnsMax`.
+
+**Remembered settings** (`shared/properties/ai/rememberedSettings.ts`, `userData/ai/remembered-settings.json`,
+`{ version: 1, agents: { claude: [{option, value}], codex: [...] } }`, replaced whole). Whatever the composer's
+menus set (mode, model, effort, Fast mode, Ultracode, Codex's plan switch: every option id the agent offers, none
+hard-coded) is remembered per agent, last writer wins. Written by the person's own picks only: `ai:remember`
+(a pick before the chat has a session) and a successful `ai:setOption` (a pick in a live chat, in any chat); a
+mode the agent changes by itself is never remembered, so Bypass permissions comes back only because it was chosen
+(through its confirmation) and starts a new chat red from the first frame. Read back by `parseRememberedFile`:
+total, so a corrupt file is the defaults and a damaged entry loses only itself; each agent holds at most
+`configOptionsMax` entries of at most `idCharsMax` characters. `ai:agents` carries the set (`remembered`) beside
+the options, so the composer's first frame already shows it. At `session/new` the host sets each remembered option
+the session offers, in the agent's option order, only when it differs and the value is still offered (else dropped
+silently); an adapter refusing one does not stop the chat (one quiet `info` notice). A resumed, loaded or forked
+session keeps its own values. The cache of each agent's options keeps the agent's own defaults as current values
+(`OptionsSource`), so "Reset to defaults" (last row of the model menu, `ai:remember` `{ kind: 'reset' }`) shows
+true defaults. Studio's chat has a model chip only, with no mode or effort menus, so it has nothing to remember.
 
 **Chat management** (index version 2, `chatStore.ts`). The index adds `sections` (id `s<16 hex>`,
 name at most `sectionNameCharsMax` characters and unique ignoring case, `collapsed`, `rank`) and, per

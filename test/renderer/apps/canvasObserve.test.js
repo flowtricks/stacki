@@ -10,6 +10,7 @@ const load = require('../../helpers/rendererModule');
 
 const slot = load('src/ui/canvasClickSlot.ts');
 const { captureChipText, createCanvasCapture } = load('src/features/apps/canvasCapture.ts');
+const { ENGLISH_TRANSLATE } = load('shared/properties/i18n/englishTranslator.ts');
 const rpc = load('shared/properties/appsRpc.ts');
 
 const click = (path) => ({ path, occurrence: 0, x: 10, y: 20, box: undefined });
@@ -67,7 +68,7 @@ test('capture mode is unchanged, and observing is only for an app that asks', ()
 });
 
 test("the chip says the app's reason, or the mode's own neutral words", () => {
-  const chip = (mode, reason) => captureChipText({ appName: 'Analytics', mode, reason });
+  const chip = (mode, reason) => captureChipText({ appName: 'Analytics', mode, reason }, ENGLISH_TRANSLATE);
   assert.equal(chip('observe', 'Click an element to see its stats'), 'Analytics: Click an element to see its stats');
   assert.equal(chip('observe', undefined), 'Analytics is listening for clicks', 'observing offers no Escape');
   assert.equal(chip('capture', 'Click to pin a comment'), 'Analytics: Click to pin a comment · Esc to cancel');

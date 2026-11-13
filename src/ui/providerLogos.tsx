@@ -12,6 +12,7 @@ export interface ProviderMark {
   readonly path: string;
 }
 
+// i18n-ignore-file: provider titles are brand names, spelled the same in every language.
 export const PROVIDER_LOGOS = {
   airtable: {
     title: 'Airtable',

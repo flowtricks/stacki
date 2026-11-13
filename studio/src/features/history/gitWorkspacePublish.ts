@@ -6,6 +6,7 @@ import { overlayPublishSource } from '../github/nativePublish';
 import { gitWorkspaceBranch, gitRevision, type GitWorkspaceManifest } from './gitWorkspaceContract';
 import { gitWorkspaceContext, gitWorkspaceRun, gitWorkspaceCommit } from './gitWorkspaceObjects';
 import { checkpointGitWorkspace } from './gitWorkspaceCheckpoint';
+import { ReferencedError } from '../../shared/referencedError';
 
 /** Publish the actual local ancestry; an explicit commit must never be silently squashed. */
 export async function publishGitWorkspace(
@@ -41,10 +42,7 @@ export async function publishGitWorkspace(
   try {
     await checkpointGitWorkspace(workspace, manifest, next);
   } catch (error) {
-    throw new Error(
-      'Saved to GitHub, but the local Git checkpoint could not be updated. ' + 'Let Studio restart to recover its checkpoint before publishing again.',
-      { cause: error },
-    );
+    throw Object.assign(new ReferencedError('git.studio.publishCheckpoint'), { cause: error });
   }
   return { sha: head, url: `https://github.com/${manifest.repository}/commit/${head}` };
 }
@@ -52,7 +50,7 @@ export async function publishGitWorkspace(
 async function verifyPublishHead(run: ReturnType<typeof gitWorkspaceRun>, remote: string, branch: string, expected: string) {
   const witnessed = (await run(['ls-remote', '--heads', remote, 'refs/heads/' + branch])).split('\t')[0] ?? '';
   if (witnessed !== expected) {
-    throw new Error('GitHub changed. Pull from GitHub before publishing.');
+    throw new ReferencedError('git.studio.githubChanged');
   }
 }
 
@@ -63,6 +61,6 @@ async function verifyPublishAncestry(git: PublishSource['git'], remote: string, 
   await gitWorkspaceRun(git)(['fetch', '--quiet', '--depth=301', '--filter=blob:none', '--no-tags', remote, expected]);
   const ancestor = await publishGit(git, ['merge-base', '--is-ancestor', expected, head]);
   if (!ancestor.ok) {
-    throw new Error('Pull from GitHub before publishing; the remote has changes this branch lacks.');
+    throw new ReferencedError('git.studio.publishBehind');
   }
 }

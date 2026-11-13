@@ -17,11 +17,13 @@
 // itself while an advanced setting is required and empty, because a field the
 // app cannot start without must never be hidden. The "Set up" prompt lists every
 // setting, advanced or not: it is shown only while something is missing.
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { AppSummary } from '../../../shared/properties/apps';
 import { missingRequiredSettings, type AppSettingDeclaration, type AppSettingValues } from '../../../shared/properties/appSettings';
 import { readAppSettings, writeAppSettings } from '../../ipc/appPublishBridge';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { ChevronRightIcon, HideIcon, PreviewIcon } from '../../ui/Icons';
 import { AppTile } from './AppTile';
 import { emitToApp } from './appsRuntime';
@@ -29,7 +31,9 @@ import { AppDetailsRow, AppDetailsSection } from './AppDetailsLayout';
 import './appSettings.css';
 
 type SettingsLoad =
-  { readonly kind: 'loading' } | { readonly kind: 'failed'; readonly message: string } | { readonly kind: 'ready'; readonly values: AppSettingValues };
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined }
+  | { readonly kind: 'ready'; readonly values: AppSettingValues };
 
 /** One app's saved settings, read again when `reload` is called. */
 export function useAppSettings(projectPath: string, app: AppSummary): { readonly load: SettingsLoad; readonly reload: () => void } {
@@ -43,7 +47,8 @@ export function useAppSettings(projectPath: string, app: AppSummary): { readonly
     }
     let active = true;
     void readAppSettings(projectPath, app.manifest.id).then(
-      (answer) => active && setLoad(answer.ok ? { kind: 'ready', values: answer.value } : { kind: 'failed', message: answer.message }),
+      (answer) =>
+        active && setLoad(answer.ok ? { kind: 'ready', values: answer.value } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef }),
       (error: unknown) => active && setLoad({ kind: 'failed', message: String(error) }),
     );
     return () => {
@@ -55,12 +60,13 @@ export function useAppSettings(projectPath: string, app: AppSummary): { readonly
 
 /** The details popup's "App settings" section; nothing for an app that declares none. */
 export function AppSettingsSection({ projectPath, app }: { readonly projectPath: string; readonly app: AppSummary }) {
+  const translate = useTranslate();
   const { load, reload } = useAppSettings(projectPath, app);
   if (app.manifest.settings.length === 0) {
     return undefined;
   }
   return (
-    <AppDetailsSection title="App settings" hint="Each person fills these in for themselves. Secret values are kept outside the project.">
+    <AppDetailsSection title={translate('apps.settings.title')} hint={translate('apps.settings.hint')}>
       <SettingsBody projectPath={projectPath} app={app} load={load} layout="rows" onSaved={reload} />
     </AppDetailsSection>
   );
@@ -74,6 +80,7 @@ type SettingsLayout = 'rows' | 'stacked';
  * fields, in place of the app. Once saved with every required value, the app loads.
  */
 export function AppSetupGate({ projectPath, app, children }: { readonly projectPath: string; readonly app: AppSummary; readonly children: ReactNode }) {
+  const translate = useTranslate();
   const { load, reload } = useAppSettings(projectPath, app);
   if (app.manifest.settings.length === 0) {
     return children;
@@ -82,12 +89,12 @@ export function AppSetupGate({ projectPath, app, children }: { readonly projectP
     return children;
   }
   return (
-    <div className="apps-setup" role="region" aria-label={`Set up ${app.manifest.name}`}>
+    <div className="apps-setup" role="region" aria-label={translate('apps.settings.setUp', { name: app.manifest.name })}>
       <div className="apps-setup-head">
         <AppTile manifest={app.manifest} size={32} />
-        <p className="apps-setup-title">Set up {app.manifest.name}</p>
+        <p className="apps-setup-title">{translate('apps.settings.setUp', { name: app.manifest.name })}</p>
       </div>
-      <p className="apps-note">{app.manifest.name} needs these before it can start. Secret values are kept outside the project.</p>
+      <p className="apps-note">{translate('apps.settings.needsBeforeStart', { name: app.manifest.name })}</p>
       <SettingsBody projectPath={projectPath} app={app} load={load} layout="stacked" onSaved={reload} />
     </div>
   );
@@ -101,13 +108,15 @@ function SettingsBody(props: {
   readonly onSaved: () => void;
 }) {
   const { load } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   switch (load.kind) {
     case 'loading':
-      return <p className="apps-note">Reading settings…</p>;
+      return <p className="apps-note">{translate('apps.settings.reading')}</p>;
     case 'failed':
       return (
         <p className="apps-error" role="alert">
-          {load.message}
+          {translateDescribed(load)}
         </p>
       );
     case 'ready':
@@ -127,8 +136,14 @@ function SettingsForm(props: {
   readonly onSaved: () => void;
 }) {
   const { app } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [draft, setDraft] = useState<AppSettingValues>(props.saved);
-  const [state, setState] = useState<{ readonly kind: 'idle' } | { readonly kind: 'saving' } | { readonly kind: 'failed'; readonly message: string }>({
+  const [state, setState] = useState<
+    | { readonly kind: 'idle' }
+    | { readonly kind: 'saving' }
+    | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined }
+  >({
     kind: 'idle',
   });
   const missing = missingRequiredSettings(app.manifest.settings, draft);
@@ -161,7 +176,7 @@ function SettingsForm(props: {
           }
           props.onSaved();
         } else {
-          setState({ kind: 'failed', message: answer.message });
+          setState({ kind: 'failed', message: answer.message, messageRef: answer.messageRef });
         }
       },
       (error: unknown) => setState({ kind: 'failed', message: String(error) }),
@@ -181,16 +196,14 @@ function SettingsForm(props: {
       )}
       {state.kind === 'failed' && (
         <p className="apps-error" role="alert">
-          {state.message}
+          {translateDescribed(state)}
         </p>
       )}
       <div className={props.layout === 'rows' ? 'apps-details-section-footer' : 'apps-actions'}>
         <button type="submit" className="apps-button primary" disabled={!changed || state.kind === 'saving'}>
-          {state.kind === 'saving' ? 'Saving…' : 'Save settings'}
+          {state.kind === 'saving' ? translate('apps.settings.saving') : translate('apps.settings.save')}
         </button>
-        {missing.length > 0 && (
-          <span className="apps-note">{missing.length === 1 ? '1 required setting is empty' : `${missing.length} required settings are empty`}</span>
-        )}
+        {missing.length > 0 && <span className="apps-note">{translate('apps.settings.requiredEmpty', { count: missing.length })}</span>}
       </div>
     </form>
   );
@@ -202,6 +215,7 @@ function SettingsForm(props: {
  * remounts after each save (SettingsBody's key), so the choice is made again then.
  */
 function AdvancedSettings(props: { readonly openInitially: boolean; readonly children: ReactNode }) {
+  const translate = useTranslate();
   const [open, setOpen] = useState(props.openInitially);
   const bodyId = useId();
   assert(bodyId.length > 0, 'The disclosure body has an id for aria-controls');
@@ -215,7 +229,7 @@ function AdvancedSettings(props: { readonly openInitially: boolean; readonly chi
         onClick={() => setOpen((current) => !current)}
       >
         <ChevronRightIcon size={11} className="apps-settings-advanced-chevron" />
-        <span>Advanced</span>
+        <span>{translate('apps.settings.advanced')}</span>
       </button>
       {/* Closed, the fields are not rendered at all; their values live in the form's draft, so nothing typed is lost. */}
       <div id={bodyId} className="apps-settings-advanced-body" hidden={!open}>
@@ -233,6 +247,7 @@ function SettingField(props: {
   readonly onChange: (value: string) => void;
 }) {
   const { setting } = props;
+  const translate = useTranslate();
   const [revealed, setRevealed] = useState(false);
   const id = `app-setting-${props.appId}-${setting.id}`;
   assert(setting.label.length > 0, 'A setting has a label');
@@ -240,7 +255,7 @@ function SettingField(props: {
   const label = (
     <label htmlFor={id} className="apps-setting-label">
       {setting.label}
-      {setting.required && <span className="apps-setting-required"> required</span>}
+      {setting.required && <span className="apps-setting-required"> {translate('apps.settings.required')}</span>}
     </label>
   );
   const input = (
@@ -258,9 +273,9 @@ function SettingField(props: {
         <button
           type="button"
           className="apps-icon-button"
-          aria-label={revealed ? `Hide ${setting.label}` : `Show ${setting.label}`}
+          aria-label={revealed ? translate('apps.settings.hideNamed', { name: setting.label }) : translate('apps.settings.showNamed', { name: setting.label })}
           aria-pressed={revealed}
-          title={revealed ? 'Hide' : 'Show'}
+          title={revealed ? translate('apps.settings.hide') : translate('apps.settings.show')}
           onClick={() => setRevealed((current) => !current)}
         >
           {revealed ? <HideIcon size={13} /> : <PreviewIcon size={13} />}
@@ -268,7 +283,7 @@ function SettingField(props: {
       )}
     </span>
   );
-  const notes = [setting.description, secret ? 'Kept outside the project, never committed.' : undefined].filter((note): note is string => note !== undefined);
+  const notes = [setting.description, secret ? translate('apps.settings.secretKept') : undefined].filter((note): note is string => note !== undefined);
   switch (props.layout) {
     case 'rows':
       return (

@@ -16,9 +16,14 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
-import type { AppError, Result } from '../../../shared/core/result';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import type { Result } from '../../../shared/core/result';
+import type { PropertyError } from '../../../shared/properties/propertyErrors';
+import { propertyErrorTextFor } from '../../lib/i18n/propertyErrorText';
 import { reportErrorToast } from '../../ui/errorNotices';
 import type { ComponentProperty, PropertyChange, PropertyOptionRename } from '../../../shared/properties/propertyEditing';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import type { EditPace } from '../props/propBindings';
 
@@ -30,6 +35,7 @@ const AUTOSAVE_PASSES_MAX = 16;
 const NAME = /^[A-Za-z_$][\w$]*$/;
 const STATED_FIELDS = ['name', 'type', 'required', 'readonly', 'defaultValue', 'description'] as const;
 
+// i18n-ignore: English reference text, shown through the componentProps.autosave.conflict message.
 export const CONFLICT_NOTICE = 'This file changed on disk, so the form reloaded. Your edit was kept.';
 
 export interface PropertyDraft {
@@ -51,12 +57,13 @@ export type PropertySaveOutcome =
 const NAME_REFUSALS: ReadonlySet<string> = new Set(['name', 'duplicate']);
 
 /** What a save main did not write came to, with the reason placed by its code. */
-export function refusalOf(error: AppError): PropertySaveOutcome {
+export function refusalOf(error: PropertyError, translate: Translator): PropertySaveOutcome {
   assert(error.message !== '', 'refusalOf: a refusal says why');
+  const message = propertyErrorTextFor(error, translate);
   if (error.code === 'conflict') {
-    return { kind: 'conflict', message: error.message };
+    return { kind: 'conflict', message };
   }
-  return { kind: NAME_REFUSALS.has(error.code) ? 'name-refused' : 'refused', message: error.message };
+  return { kind: NAME_REFUSALS.has(error.code) ? 'name-refused' : 'refused', message };
 }
 
 /** How a form reaches its file. */
@@ -79,11 +86,11 @@ export function savePhaseOf(change: PropertyChange): 'saving' | 'autosaving' {
 }
 
 /** Why a property cannot be written as it stands, or undefined when it can. */
-export function propertyProblem(property: Pick<ComponentProperty, 'name' | 'type'>): string | undefined {
+export function propertyProblem(property: Pick<ComponentProperty, 'name' | 'type'>, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   if (!NAME.test(property.name)) {
-    return 'Use a name such as title, imageUrl, or isVisible.';
+    return translate('componentProps.problem.nameShape');
   }
-  return property.type.trim() === '' ? 'Give the property a type.' : undefined;
+  return property.type.trim() === '' ? translate('componentProps.problem.typeMissing') : undefined;
 }
 
 function sameStatement(left: ComponentProperty, right: ComponentProperty): boolean {
@@ -122,6 +129,10 @@ interface Autosave {
 }
 
 export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHost | undefined) {
+  // A ref, so the save callbacks stay stable while the language can still change.
+  const translate = useTranslate();
+  const translateRef = useRef(translate);
+  translateRef.current = translate;
   const [draft, setDraft] = useState(initial);
   const [nameText, setNameText] = useState(initial.property.name);
   const [status, setStatus] = useState<FormStatus>({ error: '', nameError: '', notice: '', savedName: initial.property.name });
@@ -174,7 +185,7 @@ export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHo
       const property = mergedProperty(own.saved, own.draft.property, fresh.value);
       own.saved = fresh.value;
       replaceDraft({ ...own.draft, property });
-      report({ error: '', notice: CONFLICT_NOTICE });
+      report({ error: '', notice: translateRef.current('componentProps.autosave.conflict') });
       return 'retry';
     },
     [replaceDraft, report],
@@ -212,7 +223,7 @@ export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHo
         if (sameStatement(sent.property, own.saved) && sent.optionRenames.length === 0) {
           return;
         }
-        const problem = propertyProblem(sent.property);
+        const problem = propertyProblem(sent.property, translateRef.current);
         if (problem !== undefined) {
           report({ error: problem, notice: '' });
           return;
@@ -283,7 +294,7 @@ export function usePropertyAutosave(initial: PropertyDraft, host: PropertySaveHo
     if (own.nameText === own.draft.property.name) {
       return;
     }
-    const problem = propertyProblem({ name: own.nameText, type: own.draft.property.type });
+    const problem = propertyProblem({ name: own.nameText, type: own.draft.property.type }, translateRef.current);
     if (problem !== undefined) {
       report({ error: problem, notice: '' });
       return;

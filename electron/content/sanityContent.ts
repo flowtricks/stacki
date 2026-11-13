@@ -336,6 +336,7 @@ export async function sanityRequest(target: SanityDataset, path: string, body: o
   const url = `https://${target.projectId}.api.sanity.io/${SANITY_API_VERSION}/data/${path}`;
   const response = await fetch(url, {
     method: 'POST',
+    // i18n-ignore: HTTP header value, not interface text.
     headers: { Authorization: `Bearer ${target.token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     redirect: 'error',
@@ -355,6 +356,7 @@ export async function sanityGet(target: SanityDataset, url: string): Promise<str
   assert(url.startsWith('https://'), 'A Sanity read is over https');
   assert(/^[a-z0-9]{1,64}$/.test(target.projectId), 'A Sanity project id is lower-case');
   const response = await fetch(url, {
+    // i18n-ignore: HTTP header value, not interface text.
     headers: { Authorization: `Bearer ${target.token}` },
     redirect: 'error',
     signal: AbortSignal.timeout(SANITY_TIMEOUT_MS),

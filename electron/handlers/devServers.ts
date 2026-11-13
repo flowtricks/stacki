@@ -504,7 +504,7 @@ export class DevServers {
     let log = this.recentLog();
     const daemonLog = await readDevServerLog(projectPath, startedAtMs);
     if (daemonLog) {
-      return `${log}\n\n— Astro startup log —\n${daemonLog}`;
+      return `${log}\n\n— Astro startup log —\n${daemonLog}`; // i18n-ignore: developer log text.
     }
     try {
       const [logCmd, logArgs] = nodeCliCommand(localBin, ['dev', 'logs']);

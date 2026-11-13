@@ -2,6 +2,7 @@ import { boolean, count, object, optional, record, text } from '../core/boundary
 import { assert } from '../core/assert';
 import { parseReviewReceipt, type ReviewReceipt } from './publishReview';
 import type { PublishTarget } from './publishConfig';
+import { parseMessageRef, type MessageRef } from '../core/i18n/messageReference';
 
 export type PublishDestinationState = 'current' | 'pending' | 'unknown' | 'unconfigured';
 
@@ -104,6 +105,8 @@ export type DesktopPublishState =
   | {
       readonly kind: 'running';
       readonly step: string;
+      /** The translatable form of `step`; absent from older producers, which show the English `step`. */
+      readonly stepRef?: MessageRef | undefined;
       readonly progress?: DesktopPublishProgress;
     }
   | {
@@ -114,6 +117,8 @@ export type DesktopPublishState =
   | {
       readonly kind: 'failed';
       readonly message: string;
+      /** The translatable form of `message` when Stacki wrote the sentence; free-form tool output has none. */
+      readonly messageRef?: MessageRef | undefined;
       readonly github: boolean;
       readonly hosting: boolean;
     };
@@ -142,6 +147,7 @@ export function parseDesktopPublishState(input: unknown): DesktopPublishState {
       return {
         kind: 'running',
         ...object({ step: text, progress: optional(parseDesktopPublishProgress) })(value),
+        ...stepRefField(optionalRef(value, 'stepRef')),
       };
     case 'done':
       return { kind: 'done', ...object({ github: boolean, hosting: boolean })(value) };
@@ -149,8 +155,26 @@ export function parseDesktopPublishState(input: unknown): DesktopPublishState {
       return {
         kind: 'failed',
         ...object({ message: text, github: boolean, hosting: boolean })(value),
+        ...messageRefField(optionalRef(value, 'messageRef')),
       };
     default:
       throw new Error('Invalid publish status.');
   }
+}
+
+// A reference that crossed the wire is dropped when invalid: the English text beside it is always shown instead.
+function optionalRef(value: Readonly<Record<string, unknown>>, name: string): MessageRef | undefined {
+  const field = value[name];
+  if (field === undefined) {
+    return undefined;
+  }
+  const parsed = parseMessageRef(field);
+  return parsed.ok ? parsed.value : undefined;
+}
+
+function stepRefField(stepRef: MessageRef | undefined): { readonly stepRef?: MessageRef } {
+  return stepRef === undefined ? {} : { stepRef };
+}
+function messageRefField(messageRef: MessageRef | undefined): { readonly messageRef?: MessageRef } {
+  return messageRef === undefined ? {} : { messageRef };
 }

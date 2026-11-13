@@ -17,6 +17,7 @@ import {
   type MediaResult,
   type MediaSaveResult,
 } from '../../shared/properties/mediaHosting';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 /** What this host offers: Desktop connects media hosts; a host without them hides the panel's sources. */
 export interface MediaHostingHost {
@@ -61,7 +62,7 @@ export async function pickUploadHostedMedia(target: HostedFolder): Promise<Media
 export async function uploadHostedMedia(target: HostedFolder, files: readonly File[]): Promise<MediaResult<MediaListing>> {
   const filePaths = files.map((file) => window.avb.getFilePath(file)).filter((file): file is string => file !== undefined && file !== '');
   if (filePaths.length === 0) {
-    return { ok: false, message: 'Those files have no path on this computer to upload from.' };
+    return { ok: false, ...described('error.bridge.noFilePaths') };
   }
   const input = parseIpcPayload('mediaHosting:upload', { ...target, filePaths });
   return parseMediaResult(await window.avb.uploadHostedMedia(input), parseMediaListing);

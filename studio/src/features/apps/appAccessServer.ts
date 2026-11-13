@@ -28,11 +28,13 @@ import type { SecretVault } from '../../../vendor/stacki/electron/project/appSet
 import { parseAppFileOperation } from '../../../vendor/stacki/shared/properties/appFiles';
 import { parseAuthProviderId } from '../../../vendor/stacki/shared/properties/appAuth';
 import { stackiBrokerOrigin } from '../../../vendor/stacki/shared/properties/appConnections';
-import { appsFailureMessage, parseAppId, type AppManifest, type AppsResult } from '../../../vendor/stacki/shared/properties/apps';
+import { appsFailure, parseAppId, type AppManifest, type AppsResult } from '../../../vendor/stacki/shared/properties/apps';
+import { ReferencedError } from '../../../vendor/stacki/shared/properties/i18n/referencedError';
 import { appAccessFeature } from '../../../vendor/stacki/shared/properties/appsRpc';
 import { can } from '../../../vendor/stacki/shared/properties/projectRoles';
 import { requestRole } from '../roles/serverAccess';
 import { record } from '../../shared/validation';
+import { appsRefusal } from './appsRefusal';
 
 /** The route the provider sends the browser back to. */
 export const STUDIO_OAUTH_CALLBACK_PATH = '/studio/api/apps/oauth/callback';
@@ -80,16 +82,16 @@ async function fileAction(
   const input = record(JSON.parse((await readBody()) || '{}'));
   const id = parseAppId(input['id']);
   if (!can(role, 'code:edit')) {
-    return { ok: false, message: 'Your role cannot edit code, so apps cannot change project files for it.' };
+    return appsRefusal('apps.error.noCodeEdit');
   }
   if (!can(role, appAccessFeature(id))) {
-    return { ok: false, message: 'Your role cannot use this app.' };
+    return appsRefusal('apps.error.noThisApp');
   }
   let operation;
   try {
     operation = parseAppFileOperation(input['operation'], id);
   } catch (error: unknown) {
-    return { ok: false, message: appsFailureMessage(error) };
+    return { ok: false, ...appsFailure(error) };
   }
   return runAppFileOperation(root, id, operation, { budget, writeFile: studioWriteFile });
 }
@@ -106,7 +108,7 @@ async function netAction(
   const input = record(JSON.parse((await readBody()) || '{}'));
   const id = parseAppId(input['id']);
   if (!can(role, 'panel:apps') || !can(role, appAccessFeature(id))) {
-    return { ok: false, message: 'Your role cannot use this app.' };
+    return appsRefusal('apps.error.noThisApp');
   }
   try {
     const manifest = installedManifest(root, id);
@@ -120,7 +122,7 @@ async function netAction(
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
       throw error;
     }
-    return { ok: false, message: appsFailureMessage(error) };
+    return { ok: false, ...appsFailure(error) };
   }
 }
 
@@ -135,7 +137,7 @@ async function authAction(
   const input = record(JSON.parse((await readBody()) || '{}'));
   const id = parseAppId(input['id']);
   if (!can(role, 'panel:apps') || !can(role, appAccessFeature(id))) {
-    return { ok: false, message: 'Your role cannot use this app.' };
+    return appsRefusal('apps.error.noThisApp');
   }
   try {
     const manifest = installedManifest(root, id);
@@ -163,7 +165,7 @@ async function authAction(
       case 'wait': {
         const waiting = signIns.waiting(root, id);
         if (waiting === undefined) {
-          return { ok: false, message: 'No sign-in is waiting for this app.' };
+          return appsRefusal('apps.error.noSignInWaiting');
         }
         const outcome = await waiting;
         return outcome.ok ? { ok: true, value: outcome.value } : outcome;
@@ -172,13 +174,13 @@ async function authAction(
         signIns.cancel(root, id);
         return { ok: true, value: signIns.status(root, manifest) };
       default:
-        return { ok: false, message: 'Unknown sign-in action' };
+        return { ok: false, message: 'Unknown sign-in action' }; // i18n-ignore: protocol or programmer error answered to the Studio client, not text for the person.
     }
   } catch (error: unknown) {
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
       throw error;
     }
-    return { ok: false, message: appsFailureMessage(error) };
+    return { ok: false, ...appsFailure(error) };
   }
 }
 
@@ -192,7 +194,7 @@ function studioWriteFile(absolute: string, bytes: Uint8Array): void {
 function installedManifest(root: string, id: string): AppManifest {
   const app = listInstalledApps(root).find((summary) => summary.manifest.id === id);
   if (app === undefined) {
-    throw new Error(`The app "${id}" is not installed.`);
+    throw new ReferencedError('apps.error.notInstalled', { id });
   }
   return app.manifest;
 }

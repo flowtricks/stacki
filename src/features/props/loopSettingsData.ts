@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { groqQueryText, isItemId, type LoopQuery, type LoopSource } from '../../editor/loopQuery';
 import { assert } from '../../../shared/core/assert';
+import { described, type Described, type TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 import { toRecord } from '../../../shared/core/record';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
 import { cmsTransport } from '../../ipc/editorEnvironment';
@@ -41,17 +42,17 @@ export async function writeTracedQuery(
   projectPath: string,
   literal: GroqLiteral,
   change: { readonly file: string; readonly query: LoopQuery },
-): Promise<{ readonly ok: true } | { readonly ok: false; readonly message: string }> {
+): Promise<{ readonly ok: true } | ({ readonly ok: false } & Described & { readonly messageRef: TypedMessageRef })> {
   try {
     const text = await readText(projectPath, change.file);
     const next = rewrittenGroqLiteral(text, literal, groqQueryText(change.query, []));
     if (next === undefined) {
-      return { ok: false, message: `${change.file} changed since it was read, so nothing was saved. Its settings are shown again as they are now.` };
+      return { ok: false, ...described('props.loop.save.changed', { file: change.file }) };
     }
     await writeText(projectPath, change.file, next);
     return { ok: true };
   } catch (error: unknown) {
-    return { ok: false, message: `Couldn’t save ${change.file}: ${error instanceof Error ? error.message : String(error)}` };
+    return { ok: false, ...described('props.loop.save.failed', { file: change.file, detail: error instanceof Error ? error.message : String(error) }) };
   }
 }
 

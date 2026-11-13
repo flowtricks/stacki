@@ -1,3 +1,4 @@
+// i18n-ignore-file: the bake is the `astro-studio build-demo` command line tool; its messages are developer diagnostics in a terminal, not Studio interface text.
 // The bake-time half of componentTemplates.ts: which extra renderings each page asks
 // the build for, and what the build's answers teach. A probe is a component written
 // at the end of a page's template, after everything the page renders, so it runs in

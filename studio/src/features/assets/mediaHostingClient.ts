@@ -17,6 +17,7 @@ import {
   type MediaResult,
   type MediaSaveResult,
 } from '../../../vendor/stacki/shared/properties/mediaHosting';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import {
   parseMediaAccountChoices,
   type MediaAccountChoices,
@@ -62,9 +63,9 @@ export async function pickUploadHostedMedia(target: HostedFolder): Promise<Media
 /** Uploads files one request each; the first refusal stops the rest and is answered. */
 export async function uploadHostedMedia(target: HostedFolder, files: readonly File[]): Promise<MediaResult<MediaListing>> {
   if (files.length === 0 || files.length > MEDIA_HOSTING_LIMITS.uploadFilesMax) {
-    return { ok: false, message: `Upload 1 to ${MEDIA_HOSTING_LIMITS.uploadFilesMax} files at once.` };
+    return { ok: false, ...described('assets.upload.limit', { max: MEDIA_HOSTING_LIMITS.uploadFilesMax }) };
   }
-  let last: MediaResult<MediaListing> = { ok: false, message: 'Nothing was uploaded.' };
+  let last: MediaResult<MediaListing> = { ok: false, ...described('assets.upload.nothing') };
   for (const file of files) {
     last = await send(target, `upload?${new URLSearchParams({ folder: target.folder, filename: file.name })}`, file);
     if (!last.ok) {
@@ -143,7 +144,7 @@ async function attempt<T>(run: () => Promise<MediaResult<T>>): Promise<MediaResu
     return await run();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, message: message.slice(0, 900) || 'The media request failed.' };
+    return message === '' ? { ok: false, ...described('assets.request.failed') } : { ok: false, message: message.slice(0, 900) };
   }
 }
 

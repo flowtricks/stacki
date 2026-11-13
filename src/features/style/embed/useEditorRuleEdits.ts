@@ -2,6 +2,7 @@
 // through the class gate, prop edits, live edits, rule actions, opening an
 // embed, and the selected element's tokens (EmbedEditor.tsx).
 
+import { useTranslate, useTranslateDescribed } from '../../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { snapshotTokens } from '../model/elementTokens';
 import { groupMemberToSplit } from '../model/resolved';
@@ -90,6 +91,8 @@ export function useApplyEdit(
   pendingWrites: ReturnType<typeof usePendingWrites>,
   refreshDerivedHook: ReturnType<typeof useRefreshDerived>,
 ) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { setBusyBoth, setSaveError } = busyState;
   const { setStatus } = scanState;
   const { documentByKey, settleEmbedWrite } = pendingWrites;
@@ -114,11 +117,10 @@ export function useApplyEdit(
       if (outcome.tag !== 'refused') {
         return true;
       }
-      const why = `${rule.selectorText} is not on the element (${outcome.message})`;
-      setSaveError(`${why}, so its rule was not written.`);
+      setSaveError(translate('styleModel.embed.hook.classNotOnElement', { selector: rule.selectorText, reason: translateDescribed(outcome) }));
       return false;
     },
-    [setSaveError],
+    [setSaveError, translate, translateDescribed],
   );
 
   // Run a synchronous AST mutation, refresh the model, then persist the embed.
@@ -128,20 +130,20 @@ export function useApplyEdit(
     async (rule: ParsedRule, mutate: () => boolean | void): Promise<boolean> => {
       const embedDocument = documentByKey.get(rule.embedKey);
       if (!embedDocument) {
-        setStatus('Lost track of the source embed — try Rescan.');
+        setStatus('Lost track of the source embed — try Rescan.'); // i18n-ignore: write-only status, never rendered.
         return false;
       }
       if (!(await passesClassGate(rule))) {
         return false;
       }
       setBusyBoth(true);
-      setStatus('Saving…');
+      setStatus('Saving…'); // i18n-ignore: write-only status, never rendered.
       // try/finally so `busy` ALWAYS clears — a throw here (e.g. materializing a complex
       // nested selector) must not leave the panel stuck busy, which disables every button.
       try {
         const result = mutate();
         if (result === false) {
-          setStatus('Nothing to save.');
+          setStatus('Nothing to save.'); // i18n-ignore: write-only status, never rendered.
           return false;
         }
         // Persist FIRST, then rebuild the panel's own model. The write is what the canvas
@@ -153,7 +155,7 @@ export function useApplyEdit(
         if (!settleEmbedWrite(embedDocument, writeResult, 'rule')) {
           return false;
         }
-        setStatus(rule.fromComponent ? 'Saved. This embed is shared by every instance of ' + `${rule.componentName ?? 'the component'}.` : 'Saved to embed.');
+        setStatus(rule.fromComponent ? 'Saved. This embed is shared by every instance of ' + `${rule.componentName ?? 'the component'}.` : 'Saved to embed.'); // i18n-ignore: write-only status, never rendered.
         return true;
       } finally {
         setBusyBoth(false);
@@ -333,6 +335,8 @@ export function useRuleActions(
   applyEditHook: ReturnType<typeof useApplyEdit>,
   liveEdits: ReturnType<typeof useLiveEdits>,
 ) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { inComponentRef } = editorRefs;
   const { setSaveError } = busyState;
   const { documentByKey, markPending } = pendingWrites;
@@ -391,13 +395,13 @@ export function useRuleActions(
       void applyEdit(rule, () => {
         const result = replaceRuleCss(rule, css);
         if (!result.ok) {
-          setSaveError(`Invalid CSS: ${result.error}`);
+          setSaveError(translate('styleModel.embed.hook.invalidCss', { reason: translateDescribed({ message: result.error, messageRef: result.errorRef }) }));
           return false;
         }
         return true;
       });
     },
-    [applyEdit, setSaveError],
+    [applyEdit, setSaveError, translate, translateDescribed],
   );
   return { onRemoveRule, onRevertProp, onSaveCssRule };
 }
@@ -419,12 +423,12 @@ export function useOpenEmbed(
     (embedKey: string) => {
       const embedDocument = documentByKey.get(embedKey);
       if (!embedDocument) {
-        setStatus('Lost track of the source embed — try Rescan.');
+        setStatus('Lost track of the source embed — try Rescan.'); // i18n-ignore: write-only status, never rendered.
         return;
       }
       void navigateToEmbed(embedDocument.source, pageInstancesRef.current).then((result) => {
         if (!result.ok) {
-          setStatus(`Couldn't open it on the canvas: ${result.error}`);
+          setStatus(`Couldn't open it on the canvas: ${result.error}`); // i18n-ignore: write-only status, never rendered.
         }
       });
     },

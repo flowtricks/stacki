@@ -16,13 +16,14 @@ const load = require('../../helpers/rendererModule');
 
 const { revertedSteps, undoRefusal } = load('src/app/model/appKeys.ts');
 const { REJECTION_REASONS, describeRejection } = load('shared/engine/intent.ts');
+const { ENGLISH_TRANSLATE } = load('shared/properties/i18n/englishTranslator.ts');
 
 const CHECKSUM = 'a'.repeat(64);
 const applied = [{ checksum: CHECKSUM, inverse: [{ span: { start: 0, end: 1 }, text: 'x' }] }];
 
 async function refusalFor(error) {
   globalThis.window = { avb: { editPage: async () => ({ ok: false, error }) } };
-  const reverted = await revertedSteps('/site/src/pages/index.astro', applied, undefined);
+  const reverted = await revertedSteps('/site/src/pages/index.astro', applied, undefined, ENGLISH_TRANSLATE);
   assert.equal(reverted.done.length, 0, 'a refused revert reverts nothing');
   assert.equal(reverted.written, undefined, 'and writes nothing');
   return reverted.refusal;
@@ -54,21 +55,21 @@ async function main() {
     'merge-conflict',
   ]);
   for (const reason of REJECTION_REASONS) {
-    const refusal = undoRefusal({ code: 'rejected', reason, message: 'ignored', diskChecksum: undefined });
+    const refusal = undoRefusal({ code: 'rejected', reason, message: 'ignored', diskChecksum: undefined }, ENGLISH_TRANSLATE);
     assert.equal(refusal.message, describeRejection(reason), `${reason} reads as its notice`);
     assert.equal(refusal.kind, warnings.has(reason) ? 'warning' : 'error', `${reason} is a ${warnings.has(reason) ? 'warning' : 'error'}`);
   }
   const writeKinds = { 'write-race': 'warning', backpressured: 'warning', missing: 'error', filesystem: 'error', uncertain: 'error' };
   for (const [code, kind] of Object.entries(writeKinds)) {
-    assert.equal(undoRefusal({ code, message: `${code} happened` }).kind, kind, `a ${code} write failure is a ${kind}`);
+    assert.equal(undoRefusal({ code, message: `${code} happened` }, ENGLISH_TRANSLATE).kind, kind, `a ${code} write failure is a ${kind}`);
   }
   // Negative space: a refusal with nothing to say is a programmer error.
-  assert.throws(() => undoRefusal({ code: 'filesystem', message: '' }), /Assertion failed: An undo refusal says why/);
+  assert.throws(() => undoRefusal({ code: 'filesystem', message: '' }, ENGLISH_TRANSLATE), /Assertion failed: An undo refusal says why/);
 
   // The app shows the refusal with the kind it carries, never a fixed red.
   const history = fs.readFileSync(repoPath('src/app/state/appHistory.ts'), 'utf8');
-  assert.match(history, /showToast\(`Couldn’t \$\{direction\}: \$\{reverted\.refusal\.message\}`, reverted\.refusal\.kind\)/);
-  assert.match(history, /showToast\(`Couldn’t \$\{direction\}: this page has edits that are not saved yet\.`, 'warning'\)/);
+  assert.match(history, /\{ message: reverted\.refusal\.message \}\),\s+reverted\.refusal\.kind,?\s*\)/);
+  assert.match(history, /'shell\.history\.unsavedUndo' : 'shell\.history\.unsavedRedo'\), 'warning'\)/);
   console.log('undo refusal kinds: ok');
 }
 

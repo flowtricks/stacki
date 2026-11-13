@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PropValuePolicyContext } from './propValuePolicy';
 import type { PropValues } from './propRules';
 import { isFragmentNode } from '../../editor/liveClasses';
@@ -79,6 +80,7 @@ function ElementPropsPanel(props: ElementPropsPanelProps) {
   return <ElementPanelView state={state} />;
 }
 function ElementPanelView({ state }: { readonly state: ElementState }) {
+  const translate = useTranslate();
   const { node, isLayout, currentLayoutName, schema, allowAttrs, extraProps, showContentField, rootRef } = state;
 
   return (
@@ -129,11 +131,7 @@ function ElementPanelView({ state }: { readonly state: ElementState }) {
           <ElementSettingsHeader state={state} />
           <ElementSettings state={state} />
           {!isLayout && !allowAttrs && schema.length === 0 && extraProps.length === 0 && !showContentField && (
-            <div className="props-empty">
-              {node.kind === 'element'
-                ? 'This HTML element has no attributes set.'
-                : 'This component declares no props (add an interface Props or ' + 'an Astro.props destructure to expose some).'}
-            </div>
+            <div className="props-empty">{node.kind === 'element' ? translate('props.panel.noAttributes') : translate('props.panel.noProps')}</div>
           )}
         </div>
       </div>

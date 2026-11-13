@@ -168,9 +168,11 @@ export class GitHubRepository {
     const response = await this.transport(`https://api.github.com${endpoint}`, {
       method,
       headers: {
+        // i18n-ignore: HTTP header, not shown to a person.
         Authorization: `Bearer ${token}`,
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
+        // i18n-ignore: HTTP User-Agent, not shown to a person.
         'User-Agent': 'Astro-Studio',
         'Content-Type': 'application/json',
       },

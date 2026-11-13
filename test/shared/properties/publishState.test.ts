@@ -4,7 +4,7 @@
 // written out by hand, then check that any change at all brings the button back to "ready".
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { publishButtonState } from '#dist/shared/properties/publishState.js';
+import { parseDesktopPublishState, publishButtonState } from '#dist/shared/properties/publishState.js';
 
 const GITHUB = ['current', 'pending', 'unknown'] as const;
 const HOSTING = ['current', 'pending', 'unknown', 'unconfigured'] as const;
@@ -34,4 +34,16 @@ test('the first change after a finished publish makes the button ready again', (
   assert.equal(publishButtonState({ ...published, github: 'pending', githubPush: { commits: 1, repositoryUrl: 'https://github.com/a/b' } }, 'all'), 'ready');
   assert.equal(publishButtonState({ ...published, hosting: 'pending' }, 'all'), 'ready');
   assert.equal(publishButtonState({ github: 'unknown', hosting: 'unknown' }, 'all'), 'ready');
+});
+
+// A message reference beside the English text is optional on the wire (old producers send none) and dropped when invalid.
+test('a publish state keeps a valid message reference and drops an invalid one', () => {
+  const running = { kind: 'running', step: 'Building website…', stepRef: { key: 'publish.status.step.building' } };
+  assert.deepEqual(parseDesktopPublishState(running), running);
+  const failed = { kind: 'failed', message: 'Publish failed.', github: false, hosting: false, messageRef: { key: 'publish.studio.interrupted' } };
+  assert.deepEqual(parseDesktopPublishState(failed), failed);
+  assert.deepEqual(parseDesktopPublishState({ kind: 'running', step: 'Building website…' }), { kind: 'running', step: 'Building website…' });
+  const broken = parseDesktopPublishState({ ...failed, messageRef: { key: 'not a key' } });
+  assert.deepEqual(broken, { kind: 'failed', message: 'Publish failed.', github: false, hosting: false });
+  assert.deepEqual(parseDesktopPublishState({ ...running, stepRef: 7 }), { kind: 'running', step: 'Building website…' });
 });

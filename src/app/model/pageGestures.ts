@@ -2,6 +2,7 @@
 // choosing an import path, a layout's fields, a schema, the class field,
 // extracting a component, and what a paste brings in (App.tsx).
 
+import type { Translator } from '../../lib/i18n/localeContext';
 import { labelsNode } from '../../../shared/page/leadingNote';
 import type { ImportDecl, PageNode } from '../../../shared/page/pageNode';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
@@ -220,19 +221,22 @@ export function createdComponentMessage(
   rel: string,
   counts: { readonly props: number; readonly moved: number },
   { stranded }: { readonly stranded: boolean },
+  translate: Translator,
 ): string {
   if (stranded) {
-    return `Created ${rel} — it reads page data, so it will need props.`;
+    return translate('shell.component.createdStranded', { rel });
   }
-  const parts = [plural(counts.moved, 'moved value'), plural(counts.props, 'prop')].filter((part) => part !== '');
-  return parts.length > 0 ? `Created ${rel} with ${parts.join(' and ')}.` : `Created ${rel}`;
-}
-
-function plural(count: number, noun: string): string {
-  if (count > 0) {
-    return `${count} ${noun}${count === 1 ? '' : 's'}`;
+  const parts = [
+    counts.moved > 0 ? translate('shell.component.movedValues', { count: counts.moved }) : '',
+    counts.props > 0 ? translate('shell.component.propCount', { count: counts.props }) : '',
+  ].filter((part) => part !== '');
+  const [first, second] = parts;
+  if (first === undefined) {
+    return translate('shell.component.created', { rel });
   }
-  return '';
+  return second === undefined
+    ? translate('shell.component.createdWithOne', { rel, first })
+    : translate('shell.component.createdWithTwo', { rel, first, second });
 }
 
 // What a pasted subtree needs from its new page: project components to import from
@@ -431,6 +435,7 @@ export function insertedNode(item: InsertItem, id: NodeId): EditorNode | undefin
   } else if (item.type === 'comment') {
     node = { id, kind: 'comment', value: ' Comment ' };
   } else if (item.type === 'text') {
+    // i18n-ignore: starter content written into the person's page, not interface text.
     node = { id, kind: 'text', value: 'Text' };
   } else if (item.type === 'expr') {
     node = { id, kind: 'expr', value: '{/* code */}' };

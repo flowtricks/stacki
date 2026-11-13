@@ -151,6 +151,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'ai:agents': { projectPath: '/site' },
   'ai:installAgent': { projectPath: '/site', agent: 'claude' },
   'ai:trust': { projectPath: '/site' },
+  'ai:prewarm': { projectPath: '/site', agent: 'claude', action: 'warm' },
   'ai:chats': { projectPath: '/site' },
   'ai:chatCreate': { projectPath: '/site', agent: 'codex' },
   'ai:chatUpdate': { ...aiChat, title: 'Hero copy' },
@@ -167,6 +168,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'ai:cancel': aiChat,
   'ai:permission': { ...aiChat, request: 'p1', answer: { kind: 'cancel' } },
   'ai:setOption': { ...aiChat, option: 'model', value: 'large' },
+  'ai:remember': { projectPath: '/site', agent: 'claude', action: { kind: 'reset' } },
   'ai:setup': { projectPath: '/site', agent: 'claude', action: { kind: 'detect' } },
   'ai:review': { ...aiChat, turn: `t${'1'.repeat(16)}`, path: 'src/pages/index.astro', action: { kind: 'keep' } },
   'style:selectorUsage': { projectPath: '/site' },
@@ -380,6 +382,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
     },
   },
   'cmsConnections:remove': { projectPath: '/site', id: '00000000-0000-4000-8000-000000000000' },
+  'cmsConnections:check': { projectPath: '/site', request: { action: 'test', id: '00000000-0000-4000-8000-000000000000' } },
   'cmsConnections:sanityLogin': {
     projectPath: '/site',
     request: { action: 'start', id: '00000000-0000-4000-8000-000000000000' },
@@ -420,6 +423,8 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   // The Audits panel's rendered pass: a route of the loopback dev server.
   'audit:render': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/about' },
   'audit:measure': { projectPath: '/site', devUrl: 'http://localhost:4321', route: '/' },
+  // The interface language mirrored to main: a shipped locale or "system".
+  'locale:set': { preference: 'de' },
   // A page's value: one import called (`call`), or its last render's values (`scope`).
   'content:sampleValue': {
     projectPath: '/site',

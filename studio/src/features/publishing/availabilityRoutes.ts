@@ -1,3 +1,4 @@
+// i18n-ignore-file: server-side diagnostics the Studio server returns as received text; the server has no language provider and the browser shows them as the failure detail (docs/i18n-playbook.md section 3, text from a server).
 import { readGitWorkspace } from '../history/gitWorkspaceStorage';
 import { gitWorkspaceAvailability } from '../history/gitWorkspaceAvailability';
 import type { IncomingMessage, ServerResponse } from 'node:http';

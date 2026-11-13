@@ -12,6 +12,7 @@ import { BOUNDARY_LIMITS } from '../../shared/core/boundary';
 import { appHighlight, appTheme } from './CodeEditor';
 import { codeIndentExtensions } from './codeEditorIndent';
 import { formatHTML } from './richTextModel';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 /** The HTML the view opens on: laid out to read when it is short enough to lay out. */
 export function sourceText(value: string): string {
@@ -25,6 +26,10 @@ export function HtmlSourceEditor(props: {
   readonly formatCount: number;
   readonly onChange: (value: string) => void;
 }) {
+  // The editor is built once; its accessible name is read through a ref so a language change never rebuilds it or loses the caret.
+  const translate = useTranslate();
+  const translateRef = useRef(translate);
+  translateRef.current = translate;
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView>();
   const opened = useRef(sourceText(props.value));
@@ -50,7 +55,7 @@ export function HtmlSourceEditor(props: {
         appTheme,
         appHighlight,
         EditorView.lineWrapping,
-        EditorView.contentAttributes.of({ 'aria-label': `${latest.current.label} HTML` }),
+        EditorView.contentAttributes.of({ 'aria-label': translateRef.current('ui.htmlSource.ariaLabel', { label: latest.current.label }) }),
         EditorView.domEventHandlers({ blur: (_event, current) => commit(current) }),
       ],
     });

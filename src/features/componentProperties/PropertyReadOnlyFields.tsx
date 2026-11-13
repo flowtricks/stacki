@@ -1,39 +1,52 @@
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { CodeBlock } from '../../ui/CodeBlock';
 
 export default function PropertyReadOnlyFields({ property }: { readonly property: ComponentProperty }) {
-  const reason = property.editing?.kind === 'restricted' ? property.editing.reason : 'Edit this prop’s declaration in source.';
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const editing = property.editing;
+  const reason =
+    editing?.kind === 'restricted'
+      ? translateDescribed({ message: editing.reason, messageRef: editing.reasonRef })
+      : translate('componentProps.readOnly.editInSource');
   return (
     <div className="property-readonly-fields">
       <p className="property-help">{reason}</p>
-      <ReadOnlyField label="Name" value={property.name} />
-      <ReadOnlyCode label="Code type" value={property.type} />
+      <ReadOnlyField label={translate('componentProps.readOnly.name')} value={property.name} />
+      <ReadOnlyCode label={translate('componentProps.readOnly.codeType')} value={property.type} />
       <div className="property-flags">
         <label>
           <input type="checkbox" checked={property.required} disabled />
-          Required
+          {translate('componentProps.readOnly.required')}
         </label>
       </div>
-      <ReadOnlyCode label="Default value" value={property.defaultValue} />
-      <ReadOnlyField label="Tooltip" value={property.description} />
+      <ReadOnlyCode label={translate('componentProps.readOnly.defaultValue')} value={property.defaultValue} />
+      <ReadOnlyField label={translate('componentProps.readOnly.tooltip')} value={property.description} rows={3} />
     </div>
   );
 }
 
 function ReadOnlyCode({ label, value }: { readonly label: string; readonly value: string }) {
+  const translate = useTranslate();
   return (
     <div className="property-readonly-code">
       {label}
-      {value === '' ? <CodeBlock label={label} text="Not specified" /> : <CodeBlock label={label} language="typescript" text={value} />}
+      {value === '' ? (
+        <CodeBlock label={label} text={translate('componentProps.readOnly.notSpecified')} />
+      ) : (
+        <CodeBlock label={label} language="typescript" text={value} />
+      )}
     </div>
   );
 }
 
-function ReadOnlyField({ label, value }: { readonly label: string; readonly value: string }) {
+function ReadOnlyField({ label, value, rows = 1 }: { readonly label: string; readonly value: string; readonly rows?: number }) {
+  const translate = useTranslate();
   return (
     <label>
       {label}
-      <textarea readOnly value={value} rows={label === 'Tooltip' ? 3 : 1} aria-label={label} placeholder="Not specified" />
+      <textarea readOnly value={value} rows={rows} aria-label={label} placeholder={translate('componentProps.readOnly.notSpecified')} />
     </label>
   );
 }

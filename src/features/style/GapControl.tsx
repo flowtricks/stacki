@@ -10,6 +10,7 @@ import VariableConnect from './VariableConnect';
 import type { ResolvedProp } from './model/resolved';
 import { splitTopLevelSpaces } from './model/background';
 import { useGapHover, type GapAxis } from './model/gapHover';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // The Gap control for the Layout section: a lock toggle plus one field (linked →
 // both gaps equal) or two fields (unlinked → separate row/column).
@@ -135,6 +136,7 @@ function GapInput({
 }: GapFieldOptions & {
   ariaLabel: string;
 }) {
+  const translate = useTranslate();
   const inputProps = useGapField(field);
   return (
     <VariableConnect
@@ -142,7 +144,7 @@ function GapInput({
       // A gap has no negative side to step onto.
       {...(isNonNegative(field.prop) ? { stepMin: 0 } : {})}
       className="is-fill"
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      ariaLabel={translate('style.gapControl.connect', { name: ariaLabel })}
       disabled={field.busy}
       prop={field.prop}
       onPick={(binding) => field.onCommit(binding)}
@@ -272,6 +274,7 @@ interface WriteOptions {
 
 export default function GapControl(props: GapControlProps) {
   const { show, read, busy, setProp, clearProp, liveSetProp } = props;
+  const translate = useTranslate();
   const rowAxis = axisState(ROW, ROW_LEGACY, 'row', read);
   const columnAxis = axisState(COL, COL_LEGACY, 'col', read);
   const row = rowAxis.text;
@@ -309,7 +312,7 @@ export default function GapControl(props: GapControlProps) {
   return (
     <div className="embed-editor_size-row">
       <GroupLabel
-        label="Gap"
+        label={translate('style.gapControl.gap')}
         props={GAP_PROPS}
         read={read}
         {...labelProps}
@@ -324,7 +327,7 @@ export default function GapControl(props: GapControlProps) {
             prop={ROW}
             value={row}
             busy={busy}
-            ariaLabel="Gap"
+            ariaLabel={translate('style.gapControl.gap')}
             axes={axesFor(ROW, 'linked')}
             onLive={(next) => writeBoth(next, { live: true })}
             onCommit={(next) => writeBoth(next, { live: false })}
@@ -369,14 +372,15 @@ function SplitGapFields({
   columnAxis: Axis;
   writeAxis: ReturnType<typeof axisWriter>;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <GapCell
         axis={columnAxis}
         prop={COL}
         legacy={COL_LEGACY}
-        label="Columns"
-        ariaLabel="Column gap"
+        label={translate('style.gapControl.columns')}
+        ariaLabel={translate('style.gapControl.columnGap')}
         {...shared}
         write={(next, options) => writeAxis(columnAxis, COL, next, options)}
       />
@@ -384,8 +388,8 @@ function SplitGapFields({
         axis={rowAxis}
         prop={ROW}
         legacy={ROW_LEGACY}
-        label="Rows"
-        ariaLabel="Row gap"
+        label={translate('style.gapControl.rows')}
+        ariaLabel={translate('style.gapControl.rowGap')}
         {...shared}
         write={(next, options) => writeAxis(rowAxis, ROW, next, options)}
       />
@@ -440,13 +444,14 @@ function GapCell({
 }
 
 function GapLinkButton({ linked, busy, onToggle }: { linked: boolean; busy: boolean; onToggle: () => void }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
       className={`embed-editor_icon-btn embed-editor_gap-link ${linked ? 'is-active' : ''}`}
       disabled={busy}
       aria-pressed={linked}
-      title={linked ? 'Linked — one gap for rows and columns' : 'Unlinked — separate row and column gaps'}
+      title={linked ? translate('style.gapControl.linked') : translate('style.gapControl.unlinked')}
       onClick={onToggle}
     >
       {linked ? <LockedIcon /> : <UnlockedIcon />}

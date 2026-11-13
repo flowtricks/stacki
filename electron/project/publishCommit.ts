@@ -3,6 +3,7 @@ import { err, ok, type Result } from '../../shared/core/result';
 import { publishTree, type PublishSource } from './publishSnapshot';
 import { checkPublishWorkingSize } from './publishSize';
 import { parsePublishObject, readPublishHead, runPublishGit } from './publishGitCommand';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 export interface PublishRepository {
   readonly branch: string;
@@ -23,7 +24,7 @@ export async function requirePublishMessage(root: string, source: PublishSource,
   return message === undefined
     ? err({
         code: 'message-required',
-        message: 'Enter a commit message before publishing changes to GitHub.',
+        ...described('error.publish.commitMessageMissing'),
       })
     : ok(undefined);
 }
@@ -41,7 +42,7 @@ export async function checkPublishIncoming(root: string, repository: PublishRepo
   }
   const [commit, remoteReference] = advertised.value.trim().split('\t');
   if (remoteReference !== reference || commit === undefined) {
-    return err({ code: 'git-output', message: 'Git returned a different remote branch.' });
+    return err({ code: 'git-output', ...described('publish.git.error.differentRemote') });
   }
   const parsed = parsePublishObject(commit);
   if (!parsed.ok) {
@@ -156,20 +157,20 @@ async function verifyPublishCommit(root: string, tree: string, branch: string): 
     ? ok(head.value)
     : err({
         code: 'commit-changed',
-        message: 'Commit hooks changed the publish source. Review it and publish again.',
+        ...described('error.publish.hooksChangedSource'),
       });
 }
 
 function changedProject(): Result<never> {
   return err({
     code: 'source-changed',
-    message: 'Project or branch changed while publishing. Publish again to include the latest edits.',
+    ...described('error.publish.projectChanged'),
   });
 }
 
 function incomingChanges(): Result<never> {
   return err({
     code: 'incoming',
-    message: 'GitHub has incoming changes. Use Pull from GitHub in the branch menu, then publish again.',
+    ...described('error.publish.incomingChanges'),
   });
 }

@@ -7,6 +7,9 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import LayerPopover from './LayerPopover';
 import { displayOf } from './model/styleDisplay';
 import { type Props, EffLabel } from './EffectsKit';
+import { SkeletonRows } from '../../ui/Skeleton';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 
 // ─────────────────────────── Section ───────────────────────────
 
@@ -71,38 +74,51 @@ export function ClipGlyph({ type }: { type: string }) {
   }
 }
 
+// The shown name of each type `clipPathType` answers; anything else (an `SVG` url) shows as it is.
+const CLIP_TYPE_KEYS: Readonly<Record<string, MessageKey>> = {
+  None: 'style.clipPathRow.typeNone',
+  Polygon: 'style.clipPathRow.typePolygon',
+  Circle: 'style.clipPathRow.typeCircle',
+  Ellipse: 'style.clipPathRow.typeEllipse',
+  Inset: 'style.clipPathRow.typeInset',
+  Path: 'style.clipPathRow.typePath',
+  Shape: 'style.clipPathRow.typeShape',
+  Variable: 'style.clipPathRow.typeVariable',
+  Custom: 'style.clipPathRow.typeCustom',
+};
+
 // A cheap classifier for the trigger label — names the shape without pulling the huge
 // editor module (and its full parser) into the main bundle.
 export function clipPathType(value: string): string {
   const normalized = value.trim().toLowerCase();
   if (!normalized || normalized === 'none') {
-    return 'None';
+    return 'None'; // i18n-ignore: an id for the glyph and the label table, shown through the catalog.
   }
   if (normalized.startsWith('polygon')) {
-    return 'Polygon';
+    return 'Polygon'; // i18n-ignore: an id for the glyph and the label table, shown through the catalog.
   }
   if (normalized.startsWith('circle')) {
-    return 'Circle';
+    return 'Circle'; // i18n-ignore: an id for the glyph and the label table, shown through the catalog.
   }
   if (normalized.startsWith('ellipse')) {
-    return 'Ellipse';
+    return 'Ellipse'; // i18n-ignore: an id for the glyph and the label table, shown through the catalog.
   }
   if (normalized.startsWith('inset') || normalized.startsWith('rect') || normalized.startsWith('xywh')) {
-    return 'Inset';
+    return 'Inset'; // i18n-ignore: an id for the glyph and the label table, shown through the catalog.
   }
   if (normalized.startsWith('path')) {
-    return 'Path';
+    return 'Path'; // i18n-ignore: an id for the glyph and the label table, shown through the catalog.
   }
   if (normalized.startsWith('shape')) {
-    return 'Shape';
+    return 'Shape'; // i18n-ignore: an id for the glyph and the label table, shown through the catalog.
   }
   if (normalized.startsWith('url')) {
-    return 'SVG';
+    return 'SVG'; // i18n-ignore: the format name.
   }
   if (normalized.startsWith('var')) {
-    return 'Variable';
+    return 'Variable'; // i18n-ignore: an id for the glyph and the label table, shown through the catalog.
   }
-  return 'Custom';
+  return 'Custom'; // i18n-ignore: an id for the glyph and the label table, shown through the catalog.
 }
 
 // The editor in the panel's own layer popover, under its row, as Transform and
@@ -111,6 +127,7 @@ export function clipPathType(value: string): string {
 // editor's clip-path writes are routed to the panel's selected selector via
 // setProp/clearProp (so its own class picker is hidden).
 export function ClipPathModal({ props, anchor, onClose }: { props: Props; anchor: HTMLElement; onClose: () => void }) {
+  const translate = useTranslate();
   // The shape editor has no text to delete `!important` from, so its writes keep
   // the flag the property already has; the hook writes plain, and this says which.
   const { important } = displayOf(props.read('clip-path'));
@@ -122,9 +139,9 @@ export function ClipPathModal({ props, anchor, onClose }: { props: Props; anchor
   // What the panel shows now, read once: the editor opens on it (ClipPathProps.initialValue).
   const [initialValue] = useState(() => clipPathValueOf(props));
   return (
-    <LayerPopover anchorEl={anchor} onClose={onClose} ariaLabel="Clip path">
+    <LayerPopover anchorEl={anchor} onClose={onClose} ariaLabel={translate('style.clipPathRow.clipPath')}>
       <div className="embed-editor_clip-modal-head">
-        <span className="embed-editor_clip-modal-title">Clip path</span>
+        <span className="embed-editor_clip-modal-title">{translate('style.clipPathRow.clipPath')}</span>
         <div className="embed-editor_clip-modal-actions">
           {/* Portal target for the editor's shortcut-help control (it renders nothing
             when this is absent). Provided here since it's no longer a hosted tool. */}
@@ -133,7 +150,13 @@ export function ClipPathModal({ props, anchor, onClose }: { props: Props; anchor
         </div>
       </div>
       <div className="embed-editor_clip-modal-body">
-        <Suspense fallback={<div className="embed-editor_clip-loading">Loading editor…</div>}>
+        <Suspense
+          fallback={
+            <div className="embed-editor_clip-loading">
+              <SkeletonRows count={4} />
+            </div>
+          }
+        >
           <ClipPathEditor onApply={onApply} onClear={onClear} hideClassPicker initialValue={initialValue} />
         </Suspense>
       </div>
@@ -193,13 +216,14 @@ function clipPathValueOf({ read }: Pick<Props, 'read'>): string {
 // showing the current clip-path type. Clicking opens the visual editor popup.
 export function ClipPathRow({ props }: { props: Props }) {
   const { busy } = props;
+  const translate = useTranslate();
   const raw = clipPathValueOf(props);
   // The trigger the editor opens under, as the element itself once clicked.
   const [open, setOpen] = useState<HTMLElement | undefined>(undefined);
   const type = clipPathType(raw);
   return (
     <div className="embed-editor_size-row">
-      <EffLabel label="Clip" prop="clip-path" props={props} />
+      <EffLabel label={translate('style.clipPathRow.clip')} prop="clip-path" props={props} />
       <button
         type="button"
         className="embed-editor_clip-trigger"
@@ -212,7 +236,7 @@ export function ClipPathRow({ props }: { props: Props }) {
       >
         <span className="embed-editor_clip-trigger-type">
           <ClipGlyph type={type} />
-          <span className="embed-editor_clip-trigger-label">{type}</span>
+          <span className="embed-editor_clip-trigger-label">{CLIP_TYPE_KEYS[type] === undefined ? type : translate(CLIP_TYPE_KEYS[type])}</span>
         </span>
         <ClipEditIcon />
       </button>

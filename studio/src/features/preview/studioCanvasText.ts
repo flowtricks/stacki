@@ -1,3 +1,4 @@
+import type { Translator } from '../../../vendor/stacki/src/lib/i18n/localeContext';
 import { canvasContentEdits } from '../../../vendor/stacki/src/app/model/canvasTextContent';
 import { canvasPropEdits, type ComponentSource } from '../../../vendor/stacki/src/app/model/canvasPropText';
 import { canvasTextFormatter } from '../../../vendor/stacki/src/app/model/canvasTextFormat';
@@ -22,6 +23,7 @@ export function studioCanvasText(
   document: SharedDocument | undefined,
   nodes: readonly ParserNode[],
   context: { readonly components: readonly Component[]; readonly selected: string },
+  translate: Translator,
 ): CanvasTextDocument | undefined {
   if (!document?.ready || !file.endsWith('.astro')) {
     return undefined;
@@ -43,8 +45,9 @@ export function studioCanvasText(
     nodes,
     projectPath: ROOT,
     loadContent: async (canvas) => [
-      ...(await canvasContentEdits(canvas)),
+      ...(await canvasContentEdits(canvas, translate('shell.canvasText.sharedContent'))),
       ...(await canvasPropEdits(canvas, {
+        label: translate('shell.canvasText.componentText'),
         projectPath: ROOT,
         file: `${ROOT}/${file}`,
         nodes,

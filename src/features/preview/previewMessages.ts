@@ -6,8 +6,10 @@ import type { Box } from './outlineBoxes';
 import type { Spacing } from './spacingBands';
 import { boolean, count, dictionary, digest, list, optional, pathText, record } from '../../../shared/core/boundary';
 import type { Digest } from '../../../shared/core/brand';
-import { parsePreviewRender, type PreviewRender } from '../../../shared/page/previewToken';
+import { parsePreviewRender, type PreviewRender, type PreviewStaleReason } from '../../../shared/page/previewToken';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import { GUIDE_LIMITS, parseGuideVariableName, type GuideMetrics } from './guideModel';
 
 export type PreviewMessage =
@@ -86,12 +88,12 @@ export type PreviewReloadReason = (typeof PREVIEW_RELOAD_REASONS)[number];
 
 /** The notice for a reload a cap caused, or undefined for one the canvas could
  * never have avoided (those stay quiet, as they always were). */
-export function describePreviewReload(reason: PreviewReloadReason): string | undefined {
+export function describePreviewReload(reason: PreviewReloadReason, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   switch (reason) {
     case 'markers-over-cap':
-      return 'The canvas reloaded: this page has more elements than it updates in place.';
+      return translate('preview.reload.markersOverCap');
     case 'diff-over-cap':
-      return 'The canvas reloaded: the change was too large to update in place.';
+      return translate('preview.reload.diffOverCap');
     case 'scripts-changed':
     case 'patch-failed':
       return undefined;
@@ -100,6 +102,21 @@ export function describePreviewReload(reason: PreviewReloadReason): string | und
       return exhaustive;
     }
   }
+}
+
+const STALE_MESSAGE_KEYS: Readonly<Record<PreviewStaleReason, MessageKey>> = {
+  'no-render': 'preview.stale.noRender',
+  superseded: 'preview.stale.superseded',
+  'token-mismatch': 'preview.stale.tokenMismatch',
+  'file-changed': 'preview.stale.fileChanged',
+  'file-missing': 'preview.stale.fileMissing',
+  'unstamped-file': 'preview.stale.unstampedFile',
+  'shown-page-differs': 'preview.stale.shownPageDiffers',
+};
+
+/** The notice for a refused canvas event in the person's language: `describePreviewStale` (shared/page) keeps the English for logs. */
+export function describeStaleClick(reason: PreviewStaleReason, translate: Translator = ENGLISH_TRANSLATE): string {
+  return translate(STALE_MESSAGE_KEYS[reason]);
 }
 
 /** A shortcut the canvas frame forwards while it holds keyboard focus

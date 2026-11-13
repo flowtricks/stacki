@@ -1,19 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslate, useTranslateDescribed } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
+import { parseOptionalMessageRef, type MessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
 import { request } from '../project/projectClient';
 import { record, string } from '../../shared/validation';
 
 export function SyncNotice({ refresh, report }: { readonly refresh: () => void; readonly report: (problem: unknown) => void }) {
+  const translateDescribed = useTranslateDescribed();
   const callback = useRef(refresh);
   callback.current = refresh;
   const [conflict, setConflict] = useState<{ sha: string; files: string[] }>();
   const [busy, setBusy] = useState(false);
   const last = useRef('');
   const lastFailure = useRef('');
-  function failed(problem: unknown) {
+  function failed(problem: unknown, messageRef?: MessageRef) {
     const message = problem instanceof Error ? problem.message : String(problem);
     if (message !== lastFailure.current) {
       lastFailure.current = message;
-      report(message);
+      // The server's English text is the identity of a repeat; the person sees it in their language when it sent a reference.
+      report(translateDescribed({ message, messageRef }));
     }
   }
   async function sync(side?: 'draft' | 'github') {
@@ -33,7 +37,7 @@ export function SyncNotice({ refresh, report }: { readonly refresh: () => void; 
         }
         setConflict({ sha: string(value['sha']), files: files.map((file) => string(file)) });
       } else if (value['kind'] === 'failed') {
-        failed(string(value['message']));
+        failed(string(value['message']), parseOptionalMessageRef(value['messageRef']));
       } else if (value['kind'] === 'synced') {
         lastFailure.current = '';
         setConflict(undefined);
@@ -64,18 +68,19 @@ function SyncConflict({
   readonly busy: boolean;
   readonly sync: (side: 'draft' | 'github') => Promise<void>;
 }) {
+  const translate = useTranslate();
   return (
     <div className="sync-notice" role="status">
-      <p>GitHub and the draft changed the same content. Choose which version to keep for these files.</p>
+      <p>{translate('git.sync.conflict')}</p>
       {conflict.files.map((file) => (
         <code key={file}>{file}</code>
       ))}
       <div className="node-actions">
         <button disabled={busy} onClick={() => void sync('draft')}>
-          Keep draft versions
+          {translate('git.sync.keepDraft')}
         </button>
         <button disabled={busy} onClick={() => void sync('github')}>
-          Use GitHub versions
+          {translate('git.sync.useGitHub')}
         </button>
       </div>
     </div>

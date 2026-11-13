@@ -10,7 +10,8 @@
 // most APP_PLACE_LIMITS.visibilityReposMax repositories are remembered. A
 // failure answers no visibility, never an error: the pill then says "GitHub".
 import { assert } from '../../shared/core/assert';
-import { appsFailureMessage, type AppSummary, type AppsResult } from '../../shared/properties/apps';
+import { described } from '../../shared/properties/i18n/messageRef';
+import { appsFailure, type AppSummary, type AppsResult } from '../../shared/properties/apps';
 import type { MarketplaceIndex } from '../../shared/properties/appMarketplace';
 import {
   APP_PLACE_LIMITS,
@@ -129,7 +130,7 @@ function installedApp(projectRoot: string, id: string): AppsResult<AppSummary> {
   try {
     const app = listInstalledApps(projectRoot).find((summary) => summary.manifest.id === id);
     if (app === undefined) {
-      return { ok: false, message: `The app "${id}" is not installed.` };
+      return { ok: false, ...described('apps.error.notInstalled', { id }) };
     }
     assert(app.manifest.id === id, 'The found app is the one asked for');
     return { ok: true, value: app };
@@ -137,6 +138,6 @@ function installedApp(projectRoot: string, id: string): AppsResult<AppSummary> {
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
       throw error;
     }
-    return { ok: false, message: appsFailureMessage(error) };
+    return { ok: false, ...appsFailure(error) };
   }
 }

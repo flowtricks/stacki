@@ -1,4 +1,5 @@
 import { centralIcon } from '../../../ui/central/CentralIcon';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 import type { InlineChip, InlineCodeView } from './useInlineTarget';
 import { InlineBranchEditor, InlineBranchPicker } from './InlineBranchEditor';
@@ -33,7 +34,7 @@ import type { ElementSnapshot, ParsedRule } from '../model/styleTypes';
 import { type LiveSetProp } from './EditorBasics';
 import { usePanelLayer } from './editorModel';
 import { type SourceOption, type SelectorSuggestion } from './LayoutRows';
-import { useHighlightInView, QUERY_MODES, type QuerySuggestion, type QueryComboProps } from './SelectorPicker';
+import { useHighlightInView, queryModes, type QuerySuggestion, type QueryComboProps } from './SelectorPicker';
 
 export function QueryCombo(props: QueryComboProps) {
   const { draft, setDraft, onSubmit, onCancel, suggestions, ariaLabel } = props;
@@ -123,8 +124,17 @@ export function QuerySuggestionList({
   setHighlight: (index: number) => void;
   submit: (text: string) => void;
 }) {
+  const translate = useTranslate();
   return (
-    <Popup mode="popover" portal={false} onClose={onClose} className="embed-editor_selector-suggest" ref={listRef} role="listbox" label="Query suggestions">
+    <Popup
+      mode="popover"
+      portal={false}
+      onClose={onClose}
+      className="embed-editor_selector-suggest"
+      ref={listRef}
+      role="listbox"
+      label={translate('styleModel.embed.query.suggestions')}
+    >
       {filtered.map((suggestion, i) => (
         <button
           key={`${suggestion.kind}:${suggestion.query}`}
@@ -219,6 +229,7 @@ export function AddQueryForm({
   onAdd: (query: string, mode: 'wrap' | 'nest') => void;
   onCancel: () => void;
 }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState('@');
   const [mode, setMode] = useState<'wrap' | 'nest'>('nest');
   const submit = (text: string) => onAdd(text, canNest ? mode : 'wrap');
@@ -228,24 +239,31 @@ export function AddQueryForm({
       <div className="embed-editor_add-query-controls">
         <SegmentedControl
           className="embed-editor_add-query-mode"
-          options={QUERY_MODES}
+          options={queryModes(translate)}
           value={canNest ? mode : 'wrap'}
           onChange={setMode}
-          ariaLabel="How to add the query"
+          ariaLabel={translate('styleModel.embed.query.howToAdd')}
           disabled={!canNest}
           widthMode="hug"
         />
         <div className="embed-editor_add-query-actions">
           <button type="button" className="u-button is-ghost is-small" onClick={onCancel}>
-            Cancel
+            {translate('ui.cancel')}
           </button>
           <button type="button" className="u-button is-primary is-small" onClick={() => submit(draft)} disabled={draft.trim() === '' || draft.trim() === '@'}>
-            Add
+            {translate('styleModel.embed.query.add')}
           </button>
         </div>
       </div>
-      {!canNest ? <p className="embed-editor_add-query-note">Pick a selector to nest inside it.</p> : undefined}
-      <QueryCombo draft={draft} setDraft={setDraft} onSubmit={submit} onCancel={onCancel} suggestions={suggestions} ariaLabel="Query to add" />
+      {!canNest ? <p className="embed-editor_add-query-note">{translate('styleModel.embed.query.pickToNest')}</p> : undefined}
+      <QueryCombo
+        draft={draft}
+        setDraft={setDraft}
+        onSubmit={submit}
+        onCancel={onCancel}
+        suggestions={suggestions}
+        ariaLabel={translate('styleModel.embed.query.queryToAdd')}
+      />
     </div>
   );
 }
@@ -269,6 +287,7 @@ export function EditQueryForm({
   onRename: (from: string, to: string) => void;
   onCancel: () => void;
 }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(query);
   const changed = draft.trim() !== '' && draft.trim() !== '@' && draft.trim() !== query;
   const submit = (text: string) => {
@@ -281,15 +300,15 @@ export function EditQueryForm({
   return (
     <div className="embed-editor_add-query is-rename">
       <div className="embed-editor_add-query-controls">
-        <span className="embed-editor_add-query-count" title={`${uses === 1 ? '1 block' : `${uses} blocks`} in ${sourceLabel}`}>
-          {uses === 1 ? '1 block' : `${uses} blocks`} in {sourceLabel}
+        <span className="embed-editor_add-query-count" title={translate('styleModel.embed.query.blocksIn', { count: uses, source: sourceLabel })}>
+          {translate('styleModel.embed.query.blocksIn', { count: uses, source: sourceLabel })}
         </span>
         <div className="embed-editor_add-query-actions">
           <button type="button" className="u-button is-ghost is-small" onClick={onCancel}>
-            Cancel
+            {translate('ui.cancel')}
           </button>
           <button type="button" className="u-button is-primary is-small" onClick={() => submit(draft)} disabled={!changed}>
-            Rename
+            {translate('styleModel.embed.query.rename')}
           </button>
         </div>
       </div>
@@ -299,7 +318,7 @@ export function EditQueryForm({
         onSubmit={submit}
         onCancel={onCancel}
         suggestions={suggestions}
-        ariaLabel="Query"
+        ariaLabel={translate('styleModel.embed.query.query')}
         initial={query}
         selectOnFocus
       />
@@ -422,6 +441,7 @@ export function EditableCssRule({
   readonly busy: boolean;
   readonly onSave: (rule: ParsedRule, css: string) => void;
 }) {
+  const translate = useTranslate();
   // Flush left with a tab per level, whatever the <style> block's own indentation
   // (replaceRuleCss puts the block's indentation back on save), inside the selectors
   // and queries it is written in. Those are read-only: they may hold other rules,
@@ -466,7 +486,7 @@ export function EditableCssRule({
     <CodeEditor
       value={draft}
       language="css"
-      ariaLabel={`Editable CSS for ${rule.nestedDisplay ?? rule.selectorText}; changes save automatically`}
+      ariaLabel={translate('styleModel.embed.query.editableCss', { rule: rule.nestedDisplay ?? rule.selectorText })}
       // A whole rule: `--` offers variables in each declaration's value. There is
       // no one property to bind the whole text to, so it has no bind dot.
       variables={{ kind: 'declarations' }}
@@ -493,15 +513,16 @@ export type CssCodeSectionProps = {
 };
 
 export function CssCodeHeader({ open, sourceLabel, onToggle }: { readonly open: boolean; readonly sourceLabel: string; readonly onToggle: () => void }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
       className="embed-editor_css-code-header embed-editor_css-code-toggle"
       aria-expanded={open}
-      aria-label={`${open ? 'Collapse' : 'Expand'} CSS Code`}
+      aria-label={open ? translate('styleModel.embed.query.codeCollapse') : translate('styleModel.embed.query.codeExpand')}
       onClick={onToggle}
     >
-      <span className="embed-editor_css-code-title">CSS Code</span>
+      <span className="embed-editor_css-code-title">{translate('styleModel.embed.query.codeTitle')}</span>
       {sourceLabel ? (
         <span className="embed-editor_css-code-source" title={sourceLabel}>
           {sourceLabel}
@@ -515,6 +536,7 @@ export function CssCodeHeader({ open, sourceLabel, onToggle }: { readonly open: 
 }
 
 export function CssCodeSection({ model, activeSelector, visibleSelectors, editableRule, busy, open, onToggle, onSave, inlineCode }: CssCodeSectionProps) {
+  const translate = useTranslate();
   const layer = usePanelLayer();
   const rules = useMemo(() => {
     const visible = [...model.base, ...model.conditional].filter((rule) => cssRuleMatchesVisibleSelector(rule, visibleSelectors));
@@ -523,7 +545,8 @@ export function CssCodeSection({ model, activeSelector, visibleSelectors, editab
   }, [model, activeSelector, visibleSelectors, layer]);
   const view = useMemo(() => buildCssRuleView(rules), [rules]);
   const sources = useMemo(() => [...new Set(rules.map((entry) => entry.rule.embedLabel))], [rules]);
-  const sourceLabel = inlineCode !== undefined ? 'style attribute' : activeSelector ? (editableRule?.embedLabel ?? sources.join(', ')) : '';
+  const sourceLabel =
+    inlineCode !== undefined ? translate('styleModel.embed.query.attributeSource') : activeSelector ? (editableRule?.embedLabel ?? sources.join(', ')) : '';
 
   return (
     <section className={`embed-editor_css-code ${open ? 'is-open' : 'is-collapsed'}`}>
@@ -536,14 +559,19 @@ export function CssCodeSection({ model, activeSelector, visibleSelectors, editab
           ) : inlineCode?.kind === 'readonly' ? (
             <>
               <p className="embed-editor_inline-writes-to">{inlineCode.reason}</p>
-              <CodeBlock text={inlineCode.code} language="css" className="embed-editor_css-code-preview" label="The style attribute, read-only" />
+              <CodeBlock
+                text={inlineCode.code}
+                language="css"
+                className="embed-editor_css-code-preview"
+                label={translate('styleModel.embed.query.attributeReadOnly')}
+              />
             </>
           ) : activeSelector && editableRule ? (
             <EditableCssRule key={editableRule.ruleId} rule={editableRule} busy={busy} onSave={onSave} />
           ) : view.code ? (
-            <CssCodePreview view={view} ariaLabel="CSS matching this element" />
+            <CssCodePreview view={view} ariaLabel={translate('styleModel.embed.query.matching')} />
           ) : (
-            <p className="embed-editor_css-code-empty">No matching CSS rules.</p>
+            <p className="embed-editor_css-code-empty">{translate('styleModel.embed.query.noRules')}</p>
           )}
         </div>
       ) : undefined}

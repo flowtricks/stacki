@@ -21,6 +21,7 @@ import {
 import * as connections from './cmsConnectionsBridge';
 import { parseCollectionSettings, type CollectionSettings, type SettingsChange } from '../../shared/properties/collectionSettings';
 import { cmsTransport } from './editorEnvironment';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 export function remoteCollections(projectPath: string, connectionId: string): Promise<RemoteResult<readonly RemoteCollection[]>> {
   return connectionId === ASTRO_CONTENT_ID
@@ -118,7 +119,8 @@ async function attempt<T>(run: () => Promise<RemoteResult<T>>): Promise<RemoteRe
     return await run();
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, message: message.slice(0, 900) || 'The content request failed.' };
+    // The browser's or host's own text wins when there is one; it is not ours to translate.
+    return message === '' ? { ok: false, ...described('error.bridge.contentRequestFailed') } : { ok: false, message: message.slice(0, 900) };
   }
 }
 

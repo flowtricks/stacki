@@ -1,8 +1,11 @@
+// i18n-ignore-file: the labels are English next to their `labelKey`, which the panel translates; the rest of the file holds no interface text.
 // `filter` / `backdrop-filter` are a SPACE-separated list of filter functions
 // (blur/brightness/…/drop-shadow). We model each as one editable layer and
 // parse/serialize back, splitting on TOP-LEVEL spaces so drop-shadow()'s inner
 // lengths + rgba() survive. Mirrors lib/transform.ts.
 
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
 import { splitTopLevelSpaces } from './background';
 
 export type FilterType = 'blur' | 'brightness' | 'contrast' | 'grayscale' | 'hue-rotate' | 'invert' | 'saturate' | 'sepia' | 'drop-shadow';
@@ -21,30 +24,34 @@ export type Filter = {
 export type FilterPatch = Pick<Filter, 'amount'> | Pick<Filter, 'x'> | Pick<Filter, 'y'> | Pick<Filter, 'blur'> | Pick<Filter, 'color'>;
 
 export type FilterControl = 'amount' | 'angle' | 'shadow';
-export const FILTER_META: Record<FilterType, { label: string; unit: string; min: number; max: number; control: FilterControl; def: string }> = {
-  blur: { label: 'Blur', unit: 'px', min: 0, max: 100, control: 'amount', def: '4px' },
-  brightness: { label: 'Brightness', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
-  contrast: { label: 'Contrast', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
-  saturate: { label: 'Saturation', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
-  grayscale: { label: 'Grayscale', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
-  invert: { label: 'Invert', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
-  sepia: { label: 'Sepia', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
+export const FILTER_META: Record<
+  FilterType,
+  { label: string; labelKey: MessageKey; unit: string; min: number; max: number; control: FilterControl; def: string }
+> = {
+  blur: { label: 'Blur', labelKey: 'styleModel.filter.type.blur', unit: 'px', min: 0, max: 100, control: 'amount', def: '4px' },
+  brightness: { label: 'Brightness', labelKey: 'styleModel.filter.type.brightness', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
+  contrast: { label: 'Contrast', labelKey: 'styleModel.filter.type.contrast', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
+  saturate: { label: 'Saturation', labelKey: 'styleModel.filter.type.saturate', unit: '%', min: 0, max: 200, control: 'amount', def: '100%' },
+  grayscale: { label: 'Grayscale', labelKey: 'styleModel.filter.type.grayscale', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
+  invert: { label: 'Invert', labelKey: 'styleModel.filter.type.invert', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
+  sepia: { label: 'Sepia', labelKey: 'styleModel.filter.type.sepia', unit: '%', min: 0, max: 100, control: 'amount', def: '100%' },
   'hue-rotate': {
     label: 'Hue rotate',
+    labelKey: 'styleModel.filter.type.hueRotate',
     unit: 'deg',
     min: 0,
     max: 360,
     control: 'angle',
     def: '0deg',
   },
-  'drop-shadow': { label: 'Drop shadow', unit: 'px', min: 0, max: 100, control: 'shadow', def: '' },
+  'drop-shadow': { label: 'Drop shadow', labelKey: 'styleModel.filter.type.dropShadow', unit: 'px', min: 0, max: 100, control: 'shadow', def: '' },
 };
 
 // Grouped exactly like Webflow's filter menu.
-export const FILTER_GROUPS: ReadonlyArray<{ heading: string; types: FilterType[] }> = [
-  { heading: 'General', types: ['blur', 'drop-shadow'] },
-  { heading: 'Color adjustments', types: ['brightness', 'contrast', 'hue-rotate', 'saturate'] },
-  { heading: 'Color effects', types: ['grayscale', 'invert', 'sepia'] },
+export const FILTER_GROUPS: ReadonlyArray<{ heading: string; headingKey: MessageKey; types: FilterType[] }> = [
+  { heading: 'General', headingKey: 'styleModel.filter.group.general', types: ['blur', 'drop-shadow'] },
+  { heading: 'Color adjustments', headingKey: 'styleModel.filter.group.colorAdjustments', types: ['brightness', 'contrast', 'hue-rotate', 'saturate'] },
+  { heading: 'Color effects', headingKey: 'styleModel.filter.group.colorEffects', types: ['grayscale', 'invert', 'sepia'] },
 ];
 
 function isFilterType(value: string): value is FilterType {
@@ -160,11 +167,12 @@ export function retypeFilter(type: FilterType): Filter {
 }
 
 /** A short label for a collapsed row. */
-export function filterLabel(filter: Filter): string {
+export function filterLabel(filter: Filter, translate: Translator = ENGLISH_TRANSLATE): string {
   const meta = FILTER_META[filter.type];
+  const name = translate(meta.labelKey);
   if (filter.type === 'drop-shadow') {
     const lengths = [filter.x, filter.y, filter.blur].map((length) => length.trim() || '0px');
-    return `${meta.label}: ${lengths.join(' ')}`;
+    return `${name}: ${lengths.join(' ')}`;
   }
-  return `${meta.label}: ${filter.amount.trim() || meta.def}`;
+  return `${name}: ${filter.amount.trim() || meta.def}`;
 }

@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { literalOptions } from '../../shared/properties/propertyOptions';
 
@@ -132,13 +133,13 @@ export function optionAliasOf(document: ts.SourceFile, member: ts.PropertySignat
 }
 
 /** What the panel says about editing an alias's options, when the edit reaches beyond this prop. */
-export function optionAliasWarning(alias: OptionAlias): string | undefined {
+export function optionAliasWarning(alias: OptionAlias): Described | undefined {
   const name = alias.declaration.name.text;
   if (alias.exported) {
-    return `${name} is exported, so other files may use it. Changing its options changes them too.`;
+    return described('props.contract.aliasExported', { name });
   }
   if (alias.uses > 1) {
-    return `${name} is used ${alias.uses} times in this file. Changing its options changes all of them.`;
+    return described('props.contract.aliasUsed', { name, uses: alias.uses });
   }
   return undefined;
 }

@@ -14,7 +14,8 @@
 import { assert } from '../core/assert';
 import { record, text } from '../core/boundary';
 import { toArray } from '../core/record';
-import { APP_LIMITS, appsFailureMessage, parseAppSummary, type AppSummary } from './apps';
+import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
+import { APP_LIMITS, appsFailure, parseAppSummary, type AppSummary } from './apps';
 
 export const APP_FOLDER_LIMITS = {
   /** Entries read from `.stacki/apps/` in one scan: every app's folder, the lockfile, the settings file and stray files. */
@@ -37,6 +38,8 @@ export const APP_FOLDER_LIMITS = {
 export interface AppFolderBroken {
   readonly folder: string;
   readonly message: string;
+  /** The reason as a reference the renderer translates; absent from an older host, which leaves the English `message`. */
+  readonly messageRef?: MessageRef | undefined;
 }
 
 /** Which app folders changed, by folder name: added, removed or edited. Empty when only the lockfile or settings did. */
@@ -72,7 +75,9 @@ export function parseAppFolderBroken(input: unknown): AppFolderBroken {
   if (message.length === 0 || message.length > APP_LIMITS.messageCharsMax) {
     throw new Error(`A broken row's reason is 1 to ${APP_LIMITS.messageCharsMax} characters`);
   }
-  return { folder: parseAppFolderName(value['folder']), message };
+  // A reference that does not parse is dropped: the English reason still shows.
+  const messageRef = parseOptionalMessageRef(value['messageRef']);
+  return { folder: parseAppFolderName(value['folder']), message, ...(messageRef === undefined ? {} : { messageRef }) };
 }
 
 export function parseAppFoldersBroken(input: unknown): readonly AppFolderBroken[] {
@@ -113,7 +118,7 @@ export function parseInstalledAppList(input: unknown): InstalledAppList {
       if (error instanceof Error && error.message.startsWith('Assertion failed')) {
         throw error;
       }
-      broken.push({ folder: summaryFolder(item, index), message: appsFailureMessage(error) });
+      broken.push({ folder: summaryFolder(item, index), ...appsFailure(error) });
     }
   }
   assert(apps.length + broken.length === items.length, 'Every listed app is one row');

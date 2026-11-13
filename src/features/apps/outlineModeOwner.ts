@@ -77,7 +77,7 @@ export function createOutlineModeOwner(deps: OutlineModeDeps): OutlineModeOwner 
         return { applied: true };
       }
       if (!deps.running(appId)) {
-        return { applied: false, reason: 'Only a running app sets the outline mode' };
+        return { applied: false, reason: 'Only a running app sets the outline mode' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       if (owner !== undefined && owner !== appId) {
         reset('replaced');

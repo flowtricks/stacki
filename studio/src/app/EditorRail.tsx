@@ -1,3 +1,5 @@
+import type { MessageKey } from '../../vendor/stacki/src/lib/i18n/localeContext';
+import { useTranslate } from '../../vendor/stacki/src/lib/i18n/useTranslate';
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { canStudioPanel } from '../features/roles/roleStore';
 import { useStudioRole } from '../features/roles/useEditorRole';
@@ -15,17 +17,17 @@ import { useRailOverflow, type RailOverflowItem } from '../../vendor/stacki/src/
 // short window has no room for moves into a More menu (railOverflow.ts); the AI
 // button stays anchored at the foot.
 const panels = [
-  { id: 'pages', label: 'Pages', shortcut: 'P', Icon: FEATURE_ICONS['panel:pages'] },
-  { id: 'navigator', label: 'Navigator', shortcut: 'Z', Icon: FEATURE_ICONS['panel:navigator'] },
-  { id: 'properties', label: 'Properties', shortcut: 'K', Icon: FEATURE_ICONS['panel:properties'] },
-  { id: 'components', label: 'Components', shortcut: '⇧A', Icon: FEATURE_ICONS['panel:components'] },
-  { id: 'assets', label: 'Assets', shortcut: 'J', Icon: FEATURE_ICONS['panel:assets'] },
-  { id: 'collections', label: 'Collections', shortcut: '⌥C', Icon: FEATURE_ICONS['panel:cms'] },
-  { id: 'variables', label: 'Variables', shortcut: '⌥V', Icon: FEATURE_ICONS['panel:variables'] },
-  { id: 'code', label: 'Code', shortcut: 'C', Icon: FEATURE_ICONS['panel:code'] },
-  { id: 'history', label: 'Git', shortcut: '⌥H', Icon: FEATURE_ICONS['panel:history'] },
-  { id: 'apps', label: 'Apps', shortcut: 'E', Icon: FEATURE_ICONS['panel:apps'] },
-] as const;
+  { id: 'pages', labelKey: 'rail.pages', shortcut: 'P', Icon: FEATURE_ICONS['panel:pages'] },
+  { id: 'navigator', labelKey: 'rail.navigator', shortcut: 'Z', Icon: FEATURE_ICONS['panel:navigator'] },
+  { id: 'properties', labelKey: 'rail.properties', shortcut: 'K', Icon: FEATURE_ICONS['panel:properties'] },
+  { id: 'components', labelKey: 'rail.components', shortcut: '⇧A', Icon: FEATURE_ICONS['panel:components'] },
+  { id: 'assets', labelKey: 'rail.assets', shortcut: 'J', Icon: FEATURE_ICONS['panel:assets'] },
+  { id: 'collections', labelKey: 'rail.collections', shortcut: '⌥C', Icon: FEATURE_ICONS['panel:cms'] },
+  { id: 'variables', labelKey: 'rail.variables', shortcut: '⌥V', Icon: FEATURE_ICONS['panel:variables'] },
+  { id: 'code', labelKey: 'rail.code', shortcut: 'C', Icon: FEATURE_ICONS['panel:code'] },
+  { id: 'history', labelKey: 'rail.history', shortcut: '⌥H', Icon: FEATURE_ICONS['panel:history'] },
+  { id: 'apps', labelKey: 'rail.apps', shortcut: 'E', Icon: FEATURE_ICONS['panel:apps'] },
+] as const satisfies readonly { readonly id: string; readonly labelKey: MessageKey; readonly shortcut: string; readonly Icon: unknown }[];
 export type Panel = (typeof panels)[number]['id'] | 'ai';
 interface Props {
   readonly componentOpen: boolean;
@@ -36,6 +38,7 @@ interface Props {
 }
 
 export function EditorRail({ panel, toggle, componentOpen, projectPath }: Props) {
+  const translate = useTranslate();
   const role = useStudioRole();
   const [tip, setTip] = useState<{ label: string; left: number; top: number }>();
   const timer = useRef<ReturnType<typeof setTimeout>>();
@@ -83,7 +86,13 @@ export function EditorRail({ panel, toggle, componentOpen, projectPath }: Props)
   const moreItems: readonly RailMoreItem[] = [
     ...shownPanels
       .filter((item) => !shown.has(item.id))
-      .map(({ id, label, shortcut, Icon }): RailMoreItem => ({ id, label, icon: <Icon size={16} />, shortcut, select: () => select(id) })),
+      .map(({ id, labelKey, shortcut, Icon }): RailMoreItem => ({
+        id,
+        label: translate(labelKey),
+        icon: <Icon size={16} />,
+        shortcut,
+        select: () => select(id),
+      })),
     ...pinned
       .filter((app) => !shown.has(railAppId(app.manifest.id)))
       .map((app): RailMoreItem => ({
@@ -95,14 +104,14 @@ export function EditorRail({ panel, toggle, componentOpen, projectPath }: Props)
       })),
   ];
   return (
-    <nav className="rail studio-rail" aria-label="Editor panels" ref={railRef}>
-      {visiblePanels.map(({ id, label, shortcut, Icon }) => (
+    <nav className="rail studio-rail" aria-label={translate('rail.editorPanels')} ref={railRef}>
+      {visiblePanels.map(({ id, labelKey, shortcut, Icon }) => (
         <button
           key={id}
-          aria-label={label}
+          aria-label={translate(labelKey)}
           aria-pressed={activeId === id}
           className={`rail-btn ${activeId === id ? 'on' : ''}`}
-          onMouseEnter={showSoon(`${label} (${shortcut})`)}
+          onMouseEnter={showSoon(translate('rail.withShortcut', { label: translate(labelKey), shortcut }))}
           onMouseLeave={hide}
           onBlur={hide}
           onClick={() => select(id)}
@@ -135,9 +144,9 @@ export function EditorRail({ panel, toggle, componentOpen, projectPath }: Props)
         <button
           ref={anchoredRef}
           className={`rail-btn ai-icon ${panel === 'ai' ? 'on' : ''}`}
-          aria-label="AI chat"
+          aria-label={translate('rail.ai')}
           aria-pressed={panel === 'ai'}
-          title="AI chat"
+          title={translate('rail.ai')}
           onClick={() => select('ai')}
         >
           ✦

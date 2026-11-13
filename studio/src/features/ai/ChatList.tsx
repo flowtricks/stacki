@@ -3,7 +3,9 @@
 // Desktop uses (a chat dropped into the pinned group is pinned; dropped out of it, unpinned). Desktop's custom
 // sections, unread marks, fork and archive need its chat store and are not offered.
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { useFormat, useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { assert } from '../../../vendor/stacki/shared/core/assert';
+import type { Translator } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import { confirmDialog } from '../../../vendor/stacki/src/ui/ConfirmDialog';
 import { DropLine } from '../../../vendor/stacki/src/ui/DropLine';
 import { MoreIcon, PinIcon, PlusIcon } from '../../../vendor/stacki/src/ui/Icons';
@@ -39,6 +41,7 @@ export function ChatList({
   readonly onOpen: () => void;
   readonly onNew: () => void;
 }) {
+  const translate = useTranslate();
   const [query, setQuery] = useState('');
   const [renaming, setRenaming] = useState<string | undefined>(undefined);
   const sections = chatSections(chats);
@@ -51,15 +54,19 @@ export function ChatList({
     drag.dragging === undefined || drag.drop === undefined || resolveDrop(sections, drag.dragging, drag.drop).kind !== 'move' ? undefined : drag.drop;
   assert(line === undefined || sections.some((section) => section.id === line.sectionId), 'ChatList: a drop line names a section of the list');
   const groups = [
-    { id: PINNED_SECTION, name: 'Pinned', chats: chats.filter((chat) => chat.pinned && visible(chat)) },
-    { id: CHATS_SECTION, name: 'Chats', chats: chats.filter((chat) => !chat.pinned && visible(chat)) },
+    { id: PINNED_SECTION, name: translate('ai.sessions.pinned'), chats: chats.filter((chat) => chat.pinned && visible(chat)) },
+    { id: CHATS_SECTION, name: translate('ai.sessions.chats'), chats: chats.filter((chat) => !chat.pinned && visible(chat)) },
   ];
   const matches = groups.some((group) => group.chats.length > 0);
   return (
     <div className="ai-sessions chat-sessions">
-      <SearchField label="Search chats" className="ai-sessions-search" value={query} onChange={setQuery} />
+      <SearchField label={translate('ai.sessions.search')} className="ai-sessions-search" value={query} onChange={setQuery} />
       <div className="ai-list" ref={drag.containerRef}>
-        {!matches && <div className="ai-empty ai-sessions-empty">{needle === '' ? <p>No chats yet.</p> : <p>No chat matches.</p>}</div>}
+        {!matches && (
+          <div className="ai-empty ai-sessions-empty">
+            {needle === '' ? <p>{translate('ai.studio.noChats')}</p> : <p>{translate('ai.sessions.noMatch')}</p>}
+          </div>
+        )}
         {groups.map((group) => (
           <section key={group.id} className="ai-section" {...drag.sectionProps(group.id)}>
             {(group.id === CHATS_SECTION ? chats.some((chat) => chat.pinned) : true) && (
@@ -70,7 +77,7 @@ export function ChatList({
               </div>
             )}
             <ul className="ai-list-rows">
-              {group.chats.length === 0 && group.id === PINNED_SECTION && <li className="ai-section-empty">Drag a chat here to pin it.</li>}
+              {group.chats.length === 0 && group.id === PINNED_SECTION && <li className="ai-section-empty">{translate('ai.studio.dragPin')}</li>}
               {group.chats.map((chat) => (
                 <Fragment key={chat.id}>
                   {line?.sectionId === group.id && line.beforeId === chat.id && <DropSlot />}
@@ -96,10 +103,10 @@ export function ChatList({
         <button
           className="ai-new-section"
           disabled={chats.length >= CHATS_MAX}
-          title={chats.length >= CHATS_MAX ? 'Delete a chat to make room' : 'Start a new chat'}
+          title={chats.length >= CHATS_MAX ? translate('ai.studio.makeRoom') : translate('ai.studio.startChat')}
           onClick={onNew}
         >
-          <PlusIcon size={12} /> New chat
+          <PlusIcon size={12} /> {translate('ai.sessions.newChat')}
         </button>
       </div>
     </div>
@@ -127,6 +134,8 @@ interface RowProps {
 }
 
 function ChatRow({ chat, active, now, renaming, dragProps, onOpen, onRenameStart, onRenameEnd }: RowProps) {
+  const translate = useTranslate();
+  const { formatNumber } = useFormat();
   const trigger = useMenuTrigger();
   const running = chat.status !== 'idle';
   const { close: closeMenu } = trigger;
@@ -151,7 +160,7 @@ function ChatRow({ chat, active, now, renaming, dragProps, onOpen, onRenameStart
       </li>
     );
   }
-  const detail = chat.messages.length ? `${chat.messages.length} message${chat.messages.length === 1 ? '' : 's'}` : chat.draft || 'No messages yet';
+  const detail = chat.messages.length ? translate('ai.studio.messages', { count: chat.messages.length }) : chat.draft || translate('ai.studio.noMessages');
   return (
     <li
       className={`ai-list-row${chat.pinned ? ' is-pinned' : ''}${trigger.open ? ' has-menu' : ''}`}
@@ -167,14 +176,18 @@ function ChatRow({ chat, active, now, renaming, dragProps, onOpen, onRenameStart
         <span className="ai-row-lead" />
         <span className="ai-list-title">{chat.title}</span>
         <span className="ai-row-meta">
-          {chat.pinned && <PinIcon size={11} aria-label="Pinned" />}
-          {running ? <LoaderDots label="Working" dotPx={3} /> : <span className="ai-list-time">{ageLabel(chat.updatedAt, now)}</span>}
+          {chat.pinned && <PinIcon size={11} aria-label={translate('ai.sessions.pinned')} />}
+          {running ? (
+            <LoaderDots label={translate('ai.studio.working')} dotPx={3} />
+          ) : (
+            <span className="ai-list-time">{ageLabel(chat.updatedAt, now, { translate, formatNumber })}</span>
+          )}
         </span>
       </button>
       <button
         ref={trigger.ref}
         className="ai-row-more"
-        aria-label={`Actions for ${chat.title}`}
+        aria-label={translate('ai.sessions.actionsFor', { name: chat.title })}
         aria-haspopup="menu"
         aria-expanded={trigger.open}
         onClick={trigger.toggle}
@@ -184,7 +197,7 @@ function ChatRow({ chat, active, now, renaming, dragProps, onOpen, onRenameStart
       <Menu
         open={trigger.open}
         anchor={trigger.anchor}
-        label={`${chat.title} actions`}
+        label={translate('ai.sessions.actionsMenu', { name: chat.title })}
         placement="below-end"
         onClose={trigger.close}
         entries={
@@ -193,22 +206,22 @@ function ChatRow({ chat, active, now, renaming, dragProps, onOpen, onRenameStart
                 {
                   kind: 'item',
                   id: 'pin',
-                  label: chat.pinned ? 'Unpin' : 'Pin',
+                  label: chat.pinned ? translate('ai.sessions.unpin') : translate('ai.sessions.pin'),
                   shortcut: 'P',
                   accelerator: 'p',
                   onSelect: () => setPinned(chat.id, !chat.pinned),
                 },
-                { kind: 'item', id: 'rename', label: 'Rename', shortcut: 'R', accelerator: 'r', onSelect: onRenameStart },
+                { kind: 'item', id: 'rename', label: translate('ai.sessions.rename'), shortcut: 'R', accelerator: 'r', onSelect: onRenameStart },
                 { kind: 'divider', id: 'divider-delete' },
                 {
                   kind: 'item',
                   id: 'delete',
-                  label: 'Delete',
+                  label: translate('ai.sessions.delete'),
                   shortcut: 'D',
                   accelerator: 'd',
                   danger: true,
                   disabled: running,
-                  onSelect: () => void confirmDelete(chat),
+                  onSelect: () => void confirmDelete(chat, translate),
                 },
               ]
             : []
@@ -218,11 +231,11 @@ function ChatRow({ chat, active, now, renaming, dragProps, onOpen, onRenameStart
   );
 }
 
-async function confirmDelete(chat: ChatThread): Promise<void> {
+async function confirmDelete(chat: ChatThread, translate: Translator): Promise<void> {
   const confirmed = await confirmDialog({
-    title: `Delete “${chat.title}”?`,
-    body: 'The conversation is removed from this browser. Changes already applied to the draft stay.',
-    confirmLabel: 'Delete',
+    title: translate('ai.studio.deleteTitle', { title: chat.title }),
+    body: translate('ai.studio.deleteBody'),
+    confirmLabel: translate('ai.sessions.delete'),
     danger: true,
   });
   if (confirmed) {
@@ -233,6 +246,7 @@ async function confirmDelete(chat: ChatThread): Promise<void> {
 /** The in-place name field a row turns into while renaming: Enter commits, Escape cancels, leaving the field commits. */
 function RenameField({ initial, onCommit, onCancel }: { readonly initial: string; readonly onCommit: (title: string) => void; readonly onCancel: () => void }) {
   // Refs, not state: Enter closes the field, which blurs it in the same event, and the blur must not commit a second time.
+  const translate = useTranslate();
   const finished = useRef(false);
   const focused = useRef(false);
   const finish = (value: string): void => {
@@ -258,7 +272,7 @@ function RenameField({ initial, onCommit, onCancel }: { readonly initial: string
         }
       }}
       className="ai-rename"
-      aria-label="Chat name"
+      aria-label={translate('ai.sessions.chatName')}
       defaultValue={initial}
       maxLength={CHAT_TITLE_CHARS_MAX}
       spellCheck={false}

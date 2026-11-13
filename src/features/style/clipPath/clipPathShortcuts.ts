@@ -1,3 +1,4 @@
+// i18n-ignore-file: the words matchPreset returns are preset ids (compared and used in option ids); `presetLabel` gives the text shown.
 // The editor's keyboard shortcuts for each kind of shape, and matching a
 // shape to a preset (ClipPath.tsx).
 
@@ -14,114 +15,108 @@ export function shortcutShapeKind(shape: ClipShape) {
 
 // The shortcuts that hold for every shape.
 export const GENERAL_SHORTCUTS: ShortcutHelpGroup = {
-  title: 'General',
+  titleKey: 'styleModel.clipPath.shortcut.group.general',
   items: [
-    { keys: 'Arrow keys', description: 'Move the selected handle by 1%.' },
-    { keys: 'Space + Arrow keys', description: 'Move by 10% instead of 1%.' },
-    { keys: 'Cmd/Ctrl + Z', description: 'Undo the last change.' },
-    { keys: 'Cmd/Ctrl + Shift + Z', description: 'Redo the last change.' },
-    { keys: 'Paste SVG', description: 'Paste an SVG to build a shape.' },
+    { keys: { message: 'styleModel.clipPath.shortcut.keys.arrowKeys' }, descriptionKey: 'styleModel.clipPath.shortcut.moveHandle' },
+    { keys: { message: 'styleModel.clipPath.shortcut.keys.spaceArrowKeys' }, descriptionKey: 'styleModel.clipPath.shortcut.moveTen' },
+    { keys: { literal: 'Cmd/Ctrl + Z' }, descriptionKey: 'styleModel.clipPath.shortcut.undo' },
+    { keys: { literal: 'Cmd/Ctrl + Shift + Z' }, descriptionKey: 'styleModel.clipPath.shortcut.redo' },
+    { keys: { message: 'styleModel.clipPath.shortcut.keys.pasteSvg' }, descriptionKey: 'styleModel.clipPath.shortcut.pasteBuild' },
   ],
 };
 
 export const POLYGON_SHORTCUTS: ShortcutHelpGroup[] = [
   {
-    title: 'Polygon',
+    titleKey: 'styleModel.clipPath.preset.polygon',
     items: [
-      { keys: 'Drag to select', description: 'Drag to select over multiple points.' },
-      { keys: 'Shift + click point', description: 'Select multiple points.' },
-      {
-        keys: 'Option/Alt + drag point',
-        description: 'Duplicate a point by dragging it while holding option/alt.',
-      },
-      { keys: 'Delete / Backspace', description: 'Delete selected points (3 must remain).' },
-      { keys: 'Cmd/Ctrl + D', description: 'Duplicate the selected point.' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.dragSelect' }, descriptionKey: 'styleModel.clipPath.shortcut.dragSelectPoints' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.shiftClickPoint' }, descriptionKey: 'styleModel.clipPath.shortcut.selectMultiple' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.altDragPoint' }, descriptionKey: 'styleModel.clipPath.shortcut.duplicateDrag' },
+      { keys: { literal: 'Delete / Backspace' }, descriptionKey: 'styleModel.clipPath.shortcut.deletePoints' },
+      { keys: { literal: 'Cmd/Ctrl + D' }, descriptionKey: 'styleModel.clipPath.shortcut.duplicatePoint' },
     ],
   },
 ];
 
 export const CIRCLE_SHORTCUTS: ShortcutHelpGroup[] = [
-  { title: 'Center', items: [{ keys: 'drag/arrow keys', description: 'Move the center.' }] },
-  { title: 'Radius', items: [{ keys: 'drag/arrow keys', description: 'Resize the radius.' }] },
+  {
+    titleKey: 'styleModel.clipPath.shortcut.group.center',
+    items: [{ keys: { message: 'styleModel.clipPath.shortcut.keys.dragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.moveCenter' }],
+  },
+  {
+    titleKey: 'styleModel.clipPath.shortcut.group.radius',
+    items: [{ keys: { message: 'styleModel.clipPath.shortcut.keys.dragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.resizeRadius' }],
+  },
 ];
 
 export const ELLIPSE_SHORTCUTS: ShortcutHelpGroup[] = [
-  { title: 'Center', items: [{ keys: 'drag/arrow keys', description: 'Move the center.' }] },
   {
-    title: 'Radius',
+    titleKey: 'styleModel.clipPath.shortcut.group.center',
+    items: [{ keys: { message: 'styleModel.clipPath.shortcut.keys.dragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.moveCenter' }],
+  },
+  {
+    titleKey: 'styleModel.clipPath.shortcut.group.radius',
     items: [
-      { keys: 'drag/arrow keys', description: 'Resize the selected radius.' },
-      {
-        keys: 'Shift + drag/arrow keys',
-        description: 'Scale both radii, keeping the aspect ratio.',
-      },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.dragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.resizeSelectedRadius' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.shiftDragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.scaleRadii' },
     ],
   },
 ];
 
 export const INSET_SHORTCUTS: ShortcutHelpGroup[] = [
   {
-    title: 'Sides',
+    titleKey: 'styleModel.clipPath.shortcut.group.sides',
     items: [
-      { keys: 'drag/arrow keys', description: 'Adjust the selected side.' },
-      {
-        keys: 'Option/Alt + drag/arrow keys',
-        description: 'Adjust this side and its opposite side together.',
-      },
-      { keys: 'Shift + drag/arrow keys', description: 'Adjust all sides together.' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.dragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.adjustSide' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.altDragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.adjustOpposite' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.shiftDragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.adjustAll' },
     ],
   },
   {
-    title: 'Corners',
+    titleKey: 'styleModel.clipPath.shortcut.group.corners',
     items: [
-      { keys: 'drag/arrow keys', description: 'Round the selected corner.' },
-      {
-        keys: 'Option/Alt + drag/arrow keys',
-        description: 'Round this corner and its opposite together.',
-      },
-      { keys: 'Shift + drag/arrow keys', description: 'Match all corners to this one.' },
-      {
-        keys: 'U + drag/arrow keys',
-        description: 'Set horizontal and vertical radius separately.',
-      },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.dragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.roundCorner' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.altDragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.roundOpposite' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.shiftDragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.matchCorners' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.uDragArrows' }, descriptionKey: 'styleModel.clipPath.shortcut.separateRadii' },
     ],
   },
 ];
 
 export const SCALED_SHAPE_SHORTCUTS: ShortcutHelpGroup[] = [
   {
-    title: 'Shape',
+    titleKey: 'styleModel.clipPath.preset.shape',
     items: [
-      { keys: 'Drag/arrow keys', description: 'Move the shape.' },
-      { keys: 'Drag corner', description: 'Resize toward the opposite corner.' },
-      { keys: 'Option/Alt + drag corner', description: 'Resize from the center.' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.dragArrowsCapital' }, descriptionKey: 'styleModel.clipPath.shortcut.moveShape' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.dragCorner' }, descriptionKey: 'styleModel.clipPath.shortcut.resizeOpposite' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.altDragCorner' }, descriptionKey: 'styleModel.clipPath.shortcut.resizeCenter' },
     ],
   },
 ];
 
 export const STRETCHED_SHAPE_SHORTCUTS: ShortcutHelpGroup[] = [
   {
-    title: 'Shape',
-    items: [{ keys: 'Stretch mode', description: 'Switch to Scale to move or resize.' }],
+    titleKey: 'styleModel.clipPath.preset.shape',
+    items: [{ keys: { message: 'styleModel.clipPath.shortcut.keys.stretchMode' }, descriptionKey: 'styleModel.clipPath.shortcut.switchToScale' }],
   },
 ];
 
 export const NONE_SHORTCUTS: ShortcutHelpGroup[] = [
   {
-    title: 'None',
+    titleKey: 'styleModel.clipPath.preset.none',
     items: [
-      { keys: 'Paste SVG', description: 'Paste an SVG to build a shape.' },
-      { keys: 'Dropdown', description: 'Pick a preset to start editing.' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.pasteSvg' }, descriptionKey: 'styleModel.clipPath.shortcut.pasteBuild' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.dropdown' }, descriptionKey: 'styleModel.clipPath.shortcut.pickPreset' },
     ],
   },
 ];
 
 export const CUSTOM_SHORTCUTS: ShortcutHelpGroup[] = [
   {
-    title: 'Custom',
+    titleKey: 'styleModel.clipPath.preset.custom',
     items: [
-      { keys: 'Code editor', description: 'Edit the raw clip-path value.' },
-      { keys: 'Paste SVG', description: 'Paste an SVG to make it editable.' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.codeEditor' }, descriptionKey: 'styleModel.clipPath.shortcut.editRaw' },
+      { keys: { message: 'styleModel.clipPath.shortcut.keys.pasteSvg' }, descriptionKey: 'styleModel.clipPath.shortcut.pasteEditable' },
     ],
   },
 ];

@@ -13,6 +13,7 @@
 // and whatever sits in a masked child sees them. A child's scope is then simply
 // the names around its mask.
 //
+// i18n-ignore-file: the engine has no catalog; every refusal carries a code and parameters (RenameProblem) that the editor words (src/editor/renameProblems.ts), and the English here is for logs and main-process replies.
 // Anything that cannot be read with certainty refuses the rename when the name
 // appears in it: the wrong answer here is a dangling reference, and a reason
 // shown under the field costs the person one manual edit.
@@ -40,11 +41,36 @@ interface TextChange {
   readonly text: string;
 }
 
-export type RenamePlan = { readonly ok: true; readonly text: string; readonly hunks: readonly CodeHunk[] } | { readonly ok: false; readonly message: string };
+/**
+ * Why a rename or a loop head is refused, as a stable code with its parameters. `message` (English) stays on every refusal for logs and old readers;
+ * the editor words `problem` in the person's language (src/editor/renameProblems.ts), because this layer has no catalog.
+ */
+export type RenameProblem =
+  | { readonly code: 'invalid-name'; readonly name: string }
+  | { readonly code: 'reserved-word'; readonly name: string }
+  | { readonly code: 'not-declared'; readonly name: string }
+  | { readonly code: 'exists'; readonly name: string; readonly choose: 'none' | 'source-menu' }
+  | { readonly code: 'frontmatter-invalid' }
+  | { readonly code: 'partial' }
+  | { readonly code: 'exported'; readonly name: string }
+  | { readonly code: 'used-as-tag'; readonly name: string }
+  | { readonly code: 'unreadable-code'; readonly excerpt: string }
+  | { readonly code: 'captured'; readonly from: string; readonly to: string }
+  | { readonly code: 'undeclared-in-head'; readonly name: string }
+  | { readonly code: 'head-unparsed' }
+  | { readonly code: 'too-large' };
+
+/** A refusal: the English sentence and the code the editor words. */
+export interface RenameRefusal {
+  readonly message: string;
+  readonly problem: RenameProblem;
+}
+
+export type RenamePlan = { readonly ok: true; readonly text: string; readonly hunks: readonly CodeHunk[] } | ({ readonly ok: false } & RenameRefusal);
 
 /** What a new loop head is: an ordinary edit, a rename of a file's variable, or refused. */
 export type HeadCheck =
-  { readonly kind: 'edit' } | { readonly kind: 'rename'; readonly rename: VariableRename } | { readonly kind: 'problem'; readonly message: string };
+  { readonly kind: 'edit' } | { readonly kind: 'rename'; readonly rename: VariableRename } | ({ readonly kind: 'problem' } & RenameRefusal);
 
 export type StatementRename = { readonly kind: 'same' } | { readonly kind: 'rename'; readonly to: string } | { readonly kind: 'mixed' };
 
@@ -117,11 +143,51 @@ const PAGE_GLOBALS: ReadonlySet<string> = new Set(
 );
 
 /** Why `name` cannot be a variable's name, or undefined when it can. */
-export function variableNameProblem(name: string): string | undefined {
+export function variableNameProblem(name: string): RenameRefusal | undefined {
   if (!IDENTIFIER_RE.test(name)) {
-    return `“${name}” isn’t a valid variable name. Use letters, numbers, _ or $, and don’t start with a number.`;
+    return refusal({ code: 'invalid-name', name });
   }
-  return RESERVED_WORDS.has(name) ? `“${name}” is a reserved word in JavaScript. Pick another name.` : undefined;
+  return RESERVED_WORDS.has(name) ? refusal({ code: 'reserved-word', name }) : undefined;
+}
+
+/** The English sentence for a refusal: the one place the wording lives for logs; the editor's catalog words each code for display. */
+export function describeRenameProblem(problem: RenameProblem): string {
+  switch (problem.code) {
+    case 'invalid-name':
+      return `“${problem.name}” isn’t a valid variable name. Use letters, numbers, _ or $, and don’t start with a number.`;
+    case 'reserved-word':
+      return `“${problem.name}” is a reserved word in JavaScript. Pick another name.`;
+    case 'not-declared':
+      return `“${problem.name}” isn’t declared in this file’s frontmatter, so it can’t be renamed here.`;
+    case 'exists':
+      return `“${problem.name}” already exists in this file.${problem.choose === 'source-menu' ? ' To loop over it, choose it in the Source menu.' : ''}`;
+    case 'frontmatter-invalid':
+      return 'The frontmatter has a syntax error, so this can’t be renamed safely. Fix it first.';
+    case 'partial':
+      return 'Part of this page isn’t readable yet, so this can’t be renamed safely. Try again once it has saved.';
+    case 'exported':
+      return `“${problem.name}” is exported, and other files can ask for it by name, so it can’t be renamed here.`;
+    case 'used-as-tag':
+      return `“${problem.name}” is used as a tag, <${problem.name}>, so it can’t be renamed here. Rename it in the code.`;
+    case 'unreadable-code':
+      return `This code can’t be read to rename it safely: ${problem.excerpt} Rename it in the code.`;
+    case 'captured':
+      return `“${problem.to}” is already a name inside a loop or function that reads “${problem.from}”, so it would read that instead.`;
+    case 'undeclared-in-head':
+      return `“${problem.name}” isn’t declared in this file, so the page would crash. Declare it in the frontmatter, or choose a list in the Source menu.`;
+    case 'head-unparsed':
+      return 'This code doesn’t parse. A loop reads like items.map((item) => (.';
+    case 'too-large':
+      return 'This file is too large to rename in.';
+    default: {
+      const exhaustive: never = problem;
+      return exhaustive;
+    }
+  }
+}
+
+function refusal(problem: RenameProblem): RenameRefusal {
+  return { message: describeRenameProblem(problem), problem };
 }
 
 /** The rename of `from` to `to` across the file, or why it cannot be made. */
@@ -129,9 +195,9 @@ export function planVariableRename(file: FileCode, rename: VariableRename): Rena
   assert(rename.from !== rename.to, 'A rename changes the name');
   assert(rename.from !== '', 'A rename names what it renames');
   const read = readFile(file);
-  const problem = renameProblem(read, rename, { around: new Set(), hint: '' });
+  const problem = renameProblem(read, rename, { around: new Set(), choose: 'none' });
   if (problem !== undefined) {
-    return { ok: false, message: problem };
+    return { ok: false, ...problem };
   }
   return writtenRename(file.source, read, rename);
 }
@@ -166,10 +232,10 @@ export function checkLoopHead(file: FileCode, loop: { readonly id: string; reado
   // What follows the head was written for the way it closed, so it must close the same.
   const after = loop.after.trimEnd().endsWith('(') ? readHeadClosed(loop.after, before.closing) : undefined;
   if (after === undefined) {
-    return { kind: 'problem', message: 'This code doesn’t parse. A loop reads like items.map((item) => (.' };
+    return { kind: 'problem', ...refusal({ code: 'head-unparsed' }) };
   }
   const undeclared = undeclaredName(read, { before, after, around });
-  return undeclared === undefined ? { kind: 'edit' } : { kind: 'problem', message: undeclaredMessage(undeclared) };
+  return undeclared === undefined ? { kind: 'edit' } : { kind: 'problem', ...refusal({ code: 'undeclared-in-head', name: undeclared }) };
 }
 
 /** What changing a declaration's statement from `before` to `after` does to its name. */
@@ -195,7 +261,11 @@ export function renamedFrontmatter(code: string, rename: VariableRename): string
 
 // --- Checks ------------------------------------------------------------------------------
 
-function renameProblem(read: FileRead, rename: VariableRename, context: { readonly around: ReadonlySet<string>; readonly hint: string }): string | undefined {
+function renameProblem(
+  read: FileRead,
+  rename: VariableRename,
+  context: { readonly around: ReadonlySet<string>; readonly choose: 'none' | 'source-menu' },
+): RenameRefusal | undefined {
   assert(rename.from !== rename.to, 'A rename checked changes the name');
   const { from, to } = rename;
   const name = variableNameProblem(to);
@@ -203,10 +273,10 @@ function renameProblem(read: FileRead, rename: VariableRename, context: { readon
     return name;
   }
   if (!read.bound.has(from)) {
-    return `“${from}” isn’t declared in this file’s frontmatter, so it can’t be renamed here.`;
+    return refusal({ code: 'not-declared', name: from });
   }
   if (taken(read, to, context.around)) {
-    return `“${to}” already exists in this file.${context.hint}`;
+    return refusal({ code: 'exists', name: to, choose: context.choose });
   }
   return blockedReason(read, rename) ?? captureProblem(read, rename);
 }
@@ -219,36 +289,32 @@ function taken(read: FileRead, name: string, around: ReadonlySet<string>): boole
   return read.uses.some((use) => use.name === name);
 }
 
-function blockedReason(read: FileRead, rename: VariableRename): string | undefined {
+function blockedReason(read: FileRead, rename: VariableRename): RenameRefusal | undefined {
   assert(read.bound.has(rename.from), 'Only a declared name reaches the blocking checks');
   const { from, to } = rename;
   if (!read.frontmatterValid) {
-    return 'The frontmatter has a syntax error, so this can’t be renamed safely. Fix it first.';
+    return refusal({ code: 'frontmatter-invalid' });
   }
   if (read.partial) {
-    return 'Part of this page isn’t readable yet, so this can’t be renamed safely. Try again once it has saved.';
+    return refusal({ code: 'partial' });
   }
   if (read.exported.has(from)) {
-    return `“${from}” is exported, and other files can ask for it by name, so it can’t be renamed here.`;
+    return refusal({ code: 'exported', name: from });
   }
   if (read.tags.has(from)) {
-    return `“${from}” is used as a tag, <${from}>, so it can’t be renamed here. Rename it in the code.`;
+    return refusal({ code: 'used-as-tag', name: from });
   }
   const unclear = read.unreadable.find((code) => mentions(code, from) || mentions(code, to));
   if (unclear !== undefined) {
-    return `This code can’t be read to rename it safely: ${excerpt(unclear)} Rename it in the code.`;
+    return refusal({ code: 'unreadable-code', excerpt: excerpt(unclear) });
   }
   return undefined;
 }
 
-function captureProblem(read: FileRead, rename: VariableRename): string | undefined {
+function captureProblem(read: FileRead, rename: VariableRename): RenameRefusal | undefined {
   assert(rename.to !== '', 'Only a valid name reaches the capture check');
   const captured = read.uses.some((use) => use.name === rename.from && use.bindsInside(rename.to));
-  return captured ? `“${rename.to}” is already a name inside a loop or function that reads “${rename.from}”, so it would read that instead.` : undefined;
-}
-
-function undeclaredMessage(name: string): string {
-  return `“${name}” isn’t declared in this file, so the page would crash. Declare it in the frontmatter, or choose a list in the Source menu.`;
+  return captured ? refusal({ code: 'captured', from: rename.from, to: rename.to }) : undefined;
 }
 
 // A name the head starts reading that nothing provides. One it read already is
@@ -283,7 +349,7 @@ function checkToken(read: FileRead, token: ChangedToken, context: { readonly aro
   if (NAME_LIKE_RE.test(token.to)) {
     const problem = variableNameProblem(token.to);
     if (problem !== undefined) {
-      return { kind: 'problem', message: problem };
+      return { kind: 'problem', ...problem };
     }
   }
   // A loop's own parameter or an outer item is that loop's to rename, not the file's.
@@ -302,9 +368,8 @@ function checkToken(read: FileRead, token: ChangedToken, context: { readonly aro
 // also re-links what the loop's children read. So the field says so, and points
 // at the menu.
 function checkHeadRename(read: FileRead, rename: VariableRename, around: ReadonlySet<string>): HeadCheck {
-  const hint = ' To loop over it, choose it in the Source menu.';
-  const problem = renameProblem(read, rename, { around, hint });
-  return problem === undefined ? { kind: 'rename', rename } : { kind: 'problem', message: problem };
+  const problem = renameProblem(read, rename, { around, choose: 'source-menu' });
+  return problem === undefined ? { kind: 'rename', rename } : { kind: 'problem', ...problem };
 }
 
 function changedToken(before: HeadRead, oldHead: string, newHead: string): ChangedToken | undefined {
@@ -840,7 +905,7 @@ function writtenRename(source: string, read: FileRead, rename: VariableRename): 
   assert(changes.length > 0, 'A declared name is at least declared');
   const text = applied(source, changes);
   const patch = diffCodePatch(source, text);
-  return patch.ok ? { ok: true, text, hunks: patch.value } : { ok: false, message: 'This file is too large to rename in.' };
+  return patch.ok ? { ok: true, text, hunks: patch.value } : { ok: false, ...refusal({ code: 'too-large' }) };
 }
 
 // Every byte a rename replaces is the old name as read, or `{name}` around it: a

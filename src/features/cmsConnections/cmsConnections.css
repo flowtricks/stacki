@@ -106,3 +106,64 @@
   align-items: center;
   gap: 8px;
 }
+/* A saved Payload connection: the row wraps so its status sits under the name, in fills like the rest. */
+.cms-connection-row {
+  flex-wrap: wrap;
+}
+.cms-payload-status {
+  flex-basis: 100%;
+  display: grid;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+.cms-payload-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cms-payload-spacer {
+  flex: 1;
+}
+.cms-payload-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bg-panel, #2b2b2b);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+.cms-payload-chip.is-ok {
+  background: #1f3a2a;
+  color: #8fe0a8;
+}
+.cms-payload-chip.is-failed {
+  background: #4a2420;
+  color: #ff9b92;
+}
+.cms-payload-time {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+.cms-connections .cms-payload-problem {
+  color: #ff9b92;
+}
+.cms-connections .cms-payload-live {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #3a3017;
+  color: #e6c76a;
+}
+.cms-payload-snippet {
+  display: grid;
+  gap: 8px;
+}
+.cms-form-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cms-detected {
+  color: var(--text-dim);
+  font-size: 12px;
+}

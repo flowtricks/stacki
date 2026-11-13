@@ -19,6 +19,10 @@ import {
   type AppStaged,
 } from '../../../shared/properties/apps';
 import { assert } from '../../../shared/core/assert';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import type { Formatters } from '../../../shared/core/i18n/format';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
+import { useFormat, useTranslate, useTranslateDescribed, useTranslateRef, useTranslateRich } from '../../lib/i18n/useTranslate';
 import { discoverPublishing } from '../../ipc/publishDiscoveryBridge';
 import { listAppReleases, listAppRepositories, stageGitHubApp } from '../../ipc/appsBridge';
 import Dropdown from '../../ui/Dropdown';
@@ -27,20 +31,12 @@ import { AppsIcon, ClockIcon, GitHubIcon, RefreshIcon, SearchIcon, WarningTriang
 import { CodeInline } from '../../ui/CodeBlock';
 import { useScrollEdges } from '../../ui/useScrollEdges';
 import { AppTile } from './AppTile';
-import {
-  LOAD_FROM_GITHUB_LABEL,
-  chooserPickables,
-  chooserRows,
-  hasStackiApps,
-  moveChooserActive,
-  type ChooserPickable,
-  type ChooserRow,
-} from './repositoryChooser';
+import { chooserPickables, chooserRows, hasStackiApps, moveChooserActive, type ChooserPickable, type ChooserRow } from './repositoryChooser';
 
 export type Load<T> =
   | { readonly kind: 'idle' }
   | { readonly kind: 'loading' }
-  | { readonly kind: 'failed'; readonly message: string }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined }
   | { readonly kind: 'ready'; readonly value: T };
 
 export interface ConnectGitHubProps {
@@ -63,23 +59,15 @@ interface Pick {
 /** Where the docs say how to add the `stacki-app` topic to a repository. */
 export const STACKI_APP_TOPIC_HELP_URL = 'https://stacki.build/docs/apps#publishing-through-github-releases';
 
-/** "3 days ago", "today": how long since an ISO time, for the lists. */
-export function sinceLabel(iso: string, nowMs: number): string {
-  const days = Math.floor((nowMs - Date.parse(iso)) / 86_400_000);
-  if (!Number.isFinite(days) || days <= 0) {
-    return 'today';
-  }
-  if (days === 1) {
-    return 'yesterday';
-  }
-  if (days < 30) {
-    return `${days} days ago`;
-  }
-  const months = Math.floor(days / 30);
-  return months < 12 ? `${months} month${months === 1 ? '' : 's'} ago` : `${Math.floor(months / 12)} year${months < 24 ? '' : 's'} ago`;
+/** "3 days ago", "yesterday": how long since an ISO time, for the lists, in the language on screen. */
+export function sinceLabel(iso: string, nowMs: number, formatRelativeTime: Formatters['formatRelativeTime']): string {
+  const publishedMs = Date.parse(iso);
+  // An unreadable time reads as now rather than crashing a list.
+  return formatRelativeTime(Number.isFinite(publishedMs) ? publishedMs : nowMs, nowMs);
 }
 
 export function ConnectGitHub(props: ConnectGitHubProps) {
+  const translate = useTranslate();
   const [signingIn, setSigningIn] = useState(false);
   const [pick, setPick] = useState<Pick | undefined>(undefined);
   const [discovery, setDiscovery] = useState(0);
@@ -108,7 +96,7 @@ export function ConnectGitHub(props: ConnectGitHubProps) {
     retry: () => setAttempt((count) => count + 1),
   });
   return (
-    <Popup className="modal apps-connect" label={LOAD_FROM_GITHUB_LABEL} onClose={props.onClose} dismissible={true}>
+    <Popup className="modal apps-connect" label={translate('apps.loadFromGitHub')} onClose={props.onClose} dismissible={true}>
       {({ close }) => (
         <ConnectFrame onCancel={close}>
           {pick === undefined ? (
@@ -185,7 +173,7 @@ export function useRepositories(projectPath: string, account: string | undefined
 export type ChooserList =
   | { readonly kind: 'loading' }
   | { readonly kind: 'ready'; readonly account: string; readonly repositories: readonly AppRepository[] }
-  | { readonly kind: 'failed'; readonly message: string; readonly retry: () => void }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined; readonly retry: () => void }
   | { readonly kind: 'rate-limited'; readonly resetAtMs: number | undefined; readonly retry: () => void }
   /** The main process is older than this renderer: only a restart makes them one version. */
   | { readonly kind: 'restart' }
@@ -213,7 +201,7 @@ export function chooserList(input: {
     case 'loading':
       return { kind: 'loading' };
     case 'failed':
-      return { kind: 'failed', message: input.repositories.message, retry: input.retry };
+      return { kind: 'failed', message: input.repositories.message, messageRef: input.repositories.messageRef, retry: input.retry };
     case 'ready':
       return listingState(input.repositories.value, input.account, input.retry);
     default: {
@@ -228,7 +216,7 @@ function listingState(listing: AppRepositoryListing, account: string, retry: () 
     case 'ready':
       return { kind: 'ready', account, repositories: listing.repositories };
     case 'failed':
-      return { kind: 'failed', message: listing.message, retry };
+      return { kind: 'failed', message: listing.message, messageRef: listing.messageRef, retry };
     case 'rate-limited':
       return { kind: 'rate-limited', resetAtMs: listing.resetAtMs, retry };
     case 'restart':
@@ -241,14 +229,14 @@ function listingState(listing: AppRepositoryListing, account: string, retry: () 
 }
 
 /** "Try again in 3 minutes.": how long until GitHub's limit lifts, rounded up, never under a minute. */
-export function rateLimitWait(resetAtMs: number | undefined, nowMs: number): string {
+export function rateLimitWait(resetAtMs: number | undefined, nowMs: number, translate: Translator): string {
   if (resetAtMs === undefined) {
-    return 'Try again in a few minutes.';
+    return translate('apps.connect.tryAgainSoon');
   }
   const minutes = Math.max(1, Math.ceil((resetAtMs - nowMs) / 60_000));
   assert(Number.isSafeInteger(minutes), 'A wait is whole minutes');
   assert(minutes >= 1, 'A wait is at least a minute');
-  return `Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`;
+  return translate('apps.connect.tryAgainIn', { count: minutes });
 }
 
 /**
@@ -269,18 +257,19 @@ export function ConnectFrame(props: {
   readonly cancel?: 'enabled' | 'disabled' | 'hidden';
   readonly children: ReactNode;
 }) {
+  const translate = useTranslate();
   const cancel = props.cancel ?? 'enabled';
   return (
     <>
       <div className="modal-header apps-connect-header">
         {props.icon ?? <GitHubIcon size={16} />}
-        {props.title ?? LOAD_FROM_GITHUB_LABEL}
+        {props.title ?? translate('apps.loadFromGitHub')}
       </div>
       <div className="modal-body apps-connect-body">{props.children}</div>
       <div className="modal-footer apps-connect-footer">
         {cancel === 'hidden' ? undefined : (
           <button type="button" disabled={cancel === 'disabled'} onClick={props.onCancel}>
-            {props.cancelLabel ?? 'Cancel'}
+            {props.cancelLabel ?? translate('ui.cancel')}
           </button>
         )}
         {props.actions}
@@ -311,6 +300,7 @@ const LISTBOX_ID = 'apps-connect-repositories';
  */
 export function RepositoryChooser(props: RepositoryChooserProps) {
   const { list } = props;
+  const translate = useTranslate();
   const [query, setQuery] = useState(props.initialQuery ?? '');
   const [active, setActive] = useState(0);
   const scroll = useRef<HTMLDivElement>(null);
@@ -352,7 +342,7 @@ export function RepositoryChooser(props: RepositoryChooserProps) {
           <SearchIcon size={14} className="apps-connect-field-icon" />
         ) : (
           <Dropdown
-            ariaLabel="GitHub account"
+            ariaLabel={translate('apps.connect.account')}
             className="apps-connect-account"
             value={props.account}
             options={props.accounts.map((login) => ({ value: login, label: login, icon: props.renderAvatar(login, login) }))}
@@ -362,12 +352,12 @@ export function RepositoryChooser(props: RepositoryChooserProps) {
         <input
           type="search"
           role="combobox"
-          aria-label="Search repositories or paste a GitHub URL"
+          aria-label={translate('apps.connect.searchLabel')}
           aria-expanded={true}
           aria-controls={LISTBOX_ID}
           aria-activedescendant={activeKey === undefined ? undefined : optionId(highlighted)}
           aria-autocomplete="list"
-          placeholder="Search repositories or paste a GitHub URL"
+          placeholder={translate('apps.connect.searchLabel')}
           spellCheck={false}
           autoComplete="off"
           value={query}
@@ -379,7 +369,7 @@ export function RepositoryChooser(props: RepositoryChooserProps) {
         />
       </div>
       <div ref={scroll} className="apps-connect-scroll" data-edge-top={edges.top} data-edge-bottom={edges.bottom}>
-        <ul className="apps-choice-list" id={LISTBOX_ID} role="listbox" aria-label="Repositories">
+        <ul className="apps-choice-list" id={LISTBOX_ID} role="listbox" aria-label={translate('apps.connect.repositories')}>
           {rows.map((row) => (
             <ChooserRowView
               key={row.key}
@@ -401,25 +391,28 @@ export function RepositoryChooser(props: RepositoryChooserProps) {
 
 export function ChooserListState(props: { readonly list: ChooserList }) {
   const { list } = props;
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
+  const translateDescribed = useTranslateDescribed();
   switch (list.kind) {
     case 'ready':
       return hasStackiApps(list.repositories) ? undefined : (
         <ChooserEmpty
           icon={<AppsIcon size={20} />}
-          title={`No Stacki apps on ${list.account}`}
+          title={translate('apps.connect.noApps', { account: list.account })}
           action={
             <a className="apps-connect-empty-link" href={STACKI_APP_TOPIC_HELP_URL} target="_blank" rel="noreferrer">
-              How to add it
+              {translate('apps.connect.howToAdd')}
             </a>
           }
-          hint="or paste a repository URL above"
+          hint={translate('apps.connect.orPaste')}
         >
-          Add the <CodeInline text="stacki-app" /> topic to a repository that publishes a Stacki app release.
+          {translateRich('apps.connect.addTopic', { topic: <CodeInline text="stacki-app" /> })}
         </ChooserEmpty>
       );
     case 'loading':
       return (
-        <div className="apps-connect-skeletons" aria-label="Loading repositories" role="status">
+        <div className="apps-connect-skeletons" aria-label={translate('apps.connect.loading')} role="status">
           {Array.from({ length: SKELETON_ROWS }, (_, index) => (
             <div key={index} className="apps-skeleton apps-connect-skeleton">
               <span className="apps-skeleton-tile" />
@@ -433,39 +426,39 @@ export function ChooserListState(props: { readonly list: ChooserList }) {
       );
     case 'failed':
       return (
-        <ChooserEmpty icon={<WarningTriangleIcon size={20} />} title="Couldn’t load your repositories" action={<RetryButton onRetry={list.retry} />} alert>
-          {list.message}
+        <ChooserEmpty icon={<WarningTriangleIcon size={20} />} title={translate('apps.connect.loadFailed')} action={<RetryButton onRetry={list.retry} />} alert>
+          {translateDescribed(list)}
         </ChooserEmpty>
       );
     case 'rate-limited':
       return (
-        <ChooserEmpty icon={<ClockIcon size={20} />} title="GitHub is limiting requests" action={<RetryButton onRetry={list.retry} />} alert>
-          {rateLimitWait(list.resetAtMs, Date.now())}
+        <ChooserEmpty icon={<ClockIcon size={20} />} title={translate('apps.connect.rateLimited')} action={<RetryButton onRetry={list.retry} />} alert>
+          {rateLimitWait(list.resetAtMs, Date.now(), translate)}
         </ChooserEmpty>
       );
     case 'restart':
       // No renderer-side restart exists, and a main process this old could not run a new one: the person quits and reopens.
       return (
-        <ChooserEmpty icon={<RefreshIcon size={20} />} title="Restart Stacki to finish updating" alert>
-          Stacki updated while it was open. Quit it and open it again to list your repositories; pasting a repository above works now.
+        <ChooserEmpty icon={<RefreshIcon size={20} />} title={translate('apps.connect.restartTitle')} alert>
+          {translate('apps.connect.restartDetail')}
         </ChooserEmpty>
       );
     case 'signed-out':
       return list.signIn === undefined ? (
-        <ChooserEmpty icon={<GitHubIcon size={20} />} title="Paste a public repository">
-          Paste a GitHub repository above, as owner/repo or its github.com address, to see its releases.
+        <ChooserEmpty icon={<GitHubIcon size={20} />} title={translate('apps.connect.pasteTitle')}>
+          {translate('apps.connect.pasteDetail')}
         </ChooserEmpty>
       ) : (
         <ChooserEmpty
           icon={<GitHubIcon size={20} />}
-          title="Sign in with GitHub to see your repositories"
+          title={translate('apps.connect.signInTitle')}
           action={
             <button type="button" className="apps-button primary" onClick={list.signIn}>
-              <GitHubIcon size={14} /> Sign in with GitHub
+              <GitHubIcon size={14} /> {translate('apps.connect.signIn')}
             </button>
           }
         >
-          Your repositories and your organizations’ are listed here. A public repository can be pasted above without signing in.
+          {translate('apps.connect.signInDetail')}
         </ChooserEmpty>
       );
     default: {
@@ -501,9 +494,10 @@ export function ChooserEmpty(props: {
 }
 
 export function RetryButton(props: { readonly onRetry: () => void }) {
+  const translate = useTranslate();
   return (
     <button type="button" className="apps-button" onClick={props.onRetry}>
-      Retry
+      {translate('ui.retry')}
     </button>
   );
 }
@@ -519,17 +513,20 @@ export function ChooserRowView(props: {
   readonly onChoose: (row: ChooserPickable) => void;
 }) {
   const { row } = props;
+  const translate = useTranslate();
+  const translateRef = useTranslateRef();
+  const { formatRelativeTime } = useFormat();
   switch (row.kind) {
     case 'section':
       return (
         <li className="dp-section apps-connect-section" role="presentation">
-          <span className="dp-section-heading">{row.label}</span>
+          <span className="dp-section-heading">{translateRef(row.labelRef)}</span>
         </li>
       );
     case 'notice':
       return (
         <li className="apps-connect-notice" role="presentation">
-          No Stacki apps match.
+          {translate('apps.connect.noMatch')}
         </li>
       );
     case 'use':
@@ -553,14 +550,18 @@ export function ChooserRowView(props: {
             <span className="apps-choice-avatar">{props.renderAvatar(owner, owner)}</span>
             <span className="apps-choice-text">
               <span className="apps-choice-title">
-                {row.kind === 'use' ? 'Use ' : ''}
+                {row.kind === 'use' ? `${translate('apps.connect.use')} ` : ''}
                 {owner}/{name}
               </span>
               <span className="apps-choice-meta">
-                {row.kind === 'use' ? 'Public repository' : `Updated ${sinceLabel(row.repository.updatedAt, props.now)}`}
+                {row.kind === 'use'
+                  ? translate('apps.connect.publicRepository')
+                  : translate('apps.connect.updated', { when: sinceLabel(row.repository.updatedAt, props.now, formatRelativeTime) })}
               </span>
             </span>
-            {row.kind === 'repository' && <span className="apps-badge muted">{row.repository.private ? 'Private' : 'Public'}</span>}
+            {row.kind === 'repository' && (
+              <span className="apps-badge muted">{row.repository.private ? translate('apps.visibility.private') : translate('apps.visibility.public')}</span>
+            )}
           </button>
         </li>
       );
@@ -583,6 +584,9 @@ function ReleaseStep(props: {
   readonly onStaged: (staged: AppStaged) => void;
 }) {
   const { pick } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const { formatRelativeTime } = useFormat();
   const [load, setLoad] = useState<Load<readonly AppRelease[]>>({ kind: 'loading' });
   const [tag, setTag] = useState<string | undefined>(undefined);
   const [chosenAsset, setChosenAsset] = useState<string | undefined>(undefined);
@@ -599,7 +603,7 @@ function ReleaseStep(props: {
           return;
         }
         if (!answer.ok) {
-          setLoad({ kind: 'failed', message: answer.message });
+          setLoad({ kind: 'failed', message: answer.message, messageRef: answer.messageRef });
           return;
         }
         const ordered = orderReleases(answer.value);
@@ -623,7 +627,7 @@ function ReleaseStep(props: {
     }
     setCheck({ kind: 'loading' });
     void stageGitHubApp(props.projectPath, { ...lookup, asset }, release.tag).then(
-      (answer) => setCheck(answer.ok ? { kind: 'ready', value: answer.value } : { kind: 'failed', message: answer.message }),
+      (answer) => setCheck(answer.ok ? { kind: 'ready', value: answer.value } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef }),
       (error: unknown) => setCheck({ kind: 'failed', message: String(error) }),
     );
   };
@@ -632,14 +636,14 @@ function ReleaseStep(props: {
       <button type="button" className="apps-link" onClick={props.onBack}>
         ← {pick.owner}/{pick.repository}
       </button>
-      {load.kind === 'loading' && <p className="apps-note">Loading releases…</p>}
+      {load.kind === 'loading' && <p className="apps-note">{translate('apps.connect.loadingReleases')}</p>}
       {load.kind === 'failed' && (
         <p className="apps-error" role="alert">
-          {load.message}
+          {translateDescribed(load)}
         </p>
       )}
-      {load.kind === 'ready' && releases.length === 0 && <p className="apps-note">This repository has no releases yet.</p>}
-      <ul className="apps-choice-list" aria-label="Releases">
+      {load.kind === 'ready' && releases.length === 0 && <p className="apps-note">{translate('apps.connect.noReleases')}</p>}
+      <ul className="apps-choice-list" aria-label={translate('apps.connect.releases')}>
         {releases.map((entry) => (
           <li key={entry.tag}>
             <button
@@ -655,18 +659,18 @@ function ReleaseStep(props: {
               <span className="apps-choice-text">
                 <span className="apps-choice-title">{entry.name || entry.tag}</span>
                 <span className="apps-choice-meta">
-                  {entry.tag} · {sinceLabel(entry.publishedAt, now)}
+                  {entry.tag} · {sinceLabel(entry.publishedAt, now, formatRelativeTime)}
                 </span>
               </span>
-              {entry.prerelease && <span className="apps-badge muted">Pre-release</span>}
+              {entry.prerelease && <span className="apps-badge muted">{translate('apps.connect.prerelease')}</span>}
             </button>
           </li>
         ))}
       </ul>
-      {choice?.kind === 'none' && <p className="apps-error">This release has no .zip app bundle.</p>}
+      {choice?.kind === 'none' && <p className="apps-error">{translate('apps.connect.noBundle')}</p>}
       {choice?.kind === 'choose' && (
         <Dropdown
-          ariaLabel="App bundle"
+          ariaLabel={translate('apps.connect.bundle')}
           value={asset ?? ''}
           options={choice.assets.map((entry) => ({ value: entry.name, label: entry.name }))}
           onChange={(value) => {
@@ -688,17 +692,17 @@ function ReleaseStep(props: {
       )}
       {check.kind === 'failed' && (
         <p className="apps-error" role="alert">
-          {check.message}
+          {translateDescribed(check)}
         </p>
       )}
       <div className="apps-actions">
         {check.kind === 'ready' ? (
           <button type="button" className="apps-button primary" onClick={() => props.onStaged(check.value)}>
-            Install
+            {translate('apps.panel.install')}
           </button>
         ) : (
           <button type="button" className="apps-button primary" disabled={asset === undefined || check.kind === 'loading'} onClick={runCheck}>
-            {check.kind === 'loading' ? 'Checking…' : 'Check release'}
+            {check.kind === 'loading' ? translate('apps.connect.checking') : translate('apps.connect.checkRelease')}
           </button>
         )}
       </div>

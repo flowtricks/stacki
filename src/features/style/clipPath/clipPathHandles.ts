@@ -2,6 +2,7 @@
 // drag target is, its colour, its label — and comparing shapes, points and
 // radii (ClipPath.tsx).
 
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
 import {
   type Point,
   type CornerName,
@@ -212,17 +213,17 @@ export function isInsetHandleAffected(activeHandle: HandleTarget | undefined, ca
   return mode === 'all' || candidateSide === oppositeInsetSide(activeSide);
 }
 
-export function cornerLabel(corner: CornerName) {
+export function cornerLabel(corner: CornerName, translate: Translator) {
   if (corner === 'topLeft') {
-    return 'top left';
+    return translate('styleModel.clipPath.corner.topLeft');
   }
   if (corner === 'topRight') {
-    return 'top right';
+    return translate('styleModel.clipPath.corner.topRight');
   }
   if (corner === 'bottomRight') {
-    return 'bottom right';
+    return translate('styleModel.clipPath.corner.bottomRight');
   }
-  return 'bottom left';
+  return translate('styleModel.clipPath.corner.bottomLeft');
 }
 
 export function pointsClose(left: Point[], right: Point[]) {

@@ -294,7 +294,7 @@ test('Rename reaches declarations and references everywhere, and respects names 
     'src/styles/tokens.css': '.a { color: var(--brand); }\n',
   });
   const taken = renameVariables(root, { renames: [{ from: '--brand', to: '--about' }] });
-  assert.deepEqual(taken, { ok: false, error: '--about already exists.' });
+  assert.deepEqual(taken, { ok: false, error: '--about already exists.', errorRef: { key: 'variables.error.alreadyExists', params: { name: '--about' } } });
   assert.equal(read(root, PAGE), HOME);
 
   const result = renameVariables(root, { renames: [{ from: '--brand', to: '--primary' }] });

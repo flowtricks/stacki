@@ -1,3 +1,4 @@
+// i18n-ignore-file: section names are English next to their `labelKey`, which the panel translates; the rest of the file holds no interface text.
 // Canonical property ordering + section grouping for the style panel.
 //
 // The panel shows declarations in a fixed Webflow-like order grouped into
@@ -5,13 +6,16 @@
 // pure, render-only transform: it never mutates the AST, so an author's embed
 // is only ever touched by an explicit edit (see the css.ts "no reflow" promise).
 
+import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
 import type { ParsedDeclaration } from './styleTypes';
 
 export type SectionId = 'flex-child' | 'layout' | 'size' | 'spacing' | 'position' | 'typography' | 'backgrounds' | 'borders' | 'effects' | 'other';
 
 export type SectionDefinition = {
   id: SectionId;
+  /** English text, for search and logs; the panel shows `labelKey` translated. */
   label: string;
+  labelKey: MessageKey;
   /** Canonical property order within the section (lowercased, matches decl.prop). */
   order: readonly string[];
 };
@@ -24,6 +28,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
     // Sits above Layout so a selected flex item's sizing/alignment reads top-down.
     id: 'flex-child',
     label: 'Flex/Grid Child',
+    labelKey: 'styleModel.sections.flexChild',
     order: [
       'flex',
       'flex-grow',
@@ -46,6 +51,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'layout',
     label: 'Layout',
+    labelKey: 'styleModel.sections.layout',
     order: [
       'display',
       'vertical-align',
@@ -77,6 +83,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'spacing',
     label: 'Spacing',
+    labelKey: 'styleModel.sections.spacing',
     // The sides only: the box has a field for each longhand. The resolved model
     // projects `margin` and the padding shorthands onto these sides
     // (spacingShorthand.ts), so the box shows them. The shorthand itself is left
@@ -88,6 +95,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'size',
     label: 'Size',
+    labelKey: 'styleModel.sections.size',
     order: [
       'width',
       'height',
@@ -109,11 +117,13 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'position',
     label: 'Position',
+    labelKey: 'styleModel.sections.position',
     order: ['position', 'inset', 'top', 'right', 'bottom', 'left', 'z-index', 'float', 'clear'],
   },
   {
     id: 'typography',
     label: 'Typography',
+    labelKey: 'styleModel.sections.typography',
     order: [
       'color',
       'font-family',
@@ -154,6 +164,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'backgrounds',
     label: 'Backgrounds',
+    labelKey: 'styleModel.sections.backgrounds',
     order: [
       'background',
       'background-color',
@@ -169,6 +180,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'borders',
     label: 'Borders',
+    labelKey: 'styleModel.sections.borders',
     order: [
       'border-radius',
       'border-top-left-radius',
@@ -200,6 +212,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
   {
     id: 'effects',
     label: 'Effects',
+    labelKey: 'styleModel.sections.effects',
     order: [
       'mix-blend-mode',
       'opacity',
@@ -228,7 +241,7 @@ export const SECTIONS: readonly SectionDefinition[] = [
       'pointer-events',
     ],
   },
-  { id: 'other', label: 'Other properties', order: [] },
+  { id: 'other', label: 'Other properties', labelKey: 'styleModel.sections.other', order: [] },
 ];
 
 // Property → section, and property → its canonical index within that section. Built once

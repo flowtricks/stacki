@@ -62,3 +62,12 @@ test('repository requests reject unsafe identifiers and result excess', () => {
     assert.throws(() => parseRepositoryResult({ ok: true, value }));
   }
 });
+test('repository sentences keep valid references and drop malformed ones', () => {
+  const error = { key: 'publish.repositories.error.changed' };
+  assert.deepEqual(parseRepositoryResult({ ok: false, error: 'Changed', errorRef: error }), { ok: false, error: 'Changed', errorRef: error });
+  assert.deepEqual(parseRepositoryResult({ ok: false, error: 'Changed', errorRef: { key: 'bad key' } }), { ok: false, error: 'Changed' });
+  const value = { connected: '', revision, repositories: [], mode: 'editable', notice: 'Managed' };
+  const noticeRef = { key: 'publish.repositories.managedNotice' };
+  assert.deepEqual(parseRepositoryResult({ ok: true, value: { ...value, noticeRef } }), { ok: true, value: { ...value, noticeRef } });
+  assert.deepEqual(parseRepositoryResult({ ok: true, value: { ...value, noticeRef: 3 } }), { ok: true, value });
+});

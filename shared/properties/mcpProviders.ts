@@ -1,3 +1,4 @@
+// i18n-ignore-file: provider names are brand names and the catalog holds no sentences; setup hints are settings.mcp.add.* keys.
 // The MCP tab's catalog of common providers: what a designer picks from a list instead of pasting a
 // command. Each entry says how Claude Code and Codex reach the service (a remote URL or a command to
 // run), which secrets it needs by NAME, and where its own setup page is. Secret VALUES never live here:

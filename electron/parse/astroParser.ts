@@ -65,6 +65,7 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
   if (typeof source !== 'string' || source.length > LIMITS.ipcFieldCharsMax) {
     return {
       editable: false,
+      // i18n-ignore: diagnostic for a page that is not editable (carried for logs and tests); the code view states it in its own words.
       reason: 'Page source is invalid or exceeds the size limit.',
       bail: undefined,
     };
@@ -114,6 +115,7 @@ function parsePage(source: string, options: { readonly locs?: boolean } = {}): P
     }
     return {
       editable: false,
+      // i18n-ignore: diagnostic for a page that is not editable (carried for logs and tests); the code view states it in its own words.
       reason: `Page contains markup the visual editor cannot represent.${where}`,
       bail: parseState.lastBail ? { what: parseState.lastBail.what, near: parseState.lastBail.near } : undefined,
     };

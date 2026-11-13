@@ -36,6 +36,7 @@ esbuild.buildSync({
       "export { auditView } from './src/features/audits/auditView';",
       "export { updateAuditState, resetAuditState, auditState, storedScope } from './src/features/audits/auditStore';",
       "export { default as AuditsPanel } from './src/features/audits/AuditsPanel';",
+      "export { ENGLISH } from './src/lib/i18n/localeContext.ts';",
       "export { registerAgentTaskHandler, requestAgentTask, agentTaskMessage, agentTaskHandlerNames } from './src/lib/agentTasks';",
       "export { terminalAgentHandler, agentLaunchCommand, posixQuote, onTerminalTabRequest } from './src/features/terminal/terminalAgent';",
       "export { default as LeftRail } from './src/app/LeftRail';",
@@ -370,7 +371,7 @@ test('hand-offs try handlers by priority and fall back to the clipboard', async 
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (text) => void (copied = text) } });
   assert.deepEqual(await audits.requestAgentTask(task), { tag: 'copied' });
   assert.equal(copied, "It's broken");
-  assert.match(audits.agentTaskMessage({ tag: 'copied' }).message, /copied/i);
+  assert.match(audits.agentTaskMessage({ tag: 'copied' }, audits.ENGLISH.translate).message, /copied/i);
   await assert.rejects(() => audits.requestAgentTask({ ...task, prompt: ' ' }), /prompt/);
 });
 

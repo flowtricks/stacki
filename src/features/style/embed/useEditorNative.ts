@@ -85,14 +85,14 @@ export function useNativeOps(
         let ok = true;
         try {
           setBusyBoth(true);
-          setStatus('Saving…');
+          setStatus('Saving…'); // i18n-ignore: write-only status, never rendered.
           const result = await removeNativePropertyAt(selectedRef.current, nativeWriteTargetAt(index), props, options);
           ok = result.ok;
         } finally {
           setBusyBoth(false);
         }
         await refreshNative();
-        setStatus(ok ? 'Removed from the Webflow class style.' : 'Couldn’t remove from the Webflow class style.');
+        setStatus(ok ? 'Removed from the Webflow class style.' : 'Couldn’t remove from the Webflow class style.'); // i18n-ignore: write-only status, never rendered.
       }),
     [refreshNative, setBusyBoth, nativeWriteTargetAt, runNativeOp, selectedRef, setStatus],
   );

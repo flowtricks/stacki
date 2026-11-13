@@ -1,3 +1,4 @@
+// i18n-ignore-file: the English labels and the built-in role names are the source text beside each labelRef; the renderer translates by reference.
 // Project roles: who may use which parts of Stacki in one project, shared by
 // Desktop and Studio through `.stacki/roles.json`. This module is the contract:
 // the access features, the bounded file parser, how a GitHub login resolves to
@@ -21,6 +22,8 @@ import { assert } from '../core/assert';
 import { record, text } from '../core/boundary';
 import { toArray } from '../core/record';
 import { APP_PERMISSION_LIMITS, parseAppPermissionId, type AppPermissionDeclaration } from './appPermissions';
+import { DescribedError } from './describedError';
+import { described, messageRef, type TypedMessageRef } from './i18n/messageRef';
 
 /** The tracked project file that holds the roles. */
 export const ROLES_FILE = '.stacki/roles.json';
@@ -260,72 +263,80 @@ export const APPS_ACCESS_GROUP = 'Apps';
 /** The Roles tab's toggles, grouped by area. Every grantable static feature appears once. */
 export const ACCESS_GROUPS: readonly {
   readonly label: string;
-  readonly features: readonly { readonly feature: StaticAccessFeature; readonly label: string }[];
+  /** The same words as a reference the renderer translates (docs/i18n-playbook.md section 7); `label` stays the English and the group's identity. */
+  readonly labelRef: TypedMessageRef;
+  readonly features: readonly { readonly feature: StaticAccessFeature; readonly label: string; readonly labelRef: TypedMessageRef }[];
 }[] = [
   {
     label: 'Panels',
+    labelRef: messageRef('roles.group.panels'),
     features: [
-      { feature: 'panel:pages', label: 'Pages' },
-      { feature: 'panel:navigator', label: 'Navigator' },
-      { feature: 'panel:properties', label: 'Component properties' },
-      { feature: 'panel:components', label: 'Components' },
-      { feature: 'panel:assets', label: 'Assets' },
-      { feature: 'panel:cms', label: 'CMS' },
-      { feature: 'panel:variables', label: 'Variables' },
-      { feature: 'panel:selectors', label: 'Style selectors' },
-      { feature: 'panel:code', label: 'Code' },
-      { feature: 'panel:history', label: 'Git' },
-      { feature: 'panel:apps', label: 'Apps' },
-      { feature: 'panel:ai', label: 'AI chat' },
-      { feature: 'panel:instructions', label: 'Instructions' },
-      { feature: 'panel:audits', label: 'Audits' },
-      { feature: 'panel:projectSettings', label: 'Project settings (secrets)' },
-      { feature: 'panel:style', label: 'Style panel' },
-      { feature: 'panel:settings', label: 'Settings panel' },
+      { feature: 'panel:pages', label: 'Pages', labelRef: messageRef('roles.feature.panelPages') },
+      { feature: 'panel:navigator', label: 'Navigator', labelRef: messageRef('roles.feature.panelNavigator') },
+      { feature: 'panel:properties', label: 'Component properties', labelRef: messageRef('roles.feature.panelProperties') },
+      { feature: 'panel:components', label: 'Components', labelRef: messageRef('roles.feature.panelComponents') },
+      { feature: 'panel:assets', label: 'Assets', labelRef: messageRef('roles.feature.panelAssets') },
+      { feature: 'panel:cms', label: 'CMS', labelRef: messageRef('roles.feature.panelCms') },
+      { feature: 'panel:variables', label: 'Variables', labelRef: messageRef('roles.feature.panelVariables') },
+      { feature: 'panel:selectors', label: 'Style selectors', labelRef: messageRef('roles.feature.panelSelectors') },
+      { feature: 'panel:code', label: 'Code', labelRef: messageRef('roles.feature.panelCode') },
+      { feature: 'panel:history', label: 'Git', labelRef: messageRef('roles.feature.panelHistory') },
+      { feature: 'panel:apps', label: 'Apps', labelRef: messageRef('roles.feature.panelApps') },
+      { feature: 'panel:ai', label: 'AI chat', labelRef: messageRef('roles.feature.panelAi') },
+      { feature: 'panel:instructions', label: 'Instructions', labelRef: messageRef('roles.feature.panelInstructions') },
+      { feature: 'panel:audits', label: 'Audits', labelRef: messageRef('roles.feature.panelAudits') },
+      { feature: 'panel:projectSettings', label: 'Project settings (secrets)', labelRef: messageRef('roles.feature.panelProjectSettings') },
+      { feature: 'panel:style', label: 'Style panel', labelRef: messageRef('roles.feature.panelStyle') },
+      { feature: 'panel:settings', label: 'Settings panel', labelRef: messageRef('roles.feature.panelSettings') },
     ],
   },
   {
     label: 'Pages',
+    labelRef: messageRef('roles.group.pages'),
     features: [
-      { feature: 'page:create', label: 'Create pages' },
-      { feature: 'page:delete', label: 'Delete pages' },
-      { feature: 'page:rename', label: 'Rename and move pages' },
-      { feature: 'page:layout', label: 'Edit the layout and outside it' },
+      { feature: 'page:create', label: 'Create pages', labelRef: messageRef('roles.feature.pageCreate') },
+      { feature: 'page:delete', label: 'Delete pages', labelRef: messageRef('roles.feature.pageDelete') },
+      { feature: 'page:rename', label: 'Rename and move pages', labelRef: messageRef('roles.feature.pageRename') },
+      { feature: 'page:layout', label: 'Edit the layout and outside it', labelRef: messageRef('roles.feature.pageLayout') },
     ],
   },
   {
     label: 'Components',
+    labelRef: messageRef('roles.group.components'),
     features: [
-      { feature: 'component:create', label: 'Create components' },
-      { feature: 'component:edit', label: 'Edit component source' },
+      { feature: 'component:create', label: 'Create components', labelRef: messageRef('roles.feature.componentCreate') },
+      { feature: 'component:edit', label: 'Edit component source', labelRef: messageRef('roles.feature.componentEdit') },
     ],
   },
   {
     label: 'Code and publishing',
+    labelRef: messageRef('roles.group.codeAndPublishing'),
     features: [
-      { feature: 'code:edit', label: 'Edit code' },
-      { feature: 'instructions:edit', label: 'Edit instructions' },
-      { feature: 'publish', label: 'Publish' },
+      { feature: 'code:edit', label: 'Edit code', labelRef: messageRef('roles.feature.codeEdit') },
+      { feature: 'instructions:edit', label: 'Edit instructions', labelRef: messageRef('roles.feature.instructionsEdit') },
+      { feature: 'publish', label: 'Publish', labelRef: messageRef('roles.feature.publish') },
     ],
   },
   {
     label: APPS_ACCESS_GROUP,
+    labelRef: messageRef('roles.group.apps'),
     features: [
-      { feature: 'marketplace:view', label: 'See the marketplace' },
-      { feature: 'marketplace:install', label: 'Install from the marketplace' },
-      { feature: 'marketplace:publish', label: 'Publish to the marketplace' },
-      { feature: 'apps:share', label: 'Share apps to GitHub' },
+      { feature: 'marketplace:view', label: 'See the marketplace', labelRef: messageRef('roles.feature.marketplaceView') },
+      { feature: 'marketplace:install', label: 'Install from the marketplace', labelRef: messageRef('roles.feature.marketplaceInstall') },
+      { feature: 'marketplace:publish', label: 'Publish to the marketplace', labelRef: messageRef('roles.feature.marketplacePublish') },
+      { feature: 'apps:share', label: 'Share apps to GitHub', labelRef: messageRef('roles.feature.appsShare') },
     ],
   },
   {
     label: 'Settings',
+    labelRef: messageRef('roles.group.settings'),
     features: [
-      { feature: 'settings:editor', label: 'Editor settings' },
-      { feature: 'settings:folders', label: 'Folders' },
-      { feature: 'settings:cms', label: 'CMS and media connections' },
-      { feature: 'settings:studio', label: 'Stacki Studio' },
-      { feature: 'settings:instructions', label: 'Hidden instructions' },
-      { feature: 'settings:audits', label: 'Audit checks' },
+      { feature: 'settings:editor', label: 'Editor settings', labelRef: messageRef('roles.feature.settingsEditor') },
+      { feature: 'settings:folders', label: 'Folders', labelRef: messageRef('roles.feature.settingsFolders') },
+      { feature: 'settings:cms', label: 'CMS and media connections', labelRef: messageRef('roles.feature.settingsCms') },
+      { feature: 'settings:studio', label: 'Stacki Studio', labelRef: messageRef('roles.feature.settingsStudio') },
+      { feature: 'settings:instructions', label: 'Hidden instructions', labelRef: messageRef('roles.feature.settingsInstructions') },
+      { feature: 'settings:audits', label: 'Audit checks', labelRef: messageRef('roles.feature.settingsAudits') },
     ],
   },
 ];
@@ -349,10 +360,10 @@ export function sameLogin(left: string, right: string): boolean {
 export function parseGitHubLogin(input: unknown): string {
   const login = text(input).trim();
   if (login.length === 0 || login.length > ROLE_LIMITS.loginCharsMax) {
-    throw new Error(`A GitHub username is 1 to ${ROLE_LIMITS.loginCharsMax} characters`);
+    throw new DescribedError(described('roles.error.loginLength', { max: ROLE_LIMITS.loginCharsMax }));
   }
   if (!/^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9]))*$/.test(login)) {
-    throw new Error(`"${login}" is not a GitHub username`);
+    throw new DescribedError(described('roles.error.loginInvalid', { login }));
   }
   assert(login.length <= ROLE_LIMITS.loginCharsMax, 'A parsed login is within the GitHub limit');
   return login;

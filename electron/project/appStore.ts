@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { assert } from '../../shared/core/assert';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import {
   APP_LIMITS,
   APP_MANIFEST_FILE,
@@ -94,7 +95,7 @@ export function readInstalledManifest(projectRoot: string, id: string): AppManif
   const file = path.join(appDirectory(projectRoot, id), APP_MANIFEST_FILE);
   const manifest = parseAppManifestSource(fs.readFileSync(file, 'utf8'));
   if (manifest.id !== id) {
-    throw new Error(`.stacki/apps/${id} holds the app "${manifest.id}"`);
+    throw new ReferencedError('apps.error.folderHoldsOtherApp', { folder: `.stacki/apps/${id}`, found: manifest.id });
   }
   return manifest;
 }
@@ -108,7 +109,7 @@ export function readInstalledManifest(projectRoot: string, id: string): AppManif
 export function readInstalledBundle(projectRoot: string, id: string): AppBundle {
   const bundle = readFolderBundle(appDirectory(projectRoot, id), id);
   if (bundle.manifest.id !== id) {
-    throw new Error(`.stacki/apps/${id} holds the app "${bundle.manifest.id}"`);
+    throw new ReferencedError('apps.error.folderHoldsOtherApp', { folder: `.stacki/apps/${id}`, found: bundle.manifest.id });
   }
   assert(
     bundle.files.some((file) => file.path === APP_MANIFEST_FILE),
@@ -124,7 +125,7 @@ export function installAppBundle(projectRoot: string, bundle: AppBundle, entry: 
   const lock = readAppsLock(projectRoot);
   const others = lock.apps.filter((app) => app.id !== entry.id);
   if (others.length >= APP_LIMITS.appsMax) {
-    throw new Error(`A project has at most ${APP_LIMITS.appsMax} apps`);
+    throw new ReferencedError('apps.error.appLimit', { count: APP_LIMITS.appsMax });
   }
   const target = appDirectory(projectRoot, entry.id);
   const staging = path.join(path.dirname(target), `${STAGING_PREFIX}${randomBytes(8).toString('hex')}`);
@@ -154,7 +155,7 @@ export function updateLockEntry(projectRoot: string, id: string, change: (entry:
   const lock = readAppsLock(projectRoot);
   const current = lock.apps.find((app) => app.id === id);
   if (current === undefined) {
-    throw new Error(`The app "${id}" is not installed`);
+    throw new ReferencedError('apps.error.notInstalled', { id });
   }
   const next = change(current);
   assert(next.id === id, 'A lock change keeps the app id');
@@ -172,7 +173,7 @@ export function recordLockEntry(projectRoot: string, entry: AppLockEntry): AppLo
   const lock = readAppsLock(projectRoot);
   assert(!lock.apps.some((app) => app.id === entry.id), 'Only an app the lockfile does not name is recorded');
   if (lock.apps.length >= APP_LIMITS.appsMax) {
-    throw new Error(`A project has at most ${APP_LIMITS.appsMax} apps`);
+    throw new ReferencedError('apps.error.appLimit', { count: APP_LIMITS.appsMax });
   }
   writeAppsLock(projectRoot, { version: 1, apps: [...lock.apps, entry] });
   assert(
@@ -187,7 +188,7 @@ export function uninstallApp(projectRoot: string, id: string): void {
   const lock = readAppsLock(projectRoot);
   // A folder added to the project (source `local`) has no lock entry: removing it removes the folder.
   if (!lock.apps.some((app) => app.id === id) && !fs.existsSync(appDirectory(projectRoot, id))) {
-    throw new Error(`The app "${id}" is not installed`);
+    throw new ReferencedError('apps.error.notInstalled', { id });
   }
   writeAppsLock(projectRoot, { version: 1, apps: lock.apps.filter((app) => app.id !== id) });
   fs.rmSync(appDirectory(projectRoot, id), { recursive: true, force: true });

@@ -9,6 +9,9 @@
 // on unlinking: pages may pass it, and removing a prop is the Properties
 // panel's to do, where its uses are shown.
 
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../shared/properties/i18n/messageRef';
+import { issue, spoken, type Issue } from './issue';
 import { assert } from '../../shared/core/assert';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import { parseExpression, type Js } from './loopSyntax';
@@ -30,15 +33,38 @@ export type BindingChange =
   | { readonly kind: 'connect'; readonly setting: LoopSetting; readonly key: string }
   | { readonly kind: 'unbind'; readonly setting: LoopSetting };
 
-export type BindingResult = { readonly ok: true; readonly frontmatter: string } | { readonly ok: false; readonly message: string };
+export type BindingResult = { readonly ok: true; readonly frontmatter: string } | ({ readonly ok: false } & Issue);
 
-/** What each setting is called, in the panel and in the prop's description. */
+/** The message that names each setting in the panel: translate it where it is drawn. */
+export const SETTING_TITLE_KEYS: Readonly<Record<LoopSetting, MessageKey>> = {
+  filter: 'editor.optionsBinding.setting.filter',
+  sort: 'editor.optionsBinding.setting.sort',
+  limit: 'editor.optionsBinding.setting.limit',
+  offset: 'editor.optionsBinding.setting.offset',
+  curated: 'editor.optionsBinding.setting.curated',
+};
+
+/** What a setting is called in the panel, in the language `translate` speaks. */
+export function settingTitle(setting: LoopSetting, translate: Translator = ENGLISH_TRANSLATE): string {
+  return translate(SETTING_TITLE_KEYS[setting]);
+}
+
+/** What each setting is called in English: the text written into a prop's description in the file, which is not interface. */
 export const SETTING_TITLES: Readonly<Record<LoopSetting, string>> = {
-  filter: 'Filters',
-  sort: 'Sort',
-  limit: 'Show',
-  offset: 'Skip',
-  curated: 'Select items',
+  filter: settingTitle('filter'),
+  sort: settingTitle('sort'),
+  limit: settingTitle('limit'),
+  offset: settingTitle('offset'),
+  curated: settingTitle('curated'),
+};
+
+// A whole sentence per setting: the setting's name sits inside it, and its case and gender change with the language.
+const CANNOT_HOLD_KEYS: Readonly<Record<LoopSetting, MessageKey>> = {
+  filter: 'editor.optionsBinding.cannotHold.filter',
+  sort: 'editor.optionsBinding.cannotHold.sort',
+  limit: 'editor.optionsBinding.cannotHold.limit',
+  offset: 'editor.optionsBinding.cannotHold.offset',
+  curated: 'editor.optionsBinding.cannotHold.curated',
 };
 
 /** The name a new prop for a setting is offered: what a builder calls it. */
@@ -64,15 +90,21 @@ export const SETTING_PROP_TYPES: Readonly<Record<LoopSetting, string>> = {
 const IDENTIFIER = /^[A-Za-z_$][\w$]*$/;
 
 /** Why a name cannot be a new prop, or undefined when it can. */
-export function propNameProblem(frontmatter: string, key: string): string | undefined {
+export function propNameProblem(frontmatter: string, key: string, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
+  const problem = propNameIssue(frontmatter, key);
+  return problem === undefined ? undefined : spoken(problem, translate);
+}
+
+/** `propNameProblem` as an `Issue`, for the binding result, which is handed on. */
+export function propNameIssue(frontmatter: string, key: string): Issue | undefined {
   if (!IDENTIFIER.test(key)) {
-    return 'Use letters and numbers, starting with a letter.';
+    return issue('editor.optionsBinding.name.invalid');
   }
   if (key.length > PROPERTY_LIMITS.nameCharsMax) {
-    return 'That name is too long.';
+    return issue('editor.optionsBinding.name.tooLong');
   }
   const taken = readPropsDestructure(frontmatter)?.entries.some((entry) => entry.key === key) ?? false;
-  return taken ? `This component already has a ${key} property.` : undefined;
+  return taken ? issue('editor.optionsBinding.name.exists', { name: key }) : undefined;
 }
 
 /**
@@ -96,7 +128,7 @@ export function reboundOptions(
   const entry = settingEntry(read.options.entries, change.setting);
   if (change.kind === 'unbind') {
     if (settingHome.kind !== 'prop' || entry === undefined) {
-      return { ok: false, message: 'This setting is not linked to a property.' };
+      return { ok: false, ...issue('editor.optionsBinding.notLinked') };
     }
     const value = frontmatter.slice(settingHome.literal.from, settingHome.literal.to);
     return { ok: true, frontmatter: spliced(frontmatter, entry.value, value) };
@@ -104,13 +136,13 @@ export function reboundOptions(
   if (change.kind === 'connect') {
     const prop = readPropsDestructure(frontmatter)?.entries.find((candidate) => candidate.key === change.key);
     if (prop === undefined || !connectableProps(frontmatter, change.setting).includes(change.key)) {
-      return { ok: false, message: `The ${change.key} property can’t hold this list’s ${SETTING_TITLES[change.setting].toLowerCase()}.` };
+      return { ok: false, ...issue(CANNOT_HOLD_KEYS[change.setting], { name: change.key }) };
     }
     return { ok: true, frontmatter: named(frontmatter, read.options, change.setting, prop.local) };
   }
-  const problem = propNameProblem(frontmatter, change.key);
+  const problem = propNameIssue(frontmatter, change.key);
   if (problem !== undefined) {
-    return { ok: false, message: problem };
+    return { ok: false, ...problem };
   }
   const local = freeLocal(change.key, read.taken);
   // The new prop starts from what the list shows now: the old prop's default
@@ -118,7 +150,7 @@ export function reboundOptions(
   const current = settingHome.kind === 'prop' ? settingHome.literal : entry?.value;
   const defaultCode = change.defaultCode ?? (current === undefined ? EMPTY_VALUES[change.setting] : frontmatter.slice(current.from, current.to));
   if (parseExpression(defaultCode) === undefined) {
-    return { ok: false, message: 'That default is not a value the list can read.' };
+    return { ok: false, ...issue('editor.optionsBinding.defaultUnreadable') };
   }
   const options = named(frontmatter, read.options, change.setting, local);
   const out = withProp(

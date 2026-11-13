@@ -1,3 +1,4 @@
+import { useStudioTranslatorBridge } from '../shared/studioTranslate';
 import { useAstroFileNotifications } from '../features/notifications/useAstroFileNotifications';
 import { useEditorNavigation } from '../features/project/editorNavigation';
 import { useEffect } from 'react';
@@ -12,6 +13,7 @@ import { Toast } from '../features/notifications/Toast';
 import { useNotifications } from '../features/notifications/useNotifications';
 
 export function App() {
+  useStudioTranslatorBridge();
   const view = useEditorView();
   const navigation = useEditorNavigation();
   const { notices, performAction, report, dismiss } = useNotifications();

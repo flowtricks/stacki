@@ -27,6 +27,10 @@ test('diff replies are bounded successes or explicit errors', () => {
     ok: false,
     error: 'Missing commit',
   });
+  const errorRef = { key: 'history.error.diffTooLarge' };
+  assert.deepEqual(parseCommitDiffResult({ ok: false, error: 'Too large', errorRef }), { ok: false, error: 'Too large', errorRef });
+  // A malformed reference is dropped; the English error still shows.
+  assert.deepEqual(parseCommitDiffResult({ ok: false, error: 'Too large', errorRef: { key: 3 } }), { ok: false, error: 'Too large' });
   for (const value of [{ ok: true }, { ok: false }, { ok: 'yes', value: '' }]) {
     assert.throws(() => parseCommitDiffResult(value));
   }

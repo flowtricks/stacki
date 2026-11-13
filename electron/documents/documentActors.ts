@@ -54,6 +54,7 @@ import {
   type DiskState,
   type CurrentError,
 } from './documentReports';
+import { translateMain } from '../lib/mainLocale';
 import { Entry, type Settled, STEPS_PER_INTENT, type Rewrite, UNCHANGED, rewriteHunks, editHistory, entryBytes, compareKeys } from './documentEntry';
 
 export {
@@ -240,7 +241,7 @@ export class DocumentActors {
         });
       case 'uncertain':
       case 'backpressured':
-        return err({ code: 'failed', message: `Could not create ${file}` });
+        return err({ code: 'failed', message: translateMain('error.documents.createFailed', { file }) });
       default: {
         const exhaustive: never = created;
         return exhaustive;
@@ -608,7 +609,7 @@ export class DocumentActors {
       return {
         tag: 'rejected',
         reason: 'write-race',
-        message: `${entry.document.path} changed as it was created`,
+        message: translateMain('error.documents.createRaced', { file: entry.document.path }),
         diskChecksum: current.value,
       };
     }

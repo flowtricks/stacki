@@ -43,6 +43,7 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
   }
   // The renderer's module, loaded the way the renderer loads it.
   const { collectionFields, describeField, fieldIssue, editsBetween, memberFor, hintFor } = loadRenderer('src/features/content/contentSchema.ts');
+  const { ENGLISH_TRANSLATE } = loadRenderer('shared/properties/i18n/englishTranslator.ts');
 
   const config = await readContentConfig(source, { force: true });
   if (config.error) {
@@ -56,7 +57,7 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
     if (value === undefined || value === null) {
       return;
     }
-    const issue = fieldIssue(field, value);
+    const issue = fieldIssue(field, value, ENGLISH_TRANSLATE);
     if (issue) {
       report(`${at}: ${issue} (value ${JSON.stringify(value)?.slice(0, 60)})`);
     }
@@ -207,14 +208,14 @@ const isPlainObject = (value) => !!value && typeof value === 'object' && !Array.
     const settings = config.collections.find((collection) => collection.name === 'siteSettings');
     const brand = collectionFields(settings.schema).union.members[0];
     const theme = brand.fields.find((field) => field.key === 'themeColor');
-    check('a regex becomes a sentence', /hex colour/.test(hintFor(theme) || ''), hintFor(theme));
+    check('a regex becomes a sentence', /hex colour/.test(hintFor(theme, ENGLISH_TRANSLATE) || ''), hintFor(theme, ENGLISH_TRANSLATE));
     const field = describeField({ type: 'string', pattern: '^[a-z0-9-]+$' }, 'slug', {});
-    check('and an unknown one still says something', /lowercase/.test(hintFor(field) || ''), hintFor(field));
+    check('and an unknown one still says something', /lowercase/.test(hintFor(field, ENGLISH_TRANSLATE) || ''), hintFor(field, ENGLISH_TRANSLATE));
     const products = config.collections.find((collection) => collection.name === 'products');
     const sku = collectionFields(products.schema)
       .fields.find((field) => field.key === 'variants')
       .item.fields.find((field) => field.key === 'sku');
-    check('a sku pattern reads as an example', /BCN-STD/.test(hintFor(sku) || ''), hintFor(sku));
+    check('a sku pattern reads as an example', /BCN-STD/.test(hintFor(sku, ENGLISH_TRANSLATE) || ''), hintFor(sku, ENGLISH_TRANSLATE));
   }
 
   if (failures.length) {

@@ -2,6 +2,7 @@
 // their fallback — and the cards the panel draws: source options, the embed
 // navigation, and the selection, context and source cards (EmbedEditor.tsx).
 
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { useMemo } from 'react';
 import { saveEmbedSource } from '../model/toolPreferences';
 import { hslaToRgba } from '../model/colorWrite';
@@ -56,7 +57,7 @@ export function useSetProp(
     // no longer what "revert" should restore.
     liveOriginRef.current.delete(prop);
     if (pseudoPickPending(activeSelector)) {
-      setStatus('Reading this pseudo-element’s rules. Try that again in a moment.');
+      setStatus('Reading this pseudo-element’s rules. Try that again in a moment.'); // i18n-ignore: write-only status, never rendered.
       return;
     }
     if (!activeSelector) {
@@ -69,7 +70,7 @@ export function useSetProp(
         createSelectedRule(write, route.embedSelector);
         return;
       }
-      setStatus('Nothing to style here — add a class in Webflow first.');
+      setStatus('Nothing to style here — add a class in Webflow first.'); // i18n-ignore: write-only status, never rendered.
       return;
     }
     if (propLayer(prop) === 'native') {
@@ -236,6 +237,7 @@ export function useSourceOptions(
   nativeTarget: ReturnType<typeof useNativeTarget>,
   resolvedHook: ReturnType<typeof useResolved>,
 ) {
+  const translate = useTranslate();
   const { nativeModel } = nativeState;
   const { model } = elementTokens;
   const { currentContext } = styleContextsHook;
@@ -290,7 +292,7 @@ export function useSourceOptions(
       if (!embedDocument.source.fromComponent) {
         continue;
       }
-      const name = embedDocument.source.componentName ?? 'Component';
+      const name = embedDocument.source.componentName ?? translate('styleModel.embed.source.component');
       byComponent.set(name, [...(byComponent.get(name) ?? []), embedDocument]);
     }
     for (const [name, docs] of byComponent) {
@@ -305,7 +307,7 @@ export function useSourceOptions(
       });
     }
     return optionList;
-  }, [embedList, embedsWithRules]);
+  }, [embedList, embedsWithRules, translate]);
   return { nativeStyleName, sourceNote, sourceOptions };
 }
 

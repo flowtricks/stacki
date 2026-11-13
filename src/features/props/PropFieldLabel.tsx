@@ -1,6 +1,7 @@
 // A prop field's label row: its pill, its menu, the picker it opens, and the
 // reset menu (PropField.tsx).
 
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import React, { useRef, useState } from 'react';
 import { dataPickerPosition } from './dataPickerPosition';
 import { ResetMenu } from '../../ui/ResetLabel';
@@ -9,7 +10,7 @@ import { BindHandle, FieldDataPicker } from './propBindings';
 import PropTip from './PropTip';
 import { BracesIcon } from '../../ui/Icons';
 import { FieldTypeIcon } from './FieldTypeIcon';
-import { controlWord, type PropState } from './propFieldModel';
+import { controlLabel, type PropState } from './propFieldModel';
 import { fitOfFieldType, literalOf, type NewPropSeed } from './newPropModel';
 import { fieldTooltip } from '../../editor/propDocumentation';
 import { isMediaName } from '../../editor/fieldNames';
@@ -20,6 +21,7 @@ import { startingConditional, valueLanguageOf } from './conditionalModel';
 
 export const noLabelActivation = (event: React.MouseEvent<HTMLLabelElement>) => event.preventDefault();
 export function PropFieldPill({ state }: { readonly state: PropState }) {
+  const translate = useTranslate();
   const { name, type, isSet, showExpr, onLabelClick, onLabelContextMenu, required, missingRequired, deprecated } = state;
   // Set is the overridden state: the label takes the accent, as a value the
   // instance gives rather than the component's default.
@@ -28,7 +30,7 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
   return (
     <span
       className={classes.join(' ')}
-      title={isSet ? 'Overridden — click to reset, ⌥-click resets at once' : showExpr ? 'Click for options' : undefined}
+      title={isSet ? translate('props.field.overridden') : showExpr ? translate('props.field.clickForOptions') : undefined}
       onClick={onLabelClick}
       onContextMenu={onLabelContextMenu}
     >
@@ -38,8 +40,8 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
         <span
           className={`prop-required${missingRequired ? ' missing' : ''}`}
           role="img"
-          aria-label={missingRequired ? 'Required, not set' : 'Required'}
-          title={missingRequired ? 'Required — the component needs a value' : 'Required'}
+          aria-label={missingRequired ? translate('props.field.requiredNotSet') : translate('props.sections.required')}
+          title={missingRequired ? translate('props.field.requiredNeeds') : translate('props.sections.required')}
         />
       )}
     </span>
@@ -48,16 +50,18 @@ export function PropFieldPill({ state }: { readonly state: PropState }) {
 
 // The line under a field that names what it is missing (PropField.tsx).
 export function PropFieldNote({ state }: { readonly state: PropState }) {
+  const translate = useTranslate();
   if (!state.missingRequired) {
     return undefined;
   }
   return (
     <div className="prop-field-note required" role="note">
-      Required — the component needs a value
+      {translate('props.field.requiredNeeds')}
     </div>
   );
 }
 export function PropFieldMenu({ state }: { readonly state: PropState }) {
+  const translate = useTranslate();
   const { field, menuPosition, setMenuPosition, showExpr, reset, fromCustom } = state;
 
   return (
@@ -68,13 +72,14 @@ export function PropFieldMenu({ state }: { readonly state: PropState }) {
         // Only while the field is showing a value instead of its own control —
         // it is the way back, and there is nothing to go back FROM otherwise.
         {...(showExpr ? { onUnbind: fromCustom } : {})}
-        unbindLabel={`Use the ${controlWord(field)}`}
+        unbindLabel={controlLabel(field, translate)}
         onClose={() => setMenuPosition(undefined)}
       />
     )
   );
 }
 export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
+  const translate = useTranslate();
   const {
     field,
 
@@ -93,15 +98,18 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
       {pill}
       {/* The prop's own documentation — the comment above it in the
           component's `interface Props`. */}
-      <PropTip text={fieldTooltip(field.doc, state.deprecated)} />
+      <PropTip text={fieldTooltip(field.doc, state.deprecated, translate)} />
       {state.deprecated !== undefined && (
-        <span className="prop-deprecated" title={state.deprecated === '' ? 'Deprecated' : `Deprecated: ${state.deprecated}`}>
-          Deprecated
+        <span
+          className="prop-deprecated"
+          title={state.deprecated === '' ? translate('props.field.deprecated') : translate('props.field.deprecatedNote', { note: state.deprecated })}
+        >
+          {translate('props.field.deprecated')}
         </span>
       )}
       {reason && (
         <span className="prop-inert" title={reason}>
-          ignored
+          {translate('props.field.ignored')}
         </span>
       )}
       {/* The way between the field's own control and an expression, both ways,
@@ -113,9 +121,9 @@ export function PropFieldLabelRow({ state }: { readonly state: PropState }) {
         <button
           type="button"
           className={`prop-expr-toggle${showExpr ? ' on' : ''}`}
-          title={showExpr ? `Use the ${controlWord(field)}` : 'Write an expression'}
+          title={showExpr ? controlLabel(field, translate) : translate('props.field.writeExpression')}
           aria-pressed={showExpr}
-          aria-label="Write an expression"
+          aria-label={translate('props.field.writeExpression')}
           onClick={() => (showExpr ? fromCustom() : setCustom(true))}
         >
           <BracesIcon size={12} />

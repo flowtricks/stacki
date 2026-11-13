@@ -7,6 +7,7 @@ import Popup from '../../ui/Popup';
 import Dropdown from '../../ui/Dropdown';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { SanityIcon } from '../../ui/Icons';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { openSanitySignIn, sanityLogin } from '../../ipc/cmsConnectionsBridge';
 import { SANITY_LOGIN_TIMEOUT_MS, type SanityLoginState, type SanityProjectChoice } from '../../../shared/properties/cmsConnections';
 
@@ -14,6 +15,7 @@ const POLL_INTERVAL_MS = 1000;
 const POLLS_MAX = Math.ceil(SANITY_LOGIN_TIMEOUT_MS / POLL_INTERVAL_MS);
 
 export function SanitySignIn(props: { readonly projectPath: string; readonly close: () => void }) {
+  const translate = useTranslate();
   // A new id starts a new sign-in: on opening, and on Try again.
   const [session, setSession] = useState(() => crypto.randomUUID());
   const state = useSanitySession(props.projectPath, session);
@@ -24,11 +26,11 @@ export function SanitySignIn(props: { readonly projectPath: string; readonly clo
     }
   }, [state?.kind, close]);
   return (
-    <Popup className="modal publish-settings cms-sanity-sign-in" label="Log in with Sanity" onClose={close} dismissible>
+    <Popup className="modal publish-settings cms-sanity-sign-in" label={translate('cmsConnections.actions.logInSanity')} onClose={close} dismissible>
       {() => (
         <>
           <div className="modal-header">
-            <SanityIcon size={18} /> Log in with Sanity
+            <SanityIcon size={18} /> {translate('cmsConnections.actions.logInSanity')}
           </div>
           <div className="modal-body publish-fields" aria-live="polite">
             <SignInStep
@@ -52,31 +54,33 @@ export function SanitySignIn(props: { readonly projectPath: string; readonly clo
 
 function SignInStep(props: { readonly state: SanityLoginState; readonly choose: (projectId: string, dataset: string) => void; readonly retry: () => void }) {
   const { state } = props;
+  const translate = useTranslate();
+  const describe = useTranslateDescribed();
   switch (state.kind) {
     case 'starting':
-      return <p>Starting…</p>;
+      return <p>{translate('cmsConnections.signIn.starting')}</p>;
     case 'browser':
       return (
         <>
-          <p>Sign in on Sanity’s page in your browser, then come back here. Stacki creates an Editor key for this site’s project and keeps only that key.</p>
+          <p>{translate('cmsConnections.signIn.browser')}</p>
           <button type="button" className="primary" onClick={() => void openSanitySignIn(state.url)}>
-            Open the browser again
+            {translate('cmsConnections.signIn.openAgain')}
           </button>
         </>
       );
     case 'choosing':
       return <ProjectChoice state={state} choose={props.choose} />;
     case 'creating':
-      return <p>Creating an Editor key for this project…</p>;
+      return <p>{translate('cmsConnections.signIn.creating')}</p>;
     case 'complete':
-      return <p>Connected.</p>;
+      return <p>{translate('cmsConnections.signIn.complete')}</p>;
     case 'cancelled':
     case 'failed':
       return (
         <>
-          <ErrorToast message={state.kind === 'failed' ? state.message : 'Sign-in cancelled.'} />
+          <ErrorToast message={state.kind === 'failed' ? describe(state) : translate('cmsConnections.signIn.cancelled')} />
           <button type="button" onClick={props.retry}>
-            Try again
+            {translate('cmsConnections.signIn.tryAgain')}
           </button>
         </>
       );
@@ -91,6 +95,7 @@ function ProjectChoice(props: {
   readonly state: Extract<SanityLoginState, { readonly kind: 'choosing' }>;
   readonly choose: (projectId: string, dataset: string) => void;
 }) {
+  const translate = useTranslate();
   const { projects, suggestion } = props.state;
   const first = projects[0];
   const [projectId, setProjectId] = useState(suggestion?.projectId ?? first?.id ?? '');
@@ -99,11 +104,11 @@ function ProjectChoice(props: {
   const datasets = project?.datasets ?? [];
   return (
     <>
-      {suggestion && <p>This site’s .env names the project and dataset chosen below.</p>}
+      {suggestion && <p>{translate('cmsConnections.signIn.envNote')}</p>}
       <div className="publish-field">
-        <label>Project</label>
+        <label>{translate('cmsConnections.signIn.project')}</label>
         <Dropdown
-          ariaLabel="Project"
+          ariaLabel={translate('cmsConnections.signIn.project')}
           value={projectId}
           options={projects.map((entry) => ({ value: entry.id, label: `${entry.name} (${entry.id})` }))}
           searchable={projects.length > 6}
@@ -117,9 +122,9 @@ function ProjectChoice(props: {
         />
       </div>
       <div className="publish-field">
-        <label>Dataset</label>
+        <label>{translate('cmsConnections.form.dataset')}</label>
         <Dropdown
-          ariaLabel="Dataset"
+          ariaLabel={translate('cmsConnections.form.dataset')}
           value={dataset}
           options={datasets.map((name) => ({ value: name, label: name }))}
           menuClassName="publish-dropdown"
@@ -128,7 +133,7 @@ function ProjectChoice(props: {
         />
       </div>
       <button type="button" className="primary" disabled={!project || !datasets.includes(dataset)} onClick={() => props.choose(projectId, dataset)}>
-        Connect
+        {translate('cmsConnections.signIn.connect')}
       </button>
     </>
   );

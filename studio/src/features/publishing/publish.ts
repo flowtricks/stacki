@@ -19,6 +19,8 @@ import { published, publishFailure, PublishFailure } from './publishFailure';
 import { record, string } from '../../shared/validation';
 import { SerialQueue } from '../../shared/serialQueue';
 import type { ReviewReceipt } from '../../../vendor/stacki/shared/properties/publishReview';
+import type { MessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
+import { described, type Described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 export type PublishStage = 'preparing' | 'building' | 'committing' | 'cleanup' | 'deploying';
 export type PublishState =
@@ -36,10 +38,11 @@ export type PublishState =
       readonly sha: string;
       readonly url: string;
       readonly cleanupWarning?: string;
+      readonly cleanupWarningRef?: MessageRef | undefined;
       readonly github?: 'skipped';
       readonly deployment?: 'live' | 'pending';
     }
-  | { readonly kind: 'failed'; readonly id: string; readonly message: string };
+  | { readonly kind: 'failed'; readonly id: string; readonly message: string; readonly messageRef?: MessageRef | undefined };
 export class Publisher {
   private current: PublishState = { kind: 'idle' };
   private readonly listeners = new Set<(state: PublishState) => void>();
@@ -89,7 +92,7 @@ export class Publisher {
       throw new Error('Configure the GitHub App and repository before publishing.');
     }
     if (gitWorkspaceBusy(this.root)) {
-      throw new PublishFailure('Wait for the Git operation to finish before publishing.');
+      throw new PublishFailure(described('publish.studio.error.gitBusy'));
     }
     if (this.running) {
       throw new Error('A publish is already running');
@@ -114,7 +117,7 @@ export class Publisher {
       const config = managedPublishConfig(storedConfig, target, this.deploy ? this.managedHosting : undefined);
       if (config.githubWorkflow?.kind === 'pull-request') {
         if (target === 'hosting') {
-          throw new PublishFailure('Submit changes for review and deploy the merged branch through your repository workflow.');
+          throw new PublishFailure(described('error.publish.reviewHint'));
         }
         return await this.submitReview(temporary, progress);
       }
@@ -128,11 +131,9 @@ export class Publisher {
       if (!(error instanceof PublishFailure)) {
         throw error;
       }
-      this.state = {
-        kind: 'failed',
-        id,
-        message: (savedToGitHub ? 'Saved to GitHub. Remaining publish steps failed: ' : '') + (error instanceof Error ? error.message : 'Publish failed'),
-      };
+      // After a GitHub save, the earlier failure's English text travels as a parameter: a composite cannot reuse its reference.
+      const problem = savedToGitHub ? described('publish.studio.error.savedThenFailed', { message: error.message }) : error.problem;
+      this.state = { kind: 'failed', id, message: problem.message, ...(problem.messageRef === undefined ? {} : { messageRef: problem.messageRef }) };
       return this.state;
     } finally {
       this.running = false;
@@ -171,14 +172,16 @@ export class Publisher {
       kind: 'committed',
       id: progress.id,
       ...result,
-      ...(cleanupWarning ? { cleanupWarning } : {}),
+      ...(cleanupWarning
+        ? { cleanupWarning: cleanupWarning.message, ...(cleanupWarning.messageRef === undefined ? {} : { cleanupWarningRef: cleanupWarning.messageRef }) }
+        : {}),
       ...(deployment ? { deployment } : {}),
     };
     return this.state;
   }
   private async submitReview(temporary: string, progress: Extract<PublishState, { kind: 'building' }>): Promise<PublishState> {
     if (!this.github?.review) {
-      throw new PublishFailure('This repository connection does not support pull request review.');
+      throw new PublishFailure(described('publish.studio.error.noReview'));
     }
     if (this.refresh) {
       published(await this.refresh().then(ok, publishFailure));
@@ -258,7 +261,7 @@ export class Publisher {
       }
       published(await rm(path.dirname(snapshot), { recursive: true, force: true }).then(ok, publishFailure));
     }
-    throw new PublishFailure('GitHub is changing too quickly. Try publishing again.');
+    throw new PublishFailure(described('publish.studio.error.tooFast'));
   }
   private async deployConfigured(snapshot: string, progress: Extract<PublishState, { kind: 'building' }>, config: PublishConfig): Promise<'live'> {
     this.state = { ...progress, stage: 'deploying', deployment: 'pending' };
@@ -267,7 +270,7 @@ export class Publisher {
   }
   private async publishHosting(snapshot: string, progress: Extract<PublishState, { kind: 'building' }>, config: PublishConfig): Promise<PublishState> {
     if (config.hosting.provider === 'none') {
-      throw new PublishFailure('Choose a hosting provider in Publish settings.');
+      throw new PublishFailure(described('error.publish.chooseHosting'));
     }
     await this.coordinator.run(async () => {
       await this.persistDraft?.();
@@ -305,12 +308,14 @@ export class Publisher {
       return 'pending';
     }
   }
-  private async cleanPublishedAssets(files: readonly PublishedFile[], sha: string) {
+  private async cleanPublishedAssets(files: readonly PublishedFile[], sha: string): Promise<Described | undefined> {
     try {
-      return (await this.cleanup?.(files, sha))?.warning;
+      const warning = (await this.cleanup?.(files, sha))?.warning;
+      // The storage cleanup writes its own sentence (already in the server's language), so it has no reference here.
+      return warning === undefined ? undefined : { message: warning };
     } catch (error: unknown) {
       publishFailure(error);
-      return 'Published successfully. Storage cleanup will retry after the next GitHub publish.';
+      return described('publish.studio.error.cleanupRetry');
     }
   }
 }
@@ -349,7 +354,8 @@ async function afterPublish(snapshot: string, config: PublishConfig, target: Pub
     await runPublishScripts(snapshot, config.afterPublish, { STACKI_PUBLISH_TARGET: target });
   } catch (error: unknown) {
     const failure = publishFailure(error);
-    const message = failure.ok ? '' : failure.error.message;
-    throw new PublishFailure((options.hostingComplete ? 'Hosting deployment completed. ' : '') + message);
+    const problem: Described = failure.ok ? { message: '' } : { message: failure.error.message, messageRef: failure.error.messageRef };
+    // The completed-hosting note is a sentence of its own around the failure text, which is English as received.
+    throw new PublishFailure(options.hostingComplete ? described('publish.studio.error.hostingDoneThen', { message: problem.message }) : problem);
   }
 }

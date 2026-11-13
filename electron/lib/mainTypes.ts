@@ -41,6 +41,7 @@ export interface GitInfo {
   head?: string | undefined;
   userEmail?: string | undefined;
   trunk?: string | undefined;
+  defaultBranch?: string | undefined;
   dirtyFiles?: string[];
   hasUpstream?: boolean;
 }

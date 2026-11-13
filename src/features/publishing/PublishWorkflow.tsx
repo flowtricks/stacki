@@ -1,18 +1,20 @@
 import type { PublishConfig } from '../../../shared/properties/publishConfig';
 import type { GitHubWorkflow } from '../../../shared/properties/publishReview';
 import Dropdown from '../../ui/Dropdown';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export function PublishWorkflow({ config, change }: { readonly config: PublishConfig; readonly change: (config: PublishConfig) => void }) {
+  const translate = useTranslate();
   const reviewing = config.githubWorkflow?.kind === 'pull-request';
   return (
     <div className="publish-field">
-      <span className="publish-label">GitHub workflow</span>
+      <span className="publish-label">{translate('publish.workflow.label')}</span>
       <Dropdown<GitHubWorkflow['kind']>
-        ariaLabel="GitHub workflow"
+        ariaLabel={translate('publish.workflow.label')}
         value={reviewing ? 'pull-request' : 'direct'}
         options={[
-          { value: 'direct', label: 'Publish to the current branch' },
-          { value: 'pull-request', label: 'Open a pull request for review' },
+          { value: 'direct', label: translate('publish.workflow.direct') },
+          { value: 'pull-request', label: translate('publish.workflow.pullRequest') },
         ]}
         menuClassName="publish-dropdown"
         livePreview={false}
@@ -24,7 +26,7 @@ export function PublishWorkflow({ config, change }: { readonly config: PublishCo
           });
         }}
       />
-      {reviewing && <span>Review submissions stay off the live site. Merge and deploy through GitHub.</span>}
+      {reviewing && <span>{translate('publish.workflow.reviewNote')}</span>}
     </div>
   );
 }

@@ -25,6 +25,7 @@ import {
 } from '../../ui/Icons';
 import { type LoopFieldKind } from '../../editor/loopQuery';
 import { type RowParts } from './loopSettingsModel';
+import { useLocale, useTranslate } from '../../lib/i18n/useTranslate';
 // One closed filter or sort: the field quieter, what is asked of it brighter,
 // and a remove button that shows on hover, as a builder's settings list does.
 export function ListRow(props: {
@@ -39,6 +40,7 @@ export function ListRow(props: {
   readonly onToggle: () => void;
   readonly onRemove: () => void;
 }) {
+  const translate = useTranslate();
   const { parts } = props;
   // The row element as state, not a ref: a row created open (a filter just
   // added) renders its pop-up in the same pass, before a ref would be set.
@@ -66,7 +68,7 @@ export function ListRow(props: {
         <span className="loop-settings-item-lead">{parts.lead}</span>
         <span className="loop-settings-item-rest">{parts.rest}</span>
       </button>
-      <button type="button" className="loop-settings-item-remove" aria-label={props.removeLabel} title="Remove" onClick={props.onRemove}>
+      <button type="button" className="loop-settings-item-remove" aria-label={props.removeLabel} title={translate('ui.remove')} onClick={props.onRemove}>
         <TrashIcon size={13} />
       </button>
       {props.open && props.editor !== undefined && (
@@ -91,6 +93,7 @@ export function RowPopup(props: {
   readonly onClose: () => void;
   readonly children: ReactNode;
 }) {
+  const translate = useTranslate();
   const [placed, setPlaced] = useState<{ readonly anchor: HTMLElement; readonly position: FieldPosition } | undefined>(undefined);
   const { anchor } = props;
   const heightPxMax = props.heightPxMax ?? ROW_POPUP_HEIGHT_PX_MAX;
@@ -113,7 +116,7 @@ export function RowPopup(props: {
       className="loop-settings-popup"
       style={placed.position}
       role="dialog"
-      label={props.label ?? 'Edit'}
+      label={props.label ?? translate('props.loop.rows.edit')}
     >
       {props.children}
     </Popup>
@@ -149,6 +152,10 @@ export function SectionHeader(props: {
   readonly reset?: SectionReset;
   readonly onAdd: () => void;
 }) {
+  const translate = useTranslate();
+  const { locale } = useLocale();
+  // German nouns keep their capital, so only the other languages lower-case the title.
+  const addLabel = translate('props.loop.rows.add', { title: locale === 'de' ? props.title : props.title.toLowerCase() });
   return (
     <div className="loop-settings-header">
       <span className="loop-settings-label">
@@ -158,14 +165,7 @@ export function SectionHeader(props: {
         {props.toggle}
       </span>
       <span className="loop-settings-header-tools">{props.extra}</span>
-      <button
-        type="button"
-        className="loop-settings-add"
-        aria-label={`Add ${props.title.toLowerCase()}`}
-        title={`Add ${props.title.toLowerCase()}`}
-        disabled={!props.addable}
-        onClick={props.onAdd}
-      >
+      <button type="button" className="loop-settings-add" aria-label={addLabel} title={addLabel} disabled={!props.addable} onClick={props.onAdd}>
         <PlusIcon size={13} />
       </button>
     </div>
@@ -275,11 +275,12 @@ export function EditorRow(props: { readonly label: string; readonly dot?: ReactN
  * reads as controls; opened when someone wants to know.
  */
 export function LoopDetails(props: { readonly children: ReactNode }) {
+  const translate = useTranslate();
   const [open, setOpen] = useState(false);
   return (
     <div className="loop-lineage">
       <button type="button" className="loop-lineage-toggle" aria-expanded={open} onClick={() => setOpen(!open)}>
-        Details
+        {translate('props.loop.rows.details')}
         <ChevronRightIcon size={10} className={`loop-lineage-chevron${open ? ' open' : ''}`} />
       </button>
       {open && <div className="loop-lineage-body">{props.children}</div>}

@@ -31,7 +31,7 @@ export default function MarkdownField({ value, label, extensions = 'commonmark',
       value={html}
       label={label}
       sourceView={{
-        label: 'Markdown',
+        label: 'Markdown', // i18n-ignore: the name of the file format, the same in every language
         render: () => (
           <div className="html-source markdown-source">
             <CodeEditor language="markdown" value={value} onChange={(text: string) => onChange(text)} />

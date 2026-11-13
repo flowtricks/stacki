@@ -1,5 +1,5 @@
 import { readPropertyOrigins } from './propertyOrigins';
-import { readPropertyContracts } from './propertyContracts';
+import { readPropertyContracts, withReason } from './propertyContracts';
 import type { PropertyContracts } from './propertyContracts';
 import type { PropertyOrigins } from './propertyOrigins';
 import type { ModelSchemaField } from '../../shared/properties/propModelSchema';
@@ -14,6 +14,8 @@ import { assert } from '../../shared/core/assert';
 import { indentUnitOf, withIndentUnit } from '../../shared/core/indent';
 import type { ComponentProperties, ComponentProperty, PropertyChange, PropertyEditing } from '../../shared/properties/propertyEditing';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
+import { refusal } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
 import {
   applySourceEdits,
@@ -122,6 +124,7 @@ function schemaPropertyType(field: ModelSchemaField): string {
 
 function sourcedProperty(property: ComponentProperty, definitions: Definitions, origins: PropertyOrigins, contracts: PropertyContracts): ComponentProperty {
   const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === property.name);
+  const conditions = contracts.conditions(property.name);
   const types = (origins.members.get(property.name) ?? [])
     .flatMap((member) => (member.type ? [definitions.readType(member.type)] : []))
     .filter((type) => type !== 'never');
@@ -142,7 +145,8 @@ function sourcedProperty(property: ComponentProperty, definitions: Definitions, 
       member ?? definitions.members.find((item) => propertyKey(item.name) === property.name),
       definitions.document.syntax,
     ),
-    conditions: contracts.conditions(property.name),
+    conditions: conditions.map((condition) => condition.message),
+    conditionRefs: conditions.map((condition) => condition.messageRef),
   };
 }
 
@@ -153,25 +157,19 @@ function withAliasWarning(editing: PropertyEditing, member: ts.PropertySignature
   }
   const alias = optionAliasOf(syntax, member);
   const warning = alias === undefined ? undefined : optionAliasWarning(alias);
-  return warning === undefined ? editing : { kind: 'editable', warning };
+  return warning === undefined ? editing : { kind: 'editable', warning: warning.message, warningRef: warning.messageRef };
 }
 
 function contractEditing(definitions: Definitions, contracts: PropertyContracts, name: string): PropertyEditing {
   if (definitions.patterns.length > 1 || definitions.bindings.some((binding) => !ts.isIdentifier(binding.name))) {
-    return {
-      kind: 'restricted',
-      reason: 'This prop uses complex destructuring. Edit it in source.',
-    };
+    return withReason('restricted', described('props.contract.complexDestructuring'));
   }
   if (!/^[A-Za-z_$][\w$]*$/.test(name)) {
-    return { kind: 'restricted', reason: 'This prop uses a quoted name. Edit it in source.' };
+    return withReason('restricted', described('props.contract.quotedName'));
   }
   const editing = contracts.editing(name);
   if (editing.kind === 'override' && !definitions.container) {
-    return {
-      kind: 'restricted',
-      reason: 'This inherited prop has no unambiguous local declaration to update.',
-    };
+    return withReason('restricted', described('props.contract.noLocalDeclaration'));
   }
   return editing;
 }
@@ -237,24 +235,21 @@ function editDefinition(source: string, change: PropertyChange): Result<string> 
 
 function editCommonDefinition(definitions: Definitions, change: Exclude<PropertyChange, { readonly kind: 'source' }>): Result<string> {
   if (change.kind === 'order' || (change.kind === 'save' && !change.originalName)) {
-    return err({
-      code: 'advanced',
-      message: 'Add or reorder declarations in this combined type in source.',
-    });
+    return err(refusal('advanced', 'props.edit.combinedAdd'));
   }
   const name = change.kind === 'save' ? change.originalName : change.name;
   // Renderer permissions are descriptive only; every write rechecks the current source.
   const contracts = readPropertyContracts(definitions.document);
   const access = contractEditing(definitions, contracts, name);
   if (access.kind === 'restricted') {
-    return err({ code: 'restricted', message: access.reason });
+    return err({ code: 'restricted', message: access.reason, ...(access.reasonRef === undefined ? {} : { messageRef: access.reasonRef }) });
   }
   if (access.kind === 'override') {
     if (change.kind === 'remove') {
-      return err({ code: 'inherited', message: 'Inherited HTML attributes cannot be deleted.' });
+      return err(refusal('inherited', 'props.edit.inheritedDelete'));
     }
     if (change.kind === 'save' && change.property.name !== name) {
-      return err({ code: 'inherited', message: 'Inherited HTML attributes cannot be renamed.' });
+      return err(refusal('inherited', 'props.edit.inheritedRename'));
     }
     return change.kind === 'options' ? saveDefinitionOptions(definitions, name, change.type) : saveDefinition(definitions, name, change.property);
   }
@@ -353,13 +348,13 @@ function saveDefinition(definitions: Definitions, originalName: string, property
   const snapshot = readComponentProperties(definitions.document.source);
   const previous = originalName ? snapshot.properties.find((field) => field.name === originalName) : undefined;
   if (originalName && previous === undefined) {
-    return err({ code: 'missing', message: 'This property no longer exists. Reload the panel.' });
+    return err(refusal('missing', 'props.edit.missing'));
   }
   if (originalName !== property.name && snapshot.properties.some((field) => field.name === property.name)) {
-    return err({ code: 'duplicate', message: `A property named ${property.name} already exists.` });
+    return err(refusal('duplicate', 'props.edit.duplicate', { name: property.name }));
   }
   if (!originalName && snapshot.properties.length >= PROPERTY_LIMITS.fieldsMax) {
-    return err({ code: 'limit', message: 'The component property limit has been reached.' });
+    return err(refusal('limit', 'props.edit.limit'));
   }
   // A save that changes nothing writes nothing: the file is the author's.
   if (previous !== undefined && sameProperty(previous, property)) {
@@ -425,7 +420,7 @@ function declarationEdits(
   }
   const reason = untypedReason(definitions);
   if (reason !== undefined) {
-    return err({ code: 'untyped', message: reason });
+    return err({ code: 'untyped', ...reason });
   }
   const snapshot = readComponentProperties(definitions.document.source);
   // The new interface lists the props in the order the panel shows them, the saved one in its place.
@@ -443,15 +438,15 @@ function declarationEdits(
 const LOOSE_TYPES = new Set(['', 'unknown']);
 
 // Why a component without a Props declaration cannot be given one, if it cannot.
-function untypedReason(definitions: Definitions): string | undefined {
+function untypedReason(definitions: Definitions): Described | undefined {
   const annotated = syntaxNodes(definitions.document.syntax)
     .filter(ts.isVariableDeclaration)
     .find((node) => isAstroProps(node.initializer) && node.type !== undefined);
   if (annotated?.type !== undefined) {
-    return `This component types its props as ${annotated.type.getText()}. Change the prop's type there.`;
+    return described('props.edit.untypedAnnotated', { type: annotated.type.getText() });
   }
   if (definitions.patterns.some((pattern) => pattern.elements.some((element) => element.dotDotDotToken !== undefined))) {
-    return 'This component passes other attributes on with ...rest and has no Props type; a Props type would have to list every attribute it forwards. Set this prop in source.';
+    return described('props.edit.untypedRest');
   }
   return undefined;
 }
@@ -459,7 +454,7 @@ function untypedReason(definitions: Definitions): string | undefined {
 function saveDefinitionOptions(definitions: Definitions, name: string, type: string): Result<string> {
   const property = readComponentProperties(definitions.document.source).properties.find((field) => field.name === name);
   if (!property) {
-    return err({ code: 'missing', message: 'This property no longer exists. Reload the panel.' });
+    return err(refusal('missing', 'props.edit.missing'));
   }
   assert(property.name === name, 'Option reorder targets the requested property');
   assert(type.length <= PROPERTY_LIMITS.textCharsMax, 'Option type is bounded');
@@ -485,10 +480,7 @@ function saveDefinitionBinding(
   }
   const locals = syntaxNodes(definitions.document.syntax).filter(ts.isIdentifier);
   if (locals.some((node) => node.text === property.name && !ts.isPropertySignature(node.parent))) {
-    return err({
-      code: 'binding',
-      message: `The name ${property.name} is already in scope. ` + 'Add an aliased default in TypeScript source.',
-    });
+    return err(refusal('binding', 'props.edit.nameInScope', { name: property.name }));
   }
   const pattern = definitions.patterns[0];
   if (pattern) {
@@ -509,10 +501,7 @@ function saveDefinitionBinding(
 function reorderDefinitions(definitions: Definitions, names: readonly string[]): Result<string> {
   const fields = readComponentProperties(definitions.document.source).properties;
   if (new Set(names).size !== names.length || names.length !== fields.length || names.some((name) => !fields.some((field) => field.name === name))) {
-    return err({
-      code: 'order',
-      message: 'Reorder must include every declared property exactly once.',
-    });
+    return err(refusal('order', 'props.edit.reorder'));
   }
   const chunks = new Map(fields.map((field) => [field.name, withIndentUnit(renderDefinition(field), indentUnitOf(definitions.document.frontmatter))]));
   for (const member of definitions.members) {
@@ -531,7 +520,7 @@ function reorderDefinitions(definitions: Definitions, names: readonly string[]):
   if (!container) {
     const reason = untypedReason(definitions);
     if (reason !== undefined) {
-      return err({ code: 'untyped', message: reason });
+      return err({ code: 'untyped', ...reason });
     }
     return ok(replaceFrontmatter(definitions.document, `interface Props {${text}\n}\n${definitions.document.frontmatter}`));
   }
@@ -555,7 +544,7 @@ function removeDefinition(definitions: Definitions, name: string): Result<string
   const member = definitions.members.find((item) => propertyKey(item.name) === name);
   const binding = definitions.bindings.find((item) => propertyKey(item.propertyName ?? item.name) === name);
   if (!member && !binding) {
-    return err({ code: 'missing', message: 'Property not found.' });
+    return err(refusal('missing', 'props.edit.notFound'));
   }
   const edits: SourceEdit[] = member ? [{ start: member.getFullStart(), end: member.end, text: '' }] : [];
   if (binding) {
@@ -577,10 +566,7 @@ function removeDefinition(definitions: Definitions, name: string): Result<string
   // breaks rendering, while a false positive can still be resolved in source.
   const escaped = local.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   if (new RegExp(`(^|[^\\w$])${escaped}([^\\w$]|$)`).test(output)) {
-    return err({
-      code: 'in-use',
-      message: 'This property is still referenced. Remove its component usages before deleting it.',
-    });
+    return err(refusal('in-use', 'props.edit.inUse'));
   }
   return ok(output);
 }

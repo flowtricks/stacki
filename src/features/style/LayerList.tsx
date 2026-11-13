@@ -2,6 +2,7 @@ import { centralIcon } from '../../ui/central/CentralIcon';
 import { drag as centralDrag, eye as centralEye, eyeOff as centralEyeOff, trashCanSimple as centralTrashCanSimple } from '../../ui/central/centralGeometry';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // A reusable layer stack (background image/gradient layers, text-shadow layers):
 // drag-to-reorder, click a row to open its editor, and a hover-revealed Remove (trash)
@@ -108,6 +109,7 @@ function LayerRow({
   onRemove,
   onToggleHidden,
 }: LayerRowProps) {
+  const translate = useTranslate();
   return (
     <li
       className={`embed-editor_bg-layer ${dropTarget ? 'is-drop-target' : ''} ` + `${dragging ? 'is-dragging' : ''} ${hidden ? 'is-hidden' : ''}`}
@@ -131,8 +133,8 @@ function LayerRow({
             transfer.setData('text/plain', String(index));
           }}
           onDragEnd={onDragEndRow}
-          title="Drag to reorder"
-          aria-label="Drag to reorder"
+          title={translate('style.layerList.dragToReorder')}
+          aria-label={translate('style.layerList.dragToReorder')}
         >
           <GripIcon />
         </span>
@@ -141,7 +143,7 @@ function LayerRow({
           className="embed-editor_bg-layer-main"
           onClick={(event) => onOpen(index, event.currentTarget.closest<HTMLElement>('li') ?? event.currentTarget)}
           disabled={busy}
-          title="Edit layer"
+          title={translate('style.layerList.editLayer')}
         >
           {preview}
           <span className="embed-editor_bg-layer-label">{label}</span>
@@ -155,6 +157,7 @@ function LayerRow({
 // The hover-revealed row actions: the eye (only when hiding is supported) and
 // the trash.
 function LayerRowActions({ index, busy, hidden, onRemove, onToggleHidden }: Pick<LayerRowProps, 'index' | 'busy' | 'hidden' | 'onRemove' | 'onToggleHidden'>) {
+  const translate = useTranslate();
   return (
     <>
       {onToggleHidden ? (
@@ -164,8 +167,8 @@ function LayerRowActions({ index, busy, hidden, onRemove, onToggleHidden }: Pick
           onClick={() => onToggleHidden(index)}
           disabled={busy}
           aria-pressed={hidden}
-          title={hidden ? 'Show' : 'Hide'}
-          aria-label={hidden ? 'Show layer' : 'Hide layer'}
+          title={hidden ? translate('style.layerList.show') : translate('style.layerList.hide')}
+          aria-label={hidden ? translate('style.layerList.showLayer') : translate('style.layerList.hideLayer')}
         >
           {hidden ? <EyeOffIcon /> : <EyeIcon />}
         </button>
@@ -175,8 +178,8 @@ function LayerRowActions({ index, busy, hidden, onRemove, onToggleHidden }: Pick
         className="embed-editor_bg-layer-action embed-editor_bg-layer-trash"
         onClick={() => onRemove(index)}
         disabled={busy}
-        title="Remove layer"
-        aria-label="Remove layer"
+        title={translate('style.layerList.removeLayer')}
+        aria-label={translate('style.layerList.removeLayer')}
       >
         <TrashIcon />
       </button>

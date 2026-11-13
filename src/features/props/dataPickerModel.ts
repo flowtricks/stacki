@@ -16,6 +16,8 @@
 
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { pathSteps } from '../../editor/dataSample';
 
 export interface EntryPage {
@@ -133,7 +135,7 @@ export interface DataOrigin {
  * of them is the one being bound: `Button.astro frontmatter` is the
  * component's own, and a project collection reads the same everywhere.
  */
-export function sectionHeading(section: string, origin: DataOrigin | undefined): string | undefined {
+export function sectionHeading(section: string, origin: DataOrigin | undefined, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   // A project data file is headed by its path under src/, as the CMS panel lists it.
   const dataFile = dataFileOfSection(section);
   if (dataFile !== undefined) {
@@ -143,25 +145,25 @@ export function sectionHeading(section: string, origin: DataOrigin | undefined):
   const component = componentNameOf(origin?.file);
   switch (section) {
     case 'loop':
-      return 'Loop item';
+      return translate('props.dataPicker.section.loopItem');
     case 'props':
       // A component's props are the component's own, so its name says it all;
       // a page is not one, and says which file's props these are.
-      return component ?? (file === undefined ? 'Props' : `${file} props`);
+      return component ?? (file === undefined ? translate('props.dataPicker.section.props') : translate('props.dataPicker.section.fileProps', { file }));
     case 'frontmatter':
-      return file === undefined ? 'Frontmatter' : `${file} frontmatter`;
+      return file === undefined ? translate('props.dataPicker.section.frontmatter') : translate('props.dataPicker.section.fileFrontmatter', { file });
     case 'collections':
       // Astro's own name for them, so it matches the docs and the config file.
-      return 'Content Collections';
+      return translate('props.dataPicker.section.collections');
     case 'loop-sanity':
-      return 'Sanity';
+      return 'Sanity'; // i18n-ignore: brand name.
     case PROJECT_DATA_SECTION:
       // The lists the project keeps outside the page, in its data modules (loopProjectData.ts).
-      return 'Project data';
+      return translate('props.dataPicker.section.projectData');
     case 'loop-page':
-      return 'On this page';
+      return translate('props.dataPicker.section.onPage');
     case 'loop-component':
-      return component ?? 'On this page';
+      return component ?? translate('props.dataPicker.section.onPage');
     default:
       return undefined;
   }
@@ -199,13 +201,18 @@ export type SectionHead = { readonly kind: 'group'; readonly heading: string; re
  * component's group, under a quiet "Frontmatter", and opens that group itself
  * when the component has no props. A page's frontmatter keeps its own group.
  */
-export function sectionHeads(section: string, previous: string | undefined, origin: DataOrigin | undefined): readonly SectionHead[] {
+export function sectionHeads(
+  section: string,
+  previous: string | undefined,
+  origin: DataOrigin | undefined,
+  translate: Translator = ENGLISH_TRANSLATE,
+): readonly SectionHead[] {
   const component = componentNameOf(origin?.file);
   if (section === 'frontmatter' && component !== undefined) {
-    const part: SectionHead = { kind: 'part', heading: 'Frontmatter' };
+    const part: SectionHead = { kind: 'part', heading: translate('props.dataPicker.section.frontmatter') };
     return previous === 'props' ? [part] : [{ kind: 'group', heading: component, section: 'props' }, part];
   }
-  const heading = sectionHeading(section, origin);
+  const heading = sectionHeading(section, origin, translate);
   return heading === undefined ? [] : [{ kind: 'group', heading, section }];
 }
 
@@ -280,20 +287,20 @@ export interface MissingAnchor {
  * has no such one, a value whose fields it cannot see, or a name that is not
  * in scope here at all.
  */
-export function missingLabel(anchors: readonly MissingAnchor[]): string {
+export function missingLabel(anchors: readonly MissingAnchor[], translate: Translator = ENGLISH_TRANSLATE): string {
   assert(anchors.length <= LIMITS.treeDepthMax, 'missingLabel: anchors stay inside the depth limit');
   const nearest = anchors[anchors.length - 1];
   if (nearest === undefined) {
-    return 'not in scope';
+    return translate('props.dataPicker.missing.notInScope');
   }
   if (anchors.some(isEntryLike)) {
-    return 'not in this entry';
+    return translate('props.dataPicker.missing.notInEntry');
   }
   if (nearest.children === undefined || nearest.children.length === 0) {
-    return 'fields not known';
+    return translate('props.dataPicker.missing.fieldsUnknown');
   }
   assert(nearest.children.length > 0, 'missingLabel: a value with listed fields has some');
-  return 'no such field';
+  return translate('props.dataPicker.missing.noSuchField');
 }
 
 // A collection entry, or a list or item made of them: a project collection

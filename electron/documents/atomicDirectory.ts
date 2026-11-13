@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { err, ok, type Result } from '../../shared/core/result';
+import { translateMain } from '../lib/mainLocale';
 
 export const ATOMIC_DIRECTORY = path.join('.stacki', 'io');
 const ANCESTORS_MAX = 256;
@@ -81,5 +82,5 @@ function prepareAtomicDirectoryExists(error: unknown): boolean {
 
 function prepareAtomicDirectoryFailure(directory: string, error: unknown): Result<never, AtomicDirectoryError> {
   const message = error instanceof Error ? error.message : String(error);
-  return err({ code: 'filesystem', message: `Could not prepare ${directory}: ${message}` });
+  return err({ code: 'filesystem', message: translateMain('error.documents.prepareFailed', { folder: directory, reason: message }) });
 }

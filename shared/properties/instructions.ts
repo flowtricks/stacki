@@ -1,3 +1,4 @@
+// i18n-ignore-file: the skill-reason messages in parseSkillMeta are diagnostics carried in the listing (the sidebar never shows them), and the scaffold is SKILL.md text written into the project; the typed-name problems are references.
 // The Instructions panel's contract: which Markdown files a project keeps for
 // its coding agents and people, how each is sorted into a section, what a
 // skill's frontmatter must say, and the project's hidden paths
@@ -24,6 +25,7 @@
 import { assert } from '../core/assert';
 import { count, list, pathText, record, text } from '../core/boundary';
 import { err, ok, type Result } from '../core/result';
+import { described, type Described } from './i18n/messageRef';
 
 /** The tracked project file that holds the hidden paths. */
 export const INSTRUCTIONS_FILE = '.stacki/instructions.json';
@@ -273,16 +275,21 @@ export function parseSkillMeta(frontmatter: unknown): SkillMeta {
 
 /** Why a typed skill name cannot name a skill folder, or undefined when it can: lowercase letters, digits and hyphens. */
 export function skillNameProblem(name: string): string | undefined {
+  return skillNameProblemDescribed(name)?.message;
+}
+
+/** `skillNameProblem` with the reference the renderer translates (docs/i18n-playbook.md section 7); the English is the same sentence. */
+export function skillNameProblemDescribed(name: string): Described | undefined {
   if (name === '') {
-    return 'Give the skill a name.';
+    return described('instructionsPanel.problem.skillNameEmpty');
   }
   if (name.length > INSTRUCTION_LIMITS.skillNameCharsMax) {
-    return `A skill name is at most ${INSTRUCTION_LIMITS.skillNameCharsMax} characters.`;
+    return described('instructionsPanel.problem.skillNameLong', { max: INSTRUCTION_LIMITS.skillNameCharsMax });
   }
   if (/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) {
     return undefined;
   }
-  return 'Use lowercase letters, numbers and single hyphens, like "write-tests".';
+  return described('instructionsPanel.problem.skillNameFormat');
 }
 
 /** A name typed in any case and spacing, as a skill or file name: `Write Tests!` → `write-tests`. */
@@ -325,17 +332,22 @@ export function yamlScalar(value: string): string {
 
 /** Why a typed rule file or folder name is unusable, or undefined. One name, no path. */
 export function fileNameProblem(name: string): string | undefined {
+  return fileNameProblemDescribed(name)?.message;
+}
+
+/** `fileNameProblem` with the reference the renderer translates; the English is the same sentence. */
+export function fileNameProblemDescribed(name: string): Described | undefined {
   if (name.trim() === '') {
-    return 'Give it a name.';
+    return described('instructionsPanel.problem.fileNameEmpty');
   }
   if (name.length > INSTRUCTION_LIMITS.fileNameCharsMax) {
-    return `A name is at most ${INSTRUCTION_LIMITS.fileNameCharsMax} characters.`;
+    return described('instructionsPanel.problem.fileNameLong', { max: INSTRUCTION_LIMITS.fileNameCharsMax });
   }
   if (/[\\/:*?"<>|\u0000-\u001f]/.test(name)) {
-    return 'A name cannot hold / \\ : * ? " < > or |.';
+    return described('instructionsPanel.problem.fileNameChars');
   }
   if (name.startsWith('.')) {
-    return 'A name cannot start with a dot.';
+    return described('instructionsPanel.problem.fileNameDot');
   }
   return undefined;
 }

@@ -10,6 +10,7 @@ import { useState } from 'react';
 import type { ComponentProperties, PropertyChange } from '../../../shared/properties/propertyEditing';
 import { boundAttributes } from '../../editor/attributesBinding';
 import { attributeDefaultsProblem, type AttributeDefault } from '../../editor/propDeclaration';
+import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
 import { CodeInline } from '../../ui/CodeBlock';
 import Popup from '../../ui/Popup';
 import { ErrorToast } from '../../ui/ErrorToast';
@@ -33,6 +34,7 @@ export function AttributesPropertyRow({
   readonly busy: boolean;
   readonly onOpen: () => void;
 }) {
+  const translate = useTranslate();
   const count = attributes.connections.length;
   return (
     <div className="list-field-row property-row property-attributes-row">
@@ -41,14 +43,14 @@ export function AttributesPropertyRow({
         type="button"
         className="list-field-text property-row-main"
         disabled={busy}
-        title={attributes.tooltip || 'Attributes an instance adds to the connected elements'}
+        title={attributes.tooltip || translate('componentProps.attributes.tooltipDefault')}
         onClick={onOpen}
       >
         <span className="list-field-icon" aria-hidden="true">
           <BracesIcon size={14} />
         </span>
         {attributes.local}
-        <span className="property-row-kind">{count === 1 ? 'Attributes · 1 element' : `Attributes · ${count} elements`}</span>
+        <span className="property-row-kind">{translate('componentProps.attributes.rowKind', { count })}</span>
       </button>
     </div>
   );
@@ -64,6 +66,8 @@ interface EditorProps extends AttributesHost {
 
 /** The attributes prop's settings: its name, its connections, and its defaults when it has any. */
 export function AttributesPropertyEditor(props: EditorProps) {
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
   const { attributes } = props;
   const first = attributes.connections[0];
   const [rows, setRows] = useState<readonly AttributeDefault[]>(first?.defaults ?? []);
@@ -72,7 +76,7 @@ export function AttributesPropertyEditor(props: EditorProps) {
   // Each change lands as it is made: a row when it is left, a removal at once.
   const commit = (next: readonly AttributeDefault[]): void => {
     const defaults = next.filter((row) => row.name.trim() !== '' || row.value !== '').map((row) => ({ name: row.name.trim(), value: row.value }));
-    const defaultsProblem = attributeDefaultsProblem(defaults);
+    const defaultsProblem = attributeDefaultsProblem(defaults, translate);
     if (defaultsProblem !== undefined) {
       setProblem(defaultsProblem);
       return;
@@ -94,22 +98,22 @@ export function AttributesPropertyEditor(props: EditorProps) {
         <>
           <header>
             <div className="property-editor-title">
-              <strong>Attributes property</strong>
+              <strong>{translate('componentProps.attributes.title')}</strong>
             </div>
-            <button aria-label="Close property settings" disabled={props.busy} onClick={close}>
+            <button aria-label={translate('componentProps.dialog.close')} disabled={props.busy} onClick={close}>
               ×
             </button>
           </header>
           <fieldset disabled={props.busy}>
             <div className="property-attributes-name">
-              <span>Name</span>
+              <span>{translate('componentProps.attributes.name')}</span>
               <span className="property-chip">
                 <BracesIcon size={11} />
                 {attributes.local}
               </span>
             </div>
             <p className="property-help">
-              Passes any other attributes through <CodeInline text={`{...${attributes.local}}`} language="typescript" />.
+              {translateRich('componentProps.attributes.passThrough', { spread: <CodeInline text={`{...${attributes.local}}`} language="typescript" /> })}
             </p>
             <AttributeConnections attributes={attributes} onSelectNode={props.onSelectNode} />
             {rows.length > 0 && (
@@ -126,7 +130,7 @@ export function AttributesPropertyEditor(props: EditorProps) {
               />
             )}
             {rows.length > 0 && !defaultsAgree(attributes.connections) && (
-              <p className="property-help">The connected elements have different defaults; editing one gives every one of them these.</p>
+              <p className="property-help">{translate('componentProps.attributes.defaultsDiffer')}</p>
             )}
             {problem && <ErrorToast message={problem} />}
           </fieldset>
@@ -148,21 +152,22 @@ function AttributeDefaultRows({
   /** A row was left: what was typed in it is written. */
   readonly onLeave: () => void;
 }) {
+  const translate = useTranslate();
   const edit = (index: number, entry: AttributeDefault): void =>
     onChange(
       rows.map((row, at) => (at === index ? entry : row)),
       'typing',
     );
   return (
-    <div className="property-attribute-defaults" role="group" aria-label="Default attributes">
+    <div className="property-attribute-defaults" role="group" aria-label={translate('componentProps.attributes.defaults')}>
       <div className="property-attribute-defaults-title">
-        <span>Default attributes</span>
+        <span>{translate('componentProps.attributes.defaults')}</span>
         {editable.allowed && (
           <button
             type="button"
             className="ghost"
-            aria-label="Add default attribute"
-            title="Add default attribute"
+            aria-label={translate('componentProps.attributes.addDefault')}
+            title={translate('componentProps.attributes.addDefault')}
             onClick={() => onChange([...rows, { name: '', value: '' }], 'typing')}
           >
             <PlusIcon size={12} />
@@ -172,8 +177,8 @@ function AttributeDefaultRows({
       {rows.map((row, index) => (
         <div className="property-attribute-default" key={index}>
           <input
-            aria-label={`Default attribute ${index + 1} name`}
-            placeholder="name"
+            aria-label={translate('componentProps.attributes.defaultName', { number: index + 1 })}
+            placeholder={translate('componentProps.attributes.namePlaceholder')}
             value={row.name}
             readOnly={!editable.allowed}
             spellCheck={false}
@@ -181,8 +186,8 @@ function AttributeDefaultRows({
             onChange={(event) => edit(index, { ...row, name: event.target.value })}
           />
           <input
-            aria-label={`Default attribute ${index + 1} value`}
-            placeholder="value"
+            aria-label={translate('componentProps.attributes.defaultValue', { number: index + 1 })}
+            placeholder={translate('componentProps.attributes.valuePlaceholder')}
             value={row.value}
             readOnly={!editable.allowed}
             onBlur={onLeave}
@@ -192,8 +197,8 @@ function AttributeDefaultRows({
             <button
               type="button"
               className="ghost"
-              aria-label={`Remove default attribute ${row.name || index + 1}`}
-              title="Remove"
+              aria-label={translate('componentProps.attributes.removeDefault', { name: row.name || String(index + 1) })}
+              title={translate('ui.remove')}
               onClick={() =>
                 onChange(
                   rows.filter((_, at) => at !== index),
@@ -217,18 +222,19 @@ function AttributeConnections({
   readonly attributes: AttributesProperty;
   readonly onSelectNode: AttributesHost['onSelectNode'];
 }) {
+  const translate = useTranslate();
   const count = attributes.connections.length;
   return (
-    <div className="property-connections" role="group" aria-label="Connections">
-      <span>Connections: {count === 1 ? '1 element' : `${count} elements`}</span>
-      {count === 0 && <p className="property-help">No element spreads {`{...${attributes.local}}`} yet. Connect one from its Attributes bind dot.</p>}
+    <div className="property-connections" role="group" aria-label={translate('componentProps.attributes.connections')}>
+      <span>{translate('componentProps.attributes.connectionsCount', { count })}</span>
+      {count === 0 && <p className="property-help">{translate('componentProps.attributes.noSpread', { spread: `{...${attributes.local}}` })}</p>}
       {attributes.connections.map((connection) => (
         <button
           type="button"
           key={connection.id}
           className="property-connection"
           disabled={onSelectNode === undefined}
-          title={onSelectNode === undefined ? connection.label : `Select ${connection.label}`}
+          title={onSelectNode === undefined ? connection.label : translate('componentProps.attributes.select', { name: connection.label })}
           onClick={() => onSelectNode?.(connection.id)}
         >
           {elementIcon(connection.tag, 12)}

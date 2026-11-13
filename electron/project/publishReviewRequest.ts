@@ -3,6 +3,7 @@
 import { err, ok, type Result } from '../../shared/core/result';
 import { parseReviewReceipt, type ReviewReceipt } from '../../shared/properties/publishReview';
 import { record, text } from '../../shared/core/boundary';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 export interface ReviewRequest {
   readonly repository: string;
@@ -14,7 +15,7 @@ export interface ReviewRequest {
 
 export async function openPublishReview(input: ReviewRequest, transport: typeof fetch = fetch): Promise<Result<ReviewReceipt>> {
   if (!/^[\w.-]+\/[\w.-]+$/.test(input.repository)) {
-    return err({ code: 'review', message: 'Invalid review repository.' });
+    return err({ code: 'review', ...described('publish.review.error.invalidRepository') });
   }
   const owner = input.repository.split('/')[0];
   const endpoint = `https://api.github.com/repos/${input.repository}/pulls`;
@@ -29,7 +30,7 @@ export async function openPublishReview(input: ReviewRequest, transport: typeof 
     return existing;
   }
   if (!Array.isArray(existing.value) || existing.value.length >= 100) {
-    return err({ code: 'review', message: 'GitHub returned an incomplete review list.' });
+    return err({ code: 'review', ...described('publish.review.error.incompleteList') });
   }
   const previous: unknown = existing.value[0];
   if (previous !== undefined) {
@@ -39,9 +40,11 @@ export async function openPublishReview(input: ReviewRequest, transport: typeof 
     endpoint,
     input.token,
     {
+      // i18n-ignore: the pull request title is written to GitHub for every collaborator, not shown in Stacki.
       title: 'Review website changes from Stacki',
       head: input.branch,
       base: input.base,
+      // i18n-ignore: the pull request description is written to GitHub for every collaborator, not shown in Stacki.
       body: 'Submitted from Stacki. This snapshot has not been deployed by Stacki. ' + 'Review and merge through the repository workflow.',
     },
     transport,
@@ -56,16 +59,16 @@ function reviewReceipt(input: ReviewRequest, data: unknown): Result<ReviewReceip
     if (value['state'] !== 'open') {
       return err({
         code: 'review-closed',
-        message: 'This snapshot already has a closed review. ' + 'Sync the base branch or make a new change before submitting.',
+        ...described('publish.review.error.closed'),
       });
     }
     const url = text(value['html_url']);
     if (!url.startsWith(`https://github.com/${input.repository}/pull/`)) {
-      return err({ code: 'review', message: 'GitHub returned a different repository review.' });
+      return err({ code: 'review', ...described('publish.review.error.differentRepository') });
     }
     return ok(parseReviewReceipt({ sha: input.sha, branch: input.branch, url }));
   } catch {
-    return err({ code: 'review-response', message: 'GitHub returned an invalid review receipt.' });
+    return err({ code: 'review-response', ...described('publish.review.error.invalidReceipt') });
   }
 }
 
@@ -78,10 +81,12 @@ async function reviewRequest(
   const response = await transport(url, {
     method: body === undefined ? 'GET' : 'POST',
     headers: {
+      // i18n-ignore: HTTP header value or request path, protocol text.
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',
       'Content-Type': 'application/json',
       'X-GitHub-Api-Version': '2022-11-28',
+      // i18n-ignore: HTTP header value or request path, protocol text.
       'User-Agent': 'Stacki',
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -89,7 +94,7 @@ async function reviewRequest(
   }).then(ok, () =>
     err({
       code: 'review-network',
-      message: 'Review request interrupted. Retry to recover the existing branch or pull request.',
+      ...described('publish.review.error.interrupted'),
     }),
   );
   if (!response.ok) {
@@ -98,7 +103,7 @@ async function reviewRequest(
   if (!response.value.ok) {
     return err({
       code: 'review-http',
-      message: `GitHub review request failed (${response.value.status}). ` + 'Check pull request write permission, then retry.',
+      ...described('publish.review.error.requestFailed', { status: response.value.status }),
     });
   }
   return readReviewResponse(response.value);
@@ -107,7 +112,7 @@ async function reviewRequest(
 async function readReviewResponse(response: Response): Promise<Result<unknown>> {
   const reader = response.body?.getReader();
   if (!reader) {
-    return err({ code: 'review-response', message: 'GitHub returned an empty review response.' });
+    return err({ code: 'review-response', ...described('publish.review.error.emptyResponse') });
   }
   const chunks: Uint8Array[] = [];
   let size = 0;
@@ -128,7 +133,7 @@ async function readReviewResponse(response: Response): Promise<Result<unknown>> 
       if (!(chunk instanceof Uint8Array)) {
         return err({
           code: 'review-response',
-          message: 'GitHub returned an invalid response chunk.',
+          ...described('publish.review.error.invalidChunk'),
         });
       }
       size += chunk.length;
@@ -137,11 +142,11 @@ async function readReviewResponse(response: Response): Promise<Result<unknown>> 
       }
       chunks.push(chunk);
     }
-    return err({ code: 'review-response', message: 'GitHub review response exceeds its limit.' });
+    return err({ code: 'review-response', ...described('publish.review.error.responseLimit') });
   } catch {
     return err({
       code: 'review-response',
-      message: 'GitHub returned an unreadable review response.',
+      ...described('publish.review.error.unreadable'),
     });
   } finally {
     await reader.cancel().catch(() => undefined);

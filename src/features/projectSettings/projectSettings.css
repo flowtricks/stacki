@@ -220,26 +220,3 @@
 .secrets-draft {
   background: var(--bg-panel-2);
 }
-
-/* The (i) mark beside a title: the longer explanation lives in its tooltip, not on screen. */
-.settings-info {
-  display: inline-flex;
-  align-items: center;
-  margin-left: 6px;
-  padding: 2px;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-faint);
-  vertical-align: middle;
-}
-.settings-info:hover,
-.settings-info:focus-visible {
-  color: var(--text);
-}
-.rail-tooltip.settings-info-tip {
-  z-index: 10001;
-  max-width: 260px;
-  font-weight: 400;
-  line-height: 1.45;
-  white-space: normal;
-}

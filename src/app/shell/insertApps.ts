@@ -8,6 +8,7 @@
 // by the host, appService.ts) and offers its approved apps that are not installed; choosing one
 // opens the Apps panel's Marketplace tab on it.
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { PaletteApp, PaletteAppList, PaletteAppsSource } from '../../features/palette/paletteApps';
 import { canSeePaletteApps } from '../../features/palette/paletteApps';
 import { listAppDirectory, requestAppConnect, type AppDirectoryEntry } from '../../features/apps/appsDirectory';
@@ -44,6 +45,7 @@ export function useInsertAppsSource({ projectPath, role, browse, notify }: Inser
   const entries = useAppDirectory(projectPath, role);
   const market = useMarketplaceApps(projectPath, role);
   const commands = useAppCommands();
+  const translate = useTranslate();
   return useMemo((): PaletteAppsSource => {
     // Connecting runs in the Apps panel, which the request reveals (appsDirectory.ts); Build an app opens the AI chat.
     const installed = entries.kind === 'ready' ? new Set(entries.entries.map((entry) => entry.id)) : new Set<string>();
@@ -51,10 +53,10 @@ export function useInsertAppsSource({ projectPath, role, browse, notify }: Inser
       list: withCommands(paletteList(entries, browse), commands),
       browse,
       connect: requestAppConnect,
-      buildApp: () => void requestBuildApp(notify),
+      buildApp: () => void requestBuildApp(translate, notify),
       marketplace: market.filter((app) => !installed.has(app.id)).map(paletteMarketplaceApp),
     };
-  }, [entries, market, browse, notify, commands]);
+  }, [entries, market, browse, notify, commands, translate]);
 }
 
 // The marketplace's apps for a role that may see them; none while the index loads, or when it could

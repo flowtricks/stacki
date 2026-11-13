@@ -13,6 +13,7 @@ import { digestOf } from './atomicWrite';
 import { assert } from '../../shared/core/assert';
 import type { Digest } from '../../shared/core/brand';
 import { createNodeDocumentActors, type DocumentActors, type WriteReport } from './documentActors';
+import { translateMain } from '../lib/mainLocale';
 
 interface DocumentHost {
   readonly documents: DocumentActors;
@@ -68,11 +69,11 @@ export function createProjectText(file: string, text: string): Digest {
 export function describeWriteReport(file: string, report: Exclude<WriteReport, { readonly tag: 'applied' }>): string {
   switch (report.tag) {
     case 'rejected':
-      return report.message === '' ? `Could not save ${file} (${report.reason}).` : report.message;
+      return report.message === '' ? translateMain('error.documents.saveRejected', { file, reason: report.reason }) : report.message;
     case 'uncertain':
-      return `${file} may not have been saved: ${report.message}`;
+      return translateMain('error.documents.saveUncertain', { file, reason: report.message });
     case 'backpressured':
-      return `${file} has too many saves waiting; the edit was kept, save again.`;
+      return translateMain('error.documents.savesWaiting', { file });
     default: {
       const exhaustive: never = report;
       return exhaustive;

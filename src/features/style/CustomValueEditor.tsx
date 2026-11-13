@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, ReactElement, ReactNode, RefObject } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import { popupBox } from '../../ui/Dropdown';
 import { usePopupScrollLock } from '../../ui/popupScrollLock';
@@ -75,6 +76,7 @@ interface CustomValueProps {
 }
 function CustomValue(props: CustomValueProps) {
   const state = useCustomValue(props);
+  const translate = useTranslate();
   const { label } = props;
   return (
     <Popup
@@ -98,7 +100,7 @@ function CustomValue(props: CustomValueProps) {
       }}
     >
       <div className="var-custom-head">
-        <span>Custom value</span>
+        <span>{translate('style.customValueEditor.customValue')}</span>
         <span className="var-custom-name">{label}</span>
       </div>
       {props.connectField(
@@ -117,7 +119,7 @@ function CustomValue(props: CustomValueProps) {
         state.setDraft,
       )}
       <div className="var-custom-foot">
-        <span>Enter to save · Escape to cancel</span>
+        <span>{translate('style.customValueEditor.hint')}</span>
       </div>
     </Popup>
   );

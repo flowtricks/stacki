@@ -6,6 +6,9 @@
 // (CmsSourceSettings.tsx) hides collections and chooses data files.
 import { useEffect, useState, type ReactNode } from 'react';
 import { CodeInline } from '../../ui/CodeBlock';
+import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
+import type { Described } from '../../../shared/properties/i18n/messageRef';
 import { CloseIcon, LayoutIcon, PlusIcon } from '../../ui/Icons';
 import { ResetLabel } from '../../ui/ResetLabel';
 import { FeatureIcon } from '../featureIcons';
@@ -15,7 +18,7 @@ import {
   PAGES_FOLDER,
   PROJECT_FOLDER_KINDS,
   PROJECT_FOLDER_ROOTS,
-  addFolder,
+  addFolderDescribed,
   configOf,
   foldersFor,
   differsFromDefaults,
@@ -27,7 +30,7 @@ import {
 import { pickProjectPath, readFoldersFile, saveFoldersFile, type FoldersFile } from './foldersBridge';
 import { notifyProjectSourcesChanged } from '../state/projectSources';
 import { CmsSources } from './CmsSourceSettings';
-import { SettingsIntro, SettingsSection, useSaveIndicator } from './SettingsLayout';
+import { SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 
 type Load =
   | { readonly kind: 'loading' }
@@ -36,12 +39,13 @@ type Load =
   | { readonly kind: 'unsupported' }
   | { readonly kind: 'ready'; readonly file: FoldersFile };
 
-const KIND_LABELS: Readonly<Record<ProjectFolderKind, string>> = {
-  components: 'Components',
-  layouts: 'Layouts',
-  assets: 'Assets',
-  styles: 'Styles',
-  variables: 'Variables',
+// Keys, not words, so a language change reaches the screen while it is open.
+const KIND_KEYS: Readonly<Record<ProjectFolderKind, MessageKey>> = {
+  components: 'settings.folders.kind.components',
+  layouts: 'settings.folders.kind.layouts',
+  assets: 'settings.folders.kind.assets',
+  styles: 'settings.folders.kind.styles',
+  variables: 'settings.folders.kind.variables',
 };
 
 // Each kind shows the icon of the panel that reads it (featureIcons.ts); layouts have no panel.
@@ -64,9 +68,6 @@ function KindIcon(props: { readonly kind: ProjectFolderKind }) {
   }
 }
 
-/** Desktop's note for a main process older than this renderer; Studio passes its own. */
-const UNSUPPORTED_NOTE = 'Restart Stacki to edit folders.';
-
 export interface FolderSettingsProps {
   readonly projectPath: string;
   /** What the tab says when the host predates folder settings. */
@@ -78,8 +79,10 @@ export interface FolderSettingsProps {
 }
 
 export function FolderSettings(props: FolderSettingsProps) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
-  const [notice, setNotice] = useState<string | undefined>(undefined);
+  const [notice, setNotice] = useState<Described | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const indicator = useSaveIndicator();
   useEffect(() => {
@@ -104,7 +107,7 @@ export function FolderSettings(props: FolderSettingsProps) {
   if (load.kind === 'loading') {
     return (
       <p className="app-settings-status" role="status">
-        Loading folders…
+        {translate('settings.folders.loading')}
       </p>
     );
   }
@@ -116,7 +119,7 @@ export function FolderSettings(props: FolderSettingsProps) {
     );
   }
   if (load.kind === 'unsupported') {
-    return <UnsupportedFolders note={props.unsupportedNote ?? UNSUPPORTED_NOTE} pagesRow={<PagesRow {...props} />} />;
+    return <UnsupportedFolders note={props.unsupportedNote ?? translate('settings.folders.restart')} pagesRow={<PagesRow {...props} />} />;
   }
   const file = load.file;
   const config = configOf(file.read);
@@ -129,7 +132,7 @@ export function FolderSettings(props: FolderSettingsProps) {
       // An open binding picker re-reads what it may list (Show in data picker).
       notifyProjectSourcesChanged();
     } catch (failure: unknown) {
-      setNotice(cleanError(failure));
+      setNotice({ message: cleanError(failure) });
     } finally {
       setBusy(false);
     }
@@ -140,17 +143,17 @@ export function FolderSettings(props: FolderSettingsProps) {
     try {
       picked = await pickProjectPath(props.projectPath);
     } catch (failure: unknown) {
-      setNotice(cleanError(failure));
+      setNotice({ message: cleanError(failure) });
       return;
     }
     switch (picked.kind) {
       case 'canceled':
         return;
       case 'outside':
-        setNotice(picked.message);
+        setNotice({ message: picked.message });
         return;
       case 'picked': {
-        const next = addFolder(config, kind, picked.path);
+        const next = addFolderDescribed(config, kind, picked.path);
         if (next.ok) {
           await save(next.value);
         } else {
@@ -166,22 +169,19 @@ export function FolderSettings(props: FolderSettingsProps) {
   };
 
   return (
-    <section className="app-folders" aria-label="Project folders">
-      <SettingsIntro saving={indicator.state}>
-        The folders each panel reads, saved in <CodeInline text=".stacki/folders.json" /> for Desktop and Studio. A panel you have not changed uses its
-        defaults. Changes save as you make them.
-      </SettingsIntro>
+    <section className="app-folders" aria-label={translate('settings.folders.aria')}>
+      <SettingsSaveRow saving={indicator.state} />
       {file.read.kind === 'invalid' && (
         <p className="app-folders-notice" role="alert">
-          The folder settings could not be read ({file.read.message}). Every panel uses its defaults; a change here replaces the file.
+          {translate('settings.folders.unreadable', { message: file.read.message })}
         </p>
       )}
       {notice !== undefined && (
         <p className="app-folders-notice" role="alert">
-          {notice}
+          {translateDescribed(notice)}
         </p>
       )}
-      <SettingsSection title="Panels">
+      <SettingsSection title={translate('settings.folders.panels')}>
         {PROJECT_FOLDER_KINDS.map((kind) => (
           <FolderRow
             key={kind}
@@ -196,7 +196,7 @@ export function FolderSettings(props: FolderSettingsProps) {
         ))}
         <PagesRow {...props} />
       </SettingsSection>
-      <SettingsSection title="CMS" description="Which collections and data files the CMS panel lists.">
+      <SettingsSection title="CMS" info={translate('settings.folders.cms.info')}>
         <CmsSources
           projectPath={props.projectPath}
           config={config}
@@ -212,15 +212,16 @@ export function FolderSettings(props: FolderSettingsProps) {
 
 /** The defaults every panel reads, shown without controls: the host cannot store a change. */
 function UnsupportedFolders(props: { readonly note: string; readonly pagesRow: ReactNode }) {
+  const translate = useTranslate();
   return (
-    <section className="app-folders" aria-label="Project folders">
+    <section className="app-folders" aria-label={translate('settings.folders.aria')}>
       <p className="app-folders-notice" role="status">
         {props.note}
       </p>
-      <SettingsSection title="Panels">
+      <SettingsSection title={translate('settings.folders.panels')}>
         {PROJECT_FOLDER_KINDS.map((kind) => (
-          <FixedRow key={kind} icon={<KindIcon kind={kind} />} label={KIND_LABELS[kind]} folders={foldersFor(kind, undefined)}>
-            Default folders.
+          <FixedRow key={kind} icon={<KindIcon kind={kind} />} label={translate(KIND_KEYS[kind])} folders={foldersFor(kind, undefined)}>
+            {translate('settings.folders.defaults')}
           </FixedRow>
         ))}
         {props.pagesRow}
@@ -231,17 +232,19 @@ function UnsupportedFolders(props: { readonly note: string; readonly pagesRow: R
 
 /** Pages follow Astro's own setting: `<srcDir>/pages`, read from astro.config, never edited here. */
 function PagesRow(props: FolderSettingsProps) {
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
   const folder = props.pages?.folder ?? PAGES_FOLDER;
   const configFile = props.pages?.configFile;
   const open = props.onOpenFile;
   return (
-    <FixedRow icon={<FeatureIcon feature="panel:pages" size={14} />} label="Pages" folders={[folder]}>
-      Follows <CodeInline text="srcDir" /> in astro.config.
+    <FixedRow icon={<FeatureIcon feature="panel:pages" size={14} />} label={translate('settings.folders.pages')} folders={[folder]}>
+      {translateRich('settings.folders.pagesFollow', { srcDir: <CodeInline text="srcDir" /> })}
       {configFile !== undefined && open !== undefined && (
         <>
           {' '}
           <button type="button" className="app-folder-link" onClick={() => open(configFile)}>
-            Open astro.config
+            {translate('settings.folders.openAstroConfig')}
           </button>
         </>
       )}
@@ -259,17 +262,18 @@ function FolderRow(props: {
   readonly onReset: () => void;
 }) {
   assert(props.customized || props.folders.length > 0, 'FolderRow: a default list is never empty');
-  const label = KIND_LABELS[props.kind];
+  const translate = useTranslate();
+  const label = translate(KIND_KEYS[props.kind]);
   const roots = PROJECT_FOLDER_ROOTS[props.kind].map((root) => root + '/').join(', ');
   return (
-    <div className="app-folder-row" aria-label={`${label} folders`}>
+    <div className="app-folder-row" aria-label={translate('settings.folders.rowLabel', { label })}>
       <div className="app-folder-heading">
         <KindIcon kind={props.kind} />
         <FolderTitle label={label} customized={props.customized} busy={props.busy} onReset={props.onReset} />
         <div className="app-folder-actions">
-          <button type="button" disabled={props.busy} onClick={props.onAdd} title={`A folder inside ${roots}`}>
+          <button type="button" disabled={props.busy} onClick={props.onAdd} title={translate('settings.folders.addTip', { roots })}>
             <PlusIcon size={12} />
-            <span>Add folder</span>
+            <span>{translate('settings.folders.add')}</span>
           </button>
         </div>
       </div>
@@ -277,12 +281,17 @@ function FolderRow(props: {
         {props.folders.map((folder) => (
           <li key={folder} className="app-folder-chip">
             <CodeInline text={folder} />
-            <button type="button" aria-label={`Remove ${folder} from ${label}`} disabled={props.busy} onClick={() => props.onRemove(folder)}>
+            <button
+              type="button"
+              aria-label={translate('settings.folders.remove', { folder, label })}
+              disabled={props.busy}
+              onClick={() => props.onRemove(folder)}
+            >
               <CloseIcon size={12} />
             </button>
           </li>
         ))}
-        {props.folders.length === 0 && <li className="app-folder-none">No folders: this panel lists nothing.</li>}
+        {props.folders.length === 0 && <li className="app-folder-none">{translate('settings.folders.none')}</li>}
       </ul>
     </div>
   );
@@ -311,8 +320,9 @@ export function FolderTitle(props: { readonly label: string; readonly customized
 }
 
 function FixedRow(props: { readonly icon: ReactNode; readonly label: string; readonly folders: readonly string[]; readonly children: ReactNode }) {
+  const translate = useTranslate();
   return (
-    <div className="app-folder-row" aria-label={`${props.label} folders`}>
+    <div className="app-folder-row" aria-label={translate('settings.folders.rowLabel', { label: props.label })}>
       <div className="app-folder-heading">
         {props.icon}
         <span className="app-folder-title">{props.label}</span>

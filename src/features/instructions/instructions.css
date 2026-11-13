@@ -214,37 +214,3 @@
 .instructions-rich li.task.done {
   color: var(--text-dim);
 }
-
-/* Settings → Instructions. */
-.instructions-hidden-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 8px 0;
-  padding: 0;
-  list-style: none;
-}
-.instructions-hidden-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 8px;
-  border-radius: var(--radius);
-  background: var(--bg-hover);
-  font-size: 12px;
-}
-.instructions-hidden-add {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-}
-.instructions-hidden-add input {
-  flex: 1;
-  padding: 5px 7px;
-  border: 0;
-  border-radius: var(--radius);
-  background: var(--bg-input);
-  color: var(--text);
-  font: inherit;
-  font-size: 12px;
-}

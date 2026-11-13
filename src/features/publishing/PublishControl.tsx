@@ -30,6 +30,7 @@ export function PublishControl({
   refreshAvailability,
   availability: checkedAvailability = UNKNOWN_PUBLISH_AVAILABILITY,
 }: Props) {
+  const translate = useTranslate();
   const { open, setOpen, settings, checking, run, openSettings, closeSettings } = usePublishMenu(projectPath, publish, settingsClosed, refreshAvailability);
   const configuration = usePublishConfiguration(projectPath, { open, settings, checking });
   const defaultTarget = 'config' in configuration ? configuration.config.defaultTarget : 'all';
@@ -56,7 +57,7 @@ export function PublishControl({
         anchor={container.current ?? undefined}
         onClose={() => setOpen(false)}
         className="stacki-publish-menu"
-        label="Publish options"
+        label={translate('publish.menu.options')}
       >
         <PublishMenuOptions
           key={projectPath}

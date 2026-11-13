@@ -92,6 +92,8 @@ export const CHANNEL_ACCESS: Readonly<Partial<Record<IpcChannel, readonly Access
   // one stay open; the renderer hides the panel from roles without `panel:ai`.
   'ai:installAgent': ['code:edit'],
   'ai:trust': ['code:edit'],
+  // Starts the agent's process, which can run anything in the project, so it is code editing like a prompt.
+  'ai:prewarm': ['code:edit'],
   'ai:chatCreate': ['code:edit'],
   'ai:chatUpdate': ['code:edit'],
   'ai:chatDelete': ['code:edit'],
@@ -107,6 +109,7 @@ export const CHANNEL_ACCESS: Readonly<Partial<Record<IpcChannel, readonly Access
   'ai:cancel': ['code:edit'],
   'ai:permission': ['code:edit'],
   'ai:setOption': ['code:edit'],
+  'ai:remember': ['code:edit'],
   'ai:review': ['code:edit'],
   'ai:setup': ['code:edit'],
   'git:commit': ['panel:history'],

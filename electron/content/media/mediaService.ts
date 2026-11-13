@@ -5,6 +5,7 @@
 // object store renames in place; a folder rename moves each object below it.
 
 import { assert } from '../../../shared/core/assert';
+import { described } from '../../../shared/properties/i18n/messageRef';
 import { MEDIA_HOSTING_LIMITS, mediaKeyOf, mediaKindOf, replacementRefusal, type MediaListing } from '../../../shared/properties/mediaHosting';
 import { MEDIA_HTTP_LIMITS, MediaHostError } from './mediaHttp';
 import { applyOrder, orderAfter, readOrder, writeOrder } from './mediaOrder';
@@ -38,7 +39,7 @@ export function mediaService(store: MediaStore): MediaService {
       const taken = new Set([...listed.files.map((file) => file.name), ...listed.folders]);
       for (const file of files) {
         if (file.bytes.length > MEDIA_HTTP_LIMITS.fileBytesMax) {
-          throw new MediaHostError(`${file.name} is larger than ${MEDIA_HTTP_LIMITS.fileBytesMax / 1024 / 1024} MB.`, 0);
+          throw new MediaHostError(described('cmsBackend.media.fileTooLarge', { name: file.name, size: MEDIA_HTTP_LIMITS.fileBytesMax / 1024 / 1024 }), 0);
         }
         const name = uniqueName(file.name, taken);
         taken.add(name);
@@ -49,7 +50,7 @@ export function mediaService(store: MediaStore): MediaService {
     async createFolder(folder, name) {
       const listed = await store.list(folder);
       if (listed.folders.includes(name) || listed.files.some((file) => file.name === name)) {
-        throw new MediaHostError('Something with that name already exists.', 0);
+        throw new MediaHostError(described('cmsBackend.media.nameExists'), 0);
       }
       await store.createFolder(mediaKeyOf(folder, name));
       return list(folder);
@@ -60,7 +61,7 @@ export function mediaService(store: MediaStore): MediaService {
       }
       const listed = await store.list(folder);
       if (listed.folders.includes(change.to) || listed.files.some((file) => file.name === change.to)) {
-        throw new MediaHostError('Something with that name already exists.', 0);
+        throw new MediaHostError(described('cmsBackend.media.nameExists'), 0);
       }
       const from = mediaKeyOf(folder, change.from);
       const to = mediaKeyOf(folder, change.to);
@@ -88,7 +89,7 @@ export function mediaService(store: MediaStore): MediaService {
       const present = new Set(listed.files.map((file) => file.name));
       const missing = names.find((name) => !present.has(name));
       if (missing !== undefined) {
-        throw new MediaHostError(`${missing} is no longer in this folder. Refresh and try again.`, 0);
+        throw new MediaHostError(described('cmsBackend.media.missingInFolder', { name: missing }), 0);
       }
       await writeOrder(store, folder, names);
       return list(folder);
@@ -99,11 +100,11 @@ export function mediaService(store: MediaStore): MediaService {
         throw new MediaHostError(refusal, 0);
       }
       if (file.bytes.length > MEDIA_HTTP_LIMITS.fileBytesMax) {
-        throw new MediaHostError(`${file.name} is larger than ${MEDIA_HTTP_LIMITS.fileBytesMax / 1024 / 1024} MB.`, 0);
+        throw new MediaHostError(described('cmsBackend.media.fileTooLarge', { name: file.name, size: MEDIA_HTTP_LIMITS.fileBytesMax / 1024 / 1024 }), 0);
       }
       const listed = await store.list(folder);
       if (!listed.files.some((entry) => entry.name === name)) {
-        throw new MediaHostError(`${name} is no longer in this folder. Refresh and try again.`, 0);
+        throw new MediaHostError(described('cmsBackend.media.missingInFolder', { name }), 0);
       }
       // The old file's content type: the key, and so what it serves as, is unchanged.
       await store.write(mediaKeyOf(folder, name), file.bytes, contentTypeOf(name));

@@ -11,17 +11,24 @@
 //   account it is connected as and Disconnect. The sign-in runs in the host
 //   (src/ipc/appAccessBridge.ts), with the installer's own client from the
 //   app's settings; tokens never reach this view.
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import { useCallback, useEffect, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
-import { networkSummary, type AppAuthStatus, type AppNetworkHost } from '../../../shared/properties/appAuth';
+import { type AppAuthStatus, type AppNetworkHost } from '../../../shared/properties/appAuth';
 import type { AppSummary } from '../../../shared/properties/apps';
 import { connectAppAuth, disconnectAppAuth, onAppAuthChanged, readAppAuthStatus } from '../../ipc/appAccessBridge';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { WarningTriangleIcon } from '../../ui/Icons';
 import { AppDetailsRow, AppDetailsSection } from './AppDetailsLayout';
 
 /** "Uses external services: …" with a small warning style, or "Works fully offline". */
 export function AppNetworkNote({ network }: { readonly network: readonly AppNetworkHost[] }) {
-  const summary = networkSummary(network);
+  const translate = useTranslate();
+  const summary =
+    network.length === 0
+      ? translate('apps.network.offline')
+      : translate('apps.network.external', { hosts: network.map((entry) => `${entry.host} (${entry.purpose})`).join(', ') });
   if (network.length === 0) {
     return <p className="apps-network-note offline">{summary}</p>;
   }
@@ -35,12 +42,14 @@ export function AppNetworkNote({ network }: { readonly network: readonly AppNetw
 
 type ConnectionsLoad =
   | { readonly kind: 'loading' }
-  | { readonly kind: 'failed'; readonly message: string }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined }
   | { readonly kind: 'ready'; readonly statuses: readonly AppAuthStatus[] };
 
 /** The details popup's "Connections" section; nothing for an app that signs in nowhere. */
 export function AppConnectionsSection({ projectPath, app }: { readonly projectPath: string; readonly app: AppSummary }) {
   const { manifest } = app;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [load, setLoad] = useState<ConnectionsLoad>({ kind: 'loading' });
   const [working, setWorking] = useState<string | undefined>(undefined);
   const [problem, setProblem] = useState<string | undefined>(undefined);
@@ -50,7 +59,7 @@ export function AppConnectionsSection({ projectPath, app }: { readonly projectPa
       return;
     }
     void readAppAuthStatus(projectPath, manifest.id).then(
-      (answer) => setLoad(answer.ok ? { kind: 'ready', statuses: answer.value } : { kind: 'failed', message: answer.message }),
+      (answer) => setLoad(answer.ok ? { kind: 'ready', statuses: answer.value } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef }),
       (error: unknown) => setLoad({ kind: 'failed', message: String(error) }),
     );
   }, [projectPath, manifest.id, declared]);
@@ -65,14 +74,14 @@ export function AppConnectionsSection({ projectPath, app }: { readonly projectPa
   if (!declared) {
     return undefined;
   }
-  const act = (provider: string, run: () => Promise<{ readonly ok: boolean; readonly message?: string }>) => {
+  const act = (provider: string, run: () => Promise<{ readonly ok: boolean; readonly message?: string; readonly messageRef?: MessageRef | undefined }>) => {
     setWorking(provider);
     setProblem(undefined);
     void run().then(
       (answer) => {
         setWorking(undefined);
         if (!answer.ok) {
-          setProblem(answer.message);
+          setProblem(translateDescribed({ message: answer.message ?? '', messageRef: answer.messageRef }));
         }
         refresh();
       },
@@ -83,34 +92,40 @@ export function AppConnectionsSection({ projectPath, app }: { readonly projectPa
     );
   };
   return (
-    <AppDetailsSection title="Connections" hint="Each person signs in with their own account. Tokens stay on this computer, never in the project.">
+    <AppDetailsSection title={translate('apps.connections.title')} hint={translate('apps.connections.hint')}>
       {manifest.auth.map((provider) => {
         const status = load.kind === 'ready' ? load.statuses.find((entry) => entry.provider === provider.id) : undefined;
         const busy = working === provider.id;
         assert(provider.label.length > 0, 'A provider has a label');
         if (status?.connected === true) {
           return (
-            <AppDetailsRow key={provider.id} label={provider.label} description={status.account === undefined ? 'Connected' : `Connected as ${status.account}`}>
+            <AppDetailsRow
+              key={provider.id}
+              label={provider.label}
+              description={
+                status.account === undefined ? translate('apps.connections.connected') : translate('apps.connections.connectedAs', { account: status.account })
+              }
+            >
               <button
                 type="button"
                 className="apps-button"
                 disabled={working !== undefined}
                 onClick={() => act(provider.id, () => disconnectAppAuth(projectPath, manifest.id, provider.id))}
               >
-                {busy ? 'Disconnecting…' : 'Disconnect'}
+                {busy ? translate('apps.connections.disconnecting') : translate('apps.connections.disconnect')}
               </button>
             </AppDetailsRow>
           );
         }
         return (
-          <AppDetailsRow key={provider.id} label={provider.label} description={describeDisconnected({ busy, load, status })}>
+          <AppDetailsRow key={provider.id} label={provider.label} description={describeDisconnected({ busy, load, status }, translate, translateDescribed)}>
             <button
               type="button"
               className="apps-button primary"
               disabled={working !== undefined || load.kind === 'loading'}
               onClick={() => act(provider.id, () => connectAppAuth(projectPath, manifest.id, provider.id))}
             >
-              {busy ? 'Waiting…' : `Connect ${provider.label}`}
+              {busy ? translate('apps.connections.waiting') : translate('apps.connections.connect', { provider: provider.label })}
             </button>
           </AppDetailsRow>
         );
@@ -127,39 +142,37 @@ export function AppConnectionsSection({ projectPath, app }: { readonly projectPa
  * A custom provider always does, which the note says plainly.
  */
 function OwnClientNote({ app }: { readonly app: AppSummary }) {
+  const translate = useTranslate();
   const own = app.manifest.auth.filter((provider) => provider.clientIdSetting !== undefined);
   if (own.length === 0) {
     return undefined;
   }
   const custom = own.filter((provider) => provider.connection === undefined);
   if (custom.length === own.length) {
-    return (
-      <p className="apps-connections-note">
-        Signs in with your own OAuth client: fill in its client id in App settings, and register this app’s redirect address with it.
-      </p>
-    );
+    return <p className="apps-connections-note">{translate('apps.connections.ownClientCustom')}</p>;
   }
   return (
     <details className="apps-connections-advanced">
-      <summary>Advanced: use your own OAuth client</summary>
-      <p>
-        Fill in your own client id (and secret, where the provider needs one) in App settings, and Stacki signs in with your client instead of Stacki’s.
-        Register the loopback address on this computer as its redirect; clear the client id to go back to Stacki’s connection.
-      </p>
+      <summary>{translate('apps.connections.advanced')}</summary>
+      <p>{translate('apps.connections.ownClientAdvanced')}</p>
     </details>
   );
 }
 
 // What a row that is not connected says: waiting on the browser, a failed read, a connection that cannot sign in now, or plainly not connected.
-function describeDisconnected(row: { readonly busy: boolean; readonly load: ConnectionsLoad; readonly status: AppAuthStatus | undefined }): string {
+function describeDisconnected(
+  row: { readonly busy: boolean; readonly load: ConnectionsLoad; readonly status: AppAuthStatus | undefined },
+  translate: Translator,
+  translateDescribed: (described: { readonly message: string; readonly messageRef?: MessageRef | undefined }) => string,
+): string {
   if (row.busy) {
-    return 'Finish signing in in your browser.';
+    return translate('apps.connections.finishInBrowser');
   }
   if (row.load.kind === 'failed') {
-    return row.load.message;
+    return translateDescribed(row.load);
   }
   if (row.status !== undefined && !row.status.connected && 'code' in row.status) {
     return row.status.message;
   }
-  return 'Not connected';
+  return translate('apps.connections.notConnected');
 }

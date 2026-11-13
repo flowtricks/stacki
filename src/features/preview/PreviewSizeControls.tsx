@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PREVIEW_WIDTH_LIMITS, parsePreviewWidth } from './previewViewport';
 
 export interface PreviewSizeControlsProps {
@@ -9,6 +10,7 @@ export interface PreviewSizeControlsProps {
 }
 
 export function PreviewSizeControls({ width, scale, onWidth, onFit }: PreviewSizeControlsProps) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(String(Math.round(width)));
   useEffect(() => setDraft(String(Math.round(width))), [width]);
   const commit = (): void => {
@@ -21,11 +23,11 @@ export function PreviewSizeControls({ width, scale, onWidth, onFit }: PreviewSiz
   };
   return (
     <div className="preview-size-controls">
-      <label className="preview-width-field" data-tooltip="Canvas width in pixels">
+      <label className="preview-width-field" data-tooltip={translate('preview.size.widthTip')}>
         <input
           type="text"
           inputMode="numeric"
-          aria-label="Canvas width"
+          aria-label={translate('preview.size.width')}
           maxLength={4}
           value={draft}
           onChange={(event) => setDraft(event.currentTarget.value)}
@@ -38,15 +40,15 @@ export function PreviewSizeControls({ width, scale, onWidth, onFit }: PreviewSiz
               setDraft(String(Math.round(width)));
             }
           }}
-          aria-description={`Enter ${PREVIEW_WIDTH_LIMITS.minimum}–` + `${PREVIEW_WIDTH_LIMITS.maximum}px`}
+          aria-description={translate('preview.size.widthHint', { minimum: PREVIEW_WIDTH_LIMITS.minimum, maximum: PREVIEW_WIDTH_LIMITS.maximum })}
         />
         <span>px</span>
       </label>
-      <output aria-label="Canvas scale" data-tooltip="Preview scaled to fit the available space">
+      <output aria-label={translate('preview.size.scale')} data-tooltip={translate('preview.size.scaleTip')}>
         {Math.round(scale * 100)}%
       </output>
-      <button type="button" data-tooltip="Reset canvas to available width" onClick={onFit}>
-        Fit
+      <button type="button" data-tooltip={translate('preview.size.fitTip')} onClick={onFit}>
+        {translate('preview.canvas.fit')}
       </button>
     </div>
   );

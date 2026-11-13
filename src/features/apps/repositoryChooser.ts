@@ -8,14 +8,12 @@
 // tagged repository gets the list area's empty state, not rows. Pure, so the
 // rows, the dedupe and the keyboard movement are tested without a browser.
 import { assert } from '../../../shared/core/assert';
+import { messageRef, type TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 import { APP_GITHUB_CHOICE_LIMITS, parseGitHubRepositoryReference, type AppRepository } from '../../../shared/properties/apps';
-
-/** What the action that installs an app from a GitHub release is called, everywhere it appears. */
-export const LOAD_FROM_GITHUB_LABEL = 'Load App From GitHub';
 
 export type ChooserRow =
   | { readonly kind: 'use'; readonly key: string; readonly owner: string; readonly repository: string }
-  | { readonly kind: 'section'; readonly key: string; readonly label: string }
+  | { readonly kind: 'section'; readonly key: string; readonly label: string; readonly labelRef: TypedMessageRef }
   | { readonly kind: 'repository'; readonly key: string; readonly repository: AppRepository }
   | { readonly kind: 'notice'; readonly key: string; readonly notice: 'no-match' };
 
@@ -42,7 +40,7 @@ export function chooserRows(input: ChooserInput): readonly ChooserRow[] {
     }
   }
   if (matches.length > 0) {
-    rows.push({ kind: 'section', key: 'section:tagged', label: 'Stacki apps' });
+    rows.push({ kind: 'section', key: 'section:tagged', label: 'Stacki apps', labelRef: messageRef('apps.chooser.sectionStacki') }); // i18n-ignore: English identity of the section; the heading drawn is `labelRef` translated.
     rows.push(...matches.map((repository) => repositoryRow(repository)));
   } else if (searching && tagged.length > 0) {
     // With nothing tagged, the empty state speaks instead; a notice would repeat it.

@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { assert } from '../../../shared/core/assert';
 import { AppsIcon, GitHubIcon, SparkleIcon } from '../../ui/Icons';
-import { paletteAppByline, type PaletteApp, type PaletteAppAuthor, type PaletteAppsAction } from './paletteApps';
+import { type PaletteApp, type PaletteAppAuthor, type PaletteAppsAction } from './paletteApps';
 
 // The insert palette's app rows: an app in the plain list (All results and the Apps tab), and what the Apps
 // tab says when it has no app to list. They wear the list row's classes, so the keyboard highlight, the
@@ -26,7 +27,8 @@ export function InsertAppRow({
   readonly onHover: () => void;
   readonly onOpen: () => void;
 }) {
-  const byline = paletteAppByline(app);
+  const translate = useTranslate();
+  const byline = app.author === undefined ? undefined : translate('palette.apps.by', { login: app.author.login });
   return (
     <div className={`insert-item insert-app ${highlighted ? 'highlight' : ''}`} onMouseMove={highlighted ? undefined : onHover} onClick={onOpen}>
       <span className="insert-item-icon">
@@ -44,7 +46,7 @@ function AuthorByline({ author, byline }: { readonly author: PaletteAppAuthor; r
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const url = author.avatarURL;
   assert(url === undefined || url.length > 0, 'InsertAppRows: an avatar address is never empty');
-  assert(byline.endsWith(author.login), 'InsertAppRows: the byline names the author');
+  assert(byline.includes(author.login), 'InsertAppRows: the byline names the author');
   return (
     <span className="insert-item-sub insert-app-byline">
       {url !== undefined && failed !== url && (
@@ -84,10 +86,11 @@ export function InsertMarketplaceRow({
   readonly onHover: () => void;
   readonly onOpen: () => void;
 }) {
+  const translate = useTranslate();
   // One list child per result keeps the keyboard's scroll-into-view counting rows, heading or not.
   return (
     <div className="insert-marketplace-entry">
-      {first && <div className="insert-section-heading">Marketplace</div>}
+      {first && <div className="insert-section-heading">{translate('palette.apps.marketplace')}</div>}
       <InsertAppRow app={app} highlighted={highlighted} onHover={onHover} onOpen={onOpen} />
     </div>
   );
@@ -107,22 +110,23 @@ export function InsertAppsEmpty({
   readonly onHover: (index: number) => void;
   readonly onRun: (action: PaletteAppsAction) => void;
 }) {
+  const translate = useTranslate();
   switch (empty.kind) {
     case 'loading':
-      return <div className="props-empty">Loading apps…</div>;
+      return <div className="props-empty">{translate('palette.apps.loading')}</div>;
     case 'failed':
       return <div className="props-empty">{empty.message}</div>;
     case 'none':
       assert(actions.length > 0, 'InsertAppRows: an empty Apps tab always offers a way on');
       return (
-        <div className="insert-apps-empty" role="group" aria-label="No apps yet">
+        <div className="insert-apps-empty" role="group" aria-label={translate('palette.apps.empty.title')}>
           <div className="insert-apps-empty-head">
             <span className="insert-apps-empty-tile" aria-hidden="true">
               <AppsIcon size={18} />
             </span>
             <span className="insert-apps-empty-text">
-              <span className="insert-apps-empty-title">No apps yet</span>
-              <span className="insert-apps-empty-note">Apps add tools to Stacki: audits, heat maps, content helpers and more.</span>
+              <span className="insert-apps-empty-title">{translate('palette.apps.empty.title')}</span>
+              <span className="insert-apps-empty-note">{translate('palette.apps.empty.note')}</span>
             </span>
           </div>
           {actions.map((action, index) => (
@@ -133,7 +137,7 @@ export function InsertAppsEmpty({
               onClick={() => onRun(action)}
             >
               <span className="insert-item-icon">{ACTION_ICONS[action.key]}</span>
-              <span className="insert-item-label">{action.label}</span>
+              <span className="insert-item-label">{translate(action.labelKey)}</span>
             </div>
           ))}
         </div>

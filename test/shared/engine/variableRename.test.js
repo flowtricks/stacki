@@ -244,7 +244,7 @@ test('an inner binding of the new name is fine where the old one is not read und
 test('reserved words and invalid identifiers are refused', () => {
   const source = page('const items = [];', '{items.map((item) => <i>{item}</i>)}');
   for (const word of ['class', 'await', 'null', 'enum', 'yield', 'let', 'static']) {
-    assert.equal(variableNameProblem(word), `“${word}” is a reserved word in JavaScript. Pick another name.`, word);
+    assert.equal(variableNameProblem(word)?.message, `“${word}” is a reserved word in JavaScript. Pick another name.`, word);
     assert.equal(refusal(source, 'items', word), `“${word}” is a reserved word in JavaScript. Pick another name.`, word);
   }
   for (const name of ['2stats', 'my-list', 'my list', '']) {
@@ -294,7 +294,11 @@ test('a name inside the head’s expression is found as well as one at its front
 
 test('naming an existing list in the head is refused, and points at the Source menu', () => {
   const check = headCheck(LOOPED, 'other.map((item) => (');
-  assert.deepEqual(check, { kind: 'problem', message: '“other” already exists in this file. To loop over it, choose it in the Source menu.' });
+  assert.deepEqual(check, {
+    kind: 'problem',
+    message: '“other” already exists in this file. To loop over it, choose it in the Source menu.',
+    problem: { code: 'exists', name: 'other', choose: 'source-menu' },
+  });
 });
 
 test('an outer loop’s item is a name that exists in that scope', () => {
@@ -303,7 +307,11 @@ test('an outer loop’s item is a name that exists in that scope', () => {
   const inner = loopOf(file).children[0].children[0];
   assert.equal(inner.kind, 'map');
   const check = checkLoopHead(file, { id: inner.id, before: inner.head, after: 'group.map((item) => (' });
-  assert.deepEqual(check, { kind: 'problem', message: '“group” already exists in this file. To loop over it, choose it in the Source menu.' });
+  assert.deepEqual(check, {
+    kind: 'problem',
+    message: '“group” already exists in this file. To loop over it, choose it in the Source menu.',
+    problem: { code: 'exists', name: 'group', choose: 'source-menu' },
+  });
 });
 
 test('an outer loop’s item in a head is that loop’s, so editing past it is an ordinary edit', () => {
@@ -322,6 +330,7 @@ test('a head reading an undeclared name would crash the page, and is refused', (
   assert.deepEqual(check, {
     kind: 'problem',
     message: '“missing” isn’t declared in this file, so the page would crash. Declare it in the frontmatter, or choose a list in the Source menu.',
+    problem: { code: 'undeclared-in-head', name: 'missing' },
   });
 });
 
@@ -344,7 +353,7 @@ test('an undeclared name the head already read is not news', () => {
 test('a head that does not parse is refused, with reserved words and bad names named', () => {
   const message = 'This code doesn’t parse. A loop reads like items.map((item) => (.';
   for (const after of ['statsEntries2.map((item) => ', 'statsEntries2.map((item => (', 'statsEntries2..map((item) => (', '']) {
-    assert.deepEqual(headCheck(LOOPED, after), { kind: 'problem', message }, after);
+    assert.deepEqual(headCheck(LOOPED, after), { kind: 'problem', message, problem: { code: 'head-unparsed' } }, after);
   }
   assert.match(headCheck(LOOPED, 'class.map((item) => (').message, /reserved word/);
   assert.match(headCheck(LOOPED, '2stats.map((item) => (').message, /isn’t a valid variable name/);

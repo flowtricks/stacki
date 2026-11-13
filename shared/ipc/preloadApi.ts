@@ -163,6 +163,7 @@ interface InvokeChannels {
   readonly cmsConnections: 'cmsConnections:list';
   readonly saveCmsConnection: 'cmsConnections:save';
   readonly removeCmsConnection: 'cmsConnections:remove';
+  readonly checkCmsConnection: 'cmsConnections:check';
   readonly sanityLogin: 'cmsConnections:sanityLogin';
   readonly remoteCollections: 'cmsRemote:collections';
   readonly remoteDocuments: 'cmsRemote:documents';
@@ -240,6 +241,7 @@ interface InvokeChannels {
   readonly aiAgents: 'ai:agents';
   readonly aiInstallAgent: 'ai:installAgent';
   readonly aiTrust: 'ai:trust';
+  readonly aiPrewarm: 'ai:prewarm';
   readonly aiChats: 'ai:chats';
   readonly aiChatCreate: 'ai:chatCreate';
   readonly aiChatUpdate: 'ai:chatUpdate';
@@ -256,6 +258,7 @@ interface InvokeChannels {
   readonly aiCancel: 'ai:cancel';
   readonly aiPermission: 'ai:permission';
   readonly aiSetOption: 'ai:setOption';
+  readonly aiRemember: 'ai:remember';
   readonly aiReview: 'ai:review';
   readonly aiSetup: 'ai:setup';
   readonly startTerminal: 'terminal:start';
@@ -263,6 +266,7 @@ interface InvokeChannels {
   readonly closeTerminal: 'terminal:close';
   readonly settings: 'settings:get';
   readonly setPreference: 'settings:set';
+  readonly setLocale: 'locale:set';
   readonly microphoneOpenSettings: 'microphone:openSettings';
   readonly microphoneRequest: 'microphone:request';
   readonly microphoneStatus: 'microphone:status';

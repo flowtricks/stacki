@@ -7,6 +7,8 @@
 // Every call goes through the main process, which holds the keys
 // (src/ipc/mediaHostingBridge.ts).
 import React, { useCallback, useEffect, useState } from 'react';
+import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import type { AssetRequest } from '../../ui/assetPick';
 import type { MediaConnection, MediaFile, MediaListing, MediaResult } from '../../../shared/properties/mediaHosting';
 import {
@@ -39,15 +41,18 @@ import { FONT_PREVIEW_EXTENSIONS, useFontPreview } from '../../ui/fontPreview';
 import Popup from '../../ui/Popup';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { pickPrompt } from './assetPaths';
+import type { Translator } from '../../lib/i18n/localeContext';
 import type { SourceNavigation } from './AssetSources';
-import { formatBytes, hostedCrumbs, hostedKindMatches, movedOrder } from './hostedMediaModel';
+import { hostedCrumbs, hostedKindMatches, movedOrder } from './hostedMediaModel';
 import { copyLink, openLink } from './assetLinks';
 import './hostedMedia.css';
 
 export type HostedToast = (message: string, kind: 'error' | 'success') => void;
 
 type ListingState =
-  { readonly kind: 'loading' } | { readonly kind: 'error'; readonly message: string } | { readonly kind: 'ready'; readonly listing: MediaListing };
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'error'; readonly message: string; readonly messageRef?: MessageRef | undefined }
+  | { readonly kind: 'ready'; readonly listing: MediaListing };
 
 type Renaming = { readonly entry: 'file' | 'folder'; readonly name: string };
 
@@ -68,18 +73,19 @@ interface BrowserProps {
 }
 
 export function HostedMediaBrowser(props: BrowserProps) {
+  const translate = useTranslate();
   const browser = useHostedBrowser(props);
   const { state } = browser;
   const files =
     state.kind === 'ready' ? state.listing.files.filter((file) => props.pick === undefined || hostedKindMatches(props.pick.mediaKind, file.kind)) : [];
   return (
-    <div className="panel-section grow" role="region" aria-label="Assets">
+    <div className="panel-section grow" role="region" aria-label={translate('assets.title')}>
       <HostedHeader {...props} browser={browser} />
       {props.pick && (
         <div className="asset-picking">
-          <span>{pickPrompt(props.pick.mediaKind)}</span>
+          <span>{pickPrompt(props.pick.mediaKind, translate)}</span>
           <button className="ghost" onClick={props.onPickCancel}>
-            Cancel
+            {translate('ui.cancel')}
           </button>
         </div>
       )}
@@ -116,6 +122,8 @@ type Browser = ReturnType<typeof useHostedBrowser>;
 
 function useHostedBrowser(props: BrowserProps) {
   const { projectPath, connection, showToast } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [folder, setFolder] = useState('');
   const [state, setState] = useState<ListingState>({ kind: 'loading' });
   const [busy, setBusy] = useState(false);
@@ -127,7 +135,7 @@ function useHostedBrowser(props: BrowserProps) {
   const load = useCallback(async () => {
     setState({ kind: 'loading' });
     const result = await listHostedMedia({ projectPath, connectionId: connection.id, folder });
-    setState(result.ok ? { kind: 'ready', listing: result.value } : { kind: 'error', message: result.message });
+    setState(result.ok ? { kind: 'ready', listing: result.value } : { kind: 'error', message: result.message, messageRef: result.messageRef });
   }, [projectPath, connection.id, folder]);
   useEffect(() => {
     void load();
@@ -138,7 +146,7 @@ function useHostedBrowser(props: BrowserProps) {
     const result = await action();
     setBusy(false);
     if (!result.ok) {
-      showToast(result.message, 'error');
+      showToast(translateDescribed(result), 'error');
       return;
     }
     if (result.value !== undefined) {
@@ -170,7 +178,7 @@ function useHostedBrowser(props: BrowserProps) {
     upload: () => void run(undefined, () => pickUploadHostedMedia(target)),
     uploadDropped: (dropped: readonly File[]) => {
       if (dropped.length > DROP_FILES_MAX) {
-        showToast(`Drop at most ${DROP_FILES_MAX} files at once.`, 'error');
+        showToast(translate('assets.drop.limit', { count: DROP_FILES_MAX }), 'error');
         return;
       }
       void run(undefined, () => uploadHostedMedia(target, dropped));
@@ -183,8 +191,8 @@ function useHostedBrowser(props: BrowserProps) {
         void run(undefined, () => renameHostedMedia(target, { entry: entry.entry, from: entry.name, to: clean }));
       }
     },
-    remove: (entry: Renaming) => void removeEntry(entry, (confirmed) => run(undefined, () => deleteHostedMedia(target, confirmed))),
-    replace: (file: MediaFile) => void run(`Replaced ${file.name}.`, () => replaceHostedMedia(target, file.name)),
+    remove: (entry: Renaming) => void removeEntry(entry, translate, (confirmed) => run(undefined, () => deleteHostedMedia(target, confirmed))),
+    replace: (file: MediaFile) => void run(translate('assets.toast.replaced', { name: file.name }), () => replaceHostedMedia(target, file.name)),
     move: (moved: string, before: string | undefined) => {
       const order = movedOrder(names, { moved, before });
       if (order !== names) {
@@ -194,14 +202,11 @@ function useHostedBrowser(props: BrowserProps) {
   };
 }
 
-async function removeEntry(entry: Renaming, remove: (entry: Renaming) => Promise<void>): Promise<void> {
+async function removeEntry(entry: Renaming, translate: Translator, remove: (entry: Renaming) => Promise<void>): Promise<void> {
   const confirmed = await confirmDialog({
-    title: `Delete ${entry.name}?`,
-    body:
-      entry.entry === 'folder'
-        ? 'The folder and everything in it are deleted from the host. Hosts keep no bin, so this cannot be undone.'
-        : 'The file is deleted from the host, and anything linking to it stops finding it. Hosts keep no bin, so this cannot be undone.',
-    confirmLabel: 'Delete',
+    title: translate('assets.delete.title', { name: entry.name }),
+    body: entry.entry === 'folder' ? translate('assets.hosted.deleteFolderBody') : translate('assets.hosted.deleteFileBody'),
+    confirmLabel: translate('assets.delete.action'),
     danger: true,
   });
   if (confirmed) {
@@ -211,23 +216,36 @@ async function removeEntry(entry: Renaming, remove: (entry: Renaming) => Promise
 
 function HostedHeader(props: BrowserProps & { readonly browser: Browser }) {
   const { browser } = props;
+  const translate = useTranslate();
   return (
     <div className="panel-header">
       {props.navigation.picker}
       <div style={{ display: 'flex', gap: 2 }}>
-        <button className="ghost" title="New folder" aria-label="New folder" disabled={browser.busy} onClick={() => browser.setNewFolder(true)}>
+        <button
+          className="ghost"
+          title={translate('assets.header.newFolder')}
+          aria-label={translate('assets.header.newFolder')}
+          disabled={browser.busy}
+          onClick={() => browser.setNewFolder(true)}
+        >
           <FolderPlusIcon size={14} />
         </button>
-        <button className="ghost" title="Upload media" aria-label="Upload media" disabled={browser.busy} onClick={browser.upload}>
+        <button
+          className="ghost"
+          title={translate('assets.hosted.upload')}
+          aria-label={translate('assets.hosted.upload')}
+          disabled={browser.busy}
+          onClick={browser.upload}
+        >
           <UploadCloudIcon size={14} />
         </button>
         <MoreMenu
-          title={`Options for ${props.connection.label}`}
+          title={translate('assets.tile.options', { name: props.connection.label })}
           width={170}
           items={[
-            { label: 'Refresh', icon: <RefreshIcon size={13} />, onSelect: browser.refresh },
-            { label: 'Edit connection…', icon: <PencilIcon size={13} />, onSelect: props.onEdit },
-            { label: 'Remove connection', icon: <TrashIcon size={13} />, danger: true, onSelect: props.onRemove },
+            { label: translate('assets.hosted.refresh'), icon: <RefreshIcon size={13} />, onSelect: browser.refresh },
+            { label: translate('assets.hosted.edit'), icon: <PencilIcon size={13} />, onSelect: props.onEdit },
+            { label: translate('assets.hosted.remove'), icon: <TrashIcon size={13} />, danger: true, onSelect: props.onRemove },
           ]}
         />
       </div>
@@ -236,8 +254,9 @@ function HostedHeader(props: BrowserProps & { readonly browser: Browser }) {
 }
 
 function HostedCrumbs({ folder, onOpen }: { readonly folder: string; readonly onOpen: (folder: string) => void }) {
+  const translate = useTranslate();
   // The trail starts at "Assets", the bucket or zone's top: Assets › images, or just Assets there.
-  const crumbs = hostedCrumbs('Assets', folder);
+  const crumbs = hostedCrumbs(translate('assets.title'), folder);
   return (
     <div className="asset-crumbs">
       {crumbs.map((crumb, index) => (
@@ -259,15 +278,17 @@ function HostedCrumbs({ folder, onOpen }: { readonly folder: string; readonly on
 function HostedContents(props: BrowserProps & { readonly browser: Browser; readonly files: readonly MediaFile[] }) {
   const { browser, files } = props;
   const { state } = browser;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   if (state.kind === 'loading') {
-    return <div className="props-empty">Loading…</div>;
+    return <div className="props-empty">{translate('assets.hosted.loading')}</div>;
   }
   if (state.kind === 'error') {
     return (
       <div className="props-empty">
-        {state.message}
+        {translateDescribed(state)}
         <div style={{ marginTop: 10 }}>
-          <button onClick={browser.refresh}>Try again</button>
+          <button onClick={browser.refresh}>{translate('assets.hosted.tryAgain')}</button>
         </div>
       </div>
     );
@@ -298,21 +319,20 @@ function HostedContents(props: BrowserProps & { readonly browser: Browser; reado
           <HostedTile key={file.key} file={file} props={props} browser={browser} />
         ))}
       </div>
-      {state.listing.truncated && <div className="props-empty">This folder holds more files than the panel lists.</div>}
-      {folders.length === 0 && files.length === 0 && !browser.newFolder && (
-        <div className="props-empty">Empty folder. Drop files here or use the upload button.</div>
-      )}
+      {state.listing.truncated && <div className="props-empty">{translate('assets.hosted.truncated')}</div>}
+      {folders.length === 0 && files.length === 0 && !browser.newFolder && <div className="props-empty">{translate('assets.empty')}</div>}
     </>
   );
 }
 
 function NewHostedFolder({ browser }: { readonly browser: Browser }) {
+  const translate = useTranslate();
   return (
     <div className="asset-folder">
       <FolderIcon size={14} />
       <input
         autoFocus
-        placeholder="Folder name"
+        placeholder={translate('assets.folderName')}
         onBlur={(event) => {
           browser.setNewFolder(false);
           const name = event.currentTarget.value.trim();
@@ -335,6 +355,7 @@ function NewHostedFolder({ browser }: { readonly browser: Browser }) {
 }
 
 function HostedFolderRow({ name, browser, onOpen }: { readonly name: string; readonly browser: Browser; readonly onOpen: () => void }) {
+  const translate = useTranslate();
   const entry: Renaming = { entry: 'folder', name };
   const renaming = browser.renaming?.entry === 'folder' && browser.renaming.name === name;
   return (
@@ -343,10 +364,10 @@ function HostedFolderRow({ name, browser, onOpen }: { readonly name: string; rea
       {renaming ? <NameInput name={name} onCommit={(value) => browser.rename(entry, value)} /> : <span className="asset-folder-name">{name}</span>}
       <MoreMenu
         className="hosted-row-menu"
-        title={`Options for ${name}`}
+        title={translate('assets.tile.options', { name })}
         items={[
-          { label: 'Rename', icon: <PencilIcon size={13} />, onSelect: () => browser.setRenaming(entry) },
-          { label: 'Delete', icon: <TrashIcon size={13} />, danger: true, onSelect: () => browser.remove(entry) },
+          { label: translate('assets.hosted.rename'), icon: <PencilIcon size={13} />, onSelect: () => browser.setRenaming(entry) },
+          { label: translate('assets.delete.action'), icon: <TrashIcon size={13} />, danger: true, onSelect: () => browser.remove(entry) },
         ]}
       />
       <span className="crumb-sep">
@@ -360,12 +381,16 @@ function HostedTile({ file, props, browser }: { readonly file: MediaFile; readon
   const entry: Renaming = { entry: 'file', name: file.name };
   const renaming = browser.renaming?.entry === 'file' && browser.renaming.name === file.name;
   const { pick } = props;
+  const translate = useTranslate();
+  const { formatBytes } = useFormat();
   const [over, setOver] = useState(false);
   return (
     <div
       className={`asset-tile hosted-tile ${pick ? 'pickable' : ''} ${pick?.current === file.url ? 'selected' : ''} ${over ? 'drop-before' : ''}`}
       draggable={!renaming && pick === undefined}
-      title={pick ? `Use ${file.name}` : `${file.name}${file.sizeBytes === undefined ? '' : ` · ${formatBytes(file.sizeBytes)}`}`}
+      title={
+        pick ? translate('assets.tile.use', { path: file.name }) : `${file.name}${file.sizeBytes === undefined ? '' : ` · ${formatBytes(file.sizeBytes)}`}`
+      }
       onDragStart={(event) => event.dataTransfer.setData(HOSTED_DRAG, file.name)}
       onDragOver={(event) => {
         if (event.dataTransfer.types.includes(HOSTED_DRAG)) {
@@ -396,13 +421,13 @@ function HostedTile({ file, props, browser }: { readonly file: MediaFile; readon
       {!pick && (
         <MoreMenu
           className="asset-tile-menu"
-          title={`Options for ${file.name}`}
+          title={translate('assets.tile.options', { name: file.name })}
           items={[
-            { label: 'Copy link', icon: <CopyIcon size={13} />, onSelect: () => void copyLink(file.url, props.showToast) },
-            { label: 'Open link', icon: <ExternalIcon size={13} />, onSelect: () => void openLink(file.url) },
-            { label: 'Replace…', icon: <UploadIcon size={13} />, onSelect: () => browser.replace(file) },
-            { label: 'Rename', icon: <PencilIcon size={13} />, onSelect: () => browser.setRenaming(entry) },
-            { label: 'Delete', icon: <TrashIcon size={13} />, danger: true, onSelect: () => browser.remove(entry) },
+            { label: translate('assets.tile.copyLink'), icon: <CopyIcon size={13} />, onSelect: () => void copyLink(file.url, translate, props.showToast) },
+            { label: translate('assets.hosted.openLink'), icon: <ExternalIcon size={13} />, onSelect: () => void openLink(file.url) },
+            { label: translate('assets.tile.replace'), icon: <UploadIcon size={13} />, onSelect: () => browser.replace(file) },
+            { label: translate('assets.hosted.rename'), icon: <PencilIcon size={13} />, onSelect: () => browser.setRenaming(entry) },
+            { label: translate('assets.delete.action'), icon: <TrashIcon size={13} />, danger: true, onSelect: () => browser.remove(entry) },
           ]}
         />
       )}
@@ -439,6 +464,7 @@ export function HostedThumb({ file }: { readonly file: MediaFile }) {
     return (
       <div className="asset-thumb is-font">
         <span className="asset-font" style={{ fontFamily: `"${fontFamily}"` }}>
+          {/* i18n-ignore: the font specimen draws the font's own glyphs. */}
           Aa
         </span>
       </div>
@@ -455,6 +481,7 @@ export function HostedThumb({ file }: { readonly file: MediaFile }) {
 }
 
 function HostedPreview({ file, onClose }: { readonly file: MediaFile; readonly onClose: () => void }) {
+  const { formatBytes, formatDate } = useFormat();
   return (
     <Popup className="modal hosted-preview" label={file.name} onClose={onClose} dismissible>
       {() => (
@@ -463,7 +490,9 @@ function HostedPreview({ file, onClose }: { readonly file: MediaFile; readonly o
           <div className="modal-body hosted-preview-body">
             <PreviewMedia file={file} />
             <div className="hosted-preview-meta">
-              {[formatBytes(file.sizeBytes), file.modified === undefined ? '' : new Date(file.modified).toLocaleString()].filter(Boolean).join(' · ')}
+              {[file.sizeBytes === undefined ? '' : formatBytes(file.sizeBytes), file.modified === undefined ? '' : modifiedText(file.modified, formatDate)]
+                .filter(Boolean)
+                .join(' · ')}
             </div>
           </div>
         </>
@@ -523,4 +552,10 @@ function NameInput({ name, onCommit }: { readonly name: string; readonly onCommi
 // An uncontrolled input's text is the element's own state, cleared in place.
 function clearInput(inputElement: HTMLInputElement): void {
   inputElement.value = '';
+}
+
+// A host's modified time is an ISO string; one it cannot read shows nothing rather than "Invalid Date".
+function modifiedText(iso: string, formatDate: (value: Date | number, options: Intl.DateTimeFormatOptions) => string): string {
+  const time = Date.parse(iso);
+  return Number.isNaN(time) ? '' : formatDate(time, { dateStyle: 'medium', timeStyle: 'short' });
 }

@@ -16,7 +16,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
 import { ChevronLeftIcon, HideIcon, PreviewIcon } from '../../ui/Icons';
 import ProviderLogo from '../../ui/ProviderLogo';
-import InfoHint from './InfoHint';
+import InfoHint from '../../ui/InfoHint';
 import { addServerWithSecrets, type SecretToStore } from './mcpFlows';
 import { PASTE_PROBLEM_KEYS, PROVIDER_PROBLEM_KEYS } from './mcpModel';
 import { problemKey } from './secretsModel';

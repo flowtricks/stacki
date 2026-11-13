@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { useFrameAddress } from './frameAddress';
 import type { CanvasSitePages } from '../../../vendor/stacki/shared/properties/canvasInteraction';
 import { useCanvasText } from '../../../vendor/stacki/src/features/preview/useCanvasText';
@@ -115,11 +116,18 @@ export function PreviewCanvas(props: Props) {
 // slot show marked and editable as on the page itself.
 function useStudioCanvasText(props: Props) {
   const components = useSameComponents(props.components);
+  const translate = useTranslate();
   useCanvasText({
-    document: studioCanvasText(props.file, props.document, props.nodes, {
-      components,
-      selected: props.selected,
-    }),
+    document: studioCanvasText(
+      props.file,
+      props.document,
+      props.nodes,
+      {
+        components,
+        selected: props.selected,
+      },
+      translate,
+    ),
     frame: props.preview.frame,
     url: props.preview.url,
     post: props.preview.send,
@@ -178,6 +186,7 @@ function DesignFrame({
   readonly shownGuide: ShownGuide | undefined;
   readonly interactive?: boolean;
 }) {
+  const translate = useTranslate();
   // Later pages replace the frame's history entry: the canvas never adds back steps (frameAddress.ts).
   const frameAddress = useFrameAddress(props.preview.frame, props.preview.url);
   return (
@@ -201,7 +210,7 @@ function DesignFrame({
         <div className="frame-clip">
           <iframe
             ref={props.preview.frame}
-            title="Site preview"
+            title={translate('preview.pane.title')}
             src={frameAddress}
             onLoad={() => {
               props.preview.loaded({ preserveNavigation: interactive ?? false });

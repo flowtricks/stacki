@@ -13,6 +13,7 @@ import { layerShorthand, parseLayerShorthand, serializeLayers, type BgLayer } fr
 import { customPropertiesIn, substituteCustomProperties } from './model/cssVars';
 import { type LayerFieldProps } from './BackgroundLayerFields';
 import VariableConnect from './VariableConnect';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 /** The custom properties `texts` read, as the selected element resolves them. */
 export function useResolvedCustomProperties(texts: readonly string[]): ReadonlyMap<string, string> {
@@ -73,6 +74,7 @@ export type GradientCodeProps = Pick<LayerFieldProps, 'layers' | 'index' | 'busy
  */
 export function GradientCode(props: GradientCodeProps) {
   const { layers, index, busy, applyLayers, liveSetProp } = props;
+  const translate = useTranslate();
   const layer = layers[index];
   assert(layer !== undefined, 'GradientCode: the layer exists');
   const [draft, setDraft] = useState<string | undefined>(undefined);
@@ -119,7 +121,7 @@ export function GradientCode(props: GradientCodeProps) {
   return (
     <>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Preview</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.gradientCode.preview')}</span>
         <div className="embed-editor_gradient-code-preview" aria-hidden="true">
           <span style={layerPreviewStyle(drafted, values)} />
         </div>
@@ -145,14 +147,23 @@ export function GradientCode(props: GradientCodeProps) {
           }
         }}
       >
-        <VariableConnect className="is-multiline" code expanded ariaLabel="Layer code" disabled={busy} prop="background" onDraft={onDraft} onPick={onDraft}>
+        <VariableConnect
+          className="is-multiline"
+          code
+          expanded
+          ariaLabel={translate('style.gradientCode.layerCode')}
+          disabled={busy}
+          prop="background"
+          onDraft={onDraft}
+          onPick={onDraft}
+        >
           <textarea
             className="embed-editor_gradient-code-field"
             value={text}
             spellCheck={false}
             rows={4}
             disabled={busy}
-            aria-label="Layer code"
+            aria-label={translate('style.gradientCode.layerCode')}
             onChange={(event) => onDraft(event.target.value)}
           />
         </VariableConnect>

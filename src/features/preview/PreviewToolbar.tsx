@@ -6,6 +6,8 @@ import { AllBreakpointsIcon, ChevronRightIcon, DesktopIcon, PanelRightIcon, Phon
 import { PreviewSizeControls } from './PreviewSizeControls';
 import { GuideMenu, type GuideMenuProps } from './GuideMenu';
 import type { PreviewSizeControlsProps } from './PreviewSizeControls';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import { ToolbarOverflow, type ToolbarItem } from './ToolbarOverflow';
 
 const InteractIcon = centralIcon(centralCursorClick);
@@ -16,17 +18,17 @@ type FixedDevice = Exclude<PreviewDevice, 'custom'>;
 interface DeviceDefinition {
   readonly key: FixedDevice;
   readonly Icon: React.ComponentType<IconProps>;
-  readonly title: string;
+  readonly titleKey: MessageKey;
   /** The viewport width it simulates; undefined for the full available width. */
   readonly width: number | undefined;
   readonly from?: number;
 }
 
 export const DEVICES: readonly DeviceDefinition[] = [
-  { key: 'desktop', Icon: DesktopIcon, title: 'Desktop — 1', width: undefined, from: 1024 },
-  { key: 'tablet', Icon: TabletIcon, title: 'Tablet (768px) — 2', width: 768, from: 768 },
-  { key: 'phone', Icon: PhoneIcon, title: 'Phone (375px) — 3', width: 375, from: 0 },
-  { key: 'canvas', Icon: AllBreakpointsIcon, title: 'Canvas — all breakpoints — 4', width: undefined },
+  { key: 'desktop', Icon: DesktopIcon, titleKey: 'preview.device.desktop', width: undefined, from: 1024 },
+  { key: 'tablet', Icon: TabletIcon, titleKey: 'preview.device.tablet', width: 768, from: 768 },
+  { key: 'phone', Icon: PhoneIcon, titleKey: 'preview.device.phone', width: 375, from: 0 },
+  { key: 'canvas', Icon: AllBreakpointsIcon, titleKey: 'preview.device.canvas', width: undefined },
 ];
 
 export interface PreviewCrumb {
@@ -85,15 +87,16 @@ interface PreviewToolbarProps {
 const CRUMBS_WIDTH_PX_MIN = 120;
 
 export function PreviewToolbar(props: PreviewToolbarProps) {
+  const translate = useTranslate();
   const shownCrumbs = useFoldedCrumbs(props.crumbs);
   return (
-    <ToolbarOverflow items={toolbarItems(props)} childrenWidthPxMin={CRUMBS_WIDTH_PX_MIN}>
+    <ToolbarOverflow items={toolbarItems(props, translate)} childrenWidthPxMin={CRUMBS_WIDTH_PX_MIN}>
       <CrumbTrail crumbs={shownCrumbs.crumbs} {...(props.onCrumb === undefined ? {} : { onCrumb: props.onCrumb })} onExpand={shownCrumbs.expand} />
     </ToolbarOverflow>
   );
 }
 
-function toolbarItems(props: PreviewToolbarProps): readonly ToolbarItem[] {
+function toolbarItems(props: PreviewToolbarProps, translate: Translator): readonly ToolbarItem[] {
   const devices: ToolbarItem = {
     id: 'devices',
     priority: 90,
@@ -117,16 +120,17 @@ function toolbarItems(props: PreviewToolbarProps): readonly ToolbarItem[] {
       content: <GuideMenu {...props.guide} />,
       afterPress: 'stay',
     },
-    ...interactionItems(props.interaction),
+    ...interactionItems(props.interaction, translate),
     ...sizing,
     devices,
-    ...inspectorItems(props.inspector),
+    ...inspectorItems(props.inspector, translate),
   ];
 }
 
 // Treat the original segmented switch as one overflow item so its shared surface
 // and sliding selection remain intact whenever the toolbar has room for it.
 function DeviceButtons({ activeDevice, onDevice }: Pick<PreviewToolbarProps, 'activeDevice' | 'onDevice'>) {
+  const translate = useTranslate();
   const buttons = useRef(new Map<FixedDevice, HTMLButtonElement>());
   const [indicator, setIndicator] = useState<{ readonly left: number; readonly width: number } | undefined>();
   useLayoutEffect(() => {
@@ -134,9 +138,9 @@ function DeviceButtons({ activeDevice, onDevice }: Pick<PreviewToolbarProps, 'ac
     setIndicator(element ? { left: element.offsetLeft, width: element.offsetWidth } : undefined);
   }, [activeDevice]);
   return (
-    <div className="device-btns" role="group" aria-label="Preview device">
+    <div className="device-btns" role="group" aria-label={translate('preview.device.group')}>
       {indicator && <span className="device-indicator" style={indicator} />}
-      {DEVICES.map(({ key, Icon, title }) => (
+      {DEVICES.map(({ key, Icon, titleKey }) => (
         <button
           key={key}
           ref={(element) => {
@@ -147,8 +151,8 @@ function DeviceButtons({ activeDevice, onDevice }: Pick<PreviewToolbarProps, 'ac
             }
           }}
           className={activeDevice === key ? 'on' : ''}
-          data-tooltip={title}
-          aria-label={title}
+          data-tooltip={translate(titleKey)}
+          aria-label={translate(titleKey)}
           aria-pressed={activeDevice === key}
           onClick={() => onDevice(key)}
         >
@@ -159,11 +163,11 @@ function DeviceButtons({ activeDevice, onDevice }: Pick<PreviewToolbarProps, 'ac
   );
 }
 
-function inspectorItems(inspector: PreviewInspectorActions | undefined): readonly ToolbarItem[] {
+function inspectorItems(inspector: PreviewInspectorActions | undefined, translate: Translator): readonly ToolbarItem[] {
   if (!inspector) {
     return [];
   }
-  const label = inspector.open ? 'Hide style and settings panel' : 'Show style and settings panel';
+  const label = inspector.open ? translate('preview.inspector.hide') : translate('preview.inspector.show');
   const button = (
     <div className="device-btns guide-btns">
       <button
@@ -215,6 +219,7 @@ function CrumbTrail({
   readonly onCrumb?: (id: string | undefined) => void;
   readonly onExpand: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="crumbs">
       {crumbs.map((item, index) => (
@@ -225,7 +230,7 @@ function CrumbTrail({
             </span>
           )}
           {item.kind === 'folded' ? (
-            <span className="crumb crumb-more" title={foldedTitle(item)} onClick={onExpand}>
+            <span className="crumb crumb-more" title={foldedTitle(item, translate)} onClick={onExpand}>
               …
             </span>
           ) : (
@@ -239,11 +244,11 @@ function CrumbTrail({
   );
 }
 
-function foldedTitle(item: FoldedCrumb): string {
-  return `Show ${item.hidden.length} more: ${item.hidden.map((crumb) => crumb.label).join(' › ')}`;
+function foldedTitle(item: FoldedCrumb, translate: Translator): string {
+  return translate('preview.crumbs.more', { count: item.hidden.length, names: item.hidden.map((crumb) => crumb.label).join(' › ') });
 }
 
-function interactionItems(interaction: PreviewToolbarProps['interaction']): readonly ToolbarItem[] {
+function interactionItems(interaction: PreviewToolbarProps['interaction'], translate: Translator): readonly ToolbarItem[] {
   if (!interaction) {
     return [];
   }
@@ -251,8 +256,8 @@ function interactionItems(interaction: PreviewToolbarProps['interaction']): read
     <div className="device-btns guide-btns">
       <button
         type="button"
-        aria-label="Interact with canvas"
-        data-tooltip="Interact with canvas — links, buttons and forms"
+        aria-label={translate('preview.interact.label')}
+        data-tooltip={translate('preview.interact.tip')}
         aria-pressed={interaction.active}
         className={interaction.active ? 'on' : ''}
         disabled={!interaction.available}

@@ -19,7 +19,11 @@ function bundle(entry) {
   fs.mkdirSync(directory, { recursive: true });
   const outfile = path.join(directory, 'module.cjs');
   esbuild.buildSync({
-    entryPoints: [repoPath(entry)],
+    stdin: {
+      contents: [`export * from './${entry}';`, "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';"].join('\n'),
+      resolveDir: repoPath('.'),
+      loader: 'ts',
+    },
     outfile,
     bundle: true,
     format: 'cjs',
@@ -50,7 +54,7 @@ test('a newer version is available for a GitHub and a marketplace install, with 
   for (const source of [github, marketplace]) {
     const status = updates.appUpdateStatus(lock(source, { update: update() }));
     assert.equal(status.kind, 'available');
-    assert.equal(updates.updateStatusLabel(status), 'Update available · v1.2.0');
+    assert.equal(updates.updateStatusLabel(status, updates.ENGLISH_TRANSLATE), 'Update available · v1.2.0');
     // What it adds is still named, so the person sees it before choosing Update.
     const withAdditions = updates.appUpdateStatus(lock(source, { update: update(['reaches api.example.com']) }));
     assert.equal(withAdditions.kind, 'available', 'auto-update is off: it is simply available');
@@ -62,7 +66,7 @@ test('auto-update on holds a version that asks for more: it reads "Update needs 
   for (const source of [github, marketplace]) {
     const held = updates.appUpdateStatus(lock(source, { autoUpdate: true, update: update(['reaches api.example.com', 'signs in to Google']) }));
     assert.equal(held.kind, 'needs-approval');
-    assert.equal(updates.updateStatusLabel(held), 'Update needs your OK · v1.2.0');
+    assert.equal(updates.updateStatusLabel(held, updates.ENGLISH_TRANSLATE), 'Update needs your OK · v1.2.0');
     // Negative space: auto-update on with nothing new is an ordinary waiting update (it installs at the next check).
     assert.equal(updates.appUpdateStatus(lock(source, { autoUpdate: true, update: update([]) })).kind, 'available');
   }
@@ -78,15 +82,18 @@ test('an uploaded app or one added to the project folder never offers an update'
 });
 
 test('the note names what a version adds, and nothing when it adds nothing', () => {
-  assert.equal(updates.updateAdditionsNote(update([])), undefined);
+  assert.equal(updates.updateAdditionsNote(update([]), updates.ENGLISH_TRANSLATE), undefined);
   assert.equal(
-    updates.updateAdditionsNote(update(['reaches api.example.com', 'adds the “Can export” permission'])),
+    updates.updateAdditionsNote(update(['reaches api.example.com', 'adds the “Can export” permission']), updates.ENGLISH_TRANSLATE),
     'New in v1.2.0: reaches api.example.com, adds the “Can export” permission.',
   );
 });
 
 test('the auto-update hint says who it is for', () => {
-  assert.equal(updates.AUTO_UPDATE_HINT, 'Install new versions of this app as they are released. Only turn this on for a publisher you trust.');
+  assert.equal(
+    updates.ENGLISH_TRANSLATE('apps.updates.automaticallyHint'),
+    'Install new versions of this app as they are released. Only turn this on for a publisher you trust.',
+  );
 });
 
 test('the waiting set follows the installed list and the update checks', () => {

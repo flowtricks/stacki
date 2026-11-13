@@ -12,6 +12,8 @@
 // attribute would collide with.
 
 import { assert } from '../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../shared/properties/i18n/messageRef';
 import { LIMITS } from '../../shared/core/limits';
 
 const GLOBAL = [
@@ -234,7 +236,7 @@ export interface AttributeNameContext {
  * noted: the name the attribute already has (`class:list` on an element that
  * has one) is what the file says, and is never flagged.
  */
-export function attributeNameNote(name: string, context: AttributeNameContext): string | undefined {
+export function attributeNameNote(name: string, context: AttributeNameContext, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   const clean = name.trim();
   if (clean === '' || clean === context.own) {
     return undefined;
@@ -243,16 +245,16 @@ export function attributeNameNote(name: string, context: AttributeNameContext): 
   assert(context.taken.length <= LIMITS.attrsPerNodeMax, 'attributeNameNote: taken names are bounded');
   // An element's classes have a field of their own, driven by the Style panel's selectors.
   if (context.tag !== undefined && (clean === 'class' || clean === 'class:list')) {
-    return 'Classes are edited in the Style panel.';
+    return translate('editor.htmlAttributes.useStylePanel');
   }
   if (context.taken.includes(clean)) {
-    return `${clean} is already on this element.`;
+    return translate('editor.htmlAttributes.taken', { name: clean });
   }
   if (RESERVED.test(clean) || context.reserved.includes(clean)) {
-    return 'This is a reserved name.';
+    return translate('editor.htmlAttributes.reserved');
   }
   if (context.tag === undefined || clean.startsWith('{')) {
     return undefined;
   }
-  return attributeValidOn(clean, context.tag) ? undefined : `${clean} isn’t an attribute of <${context.tag}>.`;
+  return attributeValidOn(clean, context.tag) ? undefined : translate('editor.htmlAttributes.notOnTag', { name: clean, tag: context.tag });
 }

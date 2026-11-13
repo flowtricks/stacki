@@ -1,3 +1,4 @@
+// i18n-ignore-file: the bake is the `astro-studio build-demo` command line tool; its messages are developer diagnostics in a terminal, not Studio interface text.
 // Which component renderings a bake asks for: every instance a page can show without
 // a loop around it, and every component's insertion recipe, rendered on a page that
 // already uses that component so no page gains styles it did not have.

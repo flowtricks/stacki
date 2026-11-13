@@ -370,7 +370,7 @@ test('headings carry the roles icon, and permissions start collapsed and remembe
   await mount(['flowtricks'], ['panel:pages', 'publish', 'app:*']);
   assert.ok(document.querySelector('.app-role-heading .app-role-heading-icon svg'), 'the heading starts with the people icon');
   const toggle = document.querySelector('.app-role-permissions-toggle');
-  assert.match(toggle.textContent, /^Permissions · 3 of \d+ on$/);
+  assert.match(toggle.textContent, /^PermissionsOn 3 of \d+$/);
   assert.equal(toggle.getAttribute('aria-expanded'), 'false');
   const body = document.getElementById(toggle.getAttribute('aria-controls'));
   assert.equal(body.hasAttribute('inert'), true, 'a collapsed grid takes no focus');

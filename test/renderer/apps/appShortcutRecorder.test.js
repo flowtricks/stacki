@@ -41,6 +41,7 @@ esbuild.buildSync({
       "export { configureAppCommands, resetAppCommands, bindCommands, commandShortcutHint, shortcutHolder, rebindFor } from './src/features/apps/appCommands';",
       "export { recorderStep, isShortcutRecorderTarget } from './src/ui/ShortcutRecorder';",
       "export { ADMIN_VIEW } from './shared/properties/projectRoles';",
+      "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
     ].join('\n'),
     resolveDir: ROOT,
     loader: 'ts',
@@ -124,13 +125,13 @@ test('recorderStep: cancel, clear, wait, pass, refuse and record', () => {
 });
 
 test('the hint is the reserved range; a holder is named; a rebind back to the default is none', () => {
-  assert.equal(apps.commandShortcutHint('mac'), 'Use ⌘⌥⇧ with a number from 1 to 9');
-  assert.equal(apps.commandShortcutHint('other'), 'Use Ctrl+Alt+Shift with a number from 1 to 9');
+  assert.equal(apps.commandShortcutHint('mac', apps.ENGLISH_TRANSLATE), 'Use ⌘⌥⇧ with a number from 1 to 9');
+  assert.equal(apps.commandShortcutHint('other', apps.ENGLISH_TRANSLATE), 'Use Ctrl+Alt+Shift with a number from 1 to 9');
   const bound = apps.bindCommands([heatMap, notes], new Map(), {});
-  assert.equal(apps.shortcutHolder(bound, 'notes', 'open', 'Mod+Alt+Shift+1'), 'Used by Heat map', 'another app is named by its app');
-  assert.equal(apps.shortcutHolder(bound, 'notes', 'pin', 'Mod+Alt+Shift+2'), 'Used by Open notes', 'one of the same app by its title');
-  assert.equal(apps.shortcutHolder(bound, 'notes', 'open', 'Mod+Alt+Shift+2'), undefined, 'its own key is no conflict');
-  assert.equal(apps.shortcutHolder(bound, 'notes', 'open', 'Mod+Alt+Shift+5'), undefined, 'a free key');
+  assert.equal(apps.shortcutHolder(bound, 'notes', 'open', 'Mod+Alt+Shift+1', apps.ENGLISH_TRANSLATE), 'Used by Heat map', 'another app is named by its app');
+  assert.equal(apps.shortcutHolder(bound, 'notes', 'pin', 'Mod+Alt+Shift+2', apps.ENGLISH_TRANSLATE), 'Used by Open notes', 'one of the same app by its title');
+  assert.equal(apps.shortcutHolder(bound, 'notes', 'open', 'Mod+Alt+Shift+2', apps.ENGLISH_TRANSLATE), undefined, 'its own key is no conflict');
+  assert.equal(apps.shortcutHolder(bound, 'notes', 'open', 'Mod+Alt+Shift+5', apps.ENGLISH_TRANSLATE), undefined, 'a free key');
   const [toggle] = heatMap.manifest.commands;
   assert.equal(apps.rebindFor(toggle, 'Mod+Alt+Shift+1'), undefined);
   assert.equal(apps.rebindFor(toggle, 'Mod+Alt+Shift+4'), 'Mod+Alt+Shift+4');

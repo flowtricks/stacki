@@ -1,6 +1,13 @@
 import { assert } from '../../../vendor/stacki/shared/core/assert';
 
-export function loginCountdown(seconds: number) {
+/** The countdown's sentences in the visitor's language, chosen by the Worker: `many` holds a literal `{seconds}` the script fills in each tick. */
+export interface LoginCountdownText {
+  readonly one: string;
+  readonly many: string;
+  readonly ready: string;
+}
+
+export function loginCountdown(seconds: number, text: LoginCountdownText, escape: (value: string) => string) {
   assert(Number.isSafeInteger(seconds), 'Sign-in wait must be a safe integer');
   assert(seconds >= 0, 'Sign-in wait cannot be negative');
   assert(Number.isSafeInteger(Date.now() + seconds * 1000), 'Sign-in deadline must be safe');
@@ -9,14 +16,15 @@ export function loginCountdown(seconds: number) {
   }
   const nonce = crypto.randomUUID();
   return {
-    markup: ` <span id="login-countdown">Wait at least ${seconds} ` + `${seconds === 1 ? 'second' : 'seconds'}, then start a new sign-in below.</span>`,
-    script: `<script nonce="${nonce}">` + `(${startLoginCountdown.toString()})(${seconds}, window);</script>`,
+    markup: ` <span id="login-countdown">${escape(seconds === 1 ? text.one : text.many.replace('{seconds}', String(seconds)))}</span>`,
+    // The text is JSON inside a script element: `<` is escaped so a message can never close the element.
+    script: `<script nonce="${nonce}">` + `(${startLoginCountdown.toString()})(${seconds}, window, ${JSON.stringify(text).replace(/</g, '\\u003c')});</script>`,
     policy: `; script-src 'nonce-${nonce}'`,
   } as const;
 }
 
 // This function is serialized into the login page, so it must not close over server code.
-function startLoginCountdown(seconds: number, browser: LoginCountdownBrowser): void {
+function startLoginCountdown(seconds: number, browser: LoginCountdownBrowser, text: LoginCountdownText): void {
   const countdown = browser.document.getElementById('login-countdown');
   const message = browser.document.getElementById('login-message');
   if (!countdown) {
@@ -30,11 +38,11 @@ function startLoginCountdown(seconds: number, browser: LoginCountdownBrowser): v
   const timer = browser.setInterval(() => {
     const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
     if (remaining > 0) {
-      countdown.textContent = `Wait at least ${remaining} ${remaining === 1 ? 'second' : 'seconds'}, ` + 'then start a new sign-in below.';
+      countdown.textContent = remaining === 1 ? text.one : text.many.replace('{seconds}', String(remaining));
     } else {
       browser.clearInterval(timer);
       message.setAttribute('role', 'status');
-      message.textContent = 'You can try signing in again below.';
+      message.textContent = text.ready;
     }
   }, 1000);
 }

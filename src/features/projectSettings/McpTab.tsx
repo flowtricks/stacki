@@ -18,7 +18,7 @@ import { confirmDialog } from '../../ui/ConfirmDialog';
 import { ChevronDownIcon, ChevronRightIcon, CodeIcon, PlugIcon } from '../../ui/Icons';
 import ProviderLogo from '../../ui/ProviderLogo';
 import { SegmentedTabs } from '../../ui/SegmentedTabs';
-import InfoHint from './InfoHint';
+import InfoHint from '../../ui/InfoHint';
 import McpJsonView from './McpJsonView';
 import { AddServer } from './McpAddSection';
 import { McpCardsSkeleton } from './McpSkeleton';

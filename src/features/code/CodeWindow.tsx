@@ -5,6 +5,7 @@ import type { CodeEditorProps } from '../../ui/CodeEditor';
 import { CloseIcon, CodeIcon } from '../../ui/Icons';
 import { useWindowRectangle } from '../../ui/useWindowRectangle';
 import { WindowResizeHandles } from '../../ui/WindowResizeHandles';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 interface CodeWindowProps extends CodeEditorProps {
   readonly title: string;
@@ -19,6 +20,7 @@ export function codeWindowPinsHeaders(language: string | undefined): boolean {
 
 // A single pointer session owns movement and cleanup, including closing mid-drag.
 export default function CodeWindow(props: CodeWindowProps) {
+  const translate = useTranslate();
   const { title, language, indentation, value, onChange, onClose, editorKey, revealLine } = props;
   const windowState = useWindowRectangle({ width: 340, height: 220 });
   const { rectangle } = windowState;
@@ -42,7 +44,7 @@ export default function CodeWindow(props: CodeWindowProps) {
         <span className="code-window-title">{title}</span>
         <span className="type-tag">{language}</span>
         <span style={{ flex: 1 }} />
-        <button className="ghost" title="Close (edits are saved live)" onClick={onClose}>
+        <button className="ghost" title={translate('workspace.code.close')} onClick={onClose}>
           <CloseIcon size={12} />
         </button>
       </div>

@@ -1,3 +1,4 @@
+import { studioTranslate } from '../../shared/studioTranslate';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadProject, type Project } from './projectClient';
 import { onWindowReturn } from '../../../vendor/stacki/src/lib/windowReturn';
@@ -29,7 +30,7 @@ export function useProjectLoad(report: (error: unknown) => void) {
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
-          setFailure(error instanceof Error ? error.message : 'Unable to open your studio.');
+          setFailure(error instanceof Error ? error.message : studioTranslate('studio.project.openFailed'));
           report(error);
         }
       })

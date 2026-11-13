@@ -16,6 +16,7 @@ import { LOOP_QUERY_LIMITS, type LoopQuery } from '../../editor/loopQuery';
 import type { LoopCatalog } from './loopCatalog';
 import { RowPopup, SectionHeader } from './LoopRows';
 import { SettingDot, type BindingContext, type DraftEditor } from './LoopBinding';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { LinkedSetting } from './LoopLinked';
 import { loadItems, type ItemPicture, type PickableItem } from './loopSettingsData';
 
@@ -49,6 +50,7 @@ export function ItemsSection(props: ItemsSectionProps) {
 }
 
 function ItemsEditor(props: ItemsSectionProps & { readonly dot?: ReactNode }) {
+  const translate = useTranslate();
   const selection = props.query.selection ?? [];
   const items = useItems(props.projectPath, props.catalog, { query: props.query, ids: props.ids });
   const [picking, setPicking] = useState(false);
@@ -71,7 +73,7 @@ function ItemsEditor(props: ItemsSectionProps & { readonly dot?: ReactNode }) {
     <div className="loop-settings-section">
       <div ref={attachHeader}>
         <SectionHeader
-          title="Select items"
+          title={translate('props.loop.items.select')}
           label={props.label}
           dot={props.dot}
           addable={selection.length < LOOP_QUERY_LIMITS.selectionMax}
@@ -84,7 +86,7 @@ function ItemsEditor(props: ItemsSectionProps & { readonly dot?: ReactNode }) {
             <PickedRow
               key={id}
               id={id}
-              title={itemOf(id)?.title ?? (items === undefined ? id : `${id} (not found)`)}
+              title={itemOf(id)?.title ?? (items === undefined ? id : translate('props.loop.items.notFound', { id }))}
               found={itemOf(id) !== undefined}
               thumb={thumb(itemOf(id)?.picture)}
               row={reorder.rowProps(index)}
@@ -95,7 +97,7 @@ function ItemsEditor(props: ItemsSectionProps & { readonly dot?: ReactNode }) {
         </div>
       )}
       {picking && (
-        <RowPopup anchor={header} heightPxMax={PICKER_HEIGHT_PX_MAX} label="Select items" onClose={() => setPicking(false)}>
+        <RowPopup anchor={header} heightPxMax={PICKER_HEIGHT_PX_MAX} label={translate('props.loop.items.select')} onClose={() => setPicking(false)}>
           <ItemPicker items={items} selection={selection} pictures={pictures} thumb={thumb} onChange={write} />
         </RowPopup>
       )}
@@ -166,6 +168,7 @@ function PickedRow(props: {
   readonly rowClass: string;
   readonly onRemove: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <div {...props.row} className={`loop-settings-item loop-settings-picked ${props.rowClass}`}>
       <span className="loop-settings-item-drag" aria-hidden="true">
@@ -175,7 +178,13 @@ function PickedRow(props: {
       <span className={`loop-settings-picked-title${props.found ? '' : ' missing'}`} title={props.id}>
         {props.title}
       </span>
-      <button type="button" className="loop-settings-item-remove" aria-label="Remove item" title="Remove" onClick={props.onRemove}>
+      <button
+        type="button"
+        className="loop-settings-item-remove"
+        aria-label={translate('props.loop.items.remove')}
+        title={translate('ui.remove')}
+        onClick={props.onRemove}
+      >
         <TrashIcon size={13} />
       </button>
     </div>
@@ -191,6 +200,7 @@ function ItemPicker(props: {
   readonly thumb: (picture: ItemPicture | undefined) => ReactNode;
   readonly onChange: (selection: readonly string[]) => void;
 }) {
+  const translate = useTranslate();
   const [search, setSearch] = useState('');
   const { items, selection } = props;
   const shown = useMemo(() => {
@@ -214,15 +224,21 @@ function ItemPicker(props: {
     <div className="loop-settings-picker">
       <label className="loop-settings-picker-search">
         <SearchIcon size={12} />
-        <input value={search} placeholder="Search items" spellCheck={false} autoFocus={true} onChange={(event) => setSearch(event.target.value)} />
+        <input
+          value={search}
+          placeholder={translate('props.loop.items.search')}
+          spellCheck={false}
+          autoFocus={true}
+          onChange={(event) => setSearch(event.target.value)}
+        />
       </label>
       {items === undefined ? (
-        <div className="loop-settings-empty">Loading items…</div>
+        <div className="loop-settings-empty">{translate('props.loop.items.loading')}</div>
       ) : (
         <>
           <label className={`loop-settings-picker-row all${allShown ? ' chosen' : ''}`}>
             <input type="checkbox" checked={allShown} disabled={shown.length === 0} onChange={toggleAll} />
-            <span className="loop-settings-picker-title">Select all</span>
+            <span className="loop-settings-picker-title">{translate('props.loop.items.selectAll')}</span>
             <PickerCheck checked={allShown} />
           </label>
           <PickerList shown={shown} chosen={chosen} searching={search !== ''} pictures={props.pictures} thumb={props.thumb} onToggle={toggle} />
@@ -240,6 +256,7 @@ function PickerList(props: {
   readonly thumb: (picture: ItemPicture | undefined) => ReactNode;
   readonly onToggle: (id: string) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="loop-settings-picker-list">
       {props.shown.map((item) => {
@@ -253,7 +270,9 @@ function PickerList(props: {
           </label>
         );
       })}
-      {props.shown.length === 0 && <div className="loop-settings-empty">{props.searching ? 'No items match.' : 'This collection has no items.'}</div>}
+      {props.shown.length === 0 && (
+        <div className="loop-settings-empty">{props.searching ? translate('props.loop.items.noMatch') : translate('props.loop.items.empty')}</div>
+      )}
     </div>
   );
 }

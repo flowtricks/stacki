@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { setToolPathHome } from '../../../vendor/stacki/electron/lib/nodeTools';
 import { PublishingAccount } from '../../../vendor/stacki/electron/project/publishAccount';
 import { parseAccountRequest } from '../../../vendor/stacki/shared/ipc/publishAccount';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 const account = new PublishingAccount();
 
@@ -25,12 +26,7 @@ export async function accountRoute(
   const input = parseAccountRequest(body);
   setToolPathHome(homedir());
   // Hosted Studio owns its publishing credentials; visitors must never replace server logins.
-  const result = process.env['GITHUB_REPOSITORY']
-    ? {
-        kind: 'failed',
-        message: 'This Studio uses managed publishing credentials. Add accounts in Desktop or local Studio.',
-      }
-    : account.request(root, input);
+  const result = process.env['GITHUB_REPOSITORY'] ? { kind: 'failed', ...described('publish.studio.error.managedCredentials') } : account.request(root, input);
   response.setHeader('Content-Type', 'application/json');
   response.setHeader('Cache-Control', 'no-store');
   response.end(JSON.stringify(result));

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { ExternalIcon, PencilIcon } from './Icons';
 import { UnlinkIcon } from './richTextIcons';
 import { linkAddress } from './richTextModel';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 /** Where the bubble sits, in the editor's own coordinates. */
 export interface LinkBubblePlace {
@@ -24,6 +25,7 @@ export function HtmlLinkEditor(props: {
   readonly onRemove: () => void;
   readonly onClose: () => void;
 }) {
+  const translate = useTranslate();
   const { bubble } = props;
   const style = { top: bubble.place.top, left: bubble.place.left };
   if (bubble.kind === 'edit') {
@@ -34,19 +36,19 @@ export function HtmlLinkEditor(props: {
       <span className="html-link-href" title={bubble.href}>
         {bubble.href}
       </span>
-      <button type="button" className="html-tool" title="Edit link" onClick={props.onEdit}>
+      <button type="button" className="html-tool" title={translate('ui.htmlLink.edit')} onClick={props.onEdit}>
         <PencilIcon size={13} />
       </button>
       <button
         type="button"
         className="html-tool"
-        title="Open link"
+        title={translate('ui.htmlLink.open')}
         disabled={!/^(?:https?:|mailto:|tel:)/i.test(bubble.href)}
         onClick={() => window.open(bubble.href, '_blank', 'noopener,noreferrer')}
       >
         <ExternalIcon size={13} />
       </button>
-      <button type="button" className="html-tool" title="Remove link" onClick={props.onRemove}>
+      <button type="button" className="html-tool" title={translate('ui.htmlLink.remove')} onClick={props.onRemove}>
         <UnlinkIcon size={13} />
       </button>
     </div>
@@ -60,6 +62,7 @@ function LinkForm(props: {
   readonly onRemove: () => void;
   readonly onClose: () => void;
 }) {
+  const translate = useTranslate();
   const [typed, setTyped] = useState(props.href);
   const address = linkAddress(typed);
   return (
@@ -74,8 +77,8 @@ function LinkForm(props: {
       }}
     >
       <input
-        aria-label="Link address"
-        placeholder="Paste or type a link…"
+        aria-label={translate('ui.htmlLink.address')}
+        placeholder={translate('ui.htmlLink.placeholder')}
         value={typed}
         autoFocus
         spellCheck={false}
@@ -88,10 +91,10 @@ function LinkForm(props: {
         }}
       />
       <button type="submit" className="html-link-apply primary" disabled={address === undefined}>
-        Apply
+        {translate('ui.apply')}
       </button>
       {props.href !== '' && (
-        <button type="button" className="html-tool" title="Remove link" onClick={props.onRemove}>
+        <button type="button" className="html-tool" title={translate('ui.htmlLink.remove')} onClick={props.onRemove}>
           <UnlinkIcon size={13} />
         </button>
       )}

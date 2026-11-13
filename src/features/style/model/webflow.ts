@@ -21,6 +21,8 @@ import { styleTransport } from '../../../ipc/editorEnvironment';
 
 import { collectRules, parseRegion, renderEmbed, splitEmbed } from './css';
 import { assert } from '../../../../shared/core/assert';
+import { englishText, messageRef } from '../../../../shared/properties/i18n/messageRef';
+import { failureOf, type Failure } from './failureMessage';
 import { getHost, walkNodes, type HostNode } from './host';
 import type { ElementSnapshot, NativeStyle, ParsedRule, StyleRegion } from './styleTypes';
 import type { MatchTarget, TreeView } from './selectors';
@@ -379,7 +381,7 @@ export function embedWritesStarted(): number {
   return embedWriteCount;
 }
 
-export type EmbedWriteResult = { ok: true; code: string } | { ok: false; error: string };
+export type EmbedWriteResult = { ok: true; code: string } | Failure;
 
 // One file's writes, in order. Studio and the demo check each write against the
 // version it was made from (its `base`), so a write may only start once the one
@@ -459,8 +461,11 @@ async function writeFileNow(embedDocument: EmbedDocument, path: string): Promise
       await styleTransport.writeStyleFile({ filePath: path, css: code, base: before });
       // A <style> node's write goes through the page model, which the app
       // already snapshots — only stylesheets need their own history entry.
+      const stylesIn = messageRef('shell.history.stylesIn', { name: embedDocument.source.label });
       getHost().recordUndo?.({
-        label: `styles in ${embedDocument.source.label}`,
+        // The English name stays for readers that predate the reference; the app words the reference in the current language.
+        label: englishText(stylesIn),
+        labelRef: stylesIn,
         // One step per file per burst: a slider drag writes on every tick.
         coalesceKey: `css:${path}`,
         undo: () => writeStyleFileAndReload(embedDocument, path, before),
@@ -494,7 +499,7 @@ export async function writeEmbedDocument(
   const code = serializeDocument(embedDocument);
   const write = getHost().writeStyleNode;
   if (!write) {
-    return { ok: false, error: 'No page open to write into.' };
+    return failureOf('styleModel.write.noPage');
   }
   // A <style> block belonging to the page, while a component is open: there
   // is no such node in the model being edited. The write used to find
@@ -502,7 +507,7 @@ export async function writeEmbedDocument(
   // canvas would never show.
   try {
     if (write({ nodeId: origin.nodeId, filePath: origin.filePath }, code, !live) === false) {
-      return { ok: false, error: "Couldn't find that <style> block in the open file." };
+      return failureOf('styleModel.write.blockMissing', { tag: '<style>' });
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : '';
@@ -542,11 +547,11 @@ export async function writeFirstStyleBlock(embedDocument: EmbedDocument, classNa
   embedWriteCount += 1;
   const add = getHost().addStyleBlock;
   if (!add) {
-    return { ok: false, error: 'This page cannot take a style block here.' };
+    return failureOf('styleModel.write.pageCannotTakeBlock');
   }
   const code = serializeDocument(embedDocument);
   if (code.trim().length === 0) {
-    return { ok: false, error: 'There is no style to add yet.' };
+    return failureOf('styleModel.write.nothingToAdd');
   }
   try {
     const outcome = await add({ css: code, className, placement: PLACEMENT_END });
@@ -629,19 +634,16 @@ function reachesComponent(rule: ParsedRule): boolean {
 
 // Selecting the <style> node a rule lives in; a stylesheet isn't in the tree,
 // so there is nothing to navigate to.
-export async function navigateToEmbed(source: EmbedSource, _pageInstances?: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function navigateToEmbed(source: EmbedSource, _pageInstances?: unknown): Promise<{ ok: true } | Failure> {
   if (source.origin.kind === 'astro') {
-    return {
-      ok: false,
-      error: `These styles live in ${source.label} — open that ${source.origin.reach === 'page' ? 'page' : 'component'} to see them in the tree.`,
-    };
+    return failureOf(source.origin.reach === 'page' ? 'styleModel.navigate.livesInPage' : 'styleModel.navigate.livesInComponent', { label: source.label });
   }
   if (source.origin.kind !== 'node') {
-    return { ok: false, error: `${source.label} is a stylesheet — open it from the Assets panel.` };
+    return failureOf('styleModel.navigate.stylesheet', { label: source.label });
   }
   const select = getHost().selectNode;
   if (!select) {
-    return { ok: false, error: 'Nothing to select.' };
+    return failureOf('styleModel.navigate.nothing');
   }
   select(source.origin.nodeId);
   return { ok: true };

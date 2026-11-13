@@ -17,6 +17,7 @@ import { LIMITS } from '../../../shared/core/limits';
 import { sampleAt, samplePreview } from '../../editor/dataSample';
 import type { CatalogField } from './loopCatalog';
 import { fieldIcon, RowPopup } from './LoopRows';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 const PICKER_HEIGHT_PX_MAX = 420;
 
@@ -38,6 +39,7 @@ export function FieldPicker(props: {
   readonly extras: readonly FieldExtra[];
   readonly onChange: (value: string) => void;
 }) {
+  const translate = useTranslate();
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLButtonElement | undefined>(undefined);
   const attach = useCallback<RefCallback<HTMLButtonElement>>((element) => setAnchor(element ?? undefined), []);
@@ -53,7 +55,7 @@ export function FieldPicker(props: {
         ref={attach}
         type="button"
         className="dd-trigger loop-source-trigger"
-        aria-label="Field"
+        aria-label={translate('props.loop.field')}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
@@ -65,7 +67,7 @@ export function FieldPicker(props: {
         </span>
       </button>
       {open && (
-        <RowPopup anchor={anchor} heightPxMax={PICKER_HEIGHT_PX_MAX} label="Field" onClose={() => setOpen(false)}>
+        <RowPopup anchor={anchor} heightPxMax={PICKER_HEIGHT_PX_MAX} label={translate('props.loop.field')} onClose={() => setOpen(false)}>
           <div className="loop-source-picker">
             {props.extras.length > 0 && (
               <div className="loop-source-extras">

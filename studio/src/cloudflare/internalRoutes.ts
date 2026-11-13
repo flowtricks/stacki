@@ -1,3 +1,4 @@
+// i18n-ignore-file: HTTP API fallback text on the Studio server: it has no language, and the editor shows its own sentence for a failed request.
 import { draftKey, readCloudGitWorkspace, gitWorkspaceRoute, gitBundleRoute } from './gitWorkspaceRoutes';
 import { modelConfiguration } from '../features/ai/chatContracts';
 import { parseAssetState, emptyAssetState } from '../features/assets/assetStateTypes';

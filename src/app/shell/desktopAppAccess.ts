@@ -20,8 +20,9 @@ import {
   runAppNetFetch,
 } from '../../ipc/appAccessBridge';
 import type { ShellView } from '../App';
+import type { Translator } from '../../lib/i18n/localeContext';
 
-export function desktopAppFiles(appRef: React.MutableRefObject<ShellView>): AppHostFiles {
+export function desktopAppFiles(appRef: React.MutableRefObject<ShellView>, translateRef: React.MutableRefObject<Translator>): AppHostFiles {
   const projectPath = () => appRef.current.project.path;
   return {
     run: async (appId, operation, label) => {
@@ -34,7 +35,7 @@ export function desktopAppFiles(appRef: React.MutableRefObject<ShellView>): AppH
         return answer;
       }
       if (snapshotChars(change) > APP_FILE_LIMITS.undoSnapshotCharsMax) {
-        appRef.current.showToast(`${label}: too large to undo`, 'info');
+        appRef.current.showToast(translateRef.current('shell.apps.tooLargeToUndo', { label }), 'info');
         return answer;
       }
       const restore = (states: readonly AppFileState[]) => async (): Promise<void> => {

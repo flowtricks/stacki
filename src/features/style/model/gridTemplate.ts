@@ -3,6 +3,8 @@
 // expands `repeat(n, …)` and drops [line-name] tokens so the list is one entry per
 // visible track; writing emits an explicit space-separated list (Webflow's native
 // API drops some CSS functions, so we avoid repeat() on write).
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
 
 /** Split a track list on TOP-LEVEL whitespace (parens / brackets protect commas,
  *  minmax(), repeat(), and [line names]). */
@@ -218,13 +220,13 @@ export function isFixedSizeTrack(track: string): boolean {
 }
 
 /** Short human label for a track row (Webflow-style). */
-export function trackLabel(track: string): string {
+export function trackLabel(track: string, translate: Translator = ENGLISH_TRANSLATE): string {
   const size = parseTrackSize(track);
   if (size.mode === 'minmax') {
-    return `Min/Max: ${size.min} / ${size.max}`;
+    return translate('styleModel.grid.track.minMax', { min: size.min, max: size.max });
   }
   const sizeValue = size.value.trim();
-  return sizeValue.toLowerCase() === 'auto' || !sizeValue ? 'Auto' : sizeValue;
+  return sizeValue.toLowerCase() === 'auto' || !sizeValue ? translate('styleModel.grid.track.auto') : sizeValue;
 }
 
 // ── grid-template-areas ──
@@ -317,19 +319,21 @@ export function serializeAreas(areas: GridArea[]): string {
 }
 
 /** The list-row label: `{name} Row {rowStart} / Col {colStart}` (Webflow-style). */
-export function areaLabel(area: GridArea): string {
-  return `${area.name} Row ${area.rowStart} / Col ${area.colStart}`;
+export function areaLabel(area: GridArea, translate: Translator = ENGLISH_TRANSLATE): string {
+  return translate('styleModel.grid.area.position', { name: area.name, row: area.rowStart, column: area.colStart });
 }
 
 /** A unique `Area` / `Area-2` / … name not already used. */
 export function nextAreaName(areas: GridArea[]): string {
   const used = new Set(areas.map((area) => area.name));
   if (!used.has('Area')) {
+    // i18n-ignore: the generated name is an identifier written into the user's grid-template-areas.
     return 'Area';
   }
   const candidateCount = areas.length + 2;
   for (let number = 2; number <= candidateCount; number += 1) {
     if (!used.has(`Area-${number}`)) {
+      // i18n-ignore: the generated name is an identifier written into the user's grid-template-areas.
       return `Area-${number}`;
     }
   }

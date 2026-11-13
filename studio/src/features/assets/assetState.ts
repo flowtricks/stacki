@@ -1,3 +1,4 @@
+import { ReferencedError } from '../../shared/referencedError';
 import { gitDraftHeaders } from '../history/gitWorkspaceStorage';
 import { mkdir, readFile, rename, writeFile, rm, rmdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -25,7 +26,7 @@ export async function saveAssetState(root: string, state: AssetState) {
       signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) {
-      throw new Error('Could not persist asset changes');
+      throw new ReferencedError('assets.error.changesNotSaved');
     }
   }
   await writeLocalState(root, body);
@@ -38,7 +39,7 @@ export async function restoreAssetState(root: string) {
       signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) {
-      throw new Error('Could not restore asset changes');
+      throw new ReferencedError('assets.error.changesNotRestored');
     }
     await writeLocalState(root, JSON.stringify(parseAssetState(await response.json())));
   }

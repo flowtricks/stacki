@@ -15,6 +15,7 @@
 // edits are written there (model/componentStyleWrite.ts). An expression the
 // conditional model cannot read is shown read-only, with the controls disabled.
 
+import { useTranslate, useTranslateDescribed } from '../../../lib/i18n/useTranslate';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../../shared/core/assert';
 import { readInlineStyle } from '../../../../shared/engine/inlineStyle';
@@ -136,6 +137,8 @@ export function useInlineCard(
   inline: InlineState,
   panel: { readonly deselect: () => void; readonly setSaveError: (message: string | undefined) => void },
 ): StyleCardProps {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { nodeId, setPickedFor, branchKey, setBranchKey } = inline;
   const { deselect, setSaveError } = panel;
   const style = chipStyleOf(inline, card.snapshot);
@@ -153,7 +156,7 @@ export function useInlineCard(
     const hostText = attributeText(findNode(host.nodes, nodeId), 'string');
     const outcome = inlineStyleWrite(inlineEditBase(hostText, nodeId, heldRef.current), properties, declaration);
     if (outcome.tag === 'refused') {
-      refuse(outcome.message);
+      refuse(translateDescribed(outcome));
       return;
     }
     setSaveError(undefined);
@@ -169,7 +172,7 @@ export function useInlineCard(
     const current = currentExpression(style, nodeId, heldRef.current);
     const read = current === undefined ? undefined : readStyleBranches(current);
     if (current === undefined || read?.tag !== 'branches') {
-      refuse('The style attribute changed shape; pick the chip again to edit it.');
+      refuse(translate('styleModel.embed.inline.changedShape'));
       return;
     }
     const branch = read.branches.find((entry) => entry.key === selectedBranch(style, branchKey).key);
@@ -179,7 +182,7 @@ export function useInlineCard(
     }
     const written = writeStyleBranch(current, branch, nextBody);
     if (written.tag === 'refused') {
-      refuse(written.message);
+      refuse(translateDescribed(written));
       return;
     }
     setSaveError(undefined);
@@ -189,7 +192,7 @@ export function useInlineCard(
     writeBranch((branch) => {
       const outcome = inlineStyleWrite(branch.body, properties, declaration);
       if (outcome.tag === 'refused') {
-        refuse(outcome.message);
+        refuse(translateDescribed(outcome));
         return undefined;
       }
       return outcome.next ?? '';
@@ -261,7 +264,7 @@ export function useInlineCard(
     // Read-only, with why: the controls stay, disabled (StyleCard.tsx).
     return {
       ...withChip,
-      inlineCode: { kind: 'readonly', code: style.code, reason: style.message },
+      inlineCode: { kind: 'readonly', code: style.code, reason: translateDescribed({ message: style.message, messageRef: style.messageRef }) },
       setProp: ignoreWrite,
       onAdd: ignoreWrite,
       liveSetProp: ignoreLive,
@@ -293,7 +296,7 @@ export function useInlineCard(
         }
         const outcome = plainStyleCommit(body);
         if (outcome.tag === 'refused') {
-          refuse(outcome.message);
+          refuse(translateDescribed(outcome));
           return;
         }
         setSaveError(undefined);
@@ -313,7 +316,7 @@ export function useInlineCard(
     selected: selectedBranch(style, branchKey),
     onSelect: setBranchKey,
     onCommit: (body) => writeBranch(() => body),
-    writesTo: style.source.kind === 'component' ? `Edits ${style.source.fileName} · all instances` : undefined,
+    writesTo: style.source.kind === 'component' ? translate('styleModel.embed.inline.writesTo', { file: style.source.fileName }) : undefined,
   };
   return { ...withChip, ...writes, inlineCode: { kind: 'branches', view } };
 }

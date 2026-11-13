@@ -4,6 +4,7 @@
 // Submission and terminal results are separate types, because backpressure is
 // not a rejection: a backpressured intent was never accepted and still belongs
 // to the persistence layer.
+// i18n-ignore-file: the engine has no catalog; describeRejection is the English sentence for logs and main-process replies, and the editor words each reason from REJECTION_KEYS (src/app/rejectionMessages.ts).
 import { assert } from '../core/assert';
 import { toFilePath, toIntentId, type Digest, type FilePath, type IntentId } from '../core/brand';
 import { digest, pathText } from '../core/boundary';

@@ -20,7 +20,9 @@ import {
   RepeatIcon,
   TextIcon,
 } from '../../ui/Icons';
-import { pathSteps } from '../../editor/dataSample';
+import { pathSteps, previewText, treeKindLabel } from '../../editor/dataSample';
+import type { TypedMessageRef, Translator } from '../../../shared/properties/i18n/messageRef';
+import { useTranslate, useTranslateRef } from '../../lib/i18n/useTranslate';
 import {
   entryPageOf,
   entryPath,
@@ -120,7 +122,7 @@ export function needOf(root: Pick<PickerNode, 'query' | 'importNeed'>): PickNeed
 // field an entry left unset, or data the app can't see the shape of. The path is still
 // what the chip says, so it is shown where it belongs and marked, rather than
 // leaving the picker looking like it doesn't know what the chip points at.
-function withCurrent(tree: readonly PickerNode[], current: string | undefined) {
+function withCurrent(tree: readonly PickerNode[], current: string | undefined, translate: Translator) {
   const flat = flatten(tree);
   if (!current) {
     return tree;
@@ -141,7 +143,7 @@ function withCurrent(tree: readonly PickerNode[], current: string | undefined) {
     key: anchor ? current.slice(anchor.path.length).replace(/^\./, '') : current,
     // "not in this entry" only for a field a collection entry left unset;
     // anything else says what is really known about it (dataPickerModel.ts).
-    kind: missingLabel(anchors),
+    kind: missingLabel(anchors, translate),
     preview: '',
     children: undefined,
     missing: true,
@@ -175,6 +177,8 @@ export interface PickerNode {
   readonly key: string;
   readonly kind: string;
   readonly preview: string;
+  /** The preview as a message reference when it is worded ("3 items"); `preview` is its English. */
+  readonly previewRef?: TypedMessageRef | undefined;
   readonly children: readonly PickerNode[] | undefined;
   readonly section?: string;
   readonly nav?: Navigation;
@@ -183,8 +187,11 @@ export interface PickerNode {
   readonly importNeed?: ImportNeed;
   /** Why the row cannot be bound (an imported function): it is drawn dimmed, says why, and picks nothing. */
   readonly unbindable?: string;
+  /** The reason as a message reference, so the picker can say it in the active language; `unbindable` is its English. */
+  readonly unbindableRef?: TypedMessageRef | undefined;
   /** A muted word in place of a value: a prop the instance does not pass and has no default reads "not set". */
   readonly note?: string;
+  readonly noteRef?: TypedMessageRef | undefined;
   /** A muted line under the name: where the row lives, when two rows could be mistaken for each other. */
   readonly detail?: string;
   readonly lazy?: boolean;
@@ -208,6 +215,7 @@ export interface DataPickerProps {
   readonly origin?: DataOrigin | undefined;
   readonly onWrite?: () => void;
   readonly onEdit?: (() => void) | undefined;
+  /** The footer's edit row; the picker's own "Edit" when absent. */
   readonly editLabel?: string;
   readonly footer?: boolean;
   /** Rows above the search, for what the field can do besides pick: "New Text property" in a component. */
@@ -225,7 +233,9 @@ export interface DataPickerProps {
 
 export default function DataPicker(props: DataPickerProps) {
   const allowCode = useCodeAccess();
-  const { entries, onStepItem, onPick, onWrite, onEdit, editLabel = 'Edit', footer = true, lead } = props;
+  const { entries, onStepItem, onPick, onWrite, onEdit, footer = true, lead } = props;
+  const translate = useTranslate();
+  const editLabel = props.editLabel ?? translate('props.dataPicker.edit');
   const state = useDataPicker(props);
   const { query, setQuery, searchRef, listRef } = state;
   const origin = props.origin;
@@ -242,7 +252,7 @@ export default function DataPicker(props: DataPickerProps) {
           stepping through them previews the page against other content and
           re-reads this list against it at the same time. */}
         {entries && entries.count > 1 && <EntryNavigation entries={entries} />}
-        <DataSearch value={query} label="Search data" inputRef={searchRef} onChange={setQuery} />
+        <DataSearch value={query} label={translate('props.dataPicker.search')} inputRef={searchRef} onChange={setQuery} />
         <DataPickerResults state={state} origin={origin} folding={props.sources ?? 'folded'} onPick={onPick} onStepItem={onStepItem} listRef={listRef} />
         {/* Above "Write an expression…", because it is about the thing already
           bound rather than about replacing it. Only ever rendered for a picker
@@ -257,7 +267,7 @@ export default function DataPicker(props: DataPickerProps) {
         {allowCode && footer && (
           <div className="dp-foot" onMouseDown={(event) => event.preventDefault()} onClick={onWrite}>
             <CodeIcon size={11} />
-            Write an expression…
+            {translate('props.dataPicker.writeExpression')}
           </div>
         )}
       </div>
@@ -281,6 +291,7 @@ function DataPickerResults({
   readonly onStepItem: DataPickerProps['onStepItem'];
   readonly listRef: React.RefObject<HTMLDivElement>;
 }) {
+  const translate = useTranslate();
   const { matches, tree } = state;
   return (
     <div className="dp-list" ref={listRef}>
@@ -293,19 +304,20 @@ function DataPickerResults({
         <DataRoots nodes={tree} origin={origin} folding={folding} state={state} onPick={onPick} onStepItem={onStepItem} />
       )}
       {((matches && !matches.length) || (!matches && !tree.length)) && (
-        <div className="dp-empty">{matches ? 'Nothing matches' : 'No data in scope here — add a prop to this file, or a const to its frontmatter.'}</div>
+        <div className="dp-empty">{matches ? translate('props.dataPicker.noMatch') : translate('props.dataPicker.empty')}</div>
       )}
     </div>
   );
 }
 
 function useDataPicker({ tree: rawTree, current, onExpand, propSettings }: DataPickerProps) {
+  const translate = useTranslate();
   // Which folded source groups are open, by section, for as long as the picker is.
   // A group holding the current binding starts open, so the picker opens ON it.
   const [sections, setSections] = useState<ReadonlySet<string>>(() => sectionsHolding(rawTree ?? [], current));
   const [query, setQuery] = useState('');
   const [settingsKey, setSettingsKey] = useState<string | undefined>(undefined);
-  const tree = useMemo(() => withCurrent(rawTree ?? [], current), [rawTree, current]);
+  const tree = useMemo(() => withCurrent(rawTree ?? [], current, translate), [rawTree, current, translate]);
   // Which entry each list of entries shows: the one the binding names, else the first.
   const [pages, setPages] = useState<EntryPages>(() => pagesOfPath(current));
   const [open, setOpen] = useState(() => {
@@ -455,6 +467,8 @@ interface RowProps {
   readonly onStepItem: DataPickerProps['onStepItem'];
 }
 function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: RowProps) {
+  const translate = useTranslate();
+  const translateRef = useTranslateRef();
   assert(depth <= LIMITS.treeDepthMax, 'DataPicker: render depth limit exceeded');
   const { open, pages, current, selectedRef, toggle, stepEntry } = state;
   const expandable = !!node.children?.length || node.lazy;
@@ -470,7 +484,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
       <DataTreeRow
         depth={depth}
         label={showPath ? node.path : node.key}
-        title={`${node.path} — ${node.unbindable ?? node.kind}`}
+        title={`${node.path} — ${node.unbindableRef !== undefined ? translateRef(node.unbindableRef) : (node.unbindable ?? treeKindLabel(node.kind, translate))}`}
         detail={node.detail}
         expandable={expandable === true}
         open={isOpen}
@@ -491,9 +505,9 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
           ) : page !== undefined ? (
             <ItemNavigation path={node.path} nav={page} onStepItem={(_path, step) => stepEntry(node, step)} />
           ) : node.note !== undefined ? (
-            <span className="dp-val kind">{node.note}</span>
+            <span className="dp-val kind">{node.noteRef !== undefined ? translateRef(node.noteRef) : node.note}</span>
           ) : (
-            <PreviewValue preview={node.preview} kind={node.kind} image={node.image} />
+            <PreviewValue preview={previewText(node, translate)} kind={treeKindLabel(node.kind, translate)} image={node.image} />
           )
         }
         end={state.keyOf !== undefined && <PropSettingsSlot propKey={settingsKeyOf(node, state.keyOf)} onOpen={state.openSettings} />}
@@ -512,7 +526,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
             ))}
             {shown.unread && (
               <div className="dp-loading" style={{ paddingLeft: dataRowIndentPx(depth + 1) }}>
-                Reading one entry…
+                {translate('props.dataPicker.reading')}
               </div>
             )}
           </>
@@ -522,7 +536,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
           ))
         ) : node.lazy ? (
           <div className="dp-loading" style={{ paddingLeft: dataRowIndentPx(depth + 1) }}>
-            Reading one entry…
+            {translate('props.dataPicker.reading')}
           </div>
         ) : undefined)}
     </React.Fragment>
@@ -532,6 +546,7 @@ function DataRow({ node, depth, showPath, root, state, onPick, onStepItem }: Row
 // a collection is a CMS collection to the person reading the list, as in the
 // left rail. Its section heading carries Astro's.
 function DataRowLead({ node, depth }: { readonly node: PickerNode; readonly depth: number }) {
+  const translate = useTranslate();
   if (depth > 0) {
     return undefined;
   }
@@ -540,7 +555,7 @@ function DataRowLead({ node, depth }: { readonly node: PickerNode; readonly dept
   }
   if (node.section === 'collections') {
     return (
-      <span className="dp-kind-icon" title="Content collection">
+      <span className="dp-kind-icon" title={translate('props.dataPicker.contentCollection')}>
         <CmsIcon size={12} />
       </span>
     );
@@ -552,14 +567,15 @@ function DataRowLead({ node, depth }: { readonly node: PickerNode; readonly dept
 // prop's: the slot is there either way, so showing the gear moves nothing and
 // the column of values beside it stays one column.
 function PropSettingsSlot({ propKey, onOpen }: { readonly propKey: string | undefined; readonly onOpen: (key: string) => void }) {
+  const translate = useTranslate();
   return (
     <span className="dp-settings-slot">
       {propKey !== undefined && (
         <button
           type="button"
           className="dp-settings"
-          aria-label={`Edit ${propKey} settings`}
-          title="Edit settings"
+          aria-label={translate('props.dataPicker.editPropSettings', { name: propKey })}
+          title={translate('props.dataPicker.editSettings')}
           // Pressing it keeps the caret in the field, as pressing the row does.
           onMouseDown={(event) => event.preventDefault()}
           onClick={(event) => {
@@ -592,9 +608,10 @@ function DataRoots({
   readonly onPick: DataPickerProps['onPick'];
   readonly onStepItem: DataPickerProps['onStepItem'];
 }) {
+  const translate = useTranslate();
   let section: string | undefined;
   return (nodes || []).map((node) => {
-    const heads = node.section && node.section !== section ? sectionHeads(node.section, section, origin) : [];
+    const heads = node.section && node.section !== section ? sectionHeads(node.section, section, origin, translate) : [];
     section = node.section || section;
     const folds = folding === 'folded' && isSourceSection(section);
     // A folded group's rows are not drawn at all, so nothing in it can be reached until it is opened.
@@ -664,9 +681,16 @@ function SectionIcon({ section }: { readonly section: string | undefined }) {
 }
 
 function EntryNavigation({ entries }: { readonly entries: Entries }) {
+  const translate = useTranslate();
   return (
     <div className="dp-entry">
-      <button type="button" className="dp-step" title="Previous entry" onMouseDown={(event) => event.preventDefault()} onClick={() => entries.onStep(-1)}>
+      <button
+        type="button"
+        className="dp-step"
+        title={translate('props.dataPicker.previousEntry')}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => entries.onStep(-1)}
+      >
         <ChevronLeftIcon size={12} />
       </button>
       <span className="dp-entry-label" title={entries.label}>
@@ -675,7 +699,13 @@ function EntryNavigation({ entries }: { readonly entries: Entries }) {
       <span className="dp-entry-count">
         {entries.index + 1}/{entries.count}
       </span>
-      <button type="button" className="dp-step" title="Next entry" onMouseDown={(event) => event.preventDefault()} onClick={() => entries.onStep(1)}>
+      <button
+        type="button"
+        className="dp-step"
+        title={translate('props.dataPicker.nextEntry')}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => entries.onStep(1)}
+      >
         <ChevronRightIcon size={12} />
       </button>
     </div>
@@ -686,43 +716,44 @@ function EntryNavigation({ entries }: { readonly entries: Entries }) {
 // number, a switch, attributes, an image or a list of items. Other kinds have
 // no icon of their own.
 function PropKindIcon({ kind }: { readonly kind: string }) {
+  const translate = useTranslate();
   switch (kind) {
     case 'string':
     case 'text':
     case 'enum':
       return (
-        <span className="dp-kind-icon" title="Text">
+        <span className="dp-kind-icon" title={translate('props.dataPicker.kind.text')}>
           <TextIcon size={11} />
         </span>
       );
     case 'number':
       return (
-        <span className="dp-kind-icon" title="Number">
+        <span className="dp-kind-icon" title={translate('props.dataPicker.kind.number')}>
           <FieldNumberIcon size={11} />
         </span>
       );
     case 'boolean':
       return (
-        <span className="dp-kind-icon" title="Switch">
+        <span className="dp-kind-icon" title={translate('props.dataPicker.kind.switch')}>
           <FieldSwitchIcon size={11} />
         </span>
       );
     case 'rest props':
       return (
-        <span className="dp-kind-icon" title="Attributes">
+        <span className="dp-kind-icon" title={translate('props.dataPicker.kind.attributes')}>
           <BracesIcon size={11} />
         </span>
       );
     case 'image':
     case 'image url':
       return (
-        <span className="dp-kind-icon" title="Image">
+        <span className="dp-kind-icon" title={translate('props.dataPicker.kind.image')}>
           <ElementImageIcon size={11} />
         </span>
       );
     case 'list':
       return (
-        <span className="dp-kind-icon" title="List">
+        <span className="dp-kind-icon" title={translate('props.dataPicker.kind.list')}>
           <RepeatIcon size={11} />
         </span>
       );

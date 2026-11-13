@@ -1,3 +1,4 @@
+// i18n-ignore-file: breakpoint names are English next to their `labelKey`, which the panel translates.
 // Native Webflow class styles — the responsive/breakpoint model + the pure
 // helpers that project a NativeModel (read in webflow.ts) into the resolved
 // style panel. Class styles are read/written through the Designer Style API
@@ -5,6 +6,8 @@
 // Designer API, so they never appear here — those edits fall back to an embed.
 
 import { assert } from '../../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
 import { STATES, type NativeContribution, type StateKey, type StyleContext } from './resolved';
 import type { BreakpointId, NativeModel } from './styleTypes';
 import { nestedQueryOfKey, splitSourcedKey } from './queryWrapper';
@@ -16,6 +19,7 @@ export type NativeStyleOptions = { breakpoint?: BreakpointId; pseudo?: string };
 export type BreakpointDefinition = {
   id: BreakpointId;
   label: string;
+  labelKey: MessageKey;
   /** Canonical `@media` condition, used to merge an equivalent embed query. */
   media: string | undefined;
 };
@@ -23,13 +27,13 @@ export type BreakpointDefinition = {
 // Webflow's fixed breakpoint scale, largest → smallest (the order the dropdown
 // lists them after Base). `main` is the base breakpoint (= the panel's Base).
 export const BREAKPOINTS: readonly BreakpointDefinition[] = [
-  { id: 'xxl', label: 'Desktop ≥1920', media: '(min-width: 1920px)' },
-  { id: 'xl', label: 'Desktop ≥1440', media: '(min-width: 1440px)' },
-  { id: 'large', label: 'Desktop ≥1280', media: '(min-width: 1280px)' },
-  { id: 'main', label: 'Base', media: undefined },
-  { id: 'medium', label: 'Tablet', media: '(max-width: 991px)' },
-  { id: 'small', label: 'Mobile (L)', media: '(max-width: 767px)' },
-  { id: 'tiny', label: 'Mobile', media: '(max-width: 479px)' },
+  { id: 'xxl', label: 'Desktop ≥1920', labelKey: 'styleModel.breakpoint.xxl', media: '(min-width: 1920px)' },
+  { id: 'xl', label: 'Desktop ≥1440', labelKey: 'styleModel.breakpoint.xl', media: '(min-width: 1440px)' },
+  { id: 'large', label: 'Desktop ≥1280', labelKey: 'styleModel.breakpoint.large', media: '(min-width: 1280px)' },
+  { id: 'main', label: 'Base', labelKey: 'styleModel.breakpoint.main', media: undefined },
+  { id: 'medium', label: 'Tablet', labelKey: 'styleModel.breakpoint.medium', media: '(max-width: 991px)' },
+  { id: 'small', label: 'Mobile (L)', labelKey: 'styleModel.breakpoint.small', media: '(max-width: 767px)' },
+  { id: 'tiny', label: 'Mobile', labelKey: 'styleModel.breakpoint.tiny', media: '(max-width: 479px)' },
 ];
 
 function isBreakpointId(value: string): value is BreakpointId {
@@ -51,7 +55,10 @@ const PSEUDO_FOR_STATE: Record<StateKey, string | undefined> = {
   ':active': 'active',
 };
 
-export const breakpointLabel = (id: BreakpointId): string => BREAKPOINTS.find((bp) => bp.id === id)?.label ?? id;
+export function breakpointLabel(id: BreakpointId, translate: Translator = ENGLISH_TRANSLATE): string {
+  const definition = BREAKPOINTS.find((bp) => bp.id === id);
+  return definition === undefined ? id : translate(definition.labelKey);
+}
 
 /** The `@media` condition for a breakpoint (e.g. `(max-width: 767px)`), or undefined for
  *  main/base. */
@@ -176,6 +183,7 @@ export function buildStyleContexts(
    *  own queries. They lead the custom-query group; ones reaching this element
    *  from somewhere else in the project follow. */
   ownContexts: ReadonlySet<string> = new Set(),
+  translate: Translator = ENGLISH_TRANSLATE,
 ): StyleContext[] {
   const list: StyleContext[] = [];
   const usedBp = new Set<BreakpointId>();
@@ -184,7 +192,7 @@ export function buildStyleContexts(
 
   embedContextKeys.forEach((key) => {
     if (key === '') {
-      list.push({ key: '', label: 'Base', breakpoint: 'main', embedAtContext: '' });
+      list.push({ key: '', label: translate('styleModel.breakpoint.main'), breakpoint: 'main', embedAtContext: '' });
       usedBp.add('main');
       return;
     }
@@ -218,7 +226,7 @@ export function buildStyleContexts(
       usedBp.add(bp);
       list.push({
         key: `bp:${bp}`,
-        label: breakpointLabel(bp),
+        label: breakpointLabel(bp, translate),
         breakpoint: bp,
         embedAtContext: placed,
       });
@@ -244,7 +252,7 @@ export function buildStyleContexts(
     usedBp.add(definition.id);
     list.push({
       key: `bp:${definition.id}`,
-      label: definition.label,
+      label: translate(definition.labelKey),
       breakpoint: definition.id,
       embedAtContext: undefined,
     });

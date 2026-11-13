@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
 import type { PropertyEditing } from '../../shared/properties/propertyEditing';
 import { isAstroProps, propertyKey, syntaxNodes } from './propertySyntax';
@@ -16,7 +17,8 @@ interface Work {
   readonly path: readonly string[];
 }
 interface Branch {
-  readonly condition: string;
+  /** Which branch of the union: the discriminating field and its value (code), or its position when no field tells them apart. */
+  readonly condition: { readonly kind: 'named'; readonly label: string } | { readonly kind: 'numbered'; readonly number: number };
   readonly fields: ReadonlyMap<string, ts.PropertySignature>;
 }
 interface Contract {
@@ -30,7 +32,7 @@ export interface PropertyContracts {
   readonly names: ReadonlySet<string>;
   readonly editable: ReadonlyMap<string, ts.PropertySignature>;
   readonly editing: (name: string) => PropertyEditing;
-  readonly conditions: (name: string) => readonly string[];
+  readonly conditions: (name: string) => readonly Described[];
 }
 
 // A common member must be the same declaration in both the public contract and
@@ -40,7 +42,7 @@ export function readPropertyContracts(document: PropertySyntax): PropertyContrac
   for (const statement of document.syntax.statements) {
     if (ts.isTypeAliasDeclaration(statement) || ts.isInterfaceDeclaration(statement)) {
       if (declarations.has(statement.name.text)) {
-        return unavailableContracts('Duplicate type declarations require editing in source.');
+        return unavailableContracts(described('props.contract.duplicateTypes'));
       }
       declarations.set(statement.name.text, statement);
     }
@@ -54,7 +56,7 @@ export function readPropertyContracts(document: PropertySyntax): PropertyContrac
   const runtimeContracts = assertions.map((node) => readContract(node.type, declarations, attributes, imports));
   const contracts = [publicContract, ...runtimeContracts];
   const editable = new Map<string, ts.PropertySignature>();
-  const reasons = new Map<string, string>();
+  const reasons = new Map<string, Described>();
   for (const [name, usages] of publicContract.members) {
     const member = usages[0]?.member;
     assert(member !== undefined, 'Contract field has a declaration');
@@ -73,23 +75,22 @@ export function readPropertyContracts(document: PropertySyntax): PropertyContrac
       editable.has(name)
         ? { kind: 'editable' }
         : inheritedAttributeCanOverride(name, contracts)
-          ? {
-              kind: 'override',
-              reason: 'This HTML attribute will be declared locally when you save it.',
-            }
-          : {
-              kind: 'restricted',
-              reason: reasons.get(name) ?? 'This prop is inherited or imported. Edit its declaration in source.',
-            },
+          ? withReason('override', described('props.contract.override'))
+          : withReason('restricted', reasons.get(name) ?? described('props.contract.inherited')),
     conditions: (name) => contractConditions(publicContract, name),
   };
 }
 
-function unavailableContracts(reason: string): PropertyContracts {
+/** An override or restricted permission, its reason in English and as a reference the window translates. */
+export function withReason(kind: 'override' | 'restricted', reason: Described): PropertyEditing {
+  return { kind, reason: reason.message, reasonRef: reason.messageRef };
+}
+
+function unavailableContracts(reason: Described): PropertyContracts {
   return {
     names: new Set(),
     editable: new Map(),
-    editing: () => ({ kind: 'restricted', reason }),
+    editing: () => withReason('restricted', reason),
     conditions: () => [],
   };
 }
@@ -102,22 +103,22 @@ function inheritedAttributeCanOverride(name: string, contracts: readonly Contrac
   return contracts.every((contract) => contract.inheritedAttributes && !contract.members.has(name));
 }
 
-function commonMemberRestriction(name: string, contract: Contract, runtimeContracts: readonly Contract[]): string | undefined {
+function commonMemberRestriction(name: string, contract: Contract, runtimeContracts: readonly Contract[]): Described | undefined {
   const usages = contract.members.get(name) ?? [];
   if (usages.some((usage) => usage.conditional)) {
-    return 'This prop has variant rules. Edit its declaration in source to preserve those rules.';
+    return described('props.contract.variantRules');
   }
   if (new Set(usages.map((usage) => usage.member)).size !== 1) {
-    return 'This prop combines multiple declarations. Edit those declarations in source.';
+    return described('props.contract.separateDeclarations');
   }
   if (!contract.complete) {
-    return 'This prop depends on a shared or computed type that must be edited in source.';
+    return described('props.contract.computedType');
   }
   const member = usages[0]?.member;
   for (const runtime of runtimeContracts) {
     const matches = runtime.members.get(name) ?? [];
     if (!runtime.complete || matches.length === 0 || matches.some((match) => match.member !== member || match.conditional)) {
-      return 'This prop has a separate runtime type. Edit both declarations together in source.';
+      return described('props.contract.runtimeType');
     }
   }
   return undefined;
@@ -126,12 +127,16 @@ function commonMemberRestriction(name: string, contract: Contract, runtimeContra
 // A member whose own type is defined elsewhere or computed: its options (or
 // shape) are not this file's text, so the panel cannot show or write them. A
 // same-file alias of literal options is editable (propertyTypes.ts, optionAliasOf).
-function memberTypeRestriction(member: ts.PropertySignature, declarations: ReadonlyMap<string, Declaration>, imports: ReadonlySet<string>): string | undefined {
+function memberTypeRestriction(
+  member: ts.PropertySignature,
+  declarations: ReadonlyMap<string, Declaration>,
+  imports: ReadonlySet<string>,
+): Described | undefined {
   const type = member.type;
   if (type === undefined) {
     return undefined;
   }
-  const reason = 'This prop depends on a shared or computed type that must be edited in source.';
+  const reason = described('props.contract.computedType');
   if (ts.isMappedTypeNode(type) || ts.isConditionalTypeNode(type) || ts.isIndexedAccessTypeNode(type)) {
     return reason;
   }
@@ -352,7 +357,9 @@ function unionBranches(node: ts.UnionTypeNode): readonly Branch[] {
   const discriminator = [...(fields[0]?.keys() ?? [])].find((name) => fields.every((branch) => literalBranchValue(branch.get(name)?.type) !== undefined));
   return fields.map((branch, index) => ({
     fields: branch,
-    condition: discriminator ? `${discriminator} = ${literalBranchValue(branch.get(discriminator)?.type)}` : `Variant branch ${index + 1}`,
+    condition: discriminator
+      ? { kind: 'named', label: `${discriminator} = ${literalBranchValue(branch.get(discriminator)?.type)}` }
+      : { kind: 'numbered', number: index + 1 },
   }));
 }
 
@@ -389,21 +396,17 @@ function literalBranchValue(type: ts.TypeNode | undefined): string | undefined {
   return types.every((value) => ts.isLiteralTypeNode(value)) ? type.getText() : undefined;
 }
 
-function contractConditions(contract: Contract, name: string): readonly string[] {
+function contractConditions(contract: Contract, name: string): readonly Described[] {
   const common = contract.members.get(name)?.find((usage) => !usage.conditional)?.member;
   const conditions = contract.branches
     .filter((branches) => branches.some((branch) => branch.fields.has(name)))
     .flatMap((branches) =>
       branches.map((branch) => {
         const member = branch.fields.get(name) ?? common;
-        const state = member
-          ? member.type?.kind === ts.SyntaxKind.NeverKeyword
-            ? 'not allowed'
-            : member.questionToken
-              ? 'optional'
-              : 'required'
-          : 'not declared';
-        return `${branch.condition}: ${state}`;
+        const state = member ? (member.type?.kind === ts.SyntaxKind.NeverKeyword ? 'Never' : member.questionToken ? 'Optional' : 'Required') : 'Undeclared';
+        return branch.condition.kind === 'named'
+          ? described(`props.contract.condition.named${state}`, { branch: branch.condition.label })
+          : described(`props.contract.condition.numbered${state}`, { number: branch.condition.number });
       }),
     );
   assert(conditions.length <= PROPERTY_LIMITS.fieldsMax, 'Property variant conditions are bounded');

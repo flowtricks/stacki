@@ -23,6 +23,7 @@ const assert = require('node:assert/strict');
 const load = require('../../helpers/rendererModule');
 
 const flow = load('src/features/apps/publishFlow.ts');
+const { ENGLISH_TRANSLATE } = load('shared/properties/i18n/englishTranslator.ts');
 
 const repository = (owner, name, stackiApp, organization) => ({
   owner,
@@ -71,11 +72,11 @@ test('a share offers the account first, then its organizations, private by defau
     { login: 'acme', kind: 'organization' },
     { login: 'zeta-co', kind: 'organization' },
   ]);
-  const choices = flow.visibilityChoices('acme', 'organization');
+  const choices = flow.visibilityChoices('acme', 'organization', ENGLISH_TRANSLATE);
   assert.equal(choices[0].visibility, 'private', 'private is the default and comes first');
   assert.equal(choices[0].detail, 'People in acme can install it with Load App From GitHub.');
   assert.match(choices[1].detail, /Adds an MIT license/);
-  assert.match(flow.visibilityChoices('octocat', 'user')[0].detail, /Only you and people you invite/);
+  assert.match(flow.visibilityChoices('octocat', 'user', ENGLISH_TRANSLATE)[0].detail, /Only you and people you invite/);
 });
 
 test('the owner menu groups each signed-in account with its organizations, keys unique across accounts', () => {
@@ -95,7 +96,7 @@ test('the owner menu groups each signed-in account with its organizations, keys 
 test('the name check: rules first, then existence, available only where the listing is complete', () => {
   const listed = { kind: 'ready', repositories: [repository('octocat', 'Heat-Map', true, false), repository('acme', 'tools', false, true)] };
   const status = (owner, ownerKind, name, listing = listed) => flow.repositoryNameStatus({ owner, ownerKind, name, listing });
-  assert.deepEqual(status('octocat', 'user', ''), { kind: 'invalid', message: 'Name the repository.' });
+  assert.deepEqual(status('octocat', 'user', ''), { kind: 'invalid', message: 'Name the repository.', messageRef: { key: 'apps.publish.nameEmpty' } });
   assert.equal(status('octocat', 'user', 'bad name').kind, 'invalid');
   assert.equal(status('octocat', 'user', 'tool.git').kind, 'invalid');
   assert.deepEqual(status('octocat', 'user', 'heat-map'), { kind: 'exists' }, 'GitHub compares names without case');
@@ -114,21 +115,21 @@ test('the name check: rules first, then existence, available only where the list
 });
 
 test('the confirmations say what becomes public and what is committed', () => {
-  const makePublic = flow.makePublicConfirmation('acme', 'tool');
+  const makePublic = flow.makePublicConfirmation('acme', 'tool', ENGLISH_TRANSLATE);
   assert.equal(makePublic.title, 'Make acme/tool public?');
   assert.match(makePublic.body, /all of its code and its whole history/);
   assert.equal(makePublic.confirmLabel, 'Make public');
-  assert.match(flow.licenseConfirmation('acme', 'tool', 'Acme Inc', 2026).body, /Copyright \(c\) 2026 Acme Inc/);
-  assert.match(flow.publicShareConfirmation('acme', 'tool').title, /public repository acme\/tool/);
+  assert.match(flow.licenseConfirmation('acme', 'tool', 'Acme Inc', 2026, ENGLISH_TRANSLATE).body, /Copyright \(c\) 2026 Acme Inc/);
+  assert.match(flow.publicShareConfirmation('acme', 'tool', ENGLISH_TRANSLATE).title, /public repository acme\/tool/);
 });
 
 test('each refusal to make a repository public says why and what to do', () => {
   const settingsURL = 'https://github.com/acme/tool/settings';
-  assert.match(flow.visibilityRefusal({ kind: 'forbidden', reason: 'scope', settingsURL }).title, /cannot change repositories/);
-  assert.match(flow.visibilityRefusal({ kind: 'forbidden', reason: 'admin', settingsURL }).title, /Only an admin/);
-  assert.match(flow.visibilityRefusal({ kind: 'forbidden', reason: 'policy', settingsURL }).title, /does not allow public repositories/);
+  assert.match(flow.visibilityRefusal({ kind: 'forbidden', reason: 'scope', settingsURL }, ENGLISH_TRANSLATE).title, /cannot change repositories/);
+  assert.match(flow.visibilityRefusal({ kind: 'forbidden', reason: 'admin', settingsURL }, ENGLISH_TRANSLATE).title, /Only an admin/);
+  assert.match(flow.visibilityRefusal({ kind: 'forbidden', reason: 'policy', settingsURL }, ENGLISH_TRANSLATE).title, /does not allow public repositories/);
   assert.deepEqual(
-    ['public', 'topic', 'release', 'license', 'scan'].map((check) => flow.marketplaceCheckLabel(check)),
+    ['public', 'topic', 'release', 'license', 'scan'].map((check) => flow.marketplaceCheckLabel(check, ENGLISH_TRANSLATE)),
     [
       'The repository is public',
       'It carries the stacki-app topic',

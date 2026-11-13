@@ -1,6 +1,8 @@
 import Popup from '../../../vendor/stacki/src/ui/Popup';
 import Dropdown, { type DropdownOption } from '../../../vendor/stacki/src/ui/Dropdown';
 import { useState } from 'react';
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
+import type { Translator } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import JSON5 from 'json5';
 import { ValueFields } from '../../shared/ui/ValueFields';
 import type { PropField } from '../../../vendor/stacki/shared/properties/propSchema';
@@ -16,6 +18,7 @@ interface PropertyProps {
   readonly change: (value: string | undefined, expression: boolean) => void;
 }
 export function Property({ field, value, expression, applies, options, fallback, classes, change }: PropertyProps) {
+  const translate = useTranslate();
   const [mode, setMode] = useState(expression && !field.shape && !['boolean', 'number'].includes(field.type));
   let literal: unknown;
   let literalError = '';
@@ -23,7 +26,7 @@ export function Property({ field, value, expression, applies, options, fallback,
     try {
       literal = JSON5.parse(value ?? (field.shapeIsList ? '[]' : '{}'));
     } catch {
-      literalError = 'This value uses an expression. Switch to {} to edit its source.';
+      literalError = translate('settings.element.usesExpression');
     }
   }
   const template = Object.fromEntries((field.shape ?? []).map((item) => [item.name, item.type === 'number' ? 0 : item.type === 'boolean' ? false : '']));
@@ -49,23 +52,29 @@ export function Property({ field, value, expression, applies, options, fallback,
       {field.name === 'class' && suggest && !mode && (
         <ClassSuggestions onClose={() => setSuggest(false)} classes={classes} shown={shown} last={last} change={change} />
       )}
-      {!applies && <small>Not used by this variant</small>}
+      {!applies && <small>{translate('settings.element.notUsed')}</small>}
     </div>
   );
 }
 
 function PropertyLabel({ field, mode, setMode, change }: Pick<PropertyProps, 'field' | 'change'> & { mode: boolean; setMode: (value: boolean) => void }) {
+  const translate = useTranslate();
   return (
     <span className="field-label">
       {field.name}
       <span className="field-tools">
-        <button type="button" title="Reset to default" aria-label={`Reset ${field.name}`} onClick={() => change(undefined, mode)}>
+        <button
+          type="button"
+          title={translate('settings.element.resetTip')}
+          aria-label={translate('settings.element.resetLabel', { name: field.name })}
+          onClick={() => change(undefined, mode)}
+        >
           ↺
         </button>
         <button
           type="button"
-          title="JavaScript expression"
-          aria-label={`Expression ${field.name}`}
+          title={translate('settings.element.expressionTip')}
+          aria-label={translate('settings.element.expressionLabel', { name: field.name })}
           className={mode ? 'active' : ''}
           onClick={() => setMode(!mode)}
         >
@@ -96,6 +105,7 @@ function PropertyControl({
   setSuggest,
   change,
 }: Omit<ControlProps, 'expression' | 'applies' | 'classes'>) {
+  const translate = useTranslate();
   return !mode && field.shape ? (
     literalError ? (
       <small>{literalError}</small>
@@ -111,7 +121,11 @@ function PropertyControl({
     <Dropdown
       ariaLabel={field.name}
       value={value ?? ''}
-      options={[defaultOption(fallback), { value: 'true', label: 'True' }, { value: 'false', label: 'False' }]}
+      options={[
+        defaultOption(fallback, translate),
+        { value: 'true', label: translate('settings.element.true') },
+        { value: 'false', label: translate('settings.element.false') },
+      ]}
       livePreview={false}
       onChange={(next) => change(next || undefined, true)}
     />
@@ -119,7 +133,7 @@ function PropertyControl({
     <Dropdown
       ariaLabel={field.name}
       value={shown}
-      options={[defaultOption(fallback), ...options.map((option) => ({ value: option, label: option }))]}
+      options={[defaultOption(fallback, translate), ...options.map((option) => ({ value: option, label: option }))]}
       livePreview={false}
       onChange={(next) => change(next || undefined, !!field.numeric)}
     />
@@ -131,7 +145,7 @@ function PropertyControl({
       max={field.max}
       step={field.step ?? 'any'}
       value={shown}
-      placeholder={fallback === undefined ? (field.hint ?? 'Not set') : String(fallback)}
+      placeholder={fallback === undefined ? (field.hint ?? translate('settings.element.notSet')) : String(fallback)}
       onFocus={() => setSuggest(true)}
       onBlur={() => setTimeout(() => setSuggest(false), 150)}
       onChange={(event) => change(event.target.value, mode || field.type === 'number')}
@@ -179,6 +193,7 @@ function decode(value: string) {
 }
 
 // The empty value leaves the property unset, so the component's own default applies.
-function defaultOption(fallback: PropertyProps['fallback']): DropdownOption {
-  return { value: '', label: `Default${fallback !== undefined ? ` (${fallback})` : ''}`, dim: true };
+function defaultOption(fallback: PropertyProps['fallback'], translate: Translator): DropdownOption {
+  const label = fallback === undefined ? translate('settings.element.default') : translate('settings.element.defaultWith', { value: String(fallback) });
+  return { value: '', label, dim: true };
 }

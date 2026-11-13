@@ -5,10 +5,12 @@ import { hostingCommand, scriptCommand } from '../../shared/properties/publishCo
 import type { PublishCommand } from '../../shared/properties/publishCommands';
 import { resolvePublishExecutable } from './publishExecutable';
 import { withWorkerAccount } from './publishWorkerConfig';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
+import { DescribedError } from '../../shared/properties/describedError';
 
 export async function runPublishScripts(root: string, scripts: readonly string[], environment: Readonly<Record<string, string>> = {}): Promise<void> {
   if (scripts.length > PUBLISH_LIMITS.hooksMax) {
-    throw new Error('Publish hook exceeds eight scripts.');
+    throw new DescribedError(described('publish.command.hooksLimit'));
   }
   for (const script of scripts) {
     await runPublishCommand(root, { ...scriptCommand(script), environment });
@@ -17,7 +19,7 @@ export async function runPublishScripts(root: string, scripts: readonly string[]
 
 export async function deployHosting(root: string, config: PublishConfig): Promise<void> {
   if (config.hosting.provider === 'none') {
-    throw new Error('Choose a hosting provider in Publish settings.');
+    throw new DescribedError(described('error.publish.chooseHosting'));
   }
   const command = hostingCommand(config.hosting);
   if (config.hosting.provider === 'cloudflare-workers') {
@@ -57,31 +59,31 @@ export async function runPublishCommand(root: string, command: PublishCommand): 
     });
     // Logs may contain credentials from third-party hooks. Keep them out of IPC and UI errors.
     let outputBytes = 0;
-    let failure = '';
-    const stop = (message: string) => {
-      failure = message;
+    let failure: Described | undefined;
+    const stop = (problem: Described) => {
+      failure = problem;
       stopPublishProcess(child.pid);
       child.kill('SIGKILL');
     };
     const collect = (chunk: Buffer) => {
       outputBytes += chunk.length;
       if (outputBytes > PUBLISH_LIMITS.outputBytesMax) {
-        stop('Command exceeded the 1 MiB output limit.');
+        stop(described('publish.command.outputLimit'));
       }
     };
     child.stdout.on('data', collect);
     child.stderr.on('data', collect);
-    const timer = setTimeout(() => stop('Command exceeded the ten-minute time limit.'), PUBLISH_LIMITS.commandTimeoutMs);
+    const timer = setTimeout(() => stop(described('publish.command.timeLimit')), PUBLISH_LIMITS.commandTimeoutMs);
     child.once('error', () => {
       clearTimeout(timer);
-      reject(new Error(`Could not start ${command.executable}. Install and authenticate it first.`));
+      reject(new DescribedError(described('publish.command.startFailed', { executable: command.executable })));
     });
     child.once('close', (code) => {
       clearTimeout(timer);
-      if (code === 0 && !failure) {
+      if (code === 0 && failure === undefined) {
         resolve();
       } else {
-        reject(new Error(failure || `${command.executable} failed (exit ${code}). Check its setup.`));
+        reject(new DescribedError(failure ?? described('publish.command.exitFailed', { executable: command.executable, code: String(code) })));
       }
     });
   });

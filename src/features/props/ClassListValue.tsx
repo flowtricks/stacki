@@ -10,7 +10,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { Attr } from '../../../shared/page/pageNode';
-import { CLASS_LIST_LIMITS, type ClassListValue, type GroupMatch } from '../../editor/conditionalValue';
+import { CLASS_LIST_LIMITS, type ClassListValue } from '../../editor/conditionalValue';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Dropdown from '../../ui/Dropdown';
 import useListReorder from '../../ui/useListReorder';
 import { DropLine } from '../../ui/DropLine';
@@ -19,6 +20,7 @@ import { ConditionRow, ResultField, ResultWords, useConditionCatalog } from './C
 import {
   appliedClassList,
   classDraftOf,
+  matchOptions,
   whenWords,
   withClassEntry,
   withClassEntryAdded,
@@ -38,11 +40,6 @@ const EDITOR_HEIGHT_PX_MAX = 640;
 // Wide enough for a property, an operator and its values on one line; it slides left over the canvas to fit.
 const EDITOR_WIDTH_PX_MIN = 520;
 
-const MATCH_OPTIONS: readonly { readonly value: GroupMatch; readonly label: string }[] = [
-  { value: 'all', label: 'all' },
-  { value: 'any', label: 'any' },
-];
-
 export interface ClassListFieldProps {
   readonly model: ClassListValue;
   readonly value: Attr | undefined;
@@ -53,6 +50,7 @@ export interface ClassListFieldProps {
 
 /** A class list, collapsed: its chip and one line per class, either opening the editor. */
 export function ClassListField(props: ClassListFieldProps) {
+  const translate = useTranslate();
   const catalog = useConditionCatalog(props.bindContext);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -60,14 +58,14 @@ export function ClassListField(props: ClassListFieldProps) {
     <div className="conditional-field" ref={ref}>
       <button type="button" className="conditional-chip" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(!open)}>
         <BranchIcon size={11} />
-        Class list
+        {translate('props.classList.title')}
       </button>
-      <button type="button" className="conditional-summary class-list-summary" title="Edit the classes" onClick={() => setOpen(true)}>
+      <button type="button" className="conditional-summary class-list-summary" title={translate('props.classList.edit')} onClick={() => setOpen(true)}>
         <span className="conditional-lines">
           {props.model.entries.map((entry, index) => (
             <span key={index} className="conditional-line class-list-line">
               <ResultWords result={entry.value} language="text" />
-              {entry.when.length > 0 && <span className="conditional-bullet-when">{whenWords(entry.when, entry.match, catalog)}</span>}
+              {entry.when.length > 0 && <span className="conditional-bullet-when">{whenWords(entry.when, entry.match, catalog, translate)}</span>}
             </span>
           ))}
         </span>
@@ -97,6 +95,7 @@ export interface ClassListEditorProps {
 
 /** The Class list pop-up, writing its draft once as it closes (as the Value conditions editor does). */
 export function ClassListEditor(props: ClassListEditorProps) {
+  const translate = useTranslate();
   const catalog = useConditionCatalog(props.bindContext);
   const [draft, setDraft] = useState<ClassListDraft>(() => classDraftOf(props.model));
   const written = useRef(false);
@@ -124,11 +123,11 @@ export function ClassListEditor(props: ClassListEditorProps) {
     props.onClose();
   };
   return (
-    <RowPopup anchor={anchor} heightPxMax={EDITOR_HEIGHT_PX_MAX} widthPxMin={EDITOR_WIDTH_PX_MIN} label="Class list" onClose={close}>
+    <RowPopup anchor={anchor} heightPxMax={EDITOR_HEIGHT_PX_MAX} widthPxMin={EDITOR_WIDTH_PX_MIN} label={translate('props.classList.title')} onClose={close}>
       <div className="conditional-editor class-list-editor">
         <div className="loop-property-head">
-          <span className="loop-bind-title">Class list</span>
-          <button type="button" className="loop-settings-remove" aria-label="Close class list" title="Close" onClick={close}>
+          <span className="loop-bind-title">{translate('props.classList.title')}</span>
+          <button type="button" className="loop-settings-remove" aria-label={translate('props.classList.close')} title={translate('ui.close')} onClick={close}>
             <CloseIcon size={12} />
           </button>
         </div>
@@ -140,7 +139,7 @@ export function ClassListEditor(props: ClassListEditorProps) {
           onClick={() => setDraft((current) => withClassEntryAdded(current))}
         >
           <PlusIcon size={11} />
-          Add class
+          {translate('props.classList.add')}
         </button>
       </div>
     </RowPopup>
@@ -156,6 +155,7 @@ function EntryList(props: {
   readonly bindContext: RichContext | undefined;
   readonly setDraft: (change: (draft: ClassListDraft) => ClassListDraft) => void;
 }) {
+  const translate = useTranslate();
   const { draft, setDraft, catalog } = props;
   const count = draft.entries.length;
   const move = (source: number, target: number): void => {
@@ -195,7 +195,7 @@ function EntryList(props: {
         className={`conditional-group class-list-entry${reorder.dragIndex === index ? ' is-dragging' : ''}`}
         role="group"
         tabIndex={0}
-        aria-label={`Class ${index + 1}`}
+        aria-label={translate('props.classList.entry', { number: index + 1 })}
       >
         {(gap === index || (gap === count && index === count - 1)) && (
           <span className={`conditional-gap is-${gap === index ? 'before' : 'after'}`}>
@@ -203,12 +203,18 @@ function EntryList(props: {
           </span>
         )}
         <div className="class-list-entry-head">
-          <button type="button" className="conditional-grip" aria-label={`Drag to reorder class ${index + 1}`} data-drag-through tabIndex={-1}>
+          <button
+            type="button"
+            className="conditional-grip"
+            aria-label={translate('props.classList.drag', { number: index + 1 })}
+            data-drag-through
+            tabIndex={-1}
+          >
             <DragIcon size={12} />
           </button>
           <ResultField
-            label="Class"
-            placeholder="Class name"
+            label={translate('props.classList.class')}
+            placeholder={translate('props.classList.className')}
             result={entry.value}
             bindContext={props.bindContext}
             language="text"
@@ -217,8 +223,8 @@ function EntryList(props: {
           <button
             type="button"
             className="loop-settings-remove"
-            aria-label="Remove class"
-            title="Remove class"
+            aria-label={translate('props.classList.remove')}
+            title={translate('props.classList.remove')}
             onClick={() => setDraft((current) => withClassEntryRemoved(current, index))}
           >
             <TrashIcon size={12} />
@@ -226,21 +232,21 @@ function EntryList(props: {
         </div>
         {entry.when.length > 0 && (
           <div className="conditional-group-head">
-            Only when
+            {translate('props.classList.onlyWhen')}
             <Dropdown
-              ariaLabel="Match"
+              ariaLabel={translate('props.conditional.match')}
               className="conditional-match"
               value={entry.match}
-              options={MATCH_OPTIONS}
+              options={matchOptions(translate)}
               onChange={(match) => change((current) => ({ ...current, match }))}
             />
-            <span className="conditional-phrase">conditions are true</span>
+            <span className="conditional-phrase">{translate('props.classList.phrase')}</span>
             {/* Takes the condition away, not the class: it is given always again. */}
             <button
               type="button"
               className="loop-settings-remove"
-              aria-label="Remove condition"
-              title="Remove condition"
+              aria-label={translate('props.conditional.removeCondition')}
+              title={translate('props.conditional.removeCondition')}
               onClick={() => change((current) => ({ ...current, match: 'all', when: [] }))}
             >
               <TrashIcon size={12} />
@@ -268,7 +274,7 @@ function EntryList(props: {
           onClick={() => change((current) => withWhenAdded(current, catalog))}
         >
           <PlusIcon size={11} />
-          {entry.when.length === 0 ? 'Only when' : 'New condition'}
+          {entry.when.length === 0 ? translate('props.classList.onlyWhen') : translate('props.conditional.newCondition')}
         </button>
       </div>
     );

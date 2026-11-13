@@ -1,3 +1,4 @@
+// i18n-ignore-file: the English literals left here are TypeScript type expressions and JSDoc tags, not interface words.
 // A property's Kind: what a designer picks in the Properties panel instead of
 // a TypeScript type (docs/plans/prop-controls.md §6). Each kind writes the
 // native type the component already uses for it, so a kind picked here reads
@@ -10,14 +11,25 @@
 // and is kept exactly as written.
 
 import { assert } from '../../../shared/core/assert';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
 import { SETTING_PROP_TYPES } from '../../editor/optionsBinding';
 import { tagValue, withTag } from './settingTags';
 import { LIST_STARTER_FIELDS, listTypeText } from '../../editor/listPropType';
 
-export const KIND_SECTIONS = ['Basic', 'Media & links', 'Structure', 'Element', 'Collection list', 'Advanced'] as const;
+export const KIND_SECTIONS = ['basic', 'media', 'structure', 'element', 'collection', 'advanced'] as const;
 export type KindSection = (typeof KIND_SECTIONS)[number];
+
+/** The heading each section shows in the Kind picker; the ids above are what code compares. */
+export const KIND_SECTION_LABELS: Readonly<Record<KindSection, MessageKey>> = {
+  basic: 'componentProps.kindSection.basic',
+  media: 'componentProps.kindSection.media',
+  structure: 'componentProps.kindSection.structure',
+  element: 'componentProps.kindSection.element',
+  collection: 'componentProps.kindSection.collection',
+  advanced: 'componentProps.kindSection.advanced',
+};
 
 export type PropertyKind =
   | 'text'
@@ -39,10 +51,10 @@ export type PropertyKind =
 
 export interface KindChoice {
   readonly kind: PropertyKind;
-  readonly label: string;
+  readonly label: MessageKey;
   readonly section: KindSection;
-  /** What the choice writes, shown as its hint. */
-  readonly hint: string;
+  /** What the choice writes, shown as its hint: a type expression, or a message key when the hint is words. */
+  readonly hint: string | MessageKey;
 }
 
 /** A TypeScript type offered under Advanced, written as it reads. */
@@ -58,30 +70,31 @@ const IMAGE_TYPE = 'ImageMetadata | string';
 const IMAGE_TYPE_INLINE = 'import("astro").ImageMetadata | string';
 
 export const KIND_CHOICES: readonly KindChoice[] = [
-  { kind: 'text', label: 'Text', section: 'Basic', hint: 'string' },
-  { kind: 'number', label: 'Number', section: 'Basic', hint: 'number' },
-  { kind: 'switch', label: 'Switch', section: 'Basic', hint: 'boolean' },
-  { kind: 'choice', label: 'Choice', section: 'Basic', hint: 'One of a list' },
-  { kind: 'link', label: 'Link', section: 'Media & links', hint: 'string, @format uri' },
-  { kind: 'image', label: 'Image', section: 'Media & links', hint: IMAGE_TYPE },
-  { kind: 'color', label: 'Color', section: 'Media & links', hint: 'string, @format color' },
-  { kind: 'date', label: 'Date', section: 'Media & links', hint: 'Date' },
-  { kind: 'list', label: 'List', section: 'Structure', hint: 'Items with fields' },
-  { kind: 'group', label: 'Group', section: 'Structure', hint: 'Fields in an object' },
-  { kind: 'record', label: 'Key–value list', section: 'Structure', hint: 'Record<string, string>' },
-  { kind: 'attributes', label: 'Attributes', section: 'Element', hint: 'From an element’s Attributes' },
-  { kind: 'filter', label: 'Filter', section: 'Collection list', hint: 'Collection list filters' },
-  { kind: 'sort', label: 'Sort', section: 'Collection list', hint: 'Collection list sort' },
-  { kind: 'curated', label: 'Selected items', section: 'Collection list', hint: 'Collection list picks' },
-  { kind: 'code', label: 'Code type…', section: 'Advanced', hint: 'Write a TypeScript type' },
+  { kind: 'text', label: 'componentProps.kind.text', section: 'basic', hint: 'string' },
+  { kind: 'number', label: 'componentProps.kind.number', section: 'basic', hint: 'number' },
+  { kind: 'switch', label: 'componentProps.kind.switch', section: 'basic', hint: 'boolean' },
+  { kind: 'choice', label: 'componentProps.kind.choice', section: 'basic', hint: 'componentProps.kindHint.choice' },
+  { kind: 'link', label: 'componentProps.kind.link', section: 'media', hint: 'string, @format uri' },
+  { kind: 'image', label: 'componentProps.kind.image', section: 'media', hint: IMAGE_TYPE },
+  { kind: 'color', label: 'componentProps.kind.color', section: 'media', hint: 'string, @format color' },
+  { kind: 'date', label: 'componentProps.kind.date', section: 'media', hint: 'Date' },
+  { kind: 'list', label: 'componentProps.kind.list', section: 'structure', hint: 'componentProps.kindHint.list' },
+  { kind: 'group', label: 'componentProps.kind.group', section: 'structure', hint: 'componentProps.kindHint.group' },
+  { kind: 'record', label: 'componentProps.kind.record', section: 'structure', hint: 'Record<string, string>' },
+  { kind: 'attributes', label: 'componentProps.kind.attributes', section: 'element', hint: 'componentProps.kindHint.attributes' },
+  { kind: 'filter', label: 'componentProps.kind.filter', section: 'collection', hint: 'componentProps.kindHint.filter' },
+  { kind: 'sort', label: 'componentProps.kind.sort', section: 'collection', hint: 'componentProps.kindHint.sort' },
+  { kind: 'curated', label: 'componentProps.kind.curated', section: 'collection', hint: 'componentProps.kindHint.curated' },
+  { kind: 'code', label: 'componentProps.kind.code', section: 'advanced', hint: 'componentProps.kindHint.code' },
 ];
 
 // TypeScript's own words, for the props a designer's kinds do not describe.
 export const CODE_TYPE_CHOICES: readonly CodeTypeChoice[] = [
+  // i18n-ignore: TypeScript type names, shown as the language spells them.
   { type: 'readonly [string, number]', label: 'Tuple' },
   { type: 'object', label: 'object' },
-  { type: '(value: string) => void', label: 'Function' },
-  { type: 'Promise<string>', label: 'Promise' },
+  { type: '(value: string) => void', label: 'Function' }, // i18n-ignore: TypeScript type name.
+  { type: 'Promise<string>', label: 'Promise' }, // i18n-ignore: TypeScript type name.
   { type: 'bigint', label: 'bigint' },
   { type: 'symbol', label: 'symbol' },
   { type: 'null', label: 'null' },

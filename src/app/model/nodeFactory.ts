@@ -2,6 +2,7 @@
 // slot hosts and definitions, finding an element by tag, the opening
 // selection, the names a page already uses, and a node's code text (App.tsx).
 
+// i18n-ignore-file: starter content written into the person's own page (their site's text), not interface text.
 import type { SetStateAction } from 'react';
 import type { Attr, PageModel, PageNode, PairedNode } from '../../../shared/page/pageNode';
 import type { ScanComponent } from '../../../shared/properties/projectScan';

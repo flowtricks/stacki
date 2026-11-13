@@ -2,6 +2,7 @@ import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import { parseOkResult } from '../../shared/ipc/ipcContract';
 import { GITHUB_DEVICE_URL } from '../../shared/ipc/publishAccount';
 import { parseAccountState, parseSignInURL, type AccountRequest, type AccountState } from '../../shared/ipc/publishAccount';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 export async function publishingAccount(projectPath: string, request: AccountRequest): Promise<AccountState> {
   const input = parseIpcPayload('publish:account', { projectPath, request });
@@ -9,7 +10,7 @@ export async function publishingAccount(projectPath: string, request: AccountReq
   try {
     result = await window.avb.publishingAccount(input);
   } catch {
-    return { kind: 'failed', message: 'Could not reach account sign-in. Please try again.' };
+    return { kind: 'failed', ...described('error.bridge.accountUnreachable') };
   }
   return parseAccountState(result);
 }

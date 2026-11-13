@@ -5,6 +5,9 @@
 // these checks still cannot reach disk.
 import { assert } from '../../../shared/core/assert';
 import { APP_PERMISSION_LIMITS } from '../../../shared/properties/appPermissions';
+import { DescribedError } from '../../../shared/properties/describedError';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import { described, type Described, type Translator } from '../../../shared/properties/i18n/messageRef';
 import {
   ACCESS_FEATURES,
   ADMIN_ROLE_ID,
@@ -28,7 +31,7 @@ import {
 export function addRole(roles: ProjectRoles, name: string): ProjectRoles {
   const trimmed = roleNameFor(roles, undefined, name);
   if (roles.roles.length >= ROLE_LIMITS.rolesMax) {
-    throw new Error(`A project has at most ${ROLE_LIMITS.rolesMax} roles`);
+    throw new DescribedError(described('roles.error.rolesMax', { count: ROLE_LIMITS.rolesMax }));
   }
   const id = roleIdFor(
     trimmed,
@@ -47,14 +50,18 @@ export function addRole(roles: ProjectRoles, name: string): ProjectRoles {
  * Admin and client always lead the file (the parser puts them there), so a copy of
  * either goes first among the custom roles.
  */
-export function duplicateRole(roles: ProjectRoles, id: string): { readonly roles: ProjectRoles; readonly id: string } {
+export function duplicateRole(
+  roles: ProjectRoles,
+  id: string,
+  translate: Translator = ENGLISH_TRANSLATE,
+): { readonly roles: ProjectRoles; readonly id: string } {
   const sourceIndex = roles.roles.findIndex((role) => role.id === id);
   const source = roles.roles[sourceIndex];
   assert(source !== undefined, 'A duplicated role exists');
   if (roles.roles.length >= ROLE_LIMITS.rolesMax) {
-    throw new Error(`A project has at most ${ROLE_LIMITS.rolesMax} roles`);
+    throw new DescribedError(described('roles.error.rolesMax', { count: ROLE_LIMITS.rolesMax }));
   }
-  const name = copyName(roles, source.name);
+  const name = copyName(roles, source.name, translate);
   const copyId = roleIdFor(
     name,
     roles.roles.map((role) => role.id),
@@ -73,11 +80,15 @@ export function duplicateRole(roles: ProjectRoles, id: string): { readonly roles
 const BUILT_IN_ROLE_COUNT = 2;
 
 // "<Name> copy", then "<Name> copy 2" and on, within the name bound and unique ignoring case.
-function copyName(roles: ProjectRoles, name: string): string {
+function copyName(roles: ProjectRoles, name: string, translate: Translator): string {
   const taken = new Set(roles.roles.map((role) => role.name.toLowerCase()));
+  const named = (base: string, attempt: number): string =>
+    attempt === 1 ? translate('roles.copy.name', { name: base }) : translate('roles.copy.numbered', { name: base, number: attempt });
   for (let attempt = 1; attempt <= ROLE_LIMITS.rolesMax + 1; attempt += 1) {
-    const suffix = attempt === 1 ? ' copy' : ` copy ${attempt}`;
-    const candidate = `${name.slice(0, ROLE_LIMITS.roleNameCharsMax - suffix.length).trimEnd()}${suffix}`;
+    // The copy's wording differs by language, so the base is cut by how far the whole name overshoots the bound.
+    const whole = named(name, attempt);
+    const overshoot = Math.max(0, whole.length - ROLE_LIMITS.roleNameCharsMax);
+    const candidate = overshoot === 0 ? whole : named(name.slice(0, Math.max(1, name.length - overshoot)).trimEnd(), attempt);
     if (!taken.has(candidate.toLowerCase())) {
       assert(candidate.length <= ROLE_LIMITS.roleNameCharsMax, 'A copy name is within the name bound');
       return candidate;
@@ -107,14 +118,14 @@ export function renameRole(roles: ProjectRoles, id: string, name: string): Proje
 export function roleNameFor(roles: ProjectRoles, id: string | undefined, input: string): string {
   const trimmed = input.trim();
   if (trimmed.length === 0) {
-    throw new Error('A role needs a name');
+    throw new DescribedError(described('roles.error.nameEmpty'));
   }
   if (trimmed.length > ROLE_LIMITS.roleNameCharsMax) {
-    throw new Error(`A role name is at most ${ROLE_LIMITS.roleNameCharsMax} characters`);
+    throw new DescribedError(described('roles.error.nameLong', { max: ROLE_LIMITS.roleNameCharsMax }));
   }
   const taken = roles.roles.find((role) => role.id !== id && role.name.toLowerCase() === trimmed.toLowerCase());
   if (taken !== undefined) {
-    throw new Error(`There is already a role named ${taken.name}`);
+    throw new DescribedError(described('roles.error.nameTaken', { name: taken.name }));
   }
   return trimmed;
 }
@@ -138,10 +149,10 @@ export function addMember(roles: ProjectRoles, id: string, input: string): Proje
   const target = roles.roles.find((role) => role.id === id);
   assert(target !== undefined, 'Members are added to a role that exists');
   if (target.members.some((member) => sameLogin(member, login))) {
-    throw new Error(`${login} is already in ${target.name}`);
+    throw new DescribedError(described('roles.error.memberListed', { login, role: target.name }));
   }
   if (target.members.length >= ROLE_LIMITS.membersMax) {
-    throw new Error(`A role has at most ${ROLE_LIMITS.membersMax} members`);
+    throw new DescribedError(described('roles.error.membersMax', { count: ROLE_LIMITS.membersMax }));
   }
   const previous = memberRole(roles, login);
   const without = previous === undefined ? roles : removeMember(roles, previous.id, login);
@@ -153,7 +164,7 @@ export function removeMember(roles: ProjectRoles, id: string, login: string): Pr
   const target = roles.roles.find((role) => role.id === id);
   assert(target !== undefined, 'Members are removed from a role that exists');
   if (id === ADMIN_ROLE_ID && target.members.length === 1 && target.members.some((member) => sameLogin(member, login))) {
-    throw new Error('At least one person must be an admin');
+    throw new DescribedError(described('roles.error.lastAdmin'));
   }
   return updateRole(roles, id, (role) => ({ ...role, members: role.members.filter((member) => !sameLogin(member, login)) }));
 }
@@ -232,9 +243,7 @@ export function setAppPermissions(
   assert(target !== undefined, 'App permissions change on a role that exists');
   const known = Object.hasOwn(target.appPermissions, appId);
   if (!known && Object.keys(target.appPermissions).length >= ROLE_LIMITS.appPermissionAppsMax) {
-    throw new Error(
-      `A role holds app permissions for at most ${ROLE_LIMITS.appPermissionAppsMax} apps. Remove a role's settings for apps no longer installed in roles.json.`,
-    );
+    throw new DescribedError(described('roles.error.appsMax', { count: ROLE_LIMITS.appPermissionAppsMax }));
   }
   const values = { ...(known ? target.appPermissions[appId] : {}) };
   for (const permissionId of permissionIds) {
@@ -242,7 +251,7 @@ export function setAppPermissions(
   }
   // Values kept for permissions a newer version dropped count too, so the file's own bound is checked here, beside the switch.
   if (Object.keys(values).length > APP_PERMISSION_LIMITS.permissionsMax) {
-    throw new Error(`A role holds at most ${APP_PERMISSION_LIMITS.permissionsMax} permissions for one app`);
+    throw new DescribedError(described('roles.error.permissionsMax', { count: APP_PERMISSION_LIMITS.permissionsMax }));
   }
   const stored = updateRole(roles, id, (role) => ({ ...role, appPermissions: { ...role.appPermissions, [appId]: values } }));
   assert(Object.hasOwn(roleOf(stored, id).appPermissions, appId), 'The app now has stored values');
@@ -272,7 +281,7 @@ export function setPinnedApp(roles: ProjectRoles, id: string, appId: string, cha
     return roles;
   }
   if (target.pinnedApps.length >= ROLE_LIMITS.pinnedAppsMax) {
-    throw new Error(`A role pins at most ${ROLE_LIMITS.pinnedAppsMax} apps`);
+    throw new DescribedError(described('roles.error.pinsMax', { count: ROLE_LIMITS.pinnedAppsMax }));
   }
   const usable = can(roleView(target), `app:${app}`) ? roles : setAppAccess(roles, id, app, 'grant');
   const next = updateRole(usable, id, (role) => ({ ...role, pinnedApps: [...without, app] }));
@@ -329,13 +338,13 @@ export function setDefaultRole(roles: ProjectRoles, id: string): ProjectRoles {
 }
 
 /** Why saving `roles` would lock `login` out of editing roles, or undefined when it would not. */
-export function selfLockout(roles: ProjectRoles, login: string | undefined): string | undefined {
+export function selfLockout(roles: ProjectRoles, login: string | undefined): Described | undefined {
   if (login === undefined) {
     return undefined;
   }
   const role = resolveRole(roles, login, 'admin');
   assert(role.id.length > 0, 'A resolved role has an id');
-  return role.isAdmin ? undefined : `This would make you (${login}) ${role.name} and remove your admin access. Keep yourself an admin.`;
+  return role.isAdmin ? undefined : described('roles.error.lockout', { login, role: role.name });
 }
 
 function roleOf(roles: ProjectRoles, id: string): ProjectRole {

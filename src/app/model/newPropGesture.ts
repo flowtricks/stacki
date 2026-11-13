@@ -6,6 +6,8 @@
 // default's file), each once, and names every binding in scope so the prop is
 // read by its own name only when nothing else has it.
 
+import type { Translator } from '../../lib/i18n/localeContext';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import { assert } from '../../../shared/core/assert';
 import { err, ok, type Result } from '../../../shared/core/result';
 import { frontmatterGesture } from '../../editor/editGestures';
@@ -20,12 +22,12 @@ export interface NewPropGesture {
   readonly local: string;
 }
 
-export function newPropGesture(model: EditorModel, declaration: PropDeclaration): Result<NewPropGesture, string> {
+export function newPropGesture(model: EditorModel, declaration: PropDeclaration, translate: Translator = ENGLISH_TRANSLATE): Result<NewPropGesture, string> {
   if (model.format !== undefined) {
-    return err('Only an Astro component takes properties.');
+    return err(translate('shell.prop.astroOnly'));
   }
   const taken = namesInScope(model.extraFrontmatter, model.imports);
-  const declared = declaredProp(model.extraFrontmatter, declaration, taken, model.imports);
+  const declared = declaredProp(model.extraFrontmatter, declaration, taken, model.imports, translate);
   if (!declared.ok) {
     return declared;
   }

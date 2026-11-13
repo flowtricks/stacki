@@ -44,6 +44,7 @@ export interface AstroContentSource {
 export const ASTRO_CONTENT_SOURCE: AstroContentSource = {
   kind: 'astro',
   id: ASTRO_CONTENT_ID,
+  // i18n-ignore: The English label for logs and tooltips; the panel shows sourceName(), translated.
   label: 'Content Collections',
 };
 

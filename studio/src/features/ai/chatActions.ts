@@ -1,3 +1,4 @@
+import { studioTranslate } from './studioWords';
 import { request } from '../project/projectClient';
 import { chatState, updateChat, parseProposal, type ChatThread, type ChatMessage } from './chatState';
 import type { ChatContext } from './chatContracts';
@@ -21,7 +22,7 @@ export async function sendChat(id: string, file: string) {
   if (running.size >= 3) {
     updateChat(id, (thread) => ({
       ...thread,
-      error: 'Three chats are already working. Wait for one to finish.',
+      error: studioTranslate()('ai.studio.threeWorking'),
     }));
     return;
   }
@@ -68,7 +69,11 @@ export async function sendChat(id: string, file: string) {
   } catch (error) {
     updateChat(id, (thread) => ({
       ...thread,
-      error: controller.signal.aborted ? 'Response stopped.' : error instanceof Error ? error.message : 'Could not send message.',
+      error: controller.signal.aborted
+        ? studioTranslate()('ai.studio.stopped')
+        : error instanceof Error
+          ? error.message
+          : studioTranslate()('ai.studio.sendFailed'),
       draft: thread.draft || chat.draft,
       segments: thread.segments.length ? thread.segments : chat.segments,
       images: thread.images.length ? thread.images : chat.images,
@@ -82,7 +87,7 @@ export function stopChat(id: string) {
   running.get(id)?.abort();
 }
 export function discardProposal(id: string, messageId: string) {
-  finishProposal(id, messageId, 'Discarded. No changes were applied.');
+  finishProposal(id, messageId, studioTranslate()('ai.studio.discarded'));
 }
 function finishProposal(id: string, messageId: string, outcome: string) {
   updateChat(id, (thread) => ({
@@ -109,12 +114,12 @@ export async function applyProposal(id: string, messageId: string, refresh: () =
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: proposal.id }),
     });
-    finishProposal(id, messageId, 'Applied to the shared draft. Ready to preview.');
+    finishProposal(id, messageId, studioTranslate()('ai.studio.applied'));
     refresh();
   } catch (error) {
     updateChat(id, (chat) => ({
       ...chat,
-      error: error instanceof Error ? error.message : 'Could not apply changes.',
+      error: error instanceof Error ? error.message : studioTranslate()('ai.studio.applyFailed'),
     }));
   } finally {
     updateChat(id, (chat) => ({ ...chat, status: 'idle' }));
@@ -130,6 +135,7 @@ async function generateReply(chat: ChatThread, file: string, signal: AbortSignal
       body: JSON.stringify({
         file,
         model: chat.model,
+        // i18n-ignore: the instruction sent to the model when the person sends images alone, not interface text.
         prompt: chat.draft.trim() || 'Describe these images and how they relate to this page.',
         images: chat.images.length
           ? chat.images

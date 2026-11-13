@@ -4,8 +4,10 @@ import { hostingSiteKey, savedPublishedSite } from '../../../shared/properties/p
 import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
 import { reportErrorToast } from '../../ui/errorNotices';
 import { readPublishedSiteURL } from './publishBridge';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export function usePublishedSiteURL(projectPath: string, config: PublishConfig | undefined) {
+  const translate = useTranslate();
   const destination = config === undefined ? undefined : hostingSiteKey(config.hosting);
   const saved = config === undefined ? undefined : savedPublishedSite(config);
   const savedURL = saved?.url;
@@ -31,7 +33,7 @@ export function usePublishedSiteURL(projectPath: string, config: PublishConfig |
         return;
       }
       const current = await rememberPublishedSite(projectPath, destination, url, () => active).catch(() => {
-        reportErrorToast('Could not save the published site link. Reopen Publish options to retry.');
+        reportErrorToast(translate('publish.site.saveFailed'));
         return false;
       });
       if (active) {
@@ -43,7 +45,7 @@ export function usePublishedSiteURL(projectPath: string, config: PublishConfig |
     return () => {
       active = false;
     };
-  }, [projectPath, destination, manual, savedURL]);
+  }, [projectPath, destination, manual, savedURL, translate]);
   if (manual) {
     return savedURL;
   }

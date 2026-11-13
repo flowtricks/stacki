@@ -2,6 +2,7 @@
 // computed from the disk each time, so what the form shows and what is written
 // come from one place; the renderer sends a draft, never file text.
 
+import { DescribedError } from '../../shared/properties/describedError';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -161,7 +162,7 @@ function newCollectionChanges(projectPath: string, name: string): readonly PageT
   const before = located === undefined ? undefined : fs.readFileSync(cmsSourcePath(projectPath, rel), 'utf8');
   const patch = addCollectionToConfig(before, name);
   if (!patch.ok) {
-    throw new Error(patch.error);
+    throw new DescribedError(patch.error);
   }
   return [
     { path: rel, action: before === undefined ? 'create' : 'edit', text: patch.value.text },

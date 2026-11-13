@@ -8,7 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { realpathSync } from 'node:fs';
 import type { MainHost } from './mainHost';
-import { APP_LIMITS, APP_SDK_FILE, APPS_DIRECTORY, appsFailureMessage, parseAppId, type AppManifest, type AppsResult } from '../../shared/properties/apps';
+import { APP_LIMITS, APP_SDK_FILE, APPS_DIRECTORY, appsFailure, parseAppId, type AppManifest, type AppsResult } from '../../shared/properties/apps';
 import { appContentSecurityPolicy, appSdkSource } from '../../shared/properties/appSdk';
 import { appHostAsset, withAppTokens } from '../../shared/properties/appUiKit';
 import { deflateRawSync } from 'node:zlib';
@@ -27,6 +27,7 @@ import type { GitHubFetch } from '../project/appGitHub';
 import { marketplaceCheckURL, marketplaceIndexURL, marketplaceSubmissionsURL, type MarketplaceBuild } from '../project/appMarketplace';
 import { publishingGitEnvironment } from '../project/publishGitHub';
 import { DEFAULT_PUBLISH_CONFIG } from '../../shared/properties/publishConfig';
+import { translateMain } from '../lib/mainLocale';
 
 export const APP_SCHEME = 'stacki-app';
 
@@ -133,10 +134,10 @@ export function registerAppsHandlers(
   ipcMain.handle('apps:pickFile', async (_event, input) => {
     const project = root(input.projectPath);
     const picked = await host.showOpenDialog({
-      title: 'Install an app',
-      buttonLabel: 'Choose',
+      title: translateMain('dialog.open.apps.title'),
+      buttonLabel: translateMain('dialog.open.apps.button'),
       properties: ['openFile'],
-      filters: [{ name: 'Stacki app', extensions: ['zip'] }],
+      filters: [{ name: translateMain('dialog.open.apps.filter'), extensions: ['zip'] }],
     });
     const file = picked.canceled ? undefined : picked.filePaths[0];
     if (file === undefined) {
@@ -144,7 +145,7 @@ export function registerAppsHandlers(
     }
     const size = fs.statSync(file).size;
     if (size > APP_LIMITS.archiveBytesMax) {
-      return { ok: false as const, message: `The app file exceeds ${APP_LIMITS.archiveBytesMax} bytes` };
+      return { ok: false as const, message: translateMain('error.apps.fileTooLarge', { bytes: APP_LIMITS.archiveBytesMax }) };
     }
     return service.stageFile(project, new Uint8Array(fs.readFileSync(file)), path.basename(file));
   });
@@ -242,14 +243,14 @@ function settingsAction<T>(project: string, id: string, run: (project: string, m
   try {
     const app = listInstalledApps(project).find((summary) => summary.manifest.id === id);
     if (app === undefined) {
-      return { ok: false, message: `The app "${id}" is not installed.` };
+      return { ok: false, message: translateMain('error.apps.notInstalled', { id }) };
     }
     return { ok: true, value: run(project, app.manifest) };
   } catch (error: unknown) {
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
       throw error;
     }
-    return { ok: false, message: appsFailureMessage(error) };
+    return { ok: false, ...appsFailure(error) };
   }
 }
 

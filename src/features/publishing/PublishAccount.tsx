@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import { described, type MessageKey } from '../../../shared/properties/i18n/messageRef';
 import { publishingAccount, openAccountSignIn } from '../../ipc/publishAccountBridge';
 import { ErrorToast } from '../../ui/ErrorToast';
 import Popup from '../../ui/Popup';
@@ -22,6 +24,8 @@ const POLL_INTERVAL_MS = 1000;
 const POLLS_MAX = Math.ceil((ACCOUNT_INSTALL_TIMEOUT_MS + ACCOUNT_SIGN_IN_TIMEOUT_MS) / POLL_INTERVAL_MS);
 
 export function AddPublishAccount(props: Props) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const label = PROVIDER_LABELS[props.provider];
   const [attempt, setAttempt] = useState(0);
   const state = useAccountSignIn(props.projectPath, props.provider, attempt);
@@ -38,7 +42,8 @@ export function AddPublishAccount(props: Props) {
   }, [state.kind, connected, attempt]);
   const retry = () => setAttempt(attempt + 1);
   // A first connection signs in; adding another GitHub or Cloudflare account keeps its old title.
-  const heading = props.purpose === 'sign-in' ? `Sign in to ${label}` : `Add ${label} account`;
+  const heading =
+    props.purpose === 'sign-in' ? translate('publish.account.signInTitle', { provider: label }) : translate('publish.account.addTitle', { provider: label });
   return (
     <Popup className="modal publish-settings publish-add-account" label={heading} onClose={props.close} dismissible={true}>
       {({ close }) => (
@@ -51,18 +56,18 @@ export function AddPublishAccount(props: Props) {
               <AccountDeviceCode code={state.code} />
             ) : state.kind === 'failed' ? (
               <>
-                <ErrorToast message={state.message} />
+                <ErrorToast message={translateDescribed(state)} />
                 <button type="button" onClick={retry}>
-                  Try again
+                  {translate('publish.common.tryAgain')}
                 </button>
               </>
             ) : (
-              <p>{state.kind === 'complete' ? 'Account connected.' : `Starting ${label} sign-in…`}</p>
+              <p>{state.kind === 'complete' ? translate('publish.account.connected') : translate('publish.account.starting', { provider: label })}</p>
             )}
           </div>
           <div className="modal-footer">
             <button type="button" onClick={close}>
-              Cancel
+              {translate('ui.cancel')}
             </button>
           </div>
         </>
@@ -71,31 +76,33 @@ export function AddPublishAccount(props: Props) {
   );
 }
 
+// i18n-ignore: product names are never translated.
 const PROVIDER_LABELS: Readonly<Record<AccountProvider, string>> = { github: 'GitHub', cloudflare: 'Cloudflare', vercel: 'Vercel' };
 
 function AccountDeviceCode({ code }: { readonly code: string }) {
+  const translate = useTranslate();
   const [error, setError] = useState('');
   return (
     <>
-      <p>Enter this one-time code on GitHub to connect your account.</p>
+      <p>{translate('publish.account.deviceCode.intro')}</p>
       <label>
-        One-time code
+        {translate('publish.account.deviceCode.label')}
         <input className="publish-account-code" value={code} readOnly onFocus={(event) => event.currentTarget.select()} />
       </label>
-      <p className="hint-text">Choose the account you want to add on GitHub. You can sign in with another account there.</p>
+      <p className="hint-text">{translate('publish.account.deviceCode.hint')}</p>
       <button
         type="button"
         className="primary"
         onClick={() => {
           setError('');
           void openAccountSignIn().catch(() => {
-            setError('Could not open the browser. Visit github.com/login/device and enter the code.');
+            setError(translate('publish.account.deviceCode.openFailed'));
           });
         }}
       >
-        Continue in browser
+        {translate('publish.account.continueBrowser')}
       </button>
-      <p className="hint-text">Waiting for sign-in…</p>
+      <p className="hint-text">{translate('publish.account.waiting')}</p>
       {error && <ErrorToast message={error} />}
     </>
   );
@@ -133,7 +140,7 @@ function useAccountSignIn(projectPath: string, provider: AccountProvider, attemp
         });
       }
       if (active) {
-        setState({ kind: 'failed', message: 'Account sign-in expired. Please try again.' });
+        setState({ kind: 'failed', ...described('publish.account.expired') });
         void publishingAccount(projectPath, { action: 'cancel', id, provider });
       }
     }
@@ -151,16 +158,16 @@ function useAccountSignIn(projectPath: string, provider: AccountProvider, attemp
 // What each browser sign-in says: the tool it installs, and where the install goes.
 const BROWSER_SIGN_IN = {
   cloudflare: {
-    label: 'Cloudflare',
-    installed: 'Wrangler was added to this site’s development dependencies.',
-    installing: 'Installing Wrangler in this site… Cancelling skips sign-in but lets the installation finish.',
+    label: 'Cloudflare', // i18n-ignore: product name.
+    installed: 'publish.account.cloudflare.installed',
+    installing: 'publish.account.cloudflare.installing',
   },
   vercel: {
-    label: 'Vercel',
-    installed: 'The Vercel CLI was installed for your user account.',
-    installing: 'Installing the Vercel CLI… Cancelling skips sign-in but lets the installation finish.',
+    label: 'Vercel', // i18n-ignore: product name.
+    installed: 'publish.account.vercel.installed',
+    installing: 'publish.account.vercel.installing',
   },
-} as const;
+} as const satisfies Record<'cloudflare' | 'vercel', { readonly label: string; readonly installed: MessageKey; readonly installing: MessageKey }>;
 
 // One screen for the whole browser sign-in: installing, starting, waiting and failing only
 // change the button and the status line, so nothing flashes past between steps.
@@ -170,19 +177,18 @@ function BrowserSignIn(props: {
   readonly installed: boolean;
   readonly retry: () => void;
 }) {
+  const translate = useTranslate();
   const [error, setError] = useState('');
   const { state } = props;
   const copy = BROWSER_SIGN_IN[props.provider];
   return (
     <>
-      <p>Sign in to {copy.label} and approve access to connect your accounts.</p>
-      <p className="hint-text">
-        To use a different login, switch accounts in {copy.label} before approving access. This updates the {copy.label} login used by local publishing.
-      </p>
-      {props.installed && state.kind !== 'installing' && <p className="hint-text">{copy.installed}</p>}
+      <p>{translate('publish.account.browser.intro', { provider: copy.label })}</p>
+      <p className="hint-text">{translate('publish.account.browser.switchHint', { provider: copy.label })}</p>
+      {props.installed && state.kind !== 'installing' && <p className="hint-text">{translate(copy.installed)}</p>}
       {state.kind === 'failed' ? (
         <button type="button" className="primary" onClick={props.retry}>
-          Try again
+          {translate('publish.common.tryAgain')}
         </button>
       ) : (
         <button
@@ -193,12 +199,12 @@ function BrowserSignIn(props: {
             if (state.kind === 'browser') {
               setError('');
               void openAccountSignIn(state.url).catch(() => {
-                setError(`Could not open ${copy.label} sign-in. Please try again.`);
+                setError(translate('publish.account.openFailed', { provider: copy.label }));
               });
             }
           }}
         >
-          Continue in browser
+          {translate('publish.account.continueBrowser')}
         </button>
       )}
       <BrowserSignInStatus provider={props.provider} state={state} />
@@ -208,25 +214,27 @@ function BrowserSignIn(props: {
 }
 
 function BrowserSignInStatus({ provider, state }: { readonly provider: 'cloudflare' | 'vercel'; readonly state: AccountState }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const copy = BROWSER_SIGN_IN[provider];
   switch (state.kind) {
     case 'installing':
-      return <p className="hint-text">{copy.installing}</p>;
+      return <p className="hint-text">{translate(copy.installing)}</p>;
     case 'starting':
-      return <p className="hint-text">Starting {copy.label} sign-in…</p>;
+      return <p className="hint-text">{translate('publish.account.starting', { provider: copy.label })}</p>;
     case 'waiting':
     case 'browser':
-      return <p className="hint-text">Waiting for sign-in…</p>;
+      return <p className="hint-text">{translate('publish.account.waiting')}</p>;
     case 'complete':
-      return <p className="hint-text">Account connected.</p>;
+      return <p className="hint-text">{translate('publish.account.connected')}</p>;
     case 'cancelled':
-      return <p className="hint-text">Sign-in cancelled.</p>;
+      return <p className="hint-text">{translate('publish.account.cancelled')}</p>;
     case 'failed':
       // The cause goes to the app's error toast; the screen only says sign-in stopped.
       return (
         <>
-          <p className="hint-text">Sign-in did not finish.</p>
-          <ErrorToast message={state.message} />
+          <p className="hint-text">{translate('publish.account.unfinished')}</p>
+          <ErrorToast message={translateDescribed(state)} />
         </>
       );
     default: {

@@ -15,7 +15,9 @@
 // and the SHA-256 of the line's exact text, where every reviewer sees it.
 import { assert } from '../core/assert';
 import { record, text } from '../core/boundary';
+import { parseMessageRef, type MessageRef } from '../core/i18n/messageReference';
 import { toArray } from '../core/record';
+import { described, englishText, messageRef, type MessageKey, type TypedMessageRef } from './i18n/messageRef';
 
 export const APP_SECRET_LIMITS = {
   /** Files scanned: every file a bundle may hold (APP_LIMITS.filesMax). */
@@ -100,7 +102,7 @@ export type AppSecretScan =
   | { readonly kind: 'clean'; readonly filesScanned: number }
   | { readonly kind: 'found'; readonly findings: readonly AppSecretFinding[]; readonly truncated: boolean; readonly filesScanned: number }
   /** Past a bound: a scan that cannot finish does not pass. */
-  | { readonly kind: 'too-large'; readonly reason: string };
+  | { readonly kind: 'too-large'; readonly reason: string; readonly reasonRef?: MessageRef | undefined };
 
 export interface ScannedFile {
   readonly path: string;
@@ -128,10 +130,10 @@ export function isScannedFile(path: string): boolean {
  */
 export function scanAppSecrets(files: readonly ScannedFile[], options: AppSecretScanOptions): AppSecretScan {
   if (files.length > APP_SECRET_LIMITS.filesMax) {
-    return { kind: 'too-large', reason: `More than ${APP_SECRET_LIMITS.filesMax} files to scan for secrets` };
+    return tooLarge('apps.scan.tooManyFiles', { max: APP_SECRET_LIMITS.filesMax });
   }
   if (options.allowlist.length > APP_SECRET_LIMITS.allowlistMax) {
-    return { kind: 'too-large', reason: `secretsAllowlist has more than ${APP_SECRET_LIMITS.allowlistMax} entries` };
+    return tooLarge('apps.scan.allowlistTooLong', { max: APP_SECRET_LIMITS.allowlistMax });
   }
   const allowed = new Set(options.allowlist.map((entry) => `${entry.file}\n${entry.lineSha256}`));
   const placeholders = options.placeholders.filter((placeholder) => placeholder.length > 0);
@@ -139,12 +141,12 @@ export function scanAppSecrets(files: readonly ScannedFile[], options: AppSecret
   let totalChars = 0;
   for (const file of files) {
     if (file.text.length > APP_SECRET_LIMITS.fileBytesMax) {
-      return { kind: 'too-large', reason: `${file.path} is larger than ${APP_SECRET_LIMITS.fileBytesMax} bytes to scan` };
+      return tooLarge('apps.scan.fileTooLarge', { path: file.path, max: APP_SECRET_LIMITS.fileBytesMax });
     }
     totalChars += file.text.length;
   }
   if (totalChars > APP_SECRET_LIMITS.bytesMax) {
-    return { kind: 'too-large', reason: `More than ${APP_SECRET_LIMITS.bytesMax} bytes to scan for secrets` };
+    return tooLarge('apps.scan.tooManyBytes', { max: APP_SECRET_LIMITS.bytesMax });
   }
   const findings: AppSecretFinding[] = [];
   for (const file of files) {
@@ -252,6 +254,12 @@ export function parseSecretsAllowlist(input: unknown, parsePath: (path: unknown)
   });
 }
 
+// A scan past a bound: the English reason beside the reference the renderer translates.
+function tooLarge(key: MessageKey, params: Readonly<Record<string, string | number>>): Extract<AppSecretScan, { readonly kind: 'too-large' }> {
+  const reason = described(key, params);
+  return { kind: 'too-large', reason: reason.message, reasonRef: reason.messageRef };
+}
+
 /** A scan on the wire, checked and bounded. */
 export function parseAppSecretScan(input: unknown): AppSecretScan {
   const value = record(input);
@@ -259,7 +267,7 @@ export function parseAppSecretScan(input: unknown): AppSecretScan {
     case 'clean':
       return { kind: 'clean', filesScanned: scannedCount(value['filesScanned']) };
     case 'too-large':
-      return { kind: 'too-large', reason: boundedReason(value['reason']) };
+      return { kind: 'too-large', reason: boundedReason(value['reason']), ...optionalReasonRef(value['reasonRef']) };
     case 'found': {
       const items = toArray(value['findings']);
       if (items === undefined || items.length === 0 || items.length > APP_SECRET_LIMITS.findingsMax) {
@@ -307,6 +315,15 @@ function scannedCount(input: unknown): number {
   return input;
 }
 
+// A reference that crossed a boundary: kept when it parses, dropped (the English `reason` shows) when it does not.
+function optionalReasonRef(input: unknown): { readonly reasonRef?: MessageRef } {
+  if (input === undefined) {
+    return {};
+  }
+  const parsed = parseMessageRef(input);
+  return parsed.ok ? { reasonRef: parsed.value } : {};
+}
+
 function boundedReason(input: unknown): string {
   const reason = text(input).trim();
   if (reason.length === 0 || reason.length > 500) {
@@ -315,34 +332,39 @@ function boundedReason(input: unknown): string {
   return reason;
 }
 
-/** What each kind of finding is, in words, for the report. */
-export function secretRuleLabel(rule: AppSecretRule): string {
+/** What each kind of finding is, as a reference the renderer translates. */
+export function secretRuleRef(rule: AppSecretRule): TypedMessageRef {
   switch (rule) {
     case 'sk-key':
-      return 'API secret key (sk-)';
+      return messageRef('apps.scan.rule.skKey');
     case 'stripe-key':
-      return 'Stripe key';
+      return messageRef('apps.scan.rule.stripeKey');
     case 'github-token':
-      return 'GitHub token';
+      return messageRef('apps.scan.rule.githubToken');
     case 'github-pat':
-      return 'GitHub fine-grained token';
+      return messageRef('apps.scan.rule.githubPat');
     case 'aws-access-key':
-      return 'AWS access key';
+      return messageRef('apps.scan.rule.awsAccessKey');
     case 'google-api-key':
-      return 'Google API key';
+      return messageRef('apps.scan.rule.googleApiKey');
     case 'slack-token':
-      return 'Slack token';
+      return messageRef('apps.scan.rule.slackToken');
     case 'slack-webhook':
-      return 'Slack webhook';
+      return messageRef('apps.scan.rule.slackWebhook');
     case 'private-key':
-      return 'Private key';
+      return messageRef('apps.scan.rule.privateKey');
     case 'jwt':
-      return 'JSON Web Token';
+      return messageRef('apps.scan.rule.jwt');
     case 'assigned-secret':
-      return 'Hard-coded secret value';
+      return messageRef('apps.scan.rule.assignedSecret');
     default: {
       const exhaustive: never = rule;
       return exhaustive;
     }
   }
+}
+
+/** What each kind of finding is, in English words (logs, tests). */
+export function secretRuleLabel(rule: AppSecretRule): string {
+  return englishText(secretRuleRef(rule));
 }

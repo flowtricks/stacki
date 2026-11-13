@@ -59,7 +59,7 @@ export type AppFileOutcome = { readonly applied: true; readonly paths: readonly 
  */
 export function accessRoleRefusal(method: AppMethod, role: RoleView): string | undefined {
   if (method.startsWith('files.') && !can(role, 'code:edit')) {
-    return `The ${role.name} role cannot edit code, so apps cannot read or change project files for it`;
+    return `The ${role.name} role cannot edit code, so apps cannot read or change project files for it`; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   return undefined;
 }

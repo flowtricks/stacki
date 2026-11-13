@@ -17,12 +17,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { assert } from '../../shared/core/assert';
+import type { MessageRef } from '../../shared/core/i18n/messageReference';
+import { described } from '../../shared/properties/i18n/messageRef';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import {
   APP_LIMITS,
   APP_MANIFEST_FILE,
   APPS_DIRECTORY,
   APPS_LOCK_FILE,
-  appsFailureMessage,
+  appsFailure,
   parseBundlePath,
   type AppLockEntry,
   type AppManifest,
@@ -43,7 +46,7 @@ export type AppFolderRead =
       /** When its manifest was last written (ISO): what a folder-only app's `installedAt` says. */
       readonly addedAt: string;
     }
-  | { readonly kind: 'broken'; readonly folder: string; readonly message: string };
+  | { readonly kind: 'broken'; readonly folder: string; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 /** The Installed list: the apps, and the folders that do not read as one. */
 export interface InstalledApps {
@@ -85,7 +88,7 @@ export function mergeInstalledApps(
   const broken: AppFolderBroken[] = [];
   for (const read of folders) {
     if (read.kind === 'broken') {
-      broken.push({ folder: read.folder, message: read.message });
+      broken.push({ folder: read.folder, message: read.message, ...(read.messageRef === undefined ? {} : { messageRef: read.messageRef }) });
       continue;
     }
     assert(read.manifest.id === read.folder, 'A folder reads as an app only under its own id');
@@ -128,7 +131,7 @@ export function readAppFolders(projectRoot: string): readonly AppFolderRead[] {
       continue;
     }
     if (entry.kind === 'link') {
-      reads.push({ kind: 'broken', folder: entry.name, message: 'This is a link. An app’s folder holds its files itself.' });
+      reads.push({ kind: 'broken', folder: entry.name, ...described('apps.error.folderIsLink') });
       continue;
     }
     if (apps < APP_LIMITS.appsMax) {
@@ -136,7 +139,7 @@ export function readAppFolders(projectRoot: string): readonly AppFolderRead[] {
       apps += read.kind === 'app' ? 1 : 0;
       reads.push(read);
     } else {
-      reads.push({ kind: 'broken', folder: entry.name, message: `A project has at most ${APP_LIMITS.appsMax} apps; this folder is past the limit.` });
+      reads.push({ kind: 'broken', folder: entry.name, ...described('apps.error.folderPastLimit', { count: APP_LIMITS.appsMax }) });
     }
   }
   assert(reads.length <= APP_FOLDER_LIMITS.entriesMax, 'A scan is bounded by the entries it read');
@@ -150,7 +153,7 @@ export function readAppFolder(projectRoot: string, folder: string): AppFolderRea
   try {
     files = listFolderFiles(directory, folder);
   } catch (error: unknown) {
-    return { kind: 'broken', folder, message: expectedFailure(error) };
+    return { kind: 'broken', folder, ...expectedFailure(error) };
   }
   const stamp = filesStamp(files);
   const kept = cache.get(directory);
@@ -245,7 +248,7 @@ function appsDirectoryEntries(projectRoot: string): readonly DirectoryEntry[] {
     throw error;
   }
   if (entries.length > APP_FOLDER_LIMITS.entriesMax) {
-    throw new Error(`${APPS_DIRECTORY} holds more than ${APP_FOLDER_LIMITS.entriesMax} entries`);
+    throw new ReferencedError('apps.error.folderEntriesMax', { directory: APPS_DIRECTORY, count: APP_FOLDER_LIMITS.entriesMax });
   }
   const visible: DirectoryEntry[] = [];
   for (const entry of entries) {
@@ -270,18 +273,18 @@ function readFolderAsApp(directory: string, folder: string, files: readonly Fold
   try {
     bundle = bundleFromFiles(readFolderFiles(directory, folder, files));
   } catch (error: unknown) {
-    return { kind: 'broken', folder, message: expectedFailure(error) };
+    return { kind: 'broken', folder, ...expectedFailure(error) };
   }
   const id = bundle.manifest.id;
   if (id !== folder) {
-    return { kind: 'broken', folder, message: `The folder is named "${folder}" but its stacki-app.json says "id": "${id}". Rename one to match.` };
+    return { kind: 'broken', folder, ...described('apps.error.folderIdMismatch', { folder, id }) };
   }
   let addedAt: string;
   try {
     // The manifest can go between the read and this stat (an agent mid-edit): that folder is broken, not the list.
     addedAt = fs.statSync(path.join(directory, APP_MANIFEST_FILE)).mtime.toISOString();
   } catch (error: unknown) {
-    return { kind: 'broken', folder, message: expectedFailure(error) };
+    return { kind: 'broken', folder, ...expectedFailure(error) };
   }
   return { kind: 'app', folder, manifest: bundle.manifest, sha256: appFolderDigest(bundle.files), addedAt };
 }
@@ -295,14 +298,14 @@ function listFolderFiles(directory: string, label: string): readonly FolderFile[
   let level: readonly string[] = [''];
   for (let depth = 0; level.length > 0; depth += 1) {
     if (depth >= APP_LIMITS.pathDepthMax) {
-      throw new Error(`${APPS_DIRECTORY}/${label} is nested more than ${APP_LIMITS.pathDepthMax} folders deep`);
+      throw new ReferencedError('apps.error.folderTooDeep', { path: `${APPS_DIRECTORY}/${label}`, count: APP_LIMITS.pathDepthMax });
     }
     const next: string[] = [];
     for (const relative of level) {
       const entries = fs.readdirSync(path.join(directory, ...relative.split('/').filter(Boolean)), { withFileTypes: true });
       entriesSeen += entries.length;
       if (entriesSeen > APP_LIMITS.filesMax * 2) {
-        throw new Error(`${APPS_DIRECTORY}/${label} holds more than ${APP_LIMITS.filesMax} files`);
+        throw new ReferencedError('apps.error.folderTooManyFiles', { path: `${APPS_DIRECTORY}/${label}`, count: APP_LIMITS.filesMax });
       }
       for (const entry of entries) {
         if (entry.name.startsWith('.')) {
@@ -310,14 +313,14 @@ function listFolderFiles(directory: string, label: string): readonly FolderFile[
         }
         const child = relative === '' ? entry.name : `${relative}/${entry.name}`;
         if (entry.isSymbolicLink()) {
-          throw new Error(`${APPS_DIRECTORY}/${label}/${child} is a link; an app’s folder holds files only`);
+          throw new ReferencedError('apps.error.folderHasLink', { path: `${APPS_DIRECTORY}/${label}/${child}` });
         }
         if (entry.isDirectory()) {
           next.push(child);
           continue;
         }
         if (files.length >= APP_LIMITS.filesMax) {
-          throw new Error(`${APPS_DIRECTORY}/${label} holds more than ${APP_LIMITS.filesMax} files`);
+          throw new ReferencedError('apps.error.folderTooManyFiles', { path: `${APPS_DIRECTORY}/${label}`, count: APP_LIMITS.filesMax });
         }
         const bundlePath = parseBundlePath(child);
         const full = path.join(directory, ...bundlePath.split('/'));
@@ -335,18 +338,18 @@ function readFolderFiles(directory: string, label: string, files: readonly Folde
   let totalBytes = 0;
   for (const file of files) {
     if (file.sizeBytes > APP_LIMITS.fileBytesMax) {
-      throw new Error(`${APPS_DIRECTORY}/${label}/${file.path} exceeds ${APP_LIMITS.fileBytesMax} bytes`);
+      throw new ReferencedError('apps.error.exceedsBytes', { path: `${APPS_DIRECTORY}/${label}/${file.path}`, bytes: APP_LIMITS.fileBytesMax });
     }
     totalBytes += file.sizeBytes;
   }
   if (totalBytes > APP_LIMITS.bundleBytesMax) {
-    throw new Error(`${APPS_DIRECTORY}/${label} exceeds ${APP_LIMITS.bundleBytesMax} bytes`);
+    throw new ReferencedError('apps.error.exceedsBytes', { path: `${APPS_DIRECTORY}/${label}`, bytes: APP_LIMITS.bundleBytesMax });
   }
   const read = files.map((file) => {
     const bytes = fs.readFileSync(path.join(directory, ...file.path.split('/')));
     // A file that grew between the stat and the read is held to the same bound.
     if (bytes.byteLength > APP_LIMITS.fileBytesMax) {
-      throw new Error(`${APPS_DIRECTORY}/${label}/${file.path} exceeds ${APP_LIMITS.fileBytesMax} bytes`);
+      throw new ReferencedError('apps.error.exceedsBytes', { path: `${APPS_DIRECTORY}/${label}/${file.path}`, bytes: APP_LIMITS.fileBytesMax });
     }
     return { path: file.path, bytes: new Uint8Array(bytes) };
   });
@@ -364,7 +367,7 @@ function folderStampOrTime(directory: string, label: string): string {
   try {
     return filesStamp(listFolderFiles(directory, label));
   } catch (error: unknown) {
-    return digestLines([statLine(label, directory), expectedFailure(error)]);
+    return digestLines([statLine(label, directory), expectedFailure(error).message]);
   }
 }
 
@@ -390,11 +393,11 @@ function appFolderPath(projectRoot: string, folder: string): string {
 }
 
 // A folder that fails to read is a row with the reason; a broken invariant still crashes (AGENTS.md §3).
-function expectedFailure(error: unknown): string {
+function expectedFailure(error: unknown): ReturnType<typeof appsFailure> {
   if (error instanceof Error && error.message.startsWith('Assertion failed')) {
     throw error;
   }
-  return appsFailureMessage(error);
+  return appsFailure(error);
 }
 
 function isMissing(error: unknown): boolean {

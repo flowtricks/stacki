@@ -59,12 +59,18 @@ export function createDesktopPropPreview(
 ): PropPreview & { readonly dispose: () => void } {
   let prop: string | undefined;
   let pending: (() => void) | undefined;
+  // What the debounce is waiting to send, so a pick can send it at once (commit).
+  let pendingShow: (() => void) | undefined;
+  // The override the canvas was last told to show, so a pick of the option already on
+  // show does not ask for it a second time.
+  let lastShown: string | undefined;
   let settling: (() => void) | undefined;
   // Whether the canvas may be showing a preview, so a cancel is sent only when one can be undone.
   let shown = false;
   const stopPending = () => {
     pending?.();
     pending = undefined;
+    pendingShow = undefined;
   };
   const stopSettling = () => {
     settling?.();
@@ -73,10 +79,20 @@ export function createDesktopPropPreview(
   const cancel = () => {
     stopPending();
     stopSettling();
+    lastShown = undefined;
     if (shown) {
       shown = false;
       io.send({ type: VARIANT_MESSAGE_TYPES.cancel });
     }
+  };
+  const showOverride = (override: VariantOverride): void => {
+    const key = JSON.stringify(override);
+    if (key === lastShown && shown) {
+      return;
+    }
+    lastShown = key;
+    shown = true;
+    io.send({ type: VARIANT_MESSAGE_TYPES.show, override });
   };
   return {
     prepare: (name) => {
@@ -92,10 +108,12 @@ export function createDesktopPropPreview(
         return; // A prop or value the preview cannot carry: the dropdown still picks it.
       }
       assert(override.target === instance.target, 'desktop prop preview: renders the selected instance');
+      pendingShow = () => showOverride(override);
       pending = io.schedule(DESKTOP_PROP_PREVIEW_DEBOUNCE_MS, () => {
+        const run = pendingShow;
         pending = undefined;
-        shown = true;
-        io.send({ type: VARIANT_MESSAGE_TYPES.show, override });
+        pendingShow = undefined;
+        run?.();
       });
     },
     cancel,
@@ -114,16 +132,22 @@ export function createDesktopPropPreview(
         return; // A prop the preview cannot carry: its write still shows it.
       }
       assert(override.prop === name, 'desktop prop preview: a live value previews its own prop');
-      shown = true;
-      io.send({ type: VARIANT_MESSAGE_TYPES.show, override });
+      showOverride(override);
       settling = io.schedule(DESKTOP_PROP_LIVE_SETTLE_MS, () => {
         settling = undefined;
         cancel();
       });
     },
+    // A pick: the option it chose goes to the canvas now, not after the debounce (a quick
+    // click would otherwise leave the canvas on the old value until the write rendered,
+    // and the picked option's show was dropped), and the canvas is told to hold it for
+    // the write that follows (morphVariant.ts).
     commit: () => {
+      const flush = pendingShow;
       stopPending();
       stopSettling();
+      flush?.();
+      lastShown = undefined;
       if (shown) {
         shown = false;
         io.send({ type: VARIANT_MESSAGE_TYPES.commit });

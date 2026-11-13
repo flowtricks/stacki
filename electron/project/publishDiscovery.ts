@@ -29,10 +29,14 @@ export async function discoverPublishing(root: string, input: DiscoveryRequest):
 }
 
 const PROVIDER_LABELS: Readonly<Record<DiscoveryProvider, string>> = {
+  // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
   cloudflare: 'Cloudflare',
+  // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
   'cloudflare-workers': 'Cloudflare',
   linked: 'hosting',
+  // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
   vercel: 'Vercel',
+  // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
   github: 'GitHub',
 };
 
@@ -148,7 +152,8 @@ function discoveryNotice(
     }
   }
   if (connection !== undefined || results.some((result) => result.status === 'rejected')) {
-    return { notice: { reason: connection ?? 'unknown', message: 'Some accounts could not be loaded. Refresh to retry.' } };
+    // The screen shows the sentence for the reason, so a partly loaded list reports as that reason rather than a second, unshown text.
+    return { notice: connectionProblem(provider, connection ?? 'unknown') };
   }
   return {};
 }
@@ -162,6 +167,7 @@ function discoveryProjectKey(project: PublishProject): string {
     case 'cloudflare-workers':
       return `${hosting.provider}/${hosting.accountId}/${hosting.project}`;
     case 'vercel':
+      // i18n-ignore: HTTP header value or request path, protocol text.
       return `vercel/${hosting.organizationId}/${hosting.projectId}`;
   }
 }

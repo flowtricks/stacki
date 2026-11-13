@@ -9,6 +9,7 @@ import type { Container, Document, Rule } from 'postcss';
 import selectorParser from 'postcss-selector-parser';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { SELECTOR_USAGE_LIMITS } from '../../shared/properties/selectorUsage';
 import type { StyleRegion } from '../documents/astroStyleBlocks';
 
@@ -29,12 +30,12 @@ export interface RuleSelector {
   /** 1-based line in the file. */
   readonly line: number;
   /** Why this selector can never be removed, when it cannot. */
-  readonly fixed: string | undefined;
+  readonly fixed: Described | undefined;
   /** The at-rules and rules around this one, outermost first, for postconditions. */
   readonly context: string;
 }
 
-export type RegionRules = { readonly kind: 'rules'; readonly selectors: readonly RuleSelector[] } | { readonly kind: 'unreadable'; readonly reason: string };
+export type RegionRules = { readonly kind: 'rules'; readonly selectors: readonly RuleSelector[] } | { readonly kind: 'unreadable'; readonly reason: Described };
 
 /** Every selector of every rule in a region, or why the region cannot be read. */
 export function readRegionRules(region: StyleRegion): RegionRules {
@@ -42,7 +43,7 @@ export function readRegionRules(region: StyleRegion): RegionRules {
   try {
     parsed = parseCss(region.text);
   } catch (error: unknown) {
-    return { kind: 'unreadable', reason: `CSS could not be read: ${error instanceof Error ? error.message : String(error)}` };
+    return { kind: 'unreadable', reason: described('selectors.problem.cssUnreadable', { detail: error instanceof Error ? error.message : String(error) }) };
   }
   const selectors: RuleSelector[] = [];
   const failure = collectRules(region, parsed, selectors);
@@ -209,10 +210,10 @@ export function shapeOf(selector: RuleSelector): string {
   return `${selector.context}\u0000${selector.text}`;
 }
 
-function collectRules(region: StyleRegion, parsed: ParsedCss, out: RuleSelector[]): string | undefined {
+function collectRules(region: StyleRegion, parsed: ParsedCss, out: RuleSelector[]): Described | undefined {
   const { root, original } = parsed;
   const lineBase = region.line - 1;
-  let failure: string | undefined;
+  let failure: Described | undefined;
   root.walkRules((rule: Rule) => {
     if (failure !== undefined) {
       return false;
@@ -226,22 +227,22 @@ function collectRules(region: StyleRegion, parsed: ParsedCss, out: RuleSelector[
     const ruleEnd = endOffset === undefined ? undefined : original(endOffset);
     const line = rule.source?.start?.line;
     if (ruleStart === undefined || ruleEnd === undefined || line === undefined) {
-      failure = 'CSS rule has no source position';
+      failure = described('selectors.problem.ruleNoPosition');
       return false;
     }
     const parsed = parseSelectorList(rule.selector);
     if (parsed === undefined) {
-      failure = `Selector "${rule.selector.slice(0, 80)}" could not be read`;
+      failure = described('selectors.problem.selectorUnreadable', { selector: rule.selector.slice(0, 80) });
       return false;
     }
     if (out.length + parsed.length > SELECTOR_USAGE_LIMITS.entriesMax) {
-      failure = 'Too many selectors to check';
+      failure = described('selectors.problem.tooManyToCheck');
       return false;
     }
     const context = contextOf(rule);
     // A selector written with comments in it keeps them in raws; rewriting its
     // list could drop them, so such a rule is reported and never edited.
-    const fixed = rule.raws.selector === undefined ? undefined : 'Its selector contains a comment';
+    const fixed = rule.raws.selector === undefined ? undefined : described('selectors.reason.selectorComment');
     for (const [index, item] of parsed.entries()) {
       out.push({ region, ruleStart, ruleEnd, index, listCount: parsed.length, text: item.text, names: item.names, line: lineBase + line, fixed, context });
     }

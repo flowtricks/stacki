@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { componentReference } from '../model/componentReference';
 // What the shell is drawn from: the scope context, an instance's props, tag
 // options, the code window, a symbol's file, the canvas gate, notices,
@@ -282,6 +283,7 @@ export function useCodeWindow(
 
 // Opening the file an imported symbol comes from.
 export function useSymbolFile(coreState: ReturnType<typeof useCoreState>, pageOps: ReturnType<typeof usePageOps>, lifecycle: ReturnType<typeof useLifecycle>) {
+  const translate = useTranslate();
   const { currentPage, editStackRef, projectRef, setCodeWin, setFileText } = coreState;
   const { frontmatterCode } = pageOps;
   const { showToast } = lifecycle;
@@ -309,7 +311,7 @@ export function useSymbolFile(coreState: ReturnType<typeof useCoreState>, pageOp
         const symbol = await readSymbol(projectPath, fromFile, imp.spec, name);
         if (!symbol?.ok) {
           showToast(
-            symbol?.reason === 'too-large' ? 'That file is too large to edit in the app.' : `Couldn't find where ${name} is defined (${imp.spec}).`,
+            symbol?.reason === 'too-large' ? translate('shell.symbol.tooLarge') : translate('shell.symbol.notFound', { name, spec: imp.spec }),
             'error',
           );
           return false;
@@ -330,7 +332,7 @@ export function useSymbolFile(coreState: ReturnType<typeof useCoreState>, pageOp
         return false;
       }
     },
-    [frontmatterCode, currentPage, showToast, editStackRef, projectRef, setCodeWin, setFileText],
+    [frontmatterCode, currentPage, showToast, editStackRef, projectRef, setCodeWin, setFileText, translate],
   );
   // Opens one project file, named project-relative, in the code panel: Settings → Folders
   // opens astro.config and the content config this way.

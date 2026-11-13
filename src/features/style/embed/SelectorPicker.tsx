@@ -1,4 +1,7 @@
 import { centralIcon } from '../../../ui/central/CentralIcon';
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { add as centralAdd } from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
 // The selector well: the chips a selection is styled by, picking and adding
@@ -20,24 +23,14 @@ import { InlineStyleChip } from './InlineStyleChip';
 import type { InlineChip } from './useInlineTarget';
 import { useHeldSelection } from './heldSelection';
 import { loneTypedClass, usePseudoTarget } from './editorModel';
-import {
-  CLASS_NAME_REFUSAL,
-  classRowMatch,
-  classRows,
-  classRowStep,
-  fuzzySegments,
-  isClassName,
-  rankFuzzy,
-  type ClassRow,
-  type ClassRowList,
-} from '../../../lib/fuzzyRank';
+import { classRowMatch, classRows, classRowStep, fuzzySegments, isClassName, rankFuzzy, type ClassRow, type ClassRowList } from '../../../lib/fuzzyRank';
 import { chipAtCaret, chipPart, createPressWatch, type PressWatch } from '../model/selectorCaret';
 import { PLACEMENT_END } from '../../../editor/classAttr';
 import {
   type SelectorSuggestion,
   useProjectClasses,
   PROJECT_CLASS_LIMIT,
-  SUGGESTION_KIND_LABEL,
+  SUGGESTION_KIND_LABEL_KEY,
   type ClassifiedSelector,
   classifySelector,
   selectorAccessibleLabel,
@@ -58,6 +51,7 @@ export function SelectorPicker({
   onVisibleSelectorsChange,
   inline,
 }: SelectorPickerProps) {
+  const translate = useTranslate();
   // Another element's chips land in stages; the well draws only the finished list,
   // keeping the last one until then (heldSelection.ts).
   const held = useHeldSelection({ selectors, activeSelector, activePicked }, { settled: settled ?? true });
@@ -99,7 +93,7 @@ export function SelectorPicker({
           {loading && !view.shownSelectors.length ? (
             <div className="embed-editor_selector-loading" aria-live="polite">
               <SpinnerIcon />
-              <span className="u-sr-only">Finding the selectors that style this element…</span>
+              <span className="u-sr-only">{translate('styleModel.embed.picker.finding')}</span>
             </div>
           ) : undefined}
           {view.shownSelectors.length || showInput || inline !== undefined ? (
@@ -607,6 +601,7 @@ function SelectorChip({
   readonly onDeselect: () => void;
   readonly onRemove: ((entry: ClassifiedSelector) => void) | undefined;
 }) {
+  const translate = useTranslate();
   const selectorText = entry.selector;
   const active = selectorsMatch(selectorText.text, activeSelector);
   const state: ChipState = { active, dimmed: selectorText.inContext === false, deselectable };
@@ -614,7 +609,7 @@ function SelectorChip({
   // still uses the resolved selector (sel.text).
   const label = selectorText.display ?? selectorText.text;
   const [truncated, setTruncated] = useState(false);
-  const { ref, hoverProps, hide, tip } = useHoverTip<HTMLButtonElement>(<SelectorChipTip label={label} hint={chipHint(entry, state)} />);
+  const { ref, hoverProps, hide, tip } = useHoverTip<HTMLButtonElement>(<SelectorChipTip label={label} hint={chipHint(entry, state, translate)} />);
   return (
     <>
       <button
@@ -654,7 +649,7 @@ function SelectorChip({
           event.stopPropagation();
           onRemove?.(entry);
         }}
-        title={truncated ? undefined : chipTitle(label, entry, state)}
+        title={truncated ? undefined : chipTitle(label, entry, state, translate)}
       >
         {/* The chip cuts from the start, so chips sharing a long prefix differ where
             they can be read. The whole selector stays here as text; embedEditor.css says how. */}
@@ -705,25 +700,25 @@ export function chipClassName(entry: ClassifiedSelector, state: ChipState): stri
     .join(' ');
 }
 
-export function chipTitle(label: string, entry: ClassifiedSelector, state: ChipState): string {
-  const hint = chipHint(entry, state);
+export function chipTitle(label: string, entry: ClassifiedSelector, state: ChipState, translate: Translator = ENGLISH_TRANSLATE): string {
+  const hint = chipHint(entry, state, translate);
   return hint === undefined ? label : `${label} — ${hint}`;
 }
 
 /** What a chip says beyond its selector: what a click does, or why it reads as it does. */
-export function chipHint(entry: ClassifiedSelector, state: ChipState): string | undefined {
+export function chipHint(entry: ClassifiedSelector, state: ChipState, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   if (state.active) {
-    return state.deselectable === false ? undefined : 'click to deselect';
+    return state.deselectable === false ? undefined : translate('styleModel.embed.picker.chipDeselect');
   }
   if (state.dimmed) {
-    return 'styled in another query';
+    return translate('styleModel.embed.picker.chipOtherQuery');
   }
   // A class the instance passed in says so: it is the page's class, and its rule
   // is written there rather than into the component (model/instanceClasses.ts).
   if (entry.selector.fromInstance === true) {
-    return entry.selector.pending ? 'from this instance, no styles yet' : 'from this instance';
+    return entry.selector.pending ? translate('styleModel.embed.picker.chipInstancePending') : translate('styleModel.embed.picker.chipInstance');
   }
-  return entry.selector.pending ? 'no styles yet' : undefined;
+  return entry.selector.pending ? translate('styleModel.embed.picker.chipPending') : undefined;
 }
 
 export interface AddSelectorState {
@@ -761,6 +756,7 @@ export function SelectorAddField({
   apply: (text: string) => void;
   onCaretKey?: (key: string) => boolean;
 }) {
+  const translate = useTranslate();
   const { draft, setHighlight, showList } = add;
   return (
     <div className="embed-editor_selector-field">
@@ -768,7 +764,7 @@ export function SelectorAddField({
         ref={inputRef}
         className="u-input embed-editor_selector-add"
         value={draft}
-        placeholder="Add a selector (e.g. .card:hover)"
+        placeholder={translate('styleModel.embed.picker.addPlaceholder', { example: '.card:hover' })}
         spellCheck={false}
         disabled={busy}
         role="combobox"
@@ -796,7 +792,7 @@ export function SelectorAddField({
           }
           selectorKeyDown(event, add, apply);
         }}
-        aria-label="Add a selector"
+        aria-label={translate('styleModel.embed.picker.addLabel')}
       />
       {showList ? <SelectorSuggestions add={add} listRef={listRef} apply={apply} /> : undefined}
     </div>
@@ -861,19 +857,17 @@ export function selectorKeyDown(event: ReactKeyboardEvent<HTMLInputElement>, add
 // It is never disabled: the choice is remembered, so it can be set before there
 // is anything to hide, and greyed out it read as broken.
 export function SelectorFilterToggles({ view }: { view: SelectorView }) {
+  const translate = useTranslate();
   const { globals, inherited } = view;
   return (
     <>
-      <label className="embed-editor_check embed-editor_selector-filter" title="Tags, universal selectors, and broad states can match many elements">
+      <label className="embed-editor_check embed-editor_selector-filter" title={translate('styleModel.embed.picker.hideGlobalsTip')}>
         <input type="checkbox" checked={view.filters.hideGlobals} onChange={(event) => view.setHideGlobals(event.target.checked)} />
-        <span>Hide global selectors ({globals.length})</span>
+        <span>{translate('styleModel.embed.picker.hideGlobals', { count: globals.length })}</span>
       </label>
-      <label
-        className="embed-editor_check embed-editor_selector-filter"
-        title="Selectors that apply because this element is inside a matching parent or ancestor"
-      >
+      <label className="embed-editor_check embed-editor_selector-filter" title={translate('styleModel.embed.picker.hideInheritedTip')}>
         <input type="checkbox" checked={view.filters.hideInherited} onChange={(event) => view.setHideInherited(event.target.checked)} />
-        <span>Hide inherited styles ({inherited.length})</span>
+        <span>{translate('styleModel.embed.picker.hideInherited', { count: inherited.length })}</span>
       </label>
     </>
   );
@@ -895,9 +889,17 @@ export const ADD_QUERY = '\0add-query';
 
 export const PlusIcon = centralIcon(centralAdd, 12);
 
-export const QUERY_MODES: SegmentedOption<'wrap' | 'nest'>[] = [
-  { value: 'wrap', label: 'Wrap', tooltip: 'New block — @query { selector { … } }' },
-  { value: 'nest', label: 'Nest', tooltip: 'Inside the selector — selector { @query { … } }' },
+export const queryModes = (translate: Translator): SegmentedOption<'wrap' | 'nest'>[] => [
+  {
+    value: 'wrap',
+    label: translate('styleModel.embed.query.wrap'),
+    tooltip: translate('styleModel.embed.query.wrapTip', { code: '@query { selector { … } }' }),
+  },
+  {
+    value: 'nest',
+    label: translate('styleModel.embed.query.nest'),
+    tooltip: translate('styleModel.embed.query.nestTip', { code: 'selector { @query { … } }' }),
+  },
 ];
 
 export type QuerySuggestion = { query: string; kind: string };
@@ -950,6 +952,7 @@ function SelectorSuggestions({
   readonly listRef: React.RefObject<HTMLDivElement>;
   readonly apply: (text: string) => void;
 }) {
+  const translate = useTranslate();
   const { list, highlight, setHighlight, refusal } = add;
   return (
     <Popup
@@ -959,7 +962,7 @@ function SelectorSuggestions({
       className="embed-editor_selector-suggest"
       ref={listRef}
       role="listbox"
-      label="Selector suggestions"
+      label={translate('styleModel.embed.picker.suggestions')}
     >
       {list.rows.map((row, i) => (
         <button
@@ -979,7 +982,7 @@ function SelectorSuggestions({
       {/* Last, so a row's place among the children stays its index in the list. */}
       {refusal ? (
         <div className="embed-editor_suggest-note" role="status">
-          {CLASS_NAME_REFUSAL}
+          {translate('styleModel.embed.picker.classRefusal')}
         </div>
       ) : undefined}
     </Popup>
@@ -992,11 +995,12 @@ function selectorRowText(row: ClassRow<RankedSuggestion>): string {
 }
 
 function SelectorRowLabel({ row }: { readonly row: ClassRow<RankedSuggestion> }) {
+  const translate = useTranslate();
   if (row.kind === 'create') {
     return (
       <>
-        <span className="embed-editor_suggest-sel">Create {row.name}</span>
-        <span className="embed-editor_suggest-kind">{SUGGESTION_KIND_LABEL.class}</span>
+        <span className="embed-editor_suggest-sel">{translate('styleModel.embed.picker.create', { name: row.name })}</span>
+        <span className="embed-editor_suggest-kind">{translate(SUGGESTION_KIND_LABEL_KEY.class)}</span>
       </>
     );
   }
@@ -1014,7 +1018,7 @@ function SelectorRowLabel({ row }: { readonly row: ClassRow<RankedSuggestion> })
           ),
         )}
       </span>
-      <span className="embed-editor_suggest-kind">{SUGGESTION_KIND_LABEL[suggestion.kind]}</span>
+      <span className="embed-editor_suggest-kind">{translate(SUGGESTION_KIND_LABEL_KEY[suggestion.kind])}</span>
     </>
   );
 }

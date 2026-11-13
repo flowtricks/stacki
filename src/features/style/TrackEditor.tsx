@@ -11,6 +11,8 @@ import { handleArrowStep } from './model/numberStep';
 import { panelSpan } from './model/panelBox';
 import { parseTrackSize, trackKind, type TrackSize } from './model/gridTemplate';
 import { WarnIcon } from './GridSettingsKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 // Webflow's grid track glyphs: a GEAR for minmax/custom, an "A" for auto/content, and
 // a double-arrow for everything else (fr / lengths). The arrow points along the axis
@@ -80,6 +82,7 @@ export function TrackInput({
   busy: boolean;
   onCommit: (value: string) => void;
 }) {
+  const translate = useTranslate();
   const [text, setText] = useState(value);
   const focused = useRef(false);
   useEffect(() => {
@@ -102,7 +105,7 @@ export function TrackInput({
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      ariaLabel={translate('style.trackEditor.connect', { name: ariaLabel })}
       disabled={busy}
       className="is-fill"
       prop="grid-template-columns"
@@ -154,9 +157,9 @@ export function stepTrackInput(event: React.KeyboardEvent<HTMLInputElement>): st
   return stepped.text;
 }
 
-export const SIZING_OPTIONS: ReadonlyArray<SegmentedOption<'default' | 'minmax'>> = [
-  { value: 'default', label: 'Default' },
-  { value: 'minmax', label: 'Min/Max' },
+export const sizingOptions = (translate: Translator): ReadonlyArray<SegmentedOption<'default' | 'minmax'>> => [
+  { value: 'default', label: translate('style.trackEditor.sizingDefault') },
+  { value: 'minmax', label: translate('style.trackEditor.sizingMinMax') },
 ];
 
 export type AutoFit = { on: boolean; can: boolean; onToggle: (on: boolean) => void };
@@ -187,6 +190,7 @@ export function switchedSize(track: string, mode: 'default' | 'minmax'): TrackSi
 // The per-track editor: Default (a single size) or Min/Max (a minmax pair). Track lists
 // (not the auto sections) also get the Auto-fit toggle + its constraint warning.
 export function TrackSizeEditor({ track, busy, autoFit, onChange }: { track: string; busy: boolean; autoFit?: AutoFit; onChange: (size: TrackSize) => void }) {
+  const translate = useTranslate();
   const size = parseTrackSize(track);
   const switchMode = (mode: 'default' | 'minmax') => {
     if (mode !== size.mode) {
@@ -196,8 +200,14 @@ export function TrackSizeEditor({ track, busy, autoFit, onChange }: { track: str
   return (
     <div className="embed-editor_grid-track-editor">
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Sizing</span>
-        <SegmentedControl value={size.mode} options={SIZING_OPTIONS} onChange={switchMode} ariaLabel="Track sizing" disabled={busy} />
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.trackEditor.sizing')}</span>
+        <SegmentedControl
+          value={size.mode}
+          options={sizingOptions(translate)}
+          onChange={switchMode}
+          ariaLabel={translate('style.trackEditor.trackSizing')}
+          disabled={busy}
+        />
       </div>
       <TrackSizeFields size={size} busy={busy} onChange={onChange} />
       {autoFit ? <AutoFitToggle autoFit={autoFit} busy={busy} /> : undefined}
@@ -207,14 +217,15 @@ export function TrackSizeEditor({ track, busy, autoFit, onChange }: { track: str
 
 // Default: one Size field; Min/Max: the two bounds.
 export function TrackSizeFields({ size, busy, onChange }: { size: TrackSize; busy: boolean; onChange: (size: TrackSize) => void }) {
+  const translate = useTranslate();
   if (size.mode === 'default') {
     return (
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Size</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.trackEditor.size')}</span>
         <TrackInput
           value={size.value}
           placeholder="1fr"
-          ariaLabel="Track size"
+          ariaLabel={translate('style.trackEditor.trackSize')}
           busy={busy}
           onCommit={(next) => onChange({ mode: 'default', value: next || 'auto' })}
         />
@@ -224,21 +235,21 @@ export function TrackSizeFields({ size, busy, onChange }: { size: TrackSize; bus
   return (
     <>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Min</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.trackEditor.min')}</span>
         <TrackInput
           value={size.min}
           placeholder="auto"
-          ariaLabel="Track min"
+          ariaLabel={translate('style.trackEditor.trackMin')}
           busy={busy}
           onCommit={(next) => onChange({ mode: 'minmax', min: next || 'auto', max: size.max })}
         />
       </div>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Max</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.trackEditor.max')}</span>
         <TrackInput
           value={size.max}
           placeholder="1fr"
-          ariaLabel="Track max"
+          ariaLabel={translate('style.trackEditor.trackMax')}
           busy={busy}
           onCommit={(next) => onChange({ mode: 'minmax', min: size.min, max: next || '1fr' })}
         />
@@ -248,6 +259,7 @@ export function TrackSizeFields({ size, busy, onChange }: { size: TrackSize; bus
 }
 
 export function AutoFitToggle({ autoFit, busy }: { autoFit: AutoFit; busy: boolean }) {
+  const translate = useTranslate();
   return (
     <>
       <label className="embed-editor_grad-check embed-editor_grid-autofit">
@@ -257,14 +269,14 @@ export function AutoFitToggle({ autoFit, busy }: { autoFit: AutoFit; busy: boole
           disabled={busy || (!autoFit.can && !autoFit.on)}
           onChange={(event) => autoFit.onToggle(event.target.checked)}
         />
-        <span>Auto-fit</span>
+        <span>{translate('style.trackEditor.autoFit')}</span>
       </label>
       {!autoFit.can && !autoFit.on ? (
         <div className="embed-editor_grid-warning">
           <span className="embed-editor_grid-warning-icon">
             <WarnIcon />
           </span>
-          <span>Auto-fit can’t be enabled when there are auto, flexible (FR), minmax(auto, fr), minmax(auto, auto), or other auto-fit columns or rows.</span>
+          <span>{translate('style.trackEditor.autoFitWarning')}</span>
         </div>
       ) : undefined}
     </>

@@ -139,15 +139,17 @@ test('an existing config gains the collection beside the others, and its missing
 
 test('a config that cannot take the collection is refused with the reason', () => {
   const taken = addCollectionToConfig('export const collections = { news };\n', 'news');
-  assert.deepEqual(taken, { ok: false, error: 'A collection named “news” already exists.' });
+  assert.equal(taken.ok, false);
+  assert.equal(taken.error.message, 'A collection named “news” already exists.');
+  assert.deepEqual(taken.error.messageRef, { key: 'cmsBackend.config.collectionExists', params: { name: 'news' } });
   const keyed = addCollectionToConfig("export const collections = { 'news': x };\n", 'news');
   assert.equal(keyed.ok, false);
   const missing = addCollectionToConfig('export default {};\n', 'news');
   assert.equal(missing.ok, false);
-  assert.match(missing.error, /could not find/);
+  assert.match(missing.error.message, /could not find/);
   const open = addCollectionToConfig('export const collections = { a: "}", b: {', 'news');
   assert.equal(open.ok, false);
-  assert.match(open.error, /not closed/);
+  assert.match(open.error.message, /not closed/);
   const shadowed = addCollectionToConfig("import news from './news';\nexport const collections = { team };\n", 'news');
   assert.equal(shadowed.ok, true);
   assert.match(shadowed.value.text, /const newsCollection = defineCollection/);

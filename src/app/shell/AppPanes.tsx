@@ -1,3 +1,5 @@
+import { useFormat, useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import { desktopCanvasText } from './desktopCanvasText';
 import { RemoteCmsView } from '../../features/cms/RemoteCmsView';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -22,7 +24,6 @@ import { noteText } from '../../editor/treeSelection';
 import { canvasClickAction } from '../../editor/canvasClick';
 import { leftTabAfterCanvasSelection } from '../model/canvasSelectionTab';
 import PreviewPane from '../../features/preview/PreviewPane';
-import { relativeTime } from '../../features/history/HistoryPanel';
 import SaveConflictNotice from '../SaveConflictNotice';
 import { nodeAtPath } from '../../editor/editorTree';
 import type { AssetReference, PickedAsset } from '../../ui/AssetField';
@@ -52,6 +53,7 @@ import { selectedPseudo } from '../model/selectionStructure';
 import { appOverlayLayer, useAppOverlayPaths } from './DesktopApps';
 
 export function CanvasPane({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const hoverNodeId = useLiveValue(app.hoverNode);
   const hoverPseudo = useLiveValue(app.hoverPseudo);
   const context = useCanvasContextMenu(app);
@@ -61,7 +63,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
       <PreviewPane
         extraTrackPaths={appOverlayPaths}
         overlayLayer={appOverlayLayer(app)}
-        textDocument={desktopCanvasText(app)}
+        textDocument={desktopCanvasText(app, translate)}
         spacingHover={app.spacingHover}
         devUrl={app.devUrl}
         devStatus={app.devStatus}
@@ -360,6 +362,9 @@ function InstructionsCover({ app }: { readonly app: ShellView }) {
 // click editing a file that isn't what's on screen. An overlay cannot do that, because
 // there is nothing to click.
 export function OldVersionCover({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
+  const { formatRelativeTime } = useFormat();
   const { oldVersionUrl, previewInfo } = app;
   if (!oldVersionUrl || !previewInfo) {
     return undefined;
@@ -368,24 +373,27 @@ export function OldVersionCover({ app }: { readonly app: ShellView }) {
     <div className="preview-mode old-version">
       <div className="preview-banner">
         <span className="preview-banner-text">
-          You’re looking at <strong>{previewInfo.subject}</strong> — how the site was {relativeTime(previewInfo.when ?? '')}. This is a look, not a place to
-          work.
+          {translateRich('shell.oldVersion.banner', {
+            subject: <strong>{previewInfo.subject}</strong>,
+            when: Number.isFinite(Date.parse(previewInfo.when ?? '')) ? formatRelativeTime(Date.parse(previewInfo.when ?? ''), Date.now()) : '',
+          })}
         </span>
         <button className="preview-banner-exit" onClick={app.onExitCommitPreview}>
-          Back to now
+          {translate('shell.oldVersion.backToNow')}
         </button>
       </div>
-      <iframe src={oldVersionUrl} title="An earlier version of the site" />
+      <iframe src={oldVersionUrl} title={translate('shell.oldVersion.frameTitle')} />
     </div>
   );
 }
 
 const RIGHT_TABS = [
-  { id: 'style', label: 'Style' },
-  { id: 'settings', label: 'Settings' },
-] as const;
+  { id: 'style', labelKey: 'shell.rightTabs.style' },
+  { id: 'settings', labelKey: 'shell.rightTabs.settings' },
+] as const satisfies readonly { readonly id: string; readonly labelKey: MessageKey }[];
 
 export function RightPanel({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   // Hovering a component prop's option previews it on the canvas without writing.
   const propPreview = useDesktopPropPreview(
     propPreviewInstance(app.selectedComponent?.path, app.project.path ?? undefined, app.selectedId ? app.pathFor(app.selectedId) : undefined),
@@ -407,14 +415,14 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
     <ResizablePanel kind="right">
       <RightTabs app={app} />
       <KeptTabPanel shown={app.rightTab === 'style'}>
-        <PanelBoundary name="The Style panel" resetKey={app.selectedId}>
+        <PanelBoundary name="The Style panel" label={translate('shell.rightTabs.stylePanel')} resetKey={app.selectedId}>
           <StyleTab app={app} />
         </PanelBoundary>
       </KeptTabPanel>
       <KeptTabPanel shown={app.rightTab === 'settings'}>
         <PropPreviewContext.Provider value={propPreview}>
-          <PanelBoundary name="The Settings panel" resetKey={app.selectedId}>
-            <PropsPanel {...settingsValues(app)} {...settingsHandlers(app)} />
+          <PanelBoundary name="The Settings panel" label={translate('shell.rightTabs.settingsPanel')} resetKey={app.selectedId}>
+            <PropsPanel {...settingsValues(app)} {...settingsHandlers(app, translate)} />
           </PanelBoundary>
         </PropPreviewContext.Provider>
       </KeptTabPanel>
@@ -423,6 +431,7 @@ export function RightPanel({ app }: { readonly app: ShellView }) {
 }
 
 export function RightTabs({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const role = useCurrentRole();
   const tabs = RIGHT_TABS.filter((tab) => canPanel(role, tab.id));
   const stripRef = useRef<HTMLDivElement>(null);
@@ -432,7 +441,7 @@ export function RightTabs({ app }: { readonly app: ShellView }) {
       {indicator && <span className="right-tabs-indicator" style={indicator} />}
       {tabs.map((tab) => (
         <button key={tab.id} data-right-tab={tab.id} className={app.rightTab === tab.id ? 'on' : ''} onClick={() => app.setRightTab(tab.id)}>
-          {tab.label}
+          {translate(tab.labelKey)}
         </button>
       ))}
     </div>
@@ -474,6 +483,7 @@ function sameIndicator(previous: TabIndicator | undefined, next: TabIndicator | 
 }
 
 export function StyleTab({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const { selectedId } = app;
   const pageFile = app.editStack[app.editStack.length - 1]?.path || app.currentPage?.path || undefined;
   // Each component the page uses, read as it loads (StylePanel): the first instance
@@ -524,16 +534,20 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       onAddClass={(name, placement) =>
         selectedId
           ? app.addClassToNode(selectedId, name, placement, app.pathFor(selectedId))
-          : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
+          : Promise.resolve({ tag: 'refused', message: translate('shell.refusal.noElement') })
       }
       onAddStyleBlock={(request) =>
-        selectedId ? app.addStyleBlock(selectedId, request, app.pathFor(selectedId)) : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
+        selectedId
+          ? app.addStyleBlock(selectedId, request, app.pathFor(selectedId))
+          : Promise.resolve({ tag: 'refused', message: translate('shell.refusal.noElement') })
       }
       onRemoveClass={(name) =>
-        selectedId ? app.removeClassFromNode(selectedId, name, app.pathFor(selectedId)) : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
+        selectedId
+          ? app.removeClassFromNode(selectedId, name, app.pathFor(selectedId))
+          : Promise.resolve({ tag: 'refused', message: translate('shell.refusal.noElement') })
       }
       onRemoveAttribute={(name) =>
-        selectedId ? app.removeAttributeFromNode(selectedId, name) : Promise.resolve({ tag: 'refused', message: 'no element is selected' })
+        selectedId ? app.removeAttributeFromNode(selectedId, name) : Promise.resolve({ tag: 'refused', message: translate('shell.refusal.noElement') })
       }
       onSetInlineStyle={(nodeId, style) => {
         // The Settings style field's own write (desktopAppHost.ts setStyle): one
@@ -619,11 +633,11 @@ export function settingsValues(app: ShellView) {
 
 // What the Settings tab's fields write, each to the selection.
 // A list setting's property, renamed or retitled as the Properties panel would.
-function loopPropertyEditor(app: ShellView) {
+function loopPropertyEditor(app: ShellView, translate: Translator) {
   return async (key: string, edit: LoopPropertyEdit): Promise<string | undefined> => {
     const file = app.editStack[app.editStack.length - 1]?.path || app.currentPage?.path;
     if (file === undefined) {
-      return 'Open the component first.';
+      return translate('shell.loop.openComponent');
     }
     const saver = {
       projectPath: app.project.path,
@@ -633,11 +647,11 @@ function loopPropertyEditor(app: ShellView) {
       recordUndo: app.recordPropertyUndo,
       completeSave: app.completePropertySave,
     };
-    return editLoopProperty(saver, key, edit);
+    return editLoopProperty(saver, key, edit, translate);
   };
 }
 
-export function settingsHandlers(app: ShellView) {
+export function settingsHandlers(app: ShellView, translate: Translator) {
   const { selectedId } = app;
   return {
     ...settingsTextHandlers(app),
@@ -674,10 +688,10 @@ export function settingsHandlers(app: ShellView) {
     onOpenCode: app.openCodeWindow,
     onSetFrontmatter: app.setExtraFrontmatter,
     onSetLoopSource: (target: LoopTarget, sanityClient: 'available' | 'unavailable', declaration?: PropDeclaration): LoopApplyResult =>
-      selectedId ? app.setLoopSource(selectedId, target, sanityClient, declaration) : { ok: false, message: 'Select the loop first.' },
-    onEditLoopProperty: loopPropertyEditor(app),
+      selectedId ? app.setLoopSource(selectedId, target, sanityClient, declaration) : { ok: false, message: translate('shell.loop.selectFirst') },
+    onEditLoopProperty: loopPropertyEditor(app, translate),
     onCommitLoopHead: (value: string, renames: readonly Rename[]): string | undefined =>
-      selectedId ? app.setLoopHead(selectedId, value, renames) : 'Select the loop first.',
+      selectedId ? app.setLoopHead(selectedId, value, renames) : translate('shell.loop.selectFirst'),
     onRenameVariable: app.renameVariable,
     onOpenSymbol: app.onOpenSymbol,
     onToggleElse: (want: boolean) => {
@@ -770,11 +784,4 @@ export function ConflictNotice({ app }: { readonly app: ShellView }) {
   );
 }
 
-export function BusyOverlay({ message }: { readonly message: string }) {
-  return (
-    <div className="busy-overlay">
-      <div className="spinner" />
-      <div>{message}</div>
-    </div>
-  );
-}
+export { BusyOverlay } from './BusyOverlay';

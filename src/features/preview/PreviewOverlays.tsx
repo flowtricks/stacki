@@ -2,6 +2,7 @@ import { outsideScope } from '../../../shared/properties/deepOutline';
 import { canvasHighlight, deepHoverNode, subscribeCanvasHighlight } from '../../ui/canvasOutlineMode';
 import type { CanvasHighlight } from '../../../shared/properties/deepOutline';
 import React, { useSyncExternalStore } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { assert } from '../../../shared/core/assert';
 import { pseudoPath, type PseudoLayer } from '../../../shared/page/pseudoPath';
 import type { Box } from './outlineBoxes';
@@ -188,6 +189,7 @@ function ComponentEditButton({
   readonly occurrence: number;
   readonly onOpen: PreviewOverlaysProps['onOpenComponent'];
 }) {
+  const translate = useTranslate();
   if (info.kind !== 'component') {
     return undefined;
   }
@@ -204,8 +206,8 @@ function ComponentEditButton({
     <button
       type="button"
       className="node-outline-edit"
-      aria-label={`Edit ${info.label} component`}
-      data-tooltip="Edit component"
+      aria-label={translate('preview.overlay.editComponent', { name: info.label })}
+      data-tooltip={translate('preview.overlay.editTip')}
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
       onClick={(event) => {

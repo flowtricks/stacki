@@ -8,12 +8,13 @@
 // call, and this file only decides what the attribute says and what it becomes.
 
 import { assert } from '../../../../shared/core/assert';
+import { described, type Described, type MessageKey, type TypedMessageRef } from '../../../../shared/properties/i18n/messageRef';
 import { LIMITS } from '../../../../shared/core/limits';
 import { editInlineStyle, readInlineStyle, type InlineDeclaration } from '../../../../shared/engine/inlineStyle';
 import type { StyleDeclaration } from '../../../../shared/engine/intent';
 import type { HostNode } from './host';
 import { readableStyleCode, readableStyleText, styleExpressionSpanInSource } from './inlineCode';
-import { readStyleBranches, type StyleBranch } from './inlineBranches';
+import { alwaysBranchLabel, readStyleBranches, type StyleBranch } from './inlineBranches';
 
 /** What the selected element's `style` attribute holds, as far as the panel goes. */
 export type InlineStyle =
@@ -25,7 +26,7 @@ export type InlineStyle =
   // template): edited branch by branch, where `source` says (inlineBranches.ts).
   | { readonly kind: 'branched'; readonly expression: string; readonly branches: readonly StyleBranch[]; readonly source: InlineSource }
   // Code the panel cannot hold: shown read-only (`code`, model/inlineCode.ts), with why.
-  | { readonly kind: 'code'; readonly reason: InlineCodeReason; readonly message: string; readonly code: string };
+  | { readonly kind: 'code'; readonly reason: InlineCodeReason; readonly message: string; readonly messageRef: TypedMessageRef; readonly code: string };
 
 /** Where an expression's edits are written. */
 export type InlineSource =
@@ -42,12 +43,14 @@ export type InlineCodeReason =
   | 'component';
 
 /** The attribute's next text: undefined removes it (the last declaration went). */
-export type InlineWrite = { readonly tag: 'write'; readonly next: string | undefined } | { readonly tag: 'refused'; readonly message: string };
+export type InlineWrite = { readonly tag: 'write'; readonly next: string | undefined } | ({ readonly tag: 'refused' } & Described);
 
 /** How a contributor from the style attribute is named where a selector would be.
  *  `@` cannot start a selector, so no rule's text can ever equal it. */
 export const INLINE_STYLE_SELECTOR = '@inline-style';
+// The chip's name in its English form; the panel shows `inlineStyleLabel` translated.
 export const INLINE_STYLE_LABEL = 'Inline styles';
+export const INLINE_STYLE_LABEL_KEY: MessageKey = 'styleModel.inline.label';
 
 export const INLINE_NONE: InlineStyle = { kind: 'none' };
 
@@ -71,11 +74,16 @@ export function inlineStyleOf(node: Pick<HostNode, 'props'> | undefined): Inline
     return expressionStyle(value, { kind: 'node' });
   }
   if (value.length > LIMITS.attrCharsMax) {
-    return { kind: 'code', reason: 'unreadable', message: UNREADABLE, code: readableStyleText(value.slice(0, LIMITS.attrCharsMax)) };
+    return {
+      kind: 'code',
+      reason: 'unreadable',
+      ...described('styleModel.inline.reason.unreadable'),
+      code: readableStyleText(value.slice(0, LIMITS.attrCharsMax)),
+    };
   }
   const declarations = readInlineStyle(value);
   if (declarations === undefined) {
-    return { kind: 'code', reason: 'unreadable', message: UNREADABLE, code: readableStyleText(value) };
+    return { kind: 'code', reason: 'unreadable', ...described('styleModel.inline.reason.unreadable'), code: readableStyleText(value) };
   }
   if (declarations.length === 0) {
     // Only separators (`;`): nothing is declared.
@@ -84,13 +92,11 @@ export function inlineStyleOf(node: Pick<HostNode, 'props'> | undefined): Inline
   return { kind: 'declarations', text: value, declarations };
 }
 
-const UNREADABLE = 'This style attribute is not a plain list of declarations.';
-
 /** An expression as the panel edits it: by branch, or read-only with the reason. */
 export function expressionStyle(expression: string, source: InlineSource): InlineStyle {
   const read = readStyleBranches(expression);
   if (read.tag === 'unsupported') {
-    return { kind: 'code', reason: 'expression', message: read.reason, code: readableStyleCode(expression) };
+    return { kind: 'code', reason: 'expression', message: read.reason, messageRef: read.reasonRef, code: readableStyleCode(expression) };
   }
   assert(read.branches.length > 0, 'expressionStyle: an editable expression has a branch');
   return { kind: 'branched', expression, branches: read.branches, source };
@@ -139,7 +145,7 @@ export function chipInlineStyle(
   const span = component === undefined ? undefined : styleExpressionSpanInSource(component.text);
   if (component === undefined || span === undefined) {
     // Without the component's file, what the canvas rendered, read-only.
-    return { kind: 'code', reason: 'component', message: 'The component that writes this style could not be read.', code: readableStyleText(rendered.style) };
+    return { kind: 'code', reason: 'component', ...described('styleModel.inline.reason.componentUnreadable'), code: readableStyleText(rendered.style) };
   }
   const fileName = component.path.split(/[\\/]/).pop() ?? component.path;
   return expressionStyle(span.expression, { kind: 'component', path: component.path, fileName, text: component.text, start: span.start, end: span.end });
@@ -188,7 +194,7 @@ export function inlineStyleWrite(text: string, properties: readonly string[], de
   assert(properties.length > 0, 'inlineStyleWrite: a write names a property');
   assert(properties.length <= INLINE_WRITE_PROPERTIES_MAX, 'inlineStyleWrite: a write names a handful of properties');
   if (text.length > LIMITS.attrCharsMax) {
-    return { tag: 'refused', message: 'This style attribute is too long to edit here. Edit it in Settings.' };
+    return { tag: 'refused', ...described('styleModel.inline.refusal.tooLongToEdit') };
   }
   let next = text;
   for (const property of properties) {
@@ -196,26 +202,26 @@ export function inlineStyleWrite(text: string, properties: readonly string[], de
     assert(property !== '', 'inlineStyleWrite: property names are not empty');
     const edited = editInlineStyle(next, property, declaration);
     if (edited.tag === 'ambiguous') {
-      return { tag: 'refused', message: `${property} is declared twice in the style attribute. Edit it in Settings.` };
+      return { tag: 'refused', ...described('styleModel.inline.refusal.declaredTwice', { property }) };
     }
     if (edited.tag === 'unreadable') {
-      return { tag: 'refused', message: 'The style attribute is not a plain list of declarations. Edit it in Settings.' };
+      return { tag: 'refused', ...described('styleModel.inline.refusal.notPlainList') };
     }
     next = edited.text;
   }
   if (next.length > LIMITS.attrCharsMax) {
-    return { tag: 'refused', message: 'That would make the style attribute too long.' };
+    return { tag: 'refused', ...described('styleModel.inline.refusal.tooLong') };
   }
   const read = readInlineStyle(next);
   if (read === undefined) {
     // A value with a stray bracket or quote would break every declaration after it.
-    return { tag: 'refused', message: 'That value would break the style attribute. Check its brackets and quotes.' };
+    return { tag: 'refused', ...described('styleModel.inline.refusal.valueBreaks') };
   }
   if (declaration.tag === 'set') {
     // A value holding its own top-level `;` would write a second declaration nobody asked for.
     const alone = readInlineStyle(`x: ${declaration.value}`);
     if (alone?.length !== 1) {
-      return { tag: 'refused', message: 'A value cannot hold a “;” of its own here.' };
+      return { tag: 'refused', ...described('styleModel.inline.refusal.semicolon') };
     }
   }
   if (read.length === 0) {
@@ -228,7 +234,7 @@ export function inlineStyleWrite(text: string, properties: readonly string[], de
 /** A plain string attribute as the CSS code editor's one branch: always applied. */
 export function plainStyleBranch(text: string): StyleBranch {
   assert(text.length <= LIMITS.attrCharsMax, 'plainStyleBranch: an attribute is inside its bound');
-  return { key: '0', label: 'always', start: 0, end: text.length, form: { kind: 'string', quote: '"' }, body: text };
+  return { key: '0', ...alwaysBranchLabel(), start: 0, end: text.length, form: { kind: 'string', quote: '"' }, body: text };
 }
 
 /**
@@ -238,13 +244,13 @@ export function plainStyleBranch(text: string): StyleBranch {
  */
 export function plainStyleCommit(body: string): InlineWrite {
   if (body.length > LIMITS.attrCharsMax) {
-    return { tag: 'refused', message: 'That would make the style attribute too long.' };
+    return { tag: 'refused', ...described('styleModel.inline.refusal.tooLong') };
   }
   if (body.trim() === '') {
     return { tag: 'write', next: undefined };
   }
   if (readInlineStyle(body) === undefined) {
-    return { tag: 'refused', message: 'The style attribute is not a list of declarations yet: check its colons, brackets and quotes.' };
+    return { tag: 'refused', ...described('styleModel.inline.refusal.notDeclarations') };
   }
   return { tag: 'write', next: body };
 }

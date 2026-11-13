@@ -34,7 +34,6 @@ const PRE_ALLOWED = {
 // single declaration in a hint. It is a label, not code to read. A shell command
 // is code wherever it sits, and takes CodeInline.
 const CODE_LABELS_ALLOWED = {
-  'src/app/settings/AuditsSettings.tsx': 'A file path in a sentence.',
   'src/app/settings/InstructionsSettings.tsx': 'A path pattern in a sentence or a list row.',
   'src/features/assets/AssetsPanel.tsx': 'A folder name in a sentence.',
   'src/features/cms/CmsSettings.tsx': 'A field key in a sentence.',

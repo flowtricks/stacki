@@ -25,7 +25,7 @@ export async function resolveCanvasCursor(appId: string, request: AppCanvasCurso
   }
   const bytes = await read(appId, request.image, APP_RPC_LIMITS.cursorImageBytesMax);
   if (bytes === undefined) {
-    return { ok: false, reason: `cursor.image must be a file in the app’s bundle of at most ${APP_RPC_LIMITS.cursorImageBytesMax} bytes` };
+    return { ok: false, reason: `cursor.image must be a file in the app’s bundle of at most ${APP_RPC_LIMITS.cursorImageBytesMax} bytes` }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   assert(bytes.length <= APP_RPC_LIMITS.cursorImageBytesMax, 'A reader keeps to the byte bound');
   const checked = request.image.endsWith('.png') ? checkPNG(bytes) : checkSVG(bytes);
@@ -79,7 +79,7 @@ type Checked = { readonly ok: true; readonly type: 'image/png' | 'image/svg+xml'
 /** A PNG by its signature, no larger than a cursor by its header. */
 export function checkPNG(bytes: Uint8Array): Checked {
   if (bytes.length < PNG_SIZE_OFFSET + 8 || PNG_SIGNATURE.some((byte, index) => bytes[index] !== byte)) {
-    return { ok: false, reason: 'cursor.image ends in .png but is not a PNG' };
+    return { ok: false, reason: 'cursor.image ends in .png but is not a PNG' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   return sized(view.getUint32(PNG_SIZE_OFFSET), view.getUint32(PNG_SIZE_OFFSET + 4), 'image/png');
@@ -91,16 +91,16 @@ export function checkSVG(bytes: Uint8Array): Checked {
   try {
     source = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
-    return { ok: false, reason: 'cursor.image ends in .svg but is not UTF-8 text' };
+    return { ok: false, reason: 'cursor.image ends in .svg but is not UTF-8 text' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   const root = /<svg\b[^>]*>/i.exec(source)?.[0];
   if (root === undefined) {
-    return { ok: false, reason: 'cursor.image ends in .svg but has no <svg> element' };
+    return { ok: false, reason: 'cursor.image ends in .svg but has no <svg> element' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   const width = pixelsOf(/\swidth\s*=\s*["']\s*([0-9.]+)\s*(?:px)?\s*["']/i.exec(root)?.[1]);
   const height = pixelsOf(/\sheight\s*=\s*["']\s*([0-9.]+)\s*(?:px)?\s*["']/i.exec(root)?.[1]);
   if (width === undefined || height === undefined) {
-    return { ok: false, reason: 'A cursor SVG sets width and height in pixels on its <svg> element' };
+    return { ok: false, reason: 'A cursor SVG sets width and height in pixels on its <svg> element' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   return sized(width, height, 'image/svg+xml');
 }
@@ -108,7 +108,7 @@ export function checkSVG(bytes: Uint8Array): Checked {
 function sized(width: number, height: number, type: 'image/png' | 'image/svg+xml'): Checked {
   const max = APP_RPC_LIMITS.cursorImagePxMax;
   if (width < 1 || height < 1 || width > max || height > max) {
-    return { ok: false, reason: `A cursor image is 1 to ${max} pixels a side; this one is ${width}×${height}` };
+    return { ok: false, reason: `A cursor image is 1 to ${max} pixels a side; this one is ${width}×${height}` }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   return { ok: true, type };
 }

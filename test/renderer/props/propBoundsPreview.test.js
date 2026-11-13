@@ -293,6 +293,47 @@ test('clicking a previewed option commits it with exactly one source write', asy
   assert.deepEqual(sent.at(-1), { type: 'avb:variant-commit' }, 'nothing is left to clean up after a commit');
 });
 
+test('a click before the debounce still shows the picked option, then commits it, with one write', async () => {
+  const { preview, sent, tick } = previewHarness();
+  const panel = mount([VARIANT], { variant: { type: 'string', value: 'h2' } }, preview);
+  const trigger = field('variant').querySelector('.dd-trigger');
+  await act(async () => trigger.dispatchEvent(pointerInto()));
+  await act(async () => trigger.click());
+  await act(async () => option('display').click());
+  assert.deepEqual(
+    sent.map((message) => message.type),
+    ['avb:variant', 'avb:variant-commit'],
+    'show then commit, in that order: the canvas goes from the old value straight to the picked one',
+  );
+  assert.equal(sent[0].override.value, 'display');
+  tick();
+  assert.equal(sent.length, 2, 'the debounced show is not sent a second time');
+  assert.equal(panel.writes.length, 1, 'one write');
+  unmount();
+  preview.dispose();
+});
+
+test('a picked option already on show is asked for once, and picking A then B then C holds each in turn', async () => {
+  const { preview, sent } = previewHarness();
+  const show = (value) => {
+    preview.prepare('variant');
+    preview.hover(value);
+  };
+  show('h1');
+  preview.commit();
+  show('h2');
+  preview.commit();
+  show('h3');
+  preview.commit();
+  assert.deepEqual(
+    sent.map((message) => (message.type === 'avb:variant' ? message.override.value : message.type)),
+    ['h1', 'avb:variant-commit', 'h2', 'avb:variant-commit', 'h3', 'avb:variant-commit'],
+    'never a cancel, never a value but the picked one',
+  );
+  preview.dispose();
+  assert.equal(sent.length, 6, 'nothing is left to clean up after a commit');
+});
+
 test('a preview always cleans up, and an instance outside the project has none', () => {
   const { preview, sent, tick } = previewHarness();
   preview.prepare('variant', VARIANTS);

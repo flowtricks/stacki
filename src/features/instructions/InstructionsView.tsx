@@ -16,6 +16,7 @@
 // editors' own, as for every field in the app (appShortcuts.ts hands ⌘Z back).
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type MouseEvent, type RefObject } from 'react';
 import { assert } from '../../../shared/core/assert';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import CodeEditor from '../../ui/CodeEditor';
 import { CodeBlock } from '../../ui/CodeBlock';
 import { SegmentedTabs } from '../../ui/SegmentedTabs';
@@ -58,11 +59,12 @@ export default function InstructionsView({
   Form,
   onClose,
 }: InstructionsViewProps & { readonly Form: ComponentType<InstructionFormProps> }) {
+  const translate = useTranslate();
   const document = useInstructionDocument(projectPath, file);
   const [mode, setMode] = useState<ViewMode>('rich');
   const { session } = document;
   return (
-    <div className={`cms-view instructions-view ${hidden ? 'hidden' : ''}`} role="region" aria-label={`Instructions: ${file}`}>
+    <div className={`cms-view instructions-view ${hidden ? 'hidden' : ''}`} role="region" aria-label={translate('instructionsPanel.view.region', { file })}>
       <CodeHighlightStyles />
       <div className="cms-detail remote-cms-item">
         <div className="cms-detail-head remote-cms-item-head">
@@ -71,22 +73,22 @@ export default function InstructionsView({
           <div className="remote-cms-item-meta">
             <SaveStatus session={session} save={document.save} editable={editable} />
             <SegmentedTabs
-              label="View"
+              label={translate('instructionsPanel.view.label')}
               value={mode}
               tabs={[
-                { value: 'rich', label: 'Fields' },
-                { value: 'source', label: 'Source' },
+                { value: 'rich', label: translate('instructionsPanel.view.fields') },
+                { value: 'source', label: translate('instructionsPanel.view.source') },
               ]}
               onPick={setMode}
             />
-            <button type="button" className="ghost" aria-label="Close file" title="Close" onClick={onClose}>
+            <button type="button" className="ghost" aria-label={translate('instructionsPanel.view.closeFile')} title={translate('ui.close')} onClick={onClose}>
               <CloseIcon size={13} />
             </button>
           </div>
         </div>
         {session?.conflict !== undefined && <ConflictBar conflict={session.conflict} onChoose={document.resolve} />}
         <div className="cms-detail-body">
-          {document.load.kind === 'loading' && <div className="props-empty">Opening {file}…</div>}
+          {document.load.kind === 'loading' && <div className="props-empty">{translate('instructionsPanel.view.opening', { file })}</div>}
           {document.load.kind === 'error' && (
             <div className="props-empty" role="alert">
               {document.load.message}
@@ -129,8 +131,9 @@ export function titleOf(file: string, source: string | undefined): string {
 }
 
 function SaveStatus(props: { readonly session: DocumentSession | undefined; readonly save: SaveState; readonly editable: boolean }) {
+  const translate = useTranslate();
   if (!props.editable) {
-    return <span className="remote-cms-times">Read only</span>;
+    return <span className="remote-cms-times">{translate('instructionsPanel.view.readOnly')}</span>;
   }
   if (props.save.kind === 'error') {
     return (
@@ -140,30 +143,35 @@ function SaveStatus(props: { readonly session: DocumentSession | undefined; read
     );
   }
   if (props.save.kind === 'saving') {
-    return <span className="remote-cms-times">Saving…</span>;
+    return <span className="remote-cms-times">{translate('instructionsPanel.view.saving')}</span>;
   }
-  return <span className="remote-cms-times">{props.session !== undefined && isDirty(props.session) ? 'Edited' : 'Saved'}</span>;
+  return (
+    <span className="remote-cms-times">
+      {props.session !== undefined && isDirty(props.session) ? translate('instructionsPanel.view.edited') : translate('instructionsPanel.view.saved')}
+    </span>
+  );
 }
 
 function ConflictBar(props: { readonly conflict: NonNullable<DocumentSession['conflict']>; readonly onChoose: (choice: ConflictChoice) => void }) {
+  const translate = useTranslate();
   return (
     <div className="instructions-conflict" role="alert">
-      <span>This file changed on disk while you were editing. Your edits are kept here and are not being saved.</span>
+      <span>{translate('instructionsPanel.conflict.message')}</span>
       <div className="instructions-conflict-actions">
         <button
           type="button"
           className="primary"
           disabled={props.conflict.merged === undefined}
-          title={props.conflict.merged === undefined ? 'Both changed the same lines; pick one version.' : 'Keep both changes'}
+          title={props.conflict.merged === undefined ? translate('instructionsPanel.conflict.blocked') : translate('instructionsPanel.conflict.mergeTip')}
           onClick={() => props.onChoose('merge')}
         >
-          Merge both
+          {translate('instructionsPanel.conflict.merge')}
         </button>
         <button type="button" onClick={() => props.onChoose('theirs')}>
-          Use disk version
+          {translate('instructionsPanel.conflict.theirs')}
         </button>
         <button type="button" onClick={() => props.onChoose('mine')}>
-          Keep mine
+          {translate('instructionsPanel.conflict.mine')}
         </button>
       </div>
     </div>

@@ -1,10 +1,11 @@
+import type { MessageRef } from '../core/i18n/messageReference';
 import type { MicrophoneReport } from '../properties/microphone';
 import type { AiResults } from './aiChat';
 import type { AppFileAnswer } from '../properties/appFiles';
 import type { AppAccessToken, AppAuthStatus } from '../properties/appAuth';
 import type { AppNetResponse } from '../properties/appNet';
 import type { AccountState } from './publishAccount';
-import type { CmsConnectionList, CmsSaveResult, SanityLoginState } from '../properties/cmsConnections';
+import type { CmsCheckResult, CmsConnectionList, CmsSaveResult, SanityLoginState } from '../properties/cmsConnections';
 import type {
   RemoteCollection,
   RemoteAsset,
@@ -283,11 +284,14 @@ export interface IpcResults extends AiResults {
     readonly entries: ReadonlyArray<WireEntry>;
     readonly readOnly: boolean;
     readonly reason?: undefined | string;
+    readonly reasonRef?: undefined | MessageRef;
     readonly idsAreGuesses?: boolean;
     readonly idNote?: undefined | string;
+    readonly idNoteRef?: undefined | MessageRef;
     readonly shape?: string;
     readonly parsed?: boolean;
     readonly parserNote?: undefined | string;
+    readonly parserNoteRef?: undefined | MessageRef;
     readonly collection: WireCollection;
   };
   readonly 'content:remoteEdit': RemoteResult<AstroRemoteEditAnswer>;
@@ -335,12 +339,14 @@ export interface IpcResults extends AiResults {
   readonly 'css:addSection': {
     readonly ok: boolean;
     readonly error?: string;
+    readonly errorRef?: MessageRef | undefined;
     readonly stale?: boolean;
     readonly title?: string;
   };
   readonly 'css:addVariables': {
     readonly ok: boolean;
     readonly error?: string;
+    readonly errorRef?: MessageRef | undefined;
     readonly name?: string;
     readonly changed?: boolean;
   };
@@ -348,10 +354,12 @@ export interface IpcResults extends AiResults {
     readonly ok: boolean;
     readonly stale?: boolean;
     readonly error?: string;
+    readonly errorRef?: MessageRef | undefined;
   };
   readonly 'css:moveVariables': {
     readonly ok: boolean;
     readonly error?: string;
+    readonly errorRef?: MessageRef | undefined;
     readonly name?: string;
     readonly changed?: boolean;
   };
@@ -359,6 +367,7 @@ export interface IpcResults extends AiResults {
     readonly ok: boolean;
     readonly stale?: boolean;
     readonly error?: string;
+    readonly errorRef?: MessageRef | undefined;
   };
   readonly 'css:renameVariables': {
     readonly ok: boolean;
@@ -366,16 +375,19 @@ export interface IpcResults extends AiResults {
     readonly occurrences?: number;
     readonly paths?: ReadonlyArray<string>;
     readonly error?: string;
+    readonly errorRef?: MessageRef | undefined;
   };
   readonly 'css:setSectionTitle': {
     readonly ok: boolean;
     readonly stale?: boolean;
     readonly error?: string;
+    readonly errorRef?: MessageRef | undefined;
   };
   readonly 'css:setVariable': {
     readonly ok: boolean;
     readonly stale?: boolean;
     readonly error?: string;
+    readonly errorRef?: MessageRef | undefined;
   };
   readonly 'css:variables':
     | {
@@ -447,6 +459,7 @@ export interface IpcResults extends AiResults {
     | {
         readonly restored: boolean;
         readonly error: string;
+        readonly errorRef?: MessageRef | undefined;
         readonly parkedFrom: undefined | string;
         readonly ok: true;
         readonly from: string;
@@ -506,6 +519,7 @@ export interface IpcResults extends AiResults {
   readonly 'cmsConnections:list': CmsConnectionList;
   readonly 'cmsConnections:save': CmsSaveResult;
   readonly 'cmsConnections:remove': CmsConnectionList;
+  readonly 'cmsConnections:check': CmsCheckResult;
   readonly 'cmsConnections:sanityLogin': SanityLoginState;
   readonly 'cmsRemote:collections': RemoteResult<readonly RemoteCollection[]>;
   readonly 'cmsRemote:documents': RemoteResult<RemoteDocumentList>;
@@ -594,6 +608,7 @@ export interface IpcResults extends AiResults {
     readonly ok: boolean;
     readonly missing?: boolean;
     readonly message?: string;
+    readonly messageRef?: MessageRef | undefined;
   };
   readonly 'git:restoreProject': {
     readonly ok: boolean;
@@ -613,8 +628,12 @@ export interface IpcResults extends AiResults {
     | {
         readonly restored: boolean;
         readonly error: string;
+        readonly errorRef?: MessageRef | undefined;
       };
   readonly 'git:worktrees': ReadonlyArray<WireWorktreeInfo>;
+  readonly 'locale:set': {
+    readonly saved: boolean;
+  };
   readonly 'microphone:openSettings': {
     readonly ok: true;
   };
@@ -733,6 +752,7 @@ export interface IpcResults extends AiResults {
     | {
         readonly canceled: false;
         readonly error: string;
+        readonly errorRef?: MessageRef | undefined;
         readonly projectPath?: never;
       }
     | {

@@ -12,6 +12,7 @@ import { assert } from '../../../shared/core/assert';
 import { isArrayLiteral, LOOP_LITERAL_LIMITS } from '../../editor/loopLiteral';
 import { SectionHeader } from './LoopRows';
 import { moved } from './LoopItems';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 /**
  * A custom list's items: rows of text while every item is a string, and, behind the `{}` beside the label, the
@@ -27,6 +28,7 @@ export function LiteralItemsSection(props: {
   /** Writes the list as the code it is given; a message says why it could not be. */
   readonly onCode: (code: string) => string | undefined;
 }) {
+  const translate = useTranslate();
   const access = useCodeAccess();
   const { items } = props;
   const [open, setOpen] = useState(items === undefined);
@@ -41,9 +43,15 @@ export function LiteralItemsSection(props: {
     <button
       type="button"
       className={`prop-expr-toggle${shown ? ' on' : ''}`}
-      title={items === undefined ? 'These items are code' : shown ? 'Use the item rows' : 'Write the items as code'}
+      title={
+        items === undefined
+          ? translate('props.loop.literal.areCode')
+          : shown
+            ? translate('props.loop.literal.useRows')
+            : translate('props.loop.literal.writeCode')
+      }
       aria-pressed={shown}
-      aria-label="Items as code"
+      aria-label={translate('props.loop.literal.itemsAsCode')}
       disabled={items === undefined}
       onClick={() => setOpen(!shown)}
     >
@@ -53,7 +61,7 @@ export function LiteralItemsSection(props: {
   if (shown) {
     return (
       <div className="loop-settings-section">
-        <SectionHeader title="Items" addable={false} toggle={toggle} onAdd={() => undefined} />
+        <SectionHeader title={translate('props.loop.literal.items')} addable={false} toggle={toggle} onAdd={() => undefined} />
         <ItemsCode data={props.data} onCode={props.onCode} />
       </div>
     );
@@ -63,6 +71,7 @@ export function LiteralItemsSection(props: {
 
 /** The array as code: written when the box is left, once it is an array; until then the reason shows and the text stays. */
 function ItemsCode(props: { readonly data: string; readonly onCode: (code: string) => string | undefined }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(props.data);
   const [problem, setProblem] = useState<string | undefined>(undefined);
   // A change from outside (a row edit, undo, the Code field) replaces what is shown.
@@ -77,7 +86,7 @@ function ItemsCode(props: { readonly data: string; readonly onCode: (code: strin
       return true;
     }
     if (!isArrayLiteral(next)) {
-      setProblem('Write the items as a list: [ … ].');
+      setProblem(translate('props.loop.literal.notList'));
       return false;
     }
     const found = props.onCode(next);
@@ -90,7 +99,7 @@ function ItemsCode(props: { readonly data: string; readonly onCode: (code: strin
         <ExprInput
           value={draft}
           syncValue={props.data}
-          placeholder={'["Item 1", "Item 2"] or [{ title: "A" }]'}
+          placeholder={translate('props.loop.literal.placeholder')}
           invalid={problem !== undefined}
           multiline={true}
           wrap={true}
@@ -112,6 +121,7 @@ function ItemsCode(props: { readonly data: string; readonly onCode: (code: strin
 }
 
 function ItemRows(props: { readonly items: readonly string[]; readonly toggle: React.ReactNode; readonly onChange: (items: readonly string[]) => void }) {
+  const translate = useTranslate();
   const { items } = props;
   const write = (next: readonly string[]): void => {
     assert(next.length <= LOOP_LITERAL_LIMITS.itemsMax, 'A typed list is bounded');
@@ -121,10 +131,10 @@ function ItemRows(props: { readonly items: readonly string[]; readonly toggle: R
   return (
     <div className="loop-settings-section">
       <SectionHeader
-        title="Items"
+        title={translate('props.loop.literal.items')}
         addable={items.length < LOOP_LITERAL_LIMITS.itemsMax}
         toggle={props.toggle}
-        onAdd={() => write([...items, `Item ${items.length + 1}`])}
+        onAdd={() => write([...items, translate('props.loop.literal.newItem', { number: items.length + 1 })])}
       />
       {items.length > 0 ? (
         <div className="loop-settings-list">
@@ -142,8 +152,8 @@ function ItemRows(props: { readonly items: readonly string[]; readonly toggle: R
               <button
                 type="button"
                 className="loop-settings-item-remove"
-                aria-label="Remove item"
-                title="Remove"
+                aria-label={translate('props.loop.items.remove')}
+                title={translate('ui.remove')}
                 onClick={() => write(items.filter((_, at) => at !== index))}
               >
                 <TrashIcon size={13} />
@@ -152,7 +162,7 @@ function ItemRows(props: { readonly items: readonly string[]; readonly toggle: R
           ))}
         </div>
       ) : (
-        <div className="loop-settings-empty">No items yet.</div>
+        <div className="loop-settings-empty">{translate('props.loop.literal.empty')}</div>
       )}
     </div>
   );
@@ -160,6 +170,7 @@ function ItemRows(props: { readonly items: readonly string[]; readonly toggle: R
 
 // The draft is local until it is committed; Escape puts the saved text back.
 function LiteralInput(props: { readonly value: string; readonly onCommit: (value: string) => void }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(props.value);
   const commit = (): void => {
     if (draft === props.value) {
@@ -173,7 +184,7 @@ function LiteralInput(props: { readonly value: string; readonly onCommit: (value
       value={draft}
       maxLength={LOOP_LITERAL_LIMITS.itemCharsMax}
       spellCheck={false}
-      aria-label="Item"
+      aria-label={translate('props.loop.literal.item')}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
       onKeyDown={(event) => {

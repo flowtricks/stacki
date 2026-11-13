@@ -69,6 +69,7 @@ import {
 } from './embed/useEditorResolution';
 import { useInlineCard, useInlineState } from './embed/useInlineTarget';
 import './embedEditor.css';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import {
   useSetProp,
   useClearProp,
@@ -83,6 +84,8 @@ import {
 export { SelectorPicker } from './embed/SelectorPicker';
 
 export { useRemovedClasses, withoutClasses } from './embed/editorModel';
+
+const STYLE_TAG = '<style>'; // i18n-ignore: an HTML tag name shown as code.
 
 export default function EmbedEditor() {
   const editorFoundation = useEditorFoundation();
@@ -505,6 +508,7 @@ interface EditorView {
 
 function EditorRoot({ view }: { view: EditorView }) {
   const { phase, model, pendingCount } = view;
+  const translate = useTranslate();
   return (
     <ProvenanceEmbedNav.Provider value={view.embedNav}>
       <div className="embed-editor_root" ref={view.rootRef}>
@@ -513,11 +517,7 @@ function EditorRoot({ view }: { view: EditorView }) {
         <SaveIndicator
           busy={view.busy}
           error={view.saveError}
-          pending={
-            pendingCount
-              ? `${pendingCount} change${pendingCount === 1 ? '' : 's'} ` + "to the page's styles — not on the canvas until you leave this component"
-              : undefined
-          }
+          pending={pendingCount ? translate('style.embedEditor.pendingTooltip', { count: pendingCount }) : undefined}
         />
         <PendingNote count={pendingCount} />
         {view.nativeFallback ? <FallbackNote note={view.nativeFallback} onDismiss={view.dismissFallback} /> : undefined}
@@ -542,24 +542,20 @@ function EditorRoot({ view }: { view: EditorView }) {
 
 // Edits to the page's own <style> blocks held while a component is open.
 function PendingNote({ count }: { count: number }) {
+  const translate = useTranslate();
   if (!count) {
     return undefined;
   }
-  return (
-    <p className="embed-editor_pending-note">
-      {count} change{count === 1 ? '' : 's'} to the page's own &lt;style&gt; block
-      {count === 1 ? '' : 's'} {count === 1 ? 'is' : 'are'} held here — the canvas won't show {count === 1 ? 'it' : 'them'} until you leave this component, and{' '}
-      {count === 1 ? 'it saves' : 'they save'} when you do.
-    </p>
-  );
+  return <p className="embed-editor_pending-note">{translate('style.embedEditor.pendingNote', { count, tag: STYLE_TAG })}</p>;
 }
 
 // Why a native write fell back to an embed, until dismissed.
 function FallbackNote({ note, onDismiss }: { note: string; onDismiss: () => void }) {
+  const translate = useTranslate();
   return (
     <p className="embed-editor_fallback-note" role="status">
       {note}
-      <button type="button" className="embed-editor_fallback-dismiss" aria-label="Dismiss" onClick={onDismiss}>
+      <button type="button" className="embed-editor_fallback-dismiss" aria-label={translate('style.embedEditor.dismiss')} onClick={onDismiss}>
         ✕
       </button>
     </p>
@@ -568,13 +564,9 @@ function FallbackNote({ note, onDismiss }: { note: string; onDismiss: () => void
 
 // Nothing targets the element: how many embeds were scanned, or that there were none.
 function EmptyScanNote({ scan }: { scan: ScanState | undefined }) {
-  return (
-    <div className="embed-editor_empty">
-      {scan?.embedCount
-        ? `Scanned ${scan.embedCount} embed${scan.embedCount === 1 ? '' : 's'}` +
-          (scan.componentEmbedCount ? ` (${scan.componentEmbedCount} in components)` : '') +
-          ', but none target this element.'
-        : 'No HTML embeds with <style> blocks were found on this page.'}
-    </div>
-  );
+  const translate = useTranslate();
+  const scannedMessage = scan?.componentEmbedCount
+    ? translate('style.embedEditor.scannedWithComponents', { count: scan.embedCount, components: scan.componentEmbedCount })
+    : translate('style.embedEditor.scanned', { count: scan?.embedCount ?? 0 });
+  return <div className="embed-editor_empty">{scan?.embedCount ? scannedMessage : translate('style.embedEditor.noEmbeds', { tag: STYLE_TAG })}</div>;
 }

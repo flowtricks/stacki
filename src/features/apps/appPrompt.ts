@@ -6,12 +6,11 @@
 // chat (requestBuildApp) as the App builder instructions chip in the message box: the person adds their own words
 // and sends it, or clicks the chip to copy the instructions for an agent outside the project.
 import { assert } from '../../../shared/core/assert';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { agentTask } from '../../../shared/properties/agentTask';
 import { requestAgentTask } from '../../lib/agentTasks';
 import { provideBuiltinInstructions } from '../../lib/builtinInstructions';
 import { APPS_PROMPT } from './generated/appsPrompt';
-
-export const BUILD_APP_LABEL = 'Build an app';
 
 /** The prompt text. */
 export function appBuildPrompt(): string {
@@ -28,10 +27,10 @@ provideBuiltinInstructions('app-builder', appBuildPrompt);
  * `draftChip`, agentTasks.ts). With no AI chat to take it (a role without the panel, Studio without a chat) the prompt is copied
  * instead, and `notify` says so: the person is never left with nothing happening.
  */
-export async function requestBuildApp(notify: (message: string, kind: 'success' | 'error') => void): Promise<void> {
+export async function requestBuildApp(translate: Translator, notify: (message: string, kind: 'success' | 'error') => void): Promise<void> {
   const outcome = await requestAgentTask(
     agentTask({
-      title: BUILD_APP_LABEL,
+      title: translate('apps.build.label'),
       prompt: appBuildPrompt(),
       delivery: 'draft',
       draftChip: 'app-builder',
@@ -42,10 +41,10 @@ export async function requestBuildApp(notify: (message: string, kind: 'success' 
     case 'sent':
       return; // The chat is open with the chip in it; a notice would only repeat what is on screen.
     case 'copied':
-      notify('The AI chat isn’t available here, so the “Build an app” prompt is copied. Paste it into your AI agent.', 'success');
+      notify(translate('apps.build.copied', { action: translate('apps.build.label') }), 'success');
       return;
     case 'failed':
-      notify(`Stacki could not open the AI chat or copy the prompt: ${outcome.message}`, 'error');
+      notify(translate('apps.build.failed', { message: outcome.message }), 'error');
       return;
     default: {
       const exhaustive: never = outcome;

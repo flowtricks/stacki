@@ -26,12 +26,12 @@ import {
   type MarketplaceSubmission,
   type MarketplaceSubmissionOutcome,
 } from '../../shared/properties/appPublish';
-import { APPS_UNAVAILABLE_MESSAGE } from './appsBridge';
+import { APPS_UNAVAILABLE_FAILURE } from './appsBridge';
 
 /** Scans an installed app's files, or a repository's latest release, for secrets. */
 export async function scanAppSecrets(projectPath: string, target: AppScanTarget): Promise<AppsResult<AppSecretScan>> {
   if (typeof window.avb.scanAppSecrets !== 'function') {
-    return { ok: false, message: APPS_UNAVAILABLE_MESSAGE };
+    return APPS_UNAVAILABLE_FAILURE;
   }
   const input = parseIpcPayload('apps:scanSecrets', { projectPath, target });
   return parseAppsResult(await window.avb.scanAppSecrets(input), parseAppSecretScan);
@@ -92,7 +92,7 @@ export async function submitMarketplaceApp(projectPath: string, submission: Mark
 /** One app's settings, secrets included, for its details panel and `stacki.settings.get()`. */
 export async function readAppSettings(projectPath: string, id: string): Promise<AppsResult<AppSettingValues>> {
   if (typeof window.avb.readAppSettings !== 'function') {
-    return { ok: false, message: APPS_UNAVAILABLE_MESSAGE };
+    return APPS_UNAVAILABLE_FAILURE;
   }
   const input = parseIpcPayload('apps:readSettings', { projectPath, id });
   return parseAppsResult(await window.avb.readAppSettings(input), parseAppSettingValuesReply);

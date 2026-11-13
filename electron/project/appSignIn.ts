@@ -22,6 +22,8 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { assert } from '../../shared/core/assert';
 import { record, text } from '../../shared/core/boundary';
 import { parseAppId, type AppManifest } from '../../shared/properties/apps';
+import { described, type TypedMessageRef } from '../../shared/properties/i18n/messageRef';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import { APP_AUTH_LIMITS, parseAuthProviderId, type AppAccessToken, type AppAuthProvider, type AppAuthStatus } from '../../shared/properties/appAuth';
 import { readAppSettings, secretVaultFile, type SecretVault } from './appSettingsStore';
 import { brokerRoutes, type StackiConnectionProviderId } from '../../shared/properties/appConnections';
@@ -50,7 +52,8 @@ export interface AppSignInFlow {
   readonly done: Promise<FlowOutcome>;
 }
 
-export type FlowOutcome = { readonly ok: true; readonly value: AppAuthStatus } | { readonly ok: false; readonly message: string };
+export type FlowOutcome =
+  { readonly ok: true; readonly value: AppAuthStatus } | { readonly ok: false; readonly message: string; readonly messageRef?: TypedMessageRef | undefined };
 
 /** What a callback request carried, as the host's route read it. */
 export interface SignInCallback {
@@ -128,10 +131,10 @@ export function createAppSignIns(dependencies: AppSignInDependencies) {
       }
       const key = flowKey(projectRoot, manifest.id);
       if (pending.has(key)) {
-        throw new Error(`${manifest.name} is already waiting for a sign-in; finish it in the browser or wait for it to time out.`);
+        throw new ReferencedError('apps.error.signInWaiting', { name: manifest.name });
       }
       if (pending.size >= STORE_LIMITS.flowsMax) {
-        throw new Error('Too many sign-ins are waiting; try again shortly.');
+        throw new ReferencedError('apps.error.signInsTooMany');
       }
       const route = routeOf(projectRoot, dependencies.vault, manifest, provider);
       const { verifier, challenge } = pkcePair();
@@ -147,7 +150,7 @@ export function createAppSignIns(dependencies: AppSignInDependencies) {
       const timer = setTimeout(() => {
         const flow = pending.get(key);
         if (flow !== undefined) {
-          finish(flow, { ok: false, message: 'The sign-in timed out; connect again to retry.' });
+          finish(flow, { ok: false, ...described('apps.error.signInTimedOut') });
         }
       }, APP_AUTH_LIMITS.flowTimeoutMs);
       // The timeout only expires a waiting flow; it must not hold the process open, so Desktop
@@ -163,15 +166,18 @@ export function createAppSignIns(dependencies: AppSignInDependencies) {
     async complete(callback: SignInCallback): Promise<FlowOutcome> {
       const flow = callback.state === undefined ? undefined : flowWithState(pending, callback.state);
       if (flow === undefined) {
-        return { ok: false, message: 'This sign-in is not one Stacki started, or it has expired.' };
+        return { ok: false, ...described('apps.error.signInNotStarted') };
       }
       if (callback.error !== undefined) {
-        const outcome: FlowOutcome = { ok: false, message: `${flow.provider.label} refused the sign-in: ${callback.error.slice(0, 200)}` };
+        const outcome: FlowOutcome = {
+          ok: false,
+          ...described('apps.error.signInRefused', { provider: flow.provider.label, detail: callback.error.slice(0, 200) }),
+        };
         finish(flow, outcome);
         return outcome;
       }
       if (callback.code === undefined || callback.code.length === 0 || callback.code.length > APP_AUTH_LIMITS.tokenCharsMax) {
-        const outcome: FlowOutcome = { ok: false, message: `${flow.provider.label} sent no authorization code.` };
+        const outcome: FlowOutcome = { ok: false, ...described('apps.error.signInNoCode', { provider: flow.provider.label }) };
         finish(flow, outcome);
         return outcome;
       }
@@ -185,7 +191,12 @@ export function createAppSignIns(dependencies: AppSignInDependencies) {
         if (error instanceof Error && error.message.startsWith('Assertion failed')) {
           throw error;
         }
-        outcome = { ok: false, message: error instanceof Error ? error.message : String(error) };
+        outcome = {
+          ok: false,
+          ...(error instanceof ReferencedError
+            ? { message: error.message, messageRef: error.messageRef }
+            : { message: error instanceof Error ? error.message : String(error) }),
+        };
       }
       finish(flow, outcome);
       return outcome;
@@ -198,7 +209,7 @@ export function createAppSignIns(dependencies: AppSignInDependencies) {
         return undefined;
       }
       if (flow.listeners.length >= 2) {
-        throw new Error('Someone is already waiting for this sign-in.');
+        throw new ReferencedError('apps.error.signInSomeoneWaiting');
       }
       return new Promise((resolve) => {
         flow.listeners.push(resolve);
@@ -209,7 +220,7 @@ export function createAppSignIns(dependencies: AppSignInDependencies) {
     cancel(projectRoot: string, appId: string): void {
       const flow = pending.get(flowKey(projectRoot, appId));
       if (flow !== undefined) {
-        finish(flow, { ok: false, message: 'The sign-in was cancelled.' });
+        finish(flow, { ok: false, ...described('apps.error.signInCancelled') });
       }
     },
 
@@ -260,7 +271,7 @@ export function createAppSignIns(dependencies: AppSignInDependencies) {
       const provider = providerOf(manifest, providerId);
       const stored = (readTokens(dependencies.vault, projectRoot)[manifest.id] ?? {})[provider.id];
       if (stored === undefined) {
-        throw new Error(`Not connected to ${provider.label}; connect it in the app's details or with stacki.auth.connect.`);
+        throw new ReferencedError('apps.error.notConnected', { provider: provider.label });
       }
       const fresh = stored.expiresAtMs === undefined || dependencies.now() < stored.expiresAtMs - APP_AUTH_LIMITS.refreshSkewMs;
       const token = fresh ? stored : await refreshOnce(projectRoot, manifest, provider, stored);
@@ -319,7 +330,7 @@ export function createAppSignIns(dependencies: AppSignInDependencies) {
     }
     const refresh = (async (): Promise<StoredToken> => {
       if (stored.refreshToken === undefined) {
-        throw new Error(`The ${provider.label} sign-in expired; connect again.`);
+        throw new ReferencedError('apps.error.signInExpired', { provider: provider.label });
       }
       const request: TokenRequest =
         stored.route === 'broker'
@@ -393,7 +404,7 @@ async function requestToken(
     if (provider.clientSecretSetting !== undefined) {
       const secret = readAppSettings(projectRoot, dependencies.vault, manifest)[provider.clientSecretSetting];
       if (secret === undefined || secret === '') {
-        throw new Error(`Fill in the ${provider.label} client secret in the app's settings first.`);
+        throw new ReferencedError('apps.error.clientSecretMissing', { provider: provider.label });
       }
       body.set('client_secret', secret);
     }
@@ -412,14 +423,17 @@ async function requestToken(
       signal: AbortSignal.timeout(APP_AUTH_LIMITS.tokenRequestTimeoutMs),
     });
   } catch (error: unknown) {
-    throw new Error(`${provider.label} did not answer the token request: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300));
+    throw new ReferencedError('apps.error.tokenNoAnswer', {
+      provider: provider.label,
+      detail: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+    });
   }
   const source = new TextDecoder().decode(await readBounded(response, APP_AUTH_LIMITS.tokenResponseBytesMax));
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);
   } catch {
-    throw new Error(`${provider.label} answered the token request with something other than JSON (status ${response.status}).`);
+    throw new ReferencedError('apps.error.tokenNotJSON', { provider: provider.label, status: response.status });
   }
   return { ...parseTokenResponse(parsed, { ok: response.ok }, provider, dependencies.now(), previous), route: request.route };
 }
@@ -434,7 +448,7 @@ function exchangeRequest(dependencies: AppSignInDependencies, flow: PendingFlow,
   }
   const handoff = callback.handoff;
   if (handoff === undefined || handoff.length === 0 || handoff.length > APP_AUTH_LIMITS.tokenCharsMax) {
-    throw new Error(`The ${flow.provider.label} sign-in came back without Stacki's handoff; connect again.`);
+    throw new ReferencedError('apps.error.signInNoHandoff', { provider: flow.provider.label });
   }
   return { route: 'broker', url: brokerRoutes(dependencies.broker, brokerConnection(flow.provider)).token, json: { code, handoff, verifier: flow.verifier } };
 }
@@ -498,7 +512,7 @@ function routeOf(
   if (provider.connection !== undefined) {
     return { kind: 'broker', connection: provider.connection };
   }
-  throw new Error(`Fill in your own ${provider.label} client id in the app's settings first.`);
+  throw new ReferencedError('apps.error.clientIdMissing', { provider: provider.label });
 }
 
 /** A token endpoint's JSON answer (RFC 6749 §5.1, §5.2). Exported for the tests that drive it directly. */
@@ -560,6 +574,7 @@ function accountOf(value: Readonly<Record<string, unknown>>): string | undefined
 function boundedToken(input: unknown, what: string): string {
   const value = text(input);
   if (value.length === 0 || value.length > APP_AUTH_LIMITS.tokenCharsMax) {
+    // i18n-ignore: a provider's malformed token reply, a protocol diagnostic named after the field.
     throw new Error(`The token answer's ${what} is 1 to ${APP_AUTH_LIMITS.tokenCharsMax} characters`);
   }
   return value;
@@ -572,7 +587,7 @@ function statusOf(provider: string, token: StoredToken): AppAuthStatus {
 function providerOf(manifest: AppManifest, providerId: string): AppAuthProvider {
   const provider = manifest.auth.find((entry) => entry.id === providerId);
   if (provider === undefined) {
-    throw new Error(`${manifest.name} declares no auth provider "${providerId.slice(0, 32)}".`);
+    throw new ReferencedError('apps.error.declaresNoProvider', { name: manifest.name, provider: providerId.slice(0, 32) });
   }
   return provider;
 }
@@ -580,7 +595,7 @@ function providerOf(manifest: AppManifest, providerId: string): AppAuthProvider 
 function customClientId(projectRoot: string, vault: SecretVault, manifest: AppManifest, provider: AppAuthProvider): string {
   const route = routeOf(projectRoot, vault, manifest, provider);
   if (route.kind !== 'custom') {
-    throw new Error(`The ${provider.label} client id was cleared; connect again.`);
+    throw new ReferencedError('apps.error.clientIdCleared', { provider: provider.label });
   }
   return route.clientId;
 }
@@ -623,11 +638,13 @@ function readTokens(vault: SecretVault, projectRoot: string): TokenFile {
     throw error;
   }
   if (source.length > STORE_LIMITS.fileBytesMax) {
+    // i18n-ignore: on-disk sign-in store diagnostic, not a state a person acts on.
     throw new Error('The sign-in file exceeds its limit.');
   }
   const parsed: unknown = JSON.parse(source);
   const value = record(parsed);
   if (value['version'] !== 1) {
+    // i18n-ignore: on-disk sign-in store diagnostic.
     throw new Error('The sign-in file version must be 1');
   }
   const result: Record<string, Record<string, StoredToken>> = {};
@@ -684,6 +701,7 @@ function writeTokens(vault: SecretVault, projectRoot: string, tokens: TokenFile)
   const file = appTokenFile(vault, projectRoot);
   const source = `${JSON.stringify({ version: 1, apps })}\n`;
   if (source.length > STORE_LIMITS.fileBytesMax) {
+    // i18n-ignore: on-disk sign-in store bound diagnostic.
     throw new Error('The sign-ins exceed their limit; nothing was saved.');
   }
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });

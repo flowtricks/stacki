@@ -29,6 +29,8 @@ const turn = `t${'b'.repeat(16)}`;
 
 test('good payloads parse for every AI channel', () => {
   assert.deepEqual(parseIpcPayload('ai:agents', { projectPath }), { projectPath });
+  assert.deepEqual(parseIpcPayload('ai:prewarm', { projectPath, agent: 'claude', action: 'warm' }), { projectPath, agent: 'claude', action: 'warm' });
+  assert.deepEqual(parseIpcPayload('ai:prewarm', { projectPath, agent: 'codex', action: 'release' }), { projectPath, agent: 'codex', action: 'release' });
   assert.deepEqual(parseIpcPayload('ai:chatCreate', { projectPath, agent: 'codex' }), { projectPath, agent: 'codex' });
   assert.deepEqual(parseIpcPayload('ai:chatUpdate', { projectPath, chat, pinned: true }), { projectPath, chat, pinned: true });
   const prompt = parseIpcPayload('ai:prompt', {
@@ -92,6 +94,17 @@ test('each bad payload shape is refused before main acts', () => {
     ['ai:review', () => parseIpcPayload('ai:review', { projectPath, chat, turn: 'turn', path: 'a', action: { kind: 'keep' } })],
     ['ai:review', () => parseIpcPayload('ai:review', { projectPath, chat, turn, path: 'a', action: { kind: 'delete' } })],
     ['ai:setOption', () => parseIpcPayload('ai:setOption', { projectPath, chat, option: 'model', value: 'x'.repeat(AI_LIMITS.idCharsMax + 1) })],
+    ['ai:remember', () => parseIpcPayload('ai:remember', { projectPath, agent: 'gemini', action: { kind: 'reset' } })],
+    ['ai:prewarm', () => parseIpcPayload('ai:prewarm', { projectPath, agent: 'claude', action: 'start' })],
+    ['ai:prewarm', () => parseIpcPayload('ai:prewarm', { projectPath, agent: 'claude' })],
+    ['ai:prewarm', () => parseIpcPayload('ai:prewarm', { projectPath, agent: 'gemini', action: 'warm' })],
+    ['ai:remember', () => parseIpcPayload('ai:remember', { projectPath, agent: 'claude', action: { kind: 'forget' } })],
+    ['ai:remember', () => parseIpcPayload('ai:remember', { projectPath, agent: 'claude', action: { kind: 'set', option: '', value: 'x' } })],
+    [
+      'ai:remember',
+      () =>
+        parseIpcPayload('ai:remember', { projectPath, agent: 'claude', action: { kind: 'set', option: 'model', value: 'x'.repeat(AI_LIMITS.idCharsMax + 1) } }),
+    ],
   ];
   for (const [channel, parse] of bad) {
     assert.throws(parse, Error, channel);

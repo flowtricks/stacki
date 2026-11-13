@@ -15,12 +15,15 @@
 // full URL. Pure, so the rules are pinned by tests without a renderer.
 
 import { assert } from '../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../shared/properties/i18n/messageRef';
 import { err, ok, type Result } from '../../shared/core/result';
 
 /** What an Image property's default names: an imported file in src/, or a URL. */
 export type ImageDefault = { readonly kind: 'asset'; readonly specifier: string; readonly base: string } | { readonly kind: 'url'; readonly url: string };
 
 /** The type an imported image is, and where it is imported from. */
+// i18n-ignore: the name of Astro's type, code written into the component.
 export const IMAGE_TYPE = { name: 'ImageMetadata', path: 'astro' } as const;
 
 export const IMAGE_LIMITS = { sourceCharsMax: 2048, baseCharsMax: 48 } as const satisfies Record<string, number>;
@@ -31,20 +34,20 @@ const RELATIVE = /^(\.\.?\/|[@~]\/)/;
 const URL_LIKE = /^(https?:\/\/|\/\/|\/|data:image\/)/i;
 
 /** What `source` names as an Image property's default; an error says why it names none. */
-export function imageDefaultOf(source: string): Result<ImageDefault, string> {
+export function imageDefaultOf(source: string, translate: Translator = ENGLISH_TRANSLATE): Result<ImageDefault, string> {
   const text = source.trim();
   if (text === '') {
-    return err('Choose a default image.');
+    return err(translate('editor.imageDefault.choose'));
   }
   if (text.length > IMAGE_LIMITS.sourceCharsMax) {
-    return err('That image address is too long.');
+    return err(translate('editor.imageDefault.tooLong'));
   }
   if (/["'`\\\n]/.test(text)) {
-    return err('That is not an image address.');
+    return err(translate('editor.imageDefault.invalid'));
   }
   if (RELATIVE.test(text)) {
     if (!IMPORTABLE.test(text)) {
-      return err('Only an image file can be imported as an image.');
+      return err(translate('editor.imageDefault.notImportable'));
     }
     const out: ImageDefault = { kind: 'asset', specifier: text, base: importBase(text) };
     assert(/^[A-Za-z_$][\w$]*$/.test(out.base), 'imageDefaultOf: an import is named by an identifier');
@@ -53,7 +56,7 @@ export function imageDefaultOf(source: string): Result<ImageDefault, string> {
   if (URL_LIKE.test(text)) {
     return ok({ kind: 'url', url: text });
   }
-  return err('Choose an image from the project, or enter its URL.');
+  return err(translate('editor.imageDefault.chooseOrUrl'));
 }
 
 /** The type the prop is declared with: the imported image's metadata, or a URL's string. */

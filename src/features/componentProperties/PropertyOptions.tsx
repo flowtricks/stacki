@@ -4,6 +4,7 @@ import { PROPERTY_LIMITS } from '../../../shared/properties/propertyEditing';
 import type { PropertyOptionRename } from '../../../shared/properties/propertyEditing';
 import { arrayItems, arrayText, moveItem } from '../props/arrayValue';
 import { literalOptions } from '../../../shared/properties/propertyOptions';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import ListField from '../props/ListField';
 import type { ListFieldChange } from '../props/ListField';
 import { CodeTypeEditor, CodeTypeToggle } from '../props/propBindings';
@@ -27,6 +28,7 @@ interface PropertyOptionsProps {
 }
 
 export function PropertyOptions({ type, disabled, code, onChange, onTypeChange }: PropertyOptionsProps) {
+  const translate = useTranslate();
   // Retain the original scalar kind through intermediate edits such as '-' in a number.
   const scalarKind = useRef<'text' | 'literal'>();
   const options = literalOptions(type);
@@ -35,7 +37,7 @@ export function PropertyOptions({ type, disabled, code, onChange, onTypeChange }
     return (
       <div className="property-options props-field">
         <div className="property-options-heading">
-          <span>Options</span>
+          <span>{translate('componentProps.options.title')}</span>
           <CodeTypeToggle open={code.open} onToggle={() => code.setOpen(!code.open)} />
         </div>
         <CodeTypeEditor type={type} placeholder="" onChange={onTypeChange} />
@@ -66,7 +68,7 @@ export function PropertyOptions({ type, disabled, code, onChange, onTypeChange }
   return (
     <div className="property-options props-field">
       <div className="property-options-heading">
-        <span>Options</span>
+        <span>{translate('componentProps.options.title')}</span>
         <CodeTypeToggle open={code.open} onToggle={() => code.setOpen(!code.open)} />
       </div>
       <ListField

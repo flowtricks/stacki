@@ -148,6 +148,7 @@ function appUiKitBody(file: AppUiKitFile): string {
     case 'tokens.css':
       return `${APP_UI_TOKENS_CSS}\n`;
     case 'ui.css':
+      // i18n-ignore: a CSS comment in the stylesheet served to apps.
       return `/* Stacki app UI kit, built from the editor's CSS. See docs/apps.md, "Look and feel". */\n${APP_UI_TOKENS_CSS}\n${APP_UI_COMPONENTS_CSS}\n`;
     case 'ui.js':
       return APP_UI_SCRIPT;

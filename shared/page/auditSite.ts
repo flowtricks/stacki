@@ -5,7 +5,7 @@
 // titles the scan and the rendered pass read) and returns findings; none
 // reads anything itself.
 import { assert } from '../core/assert';
-import { AUDIT_LIMITS, auditFinding, type AuditFinding } from './auditFindings';
+import { AUDIT_LIMITS, auditFinding, detailText, type AuditFinding } from './auditFindings';
 import type { AuditFileSummary } from './auditStatic';
 
 export interface SiteFacts {
@@ -50,17 +50,17 @@ export function auditSite(facts: SiteFacts): readonly AuditFinding[] {
   const findings: AuditFinding[] = [];
   const config = facts.astroConfig;
   if (config !== undefined && !facts.sitemap) {
-    findings.push(siteFinding('sitemap', config.file, 'No sitemap integration, sitemap endpoint or served sitemap'));
+    findings.push(siteFinding('sitemap', config.file, detailText('audits.detail.noSitemap')));
   }
   if (!facts.robots) {
-    findings.push(siteFinding('robots', 'public/robots.txt', 'Neither public/robots.txt, a robots.txt endpoint nor a robots integration'));
+    findings.push(siteFinding('robots', 'public/robots.txt', detailText('audits.detail.noRobots')));
   }
   // The rendered pages are the truth when there are any; the source's own notes otherwise.
   const rendered = facts.pages.filter((page) => page.structuredData !== undefined);
   const structured = rendered.length > 0 ? rendered.some((page) => page.structuredData === true) : facts.summaries.some((summary) => summary.structuredData);
   const heads = rendered.length > 0 ? rendered : facts.summaries.filter((summary) => summary.head);
   if (heads.length > 0 && !structured) {
-    findings.push(siteFinding('structured-data', facts.pages[0]?.file ?? config?.file ?? 'src', 'No page writes application/ld+json structured data'));
+    findings.push(siteFinding('structured-data', facts.pages[0]?.file ?? config?.file ?? 'src', detailText('audits.detail.noStructuredData')));
   }
   findings.push(...launchFindings(facts.launch));
   findings.push(...duplicates(facts.pages, 'title'), ...duplicates(facts.pages, 'description'));
@@ -68,8 +68,8 @@ export function auditSite(facts: SiteFacts): readonly AuditFinding[] {
   return findings;
 }
 
-function siteFinding(check: AuditFinding['check'], file: string, detail: string): AuditFinding {
-  return auditFinding({ check, file, fileKind: 'site', element: undefined, detail, source: 'static', fix: undefined });
+function siteFinding(check: AuditFinding['check'], file: string, detail: ReturnType<typeof detailText>): AuditFinding {
+  return auditFinding({ check, file, fileKind: 'site', element: undefined, ...detail, source: 'static', fix: undefined });
 }
 
 // One finding per page whose title (or description) another page shares, naming the others.
@@ -98,7 +98,9 @@ function duplicates(pages: readonly SitePage[], field: 'title' | 'description'):
           file: page.file,
           fileKind: 'page',
           element: undefined,
-          detail: `"${shown}" is also on ${others.slice(0, 3).join(', ')}${others.length > 3 ? ` and ${others.length - 3} more` : ''}`,
+          ...(others.length > 3
+            ? detailText('audits.detail.alsoOnMore', { value: shown, routes: others.slice(0, 3).join(', '), more: others.length - 3 })
+            : detailText('audits.detail.alsoOn', { value: shown, routes: others.join(', ') })),
           source: 'static',
           fix: undefined,
         }),
@@ -162,13 +164,13 @@ function launchFindings(launch: LaunchFacts | undefined): readonly AuditFinding[
   }
   const found: AuditFinding[] = [];
   if (!launch.favicon) {
-    found.push(siteFinding('launch-favicon', launch.headFile, 'No page links an icon, and public/ has no favicon'));
+    found.push(siteFinding('launch-favicon', launch.headFile, detailText('audits.detail.launchNoFavicon')));
   }
   if (!launch.notFound) {
-    found.push(siteFinding('launch-404', 'src/pages', 'No src/pages/404 page'));
+    found.push(siteFinding('launch-404', 'src/pages', detailText('audits.detail.launchNo404')));
   }
   if (!launch.analytics) {
-    found.push(siteFinding('launch-analytics', launch.headFile, 'No analytics snippet in any page, and no analytics integration'));
+    found.push(siteFinding('launch-analytics', launch.headFile, detailText('audits.detail.launchNoAnalytics')));
   }
   assert(found.length <= 3, 'launchFindings: three checks at most');
   return found;

@@ -2,6 +2,8 @@
 // for each kind of shape, strict and raw (ClipPath.tsx).
 
 import type { CSSProperties } from 'react';
+import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { type CornerName, type HandleTarget } from './clipPathTypes';
 import { CORNERS } from './clipPathConstants';
 import { polygonHandleDisplayPoint } from './clipPathMeasure';
@@ -9,28 +11,28 @@ import { cornerLabel } from './clipPathHandles';
 import { shapeResizeCornerPoint } from './shapeFunctionModel';
 import { formatCssCoordinateValueForPreview } from './clipPathPreview';
 import { rawEditableHandleCssPoint } from './clipPathCanvasUnits';
-import { HANDLE_ADJUST_HINT, POINT_HANDLE_HINT, INSET_EDGE_HANDLE_HINT, INSET_RADIUS_HANDLE_HINT } from './clipPathStyleWrite';
 import { type EditorProps } from './clipPathWriteActions';
 
 // The shortcuts for the current shape, grouped.
 export function ShortcutHelpGroups({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shortcutHelpGroups } = editor;
   return (
     <div className="clip-path_shortcuts-body">
       {shortcutHelpGroups.map((group) => (
-        <section className="clip-path_shortcuts-group" key={group.title}>
-          <h3>{group.title}</h3>
+        <section className="clip-path_shortcuts-group" key={group.titleKey}>
+          <h3>{translate(group.titleKey)}</h3>
           <dl>
             {group.items.map((item) => (
-              <div key={`${group.title}-${item.keys}`}>
+              <div key={`${group.titleKey}-${item.descriptionKey}`}>
                 <dt>
-                  {item.keys.split(' + ').map((key, index) => (
+                  {('literal' in item.keys ? item.keys.literal : translate(item.keys.message)).split(' + ').map((key, index) => (
                     <kbd className="clip-path_shortcuts-key" key={index}>
                       {key}
                     </kbd>
                   ))}
                 </dt>
-                <dd>{item.description}</dd>
+                <dd>{translate(item.descriptionKey)}</dd>
               </div>
             ))}
           </dl>
@@ -102,6 +104,7 @@ export function CanvasGuides({ editor }: EditorProps) {
 
 // A scaled shape's bounding box: drag inside it to move, drag a corner to resize.
 export function ShapeBoundsControls({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shape, activeShapeBounds, shapeFitMode, isShapeTransformSelected } = editor;
   const { shapeBoundsStyle, beginShapeTransformDrag, handlePositionStyle } = editor;
   if (shape.kind !== 'shape' || !activeShapeBounds || shapeFitMode !== 'contain') {
@@ -118,7 +121,7 @@ export function ShapeBoundsControls({ editor }: EditorProps) {
         className="clip-path_shape-move"
         style={shapeBoundsStyle}
         onPointerDown={beginShapeTransformDrag('move')}
-        aria-label="Move shape"
+        aria-label={translate('styleModel.clipPath.handle.moveShape')}
         role="button"
         tabIndex={-1}
       />
@@ -131,7 +134,7 @@ export function ShapeBoundsControls({ editor }: EditorProps) {
             className={['clip-path_shape-resize', `is-${corner}`, isShapeTransformSelected ? 'is-selected' : ''].filter(Boolean).join(' ')}
             style={handlePositionStyle(point.x, point.y)}
             onPointerDown={beginShapeTransformDrag('resize', corner)}
-            aria-label={`Resize shape from ${cornerLabel(corner)} corner`}
+            aria-label={translate('styleModel.clipPath.handle.resizeShape', { corner: cornerLabel(corner, translate) })}
           />
         );
       })}
@@ -173,6 +176,7 @@ export function HandleButton({
 // The points of a polygon written in units the canvas cannot place as plain
 // percentages.
 export function RawPolygonHandles({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shape, handleCssPositionStyle } = editor;
   if (shape.kind !== 'raw' || shape.editable?.kind !== 'polygon') {
     return undefined;
@@ -185,7 +189,7 @@ export function RawPolygonHandles({ editor }: EditorProps) {
         editor={editor}
         handle={handle}
         style={handleCssPositionStyle(formatCssCoordinateValueForPreview(point.x), formatCssCoordinateValueForPreview(point.y))}
-        label={`Point ${index + 1}. Drag or use arrow keys to move.`}
+        label={translate('styleModel.clipPath.handle.pointMove', { number: index + 1 })}
       />
     );
   });
@@ -193,6 +197,7 @@ export function RawPolygonHandles({ editor }: EditorProps) {
 
 // The centre and radius of a circle written in raw CSS units.
 export function RawCircleHandles({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shape, handleCssPositionStyle } = editor;
   if (shape.kind !== 'raw' || shape.editable?.kind !== 'circle') {
     return undefined;
@@ -209,7 +214,7 @@ export function RawCircleHandles({ editor }: EditorProps) {
           handle={center}
           extra="is-center"
           style={handleCssPositionStyle(centerPoint.x, centerPoint.y)}
-          label="Circle center. Drag or use arrow keys to move."
+          label={translate('styleModel.clipPath.handle.circleCenter')}
         />
       ) : undefined}
       {radiusPoint ? (
@@ -217,7 +222,7 @@ export function RawCircleHandles({ editor }: EditorProps) {
           editor={editor}
           handle={radius}
           style={handleCssPositionStyle(radiusPoint.x, radiusPoint.y)}
-          label="Circle radius. Drag or use arrow keys to resize."
+          label={translate('styleModel.clipPath.handle.circleRadius')}
         />
       ) : undefined}
     </>
@@ -226,6 +231,7 @@ export function RawCircleHandles({ editor }: EditorProps) {
 
 // The centre and radii of an ellipse written in raw CSS units.
 export function RawEllipseHandles({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shape, handleCssPositionStyle } = editor;
   if (shape.kind !== 'raw' || shape.editable?.kind !== 'ellipse') {
     return undefined;
@@ -238,7 +244,11 @@ export function RawEllipseHandles({ editor }: EditorProps) {
       return undefined;
     }
     const handleLabel =
-      handle.kind === 'ellipse-center' ? 'Ellipse center' : handle.kind === 'ellipse-rx' ? 'Ellipse horizontal radius' : 'Ellipse vertical radius';
+      handle.kind === 'ellipse-center'
+        ? translate('styleModel.clipPath.handle.ellipseCenterAdjust')
+        : handle.kind === 'ellipse-rx'
+          ? translate('styleModel.clipPath.handle.ellipseRxAdjust')
+          : translate('styleModel.clipPath.handle.ellipseRyAdjust');
     return (
       <HandleButton
         key={handle.kind}
@@ -246,7 +256,7 @@ export function RawEllipseHandles({ editor }: EditorProps) {
         handle={handle}
         {...(handle.kind === 'ellipse-center' ? { extra: 'is-center' } : {})}
         style={handleCssPositionStyle(point.x, point.y)}
-        label={`${handleLabel}. ${HANDLE_ADJUST_HINT}`}
+        label={handleLabel}
       />
     );
   });
@@ -254,6 +264,7 @@ export function RawEllipseHandles({ editor }: EditorProps) {
 
 // The edges and corner radii of an inset written in raw CSS units.
 export function RawInsetHandles({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shape, handleCssPositionStyle } = editor;
   if (shape.kind !== 'raw' || shape.editable?.kind !== 'inset') {
     return undefined;
@@ -275,7 +286,7 @@ export function RawInsetHandles({ editor }: EditorProps) {
             handle={handle}
             extra="is-inset-side"
             style={handleCssPositionStyle(point.x, point.y)}
-            label="Inset edge. Drag or use arrow keys to resize."
+            label={translate('styleModel.clipPath.handle.insetEdgeRaw')}
           />
         );
       })}
@@ -292,7 +303,7 @@ export function RawInsetHandles({ editor }: EditorProps) {
                 handle={cornerHandle(corner)}
                 extra="is-radius"
                 style={handleCssPositionStyle(point.x, point.y)}
-                label={`Inset ${cornerLabel(corner)} corner radius. ${HANDLE_ADJUST_HINT}`}
+                label={translate('styleModel.clipPath.handle.insetRadiusAdjust', { corner: cornerLabel(corner, translate) })}
               />
             );
           })
@@ -304,6 +315,7 @@ export function RawInsetHandles({ editor }: EditorProps) {
 // A polygon's points. A point outside the canvas is drawn on its edge; the side it
 // was projected to is remembered so the handle doesn't jump between sides.
 export function PolygonHandles({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shape, handleBounds, polygonDisplayProjectionsRef, handlePositionStyle } = editor;
   const { onRemovePoint } = editor;
   if (shape.kind !== 'polygon') {
@@ -327,7 +339,7 @@ export function PolygonHandles({ editor }: EditorProps) {
           event.stopPropagation();
           onRemovePoint(i);
         }}
-        label={`Point ${i + 1}. ${POINT_HANDLE_HINT}`}
+        label={translate('styleModel.clipPath.handle.pointRemove', { number: i + 1 })}
       />
     );
   });
@@ -335,6 +347,7 @@ export function PolygonHandles({ editor }: EditorProps) {
 
 // A circle's centre and radius.
 export function CircleHandles({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shape, handlePositionStyle, circleRadiusHandleX, circleRadiusHandleY } = editor;
   if (shape.kind !== 'circle') {
     return undefined;
@@ -346,13 +359,13 @@ export function CircleHandles({ editor }: EditorProps) {
         handle={{ kind: 'circle-center' }}
         extra="is-center"
         style={handlePositionStyle(shape.cx, shape.cy)}
-        label="Circle center. Drag or use arrow keys to move."
+        label={translate('styleModel.clipPath.handle.circleCenter')}
       />
       <HandleButton
         editor={editor}
         handle={{ kind: 'circle-radius' }}
         style={handlePositionStyle(circleRadiusHandleX, circleRadiusHandleY)}
-        label="Circle radius. Drag or use arrow keys to resize."
+        label={translate('styleModel.clipPath.handle.circleRadius')}
       />
     </>
   );
@@ -360,6 +373,7 @@ export function CircleHandles({ editor }: EditorProps) {
 
 // An ellipse's centre and its two radii.
 export function EllipseHandles({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shape, handlePositionStyle } = editor;
   if (shape.kind !== 'ellipse') {
     return undefined;
@@ -371,19 +385,19 @@ export function EllipseHandles({ editor }: EditorProps) {
         handle={{ kind: 'ellipse-center' }}
         extra="is-center"
         style={handlePositionStyle(shape.cx, shape.cy)}
-        label="Ellipse center. Drag or use arrow keys to move."
+        label={translate('styleModel.clipPath.handle.ellipseCenter')}
       />
       <HandleButton
         editor={editor}
         handle={{ kind: 'ellipse-rx' }}
         style={handlePositionStyle(shape.cx + shape.rx, shape.cy)}
-        label="Ellipse horizontal radius. Drag or use any arrow key to resize."
+        label={translate('styleModel.clipPath.handle.ellipseRx')}
       />
       <HandleButton
         editor={editor}
         handle={{ kind: 'ellipse-ry' }}
         style={handlePositionStyle(shape.cx, shape.cy + shape.ry)}
-        label="Ellipse vertical radius. Drag or use any arrow key to resize."
+        label={translate('styleModel.clipPath.handle.ellipseRy')}
       />
     </>
   );
@@ -391,27 +405,28 @@ export function EllipseHandles({ editor }: EditorProps) {
 
 // An inset's four edges and its corner radii.
 export function InsetHandles({ editor }: EditorProps) {
+  const translate = useTranslate();
   const { shape, handlePositionStyle, insetCenterX, insetCenterY } = editor;
   const { insetRadiusHandlePosition } = editor;
   if (shape.kind !== 'inset') {
     return undefined;
   }
-  const edges: Array<{ handle: HandleTarget; x: number; y: number; name: string }> = [
-    { handle: { kind: 'inset-top' }, x: insetCenterX, y: shape.top, name: 'top' },
-    { handle: { kind: 'inset-right' }, x: 100 - shape.right, y: insetCenterY, name: 'right' },
-    { handle: { kind: 'inset-bottom' }, x: insetCenterX, y: 100 - shape.bottom, name: 'bottom' },
-    { handle: { kind: 'inset-left' }, x: shape.left, y: insetCenterY, name: 'left' },
+  const edges: Array<{ handle: HandleTarget; x: number; y: number; nameKey: MessageKey }> = [
+    { handle: { kind: 'inset-top' }, x: insetCenterX, y: shape.top, nameKey: 'styleModel.clipPath.edge.top' },
+    { handle: { kind: 'inset-right' }, x: 100 - shape.right, y: insetCenterY, nameKey: 'styleModel.clipPath.edge.right' },
+    { handle: { kind: 'inset-bottom' }, x: insetCenterX, y: 100 - shape.bottom, nameKey: 'styleModel.clipPath.edge.bottom' },
+    { handle: { kind: 'inset-left' }, x: shape.left, y: insetCenterY, nameKey: 'styleModel.clipPath.edge.left' },
   ];
   return (
     <>
       {edges.map((edge) => (
         <HandleButton
-          key={edge.name}
+          key={edge.nameKey}
           editor={editor}
           handle={edge.handle}
           extra="is-inset-side"
           style={handlePositionStyle(edge.x, edge.y)}
-          label={`Inset ${edge.name} edge. ${INSET_EDGE_HANDLE_HINT}`}
+          label={translate('styleModel.clipPath.handle.insetEdge', { edge: translate(edge.nameKey) })}
         />
       ))}
       {CORNERS.map((corner) => {
@@ -423,7 +438,7 @@ export function InsetHandles({ editor }: EditorProps) {
             handle={{ kind: 'inset-radius', corner }}
             extra="is-radius"
             style={handlePositionStyle(position.x, position.y)}
-            label={`Inset ${cornerLabel(corner)} corner radius. ${INSET_RADIUS_HANDLE_HINT}`}
+            label={translate('styleModel.clipPath.handle.insetRadius', { corner: cornerLabel(corner, translate) })}
           />
         );
       })}

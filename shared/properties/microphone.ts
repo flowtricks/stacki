@@ -5,6 +5,7 @@
 // bridge, parsed on the way in (docs/contracts.md, "Microphone access").
 import { assert } from '../core/assert';
 import { record } from '../core/boundary';
+import { englishText, messageRef, type TypedMessageRef } from './i18n/messageRef';
 
 /**
  * macOS's own answers (Electron's `systemPreferences.getMediaAccessStatus`), plus 'unknown' for
@@ -59,14 +60,18 @@ export function parseMicrophoneOpened(input: unknown): true {
  * application to switch on (macOS lists the development build as "Electron", the installed app
  * as "Stacki"; switching on the wrong one changes nothing).
  */
-export function microphoneAdvice(report: MicrophoneReport): { readonly message: string; readonly hint: string } {
+export function microphoneAdvice(report: MicrophoneReport): MicrophoneAdvice {
   assert(report.appName.length > 0, 'microphoneAdvice: the application has a name');
   const restricted = report.status === 'restricted';
-  const message = restricted
-    ? 'Microphone access is restricted on this Mac, so voice input cannot start.'
-    : 'Microphone access is off. Allow it in System Settings, then try again.';
-  const hint = restricted
-    ? 'A profile or Screen Time rule blocks it; only an administrator can change that.'
-    : `In Privacy & Security → Microphone, switch on “${report.appName}”.`;
-  return { message, hint };
+  const messageReference = messageRef(restricted ? 'ai.dictation.restricted' : 'ai.dictation.off');
+  const hintReference = restricted ? messageRef('ai.dictation.restrictedHint') : messageRef('ai.dictation.offHint', { app: report.appName });
+  return { message: englishText(messageReference), hint: englishText(hintReference), messageRef: messageReference, hintRef: hintReference };
+}
+
+/** The sentence and the hint in English (logs, tests) and as references the renderer translates. */
+export interface MicrophoneAdvice {
+  readonly message: string;
+  readonly hint: string;
+  readonly messageRef: TypedMessageRef;
+  readonly hintRef: TypedMessageRef;
 }

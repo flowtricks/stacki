@@ -23,7 +23,7 @@ import {
   DEFAULT_APP_SHARE_VISIBILITY,
   repositoryAccessURL,
   repositoryURL,
-  shareStepLabel,
+  shareStepRef,
   shareStepStates,
   suggestedRepositoryName,
   type AppRepositoryOwnerKind,
@@ -33,6 +33,8 @@ import {
   type AppShared,
 } from '../../../shared/properties/appPublish';
 import { scanAppSecrets, shareApp, switchAppSource } from '../../ipc/appPublishBridge';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
+import { useTranslate, useTranslateDescribed, useTranslateRef } from '../../lib/i18n/useTranslate';
 import { listAppRepositories } from '../../ipc/appsBridge';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import Dropdown from '../../ui/Dropdown';
@@ -55,8 +57,6 @@ import {
   type ShareOwnerChoice,
 } from './publishFlow';
 import './publish.css';
-
-const SHARE_LABEL = 'Share app to GitHub';
 
 export interface ShareAppProps {
   readonly projectPath: string;
@@ -87,10 +87,12 @@ type Phase =
   | { readonly kind: 'form' }
   | { readonly kind: 'running'; readonly step: AppShareStep }
   | { readonly kind: 'failed'; readonly outcome: Extract<AppShareOutcome, { readonly kind: 'failed' }> }
-  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'error'; readonly message: string; readonly messageRef?: MessageRef | undefined }
   | { readonly kind: 'shared'; readonly shared: AppShared; readonly account: string };
 
 export function ShareApp(props: ShareAppProps) {
+  const translate = useTranslate();
+  const shareLabel = translate('apps.share.title');
   const [signingIn, setSigningIn] = useState(false);
   const [discovery, setDiscovery] = useState(0);
   const { accounts, account } = usePublishAccounts(props.projectPath, discovery);
@@ -127,7 +129,7 @@ export function ShareApp(props: ShareAppProps) {
     void shareApp(props.projectPath, { id: chosen.manifest.id, account: shareAccount, ...rest }, (step) => setPhase({ kind: 'running', step })).then(
       (answer) => {
         if (!answer.ok) {
-          setPhase({ kind: 'error', message: answer.message });
+          setPhase({ kind: 'error', message: answer.message, messageRef: answer.messageRef });
           return;
         }
         const outcome = answer.value;
@@ -137,10 +139,10 @@ export function ShareApp(props: ShareAppProps) {
     );
   };
   return (
-    <Popup className="modal apps-connect apps-share" label={SHARE_LABEL} onClose={props.onClose} dismissible={phase.kind !== 'running'}>
+    <Popup className="modal apps-connect apps-share" label={shareLabel} onClose={props.onClose} dismissible={phase.kind !== 'running'}>
       {({ close }) =>
         chosen === undefined ? (
-          <ConnectFrame onCancel={close} title={SHARE_LABEL}>
+          <ConnectFrame onCancel={close} title={shareLabel}>
             <UploadedPicker uploaded={props.uploaded} onPick={setChosen} />
           </ConnectFrame>
         ) : (
@@ -223,7 +225,8 @@ export function useInstalledScan(projectPath: string, id: string | undefined): {
     let active = true;
     setLoad({ kind: 'loading' });
     void scanAppSecrets(projectPath, { kind: 'installed', id }).then(
-      (answer) => active && setLoad(answer.ok ? { kind: 'ready', scan: answer.value } : { kind: 'failed', message: answer.message }),
+      (answer) =>
+        active && setLoad(answer.ok ? { kind: 'ready', scan: answer.value } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef }),
       (error: unknown) => active && setLoad({ kind: 'failed', message: String(error) }),
     );
     return () => {
@@ -235,15 +238,16 @@ export function useInstalledScan(projectPath: string, id: string | undefined): {
 
 /** Which app to share (uploaded, or added to the project folder), when the popup was opened without one. */
 function UploadedPicker(props: { readonly uploaded: readonly AppSummary[]; readonly onPick: (app: AppSummary) => void }) {
+  const translate = useTranslate();
   if (props.uploaded.length === 0) {
     return (
-      <ChooserEmpty icon={<GitHubIcon size={20} />} title="No apps to share">
-        Apps installed from a file or added to the project folder can be shared to GitHub. Apps loaded from GitHub or the marketplace already live there.
+      <ChooserEmpty icon={<GitHubIcon size={20} />} title={translate('apps.share.noneTitle')}>
+        {translate('apps.share.noneDetail')}
       </ChooserEmpty>
     );
   }
   return (
-    <ul className="apps-choice-list" aria-label="Apps to share">
+    <ul className="apps-choice-list" aria-label={translate('apps.share.appsToShare')}>
       {props.uploaded.map((app) => (
         <li key={app.manifest.id}>
           <button type="button" className="apps-choice" onClick={() => props.onPick(app)}>
@@ -252,7 +256,7 @@ function UploadedPicker(props: { readonly uploaded: readonly AppSummary[]; reado
             </span>
             <span className="apps-choice-text">
               <span className="apps-choice-title">{app.manifest.name}</span>
-              <span className="apps-choice-meta">Version {app.manifest.version}</span>
+              <span className="apps-choice-meta">{translate('apps.details.versionNamed', { version: app.manifest.version })}</span>
             </span>
           </button>
         </li>
@@ -275,6 +279,7 @@ export function ShareFrame(props: {
   readonly children: ReactNode;
 }) {
   assert(props.app.name.length > 0, 'A shared app has a name');
+  const translate = useTranslate();
   return (
     <ConnectFrame
       onCancel={props.onCancel}
@@ -288,8 +293,8 @@ export function ShareFrame(props: {
       }
       title={
         <span className="apps-share-subject">
-          <span className="apps-share-subject-name">Share {props.app.name}</span>
-          <span className="apps-share-subject-meta">Version {props.app.version} · to GitHub</span>
+          <span className="apps-share-subject-name">{translate('apps.share.subject', { name: props.app.name })}</span>
+          <span className="apps-share-subject-meta">{translate('apps.share.subjectMeta', { version: props.app.version })}</span>
         </span>
       }
       actions={props.actions}
@@ -317,9 +322,11 @@ function SharePhase(
   },
 ) {
   const { phase, app } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const back = (
     <button type="button" className="primary" onClick={props.onRetry}>
-      Back
+      {translate('apps.share.back')}
     </button>
   );
   switch (phase.kind) {
@@ -328,7 +335,7 @@ function SharePhase(
         return (
           <ShareFrame app={app.manifest} onCancel={props.onDone}>
             <p className="apps-share-detail" role="status">
-              Reading your GitHub sign-in…
+              {translate('apps.share.reading')}
             </p>
           </ShareFrame>
         );
@@ -361,7 +368,7 @@ function SharePhase(
           cancel="disabled"
           actions={
             <button type="button" className="primary" disabled>
-              Sharing…
+              {translate('apps.share.sharing')}
             </button>
           }
         >
@@ -373,8 +380,8 @@ function SharePhase(
         <ShareFrame app={app.manifest} onCancel={props.onDone} actions={back}>
           <div className="apps-share-result" role="alert">
             <StepList states={shareStepStates(phase.outcome.step, { failed: true })} visibility={undefined} />
-            <p className="apps-error">{phase.outcome.message}</p>
-            <CreatedReport created={phase.outcome.created} />
+            <p className="apps-error">{translateDescribed(phase.outcome)}</p>
+            <CreatedReport created={phase.outcome.created} createdRefs={phase.outcome.createdRefs} />
           </div>
         </ShareFrame>
       );
@@ -382,8 +389,8 @@ function SharePhase(
       return (
         <ShareFrame app={app.manifest} onCancel={props.onDone} actions={back}>
           <div className="apps-share-result" role="alert">
-            <p className="apps-error">{phase.message}</p>
-            <p className="apps-share-detail">Nothing was created on GitHub.</p>
+            <p className="apps-error">{translateDescribed(phase)}</p>
+            <p className="apps-share-detail">{translate('apps.share.nothingCreated')}</p>
           </div>
         </ShareFrame>
       );
@@ -398,21 +405,20 @@ function SharePhase(
 
 /** No account to share with: the publish sign-in where the host has one; Studio has none and says where sharing works. */
 function SignedOut(props: { readonly onSignIn: (() => void) | undefined }) {
+  const translate = useTranslate();
   return (
     <ChooserEmpty
       icon={<GitHubIcon size={20} />}
-      title={props.onSignIn === undefined ? 'Sharing needs Stacki Desktop' : 'Sign in with GitHub to share'}
+      title={props.onSignIn === undefined ? translate('apps.share.needsDesktop') : translate('apps.share.signInTitle')}
       action={
         props.onSignIn === undefined ? undefined : (
           <button type="button" className="apps-button primary" onClick={props.onSignIn}>
-            <GitHubIcon size={14} /> Sign in with GitHub
+            <GitHubIcon size={14} /> {translate('apps.connect.signIn')}
           </button>
         )
       }
     >
-      {props.onSignIn === undefined
-        ? 'Studio holds no GitHub sign-in to create repositories with. Share the app from Stacki Desktop.'
-        : 'The app is shared with the account you publish with.'}
+      {props.onSignIn === undefined ? translate('apps.share.studioDetail') : translate('apps.share.signInDetail')}
     </ChooserEmpty>
   );
 }
@@ -440,6 +446,7 @@ export interface ShareFormProps {
  * Exported for the layout test.
  */
 export function ShareForm(props: ShareFormProps) {
+  const translate = useTranslate();
   const formId = useId();
   const [ownerKey, setOwnerKey] = useState<string | undefined>(undefined);
   const [name, setName] = useState(() => props.initialName ?? suggestedRepositoryName(props.app.id));
@@ -450,13 +457,13 @@ export function ShareForm(props: ShareFormProps) {
   const options = props.owners.map((entry) => ({
     value: entry.key,
     label: entry.login,
-    hint: entry.kind === 'organization' ? 'Organization' : 'Personal',
+    hint: entry.kind === 'organization' ? translate('apps.share.organization') : translate('apps.share.personal'),
     icon: props.renderAvatar(entry.login, entry.login),
-    ...(grouped ? { group: `Signed in as ${entry.account}` } : {}),
+    ...(grouped ? { group: translate('apps.share.signedInAs', { account: entry.account }) } : {}),
   }));
   const status = repositoryNameStatus({ owner: owner.login, ownerKind: owner.kind, name, listing: props.listingOf(owner.account) });
   const ready = repositoryNameUsable(status) && scanPassed(props.scan);
-  const choices = visibilityChoices(owner.login, owner.kind);
+  const choices = visibilityChoices(owner.login, owner.kind, translate);
   const choice = choices.find((entry) => entry.visibility === visibility);
   assert(choice !== undefined, 'The chosen visibility is offered');
   const share = async () => {
@@ -464,7 +471,7 @@ export function ShareForm(props: ShareFormProps) {
       return;
     }
     if (visibility === 'public') {
-      const confirmation = publicShareConfirmation(owner.login, name);
+      const confirmation = publicShareConfirmation(owner.login, name, translate);
       const answer = await confirmDialog({ title: confirmation.title, body: confirmation.body, confirmLabel: confirmation.confirmLabel });
       if (answer !== true) {
         return;
@@ -478,7 +485,7 @@ export function ShareForm(props: ShareFormProps) {
       onCancel={props.onCancel}
       actions={
         <button type="submit" form={formId} className="primary apps-share-submit" disabled={!ready}>
-          {visibility === 'public' ? 'Share publicly' : 'Share privately'}
+          {visibility === 'public' ? translate('apps.share.sharePublicly') : translate('apps.share.sharePrivately')}
         </button>
       }
     >
@@ -491,15 +498,22 @@ export function ShareForm(props: ShareFormProps) {
         }}
       >
         <div className="apps-share-section">
-          <span className="apps-share-label">Repository</span>
+          <span className="apps-share-label">{translate('apps.share.repository')}</span>
           <div className="apps-share-destination" data-status={status.kind}>
-            <Dropdown ariaLabel="Repository owner" className="apps-share-owner" value={owner.key} options={options} menuWidthMin={220} onChange={setOwnerKey} />
+            <Dropdown
+              ariaLabel={translate('apps.share.ownerLabel')}
+              className="apps-share-owner"
+              value={owner.key}
+              options={options}
+              menuWidthMin={220}
+              onChange={setOwnerKey}
+            />
             <span className="apps-share-slash" aria-hidden="true">
               /
             </span>
             <input
               className="apps-share-name"
-              aria-label="Repository name"
+              aria-label={translate('apps.share.nameLabel')}
               aria-invalid={!repositoryNameUsable(status)}
               aria-describedby={`${formId}-status`}
               value={name}
@@ -512,9 +526,9 @@ export function ShareForm(props: ShareFormProps) {
         </div>
         <div className="apps-share-section">
           <div className="apps-share-row">
-            <span className="apps-share-label">Visibility</span>
+            <span className="apps-share-label">{translate('apps.share.visibility')}</span>
             <SegmentedTabs
-              label="Visibility"
+              label={translate('apps.share.visibility')}
               // Two choices filling a fixed-width slot: equal halves read as one switch.
               layout="equal"
               className={{ track: 'apps-share-visibility' }}
@@ -534,35 +548,37 @@ export function ShareForm(props: ShareFormProps) {
 /** The line under the destination: what GitHub would say about the name, as it is typed. */
 function NameStatus(props: { readonly id: string; readonly status: RepositoryNameStatus; readonly owner: string; readonly name: string }) {
   const { status } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   switch (status.kind) {
     case 'invalid':
       return (
         <p id={props.id} className="apps-share-status invalid" role="alert">
-          <WarningTriangleIcon size={11} /> {status.message}
+          <WarningTriangleIcon size={11} /> {translateDescribed(status)}
         </p>
       );
     case 'exists':
       return (
         <p id={props.id} className="apps-share-status invalid" role="alert">
-          <WarningTriangleIcon size={11} /> {props.owner}/{props.name} already exists
+          <WarningTriangleIcon size={11} /> {translate('apps.share.exists', { name: `${props.owner}/${props.name}` })}
         </p>
       );
     case 'available':
       return (
         <p id={props.id} className="apps-share-status available">
-          <CheckIcon size={11} /> Available
+          <CheckIcon size={11} /> {translate('apps.share.available')}
         </p>
       );
     case 'checking':
       return (
         <p id={props.id} className="apps-share-status">
-          Checking {props.owner}’s repositories…
+          {translate('apps.share.checking', { owner: props.owner })}
         </p>
       );
     case 'unchecked':
       return (
         <p id={props.id} className="apps-share-status">
-          Creates github.com/{props.owner}/{props.name}
+          {translate('apps.share.creates', { address: `github.com/${props.owner}/${props.name}` })}
         </p>
       );
     default: {
@@ -578,38 +594,44 @@ export function StepList<S extends string>(props: {
   readonly visibility: AppShareVisibility | undefined;
   readonly label?: (step: S) => string;
 }) {
+  const translate = useTranslate();
+  const translateRef = useTranslateRef();
   return (
-    <ol className="apps-steps" aria-label="Progress">
+    <ol className="apps-steps" aria-label={translate('apps.share.progress')}>
       {props.states.map((state) => (
         <li key={state.step} className={`apps-step ${state.status}`} aria-current={state.status === 'running' ? 'step' : undefined}>
           <span className="apps-step-mark" aria-hidden="true">
             {state.status === 'done' ? <CheckIcon size={11} /> : state.status === 'failed' ? <WarningTriangleIcon size={11} /> : undefined}
           </span>
-          <span>{props.label?.(state.step) ?? defaultStepLabel(state.step, props.visibility)}</span>
-          <span className="apps-note">{state.status === 'running' ? 'Working…' : state.status === 'failed' ? 'Failed' : ''}</span>
+          <span>{props.label?.(state.step) ?? translateRef(defaultStepRef(state.step, props.visibility))}</span>
+          <span className="apps-note">
+            {state.status === 'running' ? translate('apps.share.working') : state.status === 'failed' ? translate('apps.share.failed') : ''}
+          </span>
         </li>
       ))}
     </ol>
   );
 }
 
-function defaultStepLabel(step: string, visibility: AppShareVisibility | undefined): string {
+function defaultStepRef(step: string, visibility: AppShareVisibility | undefined) {
   const shareStep = APP_SHARE_STEPS.find((known) => known === step);
   assert(shareStep !== undefined, 'A step without its own label is a share step');
-  return shareStepLabel(shareStep, visibility ?? DEFAULT_APP_SHARE_VISIBILITY);
+  return shareStepRef(shareStep, visibility ?? DEFAULT_APP_SHARE_VISIBILITY);
 }
 
 /** Exactly what a failed share left on GitHub, so nothing is unaccounted for. */
-function CreatedReport({ created }: { readonly created: readonly string[] }) {
+function CreatedReport({ created, createdRefs }: { readonly created: readonly string[]; readonly createdRefs: readonly MessageRef[] | undefined }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   if (created.length === 0) {
-    return <p className="apps-note">Nothing was created on GitHub.</p>;
+    return <p className="apps-note">{translate('apps.share.nothingCreated')}</p>;
   }
   return (
     <div className="apps-share-created">
-      <p className="apps-note">Created before it stopped; delete or finish them on GitHub:</p>
+      <p className="apps-note">{translate('apps.share.createdBefore')}</p>
       <ul>
-        {created.map((entry) => (
-          <li key={entry}>{entry}</li>
+        {created.map((entry, index) => (
+          <li key={entry}>{translateDescribed({ message: entry, messageRef: createdRefs?.[index] })}</li>
         ))}
       </ul>
     </div>
@@ -631,6 +653,8 @@ export function SharedState(
   },
 ): ReactNode {
   const { shared } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const switchId = useId();
   const [switchSource, setSwitchSource] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -649,7 +673,7 @@ export function SharedState(
       if (answer.ok) {
         props.onSwitched(answer.value);
       } else {
-        props.notify(answer.message, 'error');
+        props.notify(translateDescribed(answer), 'error');
         return;
       }
     }
@@ -665,11 +689,11 @@ export function SharedState(
         <>
           {submit !== undefined && (
             <button type="button" disabled={busy} onClick={() => void finish(() => submit(shared, props.account))}>
-              Also submit to the marketplace
+              {translate('apps.share.alsoSubmit')}
             </button>
           )}
           <button type="button" className="primary" disabled={busy} onClick={() => void finish(undefined)}>
-            {busy ? 'Switching…' : 'Done'}
+            {busy ? translate('apps.share.switching') : translate('apps.share.done')}
           </button>
         </>
       }
@@ -680,8 +704,8 @@ export function SharedState(
             <CheckIcon size={12} />
           </span>
           <span className="apps-share-done-text">
-            <strong>Shared {shared.visibility === 'public' ? 'publicly' : 'privately'}</strong>
-            <span className="apps-share-detail">Release {shared.tag} is on GitHub.</span>
+            <strong>{shared.visibility === 'public' ? translate('apps.share.sharedPublicly') : translate('apps.share.sharedPrivately')}</strong>
+            <span className="apps-share-detail">{translate('apps.share.releaseOnGitHub', { tag: shared.tag })}</span>
           </span>
         </div>
         <div className="apps-share-link-row">
@@ -696,27 +720,27 @@ export function SharedState(
             className="apps-share-link-action"
             onClick={() =>
               void navigator.clipboard.writeText(url).then(
-                () => props.notify('Copied the repository link.', 'success'),
-                () => props.notify('Stacki could not reach the clipboard.', 'error'),
+                () => props.notify(translate('apps.share.copied'), 'success'),
+                () => props.notify(translate('apps.share.clipboardFailed'), 'error'),
               )
             }
           >
-            <CopyIcon size={11} /> Copy link
+            <CopyIcon size={11} /> {translate('apps.share.copyLink')}
           </button>
           <a className="apps-share-link-action" href={repositoryAccessURL(shared.owner, shared.repository)} target="_blank" rel="noopener noreferrer">
-            <ExternalIcon size={11} /> Invite people
+            <ExternalIcon size={11} /> {translate('apps.share.invite')}
           </a>
         </div>
         <StepList states={shareStepStates('finished', { failed: false })} visibility={shared.visibility} />
         <div className="apps-share-update">
           <span className="apps-share-update-text">
-            <span>Install updates from this repository</span>
+            <span>{translate('apps.share.installUpdates')}</span>
             <span id={switchId} className="apps-share-detail">
-              The project gets an update notice when {shared.owner}/{shared.repository} publishes a new release.
+              {translate('apps.share.updateNotice', { name: `${shared.owner}/${shared.repository}` })}
             </span>
           </span>
           <Switch
-            label="Install updates from this repository"
+            label={translate('apps.share.installUpdates')}
             checked={switchSource}
             describedBy={switchId}
             onToggle={() => setSwitchSource((value) => !value)}

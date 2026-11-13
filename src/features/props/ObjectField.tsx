@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import React from 'react';
 import { arrayItems, arrayText, objectFields, objectText } from './arrayValue';
 import type { ObjectRow } from './arrayValue';
@@ -58,6 +59,7 @@ function ObjectRowField(props: RowProps) {
   );
 }
 function ObjectRowControl({ field, onChange }: RowProps) {
+  const translate = useTranslate();
   if (field.kind === 'list') {
     assert(field.items !== undefined, 'ObjectField: list field has items');
     return (
@@ -77,8 +79,8 @@ function ObjectRowControl({ field, onChange }: RowProps) {
     return (
       <SegSwitch
         options={[
-          { value: true, label: 'True' },
-          { value: false, label: 'False' },
+          { value: true, label: translate('props.newProp.form.true') },
+          { value: false, label: translate('props.newProp.form.false') },
         ]}
         current={text === 'true'}
         onPick={(next) => onChange({ ...field, text: next ? 'true' : 'false' }, { immediate: true })}

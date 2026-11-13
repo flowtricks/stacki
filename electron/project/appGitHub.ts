@@ -12,6 +12,7 @@ import { createHash } from 'node:crypto';
 import { assert } from '../../shared/core/assert';
 import { record, text } from '../../shared/core/boundary';
 import { toArray } from '../../shared/core/record';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import {
   APP_GITHUB_CHOICE_LIMITS,
   APP_LIMITS,
@@ -69,23 +70,23 @@ export async function releaseAsset(
   const which = options.tag === undefined ? 'latest' : `tags/${encodeURIComponent(options.tag)}`;
   const response = await apiGet(fetcher, `${API_ORIGIN}/repos/${repository}/releases/${which}`, options.token);
   if (response.status === 404) {
-    throw new Error(`${source.owner}/${source.repository} has no such release, or this account cannot read it.`);
+    throw new ReferencedError('apps.error.gitHubNoRelease', { repository: `${source.owner}/${source.repository}` });
   }
   if (!response.ok) {
-    throw new Error(`GitHub answered ${response.status} for ${source.owner}/${source.repository}'s release.`);
+    throw new ReferencedError('apps.error.gitHubAnsweredRelease', { status: response.status, repository: `${source.owner}/${source.repository}` });
   }
   const release = record(await readJSON(response));
   const tag = text(release['tag_name']);
   if (tag.length === 0 || tag.length > APP_LIMITS.tagCharsMax) {
-    throw new Error('The release has no usable tag.');
+    throw new ReferencedError('apps.error.releaseNoTag');
   }
   const assets = toArray(release['assets']) ?? [];
   if (assets.length > APP_GITHUB_LIMITS.assetsMax) {
-    throw new Error('The release lists too many assets.');
+    throw new ReferencedError('apps.error.releaseTooManyAssets');
   }
   const found = assets.map((asset) => record(asset)).find((asset) => asset['name'] === source.asset);
   if (found === undefined) {
-    throw new Error(`The release ${tag} has no asset named ${source.asset}.`);
+    throw new ReferencedError('apps.error.releaseNoAsset', { tag, asset: source.asset });
   }
   return parseAsset(found, tag, source);
 }
@@ -95,10 +96,10 @@ export async function listReleases(fetcher: GitHubFetch, owner: string, reposito
   const url = `${API_ORIGIN}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/releases?per_page=${APP_GITHUB_CHOICE_LIMITS.releasesMax}`;
   const response = await apiGet(fetcher, url, token);
   if (response.status === 404) {
-    throw new Error(`${owner}/${repository} was not found, or this account cannot read it.`);
+    throw new ReferencedError('apps.error.repositoryNotFound', { repository: `${owner}/${repository}` });
   }
   if (!response.ok) {
-    throw new Error(`GitHub answered ${response.status} for ${owner}/${repository}'s releases.`);
+    throw new ReferencedError('apps.error.gitHubAnsweredReleases', { status: response.status, repository: `${owner}/${repository}` });
   }
   const items = toArray(await readJSON(response)) ?? [];
   const releases = items.slice(0, APP_GITHUB_CHOICE_LIMITS.releasesMax).flatMap((item) => {
@@ -133,11 +134,11 @@ export async function repositoryVisibility(fetcher: GitHubFetch, owner: string, 
   const url = `${API_ORIGIN}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`;
   const response = await apiGet(fetcher, url, token);
   if (!response.ok) {
-    throw new Error(`GitHub answered ${response.status} for ${owner}/${repository}.`);
+    throw new ReferencedError('apps.error.gitHubAnsweredRepository', { status: response.status, repository: `${owner}/${repository}` });
   }
   const isPrivate = record(await readJSON(response))['private'];
   if (typeof isPrivate !== 'boolean') {
-    throw new Error(`GitHub did not say whether ${owner}/${repository} is private.`);
+    throw new ReferencedError('apps.error.privateUnknown', { repository: `${owner}/${repository}` });
   }
   return isPrivate ? 'private' : 'public';
 }
@@ -230,7 +231,7 @@ async function listAccountRepositories(fetcher: GitHubFetch, token: string): Pro
       if (limited !== undefined) {
         throw new Error(rateLimitMessage(limited.resetAtMs));
       }
-      throw new Error(`GitHub answered ${response.status} for this account's repositories.`);
+      throw new ReferencedError('apps.error.gitHubAnsweredAccountRepositories', { status: response.status });
     }
     const items = toArray(await readJSON(response)) ?? [];
     for (const item of items.slice(0, 100)) {
@@ -303,7 +304,9 @@ function apiGet(fetcher: GitHubFetch, url: string, token: string | undefined): P
     headers: {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
+      // i18n-ignore: HTTP header value or request path, protocol text.
       'User-Agent': 'Stacki',
+      // i18n-ignore: HTTP header value or request path, protocol text.
       ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }),
     },
     redirect: 'error',
@@ -320,22 +323,22 @@ async function readJSON(response: Response): Promise<unknown> {
 function parseAsset(asset: Readonly<Record<string, unknown>>, tag: string, source: AppGitHubSource): ReleaseAsset {
   const sizeBytes = asset['size'];
   if (typeof sizeBytes !== 'number' || !Number.isSafeInteger(sizeBytes) || sizeBytes <= 0) {
-    throw new Error('The release asset has no size.');
+    throw new ReferencedError('apps.error.assetNoSize');
   }
   if (sizeBytes > APP_LIMITS.archiveBytesMax) {
-    throw new Error(`${source.asset} is ${sizeBytes} bytes; an app is at most ${APP_LIMITS.archiveBytesMax}.`);
+    throw new ReferencedError('apps.error.assetTooBig', { asset: source.asset, bytes: sizeBytes, max: APP_LIMITS.archiveBytesMax });
   }
   const url = text(asset['url']);
   const expected = `${API_ORIGIN}/repos/${source.owner}/${source.repository}/releases/assets/`;
   if (!url.toLowerCase().startsWith(expected.toLowerCase())) {
-    throw new Error('The release asset does not download from its own repository.');
+    throw new ReferencedError('apps.error.assetWrongRepository');
   }
   const digest = asset['digest'];
   let sha256: string | undefined;
   if (typeof digest === 'string' && digest.startsWith('sha256:')) {
     sha256 = digest.slice('sha256:'.length).toLowerCase();
     if (!/^[0-9a-f]{64}$/.test(sha256)) {
-      throw new Error('GitHub’s digest for the asset is malformed.');
+      throw new ReferencedError('apps.error.digestMalformed');
     }
   }
   return { tag, name: source.asset, sizeBytes, url, sha256 };
@@ -346,8 +349,10 @@ export async function downloadReleaseAsset(fetcher: GitHubFetch, asset: ReleaseA
   let url = asset.url;
   for (let hop = 0; hop <= APP_GITHUB_LIMITS.redirectsMax; hop += 1) {
     const host = assertDownloadHost(url);
+    // i18n-ignore: HTTP header value or request path, protocol text.
     const authorization = token !== undefined && host === 'api.github.com' ? { Authorization: `Bearer ${token}` } : {};
     const response = await fetcher(url, {
+      // i18n-ignore: HTTP header value or request path, protocol text.
       headers: { Accept: 'application/octet-stream', 'User-Agent': 'Stacki', ...authorization },
       redirect: 'manual',
       signal: AbortSignal.timeout(APP_GITHUB_LIMITS.requestMsMax),
@@ -355,34 +360,34 @@ export async function downloadReleaseAsset(fetcher: GitHubFetch, asset: ReleaseA
     if (response.status >= 300 && response.status < 400) {
       const location = response.headers.get('location') ?? undefined;
       if (location === undefined) {
-        throw new Error('GitHub redirected the download nowhere.');
+        throw new ReferencedError('apps.error.downloadRedirectNowhere');
       }
       url = new URL(location, url).toString();
       continue;
     }
     if (!response.ok) {
-      throw new Error(`The download answered ${response.status}.`);
+      throw new ReferencedError('apps.error.downloadStatus', { status: response.status });
     }
     const bytes = await readBounded(response, asset.sizeBytes);
     if (bytes.byteLength !== asset.sizeBytes) {
-      throw new Error(`The download is ${bytes.byteLength} bytes; the release says ${asset.sizeBytes}.`);
+      throw new ReferencedError('apps.error.downloadSizeMismatch', { actual: bytes.byteLength, expected: asset.sizeBytes });
     }
     const sha256 = sha256Hex(bytes);
     if (asset.sha256 !== undefined && asset.sha256 !== sha256) {
-      throw new Error('The download does not match the digest GitHub published for it.');
+      throw new ReferencedError('apps.error.downloadDigestMismatch');
     }
     return { asset, bytes, sha256 };
   }
-  throw new Error('GitHub redirected the download too many times.');
+  throw new ReferencedError('apps.error.downloadRedirectedTooMany');
 }
 
 function assertDownloadHost(url: string): string {
   const parsed = new URL(url);
   if (parsed.protocol !== 'https:') {
-    throw new Error('Apps download over HTTPS only.');
+    throw new ReferencedError('apps.error.downloadHTTPSOnly');
   }
   if (!DOWNLOAD_HOSTS.has(parsed.hostname)) {
-    throw new Error(`The download was sent to ${parsed.hostname}, which is not GitHub.`);
+    throw new ReferencedError('apps.error.downloadNotGitHub', { host: parsed.hostname });
   }
   assert(parsed.username === '', 'A download URL carries no credentials');
   return parsed.hostname;
@@ -392,7 +397,7 @@ function assertDownloadHost(url: string): string {
 export async function readBounded(response: Response, bytesMax: number): Promise<Uint8Array> {
   const stated = Number(response.headers.get('content-length') ?? '0');
   if (Number.isFinite(stated) && stated > bytesMax) {
-    throw new Error(`The response is larger than ${bytesMax} bytes.`);
+    throw new ReferencedError('apps.error.responseTooLarge', { max: bytesMax });
   }
   const reader = response.body?.getReader();
   if (reader === undefined) {
@@ -409,12 +414,12 @@ export async function readBounded(response: Response, bytesMax: number): Promise
     }
     const chunk = result['value'];
     if (!(chunk instanceof Uint8Array)) {
-      throw new Error('The response body is not bytes.');
+      throw new ReferencedError('apps.error.responseNotBytes');
     }
     total += chunk.byteLength;
     if (total > bytesMax) {
       await reader.cancel();
-      throw new Error(`The response is larger than ${bytesMax} bytes.`);
+      throw new ReferencedError('apps.error.responseTooLarge', { max: bytesMax });
     }
     chunks.push(chunk);
   }

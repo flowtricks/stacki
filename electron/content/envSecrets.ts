@@ -1,3 +1,4 @@
+// i18n-ignore-file: the messages are the English fallback beside each stable failure code; the Secrets tab translates by code (settings.secrets.error.*).
 // The Settings panel's Secrets tab, main-process half (shared/properties/secrets.ts): list the
 // names in the project's `.env`, hand one value to the renderer when a person reveals or edits
 // it, apply one change, and append `.env` to `.gitignore`.

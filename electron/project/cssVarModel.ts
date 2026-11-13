@@ -5,6 +5,7 @@ import { variableFiles as fs } from './variableWorkspace';
 import path from 'path';
 import { MAIN_LIMITS } from './variableWorkspace';
 import { assert } from '../../shared/core/assert';
+import { described, type MessageRef } from '../../shared/properties/i18n/messageRef';
 import { toPosix, findStylesheets, type VarEntry, type Rule, readDeclarations } from './cssVarRead';
 import { labelForRule, commonStem, namesOf, groupRules, findFamilies, prefixSections } from './cssVarGroups';
 import { resolveValue, colorOf, isUncomputableColor, kindOf } from './cssVarValues';
@@ -61,6 +62,8 @@ export interface FileModel {
   readonly name: string;
   readonly groups: Group[];
   readonly error?: string;
+  /** The reference the panel translates `error` from; absent for text received from elsewhere. */
+  readonly errorRef?: MessageRef | undefined;
   readonly count?: number;
   declarations?: Rule[];
 }
@@ -327,12 +330,8 @@ export function readVariables(projectPath: string): {
     try {
       rules = readDeclarations(text);
     } catch (error: unknown) {
-      files.push({
-        rel,
-        name: path.basename(abs),
-        error: `Could not parse — ${error instanceof Error ? error.message : String(error)}`,
-        groups: [],
-      });
+      const parseFailure = described('variables.error.parse', { detail: error instanceof Error ? error.message : String(error) });
+      files.push({ rel, name: path.basename(abs), error: parseFailure.message, errorRef: parseFailure.messageRef, groups: [] });
       continue;
     }
     if (!rules.length) {
@@ -398,7 +397,9 @@ function readAstroFiles(projectPath: string): FileModel[] {
     const name = rel.replace(/^src\//, '');
     const read = readAstroVariables(rel, text);
     if (read.kind === 'error') {
-      files.push({ rel, name, error: `Could not parse — ${read.message}`, groups: [] });
+      // A reference from the reader already names the whole sentence; one without it is wrapped as the English always was.
+      const parseFailure = described('variables.error.parse', { detail: read.message });
+      files.push({ rel, name, error: parseFailure.message, errorRef: read.messageRef ?? parseFailure.messageRef, groups: [] });
     } else if (read.kind === 'rules') {
       const rules = read.sections.flatMap((section) => section.rules);
       assert(rules.length > 0, 'readAstroFiles: a read with sections holds rules');

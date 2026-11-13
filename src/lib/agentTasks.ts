@@ -7,6 +7,7 @@
 // to the clipboard, so a hand-off never silently does nothing.
 import { assert } from '../../shared/core/assert';
 import { agentTask, type AgentTask } from '../../shared/properties/agentTask';
+import type { Translator } from '../../shared/properties/i18n/messageRef';
 
 /** How a hand-off ended, for the caller's toast. */
 export type AgentTaskOutcome =
@@ -82,14 +83,14 @@ async function copyPrompt(prompt: string): Promise<AgentTaskOutcome> {
 }
 
 /** The toast a hand-off ends with. */
-export function agentTaskMessage(outcome: AgentTaskOutcome): { readonly message: string; readonly kind: 'success' | 'info' | 'error' } {
+export function agentTaskMessage(outcome: AgentTaskOutcome, translate: Translator): { readonly message: string; readonly kind: 'success' | 'info' | 'error' } {
   switch (outcome.tag) {
     case 'sent':
-      return { message: `Sent to ${outcome.where}.`, kind: 'success' };
+      return { message: translate('ui.handoff.sent', { where: outcome.where }), kind: 'success' };
     case 'copied':
-      return { message: 'Prompt copied. Paste it into your coding agent.', kind: 'info' };
+      return { message: translate('ui.handoff.copied'), kind: 'info' };
     case 'failed':
-      return { message: `Couldn’t hand this off: ${outcome.message}`, kind: 'error' };
+      return { message: translate('ui.handoff.failed', { reason: outcome.message }), kind: 'error' };
     default: {
       const exhaustive: never = outcome;
       return exhaustive;

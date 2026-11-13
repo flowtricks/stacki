@@ -10,6 +10,8 @@
 
 import type { Attr } from '../../shared/page/pageNode';
 import { assert } from '../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../shared/properties/i18n/messageRef';
 import { namesIn } from './classAttr';
 
 type ElementProps = Readonly<Record<string, Attr>>;
@@ -23,49 +25,49 @@ export type PropRemoval =
 const ATTRIBUTES_NOT_REMOVABLE: ReadonlySet<string> = new Set(['class', 'class:list', 'style']);
 
 /** Removes `name` from a literal `class="…"`; refuses every computed shape. */
-export function classRemoval(props: ElementProps | undefined, name: string): PropRemoval {
+export function classRemoval(props: ElementProps | undefined, name: string, translate: Translator = ENGLISH_TRANSLATE): PropRemoval {
   assert(name.length > 0, 'classRemoval: a class name is given');
   assert(!/\s/.test(name), 'classRemoval: one class, no whitespace');
   if (namesIn(props?.['class:list']).includes(name)) {
-    return refused(`“${name}” is written inside class:list, so Stacki leaves it for you to remove in code.`);
+    return refused(translate('editor.selectorRemoval.insideClassList', { name }));
   }
   const prop = props?.['class'];
   if (prop === undefined) {
-    return refused(notWritten(name, props));
+    return refused(notWritten(name, props, translate));
   }
   if (prop.type === 'string') {
     const words = namesIn(prop);
     if (!words.includes(name)) {
-      return refused(notWritten(name, props));
+      return refused(notWritten(name, props, translate));
     }
     const remaining = words.filter((word) => word !== name);
     assert(remaining.length < words.length, 'classRemoval: the class was taken out');
     return remaining.length === 0 ? edit('class', undefined) : edit('class', { type: 'string', value: remaining.join(' ') });
   }
   if (prop.type === 'expr') {
-    return refused(`“${name}” comes from the expression class={${prop.value}}, so Stacki leaves it for you to change in code.`);
+    return refused(translate('editor.selectorRemoval.classExpression', { name, code: `class={${prop.value}}` }));
   }
-  return refused(notWritten(name, props));
+  return refused(notWritten(name, props, translate));
 }
 
 /** Removes a literal attribute (`data-state="open"`, `hidden`); refuses a bound one. */
-export function attributeRemoval(props: ElementProps | undefined, name: string): PropRemoval {
+export function attributeRemoval(props: ElementProps | undefined, name: string, translate: Translator = ENGLISH_TRANSLATE): PropRemoval {
   assert(name.length > 0, 'attributeRemoval: an attribute name is given');
   if (ATTRIBUTES_NOT_REMOVABLE.has(name)) {
-    return refused(`The ${name} attribute holds more than one thing, so it can’t be removed as one chip.`);
+    return refused(translate('editor.selectorRemoval.notOneThing', { name }));
   }
   const prop = props?.[name];
   if (prop === undefined) {
-    return refused(notWritten(name, props));
+    return refused(notWritten(name, props, translate));
   }
   switch (prop.type) {
     case 'string':
     case 'bare':
       return edit(name, undefined);
     case 'expr':
-      return refused(`${name} is bound to {${prop.value}}, so Stacki leaves it for you to change in code.`);
+      return refused(translate('editor.selectorRemoval.bound', { name, code: `{${prop.value}}` }));
     case 'spread':
-      return refused(notWritten(name, props));
+      return refused(notWritten(name, props, translate));
     default: {
       const exhaustive: never = prop;
       return exhaustive;
@@ -83,9 +85,7 @@ function refused(reason: string): PropRemoval {
 }
 
 // Not on this element's tag as written: it reaches the element some other way.
-function notWritten(name: string, props: ElementProps | undefined): string {
+function notWritten(name: string, props: ElementProps | undefined, translate: Translator): string {
   const spread = Object.values(props ?? {}).some((prop) => prop.type === 'spread');
-  return spread
-    ? `“${name}” isn’t written on this element; it may come from a spread or a component prop, so there is nothing here to remove.`
-    : `“${name}” isn’t written on this element, so there is nothing here to remove.`;
+  return spread ? translate('editor.selectorRemoval.notWrittenSpread', { name }) : translate('editor.selectorRemoval.notWritten', { name });
 }

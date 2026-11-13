@@ -12,6 +12,7 @@ import { APPS_DIRECTORY, type AppSummary } from '../../../shared/properties/apps
 import type { AppFolderBroken } from '../../../shared/properties/appFolders';
 import { APP_FOLDER_REVEAL, revealAppFolder } from '../../ipc/appFoldersBridge';
 import { scanAppSecrets } from '../../ipc/appPublishBridge';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { CodeInline } from '../../ui/CodeBlock';
 import { FolderIcon, WarningTriangleIcon } from '../../ui/Icons';
 import { AppDetailsItem, AppDetailsList, AppDetailsSection } from './AppDetailsLayout';
@@ -19,6 +20,8 @@ import { SecretScanStatus, type ScanLoad } from './SecretScanReport';
 import './publish.css';
 
 export function BrokenAppRow({ broken, projectPath }: { readonly broken: AppFolderBroken; readonly projectPath: string }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   return (
     <li className="apps-row apps-row-broken">
       <div className="apps-row-main">
@@ -30,8 +33,8 @@ export function BrokenAppRow({ broken, projectPath }: { readonly broken: AppFold
             <span className="apps-row-name">
               <span className="apps-row-title">{broken.folder}</span>
             </span>
-            <span className="apps-row-description" title={broken.message}>
-              {broken.message}
+            <span className="apps-row-description" title={translateDescribed(broken)}>
+              {translateDescribed(broken)}
             </span>
           </span>
         </span>
@@ -40,8 +43,8 @@ export function BrokenAppRow({ broken, projectPath }: { readonly broken: AppFold
             <button
               type="button"
               className="apps-icon-button"
-              title="Show in Finder"
-              aria-label={`Show ${broken.folder} in Finder`}
+              title={translate('apps.folder.showInFinder')}
+              aria-label={translate('apps.folder.showNamedInFinder', { name: broken.folder })}
               onClick={() => void revealAppFolder(projectPath, broken.folder)}
             >
               <FolderIcon size={14} />
@@ -66,12 +69,13 @@ export function AppFolderScanSection({ projectPath, app }: { readonly projectPat
 }
 
 function AppFolderScan({ projectPath, app }: { readonly projectPath: string; readonly app: AppSummary }) {
+  const translate = useTranslate();
   const id = app.manifest.id;
   const [scan, setScan] = useState<ScanLoad>({ kind: 'loading' });
   const runScan = useCallback(() => {
     setScan({ kind: 'loading' });
     void scanAppSecrets(projectPath, { kind: 'installed', id }).then(
-      (answer) => setScan(answer.ok ? { kind: 'ready', scan: answer.value } : { kind: 'failed', message: answer.message }),
+      (answer) => setScan(answer.ok ? { kind: 'ready', scan: answer.value } : { kind: 'failed', message: answer.message, messageRef: answer.messageRef }),
       (error: unknown) => setScan({ kind: 'failed', message: error instanceof Error ? error.message : String(error) }),
     );
   }, [projectPath, id]);
@@ -79,7 +83,7 @@ function AppFolderScan({ projectPath, app }: { readonly projectPath: string; rea
   useEffect(() => runScan(), [runScan, app.lock.sha256]);
   // One status line, which expands to the findings when the scan found something (SecretScanReport.tsx).
   return (
-    <AppDetailsSection title="Secret scan" hint={`Found in ${APPS_DIRECTORY}/${id}/, so no install step checked its files.`}>
+    <AppDetailsSection title={translate('apps.folder.scanTitle')} hint={translate('apps.folder.scanHint', { folder: `${APPS_DIRECTORY}/${id}/` })}>
       <SecretScanStatus load={scan} onRescan={runScan} />
     </AppDetailsSection>
   );
@@ -91,13 +95,14 @@ function AppFolderScan({ projectPath, app }: { readonly projectPath: string; rea
  * nothing here: its About facts already say "Works offline".
  */
 export function AppServicesSection({ app }: { readonly app: AppSummary }) {
+  const translate = useTranslate();
   const { network, auth } = app.manifest;
   if (network.length === 0 && auth.length === 0) {
     return undefined;
   }
   return (
-    <AppDetailsSection title="External services" hint="The services this app may reach, as its manifest declares them. Stacki holds it to this list.">
-      <AppDetailsList label={`${app.manifest.name} external services`}>
+    <AppDetailsSection title={translate('apps.services.title')} hint={translate('apps.services.hint')}>
+      <AppDetailsList label={translate('apps.services.listLabel', { name: app.manifest.name })}>
         {network.map((entry) => (
           <AppDetailsItem key={`host:${entry.host}`} label={<CodeInline text={entry.host} />} title={entry.host} tone="warning">
             <span className="apps-details-muted" title={entry.purpose}>
@@ -107,7 +112,7 @@ export function AppServicesSection({ app }: { readonly app: AppSummary }) {
         ))}
         {auth.map((provider) => (
           <AppDetailsItem key={`auth:${provider.id}`} label={provider.label}>
-            <span className="apps-details-muted">Each person’s own account</span>
+            <span className="apps-details-muted">{translate('apps.services.ownAccount')}</span>
           </AppDetailsItem>
         ))}
       </AppDetailsList>

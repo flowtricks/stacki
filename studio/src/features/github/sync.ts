@@ -97,6 +97,7 @@ export class RepositorySync {
     } catch (error) {
       this.state = {
         kind: 'failed',
+        // i18n-ignore: Fallback for a thrown non-Error in the Studio sync server, relayed as received.
         message: error instanceof Error ? error.message : 'GitHub sync failed',
       };
     }

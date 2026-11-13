@@ -12,6 +12,7 @@ import { assert } from '../core/assert';
 import { parseConnectionId } from './cmsConnections';
 import { parseEntrySlug, type EntrySlug } from './entrySlug';
 import { parseProjectFile, parseRemoteSchemaField, parseRemoteValue, type RemoteSchemaField, type RemoteValue } from './cmsRemoteSchema';
+import { parseMessageRef, parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 
 export const CMS_REMOTE_LIMITS = {
   collectionsMax: 200,
@@ -102,6 +103,8 @@ export interface RemoteRevision {
   readonly id: string;
   readonly timestamp: string;
   readonly author: string;
+  /** Says who in the language on screen when Sanity gave no name (`author` then holds the English word). */
+  readonly authorRef?: MessageRef | undefined;
 }
 
 /**
@@ -144,9 +147,15 @@ export interface RemoteDocument {
   readonly file?: string;
   /** An Astro content entry's id, as its Slug field edits it (entrySlug.ts); a CMS document has none. */
   readonly slug?: EntrySlug;
+  /**
+   * True when an edit to this document changes the live content at once, because its collection keeps no
+   * drafts (a Payload collection without `versions.drafts`). Absent where edits are always drafts.
+   */
+  readonly appliesLive?: boolean;
 }
 
-export type RemoteResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string };
+export type RemoteResult<T> =
+  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 /** One top-level field's new value; `undefined` removes the field. */
 export interface RemoteWrite {
@@ -212,7 +221,8 @@ export function parseRemoteResult<T>(input: unknown, parseValue: (value: unknown
   const message = text(value['message']);
   assert(message.length > 0, 'A CMS failure says what went wrong');
   assert(message.length <= 1000, 'A CMS failure message is short');
-  return { ok: false, message };
+  const ref = value['messageRef'] === undefined ? undefined : parseMessageRef(value['messageRef']);
+  return ref?.ok === true ? { ok: false, message, messageRef: ref.value } : { ok: false, message };
 }
 
 export function parseRemoteCollections(input: unknown): RemoteCollection[] {
@@ -326,6 +336,7 @@ export function parseRemoteDocument(input: unknown): RemoteDocument {
     ...(value['fieldGroups'] === undefined ? {} : { fieldGroups: parseRemoteFieldGroups(value['fieldGroups']) }),
     ...(value['file'] === undefined ? {} : { file: parseProjectFile(value['file']) }),
     ...(value['slug'] === undefined ? {} : { slug: parseEntrySlug(value['slug']) }),
+    ...(value['appliesLive'] === true ? { appliesLive: true } : {}),
   };
 }
 
@@ -425,10 +436,12 @@ export function parseRemoteRevisionId(input: unknown): string {
 export function parseRemoteRevisions(input: unknown): RemoteRevision[] {
   return boundedList(input, CMS_REMOTE_LIMITS.revisionsMax).map((entry) => {
     const value = record(entry);
+    const authorRef = parseOptionalMessageRef(value['authorRef']);
     return {
       id: parseRemoteRevisionId(value['id']),
       timestamp: preview(value['timestamp']),
       author: preview(value['author']),
+      ...(authorRef === undefined ? {} : { authorRef }),
     };
   });
 }
@@ -465,12 +478,15 @@ function parseStatus(input: unknown): RemoteStatus {
   throw new Error('Invalid document status.');
 }
 
+// A CMS address is https, or http on this machine: a Payload server run locally answers on http://localhost.
 function parseHTTPS(input: unknown): string {
   const url = new URL(text(input));
-  if (url.protocol !== 'https:' || url.username || url.password) {
+  const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.hostname === '[::1]';
+  const secure = url.protocol === 'https:' || (url.protocol === 'http:' && loopback);
+  if (!secure || url.username || url.password) {
     throw new Error('Invalid CMS editor address.');
   }
-  assert(url.protocol === 'https:', 'A CMS editor opens over https');
+  assert(secure, 'A CMS address is https, or http on this machine');
   return url.toString();
 }
 

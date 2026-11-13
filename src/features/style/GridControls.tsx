@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { GroupLabel } from './TypographySection';
 import FieldLabel from './components/FieldLabel';
 import { PropTip } from './components/CssPropertyTip';
@@ -10,7 +12,7 @@ import type { ResolvedProp } from './model/resolved';
 import { useHighlight } from './model/computedStyle';
 import { commitInPlace } from './model/commitInPlace';
 import { countTracks, NEW_COLUMN, NEW_ROW, repeatTracks, isUniformTracks } from './gridTracks';
-import { GRID_ITEM_ALIGN, gridKeyword, GridAlignIcon, X_ALIGN_ICONS, Y_ALIGN_ICONS, X_ALIGN_LABELS, Y_ALIGN_LABELS, cap, CustomizeIcon } from './GridIcons';
+import { GRID_ITEM_ALIGN, gridKeyword, GridAlignIcon, X_ALIGN_ICONS, Y_ALIGN_ICONS, xAlignLabels, yAlignLabels, cap, CustomizeIcon } from './GridIcons';
 import { GridDirectionControl, GridContentControl, CountField } from './GridFlowControls';
 import { displayOf, displayText, parseImportant } from './model/styleDisplay';
 
@@ -41,6 +43,9 @@ function GridAlignBox({
   busy: boolean;
   onSet: (prop: string, value: string) => void;
 }) {
+  const translate = useTranslate();
+  const xLabels = xAlignLabels(translate);
+  const yLabels = yAlignLabels(translate);
   // Grid's initial justify-items / align-items behave as stretch, so an unset control
   // shows a full-bleed item.
   const ji = justifyItems || 'stretch';
@@ -62,7 +67,7 @@ function GridAlignBox({
               type="button"
               className="embed-editor_align-dot"
               disabled={busy}
-              aria-label={`Align ${cap(cx)} ${cap(ry)}`}
+              aria-label={translate('style.gridControls.alignAt', { horizontal: xLabels[cx] ?? cap(cx), vertical: yLabels[ry] ?? cap(ry) })}
               onClick={() => {
                 onSet('justify-items', cx);
                 onSet('align-items', ry);
@@ -142,15 +147,15 @@ function GridAxisCustomInput({
 
 // An align axis's dropdown options: the presets with their axis's labels and icons,
 // then "Custom".
-function alignAxisOptions(axis: 'X' | 'Y'): SelectOption<string>[] {
-  const labels = axis === 'X' ? X_ALIGN_LABELS : Y_ALIGN_LABELS;
+function alignAxisOptions(axis: 'X' | 'Y', translate: Translator): SelectOption<string>[] {
+  const labels = axis === 'X' ? xAlignLabels(translate) : yAlignLabels(translate);
   const icons = axis === 'X' ? X_ALIGN_ICONS : Y_ALIGN_ICONS;
   const options: SelectOption<string>[] = GRID_ITEM_ALIGN.map((option) => ({
     value: option,
     label: labels[option] ?? cap(option),
     icon: <GridAlignIcon paths={icons[option] ?? []} />,
   }));
-  options.push({ value: AXIS_CUSTOM, label: 'Custom' });
+  options.push({ value: AXIS_CUSTOM, label: translate('style.gridControls.custom') });
   return options;
 }
 
@@ -173,6 +178,7 @@ interface GridAlignAxisProps {
 }
 function GridAlignAxis(props: GridAlignAxisProps) {
   const { axis, prop, value, busy, onSet, onPreview, onClear } = props;
+  const translate = useTranslate();
   const [forceCustom, setForceCustom] = useState(false);
   const present = Boolean(value);
   const shown = gridKeyword(value);
@@ -181,7 +187,7 @@ function GridAlignAxis(props: GridAlignAxisProps) {
   // Unset → what the page computes for this element before falling back to grid's
   // own `stretch` default.
   const shownAlign = useHighlight('', present ? '' : prop, GRID_ITEM_ALIGN, 'stretch');
-  const options = alignAxisOptions(axis);
+  const options = alignAxisOptions(axis, translate);
   // "Custom" has no value of its own to show, so landing on it reverts the preview.
   const preview = (option: string | undefined) => onPreview(option === AXIS_CUSTOM ? undefined : option);
   const pick = (choice: string) => {
@@ -209,7 +215,7 @@ function GridAlignAxis(props: GridAlignAxisProps) {
       <Select
         value={customMode ? AXIS_CUSTOM : known ? shown : shownAlign}
         options={options}
-        ariaLabel={`Align ${axis}`}
+        ariaLabel={translate('style.gridControls.alignAxis', { axis })}
         disabled={busy}
         hideTriggerIcon
         onChange={pick}
@@ -219,7 +225,7 @@ function GridAlignAxis(props: GridAlignAxisProps) {
             <GridAxisCustomInput
               value={value}
               busy={busy}
-              ariaLabel={`Align ${axis}`}
+              ariaLabel={translate('style.gridControls.alignAxis', { axis })}
               autoFocus={forceCustom}
               onCommit={(next) => onSet(next)}
               onClear={() => {
@@ -270,6 +276,7 @@ function resolvedValue(read: Read, prop: string): string {
 
 export default function GridControls(props: GridControlsProps) {
   const { read, busy, setProp, clearProp } = props;
+  const translate = useTranslate();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const labelProps = {
     read,
@@ -281,7 +288,7 @@ export default function GridControls(props: GridControlsProps) {
     <>
       <GridTracksRow props={props} onConfigure={() => setSettingsOpen(true)} />
       <div className="embed-editor_size-row">
-        <GroupLabel label="Direction" props={['grid-auto-flow']} {...labelProps} onClear={() => clearProp('grid-auto-flow')} />
+        <GroupLabel label={translate('style.gridControls.direction')} props={['grid-auto-flow']} {...labelProps} onClear={() => clearProp('grid-auto-flow')} />
         <GridDirectionControl
           value={resolvedText(read, 'grid-auto-flow')}
           busy={busy}
@@ -290,8 +297,8 @@ export default function GridControls(props: GridControlsProps) {
         />
       </div>
       <GridAlignRow props={props} />
-      <ContentRow label="Columns" prop="justify-content" vertical={false} props={props} />
-      <ContentRow label="Rows" prop="align-content" vertical props={props} />
+      <ContentRow label={translate('style.gridControls.columns')} prop="justify-content" vertical={false} props={props} />
+      <ContentRow label={translate('style.gridControls.rows')} prop="align-content" vertical props={props} />
       {settingsOpen ? (
         <GridSettings
           read={read}
@@ -310,6 +317,7 @@ export default function GridControls(props: GridControlsProps) {
 // Columns / Rows track counts and the gear that opens the Configure-grid modal.
 function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onConfigure: () => void }) {
   const { read, busy, setProp, clearProp } = props;
+  const translate = useTranslate();
   const labelProps = {
     read,
     busy,
@@ -324,7 +332,7 @@ function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onCon
   return (
     <div className="embed-editor_size-row embed-editor_bg-row-top">
       <GroupLabel
-        label="Grid"
+        label={translate('style.gridControls.grid')}
         props={['grid-template-columns', 'grid-template-rows']}
         {...labelProps}
         onClear={() => clearProp(['grid-template-columns', 'grid-template-rows'])}
@@ -336,19 +344,29 @@ function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onCon
           <CountField
             value={countTracks(columnsRaw)}
             busy={busy}
-            ariaLabel="Grid columns"
+            ariaLabel={translate('style.gridControls.gridColumns')}
             onCommit={(count) => setProp('grid-template-columns', repeatTracks(count, NEW_COLUMN), false)}
           />
-          <GroupLabel label="Columns" props={['grid-template-columns']} {...labelProps} onClear={() => clearProp('grid-template-columns')} />
+          <GroupLabel
+            label={translate('style.gridControls.columns')}
+            props={['grid-template-columns']}
+            {...labelProps}
+            onClear={() => clearProp('grid-template-columns')}
+          />
         </div>
         <div className="embed-editor_gap-cell">
           <CountField
             value={countTracks(rowsRaw)}
             busy={busy}
-            ariaLabel="Grid rows"
+            ariaLabel={translate('style.gridControls.gridRows')}
             onCommit={(count) => setProp('grid-template-rows', repeatTracks(count, NEW_ROW), false)}
           />
-          <GroupLabel label="Rows" props={['grid-template-rows']} {...labelProps} onClear={() => clearProp('grid-template-rows')} />
+          <GroupLabel
+            label={translate('style.gridControls.rows')}
+            props={['grid-template-rows']}
+            {...labelProps}
+            onClear={() => clearProp('grid-template-rows')}
+          />
         </div>
         <ConfigureGridButton busy={busy} customTracks={customTracks} onOpen={onConfigure} />
       </div>
@@ -359,6 +377,7 @@ function GridTracksRow({ props, onConfigure }: { props: GridControlsProps; onCon
 // The gear, with a rich "Configure grid" tooltip shown after a short hover (matches the
 // Direction / Content segmented tooltips instead of the OS-native `title`).
 function ConfigureGridButton({ busy, customTracks, onOpen }: { busy: boolean; customTracks: boolean; onOpen: () => void }) {
+  const translate = useTranslate();
   const gearRef = useRef<HTMLButtonElement>(null);
   const [gearTip, setGearTip] = useState(false);
   const gearTimer = useRef<number | undefined>(undefined);
@@ -376,7 +395,7 @@ function ConfigureGridButton({ busy, customTracks, onOpen }: { busy: boolean; cu
         type="button"
         className={'embed-editor_icon-btn embed-editor_grid-gear ' + (customTracks ? 'is-active' : '')}
         disabled={busy}
-        aria-label="Configure grid"
+        aria-label={translate('style.gridControls.configureGrid')}
         onMouseEnter={() => {
           clearGearTimer();
           gearTimer.current = window.setTimeout(() => setGearTip(true), 500);
@@ -393,7 +412,7 @@ function ConfigureGridButton({ busy, customTracks, onOpen }: { busy: boolean; cu
       >
         <CustomizeIcon />
       </button>
-      {gearTip && gearRef.current ? <HoverTooltip anchor={gearRef.current}>Configure grid</HoverTooltip> : undefined}
+      {gearTip && gearRef.current ? <HoverTooltip anchor={gearRef.current}>{translate('style.gridControls.configureGrid')}</HoverTooltip> : undefined}
     </>
   );
 }
@@ -401,6 +420,7 @@ function ConfigureGridButton({ busy, customTracks, onOpen }: { busy: boolean; cu
 // Align: the preview box and the X (justify-items) / Y (align-items) axis dropdowns.
 function GridAlignRow({ props }: { props: GridControlsProps }) {
   const { read, busy, setProp, clearProp, liveSetProp } = props;
+  const translate = useTranslate();
   const alignAxis = (axis: 'X' | 'Y', prop: string) => (
     <GridAlignAxis
       axis={axis}
@@ -425,7 +445,7 @@ function GridAlignRow({ props }: { props: GridControlsProps }) {
         onReset={() => {}}
         tooltip={<PropTip props={['justify-items', 'align-items']} />}
       >
-        Align
+        {translate('style.gridControls.align')}
       </FieldLabel>
       <div className="embed-editor_align">
         <GridAlignBox

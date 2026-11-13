@@ -2,6 +2,7 @@
 // combobox, suggestions, custom properties and the new value's input
 // (EmbedEditor.tsx).
 
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Popup from '../../../ui/Popup';
 import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent } from 'react';
@@ -37,6 +38,7 @@ export function ValueField({
   onLiveCommit: (value: string, important: boolean) => void;
   onPick: (binding: string) => void;
 }) {
+  const translate = useTranslate();
   const external = withImportant({ value, important });
   // Mirror external edits, but never clobber what the user is typing.
   const { draft, setDraft, focused } = useExternalDraft(external);
@@ -74,7 +76,7 @@ export function ValueField({
     <VariableConnect
       code
       {...(isNonNegative(prop) ? { stepMin: 0 } : {})}
-      ariaLabel={`Connect ${prop} to a variable`}
+      ariaLabel={translate('styleModel.shared.connectVariable', { label: prop })}
       disabled={busy}
       prop={prop}
       onPick={onPick}
@@ -100,7 +102,7 @@ export function ValueField({
         }}
         disabled={busy}
         spellCheck={false}
-        aria-label="Value"
+        aria-label={translate('styleModel.embed.add.value')}
       />
     </VariableConnect>
   );
@@ -145,6 +147,7 @@ export interface PropertyComboboxProps {
   onEscape: () => void;
 }
 export function PropertyCombobox(props: PropertyComboboxProps) {
+  const translate = useTranslate();
   const { value, custom, busy, onChange, onPick, onEnter, onEscape } = props;
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
@@ -194,9 +197,9 @@ export function PropertyCombobox(props: PropertyComboboxProps) {
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onKeyDown={onKeyDown}
-        placeholder="property"
+        placeholder={translate('styleModel.embed.add.propertyPlaceholder')}
         spellCheck={false}
-        aria-label="New property name"
+        aria-label={translate('styleModel.embed.add.newName')}
       />
       {open && matches.length ? (
         <PropertySuggestions
@@ -231,8 +234,17 @@ export function PropertySuggestions({
   setActive: (index: number) => void;
   choose: (prop: string) => void;
 }) {
+  const translate = useTranslate();
   return (
-    <Popup mode="popover" onClose={onClose} ref={listRef} className="embed-editor_propsuggest" style={position} role="listbox" label="CSS properties">
+    <Popup
+      mode="popover"
+      onClose={onClose}
+      ref={listRef}
+      className="embed-editor_propsuggest"
+      style={position}
+      role="listbox"
+      label={translate('styleModel.embed.add.suggestions')}
+    >
       {matches.map((prop, i) => (
         <button
           key={prop}
@@ -445,8 +457,15 @@ export function useAddProperty(onAdd: (prop: string, value: string, important: b
 }
 
 export function CancelAddButton({ onCancel }: { onCancel: () => void }) {
+  const translate = useTranslate();
   return (
-    <button className="embed-editor_icon-btn" type="button" onClick={onCancel} title="Cancel" aria-label="Cancel adding property">
+    <button
+      className="embed-editor_icon-btn"
+      type="button"
+      onClick={onCancel}
+      title={translate('ui.cancel')}
+      aria-label={translate('styleModel.embed.add.cancel')}
+    >
       ✕
     </button>
   );
@@ -471,6 +490,7 @@ export function NewValueInput({
   submit: () => void;
   cancel: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <input
       ref={valueRef}
@@ -485,20 +505,21 @@ export function NewValueInput({
           cancel();
         }
       }}
-      placeholder="value"
+      placeholder={translate('styleModel.embed.add.valuePlaceholder')}
       spellCheck={false}
-      aria-label="New value"
+      aria-label={translate('styleModel.embed.add.newValue')}
     />
   );
 }
 
 export function AddPropertyButton({ busy, onOpen }: { busy: boolean; onOpen: () => void }) {
+  const translate = useTranslate();
   return (
     <button className="embed-editor_add-btn" type="button" onClick={onOpen} disabled={busy}>
       <span className="embed-editor_add-plus" aria-hidden="true">
         +
       </span>{' '}
-      Add property
+      {translate('styleModel.embed.add.button')}
     </button>
   );
 }

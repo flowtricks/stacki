@@ -27,7 +27,7 @@ import { CheckIcon, ChevronRightIcon } from './Icons';
 import { centralIcon } from './central/CentralIcon';
 import { info as centralInfo } from './central/centralGeometry';
 import { assertMenuEntries, decideKey, initialIndex, isMenuRow, isNavigable, placeInfoTip, placeMenu } from './menuModel';
-import { useDelayedPlacement } from './delayedTooltip';
+import { tooltipHost, useDelayedPlacement } from './delayedTooltip';
 import type { InfoTipPlacement, MenuEntry, MenuPlacement, MenuPosition, MenuRow } from './menuModel';
 import './menu.css';
 
@@ -421,9 +421,14 @@ function RowButton({ entry, hasChecks, hasIcons, expanded, buttonRef, onChoose, 
   assert(entry.label.length > 0, 'Menu: every row has a label');
   const infoText = entry.kind === 'submenu' ? undefined : entry.info;
   const tip = useDelayedPlacement(placeTipFor);
+  // The row's own element, to draw its info tip inside the open modal (tooltipHost).
+  const rowElement = useRef<HTMLButtonElement | undefined>(undefined);
   return (
     <button
-      ref={buttonRef}
+      ref={(element) => {
+        rowElement.current = element ?? undefined;
+        buttonRef(element);
+      }}
       type="button"
       className={classes.join(' ')}
       disabled={entry.disabled === true}
@@ -454,7 +459,7 @@ function RowButton({ entry, hasChecks, hasIcons, expanded, buttonRef, onChoose, 
         {entry.description !== undefined && <span className="menu-description">{entry.description}</span>}
       </span>
       <RowEnd entry={entry} hasChecks={hasChecks} onMarkEnter={infoText === undefined ? undefined : tip.show} onMarkLeave={tip.hide} />
-      {infoText !== undefined && tip.value !== undefined && createPortal(<InfoTip text={infoText} placement={tip.value} />, document.body)}
+      {infoText !== undefined && tip.value !== undefined && createPortal(<InfoTip text={infoText} placement={tip.value} />, tooltipHost(rowElement.current))}
     </button>
   );
 }

@@ -12,6 +12,7 @@ import type { BrowserWindow, MessageBoxOptions, MessageBoxReturnValue } from 'el
 import type { AppUpdater } from 'electron-updater';
 import { assert } from '../../shared/core/assert';
 import { toRecord } from '../../shared/core/record';
+import { translateMain } from '../lib/mainLocale';
 
 export interface AutoUpdateHost {
   readonly app: Pick<Electron.App, 'isPackaged' | 'isReady' | 'getPath' | 'getVersion'>;
@@ -45,8 +46,11 @@ export function updateDownloadingMessage(download: Extract<UpdateDownload, { kin
   assert(percent >= 0, 'download progress is not negative');
   assert(percent <= 100, 'download progress is at most 100%');
   return {
-    message: download.version === undefined ? 'Downloading the Stacki update…' : `Downloading Stacki ${download.version}…`,
-    detail: `${percent}% downloaded. You’ll be asked whether to restart once it has finished.`,
+    message:
+      download.version === undefined
+        ? translateMain('dialog.update.downloading.message')
+        : translateMain('dialog.update.downloading.messageVersion', { version: download.version }),
+    detail: translateMain('dialog.update.downloading.detail', { percent }),
   };
 }
 
@@ -90,9 +94,9 @@ export class AutoUpdates {
     if (!this.host.app.isPackaged) {
       await this.host.showMessageBox(parent, {
         type: 'info',
-        title: 'Check for Updates',
-        message: 'Updates are only checked in the installed this.host.app.',
-        detail: `This is a development build (${this.host.app.getVersion()}), ` + 'which updates when you rebuild it.',
+        title: translateMain('dialog.update.check.title'),
+        message: translateMain('dialog.update.development.message'),
+        detail: translateMain('dialog.update.development.detail', { version: this.host.app.getVersion() }),
       });
       return;
     }
@@ -103,7 +107,7 @@ export class AutoUpdates {
         await this.promptToInstall(this.download.version);
         return;
       case 'downloading':
-        await this.host.showMessageBox(parent, { type: 'info', title: 'Check for Updates', ...updateDownloadingMessage(this.download) });
+        await this.host.showMessageBox(parent, { type: 'info', title: translateMain('dialog.update.check.title'), ...updateDownloadingMessage(this.download) });
         return;
       case 'none':
         break;
@@ -116,8 +120,8 @@ export class AutoUpdates {
     if (this.checkInFlight) {
       await this.host.showMessageBox(parent, {
         type: 'info',
-        title: 'Check for Updates',
-        message: 'Already checking for updates.',
+        title: translateMain('dialog.update.check.title'),
+        message: translateMain('dialog.update.check.alreadyChecking'),
       });
       return;
     }
@@ -133,26 +137,26 @@ export class AutoUpdates {
         this.log('Manual check found an update', { version: result.updateInfo?.version });
         await this.host.showMessageBox(parent, {
           type: 'info',
-          title: 'Update Available',
-          message: `Stacki ${result.updateInfo?.version} is downloading.`,
-          detail: 'You’ll be asked whether to restart once it has finished.',
+          title: translateMain('dialog.update.available.title'),
+          message: translateMain('dialog.update.available.message', { version: result.updateInfo?.version ?? '' }),
+          detail: translateMain('dialog.update.available.detail'),
         });
         return;
       }
       this.log('Manual check found no update', { version: this.host.app.getVersion() });
       await this.host.showMessageBox(parent, {
         type: 'info',
-        title: 'Check for Updates',
-        message: `Stacki ${this.host.app.getVersion()} is the latest version.`,
+        title: translateMain('dialog.update.check.title'),
+        message: translateMain('dialog.update.check.latest', { version: this.host.app.getVersion() }),
       });
     } catch (error: unknown) {
       this.log('Manual check failed', formatAutoUpdateError(error));
       await this.host.showMessageBox(parent, {
         type: 'warning',
-        title: 'Check for Updates',
+        title: translateMain('dialog.update.check.title'),
         // The raw error carries response headers and a stack; the log has all of
         // it, the dialog gets the first line.
-        message: 'Stacki could not check for updates.',
+        message: translateMain('dialog.update.check.failed'),
         detail: formatAutoUpdateError(error).split('\n')[0]?.slice(0, 200) ?? '',
       });
     } finally {
@@ -222,11 +226,11 @@ export class AutoUpdates {
       const parent = this.host.parentWindow();
       void this.host.showMessageBox(parent, {
         type: 'warning',
-        title: 'Update Check Failed',
-        message: 'Stacki could not check for updates.',
+        title: translateMain('dialog.update.failed.title'),
+        message: translateMain('dialog.update.check.failed'),
         // The raw error carries response headers and a stack trace; the full
         // text is in the log, so show the user only the first line.
-        detail: formatAutoUpdateError(error).split('\n')[0]?.slice(0, 200) + '\n\nStacki will try again later.',
+        detail: `${formatAutoUpdateError(error).split('\n')[0]?.slice(0, 200)}\n\n${translateMain('dialog.update.failed.retryLater')}`,
       });
     });
   }
@@ -235,12 +239,12 @@ export class AutoUpdates {
     const parent = this.host.parentWindow();
     const { response } = await this.host.showMessageBox(parent, {
       type: 'info',
-      title: 'Update Ready',
-      buttons: ['Restart Now', 'Later'],
+      title: translateMain('dialog.update.ready.title'),
+      buttons: [translateMain('dialog.update.ready.restartNow'), translateMain('dialog.update.ready.later')],
       defaultId: 0,
       cancelId: 1,
-      message: `Stacki ${version} has been downloaded.`,
-      detail: 'Restart Stacki to install the update.',
+      message: translateMain('dialog.update.ready.message', { version }),
+      detail: translateMain('dialog.update.ready.detail'),
     });
 
     if (response === 0) {

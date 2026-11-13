@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { Hosting } from '../../../shared/properties/publishConfig';
 import type { PublishAccount, PublishProject } from '../../../shared/properties/publishDiscovery';
 import Dropdown from '../../ui/Dropdown';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { RefreshIcon } from '../../ui/Icons';
 import { AddPublishAccount } from './PublishAccount';
 import { AddWorker } from './PublishWorker';
@@ -57,6 +59,7 @@ export function HostingChoice(props: Props) {
 }
 
 function CloudflareAccount(props: Props & { readonly add: () => void }) {
+  const translate = useTranslate();
   const selected = hostingAccount(props.value);
   const selectedName = useCloudflareAccountName(props, selected);
   const accounts =
@@ -64,16 +67,21 @@ function CloudflareAccount(props: Props & { readonly add: () => void }) {
   return (
     <div className="publish-field">
       <div className="publish-field-heading">
-        <HostingLabel label="Cloudflare account" busy={props.busy} refresh={props.refresh} />
+        <HostingLabel
+          label={translate('publish.hosting.cloudflareAccount')}
+          refreshLabel={translate('publish.hosting.refreshCloudflareAccount')}
+          busy={props.busy}
+          refresh={props.refresh}
+        />
         <button type="button" className="publish-refresh" onClick={props.add}>
-          Add account
+          {translate('publish.common.addAccount')}
         </button>
       </div>
       <Dropdown
-        ariaLabel="Cloudflare account"
+        ariaLabel={translate('publish.hosting.cloudflareAccount')}
         value={selected}
         options={accounts.map((account) => ({ value: account.id, label: account.name }))}
-        placeholder={props.busy ? 'Loading accounts…' : 'Choose account…'}
+        placeholder={props.busy ? translate('publish.common.loadingAccounts') : translate('publish.hosting.chooseAccount')}
         disabled={accounts.length === 0}
         searchable={accounts.length > 6}
         menuClassName="publish-dropdown"
@@ -90,6 +98,7 @@ function CloudflareAccount(props: Props & { readonly add: () => void }) {
 }
 
 function useCloudflareAccountName(props: Props, selected: string): string {
+  const translate = useTranslate();
   const [known, setKnown] = useState<{
     readonly projectPath: string;
     readonly account: PublishAccount;
@@ -109,10 +118,11 @@ function useCloudflareAccountName(props: Props, selected: string): string {
       return known.account.name;
     }
   }
-  return props.busy ? 'Loading account name…' : 'Account name unavailable';
+  return props.busy ? translate('publish.hosting.accountNameLoading') : translate('publish.hosting.accountNameUnavailable');
 }
 
 function HostingProject(props: Props & { readonly add: () => void }) {
+  const translate = useTranslate();
   const selected = hostingKey(props.value);
   const account = hostingAccount(props.value);
   const options = props.projects
@@ -120,37 +130,53 @@ function HostingProject(props: Props & { readonly add: () => void }) {
       value: hostingKey(project.hosting),
       label: project.name,
       group: props.accounts.find((entry) => entry.id === hostingAccount(project.hosting))?.name ?? '',
-      description: project.hosting.provider === 'cloudflare' ? 'Pages' : project.hosting.provider === 'cloudflare-workers' ? 'Worker' : '',
+      description:
+        project.hosting.provider === 'cloudflare'
+          ? translate('publish.hosting.pages')
+          : project.hosting.provider === 'cloudflare-workers'
+            ? translate('publish.hosting.worker')
+            : '',
     }))
     .sort((left, right) => left.group.localeCompare(right.group) || left.label.localeCompare(right.label));
   if (selected && !options.some((option) => option.value === selected)) {
     options.unshift({
       value: selected,
-      label: hostingName(props.value),
+      label: hostingLabel(props.value, translate),
       group: '',
-      description: account ? 'Saved' : 'Account unverified',
+      description: account ? translate('publish.hosting.saved') : translate('publish.hosting.accountUnverified'),
     });
   }
   return (
     <div className="publish-field">
       <div className="publish-field-heading">
-        <HostingLabel label="Hosting project" busy={props.busy} refresh={props.refresh} />
+        <HostingLabel
+          label={translate('publish.hosting.project')}
+          refreshLabel={translate('publish.hosting.refreshProject')}
+          busy={props.busy}
+          refresh={props.refresh}
+        />
         {props.provider === 'cloudflare' && (
           <button type="button" className="publish-refresh" disabled={!account || props.busy} onClick={props.add}>
-            Add Worker
+            {translate('publish.hosting.addWorker')}
           </button>
         )}
       </div>
       <Dropdown
-        ariaLabel="Hosting project"
+        ariaLabel={translate('publish.hosting.project')}
         value={selected}
         options={options}
-        placeholder={props.provider === 'cloudflare' && !account ? 'Choose a Cloudflare account first' : props.busy ? 'Loading projects…' : 'Choose project…'}
+        placeholder={
+          props.provider === 'cloudflare' && !account
+            ? translate('publish.hosting.chooseCloudflareFirst')
+            : props.busy
+              ? translate('publish.hosting.loadingProjects')
+              : translate('publish.hosting.chooseProject')
+        }
         disabled={props.provider === 'cloudflare' && !account && !selected}
         menuClassName="publish-dropdown"
         livePreview={false}
         searchable={true}
-        searchPlaceholder="Find project…"
+        searchPlaceholder={translate('publish.hosting.findProject')}
         onChange={(value) => {
           const project = props.projects.find((entry) => hostingKey(entry.hosting) === value);
           if (project) {
@@ -184,17 +210,11 @@ function useResolvedAccount(props: Props): void {
   }, [props]);
 }
 
-function HostingLabel(props: { readonly label: string; readonly busy: boolean; readonly refresh: () => void }) {
+function HostingLabel(props: { readonly label: string; readonly refreshLabel: string; readonly busy: boolean; readonly refresh: () => void }) {
   return (
     <div className="publish-label-refresh">
       <span className="publish-label">{props.label}</span>
-      <button
-        type="button"
-        className="publish-refresh publish-refresh-icon"
-        disabled={props.busy}
-        aria-label={`Refresh ${props.label.toLowerCase()}`}
-        onClick={props.refresh}
-      >
+      <button type="button" className="publish-refresh publish-refresh-icon" disabled={props.busy} aria-label={props.refreshLabel} onClick={props.refresh}>
         <RefreshIcon size={13} />
       </button>
     </div>
@@ -218,11 +238,16 @@ export function hostingKey(hosting: Hosting): string {
       return '';
     case 'cloudflare':
     case 'cloudflare-workers':
-      return hosting.project ? `${hosting.provider}/${hosting.accountId}/${hosting.project}` : '';
+      return hosting.project ? `${hosting.provider}/${hosting.accountId}/${hosting.project}` : ''; // i18n-ignore: an option id, not text.
     case 'vercel':
-      return hosting.projectId ? `vercel/${hosting.organizationId}/${hosting.projectId}` : '';
+      return hosting.projectId ? `vercel/${hosting.organizationId}/${hosting.projectId}` : ''; // i18n-ignore: an option id, not text.
   }
 }
+// What the saved destination is called in the project list; a Vercel project has no name until discovery finds it.
+function hostingLabel(hosting: Hosting, translate: Translator): string {
+  return hosting.provider === 'vercel' ? translate('publish.hosting.savedVercelProject') : hostingName(hosting);
+}
+// Only compared and tested for emptiness: the display name for Vercel comes from `hostingLabel`.
 function hostingName(hosting: Hosting): string {
   switch (hosting.provider) {
     case 'none':
@@ -231,6 +256,6 @@ function hostingName(hosting: Hosting): string {
     case 'cloudflare-workers':
       return hosting.project;
     case 'vercel':
-      return 'Saved Vercel project';
+      return 'vercel'; // i18n-ignore: a non-empty marker for comparisons; the label people read is hostingLabel.
   }
 }

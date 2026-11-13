@@ -35,8 +35,8 @@ test.before(async () => {
   sources = Object.fromEntries(Object.entries(builder.KIT_SOURCE_FILES).map(([name, file]) => [name, read(file)]));
 });
 
-test('the generated module is what the editor CSS builds today', () => {
-  const expected = builder.appUiKitModule(builder.buildAppUiKit(sources, builder.bundleAppUiKit(repoPath('.'))));
+test('the generated module is what the editor CSS builds today', async () => {
+  const expected = builder.appUiKitModule(builder.buildAppUiKit(sources, await builder.bundleAppUiKit(repoPath('.'))));
   assert.equal(read('shared/properties/generated/appUiKitBundle.ts'), expected, 'run node scripts/build/appUiKit.mts');
 });
 

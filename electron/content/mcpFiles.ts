@@ -1,3 +1,4 @@
+// i18n-ignore-file: the messages are the English fallback beside each stable failure code; the MCP tab translates by code (settings.mcp.error.*).
 // The Settings panel's MCP tab, main-process half (shared/properties/mcp.ts): read and change the
 // project's `.mcp.json`, and read and change the person's Codex file, `~/.codex/config.toml`.
 //

@@ -27,7 +27,7 @@ export interface NodeDescription {
 /** A node's Navigator icon and label; `live` is the class list the page rendered it with, when known. */
 export function describeNode(node: PageNode, live: readonly string[] | undefined): NodeDescription {
   if (isFragmentNode(node)) {
-    return { icon: <CustomElementIcon size={12} />, label: 'Fragment' };
+    return { icon: <CustomElementIcon size={12} />, label: 'Fragment' }; // i18n-ignore: the name of Astro's <Fragment> element, a code word.
   }
   switch (node.kind) {
     case 'text':

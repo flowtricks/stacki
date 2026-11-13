@@ -6,15 +6,18 @@
 import type { ReactNode } from 'react';
 import Popup from './Popup';
 import './assetPickOverlay.css';
+import type { MessageKey } from '../lib/i18n/localeContext';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
-export function AssetPickOverlay(props: { readonly title: string; readonly onClose: () => void; readonly children: ReactNode }) {
+export function AssetPickOverlay(props: { readonly mediaKind: AssetPickKind; readonly onClose: () => void; readonly children: ReactNode }) {
+  const translate = useTranslate();
   return (
     <Popup className="asset-pick-overlay" labelledBy="asset-pick-overlay-title" onClose={props.onClose}>
       {({ close }) => (
         <>
           <header>
-            <h2 id="asset-pick-overlay-title">{props.title}</h2>
-            <button type="button" aria-label="Close" onClick={close}>
+            <h2 id="asset-pick-overlay-title">{translate(TITLE_KEYS[props.mediaKind])}</h2>
+            <button type="button" aria-label={translate('ui.close')} onClick={close}>
               ×
             </button>
           </header>
@@ -25,7 +28,12 @@ export function AssetPickOverlay(props: { readonly title: string; readonly onClo
   );
 }
 
+export type AssetPickKind = 'image' | 'video' | 'audio' | 'asset';
+
 /** The overlay's heading for a request of this kind. */
-export function assetPickTitle(mediaKind: 'image' | 'video' | 'audio' | 'asset'): string {
-  return mediaKind === 'asset' ? 'Choose a file' : `Choose an ${mediaKind === 'image' ? 'image' : mediaKind}`;
-}
+const TITLE_KEYS = {
+  asset: 'ui.assetPick.title.asset',
+  image: 'ui.assetPick.title.image',
+  video: 'ui.assetPick.title.video',
+  audio: 'ui.assetPick.title.audio',
+} as const satisfies Record<AssetPickKind, MessageKey>;

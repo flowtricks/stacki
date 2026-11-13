@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { useRef, useState } from 'react';
 import ColorPicker from './ColorPicker';
 import { useResolvedColor } from '../model/computedColor';
@@ -12,13 +13,14 @@ export default function ColorSwatch({
   value,
   busy,
   onChange,
-  ariaLabel = 'Choose color',
+  ariaLabel,
 }: {
   value: string;
   busy?: boolean;
   onChange: (color: string, live: boolean) => void;
   ariaLabel?: string;
 }) {
+  const translate = useTranslate();
   // The swatch paints and picks a colour; `!important` is the field's to show.
   // A row hands over its field's text, and `#ceff08 !important` is not a
   // colour: as a background it is invalid, so the swatch drew nothing. The
@@ -45,7 +47,7 @@ export default function ColorSwatch({
         type="button"
         className="u-color-swatch"
         disabled={busy}
-        aria-label={ariaLabel}
+        aria-label={ariaLabel ?? translate('styleModel.components.colorSwatch.label')}
         onClick={() => setAnchor((previous) => (previous ? undefined : (ref.current?.getBoundingClientRect() ?? undefined)))}
       >
         <span className="u-color-swatch-fill" style={{ background: fill.trim() || 'transparent' }} />

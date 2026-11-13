@@ -11,6 +11,7 @@ an npm package or copy a developer's working Studio folder. Never overwrite an e
 studio folder.
 Validate the release paths and version before extracting. Copy templates/cloudflare to cloudflare
 for a new installation. Use the package's lockfile and scripts.`;
+  // i18n-ignore: the prompt is read by the person's coding agent, not shown as interface text.
   return `Set up Stacki Studio for this Astro project, including local preview and hosted editing.
 
 ${installation}

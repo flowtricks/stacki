@@ -16,11 +16,12 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import os from 'node:os';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { cmsFailureMessage, cmsRemoteService, type CmsRemoteService } from '../../../vendor/stacki/electron/content/cmsRemoteService';
+import { cmsFailureProblem, cmsRemoteService, type CmsRemoteService } from '../../../vendor/stacki/electron/content/cmsRemoteService';
 import { fetchLinkPreview } from '../../../vendor/stacki/electron/content/linkPreview';
 import { parseVideoLinkURL } from '../../../vendor/stacki/shared/properties/linkPreview';
 import { SANITY_UPLOAD_BYTES_MAX } from '../../../vendor/stacki/electron/content/sanityUpload';
-import { parseCmsConnectionDraft, parseConnectionId } from '../../../vendor/stacki/shared/properties/cmsConnections';
+import { CmsInputError, parseCmsConnectionDraft, parseConnectionId } from '../../../vendor/stacki/shared/properties/cmsConnections';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import {
   parseRemoteAssetKind,
   parseRemoteCollectionName,
@@ -88,7 +89,7 @@ export function cmsRemoteRoutes(root: string) {
       const value = operation === 'upload' ? await upload(service, request) : await run(service, operation, await readBody());
       send(response, { ok: true, value });
     } catch (error) {
-      send(response, { ok: false, message: cmsFailureMessage(error).slice(0, 900) });
+      send(response, failure(error));
     }
     return true;
   };
@@ -102,8 +103,14 @@ async function linkPreviewRoute(text: string) {
     const url = parseVideoLinkURL(record(JSON.parse(text))['url']);
     return { ok: true, value: await fetchLinkPreview(url) };
   } catch (error) {
-    return { ok: false, message: cmsFailureMessage(error).slice(0, 900) };
+    return failure(error);
   }
+}
+
+// A failure as the panel says it: the English sentence and, where there is one, its reference, so the panel can translate it.
+function failure(error: unknown) {
+  const problem = cmsFailureProblem(error);
+  return { ok: false, message: problem.message.slice(0, 900), ...(problem.messageRef === undefined ? {} : { messageRef: problem.messageRef }) };
 }
 
 async function run(service: CmsRemoteService, operation: string, text: string) {
@@ -166,8 +173,11 @@ class LocalConnections {
       this.write(next);
       return { ok: true, list: publicList(next) };
     } catch (error) {
+      if (error instanceof CmsInputError) {
+        return { ok: false, message: error.message, messageRef: error.messageRef };
+      }
       const message = error instanceof Error ? error.message : String(error);
-      return { ok: false, message: message.slice(0, 900) || 'Could not save the connection.' };
+      return message === '' ? { ok: false, ...described('cmsConnections.studio.saveFailed') } : { ok: false, message: message.slice(0, 900) };
     }
   }
 

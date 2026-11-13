@@ -1,5 +1,6 @@
 import { ToolbarTooltip } from './ToolbarTooltip';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { MoreIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
 import { toolbarOverflow } from './toolbarFit';
@@ -27,6 +28,7 @@ export function ToolbarOverflow({
   readonly childrenWidthPxMin: number;
   readonly children: ReactNode;
 }) {
+  const translate = useTranslate();
   const toolbar = useRef<HTMLDivElement>(null);
   const more = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -50,8 +52,8 @@ export function ToolbarOverflow({
         ref={more}
         className={`preview-toolbar-more ${hidden.length ? '' : 'is-overflow'}`}
         aria-hidden={!hidden.length || undefined}
-        aria-label="More preview actions"
-        data-tooltip="More preview actions"
+        aria-label={translate('preview.toolbar.more')}
+        data-tooltip={translate('preview.toolbar.more')}
         aria-haspopup="dialog"
         aria-expanded={open && hidden.length > 0}
         onClick={() => setOpen(!open)}
@@ -66,7 +68,7 @@ export function ToolbarOverflow({
           onClose={() => setOpen(false)}
           className="preview-toolbar-menu"
           role="dialog"
-          label="More preview actions"
+          label={translate('preview.toolbar.more')}
           style={menuPosition(more.current)}
         >
           {({ finish }) =>

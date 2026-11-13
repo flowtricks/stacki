@@ -10,13 +10,13 @@ import { parseReadableAppSummaries } from '../../shared/properties/appFolders';
 import { parseMarketplaceIndex, type MarketplaceIndex } from '../../shared/properties/appMarketplace';
 import { parseAppRepositoryPlaceReply, type AppRepositoryPlaceReply } from '../../shared/properties/appPlace';
 import { readHostVersion } from './appDataBridge';
-import { APPS_UNAVAILABLE_MESSAGE } from './appsBridge';
+import { APPS_UNAVAILABLE_FAILURE } from './appsBridge';
 
 /** The marketplace index; `refresh` reads it again instead of reusing a recent copy. */
 export async function loadMarketplace(projectPath: string, freshness: { readonly refresh: boolean }): Promise<AppsResult<MarketplaceIndex>> {
   // A main process from before the marketplace has no such method: the person restarts.
   if (typeof window.avb.appMarketplace !== 'function') {
-    return { ok: false, message: APPS_UNAVAILABLE_MESSAGE };
+    return APPS_UNAVAILABLE_FAILURE;
   }
   const input = parseIpcPayload('apps:marketplace', { projectPath, refresh: freshness.refresh });
   return parseAppsResult(await window.avb.appMarketplace(input), parseMarketplaceIndex);

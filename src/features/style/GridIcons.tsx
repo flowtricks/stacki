@@ -5,6 +5,7 @@ import { chevronDown as centralChevronDown, chevronUp as centralChevronUp, prope
 // (GridControls.tsx).
 
 import type { ReactNode } from 'react';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { type SegmentedOption } from './components/SegmentedControl';
 
 export const FLEX_FLOW_WRAP_ICON_FIRST_PATH =
@@ -28,13 +29,13 @@ export const FlexFlowColumnWrapIcon = () => (
     <path opacity="0.4" d="M4.20703 11L11 4.20703L11 3L10.793 3L4 9.79297L4 11L4.20703 11Z" fill="currentColor" />
   </svg>
 );
-export const GRID_FLOW: ReadonlyArray<SegmentedOption<string>> = [
-  { value: 'row', label: <FlexFlowWrapIcon />, ariaLabel: 'Horizontal', tooltip: 'Horizontal' },
+export const gridFlowOptions = (translate: Translator): ReadonlyArray<SegmentedOption<string>> => [
+  { value: 'row', label: <FlexFlowWrapIcon />, ariaLabel: translate('style.gridIcons.horizontal'), tooltip: translate('style.gridIcons.horizontal') },
   {
     value: 'column',
     label: <FlexFlowColumnWrapIcon />,
-    ariaLabel: 'Vertical',
-    tooltip: 'Vertical',
+    ariaLabel: translate('style.gridIcons.vertical'),
+    tooltip: translate('style.gridIcons.vertical'),
   },
 ];
 // Item alignment (justify-items = X, align-items = Y), Webflow's order.
@@ -113,30 +114,30 @@ export const Y_ALIGN_ICONS: Record<string, ReactNode> = {
   ),
 };
 // Axis-aware labels: start/end read Left/Right on X, Top/Bottom on Y (Webflow).
-export const X_ALIGN_LABELS: Record<string, string> = {
-  start: 'Left',
-  center: 'Center',
-  end: 'Right',
-  stretch: 'Stretch',
-  baseline: 'Baseline',
-};
-export const Y_ALIGN_LABELS: Record<string, string> = {
-  start: 'Top',
-  center: 'Center',
-  end: 'Bottom',
-  stretch: 'Stretch',
-  baseline: 'Baseline',
-};
+export const xAlignLabels = (translate: Translator): Record<string, string> => ({
+  start: translate('style.gridIcons.left'),
+  center: translate('style.gridIcons.center'),
+  end: translate('style.gridIcons.right'),
+  stretch: translate('style.gridIcons.stretch'),
+  baseline: translate('style.gridIcons.baseline'),
+});
+export const yAlignLabels = (translate: Translator): Record<string, string> => ({
+  start: translate('style.gridIcons.top'),
+  center: translate('style.gridIcons.center'),
+  end: translate('style.gridIcons.bottom'),
+  stretch: translate('style.gridIcons.stretch'),
+  baseline: translate('style.gridIcons.baseline'),
+});
 
-export const LABELS: Record<string, string> = {
-  'space-between': 'Space between',
-  'space-around': 'Space around',
-  'space-evenly': 'Space evenly',
-  start: 'Start',
-  end: 'End',
-  center: 'Center',
-  stretch: 'Stretch',
-};
+export const contentLabels = (translate: Translator): Record<string, string> => ({
+  'space-between': translate('style.gridIcons.spaceBetween'),
+  'space-around': translate('style.gridIcons.spaceAround'),
+  'space-evenly': translate('style.gridIcons.spaceEvenly'),
+  start: translate('style.gridIcons.start'),
+  end: translate('style.gridIcons.end'),
+  center: translate('style.gridIcons.center'),
+  stretch: translate('style.gridIcons.stretch'),
+});
 export const cap = (word: string) => (word ? (word[0] ?? '').toUpperCase() + word.slice(1) : word);
 
 // ── content-distribution glyphs (justify-content = Columns, align-content = Rows) ──
@@ -244,12 +245,13 @@ export function ContentIcon({ value, vertical }: { value: string; vertical: bool
     </svg>
   );
 }
-export const contentOptions = ({ vertical }: { readonly vertical: boolean }): ReadonlyArray<SegmentedOption<string>> => {
+export const contentOptions = ({ vertical }: { readonly vertical: boolean }, translate: Translator): ReadonlyArray<SegmentedOption<string>> => {
   // Vertical → align-content (Rows); otherwise justify-content (Columns). The tooltip
   // names the property, like Webflow ("Justify Content: Center").
-  const propName = vertical ? 'Align Content' : 'Justify Content';
+  const labels = contentLabels(translate);
   return GRID_CONTENT.map((option) => {
-    const name = `${propName}: ${LABELS[option] ?? cap(option)}`;
+    const value = labels[option] ?? cap(option);
+    const name = vertical ? translate('style.gridIcons.alignContent', { value }) : translate('style.gridIcons.justifyContent', { value });
     return {
       value: option,
       label: <ContentIcon value={option} vertical={vertical} />,

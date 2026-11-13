@@ -4,6 +4,7 @@
 import { splitTopLevelSpaces } from './model/background';
 import { displayOf, parseImportant, withImportant } from './model/styleDisplay';
 import { type Props, stripImportant, PropLabel, LiveInput } from './BordersKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // The Borders section: a corner-radius control (linked / per-corner) and a border
 // control scoped to a side (all / top / right / bottom / left) with style, width,
@@ -48,10 +49,10 @@ export function CornerIcon({ corner }: { corner: 'tl' | 'tr' | 'bl' | 'br' }) {
 
 export const RADIUS = 'border-radius';
 export const CORNERS = [
-  { prop: 'border-top-left-radius', corner: 'tl' as const, name: 'Top left' },
-  { prop: 'border-top-right-radius', corner: 'tr' as const, name: 'Top right' },
-  { prop: 'border-bottom-left-radius', corner: 'bl' as const, name: 'Bottom left' },
-  { prop: 'border-bottom-right-radius', corner: 'br' as const, name: 'Bottom right' },
+  { prop: 'border-top-left-radius', corner: 'tl' as const, nameKey: 'style.radiusControl.topLeft' as const },
+  { prop: 'border-top-right-radius', corner: 'tr' as const, nameKey: 'style.radiusControl.topRight' as const },
+  { prop: 'border-bottom-left-radius', corner: 'bl' as const, nameKey: 'style.radiusControl.bottomLeft' as const },
+  { prop: 'border-bottom-right-radius', corner: 'br' as const, nameKey: 'style.radiusControl.bottomRight' as const },
 ];
 
 export type Corners = { tl: string; tr: string; bl: string; br: string };
@@ -81,6 +82,7 @@ export interface RadiusWrite {
 // the shorthand in the cascade), and clearing it hands the corner back.
 export function RadiusControl(props: Props) {
   const { read, busy } = props;
+  const translate = useTranslate();
   const radiusDisplay = displayOf(read(RADIUS));
   const fromShorthand = parseRadius(radiusDisplay.value);
   const write = (prop: string): RadiusWrite => ({
@@ -107,7 +109,7 @@ export function RadiusControl(props: Props) {
         {/* This label belongs to the field beside it — the `border-radius` shorthand
             and nothing else; each corner glyph below owns its own longhand. */}
         <PropLabel
-          label="Radius"
+          label={translate('style.radiusControl.radius')}
           prop={RADIUS}
           read={read}
           busy={busy}
@@ -116,7 +118,13 @@ export function RadiusControl(props: Props) {
           onSelectSelector={props.onSelectSelector}
         />
         <div className="embed-editor_radius-head">
-          <LiveInput value={radiusDisplay.present ? withImportant(radiusDisplay) : ''} busy={busy} ariaLabel="Border radius" prop={RADIUS} {...write(RADIUS)} />
+          <LiveInput
+            value={radiusDisplay.present ? withImportant(radiusDisplay) : ''}
+            busy={busy}
+            ariaLabel={translate('style.radiusControl.borderRadius')}
+            prop={RADIUS}
+            {...write(RADIUS)}
+          />
         </div>
       </div>
       <div className="embed-editor_radius-grid">
@@ -131,6 +139,8 @@ export function RadiusControl(props: Props) {
 // One corner's longhand field, with its corner glyph as the label.
 export function CornerField({ field, placeholder, props, write }: { field: (typeof CORNERS)[number]; placeholder: string; props: Props; write: RadiusWrite }) {
   const { read, busy } = props;
+  const translate = useTranslate();
+  const radiusName = translate('style.radiusControl.cornerRadius', { corner: translate(field.nameKey) });
   const display = displayOf(read(field.prop));
   return (
     <div className="embed-editor_radius-corner">
@@ -141,7 +151,7 @@ export function CornerField({ field, placeholder, props, write }: { field: (type
         label={
           <>
             <CornerIcon corner={field.corner} />
-            <span className="u-sr-only">{field.name} radius</span>
+            <span className="u-sr-only">{radiusName}</span>
           </>
         }
         prop={field.prop}
@@ -155,7 +165,7 @@ export function CornerField({ field, placeholder, props, write }: { field: (type
       <LiveInput
         value={display.present ? withImportant(display) : ''}
         busy={busy}
-        ariaLabel={`${field.name} radius`}
+        ariaLabel={radiusName}
         placeholder={placeholder}
         prop={field.prop}
         {...write}

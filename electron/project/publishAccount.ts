@@ -12,6 +12,7 @@ import {
 } from '../../shared/ipc/publishAccount';
 import { packageManagerLabel, type PackageManager } from '../../shared/properties/packageManager';
 import { homedir } from 'node:os';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { ensureToolPath, toolPathHome } from '../lib/nodeTools';
 import { detectPackageManager, PNPM_TOLERATE_IGNORED_BUILDS } from './packageManager';
 import { addPublishToolDirectory, projectHasWrangler, publishToolInstalled, resolvePublishExecutable, vercelInstallPrefix } from './publishExecutable';
@@ -57,7 +58,7 @@ export class PublishingAccount {
       return session.state;
     }
     if (request.action !== 'start') {
-      return { kind: 'failed', message: 'This sign-in session has ended. Please try again.' };
+      return { kind: 'failed', ...described('publish.account.error.sessionEnded') };
     }
     const busy = this.busy();
     if (busy !== undefined) {
@@ -79,13 +80,13 @@ export class PublishingAccount {
     if (accountSignInPending(session.state)) {
       return {
         kind: 'failed',
-        message: 'Finish or cancel the account sign-in already in progress.',
+        ...described('publish.account.error.inProgress'),
       };
     }
     if (session.step.kind === 'installing' && running(session.process)) {
       return {
         kind: 'failed',
-        message: `${toolLabel(session.provider)} is still installing in the background. Try again in a moment.`,
+        ...described('publish.account.error.stillInstalling', { tool: toolLabel(session.provider) }),
       };
     }
     return undefined;
@@ -97,7 +98,7 @@ export class PublishingAccount {
       child = this.launch(root, provider, step);
     } catch {
       // On Windows a missing tool is found while resolving it, before any process starts.
-      return { kind: 'failed', message: launchFailure(provider, step) };
+      return { kind: 'failed', ...launchFailure(provider, step) };
     }
     const stop = () => {
       stopAccountSignIn(child, provider);
@@ -128,10 +129,9 @@ export class PublishingAccount {
     if (accountSignInPending(session.state)) {
       this.finish(session, {
         kind: 'failed',
-        message:
-          session.step.kind === 'installing'
-            ? `${toolLabel(session.provider)} installation timed out. Check your connection and try again.`
-            : `${providerLabel(session.provider)} sign-in expired. Please try again.`,
+        ...(session.step.kind === 'installing'
+          ? described('publish.account.error.installTimedOut', { tool: toolLabel(session.provider) })
+          : described('publish.account.error.providerSignInExpired', { provider: providerLabel(session.provider) })),
       });
       return;
     }
@@ -149,7 +149,7 @@ export class PublishingAccount {
     child.on('error', () =>
       this.finish(session, {
         kind: 'failed',
-        message: launchFailure(session.provider, session.step),
+        ...launchFailure(session.provider, session.step),
       }),
     );
     child.on('close', (code) => this.closed(session, code ?? undefined));
@@ -186,7 +186,9 @@ export class PublishingAccount {
       } else {
         this.finish(session, {
           kind: 'failed',
-          message: `Could not install ${toolLabel(session.provider)}. Check your connection and ${session.provider === 'vercel' ? 'disk space' : 'project access'}, then retry.`,
+          ...described(session.provider === 'vercel' ? 'publish.account.error.installFailedDisk' : 'publish.account.error.installFailedAccess', {
+            tool: toolLabel(session.provider),
+          }),
         });
       }
       return;
@@ -197,7 +199,7 @@ export class PublishingAccount {
         ? { kind: 'complete' }
         : {
             kind: 'failed',
-            message: `${providerLabel(session.provider)} sign-in did not complete. Check CLI authentication and try again.`,
+            ...described('publish.account.error.signInIncomplete', { provider: providerLabel(session.provider) }),
           },
     );
   }
@@ -213,12 +215,13 @@ export class PublishingAccount {
     assert(typeof chunk === 'string', 'Account sign-in streams use UTF-8 text');
     assert(session.output.length <= OUTPUT_CHARS_MAX, 'Account sign-in output stays bounded');
     const installing = session.step.kind === 'installing';
-    const label = installing ? `${toolLabel(session.provider)} installation` : `${providerLabel(session.provider)} sign-in`;
     const limit = installing ? INSTALL_OUTPUT_CHARS_MAX : OUTPUT_CHARS_MAX;
     if (chunk.length > limit - session.outputChars) {
       this.finish(session, {
         kind: 'failed',
-        message: `${label} returned too much output.`,
+        ...(installing
+          ? described('publish.account.error.installOutputLarge', { tool: toolLabel(session.provider) })
+          : described('publish.account.error.signInOutputLarge', { provider: providerLabel(session.provider) })),
       });
       return;
     }
@@ -279,18 +282,18 @@ function running(child: ChildProcessWithoutNullStreams): boolean {
   return child.exitCode === null && child.signalCode === null;
 }
 
-function launchFailure(provider: AccountProvider, step: LaunchStep): string {
+function launchFailure(provider: AccountProvider, step: LaunchStep): Described {
   if (step.kind === 'installing') {
     const label = packageManagerLabel(step.packageManager);
-    return `Could not run ${label} to install ${toolLabel(provider)}. Install ${label}, then try again.`;
+    return described('publish.account.error.launchInstall', { manager: label, tool: toolLabel(provider) });
   }
   switch (provider) {
     case 'github':
-      return 'Could not start GitHub sign-in. Install gh and try again.';
+      return described('publish.account.error.startGitHub');
     case 'cloudflare':
-      return 'Could not start Cloudflare sign-in. Install Wrangler and try again.';
+      return described('publish.account.error.startCloudflare');
     case 'vercel':
-      return 'Could not start Vercel sign-in. Install the Vercel CLI and try again.';
+      return described('publish.account.error.startVercel');
     default: {
       const exhaustive: never = provider;
       return exhaustive;
@@ -301,10 +304,13 @@ function launchFailure(provider: AccountProvider, step: LaunchStep): string {
 function providerLabel(provider: AccountProvider): string {
   switch (provider) {
     case 'github':
+      // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
       return 'GitHub';
     case 'cloudflare':
+      // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
       return 'Cloudflare';
     case 'vercel':
+      // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
       return 'Vercel';
     default: {
       const exhaustive: never = provider;
@@ -317,11 +323,14 @@ function providerLabel(provider: AccountProvider): string {
 function toolLabel(provider: AccountProvider): string {
   switch (provider) {
     case 'github':
+      // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
       return 'GitHub CLI';
     case 'cloudflare':
+      // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
       return 'Wrangler';
     case 'vercel':
-      return 'the Vercel CLI';
+      // i18n-ignore: product and tool names (GitHub, Vercel, Cloudflare, Wrangler), shown as written in every language.
+      return 'Vercel CLI';
     default: {
       const exhaustive: never = provider;
       return exhaustive;

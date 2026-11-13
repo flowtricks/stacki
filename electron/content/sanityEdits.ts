@@ -38,6 +38,7 @@ export async function sanityCreateDraft(target: SanityDataset, type: string, ord
   });
   return {
     id,
+    // i18n-ignore: Sanity's own name for a document with no title; the summary shows what the dataset would.
     title: 'Untitled',
     subtitle: undefined,
     imageURL: undefined,

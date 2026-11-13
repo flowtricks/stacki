@@ -1,3 +1,4 @@
+import { useTranslate } from '../lib/i18n/useTranslate';
 import { ErrorToast } from '../ui/ErrorToast';
 interface DynamicPickerProps {
   readonly entries: readonly { readonly label: string }[];
@@ -26,18 +27,19 @@ import { FileIcon } from '../ui/Icons';
 // Live preview is off. Each option is a full page navigation, so skimming the
 // list would reload the canvas once per hover.
 export default function DynamicPicker({ entries, index, onPick, error, pattern }: DynamicPickerProps) {
+  const translate = useTranslate();
   if (error) {
-    return <ErrorToast message={`Could not load dynamic page paths: ${error}`} />;
+    return <ErrorToast message={translate('shell.dynamicPicker.loadFailed', { error })} />;
   }
   if (!entries.length) {
     return (
-      <span className="route-chip" title={`${pattern} has no paths to preview — getStaticPaths returned nothing.`}>
-        No paths
+      <span className="route-chip" title={translate('shell.dynamicPicker.noPathsTitle', { pattern })}>
+        {translate('shell.dynamicPicker.noPaths')}
       </span>
     );
   }
   return (
-    <span className="route-picker" title="Which entry the canvas is showing">
+    <span className="route-picker" title={translate('shell.dynamicPicker.title')}>
       <Dropdown
         className="route-dd collection"
         menuClassName="route-menu collection"
@@ -50,7 +52,7 @@ export default function DynamicPicker({ entries, index, onPick, error, pattern }
         onChange={(value: string) => onPick(Number(value))}
         livePreview={false}
         searchable
-        searchPlaceholder="Search entries…"
+        searchPlaceholder={translate('shell.dynamicPicker.search')}
       />
     </span>
   );

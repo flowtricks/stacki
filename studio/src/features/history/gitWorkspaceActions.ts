@@ -6,12 +6,14 @@ import type { GitWorkspaceState } from './gitWorkspace';
 import { gitWorkspaceCommit, gitWorkspaceRun, snapshotGitWorkspace, fetchGitWorkspaceHeads } from './gitWorkspaceObjects';
 import { mergeGitWorkspace } from './gitWorkspaceMerge';
 import { checkpointGitWorkspace } from './gitWorkspaceCheckpoint';
+import { ReferencedError } from '../../shared/referencedError';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 export async function pullGitWorkspace(state: GitWorkspaceState) {
   const remote = await fetchGitWorkspaceHeads(gitWorkspaceRun(state.git));
   const target = remote.find((entry) => entry.name === state.manifest.branch);
   if (!target) {
-    throw new Error('This branch has not been pushed to GitHub yet.');
+    throw new ReferencedError('git.studio.notPushed');
   }
   const result = await mergeGitWorkspace(state, 'refs/remotes/origin/' + state.manifest.branch, target.head);
   return result.manifest
@@ -34,7 +36,7 @@ export async function parkGitWorkspace(state: GitWorkspaceState) {
   const { git, manifest } = state;
   const current = gitWorkspaceBranch(manifest);
   if (manifest.parked.some((branch) => branch.name === current.name)) {
-    throw new Error('This branch already has parked changes. Restore them first.');
+    throw new ReferencedError('git.studio.parkedExists');
   }
   const run = gitWorkspaceRun(git);
   const tree = await snapshotGitWorkspace(git, current.head);
@@ -58,10 +60,12 @@ export async function unparkGitWorkspace(state: GitWorkspaceState) {
   }
   const merged = await mergeGitWorkspace(state, manifest.branch, waiting.head);
   if (!merged.manifest || !merged.target) {
+    const parkedConflict = described('git.studio.parkedConflict');
     return {
       result: {
         restored: false,
-        error: 'Parked changes conflict with this branch. They are still saved.',
+        error: parkedConflict.message,
+        errorRef: parkedConflict.messageRef,
       },
     };
   }
@@ -82,18 +86,18 @@ export async function deleteGitWorkspaceBranch(state: GitWorkspaceState, input: 
   const name = gitBranchName(input.branch);
   const { manifest, git } = state;
   if ([manifest.branch, 'main', 'master'].includes(name)) {
-    throw new Error('The active branch and main branch cannot be deleted.');
+    throw new ReferencedError('git.studio.deleteProtected');
   }
   const branch = manifest.branches.find((entry) => entry.name === name);
   if (!branch) {
-    throw new Error('This branch no longer exists.');
+    throw new ReferencedError('git.studio.branchGone');
   }
   const merged = await publishGit(git, ['merge-base', '--is-ancestor', branch.head, gitWorkspaceBranch(manifest).head]);
   if (!merged.ok && !input.force) {
     return {
       ok: false as const,
       unmerged: true as const,
-      message: `“${name}” has commits that are not on the current branch.`,
+      ...described('git.action.delete.unmerged', { branch: name }),
     };
   }
   if (merged.ok) {

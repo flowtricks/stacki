@@ -3,6 +3,8 @@
 // every file it will write before anything happens, and a secret is saved only
 // to the project's git-ignored .env, never to the page.
 
+import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import { SANITY_TOKEN_ENV, parseSourceURL, parseTemplateRoute } from '../../../shared/properties/pageTemplate';
@@ -19,7 +21,7 @@ import type {
 import { readContentCollections, type AppCollection } from '../../ipc/appBridge';
 import { listCmsConnections } from '../../ipc/cmsConnectionsBridge';
 import { planPageTemplate, sampleDataSource, setProjectEnv } from '../../ipc/pageTemplateBridge';
-import { CodeBlock } from '../../ui/CodeBlock';
+import { CodeBlock, CodeInline } from '../../ui/CodeBlock';
 import Dropdown from '../../ui/Dropdown';
 import { AstroIcon, BracesIcon, CmsIcon, PlusIcon, RefreshIcon, SanityIcon, TrashIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
@@ -27,7 +29,6 @@ import {
   EMPTY_TEMPLATE_FORM,
   ENTRY_ID,
   NEW_COLLECTION,
-  UNEXPECTED_FAILURE,
   addressExample,
   connectionKeyCopy,
   fieldsAfterDeselect,
@@ -76,6 +77,8 @@ interface PageTemplateDialogProps {
 }
 
 export function PageTemplateDialog({ projectPath, layouts, onClose, onCreate, connectSanity }: PageTemplateDialogProps) {
+  const translate = useTranslate();
+  const latest = useLatestTranslate();
   const [form, setForm] = useState<TemplateForm>({ ...EMPTY_TEMPLATE_FORM, layout: layouts.at(0)?.name ?? '' });
   // Undefined until read, so the form does not call a project empty while it is still asking.
   const [collections, setCollections] = useState<readonly AppCollection[] | undefined>(undefined);
@@ -160,7 +163,7 @@ export function PageTemplateDialog({ projectPath, layouts, onClose, onCreate, co
         })
         .catch((error: unknown) => {
           if (live) {
-            setPlanning({ kind: 'failed', message: requestProblem(error) });
+            setPlanning({ kind: 'failed', message: requestProblem(error, latest.current) });
           }
         });
     }, PLAN_DELAY_MS);
@@ -168,7 +171,7 @@ export function PageTemplateDialog({ projectPath, layouts, onClose, onCreate, co
       live = false;
       clearTimeout(timer);
     };
-  }, [draft, projectPath]);
+  }, [draft, projectPath, latest]);
 
   const create = async (): Promise<void> => {
     if (!draft.ok) {
@@ -179,7 +182,7 @@ export function PageTemplateDialog({ projectPath, layouts, onClose, onCreate, co
     try {
       failure = await onCreate(draft.value, planning.kind === 'ready' ? connectionKeyCopy(form, planning.plan.env) : undefined);
     } catch (error: unknown) {
-      failure = requestProblem(error);
+      failure = requestProblem(error, translate);
     }
     setCreating(failure === undefined ? { kind: 'idle' } : { kind: 'failed', message: failure });
     if (failure === undefined) {
@@ -194,10 +197,10 @@ export function PageTemplateDialog({ projectPath, layouts, onClose, onCreate, co
   const ready = planning.kind === 'ready' && creating.kind !== 'busy';
 
   return (
-    <Popup className="modal page-template-dialog" label="Create page template" onClose={onClose} dismissible>
+    <Popup className="modal page-template-dialog" label={translate('pages.template.title')} onClose={onClose} dismissible>
       {({ close }) => (
         <>
-          <div className="modal-header">Create page template</div>
+          <div className="modal-header">{translate('pages.template.title')}</div>
           {showCode && planning.kind === 'ready' ? (
             <PlannedFiles changes={planning.plan.changes} />
           ) : (
@@ -223,7 +226,7 @@ export function PageTemplateDialog({ projectPath, layouts, onClose, onCreate, co
               {/* One layout is simply used, and none leaves a plain page: only a real choice is asked. */}
               {layouts.length > 1 && (
                 <div>
-                  <label>Layout</label>
+                  <label>{translate('pages.layout')}</label>
                   <Dropdown
                     livePreview={false}
                     value={form.layout}
@@ -239,16 +242,16 @@ export function PageTemplateDialog({ projectPath, layouts, onClose, onCreate, co
           <div className="modal-footer">
             <button
               className={`page-template-code-toggle ${showCode ? 'is-on' : ''}`}
-              title="Show the code that will be written"
+              title={translate('pages.template.showCode')}
               aria-pressed={showCode}
               disabled={planning.kind !== 'ready'}
               onClick={() => setShowCode((shown) => !shown)}
             >
               <BracesIcon size={13} />
             </button>
-            <button onClick={close}>Cancel</button>
+            <button onClick={close}>{translate('ui.cancel')}</button>
             <button className="primary" disabled={!ready} onClick={() => void create()}>
-              Create template
+              {translate('pages.template.create')}
             </button>
           </div>
         </>
@@ -259,6 +262,7 @@ export function PageTemplateDialog({ projectPath, layouts, onClose, onCreate, co
 
 // The page a designer will get, in words, with the address pattern a click away.
 function AddressPreview({ form, set, sample }: { readonly form: TemplateForm; readonly set: SetForm; readonly sample: SampleList | undefined }) {
+  const translate = useTranslate();
   // The route and its origin as they were when editing began, for Escape.
   const [editing, setEditing] = useState<Pick<TemplateForm, 'route' | 'routeSource'> | undefined>(undefined);
   // A route that cannot work stays open, with the form's error beneath it.
@@ -273,8 +277,9 @@ function AddressPreview({ form, set, sample }: { readonly form: TemplateForm; re
     <div className="page-template-preview">
       {preview !== undefined && (
         <p>
-          {preview.pages} {preview.pages === 1 ? 'page' : 'pages'}
-          {preview.title === undefined ? '' : `, like: ${preview.title}`}
+          {preview.title === undefined
+            ? translate('pages.template.previewCount', { count: preview.pages })
+            : translate('pages.template.previewLike', { count: preview.pages, title: preview.title })}
         </p>
       )}
       <div className="page-template-row">
@@ -283,7 +288,7 @@ function AddressPreview({ form, set, sample }: { readonly form: TemplateForm; re
         ) : (
           <input
             autoFocus
-            aria-label="Address pattern"
+            aria-label={translate('pages.template.addressPattern')}
             value={form.route}
             spellCheck={false}
             placeholder="/blog/[slug]"
@@ -306,7 +311,7 @@ function AddressPreview({ form, set, sample }: { readonly form: TemplateForm; re
           />
         )}
         <button className="ghost" onClick={() => (editing === undefined ? setEditing({ route: form.route, routeSource: form.routeSource }) : finish())}>
-          {editing === undefined ? 'Edit' : 'Done'}
+          {editing === undefined ? translate('pages.template.edit') : translate('pages.template.done')}
         </button>
       </div>
     </div>
@@ -314,16 +319,18 @@ function AddressPreview({ form, set, sample }: { readonly form: TemplateForm; re
 }
 
 function SourceKindField({ form, set }: { readonly form: TemplateForm; readonly set: SetForm }) {
+  const translate = useTranslate();
   return (
     <div>
-      <label>Data source</label>
+      <label>{translate('pages.template.source')}</label>
       <Dropdown<SourceKind>
         livePreview={false}
         value={form.kind}
         options={[
-          { value: 'content-collection', label: 'Content collection', icon: <AstroIcon size={13} /> },
+          { value: 'content-collection', label: translate('pages.template.source.collection'), icon: <AstroIcon size={13} /> },
+          // i18n-ignore: Sanity is a product name.
           { value: 'sanity', label: 'Sanity', icon: <SanityIcon size={13} /> },
-          { value: 'http-json', label: 'Data from a link', icon: <CmsIcon size={13} /> },
+          { value: 'http-json', label: translate('pages.template.source.link'), icon: <CmsIcon size={13} /> },
         ]}
         onChange={(kind) => set((previous) => ({ ...previous, kind, slugPath: '', slugTreatment: 'exact', fields: [] }))}
       />
@@ -344,6 +351,7 @@ function ContentFields({
   readonly collections: readonly AppCollection[] | undefined;
   readonly onSample: (list: SampleList | undefined) => void;
 }) {
+  const translate = useTranslate();
   const [sampled, setSampled] = useState<readonly SampleField[]>([]);
   const { collection } = form;
   useEffect(() => {
@@ -372,12 +380,12 @@ function ContentFields({
   return (
     <>
       <div>
-        <label>Collection</label>
+        <label>{translate('pages.template.collection')}</label>
         <Dropdown
           livePreview={false}
           value={form.collection}
-          placeholder={collections === undefined ? 'Reading collections…' : 'Choose a collection'}
-          options={collectionOptions(collections ?? [])}
+          placeholder={collections === undefined ? translate('pages.template.collection.reading') : translate('pages.template.collection.choose')}
+          options={collectionOptions(collections ?? [], translate)}
           onChange={(value) =>
             set((previous) =>
               named(value === NEW_COLLECTION ? previous.newCollection : value, {
@@ -392,23 +400,27 @@ function ContentFields({
       </div>
       {form.collection === NEW_COLLECTION && (
         <div>
-          <label>Collection name</label>
+          <label>{translate('pages.template.collection.name')}</label>
           <input
             autoFocus
             value={form.newCollection}
-            placeholder="Blog posts"
+            placeholder={translate('pages.template.collection.namePlaceholder')}
             onChange={(event) => {
               const newCollection = event.currentTarget.value;
               set((previous) => named(newCollection, { ...previous, newCollection }));
             }}
           />
-          <p className="hint-text">Stacki adds it to your content config with a title field and a first entry to preview.</p>
+          <p className="hint-text">{translate('pages.template.collection.hint')}</p>
         </div>
       )}
       {form.collection !== NEW_COLLECTION && (
         <div>
-          <label>Each page’s web address uses</label>
-          <DetailPopover label={form.contentSlug === ENTRY_ID ? 'Entry id' : form.contentSlug} title="Each page’s web address uses" surface="data">
+          <label>{translate('pages.template.addressUses')}</label>
+          <DetailPopover
+            label={form.contentSlug === ENTRY_ID ? translate('pages.template.entryId') : form.contentSlug}
+            title={translate('pages.template.addressUses')}
+            surface="data"
+          >
             {(close) => (
               <SampleTree
                 list={{ path: '', count: sampled.length, fields: sampled }}
@@ -416,7 +428,7 @@ function ContentFields({
                   kind: 'address',
                   value: form.contentSlug,
                   route: form.route,
-                  extra: { value: ENTRY_ID, label: 'Entry id' },
+                  extra: { value: ENTRY_ID, label: translate('pages.template.entryId') },
                   pick: (value) => {
                     set((previous) => ({ ...previous, contentSlug: value, slugTreatment: slugTreatmentOf(sampled, value) }));
                     close();
@@ -433,8 +445,8 @@ function ContentFields({
 
 // A project with collections lists them first; with none, a new one is the only way forward, so it leads.
 // Each collection carries the CMS icon and the new row its plus, so the icons line up down the left edge.
-function collectionOptions(collections: readonly AppCollection[]) {
-  const created = { value: NEW_COLLECTION, label: 'New collection…', icon: <PlusIcon size={13} /> };
+function collectionOptions(collections: readonly AppCollection[], translate: Translator) {
+  const created = { value: NEW_COLLECTION, label: translate('pages.template.collection.new'), icon: <PlusIcon size={13} /> };
   return collections.length === 0 ? [created] : [...collections.map((item) => ({ value: item.name, label: item.name, icon: <CmsIcon size={13} /> })), created];
 }
 
@@ -458,6 +470,8 @@ function SanityFields({
   readonly connectSanity: ConnectSanity;
   readonly onSample: (list: SampleList | undefined) => void;
 }) {
+  const translate = useTranslate();
+  const latest = useLatestTranslate();
   const [types, setTypes] = useState<readonly string[]>([]);
   const [lists, setLists] = useState<readonly SampleList[]>([]);
   const [sampling, setSampling] = useState<Sampling>({ kind: 'idle' });
@@ -482,20 +496,20 @@ function SanityFields({
           const { types: listed, access } = answer.value;
           setTypes(listed);
           update((previous) => ({ ...previous, sanityAccess: access }));
-          setSampling(listed.length === 0 ? { kind: 'failed', message: 'This Sanity dataset has no documents yet.' } : { kind: 'idle' });
+          setSampling(listed.length === 0 ? { kind: 'failed', message: latest.current('pages.template.sanity.noDocuments') } : { kind: 'idle' });
         } else {
-          setSampling({ kind: 'failed', message: answer.ok ? 'Sanity listed no document types.' : answer.message });
+          setSampling({ kind: 'failed', message: answer.ok ? latest.current('pages.template.sanity.noTypes') : answer.message });
         }
       })
       .catch((error: unknown) => {
         if (live) {
-          setSampling({ kind: 'failed', message: requestProblem(error) });
+          setSampling({ kind: 'failed', message: requestProblem(error, latest.current) });
         }
       });
     return () => {
       live = false;
     };
-  }, [connectionId, projectPath, update]);
+  }, [connectionId, projectPath, update, latest]);
   const newestType = useRef('');
   const pickType = async (documentType: string): Promise<void> => {
     newestType.current = documentType;
@@ -514,10 +528,10 @@ function SanityFields({
           update((previous) => ({ ...previous, ...addressChoice(first), fields: templateFields(first) }));
         }
       } else {
-        setSampling({ kind: 'failed', message: answer.ok ? 'Sanity sent no documents.' : answer.message });
+        setSampling({ kind: 'failed', message: answer.ok ? translate('pages.template.sanity.sentNone') : answer.message });
       }
     } catch (error: unknown) {
-      setSampling({ kind: 'failed', message: requestProblem(error) });
+      setSampling({ kind: 'failed', message: requestProblem(error, translate) });
     }
   };
   const connect =
@@ -530,14 +544,14 @@ function SanityFields({
       },
     });
   if (connections === undefined) {
-    return <p className="hint-text">Looking for a Sanity connection…</p>;
+    return <p className="hint-text">{translate('pages.template.sanity.looking')}</p>;
   }
   if (connections.length === 0) {
     return (
       <div className="page-template-connect">
-        <p className="hint-text">Connect this project to Sanity to build a template from its content.</p>
+        <p className="hint-text">{translate('pages.template.sanity.connectHint')}</p>
         <button onClick={() => setConnecting(true)}>
-          <SanityIcon size={13} /> Connect Sanity
+          <SanityIcon size={13} /> {translate('pages.template.sanity.connect')}
         </button>
         {connect}
       </div>
@@ -547,12 +561,12 @@ function SanityFields({
     <>
       <SanityConnectionField connections={connections} form={form} set={set} />
       <div>
-        <label>Document type</label>
+        <label>{translate('pages.template.sanity.documentType')}</label>
         <Dropdown
           livePreview={false}
           value={form.documentType}
           disabled={types.length === 0}
-          placeholder={sampling.kind === 'loading' ? 'Asking Sanity…' : 'Choose a type'}
+          placeholder={sampling.kind === 'loading' ? translate('pages.template.sanity.asking') : translate('pages.template.sanity.chooseType')}
           options={types.map((type) => ({ value: type, label: type }))}
           onChange={(value) => void pickType(value)}
         />
@@ -579,17 +593,14 @@ function SanityConnectionField({
   readonly form: TemplateForm;
   readonly set: SetForm;
 }) {
+  const translate = useTranslate();
   const [only] = connections;
   if (only !== undefined && connections.length === 1) {
-    return (
-      <p className="hint-text">
-        Using {only.label}: {only.projectId}, {only.dataset}.
-      </p>
-    );
+    return <p className="hint-text">{translate('pages.template.sanity.using', { label: only.label, projectId: only.projectId, dataset: only.dataset })}</p>;
   }
   return (
     <div>
-      <label>Sanity connection</label>
+      <label>{translate('pages.template.sanity.connection')}</label>
       <Dropdown
         livePreview={false}
         value={form.connectionId}
@@ -609,6 +620,7 @@ function SanityConnectionField({
 // copied there; it is an Editor key, which is more than a site needs, so the
 // person can leave it and set a read token of their own.
 function EnvNotes({ form, env, set }: { readonly form: TemplateForm; readonly env: readonly EnvStatus[]; readonly set: SetForm }) {
+  const translateRich = useTranslateRich();
   const missing = env.flatMap((item) => (item.state === 'missing' ? [item.name] : []));
   const offered = form.kind === 'sanity' && missing.includes(SANITY_TOKEN_ENV);
   const unset = offered && form.connectionKey === 'copy' ? missing.filter((name) => name !== SANITY_TOKEN_ENV) : missing;
@@ -624,10 +636,10 @@ function EnvNotes({ form, env, set }: { readonly form: TemplateForm; readonly en
               set((previous) => ({ ...previous, connectionKey }));
             }}
           />
-          <span>This dataset is private. Copy the connection’s Editor key to .env as {SANITY_TOKEN_ENV}, which stays out of Git, so the site can build.</span>
+          <span>{translateRich('pages.template.env.copyKey', { name: <CodeInline text={SANITY_TOKEN_ENV} /> })}</span>
         </label>
       )}
-      {unset.length > 0 && <p className="hint-text">Still to set in .env: {unset.join(', ')}. The page shows an error until it is.</p>}
+      {unset.length > 0 && <p className="hint-text">{translateRich('pages.template.env.unset', { names: <CodeInline text={unset.join(', ')} /> })}</p>}
     </>
   );
 }
@@ -646,6 +658,8 @@ function HttpFields({
   readonly update: SetForm;
   readonly onSample: (list: SampleList | undefined) => void;
 }) {
+  const translate = useTranslate();
+  const latestTranslate = useLatestTranslate();
   const [lists, setLists] = useState<readonly SampleList[]>([]);
   const [sampling, setSampling] = useState<Sampling>({ kind: 'idle' });
   const url = parseSourceURL(form.url);
@@ -684,16 +698,16 @@ function HttpFields({
           setSampling({ kind: 'idle' });
           update((previous) => withSampleLists(previous, found));
         } else {
-          setSampling({ kind: 'failed', message: answer.ok ? 'That address has no list of items.' : answer.message });
+          setSampling({ kind: 'failed', message: answer.ok ? latestTranslate.current('pages.template.http.noList') : answer.message });
         }
       } catch (error: unknown) {
         if (!stale()) {
-          setSampling({ kind: 'failed', message: requestProblem(error) });
+          setSampling({ kind: 'failed', message: requestProblem(error, latestTranslate.current) });
         }
       }
     });
     return run;
-  }, [projectPath, update]);
+  }, [projectPath, update, latestTranslate]);
   const asked = useRef<string | undefined>(undefined);
   const pasted = useRef(false);
   const fetchNow = useCallback(
@@ -737,7 +751,7 @@ function HttpFields({
   return (
     <>
       <div>
-        <label>Link to your data</label>
+        <label>{translate('pages.template.http.link')}</label>
         <div className="page-template-row">
           <input
             value={form.url}
@@ -763,7 +777,7 @@ function HttpFields({
           {form.url.trim().length > 0 && (
             <button
               className={`ghost page-template-refresh ${sampling.kind === 'loading' ? 'is-loading' : ''}`}
-              title={sampling.kind === 'loading' ? 'Fetching a sample' : 'Fetch the sample again'}
+              title={sampling.kind === 'loading' ? translate('pages.template.http.fetching') : translate('pages.template.http.refetch')}
               aria-busy={sampling.kind === 'loading'}
               disabled={key === undefined}
               onClick={refresh}
@@ -772,12 +786,18 @@ function HttpFields({
             </button>
           )}
         </div>
-        {sampling.kind === 'loading' && chosen === undefined && <div className="page-template-shimmer" role="status" aria-label="Reading your data" />}
+        {sampling.kind === 'loading' && chosen === undefined && (
+          <div className="page-template-shimmer" role="status" aria-label={translate('pages.template.http.reading')} />
+        )}
         {sampling.kind === 'failed' && <p className="page-template-problem">{sampling.message}</p>}
       </div>
       <div className="page-template-triggers">
-        <DetailPopover label={`Headers (${named})`} title="Request headers" surface="form">
-          <p className="hint-text">Only needed if your link requires a key.</p>
+        <DetailPopover
+          label={translate('pages.template.http.headers', { count: named })}
+          title={translate('pages.template.http.requestHeaders')}
+          surface="form"
+        >
+          <p className="hint-text">{translate('pages.template.http.headersHint')}</p>
           {form.headers.map((row, index) => (
             <HeaderFields
               key={index}
@@ -791,16 +811,20 @@ function HttpFields({
           {!headers.ok && <p className="page-template-problem">{headers.error}</p>}
           <button className="ghost page-template-add" onClick={() => set((previous) => ({ ...previous, headers: withHeaderRow(previous.headers) }))}>
             <PlusIcon size={11} />
-            Add header
+            {translate('pages.template.http.addHeader')}
           </button>
         </DetailPopover>
         {chosen !== undefined && <FieldsPopover list={chosen} form={form} set={set} />}
         {lists.length > 1 && (
           <Dropdown
             livePreview={false}
-            ariaLabel="List of items"
+            ariaLabel={translate('pages.template.http.listOfItems')}
             value={form.listPath}
-            options={lists.map((list) => ({ value: list.path, label: list.path === '' ? 'The whole reply' : list.path, hint: `${list.count}` }))}
+            options={lists.map((list) => ({
+              value: list.path,
+              label: list.path === '' ? translate('pages.template.http.wholeReply') : list.path,
+              hint: `${list.count}`,
+            }))}
             onChange={(value) => set((previous) => withSampleList(previous, lists, value))}
           />
         )}
@@ -823,24 +847,26 @@ function HeaderFields({
   readonly remove: () => void;
   readonly saved: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="page-template-header">
       <div className="page-template-header-row">
         <input
-          aria-label="Header name"
+          aria-label={translate('pages.template.header.name')}
           value={row.name}
           spellCheck={false}
+          // i18n-ignore: "Authorization" is the HTTP header name, which is never translated.
           placeholder="Authorization"
           onChange={(event) => change({ ...row, name: event.currentTarget.value })}
         />
         <input
-          aria-label="Variable holding its value"
+          aria-label={translate('pages.template.header.variable')}
           value={row.env}
           spellCheck={false}
           placeholder="API_TOKEN"
           onChange={(event) => change({ ...row, env: event.currentTarget.value })}
         />
-        <button className="ghost" title="Remove header" onClick={remove}>
+        <button className="ghost" title={translate('pages.template.header.remove')} onClick={remove}>
           <TrashIcon size={12} />
         </button>
       </div>
@@ -848,11 +874,11 @@ function HeaderFields({
         <Dropdown
           className="page-template-header-send"
           livePreview={false}
-          ariaLabel="How the value is sent"
+          ariaLabel={translate('pages.template.header.how')}
           value={row.scheme}
           options={[
-            { value: 'plain', label: 'Send the key as it is' },
-            { value: 'bearer', label: 'Put “Bearer” before the key' },
+            { value: 'plain', label: translate('pages.template.header.plain') },
+            { value: 'bearer', label: translate('pages.template.header.bearer') },
           ]}
           onChange={(scheme) => change({ ...row, scheme: scheme === 'bearer' ? 'bearer' : 'plain' })}
         />
@@ -865,6 +891,8 @@ function HeaderFields({
 // The value goes to .env when saved, and is forgotten here: the field empties
 // and nothing in the form or the page holds it.
 function SecretField({ projectPath, name, saved }: { readonly projectPath: string; readonly name: string; readonly saved: () => void }) {
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
   const [value, setValue] = useState('');
   const [state, setState] = useState<{ readonly kind: 'idle' } | { readonly kind: 'saved' } | { readonly kind: 'failed'; readonly message: string }>({
     kind: 'idle',
@@ -878,28 +906,39 @@ function SecretField({ projectPath, name, saved }: { readonly projectPath: strin
         saved();
       }
     } catch (error: unknown) {
-      setState({ kind: 'failed', message: requestProblem(error) });
+      setState({ kind: 'failed', message: requestProblem(error, translate) });
     }
   };
   return (
     <div>
       <div className="page-template-row">
-        <input type="password" value={value} autoComplete="off" placeholder={`Value of ${name}`} onChange={(event) => setValue(event.currentTarget.value)} />
+        <input
+          type="password"
+          value={value}
+          autoComplete="off"
+          placeholder={translate('pages.template.secret.value', { name })}
+          onChange={(event) => setValue(event.currentTarget.value)}
+        />
         <button disabled={value.length === 0} onClick={() => void save()}>
-          Save to .env
+          {translate('pages.template.secret.save')}
         </button>
       </div>
-      {state.kind === 'saved' && <p className="hint-text">Saved to .env, which stays out of Git.</p>}
+      {state.kind === 'saved' && <p className="hint-text">{translateRich('pages.template.secret.saved', { file: <CodeInline text=".env" /> })}</p>}
       {state.kind === 'failed' && <p className="page-template-problem">{state.message}</p>}
     </div>
   );
 }
 
 function AddressField({ list, form, set }: { readonly list: SampleList; readonly form: TemplateForm; readonly set: SetForm }) {
+  const translate = useTranslate();
   return (
     <div>
-      <label>Each page’s web address uses</label>
-      <DetailPopover label={form.slugPath.length > 0 ? form.slugPath : 'Choose what makes it unique'} title="Each page’s web address uses" surface="data">
+      <label>{translate('pages.template.addressUses')}</label>
+      <DetailPopover
+        label={form.slugPath.length > 0 ? form.slugPath : translate('pages.template.addressChoose')}
+        title={translate('pages.template.addressUses')}
+        surface="data"
+      >
         {(close) => (
           <SampleTree
             list={list}
@@ -920,8 +959,9 @@ function AddressField({ list, form, set }: { readonly list: SampleList; readonly
 }
 
 function FieldsPopover({ list, form, set }: { readonly list: SampleList; readonly form: TemplateForm; readonly set: SetForm }) {
+  const translate = useTranslate();
   return (
-    <DetailPopover label={fieldsSummary(form.fields.length, list.count)} title="Fields for the template" surface="data">
+    <DetailPopover label={fieldsSummary(form.fields.length, list.count, translate)} title={translate('pages.template.fieldsTitle')} surface="data">
       <SampleTree
         list={list}
         mode={{
@@ -937,12 +977,15 @@ function FieldsPopover({ list, form, set }: { readonly list: SampleList; readonl
 }
 
 function PlannedFiles({ changes }: { readonly changes: readonly PageTemplateChange[] }) {
+  const translate = useTranslate();
   return (
     <div className="modal-body page-template-files">
       {changes.map((change) => (
         <section key={change.path}>
           <h4>
-            {change.action === 'create' ? 'New file' : 'Added to'} {change.path}
+            {change.action === 'create'
+              ? translate('pages.template.newFile', { path: change.path })
+              : translate('pages.template.addedTo', { path: change.path })}
           </h4>
           <CodeBlock text={change.text} filename={change.path} label={change.path} className="page-template-code" />
         </section>
@@ -970,7 +1013,15 @@ function lastPathWord(address: string): string {
 
 // Expected failures arrive as messages, so a throw here is Stacki's own fault:
 // a designer gets a sentence, and the detail goes to the console for whoever fixes it.
-function requestProblem(error: unknown): string {
+function requestProblem(error: unknown, translate: Translator): string {
   console.error('Create page template:', error);
-  return UNEXPECTED_FAILURE;
+  return translate('pages.template.unexpected');
+}
+
+// The newest translator, for effects and callbacks that must not restart when the language arrives.
+function useLatestTranslate(): { readonly current: Translator } {
+  const translate = useTranslate();
+  const latest = useRef(translate);
+  latest.current = translate;
+  return latest;
 }

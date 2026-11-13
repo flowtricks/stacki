@@ -5,6 +5,7 @@
 import type { Attr } from '../../../shared/page/pageNode';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 import { isReferencePath } from '../../editor/conditionalValue';
 
 export interface AttributePair {
@@ -24,8 +25,7 @@ export const decodeAttr = (attribute: Attr | undefined) =>
  * in scope (`{...rest}`, `{...Astro.props}`, or `...rest`, which means the
  * same), or a spread of something else, which is refused with why.
  */
-export type SpreadName =
-  { readonly kind: 'none' } | { readonly kind: 'spread'; readonly path: string } | { readonly kind: 'invalid'; readonly message: string };
+export type SpreadName = { readonly kind: 'none' } | { readonly kind: 'spread'; readonly path: string } | ({ readonly kind: 'invalid' } & Described);
 
 // `{...rest}`, `...rest`, and the forms on the way to them as they are typed (`{...rest`).
 const SPREAD_NAME = /^\{?\s*\.\.\.\s*([^{}]*?)\s*\}?$/;
@@ -36,15 +36,15 @@ export function spreadOfName(text: string): SpreadName {
     return { kind: 'none' };
   }
   if (trimmed.length > LIMITS.attrCharsMax) {
-    return { kind: 'invalid', message: 'A spread passes one name in scope, such as {...rest}.' };
+    return { kind: 'invalid', ...described('props.attributeText.spreadTooLong') };
   }
   const match = SPREAD_NAME.exec(trimmed);
   const path = match?.[1] ?? '';
   if (path === '') {
-    return { kind: 'invalid', message: 'Type the value to spread, such as {...rest} or {...Astro.props}.' };
+    return { kind: 'invalid', ...described('props.attributeText.spreadEmpty') };
   }
   if (!isReferencePath(path)) {
-    return { kind: 'invalid', message: 'A spread passes one name in scope, such as {...rest} or {...Astro.props}.' };
+    return { kind: 'invalid', ...described('props.attributeText.spreadNotName') };
   }
   return { kind: 'spread', path };
 }

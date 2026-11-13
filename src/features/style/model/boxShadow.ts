@@ -4,6 +4,8 @@
 // list (index 0 = the first/top shadow) and serialize back, splitting on TOP-LEVEL
 // commas/spaces only so rgba()/hsl()/var() with inner separators survive.
 
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
 import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
 
 export type BoxShadow = {
@@ -85,6 +87,7 @@ export function blankBoxShadow(): BoxShadow {
 }
 
 /** A short label for a collapsed row ("Outer shadow: 0px 2px 5px 0px"). */
-export function boxShadowLabel(shadow: BoxShadow): string {
-  return `${shadow.inset ? 'Inner' : 'Outer'} shadow: ${boxShadowLengths(shadow)}`;
+export function boxShadowLabel(shadow: BoxShadow, translate: Translator = ENGLISH_TRANSLATE): string {
+  const lengths = boxShadowLengths(shadow);
+  return shadow.inset ? translate('styleModel.boxShadow.inner', { lengths }) : translate('styleModel.boxShadow.outer', { lengths });
 }

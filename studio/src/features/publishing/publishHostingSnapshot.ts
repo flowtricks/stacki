@@ -5,6 +5,7 @@ import { ok, err, type Result } from '../../../vendor/stacki/shared/core/result'
 import { publishInventory, publishDisk } from './publishInventory';
 import { publishFailure } from './publishFailure';
 import { STUDIO_PUBLISH_LIMITS as limits } from './publishLimits';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 /** Copy sequentially; reflinks save disk where available without sharing mutable file contents. */
 export async function createHostingSnapshot(root: string, destination: string): Promise<Result<void>> {
@@ -26,7 +27,7 @@ export async function createHostingSnapshot(root: string, destination: string): 
   const deadline = Date.now() + limits.commandTimeoutMs;
   for (const file of inventory.value.files) {
     if (Date.now() > deadline) {
-      return err({ code: 'timeout', message: 'Hosting copy exceeded ten minutes.' });
+      return err({ code: 'timeout', ...described('publish.studio.error.copyTimeout') });
     }
     const target = path.join(destination, file);
     const directory = await mkdir(path.dirname(target), { recursive: true }).then(ok, publishFailure);

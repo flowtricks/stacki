@@ -13,6 +13,7 @@
 
 import { assert } from '../../../../shared/core/assert';
 import { indentUnitOf } from '../../../../shared/core/indent';
+import { described, type Described } from '../../../../shared/properties/i18n/messageRef';
 
 /** The name a first-styled element's class starts from. Literal, so a person reading their own
  *  file finds `.class` and knows it is the one to rename. */
@@ -90,9 +91,10 @@ export type FirstStylesPlan =
   | { readonly kind: 'block' }
   | { readonly kind: 'block-and-class'; readonly className: string }
   | { readonly kind: 'class'; readonly className: string }
-  | { readonly kind: 'refused'; readonly message: string };
+  | ({ readonly kind: 'refused' } & Described);
 
-export const UNSUPPORTED_FILE_MESSAGE = 'This page has no place for a style block. Add a stylesheet to the project, or style it from an .astro page.';
+export const UNSUPPORTED_FILE = described('styleModel.write.unsupportedFile');
+export const UNSUPPORTED_FILE_MESSAGE = UNSUPPORTED_FILE.message;
 
 export function planFirstStyles(input: FirstStylesInput): FirstStylesPlan {
   const { selector, tag, elementClasses, sourceCount, ruleSelectors, takenClasses, filePath } = input;
@@ -103,7 +105,7 @@ export function planFirstStyles(input: FirstStylesInput): FirstStylesPlan {
   const bareTag = tag !== undefined && selector === tag && elementClasses.length === 0;
   if (sourceCount === 0) {
     if (!styleBlockFileSupported(filePath)) {
-      return { kind: 'refused', message: UNSUPPORTED_FILE_MESSAGE };
+      return { kind: 'refused', ...UNSUPPORTED_FILE };
     }
     return bareTag ? { kind: 'block-and-class', className: autoClassName(takenClasses) } : { kind: 'block' };
   }

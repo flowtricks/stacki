@@ -7,12 +7,15 @@
 import {
   parseCmsConnectionList,
   parseCmsSaveResult,
+  type CmsCheckRequest,
+  type CmsCheckResult,
   type CmsConnectionDraft,
   type CmsConnectionList,
   type CmsSaveResult,
   type SanityLoginRequest,
   type SanityLoginState,
 } from '../../../vendor/stacki/shared/properties/cmsConnections';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import {
   parseRemoteActedDocument,
   parseRemoteAsset,
@@ -58,8 +61,13 @@ export async function removeCmsConnection(_projectPath: string, id: string): Pro
   return parseCmsConnectionList(await post('/studio/api/cms-connections/remove', { id }));
 }
 
+/** Payload checks (Test connection, Detect) run in Desktop's main process; Studio's server does not browse Payload yet. */
+export async function checkCmsConnection(_projectPath: string, _request: CmsCheckRequest): Promise<CmsCheckResult> {
+  return { ok: false, ...described('cmsConnections.studio.payloadUnavailable') };
+}
+
 export async function sanityLogin(_projectPath: string, _request: SanityLoginRequest): Promise<SanityLoginState> {
-  return { kind: 'failed', message: 'Paste a Sanity key to connect from Studio.' };
+  return { kind: 'failed', ...described('cmsConnections.studio.pasteKey') };
 }
 
 export async function openSanitySignIn(_url: string): Promise<void> {
@@ -181,7 +189,7 @@ async function attempt<T>(run: () => Promise<RemoteResult<T>>): Promise<RemoteRe
     return await run();
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, message: message.slice(0, 900) || 'The CMS request failed.' };
+    return message === '' ? { ok: false, ...described('cmsConnections.studio.requestFailed') } : { ok: false, message: message.slice(0, 900) };
   }
 }
 

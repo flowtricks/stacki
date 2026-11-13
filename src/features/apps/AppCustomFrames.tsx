@@ -8,6 +8,7 @@
 import { useMemo } from 'react';
 import type { AppSummary } from '../../../shared/properties/apps';
 import Popup from '../../ui/Popup';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { CloseIcon } from '../../ui/Icons';
 import { AppFrame } from './AppFrame';
 import { AppTile } from './AppTile';
@@ -36,6 +37,7 @@ export function AppCustomFrames() {
 function CustomFrameWindow({ frame, app }: { readonly frame: CustomFrame; readonly app: AppSummary }) {
   // One object per frame, so the frame attaches once (AppFrame's effect depends on it).
   const info = useMemo(() => ({ id: frame.id, data: frame.data }), [frame.id, frame.data]);
+  const translate = useTranslate();
   const close = (): void => closeCustomFrame(frame.id, undefined);
   const size = fittedSize(frame);
   const labelId = `${frame.id}-title`;
@@ -44,7 +46,13 @@ function CustomFrameWindow({ frame, app }: { readonly frame: CustomFrame; readon
       <header className="app-custom-frame-header">
         <AppTile manifest={app.manifest} size={18} />
         <h2 id={labelId}>{app.manifest.name}</h2>
-        <button type="button" className="ghost apps-icon-button" onClick={close} title="Close" aria-label={`Close ${app.manifest.name}`}>
+        <button
+          type="button"
+          className="ghost apps-icon-button"
+          onClick={close}
+          title={translate('ui.close')}
+          aria-label={translate('apps.frame.closeNamed', { name: app.manifest.name })}
+        >
           <CloseIcon size={13} />
         </button>
       </header>

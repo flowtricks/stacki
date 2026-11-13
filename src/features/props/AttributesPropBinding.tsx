@@ -10,6 +10,7 @@ import { useCallback, useState } from 'react';
 import type { RefCallback } from 'react';
 import { BracesIcon, CheckIcon, ChevronDownIcon, CloseIcon, ComponentIcon, GearIcon, PlusIcon, UnlinkIcon } from '../../ui/Icons';
 import AutoTextarea from '../../ui/AutoTextarea';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { assert } from '../../../shared/core/assert';
 import type { Attr } from '../../../shared/page/pageNode';
 import { boundAttributes, readAttributesBinding, unboundAttributes } from '../../editor/attributesBinding';
@@ -59,6 +60,7 @@ export function AttributesPropControl(props: AttributesPropProps) {
         <FieldDataPicker
           pos={picker}
           bindContext={props.bindContext}
+          // i18n-ignore: the label seeds a prop name (customAttributes), written as code.
           seed={{ fit: 'attributes', label: 'Custom attributes', value: '', tag: props.tag }}
           onBindNew={(path, declaration) => {
             setPicker(undefined);
@@ -76,6 +78,7 @@ export function AttributesPropControl(props: AttributesPropProps) {
 }
 
 function BoundChip(props: AttributesPropProps & { readonly local: string }) {
+  const translate = useTranslate();
   const [panel, setPanel] = useState<Panel>(undefined);
   const [chip, setChip] = useState<HTMLButtonElement | undefined>(undefined);
   const attach = useCallback<RefCallback<HTMLButtonElement>>((element) => setChip(element ?? undefined), []);
@@ -88,7 +91,7 @@ function BoundChip(props: AttributesPropProps & { readonly local: string }) {
         className="attrs-bound-chip"
         aria-haspopup="menu"
         aria-expanded={panel !== undefined}
-        title={`Instances add attributes through ${props.local}`}
+        title={translate('props.attributesBinding.through', { local: props.local })}
         onClick={() => setPanel(panel === undefined ? 'menu' : undefined)}
       >
         <BracesIcon size={11} />
@@ -96,12 +99,12 @@ function BoundChip(props: AttributesPropProps & { readonly local: string }) {
         <ChevronDownIcon size={10} />
       </button>
       {panel === 'menu' && (
-        <RowPopup anchor={chip} label="Attributes property" onClose={close}>
+        <RowPopup anchor={chip} label={translate('props.attributesBinding.property')} onClose={close}>
           <BoundMenu {...props} onPanel={setPanel} />
         </RowPopup>
       )}
       {panel === 'settings' && (
-        <RowPopup anchor={chip} label="Property settings" onClose={close}>
+        <RowPopup anchor={chip} label={translate('props.newProp.form.settings')} onClose={close}>
           <AttributesSettings {...props} onClose={close} />
         </RowPopup>
       )}
@@ -110,13 +113,14 @@ function BoundChip(props: AttributesPropProps & { readonly local: string }) {
 }
 
 function BoundMenu(props: AttributesPropProps & { readonly local: string; readonly onPanel: (panel: Panel) => void }) {
+  const translate = useTranslate();
   const host = props.bindContext?.newProp;
   assert(host !== undefined, 'A connected attributes list is in a component');
   return (
     <div className="loop-linked-menu" role="menu">
       <button type="button" role="menuitem" className="loop-linked-item" onClick={() => props.onPanel('settings')}>
         <GearIcon size={14} />
-        Edit settings
+        {translate('props.attributesBinding.editSettings')}
       </button>
       <button
         type="button"
@@ -128,19 +132,19 @@ function BoundMenu(props: AttributesPropProps & { readonly local: string; readon
         }}
       >
         <UnlinkIcon size={14} />
-        Disconnect
+        {translate('props.attributesBinding.disconnect')}
       </button>
       <button
         type="button"
         role="menuitem"
         className="loop-linked-item accent"
         disabled={true}
-        title={`A component passes its other attributes on once, as ${props.local}.`}
+        title={translate('props.attributesBinding.passesOnce', { local: props.local })}
       >
         <PlusIcon size={14} />
-        New Attributes property
+        {translate('props.attributesBinding.newProperty')}
       </button>
-      <div className="loop-linked-heading">Connect</div>
+      <div className="loop-linked-heading">{translate('props.attributesBinding.connect')}</div>
       <div className="loop-linked-component">
         <ComponentIcon size={13} />
         {host.componentName}
@@ -157,6 +161,7 @@ function BoundMenu(props: AttributesPropProps & { readonly local: string; readon
 // The prop's tooltip (above `interface Props`) and this element's defaults
 // (the attributes before its spread), each saved as it is left.
 function AttributesSettings(props: AttributesPropProps & { readonly local: string; readonly onClose: () => void }) {
+  const translate = useTranslate();
   const frontmatter = props.bindContext?.frontmatter ?? '';
   const [tooltip, setTooltip] = useState(() => restTooltip(frontmatter));
   const [problem, setProblem] = useState<string | undefined>(undefined);
@@ -167,7 +172,7 @@ function AttributesSettings(props: AttributesPropProps & { readonly local: strin
     if (tooltip.trim() === restTooltip(frontmatter) || props.onSetFrontmatter === undefined) {
       return;
     }
-    const next = withRestTooltip(frontmatter, tooltip);
+    const next = withRestTooltip(frontmatter, tooltip, translate);
     if (next.ok) {
       setProblem(undefined);
       props.onSetFrontmatter(next.value);
@@ -188,28 +193,34 @@ function AttributesSettings(props: AttributesPropProps & { readonly local: strin
   return (
     <div className="loop-bind-dialog loop-property-settings new-prop-form">
       <div className="loop-property-head">
-        <span className="loop-bind-title">Property settings</span>
-        <button type="button" className="loop-settings-remove" aria-label="Close property settings" title="Close" onClick={props.onClose}>
+        <span className="loop-bind-title">{translate('props.newProp.form.settings')}</span>
+        <button
+          type="button"
+          className="loop-settings-remove"
+          aria-label={translate('props.attributesBinding.closeSettings')}
+          title={translate('ui.close')}
+          onClick={props.onClose}
+        >
           <CloseIcon size={12} />
         </button>
       </div>
       <div className="loop-bind-name">
-        <span className="loop-settings-editor-label">Name</span>
+        <span className="loop-settings-editor-label">{translate('props.newProp.form.name')}</span>
         <span className="loop-bind-chip">{props.local}</span>
       </div>
       <label className="loop-bind-name top">
-        <span className="loop-settings-editor-label">Tooltip</span>
+        <span className="loop-settings-editor-label">{translate('props.newProp.form.tooltip')}</span>
         <AutoTextarea
           value={tooltip}
-          aria-label="Tooltip"
-          placeholder="Describe how to use this property…"
+          aria-label={translate('props.newProp.form.tooltip')}
+          placeholder={translate('props.newProp.form.tooltipPlaceholder')}
           onChange={(event) => setTooltip(event.target.value)}
           onBlur={saveTooltip}
         />
       </label>
       {problem !== undefined && <div className="loop-bind-problem">{problem}</div>}
       <div className="loop-property-default">
-        <div className="loop-bind-title">Default Attributes</div>
+        <div className="loop-bind-title">{translate('props.attributesBinding.defaults')}</div>
         <AttributeDefaultsEditor defaults={rows} onChange={setDefaults} />
       </div>
     </div>

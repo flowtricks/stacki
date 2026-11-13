@@ -12,6 +12,7 @@ import {
   type PublishingRepositories,
 } from '../../shared/ipc/publishRepository';
 import { DEFAULT_PUBLISH_CONFIG } from '../../shared/properties/publishConfig';
+import { described, type Described, type MessageKey } from '../../shared/properties/i18n/messageRef';
 import { publishingGitEnvironment } from './publishGitHub';
 
 /** Repository setup never commits, pulls, or pushes project files. */
@@ -33,18 +34,18 @@ export async function publishingRepositories(root: string, input: RepositoryRequ
     }
     const access = record(await repositoryJSON(root, ['api', `repos/${request.repository}`], environment));
     if (record(access['permissions'])['push'] !== true) {
-      return { ok: false, error: 'This account does not have write access to that repository.' };
+      return failure('publish.repositories.error.noWriteAccess');
     }
     return connectPublishingRepository(root, request);
   } catch {
-    return {
-      ok: false,
-      error:
-        request.action === 'create'
-          ? 'Could not create the repository. Check the name, account permissions, and connection.'
-          : 'Could not access GitHub repositories. Refresh or reconnect this GitHub account.',
-    };
+    return failure(request.action === 'create' ? 'publish.repositories.error.createFailed' : 'publish.repositories.error.accessFailed');
   }
+}
+
+// The English sentence stays in `error`; the reference beside it lets the screen show the person's language.
+function failure(key: MessageKey): Extract<RepositoryResult, { readonly ok: false }> {
+  const problem: Described = described(key);
+  return problem.messageRef === undefined ? { ok: false, error: problem.message } : { ok: false, error: problem.message, errorRef: problem.messageRef };
 }
 
 export async function repositoryState(root: string): Promise<PublishingRepositories> {
@@ -76,7 +77,7 @@ export async function connectPublishingRepository(
 ): Promise<RepositoryResult> {
   const current = await repositoryState(root);
   if (current.revision !== request.revision) {
-    return { ok: false, error: 'The connected repository changed. Refresh before saving.' };
+    return failure('publish.repositories.error.changed');
   }
   if (!(await repositoryRoot(root))) {
     await git(root, ['init', '--initial-branch=main']);
@@ -85,10 +86,7 @@ export async function connectPublishingRepository(
   await git(root, ['remote', remotes.includes('origin') ? 'set-url' : 'add', 'origin', `https://github.com/${request.repository}.git`]);
   const saved = await repositoryState(root);
   if (saved.connected !== request.repository) {
-    return {
-      ok: false,
-      error: 'The repository connection changed while saving. Refresh to review it.',
-    };
+    return failure('publish.repositories.error.changedWhileSaving');
   }
   return { ok: true, value: saved };
 }
@@ -146,9 +144,7 @@ async function repositoryList(root: string, account: string, state: PublishingRe
     });
     return { ...state, repositories: await listRepositories(root, account, environment) };
   } catch {
-    return {
-      ...state,
-      notice: 'Could not list repositories for this account. Refresh or reconnect the account.',
-    };
+    const notice = described('publish.repositories.error.listFailed');
+    return { ...state, notice: notice.message, noticeRef: notice.messageRef };
   }
 }

@@ -47,12 +47,14 @@ function readAstroFiles(root: string): Result<ReadonlySet<string>, string> {
     for (let index = 0; index < directories.length; index++) {
       const directory = directories[index];
       if (directory === undefined) {
+        // i18n-ignore: programmer diagnostic thrown by the file monitor; never shown to a person.
         return { ok: false, error: 'Missing scan directory' };
       }
       const absolute = path.join(root, directory);
       const entries = readAstroDirectory(absolute);
       entriesCount += entries.length;
       if (entriesCount > ASTRO_FILES_MAX) {
+        // i18n-ignore: programmer diagnostic thrown by the file monitor; never shown to a person.
         return { ok: false, error: 'Project file notification scan exceeds limit' };
       }
       for (const entry of entries) {

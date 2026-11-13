@@ -10,24 +10,18 @@ import { useAppOverrideOwner } from './appOverrideSlot';
 import { OverrideNote, overrideTitle } from './OverrideNote';
 import { assetRelCandidates, assetValueFor, isExternalAsset } from './assetPath';
 import { classifyRemoteMedia, remotePosterSource, type RemoteMediaHint } from './remoteMedia';
+import type { MessageKey, Translator } from '../lib/i18n/localeContext';
+import { useFormat, useTranslate } from '../lib/i18n/useTranslate';
 
-const kindLabel = { image: 'Image', video: 'Video', audio: 'Audio', asset: 'Asset' };
+const CHOOSE_KEYS = {
+  image: 'ui.assetField.chooseImage',
+  video: 'ui.assetField.chooseVideo',
+  audio: 'ui.assetField.chooseAudio',
+  asset: 'ui.assetField.chooseAsset',
+} as const satisfies Record<'image' | 'video' | 'audio' | 'asset', MessageKey>;
 // Refreshes one read may chain while watcher events keep arriving. Each is a
 // real read, so a burst that outlasts this many is a watcher loop, not a user.
 const ASSET_REFRESH_CHAIN_MAX = 256;
-
-const fmtSize = (bytes: number | undefined) => {
-  if (bytes === undefined) {
-    return '';
-  }
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} KB`;
-  }
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-};
 
 // "https://cdn.site.com/a/hero.png?w=8" → "hero.png" / "cdn.site.com", so a
 // hosted image reads like the file it is rather than as a wall of URL.
@@ -35,14 +29,14 @@ const remoteName = (url: string) => {
   const path = url.split(/[?#]/)[0] ?? '';
   return path.split('/').filter(Boolean).pop() || path;
 };
-const remoteHost = (url: string) => {
+const remoteHost = (url: string, translate: Translator) => {
   if (/^data:/i.test(url)) {
-    return 'data URI';
+    return 'data URI'; // i18n-ignore: the technical name of the scheme, the same in every language
   }
   try {
     return new URL(/^\/\//.test(url) ? `https:${url}` : url).hostname;
   } catch {
-    return 'external';
+    return translate('ui.assetField.external');
   }
 };
 
@@ -142,6 +136,7 @@ export interface AssetFieldProps {
 }
 
 export default function AssetField(props: AssetFieldProps) {
+  const translate = useTranslate();
   const { showModeToggle = true, plainLabel = 'URL', mediaKind = 'asset', onChange } = props;
   const state = useAssetField(props);
   const toggle = showModeToggle && <AssetMode mode={state.mode} onMode={state.setMode} plainLabel={plainLabel} />;
@@ -165,8 +160,8 @@ export default function AssetField(props: AssetFieldProps) {
     <div className="asset-field">
       {toggle}
       {remoteCard || <LocalCard state={state} srcRel={props.srcRel} />}
-      <button className="af-choose" onClick={state.choose} title={owner === undefined ? undefined : overrideTitle(owner)}>
-        Choose {kindLabel[mediaKind]}…
+      <button className="af-choose" onClick={state.choose} title={owner === undefined ? undefined : overrideTitle(translate, owner)}>
+        {translate(CHOOSE_KEYS[mediaKind])}
       </button>
       <OverrideNote point="assets.pick" />
     </div>
@@ -315,16 +310,13 @@ function AssetMode({
   readonly onMode: (mode: 'asset' | 'url') => void;
   readonly plainLabel: string;
 }) {
+  const translate = useTranslate();
   return (
     <div className="af-mode">
-      <button className={`af-mode-btn ${mode === 'asset' ? 'on' : ''}`} title="Choose a file from this project" onClick={() => onMode('asset')}>
-        Asset
+      <button className={`af-mode-btn ${mode === 'asset' ? 'on' : ''}`} title={translate('ui.assetField.modeAssetTitle')} onClick={() => onMode('asset')}>
+        {translate('ui.assetField.modeAsset')}
       </button>
-      <button
-        className={`af-mode-btn ${mode === 'url' ? 'on' : ''}`}
-        title="Enter a plain value (external URL, expression, anything)"
-        onClick={() => onMode('url')}
-      >
+      <button className={`af-mode-btn ${mode === 'url' ? 'on' : ''}`} title={translate('ui.assetField.modePlainTitle')} onClick={() => onMode('url')}>
         {plainLabel}
       </button>
     </div>
@@ -339,6 +331,7 @@ function RemoteCard({
   readonly mediaKind: RemoteMediaHint;
   readonly posterValue: string | undefined;
 }) {
+  const translate = useTranslate();
   const { current, noteDims, dims } = state;
   return (
     <div className="af-card">
@@ -349,8 +342,8 @@ function RemoteCard({
         <div className="af-name" title={current}>
           {remoteName(current)}
         </div>
-        <div className="af-sub">{remoteHost(current)}</div>
-        {state.isFallback && <div className="af-sub">Component fallback</div>}
+        <div className="af-sub">{remoteHost(current, translate)}</div>
+        {state.isFallback && <div className="af-sub">{translate('ui.assetField.componentFallback')}</div>}
         {dims && (
           <div className="af-sub">
             {dims.w} x {dims.h}px
@@ -361,23 +354,29 @@ function RemoteCard({
   );
 }
 function LocalCard({ state, srcRel: sourceRel }: { readonly state: AssetFieldState; readonly srcRel: string | undefined }) {
+  const translate = useTranslate();
+  const { formatBytes } = useFormat();
   const { entry, noteDims, current, dims, target } = state;
   return (
     <div className="af-card">
       <div className="af-thumb">{entry ? <AssetThumb file={entry} onImageLoad={noteDims} /> : <ElementImageIcon size={18} />}</div>
       <div className="af-meta">
         <div className="af-name" title={sourceRel || current}>
-          {entry ? entry.name : sourceRel || current || 'No asset selected'}
+          {entry ? entry.name : sourceRel || current || translate('ui.assetField.noneSelected')}
         </div>
-        {state.isFallback && <div className="af-sub">Component fallback</div>}
+        {state.isFallback && <div className="af-sub">{translate('ui.assetField.componentFallback')}</div>}
         {dims && (
           <div className="af-sub">
             {dims.w} x {dims.h}px
           </div>
         )}
-        {entry && <div className="af-sub">{fmtSize(entry.size)}</div>}
+        {entry && entry.size !== undefined && <div className="af-sub">{formatBytes(entry.size)}</div>}
         {!entry && (sourceRel || current) && (
-          <div className="af-sub">{target ? `not found in ${target.startsWith('src/') ? 'src/' : 'public/'}` : 'file not found'}</div>
+          <div className="af-sub">
+            {target
+              ? translate('ui.assetField.notFoundIn', { folder: target.startsWith('src/') ? 'src/' : 'public/' })
+              : translate('ui.assetField.fileNotFound')}
+          </div>
         )}
       </div>
     </div>

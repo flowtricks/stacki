@@ -23,7 +23,10 @@
 // writes as ever.
 
 import { assert } from '../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../shared/properties/i18n/messageRef';
 import { readGroq } from './groqSyntax';
+import { issue, spoken, type Issue } from './issue';
 import {
   LOOP_QUERY_LIMITS,
   assertLoopQuery,
@@ -43,8 +46,6 @@ export const LOOP_SECTIONS = ['filter', 'sort', 'limit'] as const;
 export type LoopSection = (typeof LOOP_SECTIONS)[number];
 
 const SECTION_RANK: Readonly<Record<LoopSection, number>> = { filter: 0, sort: 1, limit: 2 };
-const SECTION_NOUNS: Readonly<Record<LoopSection, string>> = { filter: 'the filters', sort: 'the sort', limit: 'the limit' };
-const SECTION_CONTROLS: Readonly<Record<LoopSection, string>> = { filter: 'filter controls', sort: 'sort controls', limit: 'limit controls' };
 
 // A chain longer than this is not a list's settings; it also bounds the walk.
 const CHAIN_STEPS_MAX = 16;
@@ -55,6 +56,12 @@ export interface SectionReading {
   readonly code: string;
   /** Why the controls cannot show this code, or undefined when they can. */
   readonly custom: string | undefined;
+  /** The same reason as a reference the renderer translates (`spoken`); `custom` is its English. */
+  readonly customIssue: Issue | undefined;
+}
+
+function customOf(reason: Issue | undefined): Pick<SectionReading, 'custom' | 'customIssue'> {
+  return { custom: reason?.message, customIssue: reason };
 }
 
 export interface LoopSections {
@@ -95,7 +102,13 @@ export function readSections(input: LoopReadInput): LoopSections | undefined {
  * Why the controls would not show `code` in this section, or undefined when
  * they would: asked of code being typed, before the switch back to them.
  */
-export function sectionRefusal(input: LoopReadInput, section: LoopSection, code: string): string | undefined {
+export function sectionRefusal(input: LoopReadInput, section: LoopSection, code: string, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
+  const reason = sectionRefusalIssue(input, section, code);
+  return reason === undefined ? undefined : spoken(reason, translate);
+}
+
+/** `sectionRefusal` as an `Issue`, for code that stores or hands on the reason. */
+export function sectionRefusalIssue(input: LoopReadInput, section: LoopSection, code: string): Issue | undefined {
   const split = splitPipeline(input);
   if (split === undefined) {
     return undefined;
@@ -112,34 +125,55 @@ export function sectionRefusal(input: LoopReadInput, section: LoopSection, code:
 }
 
 /** Why `code` cannot go in this section, or undefined when it can; nothing is written until it can. */
-export function sectionCodeProblem(section: LoopSection, code: string): string | undefined {
+export function sectionCodeProblem(section: LoopSection, code: string, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
+  const problem = sectionCodeIssue(section, code);
+  return problem === undefined ? undefined : spoken(problem, translate);
+}
+
+/** `sectionCodeProblem` as an `Issue`, for the planner, whose answer is handed on. */
+export function sectionCodeIssue(section: LoopSection, code: string): Issue | undefined {
   const text = code.trim();
   if (text === '') {
     return undefined;
   }
   if (text.length > LOOP_QUERY_LIMITS.customCodeCharsMax) {
-    return 'This code is too long.';
+    return issue('editor.loopSections.codeTooLong');
   }
   return text.startsWith('.') ? chainProblem(section, text) : shortFormProblem(section, text);
 }
 
 /** Why GROQ text cannot go in this section, or undefined when it can. */
-export function groqSectionProblem(section: LoopSection, code: string, query: LoopQuery): string | undefined {
+export function groqSectionProblem(section: LoopSection, code: string, query: LoopQuery, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
+  const problem = groqSectionIssue(section, code, query);
+  return problem === undefined ? undefined : spoken(problem, translate);
+}
+
+/** `groqSectionProblem` as an `Issue`. */
+export function groqSectionIssue(section: LoopSection, code: string, query: LoopQuery): Issue | undefined {
   const text = code.trim();
   if (text === '') {
     return undefined;
   }
   if (text.length > LOOP_QUERY_LIMITS.customCodeCharsMax) {
-    return 'This code is too long.';
+    return issue('editor.loopSections.codeTooLong');
   }
-  return groqSectionQuery(section, text, query) === undefined ? GROQ_PROBLEMS[section] : undefined;
+  return groqSectionQuery(section, text, query) === undefined ? groqProblem(section) : undefined;
 }
 
-const GROQ_PROBLEMS: Readonly<Record<LoopSection, string>> = {
-  filter: 'This is not a GROQ condition.',
-  sort: 'Write a GROQ order, such as order(name asc), or a comparator, (a, b) => ….',
-  limit: 'Write a GROQ slice, such as [0...6].',
-};
+function groqProblem(section: LoopSection): Issue {
+  switch (section) {
+    case 'filter':
+      return issue('editor.loopSections.groq.filter');
+    case 'sort':
+      return issue('editor.loopSections.groq.sort');
+    case 'limit':
+      return issue('editor.loopSections.groq.limit');
+    default: {
+      const exhaustive: never = section;
+      return exhaustive;
+    }
+  }
+}
 
 /** The query with a section's GROQ text in place, or undefined when the text does not read as that section. */
 export function groqSectionQuery(section: LoopSection, code: string, query: LoopQuery): LoopQuery | undefined {
@@ -192,7 +226,7 @@ function groqSections(query: LoopQuery): LoopSections {
   assert(query.source.kind === 'sanity', 'Only a Sanity list keeps its sections as GROQ');
   const fetched = query.random || query.customSort !== undefined;
   const sort = fetched ? (sortFunctionCode(query, []) ?? '') : groqOrderText(query.sorts);
-  const section = (code: string): SectionReading => ({ code, custom: undefined });
+  const section = (code: string): SectionReading => ({ code, ...customOf(undefined) });
   return {
     store: 'groq',
     query,
@@ -243,7 +277,7 @@ export interface TextEdit {
   readonly text: string;
 }
 
-export type SectionWrite = { readonly ok: true; readonly edits: readonly TextEdit[] } | { readonly ok: false; readonly message: string };
+export type SectionWrite = { readonly ok: true; readonly edits: readonly TextEdit[] } | ({ readonly ok: false } & Issue);
 
 /**
  * The edits that put `code` in a section. A section with steps is rewritten
@@ -255,20 +289,20 @@ export type SectionWrite = { readonly ok: true; readonly edits: readonly TextEdi
 export function sectionEdits(input: LoopReadInput, section: LoopSection, code: string, shared: (position: number) => boolean): SectionWrite {
   const split = splitPipeline(input);
   if (split === undefined) {
-    return { ok: false, message: 'The list settings changed in the code since they were read. Select the loop again.' };
+    return { ok: false, ...issue('editor.loopPlan.settingsChanged') };
   }
   const steps = sectionSteps(split, section);
   const argument = section === 'filter' ? split.pipeline.filterArgument : undefined;
   const taken = (place: StepPlace, position: number): boolean => place === 'frontmatter' && shared(position);
   if (steps.some((step) => taken(step.step.place, step.from)) || (argument !== undefined && taken(argument.place, argument.from))) {
-    return { ok: false, message: `Other code reads ${split.pipeline.chain.join(', ')} too, so this step stays as it is. Edit it in the frontmatter.` };
+    return { ok: false, ...issue('editor.loopSections.sharedStep', { names: split.pipeline.chain.join(', ') }) };
   }
   const chain = stepsCode(section, code.trim(), sortMethodOf(split, section));
   const edits: TextEdit[] = [];
   if (argument !== undefined) {
     const single = steps.length === 0 ? singleArgument(chain) : undefined;
     if (steps.length === 0 && chain !== '' && single === undefined) {
-      return { ok: false, message: 'This list filters where it is read, which takes one function. Write these filters as one.' };
+      return { ok: false, ...issue('editor.loopSections.oneFunction') };
     }
     edits.push({ place: argument.place, from: argument.from, to: argument.to, text: single === undefined ? '' : `, ${single}` });
   }
@@ -414,14 +448,14 @@ function sectionReading(split: SplitPipeline, section: LoopSection, input: LoopR
   const argument = section === 'filter' ? split.pipeline.filterArgument : undefined;
   const chain = `${argument === undefined ? '' : `.filter(${argument.code})`}${steps.map(stepText).join('')}`;
   if (chain === '') {
-    return { code: '', custom: undefined };
+    return { code: '', ...customOf(undefined) };
   }
   const code = shortFormOf(section, steps, argument?.code) ?? chain;
   const late = lateReason(split, section);
   if (late !== undefined) {
-    return { code, custom: late };
+    return { code, ...customOf(late) };
   }
-  return { code, custom: sectionQuery(split.pipeline, chain, input) === undefined ? shapeReason(section) : undefined };
+  return { code, ...customOf(sectionQuery(split.pipeline, chain, input) === undefined ? shapeReason(section) : undefined) };
 }
 
 // The short form, for the one step that has one.
@@ -452,18 +486,42 @@ function shortFormOf(section: LoopSection, steps: readonly SplitStep[], argument
 
 // A step after one the controls would run after it means something other than
 // what they would say: "show 2" and "featured" read the same either way round.
-function lateReason(split: SplitPipeline, section: LoopSection): string | undefined {
+function lateReason(split: SplitPipeline, section: LoopSection): Issue | undefined {
   const first = split.steps.findIndex((step) => step.section === section);
   const earlier = split.steps.slice(0, Math.max(first, 0)).find((step) => SECTION_RANK[step.section] > SECTION_RANK[section]);
   if (earlier === undefined) {
     return undefined;
   }
-  return `This runs after ${SECTION_NOUNS[earlier.section]}, which the ${SECTION_CONTROLS[section]} cannot show, so it stays as code.`;
+  // Whole sentences per pair, never a noun spliced in: word order and agreement differ by language.
+  switch (section) {
+    case 'filter':
+      return earlier.section === 'sort' ? issue('editor.loopSections.late.filterAfterSort') : issue('editor.loopSections.late.filterAfterLimit');
+    case 'sort':
+      return issue('editor.loopSections.late.sortAfterLimit');
+    case 'limit':
+      // The limit ranks last, so nothing can run after it that it would have to wait for.
+      assert(false, 'lateReason: no step ranks after the limit');
+      return issue('editor.loopSections.late.sortAfterLimit');
+    default: {
+      const exhaustive: never = section;
+      return exhaustive;
+    }
+  }
 }
 
-function shapeReason(section: LoopSection): string {
-  const controls = SECTION_CONTROLS[section];
-  return `The ${controls} cannot show this code, so it stays as code. Change it to what the ${controls} can hold first.`;
+function shapeReason(section: LoopSection): Issue {
+  switch (section) {
+    case 'filter':
+      return issue('editor.loopSections.shape.filter');
+    case 'sort':
+      return issue('editor.loopSections.shape.sort');
+    case 'limit':
+      return issue('editor.loopSections.shape.limit');
+    default: {
+      const exhaustive: never = section;
+      return exhaustive;
+    }
+  }
 }
 
 // The section alone on the list, read by the reader the whole list is read by:
@@ -562,25 +620,24 @@ const LIST_NAME = 'list';
 
 // Written into the step it will be, so code that would swallow the step's own
 // bracket (a trailing `// comment`) fails here rather than on the page.
-function shortFormProblem(section: LoopSection, text: string): string | undefined {
+function shortFormProblem(section: LoopSection, text: string): Issue | undefined {
   const parsed = parseExpression(`${LIST_NAME}${stepsCode(section, text, 'sort')}`);
   const call = parsed?.expression;
   if (call?.kind !== 'call') {
-    return 'This is not one JavaScript expression.';
+    return issue('editor.loopSections.notExpression');
   }
   const argument = call.args[section === 'limit' ? 1 : 0];
   if (argument === undefined || call.args.length !== (section === 'limit' ? 2 : 1)) {
-    return 'This is not one JavaScript expression.';
+    return issue('editor.loopSections.notExpression');
   }
   return section === 'limit' ? amountProblem(argument) : functionProblem(section, argument);
 }
 
-function functionProblem(section: 'filter' | 'sort', node: Js): string | undefined {
-  const example =
-    section === 'filter' ? 'A filter is a function, such as (item) => item.number > 1.' : 'A sort is a function, such as (a, b) => a.number - b.number.';
+function functionProblem(section: 'filter' | 'sort', node: Js): Issue | undefined {
+  const example = section === 'filter' ? issue('editor.loopSections.filterIsFunction') : issue('editor.loopSections.sortIsFunction');
   switch (node.kind) {
     case 'function':
-      return section === 'sort' && node.parameters.length > 2 ? 'A sort compares two items: write (a, b) => …' : undefined;
+      return section === 'sort' && node.parameters.length > 2 ? issue('editor.loopSections.sortTwoItems') : undefined;
     case 'name':
     case 'member':
     case 'index':
@@ -606,7 +663,7 @@ function functionProblem(section: 'filter' | 'sort', node: Js): string | undefin
   }
 }
 
-function amountProblem(node: Js): string | undefined {
+function amountProblem(node: Js): Issue | undefined {
   switch (node.kind) {
     case 'string':
     case 'boolean':
@@ -614,7 +671,7 @@ function amountProblem(node: Js): string | undefined {
     case 'function':
     case 'object':
     case 'array':
-      return 'A limit is a number, or code that gives one.';
+      return issue('editor.loopSections.limitIsNumber');
     case 'name':
     case 'member':
     case 'index':
@@ -636,10 +693,10 @@ function amountProblem(node: Js): string | undefined {
 
 // Every step of a typed chain has to belong to the section it is typed in, or
 // the other sections would no longer hold their own code.
-function chainProblem(section: LoopSection, text: string): string | undefined {
+function chainProblem(section: LoopSection, text: string): Issue | undefined {
   const parsed = parseExpression(`${LIST_NAME}${text}`);
   if (parsed === undefined) {
-    return 'This is not one JavaScript expression.';
+    return issue('editor.loopSections.notExpression');
   }
   let node = parsed.expression;
   for (let count = 0; count <= CHAIN_STEPS_MAX; count++) {
@@ -647,12 +704,18 @@ function chainProblem(section: LoopSection, text: string): string | undefined {
       return undefined;
     }
     if (node.kind !== 'call' || node.callee.kind !== 'member' || sectionOfMethod(node.callee.property) !== section) {
-      return `Only ${SECTION_NOUNS[section]} go here: ${chainExample(section)}.`;
+      return issue(CHAIN_ONLY_KEYS[section], { example: chainExample(section) });
     }
     node = node.callee.object;
   }
-  return 'This chain is too long.';
+  return issue('editor.loopSections.chainTooLong');
 }
+
+const CHAIN_ONLY_KEYS: Readonly<Record<LoopSection, MessageKey>> = {
+  filter: 'editor.loopSections.chainOnly.filter',
+  sort: 'editor.loopSections.chainOnly.sort',
+  limit: 'editor.loopSections.chainOnly.limit',
+};
 
 function chainExample(section: LoopSection): string {
   switch (section) {

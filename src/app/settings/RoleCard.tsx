@@ -1,7 +1,9 @@
-// One role in Settings → Roles: its name, its members as GitHub username chips
-// with their pictures, and its access as switches grouped by area, collapsed
-// behind a "Permissions · n of m on" row (RolePermissions.tsx). Admin's access
-// is fixed ("Full access") and it is always named "Admin"; every other role,
+// One role in Settings → Roles: a header (name, member count,
+// Duplicate and a "…" menu with Rename and Delete), then the members as GitHub username
+// chips with their pictures and one compact add field on the same row, then SIDEBAR APPS,
+// then its access as switches grouped by area, collapsed behind a quiet
+// "Permissions · On n of m" row (RolePermissions.tsx). Admin's access
+// is fixed (no switches) and it is always named "Admin"; every other role,
 // Client included, is renamed in place (its id, and so its grants, stay); only
 // custom roles can be deleted, after a confirmation. Client cannot: the parser
 // puts it back in every file it reads, and Studio falls back to it (a broken roles
@@ -14,7 +16,7 @@
 // Under the Apps group, each installed app that declares permissions gets its own
 // group of switches (RoleAppPermissions.tsx).
 //
-// Every card, admin's included, has its own "Pinned to sidebar" list under its
+// Every card, admin's included, has its own "Sidebar apps" list under its
 // members and above its permissions (RolePinnedApps.tsx): each role pins its own
 // apps in its own order, so it sits where it reads as the role's, not inside the
 // collapsed permissions.
@@ -31,19 +33,25 @@ import {
   APP_ACCESS_ALL,
   CLIENT_ROLE_ID,
   ROLE_LIMITS,
+  sameLogin,
   type ProjectRole,
   type StaticAccessFeature,
 } from '../../../shared/properties/projectRoles';
 import { Switch } from '../../ui/Switch';
 import CommitAvatar from '../../features/history/CommitAvatar';
 import { FeatureIcon } from '../featureIcons';
-import { CloseIcon, CopyIcon, TrashIcon } from '../../ui/Icons';
+import MoreMenu from '../../ui/MoreMenu';
+import { CloseIcon, CopyIcon } from '../../ui/Icons';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { memberAvatarURL } from './memberAvatars';
 import { MemberPicker } from './MemberPicker';
 import { useInstalledApps } from './RoleAppPicker';
 import { RoleAppPermissions } from './RoleAppPermissions';
 import { RolePermissions } from './RolePermissions';
 import { RolePinnedApps } from './RolePinnedApps';
+
+/** More people than this scroll inside the members card. */
+export const MEMBER_ROWS_VISIBLE_MAX = 6;
 
 export interface RoleCardActions {
   /** Whether the name was accepted; a refused one says why in the card's notice. */
@@ -73,46 +81,32 @@ export function RoleCard(props: {
   readonly projectPath?: string;
   /** Why the card's last change was refused or not saved, beside it. */
   readonly notice?: ReactNode;
+  /** The signed-in GitHub login, for the "You" tag on its own member row. */
+  readonly currentLogin?: string | undefined;
   /** The card opens with its name field focused: the role was just made by Duplicate. */
   readonly naming?: 'rename' | undefined;
 }) {
   const { role, editable, actions } = props;
   const projectPath = props.projectPath;
-  const builtIn = role.id === ADMIN_ROLE_ID || role.id === CLIENT_ROLE_ID;
+  const translate = useTranslate();
+  // A role just made by Duplicate opens with its name ready to change; the menu's Rename and a click on the name do the same.
+  const [naming, setNaming] = useState<'shown' | 'editing'>(props.naming === 'rename' && editable ? 'editing' : 'shown');
   return (
-    <section className="app-role" aria-label={`${role.name} role`}>
+    <section className="app-role" aria-label={translate('settings.roles.card.label', { name: role.name })}>
       <div className="app-role-heading">
         <span className="app-role-heading-icon" aria-hidden="true">
           <FeatureIcon feature="settings:roles" size={14} />
         </span>
-        {role.id === ADMIN_ROLE_ID ? <h3>{role.name}</h3> : <RoleName role={role} editable={editable} rename={actions.rename} naming={props.naming} />}
-        {role.id === ADMIN_ROLE_ID && <span className="app-role-badge">Full access</span>}
-        {editable && (
-          <button
-            type="button"
-            className="app-role-icon"
-            aria-label={`Duplicate ${role.name}`}
-            title={`Duplicate ${role.name} as a new role, without its members`}
-            onClick={actions.duplicate}
-          >
-            <CopyIcon size={14} />
-          </button>
+        {role.id === ADMIN_ROLE_ID ? (
+          <h3>{role.name}</h3>
+        ) : (
+          <RoleName role={role} editable={editable} rename={actions.rename} naming={naming} setNaming={setNaming} />
         )}
-        {!builtIn && (
-          <button
-            type="button"
-            className="app-role-icon is-danger"
-            aria-label={`Delete ${role.name}`}
-            title={`Delete ${role.name}`}
-            disabled={!editable}
-            onClick={actions.remove}
-          >
-            <TrashIcon size={14} />
-          </button>
-        )}
+        <span className="app-role-count">{role.members.length > 0 && translate('settings.roles.members.count', { count: role.members.length })}</span>
+        <RoleHeadingActions role={role} editable={editable} actions={actions} startNaming={() => setNaming('editing')} />
       </div>
       {props.notice}
-      <Members role={role} editable={editable} actions={actions} projectPath={projectPath} />
+      <Members role={role} editable={editable} actions={actions} projectPath={projectPath} currentLogin={props.currentLogin} />
       <RolePins role={role} editable={editable} actions={actions} projectPath={projectPath} />
       {role.id !== ADMIN_ROLE_ID && (
         <RolePermissions role={role} projectPath={projectPath}>
@@ -130,25 +124,74 @@ type SectionProps = {
   readonly projectPath: string | undefined;
 };
 
-function Members(props: SectionProps) {
+// Duplicate, and the "…" menu: Rename and Delete. Admin is always "Admin" and Client cannot be deleted
+// (the parser restores it), so each menu holds only what applies; with nothing to offer it draws nothing.
+function RoleHeadingActions(props: Omit<SectionProps, 'projectPath'> & { readonly startNaming: () => void }) {
   const { role, editable, actions } = props;
+  const translate = useTranslate();
+  if (!editable) {
+    return undefined;
+  }
+  const builtIn = role.id === ADMIN_ROLE_ID || role.id === CLIENT_ROLE_ID;
   return (
-    <div className="app-role-members">
-      <ul aria-label={`${role.name} members`}>
-        {role.members.map((member) => (
-          <li key={member} className="app-role-chip">
-            <CommitAvatar name={member} email="" url={memberAvatarURL(member)} />
-            <span>{member}</span>
-            {editable && (
-              <button type="button" aria-label={`Remove ${member}`} onClick={() => actions.removeMember(member)}>
-                <CloseIcon size={10} />
-              </button>
-            )}
-          </li>
-        ))}
-        {role.members.length === 0 && <li className="app-role-none">No members</li>}
-      </ul>
-      {editable && <MemberPicker roleName={role.name} members={role.members} projectPath={props.projectPath} addMember={actions.addMember} />}
+    <>
+      <button
+        type="button"
+        className="app-role-icon"
+        aria-label={translate('settings.roles.duplicate.label', { name: role.name })}
+        title={translate('settings.roles.duplicate.tip', { name: role.name })}
+        onClick={actions.duplicate}
+      >
+        <CopyIcon size={14} />
+      </button>
+      <MoreMenu
+        className="app-role-more"
+        title={translate('settings.roles.menu.label', { name: role.name })}
+        width={150}
+        items={[
+          role.id !== ADMIN_ROLE_ID && { label: translate('settings.roles.menu.rename'), onSelect: props.startNaming },
+          !builtIn && { label: translate('settings.roles.menu.delete'), danger: true, onSelect: actions.remove },
+        ]}
+      />
+    </>
+  );
+}
+
+function Members(props: SectionProps & { readonly currentLogin: string | undefined }) {
+  const { role, editable, actions } = props;
+  const translate = useTranslate();
+  const scrolls = role.members.length > MEMBER_ROWS_VISIBLE_MAX;
+  return (
+    <div className="app-role-section app-role-members">
+      {/* One filled card: the people as rows, then the add row as its last row. */}
+      <div className="app-role-people">
+        <ul
+          className={scrolls ? 'app-role-people-list is-scrolling' : 'app-role-people-list'}
+          aria-label={translate('settings.roles.members.list', { name: role.name })}
+        >
+          {role.members.map((member) => (
+            <li key={member} className="app-role-chip">
+              <CommitAvatar name={member} email="" url={memberAvatarURL(member)} />
+              <span className="app-role-person-name">{member}</span>
+              {props.currentLogin !== undefined && sameLogin(member, props.currentLogin) && (
+                <span className="app-role-you">{translate('settings.roles.members.you')}</span>
+              )}
+              {editable && (
+                <button
+                  type="button"
+                  aria-label={translate('settings.roles.members.remove', { member })}
+                  title={translate('settings.roles.members.removeTip')}
+                  onClick={() => actions.removeMember(member)}
+                >
+                  <CloseIcon size={10} />
+                </button>
+              )}
+            </li>
+          ))}
+          {role.members.length === 0 && <li className="app-role-none">{translate('settings.roles.members.none')}</li>}
+        </ul>
+        {editable && <MemberPicker roleName={role.name} members={role.members} projectPath={props.projectPath} addMember={actions.addMember} />}
+      </div>
     </div>
   );
 }
@@ -157,6 +200,8 @@ function Access(props: SectionProps) {
   const { role, editable, actions } = props;
   const granted = new Set(role.access);
   const installed = useInstalledApps(props.projectPath);
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   return (
     <div className="app-role-access">
       {ACCESS_GROUPS.map((group) => {
@@ -166,23 +211,25 @@ function Access(props: SectionProps) {
           <Fragment key={group.label}>
             <div className="app-role-group">
               <div className="app-role-group-heading">
-                <h4>{group.label}</h4>
+                <h4>{translateDescribed({ message: group.label, messageRef: group.labelRef })}</h4>
                 {/* Mixed reads as off: switching it on grants the whole group. */}
                 <span className="app-role-group-all">
-                  All
+                  {translate('settings.roles.permissions.all')}
                   <Switch
-                    label={`All ${group.label}`}
+                    label={translate('settings.roles.permissions.allLabel', {
+                      group: translateDescribed({ message: group.label, messageRef: group.labelRef }),
+                    })}
                     checked={all}
                     disabled={!editable}
                     onToggle={() => actions.toggleGroup(features, all ? 'withdraw' : 'grant')}
                   />
                 </span>
               </div>
-              {group.features.map(({ feature, label }) => (
+              {group.features.map(({ feature, label, labelRef }) => (
                 <Toggle
                   key={feature}
                   feature={feature}
-                  label={label}
+                  label={translateDescribed({ message: label, messageRef: labelRef })}
                   checked={granted.has(feature)}
                   disabled={!editable}
                   onToggle={() => actions.toggle(feature, granted.has(feature) ? 'withdraw' : 'grant')}
@@ -204,7 +251,7 @@ function Access(props: SectionProps) {
 function RolePins(props: SectionProps) {
   const installed = useInstalledApps(props.projectPath);
   return (
-    <div className="app-role-pins-section">
+    <div className="app-role-section app-role-pins-section">
       <RolePinnedApps
         role={props.role}
         installed={installed}
@@ -220,11 +267,12 @@ function RolePins(props: SectionProps) {
 // app now and later. (Not "All apps": the group's own "All Apps" switch has that name.) Each app has its own switch in its section below (RoleAppPermissions.tsx).
 function AllApps(props: Omit<SectionProps, 'projectPath'>) {
   const { role, editable, actions } = props;
+  const translate = useTranslate();
   const all = role.access.includes(APP_ACCESS_ALL);
   return (
     <Toggle
       feature={APP_ACCESS_ALL}
-      label="Every app"
+      label={translate('settings.roles.permissions.everyApp')}
       checked={all}
       disabled={!editable}
       onToggle={() => actions.toggle(APP_ACCESS_ALL, all ? 'withdraw' : 'grant')}
@@ -251,22 +299,20 @@ function Toggle(props: {
 }
 
 /**
- * A role's name, renamed in place: click it to edit, Enter or leaving the field
- * saves, Escape cancels. A refused name (empty, too long, taken) puts the field
- * back to the saved name and the card's notice says why.
+ * A role's name, renamed in place: click it (or choose Rename in the "…" menu) to edit, Enter or leaving
+ * the field saves, Escape cancels. A refused name (empty, too long, taken) puts the field back to the
+ * saved name and the card's notice says why.
  */
 function RoleName(props: {
   readonly role: ProjectRole;
   readonly editable: boolean;
   readonly rename: (name: string) => boolean;
-  readonly naming: 'rename' | undefined;
+  readonly naming: 'shown' | 'editing';
+  readonly setNaming: (naming: 'shown' | 'editing') => void;
 }) {
   const { role } = props;
-  // A role just made by Duplicate opens with its name ready to change.
-  const [editing, setEditing] = useState<{ readonly kind: 'shown' } | { readonly kind: 'editing'; readonly text: string }>(() =>
-    props.naming === 'rename' && props.editable ? { kind: 'editing', text: role.name } : { kind: 'shown' },
-  );
-  if (editing.kind === 'shown') {
+  const translate = useTranslate();
+  if (props.naming === 'shown') {
     if (!props.editable) {
       return <h3>{role.name}</h3>;
     }
@@ -275,30 +321,42 @@ function RoleName(props: {
         <button
           type="button"
           className="app-role-name-button"
-          title="Rename"
-          aria-label={`Rename ${role.name}`}
-          onClick={() => setEditing({ kind: 'editing', text: role.name })}
+          title={translate('settings.roles.menu.rename')}
+          aria-label={translate('settings.roles.name.rename', { name: role.name })}
+          onClick={() => props.setNaming('editing')}
         >
           {role.name}
         </button>
       </h3>
     );
   }
-  const commit = (text: string) => {
-    setEditing({ kind: 'shown' });
-    if (text.trim() !== role.name) {
-      props.rename(text);
+  return <RoleNameField role={role} rename={props.rename} setNaming={props.setNaming} />;
+}
+
+// Mounted only while naming, so each edit starts from the saved name.
+function RoleNameField(props: {
+  readonly role: ProjectRole;
+  readonly rename: (name: string) => boolean;
+  readonly setNaming: (naming: 'shown' | 'editing') => void;
+}) {
+  const { role } = props;
+  const translate = useTranslate();
+  const [text, setText] = useState(role.name);
+  const commit = (value: string) => {
+    props.setNaming('shown');
+    if (value.trim() !== role.name) {
+      props.rename(value);
     }
   };
   return (
     <input
       className="app-role-name"
-      aria-label="Role name"
-      // Focus moves here because the person just clicked the name, or duplicated the role, to rename it.
+      aria-label={translate('settings.roles.name.label')}
+      // Focus moves here because the person just clicked the name, chose Rename, or duplicated the role, to rename it.
       autoFocus
       maxLength={ROLE_LIMITS.roleNameCharsMax}
-      value={editing.text}
-      onChange={(event) => setEditing({ kind: 'editing', text: event.target.value })}
+      value={text}
+      onChange={(event) => setText(event.target.value)}
       onBlur={(event) => commit(event.currentTarget.value)}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
@@ -308,7 +366,7 @@ function RoleName(props: {
           // Escape cancels the rename only; it must not close Settings too.
           event.preventDefault();
           event.stopPropagation();
-          setEditing({ kind: 'shown' });
+          props.setNaming('shown');
         }
       }}
     />

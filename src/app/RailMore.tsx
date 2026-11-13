@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { assert } from '../../shared/core/assert';
 import MoreMenu from '../ui/MoreMenu';
 import { RailMoreIcon } from './featureIcons';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 /** One hidden rail button, as its menu row. */
 export interface RailMoreItem {
@@ -19,11 +20,12 @@ export interface RailMoreItem {
 const MENU_WIDTH_PX = 200;
 
 export function RailMore(props: { readonly items: readonly RailMoreItem[]; readonly active: string | undefined }) {
+  const translate = useTranslate();
   assert(props.items.length > 0, 'The More button lists something');
   const activeInside = props.items.some((item) => item.id === props.active);
   return (
     <MoreMenu
-      title="More"
+      title={translate('rail.more')}
       side="right"
       width={MENU_WIDTH_PX}
       className={`rail-btn rail-more ${activeInside ? 'on' : ''}`}

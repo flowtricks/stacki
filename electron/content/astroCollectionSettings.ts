@@ -20,6 +20,7 @@ import path from 'node:path';
 
 import { assert } from '../../shared/core/assert';
 import type { CollectionSettings, SettingsChange } from '../../shared/properties/collectionSettings';
+import { DescribedError } from '../../shared/properties/describedError';
 import { createProjectText, writeProjectText } from '../documents/documentWrites';
 import { cmsSourcePath } from '../lib/contentPaths';
 import type { AstroRemoteHost } from './astroRemoteService';
@@ -37,7 +38,7 @@ export function readCollectionSettings(projectPath: string, name: string): Colle
   const { text } = configText(projectPath);
   const read = readCollectionSchema(text, name);
   if (!read.ok) {
-    throw new Error(read.error);
+    throw new DescribedError(read.error);
   }
   return { name, source: read.value.source, fields: read.value.fields };
 }
@@ -55,7 +56,7 @@ export async function changeCollectionSettings(
   }
   const edit = editCollectionSchema(config.text, name, change);
   if (!edit.ok) {
-    throw new Error(edit.error);
+    throw new DescribedError(edit.error);
   }
   const collection = (await host.readConfig()).collections.find((each) => each.name === name);
   // Entries first: a failure there leaves the config naming what the entries still hold.
@@ -89,7 +90,7 @@ async function deleteCollection(
   const { name, config } = request;
   const edit = editCollectionSchema(config.text, name, { kind: 'deleteCollection' });
   if (!edit.ok) {
-    throw new Error(edit.error);
+    throw new DescribedError(edit.error);
   }
   const collections = (await host.readConfig()).collections;
   for (const other of collections.filter((each) => each.name !== name)) {

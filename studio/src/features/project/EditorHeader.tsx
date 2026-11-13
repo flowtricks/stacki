@@ -1,3 +1,5 @@
+import { saveStatusLabel } from '../collaboration/saveStatus';
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { isCanvasPage } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import type { Peer } from '../collaboration/presence';
 import type { Session } from '../auth/useSession';
@@ -43,6 +45,7 @@ export function EditorHeader({
   closeDefaults,
   defaultsMode,
 }: HeaderProps) {
+  const translate = useTranslate();
   const studioRole = useStudioRole();
   const direct = session?.kind === 'local' && session.editing === 'source';
   const pages = projectPages(project);
@@ -62,7 +65,7 @@ export function EditorHeader({
         <AccountMenu saved={!defaultsMode && document?.status === 'Saved'} session={session} cursorChat={cursorChat} />
         <span className="project-name">{project.name}</span>
         <span className="save-state" role="status" data-saved={document?.status === 'Saved' ? '' : undefined}>
-          {document?.status ?? 'Connecting'}
+          {saveStatusLabel(document?.status ?? 'Connecting', translate)}
         </span>
         {!studioRole.isAdmin && <span className="client-role-badge">{studioRole.name}</span>}
         {componentOpen && switcher}
@@ -91,13 +94,14 @@ function headerBack({ document, previewFile, open, report }: Pick<HeaderProps, '
 }
 
 function Collaborators({ document, session, follow }: { document: SharedDocument | undefined; session: Session | undefined; follow: (peer: Peer) => void }) {
+  const translate = useTranslate();
   return (
     <div className="collaborators">
       {presenceUsers(document?.peers ?? []).map((peer) => (
         <button
           type="button"
           onClick={() => follow(peer)}
-          aria-label={`Go to ${peer.name}’s selection`}
+          aria-label={translate('studio.header.goToSelection', { name: peer.name })}
           key={peer.githubId === undefined ? `connection:${peer.id}` : `github:${peer.githubId}`}
           title={`${peer.name} · ${peer.page}${peer.selection ? ' · ' + peer.selection : ''}`}
           style={
@@ -129,15 +133,22 @@ function HeaderNavigation({
   readonly file: string;
   readonly switcher: React.ReactNode;
 }) {
+  const translate = useTranslate();
   return (
     <>
       {defaultsMode ? (
-        <button className="page-switch-btn comp-back" onClick={back} title="Close defaults" aria-label="Close defaults" aria-keyshortcuts="Escape">
+        <button
+          className="page-switch-btn comp-back"
+          onClick={back}
+          title={translate('shell.titleBar.closeDefaults')}
+          aria-label={translate('shell.titleBar.closeDefaults')}
+          aria-keyshortcuts="Escape"
+        >
           <span>←</span>
-          <span>Close defaults</span>
+          <span>{translate('shell.titleBar.closeDefaults')}</span>
         </button>
       ) : componentOpen ? (
-        <button className="page-switch-btn comp-back" onClick={back} title="Back to page" aria-keyshortcuts="Escape">
+        <button className="page-switch-btn comp-back" onClick={back} title={translate('studio.header.backToPage')} aria-keyshortcuts="Escape">
           <span>←</span>
           <span className="page-switch-label">{file.split('/').at(-1)}</span>
         </button>

@@ -4,6 +4,7 @@ import { decodeUtf8 } from '../../shared/core/span';
 import { digestOf } from '../documents/atomicWrite';
 import { documentHost, describeWriteReport } from '../documents/documentWrites';
 import type { RenameWriter } from './pageRenameWrite';
+import { translateMain } from '../lib/mainLocale';
 
 /** Desktop uses the same witnessed actors as normal editor saves. */
 export function desktopRenameWriter(): RenameWriter {
@@ -13,7 +14,7 @@ export function desktopRenameWriter(): RenameWriter {
       if (texts.length > LIMITS.documentActorsMax) {
         return err({
           code: 'limit',
-          message: 'Too many linked files for one rename. Split the refactor.',
+          message: translateMain('error.pageRename.tooManyFiles'),
         });
       }
       const leased = documents.withLeases(texts, run);
@@ -25,7 +26,7 @@ export function desktopRenameWriter(): RenameWriter {
         return current;
       }
       const decoded = decodeUtf8(current.value.bytes);
-      return decoded.ok ? ok(decoded.value) : err({ code: 'encoding', message: `${file} is not UTF-8.` });
+      return decoded.ok ? ok(decoded.value) : err({ code: 'encoding', message: translateMain('error.pageRename.notUtf8', { file }) });
     },
     write: (entry) => {
       noteWrite(entry.file);

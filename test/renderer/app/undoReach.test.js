@@ -90,7 +90,7 @@ for (const [what, near] of [
   ['a value', 'const writeOnce = useCallback'],
   ['a new variable', 'const add = useCallback'],
   ['a row moved', 'const move = useCallback'],
-  ['a group moved', "await writeWithUndo(selectedFile.rel, 'the group'"],
+  ['a group moved', "await writeWithUndo(selectedFile.rel, 'variables.undo.group'"],
   ['a group added', 'const duplicateSection = useCallback'],
   ['a group deleted', 'const deleteSection = useCallback'],
   ['a heading renamed', 'const retitle = useCallback'],

@@ -6,6 +6,8 @@
 // the model and its code live in src/editor/conditionalValue.ts.
 
 import { assert } from '../../../shared/core/assert';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import { LIMITS } from '../../../shared/core/limits';
 import type { Attr } from '../../../shared/page/pageNode';
 import type { SchemaField } from '../../editor/dataScope';
@@ -109,28 +111,39 @@ export function propOf(catalog: readonly ConditionProp[], subject: string): Cond
 
 export type DraftOperator = Condition['operator'];
 
+/** The "all / any" choice of a group, with its words. */
+export function matchOptions(translate: Translator = ENGLISH_TRANSLATE): readonly { readonly value: GroupMatch; readonly label: string }[] {
+  return [
+    { value: 'all', label: translate('props.conditional.match.all') },
+    { value: 'any', label: translate('props.conditional.match.any') },
+  ];
+}
+
 /** The operators a kind of prop offers, in menu order, with their words. */
-export function operatorsFor(kind: ConditionPropKind): readonly { readonly value: DraftOperator; readonly label: string }[] {
+export function operatorsFor(
+  kind: ConditionPropKind,
+  translate: Translator = ENGLISH_TRANSLATE,
+): readonly { readonly value: DraftOperator; readonly label: string }[] {
   switch (kind) {
     case 'option':
       return [
-        { value: 'in', label: 'is any' },
-        { value: 'notIn', label: 'is not any' },
-        { value: 'truthy', label: 'is set' },
-        { value: 'falsy', label: 'is empty' },
+        { value: 'in', label: translate('props.conditional.operator.isAny') },
+        { value: 'notIn', label: translate('props.conditional.operator.isNotAny') },
+        { value: 'truthy', label: translate('props.conditional.operator.isSet') },
+        { value: 'falsy', label: translate('props.conditional.operator.isEmpty') },
       ];
     case 'switch':
       return [
-        { value: 'truthy', label: 'is true' },
-        { value: 'falsy', label: 'is false' },
+        { value: 'truthy', label: translate('props.conditional.operator.isTrue') },
+        { value: 'falsy', label: translate('props.conditional.operator.isFalse') },
       ];
     case 'text':
     case 'number':
       return [
-        { value: 'in', label: 'equals' },
-        { value: 'notIn', label: 'does not equal' },
-        { value: 'truthy', label: 'is set' },
-        { value: 'falsy', label: 'is empty' },
+        { value: 'in', label: translate('props.conditional.operator.equals') },
+        { value: 'notIn', label: translate('props.conditional.operator.notEquals') },
+        { value: 'truthy', label: translate('props.conditional.operator.isSet') },
+        { value: 'falsy', label: translate('props.conditional.operator.isEmpty') },
       ];
     default: {
       const exhaustive: never = kind;
@@ -428,36 +441,46 @@ export interface SummaryLine {
 }
 
 /** The summary a conditional field shows: one line per group, then the Else. */
-export function summaryLines(model: ConditionalValue, catalog: readonly ConditionProp[]): readonly SummaryLine[] {
+export function summaryLines(model: ConditionalValue, catalog: readonly ConditionProp[], translate: Translator = ENGLISH_TRANSLATE): readonly SummaryLine[] {
   const lines: SummaryLine[] = model.groups.map((group) => {
-    const words = group.conditions.map((condition) => conditionWords(condition, catalog));
+    const words = group.conditions.map((condition) => conditionWords(condition, catalog, translate));
     const [only] = words;
     if (words.length === 1 && only !== undefined) {
-      return { heading: `If ${only}`, bullets: [], value: group.value };
+      return { heading: translate('props.conditional.summary.if', { condition: only }), bullets: [], value: group.value };
     }
-    return { heading: group.match === 'all' ? 'If all are true' : 'If any are true', bullets: words, value: group.value };
+    return {
+      heading: group.match === 'all' ? translate('props.conditional.summary.allTrue') : translate('props.conditional.summary.anyTrue'),
+      bullets: words,
+      value: group.value,
+    };
   });
-  lines.push({ heading: 'Else', bullets: [], value: model.otherwise });
+  lines.push({ heading: translate('props.conditional.summary.else'), bullets: [], value: model.otherwise });
   assert(lines.length === model.groups.length + 1, 'summaryLines: one line per group and the Else');
   return lines;
 }
 
 /** A condition in words: `Theme = Dark`, `Padding Top ≠ Small`, `Shown is true`. */
-export function conditionWords(condition: Condition, catalog: readonly ConditionProp[]): string {
+export function conditionWords(condition: Condition, catalog: readonly ConditionProp[], translate: Translator = ENGLISH_TRANSLATE): string {
   const prop = propOf(catalog, condition.subject);
   switch (condition.kind) {
     case 'test':
       if (condition.operator === 'truthy') {
-        return `${prop.label} ${prop.kind === 'switch' ? 'is true' : 'is set'}`;
+        return translate(prop.kind === 'switch' ? 'props.conditional.words.isTrue' : 'props.conditional.words.isSet', { subject: prop.label });
       }
-      return `${prop.label} ${prop.kind === 'switch' ? 'is false' : 'is empty'}`;
+      return translate(prop.kind === 'switch' ? 'props.conditional.words.isFalse' : 'props.conditional.words.isEmpty', { subject: prop.label });
     case 'compare': {
       const values = condition.values.map((value) => literalWords(value, prop.kind));
       const [only] = values;
       if (values.length === 1 && only !== undefined) {
-        return `${prop.label} ${condition.operator === 'in' ? '=' : '≠'} ${only}`;
+        return translate(condition.operator === 'in' ? 'props.conditional.words.equals' : 'props.conditional.words.notEquals', {
+          subject: prop.label,
+          value: only,
+        });
       }
-      return `${prop.label} ${condition.operator === 'in' ? 'is any of' : 'is none of'} ${values.join(', ')}`;
+      return translate(condition.operator === 'in' ? 'props.conditional.words.isAnyOf' : 'props.conditional.words.isNoneOf', {
+        subject: prop.label,
+        values: values.join(', '),
+      });
     }
     default: {
       const exhaustive: never = condition;
@@ -655,9 +678,17 @@ export function withWhenAdded(entry: ClassEntryDraft, catalog: readonly Conditio
 }
 
 /** "only when Variant ≠ Inherit and …" (or "… or …" for any), or undefined for a class given always. */
-export function whenWords(when: readonly Condition[], match: GroupMatch, catalog: readonly ConditionProp[]): string | undefined {
+export function whenWords(
+  when: readonly Condition[],
+  match: GroupMatch,
+  catalog: readonly ConditionProp[],
+  translate: Translator = ENGLISH_TRANSLATE,
+): string | undefined {
   if (when.length === 0) {
     return undefined;
   }
-  return `only when ${when.map((condition) => conditionWords(condition, catalog)).join(match === 'all' ? ' and ' : ' or ')}`;
+  const joinKey = match === 'all' ? 'props.conditional.joinAnd' : 'props.conditional.joinOr';
+  const words = when.map((condition) => conditionWords(condition, catalog, translate));
+  const joined = words.reduce((left, right) => translate(joinKey, { left, right }));
+  return translate('props.conditional.when', { conditions: joined });
 }

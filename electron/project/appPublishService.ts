@@ -10,6 +10,8 @@
 // released and MIT licensed, so a stale popup cannot submit what is not ready.
 import { createHash } from 'node:crypto';
 import { assert } from '../../shared/core/assert';
+import { described } from '../../shared/properties/i18n/messageRef';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import { APP_LIMITS, type AppGitHubSource, type AppLockEntry, type AppSummary, type AppsResult } from '../../shared/properties/apps';
 import { readAppBundle, writeDeflatedZip, type AppBundle, type DeflateRaw, type InflateRaw } from '../../shared/properties/appBundle';
 import { isScannedFile, scanAppSecrets, type AppSecretScan } from '../../shared/properties/appSecrets';
@@ -89,7 +91,7 @@ export function createAppPublishService(options: AppPublishServiceOptions) {
   // Writes need the account's token; a host without a GitHub sign-in (Studio) cannot make them.
   const token = async (account: string): Promise<string> => {
     if (options.tokenFor === undefined) {
-      throw new Error('Sharing to GitHub, changing a repository and submitting to the marketplace need Stacki Desktop, which holds your GitHub sign-in.');
+      throw new ReferencedError('apps.error.needsDesktop');
     }
     return options.tokenFor(account);
   };
@@ -105,7 +107,7 @@ export function createAppPublishService(options: AppPublishServiceOptions) {
     const auth = await readToken(account);
     const status = await repositoryStatus(options.fetch, auth, owner, repository);
     if (status.release === undefined) {
-      throw new Error(`${owner}/${repository} has no release with a .zip app bundle to scan.`);
+      throw new ReferencedError('apps.error.noReleaseToScan', { repository: `${owner}/${repository}` });
     }
     const source: AppGitHubSource = { kind: 'github', owner, repository, asset: status.release.asset };
     const asset = await releaseAsset(options.fetch, source, { tag: status.release.tag, token: auth });
@@ -113,9 +115,25 @@ export function createAppPublishService(options: AppPublishServiceOptions) {
     return { bundle: readAppBundle(downloaded.bytes, options.inflateRaw), status };
   };
 
-  const requireClean = (scan: AppSecretScan, what: string): void => {
-    if (scan.kind !== 'clean') {
-      throw new Error(`The secret scan did not pass, so ${what}. Move each key into an app setting, then rescan.`);
+  // `refusal` is the outcome the failed scan prevents: the sentence says what did not happen.
+  const requireClean = (
+    scan: AppSecretScan,
+    refusal: { readonly kind: 'stays-private'; readonly repository: string } | { readonly kind: 'nothing-created' | 'not-asked' },
+  ): void => {
+    if (scan.kind === 'clean') {
+      return;
+    }
+    switch (refusal.kind) {
+      case 'stays-private':
+        throw new ReferencedError('apps.error.scanFailedPrivate', { repository: refusal.repository });
+      case 'nothing-created':
+        throw new ReferencedError('apps.error.scanFailedNothingCreated');
+      case 'not-asked':
+        throw new ReferencedError('apps.error.scanFailedNotAsked');
+      default: {
+        const exhaustive: never = refusal;
+        return exhaustive;
+      }
     }
   };
 
@@ -136,7 +154,7 @@ export function createAppPublishService(options: AppPublishServiceOptions) {
     /** Makes a repository public: the scan first, then one request. */
     makePublic: (owner: string, repository: string, account: string): Promise<AppsResult<AppVisibilityOutcome>> =>
       attempt(async () => {
-        requireClean(scanBundle((await releasedBundle(owner, repository, account)).bundle), `${owner}/${repository} stays private`);
+        requireClean(scanBundle((await releasedBundle(owner, repository, account)).bundle), { kind: 'stays-private', repository: `${owner}/${repository}` });
         return makeRepositoryPublic(options.fetch, await token(account), owner, repository);
       }),
 
@@ -165,19 +183,17 @@ export function createAppPublishService(options: AppPublishServiceOptions) {
         // The installed list, not the lockfile alone: an app added to the project folder has no lock entry.
         const entry = listInstalledApps(projectRoot).find((app) => app.lock.id === request.id)?.lock;
         if (entry === undefined) {
-          throw new Error(`The app "${request.id}" is not installed.`);
+          throw new ReferencedError('apps.error.notInstalled', { id: request.id });
         }
         if (!shareableSource(entry.source)) {
-          throw new Error(
-            'Only an app uploaded from a file or added to the project folder is shared from here; this one already comes from GitHub or the marketplace.',
-          );
+          throw new ReferencedError('apps.error.onlyUploadedShared');
         }
         const auth = await token(request.account);
         const bundle = readInstalledBundle(projectRoot, request.id);
-        requireClean(scanBundle(bundle), 'nothing was created on GitHub');
+        requireClean(scanBundle(bundle), { kind: 'nothing-created' });
         const zip = writeDeflatedZip(bundle.files, options.deflateRaw);
         if (zip.byteLength > APP_LIMITS.archiveBytesMax) {
-          throw new Error(`The app zips to ${zip.byteLength} bytes; a release is at most ${APP_LIMITS.archiveBytesMax}. Nothing was created on GitHub.`);
+          throw new ReferencedError('apps.error.zipTooBig', { bytes: zip.byteLength, max: APP_LIMITS.archiveBytesMax });
         }
         // The zip must read back as this very app before anything is created.
         const check = readAppBundle(zip, options.inflateRaw);
@@ -192,6 +208,7 @@ export function createAppPublishService(options: AppPublishServiceOptions) {
             ownerKind: request.ownerKind,
             name: request.name,
             visibility: request.visibility,
+            // i18n-ignore: text written into the repository description on GitHub, not interface text.
             description: bundle.manifest.description || `${bundle.manifest.name}, a Stacki app`,
             files: bundle.files,
             tag: shareReleaseTag(bundle.manifest.version),
@@ -215,17 +232,20 @@ export function createAppPublishService(options: AppPublishServiceOptions) {
       attempt(async () => {
         const entry = listInstalledApps(projectRoot).find((app) => app.lock.id === id)?.lock;
         if (entry === undefined) {
-          throw new Error(`The app "${id}" is not installed.`);
+          throw new ReferencedError('apps.error.notInstalled', { id });
         }
         if (!shareableSource(entry.source)) {
-          throw new Error('Only an app uploaded from a file or added to the project folder switches to a GitHub release.');
+          throw new ReferencedError('apps.error.onlyUploadedSwitch');
         }
         const auth = source.account === undefined ? undefined : await readToken(source.account);
         const asset = await releaseAsset(options.fetch, source, { tag: source.tag, token: auth });
         const downloaded = await downloadReleaseAsset(options.fetch, asset, auth);
         const bundle = readAppBundle(downloaded.bytes, options.inflateRaw);
         if (bundle.manifest.id !== id || bundle.manifest.version !== entry.version) {
-          throw new Error(`The release holds ${bundle.manifest.id} ${bundle.manifest.version}, not ${id} ${entry.version}; the app was not switched.`);
+          throw new ReferencedError('apps.error.switchWrongRelease', {
+            found: `${bundle.manifest.id} ${bundle.manifest.version}`,
+            expected: `${id} ${entry.version}`,
+          });
         }
         const switched = (current: AppLockEntry): AppLockEntry => ({
           ...current,
@@ -246,16 +266,17 @@ export function createAppPublishService(options: AppPublishServiceOptions) {
     /** Asks the marketplace whether it would accept the repository, after the local scan passed. */
     precheck: (owner: string, repository: string, account: string): Promise<AppsResult<MarketplacePrecheck>> =>
       attempt(async () => {
-        requireClean(scanBundle((await releasedBundle(owner, repository, account)).bundle), 'the marketplace was not asked');
+        requireClean(scanBundle((await releasedBundle(owner, repository, account)).bundle), { kind: 'not-asked' });
         let response: Response;
         try {
           response = await options.fetch(marketplaceCheckAddress(options.checkURL, owner, repository), {
+            // i18n-ignore: HTTP header value or request path, protocol text.
             headers: { Accept: 'application/json', 'User-Agent': 'Stacki' },
             redirect: 'error',
             signal: AbortSignal.timeout(APP_PUBLISH_SERVICE_LIMITS.submissionMsMax),
           });
         } catch (error: unknown) {
-          return { kind: 'unavailable', message: `The marketplace could not be reached: ${String(error).slice(0, 200)}` };
+          return { kind: 'unavailable', ...described('apps.error.marketplaceUnreachable', { detail: String(error).slice(0, 200) }) };
         }
         return precheckOutcome(response.status, await boundedText(response));
       }),
@@ -272,7 +293,10 @@ export function createAppPublishService(options: AppPublishServiceOptions) {
         const readiness = marketplaceReadiness(status, { clean: scanBundle(bundle).kind === 'clean' });
         if (!readiness.ready) {
           const failing = readiness.checks.filter((entry) => !entry.passed).map((entry) => entry.check);
-          throw new Error(`${submission.owner}/${submission.repository} is not ready for the marketplace: ${failing.join(', ')}.`);
+          throw new ReferencedError('apps.error.notReadyForMarketplace', {
+            repository: `${submission.owner}/${submission.repository}`,
+            failing: failing.join(', '),
+          });
         }
         assert(status.release !== undefined, 'A ready repository has a release');
         let response: Response;
@@ -280,13 +304,14 @@ export function createAppPublishService(options: AppPublishServiceOptions) {
           // The Worker reads the repository as this account to confirm who submits; the token is never kept.
           response = await options.fetch(options.submissionsURL, {
             method: 'POST',
+            // i18n-ignore: HTTP header value or request path, protocol text.
             headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'Stacki', Authorization: `Bearer ${auth}` },
             body: submissionBody(submission, status.release),
             redirect: 'error',
             signal: AbortSignal.timeout(APP_PUBLISH_SERVICE_LIMITS.submissionMsMax),
           });
         } catch (error: unknown) {
-          return { kind: 'unavailable', message: `The marketplace could not be reached: ${String(error).slice(0, 200)}` };
+          return { kind: 'unavailable', ...described('apps.error.marketplaceUnreachable', { detail: String(error).slice(0, 200) }) };
         }
         return submissionOutcome(response.status, await boundedText(response));
       }),

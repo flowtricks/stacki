@@ -23,6 +23,8 @@ import { toPosix, errorMessage } from '../lib/mainHelpers';
 import type { MainHost } from './mainHost';
 import { routeForPage } from '../project/projectFiles';
 import { parsePageSource, pageEditError, resolvePagesDirectory, fillRoute } from '../documents/pageRequests';
+import { translateMain, translateMainDescribed } from '../lib/mainLocale';
+import { DescribedError } from '../../shared/properties/describedError';
 
 export function registerPageHandlers(host: Pick<MainHost, 'documents' | 'ipcMain' | 'noteAppWrite'>): void {
   registerPageReadHandlers(host);
@@ -165,7 +167,7 @@ function registerPageMoveHandlers({ ipcMain, noteAppWrite }: Pick<MainHost, 'ipc
   // in the file's frontmatter are rewritten so they keep resolving.
   ipcMain.handle('page:move', async (_event, { projectPath, from, to }) => {
     const pagesDirectory = path.join(projectPath, 'src', 'pages');
-    const change = parsePageRename({
+    const change = parseRenameRequest({
       kind: 'page',
       from: toPosix(path.relative(pagesDirectory, from)),
       to,
@@ -181,7 +183,7 @@ function registerPageMoveHandlers({ ipcMain, noteAppWrite }: Pick<MainHost, 'ipc
   });
 
   ipcMain.handle('pagefolder:rename', async (_event, { projectPath, from, to }) => {
-    renameProjectPages(projectPath, parsePageRename({ kind: 'folder', from, to }));
+    renameProjectPages(projectPath, parseRenameRequest({ kind: 'folder', from, to }));
     noteAppWrite();
     return { ok: true as const };
   });
@@ -219,7 +221,7 @@ function registerProjectInjectedRoutesHandlers({ ipcMain }: Pick<MainHost, 'ipcM
     try {
       const response = await fetch(`${devUrl}/__avb/paths?p=${encodeURIComponent(rel)}`);
       if (!response.ok) {
-        return { entries: [], error: `Dev server returned ${response.status}` };
+        return { entries: [], error: translateMain('error.pages.devServerStatus', { status: response.status }) };
       }
       const input: unknown = await response.json();
       const data = parseDynamicPaths(input);
@@ -254,13 +256,25 @@ function readThroughActor({ documents }: Pick<MainHost, 'documents'>, pagePath: 
   return { text: decoded.value, checksum: current.value.checksum };
 }
 
+/** `parsePageRename`, with its refusal worded in the language main speaks: the renderer shows a rejected invoke's message as received. */
+function parseRenameRequest(input: unknown): ReturnType<typeof parsePageRename> {
+  try {
+    return parsePageRename(input);
+  } catch (failure: unknown) {
+    if (failure instanceof DescribedError) {
+      throw new Error(translateMainDescribed(failure.problem));
+    }
+    throw failure;
+  }
+}
+
 function renameProjectPages(projectPath: string, change: ReturnType<typeof parsePageRename>): void {
   const planned = planPageRename(projectPath, change, projectAliases(projectPath));
   if (!planned.ok) {
-    throw new Error(planned.error.message);
+    throw new Error(translateMainDescribed(planned.error));
   }
   const saved = applyPageRename(planned.value, desktopRenameWriter());
   if (!saved.ok) {
-    throw new Error(saved.error.message);
+    throw new Error(translateMainDescribed(saved.error));
   }
 }

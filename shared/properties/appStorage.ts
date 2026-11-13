@@ -143,11 +143,11 @@ export function nextAppStorageValues(
   }
   next.set(key, value);
   if (next.size > APP_STORAGE_LIMITS.keysMax) {
-    return { ok: false, reason: `An app keeps at most ${APP_STORAGE_LIMITS.keysMax} keys in one scope; remove some first` };
+    return { ok: false, reason: `An app keeps at most ${APP_STORAGE_LIMITS.keysMax} keys in one scope; remove some first` }; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
   const bytes = appStorageBytes(next);
   if (bytes > APP_STORAGE_LIMITS.appBytesMax) {
-    return { ok: false, reason: `An app keeps at most ${APP_STORAGE_LIMITS.appBytesMax} bytes in one scope; this would make ${bytes}` };
+    return { ok: false, reason: `An app keeps at most ${APP_STORAGE_LIMITS.appBytesMax} bytes in one scope; this would make ${bytes}` }; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
   assert(next.get(key) === value, 'The set value is the one kept');
   return { ok: true, values: next };

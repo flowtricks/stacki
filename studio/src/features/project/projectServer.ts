@@ -149,6 +149,7 @@ export async function scanProject(root: string, analysis = new ComponentAnalysis
   }
   return {
     workspaceId: await readWorkspaceId(root),
+    // i18n-ignore: the sample project's own name (project data, not interface text).
     name: path.basename(root) === 'workspace' ? 'Example site' : path.basename(root),
     pages: files.filter((file) => /^src\/pages\/.+\.(astro|md|mdx)$/.test(file)),
     pageMetadata: await projectPageTitles(root, files),

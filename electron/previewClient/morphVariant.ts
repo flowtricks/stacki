@@ -2,12 +2,15 @@
 // the renderer names one instance's one prop and a value; this fetches the
 // page rendered that way and hands it to the patcher as it would any new
 // rendering. Cancel puts the page's real rendering back; commit keeps what is
-// shown until the write that follows renders. Nothing here writes anything.
+// shown until the write that follows renders: pulls the page makes meanwhile
+// keep asking for the committed option (see `hold`), so a rendering of the file from
+// before the write lands cannot paint the old value over it. Nothing here writes anything.
 //
 // Renders are cached per override while one dropdown is open, so moving the
 // pointer back over an option shows it at once; the cache is bounded and is
 // dropped whenever the preview ends or the page changes underneath it.
 
+import { assert } from '../../shared/core/assert';
 import { parseVariantMessage, VARIANT_HEADER, variantHeaderValue, type VariantOverride } from '../../shared/page/variantOverride';
 
 export const VARIANT_PREVIEW_LIMITS = {
@@ -15,6 +18,10 @@ export const VARIANT_PREVIEW_LIMITS = {
   rendersMax: 32,
   // The same bound the patcher puts on a pushed rendering.
   htmlCharsMax: 4_000_000,
+  // How long a committed option keeps being asked for. A save and an Astro render
+  // take well under a second; the hold outlasts a slow one, and its end pulls the
+  // written page, so a write that never landed (refused, failed) is not left hidden.
+  holdMs: 2_500,
 } as const;
 
 export interface VariantPreviewHost {
@@ -22,7 +29,16 @@ export interface VariantPreviewHost {
   readonly paint: (html: string) => void;
   /** Put the page's real rendering back. */
   readonly restore: () => void;
+  /** Drop a pull of the plain page that is still on its way: it may predate the commit. */
+  readonly supersede?: () => void;
+  /** Runs `run` after `delayMs`; the returned function cancels it. Defaults to timers. */
+  readonly schedule?: (delayMs: number, run: () => void) => () => void;
 }
+
+const timerSchedule = (delayMs: number, run: () => void): (() => void) => {
+  const timer = setTimeout(run, delayMs);
+  return () => clearTimeout(timer);
+};
 
 export function createVariantPreview(host: VariantPreviewHost) {
   const renders = new Map<string, string>();
@@ -35,8 +51,30 @@ export function createVariantPreview(host: VariantPreviewHost) {
   // Without it, such a pull painted the plain page over the preview while the pointer
   // still rested on the option, and the canvas went back to the written value.
   let current: string | undefined;
+  // Set from a commit until the write has had time to render. Why it exists: the page
+  // pulls itself as soon as the write is applied, and the dev server can still answer
+  // with the file as it was; with the override dropped at commit that pull painted the
+  // old value over the committed one, and the write's own pull painted the new one
+  // again: a flash of the previous value between two identical renderings.
+  let endHold: (() => void) | undefined;
+  const schedule = host.schedule ?? timerSchedule;
+  const dropHold = (): void => {
+    endHold?.();
+    endHold = undefined;
+  };
+  const end = (): void => {
+    dropHold();
+    generation++;
+    current = undefined;
+    renders.clear();
+    if (shown) {
+      shown = false;
+      host.restore();
+    }
+  };
 
   const show = (override: VariantOverride): void => {
+    dropHold();
     generation++;
     const asked = generation;
     const header = variantHeaderValue(override);
@@ -76,20 +114,20 @@ export function createVariantPreview(host: VariantPreviewHost) {
           show(message.override);
           return true;
         case 'cancel':
-          generation++;
-          current = undefined;
-          renders.clear();
-          if (shown) {
-            shown = false;
-            host.restore();
-          }
+          end();
           return true;
         case 'commit':
-          // The write is on its way, and its own rendering replaces this one.
-          generation++;
-          current = undefined;
-          renders.clear();
-          shown = false;
+          // The write is on its way. A show still being fetched is the committed option
+          // and may land (the generation is kept); pulls ask for it until the hold ends.
+          assert(current !== undefined || !shown, 'a preview on show has its override');
+          if (current !== undefined) {
+            dropHold();
+            host.supersede?.();
+            endHold = schedule(VARIANT_PREVIEW_LIMITS.holdMs, () => {
+              endHold = undefined;
+              end();
+            });
+          }
           return true;
         default: {
           const exhaustive: never = message;

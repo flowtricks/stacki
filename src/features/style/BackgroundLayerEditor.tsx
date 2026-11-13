@@ -10,19 +10,23 @@ import GradientEditor from './GradientEditor';
 import { type WriteOptions, replaceLayer } from './BackgroundKit';
 import {
   LayerLonghandField,
-  TYPE_OPTIONS,
+  typeOptions,
   type LayerFieldProps,
   LayerSizeField,
   LayerPositionField,
-  TILE_OPTIONS,
-  FIXED_OPTIONS,
+  tileOptions,
+  fixedOptions,
   LayerImageField,
   LayerColorField,
 } from './BackgroundLayerFields';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+
+const GRADIENT_PLACEHOLDER = 'gradient(…)'; // i18n-ignore: CSS function syntax.
 
 export type LayerEditorProps = LayerFieldProps & { applyLayers: (layers: BgLayer[]) => void };
 
 export function LayerEditor(props: LayerEditorProps) {
+  const translate = useTranslate();
   const { layers, index, busy, setProp, liveSetProp } = props;
   const layer = layers[index];
   if (!layer) {
@@ -32,12 +36,12 @@ export function LayerEditor(props: LayerEditorProps) {
   const displayKind = displayKindOf(kind);
   const typeRow = (
     <div className="embed-editor_size-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Type</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.type')}</span>
       <SegmentedControl
-        options={TYPE_OPTIONS}
+        options={typeOptions(translate)}
         value={displayKind}
         onChange={(next) => setLayerKind({ next, displayKind, props })}
-        ariaLabel="Layer type"
+        ariaLabel={translate('style.backgroundLayerEditor.layerType')}
         disabled={busy}
       />
     </div>
@@ -49,7 +53,7 @@ export function LayerEditor(props: LayerEditorProps) {
       <div className="embed-editor_bg-editor">
         {typeRow}
         <div className="embed-editor_size-row">
-          <span className="embed-editor_size-label embed-editor_bg-caption">Color</span>
+          <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.color')}</span>
           <LayerColorField layers={layers} index={index} busy={busy} setProp={setProp} liveSetProp={liveSetProp} />
         </div>
       </div>
@@ -118,23 +122,32 @@ export function setLayerKind({ next, displayKind, props }: { next: LayerKind; di
 
 // An image layer's picker, or an unparsed gradient's raw text; then Size and Position.
 export function LayerRawFields({ displayKind, props }: { displayKind: LayerKind; props: LayerEditorProps }) {
+  const translate = useTranslate();
   const { applyLayers, ...fieldProps } = props;
   return (
     <>
       <div className="embed-editor_size-row embed-editor_bg-row-top">
-        <span className="embed-editor_size-label embed-editor_bg-caption">{displayKind === 'image' ? 'Image' : 'Gradient'}</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">
+          {displayKind === 'image' ? translate('style.backgroundLayerEditor.image') : translate('style.backgroundLayerEditor.gradient')}
+        </span>
         {displayKind === 'image' ? (
           <LayerImageField layers={fieldProps.layers} index={fieldProps.index} busy={fieldProps.busy} applyLayers={applyLayers} />
         ) : (
-          <LayerLonghandField {...fieldProps} field="image" prop="background-image" label="Layer value" placeholder="gradient(…)" />
+          <LayerLonghandField
+            {...fieldProps}
+            field="image"
+            prop="background-image"
+            label={translate('style.backgroundLayerEditor.layerValue')}
+            placeholder={GRADIENT_PLACEHOLDER}
+          />
         )}
       </div>
       <div className="embed-editor_size-row embed-editor_bg-row-top">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Size</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.size')}</span>
         <LayerSizeField {...fieldProps} />
       </div>
       <div className="embed-editor_size-row embed-editor_bg-row-top">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Position</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.position')}</span>
         <LayerPositionField {...fieldProps} />
       </div>
     </>
@@ -144,26 +157,27 @@ export function LayerRawFields({ displayKind, props }: { displayKind: LayerKind;
 // Tile (background-repeat) and Fixed (background-attachment); each default is written
 // as an empty value.
 export function LayerTileFields({ layer, props }: { layer: BgLayer; props: LayerEditorProps }) {
+  const translate = useTranslate();
   const { layers, index, busy, applyLayers } = props;
   return (
     <>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Tile</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.tile')}</span>
         <SegmentedControl
-          options={TILE_OPTIONS}
+          options={tileOptions(translate)}
           value={['repeat-x', 'repeat-y', 'no-repeat'].includes(layer.repeat.trim()) ? layer.repeat.trim() : 'repeat'}
           onChange={(next) => applyLayers(replaceLayer(layers, index, { repeat: next === 'repeat' ? '' : next }))}
-          ariaLabel="Layer tile"
+          ariaLabel={translate('style.backgroundLayerEditor.layerTile')}
           disabled={busy}
         />
       </div>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Fixed</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.backgroundLayerEditor.fixed')}</span>
         <SegmentedControl
-          options={FIXED_OPTIONS}
+          options={fixedOptions(translate)}
           value={layer.attachment.trim() === 'fixed' ? 'fixed' : 'scroll'}
           onChange={(next) => applyLayers(replaceLayer(layers, index, { attachment: next === 'scroll' ? '' : next }))}
-          ariaLabel="Layer fixed"
+          ariaLabel={translate('style.backgroundLayerEditor.layerFixed')}
           disabled={busy}
         />
       </div>

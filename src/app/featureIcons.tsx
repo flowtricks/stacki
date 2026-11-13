@@ -15,7 +15,6 @@ import {
   CmsIcon,
   ComponentEditIcon,
   ComponentFillIcon,
-  ComponentPlusIcon,
   DropletIcon,
   FolderIcon,
   GearIcon,
@@ -74,7 +73,8 @@ export const FEATURE_ICONS: Readonly<Record<StaticAccessFeature, FeatureIconComp
   'page:delete': TrashIcon,
   'page:rename': PencilIcon,
   'page:layout': LayoutIcon,
-  'component:create': ComponentPlusIcon,
+  // The Components panel's own cube, so the permission reads as that panel's.
+  'component:create': ComponentFillIcon,
   'component:edit': ComponentEditIcon,
   'code:edit': BracesIcon,
   'instructions:edit': PencilIcon,

@@ -39,6 +39,7 @@ import { tellCanvas } from '../../editor/canvasQuery';
 import { AppFrame } from './AppFrame';
 import { canvasCapture, emitToApp, insertDrag, noteOverlayHover, overlayDrag, setCanvasClientMapper, useAppsRuntime, useRefTargetLookup } from './appsRuntime';
 import type { InsertDragView } from './insertDrag';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { captureChipText, type CanvasCaptureOwner } from './canvasCapture';
 import type { DragPoint, OverlayDragHeld } from './overlayDrag';
 import { clusterOverlays, type OverlayCluster } from './overlayClusters';
@@ -111,6 +112,7 @@ export interface AppOverlayViewProps {
 
 /** The overlay itself: the items, the count bubbles, the drag surface and the capture chip, in one root that lets the pointer through. */
 export function AppOverlayView({ overlays, apps, capture, held, rects, scale, pathFor, refTarget, clickItem }: AppOverlayViewProps) {
+  const translate = useTranslate();
   const root = useRef<HTMLDivElement>(null);
   const latestScale = useRef(scale);
   latestScale.current = scale;
@@ -155,7 +157,7 @@ export function AppOverlayView({ overlays, apps, capture, held, rects, scale, pa
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [insertActive]);
-  const chip = capture === undefined ? undefined : <span className="app-capture-chip">{captureChipText(capture)}</span>;
+  const chip = capture === undefined ? undefined : <span className="app-capture-chip">{captureChipText(capture, translate)}</span>;
   const { singles, clusters } =
     overlays.size === 0
       ? { singles: [], clusters: [] }

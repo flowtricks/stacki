@@ -1,3 +1,7 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
+import type { CanvasTextRefusal } from '../../../shared/properties/canvasText';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import { noteCanvasTextEditing } from '../../editor/canvasTextFocus';
 import type { CanvasEditFormat, CanvasTextEdit } from './canvasTextSource';
@@ -48,11 +52,14 @@ interface Options {
   readonly url: string | undefined;
   readonly post: (message: unknown) => void;
   readonly subscribeLoad: (listener: () => void) => () => void;
+  /** Words the notices this module raises; English when absent (tests). */
+  readonly translate?: Translator | undefined;
 }
 
 export function useCanvasText(options: Options): void {
+  const translate = useTranslate();
   const current = useRef(options);
-  current.current = options;
+  current.current = { ...options, translate };
   const document = options.document;
   const file = document?.file;
   const source = document?.source;
@@ -199,7 +206,7 @@ function saveCanvasText(
     return edit?.plan ? [{ plan: edit.plan, value: canvasTypedText(edit.target.value, value) }] : [];
   });
   if (edits.length !== message.also.length + 1) {
-    options.initial.report('The page changed while editing. The text was not saved; select it again.');
+    options.initial.report((options.current.current?.translate ?? ENGLISH_TRANSLATE)('preview.text.pageChanged'));
     return Promise.resolve();
   }
   const position = Math.min(...edits.map((edit) => edit.plan.start));
@@ -239,7 +246,7 @@ function canvasTextSessionMessage(event: MessageEvent<unknown>, options: CanvasT
     return undefined;
   }
   if (message.type === 'avb:text-refused') {
-    options.initial.report(message.message);
+    options.initial.report(refusalText(message, options.current.current?.translate ?? ENGLISH_TRANSLATE));
     return undefined;
   }
   if (message.session !== options.session) {
@@ -355,7 +362,7 @@ function receiveCanvasSelection(message: CanvasTextSelection, options: CanvasSel
     press: (action) => {
       const selection = takeOver();
       if (selection.start >= selection.end || !format.apply(selection, action)) {
-        initial.report('This text can’t be formatted here. Use the Content field in Settings.');
+        initial.report((options.current.current?.translate ?? ENGLISH_TRANSLATE)('preview.text.cannotFormat'));
       }
       release();
     },
@@ -445,4 +452,16 @@ function windowBubble(frame: HTMLIFrameElement, rect: CanvasTextSelectionRange['
     top: box.top + rect.y * scale,
     bottom: box.top + (rect.y + rect.h) * scale,
   };
+}
+
+const REFUSAL_KEYS: Readonly<Record<CanvasTextRefusal, MessageKey>> = {
+  'waiting-render': 'preview.text.waitingRender',
+  'selection-reaches': 'preview.text.selectionReaches',
+  unsafe: 'preview.text.unsafe',
+  'page-changed': 'preview.text.pageChanged',
+};
+
+// The frame sends the English sentence and a code; the sentence is shown when the frame is older than this editor and sent no code.
+function refusalText(message: { readonly message: string; readonly reason?: CanvasTextRefusal | undefined }, translate: Translator): string {
+  return message.reason === undefined ? message.message : translate(REFUSAL_KEYS[message.reason]);
 }

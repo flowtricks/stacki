@@ -3,11 +3,9 @@
 // text swaps when it arrives. A failed import leaves English and says why in the console.
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
-import { createTranslator } from '../../../shared/core/i18n/catalog';
-import { localeDirection, type Locale } from '../../../shared/core/i18n/locales';
-import { messages as english } from '../../../shared/properties/i18n/messages/en';
+import { localeDirection, type Locale, type LocalePreference } from '../../../shared/core/i18n/locales';
 import { resolveLocale } from '../../../shared/core/i18n/parseLocale';
-import { ENGLISH, LocaleContext, warnOnce, type LocaleValue } from './localeContext';
+import { buildLocaleValue, ENGLISH, LocaleContext, warnOnce, type LocaleValue } from './localeContext';
 import { loadCatalog, type CatalogLoader } from './loadCatalog';
 import { readLocalePreference, subscribeLocalePreference, systemLanguageTags } from './localeStore';
 
@@ -17,12 +15,17 @@ interface Props {
   readonly loader?: CatalogLoader;
   /** Replaced by tests; the app asks the system. */
   readonly languageTags?: readonly string[];
+  /** Desktop passes the bridge that tells the main process (menu, dialogs); called on mount and at every change of the stored choice. */
+  readonly onPreference?: (preference: LocalePreference) => void;
 }
 
-export function LocaleProvider({ children, loader = loadCatalog, languageTags }: Props) {
+export function LocaleProvider({ children, loader = loadCatalog, languageTags, onPreference }: Props) {
   const preference = useSyncExternalStore(subscribeLocalePreference, readLocalePreference, readLocalePreference);
   const wanted: Locale = resolveLocale(preference, languageTags ?? systemLanguageTags());
   const [value, setValue] = useState<LocaleValue>(ENGLISH);
+  useEffect(() => {
+    onPreference?.(preference);
+  }, [preference, onPreference]);
   useEffect(() => {
     if (wanted === 'en') {
       setValue(ENGLISH);
@@ -35,7 +38,7 @@ export function LocaleProvider({ children, loader = loadCatalog, languageTags }:
       }
       if (result.ok) {
         const onIssue = warnOnce();
-        setValue({ locale: wanted, translate: createTranslator({ locale: wanted, catalog: result.value, fallback: english, onIssue }) });
+        setValue(buildLocaleValue(wanted, result.value, onIssue));
       } else {
         console.warn(`[i18n] ${result.error.message}`);
       }

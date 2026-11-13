@@ -433,6 +433,7 @@ test('the JSON view validates as it is typed, saves only when valid, and warns b
   assert.equal(saveButton().disabled, true, 'nothing to save yet');
   await type(editor, '{\n  "mcpServers": {\n    "a": {"command": "x",}\n  }\n}');
   assert.ok(pageText().includes('Line 3, column'), 'a position for a syntax error');
+  assert.ok(document.querySelector('.mcp-issues'), 'the error line is shown while there is a problem');
   assert.equal(saveButton().disabled, true);
   await type(editor, '{"mcpServers":{"a":{"type":"http","url":"ftp://x"}}}');
   assert.ok(pageText().includes('Enter a valid http or https address'), 'a schema problem by path');
@@ -444,6 +445,8 @@ test('the JSON view validates as it is typed, saves only when valid, and warns b
   const good = '{"mcpServers":{"a":{"command":"x"}}}';
   await type(document.querySelector('[data-code-editor]'), good);
   assert.equal(saveButton().disabled, false);
+  assert.equal(document.querySelector('.mcp-issues') ?? undefined, undefined, 'a valid text shows no status line');
+  assert.ok(!pageText().includes('Valid') && !pageText().includes('Unsaved changes'), 'no Valid or Unsaved text');
   await act(async () => document.querySelector('.mcp-json').dispatchEvent(new window.KeyboardEvent('keydown', { key: 's', metaKey: true, bubbles: true })));
   await settleAll();
   assert.equal(mcpText, good, 'Cmd+S saved');

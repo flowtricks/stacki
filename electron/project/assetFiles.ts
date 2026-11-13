@@ -5,6 +5,7 @@
 import { MAIN_LIMITS, directoryBudget } from '../lib/mainLimits';
 import { isPathWithin } from '../lib/platform';
 import { assert } from '../../shared/core/assert';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import type { AssetEntry } from '../lib/mainTypes';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -69,7 +70,7 @@ export function assetAbs(projectPath: string, rel: string) {
  * reach it, whichever folders the project lists as asset folders
  * (test/electron/documents/singleWriter.test.ts).
  */
-export function assetWriteRefusal(rel: string): string | undefined {
+export function assetWriteRefusal(rel: string): Described | undefined {
   assert(rel.length > 0, 'assetWriteRefusal: the asset is named');
   if (rootOfRel(rel) === 'public') {
     return undefined;
@@ -78,7 +79,7 @@ export function assetWriteRefusal(rel: string): string | undefined {
   if (MEDIA_EXT.test(rel)) {
     return undefined;
   }
-  return `${path.posix.basename(rel)} is source code, not an asset; edit it in the project instead.`;
+  return described('assets.error.sourceCode', { name: path.posix.basename(rel) });
 }
 
 /**

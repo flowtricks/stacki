@@ -5,6 +5,7 @@
 // collaborators may add or remove one, checked afresh here. Changing
 // SESSION_SECRET makes saved keys unreadable; they must then be added again.
 
+// i18n-ignore-file: HTTP API fallback text on the Studio server: it has no language, and the editor shows its own sentence for a failed request.
 import { canEdit } from '../features/auth/repositoryAccess';
 import type { Identity } from '../features/auth/session';
 import { publicList, withConnection, withoutConnection } from '../features/cms/cmsConnectionBook';

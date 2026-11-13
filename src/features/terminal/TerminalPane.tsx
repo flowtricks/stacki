@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import { ArrowDownIcon } from '../../ui/Icons';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { TerminalRuntime } from './terminalRuntime';
 
 export interface TerminalPaneHandle {
@@ -16,6 +17,7 @@ interface TerminalPaneProps {
 }
 
 const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(function TerminalPane(props, ref) {
+  const translate = useTranslate();
   const hostRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<TerminalRuntime>();
   const autoLaunchRef = useRef(props.autoLaunch);
@@ -60,7 +62,7 @@ const TerminalPane = forwardRef<TerminalPaneHandle, TerminalPaneProps>(function 
     <div className="term-pane">
       <div className="term-host" ref={hostRef} />
       {scrolledUp && (
-        <button className="term-scroll-btn" title="Scroll to bottom" onClick={() => runtimeRef.current?.scrollToBottom()}>
+        <button className="term-scroll-btn" title={translate('workspace.terminal.scrollBottom')} onClick={() => runtimeRef.current?.scrollToBottom()}>
           <ArrowDownIcon size={14} />
         </button>
       )}

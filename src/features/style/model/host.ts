@@ -10,6 +10,7 @@ import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
 import { PX_LENGTHS, type LengthUnit } from '../../../../shared/properties/lengthUnit';
 import type { ClassPlacement } from '../../../editor/classAttr';
+import type { TypedMessageRef } from '../../../../shared/properties/i18n/messageRef';
 
 type HostAttr = { readonly type: string; readonly value?: string };
 
@@ -185,6 +186,8 @@ export type PseudoRequest = { readonly nodeId: string; readonly pseudo: 'before'
 
 export type UndoCommand = {
   label?: string;
+  /** The step's name as a reference: the app words it in the language in force when the step is undone. Wins over `label`. */
+  labelRef?: TypedMessageRef | undefined;
   /** Edits sharing a key inside one burst collapse into a single step. */
   coalesceKey?: string;
   undo: () => void | Promise<void>;

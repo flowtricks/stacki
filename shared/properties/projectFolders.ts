@@ -15,6 +15,8 @@
 // where Astro itself looks; a second setting could only disagree with it.
 import { assert } from '../core/assert';
 import { err, ok, type Result } from '../core/result';
+import { DescribedError, problemOf } from './describedError';
+import { described, type Described, type MessageKey } from './i18n/messageRef';
 import { record } from '../core/boundary';
 
 export const PROJECT_FOLDERS_FILE = '.stacki/folders.json';
@@ -404,18 +406,23 @@ function parseHiddenCollections(input: unknown): readonly string[] {
 
 /** Why `file` cannot join the CMS panel's data files, or undefined when it can. */
 export function cmsFileProblem(existing: readonly string[], file: string): string | undefined {
+  return cmsFileProblemDescribed(existing, file)?.message;
+}
+
+/** `cmsFileProblem` with the reference the renderer translates (docs/i18n-playbook.md section 7); the English is the same sentence. */
+export function cmsFileProblemDescribed(existing: readonly string[], file: string): Described | undefined {
   assert(file.length > 0, 'cmsFileProblem: the file is named');
   if (!file.startsWith('src/')) {
-    return `${file} is outside src/, where the CMS panel reads data`;
+    return described('settings.folders.problem.cms.outside', { file });
   }
   if (!CMS_FILE_EXTENSION.test(file) || /\.d\.[cm]?ts$/i.test(file)) {
-    return `${file} is not a file the CMS can edit: choose a .ts, .js, .json or .astro file`;
+    return described('settings.folders.problem.cms.notEditable', { file });
   }
   if (existing.includes(file)) {
-    return `${file} is already in the list`;
+    return described('settings.folders.problem.listed', { item: file });
   }
   if (existing.length >= PROJECT_FOLDER_LIMITS.cmsFilesMax) {
-    return `At most ${PROJECT_FOLDER_LIMITS.cmsFilesMax} files`;
+    return described('settings.folders.problem.cms.filesMax', { count: PROJECT_FOLDER_LIMITS.cmsFilesMax });
   }
   return undefined;
 }
@@ -489,17 +496,23 @@ function withCmsChoices(config: ProjectFolders | undefined, choices: ProjectCmsC
 
 /** Adds a data file to the CMS panel's list, starting from `detected` when the list is still automatic. */
 export function addCmsFile(config: ProjectFolders | undefined, input: string, detected: readonly string[]): Result<ProjectFolders, string> {
+  const added = addCmsFileDescribed(config, input, detected);
+  return added.ok ? added : err(added.error.message);
+}
+
+/** `addCmsFile` whose refusal carries the reference the renderer translates. */
+export function addCmsFileDescribed(config: ProjectFolders | undefined, input: string, detected: readonly string[]): Result<ProjectFolders, Described> {
   let file: string;
   try {
     file = parseProjectFolder(input);
   } catch (error: unknown) {
-    return err(error instanceof Error ? error.message : String(error));
+    return err(problemOf(error));
   }
   if (isAstroSource(file)) {
-    return err(`${file} is an Astro file: the CMS includes the open one automatically`);
+    return err(described('settings.folders.problem.cms.astro', { file }));
   }
   const current = cmsDataFiles(config, detected);
-  const problem = cmsFileProblem(current, file);
+  const problem = cmsFileProblemDescribed(current, file);
   if (problem !== undefined) {
     return err(problem);
   }
@@ -557,26 +570,26 @@ function parseKindFolders(kind: ProjectFolderKind, input: unknown): readonly str
 /** One project-relative folder: `/`-separated, no `.`/`..`, hidden folders, absolute paths or drive letters. */
 export function parseProjectFolder(input: unknown): string {
   if (typeof input !== 'string') {
-    throw new Error('A folder is a project-relative path');
+    throw new DescribedError(described('settings.folders.path.notText'));
   }
   if (input.length === 0) {
-    throw new Error('A folder needs a path');
+    throw new DescribedError(described('settings.folders.path.empty'));
   }
   if (input.length > PROJECT_FOLDER_LIMITS.pathCharsMax) {
-    throw new Error(`A folder path exceeds ${PROJECT_FOLDER_LIMITS.pathCharsMax} characters`);
+    throw new DescribedError(described('settings.folders.path.tooLong', { max: PROJECT_FOLDER_LIMITS.pathCharsMax }));
   }
   if (input.startsWith('/')) {
-    throw new Error('A folder is relative to the project, not absolute');
+    throw new DescribedError(described('settings.folders.path.absolute'));
   }
   if (input.includes('\\')) {
-    throw new Error('A folder path uses / between folders');
+    throw new DescribedError(described('settings.folders.path.backslash'));
   }
   if (/^[A-Za-z]:/.test(input)) {
-    throw new Error('A folder is relative to the project, not a drive');
+    throw new DescribedError(described('settings.folders.path.drive'));
   }
   const segments = input.split('/');
   if (segments.length > PROJECT_FOLDER_LIMITS.pathSegmentsMax) {
-    throw new Error(`A folder is at most ${PROJECT_FOLDER_LIMITS.pathSegmentsMax} levels deep`);
+    throw new DescribedError(described('settings.folders.path.tooDeep', { max: PROJECT_FOLDER_LIMITS.pathSegmentsMax }));
   }
   for (const segment of segments) {
     folderSegment(segment);
@@ -586,25 +599,25 @@ export function parseProjectFolder(input: unknown): string {
 
 function folderSegment(segment: string): void {
   if (segment.length === 0) {
-    throw new Error('A folder path has an empty folder name');
+    throw new DescribedError(described('settings.folders.path.emptyName'));
   }
   if (segment === '.' || segment === '..') {
-    throw new Error('A folder path cannot step out with . or ..');
+    throw new DescribedError(described('settings.folders.path.stepOut'));
   }
   if (segment.length > PROJECT_FOLDER_LIMITS.segmentCharsMax) {
-    throw new Error(`A folder name exceeds ${PROJECT_FOLDER_LIMITS.segmentCharsMax} characters`);
+    throw new DescribedError(described('settings.folders.path.nameTooLong', { max: PROJECT_FOLDER_LIMITS.segmentCharsMax }));
   }
   if (segment.startsWith('.')) {
-    throw new Error('Hidden folders hold tools’ settings, not project files');
+    throw new DescribedError(described('settings.folders.path.hidden'));
   }
   if (!SEGMENT.test(segment)) {
-    throw new Error(`Folder name ${segment} uses characters a folder path cannot hold`);
+    throw new DescribedError(described('settings.folders.path.badChars', { name: segment }));
   }
   if (segment.endsWith(' ')) {
-    throw new Error('A folder name cannot end with a space');
+    throw new DescribedError(described('settings.folders.path.trailingSpace'));
   }
   if (RESERVED_SEGMENTS.has(segment)) {
-    throw new Error(`${segment} holds installed or built files, not the project’s own`);
+    throw new DescribedError(described('settings.folders.path.reserved', { name: segment }));
   }
 }
 
@@ -614,33 +627,46 @@ function folderSegment(segment: string): void {
  * always reads back from the file.
  */
 export function folderChoiceProblem(kind: ProjectFolderKind, existing: readonly string[], folder: string): string | undefined {
+  return folderChoiceProblemDescribed(kind, existing, folder)?.message;
+}
+
+const OUTSIDE_KEYS = {
+  components: 'settings.folders.problem.outside.components',
+  layouts: 'settings.folders.problem.outside.layouts',
+  assets: 'settings.folders.problem.outside.assets',
+  styles: 'settings.folders.problem.outside.styles',
+  variables: 'settings.folders.problem.outside.variables',
+} as const satisfies Record<ProjectFolderKind, MessageKey>;
+
+/** `folderChoiceProblem` with the reference the renderer translates; the English is the same sentence. */
+export function folderChoiceProblemDescribed(kind: ProjectFolderKind, existing: readonly string[], folder: string): Described | undefined {
   assert(folder.length > 0, 'folderChoiceProblem: the folder is named');
   const roots = PROJECT_FOLDER_ROOTS[kind];
   const top = folder.split('/')[0] ?? '';
   if (!roots.includes(top)) {
-    return `${folder} is outside ${roots.map((root) => root + '/').join(' and ')}, where ${kind} must live`;
+    return described(OUTSIDE_KEYS[kind], { folder });
   }
   if (kind === 'components' || kind === 'layouts') {
     if (isWithin(PAGES_FOLDER, folder)) {
-      return `${folder} is inside ${PAGES_FOLDER}, where every file is a page`;
+      return described('settings.folders.problem.insidePages', { folder, pages: PAGES_FOLDER });
     }
     if (folder === 'src') {
-      return `src holds the pages too; choose the folder ${kind} live in`;
+      return described(kind === 'components' ? 'settings.folders.problem.srcPages.components' : 'settings.folders.problem.srcPages.layouts');
     }
   }
   for (const other of existing) {
     if (other === folder) {
-      return `${folder} is already in the list`;
+      return described('settings.folders.problem.listed', { item: folder });
     }
     if (isWithin(other, folder)) {
-      return `${folder} is already covered by ${other}`;
+      return described('settings.folders.problem.covered', { folder, other });
     }
     if (isWithin(folder, other)) {
-      return `${folder} would cover ${other}; remove ${other} first`;
+      return described('settings.folders.problem.wouldCover', { folder, other });
     }
   }
   if (existing.length >= PROJECT_FOLDER_LIMITS.foldersPerKindMax) {
-    return `At most ${PROJECT_FOLDER_LIMITS.foldersPerKindMax} folders`;
+    return described('settings.folders.problem.foldersMax', { count: PROJECT_FOLDER_LIMITS.foldersPerKindMax });
   }
   return undefined;
 }
@@ -713,14 +739,20 @@ export function withFolders(config: ProjectFolders | undefined, kind: ProjectFol
 
 /** Adds a folder to what `kind` reads now (its defaults when unchanged), or says why it cannot. */
 export function addFolder(config: ProjectFolders | undefined, kind: ProjectFolderKind, input: string): Result<ProjectFolders, string> {
+  const added = addFolderDescribed(config, kind, input);
+  return added.ok ? added : err(added.error.message);
+}
+
+/** `addFolder` whose refusal carries the reference the renderer translates. */
+export function addFolderDescribed(config: ProjectFolders | undefined, kind: ProjectFolderKind, input: string): Result<ProjectFolders, Described> {
   let folder: string;
   try {
     folder = parseProjectFolder(input);
   } catch (error: unknown) {
-    return err(error instanceof Error ? error.message : String(error));
+    return err(problemOf(error));
   }
   const current = foldersFor(kind, config);
-  const problem = folderChoiceProblem(kind, current, folder);
+  const problem = folderChoiceProblemDescribed(kind, current, folder);
   if (problem !== undefined) {
     return err(problem);
   }

@@ -3,7 +3,8 @@ import { stackiFavicon, stackiMarkPath } from '../../shared/stackiBrand';
 import { parseProfile, type GitHubProfile } from './profile';
 import { record, string } from '../../shared/validation';
 import { cookie, sessionCookie, signSession, verifySession } from './session';
-import { SignInFailure, signInMessages, signInStep, type SignInProblem } from './signInFailure';
+import { SignInFailure, signInMessageKeys, signInStep, type SignInProblem } from './signInFailure';
+import { translatorForLanguages } from '../../shared/requestTranslate';
 import { retryAt } from './githubRateLimit';
 import { loginWait, waitCookie } from './loginCooldown';
 import { loginCountdown } from './loginCountdown';
@@ -44,11 +45,11 @@ export async function githubLogin(
   }
   if (url.pathname === '/studio/auth/login') {
     const until = await loginWait(request, config.SESSION_SECRET);
-    return until > Date.now() ? rateLimitedPage(until, config.SESSION_SECRET) : beginLogin(config);
+    return until > Date.now() ? rateLimitedPage(until, config.SESSION_SECRET, request.headers.get('Accept-Language')) : beginLogin(config);
   }
   const until = await loginWait(request, config.SESSION_SECRET);
   if (until > Date.now()) {
-    return completeAttempt(await rateLimitedPage(until, config.SESSION_SECRET));
+    return completeAttempt(await rateLimitedPage(until, config.SESSION_SECRET, request.headers.get('Accept-Language')));
   }
   try {
     return completeAttempt(await finishLogin(request, config, attempts, authorize));
@@ -64,9 +65,17 @@ export async function githubLogin(
       retryAfterSeconds: Math.max(0, Math.ceil((failure.retryAt - Date.now()) / 1000)),
     });
     if (problem === 'rate-limit') {
-      return completeAttempt(await rateLimitedPage(failure.retryAt, config.SESSION_SECRET));
+      return completeAttempt(await rateLimitedPage(failure.retryAt, config.SESSION_SECRET, request.headers.get('Accept-Language')));
     }
-    return completeAttempt(loginPage(problem, ['expired', 'cancelled', 'email'].includes(problem) ? 400 : 503, `${stage}-${status}-${code}`));
+    return completeAttempt(
+      loginPage(
+        problem,
+        ['expired', 'cancelled', 'email'].includes(problem) ? 400 : 503,
+        `${stage}-${status}-${code}`,
+        0,
+        request.headers.get('Accept-Language'),
+      ),
+    );
   }
 }
 
@@ -86,37 +95,38 @@ async function reuseLoginSession(request: Request, config: AuthConfig, authorize
 
 async function finishLogin(request: Request, config: AuthConfig, attempts: LoginAttempts, authorize: (profile: GitHubProfile) => Promise<boolean>) {
   const url = new URL(request.url);
+  const languages = request.headers.get('Accept-Language');
   const state = await verifySession(cookie(request, '__Host-studio-state'), config.SESSION_SECRET, 'login');
   if (!state || state.login !== url.searchParams.get('state')) {
-    return loginPage('expired', 403);
+    return loginPage('expired', 403, '', 0, languages);
   }
   if (url.searchParams.has('error')) {
-    return loginPage('cancelled', 400);
+    return loginPage('cancelled', 400, '', 0, languages);
   }
   const code = url.searchParams.get('code');
   if (!code) {
-    return loginPage('expired', 400);
+    return loginPage('expired', 400, '', 0, languages);
   }
   if (code.length > 1000) {
-    return loginPage('expired', 400);
+    return loginPage('expired', 400, '', 0, languages);
   }
-  const result = await attempts.run(state.login, state.expires, () => completeLogin(code, config, authorize));
+  const result = await attempts.run(state.login, state.expires, () => completeLogin(code, config, authorize, languages));
   if (result.ok) {
     return result.value;
   }
   switch (result.error) {
     case 'expired':
-      return loginPage('expired', 400);
+      return loginPage('expired', 400, '', 0, languages);
     case 'capacity':
-      return loginPage('unavailable', 503, 'callback-attempt-capacity');
+      return loginPage('unavailable', 503, 'callback-attempt-capacity', 0, languages);
   }
 }
 
-async function completeLogin(code: string, config: AuthConfig, authorize: (profile: GitHubProfile) => Promise<boolean>) {
+async function completeLogin(code: string, config: AuthConfig, authorize: (profile: GitHubProfile) => Promise<boolean>, languages: string | null) {
   const token = await signInStep('token', () => exchangeCode(code, config));
   const profile = await signInStep('profile', () => fetchProfile(token));
   if (!(await signInStep('repository', () => authorize(profile)))) {
-    return loginPage('access', 403);
+    return loginPage('access', 403, '', 0, languages);
   }
   const session = await signInStep('session', () => signSession({ ...profile, expires: Date.now() + 28_800_000, audience: 'studio' }, config.SESSION_SECRET));
   const headers = new Headers({
@@ -129,7 +139,9 @@ async function completeLogin(code: string, config: AuthConfig, authorize: (profi
 async function fetchProfile(token: string) {
   const profileResponse = await fetch('https://api.github.com/user', {
     headers: {
+      // i18n-ignore: an HTTP header value sent to GitHub.
       Authorization: `Bearer ${token}`,
+      // i18n-ignore: an HTTP header value sent to GitHub.
       'User-Agent': 'Astro-Studio',
       Accept: 'application/vnd.github+json',
     },
@@ -143,16 +155,28 @@ async function fetchProfile(token: string) {
   }
   return parseProfile(await profileResponse.json());
 }
-export function loginPage(problem?: SignInProblem, status = 200, reference = '', seconds = 0): Response {
-  const message = problem ? signInMessages[problem] : 'Sign in to edit and publish your website.';
-  const countdown = loginCountdown(seconds);
-  const detail = reference ? `<p>Reference: ${reference.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80)}</p>` : '';
+export function loginPage(problem?: SignInProblem, status = 200, reference = '', seconds = 0, languages?: string | null): Response {
+  // The page is rendered here, before the editor exists, so it speaks the language of the visitor's browser (Accept-Language).
+  const { locale, translate } = translatorForLanguages(languages);
+  const message = escapeHtml(translate(problem ? signInMessageKeys[problem] : 'studio.login.prompt'));
+  const countdown = loginCountdown(
+    seconds,
+    {
+      one: translate('studio.login.waitOne'),
+      many: translate('studio.login.waitMany', { seconds: '{seconds}' }),
+      ready: translate('studio.login.ready'),
+    },
+    escapeHtml,
+  );
+  const detail = reference
+    ? `<p>${escapeHtml(translate('studio.login.reference', { reference: reference.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) }))}</p>`
+    : '';
   return new Response(
     `<!doctype html>
-<html lang="en">
+<html lang="${locale}">
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sign in · Stacki Studio</title>
+<title>${escapeHtml(translate('studio.login.title'))}</title>
 <link rel="icon" type="image/svg+xml" href="${stackiFavicon}">
 <style>
 body{background:#111;color:#eee;font:14px system-ui;display:grid;place-items:center;
@@ -170,13 +194,13 @@ p{color:#999;line-height:1.6}
   role="img" aria-label="Stacki">
   <path d="${stackiMarkPath}" fill="currentColor" />
 </svg>
-<h1>${problem ? 'Unable to sign in' : 'Welcome to your studio'}</h1>
+<h1>${escapeHtml(translate(problem ? 'studio.login.failedHeading' : 'studio.login.welcomeHeading'))}</h1>
 <p id="login-message">${message}${countdown.markup}</p>
 <a href="/studio/auth/login">
   <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
     <path d="${githubIconPath}" fill="currentColor" />
   </svg>
-  <span>Sign in with GitHub</span>
+  <span>${escapeHtml(translate('studio.login.button'))}</span>
 </a>${detail}
 </main>${countdown.script}</body></html>`,
     {
@@ -190,12 +214,17 @@ p{color:#999;line-height:1.6}
   );
 }
 
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 async function exchangeCode(code: string, config: AuthConfig) {
   const tokenResponse = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
+      // i18n-ignore: an HTTP header value sent to GitHub.
       'User-Agent': 'Stacki-Studio',
     },
     signal: AbortSignal.timeout(15_000),
@@ -246,9 +275,9 @@ async function beginLogin(config: AuthConfig) {
   });
 }
 
-async function rateLimitedPage(until: number, secret: string) {
+async function rateLimitedPage(until: number, secret: string, languages: string | null) {
   const seconds = Math.max(1, Math.ceil((until - Date.now()) / 1000));
-  const response = loginPage('rate-limit', 429, '', seconds);
+  const response = loginPage('rate-limit', 429, '', seconds, languages);
   response.headers.set('Retry-After', String(seconds));
   response.headers.append('Set-Cookie', await waitCookie(until, secret));
   return response;

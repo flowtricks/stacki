@@ -5,6 +5,7 @@ import { err, ok, type Result } from '../../shared/core/result';
 import { PUBLISH_LIMITS } from '../../shared/properties/publishConfig';
 import { readPublishRecords } from './publishRecords';
 import { publishFilesystemFailure } from './publishGitCommand';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 export type PublishPurpose = 'github' | 'hosting';
 
@@ -63,7 +64,7 @@ export async function checkPublishTreeSize(root: string, tree: string, purpose: 
 export function parsePublishTreeEntry(record: string): Result<number> {
   const match = /^(?:100644|100755|120000) blob (?:[a-f0-9]{40}|[a-f0-9]{64}) +([0-9]+)\t([\s\S]+)$/.exec(record);
   if (match?.[1] === undefined || match[2] === undefined) {
-    return err({ code: 'git-output', message: 'Unsupported or malformed Git tree entry.' });
+    return err({ code: 'git-output', ...described('publish.git.error.badTreeEntry') });
   }
   const file = parsePublishPath(match[2]);
   if (!file.ok) {
@@ -71,14 +72,14 @@ export function parsePublishTreeEntry(record: string): Result<number> {
   }
   const size = Number(match[1]);
   if (!Number.isSafeInteger(size) || size < 0) {
-    return err({ code: 'git-output', message: 'Git returned an invalid file size.' });
+    return err({ code: 'git-output', ...described('publish.git.error.invalidSize') });
   }
   return ok(size);
 }
 
 function parsePublishPath(file: string): Result<string> {
   if (path.isAbsolute(file) || file.split('/').some((part) => part === '..' || part === '')) {
-    return err({ code: 'git-output', message: 'Git returned a path outside the project.' });
+    return err({ code: 'git-output', ...described('publish.git.error.pathOutside') });
   }
   return ok(file);
 }
@@ -88,21 +89,21 @@ function checkPublishSize(files: number, bytes: number, purpose: PublishPurpose)
     if (files > PUBLISH_LIMITS.filesMax) {
       return err({
         code: 'snapshot-limit',
-        message: 'Publish exceeds the 10,000-file snapshot limit.',
+        ...described('error.publish.snapshotFileLimit'),
       });
     }
     if (bytes > PUBLISH_LIMITS.snapshotBytesMax) {
       return err({
         code: 'snapshot-limit',
-        message: 'Publish exceeds the 256 MiB snapshot limit.',
+        ...described('error.publish.snapshotSizeLimit'),
       });
     }
   } else {
     if (files > PUBLISH_GIT_LIMITS.filesMax) {
-      return err({ code: 'git-limit', message: 'Git inspection exceeds the 100,000-file limit.' });
+      return err({ code: 'git-limit', ...described('error.publish.sourceFileLimit') });
     }
     if (bytes > PUBLISH_GIT_LIMITS.bytesMax) {
-      return err({ code: 'git-limit', message: 'Git inspection exceeds the 8 GiB source limit.' });
+      return err({ code: 'git-limit', ...described('error.publish.sourceSizeLimit') });
     }
   }
   return ok(undefined);

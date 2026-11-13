@@ -7,6 +7,7 @@ import { WindowResizeHandles } from './WindowResizeHandles';
 import type { WindowSize } from './windowGeometry';
 import './popup.css';
 import './dockableWindow.css';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 export type WindowMode = 'docked' | 'floating';
 interface DockableWindowProps {
@@ -28,12 +29,13 @@ interface DockableWindowProps {
 // The dock is owned by the caller, so the same frame can later wrap either sidebar.
 // Keep one DOM tree through mode changes: editors retain focus, drafts and scroll position.
 export default function DockableWindow(props: DockableWindowProps) {
+  const translate = useTranslate();
   const windowState = useWindowRectangle(props.minimumSize, props.storageKey, props.initialSize);
   const { rectangle } = windowState;
   const floating = props.mode === 'floating';
   const surface = useRef<HTMLDivElement>(null);
   const scope = usePopupScope(surface, { active: floating, role: 'dialog', anchor: undefined });
-  const action = floating ? 'Dock window' : 'Undock window';
+  const action = translate(floating ? 'ui.dockableWindow.dock' : 'ui.dockableWindow.undock');
   return (
     <div
       ref={surface}
@@ -57,7 +59,7 @@ export default function DockableWindow(props: DockableWindowProps) {
         <div
           className="dockable-window-header"
           tabIndex={floating ? 0 : undefined}
-          aria-label={floating ? 'Move window with arrow keys' : undefined}
+          aria-label={floating ? translate('ui.dockableWindow.moveHint') : undefined}
           onPointerDown={floating ? (event) => windowState.start(event) : undefined}
           onKeyDown={floating ? (event) => windowState.onKeyDown(event) : undefined}
         >

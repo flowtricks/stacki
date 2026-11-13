@@ -6,6 +6,7 @@ import {
   type PublishTarget,
 } from '../../../vendor/stacki/shared/properties/publishConfig';
 import { PublishFailure } from './publishFailure';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 export function managedHostingFromEnvironment(): Hosting | undefined {
   const project = process.env['STUDIO_GITHUB_DEPLOY_WORKER'];
@@ -14,7 +15,7 @@ export function managedHostingFromEnvironment(): Hosting | undefined {
     return undefined;
   }
   if (!process.env['STUDIO_DEPLOYMENT_URL']) {
-    throw new PublishFailure('GitHub hosting requires a deployment confirmation URL.');
+    throw new PublishFailure(described('publish.studio.error.managedUrl'));
   }
   return parsePublishConfig({
     ...DEFAULT_PUBLISH_CONFIG,
@@ -40,10 +41,10 @@ export function managedPublishConfig(config: PublishConfig, target: PublishTarge
     return config;
   }
   if (target === 'hosting') {
-    throw new PublishFailure('This site deploys automatically from GitHub. Use Publish to save and deploy changes together.');
+    throw new PublishFailure(described('publish.studio.error.managedAuto'));
   }
   if (config.beforePublish.length > 0 || config.afterPublish.length > 0 || config.buildScript !== 'build') {
-    throw new PublishFailure('This site builds through GitHub. Configure custom publish scripts in Cloudflare Workers Builds.');
+    throw new PublishFailure(described('publish.studio.error.managedScripts'));
   }
   // The connected GitHub build owns validation and deployment. Keep the saved destination,
   // but use the existing commit-and-confirm path so Studio never builds or deploys it twice.

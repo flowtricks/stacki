@@ -4,9 +4,11 @@ import { useProjectPageOrder } from '../../../vendor/stacki/src/features/pages/p
 import { usePageOrderDrag } from '../../../vendor/stacki/src/features/pages/usePageOrderDrag';
 import { PageOrderNotice } from '../../../vendor/stacki/src/features/pages/PageOrderNotice';
 import { useState } from 'react';
+import { useTranslate, useTranslateRich } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import type { Peer } from '../collaboration/presence';
 import { PageFileList } from './PageFileList';
 import { CreateFileDialog } from './CreateFileDialog';
+import { CodeInline } from '../../../vendor/stacki/src/ui/CodeBlock';
 import { PlusIcon } from '../../../vendor/stacki/src/ui/Icons';
 import { request, type Project } from '../project/projectClient';
 import { record, string } from '../../shared/validation';
@@ -22,6 +24,8 @@ interface Props {
   readonly collection?: boolean;
 }
 export function PagesPanel({ project, flushSave, peers, file, open, refresh, error, collection = false }: Props) {
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
   const renaming = usePageRename({ file, open, refresh, flushSave });
   const ordering = useProjectPageOrder(collection ? undefined : project.name);
   const reorder = usePageOrderDrag({
@@ -38,9 +42,9 @@ export function PagesPanel({ project, flushSave, peers, file, open, refresh, err
       <PagesHeader collection={collection} create={() => setCreating(!creating)} />
       <div className="panel-search">
         <input
-          aria-label="Search files"
+          aria-label={translate('pages.studio.searchFiles')}
           maxLength={512}
-          placeholder={collection ? 'Search collections…' : 'Search pages…'}
+          placeholder={collection ? translate('pages.studio.searchCollections') : translate('pages.switcher.searchPlaceholder')}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
         />
@@ -61,7 +65,13 @@ export function PagesPanel({ project, flushSave, peers, file, open, refresh, err
         open={open}
         collection={collection}
       />
-      {!items.length && <div className="panel-note">{collection ? 'JSON and Markdown files in src/content and src/data appear here.' : 'No pages found.'}</div>}
+      {!items.length && (
+        <div className="panel-note">
+          {collection
+            ? translateRich('pages.studio.collectionsEmpty', { content: <CodeInline text="src/content" />, data: <CodeInline text="src/data" /> })
+            : translate('pages.studio.noPages')}
+        </div>
+      )}
     </div>
   );
 }
@@ -116,11 +126,12 @@ function useCreateFile(
   return { busy, create, failure };
 }
 function PagesHeader({ collection, create }: { readonly collection: boolean; readonly create: () => void }) {
+  const translate = useTranslate();
   return (
     <div className="panel-header">
-      <h2>{collection ? 'Collections' : 'Pages'}</h2>
+      <h2>{collection ? translate('pages.studio.collections') : translate('pages.title')}</h2>
       <div className="studio-panel-actions">
-        <button className="ghost" aria-label={collection ? 'Create item' : 'Create page'} onClick={create}>
+        <button className="ghost" aria-label={collection ? translate('pages.studio.createItem') : translate('pages.create.page')} onClick={create}>
           <PlusIcon size={16} />
         </button>
       </div>

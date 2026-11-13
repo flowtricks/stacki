@@ -135,7 +135,7 @@ test('the shimmer stops under reduced motion, and the shapes are fills with no b
 
 test('the visually hidden status text is translated in every catalog', () => {
   for (const locale of ['en', 'es', 'fr', 'de', 'ptBR']) {
-    const catalog = fs.readFileSync(repoPath(`shared/properties/i18n/messages/${locale}.ts`), 'utf8');
+    const catalog = fs.readFileSync(repoPath(`shared/properties/i18n/messages/${locale}/ui.ts`), 'utf8');
     assert.match(catalog, /'ui\.loading': '[^']+'/, `${locale} has ui.loading`);
   }
 });

@@ -9,6 +9,8 @@
 //   selectors needed, so the keep list does not fill up with duplicates.
 import { assert } from '../../../shared/core/assert';
 import { err, ok, type Result } from '../../../shared/core/result';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { verdictNames, type SelectorEntry, type SelectorReport } from '../../../shared/properties/selectorUsage';
 import {
   STYLE_KEEP_LIMITS,
@@ -38,7 +40,12 @@ function coveredBy(entry: string, rel: string): boolean {
  * covers it and lock every other selector that lock was keeping by name.
  * Refused, not truncated, when the names would pass the keep list's bound.
  */
-export function unlockOneChange(report: SelectorReport, keepList: StyleKeepList, target: SelectorEntry): Result<KeepListChange, string> {
+export function unlockOneChange(
+  report: SelectorReport,
+  keepList: StyleKeepList,
+  target: SelectorEntry,
+  translate: Translator = ENGLISH_TRANSLATE,
+): Result<KeepListChange, string> {
   assert(target.verdict.kind === 'kept', 'unlockOneChange: only a locked row is unlocked');
   const covering = stylesheetLock(keepList, target.rel);
   assert(covering !== undefined, 'unlockOneChange: the row is in a locked stylesheet');
@@ -65,9 +72,7 @@ export function unlockOneChange(report: SelectorReport, keepList: StyleKeepList,
   const size = new Set([...keepList.keep, ...add]).size;
   if (size > STYLE_KEEP_LIMITS.patternsMax) {
     const where = isLockedFolder(covering) ? covering : covering.slice(covering.lastIndexOf('/') + 1);
-    return err(
-      `Unlocking ${target.selector} would lock ${add.size} other styles in ${where} one by one, past the ${STYLE_KEEP_LIMITS.patternsMax}-name limit of .stacki/styles.json. Unlock ${where} instead.`,
-    );
+    return err(translate('selectors.lock.tooMany', { selector: target.selector, count: add.size, where, limit: STYLE_KEEP_LIMITS.patternsMax }));
   }
   const change = { add: [...add], remove: exactPatterns(keepList, [...targetNames]), lock: [], unlock: [covering] };
   // Postcondition: none of the target's names stays locked by this change.

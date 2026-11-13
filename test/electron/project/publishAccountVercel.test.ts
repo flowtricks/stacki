@@ -83,7 +83,7 @@ test('a failed install says so without CLI output', async (context) => {
   await once(installer, 'close');
   const state = account.request(root, { ...request, action: 'status' });
   assert.equal(state.kind, 'failed');
-  assert.match(JSON.stringify(state), /Could not install the Vercel CLI/);
+  assert.match(JSON.stringify(state), /Could not install Vercel CLI/);
   assert.equal(JSON.stringify(state).includes('secret-token'), false);
 });
 

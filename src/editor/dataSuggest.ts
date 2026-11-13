@@ -19,7 +19,8 @@ import {
   collectionCallIn,
   referenceCallIn,
 } from './dataSource';
-import { entrySampleKey, sampleAt, sampleKey, type TreeNode, sampleNode, literalNode } from './dataSample';
+import { entrySampleKey, sampleAt, sampleKey, type TreeNode, sampleNode, literalNode, previewFields } from './dataSample';
+import { englishText, messageRef, type TypedMessageRef } from '../../shared/properties/i18n/messageRef';
 import { queriesInScope, namesInScope, type CollectionReader, type DataContext, type SchemaField, type ShapeMember, autoQueryName } from './dataScope';
 import { loopSourcePath, parseLoopHead } from './loopSource';
 import type { ImportedValue } from './importedValues';
@@ -201,6 +202,7 @@ function shapeMemberKind(member: ShapeMember): string {
     return 'value';
   }
   if (member.format === 'image' || member.format === 'video' || member.format === 'file') {
+    // i18n-ignore: a kind id that the picker maps to a message with treeKindLabel, not text drawn as it is.
     return 'image url';
   }
   return member.format === 'date' ? 'date' : (member.type ?? 'value');
@@ -299,7 +301,9 @@ function withPropValue(
     const words = /^(['`])([\s\S]*)\1$/.exec(literal);
     return { ...node, preview: words === null ? literal : `"${words[2] ?? ''}"` };
   }
-  return from.instance === undefined ? node : { ...node, note: 'not set' };
+  return from.instance === undefined
+    ? node
+    : { ...node, note: englishText(messageRef('editor.dataTree.notSet')), noteRef: messageRef('editor.dataTree.notSet') };
 }
 
 // A reference followed through the data: `getEntry(post.data.author)` is this
@@ -325,7 +329,7 @@ function referenceNode(name: string, value: string, samples: Record<string, unkn
   }
   const many = ref.fn === 'getEntries';
   const node = sampleNode(name, name, many ? [resolved] : resolved, 0);
-  node.preview = `${targetCollection} ${many ? 'entries' : 'entry'}`;
+  Object.assign(node, previewFields(messageRef(many ? 'editor.dataTree.collectionEntries' : 'editor.dataTree.collectionEntry', { name: targetCollection })));
   return node;
 }
 
@@ -362,7 +366,7 @@ function buildValueNodes(
       const many = call.fn !== 'getEntry';
       const node = sampleNode(name, name, many ? [entry] : entry, 0);
       // "blog entries", not "1 item" — the sample is one of them, not all.
-      node.preview = `${call.name} ${many ? 'entries' : 'entry'}`;
+      Object.assign(node, previewFields(messageRef(many ? 'editor.dataTree.collectionEntries' : 'editor.dataTree.collectionEntry', { name: call.name })));
       addUnique(values, node, seen);
       continue;
     }
@@ -416,7 +420,10 @@ function sampledValueNode(name: string, declaration: string, sampled: unknown): 
   const node = sampleNode(name, name, sampled, 0);
   const call = /^[{[]/.test(declaration.trim()) ? undefined : collectionCallIn(declaration);
   if (call !== undefined) {
-    node.preview = `${call.name} ${call.fn === 'getEntry' ? 'entry' : 'entries'}`;
+    Object.assign(
+      node,
+      previewFields(messageRef(call.fn === 'getEntry' ? 'editor.dataTree.collectionEntry' : 'editor.dataTree.collectionEntries', { name: call.name })),
+    );
   }
   assert(node.path === name, 'A sampled value is named as the page names it');
   return node;
@@ -475,7 +482,14 @@ function importNode(name: string, imp: ImportLike, declared: ImportedValue | und
   // Where it comes from says more than "imported": the module, as the file names it.
   const from = `from ${path}`;
   if (declared === undefined) {
-    return { path: name, key: name, kind: 'imported', preview: path === '' ? '' : from, children: undefined };
+    return {
+      path: name,
+      key: name,
+      kind: 'imported',
+      preview: path === '' ? '' : from,
+      ...(path === '' ? {} : { previewRef: messageRef('editor.dataTree.from', { path }) }),
+      children: undefined,
+    };
   }
   switch (declared.kind) {
     case 'function':
@@ -483,15 +497,17 @@ function importNode(name: string, imp: ImportLike, declared: ImportedValue | und
         path: name,
         key: name,
         kind: 'function',
-        preview: path === '' ? 'function' : `function · ${path}`,
+        preview: englishText(functionPreviewRef(path)),
+        previewRef: functionPreviewRef(path),
         children: undefined,
-        unbindable: `${name} is a function: call it in the frontmatter (const value = ${name}(…)) and bind to what it returns`,
+        unbindable: englishText(messageRef('editor.dataTree.unbindable', { name })),
+        unbindableRef: messageRef('editor.dataTree.unbindable', { name }),
       };
     case 'data':
       return sampleNode(name, name, declared.value, 0);
     case 'literal': {
       const node = literalNode(name, name, declared.text, 0);
-      return node.kind === 'value' ? { ...node, kind: 'imported', preview: from } : node;
+      return node.kind === 'value' ? { ...node, kind: 'imported', preview: from, previewRef: messageRef('editor.dataTree.from', { path }) } : node;
     }
     default: {
       const exhaustive: never = declared;
@@ -543,7 +559,7 @@ function derivedShape(node: TreeNode, declaration: string, byName: ReadonlyMap<s
   const base = baseName !== undefined ? byName.get(baseName) : undefined;
   if (base?.children) {
     const children = rebase(base.children, base.path, name);
-    return { ...node, kind: base.kind, preview: base.preview, children };
+    return { ...node, kind: base.kind, preview: base.preview, ...(base.previewRef === undefined ? {} : { previewRef: base.previewRef }), children };
   }
   // One OF a list is one of whatever the list holds, so the fields to show
   // are the item's — `featured` opens onto the same fields as `portfolio`'s
@@ -557,7 +573,10 @@ function derivedShape(node: TreeNode, declaration: string, byName: ReadonlyMap<s
   }
   // "portfolio entries" describes the list; this is one of them.
   const preview = /\bentries$/.test(from?.preview ?? '') ? (from?.preview ?? '').replace(/\bentries$/, 'entry') : item.preview || '';
-  return { ...node, kind: item.kind, preview, children: rebase(item.children, item.path, name) };
+  // The list's "portfolio entries" reference becomes the singular for one of them; any other preview keeps the item's own.
+  const listRef = from?.previewRef;
+  const previewRef = listRef?.key === 'editor.dataTree.collectionEntries' ? messageRef('editor.dataTree.collectionEntry', listRef.params) : item.previewRef;
+  return { ...node, kind: item.kind, preview, ...(previewRef === undefined ? {} : { previewRef }), children: rebase(item.children, item.path, name) };
 }
 
 // 4. Every other collection in the project, whether or not this page reads
@@ -583,7 +602,12 @@ function buildCollectionNodes(
     const entry = samples[collection.name];
     const children = collectionEntryNodes(identifier, collection, samples);
     const node: TreeNode = { path: identifier, key: collection.name, kind: 'list', preview: '', children };
-    node.preview = collection.count === undefined ? 'collection' : `${collection.count} entries`;
+    Object.assign(
+      node,
+      previewFields(
+        collection.count === undefined ? messageRef('editor.dataTree.collection') : messageRef('editor.dataTree.entryCount', { count: collection.count }),
+      ),
+    );
     node.section = 'collections';
     // Browsed one entry at a time (DataPicker's pager), across the whole
     // collection: an entry not read yet is asked for when it is stepped to.
@@ -749,7 +773,12 @@ function loopItemNode(item: string, source: string, byPath: ReadonlyMap<string, 
     path: item,
     key: item,
     kind: first ? first.kind : 'loop item',
-    preview: shown ? shown.preview : listed && list?.preview === '0 items' ? 'no items' : 'no sample',
+    preview: shown ? shown.preview : englishText(emptyLoopPreview(listed && list?.preview === '0 items' ? 'emptyList' : 'noSample')),
+    ...(shown === undefined
+      ? { previewRef: emptyLoopPreview(listed && list?.preview === '0 items' ? 'emptyList' : 'noSample') }
+      : shown.previewRef === undefined
+        ? {}
+        : { previewRef: shown.previewRef }),
     // What the arrows on this row say, and what they have to step through.
     // Only when there is more than one entry to look at: a list of one, or a
     // shape with no values behind it at all, has nowhere to go.
@@ -845,7 +874,7 @@ function collectionListNode(name: string, page: PageData): TreeNode | undefined 
   const id = toRecord(data)?.['_id'] ?? toRecord(entry)?.['id'];
   const item = itemPath[0] === 'fields' ? { id, fields: data } : entry;
   const node = sampleNode(name, name, [item], 0);
-  node.preview = `${collection} entries`;
+  Object.assign(node, previewFields(messageRef('editor.dataTree.collectionEntries', { name: collection })));
   assert(node.path === name, 'A collection list is named as the page names it');
   return node;
 }
@@ -870,7 +899,14 @@ function listsHolderNode(name: string, value: string, page: PageData): TreeNode 
   assert(children.length <= HOLDER_ENTRIES_MAX, 'A holder lists a bounded number of lists');
   return children.length === 0
     ? undefined
-    : { path: name, key: name, kind: 'object', preview: `${children.length} ${children.length === 1 ? 'list' : 'lists'}`, children };
+    : {
+        path: name,
+        key: name,
+        kind: 'object',
+        preview: englishText(messageRef('editor.dataTree.lists', { count: children.length })),
+        previewRef: messageRef('editor.dataTree.lists', { count: children.length }),
+        children,
+      };
 }
 
 // The page's frontmatter, imports and sampled entries, and the loop reader's
@@ -927,4 +963,14 @@ function rebase(nodes: readonly TreeNode[] | undefined, from: string, to: string
     path: to + node.path.slice(from.length),
     children: rebase(node.children, from, to, depth + 1),
   }));
+}
+
+// The row of a loop item with nothing to show: an empty list says so, a shape with no values says there is no sample.
+function emptyLoopPreview(reason: 'emptyList' | 'noSample'): TypedMessageRef {
+  return messageRef(reason === 'emptyList' ? 'editor.dataTree.noItems' : 'editor.dataTree.noSample');
+}
+
+// An imported function names the module it comes from when the file says which.
+function functionPreviewRef(path: string): TypedMessageRef {
+  return path === '' ? messageRef('editor.dataTree.function') : messageRef('editor.dataTree.functionFrom', { path });
 }

@@ -19,6 +19,9 @@
 //   list with (PropField), with its `{}` toggle between the list and its code.
 
 import { useRef, type ReactNode } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../shared/properties/i18n/messageRef';
 import {
   BracesIcon,
   CalendarIcon,
@@ -45,7 +48,7 @@ import {
   fieldsProblem,
   ITEM_FIELD_KINDS,
   ITEM_FIELD_LIMITS,
-  ITEM_FIELD_TITLES,
+  itemFieldTitle,
   type ItemFieldDeclaration,
   type ItemFieldKind,
 } from '../../editor/itemFields';
@@ -71,12 +74,18 @@ export interface PropertyFlags {
 
 /** Required (no `?`), as a checkbox. `readonly` is carried through as it was read. */
 export function PropertyFlagsFields(props: PropertyFlags & { readonly onChange: (flags: PropertyFlags) => void }) {
+  const translate = useTranslate();
   const { required, readonly, onChange } = props;
   return (
-    <div className="property-flags" role="group" aria-label="Property flags">
+    <div className="property-flags" role="group" aria-label={translate('props.sections.flags')}>
       <label>
-        <input type="checkbox" aria-label="Required" checked={required} onChange={(event) => onChange({ required: event.target.checked, readonly })} />
-        Required
+        <input
+          type="checkbox"
+          aria-label={translate('props.sections.required')}
+          checked={required}
+          onChange={(event) => onChange({ required: event.target.checked, readonly })}
+        />
+        {translate('props.sections.required')}
       </label>
     </div>
   );
@@ -87,7 +96,8 @@ export function PropertyFlagsFields(props: PropertyFlags & { readonly onChange: 
  * type, the same toggle a default's value and its code use (PropertyDefault.tsx).
  */
 export function CodeTypeToggle(props: { readonly open: boolean; readonly onToggle: () => void }) {
-  const action = props.open ? 'Use the controls' : 'Edit the code type';
+  const translate = useTranslate();
+  const action = props.open ? translate('props.sections.useControls') : translate('props.sections.editCodeType');
   return (
     <button
       type="button"
@@ -104,9 +114,10 @@ export function CodeTypeToggle(props: { readonly open: boolean; readonly onToggl
 
 /** The TypeScript written for the prop, in the highlighted code field. */
 export function CodeTypeEditor(props: { readonly type: string; readonly placeholder: string; readonly onChange: (type: string) => void }) {
+  const translate = useTranslate();
   return (
     <ExprInput
-      ariaLabel="Code type"
+      ariaLabel={translate('props.sections.codeType')}
       className="property-code"
       language="typescript"
       value={props.type}
@@ -130,10 +141,11 @@ export function CodeTypeField(props: {
   readonly onToggle: () => void;
   readonly onChange: (type: string) => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <div className="property-code-heading">
-        <span>Code type</span>
+        <span>{translate('props.sections.codeType')}</span>
         <CodeTypeToggle open={props.open} onToggle={props.onToggle} />
       </div>
       {props.open && <CodeTypeEditor type={props.type} placeholder={props.placeholder} onChange={props.onChange} />}
@@ -163,32 +175,34 @@ const ITEM_KIND_ICONS: Readonly<Record<ItemFieldKind, ReactNode>> = {
 };
 
 // The menu is grouped so sixteen kinds scan as five short lists.
-const ITEM_KIND_GROUPS: Readonly<Record<ItemFieldKind, string>> = {
-  text: 'Text',
-  longText: 'Text',
-  richText: 'Text',
-  number: 'Values',
-  switch: 'Values',
-  color: 'Values',
-  date: 'Values',
-  option: 'Values',
-  image: 'Media',
-  video: 'Media',
-  file: 'Media',
-  link: 'Contact',
-  email: 'Contact',
-  phone: 'Contact',
-  list: 'Structure',
-  group: 'Structure',
+const ITEM_KIND_GROUPS: Readonly<Record<ItemFieldKind, MessageKey>> = {
+  text: 'props.itemKinds.group.text',
+  longText: 'props.itemKinds.group.text',
+  richText: 'props.itemKinds.group.text',
+  number: 'props.itemKinds.group.values',
+  switch: 'props.itemKinds.group.values',
+  color: 'props.itemKinds.group.values',
+  date: 'props.itemKinds.group.values',
+  option: 'props.itemKinds.group.values',
+  image: 'props.itemKinds.group.media',
+  video: 'props.itemKinds.group.media',
+  file: 'props.itemKinds.group.media',
+  link: 'props.itemKinds.group.contact',
+  email: 'props.itemKinds.group.contact',
+  phone: 'props.itemKinds.group.contact',
+  list: 'props.itemKinds.group.structure',
+  group: 'props.itemKinds.group.structure',
 };
 
-function itemKindOptions(kinds: readonly ItemFieldKind[]): readonly DropdownOption<ItemFieldKind>[] {
-  return kinds.map((kind) => ({ value: kind, label: ITEM_FIELD_TITLES[kind], group: ITEM_KIND_GROUPS[kind], icon: ITEM_KIND_ICONS[kind] }));
+/** The kind menu's options in the language `translate` speaks; the constants below are the English ones (tests, search). */
+export function itemKindOptions(kinds: readonly ItemFieldKind[], translate: Translator = ENGLISH_TRANSLATE): readonly DropdownOption<ItemFieldKind>[] {
+  return kinds.map((kind) => ({ value: kind, label: itemFieldTitle(kind, translate), group: translate(ITEM_KIND_GROUPS[kind]), icon: ITEM_KIND_ICONS[kind] }));
 }
 
 /** What the type dropdown lists: every kind, and on the last level of fields only the kinds that hold one value, since a list or group there has no room for fields. */
 export const ITEM_KIND_OPTIONS = itemKindOptions(ITEM_FIELD_KINDS);
-export const ITEM_KIND_OPTIONS_PLAIN = itemKindOptions(ITEM_FIELD_KINDS.filter((kind) => kind !== 'list' && kind !== 'group'));
+const PLAIN_KINDS = ITEM_FIELD_KINDS.filter((kind) => kind !== 'list' && kind !== 'group');
+export const ITEM_KIND_OPTIONS_PLAIN = itemKindOptions(PLAIN_KINDS);
 
 // The field's trigger is narrow, and its longest title needs room beside the icon and the chevron.
 const ITEM_FIELD_MENU_WIDTH_PX_MIN = 148;
@@ -203,15 +217,16 @@ type ShapeChange = (shape: ListShape, pace: EditPace) => void;
  * A List or a Group row has fields of its own beneath it, edited the same way.
  */
 export function ItemFieldsEditor(props: ListShape & { readonly onChange: ShapeChange }) {
+  const translate = useTranslate();
   const { fields, itemsText, onChange } = props;
   // A name part-way through being typed can be no name at all, and an item cannot
   // be written under one. The items keep the last real name until the row has
   // another, so clearing a name to retype it keeps what they hold.
   const heldKeys = useRef(new Map<string, string>());
-  const problem = fieldsProblem(fields);
+  const problem = fieldsProblem(fields, 1, translate);
   return (
-    <div className="new-prop-settings property-item-fields" role="group" aria-label="Item fields">
-      <div className="loop-bind-title">Item fields</div>
+    <div className="new-prop-settings property-item-fields" role="group" aria-label={translate('props.sections.itemFields')}>
+      <div className="loop-bind-title">{translate('props.sections.itemFields')}</div>
       <ItemFieldRows shape={{ fields, itemsText }} parent={[]} heldKeys={heldKeys.current} onChange={onChange} />
       {problem !== undefined && <div className="new-prop-note">{problem}</div>}
     </div>
@@ -229,6 +244,7 @@ interface RowsProps {
 // The rows of one level of fields, and the + that adds a field to it. A List or
 // a Group row draws the next level beneath itself, so this draws itself.
 function ItemFieldRows({ shape, parent, heldKeys, onChange }: RowsProps) {
+  const translate = useTranslate();
   assert(parent.length < ITEM_FIELD_LIMITS.depthMax, 'ItemFieldRows: the fields nest within their bound');
   const owner = parent.length === 0 ? undefined : fieldAtPath(shape.fields, parent);
   const siblings = owner === undefined ? shape.fields : fieldsOf(owner);
@@ -251,13 +267,14 @@ function ItemFieldRows({ shape, parent, heldKeys, onChange }: RowsProps) {
         disabled={siblings.length >= ITEM_FIELD_LIMITS.fieldsPerLevelMax}
         onClick={() => onChange(addedField(shape, parent), 'at-once')}
       >
-        <PlusIcon size={11} /> Add field
+        <PlusIcon size={11} /> {translate('props.sections.addField')}
       </button>
     </>
   );
 }
 
 function ItemFieldRow(props: Omit<RowsProps, 'parent'> & { readonly field: ItemFieldDeclaration; readonly path: FieldPath; readonly siblingCount: number }) {
+  const translate = useTranslate();
   const { field, path, siblingCount, shape, heldKeys, onChange } = props;
   const heldAt = path.join('.');
   const rename = (name: string): void => {
@@ -279,28 +296,37 @@ function ItemFieldRow(props: Omit<RowsProps, 'parent'> & { readonly field: ItemF
       <div className="new-prop-list-field">
         <input
           className="new-prop-input"
-          aria-label="Field name"
-          placeholder="name"
+          aria-label={translate('props.sections.fieldName')}
+          placeholder={translate('props.newProp.form.attributeNameHint')}
           spellCheck={false}
           value={field.name}
           onChange={(event) => rename(event.target.value.replace(/[^\w$]/g, ''))}
         />
         <Dropdown
-          ariaLabel="Field type"
+          ariaLabel={translate('props.sections.fieldType')}
           value={field.kind}
-          options={path.length < ITEM_FIELD_LIMITS.depthMax ? ITEM_KIND_OPTIONS : ITEM_KIND_OPTIONS_PLAIN}
+          options={itemKindOptions(path.length < ITEM_FIELD_LIMITS.depthMax ? ITEM_FIELD_KINDS : PLAIN_KINDS, translate)}
           livePreview={false}
           menuWidthMin={ITEM_FIELD_MENU_WIDTH_PX_MIN}
           onChange={(kind) => onChange(retypedFieldAt(shape, path, kind), 'at-once')}
         />
-        <button type="button" className="loop-settings-remove" aria-label="Remove field" title="Remove" disabled={siblingCount <= 1} onClick={remove}>
+        <button
+          type="button"
+          className="loop-settings-remove"
+          aria-label={translate('props.sections.removeField')}
+          title={translate('ui.remove')}
+          disabled={siblingCount <= 1}
+          onClick={remove}
+        >
           <TrashIcon size={12} />
         </button>
       </div>
       {field.kind === 'option' && <OptionChoices field={field} onChange={(options) => onChange(optionsAtPath(shape, path, options), 'at-once')} />}
       {(field.kind === 'list' || field.kind === 'group') && (
-        <div className="property-nested-fields" role="group" aria-label={`Fields of ${field.name}`}>
-          <div className="property-nested-title">{field.kind === 'list' ? `Each ${field.name} item has` : `${field.name} has`}</div>
+        <div className="property-nested-fields" role="group" aria-label={translate('props.sections.fieldsOf', { name: field.name })}>
+          <div className="property-nested-title">
+            {field.kind === 'list' ? translate('props.sections.eachItemHas', { name: field.name }) : translate('props.sections.groupHas', { name: field.name })}
+          </div>
           <ItemFieldRows shape={shape} parent={path} heldKeys={heldKeys} onChange={onChange} />
         </div>
       )}
@@ -310,10 +336,11 @@ function ItemFieldRow(props: Omit<RowsProps, 'parent'> & { readonly field: ItemF
 
 // The words an Option field offers, edited with the list of words the Properties panel's Options use.
 function OptionChoices(props: { readonly field: Extract<ItemFieldDeclaration, { kind: 'option' }>; readonly onChange: (options: readonly string[]) => void }) {
+  const translate = useTranslate();
   const items: readonly Item[] = props.field.options.map((option) => ({ text: option, quote: '"' }));
   return (
-    <div className="property-nested-fields property-option-choices" role="group" aria-label={`Options of ${props.field.name}`}>
-      <div className="property-nested-title">Options</div>
+    <div className="property-nested-fields property-option-choices" role="group" aria-label={translate('props.sections.optionsOf', { name: props.field.name })}>
+      <div className="property-nested-title">{translate('props.newProp.form.options')}</div>
       <ListField
         value={arrayText(items)}
         itemsMin={2}
@@ -341,11 +368,12 @@ export function ListDefaultField(props: {
   readonly projectPath: string | undefined;
   readonly onChange: (code: string, pace: EditPace) => void;
 }) {
-  const field = listDefaultField(props.fields);
+  const translate = useTranslate();
+  const field = listDefaultField(props.fields, translate);
   // Keyed by the shape, so a field's rows are redrawn when the fields above change.
   const shapeKey = JSON.stringify(props.fields);
   return (
-    <div className="property-default property-list-default" role="group" aria-label="Default items">
+    <div className="property-default property-list-default" role="group" aria-label={translate('props.sections.defaultItems')}>
       <PropField
         key={shapeKey}
         nodeKey="default-items"
@@ -359,10 +387,10 @@ export function ListDefaultField(props: {
 }
 
 /** The instance field a list default is edited in: a list of items of these fields, never required. */
-export function listDefaultField(fields: readonly ItemFieldDeclaration[]): FieldDefinition {
+export function listDefaultField(fields: readonly ItemFieldDeclaration[], translate: Translator = ENGLISH_TRANSLATE): FieldDefinition {
   assert(fields.length <= ITEM_FIELD_LIMITS.fieldsPerLevelMax, 'listDefaultField: the fields are bounded');
   return {
-    name: 'Default items',
+    name: translate('props.sections.defaultItems'),
     type: 'code',
     optional: true,
     shape: shapeMembersOf(fields),

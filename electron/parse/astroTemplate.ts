@@ -597,6 +597,7 @@ function parseTemplateBody(template: string, base: number | undefined): ParsedTe
 
 function parseTemplateTag(template: string, lt: number, base: number | undefined): TemplateTagResult {
   const shorthand = template.startsWith('<>', lt);
+  // i18n-ignore: the name of the HTML fragment shorthand <>, written in the syntax tree, not interface text.
   const match = shorthand ? { full: '<>', name: 'Fragment', attrs: '', selfClose: '' } : scanTag(template, lt);
   if (!match) {
     return { kind: 'bail', what: 'a stray < or unclosed tag attribute' };

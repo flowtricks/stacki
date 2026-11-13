@@ -19,6 +19,7 @@ import { useLiveColor } from './model/liveColor';
 import type { Contributor, ResolvedProp } from './model/resolved';
 import { commitInPlace } from './model/commitInPlace';
 import { displayOf, displayText, keepImportant, parseImportant, withImportant, type Display } from './model/styleDisplay';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -107,6 +108,7 @@ export function BgLabel({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   if (display.present && !display.isSelected) {
     return <ProvenanceLabel label={label} props={[prop]} busy={busy} onProvenance={onProvenance} />;
   }
@@ -117,9 +119,9 @@ export function BgLabel({
       {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={onClear}
-      resetLabel="Clear"
+      resetLabel={translate('style.backgroundKit.clear')}
       tooltip={<PropTip props={[prop]} />}
-      {...(display.overridden ? { title: `Overridden by ${display.winnerSelector}` } : {})}
+      {...(display.overridden ? { title: translate('style.backgroundKit.overriddenBy', { selector: display.winnerSelector }) } : {})}
       menuNote={(close) => (
         <ProvenanceList
           contributors={contributors}
@@ -317,8 +319,9 @@ export function useBgFieldEditing({
 }
 
 export function BgFieldInput({ prop, label, placeholder, field }: { prop: string; label: string; placeholder: string; field: BgFieldEditing }) {
+  const translate = useTranslate();
   return (
-    <VariableConnect code ariaLabel={`Connect ${label} to a variable`} disabled={field.busy} prop={prop} onPick={field.pick}>
+    <VariableConnect code ariaLabel={translate('style.backgroundKit.connect', { name: label })} disabled={field.busy} prop={prop} onPick={field.pick}>
       <input
         {...field.scrub.input}
         className="u-input embed-editor_size-input"
@@ -341,8 +344,9 @@ export function BgFieldInput({ prop, label, placeholder, field }: { prop: string
 // clipping / stacking; closes on backdrop click or Escape. No header — the rows
 // (label left / control right, divider-separated) run edge to edge like Webflow.
 export function LayerEditorModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  const translate = useTranslate();
   return (
-    <PanelSheet className="embed-editor_bg-modal u-surface-surface" label="Background layer" onClose={onClose}>
+    <PanelSheet className="embed-editor_bg-modal u-surface-surface" label={translate('style.backgroundKit.backgroundLayer')} onClose={onClose}>
       {children}
     </PanelSheet>
   );

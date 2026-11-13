@@ -32,7 +32,7 @@ export interface SenderDeps {
   /** The file refused a write: show the conflict notice with its reason. */
   readonly conflict: (reason: RejectionReason | undefined) => void;
   /** An edit failed to apply: report the error and retain earlier successful writes. */
-  readonly notice: (message: string) => void;
+  readonly notice: (reason: RejectionReason) => void;
   /** Prompt the canvas after a discrete edit is confirmed on disk. HMR can
    * arrive later; the canvas serializes overlapping patch requests. */
   readonly onAppliedUrgentEdit?: () => void;
@@ -290,7 +290,7 @@ function refuse(deps: SenderDeps, path: string, reason: RejectionReason | undefi
 // this gesture keep their undo information; only the failed request is settled.
 function withdraw(deps: SenderDeps, path: string, origin: PageOrigin, record: EditsRecord, reason: RejectionReason): void {
   recordNoChange(record);
-  deps.notice(`Stacki couldn’t apply this edit. ${describeRejection(reason)}`);
+  deps.notice(reason);
   const queued = deps.queue.entries(path);
   const code = queued.some((entry) => entry.tag !== 'gesture');
   deps.update(path, (current) => {

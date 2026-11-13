@@ -110,6 +110,7 @@ export function terminalAgentHandler(deps: {
     if (!requestTerminalTab(command)) {
       return { tag: 'declined' };
     }
+    // i18n-ignore: `where` is a plain string the agent-task callers (lib/agentTasks) pass on; their display is outside this folder.
     return { tag: 'sent', where: mode === 'claude' ? 'Claude Code in the terminal' : 'Codex in the terminal' };
   };
 }

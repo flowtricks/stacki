@@ -257,7 +257,7 @@ const check = (what, condition, detail) => {
   // The app shell and the modules it was split into (src/app).
   const app = readAppSource();
   check('deleting prunes what it made dead', /const dead = unusedDeclarations\(next\)/.test(app), 'nothing prunes declarations');
-  check('and says which lines went', /from the frontmatter/.test(app), 'the deletion is silent about it');
+  check('and says which lines went', /shell\.remove\.alsoRemoved/.test(app), 'the deletion is silent about it');
   check('copying takes the page’s code with it', /frontmatter: state\.model\.extraFrontmatter/.test(app), 'the clipboard holds markup only');
   check('pasting brings what the markup reads', /neededFrontmatter\(\{/.test(app), 'the paste carries nothing');
   check('and rewrites a relative import for where it landed', /rebaseProjectImport\(/.test(app), 'a relative path would point at nothing from another folder');

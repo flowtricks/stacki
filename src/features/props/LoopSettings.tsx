@@ -13,6 +13,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode, RefObject } from 'react';
 import { type DropdownOption } from '../../ui/Dropdown';
+import type { DescribedTranslator } from '../../lib/i18n/localeContext';
+import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Described, Translator } from '../../../shared/properties/i18n/messageRef';
 import { AstroIcon, SanityIcon, CloseIcon, CmsIcon, FileIcon, LayersIcon, TextIcon } from '../../ui/Icons';
 import type { TreeNode } from '../../editor/dataSample';
 import { treeListFields } from './loopProjectData';
@@ -39,7 +43,7 @@ import {
   type LoopSections,
 } from '../../editor/loopSections';
 import { useSectionCode, type SectionCodeContext } from './LoopSectionCode';
-import { connectableProps, propNameProblem, SETTING_TITLES } from '../../editor/optionsBinding';
+import { connectableProps, propNameProblem, settingTitle } from '../../editor/optionsBinding';
 import { propTooltip } from '../../editor/loopProps';
 import { listPropOf } from '../../editor/propDeclaration';
 import type { BindingContext } from './LoopBinding';
@@ -58,8 +62,7 @@ import './loopSettings.css';
 
 /** What applying a change did: nothing to say, or why it could not be done. */
 export type LoopApplyResult =
-  | { readonly ok: true; readonly unbound: number; readonly lost: readonly string[]; readonly restored: boolean }
-  | { readonly ok: false; readonly message: string };
+  { readonly ok: true; readonly unbound: number; readonly lost: readonly string[]; readonly restored: boolean } | ({ readonly ok: false } & Described);
 
 export interface LoopListOption {
   readonly path: string;
@@ -117,11 +120,10 @@ interface Notice {
 
 // "Unlinked 2 bindings (Role, Featured): this list doesn’t have those fields.
 // Switch back to Campus Pastors to link them again."
-function unlinkWarning(count: number, lost: readonly string[], before: string | undefined): string {
-  const named = lost.length === 0 ? '' : ` (${lost.map((field) => titled(field)).join(', ')})`;
-  const plural = count === 1 ? 'binding' : 'bindings';
-  const back = before === undefined ? '' : ` Switch back to ${before} to link ${count === 1 ? 'it' : 'them'} again.`;
-  return `Unlinked ${count} ${plural}${named}: this list doesn’t have ${count === 1 ? 'that field' : 'those fields'}.${back}`;
+function unlinkWarning(count: number, lost: readonly string[], before: string | undefined, translate: Translator): string {
+  const names = lost.length === 0 ? '' : ` (${lost.map((field) => titled(field)).join(', ')})`;
+  const unlinked = translate('props.loop.notice.unlinked', { count, names });
+  return before === undefined ? unlinked : `${unlinked} ${translate('props.loop.notice.switchBack', { count, name: before })}`;
 }
 
 // What the loop reads now, as the Source menu names it.
@@ -137,6 +139,8 @@ const NOTICE_MS = 6_000;
 
 export default function LoopSettings(props: LoopSettingsProps) {
   const catalog = useLoopCatalog(props.projectPath);
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [notice, setNotice] = useNotice();
   const { reading, fields, sections } = useLoopReading(props.input, props.projectPath, catalog, props.pickerData?.tree);
   const holder = readingChain(reading)[0];
@@ -144,21 +148,21 @@ export default function LoopSettings(props: LoopSettingsProps) {
   const apply = (target: LoopTarget): void => {
     const client = catalog?.sanity.kind === 'connected' ? catalog.sanity.client : 'unavailable';
     const before = readingLabel(reading, props.input.data, catalog);
-    setNotice(noticeFor(props.onApply(target, client), before));
+    setNotice(noticeFor(props.onApply(target, client), before, translate, translateDescribed));
   };
   const shared = { catalog, projectPath: props.projectPath };
   const applySection = (section: LoopSection, code: string): string | undefined => {
     const client = catalog?.sanity.kind === 'connected' ? catalog.sanity.client : 'unavailable';
     const result = props.onApply({ kind: 'section', section, code }, client);
-    return result.ok ? undefined : result.message;
+    return result.ok ? undefined : translateDescribed(result);
   };
   // The custom list's `{}` code box: writes the array as typed; a refusal says why it could not be.
   const applyItemsCode = (data: string): string | undefined => {
     const client = catalog?.sanity.kind === 'connected' ? catalog.sanity.client : 'unavailable';
     const result = props.onApply({ kind: 'value', data }, client);
-    return result.ok ? undefined : result.message;
+    return result.ok ? undefined : translateDescribed(result);
   };
-  const code = sections === undefined ? undefined : sectionCodeContext(sections, { input: props.input, fields, applySection, applyQuery: apply });
+  const code = sections === undefined ? undefined : sectionCodeContext(sections, { input: props.input, fields, applySection, applyQuery: apply }, translate);
   const literal = reading.kind === 'code' ? literalItems(props.input.data) : undefined;
   // Any array literal gets the Items section: rows for strings, the `{}` code box for the rest.
   const arrayLiteral = reading.kind === 'code' && isArrayLiteral(props.input.data);
@@ -170,6 +174,7 @@ export default function LoopSettings(props: LoopSettingsProps) {
     reading,
     { frontmatter: props.input.frontmatter, filePath: props.filePath },
     { onChange: (change) => apply({ kind: 'binding', change }), onEditProperty: props.onEditProperty },
+    translate,
   );
   return (
     <div className="loop-settings">
@@ -186,7 +191,7 @@ export default function LoopSettings(props: LoopSettingsProps) {
         traced={traced.collection}
         onChoose={apply}
         onNotice={(text) => setNotice({ tone: 'error', text })}
-        newList={newListOffer(props, catalog, setNotice)}
+        newList={newListOffer(props, catalog, translate, translateDescribed, setNotice)}
       />
       {notice !== undefined && <NoticeBanner notice={notice} onDismiss={() => setNotice(undefined)} />}
       <ReadingSettings
@@ -219,14 +224,15 @@ function sectionCodeContext(
     readonly applySection: SectionCodeContext['write'];
     readonly applyQuery: (target: LoopTarget) => void;
   },
+  translate: Translator,
 ): SectionCodeContext {
   const { query } = sections;
   const groq = sections.store === 'groq';
   return {
     sections,
-    problemOf: (section, code) => (groq ? groqSectionProblem(section, code, query) : sectionCodeProblem(section, code)),
+    problemOf: (section, code) => (groq ? groqSectionProblem(section, code, query, translate) : sectionCodeProblem(section, code, translate)),
     // A GROQ clause no control can say is kept as a custom row, so all of it shows.
-    refusalOf: (section, code) => (groq ? undefined : sectionRefusal(actions.input, section, code)),
+    refusalOf: (section, code) => (groq ? undefined : sectionRefusal(actions.input, section, code, translate)),
     write: (section, code) => {
       if (!groq) {
         return actions.applySection(section, code);
@@ -247,6 +253,8 @@ function sectionCodeContext(
 function newListOffer(
   props: Pick<LoopSettingsProps, 'newProp' | 'onApply'>,
   catalog: LoopCatalog | undefined,
+  translate: Translator,
+  translateDescribed: DescribedTranslator,
   setNotice: (notice: Notice | undefined) => void,
 ): NewListOffer | undefined {
   const host = props.newProp;
@@ -257,12 +265,12 @@ function newListOffer(
   const create = (declaration: PropDeclaration): Result<string, string> => {
     const result = props.onApply({ kind: 'value', data: declaration.key }, client, declaration);
     if (!result.ok) {
-      return err(result.message);
+      return err(translateDescribed(result));
     }
-    setNotice(noticeFor(result, undefined));
+    setNotice(noticeFor(result, undefined, translate, translateDescribed));
     return ok(declaration.key);
   };
-  return { host: { ...host, create }, seed: { fit: 'list', label: 'items', value: '' } };
+  return { host: { ...host, create }, seed: { fit: 'list', label: translate('props.loop.source.itemsSeed'), value: '' } };
 }
 
 // A component's list can link its settings to its properties: one kept as
@@ -273,6 +281,7 @@ function bindingFor(
   reading: LoopReading,
   file: { readonly frontmatter: string; readonly filePath: string | undefined },
   actions: Pick<BindingContext, 'onChange' | 'onEditProperty'>,
+  translate: Translator,
 ): BindingContext | undefined {
   if (file.filePath === undefined) {
     return undefined;
@@ -289,9 +298,9 @@ function bindingFor(
       file.filePath
         .split(/[\\/]/)
         .pop()
-        ?.replace(/\.astro$/, '') ?? 'Component',
+        ?.replace(/\.astro$/, '') ?? translate('props.loop.binding.component'),
     ),
-    problemOf: (key: string): string | undefined => propNameProblem(file.frontmatter, key),
+    problemOf: (key: string): string | undefined => propNameProblem(file.frontmatter, key, translate),
     connectable: (setting: LoopSetting): readonly string[] => connectableProps(file.frontmatter, setting),
     tooltipOf: (key: string): string => propTooltip(file.frontmatter, key),
   };
@@ -396,6 +405,8 @@ function ReadingDetails(props: {
   /** Whether the settings show the list's custom code themselves, section by section. */
   readonly split: boolean;
 }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { reading, traced } = props;
   if (reading.kind === 'value' && reading.origin.kind === 'call') {
     return (
@@ -413,7 +424,10 @@ function ReadingDetails(props: {
   if (reading.kind === 'partial') {
     return props.split ? undefined : (
       <LoopDetails>
-        <div className="loop-lineage-note">{reading.reason} It still works; edit it in the code.</div>
+        <div className="loop-lineage-note">
+          {translateDescribed({ message: reading.reason, ...(reading.reasonIssue === undefined ? {} : { messageRef: reading.reasonIssue.messageRef }) })}{' '}
+          {translate('props.loop.details.stillWorks')}
+        </div>
       </LoopDetails>
     );
   }
@@ -436,6 +450,7 @@ function CollectionSettings(props: {
   readonly code: SectionCodeContext | undefined;
   readonly onChange: (query: LoopQuery) => void;
 }) {
+  const translate = useTranslate();
   const { home } = props;
   // A builder export's items carry the CMS's own ids, which its code matches.
   const ids = home?.kind === 'options' || (home?.kind === 'chain' && home.itemPath[0] === 'fields') ? 'export' : 'entry';
@@ -451,12 +466,12 @@ function CollectionSettings(props: {
     <>
       <div className="props-field loop-settings-row loop-settings-mode">
         <label>
-          <span className="prop-label">Items</span>
+          <span className="prop-label">{translate('props.loop.settings.items')}</span>
         </label>
         <SegSwitch
           options={[
-            { value: 'dynamic', label: 'Dynamic' },
-            { value: 'selected', label: 'Selected' },
+            { value: 'dynamic', label: translate('props.loop.settings.dynamic') },
+            { value: 'selected', label: translate('props.loop.settings.selected') },
           ]}
           current={query.selection === undefined ? 'dynamic' : 'selected'}
           onPick={switchTo}
@@ -566,22 +581,29 @@ function QuerySections(props: {
 
 // What applying a change says: why it failed, what it unlinked, or that a
 // switch back linked bindings again; nothing when it simply worked.
-function noticeFor(result: LoopApplyResult, before: string | undefined): Notice | undefined {
+function noticeFor(result: LoopApplyResult, before: string | undefined, translate: Translator, translateDescribed: DescribedTranslator): Notice | undefined {
   if (!result.ok) {
-    return { tone: 'error', text: result.message };
+    return { tone: 'error', text: translateDescribed(result) };
   }
   if (result.unbound > 0) {
-    return { tone: 'warning', text: unlinkWarning(result.unbound, result.lost, before) };
+    return { tone: 'warning', text: unlinkWarning(result.unbound, result.lost, before, translate) };
   }
-  return result.restored ? { tone: 'info', text: 'Bindings inside are linked again, as they were for this list.' } : undefined;
+  return result.restored ? { tone: 'info', text: translate('props.loop.notice.relinked') } : undefined;
 }
 
 function NoticeBanner(props: { readonly notice: Notice; readonly onDismiss: () => void }) {
+  const translate = useTranslate();
   const { notice } = props;
   return (
     <div className={`loop-settings-notice ${notice.tone}`} role={notice.tone === 'info' ? 'status' : 'alert'}>
       <span>{notice.text}</span>
-      <button type="button" className="loop-settings-remove" aria-label="Dismiss" title="Dismiss" onClick={props.onDismiss}>
+      <button
+        type="button"
+        className="loop-settings-remove"
+        aria-label={translate('props.loop.notice.dismiss')}
+        title={translate('props.loop.notice.dismiss')}
+        onClick={props.onDismiss}
+      >
         <CloseIcon size={12} />
       </button>
     </div>
@@ -676,10 +698,11 @@ function useTracedEditing(
 // ---------------------------------------------------------------------------
 
 function SourceRow(props: SourceRowProps) {
+  const translate = useTranslate();
   const { reading, catalog } = props;
   const rowRef = useRef<HTMLDivElement>(null);
   const current = sourceKeyOf(props);
-  const shown = props.fieldList === undefined ? sourceOptions(props, catalog, current).find((option) => option.value === current) : undefined;
+  const shown = props.fieldList === undefined ? sourceOptions(props, catalog, current, translate).find((option) => option.value === current) : undefined;
   const choose = (pick: SourcePick): void => {
     // Picking the list it already reads keeps the settings refining it.
     if (pick.kind === 'value' && `value:${pick.data}` === current) {
@@ -701,7 +724,7 @@ function SourceRow(props: SourceRowProps) {
       return;
     }
     if (pick.source.kind === 'sanity' && catalog?.sanity.kind === 'connected' && catalog.sanity.client === 'unavailable') {
-      props.onNotice('Add the @sanity/astro integration to this project to loop over Sanity content.');
+      props.onNotice(translate('props.loop.source.needsSanityAstro'));
       return;
     }
     void chooseCollection(props, catalog, pick.source);
@@ -709,11 +732,11 @@ function SourceRow(props: SourceRowProps) {
   return (
     <div className="props-field loop-settings-row" ref={rowRef}>
       <label>
-        <span className="prop-label">Source</span>
+        <span className="prop-label">{translate('props.loop.source.title')}</span>
       </label>
       <div className="loop-settings-source">
         <SourcePicker
-          label={props.fieldList === undefined ? (shown?.label ?? 'None') : fieldListLabel(props.fieldList, catalog)}
+          label={props.fieldList === undefined ? (shown?.label ?? translate('props.loop.source.none')) : fieldListLabel(props.fieldList, catalog)}
           icon={fieldListIcon(props.fieldList) ?? shown?.icon ?? <CmsIcon size={13} />}
           current={pickerPath(props, reading)}
           catalog={catalog}
@@ -780,20 +803,25 @@ async function chooseCollection(
   props.onChoose({ kind: 'query', query, fields: fields ?? [] });
 }
 
-function sourceOptions(props: SourceRowProps, catalog: LoopCatalog | undefined, current: string): DropdownOption<string>[] {
+function sourceOptions(
+  props: SourceRowProps,
+  catalog: LoopCatalog | undefined,
+  current: string,
+  translate: Translator = ENGLISH_TRANSLATE,
+): DropdownOption<string>[] {
   const options: DropdownOption<string>[] = [
-    { value: 'empty', label: 'None' },
-    { value: 'list', label: 'Custom list', hint: 'type the items', icon: <TextIcon size={13} /> },
+    { value: 'empty', label: translate('props.loop.source.none') },
+    { value: 'list', label: translate('props.loop.source.customList'), hint: translate('props.loop.source.typeItems'), icon: <TextIcon size={13} /> },
   ];
   const sanityLabel = catalog?.sanity.kind === 'connected' ? `Sanity · ${catalog.sanity.label}` : 'Sanity';
   const sanityMissing = catalog?.sanity.kind === 'connected' && catalog.sanity.client === 'unavailable';
   for (const collection of catalog?.collections ?? []) {
     const astro = collection.source.kind === 'astro';
-    const hint = sanityMissing && !astro ? 'needs @sanity/astro' : collection.count === undefined ? '' : String(collection.count);
+    const hint = sanityMissing && !astro ? translate('props.loop.source.needsIntegration') : collection.count === undefined ? '' : String(collection.count);
     options.push({
       value: sourceKey(collection.source),
       label: collection.title,
-      group: astro ? 'Content collections' : sanityLabel,
+      group: astro ? translate('props.loop.source.contentCollections') : sanityLabel,
       groupIcon: astro ? <AstroIcon size={12} /> : <SanityIcon size={12} />,
       hint,
       icon: <CmsIcon size={13} />,
@@ -805,7 +833,7 @@ function sourceOptions(props: SourceRowProps, catalog: LoopCatalog | undefined, 
     options.push({
       value: `value:${list.path}`,
       label: list.label,
-      group: project ? 'Project data' : 'On this page',
+      group: project ? translate('props.dataPicker.section.projectData') : translate('props.dataPicker.section.onPage'),
       hint: list.hint,
       icon: project ? <FileIcon size={13} /> : <LayersIcon size={13} />,
     });
@@ -813,7 +841,7 @@ function sourceOptions(props: SourceRowProps, catalog: LoopCatalog | undefined, 
   // What the loop reads now is always listed, even before the catalog loads
   // or when it is a list the menus do not offer.
   if (!options.some((option) => option.value === current)) {
-    options.push(currentOption(props, current));
+    options.push(currentOption(props, current, translate));
   }
   assert(options.length <= LOOP_CATALOG_LIMITS.collectionsMax + props.lists.length + 3, 'The Source menu is bounded');
   return options;
@@ -825,7 +853,7 @@ function isProjectData(props: SourceRowProps, name: string): boolean {
   return modules !== undefined && Object.prototype.hasOwnProperty.call(modules, name);
 }
 
-function currentOption(props: SourceRowProps, current: string): DropdownOption<string> {
+function currentOption(props: SourceRowProps, current: string, translate: Translator): DropdownOption<string> {
   const reading = props.reading;
   if (reading.kind === 'query' || reading.kind === 'partial') {
     const source = reading.kind === 'query' ? reading.query.source : reading.source;
@@ -834,51 +862,70 @@ function currentOption(props: SourceRowProps, current: string): DropdownOption<s
       return {
         value: current,
         label: source.collection,
-        group: project ? 'Project data' : 'On this page',
+        group: project ? translate('props.dataPicker.section.projectData') : translate('props.dataPicker.section.onPage'),
         hint: '',
         icon: project ? <FileIcon size={13} /> : <LayersIcon size={13} />,
       };
     }
-    return { value: current, label: source.collection, group: source.kind === 'astro' ? 'Content collections' : 'Sanity', icon: <CmsIcon size={13} /> };
+    return {
+      value: current,
+      label: source.collection,
+      // i18n-ignore: Sanity is a brand name.
+      group: source.kind === 'astro' ? translate('props.loop.source.contentCollections') : 'Sanity',
+      icon: <CmsIcon size={13} />,
+    };
   }
   if (reading.kind === 'value' && props.traced !== undefined) {
     // Named for what it really is: the collection, and the code it comes through.
     const source = props.traced.source;
     const title = props.catalog?.collections.find((entry) => sourceKey(entry.source) === sourceKey(source))?.title ?? titled(source.collection);
-    const via = reading.origin.kind === 'call' ? `via ${reading.origin.exportName}()` : props.data.trim();
+    const via = reading.origin.kind === 'call' ? translate('props.loop.source.via', { name: `${reading.origin.exportName}()` }) : props.data.trim();
     return {
       value: current,
       label: `${title} · ${props.data.trim()}`,
-      group: 'On this page',
+      group: translate('props.dataPicker.section.onPage'),
       hint: via,
       icon: source.kind === 'sanity' ? <SanityIcon size={13} /> : <AstroIcon size={13} />,
     };
   }
   if (reading.kind === 'value') {
     const origin = reading.origin;
-    const hint = origin.kind === 'call' ? `${origin.exportName}()` : origin.kind === 'import' ? 'import' : origin.kind === 'frontmatter' ? 'this file' : '';
-    return { value: current, label: props.data.trim(), group: 'On this page', hint, icon: <LayersIcon size={13} /> };
+    const hint =
+      origin.kind === 'call'
+        ? `${origin.exportName}()`
+        : origin.kind === 'import'
+          ? translate('props.loop.source.import')
+          : origin.kind === 'frontmatter'
+            ? translate('props.loop.source.thisFile')
+            : '';
+    return { value: current, label: props.data.trim(), group: translate('props.dataPicker.section.onPage'), hint, icon: <LayersIcon size={13} /> };
   }
-  return { value: current, label: 'Custom code', hint: 'edit below' };
+  return { value: current, label: translate('props.loop.customCode'), hint: translate('props.loop.source.editBelow') };
 }
 
 // Where an options object's settings are saved.
 function OptionsNote(props: { readonly home: QueryHome }) {
+  const translate = useTranslate();
+  const { formatList } = useFormat();
   const home = props.home;
+  if (home.kind === 'chain') {
+    return <div className="loop-lineage-note">{translate('props.loop.details.chain', { list: home.list })}</div>;
+  }
   const bound =
-    home.kind === 'options' ? LOOP_SETTINGS.filter((setting) => home.settings[setting].kind === 'prop').map((setting) => SETTING_TITLES[setting]) : [];
-  const defaults = bound.length === 0 ? '' : ` ${bound.join(', ')} are this component’s defaults; a page using it can set its own.`;
-  const text = home.kind === 'chain' ? `Applied to ${home.list}, kept as written.` : `Saved in this file, in the settings ${home.reader}() applies.${defaults}`;
+    home.kind === 'options' ? LOOP_SETTINGS.filter((setting) => home.settings[setting].kind === 'prop').map((setting) => settingTitle(setting, translate)) : [];
+  const saved = translate('props.loop.details.saved', { reader: home.reader });
+  const text = bound.length === 0 ? saved : `${saved} ${translate('props.loop.details.defaults', { titles: formatList(bound, 'and') })}`;
   return <div className="loop-lineage-note">{text}</div>;
 }
 
 function PartialNotice(props: { readonly onReplace: () => void }) {
+  const translate = useTranslate();
   const [armed, setArmed] = useState(false);
   return (
     <div className="loop-settings-partial">
-      <div className="loop-settings-partial-title">Custom code shapes this list</div>
+      <div className="loop-settings-partial-title">{translate('props.loop.partial.title')}</div>
       <button type="button" className="loop-settings-link" onClick={() => (armed ? props.onReplace() : setArmed(true))} onBlur={() => setArmed(false)}>
-        {armed ? 'Click again to replace the code' : 'Use list settings instead'}
+        {armed ? translate('props.loop.partial.confirm') : translate('props.loop.partial.use')}
       </button>
     </div>
   );

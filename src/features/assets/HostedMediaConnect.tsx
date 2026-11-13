@@ -5,6 +5,9 @@
 // main process, kept there encrypted, and never shown again
 // (electron/content/media/mediaConnectionStore.ts).
 import { useState } from 'react';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
+import { useMediaErrorText } from './useMediaErrorText';
 import Popup from '../../ui/Popup';
 import Dropdown from '../../ui/Dropdown';
 import { ErrorToast } from '../../ui/ErrorToast';
@@ -30,6 +33,11 @@ import {
 } from '../../../shared/properties/mediaAccounts';
 import { EMPTY_CONNECT_FIELDS, PROVIDER_NAMES, draftFields, fieldsOf, type ConnectFields } from './hostedMediaModel';
 
+/** A host's name for people: product names stay, "S3-compatible" is a description and follows the language. */
+function providerName(kind: MediaProviderKind, translate: (key: MessageKey) => string): string {
+  return kind === 's3' ? translate('assets.provider.s3') : PROVIDER_NAMES[kind];
+}
+
 export function ProviderIcon({ kind, size = 14 }: { readonly kind: MediaProviderKind; readonly size?: number }) {
   switch (kind) {
     case 'r2':
@@ -45,16 +53,10 @@ export function ProviderIcon({ kind, size = 14 }: { readonly kind: MediaProvider
   }
 }
 
-const HINTS: Readonly<Record<MediaProviderKind, string>> = {
-  r2:
-    'Create an R2 API token with Object Read & Write for this bucket (R2 → Manage API tokens). ' +
-    'The public URL is the bucket’s public development URL or its custom domain (R2 → bucket → Settings).',
-  bunny:
-    'The storage zone’s password is under Storage → your zone → FTP & API Access. ' +
-    'The pull zone URL is the CDN address connected to the zone (Pull zones → your zone → Hostnames).',
-  s3:
-    'Any host that speaks the S3 API: AWS S3, Backblaze B2, DigitalOcean Spaces, Wasabi, MinIO. ' +
-    'The public URL is where the bucket’s files are served from.',
+const HINTS: Readonly<Record<MediaProviderKind, MessageKey>> = {
+  r2: 'assets.connect.hint.r2',
+  bunny: 'assets.connect.hint.bunny',
+  s3: 'assets.connect.hint.s3',
 };
 
 export function HostedMediaConnect(props: {
@@ -65,6 +67,9 @@ export function HostedMediaConnect(props: {
   readonly onConnected: (list: MediaConnectionList) => void;
 }) {
   const { editing } = props;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const mediaErrorText = useMediaErrorText();
   const [kind, setKind] = useState<MediaProviderKind>(editing?.kind ?? 'r2');
   const [fields, setFields] = useState<ConnectFields>(editing === undefined ? EMPTY_CONNECT_FIELDS : fieldsOf(editing));
   const [error, setError] = useState<string | undefined>(undefined);
@@ -83,7 +88,7 @@ export function HostedMediaConnect(props: {
       props.onConnected(result.list);
       props.close();
     } else {
-      setError(result.message);
+      setError(translateDescribed(result));
     }
   };
   const saveManual = async () => {
@@ -91,7 +96,7 @@ export function HostedMediaConnect(props: {
     try {
       draft = parseMediaConnectionDraft(draftFields(kind, fields));
     } catch (reason: unknown) {
-      setError(reason instanceof Error ? reason.message : String(reason));
+      setError(mediaErrorText(reason));
       return;
     }
     setBusy(true);
@@ -100,7 +105,7 @@ export function HostedMediaConnect(props: {
     setBusy(false);
     finish(result);
   };
-  const title = editing === undefined ? 'Connect media storage' : `Edit ${editing.label}`;
+  const title = editing === undefined ? translate('assets.connect.title') : translate('assets.connect.edit', { label: editing.label });
   const accountRoute = kind !== 's3';
   return (
     <Popup className="modal publish-settings" label={title} onClose={props.close} dismissible>
@@ -111,10 +116,14 @@ export function HostedMediaConnect(props: {
             {error && <ErrorToast message={error} />}
             {editing === undefined && (
               <div className="publish-field">
-                Host
+                {translate('assets.connect.host')}
                 <Dropdown
                   value={kind}
-                  options={(['r2', 'bunny', 's3'] as const).map((value) => ({ value, label: PROVIDER_NAMES[value], icon: <ProviderIcon kind={value} /> }))}
+                  options={(['r2', 'bunny', 's3'] as const).map((value) => ({
+                    value,
+                    label: providerName(value, translate),
+                    icon: <ProviderIcon kind={value} />,
+                  }))}
                   onChange={(next) => {
                     setKind(next);
                     setError(undefined);
@@ -127,7 +136,7 @@ export function HostedMediaConnect(props: {
             )}
             {accountRoute && (
               <button type="button" className="ghost hosted-advanced-toggle" aria-expanded={manual} onClick={() => setManual(!manual)}>
-                {manual ? 'Use the account instead' : 'Advanced: enter keys manually'}
+                {manual ? translate('assets.connect.useAccount') : translate('assets.connect.advanced')}
               </button>
             )}
             {(manual || !accountRoute) && (
@@ -139,13 +148,13 @@ export function HostedMediaConnect(props: {
                 }}
               >
                 <label>
-                  Name
-                  <input {...field('label')} placeholder={PROVIDER_NAMES[kind]} />
+                  {translate('assets.connect.name')}
+                  <input {...field('label')} placeholder={providerName(kind, translate)} />
                 </label>
                 <ProviderFields kind={kind} field={field} fields={fields} setFields={setFields} />
-                <p className="hint-text">{HINTS[kind]}</p>
+                <p className="hint-text">{translate(HINTS[kind])}</p>
                 <button type="submit" className="primary" disabled={busy}>
-                  {busy ? 'Checking the connection…' : editing === undefined ? 'Connect' : 'Save connection'}
+                  {busy ? translate('assets.connect.checking') : editing === undefined ? translate('assets.connect.action') : translate('assets.connect.save')}
                 </button>
               </form>
             )}
@@ -158,28 +167,26 @@ export function HostedMediaConnect(props: {
 
 const ACCOUNT_TEXT = {
   r2: {
-    button: 'Connect with Cloudflare',
-    open: 'Create token in Cloudflare',
+    button: 'assets.connect.r2.button',
+    open: 'assets.connect.r2.open',
     openURL: CLOUDFLARE_TOKEN_TEMPLATE_URL,
-    keyLabel: 'Cloudflare API token',
-    find: 'Find buckets',
-    choose: 'Bucket',
-    publicLabel: 'Public bucket URL',
-    explain:
-      'Cloudflare opens with an R2 read & write token filled in. Create it, then paste it here: Stacki finds your buckets with it and keeps only that bucket’s keys, encrypted.',
+    keyLabel: 'assets.connect.r2.keyLabel',
+    find: 'assets.connect.r2.find',
+    choose: 'assets.connect.r2.choose',
+    publicLabel: 'assets.connect.r2.publicLabel',
+    explain: 'assets.connect.r2.explain',
   },
   bunny: {
-    button: 'Connect with Bunny',
-    open: 'Open my Bunny API key',
+    button: 'assets.connect.bunny.button',
+    open: 'assets.connect.bunny.open',
     openURL: BUNNY_API_KEY_URL,
-    keyLabel: 'Bunny account API key',
-    find: 'Find storage zones',
-    choose: 'Storage zone',
-    publicLabel: 'Pull zone URL',
-    explain:
-      'Paste your account API key: Stacki finds your storage zones with it, then keeps only the chosen zone’s storage password, encrypted. The account key is not kept.',
+    keyLabel: 'assets.connect.bunny.keyLabel',
+    find: 'assets.connect.bunny.find',
+    choose: 'assets.connect.bunny.choose',
+    publicLabel: 'assets.connect.bunny.publicLabel',
+    explain: 'assets.connect.bunny.explain',
   },
-} as const;
+} as const satisfies Record<'r2' | 'bunny', Readonly<Record<string, MessageKey | string>>>;
 
 // One pasted key, a choice of what it reaches, and a connect: the main process
 // (or the Studio server) does every lookup and keeps no copy of the pasted key.
@@ -190,6 +197,9 @@ function AccountConnect(props: {
   readonly onConnected: (result: MediaSaveResult) => void;
 }) {
   const text = ACCOUNT_TEXT[props.provider];
+  const translate = useTranslate();
+  const mediaErrorText = useMediaErrorText();
+  const translateDescribed = useTranslateDescribed();
   const [key, setKey] = useState('');
   const [choices, setChoices] = useState<MediaAccountChoices | undefined>(undefined);
   const [choice, setChoice] = useState('');
@@ -206,7 +216,7 @@ function AccountConnect(props: {
     try {
       accountKey = parseMediaAccountKey(props.provider === 'r2' ? { provider: 'r2', token: key } : { provider: 'bunny', apiKey: key });
     } catch (reason: unknown) {
-      props.onError(reason instanceof Error ? reason.message : String(reason));
+      props.onError(mediaErrorText(reason));
       return;
     }
     setBusy(true);
@@ -214,7 +224,7 @@ function AccountConnect(props: {
     const found = await discoverMediaAccounts(props.projectPath, accountKey);
     setBusy(false);
     if (!found.ok) {
-      props.onError(found.message);
+      props.onError(translateDescribed(found));
       return;
     }
     setChoices(found.value);
@@ -222,11 +232,7 @@ function AccountConnect(props: {
     setChoice(first?.value ?? '');
     setPublicBaseUrl(first?.publicBaseUrl ?? '');
     if (first === undefined) {
-      props.onError(
-        props.provider === 'r2'
-          ? 'This token reaches no R2 buckets. Create a bucket first, or check the token’s accounts.'
-          : 'This account has no storage zones yet.',
-      );
+      props.onError(props.provider === 'r2' ? translate('assets.connect.r2.noBuckets') : translate('assets.connect.bunny.noZones'));
     }
   };
   const connect = async () => {
@@ -239,7 +245,7 @@ function AccountConnect(props: {
           : { provider: 'bunny', apiKey: key, label: label.trim() || PROVIDER_NAMES.bunny, storageZone: name, publicBaseUrl },
       );
     } catch (reason: unknown) {
-      props.onError(reason instanceof Error ? reason.message : String(reason));
+      props.onError(mediaErrorText(reason));
       return;
     }
     setBusy(true);
@@ -250,35 +256,35 @@ function AccountConnect(props: {
   };
   return (
     <div className="publish-fields hosted-account">
-      <p className="hint-text">{text.explain}</p>
+      <p className="hint-text">{translate(text.explain)}</p>
       <button type="button" onClick={() => void openHostedLink(text.openURL)}>
         <ProviderIcon kind={props.provider} />
-        {text.open}
+        {translate(text.open)}
       </button>
       <label>
-        {text.keyLabel}
+        {translate(text.keyLabel)}
         <input value={key} type="password" autoComplete="off" spellCheck={false} onChange={(event) => setKey(event.target.value)} />
       </label>
       {choices === undefined ? (
         <button type="button" className="primary" disabled={busy || key.trim() === ''} onClick={() => void find()}>
-          {busy ? 'Looking…' : text.find}
+          {busy ? translate('assets.connect.looking') : translate(text.find)}
         </button>
       ) : (
         <>
           <div className="publish-field">
-            {text.choose}
+            {translate(text.choose)}
             <Dropdown value={choice} options={options} onChange={choose} />
           </div>
           <label>
-            {text.publicLabel}
+            {translate(text.publicLabel)}
             <input value={publicBaseUrl} spellCheck={false} placeholder="https://…" onChange={(event) => setPublicBaseUrl(event.target.value)} />
           </label>
           <label>
-            Name
-            <input value={label} placeholder={PROVIDER_NAMES[props.provider]} onChange={(event) => setLabel(event.target.value)} />
+            {translate('assets.connect.name')}
+            <input value={label} placeholder={providerName(props.provider, translate)} onChange={(event) => setLabel(event.target.value)} />
           </label>
           <button type="button" className="primary" disabled={busy || choice === ''} onClick={() => void connect()}>
-            {busy ? 'Connecting…' : text.button}
+            {busy ? translate('assets.connect.connecting') : translate(text.button)}
           </button>
         </>
       )}
@@ -319,21 +325,22 @@ function ProviderFields(props: {
   readonly setFields: (fields: ConnectFields) => void;
 }) {
   const { field, fields, setFields } = props;
+  const translate = useTranslate();
   switch (props.kind) {
     case 'r2':
       return (
         <>
           <label>
-            Account ID
-            <input {...field('accountId')} placeholder="32 characters, from the R2 overview" />
+            {translate('assets.connect.accountId')}
+            <input {...field('accountId')} placeholder={translate('assets.connect.accountIdPlaceholder')} />
           </label>
           <label>
-            Bucket
+            {translate('assets.connect.bucket')}
             <input {...field('bucket')} />
           </label>
           <label>
-            Public bucket URL
-            <input {...field('publicBaseUrl')} placeholder="Your bucket’s public URL" />
+            {translate('assets.connect.r2.publicLabel')}
+            <input {...field('publicBaseUrl')} placeholder={translate('assets.connect.bucketUrlPlaceholder')} />
           </label>
           <KeyPairFields field={field} />
         </>
@@ -342,23 +349,23 @@ function ProviderFields(props: {
       return (
         <>
           <label>
-            Storage zone
+            {translate('assets.connect.bunny.choose')}
             <input {...field('storageZone')} />
           </label>
           <div className="publish-field">
-            Region
+            {translate('assets.connect.region')}
             <Dropdown
               value={fields.region || 'de'}
-              options={BUNNY_REGIONS.map((value) => ({ value, label: value === 'de' ? 'Falkenstein (de, primary)' : value }))}
+              options={BUNNY_REGIONS.map((value) => ({ value, label: value === 'de' ? translate('assets.connect.falkenstein') : value }))}
               onChange={(region) => setFields({ ...fields, region })}
             />
           </div>
           <label>
-            Pull zone URL
-            <input {...field('publicBaseUrl')} placeholder="Your pull zone’s URL" />
+            {translate('assets.connect.bunny.publicLabel')}
+            <input {...field('publicBaseUrl')} placeholder={translate('assets.connect.pullZonePlaceholder')} />
           </label>
           <label>
-            Storage zone password
+            {translate('assets.connect.zonePassword')}
             <input {...field('accessKey', { secret: true })} />
           </label>
         </>
@@ -367,31 +374,31 @@ function ProviderFields(props: {
       return (
         <>
           <label>
-            Endpoint
-            <input {...field('endpoint')} placeholder="Endpoint URL" />
+            {translate('assets.connect.endpoint')}
+            <input {...field('endpoint')} placeholder={translate('assets.connect.endpointPlaceholder')} />
           </label>
           <label>
-            Region
+            {translate('assets.connect.region')}
             <input {...field('region')} placeholder="us-east-1" />
           </label>
           <label>
-            Bucket
+            {translate('assets.connect.bucket')}
             <input {...field('bucket')} />
           </label>
           <div className="publish-field">
-            Bucket address
+            {translate('assets.connect.bucketAddress')}
             <Dropdown
               value={fields.addressing}
               options={[
-                { value: 'path', label: 'In the path (endpoint/bucket)' },
-                { value: 'virtual', label: 'As a subdomain (bucket.endpoint)' },
+                { value: 'path', label: translate('assets.connect.addressing.path') },
+                { value: 'virtual', label: translate('assets.connect.addressing.virtual') },
               ]}
               onChange={(addressing) => setFields({ ...fields, addressing })}
             />
           </div>
           <label>
-            Public URL
-            <input {...field('publicBaseUrl')} placeholder="Your bucket’s public URL" />
+            {translate('assets.connect.publicUrl')}
+            <input {...field('publicBaseUrl')} placeholder={translate('assets.connect.bucketUrlPlaceholder')} />
           </label>
           <KeyPairFields field={field} />
         </>
@@ -404,14 +411,15 @@ function ProviderFields(props: {
 }
 
 function KeyPairFields({ field }: { readonly field: FieldProps }) {
+  const translate = useTranslate();
   return (
     <>
       <label>
-        Access key ID
+        {translate('assets.connect.accessKeyId')}
         <input {...field('accessKeyId')} />
       </label>
       <label>
-        Secret access key
+        {translate('assets.connect.secretAccessKey')}
         <input {...field('secretAccessKey', { secret: true })} />
       </label>
     </>

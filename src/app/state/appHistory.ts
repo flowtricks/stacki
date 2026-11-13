@@ -3,8 +3,12 @@
 // the code source, outside edits and file events, and composing navigation
 // (App.tsx).
 
+import { useTranslate, useTranslateRef } from '../../lib/i18n/useTranslate';
+import { messageRef } from '../../../shared/properties/i18n/messageRef';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { useGitIncoming } from '../../features/git/useGitIncoming';
 import { revertComponentProperties } from '../../features/componentProperties/propertiesBridge';
+import { propertyErrorTextFor } from '../../lib/i18n/propertyErrorText';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { parsePageSource as parseSourcePage, readPage } from '../../ipc/bridge';
 import { LIMITS } from '../../../shared/core/limits';
@@ -24,6 +28,7 @@ import { findEditorNodeById as findNodeById, toEditorPageState, carriedParse, ty
 import { type EditorModel } from '../../editor/pageView';
 import { onFilesChanged } from '../../ipc/appBridge';
 import { tellCanvas } from '../../editor/canvasQuery';
+import { VARIANT_MESSAGE_TYPES } from '../../../shared/page/variantOverride';
 import { onWindowReturn } from '../../lib/windowReturn';
 import { reviewedSource, nextSave } from '../model/nodeFactory';
 import { effective } from '../model/pageGestures';
@@ -114,6 +119,7 @@ export function useHistoryPush(coreState: ReturnType<typeof useCoreState>, lifec
         previous.redo = cmd.redo;
         if (cmd.label !== undefined) {
           previous.label = cmd.label;
+          previous.labelRef = cmd.labelRef;
         }
       } else {
         history.past.push({ kind: 'cmd', ...cmd });
@@ -136,6 +142,7 @@ export function useHistoryPush(coreState: ReturnType<typeof useCoreState>, lifec
 export function usePropertyUndo(navigation: ReturnType<typeof useNavigation>, historyPush: ReturnType<typeof useHistoryPush>) {
   const { completePropertySave } = navigation;
   const { pushCommand } = historyPush;
+  const translate = useTranslate();
 
   // Step 6: a property batch's undo is its inverse batch, held by main under a
   // token; applying one returns the token of the batch that redoes it. A file
@@ -146,15 +153,15 @@ export function usePropertyUndo(navigation: ReturnType<typeof useNavigation>, hi
       const step = async (): Promise<void> => {
         const reverted = await revertComponentProperties(next);
         if (!reverted.ok) {
-          throw new Error(reverted.error.message);
+          throw new Error(propertyErrorTextFor(reverted.error, translate));
         }
         next = reverted.value.undo;
         // As after the edit itself: the panel, the page and the scan re-read.
         await completePropertySave();
       };
-      pushCommand({ label: 'the property change', undo: step, redo: step });
+      pushCommand({ label: translate('shell.history.propertyChange'), labelRef: messageRef('shell.history.propertyChange'), undo: step, redo: step });
     },
-    [pushCommand, completePropertySave],
+    [pushCommand, completePropertySave, translate],
   );
   return { recordPropertyUndo };
 }
@@ -163,6 +170,7 @@ export function usePropertyUndo(navigation: ReturnType<typeof useNavigation>, hi
 export function useTypedParse(coreState: ReturnType<typeof useCoreState>, lifecycle: ReturnType<typeof useLifecycle>) {
   const { pageStateRef, setPageState, setSelectedId, typedSourceRef } = coreState;
   const { showToast } = lifecycle;
+  const translate = useTranslate();
 
   // The typed text's parse: a model to show when it parses, the parse-error
   // panel when it does not (plan §3.6). Installed only over the same text: the
@@ -176,7 +184,7 @@ export function useTypedParse(coreState: ReturnType<typeof useCoreState>, lifecy
       } catch (error: unknown) {
         if (typedSourceRef.current === source) {
           typedSourceRef.current = undefined;
-          showToast(`Couldn’t update code: ${cleanError(error)}`, 'error');
+          showToast(translate('shell.history.codeUpdateFailed', { message: cleanError(error) }), 'error');
         }
         return;
       }
@@ -217,7 +225,7 @@ export function useTypedParse(coreState: ReturnType<typeof useCoreState>, lifecy
       // page stays conflicted, and a save that landed meanwhile keeps its base.
       setPageState((current) => (current && current.source === source ? installed(current) : current));
     },
-    [showToast, pageStateRef, setPageState, setSelectedId, typedSourceRef],
+    [showToast, pageStateRef, setPageState, setSelectedId, typedSourceRef, translate],
   );
 
   const scheduleSaveRef = useRef<((urgency?: boolean | 'live') => void) | undefined>(undefined);
@@ -233,6 +241,7 @@ export function useTypedParse(coreState: ReturnType<typeof useCoreState>, lifecy
 export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreState: ReturnType<typeof useCoreState>) {
   const { autosave, editDrafts, historyRef, showToast } = lifecycle;
   const { pageStateRef, setPageState, setSelectedId } = coreState;
+  const translate = useTranslate();
 
   // Undo or redo one gesture sent as edit requests (step 6): its inverses go
   // out as reverts, newest first, each against the checksum it came back with,
@@ -262,7 +271,7 @@ export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreSta
         // an inverse names the bytes its write left, and the page is not there.
         // Declined, not failed: the step waits until the page is saved.
         back(entry);
-        showToast(`Couldn’t ${direction}: this page has edits that are not saved yet.`, 'warning');
+        showToast(translate(direction === 'undo' ? 'shell.history.unsavedUndo' : 'shell.history.unsavedRedo'), 'warning');
         return;
       }
       // Both halves of a partly reverted step keep the files: their calls are
@@ -274,9 +283,12 @@ export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreSta
           : { kind: 'edits', record: { outcome: { tag: 'applied', applied } }, files };
       const revert = async (): Promise<PageStep> => {
         const startOrigin = state.editable ? state.origin : undefined;
-        const reverted = await revertedSteps(path, outcome.applied, startOrigin);
+        const reverted = await revertedSteps(path, outcome.applied, startOrigin, translate);
         if (reverted.refusal !== undefined) {
-          showToast(`Couldn’t ${direction}: ${reverted.refusal.message}`, reverted.refusal.kind);
+          showToast(
+            translate(direction === 'undo' ? 'shell.history.undoFailed' : 'shell.history.redoFailed', { message: reverted.refusal.message }),
+            reverted.refusal.kind,
+          );
         }
         const { done, written, origin } = reverted;
         const left = outcome.applied.slice(0, outcome.applied.length - done.length);
@@ -307,10 +319,10 @@ export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreSta
           return;
         case 'refused':
           back(entry); // Nothing changed: the step waits where it was.
-          showToast(`Couldn’t ${direction}: ${stepped.message}`, 'error');
+          showToast(translate(direction === 'undo' ? 'shell.history.undoFailed' : 'shell.history.redoFailed', { message: stepped.message }), 'error');
           return;
         case 'files-failed':
-          showToast(`The page was restored, but its component file was not: ${stepped.message}`, 'error');
+          showToast(translate('shell.history.filesFailed', { message: stepped.message }), 'error');
           return;
         default: {
           const exhaustive: never = stepped;
@@ -318,7 +330,7 @@ export function useStepEdits(lifecycle: ReturnType<typeof useLifecycle>, coreSta
         }
       }
     },
-    [autosave, editDrafts, showToast, historyRef, pageStateRef, setPageState, setSelectedId],
+    [autosave, editDrafts, showToast, historyRef, pageStateRef, setPageState, setSelectedId, translate],
   );
   return { stepEdits };
 }
@@ -334,11 +346,16 @@ export function useUndoRedo(
   const { setHistoryTick } = typedParse;
   const { historyRef, showToast } = lifecycle;
   const { stepEdits } = stepEditsScope;
+  const translate = useTranslate();
+  const translateRef = useTranslateRef();
 
   const undo = useCallback(async () => {
     if (propertySave.saving.current) {
       return;
     }
+    // A pick's preview is held on the canvas for its write (morphVariant.ts); this
+    // step changes what the page says, so the held rendering must not outlast it.
+    tellCanvas({ type: VARIANT_MESSAGE_TYPES.cancel });
     setHistoryTick((count) => count + 1);
     const history = historyRef.current;
     history.lastKey = undefined;
@@ -352,24 +369,33 @@ export function useUndoRedo(
       try {
         await entry.undo();
       } catch (error: unknown) {
-        showToast(`Couldn’t undo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(error)}`, 'error');
+        const name = commandName(entry, translateRef);
+        showToast(
+          name
+            ? translate('shell.history.undoFailedNamed', { label: name, message: cleanError(error) })
+            : translate('shell.history.undoFailed', { message: cleanError(error) }),
+          'error',
+        );
       }
       setHistoryTick((count) => count + 1); // See below: the undo has landed.
       return;
     }
     await stepEdits(entry, 'undo');
-    noteNamedStep(entry, 'Undid', showToast);
+    noteNamedStep(entry, 'undo', translate, showToast);
     // Again now that the undo has landed. The tick above is read at once by the
     // Style panel, which re-read the CSS before the undo had changed it and kept
     // showing the old value (a background's Type, its layer row) until its next
     // poll. This one is read with the restored page in hand.
     setHistoryTick((count) => count + 1);
-  }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick]);
+  }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick, translate, translateRef]);
 
   const redo = useCallback(async () => {
     if (propertySave.saving.current) {
       return;
     }
+    // A pick's preview is held on the canvas for its write (morphVariant.ts); this
+    // step changes what the page says, so the held rendering must not outlast it.
+    tellCanvas({ type: VARIANT_MESSAGE_TYPES.cancel });
     setHistoryTick((count) => count + 1);
     const history = historyRef.current;
     history.lastKey = undefined;
@@ -383,30 +409,44 @@ export function useUndoRedo(
       try {
         await entry.redo();
       } catch (error: unknown) {
-        showToast(`Couldn’t redo${entry.label ? ` ${entry.label}` : ''}: ${cleanError(error)}`, 'error');
+        const name = commandName(entry, translateRef);
+        showToast(
+          name
+            ? translate('shell.history.redoFailedNamed', { label: name, message: cleanError(error) })
+            : translate('shell.history.redoFailed', { message: cleanError(error) }),
+          'error',
+        );
       }
       setHistoryTick((count) => count + 1); // See below: the redo has landed.
       return;
     }
     await stepEdits(entry, 'redo');
-    noteNamedStep(entry, 'Redid', showToast);
+    noteNamedStep(entry, 'redo', translate, showToast);
     // Again now that the redo has landed. The tick above is read at once by the
     // Style panel, which re-read the CSS before the redo had changed it and kept
     // showing the old value (a background's Type, its layer row) until its next
     // poll. This one is read with the restored page in hand.
     setHistoryTick((count) => count + 1);
-  }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick]);
+  }, [showToast, propertySave.saving, stepEdits, historyRef, setHistoryTick, translate, translateRef]);
   return { redo, undo };
+}
+
+// The name of a recorded command, worded in the language in force now: its reference when it has one, else the text it was recorded with.
+function commandName(entry: UndoCommand, translateRef: ReturnType<typeof useTranslateRef>): string | undefined {
+  if (entry.labelRef !== undefined) {
+    return translateRef(entry.labelRef);
+  }
+  return entry.label;
 }
 
 // A step an app named (docs/apps.md, "Undo labels") says which one went, as
 // History would: the app's own words, not "an attribute edit".
-function noteNamedStep(entry: EditsEntry, verb: 'Undid' | 'Redid', showToast: (message: string, kind: 'info') => void): void {
+function noteNamedStep(entry: EditsEntry, direction: 'undo' | 'redo', translate: Translator, showToast: (message: string, kind: 'info') => void): void {
   if (entry.label === undefined) {
     return;
   }
   assert(entry.label.length > 0, 'A step label has words');
-  showToast(`${verb} ${entry.label}`, 'info');
+  showToast(translate(direction === 'undo' ? 'shell.history.undid' : 'shell.history.redid', { label: entry.label }), 'info');
 }
 
 // Scheduling saves, and reviewing a conflict in code.
@@ -418,6 +458,7 @@ export function useScheduleSave(
 ) {
   const { pageStateRef, saveTimer, setLeftTab, setPageState } = coreState;
   const { autosave, editDrafts, showToast } = lifecycle;
+  const translate = useTranslate();
   const { scheduleSaveRef } = typedParse;
   const { pushEditHistory } = historyPush;
 
@@ -445,13 +486,13 @@ export function useScheduleSave(
         saveTimer.current = undefined;
         autosave().catch((error: unknown) => {
           if (pageStateRef.current.pageState?.save.tag !== 'failed') {
-            showToast(`Save failed: ${cleanError(error)}`, 'error');
+            showToast(translate('shell.save.failed', { message: cleanError(error) }), 'error');
           }
         });
       }, plan.delayMs);
       saveTimer.current = { handle, dueMs: nowMs + plan.delayMs };
     },
-    [autosave, showToast, saveTimer, pageStateRef],
+    [autosave, showToast, saveTimer, pageStateRef, translate],
   );
   scheduleSaveRef.current = scheduleSave;
 
@@ -471,12 +512,12 @@ export function useScheduleSave(
       try {
         const shown = await reviewedSource(open.path, state, editDrafts.entries(open.path));
         if (shown.tag === 'failed') {
-          showToast(`Couldn’t show your version: ${shown.message}`, 'error');
+          showToast(translate('shell.history.showVersionFailed', { message: shown.message }), 'error');
           return;
         }
         source = shown.source;
       } catch (error: unknown) {
-        showToast(`Couldn’t show your version: ${cleanError(error)}`, 'error');
+        showToast(translate('shell.history.showVersionFailed', { message: cleanError(error) }), 'error');
         return;
       }
       const latest = pageStateRef.current.pageState;
@@ -488,7 +529,7 @@ export function useScheduleSave(
       }
     }
     setLeftTab('code');
-  }, [editDrafts, pushEditHistory, showToast, pageStateRef, setLeftTab, setPageState]);
+  }, [editDrafts, pushEditHistory, showToast, pageStateRef, setLeftTab, setPageState, translate]);
   return { reviewConflictInCode, scheduleSave };
 }
 
@@ -500,6 +541,7 @@ export function useCommitEdit(
   historyPush: ReturnType<typeof useHistoryPush>,
 ) {
   const { editDrafts, setConflictReason, showToast } = lifecycle;
+  const translate = useTranslate();
   const { pageStateRef, propertySave, setPageState, typedCodeUnparsed } = coreState;
   const { scheduleSave } = scheduleSaveScope;
   const { pushEditHistory } = historyPush;
@@ -548,11 +590,11 @@ export function useCommitEdit(
       const origin = state.origin;
       if (editDrafts.empty(path) && origin === undefined) {
         // Typed code has not established source references for visual edits yet.
-        showToast('Wait for the current code change to finish saving, then try again.', 'info');
+        showToast(translate('shell.history.waitForSave'), 'info');
         return false;
       }
       if (editDrafts.entries(path).length >= LIMITS.intentsPendingMax) {
-        showToast('Too many edits are waiting to be saved — try again in a moment.', 'error');
+        showToast(translate('shell.history.tooManyEdits'), 'error');
         return false;
       }
       const record = pushEditHistory(gesture.coalesceKey, step.files);
@@ -562,7 +604,7 @@ export function useCommitEdit(
       scheduleSave(gesture.urgency);
       return true;
     },
-    [scheduleSave, pushEditHistory, propertySave.saving, editDrafts, typedCodeUnparsed, showToast, pageStateRef, setPageState],
+    [scheduleSave, pushEditHistory, propertySave.saving, editDrafts, typedCodeUnparsed, showToast, pageStateRef, setPageState, translate],
   );
   // The held gesture goes in with the next edit; a field that made none
   // (the pick was refused) leaves it to go in alone once the click is done,

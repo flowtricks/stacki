@@ -6,7 +6,17 @@
 // shared/), with each element's source location taken from the dev server's
 // `<!--avb-s:…-->` markers and, for contrast, its computed colours.
 import { assert } from '../core/assert';
-import { AUDIT_LIMITS, auditFinding, descriptionLengthCheck, type AuditFileKind, type AuditFinding } from './auditFindings';
+import {
+  AUDIT_LIMITS,
+  AUDIT_TAGS,
+  auditFinding,
+  descriptionLengthCheck,
+  detailText,
+  measureText,
+  type AuditFileKind,
+  type AuditFinding,
+} from './auditFindings';
+import type { MessageRef } from '../core/i18n/messageReference';
 import { contrastVerdict } from './auditContrast';
 import { DESCRIPTION_CHARS_MAX, DESCRIPTION_CHARS_MIN, VAGUE_LINK_TEXT, placeholderDetail, placeholderImage, placeholderPhrase } from './auditStatic';
 
@@ -141,8 +151,8 @@ function renderedFinding(
   page: RenderedPage,
   element: RenderedElement | undefined,
   check: AuditFinding['check'],
-  detail: string,
-  extra: Pick<AuditFinding, 'excerpt' | 'measure'>,
+  detail: string | DetailText,
+  extra: Pick<AuditFinding, 'excerpt' | 'measure' | 'measureRef'>,
 ): AuditFinding {
   const source = element?.source;
   const file = source?.file ?? page.file;
@@ -152,11 +162,12 @@ function renderedFinding(
     file,
     fileKind,
     element: source === undefined || element === undefined ? undefined : { path: source.path, tag: element.tag, line: undefined },
-    detail: source?.ancestor === true ? `${detail} (written by the component here)` : detail,
+    ...writtenDetail(detail, { byComponent: source?.ancestor === true }),
     source: 'rendered',
     fix: undefined,
     ...(extra.excerpt === undefined ? {} : { excerpt: extra.excerpt }),
     ...(extra.measure === undefined ? {} : { measure: extra.measure }),
+    ...(extra.measureRef === undefined ? {} : { measureRef: extra.measureRef }),
     ...(file === page.file ? {} : { routes: [page.route] }),
   });
 }
@@ -194,30 +205,56 @@ export function renderedText(element: RenderedElement): string {
   return parts.join('').replace(/\s+/g, ' ');
 }
 
-type Add = (element: RenderedElement | undefined, check: AuditFinding['check'], detail: string, extra?: Pick<AuditFinding, 'excerpt' | 'measure'>) => void;
+/** A detail: plain code-like text (`href="/x"`), or a sentence that carries its reference. */
+type DetailText = ReturnType<typeof detailText>;
+
+type Add = (
+  element: RenderedElement | undefined,
+  check: AuditFinding['check'],
+  detail: string | DetailText,
+  extra?: Pick<AuditFinding, 'excerpt' | 'measure' | 'measureRef'>,
+) => void;
+
+/** The detail of a finding, with the note that a component wrote the element when it did. A sentence loses its reference then, so its English shows. */
+function writtenDetail(detail: string | DetailText, options: { readonly byComponent: boolean }): { readonly detail: string; readonly detailRef?: MessageRef } {
+  if (typeof detail === 'string') {
+    return options.byComponent ? detailText('audits.detail.writtenByComponent', { detail }) : { detail };
+  }
+  // i18n-ignore: a sentence that already has a reference is shown in English here, because a reference cannot nest another.
+  return options.byComponent ? { detail: `${detail.detail} (written by the component here)` } : detail;
+}
 
 function checkDocument(page: RenderedPage, elements: readonly Visit[], add: Add, options: Pick<RenderedOptions, 'noindexRoutes'>): void {
   const html = page.root;
   if ((html.attrs['lang'] ?? '').trim().length === 0) {
-    add(html, 'html-lang', '<html> has no lang');
+    add(html, 'html-lang', detailText('audits.detail.htmlNoLang', { html: AUDIT_TAGS.html }));
   }
   const title = elements.find((visit) => visit.element.tag === 'title');
   if (title === undefined || renderedText(title.element).trim().length === 0) {
-    add(title?.element, 'title-missing', title === undefined ? 'The page renders no <title>' : 'The rendered <title> is empty');
+    add(
+      title?.element,
+      'title-missing',
+      detailText(title === undefined ? 'audits.detail.renderedNoTitle' : 'audits.detail.renderedTitleEmpty', { title: AUDIT_TAGS.title }),
+    );
   }
   const meta = (name: string): RenderedElement | undefined =>
     elements.find((visit) => visit.element.tag === 'meta' && (visit.element.attrs['name'] ?? '').toLowerCase() === name)?.element;
   const description = meta('description');
   const content = description?.attrs['content']?.trim() ?? '';
   if (content.length === 0) {
-    add(description, 'description-missing', 'The page renders no meta description');
+    add(description, 'description-missing', detailText('audits.detail.renderedNoDescription'));
   } else {
     const check = descriptionLengthCheck(content.length);
     if (check !== undefined) {
-      add(description, check, `${content.length} characters (aim for ${DESCRIPTION_CHARS_MIN}–${DESCRIPTION_CHARS_MAX})`, {
-        excerpt: content,
-        measure: `${content.length} characters`,
-      });
+      add(
+        description,
+        check,
+        detailText('audits.detail.descriptionLength', { length: content.length, min: DESCRIPTION_CHARS_MIN, max: DESCRIPTION_CHARS_MAX }),
+        {
+          excerpt: content,
+          ...measureText('audits.measure.characters', { count: content.length }),
+        },
+      );
     }
   }
   const robots = meta('robots');
@@ -230,7 +267,7 @@ function checkDocument(page: RenderedPage, elements: readonly Visit[], add: Add,
 function checkCanonical(page: RenderedPage, elements: readonly Visit[], add: Add): void {
   const link = elements.find((visit) => visit.element.tag === 'link' && (visit.element.attrs['rel'] ?? '').toLowerCase() === 'canonical')?.element;
   if (link === undefined) {
-    add(undefined, 'canonical', 'The page renders no canonical link');
+    add(undefined, 'canonical', detailText('audits.detail.renderedNoCanonical'));
     return;
   }
   const href = link.attrs['href'] ?? '';
@@ -238,12 +275,12 @@ function checkCanonical(page: RenderedPage, elements: readonly Visit[], add: Add
   try {
     path = new URL(href, 'http://canonical.invalid').pathname;
   } catch {
-    add(link, 'canonical', `href="${href}" is not a URL`);
+    add(link, 'canonical', detailText('audits.detail.canonicalNotURL', { href }));
     return;
   }
   const trim = (value: string): string => (value.length > 1 ? value.replace(/\/$/, '') : value);
   if (!page.route.includes('[') && trim(path) !== trim(page.route)) {
-    add(link, 'canonical', `Points at ${path}, not ${page.route}`);
+    add(link, 'canonical', detailText('audits.detail.canonicalPointsAt', { path, route: page.route }));
   }
 }
 
@@ -254,9 +291,9 @@ function checkOutline(elements: readonly Visit[], add: Add): void {
   });
   const ones = headings.filter((heading) => heading.level === 1);
   if (ones.length === 0) {
-    add(undefined, 'h1-count', 'The page renders no <h1>');
+    add(undefined, 'h1-count', detailText('audits.detail.renderedNoH1', { h1: AUDIT_TAGS.h1 }));
   } else if (ones.length > 1) {
-    add(ones[1]?.element, 'h1-count', `The page renders ${ones.length} <h1> elements`);
+    add(ones[1]?.element, 'h1-count', detailText('audits.detail.renderedH1Count', { total: ones.length, h1: AUDIT_TAGS.h1 }));
   }
   let previous: number | undefined;
   for (const heading of headings) {
@@ -333,7 +370,7 @@ function checkIds(elements: readonly Visit[], add: Add): void {
     const count = (seen.get(id) ?? 0) + 1;
     seen.set(id, count);
     if (count === 2) {
-      add(element, 'duplicate-id', `id="${id}" appears more than once on the page`);
+      add(element, 'duplicate-id', detailText('audits.detail.idRepeatsOnPage', { id }));
     }
   }
 }
@@ -350,7 +387,16 @@ function checkContrast(elements: readonly Visit[], add: Add): void {
     }
     const verdict = contrastVerdict({ foreground: style.color, background: style.background, fontSizePx: style.fontSizePx, fontWeight: style.fontWeight });
     if (verdict.tag === 'fail') {
-      add(element, 'contrast', `${verdict.ratio.toFixed(2)}:1, needs ${verdict.required}:1 (${style.color} on ${style.background})`);
+      add(
+        element,
+        'contrast',
+        detailText('audits.detail.contrastRatio', {
+          ratio: verdict.ratio.toFixed(2),
+          required: verdict.required,
+          color: style.color,
+          background: style.background,
+        }),
+      );
     }
   }
 }
@@ -445,6 +491,7 @@ function relocatedTo(finding: AuditFinding, page: RenderedPage, holder: Rendered
     fileKind,
     element: { path: holder.path, tag: finding.element?.tag ?? 'text', line: undefined },
     detail: finding.detail,
+    ...(finding.detailRef === undefined ? {} : { detailRef: finding.detailRef }),
     source: 'rendered',
     fix: undefined,
     ...(holder.file === page.file ? {} : { routes: [page.route] }),

@@ -15,6 +15,7 @@ import { useDelayedTooltip } from '../../ui/delayedTooltip';
 import { can } from '../../../shared/properties/projectRoles';
 import { useCurrentRole } from '../../lib/useCurrentRole';
 import { currentRole } from '../../lib/currentRole';
+import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
 
 interface PalettePanelProps {
   readonly components: readonly ScanComponent[];
@@ -144,16 +145,18 @@ function PaletteHeader({
   readonly setCreating: React.Dispatch<React.SetStateAction<boolean>>;
   readonly tooltip: ReturnType<typeof useDelayedTooltip>;
 }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const canCreate = source.kind === 'ready';
   const allowed = can(useCurrentRole(), 'component:create');
   return (
     <>
       <div className="panel-header">
-        <h2>Components</h2>
+        <h2>{translate('palette.panel.title')}</h2>
         <span hidden={!allowed} className="tip-anchor" onMouseEnter={tooltip.show} onMouseLeave={tooltip.hide}>
           <button
             className="ghost"
-            aria-label="New component"
+            aria-label={translate('palette.panel.new')}
             disabled={!canCreate}
             onClick={() => {
               tooltip.hide();
@@ -166,7 +169,9 @@ function PaletteHeader({
       </div>
       {tooltip.value && (
         <div className="rail-tooltip below" style={tooltip.value}>
-          {canCreate ? `New component (${shortcutLabel('A', 'primary-shift', currentDesktopPlatform())})` : source.reason}
+          {canCreate
+            ? translate('palette.panel.newShortcut', { shortcut: shortcutLabel('A', 'primary-shift', currentDesktopPlatform()) })
+            : translateDescribed({ message: source.reason, messageRef: source.reasonRef })}
         </div>
       )}
     </>
@@ -174,9 +179,10 @@ function PaletteHeader({
 }
 
 function PaletteSearch({ query, setQuery }: { readonly query: string; readonly setQuery: React.Dispatch<React.SetStateAction<string>> }) {
+  const translate = useTranslate();
   return (
     <div style={{ padding: '0 12px 8px' }}>
-      <input value={query} placeholder="Search components" spellCheck={false} onChange={(event) => setQuery(event.currentTarget.value)} />
+      <input value={query} placeholder={translate('palette.panel.search')} spellCheck={false} onChange={(event) => setQuery(event.currentTarget.value)} />
     </div>
   );
 }
@@ -209,11 +215,12 @@ function PaletteList(props: PaletteListProps) {
 }
 
 function PaletteItem({ component, props }: { readonly component: ScanComponent; readonly props: PaletteListProps }) {
+  const translate = useTranslate();
   return (
     <div
       className="palette-item"
       draggable
-      title="Drag into the Navigator, or double-click to add to the page"
+      title={translate('palette.panel.itemHint')}
       onMouseEnter={(event) => props.preview.show(component, event.currentTarget)}
       onDragStart={(event) => startComponentDrag(event, component, props)}
       onDragEnd={clearDrag}
@@ -236,9 +243,9 @@ function PaletteItem({ component, props }: { readonly component: ScanComponent; 
             onDragStart={(event) => event.preventDefault()}
           >
             {component.instances === undefined ? (
-              <span className="panel-loading-label">Checking instances...</span>
+              <span className="panel-loading-label">{translate('palette.panel.checking')}</span>
             ) : (
-              `${component.instances} instance${component.instances === 1 ? '' : 's'}`
+              translate('palette.panel.instances', { count: component.instances })
             )}
           </button>
         </div>
@@ -259,15 +266,11 @@ function startComponentDrag(event: React.DragEvent<HTMLDivElement>, component: S
 }
 
 function PaletteEmpty({ count, query }: { readonly count: number; readonly query: string }) {
+  const translateRich = useTranslateRich();
+  const translate = useTranslate();
   return (
     <div className="props-empty">
-      {count === 0 ? (
-        <>
-          No components found in <code>src/components</code>.
-        </>
-      ) : (
-        <>No components match “{query.trim()}”.</>
-      )}
+      {count === 0 ? translateRich('palette.panel.none', { folder: <code>src/components</code> }) : translate('palette.panel.noMatch', { query: query.trim() })}
     </div>
   );
 }

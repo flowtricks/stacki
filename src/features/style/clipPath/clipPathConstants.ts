@@ -3,6 +3,7 @@
 // steps, snapping and SVG parsing bounds, and the none and custom shapes
 // (ClipPath.tsx).
 
+import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
 import type { BreakpointId, ElementStyleSource, WebflowApi } from './webflowDesigner';
 import { type CornerName, type ShapeFunctionShape, type RawClipPathShape, type NoneShape, type ArrowKey, type ShapeScaleOptions } from './clipPathTypes';
 
@@ -38,14 +39,14 @@ export function readWebflowApi(): WebflowApi | undefined {
   return isWebflowApi(candidate) ? candidate : undefined;
 }
 
-export const BREAKPOINT_LABELS: Record<BreakpointId, string> = {
-  xxl: '1920px and up',
-  xl: '1440px and up',
-  large: '1280px and up',
-  main: 'Desktop',
-  medium: 'Tablet',
-  small: 'Mobile landscape',
-  tiny: 'Mobile portrait',
+export const BREAKPOINT_LABEL_KEYS: Record<BreakpointId, MessageKey> = {
+  xxl: 'styleModel.clipPath.breakpoint.xxl',
+  xl: 'styleModel.clipPath.breakpoint.xl',
+  large: 'styleModel.clipPath.breakpoint.large',
+  main: 'styleModel.clipPath.breakpoint.main',
+  medium: 'styleModel.clipPath.breakpoint.medium',
+  small: 'styleModel.clipPath.breakpoint.small',
+  tiny: 'styleModel.clipPath.breakpoint.tiny',
 };
 
 export const WRITE_THROTTLE_MS = 60;
@@ -96,8 +97,25 @@ export const SVG_ARC_KAPPA = 0.5522847498307936;
 export const ARROW_KEYS: ArrowKey[] = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
 export const CORNERS: CornerName[] = ['topLeft', 'topRight', 'bottomRight', 'bottomLeft'];
 export const CLIP_PATH_DEBUG = false;
-export const NONE_PRESET = 'None';
-export const CUSTOM_PRESET = 'Custom';
+// Preset ids, compared and used in option ids; PRESET_LABEL_KEYS gives the text shown.
+export const NONE_PRESET = 'None'; // i18n-ignore: preset id.
+export const CUSTOM_PRESET = 'Custom'; // i18n-ignore: preset id.
+
+export const PRESET_LABEL_KEYS: Readonly<Record<string, MessageKey>> = {
+  [NONE_PRESET]: 'styleModel.clipPath.preset.none',
+  Polygon: 'styleModel.clipPath.preset.polygon',
+  Inset: 'styleModel.clipPath.preset.inset',
+  Circle: 'styleModel.clipPath.preset.circle',
+  Ellipse: 'styleModel.clipPath.preset.ellipse',
+  Shape: 'styleModel.clipPath.preset.shape',
+  [CUSTOM_PRESET]: 'styleModel.clipPath.preset.custom',
+};
+
+/** A preset's name as the person reads it; an id with no message (none today) shows as it is. */
+export function presetLabel(name: string, translate: Translator): string {
+  const key = PRESET_LABEL_KEYS[name];
+  return key === undefined ? name : translate(key);
+}
 export const NONE_SHAPE: NoneShape = { kind: 'none' };
 export const CUSTOM_SHAPE: RawClipPathShape = {
   kind: 'raw',

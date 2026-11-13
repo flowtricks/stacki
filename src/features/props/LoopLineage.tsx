@@ -14,6 +14,7 @@ import { assert } from '../../../shared/core/assert';
 import type { CatalogField, LoopCatalog } from './loopCatalog';
 import { titled } from './loopCatalog';
 import { conditionSummary, sortSummary, sourceKey } from './loopSettingsModel';
+import { useLocale, useTranslate } from '../../lib/i18n/useTranslate';
 
 export interface LoopTrace {
   readonly steps: readonly TraceStep[];
@@ -102,33 +103,39 @@ function LineageBody(props: {
   readonly fields: readonly CatalogField[] | undefined;
   readonly editable: boolean;
 }) {
+  const translate = useTranslate();
   const { trace, collection } = props;
+  const functionName = firstFunction(trace);
   return (
     <>
-      <div className="loop-lineage-title">Comes from</div>
+      <div className="loop-lineage-title">{translate('props.loop.lineage.comesFrom')}</div>
       {props.names.map((name) => (
-        <LineageRow key={`value:${name}`} icon={<LayersIcon size={12} />} name={name} detail="This page" />
+        <LineageRow key={`value:${name}`} icon={<LayersIcon size={12} />} name={name} detail={translate('props.loop.lineage.thisPage')} />
       ))}
-      {trace === undefined && <div className="loop-settings-empty">Following the code…</div>}
+      {trace === undefined && <div className="loop-settings-empty">{translate('props.loop.lineage.following')}</div>}
       {trace?.steps.map((step, index) => (
         <LineageStep key={`${index}:${step.kind}`} step={step} catalog={props.catalog} fields={props.fields} editable={props.editable} />
       ))}
-      {trace !== undefined && collection === undefined && <div className="loop-settings-empty">The code doesn’t read a collection Stacki recognises.</div>}
+      {trace !== undefined && collection === undefined && <div className="loop-settings-empty">{translate('props.loop.lineage.unrecognised')}</div>}
       {collection !== undefined && (
         <div className="loop-lineage-note">
-          {trace !== undefined && trace.reshaped.length > 0 ? `Reshaped in code (${trace.reshaped.map((method) => `.${method}`).join(', ')}). ` : ''}
+          {trace !== undefined && trace.reshaped.length > 0
+            ? `${translate('props.loop.lineage.reshaped', { methods: trace.reshaped.map((method) => `.${method}`).join(', ') })} `
+            : ''}
           {props.editable
-            ? `Filters, sort and limit below are saved to ${collection.file}, and apply everywhere ${firstFunction(trace)} is used.`
-            : `These settings live in ${collection.file}. Edit them there, or choose a collection above to set filters here.`}
+            ? functionName === undefined
+              ? translate('props.loop.lineage.savedIt', { file: collection.file })
+              : translate('props.loop.lineage.savedFunction', { file: collection.file, name: functionName })
+            : translate('props.loop.lineage.liveIn', { file: collection.file })}
         </div>
       )}
     </>
   );
 }
 
-function firstFunction(trace: LoopTrace | undefined): string {
+function firstFunction(trace: LoopTrace | undefined): string | undefined {
   const step = trace?.steps.find((candidate) => candidate.kind === 'function');
-  return step?.kind === 'function' ? `${step.name}()` : 'it';
+  return step?.kind === 'function' ? `${step.name}()` : undefined;
 }
 
 function LineageStep(props: {
@@ -137,30 +144,39 @@ function LineageStep(props: {
   readonly fields: readonly CatalogField[] | undefined;
   readonly editable: boolean;
 }) {
+  const translate = useTranslate();
+  const { locale } = useLocale();
   const { step } = props;
   switch (step.kind) {
     case 'value':
-      return <LineageRow icon={<LayersIcon size={12} />} name={step.name} detail="This page" />;
+      return <LineageRow icon={<LayersIcon size={12} />} name={step.name} detail={translate('props.loop.lineage.thisPage')} />;
     case 'function':
       return <LineageRow icon={<CodeIcon size={12} />} name={`${step.name}()`} detail={step.file} />;
     case 'query':
-      return <LineageRow icon={<BracesIcon size={12} />} name={step.name ?? 'Query'} detail="GROQ query" />;
+      return (
+        <LineageRow
+          icon={<BracesIcon size={12} />}
+          name={step.name ?? translate('props.loop.lineage.query')}
+          detail={translate('props.loop.lineage.groqQuery')}
+        />
+      );
     case 'collection': {
       const title = props.catalog?.collections.find((entry) => sourceKey(entry.source) === sourceKey(step.source))?.title ?? titled(step.source.collection);
       const groq = step.groq;
       const details = props.editable
         ? []
         : [
-            ...(groq?.conditions ?? []).map((condition) => conditionSummary(condition, props.fields, [])),
-            ...(groq?.sorts ?? []).map((sort) => `Sorted by ${sortSummary(sort, props.fields)}`),
-            ...(groq?.limit === undefined ? [] : [`First ${groq.limit}`]),
+            ...(groq?.conditions ?? []).map((condition) => conditionSummary(condition, props.fields, [], translate, locale)),
+            ...(groq?.sorts ?? []).map((sort) => translate('props.loop.lineage.sortedBy', { sort: sortSummary(sort, props.fields, translate) })),
+            ...(groq?.limit === undefined ? [] : [translate('props.loop.lineage.first', { count: groq.limit })]),
           ];
       return (
         <div className="loop-lineage-collection">
           <LineageRow
             icon={step.source.kind === 'sanity' ? <SanityIcon size={12} /> : <AstroIcon size={12} />}
             name={title}
-            detail={step.source.kind === 'sanity' ? 'Sanity' : 'Content collection'}
+            // i18n-ignore: Sanity is a brand name.
+            detail={step.source.kind === 'sanity' ? 'Sanity' : translate('props.loop.lineage.contentCollection')}
           />
           {details.map((detail) => (
             <div key={detail} className="loop-lineage-detail">

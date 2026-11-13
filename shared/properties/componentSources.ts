@@ -67,6 +67,7 @@ export function parseComponentOrigin(input: unknown): ComponentOrigin {
 }
 
 export function componentSourceRoot(source: PackageComponentSource): string {
+  // i18n-ignore: a file-system path pattern, not interface text.
   return `node_modules/${source.package}/${source.directory}`;
 }
 

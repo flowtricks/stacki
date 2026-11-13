@@ -17,6 +17,8 @@
 import { useEffect } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { AppSummary } from '../../../shared/properties/apps';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { APP_FOLDER_LIMITS, joinBrokenRows, type AppFolderBroken } from '../../../shared/properties/appFolders';
 import { listInstalledAppList } from '../../ipc/appsBridge';
 import { listBrokenAppFolders, onAppFoldersChanged } from '../../ipc/appFoldersBridge';
@@ -57,7 +59,7 @@ export interface AppFolderReading {
 /** What a running app whose folder changed does once the folder settled. */
 export type SettledAppFolder =
   | { readonly kind: 'valid'; readonly app: AppSummary }
-  | { readonly kind: 'broken'; readonly appId: string; readonly message: string }
+  | { readonly kind: 'broken'; readonly appId: string; readonly message: string; readonly messageRef?: MessageRef | undefined }
   | { readonly kind: 'removed'; readonly appId: string };
 
 export interface AppFolderSettlerDeps {
@@ -144,15 +146,15 @@ export function createAppFolderSettler(deps: AppFolderSettlerDeps): { readonly h
  */
 export function settledAppFolders(affected: readonly string[], reading: AppFolderReading): readonly SettledAppFolder[] {
   const apps = new Map(reading.apps.map((app) => [app.manifest.id, app]));
-  const broken = new Map(reading.broken.map((row) => [row.folder, row.message]));
+  const broken = new Map(reading.broken.map((row) => [row.folder, row]));
   const settled = affected.map((appId): SettledAppFolder => {
     const app = apps.get(appId);
     if (app !== undefined) {
       return { kind: 'valid', app };
     }
-    const message = broken.get(appId);
-    if (message !== undefined) {
-      return { kind: 'broken', appId, message };
+    const row = broken.get(appId);
+    if (row !== undefined) {
+      return { kind: 'broken', appId, message: row.message, ...(row.messageRef === undefined ? {} : { messageRef: row.messageRef }) };
     }
     return { kind: 'removed', appId };
   });
@@ -161,10 +163,10 @@ export function settledAppFolders(affected: readonly string[], reading: AppFolde
 }
 
 /** The sentence a broken app's window shows over its last good version. */
-export function appFolderErrorNotice(message: string): string {
+export function appFolderErrorNotice(message: string, translate: Translator): string {
   const reason = message.trim().replace(/[.。]+$/, '');
   assert(reason.length > 0, 'A broken folder says why');
-  return `This app’s files have an error: ${reason}. Showing the last working version.`;
+  return translate('apps.folder.errorNotice', { reason });
 }
 
 // Valid apps take their new summary and reload once together; broken ones keep running and say why; removed ones close.
@@ -179,7 +181,7 @@ function applySettledAppFolders(settled: readonly SettledAppFolder[]): void {
         }
         break;
       case 'broken':
-        settleRunningApp(folder.appId, { kind: 'broken', message: folder.message });
+        settleRunningApp(folder.appId, { kind: 'broken', message: folder.message, messageRef: folder.messageRef });
         break;
       case 'removed':
         stopApp(folder.appId);

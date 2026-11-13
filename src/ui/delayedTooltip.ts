@@ -38,6 +38,16 @@ export function useDelayedTooltip(): {
   return { value, show, hide };
 }
 
+/**
+ * Where a tip is drawn for the control `from`. A modal dialog sits in the browser's top layer, which paints above
+ * every element outside it whatever its z-index, so a tip appended to the body is hidden behind Settings and every
+ * other modal. Inside an open dialog the tip is a child of that dialog instead (Popup does the same for menus). Its
+ * position is `fixed`, and the dialog has no transform, so the viewport coordinates the hooks compute still hold.
+ */
+export function tooltipHost(from: Element | undefined): HTMLElement {
+  return from?.closest<HTMLElement>('dialog[open]') ?? document.body;
+}
+
 // The arrow's point for a tip under `rect`.
 export function tooltipPointBelow(rect: Pick<DOMRect, 'left' | 'width' | 'bottom'>): TooltipPoint {
   return { left: rect.left + rect.width / 2, top: rect.bottom + TOOLTIP_GAP_PX };

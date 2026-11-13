@@ -150,8 +150,7 @@
   gap: 24px;
 }
 
-/* A tab's opening sentence, and loading lines. */
-.app-settings-intro,
+/* Loading lines. */
 .app-settings-status {
   margin: 0;
   color: var(--text-dim);
@@ -162,7 +161,7 @@
   color: var(--text-faint);
 }
 
-/* A section: a small heading, an optional muted description, then its rows. */
+/* A section: a small heading (with an optional (i)), then its rows. */
 .app-settings-section {
   display: flex;
   flex-direction: column;
@@ -174,6 +173,10 @@
   gap: 4px;
   margin-bottom: 4px;
 }
+.app-settings-section-title {
+  display: flex;
+  align-items: center;
+}
 .app-settings-section-header h4 {
   margin: 0;
   color: var(--text-dim);
@@ -181,12 +184,6 @@
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-.app-settings-section-header p {
-  margin: 0;
-  color: var(--text-faint);
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 /* A row: label and description in the first column, the control in a second
@@ -250,17 +247,18 @@
   font-size: 12px;
 }
 
-/* A tab's opening sentence with its save indicator at the right: "Saving…",
-   then "Saved" with a tick for a moment. It keeps its width while idle, so the
-   sentence beside it never reflows as a save comes and goes. */
-.app-settings-intro-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 16px;
+/* The save indicator, at the top right of the page. It takes no height of its own
+   (the panel's 24px gap is pulled back), so the first section starts right under
+   the header and the indicator sits on the same line as its heading. */
+.app-settings-save-row {
+  position: relative;
+  height: 0;
+  margin-bottom: -24px;
 }
-.app-settings-intro-row .app-settings-intro {
-  flex: 1 1 auto;
-  min-width: 0;
+.app-settings-save-row .app-settings-saved {
+  position: absolute;
+  top: 0;
+  right: 0;
 }
 .app-settings-saved {
   flex: none;
@@ -516,4 +514,23 @@
 .app-folder-link:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* The "…" (MoreMenu) on a Settings card (an audit check's priority, an MCP server, a role) is a ghost button:
+   no fill at rest, the icon dim; the fill appears on hover, keyboard focus and while its menu is open. The base
+   button rule fills every button, so this restates the rest state for the one shared class. */
+.app-settings .more-menu-button {
+  width: 24px;
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+}
+.app-settings .more-menu-button:hover:not(:disabled),
+.app-settings .more-menu-button:focus-visible,
+.app-settings .more-menu-button.is-open {
+  background: var(--bg-hover);
+  color: var(--text);
 }

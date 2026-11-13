@@ -1,5 +1,6 @@
 import { SpacingFill, useSpacingBox } from './SpacingBox';
 import type { ClearProp, LiveSetProp, Read, SelectSelector, SetProp } from './SpacingBox';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // The Spacing section — Webflow's nested margin/padding box. Composes the shared
 // SpacingBox primitives: two frames (margin, then padding nested in its centre
@@ -47,6 +48,7 @@ function sideValue(read: Read, prop: string): string {
 // "Center horizontally" = margin-left/right auto. Rendered in the Spacing section
 // header, next to the collapse arrow. Toggle: set both to auto, or clear both.
 export function SpacingCenterButton({ read, busy, setProp, clearProp }: { read: Read; busy: boolean; setProp: SetProp; clearProp: ClearProp }) {
+  const translate = useTranslate();
   const centered = sideValue(read, 'margin-left') === 'auto' && sideValue(read, 'margin-right') === 'auto';
   const toggle = () => {
     if (centered) {
@@ -61,8 +63,8 @@ export function SpacingCenterButton({ read, busy, setProp, clearProp }: { read: 
       type="button"
       className={`embed-editor_spacing-center ${centered ? 'is-active' : ''}`}
       disabled={busy}
-      title="Center element horizontally. Requires fixed width."
-      aria-label="Center horizontally (margin left and right auto)"
+      title={translate('style.spacingSection.centerTitle')}
+      aria-label={translate('style.spacingSection.centerAria')}
       aria-pressed={centered}
       onClick={toggle}
     >
@@ -72,6 +74,7 @@ export function SpacingCenterButton({ read, busy, setProp, clearProp }: { read: 
 }
 
 export default function SpacingSection(props: Props) {
+  const translate = useTranslate();
   const { label, fillHandlers, editor } = useSpacingBox(props, { variableLabels: true });
 
   return (
@@ -86,7 +89,7 @@ export default function SpacingSection(props: Props) {
           liveSetProp={props.liveSetProp}
           {...fillHandlers}
         />
-        <span className="embed-editor_spacing-tag">Margin</span>
+        <span className="embed-editor_spacing-tag">{translate('style.spacingSection.margin')}</span>
         {label('margin-top', 'top')}
         {label('margin-right', 'right')}
         {label('margin-bottom', 'bottom')}
@@ -102,7 +105,7 @@ export default function SpacingSection(props: Props) {
             liveSetProp={props.liveSetProp}
             {...fillHandlers}
           />
-          <span className="embed-editor_spacing-tag">Padding</span>
+          <span className="embed-editor_spacing-tag">{translate('style.spacingSection.padding')}</span>
           {label('padding-top', 'top')}
           {label('padding-right', 'right')}
           {label('padding-bottom', 'bottom')}

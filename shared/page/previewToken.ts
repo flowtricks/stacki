@@ -1,3 +1,4 @@
+// i18n-ignore-file: shared/page is a pure layer with no catalog; the English here is a diagnostic for logs, tests and asserts. The stale-click notice shown to people is worded from keys by describeStaleClick (src/features/preview/previewMessages.ts).
 // The preview token (plan §9, step 7): which source state a canvas rendering
 // came from, so an event from a stale rendering is refused instead of being
 // applied to whatever node now sits at the path it names.

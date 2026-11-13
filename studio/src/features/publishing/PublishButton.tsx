@@ -6,11 +6,15 @@ import { useEffect, useRef, useState } from 'react';
 import { publishProject } from './publishClient';
 import type { PublishState } from './publish';
 import { PublishStatus } from '../../../vendor/stacki/src/features/publishing/PublishStatus';
-import { publishStatusView, STUDIO_PUBLISH_RUNNING_NOTE } from './publishStatusView';
+import { publishStatusView, STUDIO_PUBLISH_RUNNING_NOTE_KEY } from './publishStatusView';
+import { useTranslate, useTranslateDescribed } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
+import type { Described, Translator } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import { useSharedPublish } from './sharedPublish';
 import './publish.css';
 
 export function PublishButton({ report }: { report: (error: unknown) => void }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [ownBusy, setBusy] = useState(false);
   const shared = useSharedPublish();
   const availability = usePublishAvailability(shared);
@@ -39,7 +43,7 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
     setVisible(true);
     try {
       const state = await publishProject(controller.signal, target, setState);
-      report(publishMessage(state));
+      report(publishMessage(state, translate, translateDescribed));
     } catch (error) {
       if (!controller.signal.aborted) {
         setFailed(true);
@@ -72,8 +76,11 @@ export function PublishButton({ report }: { report: (error: unknown) => void }) 
 
 // The same popup Desktop shows; only the job status is translated.
 function PublishStatusPopup({ state, failed, close }: { readonly state: PublishState | undefined; readonly failed: boolean; readonly close: () => void }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const view = publishStatusView(state, failed ? 'interrupted' : 'running');
-  return <PublishStatus state={view.state} close={close} runningNote={STUDIO_PUBLISH_RUNNING_NOTE} {...(view.note === undefined ? {} : { note: view.note })} />;
+  const note = view.noteParts === undefined ? view.note : view.noteParts.map((part) => translateDescribed(part)).join(' ');
+  return <PublishStatus state={view.state} close={close} runningNote={translate(STUDIO_PUBLISH_RUNNING_NOTE_KEY)} {...(note === undefined ? {} : { note })} />;
 }
 
 function usePublishBroadcast(
@@ -100,21 +107,21 @@ function usePublishBroadcast(
   }, [shared, setState, setVisible, setFailed]);
 }
 
-function publishMessage(state: PublishState): string | Error {
+function publishMessage(state: PublishState, translate: Translator, translateDescribed: (problem: Described) => string): string | Error {
   if (state.kind === 'failed') {
-    return new Error(state.message);
+    return new Error(translateDescribed(state));
   }
   if (state.kind === 'review-open') {
-    return 'Pull request ready for review.';
+    return translate('publish.studio.toast.reviewReady');
   }
   if (state.kind !== 'committed') {
-    return 'Publish started';
+    return translate('publish.studio.toast.started');
   }
   const message =
     state.deployment === 'live'
-      ? 'Published. Your changes are live.'
+      ? translate('publish.studio.toast.live')
       : state.deployment === 'pending'
-        ? 'Saved to GitHub. Live deployment is still unconfirmed; check your hosting provider.'
-        : 'Saved to GitHub. Automatic live deployment is not connected.';
-  return message + (state.cleanupWarning ? ' ' + state.cleanupWarning : '');
+        ? translate('publish.studio.toast.unconfirmed')
+        : translate('publish.studio.toast.notConnected');
+  return message + (state.cleanupWarning ? ' ' + translateDescribed({ message: state.cleanupWarning, messageRef: state.cleanupWarningRef }) : '');
 }

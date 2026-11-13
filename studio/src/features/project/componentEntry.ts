@@ -1,3 +1,4 @@
+import { studioTranslate } from '../../shared/studioTranslate';
 import { isCanvasPage, isDefaultsCanvas } from '../../../vendor/stacki/shared/properties/defaultsCanvas';
 import type { SharedDocument } from '../collaboration/useDocument';
 import { getStudioRole } from '../roles/roleStore';
@@ -39,7 +40,7 @@ export function componentEntry(context: Context) {
       return;
     }
     if (component.origin?.kind === 'package') {
-      context.report(new Error('Package components are read-only. Edit instance properties on the page.'));
+      context.report(new Error(studioTranslate('studio.component.packageReadOnly')));
       return;
     }
     const focus =

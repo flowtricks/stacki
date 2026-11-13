@@ -43,6 +43,7 @@ import { parseProjectRolesSource } from '../../../vendor/stacki/shared/propertie
 import { readMetadataSource } from '../settings/projectMetadata';
 import { requestRole } from '../roles/serverAccess';
 import { record } from '../../shared/validation';
+import { appsRefusal } from './appsRefusal';
 
 const APP_DATA_LIMITS = {
   /** Editors one server streams storage changes to. */
@@ -134,7 +135,7 @@ export function studioAppData(root: string) {
         const input = record(JSON.parse((await readBody()) || '{}') as unknown);
         const role = await requestRole(root, request);
         if (!can(role, 'panel:apps')) {
-          return { ok: false, message: 'Your role cannot use apps.' };
+          return appsRefusal('apps.error.noApps');
         }
         const person = studioPersonKey(request);
         if (action === 'host') {
@@ -148,7 +149,7 @@ export function studioAppData(root: string) {
         }
         const id = parseAppId(input['id']);
         if (!can(role, appAccessFeature(id))) {
-          return { ok: false, message: `The ${role.name} role cannot use this app.` };
+          return appsRefusal('apps.error.noApp', { role: role.name });
         }
         const scope = parseAppStorageScope(input['scope']);
         const store = storeFor(scope, person);

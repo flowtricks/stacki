@@ -13,6 +13,9 @@ import { MEDIA_HTTP_LIMITS, type MediaFetch } from '../content/media/mediaHttp';
 import { mediaService, type MediaService, type UploadFile } from '../content/media/mediaService';
 import { storeFor } from '../content/media/mediaStore';
 import { accountConnectionDraft, discoverMediaAccounts } from '../content/media/mediaAccounts';
+import { translateMain } from '../lib/mainLocale';
+import type { MessageRef } from '../../shared/core/i18n/messageReference';
+import { DescribedError } from '../../shared/properties/describedError';
 
 const failureMessageCharsMax = 900;
 
@@ -86,7 +89,7 @@ export function registerMediaHostingHandlers(
   ipcMain.handle('mediaHosting:replace', (_event, input) =>
     attempt(async () => {
       const target = service(input.projectPath, input.connectionId);
-      const picked = await host.showOpenDialog({ title: `Replace ${input.name}`, properties: ['openFile'] });
+      const picked = await host.showOpenDialog({ title: translateMain('dialog.open.replace.title', { name: input.name }), properties: ['openFile'] });
       const file = picked.filePaths[0];
       if (picked.canceled || file === undefined) {
         return undefined;
@@ -102,7 +105,7 @@ export function registerMediaHostingHandlers(
   ipcMain.handle('mediaHosting:pickUpload', (_event, input) =>
     attempt(async () => {
       const target = service(input.projectPath, input.connectionId);
-      const picked = await host.showOpenDialog({ title: 'Upload media', properties: ['openFile', 'multiSelections'] });
+      const picked = await host.showOpenDialog({ title: translateMain('dialog.open.mediaUpload.title'), properties: ['openFile', 'multiSelections'] });
       if (picked.canceled || picked.filePaths.length === 0) {
         return undefined;
       }
@@ -138,7 +141,7 @@ async function attempt<T>(run: () => Promise<T>): Promise<MediaResult<T>> {
   try {
     return { ok: true, value: await run() };
   } catch (error: unknown) {
-    return { ok: false, message: messageOf(error) };
+    return failureOf(error);
   }
 }
 
@@ -146,11 +149,19 @@ function attemptSync<T>(run: () => T): MediaResult<T> {
   try {
     return { ok: true, value: run() };
   } catch (error: unknown) {
-    return { ok: false, message: messageOf(error) };
+    return failureOf(error);
   }
+}
+
+// A described failure keeps its reference so the panel can say it in the language on screen.
+function failureOf(error: unknown): { readonly ok: false; readonly message: string; readonly messageRef?: MessageRef } {
+  if (error instanceof DescribedError && error.problem.messageRef !== undefined) {
+    return { ok: false, message: error.problem.message.slice(0, failureMessageCharsMax), messageRef: error.problem.messageRef };
+  }
+  return { ok: false, message: messageOf(error) };
 }
 
 function messageOf(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.slice(0, failureMessageCharsMax) || 'The media host did not answer.';
+  return message.slice(0, failureMessageCharsMax) || translateMain('error.media.hostSilent');
 }

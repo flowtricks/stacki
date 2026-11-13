@@ -4,6 +4,7 @@
 // Pushes: `ai:events` (batched transcript events, acknowledged with the
 // one-way `ai:ack`) and `ai:agentStatus` (an agent's availability changed).
 import { assert } from '../core/assert';
+import { parseMessageRef, type MessageRef } from '../core/i18n/messageReference';
 import { boolean, count, list, object, optional, pathText, record, text } from '../core/boundary';
 import type { Parsed } from '../core/boundary';
 import { err, ok, type Result } from '../core/result';
@@ -27,6 +28,7 @@ import {
   type SectionId,
   type TurnId,
 } from '../properties/ai/chatModel';
+import { parseRememberAction, parseRememberedSettings, type RememberedSettings } from '../properties/ai/rememberedSettings';
 import { parseMentionCandidates, parseMentionKinds, parseMentionQuery, parsePromptParts, type MentionCandidate } from '../properties/ai/mentions';
 import { parseMergeResolution, type MergeResolution } from './mergeResolution';
 import type { WireConflictPart, WireMergeClash } from './ipcWire';
@@ -37,6 +39,15 @@ import type { WireConflictPart, WireMergeClash } from './ipcWire';
 
 const projectPath = pathText;
 const chat = (input: unknown) => toChatId(text(input));
+
+/** An optional `messageRef` beside a `message`: kept when well formed, dropped (English shows) when absent or damaged. */
+function parsedRef(input: unknown): { readonly messageRef?: MessageRef } {
+  if (input === undefined) {
+    return {};
+  }
+  const parsed = parseMessageRef(input);
+  return parsed.ok ? { messageRef: parsed.value } : {};
+}
 
 function bounded(max: number, name: string) {
   return (input: unknown): string => {
@@ -193,6 +204,8 @@ export const AI_PAYLOADS = {
   'ai:agents': object({ projectPath }),
   'ai:installAgent': object({ projectPath, agent: parseAgentId }),
   'ai:trust': object({ projectPath }),
+  /** Start the agent early (the panel opened or the composer got focus), or let go of a parked session (the panel closed or the agent changed). */
+  'ai:prewarm': object({ projectPath, agent: parseAgentId, action: parsePrewarmAction }),
   'ai:chats': object({ projectPath }),
   'ai:chatCreate': object({ projectPath, agent: parseAgentId, title: optional(title), settings: optional(parseChatSettings) }),
   'ai:chatUpdate': object({
@@ -219,6 +232,8 @@ export const AI_PAYLOADS = {
   'ai:cancel': object({ projectPath, chat }),
   'ai:permission': object({ projectPath, chat, request: (input: unknown) => toPermissionRequestId(text(input)), answer: permissionAnswer }),
   'ai:setOption': object({ projectPath, chat, option: bounded(AI_LIMITS.idCharsMax, 'option'), value: bounded(AI_LIMITS.idCharsMax, 'value') }),
+  /** Remember one composer choice for the agent's next new chats, or forget the agent's whole remembered set. */
+  'ai:remember': object({ projectPath, agent: parseAgentId, action: parseRememberAction }),
   'ai:review': object({ projectPath, chat, turn: (input: unknown) => toTurnId(text(input)), path: pathText, action: reviewAction }),
   'ai:setup': object({ projectPath, agent: parseAgentId, action: (input: unknown) => parseSetupAction(input) }),
 } as const;
@@ -238,7 +253,7 @@ export type AgentAvailability =
   | { readonly agent: AgentId; readonly state: 'installing' }
   | { readonly agent: AgentId; readonly state: 'ready'; readonly adapterVersion: string; readonly running: boolean }
   | { readonly agent: AgentId; readonly state: 'sign-in' }
-  | { readonly agent: AgentId; readonly state: 'failed'; readonly message: string };
+  | { readonly agent: AgentId; readonly state: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 export interface AiAgentsReply {
   /** Whether the person has let agents work in this project. */
@@ -249,6 +264,8 @@ export interface AiAgentsReply {
    * chat can be set up before its session exists; a small fallback until the agent has said.
    */
   readonly options: readonly { readonly agent: AgentId; readonly options: readonly ChatOption[] }[];
+  /** The composer settings last used, per agent: what a new chat starts with. Read with the options so the first frame shows them. */
+  readonly remembered: RememberedSettings;
 }
 
 export interface AiFailure {
@@ -267,6 +284,8 @@ export interface AiFailure {
     /** The request is well formed but cannot be applied: a repeated section name, too many sections. */
     | 'invalid';
   readonly message: string;
+  /** The same sentence as a reference, for the renderer to translate; `message` stays for old readers and logs. */
+  readonly messageRef?: MessageRef | undefined;
 }
 
 /** `steered`: injected into the running turn. `startedNewTurn`: no turn was running, so the message began one. */
@@ -292,7 +311,7 @@ export type ReviewOutcome =
   | { readonly tag: 'done'; readonly review: 'kept' | 'undone' }
   /** The file changed after the agent's edit: the three versions, to settle in the merge editor. */
   | { readonly tag: 'drifted'; readonly clash: WireMergeClash }
-  | { readonly tag: 'failed'; readonly message: string };
+  | { readonly tag: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 export interface AiEventsPush {
   readonly projectPath: string;
@@ -314,6 +333,7 @@ export interface AiResults {
   readonly 'ai:agents': AiAgentsReply;
   readonly 'ai:installAgent': Result<AgentAvailability, AiFailure>;
   readonly 'ai:trust': { readonly ok: true };
+  readonly 'ai:prewarm': { readonly ok: true };
   readonly 'ai:chats': ChatList;
   readonly 'ai:chatCreate': Result<ChatSummary, AiFailure>;
   readonly 'ai:chatUpdate': Result<ChatSummary, AiFailure>;
@@ -330,6 +350,7 @@ export interface AiResults {
   readonly 'ai:cancel': { readonly ok: true };
   readonly 'ai:permission': Result<{ readonly answered: true }, AiFailure>;
   readonly 'ai:setOption': Result<{ readonly set: true }, AiFailure>;
+  readonly 'ai:remember': Result<RememberedSettings, AiFailure>;
   readonly 'ai:review': ReviewOutcome;
   readonly 'ai:setup': SetupState;
 }
@@ -372,7 +393,7 @@ export function parseAgentAvailability(input: unknown): AgentAvailability {
     case 'ready':
       return { agent, state, adapterVersion: bounded(AI_LIMITS.idCharsMax, 'adapterVersion')(value['adapterVersion']), running: boolean(value['running']) };
     case 'failed':
-      return { agent, state, message: bounded(AI_LIMITS.labelCharsMax, 'message')(value['message']) };
+      return { agent, state, message: bounded(AI_LIMITS.labelCharsMax, 'message')(value['message']), ...parsedRef(value['messageRef']) };
     case undefined:
       throw new Error('AgentAvailability.state: unknown state');
     default: {
@@ -394,8 +415,12 @@ export function parseAiAgentsReply(input: unknown): AiAgentsReply {
     }
     return { agent: parseAgentId(item['agent']), options: choices.map(parseChatOption) };
   })(value['options']);
-  return { trusted: boolean(value['trusted']), agents, options };
+  // Total on purpose: a damaged remembered set reads as nothing remembered and never stops the panel from loading.
+  return { trusted: boolean(value['trusted']), agents, options, remembered: parseRememberedSettings(value['remembered']) };
 }
+
+/** The success value of `ai:remember`: the whole remembered set after the change. */
+export { parseRememberedSettings };
 
 export function parseAiFailure(input: unknown): AiFailure {
   const value = record(input);
@@ -403,7 +428,7 @@ export function parseAiFailure(input: unknown): AiFailure {
   if (code === undefined) {
     throw new Error('AiFailure.code: unknown code');
   }
-  return { code, message: bounded(AI_LIMITS.labelCharsMax, 'message')(value['message']) };
+  return { code, message: bounded(AI_LIMITS.labelCharsMax, 'message')(value['message']), ...parsedRef(value['messageRef']) };
 }
 
 /** A `Result` reply whose success value `parse` reads. */
@@ -446,7 +471,7 @@ export function parseReviewOutcome(input: unknown): ReviewOutcome {
     case 'drifted':
       return { tag: 'drifted', clash: parseClash(value['clash']) };
     case 'failed':
-      return { tag: 'failed', message: bounded(AI_LIMITS.labelCharsMax, 'message')(value['message']) };
+      return { tag: 'failed', message: bounded(AI_LIMITS.labelCharsMax, 'message')(value['message']), ...parsedRef(value['messageRef']) };
     default:
       throw new Error('review outcome: unknown tag');
   }
@@ -558,6 +583,18 @@ export type SetupAction =
 /** The longest code a CLI's paste-back prompt takes. */
 export const SETUP_CODE_CHARS_MAX = 4_096;
 
+/** What the renderer asks of `ai:prewarm`: start the agent early, or let go of what an earlier start parked. */
+export const PREWARM_ACTIONS = ['warm', 'release'] as const;
+export type PrewarmAction = (typeof PREWARM_ACTIONS)[number];
+
+export function parsePrewarmAction(input: unknown): PrewarmAction {
+  const action = PREWARM_ACTIONS.find((candidate) => candidate === input);
+  if (action === undefined) {
+    throw new Error('prewarm action: expected warm or release');
+  }
+  return action;
+}
+
 export function parseSetupAction(input: unknown): SetupAction {
   const value = record(input);
   switch (value['kind']) {
@@ -602,6 +639,7 @@ export type SetupState =
       readonly step: 'failed';
       readonly during: 'install' | 'sign-in' | 'sign-out';
       readonly message: string;
+      readonly messageRef?: MessageRef | undefined;
       readonly details: string;
     };
 
@@ -655,6 +693,7 @@ export function parseSetupState(input: unknown): SetupState {
         step,
         during,
         message: bounded(AI_LIMITS.labelCharsMax, 'message')(value['message']),
+        ...parsedRef(value['messageRef']),
         details: bounded(SETUP_DETAILS_CHARS_MAX, 'details')(value['details']),
       };
     }

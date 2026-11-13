@@ -20,6 +20,7 @@ export default function StackiLogo({
       className={className}
       style={{ display: 'block', height: 'auto', ...style }}
       role="img"
+      // i18n-ignore: the product name.
       aria-label="Stacki"
     >
       <path d={stackiLogoPath1} fill="currentColor" />

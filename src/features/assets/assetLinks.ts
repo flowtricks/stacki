@@ -9,6 +9,7 @@
 //     resolves from any file in the project.
 import { assert } from '../../../shared/core/assert';
 import { openHostedLink } from '../../ipc/mediaHostingBridge';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 export function localAssetLink(rel: string): string {
   assert(rel.length > 0, 'An asset link names a file');
@@ -19,14 +20,14 @@ export function localAssetLink(rel: string): string {
 }
 
 /** Copies a link and says so; a refused clipboard says that instead. */
-export async function copyLink(link: string, showToast: (message: string, kind: 'error' | 'success') => void): Promise<void> {
+export async function copyLink(link: string, translate: Translator, showToast: (message: string, kind: 'error' | 'success') => void): Promise<void> {
   try {
     await navigator.clipboard.writeText(link);
   } catch (error: unknown) {
-    showToast(`Could not copy the link: ${error instanceof Error ? error.message : String(error)}`, 'error');
+    showToast(translate('assets.link.copyFailed', { error: error instanceof Error ? error.message : String(error) }), 'error');
     return;
   }
-  showToast('Link copied', 'success');
+  showToast(translate('assets.link.copied'), 'success');
 }
 
 /** Opens a hosted file in the browser. */

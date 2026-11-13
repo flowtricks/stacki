@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ImportDecl, MapNode } from '../../../shared/page/pageNode';
@@ -91,6 +92,7 @@ export function headRenames(before: string, after: string): readonly Rename[] {
 // is carried into the bindings inside. A head the editor does not split (a
 // destructured item, a statement body) is edited as code only.
 export function MapEditor(props: MapEditorProps) {
+  const translate = useTranslate();
   const { node, onSetText, onCommitHead } = props;
   const splittable = node.bodyParts === undefined && parseMapHead(node.head) !== undefined;
   // What was typed stays, with the reason under it, until it is put right: this
@@ -107,7 +109,7 @@ export function MapEditor(props: MapEditorProps) {
       return;
     }
     if (value.length > LIMITS.nodeValueCharsMax) {
-      setProblem('This code is too long.');
+      setProblem(translate('props.map.tooLong'));
       return;
     }
     const renames = node.bodyParts === undefined ? headRenames(node.head, value) : [];
@@ -123,7 +125,7 @@ export function MapEditor(props: MapEditorProps) {
         <label onClick={noLabelActivation}>
           <span className="prop-label">
             <CodeIcon size={12} className="prop-label-icon" />
-            Code
+            {translate('props.map.code')}
           </span>
         </label>
         <ExprInput
@@ -150,7 +152,7 @@ export function MapEditor(props: MapEditorProps) {
   ) : (
     <>
       <div className="props-field" style={{ marginTop: 8, fontSize: 11, color: 'var(--text-faint)' }}>
-        Custom loop code — edit it below.
+        {translate('props.map.customLoop')}
       </div>
       {code}
     </>
@@ -335,13 +337,14 @@ export function TagField(props: TagFieldProps) {
 }
 
 function TagFieldView({ state }: { readonly state: ReturnType<typeof useTagField> }) {
+  const translate = useTranslate();
   const { draft, setFocused, highlight, setHighlight, popupPos: popupPosition, wrapRef, inputRef, draftRef, updateDraft, matches, commit, onKeyDown } = state;
   return (
     <div className="props-field" ref={wrapRef}>
       <label onClick={noLabelActivation}>
         <span className="prop-label">
           <TagIcon size={12} className="prop-label-icon" />
-          Tag
+          {translate('props.map.tag')}
         </span>
       </label>
       <input

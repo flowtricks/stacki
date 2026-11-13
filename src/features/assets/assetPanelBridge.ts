@@ -8,6 +8,7 @@ import { toProjectPath } from '../../../shared/core/brand';
 import { cleanError } from '../../lib/cleanError';
 import { parseAssetEntry } from '../../ipc/assetBridge';
 import { parseMediaResult } from '../../../shared/properties/mediaHosting';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 
 export type AssetRoot = 'public' | 'src';
 export type AssetPanelEntry = WireAssetEntry & { readonly root: AssetRoot };
@@ -85,7 +86,10 @@ export function deleteAsset(projectPath: string, rel: string) {
 }
 
 /** Asks for a file in the system dialog and writes it over the asset, keeping its path; false when cancelled. */
-export async function replaceAsset(projectPath: string, rel: string): Promise<Result<boolean, string>> {
+export async function replaceAsset(
+  projectPath: string,
+  rel: string,
+): Promise<{ readonly ok: true; readonly value: boolean } | { readonly ok: false; readonly error: string; readonly messageRef?: MessageRef | undefined }> {
   const payload = parseIpcPayload('assets:replace', {
     projectPath: toProjectPath(projectPath),
     rel: parseAssetRelativePath(rel),
@@ -97,7 +101,9 @@ export async function replaceAsset(projectPath: string, rel: string): Promise<Re
   if (!answer.ok) {
     return answer;
   }
-  return answer.value.ok ? { ok: true, value: answer.value.value } : { ok: false, error: answer.value.message };
+  return answer.value.ok
+    ? { ok: true, value: answer.value.value }
+    : { ok: false, error: answer.value.message, ...(answer.value.messageRef === undefined ? {} : { messageRef: answer.value.messageRef }) };
 }
 
 export function makeAssetDirectory(projectPath: string, parentRel: string, name: string) {

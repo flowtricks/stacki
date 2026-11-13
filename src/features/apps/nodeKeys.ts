@@ -51,10 +51,10 @@ export function mintNodeKey(): string {
 export async function nodeKey(host: NodeKeyHost, nodeId: string): Promise<AppNodeKeyOutcome> {
   const node = host.node(nodeId);
   if (node === undefined) {
-    return { applied: false, reason: 'No element has that id on the open page' };
+    return { applied: false, reason: 'No element has that id on the open page' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   if (node.kind !== 'element' && node.kind !== 'component') {
-    return { applied: false, reason: 'Only an element or a component carries a key; text and expressions hold no attributes' };
+    return { applied: false, reason: 'Only an element or a component carries a key; text and expressions hold no attributes' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   const existing = ownKey(node);
   if (existing !== undefined && keyHolders(host.tree(), existing)[0] === nodeId) {

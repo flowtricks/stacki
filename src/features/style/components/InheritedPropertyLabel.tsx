@@ -1,5 +1,6 @@
 // An inherited value has provenance but nothing local to reset. Its source is
 // navigable only when the preview path resolves in the current document tree.
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import Popup from '../../../ui/Popup';
@@ -65,6 +66,7 @@ function InheritedPropertyPopover({
   readonly onClose: () => void;
   readonly onAnchorReclick: () => void;
 }) {
+  const translate = useTranslate();
   const ref = useRef<HTMLDivElement>(null);
   const position = useAnchoredPosition(ref, anchor);
   const target = inheritedTarget(source);
@@ -76,12 +78,12 @@ function InheritedPropertyPopover({
       ref={ref}
       className="embed-editor_provenance"
       role="dialog"
-      label={`Inherited ${property}`}
+      label={translate('styleModel.components.inherited.label', { property })}
       style={{ left: position.left, top: position.top }}
     >
       <div className="embed-editor_provenance-head">
-        <span>Value comes from:</span>
-        <button type="button" className="embed-editor_icon-btn" aria-label="Close" onClick={onClose}>
+        <span>{translate('styleModel.shared.valueComesFrom')}</span>
+        <button type="button" className="embed-editor_icon-btn" aria-label={translate('ui.close')} onClick={onClose}>
           ✕
         </button>
       </div>
@@ -89,7 +91,7 @@ function InheritedPropertyPopover({
         <button
           type="button"
           className="embed-editor_provenance-item is-active is-clickable"
-          title={`Select ${target.label}`}
+          title={translate('styleModel.components.inherited.select', { label: target.label })}
           onClick={() => {
             const current = inheritedTarget(source);
             if (current.id) {

@@ -6,6 +6,7 @@ import {
   type AccountRequest,
   type AccountState,
 } from '../../../vendor/stacki/shared/ipc/publishAccount';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import { request } from '../project/projectClient';
 
 export async function publishingAccount(_project: string, input: AccountRequest): Promise<AccountState> {
@@ -18,7 +19,7 @@ export async function publishingAccount(_project: string, input: AccountRequest)
       body,
     });
   } catch {
-    return { kind: 'failed', message: 'Could not reach account sign-in. Please try again.' };
+    return { kind: 'failed', ...described('publish.studio.accountUnreachable') };
   }
   return parseAccountState(result);
 }

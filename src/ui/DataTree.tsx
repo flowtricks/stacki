@@ -8,6 +8,7 @@ import type { ReactNode, Ref } from 'react';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
 import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, SearchIcon } from './Icons';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 // How far a nested field steps in: the width of a chevron and the gap after
 // it. A nested field with nothing beneath it drops its empty chevron slot, so
@@ -69,6 +70,7 @@ export interface DataTreeRowProps {
 }
 
 export function DataTreeRow(props: DataTreeRowProps) {
+  const translate = useTranslate();
   assert(props.depth <= LIMITS.treeDepthMax, 'DataTreeRow: render depth limit exceeded');
   assert(props.label.length <= LIMITS.attrCharsMax, 'DataTreeRow: label limit exceeded');
   const { expandable, open, depth, tone } = props;
@@ -87,7 +89,7 @@ export function DataTreeRow(props: DataTreeRowProps) {
     >
       <span
         className={`dp-twist ${expandable ? '' : depth > 0 ? 'absent' : 'hidden'} ${open ? 'open' : ''}`}
-        title={expandable ? (open ? 'Close' : 'Open') : undefined}
+        title={expandable ? translate(open ? 'ui.close' : 'ui.open') : undefined}
         onClick={
           expandable
             ? (event) => {
@@ -131,6 +133,7 @@ export function ItemNavigation({
   readonly nav: ItemPosition;
   readonly onStepItem: (path: string, step: -1 | 1, count: number) => void;
 }) {
+  const translate = useTranslate();
   assert(nav.count > 0, 'ItemNavigation: there is an item to show');
   assert(nav.index < nav.count, 'ItemNavigation: the item shown is one of the list');
   return (
@@ -138,7 +141,7 @@ export function ItemNavigation({
       <button
         type="button"
         className="dp-step"
-        title="Previous item"
+        title={translate('ui.dataTree.previousItem')}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => onStepItem(path, -1, nav.count)}
       >
@@ -150,7 +153,7 @@ export function ItemNavigation({
       <button
         type="button"
         className="dp-step"
-        title="Next item"
+        title={translate('ui.dataTree.nextItem')}
         onMouseDown={(event) => event.preventDefault()}
         onClick={() => onStepItem(path, 1, nav.count)}
       >
@@ -171,13 +174,14 @@ export function DataSearch({
   readonly inputRef?: Ref<HTMLInputElement> | undefined;
   readonly onChange: (value: string) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="dp-search">
       <SearchIcon size={12} />
       <input
         ref={inputRef}
         value={value}
-        placeholder="Search data…"
+        placeholder={translate('ui.dataTree.search')}
         aria-label={label}
         spellCheck={false}
         autoFocus
@@ -212,6 +216,7 @@ export function DataSection({
   readonly action?: { readonly label: string; readonly onClick: () => void } | undefined;
   readonly collapse?: { readonly open: boolean; readonly onToggle: () => void } | undefined;
 }) {
+  const translate = useTranslate();
   assert(heading.length > 0, 'DataSection: a heading has words');
   assert(heading.length <= LIMITS.attrCharsMax, 'DataSection: heading limit exceeded');
   const className = `${tone === 'component' ? 'dp-section component' : 'dp-section'}${collapse === undefined ? '' : ' collapsible'}`;
@@ -222,7 +227,7 @@ export function DataSection({
         role="button"
         tabIndex={0}
         aria-expanded={collapse.open}
-        title={collapse.open ? 'Close' : 'Open'}
+        title={translate(collapse.open ? 'ui.close' : 'ui.open')}
         // Pressing it keeps the caret in the search, as pressing a row does.
         onMouseDown={(event) => event.preventDefault()}
         onClick={collapse.onToggle}

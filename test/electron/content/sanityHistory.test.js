@@ -32,7 +32,7 @@ test('revisions are read newest first, with members’ names', async () => {
     const revisions = await sanityRevisions(TARGET, 'a');
     assert.deepEqual(revisions, [
       { id: 'tx2', timestamp: '2026-10-30T10:00:00Z', author: 'Tim' },
-      { id: 'tx1', timestamp: '2026-10-29T10:00:00Z', author: 'Someone' },
+      { id: 'tx1', timestamp: '2026-10-29T10:00:00Z', author: 'Someone', authorRef: { key: 'cmsBackend.sanity.someone' } },
     ]);
     assert.match(sanity.calls[0].url, /\/history\/production\/transactions\/a,drafts\.a\?/);
   } finally {

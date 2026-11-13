@@ -26,6 +26,7 @@ import { SettingDot, type BindingContext, type DraftEditor } from './LoopBinding
 import { moved, staysPut } from './LoopItems';
 import useListReorder from '../../ui/useListReorder';
 import { LinkedSetting } from './LoopLinked';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // The Field menu's entry for a shuffle, beside the fields; never a field name
 // (those are checked names, and this one starts with underscores).
@@ -69,6 +70,7 @@ function sortDraft(props: SortSectionProps): DraftEditor {
 }
 
 function SortEditor(props: SortSectionProps) {
+  const translate = useTranslate();
   const { query, fields } = props;
   const [open, setOpen] = useState<number | undefined>(undefined);
   const source = query.source.kind;
@@ -117,8 +119,8 @@ function SortEditor(props: SortSectionProps) {
   // another file's string cannot hold either.
   const extras: readonly FieldExtra[] = codeAllowed
     ? [
-        { value: RANDOM_FIELD, label: 'Random order', icon: <RepeatIcon size={13} /> },
-        { value: CUSTOM_FIELD, label: 'Custom code', icon: <CodeIcon size={13} /> },
+        { value: RANDOM_FIELD, label: translate('props.loop.sort.random'), icon: <RepeatIcon size={13} /> },
+        { value: CUSTOM_FIELD, label: translate('props.loop.customCode'), icon: <CodeIcon size={13} /> },
       ]
     : [];
   // One item, read once for the section: every Field picker shows its values.
@@ -126,7 +128,7 @@ function SortEditor(props: SortSectionProps) {
   return (
     <div className="loop-settings-section">
       <SectionHeader
-        title="Sort"
+        title={translate('props.loop.sort.title')}
         label={props.label}
         dot={<SettingDot setting="sort" binding={props.binding} draft={sortDraft(props)} />}
         toggle={props.toggle}
@@ -180,19 +182,20 @@ function CustomSortRow(props: {
   readonly onToggle: () => void;
   readonly onChange: (code: string | undefined) => void;
 }) {
+  const translate = useTranslate();
   const firstLine = props.code.split('\n')[0] ?? props.code;
   return (
     <ListRow
-      parts={{ lead: 'Custom code', rest: firstLine }}
+      parts={{ lead: translate('props.loop.customCode'), rest: firstLine }}
       open={props.open}
-      removeLabel="Remove sort"
+      removeLabel={translate('props.loop.sort.remove')}
       editor={
         <div className="loop-settings-editor">
           <CodeBox
             value={props.code}
-            label="Sort code"
+            label={translate('props.loop.sort.code')}
             placeholder={props.source === 'list' ? '(a, b) => a.order - b.order' : '(a, b) => a.data.order - b.data.order'}
-            check={customSortProblem}
+            check={(code) => customSortProblem(code, translate)}
             onCommit={props.onChange}
           />
         </div>
@@ -205,12 +208,13 @@ function CustomSortRow(props: {
 
 // A shuffle has nothing to edit, only a way out.
 function RandomRow(props: { readonly onRemove: () => void }) {
+  const translate = useTranslate();
   return (
     <ListRow
-      parts={{ lead: 'Random order', rest: 'shuffled when the page is built' }}
+      parts={{ lead: translate('props.loop.sort.random'), rest: translate('props.loop.sort.shuffled') }}
       open={false}
       locked={true}
-      removeLabel="Remove sort"
+      removeLabel={translate('props.loop.sort.remove')}
       onToggle={() => undefined}
       onRemove={props.onRemove}
     />
@@ -229,6 +233,7 @@ function SortChip(props: {
   readonly onCustom: () => void;
   readonly onChange: (sort: LoopSort | undefined) => void;
 }) {
+  const translate = useTranslate();
   const { sort } = props;
   const changeField = (path: string): void => {
     if (path === RANDOM_FIELD) {
@@ -252,7 +257,7 @@ function SortChip(props: {
   // A sort read from code keeps its order even when the field's kind no longer offers it.
   const orders: readonly LoopSortOrder[] = offered.includes(sort.order) ? offered : [sort.order, ...offered];
   const orderOptions = orders.flatMap((order) => {
-    const labels = orderLabels(order);
+    const labels = orderLabels(order, translate);
     return [
       { value: orderKey(order, 'ascending'), label: labels.ascending },
       { value: orderKey(order, 'descending'), label: labels.descending },
@@ -262,12 +267,12 @@ function SortChip(props: {
     <>
       <ListRow
         dragThrough={true}
-        parts={sortParts(sort, props.fields)}
+        parts={sortParts(sort, props.fields, translate)}
         open={props.open}
-        removeLabel="Remove sort"
+        removeLabel={translate('props.loop.sort.remove')}
         editor={
           <div className="loop-settings-editor">
-            <EditorRow label="Field">
+            <EditorRow label={translate('props.loop.field')}>
               <FieldPicker
                 value={sort.field}
                 fields={props.fields ?? []}
@@ -277,11 +282,11 @@ function SortChip(props: {
                 onChange={changeField}
               />
             </EditorRow>
-            <EditorRow label="Order">
+            <EditorRow label={translate('props.loop.sort.order')}>
               <Dropdown<OrderKey>
                 livePreview={false}
                 value={orderKey(sort.order, sort.direction)}
-                ariaLabel="Order"
+                ariaLabel={translate('props.loop.sort.order')}
                 options={orderOptions}
                 onChange={(key) => props.onChange({ ...sort, ...orderOf(key, orders) })}
               />
@@ -314,6 +319,7 @@ function orderOf(key: OrderKey, orders: readonly LoopSortOrder[]): Pick<LoopSort
 // ---------------------------------------------------------------------------
 
 export function LimitSection(props: Omit<SectionProps, 'fields'> & { readonly binding?: BindingContext | undefined; readonly toggle?: ReactNode }) {
+  const translate = useTranslate();
   const { query } = props;
   // A linked Show or Skip keeps the section open: its row is the purple bar.
   const linked = props.binding?.settings.limit.kind === 'prop' || props.binding?.settings.offset.kind === 'prop';
@@ -326,12 +332,19 @@ export function LimitSection(props: Omit<SectionProps, 'fields'> & { readonly bi
       <div className="loop-settings-header">
         <span className="loop-settings-label">
           <AppliedLabel
-            title="Limit items"
+            title={translate('props.loop.limit.title')}
             reset={{ applied: query.limit !== undefined || query.offset > 0, onReset: () => props.onChange(limitReset(query)) }}
           />
           {props.toggle}
         </span>
-        <button type="button" role="switch" aria-checked={on} aria-label="Limit items" className={`cms-toggle ${on ? 'on' : ''}`} onClick={toggle}>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label={translate('props.loop.limit.title')}
+          className={`cms-toggle ${on ? 'on' : ''}`}
+          onClick={toggle}
+        >
           <span className="cms-toggle-knob" />
         </button>
       </div>
@@ -344,10 +357,10 @@ export function LimitSection(props: Omit<SectionProps, 'fields'> & { readonly bi
             onChange={props.onChange}
             row={(dot, value, onChange) => (
               <NumberRow
-                label="Show"
+                label={translate('props.loop.limit.show')}
                 dot={dot}
                 value={value.limit}
-                placeholder="All"
+                placeholder={translate('props.loop.limit.all')}
                 bounds={{ min: 1, max: LOOP_QUERY_LIMITS.limitMax }}
                 onCommit={(limit) => onChange({ ...value, limit })}
               />
@@ -360,7 +373,7 @@ export function LimitSection(props: Omit<SectionProps, 'fields'> & { readonly bi
             onChange={props.onChange}
             row={(dot, value, onChange) => (
               <NumberRow
-                label="Skip"
+                label={translate('props.loop.limit.skip')}
                 dot={dot}
                 value={value.offset}
                 placeholder="0"
@@ -396,6 +409,7 @@ function LimitRow(props: {
 
 // The up and down buttons beside a number, shown while it is pointed at.
 function Steppers(props: { readonly onStep: (direction: 1 | -1, size: { readonly large: boolean }) => void }) {
+  const translate = useTranslate();
   return (
     <span className="num-steppers">
       {([1, -1] as const).map((direction) => (
@@ -403,8 +417,8 @@ function Steppers(props: { readonly onStep: (direction: 1 | -1, size: { readonly
           key={direction}
           type="button"
           tabIndex={-1}
-          aria-label={direction > 0 ? 'Increase' : 'Decrease'}
-          title={`${direction > 0 ? 'Increase' : 'Decrease'} — ⇧ by 10`}
+          aria-label={direction > 0 ? translate('props.loop.limit.increase') : translate('props.loop.limit.decrease')}
+          title={direction > 0 ? translate('props.loop.limit.increaseTitle') : translate('props.loop.limit.decreaseTitle')}
           onClick={(event) => props.onStep(direction, { large: event.shiftKey })}
         >
           <ChevronDownIcon size={11} style={direction > 0 ? { transform: 'rotate(180deg)' } : undefined} />

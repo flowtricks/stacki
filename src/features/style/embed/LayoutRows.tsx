@@ -1,3 +1,6 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { MessageKey, Translator } from '../../../../shared/properties/i18n/messageRef';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { chevronRight as centralChevronRight } from '../../../ui/central/centralGeometry';
 // The layout section's rows: which properties each section owns, direction
@@ -39,10 +42,11 @@ export function DirectionRow({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_size-row">
       <GroupLabel
-        label="Direction"
+        label={translate('styleModel.embed.layout.direction')}
         props={['flex-flow', 'flex-direction', 'flex-wrap']}
         read={read}
         busy={busy}
@@ -105,6 +109,7 @@ export function AlignRow({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   const column = currentFlexFlow(read).startsWith('column');
   return (
     <div className="embed-editor_size-row embed-editor_align-row">
@@ -116,7 +121,7 @@ export function AlignRow({
         onReset={() => {}}
         tooltip={<PropTip props={['justify-content', 'align-items']} />}
       >
-        Align
+        {translate('styleModel.embed.layout.align')}
       </FieldLabel>
       <AlignControl
         justify={effectiveValue(read('justify-content'))}
@@ -205,6 +210,7 @@ export function LayoutModeSections({
   activeSelector: string;
   resolving: boolean;
 }) {
+  const translate = useTranslate();
   const { read, busy, setProp, clearProp, onProvenance, onSelectSelector } = rowProps;
   const display = effectiveValue(read('display'));
   const mode = layoutMode(display);
@@ -213,17 +219,17 @@ export function LayoutModeSections({
   const hasGridGap = ['row-gap', 'column-gap', 'grid-row-gap', 'grid-column-gap', 'gap'].some((prop) => read(prop) !== undefined);
   return (
     <>
-      <LayoutDisclosure label="Flex settings" open={open.flex} onToggle={() => toggle('flex')}>
+      <LayoutDisclosure label={translate('styleModel.embed.layout.flexSettings')} open={open.flex} onToggle={() => toggle('flex')}>
         <DirectionRow {...rowProps} />
         <AlignRow {...rowProps} liveSetProp={liveSetProp} />
       </LayoutDisclosure>
-      <LayoutDisclosure label="Grid settings" open={open.grid} onToggle={() => toggle('grid')}>
+      <LayoutDisclosure label={translate('styleModel.embed.layout.gridSettings')} open={open.grid} onToggle={() => toggle('grid')}>
         <GridControls {...rowProps} liveSetProp={liveSetProp} />
       </LayoutDisclosure>
       {/* Gap is shared by flex + grid — always mounted (keeps its link-toggle state),
           shown whenever the element is a flex/grid container. */}
       <GapControl key={activeSelector} show={mode === 'flex' || mode === 'grid' || hasGridGap} {...rowProps} liveSetProp={liveSetProp} />
-      <LayoutDisclosure label="Inline settings" open={open.inline} onToggle={() => toggle('inline')}>
+      <LayoutDisclosure label={translate('styleModel.embed.layout.inlineSettings')} open={open.inline} onToggle={() => toggle('inline')}>
         {/* Align Y = vertical-align: the inline-level alignment property. Dimmed unless
             Display is inline-level or table-cell, where it actually applies. */}
         <VerticalAlignRow
@@ -308,12 +314,12 @@ export function useProjectClasses(): string[] {
 // to pick from, few enough that the list stays a list.
 export const PROJECT_CLASS_LIMIT = 30;
 
-export const SUGGESTION_KIND_LABEL: Record<SelectorSuggestion['kind'], string> = {
-  tag: 'tag',
-  class: 'class',
-  attribute: 'attribute',
-  'attribute-value': 'attribute',
-  combo: 'combo',
+export const SUGGESTION_KIND_LABEL_KEY: Record<SelectorSuggestion['kind'], MessageKey> = {
+  tag: 'styleModel.embed.picker.kind.tag',
+  class: 'styleModel.embed.picker.kind.class',
+  attribute: 'styleModel.embed.picker.kind.attribute',
+  'attribute-value': 'styleModel.embed.picker.kind.attribute',
+  combo: 'styleModel.embed.picker.kind.combo',
 };
 
 export type ClassifiedSelector = {
@@ -336,24 +342,27 @@ export function classifySelector(selector: MatchedSelector): ClassifiedSelector 
   };
 }
 
-export function selectorAccessibleLabel(entry: ClassifiedSelector, label: string): string {
+export function selectorAccessibleLabel(entry: ClassifiedSelector, label: string, translate: Translator = ENGLISH_TRANSLATE): string {
   const categories: string[] = [];
   if (entry.global) {
-    categories.push('global');
+    categories.push(translate('styleModel.embed.layout.category.global'));
   }
   if (entry.inherited) {
-    categories.push('inherited');
+    categories.push(translate('styleModel.embed.layout.category.inherited'));
   }
   if (entry.selector.inComponentMarkup === true) {
-    categories.push('component');
+    categories.push(translate('styleModel.embed.layout.category.component'));
   }
   if (entry.selector.fromInstance === true) {
-    categories.push('instance');
+    categories.push(translate('styleModel.embed.layout.category.instance'));
   }
-  if (categories.length === 0) {
+  const last = categories.pop();
+  if (last === undefined) {
     return label;
   }
-  return `${label}, ${categories.join(' and ')} selector`;
+  // The list reads `a, b and c`: the last joins through a message, since the word for "and" differs by language.
+  const joined = categories.length === 0 ? last : translate('styleModel.embed.layout.categoriesAnd', { rest: categories.join(', '), last });
+  return translate('styleModel.embed.layout.selectorLabel', { label, categories: joined });
 }
 
 // The selector picker: a chip per selector that styles the element (its own

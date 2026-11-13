@@ -7,6 +7,8 @@
 //   a day        'YYYY-MM-DD'
 //   a date-time  'YYYY-MM-DDTHH:mm', local time; the caller converts it.
 import { assert } from '../../shared/core/assert';
+import { formattersFor } from '../../shared/core/i18n/format';
+import type { Locale } from '../../shared/core/i18n/locales';
 import { validCalendarDay } from './dateFieldModel';
 
 export const DATE_TIME_PICKER_LIMITS = {
@@ -42,11 +44,15 @@ export interface LocalDateTime {
   readonly minute: number;
 }
 
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const;
-
-const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
-
-export const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'] as const;
+/**
+ * The weekday headings, Sunday first, in the language of `locale`. Calendar names come from the platform's `Intl`, never from a
+ * list in this file, so a new interface language needs no change here.
+ */
+export function weekdayLabels(locale: Locale): readonly string[] {
+  const { formatDate } = formattersFor(locale);
+  // 2026-08-16 is a Sunday; UTC keeps the weekday from moving with the computer's zone.
+  return Array.from({ length: 7 }, (_, index) => formatDate(utcDate(2026, 8, 16 + index), { weekday: 'short', timeZone: 'UTC' }));
+}
 
 /** The hours a 12-hour clock offers, in the order it shows them. */
 export const CLOCK_HOURS = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] as const;
@@ -57,10 +63,10 @@ export const CLOCK_MINUTES = Array.from(
   (_, index) => index * DATE_TIME_PICKER_LIMITS.minuteStep,
 );
 
-export function monthName(month: number): string {
+export function monthName(month: number, locale: Locale): string {
   assertMonth(month);
-  const name = MONTH_NAMES[month - 1];
-  assert(name !== undefined, 'Every month has a name');
+  const name = formattersFor(locale).formatDate(utcDate(2026, month, 1), { month: 'long', timeZone: 'UTC' });
+  assert(name.length > 0, 'Every month has a name');
   return name;
 }
 
@@ -111,15 +117,12 @@ export function monthGrid(shown: CalendarMonth): readonly CalendarCell[] {
   return cells;
 }
 
-/** A day in words, as the picker's footer names it: Friday, August 14, 2026. */
-export function longDay(day: string): string {
+/** A day in words, as the picker's footer names it: Friday, August 14, 2026 in English. */
+export function longDay(day: string, locale: Locale): string {
   assert(validCalendarDay(day), 'Only a real day is named');
   const { year, month } = monthOf(day);
   const date = Number(day.slice(8, 10));
-  const weekday = utcDate(year, month, date).getUTCDay();
-  const name = WEEKDAY_NAMES[weekday];
-  assert(name !== undefined, 'Every weekday has a name');
-  return `${name}, ${monthName(month)} ${date}, ${year}`;
+  return formattersFor(locale).formatDate(utcDate(year, month, date), { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 }
 
 /** Today, as the person's own calendar has it. */

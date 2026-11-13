@@ -13,6 +13,7 @@
 //   - the frontmatter block, where the plan wrote a query or took one away.
 
 import { assert } from '../../../vendor/stacki/shared/core/assert';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import { encodeUtf8 } from '../../../vendor/stacki/shared/core/span';
 import { writeFrontmatter } from '../../../vendor/stacki/shared/page/frontmatterSource';
 import { lineIndent } from '../../../vendor/stacki/shared/engine/planSupport';
@@ -58,7 +59,7 @@ export function loopSourceEdit(source: string, id: string, target: LoopTarget, s
   assert(plan.loop.id === loop.id, 'A loop plan restates the loop it was made for');
   const loopEdits = loopNodeEdits(source, { written, loop }, plan);
   if (loopEdits === undefined) {
-    return { source, result: { ok: false, message: 'This loop is written differently from how Stacki writes one. Change its list in Code.' } };
+    return { source, result: { ok: false, ...described('settings.element.loopDifferent') } };
   }
   const frontmatterChanged = plan.extraFrontmatter !== model.extraFrontmatter || plan.imports !== model.imports;
   const text = frontmatterChanged ? writeFrontmatter({ ...model, extraFrontmatter: plan.extraFrontmatter, imports: plan.imports }) : undefined;

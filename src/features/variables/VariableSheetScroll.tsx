@@ -2,6 +2,7 @@ import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { VariableBlock } from '../../ipc/variablesBridge';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { createScrollLanes, SCROLL_PEERS_MAX } from './variableScroll';
 
 interface ScrollMetrics {
@@ -55,6 +56,7 @@ export function useVariableSheetScroll(blocks: readonly VariableBlock[], columnC
 }
 
 export function VariableScrollBar({ scroll }: { readonly scroll: ReturnType<typeof useVariableSheetScroll> }) {
+  const translate = useTranslate();
   const { metrics, barRef, sync } = scroll;
   return (
     <div className="vars-scrollbar-row" hidden={metrics.maximum <= 0} style={{ paddingRight: metrics.gutter }}>
@@ -62,7 +64,7 @@ export function VariableScrollBar({ scroll }: { readonly scroll: ReturnType<type
         className="vars-horizontal-scroll"
         ref={barRef}
         role="region"
-        aria-label="Scroll variable values horizontally"
+        aria-label={translate('variables.scroll.label')}
         tabIndex={0}
         onScroll={(event) => sync.broadcast(event.currentTarget, event.currentTarget.scrollLeft)}
       >

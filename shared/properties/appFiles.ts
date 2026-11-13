@@ -160,14 +160,14 @@ export function parseAppFilePath(input: unknown, appId: string | undefined, opti
 export function appFilePathRefusal(path: string, appId: string | undefined): string | undefined {
   const segments = path.split('/');
   if (segments.some((segment) => segment.toLowerCase() === '.git')) {
-    return 'Apps cannot read or change Git’s own files (.git/)';
+    return 'Apps cannot read or change Git’s own files (.git/)'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
   if (segments.some((segment) => segment === 'node_modules')) {
-    return 'Apps cannot read or change installed packages (node_modules/)';
+    return 'Apps cannot read or change installed packages (node_modules/)'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
   const name = segments[segments.length - 1] ?? '';
   if (/^\.env(?:\..*)?$/i.test(name)) {
-    return 'Apps cannot read or change the project’s .env secrets; use app settings';
+    return 'Apps cannot read or change the project’s .env secrets; use app settings'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
   if (appId === undefined) {
     return undefined;
@@ -175,17 +175,17 @@ export function appFilePathRefusal(path: string, appId: string | undefined): str
   const id = parseAppId(appId);
   const appsPrefix = `${APPS_DIRECTORY}/`;
   if (path === APPS_DIRECTORY) {
-    return 'Apps can reach only their own folder in .stacki/apps/';
+    return 'Apps can reach only their own folder in .stacki/apps/'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
   if (path.startsWith(appsPrefix)) {
     const owner = path.slice(appsPrefix.length).split('/')[0];
     if (owner !== id) {
-      return 'Apps can reach only their own folder in .stacki/apps/';
+      return 'Apps can reach only their own folder in .stacki/apps/'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
     }
   }
   const dataPrefix = '.stacki/app-data/';
   if (path.startsWith(dataPrefix) && path !== `${dataPrefix}${id}.json`) {
-    return 'Apps cannot read or change another app’s stored data; use stacki.storage';
+    return 'Apps cannot read or change another app’s stored data; use stacki.storage'; // i18n-ignore: refusal returned to the app over the SDK for its developer.
   }
   return undefined;
 }

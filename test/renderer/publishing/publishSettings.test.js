@@ -353,7 +353,7 @@ test('Cloudflare shows account names through loading and failed refreshes', asyn
   const source = JSON.stringify({ ...DEFAULT_PUBLISH_CONFIG, hosting });
   const { discovery, writes, show } = fixture(context, source);
   const account = () => document.querySelector('[aria-label="Cloudflare account"]');
-  const refresh = () => document.querySelector('[aria-label="Refresh cloudflare account"]');
+  const refresh = () => document.querySelector('[aria-label="Refresh Cloudflare account"]');
   await show();
   assert.match(account().textContent, /Loading account name/);
   assert.doesNotMatch(account().textContent, new RegExp(accountId));

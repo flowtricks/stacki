@@ -13,7 +13,9 @@ import type { ResolvedProp } from './model/resolved';
 import { commitInPlace } from './model/commitInPlace';
 import { displayText, keepImportant, parseImportant, withImportant } from './model/styleDisplay';
 import { CloseIcon, RelativeIcon, AbsoluteIcon, FixedIcon, StickyIcon } from './PositionIcons';
-import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Props, SegmentedIconControl, FLOAT_SEGS, CLEAR_SEGS } from './PositionSegments';
+import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Props, SegmentedIconControl, floatSegments, clearSegments } from './PositionSegments';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
 
 // The Position section: a position-type dropdown (with a Custom escape hatch), an
 // inset box (top/right/bottom/left, like the spacing box), a z-index field, and
@@ -57,13 +59,14 @@ function LiveField({
   placeholder: string;
   ariaLabel: string;
 } & Props) {
+  const translate = useTranslate();
   const display = displayOf(read(prop));
   const external = display.present ? withImportant(display) : '';
   const field = useLiveFieldEditing({ prop, external, busy, setProp, clearProp, liveSetProp });
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      ariaLabel={translate('style.positionSection.connect', { name: ariaLabel })}
       disabled={busy}
       prop={prop}
       onPick={(binding) => {
@@ -207,17 +210,19 @@ function stepLiveFieldKey(event: ReactKeyboardEvent<HTMLInputElement>): string |
 // ─────────────────────────── Position dropdown ───────────────────────────
 
 const POSITION_PRESETS: ReadonlyArray<{ value: string; label: string; icon: ReactNode }> = [
-  { value: 'static', label: 'Static', icon: <CloseIcon /> },
-  { value: 'relative', label: 'Relative', icon: <RelativeIcon /> },
-  { value: 'absolute', label: 'Absolute', icon: <AbsoluteIcon /> },
-  { value: 'fixed', label: 'Fixed', icon: <FixedIcon /> },
-  { value: 'sticky', label: 'Sticky', icon: <StickyIcon /> },
+  // The labels are the CSS position keywords, which designers read untranslated.
+  { value: 'static', label: 'Static', icon: <CloseIcon /> }, // i18n-ignore: CSS keyword.
+  { value: 'relative', label: 'Relative', icon: <RelativeIcon /> }, // i18n-ignore: CSS keyword.
+  { value: 'absolute', label: 'Absolute', icon: <AbsoluteIcon /> }, // i18n-ignore: CSS keyword.
+  { value: 'fixed', label: 'Fixed', icon: <FixedIcon /> }, // i18n-ignore: CSS keyword.
+  { value: 'sticky', label: 'Sticky', icon: <StickyIcon /> }, // i18n-ignore: CSS keyword.
 ];
 const POSITION_PRESET_VALUES = new Set(POSITION_PRESETS.map((preset) => preset.value));
 const CUSTOM = '__custom__';
 
 // The editable field shown inside the position dropdown's trigger in custom mode.
 function PositionCustomField({ read, busy, setProp }: { read: Read; busy: boolean; setProp: SetProp }) {
+  const translate = useTranslate();
   const display = displayOf(read('position'));
   const external = display.present ? withImportant(display) : '';
   const [draft, setDraft] = useState(external);
@@ -236,7 +241,7 @@ function PositionCustomField({ read, busy, setProp }: { read: Read; busy: boolea
   };
   return (
     <VariableConnect
-      ariaLabel="Connect Position to a variable"
+      ariaLabel={translate('style.positionSection.connectPosition')}
       disabled={busy}
       prop="position"
       onPick={(binding) => {
@@ -247,7 +252,7 @@ function PositionCustomField({ read, busy, setProp }: { read: Read; busy: boolea
       <input
         className="embed-editor_value-input embed-editor_display-input"
         value={draft}
-        placeholder="custom value"
+        placeholder={translate('style.positionSection.customValuePlaceholder')}
         spellCheck={false}
         disabled={busy}
         onChange={(event) => setDraft(event.target.value)}
@@ -263,13 +268,14 @@ function PositionCustomField({ read, busy, setProp }: { read: Read; busy: boolea
             commitInPlace(event.currentTarget);
           }
         }}
-        aria-label="Position value"
+        aria-label={translate('style.positionSection.positionValue')}
       />
     </VariableConnect>
   );
 }
 
 function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; busy: boolean; setProp: SetProp; liveSetProp: LiveSetProp }) {
+  const translate = useTranslate();
   const current = effectiveValue(read, 'position');
   const isPreset = POSITION_PRESET_VALUES.has(current);
   // Unset → what the page computes (a `*` rule the panel can't see, a UA default),
@@ -302,7 +308,7 @@ function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; bus
           label: preset.label,
           icon: preset.icon,
         })),
-        { value: CUSTOM, label: 'Custom' },
+        { value: CUSTOM, label: translate('style.positionSection.custom') },
       ]}
       customInput={custom ? <PositionCustomField read={read} busy={busy} setProp={setProp} /> : undefined}
       disabled={busy}
@@ -316,7 +322,7 @@ function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; bus
         }
       }}
       onPreview={(next) => liveSetProp('position', next === CUSTOM ? undefined : (next ?? undefined), false)}
-      ariaLabel="Position"
+      ariaLabel={translate('style.positionSection.position')}
     />
   );
 }
@@ -335,6 +341,7 @@ function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; bus
 // Each preset is exactly that pair of facts: the sides it sets to 0, and the
 // sides it clears. Everything else about the element is left alone.
 
+const AUTO_KEYWORD = 'Auto'; // i18n-ignore: the CSS keyword `auto`, shown as the field's empty value.
 const INSET_SIDES = ['top', 'right', 'bottom', 'left'] as const;
 type InsetSide = (typeof INSET_SIDES)[number];
 
@@ -350,67 +357,68 @@ function InsetIcon({ x, y, width, height }: { x: number; y: number; width: numbe
 
 const INSET_PRESETS: ReadonlyArray<{
   value: string;
-  label: string;
+  labelKey: MessageKey;
   sides: readonly InsetSide[];
   icon: ReactNode;
 }> = [
   {
     value: 'top-left',
-    label: 'Top left',
+    labelKey: 'style.positionSection.topLeft',
     sides: ['top', 'left'],
     icon: <InsetIcon x={3.5} y={3.5} width={4} height={4} />,
   },
   {
     value: 'top-right',
-    label: 'Top right',
+    labelKey: 'style.positionSection.topRight',
     sides: ['top', 'right'],
     icon: <InsetIcon x={8.5} y={3.5} width={4} height={4} />,
   },
   {
     value: 'bottom-left',
-    label: 'Bottom left',
+    labelKey: 'style.positionSection.bottomLeft',
     sides: ['bottom', 'left'],
     icon: <InsetIcon x={3.5} y={8.5} width={4} height={4} />,
   },
   {
     value: 'bottom-right',
-    label: 'Bottom right',
+    labelKey: 'style.positionSection.bottomRight',
     sides: ['bottom', 'right'],
     icon: <InsetIcon x={8.5} y={8.5} width={4} height={4} />,
   },
   {
     value: 'left',
-    label: 'Left edge',
+    labelKey: 'style.positionSection.leftEdge',
     sides: ['top', 'bottom', 'left'],
     icon: <InsetIcon x={3.5} y={3.5} width={3} height={9} />,
   },
   {
     value: 'right',
-    label: 'Right edge',
+    labelKey: 'style.positionSection.rightEdge',
     sides: ['top', 'bottom', 'right'],
     icon: <InsetIcon x={9.5} y={3.5} width={3} height={9} />,
   },
   {
     value: 'bottom',
-    label: 'Bottom edge',
+    labelKey: 'style.positionSection.bottomEdge',
     sides: ['left', 'right', 'bottom'],
     icon: <InsetIcon x={3.5} y={9.5} width={9} height={3} />,
   },
   {
     value: 'top',
-    label: 'Top edge',
+    labelKey: 'style.positionSection.topEdge',
     sides: ['left', 'right', 'top'],
     icon: <InsetIcon x={3.5} y={3.5} width={9} height={3} />,
   },
   {
     value: 'full',
-    label: 'Fill',
+    labelKey: 'style.positionSection.fill',
     sides: ['top', 'right', 'bottom', 'left'],
     icon: <InsetIcon x={3.5} y={3.5} width={9} height={9} />,
   },
 ];
 
 function InsetPresets({ read, busy, setProp, clearProp }: Props) {
+  const translate = useTranslate();
   // Which sides are pinned right now — by whether they are SET at all, not by
   // whether they are still 0. Nudging a corner to `12px` has not stopped it
   // being pinned to that corner, and the row should go on saying so.
@@ -432,7 +440,7 @@ function InsetPresets({ read, busy, setProp, clearProp }: Props) {
   };
 
   return (
-    <div className="embed-editor_inset-presets" role="radiogroup" aria-label="Pin to">
+    <div className="embed-editor_inset-presets" role="radiogroup" aria-label={translate('style.positionSection.pinTo')}>
       {INSET_PRESETS.map((preset) => (
         <button
           key={preset.value}
@@ -441,8 +449,8 @@ function InsetPresets({ read, busy, setProp, clearProp }: Props) {
           aria-checked={current === preset.value}
           className={`embed-editor_inset-preset ${current === preset.value ? 'is-selected' : ''}`}
           disabled={busy}
-          title={preset.label}
-          aria-label={preset.label}
+          title={translate(preset.labelKey)}
+          aria-label={translate(preset.labelKey)}
           onClick={() => apply(preset)}
         >
           {preset.icon}
@@ -457,7 +465,7 @@ function InsetPresets({ read, busy, setProp, clearProp }: Props) {
 // editor, exactly like the margin/padding box. Each side maps to the plain
 // top/right/bottom/left property; unset reads "Auto".
 function InsetBox(props: Props) {
-  const { label, fillHandlers, editor } = useSpacingBox(props, { emptyLabel: 'Auto' });
+  const { label, fillHandlers, editor } = useSpacingBox(props, { emptyLabel: 'Auto' }); // i18n-ignore: the CSS keyword `auto`.
   return (
     <div className="embed-editor_spacing">
       <div className="embed-editor_position-inset">
@@ -503,6 +511,7 @@ function RowLabel({
   onProvenance: (prop: string, anchor: DOMRect) => void;
   onSelectSelector: (selector: string, prop?: string) => void;
 }) {
+  const translate = useTranslate();
   const resolved = read(prop);
   const isSelected = resolved?.source === 'selected';
   const contributors = resolved?.contributors ?? [];
@@ -518,7 +527,7 @@ function RowLabel({
       active={!!isSelected}
       disabled={busy}
       onReset={() => clearProp(prop)}
-      resetLabel="Clear"
+      resetLabel={translate('style.positionSection.clear')}
       tooltip={<PropTip props={[prop]} />}
       menuNote={
         contributors.length
@@ -551,6 +560,7 @@ function Row({ label, children }: { label: ReactNode; children: ReactNode }) {
 
 export default function PositionSection(props: Props) {
   const { read } = props;
+  const translate = useTranslate();
 
   const rowLabel = (label: string, prop: string) => (
     <RowLabel
@@ -566,7 +576,7 @@ export default function PositionSection(props: Props) {
 
   return (
     <div className="embed-editor_position">
-      <Row label={rowLabel('Position', 'position')}>
+      <Row label={rowLabel(translate('style.positionSection.position'), 'position')}>
         <PositionControl read={read} busy={props.busy} setProp={props.setProp} liveSetProp={props.liveSetProp} />
       </Row>
 
@@ -585,14 +595,26 @@ export default function PositionSection(props: Props) {
           "Auto" from a field that is there is clearer than inferring it from a
           field that isn't. */}
       <Row label={rowLabel('z-index', 'z-index')}>
-        <LiveField prop="z-index" placeholder="Auto" ariaLabel="z-index" {...props} />
+        <LiveField prop="z-index" placeholder={AUTO_KEYWORD} ariaLabel="z-index" {...props} />
       </Row>
 
-      <Row label={rowLabel('Float', 'float')}>
-        <SegmentedIconControl prop="float" ariaLabel="Float" segments={FLOAT_SEGS} current={effectiveText(read, 'float') || 'none'} {...props} />
+      <Row label={rowLabel(translate('style.positionSection.float'), 'float')}>
+        <SegmentedIconControl
+          prop="float"
+          ariaLabel={translate('style.positionSection.float')}
+          segments={floatSegments(translate)}
+          current={effectiveText(read, 'float') || 'none'}
+          {...props}
+        />
       </Row>
-      <Row label={rowLabel('Clear', 'clear')}>
-        <SegmentedIconControl prop="clear" ariaLabel="Clear" segments={CLEAR_SEGS} current={effectiveText(read, 'clear') || 'none'} {...props} />
+      <Row label={rowLabel(translate('style.positionSection.clearProperty'), 'clear')}>
+        <SegmentedIconControl
+          prop="clear"
+          ariaLabel={translate('style.positionSection.clearProperty')}
+          segments={clearSegments(translate)}
+          current={effectiveText(read, 'clear') || 'none'}
+          {...props}
+        />
       </Row>
     </div>
   );

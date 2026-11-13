@@ -2,6 +2,7 @@
 // order with the control each draws, and the rows no section claims
 // (EmbedEditor.tsx).
 
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import Select from '../components/Select';
@@ -118,6 +119,7 @@ export function useVisibleSelectors() {
 // The card's sticky head: the query/context selector (with its add / rename forms),
 // the element's identity, the selector well, and where edits go.
 export function StyleCardHead({ card, onVisibleSelectorsChange }: { card: StyleCardProps; onVisibleSelectorsChange: (selectors: readonly string[]) => void }) {
+  const translate = useTranslate();
   const { snapshot, activeSelector, busy } = card;
   // Whether the "Add query" form is open (below the context dropdown).
   const [addingQuery, setAddingQuery] = useState(false);
@@ -147,7 +149,11 @@ export function StyleCardHead({ card, onVisibleSelectorsChange }: { card: StyleC
       <QueryForms card={card} addingQuery={addingQuery} editingQuery={editingQuery} setAddingQuery={setAddingQuery} setEditingQuery={setEditingQuery} />
       <div className="embed-editor_selector">
         <div className="embed-editor_selector-box">
-          {snapshot ? <ElementTokenPicker snapshot={snapshot} /> : <div className="embed-editor_element-id is-empty">No element selected</div>}
+          {snapshot ? (
+            <ElementTokenPicker snapshot={snapshot} />
+          ) : (
+            <div className="embed-editor_element-id is-empty">{translate('styleModel.embed.card.noElement')}</div>
+          )}
           {/* Right-aligned slot the save indicator portals into — sits on the
             `div.test` row (see SaveIndicator). */}
           <span id="embed-editor_save-slot" className="embed-editor_selector-save" />
@@ -179,6 +185,7 @@ export function StyleCardHead({ card, onVisibleSelectorsChange }: { card: StyleC
 // The style-context dropdown. Each context row can carry a pencil to rename its query;
 // the last option adds a query.
 export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: StyleCardProps; onAddQuery: () => void; onEditQuery: (query: string) => void }) {
+  const translate = useTranslate();
   const { contexts, contextInfos, queryUses } = card;
   // Each query row names the stylesheet its block is written in, in the words and
   // icon "Add custom styles in" uses for that stylesheet, so the two read alike.
@@ -219,7 +226,7 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
         ? {
             action: {
               icon: <PencilIcon />,
-              label: `Edit ${query}`,
+              label: translate('styleModel.embed.card.editQuery', { query }),
               onSelect: () => onEditQuery(query),
             },
           }
@@ -230,7 +237,7 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
     <Select
       className="embed-editor_context-select"
       value={card.context}
-      options={[...options, { value: ADD_QUERY, label: 'Add query', icon: <PlusIcon /> }]}
+      options={[...options, { value: ADD_QUERY, label: translate('styleModel.embed.card.addQuery'), icon: <PlusIcon /> }]}
       onChange={(next) => {
         if (next === ADD_QUERY) {
           onAddQuery();
@@ -238,7 +245,7 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
           card.onContext(next);
         }
       }}
-      ariaLabel="Style context"
+      ariaLabel={translate('styleModel.embed.card.context')}
     />
   );
 }
@@ -291,25 +298,26 @@ export function QueryForms({
 // (page embeds listed in cascade order). Sits under the selector input, mirroring the
 // reference layout.
 export function SourcePickerRow({ card }: { card: StyleCardProps }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_selector-head">
       <div className="embed-editor_source-picker">
-        <span className="embed-editor_source-prefix">Add custom styles in:</span>
+        <span className="embed-editor_source-prefix">{translate('styleModel.embed.card.addIn')}</span>
         {/* Always rendered so it's openable while embeds are still fetching — it
           lists whatever's loaded so far (Webflow + page embeds); component
           embeds fill in as they arrive, flagged by the spinner beside it. */}
         <Select
           variant="link"
           searchable
-          searchPlaceholder="Search embeds…"
+          searchPlaceholder={translate('styleModel.embed.card.searchEmbeds')}
           className="embed-editor_source-link"
           value={card.sourceValue}
           options={card.sourceOptions.map(sourceSelectOption)}
           onChange={(next) => card.onSourceChange(next)}
-          ariaLabel="Style source — the Webflow class or embed edits go to"
+          ariaLabel={translate('styleModel.embed.card.source')}
         />
         {card.loading ? (
-          <span className="embed-editor_source-loading" title="Fetching embeds…" aria-live="polite">
+          <span className="embed-editor_source-loading" title={translate('styleModel.embed.card.fetching')} aria-live="polite">
             <svg className="embed-editor_source-spinner" viewBox="0 0 16 16" aria-hidden="true">
               <circle cx="8" cy="8" r="6" />
             </svg>
@@ -317,8 +325,8 @@ export function SourcePickerRow({ card }: { card: StyleCardProps }) {
         ) : undefined}
       </div>
       {card.pending ? (
-        <span className="embed-editor_unsaved" title="Not yet saved — applies when you exit the component">
-          Unsaved
+        <span className="embed-editor_unsaved" title={translate('styleModel.embed.card.unsavedTip')}>
+          {translate('styleModel.embed.card.unsaved')}
         </span>
       ) : undefined}
     </div>
@@ -349,6 +357,7 @@ export type SectionCard = Pick<StyleCardProps, 'busy' | 'resolving' | 'setProp' 
 
 // The property sections, each collapsible (Shift-click applies to all).
 export function StyleSections({ card, openProvenance }: { card: StyleCardProps; openProvenance: (prop: string, anchor: DOMRect) => void }) {
+  const translate = useTranslate();
   const { resolved } = card;
   // Always show Layout + Size so the panel is consistent across elements, not
   // only those that already set a property in that section.
@@ -372,7 +381,7 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
       {groups.map((group) => (
         <SectionBlock
           key={group.def.id}
-          label={group.def.label}
+          label={translate(group.def.labelKey)}
           open={!closedSectionIds.has(group.def.id)}
           onToggle={(event) => {
             const open = !closedSectionIds.has(group.def.id);

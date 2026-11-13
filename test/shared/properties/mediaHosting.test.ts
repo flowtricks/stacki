@@ -23,6 +23,7 @@ import {
   parseMediaSaveResult,
   parseMediaURL,
   replacementRefusal,
+  describeReplacementRefusal,
 } from '#dist/shared/properties/mediaHosting.js';
 
 const ID = '00000000-0000-4000-8000-000000000000';
@@ -153,4 +154,11 @@ test('kinds and replacement: same kind of media, same extension for other files'
   assert.match(replacementRefusal('hero.png', 'clip.mp4') ?? '', /hero.png is an image; replace it with an image too, not a video/);
   assert.match(replacementRefusal('song.mp3', 'cover.png') ?? '', /an audio file/);
   assert.match(replacementRefusal('guide.pdf', 'guide.zip') ?? '', /another pdf file/);
+  assert.deepEqual(describeReplacementRefusal('hero.png', 'clip.mp4')?.messageRef, { key: 'assets.error.replaceImageNotVideo', params: { name: 'hero.png' } });
+  assert.deepEqual(describeReplacementRefusal('guide.pdf', 'guide.zip')?.messageRef, {
+    key: 'assets.error.replaceExtension',
+    params: { name: 'guide.pdf', extension: 'pdf' },
+  });
+  assert.equal(describeReplacementRefusal('README', 'notes')?.messageRef, undefined, 'extensionless files of no media kind match');
+  assert.equal(describeReplacementRefusal('hero.png', 'new.jpg'), undefined);
 });

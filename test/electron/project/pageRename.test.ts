@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { DescribedError } from '#dist/shared/properties/describedError.js';
 import { parsePageRename, pageURLPath } from '#dist/shared/properties/pageRename.js';
 import { pageRenameConflicts } from '#dist/electron/project/pageRenameConflicts.js';
 import { planPageRename } from '#dist/electron/project/pageRenamePlan.js';
@@ -126,6 +127,25 @@ test('moving a page rebases its imports and does not overwrite a colliding desti
   }
 });
 
+test('rename refusals carry the English sentence and a catalog reference', () => {
+  const good = { kind: 'page', from: 'about.astro', to: 'company.astro' };
+  assert.throws(
+    () => parsePageRename({ ...good, to: 'file.exe' }),
+    (failure: unknown) => failure instanceof DescribedError && failure.problem.messageRef?.key === 'pages.rename.error.pageExtension',
+  );
+  const inventory = { pages: ['old.astro', 'about/index.astro'], folders: ['about'] };
+  const taken = pageRenameConflicts({ kind: 'page', from: 'old.astro', to: 'about.astro' }, inventory);
+  assert.ok(!taken.ok);
+  assert.equal(taken.error.message, 'The URL /about is already used by another page or folder.');
+  assert.deepEqual(taken.error.messageRef, { key: 'pages.rename.error.conflictUrl', params: { url: '/about' } });
+  const gone = pageRenameConflicts({ kind: 'page', from: 'missing.astro', to: 'x.astro' }, inventory);
+  assert.ok(!gone.ok);
+  assert.equal(gone.error.messageRef?.key, 'pages.rename.error.missing');
+  const inside = pageRenameConflicts({ kind: 'folder', from: 'about', to: 'about/child' }, inventory);
+  assert.ok(!inside.ok);
+  assert.equal(inside.error.messageRef?.key, 'pages.rename.error.insideItself');
+});
+
 test('stale plans refuse writes and a failed write restores earlier links', () => {
   const site = fixture();
   try {
@@ -146,7 +166,9 @@ test('stale plans refuse writes and a failed write restores earlier links', () =
         return writes === 2 ? { ok: false, error: { code: 'disk', message: 'Disk full' } } : writer.write(entry);
       },
     });
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
+    assert.equal(result.error.messageRef?.key, 'pages.rename.error.restored');
+    assert.match(result.error.message, /^Disk full Link changes were restored\.$/);
     assert.ok(fs.existsSync(path.join(site.root, 'src/pages/about')));
     assert.equal(site.read('src/data/menu.json'), '{"url":"/about/team"}');
   } finally {

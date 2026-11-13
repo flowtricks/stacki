@@ -197,7 +197,11 @@ const { theme, label } = Astro.props;
 `;
   const data = readComponentProperties(source);
   const theme = data.properties.find((property) => property.name === 'theme');
-  assert.deepEqual(theme.editing, { kind: 'restricted', reason: 'This prop depends on a shared or computed type that must be edited in source.' });
+  assert.deepEqual(theme.editing, {
+    kind: 'restricted',
+    reason: 'This prop depends on a shared or computed type that must be edited in source.',
+    reasonRef: { key: 'props.contract.computedType' },
+  });
   assert.equal(data.properties.find((property) => property.name === 'label').editing.kind, 'editable');
 });
 

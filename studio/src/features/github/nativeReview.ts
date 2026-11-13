@@ -26,12 +26,14 @@ export async function nativeReview(
   if (head.value !== parent) {
     return err({
       code: 'github_changed',
+      // i18n-ignore: Studio server reply with a stable code, relayed as received.
       message: 'Sync incoming changes before submitting a review.',
     });
   }
   const commitParent = options.localParent ?? parent;
   const ancestor = await publishGit(git, ['merge-base', '--is-ancestor', parent, commitParent]);
   if (!ancestor.ok) {
+    // i18n-ignore: Studio server reply with a stable code, relayed as received.
     return err({ code: 'github_changed', message: 'Pull from GitHub before submitting a review.' });
   }
   const original = await publishGit(git, ['rev-parse', commitParent + '^{tree}']);
@@ -43,6 +45,7 @@ export async function nativeReview(
     return tree;
   }
   if (tree.value === original.value && commitParent === parent) {
+    // i18n-ignore: Studio server reply with a stable code, relayed as received.
     return err({ code: 'review-empty', message: 'There are no changes to submit for review.' });
   }
   const branch = reviewBranch(parent, tree.value);
@@ -81,6 +84,7 @@ async function nativeReviewCommit(git: PublishGit, remote: string, branch: strin
       ? commit
       : err({
           code: 'review-changed',
+          // i18n-ignore: Studio server reply with a stable code, relayed as received.
           message: 'This review branch was changed externally. Review it on GitHub before retrying.',
         });
   }

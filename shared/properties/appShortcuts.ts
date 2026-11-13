@@ -238,7 +238,7 @@ function keyOfPress(press: AppKeyPress): string | undefined {
     return digit[1];
   }
   if (press.key === ' ') {
-    return 'Space';
+    return 'Space'; // i18n-ignore: key name, shown like Cmd and Esc, which stay English.
   }
   const named = NAMED_KEYS.find((name) => name === press.key);
   if (named !== undefined) {

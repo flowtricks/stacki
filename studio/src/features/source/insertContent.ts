@@ -62,6 +62,7 @@ function insertedContentNode(content: Exclude<InsertContent, { readonly type: 'a
         children: [{ kind: 'branch', name: 'then', children: [] }],
       };
     case 'text':
+      // i18n-ignore: starter content written into the person's page, not interface text.
       return { kind: 'text', value: 'Text' };
     case 'comment':
       return { kind: 'comment', value: ' Comment ' };

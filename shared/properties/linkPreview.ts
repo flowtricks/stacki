@@ -28,26 +28,31 @@ export interface VideoHost {
 
 export const VIDEO_HOSTS: readonly VideoHost[] = [
   {
+    // i18n-ignore: video host brand names, shown as the services write them.
     name: 'YouTube',
     oembed: 'https://www.youtube.com/oembed?format=json',
     domains: ['youtube.com', 'youtu.be', 'youtube-nocookie.com'],
   },
   {
+    // i18n-ignore: video host brand names, shown as the services write them.
     name: 'Vimeo',
     oembed: 'https://vimeo.com/api/oembed.json',
     domains: ['vimeo.com'],
   },
   {
+    // i18n-ignore: video host brand names, shown as the services write them.
     name: 'Loom',
     oembed: 'https://www.loom.com/v1/oembed',
     domains: ['loom.com'],
   },
   {
+    // i18n-ignore: video host brand names, shown as the services write them.
     name: 'Wistia',
     oembed: 'https://fast.wistia.com/oembed',
     domains: ['wistia.com', 'wistia.net', 'wi.st'],
   },
   {
+    // i18n-ignore: video host brand names, shown as the services write them.
     name: 'Dailymotion',
     oembed: 'https://www.dailymotion.com/services/oembed?format=json',
     domains: ['dailymotion.com', 'dai.ly'],

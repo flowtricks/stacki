@@ -4,6 +4,7 @@
 // composes the hook groups in order; each later group takes the earlier
 // groups' results.
 
+import { useTranslateDescribed } from '../../../lib/i18n/useTranslate';
 import { assert } from '../../../../shared/core/assert';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadEmbedSource } from '../model/toolPreferences';
@@ -310,6 +311,7 @@ export function usePendingWrites(
   scanState: ReturnType<typeof useScanState>,
   nativeState: ReturnType<typeof useNativeState>,
 ) {
+  const translateDescribed = useTranslateDescribed();
   const { docsRef, inComponentRef, pendingKeysRef } = editorRefs;
   const { setSaveError } = busyState;
   const { scan, setStatus } = scanState;
@@ -352,10 +354,10 @@ export function usePendingWrites(
         setStatus(`Held — this ${held} lives in the page, so the canvas shows it once you ` + 'leave the component.');
         return false;
       }
-      setSaveError(result.error);
+      setSaveError(translateDescribed({ message: result.error, messageRef: result.errorRef }));
       return false;
     },
-    [clearPending, markPending, inComponentRef, setSaveError, setStatus],
+    [clearPending, markPending, inComponentRef, setSaveError, setStatus, translateDescribed],
   );
 
   const documentByKey = useMemo(() => {
@@ -516,7 +518,7 @@ function useFlushPending(
     }
     pendingKeysRef.current = new Set();
     setPendingKeys(new Set());
-    setStatus(failed ? `Saved your page-embed edits — ${failed} couldn't be written.` : 'Saved the page-embed edits you made inside the component.');
+    setStatus(failed ? `Saved your page-embed edits — ${failed} couldn't be written.` : 'Saved the page-embed edits you made inside the component.'); // i18n-ignore: write-only status, never rendered.
   }, [pageDocsRef, pendingKeysRef, setPendingKeys, setStatus]);
 }
 

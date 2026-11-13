@@ -54,6 +54,7 @@ export async function prepareStudioBranch(repository: string, head: string, rele
   );
   const commit = record(
     await request(`${prefix}/commits`, 'POST', {
+      // i18n-ignore: a git commit message written to the person's repository (developer-facing history), not interface text.
       message: `Update Stacki Studio to ${release.version}\n\nReplaces Studio customizations; retains project configuration and drafts.`,
       tree: string(combined['sha'], 64),
       parents: [head],

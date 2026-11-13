@@ -1,3 +1,4 @@
+import { ReferencedError } from '../../shared/referencedError';
 import { assetDirectoryContents } from './assetDirectories';
 import { access, mkdir, readFile, rm, rmdir, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -31,7 +32,7 @@ export async function mutateAsset(root: string, input: unknown) {
   if (kind === 'delete') {
     managedAsset(rel);
     if (!info.isFile()) {
-      throw new Error('Only files can be deleted');
+      throw new ReferencedError('assets.error.onlyFilesDeleted');
     }
     const state = await readAssetState(root);
     await saveAssetState(root, { ...state, deleted: [...state.deleted, rel] });
@@ -53,7 +54,7 @@ export async function mutateAsset(root: string, input: unknown) {
   }
   assetFolderPath(root, destination);
   if (destination.startsWith(rel + '/')) {
-    throw new Error('A folder cannot be moved into itself');
+    throw new ReferencedError('assets.error.moveIntoItself');
   }
   await vacant(root, destination);
   await relocate(root, rel, destination, info.isDirectory());
@@ -63,13 +64,13 @@ async function relocate(root: string, rel: string, destination: string, director
   const contents = directory ? await assetDirectoryContents(root, rel) : { files: [rel], directories: [] };
   const { files } = contents;
   if (files.length > 200) {
-    throw new Error('Move at most 200 assets at once');
+    throw new ReferencedError('assets.error.moveMax', { count: 200 });
   }
   for (const file of files) {
     managedAsset(file);
     managedAsset(destination + file.slice(rel.length));
     if ((await stat(await safePath(root, file))).size > 20_000_000) {
-      throw new Error('Asset exceeds 20 MB');
+      throw new ReferencedError('assets.error.tooBig', { size: 20 });
     }
   }
   const state = await readAssetState(root);
@@ -106,7 +107,7 @@ function directoryOrFile(input: unknown) {
 function child(parent: string, input: unknown) {
   const name = string(input, 255).trim();
   if (!name || name.includes('/') || name.includes('\\')) {
-    throw new Error('Use a single folder or file name');
+    throw new ReferencedError('assets.error.singleName');
   }
   return filePath(parent + '/' + name);
 }
@@ -119,5 +120,5 @@ async function vacant(root: string, file: string) {
     }
     throw error;
   }
-  throw new Error('An asset or folder with that name already exists');
+  throw new ReferencedError('assets.error.nameTaken');
 }

@@ -2,8 +2,7 @@ import type { IpcResults, WireCommitInfo, WireFileKind, WireWorktreeInfo } from 
 import type { Parser } from '../../../shared/core/boundary';
 import { boolean, list, optional, pathText, record, text } from '../../../shared/core/boundary';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
-import type { Result } from '../../../shared/core/result';
-import { cleanError } from '../../lib/cleanError';
+import { failureOf, type Failure } from '../../lib/cleanError';
 import { historyTransport } from '../../ipc/editorEnvironment';
 
 export type HistoryFile = IpcResults['git:allFiles'][number];
@@ -143,12 +142,12 @@ function parseFileKind(input: unknown): WireFileKind {
   }
 }
 
-async function historyRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<Result<Value, string>> {
+async function historyRequest<Value>(parse: Parser<Value>, invoke: () => Promise<unknown>): Promise<{ readonly ok: true; readonly value: Value } | Failure> {
   let response: unknown;
   try {
     response = await invoke();
   } catch (error: unknown) {
-    return { ok: false, error: cleanError(error) };
+    return failureOf(error);
   }
   return { ok: true, value: parse(response) };
 }

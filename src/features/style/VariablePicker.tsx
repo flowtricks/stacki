@@ -4,6 +4,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, MutableRefObject } from 'react';
+import { SkeletonRows } from '../../ui/Skeleton';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import { type ProjectVariable } from './model/webflow';
 import { panelBox, panelSpan } from './model/panelBox';
@@ -74,6 +76,7 @@ export function VariablePicker({
   onPick: (binding: string) => void;
   onClose: () => void;
 }) {
+  const translate = useTranslate();
   const ref = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const [ownSearch, setSearch] = useState('');
@@ -105,7 +108,7 @@ export function VariablePicker({
       ref={ref}
       className="embed-editor_varpicker"
       role="dialog"
-      label="Connect to variable"
+      label={translate('style.variablePicker.connectToVariable')}
       style={style}
     >
       {typing === undefined ? (
@@ -113,12 +116,12 @@ export function VariablePicker({
           ref={searchRef}
           className="u-input embed-editor_varpicker-search"
           value={search}
-          placeholder="Search variables, functions"
+          placeholder={translate('style.variablePicker.searchPlaceholder')}
           spellCheck={false}
           autoFocus
           onChange={(event) => setSearch(event.target.value)}
           onKeyDown={(event) => searchKeyDown(event, navigation)}
-          aria-label="Search variables"
+          aria-label={translate('style.variablePicker.search')}
         />
       ) : undefined}
       <div
@@ -129,9 +132,11 @@ export function VariablePicker({
         onTouchStart={holdSelected.release}
       >
         {loading && !vars.length ? (
-          <p className="embed-editor_varpicker-empty">Loading variables…</p>
+          <div className="embed-editor_varpicker-empty">
+            <SkeletonRows count={3} />
+          </div>
         ) : !filtered.length ? (
-          <p className="embed-editor_varpicker-empty">No variables found.</p>
+          <p className="embed-editor_varpicker-empty">{translate('style.variablePicker.noVariables')}</p>
         ) : (
           <PickerCollections
             variables={filtered}

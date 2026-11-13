@@ -23,12 +23,14 @@ import { type SetProp, type ClearProp, type LiveSetProp, type Read, type SelectS
 import { affectedSides, siblingProps } from './SpacingFill';
 import { withImportant } from './spacingValue';
 import { humanLabel } from './SpacingLabel';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useStyleHint } from './model/computedStyle';
 
 // The editor shown inside the popover: a live text input (number + unit, with the
 // same arrow-step / !important handling as before). Commits + closes on blur.
 export function SpacingEditor(props: SpacingEditorProps) {
   const { prop, placeholder, read, onSelectSelector, onClose } = props;
+  const translate = useTranslate();
   const editor = useSpacingEditor(props);
   const computed = useStyleHint(read(prop) === undefined ? prop : '');
   return (
@@ -62,12 +64,12 @@ export function SpacingEditor(props: SpacingEditorProps) {
     >
       <div className="embed-editor_spacing-popover-row">
         <span className="embed-editor_spacing-popover-label" {...editor.scrub.label}>
-          {humanLabel(prop)}
+          {humanLabel(prop, translate)}
         </span>
         <VariableConnect
           code
           {...(isNonNegative(prop) ? { stepMin: 0 } : {})}
-          ariaLabel={`Connect ${humanLabel(prop)} to a variable`}
+          ariaLabel={translate('style.spacingEditor.connect', { name: humanLabel(prop, translate) })}
           disabled={false}
           prop={prop}
           onPick={editor.pick}
@@ -119,6 +121,7 @@ export type SpacingEditorProps = {
 // Reused Reset item — mousedown-preventDefault keeps input focus so the
 // blur→commit path doesn't fire before the click clears the value.
 export function SpacingResetButton({ onReset }: { onReset: () => void }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
@@ -130,8 +133,8 @@ export function SpacingResetButton({ onReset }: { onReset: () => void }) {
       }}
     >
       <MoreGlyph className="u-field-label-menu-icon" />
-      <span>Reset</span>
-      <span className="u-field-label-menu-shortcut">Option + click</span>
+      <span>{translate('ui.reset')}</span>
+      <span className="u-field-label-menu-shortcut">{translate('style.spacingEditor.optionClick')}</span>
     </button>
   );
 }

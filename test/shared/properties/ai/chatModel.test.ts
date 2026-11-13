@@ -179,3 +179,14 @@ test('brands keep lookalike strings apart at compile time', () => {
   const asChat: ReturnType<typeof toChatId> = section;
   assert.equal(String(asChat), sectionId);
 });
+
+test('an untracked-changes event names its turn and one known reason', () => {
+  for (const reason of ['off', 'unavailable']) {
+    assert.deepEqual(parseChatEvent({ kind: 'changes-untracked', turn, reason }), { kind: 'changes-untracked', turn, reason });
+  }
+  for (const reason of [undefined, '', 'Off', 'disabled', 1, {}]) {
+    assert.throws(() => parseChatEvent({ kind: 'changes-untracked', turn, reason }), /reason/);
+  }
+  assert.throws(() => parseChatEvent({ kind: 'changes-untracked', turn: 'bad', reason: 'off' }));
+  assert.throws(() => parseChatEvent({ kind: 'changes-untracked', reason: 'off' }));
+});

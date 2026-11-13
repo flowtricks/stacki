@@ -1,4 +1,5 @@
 import { assert } from '../../shared/core/assert';
+// i18n-ignore-file: developer-facing refusals of the insert gesture (read by agents and logs), not interface text.
 import { findWithParent } from './treeSelection';
 import type { TreeView } from './treeView';
 import { LIMITS } from '../../shared/core/limits';

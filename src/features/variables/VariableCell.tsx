@@ -6,6 +6,7 @@ import ColorSwatch from '../style/components/ColorSwatch';
 import VariableConnect, { connectCustomField } from '../style/VariableConnect';
 import EasingEditor, { MiniCurve } from '../style/EasingEditor';
 import { easingToBezier, isEasing } from '../style/model/transition';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import FluidBadge from './FluidBadge';
 import { VariablePreviewContext } from './liveVariableEdits';
 import CustomValue, { doesNotFit, isLong, withBinding } from '../style/CustomValueEditor';
@@ -247,6 +248,7 @@ function CellFluidBadge({ report }: { readonly report: FluidReport }) {
   return <FluidBadge {...(report ? { fluid: report } : {})} />;
 }
 function CellCurveButton({ state }: { readonly state: CellState }) {
+  const translate = useTranslate();
   const { cell, setCurve, value } = state;
   return (
     <>
@@ -254,8 +256,8 @@ function CellCurveButton({ state }: { readonly state: CellState }) {
         <button
           type="button"
           className="var-ease"
-          title={`Edit the curve for ${cell.name}`}
-          aria-label={`Edit the curve for ${cell.name}`}
+          title={translate('variables.cell.editCurve', { name: cell.name })}
+          aria-label={translate('variables.cell.editCurve', { name: cell.name })}
           // The editor belongs over the sheet it was opened from, not over the
           // panel beside it — so it is handed the sheet's own box. Read at the
           // press rather than held in state: the sheet is resizable.
@@ -301,6 +303,7 @@ function CellCurveEditor({ state }: { readonly state: CellState }) {
 }
 
 function CellColor({ state }: { readonly state: CellState }) {
+  const translate = useTranslate();
   const { cell, setDraft, value, commit, isColor } = state;
   return (
     <>
@@ -319,7 +322,7 @@ function CellColor({ state }: { readonly state: CellState }) {
           // paints anywhere, and a reference that leads outside this file is
           // answered by the page.
           value={cell.color || cell.resolved || value}
-          ariaLabel={`Choose the colour for ${cell.name}`}
+          ariaLabel={translate('variables.cell.chooseColor', { name: cell.name })}
           // Dragging in the picker fires live updates; only the settled value
           // is written, or a drag would be a hundred edits to the file.
           onChange={(color, live) => {

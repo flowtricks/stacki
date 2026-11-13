@@ -15,7 +15,7 @@ export function LanguageSetting() {
     label: value === 'system' ? translate('settings.language.system') : LOCALE_NATIVE_NAMES[value],
   }));
   return (
-    <SettingsRow label={translate('settings.language.label')} description={translate('settings.language.description')}>
+    <SettingsRow label={translate('settings.language.label')} info={translate('settings.language.info')}>
       <Dropdown<LocalePreference> ariaLabel={translate('settings.language.label')} value={preference} options={options} onChange={writeLocalePreference} />
     </SettingsRow>
   );

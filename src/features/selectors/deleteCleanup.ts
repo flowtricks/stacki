@@ -4,6 +4,8 @@
 // the style selectors panel. The check waits for the deletion to reach disk:
 // until then the file still uses the class and every verdict says "used".
 import { assert } from '../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import { messageRef, type Translator, type TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 import type { Attr } from '../../../shared/page/pageNode';
 import { reportActionToast } from '../../ui/errorNotices';
 import { readSelectorReport, removeSelectors, restoreSelectors } from './selectorsBridge';
@@ -56,11 +58,17 @@ export interface DeleteCleanupHost {
   /** Whether the open page's edits have all reached disk. */
   readonly saved: () => boolean;
   readonly showToast: (message: string, kind?: 'info' | 'success' | 'error') => void;
-  readonly pushCommand: (command: { readonly label: string; readonly undo: () => Promise<void>; redo: () => Promise<void> }) => void;
+  readonly pushCommand: (command: {
+    readonly label: string;
+    readonly labelRef?: TypedMessageRef | undefined;
+    readonly undo: () => Promise<void>;
+    redo: () => Promise<void>;
+  }) => void;
 }
 
 /** Check, once the deletion is saved, for selectors only the deleted names fed. */
-export async function offerStyleCleanup(host: DeleteCleanupHost, names: readonly string[]): Promise<void> {
+// `translate` is last and defaults to English so a caller without a language still compiles; the app passes the hook's.
+export async function offerStyleCleanup(host: DeleteCleanupHost, names: readonly string[], translate: Translator = ENGLISH_TRANSLATE): Promise<void> {
   if (names.length === 0) {
     return;
   }
@@ -77,14 +85,16 @@ export async function offerStyleCleanup(host: DeleteCleanupHost, names: readonly
     return;
   }
   const files = report.value.files.filter((file) => orphans.some((entry) => entry.rel === file.rel));
-  reportActionToast(`Nothing uses ${describe(orphans)} any more.`, 'info', [
+  reportActionToast(translate('selectors.deleteCleanup.unused', { names: describe(orphans, translate) }), 'info', [
     {
-      label: orphans.length === 1 ? 'Remove style' : 'Remove styles',
+      label: translate('selectors.deleteCleanup.remove', { count: orphans.length }),
       run: async () => {
         const result = await removeSelectors(
           host.projectPath,
           orphans.map((entry) => entry.id),
           files,
+          'cleanup',
+          translate,
         );
         if (!result.ok) {
           host.showToast(result.error, 'error');
@@ -92,20 +102,21 @@ export async function offerStyleCleanup(host: DeleteCleanupHost, names: readonly
         }
         const { changes, removed } = result.value;
         host.pushCommand({
-          label: 'Remove unused styles',
-          undo: () => restoreSelectors(host.projectPath, changes, 'before'),
-          redo: () => restoreSelectors(host.projectPath, changes, 'after'),
+          label: translate('selectors.cleanup.title'),
+          labelRef: messageRef('selectors.cleanup.title'),
+          undo: () => restoreSelectors(host.projectPath, changes, 'before', translate),
+          redo: () => restoreSelectors(host.projectPath, changes, 'after', translate),
         });
-        host.showToast(removed === 1 ? 'Removed 1 unused selector' : `Removed ${removed} unused selectors`, 'success');
+        host.showToast(translate('selectors.deleteCleanup.removed', { count: removed }), 'success');
       },
     },
   ]);
 }
 
-function describe(entries: readonly SelectorEntry[]): string {
+function describe(entries: readonly SelectorEntry[], translate: Translator): string {
   const named = entries.slice(0, DELETE_CLEANUP_LIMITS.namedMax).map((entry) => entry.selector);
   const rest = entries.length - named.length;
-  return rest > 0 ? `${named.join(', ')} and ${rest} more` : named.join(', ');
+  return rest > 0 ? translate('selectors.deleteCleanup.namedMore', { names: named.join(', '), count: rest }) : named.join(', ');
 }
 
 async function waitForSave(saved: () => boolean): Promise<boolean> {

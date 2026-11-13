@@ -2,6 +2,7 @@
 // and its raw editable form, handles and drag targets, the shape() model,
 // snap guides, highlights and the editor's option types (ClipPath.tsx).
 
+import type { MessageKey } from '../../../../shared/properties/i18n/messageRef';
 import type { BreakpointId } from './webflowDesigner';
 
 export type Point = { x: number; y: number };
@@ -180,5 +181,7 @@ export type PastedShapeSvgCache = {
   stretch: ShapeFunctionShape;
   contain: ShapeFunctionShape;
 };
-export type ShortcutHelpItem = { keys: string; description: string };
-export type ShortcutHelpGroup = { title: string; items: ShortcutHelpItem[] };
+// A shortcut's keys: a plain chord (`Cmd/Ctrl + Z`: key names are not translated) or a message when the chord holds words (`drag/arrow keys`).
+export type ShortcutKeys = { readonly literal: string } | { readonly message: MessageKey };
+export type ShortcutHelpItem = { readonly keys: ShortcutKeys; readonly descriptionKey: MessageKey };
+export type ShortcutHelpGroup = { readonly titleKey: MessageKey; readonly items: readonly ShortcutHelpItem[] };

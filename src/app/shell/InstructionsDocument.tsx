@@ -9,6 +9,7 @@
 // Every edit splices that key's one line (frontmatterFields.ts), so the rest of
 // the file keeps its bytes; text is still written as one YAML line, wrapped only
 // on screen. Frontmatter that is not flat `key: value` lines is one YAML field.
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { splitFrontmatter } from '../../../shared/properties/instructions';
 import { CmsFieldFrame, CmsPropField } from '../../features/cms/CmsPropField';
 import '../../features/cms/remoteCms.css';
@@ -20,6 +21,9 @@ import DateField from '../../ui/DateField';
 import { BracesIcon, CalendarIcon } from '../../ui/Icons';
 import MarkdownField from '../../ui/MarkdownField';
 
+// The file format's own word for the block at the top of a skill file, shown as written.
+const FRONTMATTER_LABEL = 'Frontmatter'; // i18n-ignore: a file-format term that stays English.
+
 export default function InstructionsDocument(props: InstructionsViewProps) {
   return <InstructionsView {...props} Form={InstructionForm} />;
 }
@@ -28,6 +32,7 @@ export default function InstructionsDocument(props: InstructionsViewProps) {
 const PROSE_KEYS: ReadonlySet<string> = new Set(['description', 'summary', 'excerpt', 'when_to_use', 'instructions']);
 
 export function InstructionForm({ source, editable, onChange }: InstructionFormProps) {
+  const translate = useTranslate();
   const split = splitFrontmatter(source);
   const view = frontmatterView(source);
   return (
@@ -38,20 +43,20 @@ export function InstructionForm({ source, editable, onChange }: InstructionFormP
           <FrontmatterInput key={`${field.line}:${field.key}`} field={field} onChange={(value) => onChange(withFieldValue(source, field, { value }))} />
         ))}
       {view.kind === 'text' && (
-        <CmsFieldFrame name="Frontmatter" help="YAML that is not a flat list of fields, edited as written." icon={<BracesIcon size={12} />} set>
+        <CmsFieldFrame name={FRONTMATTER_LABEL} help={translate('shell.instructions.yamlHelp')} icon={<BracesIcon size={12} />} set>
           {editable ? (
             <div className="html-source">
               <CodeEditor language="markdown" value={view.yaml} onChange={(yaml: string) => onChange(withFrontmatterYaml(source, yaml))} />
             </div>
           ) : (
-            <CodeBlock text={view.yaml} language="markdown" label="Frontmatter" />
+            <CodeBlock text={view.yaml} language="markdown" label={FRONTMATTER_LABEL} />
           )}
         </CmsFieldFrame>
       )}
       {/* The body needs no label: it is the document itself, under its fields. */}
       <div className="props-field instructions-body">
         {editable ? (
-          <MarkdownField value={split.body} label="Body" extensions="gfm" onChange={(body) => onChange(split.raw + body)} />
+          <MarkdownField value={split.body} label={translate('shell.instructions.body')} extensions="gfm" onChange={(body) => onChange(split.raw + body)} />
         ) : (
           <ReadOnlyBody body={split.body} />
         )}

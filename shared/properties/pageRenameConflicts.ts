@@ -1,6 +1,7 @@
 import { list, pathText } from '../core/boundary';
 import { assert } from '../core/assert';
 import { err, ok, type Result } from '../core/result';
+import { described } from './i18n/messageRef';
 import { pageURLPath, renamedPagePath, type PageRename } from './pageRename';
 
 export interface RenameInventory {
@@ -16,14 +17,14 @@ export function pageRenameConflicts(change: PageRename, inventory: RenameInvento
   if (!source.includes(change.from)) {
     return err({
       code: 'missing',
-      message: 'This page or folder no longer exists. Refresh the list.',
+      ...described('pages.rename.error.missing'),
     });
   }
   if (change.from === change.to) {
     return ok(undefined);
   }
   if (change.kind === 'folder' && change.to.startsWith(change.from + '/')) {
-    return err({ code: 'path', message: 'A folder cannot be moved inside itself.' });
+    return err({ code: 'path', ...described('pages.rename.error.insideItself') });
   }
   const untouched = [...pages.map(pageURLPath), ...folders.map((folder) => '/' + folder)];
   const occupied = new Set<string>();
@@ -44,7 +45,7 @@ export function pageRenameConflicts(change: PageRename, inventory: RenameInvento
     ? ok(undefined)
     : err({
         code: 'conflict',
-        message: `The URL ${collision} is already used by another page or folder.`,
+        ...described('pages.rename.error.conflictUrl', { url: collision }),
       });
 }
 

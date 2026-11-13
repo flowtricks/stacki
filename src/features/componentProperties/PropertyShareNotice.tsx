@@ -7,6 +7,8 @@
 
 import { useState } from 'react';
 import type { ComponentProperty, PropertyShare } from '../../../shared/properties/propertyEditing';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { CodeInline } from '../../ui/CodeBlock';
 
 interface ShareNoticeProps {
@@ -16,9 +18,15 @@ interface ShareNoticeProps {
 }
 
 export function PropertyShareNotice({ property, onOpenFile }: ShareNoticeProps) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [open, setOpen] = useState(false);
   const share = property.shared;
-  const warning = property.editing?.kind === 'editable' ? property.editing.warning : undefined;
+  const editing = property.editing;
+  const warning =
+    editing?.kind === 'editable' && editing.warning !== undefined
+      ? translateDescribed({ message: editing.warning, messageRef: editing.warningRef })
+      : undefined;
   if (share === undefined) {
     return warning === undefined ? undefined : (
       <p className="property-share-warning" role="note">
@@ -29,7 +37,7 @@ export function PropertyShareNotice({ property, onOpenFile }: ShareNoticeProps) 
   return (
     <div className="property-share" role="note">
       <button type="button" className="property-share-summary" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
-        {shareSummary(share)}
+        {shareSummary(share, translate)}
       </button>
       {open && <ShareFiles share={share} onOpenFile={onOpenFile} />}
       <ShareDefaults share={share} />
@@ -38,10 +46,9 @@ export function PropertyShareNotice({ property, onOpenFile }: ShareNoticeProps) 
 }
 
 /** "Shared: edits SeoProps in src/types.ts, used by 2 components (BaseLayout, BaseHead) and their instances." */
-export function shareSummary(share: PropertyShare): string {
+export function shareSummary(share: PropertyShare, translate: Translator): string {
   const names = share.users.map(componentName);
-  const count = names.length === 1 ? '1 component' : `${names.length} components`;
-  return `Shared: edits ${share.typeName} in ${share.path}, used by ${count} (${names.join(', ')}) and their instances.`;
+  return translate('componentProps.share.summary', { count: names.length, typeName: share.typeName, path: share.path, names: names.join(', ') });
 }
 
 /** The files a rename of a shared prop rewrites: the type's file, its users and their instances. */
@@ -50,11 +57,12 @@ export function shareRenameFiles(share: PropertyShare): readonly string[] {
 }
 
 function ShareFiles({ share, onOpenFile }: { readonly share: PropertyShare; readonly onOpenFile: ShareNoticeProps['onOpenFile'] }) {
+  const translate = useTranslate();
   return (
     <div className="property-share-files">
-      <ShareFileList label="Declared in" files={[share.path]} onOpenFile={onOpenFile} />
-      <ShareFileList label="Components" files={share.users} onOpenFile={onOpenFile} />
-      {share.instances.length > 0 && <ShareFileList label="Instances in" files={share.instances} onOpenFile={onOpenFile} />}
+      <ShareFileList label={translate('componentProps.share.declaredIn')} files={[share.path]} onOpenFile={onOpenFile} />
+      <ShareFileList label={translate('componentProps.share.components')} files={share.users} onOpenFile={onOpenFile} />
+      {share.instances.length > 0 && <ShareFileList label={translate('componentProps.share.instancesIn')} files={share.instances} onOpenFile={onOpenFile} />}
     </div>
   );
 }
@@ -90,12 +98,13 @@ function ShareFileList({
 
 // A shared prop's default is each component's own, so the ones the other users give it are shown.
 function ShareDefaults({ share }: { readonly share: PropertyShare }) {
+  const translate = useTranslate();
   if (share.defaults.length === 0) {
     return undefined;
   }
   return (
     <div className="property-share-defaults">
-      <strong>Defaults</strong>
+      <strong>{translate('componentProps.share.defaults')}</strong>
       <ul>
         {share.defaults.map((entry) => (
           <li key={entry.path}>

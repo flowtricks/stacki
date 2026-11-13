@@ -397,10 +397,22 @@ test('a sample finds every list in the reply and the fields of its items', async
         count: 2,
         fields: [
           { path: 'id', kind: 'number', example: '7', examples: ['7', '8'], address: { kind: 'exact' } },
-          { path: 'title', kind: 'string', example: 'One', examples: ['One', ''], address: { kind: 'unusable', reason: 'Some entries have no value' } },
+          {
+            path: 'title',
+            kind: 'string',
+            example: 'One',
+            examples: ['One', ''],
+            address: { kind: 'unusable', reason: 'Some entries have no value', reasonRef: { key: 'pages.template.address.noValue' } },
+          },
           { path: 'slug', kind: 'object', example: 'object', examples: ['object', ''] },
           { path: 'tags', kind: 'list', example: '1 items', examples: ['1 items', ''] },
-          { path: 'slug.current', kind: 'string', example: 'one', examples: ['one', ''], address: { kind: 'unusable', reason: 'Some entries have no value' } },
+          {
+            path: 'slug.current',
+            kind: 'string',
+            example: 'one',
+            examples: ['one', ''],
+            address: { kind: 'unusable', reason: 'Some entries have no value', reasonRef: { key: 'pages.template.address.noValue' } },
+          },
           { path: 'extra', kind: 'boolean', example: 'true', examples: ['', 'true'] },
         ],
       },
@@ -417,8 +429,12 @@ test('a collection is sampled from its entries, each field judged as an address'
   const fits = Object.fromEntries(sample.lists[0].fields.map((field) => [field.path, field.address]));
   assert.deepEqual(fits, {
     Number: { kind: 'slugified', example: '25' },
-    Heading: { kind: 'unusable', reason: 'Two entries would share the address uptime' },
-    Description: { kind: 'unusable', reason: 'Too long for a page address' },
+    Heading: {
+      kind: 'unusable',
+      reason: 'Two entries would share the address uptime',
+      reasonRef: { key: 'pages.template.address.repeated', params: { address: 'uptime' } },
+    },
+    Description: { kind: 'unusable', reason: 'Too long for a page address', reasonRef: { key: 'pages.template.address.tooLong' } },
     featured: undefined,
   });
 });

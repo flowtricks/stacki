@@ -10,6 +10,8 @@ import ImportantMark from './components/ImportantMark';
 import { DecorNoneIcon, DecorStrikeIcon, DecorUnderlineIcon, DecorOverlineIcon } from './TypographyIcons';
 import { type Props, LiveInput } from './TypographyKit';
 import { PopLabel, LengthRow } from './TypographyColumns';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 // ─────────────────────────── Text-decoration advanced options ───────────────────────────
 
@@ -79,32 +81,33 @@ export function StyleGlyph({ variant }: { variant: 'solid' | 'double' | 'dotted'
   );
 }
 
-export const DECOR_LINE_OPTIONS: SelectOption<string>[] = [
-  { value: 'none', label: 'None', icon: <DecorNoneIcon /> },
-  { value: 'line-through', label: 'Strikethrough', icon: <DecorStrikeIcon /> },
-  { value: 'underline', label: 'Underline', icon: <DecorUnderlineIcon /> },
-  { value: 'overline', label: 'Overline', icon: <DecorOverlineIcon /> },
-  { value: 'underline overline', label: 'Underline + Overline' },
-  { value: 'underline line-through', label: 'Underline + Strikethrough' },
-  { value: 'overline line-through', label: 'Overline + Strikethrough' },
-  { value: 'underline overline line-through', label: 'All' },
+export const decorLineOptions = (translate: Translator): SelectOption<string>[] => [
+  { value: 'none', label: translate('style.decorationPopover.lineNone'), icon: <DecorNoneIcon /> },
+  { value: 'line-through', label: translate('style.decorationPopover.lineStrike'), icon: <DecorStrikeIcon /> },
+  { value: 'underline', label: translate('style.decorationPopover.lineUnderline'), icon: <DecorUnderlineIcon /> },
+  { value: 'overline', label: translate('style.decorationPopover.lineOverline'), icon: <DecorOverlineIcon /> },
+  { value: 'underline overline', label: translate('style.decorationPopover.lineUnderOver') },
+  { value: 'underline line-through', label: translate('style.decorationPopover.lineUnderStrike') },
+  { value: 'overline line-through', label: translate('style.decorationPopover.lineOverStrike') },
+  { value: 'underline overline line-through', label: translate('style.decorationPopover.lineAll') },
 ];
-export const DECOR_STYLE_OPTIONS: SelectOption<string>[] = [
-  { value: 'solid', label: 'Solid', icon: <StyleGlyph variant="solid" /> },
-  { value: 'double', label: 'Double', icon: <StyleGlyph variant="double" /> },
-  { value: 'dotted', label: 'Dotted', icon: <StyleGlyph variant="dotted" /> },
-  { value: 'dashed', label: 'Dashed', icon: <StyleGlyph variant="dashed" /> },
-  { value: 'wavy', label: 'Wavy', icon: <StyleGlyph variant="wavy" /> },
+export const decorStyleOptions = (translate: Translator): SelectOption<string>[] => [
+  { value: 'solid', label: translate('style.decorationPopover.styleSolid'), icon: <StyleGlyph variant="solid" /> },
+  { value: 'double', label: translate('style.decorationPopover.styleDouble'), icon: <StyleGlyph variant="double" /> },
+  { value: 'dotted', label: translate('style.decorationPopover.styleDotted'), icon: <StyleGlyph variant="dotted" /> },
+  { value: 'dashed', label: translate('style.decorationPopover.styleDashed'), icon: <StyleGlyph variant="dashed" /> },
+  { value: 'wavy', label: translate('style.decorationPopover.styleWavy'), icon: <StyleGlyph variant="wavy" /> },
 ];
-export const SKIP_INK_OPTIONS: SelectOption<string>[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'none', label: 'None' },
+export const skipInkOptions = (translate: Translator): SelectOption<string>[] => [
+  { value: 'auto', label: translate('style.decorationPopover.skipAuto') },
+  { value: 'none', label: translate('style.decorationPopover.skipNone') },
 ];
 
 // The Decoration & underline popover body: Line / Style / Color compose the
 // `text-decoration` shorthand; Thick and Skip ink are their own longhands.
 export function DecorationPopover(props: Props) {
   const { read, busy, setProp, liveSetProp } = props;
+  const translate = useTranslate();
   const display = displayOf(read('text-decoration'));
   const raw = display.present ? display.value : displayOf(read('text-decoration-line')).value;
   const parts = parseDecoration(raw);
@@ -125,45 +128,47 @@ export function DecorationPopover(props: Props) {
     <div className="embed-editor_more-group">
       <DecorationSelectRow
         {...rowProps}
-        label="Line"
+        label={translate('style.decorationPopover.line')}
         facet="lines"
         value={lineKey(parts.lines)}
-        options={DECOR_LINE_OPTIONS}
+        options={decorLineOptions(translate)}
         toParts={(value) => ({ ...parts, lines: value === 'none' ? [] : value.split(' ') })}
         preview={preview}
       />
       <DecorationSelectRow
         {...rowProps}
-        label="Style"
+        label={translate('style.decorationPopover.style')}
         facet="style"
         value={parts.style || 'solid'}
-        options={DECOR_STYLE_OPTIONS}
+        options={decorStyleOptions(translate)}
         toParts={(value) => ({ ...parts, style: value === 'solid' ? '' : value })}
         preview={preview}
       />
-      <LengthRow prop="text-decoration-thickness" label="Thick" placeholder="Auto" {...props} />
+      <LengthRow prop="text-decoration-thickness" label={translate('style.decorationPopover.thick')} placeholder={AUTO_KEYWORD} {...props} />
       <DecorationColorRow {...rowProps} />
       <div className="embed-editor_size-row">
-        <PopLabel label="Skip ink" prop="text-decoration-skip-ink" {...props} />
+        <PopLabel label={translate('style.decorationPopover.skipInk')} prop="text-decoration-skip-ink" {...props} />
         {/* No custom field: a flagged value is marked, and picks keep the flag. */}
         <ImportantMark important={skip.important}>
           <Select
             value={skip.present ? skip.value.trim().toLowerCase() : 'auto'}
-            options={SKIP_INK_OPTIONS}
+            options={skipInkOptions(translate)}
             onChange={(value) => setProp('text-decoration-skip-ink', value, skip.important)}
             onPreview={(value) => liveSetProp('text-decoration-skip-ink', value ?? undefined, skip.important)}
-            ariaLabel="Skip ink"
+            ariaLabel={translate('style.decorationPopover.skipInk')}
             disabled={busy}
           />
         </ImportantMark>
       </div>
-      <p className="embed-editor_more-note">The browser will try to interrupt overlines and underlines to prevent drawing over glyphs.</p>
+      <p className="embed-editor_more-note">{translate('style.decorationPopover.note')}</p>
     </div>
   );
 }
 
 // Writes the `text-decoration` shorthand composed from its facets, committed by
 // default or as a live preview.
+const AUTO_KEYWORD = 'Auto'; // i18n-ignore: the CSS keyword `auto`, shown as the empty value.
+
 export type DecorationWrite = (next: DecorParts, mode?: 'live' | 'commit') => void;
 
 export type DecorationRowProps = {
@@ -194,6 +199,7 @@ export function DecorationSelectRow({
   toParts: (value: string) => DecorParts;
   preview: (value: string | undefined, next: (value: string) => DecorParts) => void;
 }) {
+  const translate = useTranslate();
   // The Line label clears the whole shorthand (and the longhand an embed may use);
   // the Style label clears only its own facet.
   const lines = facet === 'lines';
@@ -211,7 +217,7 @@ export function DecorationSelectRow({
         options={options}
         onChange={(next) => write(toParts(next))}
         onPreview={(next) => preview(next ?? undefined, toParts)}
-        ariaLabel={lines ? 'Decoration line' : 'Decoration style'}
+        ariaLabel={lines ? translate('style.decorationPopover.decorationLine') : translate('style.decorationPopover.decorationStyle')}
         disabled={props.busy}
       />
     </div>
@@ -220,21 +226,28 @@ export function DecorationSelectRow({
 
 // The Color row: a swatch and a field for the shorthand's colour facet.
 export function DecorationColorRow({ props, parts, shorthandSet, write }: DecorationRowProps) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_size-row">
-      <PopLabel label="Color" prop="text-decoration" {...props} active={shorthandSet && parts.color !== ''} onClear={() => write({ ...parts, color: '' })} />
+      <PopLabel
+        label={translate('style.decorationPopover.color')}
+        prop="text-decoration"
+        {...props}
+        active={shorthandSet && parts.color !== ''}
+        onClear={() => write({ ...parts, color: '' })}
+      />
       <div className="embed-editor_type-field">
         <ColorSwatch
           value={parts.color}
           busy={props.busy}
-          ariaLabel="Decoration color"
+          ariaLabel={translate('style.decorationPopover.decorationColor')}
           onChange={(color, live) => write({ ...parts, color }, live ? 'live' : 'commit')}
         />
         <LiveInput
           value={parts.color}
           busy={props.busy}
-          placeholder="Set a color"
-          ariaLabel="Decoration color"
+          placeholder={translate('style.decorationPopover.setColor')}
+          ariaLabel={translate('style.decorationPopover.decorationColor')}
           className="u-input embed-editor_size-input"
           prop="color"
           onCommit={(value) => write({ ...parts, color: value })}

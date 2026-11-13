@@ -14,10 +14,11 @@ import type { ReactNode, RefCallback } from 'react';
 import { CheckIcon, CloseIcon, FieldNumberIcon, FilterIcon, PlusIcon, SortIcon } from '../../ui/Icons';
 import AutoTextarea from '../../ui/AutoTextarea';
 import { assert } from '../../../shared/core/assert';
-import { SETTING_PROP_NAMES, SETTING_TITLES, type BindingChange } from '../../editor/optionsBinding';
+import { SETTING_PROP_NAMES, settingTitle, type BindingChange } from '../../editor/optionsBinding';
 import { curatedText, filterValueText, sortValueText, type LoopSetting, type SettingHome } from '../../editor/optionsQuery';
 import type { LoopQuery } from '../../editor/loopQuery';
 import { RowPopup } from './LoopRows';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 /** What a section needs to offer linking: where each setting is, and how to change it. */
 export interface BindingContext {
@@ -69,6 +70,7 @@ const DIALOG_HEIGHT_PX_MAX = 560;
 
 /** The dot offering to link an unlinked setting; nothing once it is linked. */
 export function SettingDot(props: { readonly setting: LoopSetting; readonly binding: BindingContext | undefined; readonly draft: DraftEditor }) {
+  const translate = useTranslate();
   const { binding, setting } = props;
   const [open, setOpen] = useState(false);
   const [anchor, setAnchor] = useState<HTMLButtonElement | undefined>(undefined);
@@ -76,15 +78,15 @@ export function SettingDot(props: { readonly setting: LoopSetting; readonly bind
   if (binding === undefined || binding.settings[setting].kind === 'prop') {
     return undefined;
   }
-  const title = SETTING_TITLES[setting];
+  const title = settingTitle(setting, translate);
   return (
     <>
       <button
         ref={attach}
         type="button"
         className={`loop-bind-dot${open ? ' on' : ''}`}
-        title={`Link ${title} to a component property`}
-        aria-label={`Link ${title} to a component property`}
+        title={translate('props.loop.binding.link', { title })}
+        aria-label={translate('props.loop.binding.link', { title })}
         aria-expanded={open}
         aria-haspopup="dialog"
         onClick={() => setOpen(!open)}
@@ -93,7 +95,12 @@ export function SettingDot(props: { readonly setting: LoopSetting; readonly bind
         <PlusIcon size={7} className="bind-plus" />
       </button>
       {open && (
-        <RowPopup anchor={anchor} heightPxMax={DIALOG_HEIGHT_PX_MAX} label={`New ${title} property`} onClose={() => setOpen(false)}>
+        <RowPopup
+          anchor={anchor}
+          heightPxMax={DIALOG_HEIGHT_PX_MAX}
+          label={translate('props.loop.binding.newProperty', { title })}
+          onClose={() => setOpen(false)}
+        >
           <NewProperty setting={setting} binding={binding} draft={props.draft} onDone={() => setOpen(false)} />
         </RowPopup>
       )}
@@ -113,13 +120,14 @@ export function NewProperty(props: {
   readonly draft: DraftEditor;
   readonly onDone: () => void;
 }) {
+  const translate = useTranslate();
   const { binding, setting } = props;
-  const title = SETTING_TITLES[setting];
+  const title = settingTitle(setting, translate);
   const [name, setName] = useState(() => freeKey(SETTING_PROP_NAMES[setting], binding.problemOf));
   const [tooltip, setTooltip] = useState('');
   const [value, setValue] = useState(props.draft.query);
   const key = name.trim();
-  const problem = key === '' ? 'Give the property a name.' : binding.problemOf(key);
+  const problem = key === '' ? translate('props.loop.binding.nameRequired') : binding.problemOf(key);
   const create = (): void => {
     if (problem === undefined) {
       binding.onChange({ kind: 'bind', setting, key, description: tooltip, defaultCode: defaultCodeOf(setting, value) });
@@ -129,13 +137,13 @@ export function NewProperty(props: {
   return (
     <div className="loop-bind-dialog loop-property-settings">
       <div className="loop-property-head">
-        <span className="loop-bind-title">Property settings</span>
-        <button type="button" className="loop-settings-remove" aria-label="Close" title="Close" onClick={props.onDone}>
+        <span className="loop-bind-title">{translate('props.loop.binding.settings')}</span>
+        <button type="button" className="loop-settings-remove" aria-label={translate('ui.close')} title={translate('ui.close')} onClick={props.onDone}>
           <CloseIcon size={12} />
         </button>
       </div>
       <label className="loop-bind-name">
-        <span className="loop-settings-editor-label">Name</span>
+        <span className="loop-settings-editor-label">{translate('props.loop.binding.name')}</span>
         <input
           value={name}
           spellCheck={false}
@@ -151,19 +159,19 @@ export function NewProperty(props: {
       </label>
       {problem !== undefined && key !== '' && <div className="loop-bind-problem">{problem}</div>}
       <label className="loop-bind-name top">
-        <span className="loop-settings-editor-label">Tooltip</span>
-        <AutoTextarea value={tooltip} placeholder="Describe how to use this property…" onChange={(event) => setTooltip(event.target.value)} />
+        <span className="loop-settings-editor-label">{translate('props.loop.binding.tooltip')}</span>
+        <AutoTextarea value={tooltip} placeholder={translate('props.loop.binding.tooltipPlaceholder')} onChange={(event) => setTooltip(event.target.value)} />
       </label>
       <div className="loop-property-default">
-        <div className="loop-bind-title">Default {title}</div>
+        <div className="loop-bind-title">{translate('props.loop.binding.default', { title })}</div>
         {props.draft.render(value, setValue)}
       </div>
       <div className="loop-bind-actions">
         <button type="button" className="loop-bind-button" onClick={props.onDone}>
-          Cancel
+          {translate('ui.cancel')}
         </button>
         <button type="button" className="loop-bind-button primary" disabled={problem !== undefined} onClick={create}>
-          Create
+          {translate('props.loop.binding.create')}
         </button>
       </div>
     </div>

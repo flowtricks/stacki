@@ -8,6 +8,7 @@
 
 import { assert } from '../../../../shared/core/assert';
 import { LIMITS } from '../../../../shared/core/limits';
+import { englishText, messageRef } from '../../../../shared/properties/i18n/messageRef';
 import { styleTransport } from '../../../ipc/editorEnvironment';
 import { rememberComponentSource } from './componentSourceCache';
 import { getHost } from './host';
@@ -34,8 +35,11 @@ export async function writeComponentStyle(path: string, label: string, texts: { 
     rememberComponentSource(path, before);
     throw error;
   }
+  const stylesIn = messageRef('shell.history.inlineStylesIn', { name: label });
   getHost().recordUndo?.({
-    label: `inline styles in ${label}`,
+    // The English name stays for readers that predate the reference; the app words the reference in the current language.
+    label: englishText(stylesIn),
+    labelRef: stylesIn,
     undo: async () => {
       rememberComponentSource(path, before);
       await styleTransport.writeStyleFile({ filePath: path, css: before, base: after });

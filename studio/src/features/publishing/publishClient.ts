@@ -4,6 +4,7 @@ import { request } from '../project/projectClient';
 import { StudioRequestError } from '../project/responseError';
 import { beginOperation } from '../session/activity';
 import { record, string } from '../../shared/validation';
+import { parseOptionalMessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
 import { parseReviewReceipt } from '../../../vendor/stacki/shared/properties/publishReview';
 
 export function parsePublishState(value: unknown): PublishState {
@@ -36,7 +37,8 @@ export function parsePublishState(value: unknown): PublishState {
     throw new Error('Invalid publish stage');
   }
   if (kind === 'failed') {
-    return { kind, id, message: string(data['message'], 20_000) };
+    const messageRef = parseOptionalMessageRef(data['messageRef']);
+    return { kind, id, message: string(data['message'], 20_000), ...(messageRef === undefined ? {} : { messageRef }) };
   }
   if (kind === 'committed') {
     if (data['github'] !== undefined && data['github'] !== 'skipped') {
@@ -50,6 +52,9 @@ export function parsePublishState(value: unknown): PublishState {
       ...(deployment ? { deployment } : {}),
       ...(data['github'] === 'skipped' ? { github: 'skipped' as const } : {}),
       ...(data['cleanupWarning'] ? { cleanupWarning: string(data['cleanupWarning'], 2000) } : {}),
+      ...(data['cleanupWarning'] && parseOptionalMessageRef(data['cleanupWarningRef'])
+        ? { cleanupWarningRef: parseOptionalMessageRef(data['cleanupWarningRef']) }
+        : {}),
     };
   }
   throw new Error('Invalid publish status');

@@ -9,16 +9,12 @@ import { indentUnit } from '@codemirror/language';
 import { EditorState, Prec, type Extension } from '@codemirror/state';
 import { keymap } from '@codemirror/view';
 import { CODE_INDENT_UNIT, CODE_TAB_WIDTH } from '../../shared/core/indent';
+import type { CodeIndentStyle } from './codeIndentStyle';
 
-/** Tabs everywhere, but for a format that forbids them. */
-export type CodeIndentStyle = 'spaces' | 'tabs';
+// The path-only decision lives in codeIndentStyle.ts, which imports nothing; it is re-exported so existing callers keep this import.
+export { codeIndentStyleFor, type CodeIndentStyle } from './codeIndentStyle';
 
 const SPACE_INDENT_UNIT = ' '.repeat(CODE_TAB_WIDTH);
-
-/** The style a file's editor uses. YAML forbids tabs in indentation, so a tab there would break the file. */
-export function codeIndentStyleFor(path: string): CodeIndentStyle {
-  return /\.ya?ml$/i.test(path) ? 'spaces' : 'tabs';
-}
 
 /** Tab width and indent unit: what shows, and what auto-indent inserts. */
 export function codeIndentSettings(style: CodeIndentStyle = 'tabs'): readonly Extension[] {

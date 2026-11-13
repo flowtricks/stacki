@@ -178,7 +178,7 @@ export function rulePath(folder: string, name: string): string {
 /** The new skill's file for a skill name in the skill folder. */
 export function skillPath(home: string, name: string): string {
   assert(name.length > 0, 'A skill has a name');
-  return `${home}/${name}/SKILL.md`;
+  return `${home}/${name}/SKILL.md`; // i18n-ignore: a file path, not interface text.
 }
 
 /** The hidden pattern "Hide folder" writes for a file: its folder, or the file itself at the root. */

@@ -1,9 +1,12 @@
+import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
+import { messageRef, type TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
 import { createPanelCache, usePanelData, type PanelData } from '../../lib/usePanelData';
 import { assetCache } from './assetListingCache';
 import { PanelReadStatus } from '../../ui/PanelReadStatus';
 import { SelectableAssetTile } from './AssetSelection';
 import { AssetBatchTools, useAssetBatch, convertible, type AssetBatch } from './AssetBatchTools';
-import { assetDropLimit, assetDeletionMessage } from '../../ipc/editorEnvironment';
+import { assetDropLimit } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AssetRequest } from '../../ui/assetPick';
 import type { AssetPanelEntry } from './assetPanelBridge';
@@ -34,6 +37,7 @@ type Toast = (message: string, kind: 'error' | 'success') => void;
 
 export interface AssetUndo {
   readonly label: string;
+  readonly labelRef?: TypedMessageRef | undefined;
   readonly undo: () => Promise<void>;
   readonly redo: () => Promise<void>;
 }
@@ -203,6 +207,8 @@ interface AssetActions {
 function useAssetActions(props: AssetsPanelProps, state: AssetPanelState): AssetActions {
   const { project, showToast } = props;
   const { cwd, setDragTarget, setRenaming } = state;
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const pickUpload = useCallback(
     async (destinationRel: string): Promise<void> => {
       reportResult(await pickUploadAssets(project.path, destinationRel), showToast);
@@ -225,25 +231,26 @@ function useAssetActions(props: AssetsPanelProps, state: AssetPanelState): Asset
     },
     [rename, setRenaming],
   );
-  const dropInto = useDropInto(project.path, showToast, setDragTarget, move);
+  const dropInto = useDropInto(project.path, translate, showToast, setDragTarget, move);
   const dragOverInto = useDragOverInto(setDragTarget);
   const replace = useCallback(
     (file: AssetFile): void => {
       void replaceAsset(project.path, file.rel).then((result) => {
         if (!result.ok) {
-          showToast(result.error, 'error');
+          showToast(translateDescribed({ message: result.error, messageRef: result.messageRef }), 'error');
         } else if (result.value) {
-          showToast(`Replaced ${file.name}.`, 'success');
+          showToast(translate('assets.toast.replaced', { name: file.name }), 'success');
         }
       });
     },
-    [project.path, showToast],
+    [project.path, showToast, translate, translateDescribed],
   );
   return { pickUpload, makeDirectory, commitRename, remove, replace, dropInto, dragOverInto };
 }
 
 function useAssetMove(props: AssetsPanelProps) {
   const { project, showToast, onRecordUndo } = props;
+  const translate = useTranslate();
   const execute = useCallback(
     async (fromRel: string, toDirectoryRel: string): Promise<boolean> => {
       const result = await moveAsset(project.path, fromRel, toDirectoryRel);
@@ -252,12 +259,12 @@ function useAssetMove(props: AssetsPanelProps) {
         return false;
       }
       if (!result.value) {
-        showToast('That asset was already gone.', 'error');
+        showToast(translate('assets.toast.alreadyGone'), 'error');
         return false;
       }
       return true;
     },
-    [project.path, showToast],
+    [project.path, showToast, translate],
   );
   return useCallback(
     async (fromRel: string, toDirectoryRel: string): Promise<void> => {
@@ -268,17 +275,19 @@ function useAssetMove(props: AssetsPanelProps) {
       const name = basename(fromRel);
       const landedRel = toDirectoryRel ? `${toDirectoryRel}/${name}` : name;
       onRecordUndo?.({
-        label: `move ${name}`,
+        label: translate('assets.undo.move', { name }),
+        labelRef: messageRef('assets.undo.move', { name }),
         undo: async () => void (await execute(landedRel, fromDirectory)),
         redo: async () => void (await execute(fromRel, toDirectoryRel)),
       });
     },
-    [execute, onRecordUndo],
+    [execute, onRecordUndo, translate],
   );
 }
 
 function useAssetRename(props: AssetsPanelProps) {
   const { project, showToast, onRecordUndo } = props;
+  const translate = useTranslate();
   const execute = useCallback(
     async (rel: string, newName: string): Promise<boolean> => {
       const result = await renameAsset(project.path, rel, newName);
@@ -295,30 +304,32 @@ function useAssetRename(props: AssetsPanelProps) {
       const directory = parentOf(entry.rel);
       const renamedRel = directory ? `${directory}/${clean}` : clean;
       onRecordUndo?.({
-        label: `rename to ${clean}`,
+        label: translate('assets.undo.rename', { name: clean }),
+        labelRef: messageRef('assets.undo.rename', { name: clean }),
         undo: async () => void (await execute(renamedRel, entry.name)),
         redo: async () => void (await execute(entry.rel, clean)),
       });
     },
-    [execute, onRecordUndo],
+    [execute, onRecordUndo, translate],
   );
 }
 
 function useAssetRemove(props: AssetsPanelProps) {
   const { project, showToast } = props;
+  const translate = useTranslate();
   return useCallback(
     (file: AssetFile): void => {
-      void removeAsset(file, project.path, showToast);
+      void removeAsset(file, project.path, showToast, translate);
     },
-    [project.path, showToast],
+    [project.path, showToast, translate],
   );
 }
 
-async function removeAsset(file: AssetFile, projectPath: string, showToast: Toast): Promise<void> {
+async function removeAsset(file: AssetFile, projectPath: string, showToast: Toast, translate: Translator): Promise<void> {
   const confirmed = await confirmDialog({
-    title: `Delete ${file.name}?`,
-    body: assetDeletionMessage + ' Anything on the site still pointing at ' + `/${file.rel} will stop finding it.`,
-    confirmLabel: 'Delete',
+    title: translate('assets.delete.title', { name: file.name }),
+    body: translate('assets.delete.body', { path: `/${file.rel}` }),
+    confirmLabel: translate('assets.delete.action'),
     danger: true,
   });
   if (!confirmed) {
@@ -330,12 +341,13 @@ async function removeAsset(file: AssetFile, projectPath: string, showToast: Toas
     return;
   }
   if (!result.value) {
-    showToast(`${file.name} was already gone.`, 'error');
+    showToast(translate('assets.toast.nameGone', { name: file.name }), 'error');
   }
 }
 
 function useDropInto(
   projectPath: string,
+  translate: Translator,
   showToast: Toast,
   setDragTarget: AssetPanelState['setDragTarget'],
   move: (fromRel: string, destinationRel: string) => Promise<void>,
@@ -346,7 +358,7 @@ function useDropInto(
         event.preventDefault();
         event.stopPropagation();
         setDragTarget(undefined);
-        const payload = dropPayload(event.dataTransfer);
+        const payload = dropPayload(event.dataTransfer, translate);
         if (!payload.ok) {
           showToast(payload.error, 'error');
           return;
@@ -363,7 +375,7 @@ function useDropInto(
         }
         void uploadDropped(projectPath, showToast, destinationRel, payload.value.paths);
       },
-    [move, projectPath, setDragTarget, showToast],
+    [move, projectPath, setDragTarget, showToast, translate],
   );
 }
 
@@ -388,7 +400,7 @@ async function uploadDropped(projectPath: string, showToast: Toast, destinationR
 type DropPayload = { readonly kind: 'asset'; readonly rel: string } | { readonly kind: 'os'; readonly paths: readonly File[] };
 
 // A drop carrying nothing usable is ok with no payload, not an error.
-function dropPayload(transfer: DataTransfer): Result<DropPayload | undefined, string> {
+function dropPayload(transfer: DataTransfer, translate: Translator): Result<DropPayload | undefined, string> {
   const rel = transfer.getData('avb/asset');
   if (rel) {
     try {
@@ -398,7 +410,7 @@ function dropPayload(transfer: DataTransfer): Result<DropPayload | undefined, st
     }
   }
   if (transfer.files.length > FILE_DROP_COUNT_MAX) {
-    return { ok: false, error: `Drop at most ${FILE_DROP_COUNT_MAX} files at once.` };
+    return { ok: false, error: translate('assets.drop.limit', { count: FILE_DROP_COUNT_MAX }) };
   }
   const paths = [...transfer.files];
   return paths.length === 0 ? { ok: true, value: undefined } : { ok: true, value: { kind: 'os', paths } };
@@ -433,12 +445,13 @@ function AssetPanelBody({
   readonly state: AssetPanelState;
   readonly actions: AssetActions;
 }) {
+  const translate = useTranslate();
   const folders = state.entries.filter((entry) => entry.isDir && entry.parent === state.cwd);
   const files = state.entries.filter(
     (entry): entry is AssetFile => !entry.isDir && entry.parent === state.cwd && (!props.pick || kindMatches(props.pick.mediaKind, entry.name)),
   );
   return (
-    <div className="panel-section grow" role="region" aria-label="Assets">
+    <div className="panel-section grow" role="region" aria-label={translate('assets.title')}>
       {(props.pick || !state.batch.selecting) && (
         <AssetHeader cwd={state.cwd} actions={actions} state={state} picking={Boolean(props.pick)} source={props.navigation.picker} />
       )}
@@ -464,6 +477,7 @@ function AssetHeader({
   /** The source switcher, which is the heading (AssetSources.tsx). */
   readonly source: React.ReactNode;
 }) {
+  const translate = useTranslate();
   return (
     <div className="panel-header">
       {source}
@@ -471,20 +485,20 @@ function AssetHeader({
         {!picking && (
           <button
             className="asset-select-link"
-            aria-label="Select"
-            title="Select assets to compress or delete together"
+            aria-label={translate('assets.header.select')}
+            title={translate('assets.header.selectTitle')}
             onClick={() => {
               state.batch.setSelected(new Set());
               state.batch.setSelecting(true);
             }}
           >
-            Select
+            {translate('assets.header.select')}
           </button>
         )}
         <button
           className="ghost"
-          title={cwd ? 'New folder' : 'Open public/ or src/ first'}
-          aria-label="New folder"
+          title={cwd ? translate('assets.header.newFolder') : translate('assets.header.openFirst')}
+          aria-label={translate('assets.header.newFolder')}
           disabled={!cwd}
           onClick={() => state.setNewFolder(true)}
         >
@@ -492,8 +506,8 @@ function AssetHeader({
         </button>
         <button
           className="ghost"
-          title={cwd ? 'Upload assets' : 'Open public/ or src/ first'}
-          aria-label="Upload assets"
+          title={cwd ? translate('assets.header.upload') : translate('assets.header.openFirst')}
+          aria-label={translate('assets.header.upload')}
           disabled={!cwd}
           onClick={() => void actions.pickUpload(cwd)}
         >
@@ -505,14 +519,15 @@ function AssetHeader({
 }
 
 function PickBanner({ pick, onCancel }: { readonly pick?: AssetRequest | undefined; readonly onCancel?: () => void }) {
+  const translate = useTranslate();
   if (!pick) {
     return undefined;
   }
   return (
     <div className="asset-picking">
-      <span>{pickPrompt(pick.mediaKind)}</span>
+      <span>{pickPrompt(pick.mediaKind, translate)}</span>
       <button className="ghost" onClick={onCancel}>
-        Cancel
+        {translate('ui.cancel')}
       </button>
     </div>
   );
@@ -521,7 +536,8 @@ function PickBanner({ pick, onCancel }: { readonly pick?: AssetRequest | undefin
 function AssetBreadcrumbs({ state, actions }: { readonly state: AssetPanelState; readonly actions: AssetActions }) {
   // The trail starts at "Assets", the source's top (for the project, where
   // public/ and src/ sit): Assets › src › assets, or just Assets at the top.
-  const crumbs = useMemo(() => buildCrumbs(state.cwd), [state.cwd]);
+  const translate = useTranslate();
+  const crumbs = useMemo(() => buildCrumbs(state.cwd, translate), [state.cwd, translate]);
   return (
     <div className="asset-crumbs">
       {crumbs.map((crumb, index) => (
@@ -559,6 +575,7 @@ function AssetContents({
   readonly folders: readonly AssetPanelEntry[];
   readonly files: readonly AssetFile[];
 }) {
+  const translate = useTranslate();
   return (
     <div
       className={`panel-body asset-body ${state.dragTarget === state.cwd ? 'drop' : ''}`}
@@ -579,21 +596,22 @@ function AssetContents({
           <AssetTile key={file.rel} file={file} props={props} state={state} actions={actions} />
         ))}
       </div>
-      <PanelReadStatus state={state.listing} label="assets" layout="assets" retry={state.refresh} />
+      <PanelReadStatus state={state.listing} label={translate('assets.listing.label')} layout="assets" retry={state.refresh} />
       {state.listing.kind === 'ready' && folders.length === 0 && files.length === 0 && !state.newFolder && (
-        <div className="props-empty">Empty folder. Drop files here or use the upload button.</div>
+        <div className="props-empty">{translate('assets.empty')}</div>
       )}
     </div>
   );
 }
 
 function NewFolderRow({ state, actions }: { readonly state: AssetPanelState; readonly actions: AssetActions }) {
+  const translate = useTranslate();
   return (
     <div className="asset-folder">
       <FolderIcon size={14} />
       <input
         autoFocus
-        placeholder="Folder name"
+        placeholder={translate('assets.folderName')}
         onBlur={(event) => {
           state.setNewFolder(false);
           const name = event.currentTarget.value.trim();
@@ -650,6 +668,7 @@ function AssetTile({
   readonly state: AssetPanelState;
   readonly actions: AssetActions;
 }) {
+  const translate = useTranslate();
   if (!props.pick && state.batch.selecting) {
     return <SelectableAssetTile file={file} batch={state.batch} />;
   }
@@ -659,7 +678,7 @@ function AssetTile({
       className={`asset-tile ${props.pick ? 'pickable' : ''} ${props.pick?.current === file.rel ? 'selected' : ''}`}
       draggable={state.renaming !== file.rel}
       onDragStart={(event) => startAssetDrag(event, file.rel)}
-      title={assetTitle(file, { editable, picking: Boolean(props.pick) })}
+      title={assetTitle(file, { editable, picking: Boolean(props.pick) }, translate)}
       onClick={props.pick ? () => props.pick?.onPick(file.rel, file) : undefined}
     >
       <AssetThumb
@@ -681,13 +700,17 @@ function AssetTile({
       {!props.pick && (
         <MoreMenu
           className="asset-tile-menu"
-          title={`Options for ${file.name}`}
+          title={translate('assets.tile.options', { name: file.name })}
           items={[
-            { label: 'Copy link', icon: <CopyIcon size={13} />, onSelect: () => void copyLink(localAssetLink(file.rel), props.showToast) },
-            ...(convertible(file) ? conversionMenu(file, state.batch) : []),
-            { label: 'Replace…', icon: <UploadIcon size={13} />, onSelect: () => actions.replace(file) },
             {
-              label: 'Delete',
+              label: translate('assets.tile.copyLink'),
+              icon: <CopyIcon size={13} />,
+              onSelect: () => void copyLink(localAssetLink(file.rel), translate, props.showToast),
+            },
+            ...(convertible(file) ? conversionMenu(file, state.batch, translate) : []),
+            { label: translate('assets.tile.replace'), icon: <UploadIcon size={13} />, onSelect: () => actions.replace(file) },
+            {
+              label: translate('assets.delete.action'),
               icon: <TrashIcon size={13} />,
               danger: true,
               onSelect: () => actions.remove(file),
@@ -700,14 +723,16 @@ function AssetTile({
 }
 
 function MissingAssets({ navigation, onUpload }: { readonly navigation: Navigation; readonly onUpload: () => void }) {
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
   return (
-    <div className="panel-section grow" role="region" aria-label="Assets">
+    <div className="panel-section grow" role="region" aria-label={translate('assets.title')}>
       <div className="panel-header">{navigation.picker}</div>
       <div className="props-empty">
-        This project has no <code>public/</code> folder yet.
+        {translateRich('assets.missing.message', { folder: <code>public/</code> })}
         <div style={{ marginTop: 10 }}>
           <button className="primary" onClick={onUpload}>
-            Upload an asset
+            {translate('assets.missing.upload')}
           </button>
         </div>
       </div>
@@ -762,6 +787,6 @@ function clearInput(inputElement: HTMLInputElement): void {
   inputElement.value = '';
 }
 
-function conversionMenu(file: AssetFile, batch: AssetBatch) {
-  return [{ label: 'Compress…', onSelect: () => batch.setCompression([file]) }];
+function conversionMenu(file: AssetFile, batch: AssetBatch, translate: Translator) {
+  return [{ label: translate('assets.tile.compress'), onSelect: () => batch.setCompression([file]) }];
 }

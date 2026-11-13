@@ -8,6 +8,8 @@ import { commitInPlace } from './model/commitInPlace';
 import { assert } from '../../../shared/core/assert';
 import ImportantMark from './components/ImportantMark';
 import { displayOf } from './model/styleDisplay';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 // Webflow's flex-alignment control: a live preview grid on the left (3×3 click
 // targets under a real-flex bar preview) plus the X / Y axis dropdowns. The X axis
@@ -170,24 +172,24 @@ function norm(value: string): string {
 
 // Labels track the screen axis, not the property: start/end read as Left/Right on
 // the X axis and Top/Bottom on the Y axis.
-function axisLabel(value: string, axis: 'x' | 'y'): string {
+function axisLabel(value: string, axis: 'x' | 'y', translate: Translator): string {
   switch (value) {
     case 'flex-start':
-      return axis === 'x' ? 'Left' : 'Top';
+      return axis === 'x' ? translate('style.alignControl.left') : translate('style.alignControl.top');
     case 'flex-end':
-      return axis === 'x' ? 'Right' : 'Bottom';
+      return axis === 'x' ? translate('style.alignControl.right') : translate('style.alignControl.bottom');
     case 'center':
-      return 'Center';
+      return translate('style.alignControl.center');
     case 'space-between':
-      return 'Space between';
+      return translate('style.alignControl.spaceBetween');
     case 'space-around':
-      return 'Space around';
+      return translate('style.alignControl.spaceAround');
     case 'space-evenly':
-      return 'Space evenly';
+      return translate('style.alignControl.spaceEvenly');
     case 'stretch':
-      return 'Stretch';
+      return translate('style.alignControl.stretch');
     case 'baseline':
-      return 'Baseline';
+      return translate('style.alignControl.baseline');
     default:
       return value;
   }
@@ -284,13 +286,13 @@ function useLiveTimer(onLive: (value: string) => void) {
 
 // The options of one axis dropdown: its values with their screen-axis labels and
 // icons, then "Custom".
-function axisOptions(values: readonly string[], prop: string, axis: 'x' | 'y'): SelectOption<string>[] {
+function axisOptions(values: readonly string[], prop: string, axis: 'x' | 'y', translate: Translator): SelectOption<string>[] {
   const options: SelectOption<string>[] = values.map((option) => ({
     value: option,
-    label: axisLabel(option, axis),
+    label: axisLabel(option, axis, translate),
     icon: iconFor(option, prop, axis),
   }));
-  options.push({ value: CUSTOM, label: 'Custom' });
+  options.push({ value: CUSTOM, label: translate('style.alignControl.custom') });
   return options;
 }
 
@@ -308,8 +310,9 @@ type AxisSelectProps = Pick<Props, 'busy' | 'read' | 'onSet' | 'onLive' | 'onCle
 };
 function AxisSelect(props: AxisSelectProps) {
   const { axis, prop, value, values, fallback, busy, onSet, onLive, onClear } = props;
+  const translate = useTranslate();
   const [forceCustom, setForceCustom] = useState(false);
-  const ariaLabel = axis === 'x' ? 'Horizontal alignment' : 'Vertical alignment';
+  const ariaLabel = axis === 'x' ? translate('style.alignControl.horizontalAlignment') : translate('style.alignControl.verticalAlignment');
   const present = Boolean(value.trim());
   const normalized = norm(value);
   const known = values.includes(normalized);
@@ -318,7 +321,7 @@ function AxisSelect(props: AxisSelectProps) {
   // through to the CSS default below.
   const shownComputed = useHighlight('', present ? '' : prop, values, fallback);
   const customMode = forceCustom || (present && !known);
-  const options = axisOptions(values, prop, axis);
+  const options = axisOptions(values, prop, axis, translate);
 
   const pick = (choice: string) => {
     if (choice === CUSTOM) {
@@ -455,6 +458,7 @@ export function alignArrowWrite(state: AlignBoxState, key: string): AlignWrite |
 // The 3×3 click targets: start / center / end on each screen axis. A
 // double-click toggles the main axis between Space between and that position.
 function AlignDots({ justify, align, column, busy, onSet }: Pick<Props, 'justify' | 'align' | 'column' | 'busy' | 'onSet'>) {
+  const translate = useTranslate();
   const state: AlignBoxState = { justify, align, column };
   return (
     <div className="embed-editor_align-dots">
@@ -465,8 +469,8 @@ function AlignDots({ justify, align, column, busy, onSet }: Pick<Props, 'justify
             type="button"
             className="embed-editor_align-dot"
             disabled={busy}
-            aria-label={`Align ${axisLabel(cx, 'x')} ${axisLabel(ry, 'y')}`}
-            title={norm(justify) === 'space-between' ? 'Double-click to align here' : 'Double-click for Space between'}
+            aria-label={translate('style.alignControl.alignAt', { horizontal: axisLabel(cx, 'x', translate), vertical: axisLabel(ry, 'y', translate) })}
+            title={norm(justify) === 'space-between' ? translate('style.alignControl.alignHere') : translate('style.alignControl.spaceBetweenHint')}
             onClick={() => {
               for (const [prop, value] of alignDotWrites(state, cx, ry)) {
                 onSet(prop, value);
@@ -488,6 +492,7 @@ function AlignDots({ justify, align, column, busy, onSet }: Pick<Props, 'justify
 // The preview square: a 3×3 grid of click targets (start / center / end on each
 // axis) under a real-flex bar preview that lays out with the current values.
 function AlignBox({ justify, align, column, busy, onSet }: Pick<Props, 'justify' | 'align' | 'column' | 'busy' | 'onSet'>) {
+  const translate = useTranslate();
   const justifyValue = norm(justify) || 'flex-start';
   const alignValue = norm(align) || 'stretch';
   const isBaseline = alignValue === 'baseline';
@@ -508,7 +513,7 @@ function AlignBox({ justify, align, column, busy, onSet }: Pick<Props, 'justify'
     <div
       className="embed-editor_align-box"
       role="group"
-      aria-label="Alignment"
+      aria-label={translate('style.alignControl.alignment')}
       onKeyDown={(event) => {
         // Arrow keys move the alignment while focus is in the box (a dot just clicked).
         const write = busy ? undefined : alignArrowWrite({ justify, align, column }, event.key);

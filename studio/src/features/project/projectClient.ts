@@ -1,3 +1,5 @@
+import { studioTranslate, studioTranslateRef } from '../../shared/studioTranslate';
+import { parseOptionalMessageRef } from '../../../vendor/stacki/shared/core/i18n/messageReference';
 import { parseRenameFolders } from '../../../vendor/stacki/shared/properties/pageRenameConflicts';
 import { parseWorkspaceId } from '../../shared/workspaceIdentity';
 import { parseScanPages, type ScanPage } from '../../../vendor/stacki/shared/properties/projectScan';
@@ -69,12 +71,16 @@ export async function request(url: string, options?: RequestInit): Promise<unkno
       }
     }
     if (!response.ok) {
-      throw new StudioRequestError(string(record(data)['error'] ?? responseError(response).message), response.status);
+      // A server refusal with a message reference is shown in the language on screen; without one (or an unknown key) its English text shows.
+      throw new StudioRequestError(
+        studioTranslateRef(string(record(data)['error'] ?? responseError(response).message), parseOptionalMessageRef(record(data)['messageRef'])),
+        response.status,
+      );
     }
     return data;
   } catch (error) {
     if (error instanceof TypeError || (error instanceof DOMException && error.name === 'TimeoutError')) {
-      throw new StudioRequestError('The connection to Studio was interrupted. Please retry shortly.', 0);
+      throw new StudioRequestError(studioTranslate('studio.request.interrupted'), 0);
     }
     throw error;
   } finally {
@@ -91,7 +97,7 @@ export async function loadProject(signal?: AbortSignal): Promise<Project> {
   const revision = workspaceRevision;
   const project = parseProject(await request('/studio/api/project', signal ? { signal } : undefined));
   if (revision !== workspaceRevision) {
-    throw new StudioRequestError('The shared branch changed while loading. Please retry.', 409);
+    throw new StudioRequestError(studioTranslate('studio.request.branchChanged'), 409);
   }
   requestWorkspace = project.workspaceId ?? '';
   return project;

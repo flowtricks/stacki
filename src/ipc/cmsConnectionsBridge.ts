@@ -3,10 +3,13 @@
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import { parseOkResult } from '../../shared/ipc/ipcContract';
 import {
+  parseCmsCheckResult,
   parseCmsConnectionList,
   parseCmsSaveResult,
   parseSanityLoginState,
   parseSanityLoginURL,
+  type CmsCheckRequest,
+  type CmsCheckResult,
   type CmsConnectionDraft,
   type CmsConnectionList,
   type CmsSaveResult,
@@ -37,6 +40,7 @@ import {
   type RemoteWrite,
 } from '../../shared/properties/cmsRemote';
 import { parseLinkPreview, parseVideoLinkURL, type LinkPreview } from '../../shared/properties/linkPreview';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 /** What this host can offer: Desktop signs in to Sanity in the browser. */
 export interface CmsConnectionHost {
@@ -60,13 +64,19 @@ export async function removeCmsConnection(projectPath: string, id: string): Prom
   return parseCmsConnectionList(await window.avb.removeCmsConnection(input));
 }
 
+/** Tests a saved Payload connection, or detects what a draft one offers, without saving anything. */
+export async function checkCmsConnection(projectPath: string, request: CmsCheckRequest): Promise<CmsCheckResult> {
+  const input = parseIpcPayload('cmsConnections:check', { projectPath, request });
+  return parseCmsCheckResult(await window.avb.checkCmsConnection(input));
+}
+
 export async function sanityLogin(projectPath: string, request: SanityLoginRequest): Promise<SanityLoginState> {
   const input = parseIpcPayload('cmsConnections:sanityLogin', { projectPath, request });
   let result: unknown;
   try {
     result = await window.avb.sanityLogin(input);
   } catch {
-    return { kind: 'failed', message: 'Could not reach Sanity sign-in. Please try again.' };
+    return { kind: 'failed', ...described('error.bridge.sanityUnreachable') };
   }
   return parseSanityLoginState(result);
 }

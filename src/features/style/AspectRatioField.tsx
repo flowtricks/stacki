@@ -9,16 +9,18 @@ import { commitInPlace } from './model/commitInPlace';
 import { useDebouncedLive } from './model/fieldHooks';
 import { displayOf, parseImportant } from './model/styleDisplay';
 import { type SetProp, type ClearProp, type LiveSetProp, type Props, SizeLabel, withImportant, useFollowingDraft, stepSizeKey } from './SizeKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 
 // ─────────────────────────── Aspect ratio ───────────────────────────
 
-export const RATIO_PRESETS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: '2.39 / 1', label: 'Anamorphic (2.39:1)' },
-  { value: '2 / 1', label: 'Univisium/Netflix (2:1)' },
-  { value: '16 / 9', label: 'Widescreen (16:9)' },
-  { value: '3 / 2', label: 'Landscape (3:2)' },
-  { value: '2 / 3', label: 'Portrait (2:3)' },
-  { value: '1 / 1', label: 'Square (1:1)' },
+export const RATIO_PRESETS: ReadonlyArray<{ value: string; labelKey: MessageKey }> = [
+  { value: '2.39 / 1', labelKey: 'style.aspectRatioField.anamorphic' },
+  { value: '2 / 1', labelKey: 'style.aspectRatioField.univisium' },
+  { value: '16 / 9', labelKey: 'style.aspectRatioField.widescreen' },
+  { value: '3 / 2', labelKey: 'style.aspectRatioField.landscape' },
+  { value: '2 / 3', labelKey: 'style.aspectRatioField.portrait' },
+  { value: '1 / 1', labelKey: 'style.aspectRatioField.square' },
 ];
 
 // Parse an aspect-ratio value into width/height numbers (single number → n/1).
@@ -131,6 +133,8 @@ export type RatioOtherInputProps = {
   placeholder?: string;
 };
 
+const FREE_VALUE_PLACEHOLDER = 'unset, var(--x)…'; // i18n-ignore: CSS keyword and variable syntax.
+
 export function RatioOtherInput({
   value,
   busy,
@@ -139,13 +143,15 @@ export function RatioOtherInput({
   onCommit,
   onLiveCommit,
   onClear,
-  ariaLabel = 'Aspect ratio value',
-  placeholder = 'unset, var(--x)…',
+  ariaLabel,
+  placeholder = FREE_VALUE_PLACEHOLDER,
 }: RatioOtherInputProps) {
+  const translate = useTranslate();
   const { draft, setDraft, focused } = useFollowingDraft(value);
   const { cancelLive, scheduleLive } = useDebouncedLive(onLiveCommit);
   const inputRef = useRef<HTMLInputElement>(null);
   const didFocus = useRef(false);
+  const shownLabel = ariaLabel ?? translate('style.aspectRatioField.ratioValue');
 
   // Only when this field was ASKED for — picking "Other" from the menu, where
   // the next thing anyone does is type. It used to focus on mount whatever
@@ -178,7 +184,13 @@ export function RatioOtherInput({
   // the field you land in precisely because the value is not a plain one — was
   // the one place it was shown as raw text.
   return (
-    <VariableConnect code ariaLabel={`Connect ${ariaLabel} to a variable`} disabled={busy} prop={prop} onPick={(binding) => onCommit(binding, false)}>
+    <VariableConnect
+      code
+      ariaLabel={translate('style.aspectRatioField.connect', { name: shownLabel })}
+      disabled={busy}
+      prop={prop}
+      onPick={(binding) => onCommit(binding, false)}
+    >
       <input
         ref={inputRef}
         className="u-select-custom-input"
@@ -203,20 +215,21 @@ export function RatioOtherInput({
         disabled={busy}
         spellCheck={false}
         placeholder={placeholder}
-        aria-label={ariaLabel}
+        aria-label={shownLabel}
       />
     </VariableConnect>
   );
 }
 
-export const RATIO_OPTIONS: SelectOption<string>[] = [
-  { value: 'auto', label: 'Auto' },
-  ...RATIO_PRESETS.map((preset) => ({ value: preset.value, label: preset.label })),
-  { value: 'custom', label: 'Custom' },
-  { value: 'other', label: 'Other' },
+export const ratioOptions = (translate: Translator): SelectOption<string>[] => [
+  { value: 'auto', label: translate('style.aspectRatioField.auto') },
+  ...RATIO_PRESETS.map((preset) => ({ value: preset.value, label: translate(preset.labelKey) })),
+  { value: 'custom', label: translate('style.aspectRatioField.custom') },
+  { value: 'other', label: translate('style.aspectRatioField.other') },
 ];
 
 export function AspectRatioField({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
+  const translate = useTranslate();
   const display = displayOf(read('aspect-ratio'));
   const current = display.present ? display.value : '';
   // A flagged ratio opens the free field ("other"), whose text shows `!important`
@@ -233,7 +246,7 @@ export function AspectRatioField({ read, busy, setProp, clearProp, liveSetProp, 
     <>
       <div className="embed-editor_size-row">
         <SizeLabel
-          label="Ratio"
+          label={translate('style.aspectRatioField.ratio')}
           prop="aspect-ratio"
           display={{ ...display, value: current }}
           contributors={read('aspect-ratio')?.contributors ?? []}
@@ -245,8 +258,8 @@ export function AspectRatioField({ read, busy, setProp, clearProp, liveSetProp, 
         <Select
           className="embed-editor_ratio-select"
           value={key}
-          options={RATIO_OPTIONS}
-          ariaLabel="Aspect ratio"
+          options={ratioOptions(translate)}
+          ariaLabel={translate('style.aspectRatioField.aspectRatio')}
           disabled={busy}
           onChange={onSelect}
           onPreview={(choice) => liveSetProp('aspect-ratio', choice === 'custom' || choice === 'other' ? undefined : (choice ?? undefined), false)}
@@ -315,6 +328,7 @@ export function useRatioMode({ current, derivedKey, setProp, clearProp }: { curr
 
 // The Custom W:H pair: two number fields that write `W / H` (a blank side as 0).
 export function RatioPair({ current, busy, setProp, liveSetProp }: { current: string; busy: boolean; setProp: SetProp; liveSetProp: LiveSetProp }) {
+  const translate = useTranslate();
   const parsed = parseRatio(current) ?? { width: '1', height: '1' };
   const write = (width: string, height: string, mode: 'live' | 'commit') => {
     const value = `${width || '0'} / ${height || '0'}`;
@@ -331,22 +345,22 @@ export function RatioPair({ current, busy, setProp, liveSetProp }: { current: st
           <RatioNumberInput
             value={parsed.width}
             busy={busy}
-            ariaLabel="Ratio width"
+            ariaLabel={translate('style.aspectRatioField.ratioWidth')}
             onLive={(width) => write(width, parsed.height, 'live')}
             onCommit={(width) => write(width, parsed.height, 'commit')}
           />
-          <span className="embed-editor_ratio-caption">Width</span>
+          <span className="embed-editor_ratio-caption">{translate('style.aspectRatioField.width')}</span>
         </div>
         <span className="embed-editor_ratio-colon">:</span>
         <div className="embed-editor_ratio-cell">
           <RatioNumberInput
             value={parsed.height}
             busy={busy}
-            ariaLabel="Ratio height"
+            ariaLabel={translate('style.aspectRatioField.ratioHeight')}
             onLive={(height) => write(parsed.width, height, 'live')}
             onCommit={(height) => write(parsed.width, height, 'commit')}
           />
-          <span className="embed-editor_ratio-caption">Height</span>
+          <span className="embed-editor_ratio-caption">{translate('style.aspectRatioField.height')}</span>
         </div>
       </div>
     </div>

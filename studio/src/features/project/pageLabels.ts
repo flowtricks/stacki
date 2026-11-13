@@ -1,5 +1,6 @@
 import { layoutPageTitle } from '../../../vendor/stacki/shared/page/pageTitle';
-import { pageDisplayName } from '../../../vendor/stacki/src/lib/pageName';
+import { pageDisplayLabel } from '../../../vendor/stacki/src/lib/pageName';
+import type { Translator } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import type { ParserNode } from '../source/source';
 import { routeFor, type Project } from './projectClient';
 
@@ -13,9 +14,9 @@ export function projectPages(project: Project) {
   }));
 }
 
-export function projectPageLabel(project: Project, file: string): string | undefined {
+export function projectPageLabel(project: Project, file: string, translate: Translator): string | undefined {
   const page = projectPages(project).find((entry) => entry.path === file);
-  return page ? pageDisplayName(page) : undefined;
+  return page ? pageDisplayLabel(page, translate) : undefined;
 }
 
 export function livePageTitles(project: Project, file: string, model: { readonly editable: boolean; readonly nodes: readonly ParserNode[] }): Project {

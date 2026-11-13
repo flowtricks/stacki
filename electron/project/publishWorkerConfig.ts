@@ -5,6 +5,8 @@ import { parse as parseTOML } from 'smol-toml';
 import { parseConfigFileTextToJson } from 'typescript';
 import { record, text } from '../../shared/core/boundary';
 import { assert } from '../../shared/core/assert';
+import { described } from '../../shared/properties/i18n/messageRef';
+import { DescribedError } from '../../shared/properties/describedError';
 
 const CONFIG_BYTES_MAX = 65_536;
 
@@ -15,7 +17,7 @@ export async function withWorkerAccount(root: string, accountId: string, deploy:
   const filename = await workerConfigPath(root);
   const source = await workerConfigSource(root, filename);
   if (source === undefined) {
-    throw new Error('Configure this project for Cloudflare Workers before publishing.');
+    throw new DescribedError(described('publish.worker.error.configure'));
   }
   const value = workerConfigParse(filename, source);
   const temporary = path.join(path.dirname(filename), `.stacki-worker-${randomUUID()}.json`);
@@ -49,7 +51,7 @@ async function workerConfigPath(root: string): Promise<string> {
       return filename;
     }
   }
-  throw new Error('Configure this project for Cloudflare Workers before publishing.');
+  throw new DescribedError(described('publish.worker.error.configure'));
 }
 
 async function workerConfigSource(root: string, filename: string): Promise<string | undefined> {
@@ -64,15 +66,15 @@ async function workerConfigSource(root: string, filename: string): Promise<strin
   }
   const relative = path.relative(await realpath(root), canonical);
   if (path.isAbsolute(relative) || relative.split(path.sep).includes('..')) {
-    throw new Error('Wrangler configuration must stay inside the publish snapshot.');
+    throw new DescribedError(described('publish.worker.error.configOutside'));
   }
   const metadata = await stat(canonical);
   if (metadata.size > CONFIG_BYTES_MAX) {
-    throw new Error('Wrangler configuration exceeds 64 KiB.');
+    throw new DescribedError(described('publish.worker.error.configTooLarge'));
   }
   const source = await readFile(canonical, 'utf8');
   if (Buffer.byteLength(source, 'utf8') > CONFIG_BYTES_MAX) {
-    throw new Error('Wrangler configuration exceeds 64 KiB.');
+    throw new DescribedError(described('publish.worker.error.configTooLarge'));
   }
   return source;
 }
@@ -84,7 +86,7 @@ export function workerConfigParse(filename: string, source: string): Record<stri
   // TypeScript diagnostics require slash-normalized paths, including on Windows.
   const parsed = parseConfigFileTextToJson(filename.replaceAll('\\', '/'), source);
   if (parsed.error) {
-    throw new Error('Cannot read Wrangler configuration.');
+    throw new DescribedError(described('publish.worker.error.configUnreadable'));
   }
   return record(parsed.config);
 }

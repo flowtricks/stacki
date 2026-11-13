@@ -24,6 +24,7 @@ import {
 import { PlusIcon } from './components/MenuParts';
 import { displayOf } from './model/styleDisplay';
 import { type Props, type WriteOptions, writeValue, useLayerRows, EffLabel } from './EffectsKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // ─────────────────────────── Transitions ───────────────────────────
 
@@ -63,6 +64,7 @@ export function fmtDuration(ms: number, unit: 'ms' | 's'): string {
 // Duration: a slider (numeric ms) alongside a free-text input holding the raw value,
 // so the unit lives inside the field and you can type 0.2s, var(), inherit, unset, etc.
 export function DurationField({ value, busy, onCommit, onLive }: { value: string; busy: boolean; onCommit: (v: string) => void; onLive: (v: string) => void }) {
+  const translate = useTranslate();
   const ms = durationToMs(value);
   const unit = durationUnit(value);
   // While the slider is being dragged the field shows where it is; the rest of
@@ -76,7 +78,7 @@ export function DurationField({ value, busy, onCommit, onLive }: { value: string
         min={0}
         max={2000}
         disabled={busy}
-        ariaLabel="Duration"
+        ariaLabel={translate('style.transitionsRow.duration')}
         onPreview={(milliseconds) => setPreview(fmtDuration(milliseconds, unit))}
         onInput={(milliseconds) => onLive(fmtDuration(milliseconds, unit))}
         onCommit={(milliseconds) => {
@@ -87,7 +89,7 @@ export function DurationField({ value, busy, onCommit, onLive }: { value: string
       <LiveInput
         value={preview ?? value}
         busy={busy}
-        ariaLabel="Duration"
+        ariaLabel={translate('style.transitionsRow.duration')}
         placeholder="0ms"
         prop="transition-duration"
         onLive={(next) => onLive(next.trim() || '0ms')}
@@ -110,15 +112,23 @@ export function EasingField({
   onCommit: (v: string) => void;
   onEditEasing: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_trans-easing">
-      <button type="button" className="embed-editor_trans-easing-btn" onClick={onEditEasing} disabled={busy} title="Edit easing" aria-label="Edit easing">
+      <button
+        type="button"
+        className="embed-editor_trans-easing-btn"
+        onClick={onEditEasing}
+        disabled={busy}
+        title={translate('style.transitionsRow.editEasing')}
+        aria-label={translate('style.transitionsRow.editEasing')}
+      >
         <EaseCurveIcon timing={value} />
       </button>
       <LiveInput
         value={value}
         busy={busy}
-        ariaLabel="Easing"
+        ariaLabel={translate('style.transitionsRow.easing')}
         placeholder="ease"
         prop="transition-timing-function"
         onLive={() => {}}
@@ -139,25 +149,26 @@ export function TransitionEditor({
   onChange: (p: TransitionPatch, live: boolean) => void;
   onEditEasing: () => void;
 }) {
+  const translate = useTranslate();
   const options = TRANSITION_GROUPS.flatMap<SelectOption<string>>((group) => [
-    { value: `__h_${group.heading}`, label: group.heading, heading: true },
-    ...group.items.map((item) => ({ value: item.value, label: item.label, indent: true })),
+    { value: `__h_${group.heading}`, label: translate(group.headingKey), heading: true },
+    ...group.items.map((item) => ({ value: item.value, label: translate(item.labelKey), indent: true })),
   ]);
   return (
     <div className="embed-editor_trans-editor">
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Type</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.transitionsRow.type')}</span>
         <Select
           value={transition.property}
           options={options}
           onChange={(next) => onChange({ property: next }, false)}
-          ariaLabel="Transition type"
+          ariaLabel={translate('style.transitionsRow.transitionType')}
           disabled={busy}
           searchable
         />
       </div>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Duration</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.transitionsRow.duration')}</span>
         <DurationField
           value={transition.duration}
           busy={busy}
@@ -166,7 +177,7 @@ export function TransitionEditor({
         />
       </div>
       <div className="embed-editor_size-row">
-        <span className="embed-editor_size-label embed-editor_bg-caption">Easing</span>
+        <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.transitionsRow.easing')}</span>
         <EasingField value={transition.timing} busy={busy} onCommit={(next) => onChange({ timing: next }, false)} onEditEasing={onEditEasing} />
       </div>
     </div>
@@ -175,6 +186,7 @@ export function TransitionEditor({
 
 export function TransitionsRow({ props }: { props: Props }) {
   const { read, busy } = props;
+  const translate = useTranslate();
   const display = displayOf(read('transition'));
   // `transition` is comma-separated, unlike transform and filter.
   const rows = parseHideable(display.present ? display.value : '', ',', parseTransitions);
@@ -194,15 +206,22 @@ export function TransitionsRow({ props }: { props: Props }) {
   return (
     <div className="embed-editor_type-shadows embed-editor_transitions">
       <div className="embed-editor_bg-layers-head">
-        <EffLabel label="Transitions" prop="transition" props={props} />
-        <button type="button" className="embed-editor_icon-btn" disabled={busy} title="Add transition" aria-label="Add transition" onClick={stack.add}>
+        <EffLabel label={translate('style.transitionsRow.transitions')} prop="transition" props={props} />
+        <button
+          type="button"
+          className="embed-editor_icon-btn"
+          disabled={busy}
+          title={translate('style.transitionsRow.addTransition')}
+          aria-label={translate('style.transitionsRow.addTransition')}
+          onClick={stack.add}
+        >
           <PlusIcon />
         </button>
       </div>
       <LayerList
         count={list.length}
         busy={busy}
-        ariaLabel="Transitions"
+        ariaLabel={translate('style.transitionsRow.transitions')}
         onOpen={stack.open}
         onReorder={stack.reorder}
         onRemove={stack.remove}
@@ -214,11 +233,11 @@ export function TransitionsRow({ props }: { props: Props }) {
               <ClockIcon />
             </span>
           ),
-          label: transitionLabel(list[i] ?? blankTransition()),
+          label: transitionLabel(list[i] ?? blankTransition(), translate),
         })}
       />
       {openIndex !== undefined && stack.anchorElement && current ? (
-        <LayerPopover anchorEl={stack.anchorElement} ariaLabel="Transition" onClose={stack.close}>
+        <LayerPopover anchorEl={stack.anchorElement} ariaLabel={translate('style.transitionsRow.transition')} onClose={stack.close}>
           <TransitionEditor transition={current} busy={busy} onChange={(changes, live) => patch(changes, { live })} onEditEasing={() => setEasingOpen(true)} />
         </LayerPopover>
       ) : undefined}

@@ -5,7 +5,7 @@ import { definedFields } from '../../shared/core/boundary';
 import { readPublishConfig } from '../project/publishConfig';
 import { publishingGitEnvironment } from '../project/publishGitHub';
 import type { GitInfo } from '../lib/mainTypes';
-import { mergeBranch, deleteBranch, switchBranch, resolveMerge } from '../git/gitBranches';
+import { mergeBranch, deleteBranch, switchBranch, resolveMerge, readDefaultBranch } from '../git/gitBranches';
 import { pullBranch, readIncomingCommits } from '../git/gitPull';
 import * as gitHistory from '../git/gitHistory';
 import { readCommitDiff } from '../git/gitCommitDiff';
@@ -16,13 +16,17 @@ import { parkBranch, unparkBranch, currentBranch, readGitLog, readGitIdentity, r
 import type { MainHost } from './mainHost';
 import { registerGitAvatarHandler } from './gitAvatarHandlers';
 import { registerGitHubUserSearchHandler } from './githubUserSearchHandlers';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
+import { referencingIpc } from '../lib/referencingIpc';
 
 export function registerGitHandlers(host: Pick<MainHost, 'ipcMain'>): void {
-  registerGitInfoHandler(host);
-  registerGitGhStatusHandlers(host);
-  registerGitUnparkHandlers(host);
-  registerGitPublishHandler(host);
-  registerGitPullHandler(host);
+  // Our own refusals (a branch changed, a merge went stale) carry a reference to their translation; this keeps it across IPC.
+  const referencing = { ipcMain: referencingIpc(host.ipcMain) };
+  registerGitInfoHandler(referencing);
+  registerGitGhStatusHandlers(referencing);
+  registerGitUnparkHandlers(referencing);
+  registerGitPublishHandler(referencing);
+  registerGitPullHandler(referencing);
   registerGitAvatarHandler(host);
   registerGitHubUserSearchHandler(host);
 }
@@ -67,6 +71,7 @@ function registerGitInfoHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void {
     } catch {
       /* empty repo */
     }
+    info.defaultBranch = await readDefaultBranch(git, projectPath, info.trunk);
     try {
       info.remote = (await git(projectPath, ['remote', 'get-url', 'origin'])).stdout.trim() || undefined;
     } catch {
@@ -236,7 +241,7 @@ function registerGitPublishHandler({ ipcMain }: Pick<MainHost, 'ipcMain'>): void
     try {
       await run('gh', ['--version'], projectPath);
     } catch {
-      throw new Error('GitHub CLI (gh) is not installed. Install it from https://cli.github.com ' + 'and run `gh auth login`.');
+      throw new ReferencedError('git.publish.cliMissing');
     }
     const args = ['repo', 'create', repoName, isPrivate ? '--private' : '--public', '--source', '.', '--remote', 'origin', '--push'];
     const environment = await publishingGitEnvironment(projectPath, readPublishConfig(projectPath));

@@ -7,6 +7,7 @@ import { applyVariableOperation } from './variableOperations';
 import { VARIABLE_ROOT, withVariableWorkspace } from './variableWorkspace';
 import { batchedRead } from '../../shared/batchedRead';
 import { readMetadataSource } from '../settings/projectMetadata';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import { METADATA_FILES } from '../../../vendor/stacki/shared/properties/projectMetadata';
 
 type Rooms = ReturnType<typeof createRooms>;
@@ -82,7 +83,8 @@ async function editVariables(rooms: Rooms, before: Map<string, string>, input: R
   // Check every file before committing any of a multi-file rename or mode edit.
   for (const [file] of changed) {
     if (input['operation'] !== 'restoreCssVariables' && versions[file] !== checksum(before.get(file) ?? '')) {
-      return { ok: false, error: 'A collaborator changed this source. Refresh and try again.' };
+      const changed = described('variables.error.collaboratorChanged');
+      return { ok: false, error: changed.message, errorRef: changed.messageRef };
     }
   }
   const targets = await Promise.all(changed.map(async ([file, text]) => ({ room: await rooms.get(file), text })));

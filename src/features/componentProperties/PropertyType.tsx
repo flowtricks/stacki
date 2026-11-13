@@ -9,6 +9,8 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ComponentProperty } from '../../../shared/properties/propertyEditing';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { isKnownMessageKey, type Translator } from '../../lib/i18n/localeContext';
 import Dropdown from '../../ui/Dropdown';
 import type { DropdownOption } from '../../ui/Dropdown';
 import {
@@ -28,7 +30,7 @@ import {
   SortIcon,
   TextIcon,
 } from '../../ui/Icons';
-import { CODE_TYPE_CHOICES, KIND_CHOICES, carriedDefault, propertyKind, withKind, type PropertyKind } from './propertyKinds';
+import { CODE_TYPE_CHOICES, KIND_CHOICES, KIND_SECTION_LABELS, carriedDefault, propertyKind, withKind, type PropertyKind } from './propertyKinds';
 import { withTag } from './settingTags';
 import { CodeTypeEditor, CodeTypeToggle, type EditPace } from '../props/propBindings';
 
@@ -60,6 +62,7 @@ export function opensOnCode(property: Pick<ComponentProperty, 'type' | 'descript
 const CODE_PREFIX = 'code:';
 
 export function PropertyType({ property, frontmatter, code, optionsHoldCode, onChange }: PropertyTypeProps) {
+  const translate = useTranslate();
   const kind = propertyKind(property);
   const codeChoice = CODE_TYPE_CHOICES.some((choice) => choice.type === property.type);
   const optionsOwnToggle = optionsHoldCode;
@@ -80,30 +83,30 @@ export function PropertyType({ property, frontmatter, code, optionsHoldCode, onC
       return;
     }
     if (chosen.kind === 'attributes') {
-      setNote('An Attributes property is made from an element: open the bind dot on its Attributes.');
+      setNote(translate('componentProps.type.attributesNote'));
       return;
     }
     const next = withKind(property, chosen.kind, frontmatter);
     const defaultValue = carriedDefault(property.defaultValue, chosen.kind, next.type);
     if (defaultValue === '' && property.defaultValue.trim() !== '') {
-      setNote(`The default was cleared: it is not a ${chosen.label}.`);
+      setNote(translate('componentProps.type.defaultCleared', { kind: translate(chosen.label) }));
     }
     onChange({ ...next, defaultValue }, 'at-once');
   };
   return (
-    <div className="property-type" role="group" aria-label="Kind">
+    <div className="property-type" role="group" aria-label={translate('componentProps.type.kind')}>
       <div className="property-type-heading">
-        <span>Kind</span>
+        <span>{translate('componentProps.type.kind')}</span>
         {!optionsOwnToggle && <CodeTypeToggle open={code.open} onToggle={() => code.setOpen(!code.open)} />}
       </div>
       <Dropdown
-        ariaLabel="Kind"
+        ariaLabel={translate('componentProps.type.kind')}
         value={kindValue(kind, property.type, { codeChoice })}
-        options={kindOptions(property.type, kind, { codeChoice })}
+        options={kindOptions(property.type, kind, { codeChoice }, translate)}
         onChange={pick}
         livePreview={false}
         searchable
-        searchPlaceholder="Search kinds…"
+        searchPlaceholder={translate('componentProps.type.search')}
       />
       {note && <p className="property-help">{note}</p>}
       {/* The same code field the Settings panel's Property settings has (PropertySections.tsx). */}
@@ -122,25 +125,34 @@ function kindValue(kind: PropertyKind, type: string, listed: { readonly codeChoi
   return kind === 'code' && listed.codeChoice ? `${CODE_PREFIX}${type}` : kind;
 }
 
-function kindOptions(type: string, kind: PropertyKind, listed: { readonly codeChoice: boolean }): readonly DropdownOption<string>[] {
+function kindOptions(type: string, kind: PropertyKind, listed: { readonly codeChoice: boolean }, translate: Translator): readonly DropdownOption<string>[] {
+  const advanced = translate(KIND_SECTION_LABELS.advanced);
   const kinds = KIND_CHOICES.map((choice): DropdownOption<string> => ({
     value: choice.kind,
-    label: choice.label,
+    label: translate(choice.label),
     // The current kind shows what it is written as; the others what they write.
-    hint: choice.kind === kind && choice.kind !== 'text' ? shortType(type) : choice.hint,
-    group: choice.section,
+    hint: choice.kind === kind && choice.kind !== 'text' ? shortType(type) : isKnownMessageKey(choice.hint) ? translate(choice.hint) : choice.hint,
+    group: translate(KIND_SECTION_LABELS[choice.section]),
     icon: KIND_ICONS[choice.kind],
     ...(choice.kind === 'attributes' ? { dim: true } : {}),
   }));
   const custom: readonly DropdownOption<string>[] =
     kind === 'code' && !listed.codeChoice
-      ? [{ value: 'code', label: 'Code type', hint: shortType(type) || 'No type', group: 'Advanced', icon: <CodeIcon size={14} /> }]
+      ? [
+          {
+            value: 'code',
+            label: translate('componentProps.type.codeType'),
+            hint: shortType(type) || translate('componentProps.type.noType'),
+            group: advanced,
+            icon: <CodeIcon size={14} />,
+          },
+        ]
       : [];
   const codeTypes = CODE_TYPE_CHOICES.map((choice): DropdownOption<string> => ({
     value: `${CODE_PREFIX}${choice.type}`,
     label: choice.label,
-    hint: choice.type === choice.label ? 'TypeScript' : choice.type,
-    group: 'Advanced',
+    hint: choice.type === choice.label ? translate('componentProps.type.typescript') : choice.type,
+    group: advanced,
     icon: <CodeIcon size={14} />,
   }));
   // The custom entry replaces "Code type…" so the dropdown shows the current type once.

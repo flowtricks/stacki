@@ -1,7 +1,9 @@
 import { useId, useState } from 'react';
 import './infoLabel.css';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 export function InfoLabel({ label, description }: { readonly label: string; readonly description: string }) {
+  const translate = useTranslate();
   const id = useId();
   const [open, setOpen] = useState(false);
   return (
@@ -10,7 +12,7 @@ export function InfoLabel({ label, description }: { readonly label: string; read
       <button
         type="button"
         className="info-label-trigger"
-        aria-label={`About ${label}`}
+        aria-label={translate('ui.infoLabel.about', { label })}
         aria-describedby={id}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}

@@ -1,17 +1,24 @@
 import React from 'react';
 import type { WireVariableScope } from '../../../shared/ipc/ipcResults';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+
+// The tag is a parameter so a message holds no angle brackets (they would read as rich-text marks).
+const STYLE_TAG = { tag: '<style>' } as const;
 
 // A `<style>` block's variables do not reach what a stylesheet's do, and a panel of
 // names reads as if they all apply everywhere. The badge says who each one reaches.
 
-export function variableScopeLabel(scope: WireVariableScope): string {
+// `translate` is last and defaults to English for callers with no language (tests); the badge passes the hook's.
+export function variableScopeLabel(scope: WireVariableScope, translate: Translator = ENGLISH_TRANSLATE): string {
   switch (scope.reach) {
     case 'page':
-      return 'This page';
+      return translate('variables.scope.page');
     case 'rendered':
-      return 'Where rendered';
+      return translate('variables.scope.rendered');
     case 'scoped':
-      return 'This file only';
+      return translate('variables.scope.scoped');
     default: {
       const exhaustive: never = scope.reach;
       return exhaustive;
@@ -19,14 +26,14 @@ export function variableScopeLabel(scope: WireVariableScope): string {
   }
 }
 
-function reachDetail(reach: WireVariableScope['reach']): string {
+function reachDetail(reach: WireVariableScope['reach'], translate: Translator): string {
   switch (reach) {
     case 'page':
-      return 'Declared in a <style> on this page, so it applies on this page only.';
+      return translate('variables.scope.pageDetail', STYLE_TAG);
     case 'rendered':
-      return 'Declared in a <style> in this file, so it applies only on pages that render it.';
+      return translate('variables.scope.renderedDetail', STYLE_TAG);
     case 'scoped':
-      return 'Astro scopes this <style>, so this rule reaches only the elements written in this file.';
+      return translate('variables.scope.scopedDetail', STYLE_TAG);
     default: {
       const exhaustive: never = reach;
       return exhaustive;
@@ -34,14 +41,14 @@ function reachDetail(reach: WireVariableScope['reach']): string {
   }
 }
 
-function writtenDetail(written: WireVariableScope['written']): string {
+function writtenDetail(written: WireVariableScope['written'], translate: Translator): string {
   switch (written) {
     case 'global':
-      return 'The block is is:global: Astro bundles it without scoping.';
+      return translate('variables.scope.writtenGlobal');
     case 'inline':
-      return 'The block is is:inline: Astro leaves it in the page exactly as written.';
+      return translate('variables.scope.writtenInline');
     case 'scoped':
-      return 'The block is a plain <style>: :root, html, body and :global() stay unscoped, every other selector is scoped.';
+      return translate('variables.scope.writtenScoped', STYLE_TAG);
     default: {
       const exhaustive: never = written;
       return exhaustive;
@@ -49,17 +56,18 @@ function writtenDetail(written: WireVariableScope['written']): string {
   }
 }
 
-export function variableScopeDetail(scope: WireVariableScope): string {
-  return `${reachDetail(scope.reach)} ${writtenDetail(scope.written)}`;
+export function variableScopeDetail(scope: WireVariableScope, translate: Translator = ENGLISH_TRANSLATE): string {
+  return `${reachDetail(scope.reach, translate)} ${writtenDetail(scope.written, translate)}`;
 }
 
 export function VariableScopeBadge({ scope }: { readonly scope: WireVariableScope | undefined }) {
+  const translate = useTranslate();
   if (scope === undefined) {
     return undefined;
   }
   return (
-    <span className="vars-scope" title={variableScopeDetail(scope)}>
-      {variableScopeLabel(scope)}
+    <span className="vars-scope" title={variableScopeDetail(scope, translate)}>
+      {variableScopeLabel(scope, translate)}
     </span>
   );
 }

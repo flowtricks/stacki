@@ -17,7 +17,7 @@
 // Apps also get the design tokens as public `--stacki-*` variables, injected into
 // every page. Each token names where its value lives in the editor: a custom
 // property on its root, or one declaration of one rule (TOKEN_SOURCES).
-import { buildSync } from 'esbuild';
+import { build, type Plugin } from 'esbuild';
 import path from 'node:path';
 
 /** The files the kit reads besides the bundle, by repository path. */
@@ -35,9 +35,17 @@ export type KitSources = { readonly [N in KitSourceName]: string };
 export interface KitBundle {
   readonly script: string;
   readonly css: string;
+  /** Every source file compiled into the script, by repository-relative path (the graph test pins what may enter). */
+  readonly inputs: readonly string[];
 }
 /** The entry esbuild compiles. */
 export const KIT_ENTRY = 'src/features/apps/uiKit/kitElements.tsx';
+/**
+ * The kit's translator. The editor's `useTranslate` reaches the locale provider and every English catalog; an app's frame has no
+ * provider, so the compile below sends that one import to this module, which holds only the `ui` words (test/renderer/apps/appUiKitGraph.test.js).
+ */
+export const KIT_TRANSLATE = 'src/features/apps/uiKit/kitTranslate.ts';
+const TRANSLATE_HOOK_SPECIFIER = /(^|\/)lib\/i18n\/useTranslate$/;
 /**
  * Where the kit's CSS applies: inside its elements' mounts and the layer its popups portal to
  * (src/ui/popupLayer.ts). A scoped rule matches inside its root, never the root itself.
@@ -141,12 +149,19 @@ const VARIABLE_CHAIN_MAX = 8;
 const SCRIPT_CHARS_MAX = 600_000;
 
 /** Compiles the kit's entry with esbuild, as the editor's own build compiles the components. */
-export function bundleAppUiKit(repositoryRoot: string): KitBundle {
+export async function bundleAppUiKit(repositoryRoot: string): Promise<KitBundle> {
   // Twice: the script minified, as an app downloads it; the CSS as the editor's files spell it,
   // so a reader (and the parity test) can find each rule as it is in its sheet.
-  const compile = ({ minify }: { readonly minify: boolean }) =>
-    buildSync({
+  const kitTranslator: Plugin = {
+    name: 'kit-translator',
+    setup(pluginBuild) {
+      pluginBuild.onResolve({ filter: TRANSLATE_HOOK_SPECIFIER }, () => ({ path: path.join(repositoryRoot, KIT_TRANSLATE) }));
+    },
+  };
+  const compile = async ({ minify }: { readonly minify: boolean }) =>
+    await build({
       entryPoints: [path.join(repositoryRoot, KIT_ENTRY)],
+      absWorkingDir: repositoryRoot,
       bundle: true,
       write: false,
       outdir: 'kit',
@@ -160,13 +175,18 @@ export function bundleAppUiKit(repositoryRoot: string): KitBundle {
       define: { 'process.env.NODE_ENV': '"production"' },
       loader: { '.svg': 'dataurl', '.png': 'dataurl', '.woff2': 'dataurl' },
       logLevel: 'silent',
-    }).outputFiles;
-  const script = compile({ minify: true }).find((file) => file.path.endsWith('.js'));
-  const css = compile({ minify: false }).find((file) => file.path.endsWith('.css'));
+      plugins: [kitTranslator],
+      metafile: true,
+    });
+  const scriptBuild = await compile({ minify: true });
+  const script = scriptBuild.outputFiles.find((file) => file.path.endsWith('.js'));
+  const css = (await compile({ minify: false })).outputFiles.find((file) => file.path.endsWith('.css'));
   invariant(script !== undefined, 'The kit compiles to a script');
   invariant(css !== undefined, "The kit collects its components' CSS");
   invariant(script.text.length <= SCRIPT_CHARS_MAX, `The kit script stays under ${SCRIPT_CHARS_MAX} characters`);
-  return { script: script.text, css: css.text };
+  const inputs = Object.keys(scriptBuild.metafile.inputs).map((input) => input.replaceAll('\\', '/'));
+  invariant(inputs.length > 0, 'The kit script has inputs');
+  return { script: script.text, css: css.text, inputs };
 }
 
 /** Builds the kit from the editor's files and the compiled bundle, or throws naming what is missing. */

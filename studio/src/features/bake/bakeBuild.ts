@@ -1,3 +1,4 @@
+// i18n-ignore-file: the bake is the `astro-studio build-demo` command line tool; its messages are developer diagnostics in a terminal, not Studio interface text.
 // One `astro build` for the bake, run in a child process. A build that fails part-way
 // leaves Vite's servers and watchers open, and a component probe that throws is
 // exactly such a failure; in the bake's own process those handles would keep the

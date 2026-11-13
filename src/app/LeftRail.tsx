@@ -11,24 +11,25 @@ import { useAppsRuntime } from '../features/apps/appsRuntime';
 import { RailMore, type RailMoreItem } from './RailMore';
 import { useRailOverflow, type RailOverflowItem } from './railOverflow';
 import { useTranslate } from '../lib/i18n/useTranslate';
+import type { MessageKey } from '../lib/i18n/localeContext';
 
 // Each button draws its access feature's icon (featureIcons.tsx), the same one the
 // Roles permission grid shows, so the two cannot drift apart.
 const TABS = [
-  { id: 'pages', title: 'Pages', shortcut: 'P', Icon: FEATURE_ICONS['panel:pages'] },
-  { id: 'navigator', title: 'Navigator', shortcut: 'Z', Icon: FEATURE_ICONS['panel:navigator'] },
-  { id: 'properties', title: 'Properties', shortcut: 'K', Icon: FEATURE_ICONS['panel:properties'] },
-  { id: 'components', title: 'Components', shortcut: '⇧A', Icon: FEATURE_ICONS['panel:components'] },
-  { id: 'assets', title: 'Assets', shortcut: 'J', Icon: FEATURE_ICONS['panel:assets'] },
-  { id: 'cms', title: 'CMS', shortcut: '⌥C', Icon: FEATURE_ICONS['panel:cms'] },
-  { id: 'variables', title: 'Variables', shortcut: '⌥V', Icon: FEATURE_ICONS['panel:variables'] },
-  { id: 'selectors', title: 'Style selectors', shortcut: 'G', Icon: FEATURE_ICONS['panel:selectors'] },
-  { id: 'code', title: 'Code', shortcut: 'C', Icon: FEATURE_ICONS['panel:code'] },
-  { id: 'history', title: 'Git', shortcut: '⌥H', Icon: FEATURE_ICONS['panel:history'] },
-  { id: 'apps', title: 'Apps', shortcut: 'E', Icon: FEATURE_ICONS['panel:apps'] },
-  { id: 'instructions', title: 'Instructions', shortcut: '⌥I', Icon: FEATURE_ICONS['panel:instructions'] },
-  { id: 'audits', title: 'Audits', shortcut: '⌥A', Icon: FEATURE_ICONS['panel:audits'] },
-] as const;
+  { id: 'pages', titleKey: 'rail.pages', shortcut: 'P', Icon: FEATURE_ICONS['panel:pages'] },
+  { id: 'navigator', titleKey: 'rail.navigator', shortcut: 'Z', Icon: FEATURE_ICONS['panel:navigator'] },
+  { id: 'properties', titleKey: 'rail.properties', shortcut: 'K', Icon: FEATURE_ICONS['panel:properties'] },
+  { id: 'components', titleKey: 'rail.components', shortcut: '⇧A', Icon: FEATURE_ICONS['panel:components'] },
+  { id: 'assets', titleKey: 'rail.assets', shortcut: 'J', Icon: FEATURE_ICONS['panel:assets'] },
+  { id: 'cms', titleKey: 'rail.cms', shortcut: '⌥C', Icon: FEATURE_ICONS['panel:cms'] },
+  { id: 'variables', titleKey: 'rail.variables', shortcut: '⌥V', Icon: FEATURE_ICONS['panel:variables'] },
+  { id: 'selectors', titleKey: 'rail.selectors', shortcut: 'G', Icon: FEATURE_ICONS['panel:selectors'] },
+  { id: 'code', titleKey: 'rail.code', shortcut: 'C', Icon: FEATURE_ICONS['panel:code'] },
+  { id: 'history', titleKey: 'rail.history', shortcut: '⌥H', Icon: FEATURE_ICONS['panel:history'] },
+  { id: 'apps', titleKey: 'rail.apps', shortcut: 'E', Icon: FEATURE_ICONS['panel:apps'] },
+  { id: 'instructions', titleKey: 'rail.instructions', shortcut: '⌥I', Icon: FEATURE_ICONS['panel:instructions'] },
+  { id: 'audits', titleKey: 'rail.audits', shortcut: '⌥A', Icon: FEATURE_ICONS['panel:audits'] },
+] as const satisfies readonly { readonly id: string; readonly titleKey: MessageKey; readonly shortcut: string; readonly Icon: unknown }[];
 // The project's Settings panel (features/projectSettings) sits at the rail's foot, directly above the AI button,
 // and like it never moves into More (railOverflow.ts measures the anchored pair). Not the app's Settings screen.
 const SETTINGS_TAB = { id: 'projectSettings', shortcut: '⌥S', Icon: FEATURE_ICONS['panel:projectSettings'] } as const;
@@ -113,7 +114,13 @@ export default function LeftRail({
   const moreItems: readonly RailMoreItem[] = [
     ...tabs
       .filter((tab) => !shown.has(tab.id))
-      .map(({ id, title, shortcut, Icon }): RailMoreItem => ({ id, label: title, icon: <Icon size={16} />, shortcut, select: () => onSelect(id) })),
+      .map(({ id, titleKey, shortcut, Icon }): RailMoreItem => ({
+        id,
+        label: translate(titleKey),
+        icon: <Icon size={16} />,
+        shortcut,
+        select: () => onSelect(id),
+      })),
     ...pinned
       .filter((app) => !shown.has(railAppId(app.manifest.id)))
       .map((app): RailMoreItem => ({
@@ -127,13 +134,13 @@ export default function LeftRail({
 
   return (
     <div className="rail" ref={railRef}>
-      {shownTabs.map(({ id, Icon, title, shortcut }) => (
+      {shownTabs.map(({ id, Icon, titleKey, shortcut }) => (
         <button
           key={id}
-          aria-label={shortcut ? `${title} (${shortcut})` : title}
+          aria-label={translate('rail.withShortcut', { label: translate(titleKey), shortcut })}
           aria-pressed={activeId === id}
           className={`rail-btn ${activeId === id ? 'on' : ''}`}
-          onMouseEnter={showSoon(shortcut ? `${title} (${shortcut})` : title)}
+          onMouseEnter={showSoon(translate('rail.withShortcut', { label: translate(titleKey), shortcut }))}
           onMouseLeave={hide}
           onClick={() => {
             hide();
@@ -169,7 +176,7 @@ export default function LeftRail({
         <div className="rail-anchor" ref={anchorRef}>
           {showSettings && (
             <button
-              aria-label={`${translate('rail.settings')} (${SETTINGS_TAB.shortcut})`}
+              aria-label={translate('rail.withShortcut', { label: translate('rail.settings'), shortcut: SETTINGS_TAB.shortcut })}
               aria-pressed={active === SETTINGS_TAB.id}
               className={`rail-btn ${active === SETTINGS_TAB.id ? 'on' : ''}`}
               onMouseEnter={showSoon(translate('rail.settings'))}
@@ -184,10 +191,10 @@ export default function LeftRail({
           )}
           {aiButton !== undefined && (
             <button
-              aria-label="AI chat"
+              aria-label={translate('rail.ai')}
               aria-pressed={aiButton.active}
               className={`rail-btn ${aiButton.active ? 'on' : ''}`}
-              onMouseEnter={showSoon('AI chat')}
+              onMouseEnter={showSoon(translate('rail.ai'))}
               onMouseLeave={hide}
               onClick={() => {
                 hide();

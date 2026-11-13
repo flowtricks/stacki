@@ -1,5 +1,6 @@
 import { assert } from '../core/assert';
 import { record, text, list } from '../core/boundary';
+import { englishText, messageRef, type MessageKey } from './i18n/messageRef';
 import { DEFAULT_PUBLISH_CONFIG, parsePublishConfig, type Hosting } from './publishConfig';
 
 export type DiscoveryProvider = 'cloudflare' | 'cloudflare-workers' | 'vercel' | 'github' | 'linked';
@@ -80,27 +81,23 @@ export function parseConnectionProblem(value: Readonly<Record<string, unknown>>)
   return { reason, message: discoveryLabel(value['message']) };
 }
 
-/** What a person reads for each failure; the label names the provider ("Vercel"). */
+/**
+ * The English sentence for each failure (the label names the provider, "Vercel"). The screen shows the translation of the same
+ * `publish.connection.failure.*` key chosen from `reason`, so this text only serves logs, tests and readers that predate it.
+ */
 export function connectionFailureMessage(label: string, reason: ConnectionFailure): string {
   assert(label.length > 0, 'A connection failure names its provider');
   assert(label.length <= 64, 'A provider label stays short');
-  switch (reason) {
-    case 'missing-cli':
-      return `The ${label} command-line tool is not installed on this computer.`;
-    case 'signed-out':
-      return `You are not signed in to ${label}.`;
-    case 'expired':
-      return `${label} sign-in expired or was revoked. Sign in again.`;
-    case 'network':
-      return `Could not reach ${label}. Check your internet connection, then refresh.`;
-    case 'unknown':
-      return `Could not load ${label} accounts. Refresh to try again, or enter the IDs manually.`;
-    default: {
-      const exhaustive: never = reason;
-      return exhaustive;
-    }
-  }
+  return englishText(messageRef(CONNECTION_FAILURE_KEYS[reason], { provider: label }));
 }
+
+const CONNECTION_FAILURE_KEYS = {
+  'missing-cli': 'publish.connection.failure.missingCli',
+  'signed-out': 'publish.connection.failure.signedOut',
+  expired: 'publish.connection.failure.expired',
+  network: 'publish.connection.failure.network',
+  unknown: 'publish.connection.failure.unknown',
+} as const satisfies Record<ConnectionFailure, MessageKey>;
 
 export function discoveryList(input: unknown): readonly unknown[] {
   const values = list((value) => value)(input);

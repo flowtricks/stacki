@@ -8,6 +8,8 @@ import {
 import Popup from '../../ui/Popup';
 import { useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
 import SegmentPill from './components/SegmentPill';
 import { commitInPlace } from './model/commitInPlace';
 import { ChevronIcon, tooltipArrowStyle } from './components/MenuParts';
@@ -126,61 +128,76 @@ type Flow = {
   wrap: string;
   icon: ReactNode;
   /** Menu-item label within its group. */
-  label: string;
+  labelKey: MessageKey;
+  /** The lowercase wrap name used inside the tooltip sentence. */
+  tipKey: MessageKey;
   /** A single-row / single-column primary — shown as a fixed segment, and only
    *  listed in the menu while in custom mode (so you can return to it). */
   primary?: boolean;
 };
 
-const directionPhrase: Record<string, string> = {
-  row: 'left to right',
-  'row-reverse': 'right to left',
-  column: 'top to bottom',
-  'column-reverse': 'bottom to top',
+const directionPhraseKey: Record<string, MessageKey> = {
+  row: 'style.directionControl.phraseLeftToRight',
+  'row-reverse': 'style.directionControl.phraseRightToLeft',
+  column: 'style.directionControl.phraseTopToBottom',
+  'column-reverse': 'style.directionControl.phraseBottomToTop',
 };
-const flow = (direction: string, wrap: string, icon: ReactNode, label: string, primary = false): Flow => ({
+const WRAP_NAMES = {
+  singleRow: { labelKey: 'style.directionControl.singleRow', tipKey: 'style.directionControl.tipSingleRow' },
+  singleColumn: { labelKey: 'style.directionControl.singleColumn', tipKey: 'style.directionControl.tipSingleColumn' },
+  wrapDown: { labelKey: 'style.directionControl.wrapDown', tipKey: 'style.directionControl.tipWrapDown' },
+  wrapUp: { labelKey: 'style.directionControl.wrapUp', tipKey: 'style.directionControl.tipWrapUp' },
+  wrapRight: { labelKey: 'style.directionControl.wrapRight', tipKey: 'style.directionControl.tipWrapRight' },
+  wrapLeft: { labelKey: 'style.directionControl.wrapLeft', tipKey: 'style.directionControl.tipWrapLeft' },
+} as const satisfies Record<string, { labelKey: MessageKey; tipKey: MessageKey }>;
+const flow = (direction: string, wrap: string, icon: ReactNode, name: keyof typeof WRAP_NAMES, primary = false): Flow => ({
   value: wrap === 'nowrap' ? direction : `${direction} ${wrap}`,
   direction,
   wrap,
   icon,
-  label,
+  labelKey: WRAP_NAMES[name].labelKey,
+  tipKey: WRAP_NAMES[name].tipKey,
   primary,
 });
-const tipFor = (option: Flow) => `Stack children ${directionPhrase[option.direction]}, ${option.label.toLowerCase()}`;
+const tipFor = (option: Flow, translate: Translator) =>
+  translate('style.directionControl.stackTip', {
+    direction: translate(directionPhraseKey[option.direction] ?? 'style.directionControl.phraseLeftToRight'),
+    wrap: translate(option.tipKey),
+  });
 
 // The chevron menu, grouped by primary direction. The two `primary` rows double as
 // the fixed → / ↓ segments.
-const GROUPS: ReadonlyArray<{ header: string; options: Flow[] }> = [
+const GROUPS: ReadonlyArray<{ headerKey: MessageKey; options: Flow[] }> = [
   {
-    header: 'Left to right',
+    headerKey: 'style.directionControl.headerLeftToRight',
     options: [
-      flow('row', 'nowrap', <ArrowRightIcon />, 'Single row', true),
-      flow('row', 'wrap', <RowWrapIcon />, 'Wrap down'),
-      flow('row', 'wrap-reverse', <RowWrapReverseIcon />, 'Wrap up'),
+      flow('row', 'nowrap', <ArrowRightIcon />, 'singleRow', true),
+      flow('row', 'wrap', <RowWrapIcon />, 'wrapDown'),
+      flow('row', 'wrap-reverse', <RowWrapReverseIcon />, 'wrapUp'),
     ],
   },
   {
-    header: 'Right to left',
+    headerKey: 'style.directionControl.headerRightToLeft',
     options: [
-      flow('row-reverse', 'nowrap', <ArrowLeftIcon />, 'Single row'),
-      flow('row-reverse', 'wrap', <RowReverseWrapIcon />, 'Wrap down'),
-      flow('row-reverse', 'wrap-reverse', <RowReverseWrapReverseIcon />, 'Wrap up'),
+      flow('row-reverse', 'nowrap', <ArrowLeftIcon />, 'singleRow'),
+      flow('row-reverse', 'wrap', <RowReverseWrapIcon />, 'wrapDown'),
+      flow('row-reverse', 'wrap-reverse', <RowReverseWrapReverseIcon />, 'wrapUp'),
     ],
   },
   {
-    header: 'Top to bottom',
+    headerKey: 'style.directionControl.headerTopToBottom',
     options: [
-      flow('column', 'nowrap', <ArrowDownIcon />, 'Single column', true),
-      flow('column', 'wrap', <ColumnWrapIcon />, 'Wrap right'),
-      flow('column', 'wrap-reverse', <ColumnWrapReverseIcon />, 'Wrap left'),
+      flow('column', 'nowrap', <ArrowDownIcon />, 'singleColumn', true),
+      flow('column', 'wrap', <ColumnWrapIcon />, 'wrapRight'),
+      flow('column', 'wrap-reverse', <ColumnWrapReverseIcon />, 'wrapLeft'),
     ],
   },
   {
-    header: 'Bottom to top',
+    headerKey: 'style.directionControl.headerBottomToTop',
     options: [
-      flow('column-reverse', 'nowrap', <ArrowUpIcon />, 'Single column'),
-      flow('column-reverse', 'wrap', <ColumnReverseWrapIcon />, 'Wrap right'),
-      flow('column-reverse', 'wrap-reverse', <ColumnReverseWrapReverseIcon />, 'Wrap left'),
+      flow('column-reverse', 'nowrap', <ArrowUpIcon />, 'singleColumn'),
+      flow('column-reverse', 'wrap', <ColumnReverseWrapIcon />, 'wrapRight'),
+      flow('column-reverse', 'wrap-reverse', <ColumnReverseWrapReverseIcon />, 'wrapLeft'),
     ],
   },
 ];
@@ -214,6 +231,7 @@ function CustomField({
   inputRef: React.RefObject<HTMLInputElement>;
   onCommit: (value: string, important: boolean) => void;
 }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(withImportant({ value, important }));
   const focused = useRef(false);
   useEffect(() => {
@@ -247,8 +265,8 @@ function CustomField({
       }}
       disabled={busy}
       spellCheck={false}
-      aria-label="Direction value"
-      placeholder="custom value"
+      aria-label={translate('style.directionControl.directionValue')}
+      placeholder={translate('style.directionControl.customValuePlaceholder')}
     />
   );
 }
@@ -272,6 +290,7 @@ export default function DirectionControl({
   onCommit: (direction: string, wrap: string) => void;
   onCommitCustom: (value: string, important: boolean) => void;
 }) {
+  const translate = useTranslate();
   const current = value.trim().toLowerCase() || 'row';
   const direction = rawDirection.trim().toLowerCase();
   // Custom whenever flex-direction is a free value, or carries !important.
@@ -296,7 +315,12 @@ export default function DirectionControl({
   const tip = useSegmentTip(rootRef);
 
   return (
-    <div ref={rootRef} className={`embed-editor_display ${customMode ? 'is-custom' : ''}`} role="group" aria-label="Direction">
+    <div
+      ref={rootRef}
+      className={`embed-editor_display ${customMode ? 'is-custom' : ''}`}
+      role="group"
+      aria-label={translate('style.directionControl.direction')}
+    >
       {customMode ? (
         <CustomField value={rawDirection} important={important} busy={busy} inputRef={inputRef} onCommit={onCommitCustom} />
       ) : (
@@ -311,13 +335,14 @@ export default function DirectionControl({
 }
 
 function MenuArrow({ open, busy, onToggle }: { open: boolean; busy: boolean; onToggle: () => void }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
       className="embed-editor_display-arrow"
       aria-haspopup="menu"
       aria-expanded={open}
-      aria-label="More direction options"
+      aria-label={translate('style.directionControl.moreOptions')}
       disabled={busy}
       onClick={onToggle}
     >
@@ -397,6 +422,7 @@ function SegmentTipBubble({ tip }: { tip: ShownTip | undefined }) {
 
 // The two fixed segments (→ single row, ↓ single column) and the third slot.
 function FlowSegments({ current, busy, tip, pick }: { current: string; busy: boolean; tip: SegmentTip; pick: (next: Flow) => void }) {
+  const translate = useTranslate();
   const thirdMatch = NONSTANDARD.find((option) => option.value === current);
   const third = thirdMatch ?? DEFAULT_THIRD;
   const segment = (option: Flow, selection: { readonly active: boolean }) => (
@@ -406,12 +432,12 @@ function FlowSegments({ current, busy, tip, pick }: { current: string; busy: boo
       aria-checked={selection.active}
       className={`embed-editor_display-seg ${selection.active ? 'is-selected' : ''}`}
       disabled={busy}
-      aria-label={tipFor(option)}
+      aria-label={tipFor(option, translate)}
       onClick={() => {
         tip.endTip();
         pick(option);
       }}
-      onMouseEnter={(event) => tip.startTip(tipFor(option), event.currentTarget)}
+      onMouseEnter={(event) => tip.startTip(tipFor(option, translate), event.currentTarget)}
       onMouseLeave={tip.endTip}
     >
       {option.icon}
@@ -449,6 +475,7 @@ function DirectionMenuContent({
   enterCustom: () => void;
   readonly onClose: () => void;
 }) {
+  const translate = useTranslate();
   const [hovered, setHovered] = useState<Flow | undefined>(undefined);
   return (
     <>
@@ -457,8 +484,8 @@ function DirectionMenuContent({
         // them in the menu while in custom mode, so there's a way back to them.
         const options = customMode ? group.options : group.options.filter((option) => !option.primary);
         return (
-          <div className="embed-editor_direction-group" key={group.header}>
-            <div className="embed-editor_direction-header">{group.header}</div>
+          <div className="embed-editor_direction-group" key={group.headerKey}>
+            <div className="embed-editor_direction-header">{translate(group.headerKey)}</div>
             {options.map((option) => (
               <button
                 key={option.value}
@@ -471,7 +498,7 @@ function DirectionMenuContent({
                 onMouseLeave={() => setHovered(undefined)}
               >
                 <span className="embed-editor_direction-item-icon">{option.icon}</span>
-                <span>{option.label}</span>
+                <span>{translate(option.labelKey)}</span>
               </button>
             ))}
           </div>
@@ -487,7 +514,7 @@ function DirectionMenuContent({
           onMouseEnter={() => setHovered(undefined)}
         >
           <span className="embed-editor_direction-item-icon" />
-          <span>Custom</span>
+          <span>{translate('style.directionControl.custom')}</span>
         </button>
       </div>
       <div className="embed-editor_direction-footer">
@@ -497,7 +524,7 @@ function DirectionMenuContent({
             <code>flex-wrap: {hovered.wrap}</code>
           </>
         ) : (
-          'Hover an option to see direction and wrap values.'
+          translate('style.directionControl.hoverHint')
         )}
       </div>
     </>

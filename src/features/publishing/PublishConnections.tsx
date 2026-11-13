@@ -2,6 +2,8 @@ import { AddPublishAccount } from './PublishAccount';
 import { CodeInline } from '../../ui/CodeBlock';
 import { ErrorToast } from '../../ui/ErrorToast';
 import { useEffect, useState } from 'react';
+import { useTranslate, useTranslateDescribed, useTranslateRich } from '../../lib/i18n/useTranslate';
+import { described, type Described, type MessageKey } from '../../../shared/properties/i18n/messageRef';
 import { RefreshIcon } from '../../ui/Icons';
 import Dropdown from '../../ui/Dropdown';
 import { HostingChoice, hostingKey } from './PublishHosting';
@@ -79,9 +81,25 @@ export function PublishConnections(props: Props) {
   );
 }
 
+// i18n-ignore: product names are never translated.
 const PROVIDER_LABELS: Readonly<Record<Props['provider'], string>> = { github: 'GitHub', cloudflare: 'Cloudflare', vercel: 'Vercel' };
 
-type Recovery = { readonly kind: 'sign-in'; readonly label: string } | { readonly kind: 'refresh'; readonly label: string };
+// The label is English text plus its reference, so the screen translates it and tests and logs keep the English.
+type Recovery = ({ readonly kind: 'sign-in' } | { readonly kind: 'refresh' }) & Described & { readonly label: string };
+
+function recoveryOf(kind: Recovery['kind'], key: MessageKey, params?: Readonly<Record<string, string>>): Recovery {
+  const label = described(key, params);
+  return { kind, label: label.message, ...label };
+}
+
+// The sentence for a connection problem, from its reason: the producer's English text is a function of reason and provider.
+const FAILURE_KEYS = {
+  'missing-cli': 'publish.connection.failure.missingCli',
+  'signed-out': 'publish.connection.failure.signedOut',
+  expired: 'publish.connection.failure.expired',
+  network: 'publish.connection.failure.network',
+  unknown: 'publish.connection.failure.unknown',
+} as const satisfies Record<ConnectionProblem['reason'], MessageKey>;
 
 /** The one next step for a connection problem: install and sign in, sign in again, or re-check. */
 export function connectionRecovery(provider: Props['provider'], problem: Pick<ConnectionProblem, 'reason'>): Recovery {
@@ -90,16 +108,18 @@ export function connectionRecovery(provider: Props['provider'], problem: Pick<Co
     case 'missing-cli':
       // Cloudflare and Vercel sign-in install their CLI first; Stacki never installs gh.
       if (provider === 'github') {
-        return { kind: 'refresh', label: 'Refresh connection' };
+        return recoveryOf('refresh', 'publish.connection.recovery.refresh');
       }
-      return { kind: 'sign-in', label: provider === 'vercel' ? 'Install Vercel' : `Connect ${label}` };
+      return provider === 'vercel'
+        ? recoveryOf('sign-in', 'publish.connection.recovery.installVercel')
+        : recoveryOf('sign-in', 'publish.connection.recovery.connect', { provider: label });
     case 'signed-out':
-      return { kind: 'sign-in', label: `Sign in to ${label}` };
+      return recoveryOf('sign-in', 'publish.connection.recovery.signIn', { provider: label });
     case 'expired':
-      return { kind: 'sign-in', label: 'Sign in again' };
+      return recoveryOf('sign-in', 'publish.connection.recovery.signInAgain');
     case 'network':
     case 'unknown':
-      return { kind: 'refresh', label: 'Refresh connection' };
+      return recoveryOf('refresh', 'publish.connection.recovery.refresh');
     default: {
       const exhaustive: never = problem.reason;
       return exhaustive;
@@ -117,16 +137,20 @@ function ConnectionRecovery(props: {
   readonly busy: boolean;
   readonly refresh: () => void;
 }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const [signingIn, setSigningIn] = useState(false);
   const recovery = connectionRecovery(props.provider, props.problem);
+  const recoveryLabel = translateDescribed(recovery);
+  const problemText = translate(FAILURE_KEYS[props.problem.reason], { provider: PROVIDER_LABELS[props.provider] });
   const run = recovery.kind === 'sign-in' ? () => setSigningIn(true) : props.refresh;
   return (
     <div className="publish-connection-recovery">
-      <p className="hint-text">{props.problem.message}</p>
+      <p className="hint-text">{problemText}</p>
       <button type="button" className={recovery.kind === 'sign-in' ? 'primary' : ''} disabled={props.busy} onClick={run}>
-        {props.busy ? 'Checking connection…' : recovery.label}
+        {props.busy ? translate('publish.connection.checking') : recoveryLabel}
       </button>
-      {props.toast && !props.busy && <ErrorToast message={props.problem.message} recovery={[{ label: recovery.label, run }]} />}
+      {props.toast && !props.busy && <ErrorToast message={problemText} recovery={[{ label: recoveryLabel, run }]} />}
       {signingIn && (
         <AddPublishAccount
           projectPath={props.projectPath}
@@ -151,6 +175,7 @@ function GitHubChoice(
     readonly refresh: () => void;
   },
 ) {
+  const translate = useTranslate();
   const [adding, setAdding] = useState(false);
   useEffect(() => {
     if (props.value === '' && props.accounts[0]) {
@@ -163,20 +188,25 @@ function GitHubChoice(
   return (
     <div className="publish-field">
       <div className="publish-field-heading">
-        <RefreshLabel label="GitHub account" busy={props.busy} refresh={props.refresh} />
+        <RefreshLabel
+          label={translate('publish.common.githubAccount')}
+          refreshLabel={translate('publish.connection.githubAccount.refresh')}
+          busy={props.busy}
+          refresh={props.refresh}
+        />
         <button type="button" className="publish-refresh" onClick={() => setAdding(true)}>
-          Add account
+          {translate('publish.common.addAccount')}
         </button>
       </div>
       <Dropdown
-        ariaLabel="GitHub account"
+        ariaLabel={translate('publish.common.githubAccount')}
         value={props.value}
         options={accounts.map((account) => ({
           value: account.id,
           label: account.name,
           icon: <GitHubAvatar key={account.id} login={account.id} />,
         }))}
-        placeholder={props.busy ? 'Loading accounts…' : 'No connected accounts'}
+        placeholder={props.busy ? translate('publish.common.loadingAccounts') : translate('publish.connection.noAccounts')}
         disabled={accounts.length === 0}
         onChange={props.change}
         menuClassName="publish-dropdown"
@@ -199,17 +229,11 @@ function GitHubChoice(
   );
 }
 
-function RefreshLabel(props: { readonly label: string; readonly busy: boolean; readonly refresh: () => void }) {
+function RefreshLabel(props: { readonly label: string; readonly refreshLabel: string; readonly busy: boolean; readonly refresh: () => void }) {
   return (
     <div className="publish-field-heading publish-label-refresh">
       <span className="publish-label">{props.label}</span>
-      <button
-        type="button"
-        className="publish-refresh publish-refresh-icon"
-        disabled={props.busy}
-        aria-label={`Refresh ${props.label.toLowerCase()}`}
-        onClick={props.refresh}
-      >
+      <button type="button" className="publish-refresh publish-refresh-icon" disabled={props.busy} aria-label={props.refreshLabel} onClick={props.refresh}>
         <RefreshIcon size={13} />
       </button>
     </div>
@@ -237,13 +261,13 @@ function GitHubAvatar({ login }: { readonly login: string }) {
 }
 
 export function ConnectionHelp({ provider }: { readonly provider: Props['provider'] }) {
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
   const command = { github: 'gh auth login', cloudflare: 'wrangler login', vercel: 'vercel login' };
   return (
     <details className="publish-connection-help">
-      <summary>Connection help</summary>
-      <p>
-        Run <CodeInline language="shell" text={command[provider]} />, then refresh.
-      </p>
+      <summary>{translate('publish.connection.help.title')}</summary>
+      <p>{translateRich('publish.connection.help.body', { command: <CodeInline language="shell" text={command[provider]} /> })}</p>
     </details>
   );
 }

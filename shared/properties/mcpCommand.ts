@@ -554,6 +554,7 @@ function buildCodexRemote(name: string, url: string, bearer: string | undefined)
   if (bearer !== undefined && !isMcpEnvName(bearer)) {
     return err(problem('bad-pair', '--bearer-token-env-var'));
   }
+  // i18n-ignore: HTTP header name, protocol text.
   const headers: McpPair[] = bearer === undefined ? [] : [{ name: 'Authorization', value: `Bearer \${${bearer}}` }];
   const config = validated('http', { url, headers });
   return config.ok ? ok({ name, nameDerived: false, config: config.value, scope: undefined, source: 'codex' }) : config;

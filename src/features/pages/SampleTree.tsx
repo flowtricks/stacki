@@ -7,10 +7,12 @@
 // so they cannot drift apart.
 
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { assert } from '../../../shared/core/assert';
 import type { SampleList, TemplateField } from '../../../shared/properties/pageTemplate';
 import { DATA_TREE_HEIGHT_PX_MAX, DATA_TREE_WIDTH_PX_MIN, DataSearch, DataSection, DataTreeRow, ItemNavigation, PreviewValue } from '../../ui/DataTree';
 import { popupBox } from '../../ui/Dropdown';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { ChevronDownIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
 import {
@@ -46,6 +48,7 @@ export type SampleTreeMode =
     };
 
 export function SampleTree({ list, mode }: { readonly list: SampleList; readonly mode: SampleTreeMode }) {
+  const translate = useTranslate();
   const [query, setQuery] = useState('');
   // The item's row starts open, so the popover opens on fields rather than on one closed row.
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set([ITEM_ROW]));
@@ -69,11 +72,17 @@ export function SampleTree({ list, mode }: { readonly list: SampleList; readonly
   };
   return (
     <div className="data-picker">
-      <DataSearch value={query} label="Search data" onChange={setQuery} />
+      <DataSearch value={query} label={translate('pages.sample.search')} onChange={setQuery} />
       <div className="dp-list">
         {/* As the picker heads each group of rows; a search lists matches by
             their whole path instead, without headings, as the picker's does. */}
-        {!searching && <DataSection heading={mode.kind === 'fields' ? 'Fields' : 'Web address'} tone="source" action={sectionAction(mode, list)} />}
+        {!searching && (
+          <DataSection
+            heading={mode.kind === 'fields' ? translate('pages.sample.fields') : translate('pages.sample.address')}
+            tone="source"
+            action={sectionAction(mode, list, translate)}
+          />
+        )}
         {mode.kind === 'address' && mode.extra !== undefined && !searching && (
           <AddressExtraRow extra={mode.extra} chosen={mode.value === mode.extra.value} pick={mode.pick} />
         )}
@@ -83,8 +92,9 @@ export function SampleTree({ list, mode }: { readonly list: SampleList; readonly
         {!searching && (
           <DataTreeRow
             depth={0}
+            // i18n-ignore: "item" names the loop variable in the data tree, as the Settings picker does.
             label="item"
-            title={`Each of the ${list.count} items`}
+            title={translate('pages.sample.eachItem', { count: list.count })}
             expandable={list.fields.length > 0}
             open={itemOpen}
             selected={false}
@@ -98,7 +108,7 @@ export function SampleTree({ list, mode }: { readonly list: SampleList; readonly
                   onStepItem={(_path, step, count) => setItem(steppedItem(shown, count, step))}
                 />
               ) : (
-                <PreviewValue preview={`${list.fields.length} ${list.fields.length === 1 ? 'field' : 'fields'}`} kind="object" image={undefined} />
+                <PreviewValue preview={translate('pages.sample.fieldCount', { count: list.fields.length })} kind="object" image={undefined} />
               )
             }
             onToggle={() => toggleOpen(ITEM_ROW)}
@@ -108,7 +118,7 @@ export function SampleTree({ list, mode }: { readonly list: SampleList; readonly
         {rows.map((row) => (
           <SampleRow key={row.path} row={row} depth={searching ? 0 : row.depth + 1} list={list} mode={mode} item={shown} toggleOpen={toggleOpen} />
         ))}
-        {searching && rows.length === 0 && <div className="dp-empty">Nothing matches</div>}
+        {searching && rows.length === 0 && <div className="dp-empty">{translate('pages.sample.noMatch')}</div>}
       </div>
     </div>
   );
@@ -116,11 +126,13 @@ export function SampleTree({ list, mode }: { readonly list: SampleList; readonly
 
 // Select all, or Deselect all once every field is chosen: one control at the
 // end of the heading, in place of a choice the search row would otherwise carry.
-function sectionAction(mode: SampleTreeMode, list: SampleList): { readonly label: string; readonly onClick: () => void } | undefined {
+function sectionAction(mode: SampleTreeMode, list: SampleList, translate: Translator): { readonly label: string; readonly onClick: () => void } | undefined {
   if (mode.kind === 'address') {
     return undefined;
   }
-  return allFieldsChosen(mode.chosen, list) ? { label: 'Deselect all', onClick: mode.deselectAll } : { label: 'Select all', onClick: mode.selectAll };
+  return allFieldsChosen(mode.chosen, list)
+    ? { label: translate('pages.sample.deselectAll'), onClick: mode.deselectAll }
+    : { label: translate('pages.sample.selectAll'), onClick: mode.selectAll };
 }
 
 function AddressExtraRow({
@@ -165,7 +177,8 @@ function SampleRow({
   readonly item: number;
   readonly toggleOpen: (path: string) => void;
 }) {
-  const value = <PreviewValue preview={sampleRowPreview(list, row.path, item)} kind={row.kind} image={undefined} />;
+  const translate = useTranslate();
+  const value = <PreviewValue preview={sampleRowPreview(list, row.path, item, translate)} kind={row.kind} image={undefined} />;
   const shared = {
     depth,
     label: row.label,
@@ -188,7 +201,7 @@ function SampleRow({
       />
     );
   }
-  const option = addressOptions(list.fields, mode.route).find((candidate) => candidate.value === row.path);
+  const option = addressOptions(list.fields, mode.route, translate).find((candidate) => candidate.value === row.path);
   if (option === undefined) {
     // An object or list has no address of its own, but may hold fields that do.
     return <DataTreeRow {...shared} title={row.path} selected={false} tone="path-only" check="selected-only" onPick={() => toggleOpen(row.path)} />;

@@ -5,6 +5,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { assert } from '../../shared/core/assert';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
+import { withLead } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
 import type { SelectorFileChange, SelectorFileDigest, SelectorRemoval } from '../../shared/properties/selectorUsage';
 import type { StyleKeepList } from '../../shared/properties/styleKeepList';
@@ -55,8 +57,12 @@ function writeChanges(root: string, changes: readonly SelectorFileChange[], to: 
       writeProjectText(file, target, expected);
     } catch (error: unknown) {
       const rollback = rollBack(done, to);
+      // The operating system's text is shown as received; the rollback note is ours.
       const reason = error instanceof Error ? error.message : String(error);
-      return err({ code: 'write-failed', message: rollback === undefined ? reason : `${reason} ${rollback}` });
+      if (rollback === undefined) {
+        return err({ code: 'write-failed', message: reason });
+      }
+      return err(withLead(described('props.edit.detail', { detail: reason }), { code: 'write-failed', ...rollback }));
     }
     // Pair assertion: the bytes on disk are the bytes the plan verified.
     assert(fs.readFileSync(file, 'utf8') === target, 'writeChanges: the written file reads back as planned');
@@ -65,7 +71,7 @@ function writeChanges(root: string, changes: readonly SelectorFileChange[], to: 
   return ok(undefined);
 }
 
-function rollBack(done: ReadonlyArray<{ readonly file: string; readonly change: SelectorFileChange }>, to: 'before' | 'after'): string | undefined {
+function rollBack(done: ReadonlyArray<{ readonly file: string; readonly change: SelectorFileChange }>, to: 'before' | 'after'): Described | undefined {
   const failed: string[] = [];
   for (const { file, change } of [...done].reverse()) {
     try {
@@ -74,7 +80,7 @@ function rollBack(done: ReadonlyArray<{ readonly file: string; readonly change: 
       failed.push(change.rel);
     }
   }
-  return failed.length === 0 ? undefined : `These files kept the cleanup and need checking: ${failed.join(', ')}.`;
+  return failed.length === 0 ? undefined : described('props.cleanup.keptCleanup', { files: failed.join(', ') });
 }
 
 function projectFile(root: string, rel: string): string {

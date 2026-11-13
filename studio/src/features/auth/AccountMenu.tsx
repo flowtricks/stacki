@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import release from '../../shared/release.json';
 import type { Session } from './useSession';
 import { Avatar } from './Avatar';
@@ -17,6 +18,7 @@ interface AccountMenuProps {
 }
 
 export function AccountMenu(props: AccountMenuProps) {
+  const translate = useTranslate();
   const menu = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
@@ -28,12 +30,20 @@ export function AccountMenu(props: AccountMenuProps) {
         aria-expanded={open}
         aria-haspopup="dialog"
         className="studio-brand"
-        aria-label="Stacki account menu"
-        title="Stacki account menu"
+        aria-label={translate('studio.account.menu')}
+        title={translate('studio.account.menu')}
       >
         <StackiLogo />
       </button>
-      <Popup mode="popover" portal={false} className="account-popover" open={open} onClose={close} anchor={menu.current ?? undefined} label="Stacki account">
+      <Popup
+        mode="popover"
+        portal={false}
+        className="account-popover"
+        open={open}
+        onClose={close}
+        anchor={menu.current ?? undefined}
+        label={translate('studio.account.label')}
+      >
         {(actions) => (
           <>
             <RoleMenu saved={props.saved} close={actions.close} />
@@ -42,10 +52,10 @@ export function AccountMenu(props: AccountMenuProps) {
             <button
               className="account-action"
               type="button"
-              aria-label="Cursor chat"
+              aria-label={translate('studio.account.cursorChat')}
               aria-keyshortcuts="/"
               disabled={props.cursorChat === undefined}
-              title={props.cursorChat ? 'Cursor chat (/)' : 'Available in the page editing preview'}
+              title={props.cursorChat ? translate('studio.account.cursorChatShortcut') : translate('studio.account.cursorChatUnavailable')}
               onClick={() =>
                 actions.finish(() => {
                   close();
@@ -54,11 +64,11 @@ export function AccountMenu(props: AccountMenuProps) {
               }
             >
               <CommentIcon />
-              <span>Cursor chat</span>
+              <span>{translate('studio.account.cursorChat')}</span>
               <kbd aria-hidden="true">/</kbd>
             </button>
             <AccountIdentity saved={props.saved} session={props.session} />
-            <span className="account-version">Stacki Studio {release.version}</span>
+            <span className="account-version">{translate('studio.account.version', { version: release.version })}</span>
           </>
         )}
       </Popup>
@@ -67,8 +77,9 @@ export function AccountMenu(props: AccountMenuProps) {
 }
 
 function AccountIdentity({ saved, session }: Pick<AccountMenuProps, 'saved' | 'session'>) {
+  const translate = useTranslate();
   if (session?.kind !== 'github') {
-    return <span className="local-session">{session?.kind === 'local' ? 'Local development · no sign-in required' : 'Loading account…'}</span>;
+    return <span className="local-session">{session?.kind === 'local' ? translate('studio.account.local') : translate('studio.account.loading')}</span>;
   }
   return (
     <div className="account-profile">
@@ -77,11 +88,16 @@ function AccountIdentity({ saved, session }: Pick<AccountMenuProps, 'saved' | 's
       </span>
       <div className="account-profile-name">
         <strong title={`@${session.login}`}>@{session.login}</strong>
-        <span>GitHub account</span>
+        <span>{translate('studio.account.github')}</span>
       </div>
       <form method="post" action="/studio/auth/logout">
-        <button className="account-sign-out" type="submit" disabled={!saved} title={saved ? 'Sign out of this studio' : 'Wait for your edits to finish saving'}>
-          Sign out
+        <button
+          className="account-sign-out"
+          type="submit"
+          disabled={!saved}
+          title={saved ? translate('studio.account.signOutTitle') : translate('studio.account.signOutWait')}
+        >
+          {translate('studio.account.signOut')}
         </button>
       </form>
     </div>

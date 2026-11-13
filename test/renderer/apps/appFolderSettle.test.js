@@ -51,6 +51,7 @@ esbuild.buildSync({
       "export { launchApp, resetAppsRuntime, runningApps } from './src/features/apps/appsRuntime';",
       "export { APP_FOLDER_LIMITS } from './shared/properties/appFolders';",
       "export { ADMIN_VIEW } from './shared/properties/projectRoles';",
+      "export { ENGLISH_TRANSLATE } from './shared/properties/i18n/englishTranslator';",
     ].join('\n'),
     resolveDir: ROOT,
     loader: 'ts',
@@ -101,10 +102,10 @@ test('a settled folder reads as valid, broken with its reason, or removed', () =
   assert.deepEqual(apps.settledAppFolders(['other'], reading)[0], { kind: 'broken', appId: 'other', message: 'No manifest.' });
   assert.deepEqual(apps.settledAppFolders([], reading), []);
   assert.equal(
-    apps.appFolderErrorNotice('The manifest is invalid.'),
+    apps.appFolderErrorNotice('The manifest is invalid.', apps.ENGLISH_TRANSLATE),
     'This app’s files have an error: The manifest is invalid. Showing the last working version.',
   );
-  assert.throws(() => apps.appFolderErrorNotice(' . '), /Assertion failed: A broken folder says why/);
+  assert.throws(() => apps.appFolderErrorNotice(' . ', apps.ENGLISH_TRANSLATE), /Assertion failed: A broken folder says why/);
 });
 
 // A settler over a fake clock and a folder read the test resolves by hand.

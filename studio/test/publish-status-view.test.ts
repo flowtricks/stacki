@@ -14,10 +14,10 @@ test('each running stage is a shared popup step with bounded progress', () => {
     (stage) => publishStatusView({ kind: 'building', id: 'job', stage }, 'running').state,
   );
   assert.deepEqual(steps, [
-    { kind: 'running', step: 'Preparing files…', progress: { completed: 0, total: 4 } },
-    { kind: 'running', step: 'Building website…', progress: { completed: 1, total: 4 } },
-    { kind: 'running', step: 'Saving to GitHub…', progress: { completed: 2, total: 4 } },
-    { kind: 'running', step: 'Cleaning up storage…', progress: { completed: 3, total: 4 } },
+    { kind: 'running', step: 'Preparing files…', stepRef: { key: 'publish.status.step.preparingFiles' }, progress: { completed: 0, total: 4 } },
+    { kind: 'running', step: 'Building website…', stepRef: { key: 'publish.status.step.building' }, progress: { completed: 1, total: 4 } },
+    { kind: 'running', step: 'Saving to GitHub…', stepRef: { key: 'publish.status.step.savingToGitHub' }, progress: { completed: 2, total: 4 } },
+    { kind: 'running', step: 'Cleaning up storage…', stepRef: { key: 'publish.status.step.cleanup' }, progress: { completed: 3, total: 4 } },
   ]);
   for (const state of steps) {
     assert.deepEqual(parseDesktopPublishState(state), state);
@@ -25,10 +25,19 @@ test('each running stage is a shared popup step with bounded progress', () => {
   assert.deepEqual(publishStatusView({ kind: 'building', id: 'job', stage: 'deploying', deployment: 'pending' }, 'running').state, {
     kind: 'running',
     step: 'Deploying live website…',
+    stepRef: { key: 'publish.status.step.deploying' },
     progress: { completed: 4, total: 5 },
   });
-  assert.deepEqual(publishStatusView({ kind: 'building', id: 'job' }, 'running').state, { kind: 'running', step: 'Preparing publish…' });
-  assert.deepEqual(publishStatusView(undefined, 'running').state, { kind: 'running', step: 'Preparing publish…' });
+  assert.deepEqual(publishStatusView({ kind: 'building', id: 'job' }, 'running').state, {
+    kind: 'running',
+    step: 'Preparing publish…',
+    stepRef: { key: 'publish.status.preparing' },
+  });
+  assert.deepEqual(publishStatusView(undefined, 'running').state, {
+    kind: 'running',
+    step: 'Preparing publish…',
+    stepRef: { key: 'publish.status.preparing' },
+  });
 });
 
 test('deploying without a pending deployment violates the stage bound', () => {
@@ -42,9 +51,19 @@ test('results keep Studio detail in the popup note', () => {
   assert.deepEqual(unconnected, {
     state: { kind: 'done', github: true, hosting: false },
     note: 'Live deployment is not connected in this Studio. Storage kept.',
+    noteParts: [
+      { message: 'Live deployment is not connected in this Studio.', messageRef: { key: 'publish.studio.note.notConnected' } },
+      { message: 'Storage kept.' },
+    ],
   });
   assert.equal(publishStatusView({ kind: 'failed', id: 'job', message: 'Broken' }, 'running').state.kind, 'failed');
-  assert.deepEqual(publishStatusView(undefined, 'interrupted').state, { kind: 'failed', message: PUBLISH_INTERRUPTED_MESSAGE, github: false, hosting: false });
+  assert.deepEqual(publishStatusView(undefined, 'interrupted').state, {
+    kind: 'failed',
+    message: PUBLISH_INTERRUPTED_MESSAGE,
+    messageRef: { key: 'publish.studio.interrupted' },
+    github: false,
+    hosting: false,
+  });
 });
 
 test('the demo run drives the shared popup from first stage to live', () => {
@@ -70,4 +89,20 @@ test('PublishButton renders the vendored shared popup', async () => {
   assert.match(source, /import \{ PublishStatus \} from '\.\.\/\.\.\/\.\.\/vendor\/stacki\/src\/features\/publishing\/PublishStatus';/);
   assert.match(source, /<PublishStatus\b/);
   assert.doesNotMatch(source, /PublishProgress/);
+});
+
+test('a failed job keeps its message reference through the shared popup state', () => {
+  const messageRef = { key: 'publish.studio.error.gitBusy' };
+  const state = publishStatusView(
+    { kind: 'failed', id: 'job', message: 'Wait for the Git operation to finish before publishing.', messageRef },
+    'running',
+  ).state;
+  assert.deepEqual(state, { kind: 'failed', message: 'Wait for the Git operation to finish before publishing.', messageRef, github: false, hosting: false });
+  assert.deepEqual(parseDesktopPublishState(state), state);
+  assert.deepEqual(parseDesktopPublishState({ ...state, messageRef: { key: 'bad key' } }), {
+    kind: 'failed',
+    message: 'Wait for the Git operation to finish before publishing.',
+    github: false,
+    hosting: false,
+  });
 });

@@ -13,6 +13,7 @@ import type { IpcResults } from '../../shared/ipc/ipcResults';
 import { toRecord } from '../../shared/core/record';
 import { isPathWithin } from '../lib/platform';
 import { buildShellEnv } from '../lib/shellEnvironment';
+import { translateMain } from '../lib/mainLocale';
 
 // Embedded terminal — a real login shell in the open project, hosted by
 // node-pty and rendered by xterm in the bottom dock.
@@ -296,11 +297,11 @@ async function startTerminal(
   const cwd = payload?.cwd;
   const abs = cwd ? path.resolve(cwd) : undefined;
   if (!root || !abs || !isPathWithin(root, abs)) {
-    return { ok: false as const, error: 'Terminal can only open inside the current project.' };
+    return { ok: false as const, error: translateMain('error.terminal.outsideProject') };
   }
   const id = payload?.id ?? '';
   if (!id) {
-    return { ok: false as const, error: 'Missing terminal id.' };
+    return { ok: false as const, error: translateMain('error.terminal.missingId') };
   }
   retireTerminal(id);
 
@@ -505,7 +506,7 @@ function closeTerminal(id: string): IpcResults['terminal:close'] {
 function saveClipboardImage(payload: IpcPayloads['terminal:clipboardImage']): IpcResults['terminal:clipboardImage'] {
   const buf = Buffer.from(payload.bytes);
   if (buf.length === 0) {
-    return { ok: false as const, error: 'empty image' };
+    return { ok: false as const, error: 'empty image' }; // i18n-ignore: diagnostic read by the terminal code, not shown.
   }
   try {
     pruneOldClipboardImages();

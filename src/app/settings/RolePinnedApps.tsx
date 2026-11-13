@@ -1,8 +1,8 @@
-// A role card's "Pinned to sidebar" section: the apps the role sees as their own
+// A role card's "Sidebar apps" section: the apps the role sees as their own
 // buttons on the left rail (`pinnedApps`, src/app/railApps.tsx), in rail order.
 // Each pin is a row, its app's tile and name, a grip to drag it to another place
-// and a remove button; Alt+↑ and Alt+↓ move a focused row. Under the rows, an
-// "Add app" dropdown offers every installed app not yet pinned, so several can be
+// and a remove button (grip and remove show on hover or focus); Alt+↑ and Alt+↓ move a focused row.
+// After the rows, a ghost "+ Add app" dropdown offers every installed app not yet pinned, so several can be
 // pinned one after another; one the role may not use says "Also gives <Role>
 // access", and pinning it grants the app in the same save. Every change saves at once,
 // and the rail follows the saved order.
@@ -17,7 +17,9 @@ import { ROLE_LIMITS, can, roleView, type ProjectRole } from '../../../shared/pr
 import Dropdown, { type DropdownOption } from '../../ui/Dropdown';
 import useListReorder from '../../ui/useListReorder';
 import { DropLine } from '../../ui/DropLine';
+import { Skeleton } from '../../ui/Skeleton';
 import { CloseIcon, DragIcon, PinIcon } from '../../ui/Icons';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { RoleAppIcon, type InstalledApps } from './RoleAppPicker';
 import { movedPin } from './rolesEdits';
 
@@ -29,7 +31,7 @@ export interface PinnedAppRow {
   readonly appId: string;
   readonly label: string;
   readonly app: AppSummary | undefined;
-  readonly ignored: 'Not installed' | 'No access' | undefined;
+  readonly ignored: 'not-installed' | 'no-access' | undefined;
 }
 
 /** The role's pins in rail order, each with the reason the rail ignores it, if any. */
@@ -40,9 +42,9 @@ export function pinnedAppRows(role: ProjectRole, installed: readonly AppSummary[
   return role.pinnedApps.map((appId): PinnedAppRow => {
     const app = installed.find((candidate) => candidate.manifest.id === appId);
     if (app === undefined) {
-      return { appId, label: appId, app, ignored: 'Not installed' };
+      return { appId, label: appId, app, ignored: 'not-installed' };
     }
-    return { appId, label: app.manifest.name, app, ignored: can(view, `app:${appId}`) ? undefined : 'No access' };
+    return { appId, label: app.manifest.name, app, ignored: can(view, `app:${appId}`) ? undefined : 'no-access' };
   });
 }
 
@@ -63,19 +65,31 @@ export function RolePinnedApps(props: {
   readonly order: PinnedAppOrder;
 }) {
   const { role, installed } = props;
-  if (installed.kind === 'loading') {
-    return undefined;
-  }
+  const translate = useTranslate();
   return (
-    <div className="app-role-pins" role="group" aria-label={`${role.name} apps pinned to the sidebar`}>
-      <div className="app-role-toggle">
-        <span className="app-role-toggle-icon" aria-hidden="true">
-          <PinIcon size={14} />
-        </span>
-        <span className="app-role-toggle-label">Pinned to sidebar</span>
+    <div className="app-role-pins" role="group" aria-label={translate('settings.roles.pins.group', { name: role.name })}>
+      <div className="app-role-section-heading">
+        <PinIcon size={12} />
+        <h4>{translate('settings.roles.pins.title')}</h4>
       </div>
-      <PinnedList role={role} rows={pinnedAppRows(role, installed.apps)} editable={props.editable} change={props.change} order={props.order} />
-      {props.editable && <AddPin role={role} installed={installed.apps} change={props.change} />}
+      {installed.kind === 'loading' ? (
+        <PinsSkeleton />
+      ) : (
+        <>
+          <PinnedList role={role} rows={pinnedAppRows(role, installed.apps)} editable={props.editable} change={props.change} order={props.order} />
+          {props.editable && <AddPin role={role} installed={installed.apps} change={props.change} />}
+        </>
+      )}
+    </div>
+  );
+}
+
+// Instant UI: the section's frame paints at once and the installed apps fill in as quiet shapes, never text.
+function PinsSkeleton() {
+  return (
+    <div className="app-role-pins-skeleton" aria-hidden="true">
+      <Skeleton width="120px" height="26px" radius="6px" />
+      <Skeleton width="84px" height="26px" radius="6px" />
     </div>
   );
 }
@@ -88,6 +102,7 @@ function PinnedList(props: {
   readonly order: PinnedAppOrder;
 }) {
   const { rows } = props;
+  const translate = useTranslate();
   const pinned = rows.map((row) => row.appId);
   const move = (source: number, gap: number) => {
     const next = movedPin(pinned, source, gap);
@@ -98,10 +113,12 @@ function PinnedList(props: {
     props.order(next);
   };
   const reorder = useListReorder({ count: rows.length, onMove: move, disabled: !props.editable });
-  // An empty list draws nothing: the "Add app" dropdown below already says what to do.
+  // An empty list draws nothing: the "Add app" dropdown beside it already says what to do.
   if (rows.length === 0) {
     return undefined;
   }
+  const ignoredText = (ignored: NonNullable<PinnedAppRow['ignored']>) =>
+    translate(ignored === 'not-installed' ? 'settings.roles.pins.ignored.notInstalled' : 'settings.roles.pins.ignored.noAccess');
   // Alt+↑ moves the row up one place, Alt+↓ down one; the gap is measured before removal.
   const onKey = (index: number) => (event: KeyboardEvent<HTMLElement>) => {
     if (!props.editable || !event.altKey) {
@@ -123,13 +140,13 @@ function PinnedList(props: {
   const lineGap = reorder.dragIndex === undefined ? undefined : reorder.dropIndex;
   assert(lineGap === undefined || lineGap <= rows.length, 'The drop gap is within the list');
   return (
-    <ol className="app-role-pin-list" aria-label={`${props.role.name} pinned apps, in sidebar order`}>
+    <ol className="app-role-pin-list" aria-label={translate('settings.roles.pins.list', { name: props.role.name })}>
       {rows.map((row, index) => (
         <li
           key={row.appId}
           {...reorder.rowProps(index)}
           tabIndex={0}
-          aria-label={row.ignored === undefined ? row.label : `${row.label}, ${row.ignored}`}
+          aria-label={row.ignored === undefined ? row.label : translate('settings.roles.pins.rowIgnored', { app: row.label, reason: ignoredText(row.ignored) })}
           className={`app-role-pin ${row.ignored === undefined ? '' : 'is-ignored'} ${reorder.dragIndex === index ? 'is-dragging' : ''}`}
           onKeyDown={onKey(index)}
         >
@@ -137,15 +154,26 @@ function PinnedList(props: {
           {lineGap === index && <PinGap side="before" />}
           {lineGap === rows.length && index === rows.length - 1 && <PinGap side="after" />}
           {props.editable && (
-            <button type="button" className="app-role-pin-grip" aria-label={`Drag to reorder ${row.label}`} data-drag-through tabIndex={-1}>
+            <button
+              type="button"
+              className="app-role-pin-grip"
+              aria-label={translate('settings.roles.pins.drag', { app: row.label })}
+              data-drag-through
+              tabIndex={-1}
+            >
               <DragIcon size={12} />
             </button>
           )}
           <RoleAppIcon app={row.app} />
           <span className="app-role-pin-name">{row.label}</span>
-          {row.ignored !== undefined && <span className="app-role-pin-reason">{row.ignored}</span>}
+          {row.ignored !== undefined && <span className="app-role-pin-reason">{ignoredText(row.ignored)}</span>}
           {props.editable && (
-            <button type="button" className="app-role-pin-remove" aria-label={`Unpin ${row.label}`} onClick={() => props.change(row.appId, 'unpin')}>
+            <button
+              type="button"
+              className="app-role-pin-remove"
+              aria-label={translate('settings.roles.pins.unpin', { app: row.label })}
+              onClick={() => props.change(row.appId, 'unpin')}
+            >
               <CloseIcon size={10} />
             </button>
           )}
@@ -167,8 +195,9 @@ function PinGap(props: { readonly side: 'before' | 'after' }) {
 
 function AddPin(props: { readonly role: ProjectRole; readonly installed: readonly AppSummary[]; readonly change: PinnedAppChange }) {
   const { role } = props;
+  const translate = useTranslate();
   if (props.installed.length === 0) {
-    return <p className="app-role-pins-empty">No apps installed</p>;
+    return <p className="app-role-pins-empty">{translate('settings.roles.pins.noneInstalled')}</p>;
   }
   // Every unpinned app is listed. Pinning one the role may not use also lets it use the
   // app, in the same save (setPinnedApp), so the row says so instead of refusing.
@@ -182,15 +211,20 @@ function AddPin(props: { readonly role: ProjectRole; readonly installed: readonl
   const options: readonly DropdownOption[] = unpinned.map((app) =>
     addable.includes(app)
       ? { value: app.manifest.id, label: app.manifest.name, icon: <RoleAppIcon app={app} /> }
-      : { value: app.manifest.id, label: app.manifest.name, icon: <RoleAppIcon app={app} />, hint: `Also gives ${role.name} access` },
+      : {
+          value: app.manifest.id,
+          label: app.manifest.name,
+          icon: <RoleAppIcon app={app} />,
+          hint: translate('settings.roles.pins.alsoGives', { name: role.name }),
+        },
   );
   return (
     <div className="app-role-pins-add">
       <Dropdown
-        ariaLabel={`Pin an app to the sidebar for ${role.name}`}
+        ariaLabel={translate('settings.roles.pins.addLabel', { name: role.name })}
         className="app-role-pins-dropdown"
         value=""
-        placeholder={full ? `At most ${ROLE_LIMITS.pinnedAppsMax} pinned apps` : 'Add app'}
+        placeholder={full ? translate('settings.roles.pins.full', { max: ROLE_LIMITS.pinnedAppsMax }) : translate('settings.roles.pins.add')}
         disabled={full}
         options={options}
         onChange={(appId) => props.change(appId, 'pin')}

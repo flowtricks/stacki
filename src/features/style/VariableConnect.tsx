@@ -1,5 +1,6 @@
 import { cloneElement, isValidElement, useRef, useState } from 'react';
 import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { flushSync } from 'react-dom';
 import { type ProjectVariable } from './model/webflow';
 import { selectionOffsets, setCaretOffset } from './model/cssCode';
@@ -75,7 +76,8 @@ export function connectCustomField(field: ReactElement, prop: string | undefined
 }
 
 export default function VariableConnect(props: VariableConnectProps) {
-  const { onPick, disabled, ariaLabel = 'Connect to variable', prop } = props;
+  const translate = useTranslate();
+  const { onPick, disabled, ariaLabel = translate('style.variablePicker.connectToVariable'), prop } = props;
   const connect = useVariableConnect(props);
   const { open, setOpen, big, setBig, value, applied, showToken, field, wrapRef } = connect;
   const { editorRef, dotRef, chipText, liveValue, selectionRef, readCaret, hintValue } = connect;
@@ -490,14 +492,14 @@ function valueChips({
     return {
       text: match[0],
       name: known?.name ?? bindingName(match[0]),
-      type: known?.type ?? 'Size',
+      type: known?.type ?? 'Size', // i18n-ignore: a variable type id.
     };
   });
   if (chips.length) {
     return chips;
   }
   const chipName = current?.name ?? (embedVar ? bindingName(embedVar) : raw);
-  return [{ text: varText, name: chipName, type: current?.type ?? 'Size' }];
+  return [{ text: varText, name: chipName, type: current?.type ?? 'Size' }]; // i18n-ignore: a variable type id.
 }
 
 // The wrapped child: an <input> in a panel field, a <textarea> in the big editor.

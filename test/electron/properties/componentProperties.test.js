@@ -386,7 +386,7 @@ test('rollback leaves a file another program changed and names it', () => {
         const result = updateComponentProperties({ projectPath: root, file: component, source, change: save({ name: 'heading' }) }, writer);
         assert.equal(result.ok, false);
         assert.equal(result.error.code, 'rollback');
-        assert.match(result.error.message, /changed by another program, left as is: /);
+        assert.match(result.error.message, /changed by another program, so they were left as is: /);
         assert.ok(result.error.message.includes(path.basename(replaced[0])), result.error.message);
         assert.equal(fs.readFileSync(replaced[0], 'utf8'), 'EXTERNAL');
         const untouched = replaced[0] === canonicalComponent ? canonicalPage : canonicalComponent;
@@ -1112,7 +1112,7 @@ test('the inverse batch undoes a rename, redoes it, and refuses a changed file',
       revertComponentProperties(token, store, writer),
       {
         ok: false,
-        error: { code: 'expired', message: 'This property change can no longer be undone.' },
+        error: { code: 'expired', message: 'This property change can no longer be undone.', messageRef: { key: 'props.edit.expired' } },
       },
       'a token is spent once',
     );

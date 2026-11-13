@@ -10,7 +10,10 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import type { WireInjectedRoute } from '../../../shared/ipc/ipcResults';
 import type { ScanPage, ScanResult } from '../../../shared/properties/projectScan';
 import { buildPageTree, collectPageTreeDirectories, pageDirectory, parsePageDragText } from './pageTree';
-import { pageDisplayName } from '../../lib/pageName';
+import { pageDisplayLabel } from '../../lib/pageName';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { comparePageNames, isCollectionRoute } from './pageOrder';
 import { CmsIcon, FileIcon, FolderIcon, FolderPlusIcon, PlusIcon } from '../../ui/Icons';
 import MoreMenu from '../../ui/MoreMenu';
@@ -40,6 +43,7 @@ interface PagesPanelProps {
 }
 
 export default function PagesPanel(props: PagesPanelProps) {
+  const translate = useTranslate();
   const ordering = useProjectPageOrder(props.projectPath);
   const reorder = usePageOrderDrag({
     order: ordering.state.order,
@@ -71,7 +75,7 @@ export default function PagesPanel(props: PagesPanelProps) {
         <input
           value={query}
           maxLength={512}
-          placeholder="Search pages and folders"
+          placeholder={translate('pages.panel.search')}
           spellCheck={false}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
@@ -115,6 +119,7 @@ export default function PagesPanel(props: PagesPanelProps) {
 }
 
 function usePagesPanel(props: PagesPanelProps) {
+  const translate = useTranslate();
   const [showNew, setShowNew] = useState(false);
   const [showTemplate, setShowTemplate] = useState(false);
   const [query, setQuery] = useState('');
@@ -124,7 +129,7 @@ function usePagesPanel(props: PagesPanelProps) {
   useTreeDragCleanup(() => setDropDirectory(undefined));
   const tree = useMemo(() => buildPageTree(props.scan.pages, props.scan.pageFolders), [props.scan.pageFolders, props.scan.pages]);
   const directories = useMemo(() => collectPageTreeDirectories(tree), [tree]);
-  const searchResults = useMemo(() => pagesForQuery(props.scan.pages, query), [props.scan.pages, query]);
+  const searchResults = useMemo(() => pagesForQuery(props.scan.pages, query, translate), [props.scan.pages, query, translate]);
   const { onCreateFolder } = props;
 
   useEffect(() => {
@@ -242,6 +247,7 @@ interface PageBodyProps extends PagesPanelProps {
 }
 
 function PageBody(props: PageBodyProps) {
+  const translate = useTranslate();
   return (
     <div
       className={`panel-body ${props.dropDirectory === '' && props.reorder.target === undefined ? 'pages-root-drop' : ''}`}
@@ -270,7 +276,7 @@ function PageBody(props: PageBodyProps) {
             actions={props.actions}
           />
           {props.scan.pages.length === 0 && props.scan.pageFolders.length === 0 && (props.injectedRoutes?.length ?? 0) === 0 && (
-            <div className="props-empty">No pages yet. Create one with +.</div>
+            <div className="props-empty">{translate('pages.panel.empty')}</div>
           )}
           <InjectedRoutes routes={props.injectedRoutes ?? []} currentPage={props.currentPage} select={props.onSelectRoute} />
         </>
@@ -290,8 +296,9 @@ function SearchResults({
   readonly currentPage: ScanPage | undefined;
   readonly select: (page: ScanPage) => void;
 }) {
+  const translate = useTranslate();
   if (pages.length === 0) {
-    return <div className="props-empty">No pages match “{query.trim()}”.</div>;
+    return <div className="props-empty">{translate('pages.panel.noMatch', { query: query.trim() })}</div>;
   }
   return pages.map((page) => (
     <div
@@ -301,7 +308,7 @@ function SearchResults({
     >
       <span className="icon">{isCollectionRoute(page.name) ? <CmsIcon size={13} /> : <FileIcon size={13} />}</span>
       <span className="page-list-copy">
-        <span className="label">{pageDisplayName(page)}</span>
+        <span className="label">{pageDisplayLabel(page, translate)}</span>
         <PageSearchPath path={page.route} query={query} />
       </span>
     </div>
@@ -317,6 +324,7 @@ function InjectedRoutes({
   readonly currentPage: ScanPage | undefined;
   readonly select: ((route: WireInjectedRoute) => void) | undefined;
 }) {
+  const translate = useTranslate();
   if (routes.length === 0) {
     return undefined;
   }
@@ -326,8 +334,8 @@ function InjectedRoutes({
         <span className="icon">
           <FolderIcon size={13} />
         </span>
-        <span className="label">From {routes[0]?.from ?? 'integrations'}</span>
-        <span className="sub">preview only</span>
+        <span className="label">{translate('pages.injected.from', { source: routes[0]?.from ?? translate('pages.injected.integrations') })}</span>
+        <span className="sub">{translate('pages.injected.previewOnly')}</span>
       </h3>
       {routes.map((route) => (
         <div
@@ -348,10 +356,13 @@ function InjectedRoutes({
 }
 
 // The two things `+` makes. A template gets the CMS icon its rows have in the tree.
-export function pageCreateMenuItems(actions: { readonly createPage: () => void; readonly createTemplate: () => void }) {
+export function pageCreateMenuItems(
+  actions: { readonly createPage: () => void; readonly createTemplate: () => void },
+  translate: Translator = ENGLISH_TRANSLATE,
+) {
   return [
-    { label: 'Create page', icon: <FileIcon size={13} />, onSelect: actions.createPage },
-    { label: 'Create page template', icon: <CmsIcon size={13} />, onSelect: actions.createTemplate },
+    { label: translate('pages.create.page'), icon: <FileIcon size={13} />, onSelect: actions.createPage },
+    { label: translate('pages.create.template'), icon: <CmsIcon size={13} />, onSelect: actions.createTemplate },
   ];
 }
 
@@ -365,29 +376,36 @@ function PagesHeader({
   readonly createTemplate: () => void;
 }) {
   // Creating pages and folders appears only for a role that may (shared/properties/projectRoles.ts).
+  const translate = useTranslate();
   const creatable = can(useCurrentRole(), 'page:create');
   return (
     <div className="panel-header">
-      <h2>Pages</h2>
+      <h2>{translate('pages.title')}</h2>
       {creatable && (
         <div style={{ display: 'flex', gap: 2 }}>
-          <button className="ghost" title="New folder" onClick={createFolder}>
+          <button className="ghost" title={translate('pages.folder.new')} onClick={createFolder}>
             <FolderPlusIcon size={13} />
           </button>
-          <MoreMenu className="ghost" title="New page" icon={<PlusIcon size={13} />} width={190} items={pageCreateMenuItems({ createPage, createTemplate })} />
+          <MoreMenu
+            className="ghost"
+            title={translate('pages.new.button')}
+            icon={<PlusIcon size={13} />}
+            width={190}
+            items={pageCreateMenuItems({ createPage, createTemplate }, translate)}
+          />
         </div>
       )}
     </div>
   );
 }
 
-function pagesForQuery(pages: readonly ScanPage[], query: string): readonly ScanPage[] | undefined {
+function pagesForQuery(pages: readonly ScanPage[], query: string, translate: Translator): readonly ScanPage[] | undefined {
   const clean = query.trim().toLowerCase();
   if (!clean) {
     return undefined;
   }
   return pages
-    .filter((page) => [page.name, page.route, pageDisplayName(page)].some((value) => value.toLowerCase().includes(clean)))
+    .filter((page) => [page.name, page.route, pageDisplayLabel(page, translate)].some((value) => value.toLowerCase().includes(clean)))
     .sort((left, right) => comparePageNames(left.name, right.name));
 }
 

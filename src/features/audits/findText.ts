@@ -136,6 +136,7 @@ export function replacementFinding(file: string, match: TextMatch, pattern: RegE
     element: undefined,
     detail: after,
     source: 'static',
+    // i18n-ignore: the fix label is an identity for the undo step; the Find panel draws its own translated buttons.
     fix: { label: 'Replace', before: match.value, after, file, edits: [edit] },
   };
 }

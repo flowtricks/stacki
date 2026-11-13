@@ -6,6 +6,9 @@ import Popup from '../../ui/Popup';
 import { publishingRepositories } from '../../ipc/publishRepositoryBridge';
 import type { PublishingRepositories, RepositoryRequest } from '../../../shared/ipc/publishRepository';
 import { cleanError } from '../../lib/cleanError';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
+import type { Described } from '../../../shared/properties/i18n/messageRef';
 
 type Connection = Extract<RepositoryRequest, { readonly action: 'connect' }>;
 interface Props {
@@ -15,10 +18,14 @@ interface Props {
   readonly change: (selection: Connection | undefined) => void;
   readonly busy: (busy: boolean) => void;
 }
-type SettledState = { readonly kind: 'ready'; readonly value: PublishingRepositories } | { readonly kind: 'failed'; readonly message: string };
+type SettledState =
+  | { readonly kind: 'ready'; readonly value: PublishingRepositories }
+  | { readonly kind: 'failed'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 type State = SettledState | { readonly kind: 'loading'; readonly previous: SettledState | undefined };
 
 export function PublishRepositories(props: Props) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { state, setState, refresh } = useRepositoryList(props.projectPath, props.account);
   const [adding, setAdding] = useState(false);
   const { account } = props;
@@ -28,11 +35,11 @@ export function PublishRepositories(props: Props) {
     <div className="publish-field" aria-busy={state.kind === 'loading' && !!account} data-loading={state.kind === 'loading' && !!account && !displayed}>
       <div className="publish-field-heading">
         <div className="publish-label-refresh">
-          <span className="publish-label">GitHub repository</span>
+          <span className="publish-label">{translate('publish.repositories.title')}</span>
           <button
             type="button"
             className="publish-refresh publish-refresh-icon"
-            aria-label="Refresh repos"
+            aria-label={translate('publish.repositories.refresh')}
             disabled={!account || state.kind === 'loading'}
             onClick={refresh}
           >
@@ -41,13 +48,13 @@ export function PublishRepositories(props: Props) {
         </div>
         <div className="publish-field-actions">
           <button type="button" className="publish-refresh" disabled={!account || ready?.mode === 'managed'} onClick={() => setAdding(true)}>
-            Add repo
+            {translate('publish.repositories.add')}
           </button>
         </div>
       </div>
       <RepositoryChoice {...props} state={displayed} />
-      {displayed?.kind === 'failed' && <ErrorToast message={displayed.message} />}
-      {ready?.notice && <p className="hint-text">{ready.notice}</p>}
+      {displayed?.kind === 'failed' && <ErrorToast message={translateDescribed(displayed)} />}
+      {ready?.notice && <p className="hint-text">{translateDescribed({ message: ready.notice, messageRef: ready.noticeRef })}</p>}
       {adding && (
         <NewRepository
           key={account}
@@ -65,19 +72,26 @@ export function PublishRepositories(props: Props) {
 }
 
 function RepositoryChoice(props: Props & { readonly state: SettledState | undefined }) {
+  const translate = useTranslate();
   const ready = props.state?.kind === 'ready' ? props.state.value : undefined;
   const selection = props.selection?.account === props.account ? props.selection : undefined;
   const selected = selection?.repository ?? ready?.connected ?? '';
   const repositories = [...new Set([...(ready?.repositories ?? []), ...(selected ? [selected] : [])])];
   return (
     <Dropdown
-      ariaLabel="GitHub repository"
+      ariaLabel={translate('publish.repositories.title')}
       value={selected}
       options={repositories.map((repository) => ({ value: repository, label: repository }))}
-      placeholder={!props.account ? 'Choose a GitHub account first' : props.state === undefined ? 'Loading repositories…' : 'Choose repository…'}
+      placeholder={
+        !props.account
+          ? translate('publish.repositories.chooseAccountFirst')
+          : props.state === undefined
+            ? translate('publish.repositories.loading')
+            : translate('publish.repositories.choose')
+      }
       disabled={props.state?.kind !== 'ready' || ready?.mode === 'managed'}
       searchable={repositories.length > 6}
-      searchPlaceholder="Find repository…"
+      searchPlaceholder={translate('publish.repositories.find')}
       menuClassName="publish-dropdown"
       livePreview={false}
       onChange={(repository) => {
@@ -94,25 +108,32 @@ interface NewRepositoryProps extends Props {
   readonly created: (value: PublishingRepositories, repository: string) => void;
 }
 function NewRepository(props: NewRepositoryProps) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { name, setName, visibility, setVisibility, state, error, create } = useNewRepository(props);
   return (
-    <Popup className="modal publish-settings publish-new-repository" label="Create repository" onClose={props.close} dismissible={state === 'editing'}>
+    <Popup
+      className="modal publish-settings publish-new-repository"
+      label={translate('publish.repositories.create.title')}
+      onClose={props.close}
+      dismissible={state === 'editing'}
+    >
       {({ close }) => (
         <>
-          <div className="modal-header">Create repository</div>
+          <div className="modal-header">{translate('publish.repositories.create.title')}</div>
           <div className="modal-body publish-fields" aria-busy={state === 'creating'}>
             <label>
-              Repository name
+              {translate('publish.repositories.create.name')}
               <input value={name} maxLength={100} disabled={state === 'creating'} onChange={(event) => setName(event.target.value)} />
             </label>
             <div className="publish-field">
-              <span className="publish-label">Visibility</span>
+              <span className="publish-label">{translate('publish.repositories.visibility')}</span>
               <Dropdown
-                ariaLabel="Repository visibility"
+                ariaLabel={translate('publish.repositories.visibilityLabel')}
                 value={visibility}
                 options={[
-                  { value: 'private', label: 'Private' },
-                  { value: 'public', label: 'Public' },
+                  { value: 'private', label: translate('publish.repositories.private') },
+                  { value: 'public', label: translate('publish.repositories.public') },
                 ]}
                 onChange={setVisibility}
                 livePreview={false}
@@ -120,15 +141,15 @@ function NewRepository(props: NewRepositoryProps) {
                 disabled={state === 'creating'}
               />
             </div>
-            <p className="hint-text">Creates an empty repo in {props.account}. Save Publish settings to connect it.</p>
-            {error && <ErrorToast message={error} />}
+            <p className="hint-text">{translate('publish.repositories.create.hint', { account: props.account })}</p>
+            {error && <ErrorToast message={translateDescribed(error)} />}
           </div>
           <div className="modal-footer">
             <button type="button" disabled={state === 'creating'} onClick={close}>
-              Cancel
+              {translate('ui.cancel')}
             </button>
             <button type="button" className="primary" disabled={!name || state === 'creating'} onClick={() => void create()}>
-              {state === 'creating' ? 'Creating…' : 'Create repo'}
+              {state === 'creating' ? translate('publish.repositories.create.creating') : translate('publish.repositories.create.submit')}
             </button>
           </div>
         </>
@@ -141,7 +162,7 @@ function useNewRepository(props: NewRepositoryProps) {
   const [name, setName] = useState(props.projectPath.split(/[/\\]/).at(-1) ?? 'website');
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [state, setState] = useState<'editing' | 'creating'>('editing');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<Described | undefined>(undefined);
   async function create() {
     if (state === 'creating') {
       return;
@@ -158,10 +179,10 @@ function useNewRepository(props: NewRepositoryProps) {
       if (result.ok) {
         props.created(result.value, `${props.account}/${name}`);
       } else {
-        setError(result.error);
+        setError({ message: result.error, messageRef: result.errorRef });
       }
     } catch (failure: unknown) {
-      setError(cleanError(failure));
+      setError({ message: cleanError(failure) });
     } finally {
       setState('editing');
       props.busy(false);
@@ -183,7 +204,7 @@ function useRepositoryList(projectPath: string, account: string) {
       void publishingRepositories(projectPath, { action: 'list', account })
         .then((result) => {
           if (active) {
-            setState(result.ok ? { kind: 'ready', value: result.value } : { kind: 'failed', message: result.error });
+            setState(result.ok ? { kind: 'ready', value: result.value } : { kind: 'failed', message: result.error, messageRef: result.errorRef });
           }
         })
         .catch((failure: unknown) => {

@@ -1,7 +1,9 @@
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import type { ScanPage } from '../../../shared/properties/projectScan';
-import { pageDisplayName } from '../../lib/pageName';
+import { pageDisplayLabel } from '../../lib/pageName';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 // Which link-type tab an href opens on. The tab is a reading of the value, so
 // it is a pure function of the value and of what the page and project hold:
@@ -30,9 +32,9 @@ export interface LinkPageOption {
 // The Page tab lists pages exactly as the Pages panel does, so a page has one
 // name in the app: the panel's name over the panel's route. A file name here
 // would make `index` and "Home" read as two different pages.
-export function linkPageOptions(pages: readonly LinkPage[]): readonly LinkPageOption[] {
+export function linkPageOptions(pages: readonly LinkPage[], translate: Translator = ENGLISH_TRANSLATE): readonly LinkPageOption[] {
   assert(pages.length <= LIMITS.scanEntriesMax, 'linkPageOptions: page limit exceeded');
-  return pages.map((page) => ({ value: page.route, label: pageDisplayName(page), description: page.route }));
+  return pages.map((page) => ({ value: page.route, label: pageDisplayLabel(page, translate), description: page.route }));
 }
 
 export function detectLinkType(text: string, context: LinkTypeContext): LinkType {

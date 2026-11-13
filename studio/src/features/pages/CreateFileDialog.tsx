@@ -1,5 +1,6 @@
 import Popup from '../../../vendor/stacki/src/ui/Popup';
 import { useState } from 'react';
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 
 interface Props {
   readonly create: (name: string, duplicate: boolean) => Promise<void>;
@@ -9,9 +10,11 @@ interface Props {
   readonly close: () => void;
 }
 export function CreateFileDialog({ create, collection, busy, close }: Props) {
+  const translate = useTranslate();
   const [name, setName] = useState('');
+  const title = translate(collection ? 'pages.studio.newItem' : 'pages.new.title');
   return (
-    <Popup className="modal studio-file-dialog" label={collection ? 'New item' : 'New Page'} dismissible={!busy} onClose={close}>
+    <Popup className="modal studio-file-dialog" label={title} dismissible={!busy} onClose={close}>
       {({ close }) => (
         <>
           <form
@@ -20,16 +23,16 @@ export function CreateFileDialog({ create, collection, busy, close }: Props) {
               void create(name.trim(), false);
             }}
           >
-            <div className="modal-header">{collection ? 'New item' : 'New Page'}</div>
+            <div className="modal-header">{title}</div>
             <div className="modal-body">
-              <label htmlFor="studio-file-name">{collection ? 'Item path' : 'Page name (e.g. “about” or “blog/post-1”)'}</label>
+              <label htmlFor="studio-file-name">{collection ? translate('pages.studio.itemPath') : translate('pages.new.nameLabel')}</label>
               <input
                 id="studio-file-name"
                 autoFocus
                 required
                 maxLength={512}
-                aria-label="New file name"
-                placeholder={collection ? 'posts/hello.md' : 'about'}
+                aria-label={translate('pages.studio.fileName')}
+                placeholder={collection ? 'posts/hello.md' : translate('pages.new.namePlaceholder')}
                 value={name}
                 disabled={busy}
                 onChange={(event) => setName(event.currentTarget.value)}
@@ -37,13 +40,13 @@ export function CreateFileDialog({ create, collection, busy, close }: Props) {
             </div>
             <div className="modal-footer">
               <button type="button" disabled={busy} onClick={close}>
-                Cancel
+                {translate('ui.cancel')}
               </button>
               <button type="button" disabled={busy || !name.trim()} onClick={() => void create(name.trim(), true)}>
-                Duplicate current
+                {translate('pages.studio.duplicate')}
               </button>
               <button className="primary" disabled={busy || !name.trim()}>
-                {busy ? 'Creating…' : collection ? 'Create item' : 'Create Page'}
+                {busy ? translate('pages.studio.creating') : collection ? translate('pages.studio.createItem') : translate('pages.new.create')}
               </button>
             </div>
           </form>

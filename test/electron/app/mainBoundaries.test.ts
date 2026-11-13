@@ -106,8 +106,8 @@ test('the complete channel inventory matches real main and terminal registration
   // candidates, stopping it, a permission answer, a setting, keeping or undoing one file’s change, and
   // the guided setup.
   // Settings adds secrets:* and mcp:* (project .env values and MCP servers) and the microphone adds three
-  // (microphone:status, :request and :openSettings), 264 in all.
-  assert.equal(harness.handlers.size, 264);
+  // (microphone:status, :request and :openSettings), and the interface language is mirrored to main (locale:set); the AI panel adds a prewarm (ai:prewarm) and a remembered setting (ai:remember), and a CMS connection can be checked before it is saved (cmsConnections:check), 268 in all.
+  assert.equal(harness.handlers.size, 268);
   assert.equal(terminalChannels.length, 4);
   assert.deepEqual([...Object.keys(IPC_PAYLOADS)].sort(), [...harness.handlers.keys(), ...terminalChannels].sort());
   // One-way `send` listeners bypass the invoke registrar, so each must name
@@ -187,10 +187,19 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
     usageNoticeVersion: 0,
     appsPersonHidden: false,
     aiAskBeforeTrust: false,
+    aiTrackChanges: true,
+    localePreference: 'system',
   });
   assert.equal(parseSettings({ sound: true, appsPersonHidden: true }).appsPersonHidden, true);
   assert.equal(parseSettings({ sound: true, aiAskBeforeTrust: true }).aiAskBeforeTrust, true);
   assert.throws(() => parseSettings({ sound: true, aiAskBeforeTrust: 'yes' }), /boolean/);
+  // Change tracking is on unless the person turned it off; a file written before the setting existed keeps it on.
+  assert.equal(parseSettings({ sound: true }).aiTrackChanges, true);
+  assert.equal(parseSettings({ sound: true, aiTrackChanges: false }).aiTrackChanges, false);
+  assert.equal(parseSettings({ sound: true, aiTrackChanges: true }).aiTrackChanges, true);
+  for (const bad of ['yes', 'false', 0, 1, {}]) {
+    assert.throws(() => parseSettings({ sound: true, aiTrackChanges: bad }), /boolean/);
+  }
   assert.throws(() => parseSettings({ sound: true, appsPersonHidden: 'yes' }), /boolean/);
   assert.throws(() => parseSettings({ sound: 'yes' }), /boolean/);
   assert.deepEqual(
@@ -207,6 +216,8 @@ test('disk parsers validate known shapes and fail on corrupt data', () => {
       usageLastAttemptDay: '2026-10-08',
       appsPersonHidden: false,
       aiAskBeforeTrust: false,
+      aiTrackChanges: true,
+      localePreference: 'system',
     },
   );
   assert.throws(() => parseSettings({ sound: false, usageCountsEnabled: 'no' }), /boolean/);

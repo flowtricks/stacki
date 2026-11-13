@@ -1,3 +1,4 @@
+import type { Translator } from '../../lib/i18n/localeContext';
 import { canvasContentEdits } from '../model/canvasTextContent';
 import { canvasPropEdits, type ComponentSource } from '../model/canvasPropText';
 import { readPage } from '../../ipc/bridge';
@@ -6,7 +7,7 @@ import type { CanvasTextDocument } from '../../features/preview/useCanvasText';
 import { canvasTextFormatter } from '../model/canvasTextFormat';
 import { projectRelativePath } from '../../lib/projectPath';
 
-export function desktopCanvasText(app: ShellView): CanvasTextDocument | undefined {
+export function desktopCanvasText(app: ShellView, translate: Translator): CanvasTextDocument | undefined {
   const state = app.pageState;
   const file = app.openEditableFile?.path;
   if (!file || !state?.editable || state.parsedFrom !== state.source) {
@@ -19,8 +20,9 @@ export function desktopCanvasText(app: ShellView): CanvasTextDocument | undefine
     file: projectRelativePath(app.project.path, file, window.avb.platform),
     projectPath: app.project.path,
     loadContent: async (document) => [
-      ...(await canvasContentEdits(document)),
+      ...(await canvasContentEdits(document, translate('shell.canvasText.sharedContent'))),
       ...(await canvasPropEdits(document, {
+        label: translate('shell.canvasText.componentText'),
         projectPath: app.project.path,
         file,
         nodes: state.model.nodes,

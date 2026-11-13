@@ -484,7 +484,7 @@ export function useRenameQuery(
     }
     const next = asQuery(to);
     if (!splitQuery(next)) {
-      setStatus('A query starts with @ — @media, @container or @supports.');
+      setStatus('A query starts with @ — @media, @container or @supports.'); // i18n-ignore: write-only status, never rendered.
       return;
     }
     if (next === from) {
@@ -492,7 +492,7 @@ export function useRenameQuery(
     }
     void (async () => {
       setBusyBoth(true);
-      setStatus('Renaming query…');
+      setStatus('Renaming query…'); // i18n-ignore: write-only status, never rendered.
       // try/finally so a throw mid-rename can't leave every button disabled.
       try {
         let count = 0;
@@ -500,7 +500,7 @@ export function useRenameQuery(
           count += renameAtRuleQuery(region, from, next);
         }
         if (!count) {
-          setStatus('That query isn’t in this file any more.');
+          setStatus('That query isn’t in this file any more.'); // i18n-ignore: write-only status, never rendered.
           return;
         }
         await refreshDerived();
@@ -513,7 +513,7 @@ export function useRenameQuery(
         const swap = (key: ContextKey) => renameQueryInContextKey(key, from, next);
         setTypedContexts((previous) => previous.map(swap));
         setContext((previous) => swap(previous));
-        setStatus(count === 1 ? `Renamed to ${next}.` : `Renamed ${count} blocks to ${next}.`);
+        setStatus(count === 1 ? `Renamed to ${next}.` : `Renamed ${count} blocks to ${next}.`); // i18n-ignore: write-only status, never rendered.
       } finally {
         setBusyBoth(false);
       }

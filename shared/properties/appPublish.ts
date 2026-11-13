@@ -12,7 +12,9 @@
 // Publishing to the marketplace is a separate step, once a repository is public.
 import { assert } from '../core/assert';
 import { record, text } from '../core/boundary';
+import { parseMessageRef, parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 import { toArray } from '../core/record';
+import { described, englishText, messageRef, type Described, type TypedMessageRef } from './i18n/messageRef';
 import { APP_LIMITS, parseAppId, parseAppVersion, parseGitHubSource, parseReleaseTag, parseSha256, type AppGitHubSource } from './apps';
 import { MARKETPLACE_LICENSE } from './appMarketplace';
 import { parseGitHubLogin } from './projectRoles';
@@ -80,7 +82,16 @@ export interface AppShared {
 export type AppShareOutcome =
   | { readonly kind: 'shared'; readonly shared: AppShared }
   /** A step failed: `created` says exactly what exists now, so nothing is left unaccounted for. */
-  | { readonly kind: 'failed'; readonly step: AppShareStep; readonly message: string; readonly created: readonly string[] };
+  | {
+      readonly kind: 'failed';
+      readonly step: AppShareStep;
+      readonly message: string;
+      /** The reason as a reference the renderer translates; absent from an older host. */
+      readonly messageRef?: MessageRef | undefined;
+      readonly created: readonly string[];
+      /** `created` as references, entry for entry (same length); absent from an older host. */
+      readonly createdRefs?: readonly MessageRef[] | undefined;
+    };
 
 const REPOSITORY_NAME = /^[A-Za-z0-9._-]+$/;
 
@@ -89,20 +100,25 @@ const REPOSITORY_NAME = /^[A-Za-z0-9._-]+$/;
  * 1 to 100 letters, digits, `.`, `-` and `_`, not `.` or `..`, not ending `.git`.
  */
 export function repositoryNameProblem(name: string): string | undefined {
+  return repositoryNameProblemDescribed(name)?.message;
+}
+
+/** `repositoryNameProblem` with the reference the renderer translates beside the English text. */
+export function repositoryNameProblemDescribed(name: string): (Described & { readonly messageRef: TypedMessageRef }) | undefined {
   if (name.length === 0) {
-    return 'Name the repository.';
+    return described('apps.publish.nameEmpty');
   }
   if (name.length > APP_PUBLISH_LIMITS.repositoryNameCharsMax) {
-    return `A repository name is at most ${APP_PUBLISH_LIMITS.repositoryNameCharsMax} characters.`;
+    return described('apps.publish.nameTooLong', { max: APP_PUBLISH_LIMITS.repositoryNameCharsMax });
   }
   if (!REPOSITORY_NAME.test(name)) {
-    return 'Use letters, digits, “.”, “-” and “_” only.';
+    return described('apps.publish.nameCharacters');
   }
   if (name === '.' || name === '..') {
-    return 'That name is reserved by GitHub.';
+    return described('apps.publish.nameReserved');
   }
   if (name.toLowerCase().endsWith('.git')) {
-    return 'A repository name cannot end in “.git”.';
+    return described('apps.publish.nameGit');
   }
   return undefined;
 }
@@ -177,7 +193,14 @@ export function parseAppShareOutcome(input: unknown): AppShareOutcome {
     if (created === undefined || created.length > APP_PUBLISH_LIMITS.createdMax) {
       throw new Error('A failed share lists what it created');
     }
-    return { kind: 'failed', step, message: message(value['message']), created: created.map(message) };
+    return {
+      kind: 'failed',
+      step,
+      message: message(value['message']),
+      ...optionalMessageRef(value['messageRef']),
+      created: created.map(message),
+      ...optionalCreatedRefs(value['createdRefs'], created.length),
+    };
   }
   throw new Error('A share outcome is shared or failed');
 }
@@ -189,22 +212,27 @@ export function shareReleaseTag(version: string): string {
   return tag;
 }
 
-/** What each share step is called while it runs. */
-export function shareStepLabel(step: AppShareStep, visibility: AppShareVisibility): string {
+/** What each share step is called while it runs, as a reference the renderer translates. */
+export function shareStepRef(step: AppShareStep, visibility: AppShareVisibility): TypedMessageRef {
   switch (step) {
     case 'create-repository':
-      return `Create the ${visibility} repository`;
+      return messageRef(visibility === 'public' ? 'apps.share.step.createPublic' : 'apps.share.step.createPrivate');
     case 'add-topic':
-      return 'Add the stacki-app topic';
+      return messageRef('apps.share.step.addTopic');
     case 'commit-files':
-      return visibility === 'public' ? 'Commit the app’s files and the MIT license' : 'Commit the app’s files';
+      return messageRef(visibility === 'public' ? 'apps.share.step.commitWithLicense' : 'apps.share.step.commit');
     case 'create-release':
-      return 'Release the app bundle';
+      return messageRef('apps.share.step.release');
     default: {
       const exhaustive: never = step;
       return exhaustive;
     }
   }
+}
+
+/** What each share step is called while it runs, in English (logs, tests). */
+export function shareStepLabel(step: AppShareStep, visibility: AppShareVisibility): string {
+  return englishText(shareStepRef(step, visibility));
 }
 
 /** The step states for a progress list: done before `current`, running at it, pending after; failed when the run failed there. */
@@ -244,6 +272,7 @@ export function mitLicenseText(year: number, holder: string): string {
   assert(year >= 2000, 'A copyright year is a recent one');
   const name = holder.trim().slice(0, APP_PUBLISH_LIMITS.holderCharsMax);
   assert(name.length > 0, 'A license names its copyright holder');
+  // i18n-ignore: the license text is the standard English MIT license, written into the repository as is.
   return `MIT License
 
 Copyright (c) ${year} ${name}
@@ -426,7 +455,7 @@ export function submissionBody(submission: MarketplaceSubmission, release: { rea
 export type MarketplaceSubmissionOutcome =
   | { readonly kind: 'submitted'; readonly id: number | undefined; readonly updated: boolean }
   | { readonly kind: 'refused'; readonly code: string; readonly message: string }
-  | { readonly kind: 'unavailable'; readonly message: string };
+  | { readonly kind: 'unavailable'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 /** The Worker's reply, from its status and body text. */
 export function submissionOutcome(status: number, body: string): MarketplaceSubmissionOutcome {
@@ -439,7 +468,7 @@ export function submissionOutcome(status: number, body: string): MarketplaceSubm
     parsed = undefined;
   }
   if (parsed === undefined) {
-    return { kind: 'unavailable', message: `The marketplace answered HTTP ${status}.` };
+    return { kind: 'unavailable', ...described('apps.publish.httpAnswered', { status }) };
   }
   if (status >= 200 && status < 300 && parsed['ok'] === true) {
     const id = parsed['id'];
@@ -448,7 +477,7 @@ export function submissionOutcome(status: number, body: string): MarketplaceSubm
   const code = typeof parsed['code'] === 'string' ? parsed['code'].slice(0, 40) : '';
   const said = typeof parsed['message'] === 'string' ? parsed['message'].trim().slice(0, APP_LIMITS.messageCharsMax) : '';
   if (code === 'unconfigured' || status === 404 || status >= 500 || code === '' || said === '') {
-    return { kind: 'unavailable', message: said === '' ? `The marketplace answered HTTP ${status}.` : said };
+    return said === '' ? { kind: 'unavailable', ...described('apps.publish.httpAnswered', { status }) } : { kind: 'unavailable', message: said };
   }
   return { kind: 'refused', code, message: said };
 }
@@ -460,7 +489,7 @@ export function submissionOutcome(status: number, body: string): MarketplaceSubm
 export type MarketplacePrecheck =
   | { readonly kind: 'ready'; readonly id: string; readonly name: string; readonly version: string; readonly iconPresent: boolean }
   | { readonly kind: 'refused'; readonly code: string; readonly message: string }
-  | { readonly kind: 'unavailable'; readonly message: string };
+  | { readonly kind: 'unavailable'; readonly message: string; readonly messageRef?: MessageRef | undefined };
 
 /** The check's address for a repository: `?repository=owner/repo`. */
 export function marketplaceCheckAddress(checkURL: string, owner: string, repository: string): string {
@@ -480,7 +509,7 @@ export function precheckOutcome(status: number, body: string): MarketplacePreche
     parsed = undefined;
   }
   if (parsed === undefined) {
-    return { kind: 'unavailable', message: `The marketplace answered HTTP ${status}.` };
+    return { kind: 'unavailable', ...described('apps.publish.httpAnswered', { status }) };
   }
   if (parsed['ok'] === true) {
     try {
@@ -489,13 +518,13 @@ export function precheckOutcome(status: number, body: string): MarketplacePreche
       if (error instanceof Error && error.message.startsWith('Assertion failed')) {
         throw error;
       }
-      return { kind: 'unavailable', message: 'The marketplace’s check answered in a shape Stacki does not read.' };
+      return { kind: 'unavailable', ...described('apps.publish.checkShape') };
     }
   }
   const code = typeof parsed['code'] === 'string' ? parsed['code'].slice(0, 40) : '';
   const said = typeof parsed['message'] === 'string' ? parsed['message'].trim().slice(0, APP_LIMITS.messageCharsMax) : '';
   if (code === 'unconfigured' || status === 404 || status >= 500 || code === '' || said === '') {
-    return { kind: 'unavailable', message: said === '' ? `The marketplace answered HTTP ${status}.` : said };
+    return said === '' ? { kind: 'unavailable', ...described('apps.publish.httpAnswered', { status }) } : { kind: 'unavailable', message: said };
   }
   return { kind: 'refused', code, message: said };
 }
@@ -524,7 +553,7 @@ export function parseMarketplacePrecheck(input: unknown): MarketplacePrecheck {
       return { kind: 'refused', code, message: message(value['message']) };
     }
     case 'unavailable':
-      return { kind: 'unavailable', message: message(value['message']) };
+      return { kind: 'unavailable', message: message(value['message']), ...optionalMessageRef(value['messageRef']) };
     default:
       throw new Error('A marketplace check is ready, refused or unavailable');
   }
@@ -548,10 +577,19 @@ export function parseSubmissionOutcome(input: unknown): MarketplaceSubmissionOut
       return { kind: 'refused', code, message: message(value['message']) };
     }
     case 'unavailable':
-      return { kind: 'unavailable', message: message(value['message']) };
+      return { kind: 'unavailable', message: message(value['message']), ...optionalMessageRef(value['messageRef']) };
     default:
       throw new Error('A submission outcome is submitted, refused or unavailable');
   }
+}
+
+// A reference that crossed a boundary: kept when it parses, dropped (the English `message` shows) when it does not.
+function optionalMessageRef(input: unknown): { readonly messageRef?: MessageRef } {
+  if (input === undefined) {
+    return {};
+  }
+  const parsed = parseMessageRef(input);
+  return parsed.ok ? { messageRef: parsed.value } : {};
 }
 
 function message(input: unknown): string {
@@ -597,4 +635,21 @@ export function parseAppScanTarget(input: unknown): AppScanTarget {
 export function parseSharedReleaseSource(input: unknown): AppGitHubSource & { readonly tag: string } {
   const value = record(input);
   return { ...parseGitHubSource(value), tag: parseReleaseTag(value['tag']) };
+}
+
+// The references parallel `created`: all of them parse and line up with it, or none are used and the English entries show.
+function optionalCreatedRefs(input: unknown, count: number): { readonly createdRefs?: readonly MessageRef[] } {
+  const items = toArray(input);
+  if (items === undefined || items.length !== count) {
+    return {};
+  }
+  const refs: MessageRef[] = [];
+  for (const item of items) {
+    const parsed = parseOptionalMessageRef(item);
+    if (parsed === undefined) {
+      return {};
+    }
+    refs.push(parsed);
+  }
+  return { createdRefs: refs };
 }

@@ -1,3 +1,5 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { useDefaultsKeyboard } from '../../features/componentDefaults/useDefaultsKeyboard';
 import { canvasNodeAt } from '../../features/componentDefaults/defaultsCanvasModel';
 import { useMemo, useRef } from 'react';
@@ -9,6 +11,7 @@ import type { OpenFile } from '../../editor/pageState';
 import type { useAppScope } from './appComposers';
 
 export function useDesktopDefaultsCanvas(app: ReturnType<typeof useAppScope>) {
+  const translate = useTranslate();
   const project = app.project?.path ?? '';
   const defaults = useMemo(() => desktopDefaultsHost(project), [project]);
   const previous = useRef<{
@@ -31,7 +34,7 @@ export function useDesktopDefaultsCanvas(app: ReturnType<typeof useAppScope>) {
       const entry: OpenFile = {
         kind: 'page',
         path: project + '/' + session.file,
-        name: (session.component.split('/').at(-1) ?? 'Component') + ' defaults',
+        name: translate('shell.defaults.pageName', { name: session.component.split('/').at(-1) ?? 'Component' }), // i18n-ignore: the fallback is a component name, not a sentence.
         route: defaultsCanvasRoute(session.file),
       };
       await app.openFile(entry, {
@@ -39,12 +42,12 @@ export function useDesktopDefaultsCanvas(app: ReturnType<typeof useAppScope>) {
         selectionPath: session.targetPath,
       });
       if (app.pageStateRef.current.currentPage?.path !== entry.path) {
-        throw new Error('Could not open the defaults canvas.');
+        throw new Error(translate('shell.defaults.openFailed'));
       }
       app.setLeftTab('navigator');
       app.setRightTab('settings');
     },
-    read: (session) => readDefaultsCanvas(app, project + '/' + session.file),
+    read: (session) => readDefaultsCanvas(app, project + '/' + session.file, translate),
     leave: async () => {
       const entry = previous.current.stack.at(-1);
       if (entry) {
@@ -53,7 +56,7 @@ export function useDesktopDefaultsCanvas(app: ReturnType<typeof useAppScope>) {
           selectionPath: previous.current.selectionPath,
         });
         if (app.pageStateRef.current.currentPage?.path !== entry.path) {
-          throw new Error('Could not return to the previous page. Your defaults canvas is still open.');
+          throw new Error(translate('shell.defaults.returnFailed'));
         }
       } else {
         app.setCurrentPage(undefined);
@@ -67,16 +70,16 @@ export function useDesktopDefaultsCanvas(app: ReturnType<typeof useAppScope>) {
   return {
     ...canvas,
     rootId,
-    startForNode: (_name: string, id: string) => startForNode(app, canvas, id),
+    startForNode: (_name: string, id: string) => startForNode(app, canvas, id, translate),
   };
 }
 
-async function startForNode(app: ReturnType<typeof useAppScope>, canvas: ReturnType<typeof useDefaultsCanvas>, id: string) {
+async function startForNode(app: ReturnType<typeof useAppScope>, canvas: ReturnType<typeof useDefaultsCanvas>, id: string, translate: Translator) {
   const project = app.project?.path ?? '';
   const file = app.currentPage?.path;
   const path = app.pathFor(id);
   if (!file || !path) {
-    throw new Error('Select a component in an open page.');
+    throw new Error(translate('shell.defaults.selectComponent'));
   }
   await app.flushSave();
   const page = await readPage(file);
@@ -91,9 +94,9 @@ async function startForNode(app: ReturnType<typeof useAppScope>, canvas: ReturnT
   });
 }
 
-async function readDefaultsCanvas(app: ReturnType<typeof useAppScope>, path: string) {
+async function readDefaultsCanvas(app: ReturnType<typeof useAppScope>, path: string, translate: Translator) {
   if (app.pageStateRef.current.currentPage?.path !== path) {
-    throw new Error('Return to the defaults canvas before saving.');
+    throw new Error(translate('shell.defaults.returnFirst'));
   }
   await app.flushSave();
   const page = await readPage(path);

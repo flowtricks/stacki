@@ -8,7 +8,7 @@ import { RemoteCmsView } from '../../../vendor/stacki/src/features/cms/RemoteCms
 import type { RemoteCmsSelection } from '../../../vendor/stacki/src/features/cms/remoteCmsShared';
 import { CmsConnectionsDialog } from './CmsConnectionsDialog';
 import { AssetsPanel } from '../assets/AssetsPanel';
-import { AssetPickOverlay, assetPickTitle } from '../../../vendor/stacki/src/ui/AssetPickOverlay';
+import { AssetPickOverlay } from '../../../vendor/stacki/src/ui/AssetPickOverlay';
 import { clearAssetRequest } from '../../../vendor/stacki/src/ui/assetPick';
 import type { CmsUndo } from '../../../vendor/stacki/src/features/cms/cmsWriter';
 import type { EditorProps } from '../../app/Editor';
@@ -112,7 +112,7 @@ function RemoteWorkspace({ props, selection }: { readonly props: EditorProps; re
         onSelect={(next) => setCms(next === undefined ? undefined : { kind: 'remote', selection: next })}
       />
       {pick?.presentation === 'overlay' && (
-        <AssetPickOverlay title={assetPickTitle(pick.mediaKind)} onClose={clearAssetRequest}>
+        <AssetPickOverlay mediaKind={pick.mediaKind} onClose={clearAssetRequest}>
           <AssetsPanel project={props.project} refresh={props.refresh} error={props.report} pick={pick} />
         </AssetPickOverlay>
       )}

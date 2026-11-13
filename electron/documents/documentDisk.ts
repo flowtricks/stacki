@@ -53,6 +53,7 @@ import {
 import { readSourceBytes } from '../lib/mainLimits';
 import { isInstalledFile, packageOf } from '../lib/installedPackages';
 import { atomicDirectoryOf, prepareAtomicDirectory } from './atomicDirectory';
+import { translateMain } from '../lib/mainLocale';
 
 /** A lock older than this whose owner cannot be asked is abandoned: no save
  * holds its lock for more than one read, one write and one read-back. */
@@ -83,7 +84,7 @@ export class NodeDocumentDisk implements DocumentDisk {
       bytes = readSourceBytes(file);
     } catch (error: unknown) {
       const code = errorCode(error) === 'ENOENT' ? 'missing' : 'failed';
-      return err({ code, message: `Could not read ${file}: ${errorMessage(error)}` });
+      return err({ code, message: translateMain('error.documents.readFailed', { file, reason: errorMessage(error) }) });
     }
     this.#reads += 1;
     assert(Number.isSafeInteger(this.#reads), 'The read stamp stays a safe integer');
@@ -133,7 +134,7 @@ export class NodeDocumentDisk implements DocumentDisk {
     const lockFile = location.value;
     const owner = readLockOwner(lockFile);
     if (owner?.token !== lock.token) {
-      return err({ code: 'failed', message: `The lock on ${lock.path} was taken over` });
+      return err({ code: 'failed', message: translateMain('error.documents.lockTakenOver', { file: lock.path }) });
     }
     try {
       fs.rmSync(lockFile);
@@ -207,9 +208,9 @@ export class NodeDocumentDisk implements DocumentDisk {
       fs.writeFileSync(descriptor, owner);
     } catch (error: unknown) {
       if (errorCode(error) === 'EEXIST') {
-        return err({ code: 'held', message: `${file} is being saved by another program` });
+        return err({ code: 'held', message: translateMain('error.documents.lockHeld', { file }) });
       }
-      return err({ code: 'failed', message: `Could not lock ${file}: ${errorMessage(error)}` });
+      return err({ code: 'failed', message: translateMain('error.documents.lockFailed', { file, reason: errorMessage(error) }) });
     } finally {
       if (descriptor !== undefined) {
         fs.closeSync(descriptor);
@@ -355,7 +356,7 @@ function lockFileOf(target: string): Result<string, { readonly code: 'failed'; r
     const name = digestOf(identity);
     return ok(path.join(atomicDirectoryOf(target), `${LOCK_PREFIX}${name}${LOCK_SUFFIX}`));
   } catch (error: unknown) {
-    return err({ code: 'failed', message: `Could not locate lock: ${errorMessage(error)}` });
+    return err({ code: 'failed', message: translateMain('error.documents.lockLocate', { reason: errorMessage(error) }) });
   }
 }
 

@@ -6,6 +6,7 @@ import { useSoundHere } from './soundScope';
 import { ChevronDownIcon, CheckIcon } from './Icons';
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
+import { useTranslate } from '../lib/i18n/useTranslate';
 
 export const POPUP_GAP = 4;
 const POPUP_EDGE = 8;
@@ -508,6 +509,7 @@ function menuStyle(position: PopupPosition): CSSProperties {
 }
 
 function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
+  const translate = useTranslate();
   return (
     <Popup
       mode="popover"
@@ -523,7 +525,7 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
           ref={control.searchRef}
           className="dd-search"
           value={control.query}
-          placeholder={props.searchPlaceholder ?? 'Search…'}
+          placeholder={props.searchPlaceholder ?? translate('ui.search')}
           spellCheck={false}
           onChange={(event) => {
             control.setQuery(event.target.value);
@@ -545,7 +547,7 @@ function DropdownPopup<T>({ control, props, position, onKey }: PopupProps<T>) {
           </Fragment>
         ))}
         {/* A pinned row is not a match, so the list still says nothing matched beside it. */}
-        {!control.visible.some((option) => option.pinned !== true) && <div className="dd-empty">Nothing matches</div>}
+        {!control.visible.some((option) => option.pinned !== true) && <div className="dd-empty">{translate('ui.dropdown.noMatch')}</div>}
       </div>
     </Popup>
   );

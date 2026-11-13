@@ -3,6 +3,8 @@
 // list (index 0 = the first/top shadow) and serialize back, splitting on TOP-LEVEL
 // commas/spaces only so rgba()/hsl()/var() with inner separators survive.
 
+import { ENGLISH_TRANSLATE } from '../../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../../shared/properties/i18n/messageRef';
 import { splitTopLevelCommas, splitTopLevelSpaces } from './background';
 
 export type Shadow = { x: string; y: string; blur: string; color: string };
@@ -53,6 +55,6 @@ export function blankShadow(): Shadow {
 }
 
 /** A short label for a collapsed shadow row ("Text shadow: 0px 1px 1px"). */
-export function shadowLabel(shadow: Shadow): string {
-  return `Text shadow: ${shadow.x || '0px'} ${shadow.y || '0px'} ${shadow.blur || '0px'}`;
+export function shadowLabel(shadow: Shadow, translate: Translator = ENGLISH_TRANSLATE): string {
+  return translate('styleModel.textShadow.label', { x: shadow.x || '0px', y: shadow.y || '0px', blur: shadow.blur || '0px' });
 }

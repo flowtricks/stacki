@@ -1,19 +1,27 @@
 import type { ScanPage } from '../../shared/properties/projectScan';
 import { BOUNDARY_LIMITS, pathText } from '../../shared/core/boundary';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../shared/properties/i18n/messageRef';
 
 // The one source of a page's display name. It lives in the lowest layer because
 // the Pages panel and the link field are separate features, and they must never
 // disagree on what a page is called.
 export function pageDisplayName(page: Pick<ScanPage, 'name' | 'title'>): string {
+  return pageDisplayLabel(page, ENGLISH_TRANSLATE);
+}
+
+/** The same name in the language on screen: "Home" and "Template" are words of the interface, the rest comes from the project. */
+export function pageDisplayLabel(page: Pick<ScanPage, 'name' | 'title'>, translate: Translator): string {
   if (/^index\.(astro|mdx?)$/i.test(page.name)) {
-    return 'Home';
+    return translate('ui.page.home');
   }
   const parts = pageSegments(page.name);
   const base = stripPageExtension(parts.at(-1) ?? page.name);
   if (/^\[(?:\.\.\.)?[^\]]+\]$/.test(base)) {
     // Template names explain the collection; file and route identities remain untouched.
-    const folder = parts.at(-2) ?? 'Page';
-    return pageFolderDisplayName(folder.replace(/[\[\]]/g, '')) + ' Template';
+    const folder = parts.at(-2);
+    const folderName = folder === undefined ? translate('ui.page.fallback') : pageFolderDisplayName(folder.replace(/[\[\]]/g, ''));
+    return translate('ui.page.template', { name: folderName });
   }
   const title = page.title?.trim();
   return title || base;

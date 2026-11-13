@@ -9,6 +9,7 @@ import ProvenanceList from './ProvenanceList';
 import type { ResolvedProp } from './model/resolved';
 import SharedLiveInput from './components/LiveInput';
 import { displayOf } from './model/styleDisplay';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -30,10 +31,11 @@ export const stripImportant = (value: string) => value.replace(/\s*!important\s*
 // ─────────────────── Provenance-aware label (mirrors SizeLabel) ───────────────────
 
 export function OverrideNote({ selector, onSelect }: { selector: string; onSelect: () => void }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_override-note">
-      <span>Overridden by a more specific selector:</span>
-      <button type="button" className="embed-editor_override-note-sel" title="Select this selector" onClick={onSelect}>
+      <span>{translate('style.bordersKit.overriddenBySelector')}</span>
+      <button type="button" className="embed-editor_override-note-sel" title={translate('style.bordersKit.selectSelector')} onClick={onSelect}>
         {selector}
       </button>
     </div>
@@ -57,6 +59,7 @@ export function PropLabel({
   /** Extra class on the label — the corner glyphs use it to size their pill. */
   className?: string;
 } & Pick<Props, 'read' | 'busy' | 'clearProp' | 'onProvenance' | 'onSelectSelector'>) {
+  const translate = useTranslate();
   const resolved = read(prop);
   const display = displayOf(resolved);
   const contributors = resolved?.contributors ?? [];
@@ -76,9 +79,9 @@ export function PropLabel({
       {...(display.present ? {} : { inheritedProp: prop })}
       disabled={busy}
       onReset={() => clearProp(clearProps ?? prop)}
-      resetLabel="Clear"
+      resetLabel={translate('style.bordersKit.clear')}
       tooltip={<PropTip props={tip} />}
-      {...(display.overridden ? { title: `Overridden by ${display.winnerSelector}` } : {})}
+      {...(display.overridden ? { title: translate('style.bordersKit.overriddenBy', { selector: display.winnerSelector }) } : {})}
       menuNote={(close) => (
         <>
           {display.overridden ? (

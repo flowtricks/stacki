@@ -9,6 +9,7 @@
 // it exhausts its memory and aborts the whole process, which no try/catch can stop.
 import { assert } from '../../shared/core/assert';
 import { LIMITS } from '../../shared/core/limits';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import type { SelectorScope } from '../../shared/properties/selectorUsage';
 import { parsePage } from '../parse/astroParser';
 import type { ParserNode } from '../parse/astroParserTypes';
@@ -44,7 +45,20 @@ export interface AstroSheet {
   /** The template computes a class or spreads attributes, so its classes are not all written down. */
   readonly dynamicClass: boolean;
   /** Why the file's own style blocks could not be read, when they could not. */
-  readonly unreadable: string | undefined;
+  readonly unreadable: Described | undefined;
+}
+
+/** Why a style block or template could not be read: the English sentence and its reference, which the Selectors panel words in the person's language. */
+export interface StyleProblem extends Described {
+  readonly failed: true;
+}
+
+function problem(...input: Parameters<typeof described>): StyleProblem {
+  return { failed: true, ...described(...input) };
+}
+
+function isProblem(value: unknown): value is StyleProblem {
+  return typeof value === 'object' && value !== null && 'failed' in value;
 }
 
 export function cssFileRegion(rel: string, text: string): StyleRegion {
@@ -58,10 +72,18 @@ export function readAstroSheet(rel: string, source: string): AstroSheet {
   const dynamicClass = DYNAMIC_CLASS.test(source.slice(bodyStart));
   const parsed = parsePage(source, { locs: true });
   const found = parsed.editable ? fromParser(rel, source, parsed.model.nodes) : fromScanner(rel, source, bodyStart);
-  if (typeof found === 'string') {
+  if (isProblem(found)) {
     // Nothing is blanked: every style block stays in the mention text, which can
     // only protect more names, never fewer.
-    return { rel, source, regions: [], ownText: source, foreignText: source, dynamicClass: true, unreadable: found };
+    return {
+      rel,
+      source,
+      regions: [],
+      ownText: source,
+      foreignText: source,
+      dynamicClass: true,
+      unreadable: { message: found.message, messageRef: found.messageRef },
+    };
   }
   const regions = [...found.regions].sort((left, right) => left.start - right.start).map((region, block) => ({ ...region, block }));
   const ownText = blankRanges(
@@ -74,13 +96,13 @@ export function readAstroSheet(rel: string, source: string): AstroSheet {
 interface FoundSheet {
   readonly regions: readonly StyleRegion[];
   readonly classValues: ReadonlyArray<readonly [number, number]>;
-  readonly unreadable: string | undefined;
+  readonly unreadable: Described | undefined;
 }
 
 function fromParser(rel: string, source: string, nodes: readonly ParserNode[]): FoundSheet {
   const regions: StyleRegion[] = [];
   const classValues: Array<readonly [number, number]> = [];
-  let unreadable: string | undefined;
+  let unreadable: Described | undefined;
   const stack: Array<{ readonly node: ParserNode; readonly conditional: boolean }> = nodes.map((node) => ({ node, conditional: false }));
   for (let visited = 0; stack.length > 0; visited += 1) {
     assert(visited <= LIMITS.treeNodesMax, 'fromParser: the parser bounds the tree');
@@ -97,8 +119,8 @@ function fromParser(rel: string, source: string, nodes: readonly ParserNode[]): 
     if (node.kind === 'raw') {
       if (node.name.toLowerCase() === 'style') {
         const located = locateStyleBlock(rel, source, node, { conditional });
-        if (typeof located === 'string') {
-          unreadable = located;
+        if (isProblem(located)) {
+          unreadable = { message: located.message, messageRef: located.messageRef };
         } else if (located.text !== '') {
           regions.push(located);
         }
@@ -112,17 +134,17 @@ function fromParser(rel: string, source: string, nodes: readonly ParserNode[]): 
   return { regions, classValues, unreadable };
 }
 
-function fromScanner(rel: string, source: string, bodyStart: number): FoundSheet | string {
+function fromScanner(rel: string, source: string, bodyStart: number): FoundSheet | StyleProblem {
   const scanned = scanTemplate(source, bodyStart);
-  if (typeof scanned === 'string') {
+  if (isProblem(scanned)) {
     return scanned;
   }
   const regions: StyleRegion[] = [];
-  let unreadable: string | undefined;
+  let unreadable: Described | undefined;
   for (const style of scanned.styles) {
     const lang = /\blang\s*=\s*["']?([\w-]+)/i.exec(style.attributes)?.[1];
     if (lang !== undefined && lang.toLowerCase() !== 'css') {
-      unreadable = `A <style lang="${lang}"> block is not plain CSS`;
+      unreadable = described('selectors.problem.styleLang', { tag: `<style lang="${lang}">` });
       continue;
     }
     if (style.end > style.start) {
@@ -168,7 +190,7 @@ interface TemplateScan {
 // `<` starts markup only where markup can start — after `(`, `>`, `&&`, `?` or
 // `:` — never after a name, so `i<n` stays code. Any imbalance makes the whole
 // file unreadable rather than guessed at.
-function scanTemplate(source: string, bodyStart: number): TemplateScan | string {
+function scanTemplate(source: string, bodyStart: number): TemplateScan | StyleProblem {
   const styles: FoundStyle[] = [];
   const classValues: Array<readonly [number, number]> = [];
   let depth = 0;
@@ -177,7 +199,7 @@ function scanTemplate(source: string, bodyStart: number): TemplateScan | string 
     if (source.startsWith('<!--', index)) {
       const close = source.indexOf('-->', index + 4);
       if (close === -1) {
-        return 'An HTML comment is never closed';
+        return problem('selectors.problem.commentOpen');
       }
       index = close + 3;
       continue;
@@ -188,11 +210,11 @@ function scanTemplate(source: string, bodyStart: number): TemplateScan | string 
     } else if (char === '}') {
       depth -= 1;
       if (depth < 0) {
-        return 'Its template has a } with no matching {';
+        return problem('selectors.problem.braceClose');
       }
     } else if (char === '<' && /[A-Za-z]/.test(source.charAt(index + 1)) && startsMarkup(source, index, depth)) {
       const tag = scanTag(source, { start: index, conditional: depth > 0 }, styles, classValues);
-      if (typeof tag === 'string') {
+      if (isProblem(tag)) {
         return tag;
       }
       index = tag;
@@ -201,7 +223,7 @@ function scanTemplate(source: string, bodyStart: number): TemplateScan | string 
     index += 1;
   }
   if (depth !== 0) {
-    return 'Its template has a { that is never closed';
+    return problem('selectors.problem.braceOpen');
   }
   return { styles, classValues };
 }
@@ -213,10 +235,10 @@ function scanTag(
   { start, conditional }: { readonly start: number; readonly conditional: boolean },
   styles: FoundStyle[],
   classValues: Array<readonly [number, number]>,
-): number | string {
+): number | StyleProblem {
   const end = tagEnd(source, start);
   if (end === undefined) {
-    return 'A tag is never closed with >';
+    return problem('selectors.problem.tagOpen');
   }
   const name = /^<([A-Za-z][\w:.-]*)/.exec(source.slice(start, start + 64))?.[1]?.toLowerCase() ?? '';
   const tag = source.slice(start, end);
@@ -232,7 +254,7 @@ function scanTag(
   }
   const close = source.slice(end).search(new RegExp(`</${name}\\s*>`, 'i'));
   if (close === -1) {
-    return `A <${name}> block is never closed`;
+    return problem('selectors.problem.blockOpen', { tag: `<${name}>` });
   }
   if (name === 'style') {
     styles.push({ start: end, end: end + close, attributes: tag.slice(name.length + 1, -1), conditional });
@@ -277,23 +299,23 @@ function locateStyleBlock(
   source: string,
   node: Extract<ParserNode, { kind: 'raw' }>,
   { conditional }: { readonly conditional: boolean },
-): StyleRegion | string {
+): StyleRegion | StyleProblem {
   const lang = attrText(node, 'lang');
   if (lang !== undefined && lang.toLowerCase() !== 'css') {
-    return `A <style lang="${lang}"> block is not plain CSS`;
+    return problem('selectors.problem.styleLang', { tag: `<style lang="${lang}">` });
   }
   if (node.start === undefined || node.end === undefined) {
-    return 'A <style> block has no source position';
+    return problem('selectors.problem.styleNoPosition', { tag: '<style>' });
   }
   const tag = source.slice(node.start, node.end);
   const close = /<\/style\s*>$/i.exec(tag);
   if (close === null) {
-    return 'A <style> block has no closing tag where the parser placed it';
+    return problem('selectors.problem.styleNoClosing', { tag: '<style>' });
   }
   const closeStart = node.start + close.index;
   const start = closeStart - node.inner.length;
   if (start <= node.start || source.slice(start, closeStart) !== node.inner) {
-    return 'A <style> block was not where the parser placed it';
+    return problem('selectors.problem.styleMoved', { tag: '<style>' });
   }
   const written = node.props?.['is:inline'] !== undefined ? 'inline' : node.props?.['is:global'] !== undefined ? 'global' : 'scoped';
   // The block's position is assigned once every block is found (readAstroSheet).

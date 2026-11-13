@@ -2,6 +2,7 @@ import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import type { RefCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // What a fluid clamp() costs a reader who zooms.
 //
@@ -20,11 +21,6 @@ import { createPortal } from 'react-dom';
 // The message is drawn in a portal, not inside the badge. The badge sits in a
 // scrolling column of values, and anything drawn inside that column is cropped
 // by it — which is exactly what a message wider than the column would be.
-
-const COPY = {
-  error: 'Does not reach 2x of its original size at a 500% zoom. ' + 'Reduce difference between max and min variable size.',
-  warning: 'Shrinks when increasing zoom. Increase difference between max and min viewport size.',
-};
 
 const TIP_WIDTH = 260;
 const TIP_MARGIN = 10;
@@ -73,6 +69,7 @@ interface TipProps {
   readonly link: string | undefined;
 }
 function Tip({ anchor, error, message, link }: TipProps) {
+  const translate = useTranslate();
   const ref = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState<{ readonly left: number; readonly top: number } | undefined>(undefined);
 
@@ -94,7 +91,7 @@ function Tip({ anchor, error, message, link }: TipProps) {
       style={{ left: position?.left ?? -9999, top: position?.top ?? 0, width: TIP_WIDTH }}
     >
       {message}
-      {error && link && <span className="fluid-tip-more">Read why</span>}
+      {error && link && <span className="fluid-tip-more">{translate('variables.fluid.readWhy')}</span>}
     </div>,
     document.body,
   );
@@ -104,6 +101,7 @@ interface FluidBadgeProps {
   readonly fluid?: { readonly status: string; readonly link?: string } | undefined;
 }
 export default function FluidBadge({ fluid }: FluidBadgeProps) {
+  const translate = useTranslate();
   const ref = useRef<HTMLElement | undefined>(undefined);
   const [anchor, setAnchor] = useState<DOMRect | undefined>(undefined);
 
@@ -111,8 +109,10 @@ export default function FluidBadge({ fluid }: FluidBadgeProps) {
     return undefined;
   }
   const error = fluid.status === 'error';
-  const message = fluid.status === 'error' ? COPY.error : fluid.status === 'warning' ? COPY.warning : undefined;
-  const label = `${error ? 'Accessibility error' : 'Accessibility warning'}: ${message}`;
+  const message = fluid.status === 'error' ? translate('variables.fluid.error') : fluid.status === 'warning' ? translate('variables.fluid.warning') : undefined;
+  const label = error
+    ? translate('variables.fluid.labelError', { message: message ?? '' })
+    : translate('variables.fluid.labelWarning', { message: message ?? '' });
 
   // No `title`: the browser's own tooltip would say the same thing again, a
   // second later, somewhere else.
@@ -149,7 +149,7 @@ export default function FluidBadge({ fluid }: FluidBadgeProps) {
               fluid.link
                 ? [
                     {
-                      label: 'Read why',
+                      label: translate('variables.fluid.readWhy'),
                       run: () => {
                         window.open(fluid.link, '_blank', 'noopener,noreferrer');
                       },

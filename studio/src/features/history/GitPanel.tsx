@@ -4,6 +4,7 @@ import { readGitInfo } from '../../../vendor/stacki/src/features/git/gitChipBrid
 import { useGitIncoming } from '../../../vendor/stacki/src/features/git/useGitIncoming';
 import HistoryTimeline from '../../../vendor/stacki/src/features/history/HistoryTimeline';
 import { HistorySection } from '../../../vendor/stacki/src/features/history/HistorySections';
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { createPanelCache, usePanelData } from '../../../vendor/stacki/src/lib/usePanelData';
 import { PanelReadStatus } from '../../../vendor/stacki/src/ui/PanelReadStatus';
 import type { IpcResults } from '../../../vendor/stacki/shared/ipc/ipcResults';
@@ -30,6 +31,7 @@ export function GitPanel({
   readonly refreshProject: () => Promise<unknown>;
   readonly report: (error: unknown) => void;
 }) {
+  const translate = useTranslate();
   const key = project.workspaceId ?? project.name;
   const [open, setOpen] = useState(true);
   const [notice, setNotice] = useState('');
@@ -40,10 +42,11 @@ export function GitPanel({
   return (
     <div className="panel-section grow">
       <div className="panel-header">
+        {/* i18n-ignore: Git is a product name. */}
         <h2>Git</h2>
       </div>
       <div className="panel-body history-body">
-        <PanelReadStatus state={state} label="Git history" layout="history" retry={refresh} />
+        <PanelReadStatus state={state} label={translate('history.timeline.label')} layout="history" retry={refresh} />
         {info && (
           <GitChip
             info={info}
@@ -62,7 +65,7 @@ export function GitPanel({
           </p>
         )}
         {info?.isRepo && (
-          <HistorySection title="Version history" open={open} onToggle={() => setOpen(!open)}>
+          <HistorySection title={translate('history.versionHistory')} open={open} onToggle={() => setOpen(!open)}>
             <HistoryTimeline
               projectPath={key}
               branch={info.branch}

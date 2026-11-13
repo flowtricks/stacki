@@ -54,8 +54,10 @@ export const canEdit = createAccessCheck(async (config, login) => {
   const token = await new GitHubRepository(config).installationToken();
   const response = await fetch(`https://api.github.com/repos/${config.repository}/collaborators/${encodeURIComponent(login)}/permission`, {
     headers: {
+      // i18n-ignore: an HTTP header value sent to GitHub.
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',
+      // i18n-ignore: an HTTP header value sent to GitHub.
       'User-Agent': 'Astro-Studio',
       'X-GitHub-Api-Version': '2022-11-28',
     },

@@ -1,3 +1,4 @@
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { TreeDragRow, TreeDropGap, TreeDragHandle } from '../../ui/TreeDragDrop';
 import React, { useEffect, useRef } from 'react';
 import type { NavigatorNode, DropLocation, DropTarget } from './structureModel';
@@ -336,6 +337,7 @@ interface TreeRowProps extends TreeNodeProps, NodeView {
 }
 
 function TreeRow(props: TreeRowProps) {
+  const translate = useTranslate();
   const { node, description } = props;
   const handlers = treeRowHandlers(props);
   return (
@@ -361,7 +363,7 @@ function TreeRow(props: TreeRowProps) {
       <span className="icon">{description.icon}</span>
       <RowLabel node={node} label={description.label} note={props.note} />
       {props.hint && (
-        <span className="prop-preview" title={`Imported from ${props.hint}.astro`}>
+        <span className="prop-preview" title={translate('structure.row.imported', { file: `${props.hint}.astro` })}>
           {props.hint}
         </span>
       )}
@@ -470,23 +472,24 @@ function RowLabel({ node, label, note }: { readonly node: NavigatorNode; readonl
 }
 
 function NodeStatus({ rendersNothing, hidden, inert }: { readonly rendersNothing: boolean; readonly hidden: boolean; readonly inert: boolean }) {
+  const translate = useTranslate();
   if (!rendersNothing && !hidden && !inert) {
     return undefined;
   }
   return (
     <span className="node-empty">
       {rendersNothing && (
-        <span title="Renders nothing on the page with its current props">
+        <span title={translate('structure.status.empty')}>
           <HideIcon size={12} />
         </span>
       )}
       {hidden && !rendersNothing && (
-        <span title="display: none — on the page, not drawn">
+        <span title={translate('structure.status.hidden')}>
           <HideIcon size={12} />
         </span>
       )}
       {inert && (
-        <span title="pointer-events: none — drawn, but takes no clicks">
+        <span title={translate('structure.status.inert')}>
           <PointerEventsNoneIcon size={12} />
         </span>
       )}
@@ -522,6 +525,7 @@ export { defaultCollapsed };
 // Only the selected row's subtree is tinted; a component's block takes the component colour.
 function subtreeClassName(row: { readonly rowSelected: boolean; readonly component: boolean }): string {
   if (row.rowSelected) {
+    // i18n-ignore: CSS class names, not text.
     return row.component ? 'structure-children structure-subtree is-component' : 'structure-children structure-subtree';
   }
   return 'structure-children';

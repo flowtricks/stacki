@@ -189,7 +189,7 @@ function studioAppHost(current: { readonly current: { readonly props: EditorProp
   const known = (nodeId: string) => findNode(model().nodes, nodeId) !== undefined;
   const act = async (nodeId: string, label: string | undefined, run: () => void): Promise<AppEditOutcome> => {
     if (!model().editable || !known(nodeId)) {
-      return { applied: false, reason: 'No editable element has that id on the open page' };
+      return { applied: false, reason: 'No editable element has that id on the open page' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
     labelled(model().document, label, run);
     await model().document?.whenSaved();
@@ -202,7 +202,7 @@ function studioAppHost(current: { readonly current: { readonly props: EditorProp
   }): Promise<AppInsertOutcome> => {
     const document = model().document;
     if (document === undefined || !document.ready || !model().editable) {
-      return { applied: false, reason: 'The open page cannot be edited' };
+      return { applied: false, reason: 'The open page cannot be edited' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
     const page = { file: current.current.props.file, text: document.text.toString(), selected: model().selected };
     const plan = planStudioInsert(page, current.current.props.project, insert);
@@ -216,7 +216,7 @@ function studioAppHost(current: { readonly current: { readonly props: EditorProp
     });
     try {
       if (!(await sent)) {
-        return { applied: false, reason: 'Someone else has that element selected' };
+        return { applied: false, reason: 'Someone else has that element selected' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       // The server's answer carries the page change and, with it, the selection of what was inserted.
       await textChangedFrom(document, before);
@@ -233,10 +233,10 @@ function studioAppHost(current: { readonly current: { readonly props: EditorProp
     scrollTo: able((target) => {
       if (!('nodeId' in target)) {
         // A point scrolls through the frame's app-scroll message, which the dispatcher sends (appRpcHost.ts scrollCanvas).
-        return { applied: false, reason: 'A point is scrolled by the canvas itself' };
+        return { applied: false, reason: 'A point is scrolled by the canvas itself' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       if (!known(target.nodeId)) {
-        return { applied: false, reason: 'That element is not on the canvas' };
+        return { applied: false, reason: 'That element is not on the canvas' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       model().preview.reveal(target.nodeId, target.occurrence ?? 0, { replayOnLoad: false });
       return { applied: true };
@@ -248,7 +248,7 @@ function studioAppHost(current: { readonly current: { readonly props: EditorProp
     selection: () => ({ nodeId: model().selected || undefined }),
     select: (nodeId) => {
       if (nodeId !== undefined && !known(nodeId)) {
-        return { applied: false, reason: 'No element has that id on the open page' };
+        return { applied: false, reason: 'No element has that id on the open page' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       model().select(nodeId ?? '');
       return { applied: true };
@@ -257,7 +257,7 @@ function studioAppHost(current: { readonly current: { readonly props: EditorProp
     pages: () => current.current.props.project.pages.map((page) => ({ path: page, route: routeFor(page), title: undefined })),
     openPage: (path) => {
       if (!current.current.props.project.pages.includes(path)) {
-        return { applied: false, reason: 'This project has no page at that path' };
+        return { applied: false, reason: 'This project has no page at that path' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       current.current.props.open(path);
       return { applied: true };
@@ -266,13 +266,13 @@ function studioAppHost(current: { readonly current: { readonly props: EditorProp
     openComponent: able((path) => {
       const component = current.current.props.project.components.find((entry) => entry.file === path);
       if (component === undefined) {
-        return { applied: false, reason: 'This project has no component at that path' };
+        return { applied: false, reason: 'This project has no component at that path' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       if (component.origin?.kind === 'package') {
-        return { applied: false, reason: 'Package components are read-only' };
+        return { applied: false, reason: 'Package components are read-only' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       if (!can(getStudioRole(), 'component:edit')) {
-        return { applied: false, reason: 'Your role cannot edit components in this project' };
+        return { applied: false, reason: 'Your role cannot edit components in this project' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       current.current.props.open(path);
       return { applied: true };
@@ -300,7 +300,7 @@ function studioAppHost(current: { readonly current: { readonly props: EditorProp
     save: async () => {
       const document = model().document;
       if (document === undefined) {
-        return { applied: false, reason: 'No page is open' };
+        return { applied: false, reason: 'No page is open' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       await document.whenSaved();
       return { applied: true };
@@ -386,7 +386,7 @@ async function textChangedFrom(document: NonNullable<EditorModel['document']>, b
 
 async function stepHistory(document: EditorModel['document'], direction: 'undo' | 'redo'): Promise<AppEditOutcome> {
   if (document === undefined) {
-    return { applied: false, reason: 'No page is open' };
+    return { applied: false, reason: 'No page is open' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   await document.history.step(direction);
   return { applied: true };

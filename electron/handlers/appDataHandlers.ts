@@ -18,7 +18,7 @@ import type { NativeImage } from 'electron';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { assert } from '../../shared/core/assert';
-import { appsFailureMessage, type AppsResult } from '../../shared/properties/apps';
+import { appsFailure, type AppsResult } from '../../shared/properties/apps';
 import { appMembers, type AppMember, type AppPerson } from '../../shared/properties/appsRpc';
 import { githubLoginAvatar } from '../../shared/ipc/commitAvatars';
 import type { AppStorageScope } from '../../shared/properties/appStorage';
@@ -92,7 +92,7 @@ export function registerAppDataHandlers(host: Pick<MainHost, 'ipcMain' | 'assert
       if (error instanceof Error && error.message.startsWith('Assertion failed')) {
         throw error;
       }
-      return { ok: false, message: appsFailureMessage(error) };
+      return { ok: false, ...appsFailure(error) };
     }
   });
   // `people.list`: the role members and recent commit authors, no more of each than `person.get` tells,
@@ -107,7 +107,7 @@ export function registerAppDataHandlers(host: Pick<MainHost, 'ipcMain' | 'assert
       if (error instanceof Error && error.message.startsWith('Assertion failed')) {
         throw error;
       }
-      return { ok: false, message: appsFailureMessage(error) };
+      return { ok: false, ...appsFailure(error) };
     }
   });
   ipcMain.handle('apps:hostVersion', () => ({ version: options.version() }));
@@ -120,7 +120,7 @@ export function registerAppDataHandlers(host: Pick<MainHost, 'ipcMain' | 'assert
       if (error instanceof Error && error.message.startsWith('Assertion failed')) {
         throw error;
       }
-      return { ok: false, message: appsFailureMessage(error) };
+      return { ok: false, ...appsFailure(error) };
     }
   });
 }
@@ -181,7 +181,7 @@ function attempt<T>(run: () => T): AppsResult<T> {
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
       throw error;
     }
-    return { ok: false, message: appsFailureMessage(error) };
+    return { ok: false, ...appsFailure(error) };
   }
 }
 

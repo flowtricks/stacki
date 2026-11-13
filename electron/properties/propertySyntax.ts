@@ -2,6 +2,7 @@
 import ts from 'typescript';
 import { assert } from '../../shared/core/assert';
 import { PROPERTY_LIMITS } from '../../shared/properties/propertyEditing';
+import { refusal } from '../../shared/properties/propertyErrors';
 import { err, ok, type Result } from '../../shared/core/result';
 import { isAstroProps, syntaxNodes } from '../parse/astroSyntax';
 
@@ -74,13 +75,13 @@ export function syntaxError(source: string): string | undefined {
 
 export function validatePropertyCode(type: string, expression: string): Result<void> {
   if (!type.trim()) {
-    return err({ code: 'type', message: 'Enter a TypeScript type.' });
+    return err(refusal('type', 'props.syntax.typeEmpty'));
   }
   const typeSource = `type PropertyType = ${type};`;
   const typeFile = ts.createSourceFile('type.ts', typeSource, ts.ScriptTarget.Latest, true);
   const declaration = typeFile.statements[0];
   if (typeFile.statements.length !== 1 || !declaration || !ts.isTypeAliasDeclaration(declaration)) {
-    return err({ code: 'type', message: 'Enter one TypeScript type, without declarations.' });
+    return err(refusal('type', 'props.syntax.typeSingle'));
   }
   const typeError = syntaxError(typeSource);
   if (typeError) {
@@ -90,10 +91,7 @@ export function validatePropertyCode(type: string, expression: string): Result<v
     const expressionSource = `const value = (${expression});`;
     const expressionFile = ts.createSourceFile('default.ts', expressionSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
     if (expressionFile.statements.length !== 1) {
-      return err({
-        code: 'default',
-        message: 'Enter one default expression, without declarations.',
-      });
+      return err(refusal('default', 'props.syntax.defaultSingle'));
     }
     const expressionError = syntaxError(expressionSource);
     if (expressionError) {

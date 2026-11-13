@@ -7,7 +7,7 @@
 // `raw-text` / `file-text` swap the "Use variable" fixes make, so the window sends
 // it through the same fix pipeline (undo step, canvas refresh, stale-bytes refusal).
 import { err, ok, type Result } from '../core/result';
-import type { AuditCssContext, AuditEdit, AuditFinding, AuditFix } from './auditFindings';
+import { labelText, type AuditCssContext, type AuditEdit, type AuditFinding, type AuditFix } from './auditFindings';
 
 /** Bounds of one typed value. */
 export const VALUE_EDIT_LIMITS = { charsMax: 256, parenDepthMax: 16 } as const satisfies Record<string, number>;
@@ -69,7 +69,7 @@ export function valueFixes(findings: readonly AuditFinding[], after: string): re
       return undefined;
     }
     const fix: AuditFix = {
-      label: `Set ${css.property} to ${after}`,
+      ...labelText('audits.fix.setValue', { property: css.property, value: after }),
       before: `${css.property}: ${css.value};`,
       after: `${css.property}: ${withToken(css, after)};`,
       file: finding.file,

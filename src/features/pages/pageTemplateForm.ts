@@ -3,6 +3,10 @@
 // what to fix. Pure, so every message can be pinned by a test.
 
 import { assert } from '../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import type { MessageParams } from '../../../shared/core/i18n/catalog';
+import { isKnownMessageKey } from '../../lib/i18n/localeContext';
 import { err, ok, type Result } from '../../../shared/core/result';
 import { parseAstroCollectionName } from '../../../shared/properties/astroContent';
 import type { CmsConnection } from '../../../shared/properties/cmsConnections';
@@ -37,6 +41,7 @@ export const NEW_COLLECTION = '\u0000new';
 export const ENTRY_ID = '\u0000id';
 
 /** What a designer reads when something failed that no form value could cause. */
+// i18n-ignore: the English reference text; the dialog shows the `pages.template.unexpected` message, which tests hold equal to it.
 export const UNEXPECTED_FAILURE = 'Something went wrong on Stacki’s side. Restart Stacki and try again.';
 
 export interface HeaderRow {
@@ -182,16 +187,31 @@ export function addressExample(route: string, slug: string): string {
   return address.startsWith('/') ? address : `/${slug}`;
 }
 
+// The translated reason when the producer sent a reference this build knows, else the English sentence it sent.
+function unusableReason(
+  address: { readonly reason: string; readonly reasonRef?: { readonly key: string; readonly params?: MessageParams } },
+  translate: Translator,
+): string {
+  const reference = address.reasonRef;
+  if (reference !== undefined && isKnownMessageKey(reference.key)) {
+    return translate(reference.key, reference.params);
+  }
+  return address.reason;
+}
+
 /** The fields offered as the page address, best first, and why the rest cannot be chosen. */
-export function addressOptions(fields: readonly SampleField[], route: string): readonly AddressOption[] {
+export function addressOptions(fields: readonly SampleField[], route: string, translate: Translator = ENGLISH_TRANSLATE): readonly AddressOption[] {
   const options: { readonly rank: number; readonly option: AddressOption }[] = [];
   for (const { path, address } of fields) {
     if (address?.kind === 'exact') {
       options.push({ rank: 0, option: { value: path, label: path } });
     } else if (address?.kind === 'slugified') {
-      options.push({ rank: 1, option: { value: path, label: path, description: `Cleaned up: ${addressExample(route, address.example)}` } });
+      options.push({
+        rank: 1,
+        option: { value: path, label: path, description: translate('pages.sample.cleanedUp', { address: addressExample(route, address.example) }) },
+      });
     } else if (address?.kind === 'unusable') {
-      options.push({ rank: 2, option: { value: path, label: path, description: address.reason, disabled: true } });
+      options.push({ rank: 2, option: { value: path, label: path, description: unusableReason(address, translate), disabled: true } });
     }
   }
   return options.sort((left, right) => left.rank - right.rank).map((item) => item.option);
@@ -205,8 +225,8 @@ export function templateFields(list: SampleList): readonly TemplateField[] {
 }
 
 /** The one-line summary of a template's fields: `4 fields · 100 items`. */
-export function fieldsSummary(fieldCount: number, itemCount: number): string {
-  return `${fieldCount} ${fieldCount === 1 ? 'field' : 'fields'} · ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`;
+export function fieldsSummary(fieldCount: number, itemCount: number, translate: Translator = ENGLISH_TRANSLATE): string {
+  return `${translate('pages.sample.fieldCount', { count: fieldCount })} · ${translate('pages.sample.itemCount', { count: itemCount })}`;
 }
 
 /** The form with `path`'s list chosen, its fields and address suggested afresh. */
@@ -330,7 +350,7 @@ export function sampleItemCount(list: SampleList): number {
  * many fields it holds, as the data picker's object rows do, and anything else
  * its value in that item.
  */
-export function sampleRowPreview(list: SampleList, path: string, item: number): string {
+export function sampleRowPreview(list: SampleList, path: string, item: number, translate: Translator = ENGLISH_TRANSLATE): string {
   assert(Number.isSafeInteger(item), 'sampleRowPreview: an item is a whole number');
   assert(item >= 0, 'sampleRowPreview: an item is not negative');
   const field = list.fields.find((candidate) => candidate.path === path);
@@ -339,7 +359,7 @@ export function sampleRowPreview(list: SampleList, path: string, item: number): 
   }
   if (field.kind === 'object') {
     const count = list.fields.filter((candidate) => parentOf(candidate.path) === path).length;
-    return count === 0 ? '{}' : `${count} ${count === 1 ? 'field' : 'fields'}`;
+    return count === 0 ? '{}' : translate('pages.sample.fieldCount', { count });
   }
   return field.examples?.[item] ?? field.example;
 }

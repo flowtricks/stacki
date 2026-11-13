@@ -8,6 +8,7 @@ import { handleArrowStep } from './model/numberStep';
 import { useLiveColor } from './model/liveColor';
 import { sliderLength, useLengthUnit } from './model/lengthUnit';
 import { projectDefaultUnit } from '../../../shared/properties/lengthUnit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // Shared building blocks for the shadow editors (text-shadow + box-shadow): a labelled
 // length row (drag slider + number field) and the full-width popup modal. Both editors
@@ -60,11 +61,12 @@ function ShadowTextInput({
   onLive: (value: string) => void;
   onClear: () => void;
 }) {
+  const translate = useTranslate();
   const field = useShadowDraft({ value, busy, onCommit, onLive, onClear });
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      ariaLabel={translate('style.shadowFields.connect', { name: ariaLabel })}
       disabled={busy}
       className="is-fill"
       prop={prop}
@@ -274,15 +276,16 @@ export function ShadowLength({
 // catches up: otherwise the page moves under the pointer while the swatch and
 // the number sit on the colour the drag started from (see liveColor.ts).
 export function ShadowColorRow({ color, busy, onChange }: { color: string; busy: boolean; onChange: (color: string, live: boolean) => void }) {
+  const translate = useTranslate();
   const [shown, noteLive] = useLiveColor(color);
   return (
     <div className="embed-editor_size-row">
-      <span className="embed-editor_size-label embed-editor_bg-caption">Color</span>
+      <span className="embed-editor_size-label embed-editor_bg-caption">{translate('style.shadowFields.color')}</span>
       <div className="embed-editor_type-field">
         <ColorSwatch
           value={shown}
           busy={busy}
-          ariaLabel="Shadow color"
+          ariaLabel={translate('style.shadowFields.shadowColor')}
           onChange={(next, live) => {
             noteLive(live ? next : undefined);
             onChange(next, live);
@@ -291,7 +294,7 @@ export function ShadowColorRow({ color, busy, onChange }: { color: string; busy:
         <ShadowTextInput
           value={shown}
           busy={busy}
-          ariaLabel="Shadow color"
+          ariaLabel={translate('style.shadowFields.shadowColor')}
           placeholder="rgba(0, 0, 0, 0.2)"
           className="u-input embed-editor_size-input"
           prop="color"

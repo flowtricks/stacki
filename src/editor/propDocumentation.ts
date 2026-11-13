@@ -19,6 +19,8 @@
 // writes is the setting every panel shows (docs/plans/prop-controls.md §1.1).
 
 import { assert } from '../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../shared/properties/i18n/messageRef';
 import { PROP_TAG_LIMITS, deprecationOf, readPropTags, withoutSettingTags } from '../../shared/properties/propTags';
 
 export { deprecationOf, withoutSettingTags };
@@ -76,18 +78,20 @@ export function settledNumber(value: number, settings: NumberSettings): number {
 }
 
 /** Why a typed number falls outside its settings, or undefined when it fits them. */
-export function numberNote(value: number, settings: NumberSettings): string | undefined {
+export function numberNote(value: number, settings: NumberSettings, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   if (!Number.isFinite(value)) {
-    return 'Enter a number.';
+    return translate('editor.propDocumentation.enterNumber');
   }
   if (settings.min !== undefined && value < settings.min) {
-    return `The least this takes is ${settings.min}.`;
+    return translate('editor.propDocumentation.least', { min: settings.min });
   }
   if (settings.max !== undefined && value > settings.max) {
-    return `The most this takes is ${settings.max}.`;
+    return translate('editor.propDocumentation.most', { max: settings.max });
   }
   if (settings.decimals !== undefined && Number(value.toFixed(settings.decimals)) !== value) {
-    return settings.decimals === 0 ? 'This takes whole numbers.' : `This keeps ${settings.decimals} decimals.`;
+    return settings.decimals === 0
+      ? translate('editor.propDocumentation.wholeNumbers')
+      : translate('editor.propDocumentation.decimals', { count: settings.decimals });
   }
   return undefined;
 }
@@ -100,7 +104,7 @@ const DEPRECATED_LINE = /(?<=^|\s)@deprecated\b[^@]*/g;
  * there is nothing to say. The deprecation is passed in, so a schema that
  * states it as a field of its own reads the same as one left in the doc.
  */
-export function fieldTooltip(documentation: string | undefined, deprecated: string | undefined): string {
+export function fieldTooltip(documentation: string | undefined, deprecated: string | undefined, translate: Translator = ENGLISH_TRANSLATE): string {
   const words = withoutSettingTags(documentation ?? '')
     .replace(DEPRECATED_LINE, '')
     .replace(/\s+/g, ' ')
@@ -108,8 +112,9 @@ export function fieldTooltip(documentation: string | undefined, deprecated: stri
   if (deprecated === undefined) {
     return words;
   }
-  const notice = deprecated === '' ? 'Deprecated.' : `Deprecated: ${deprecated}`;
+  const notice =
+    deprecated === '' ? translate('editor.propDocumentation.deprecated') : translate('editor.propDocumentation.deprecatedNote', { note: deprecated });
   const out = words === '' ? notice : `${notice}\n${words}`;
-  assert(out.startsWith('Deprecated'), 'fieldTooltip: a deprecation leads the tooltip');
+  assert(out.startsWith(notice), 'fieldTooltip: a deprecation leads the tooltip');
   return out;
 }

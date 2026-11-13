@@ -15,7 +15,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import { confirmDialog } from '../../ui/ConfirmDialog';
 import { HideIcon, LockIcon, PencilIcon, PlusIcon, PreviewIcon, TrashIcon } from '../../ui/Icons';
 import { Skeleton, SkeletonRows } from '../../ui/Skeleton';
-import InfoHint from './InfoHint';
+import InfoHint from '../../ui/InfoHint';
 import { cachedSecretsListing, secretsListingCache } from './secretsCache';
 import { SecretsUnavailableError, applySecretsChange, ignoreSecretsFile, listSecrets, readSecret } from './secretsBridge';
 import { SECRET_MASK, SECRET_NAME_EXAMPLE, VALUE_KIB_MAX, nameProblem, problemKey, valueProblem, type DraftProblem } from './secretsModel';

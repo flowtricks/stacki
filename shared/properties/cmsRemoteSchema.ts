@@ -11,6 +11,7 @@
 
 import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
+import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
 
 export const REMOTE_SCHEMA_LIMITS = {
   typeDepthMax: 8,
@@ -71,6 +72,9 @@ export interface RemoteSchemaField {
   readonly name: string;
   readonly title: string;
   readonly description: string;
+  /** Set on a field Stacki itself adds (an entry's Body): says `title` and `description` in the language on screen. */
+  readonly titleRef?: MessageRef | undefined;
+  readonly descriptionRef?: MessageRef | undefined;
   /** The Studio refuses to publish without it (`validation: (rule) => rule.required()`). */
   readonly required: boolean;
   /** The checks its schema states that can be read without running code. */
@@ -203,6 +207,8 @@ export function parseRemoteSchemaField(input: unknown, depth = 0): RemoteSchemaF
   if (typeof required !== 'boolean') {
     throw new Error('Expected whether the field is required.');
   }
+  const titleRef = parseOptionalMessageRef(value['titleRef']);
+  const descriptionRef = parseOptionalMessageRef(value['descriptionRef']);
   const field = {
     name: name(value['name']),
     required,
@@ -211,6 +217,8 @@ export function parseRemoteSchemaField(input: unknown, depth = 0): RemoteSchemaF
     description: short(value['description'], REMOTE_SCHEMA_LIMITS.descriptionCharsMax),
     type: parseRemoteType(value['type'], depth + 1),
     ...parseReadOnly(value['readOnly']),
+    ...(titleRef === undefined ? {} : { titleRef }),
+    ...(descriptionRef === undefined ? {} : { descriptionRef }),
   };
   assert(field.name.length > 0, 'A field has a name');
   return field;

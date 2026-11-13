@@ -1,7 +1,10 @@
+import { useFormat, useTranslate } from '../../lib/i18n/useTranslate';
 import { PanelReadStatus } from '../../ui/PanelReadStatus';
 import { ErrorToast } from '../../ui/ErrorToast';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assert } from '../../../shared/core/assert';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
+import { translateReference } from '../../lib/i18n/translateErrorText';
 import type { HistoryCommit, HistoryCommitFile } from './historyBridge';
 import { readHistoryLog } from './historyBridge';
 import { commitAuthor, relativeTime } from './historyModel';
@@ -37,6 +40,7 @@ type TimelineState =
       readonly commits: readonly HistoryCommit[];
       readonly atEnd: boolean;
       readonly message: string;
+      readonly messageRef?: MessageRef | undefined;
     };
 
 interface HistoryTimelineProps {
@@ -54,6 +58,7 @@ interface HistoryTimelineProps {
 }
 
 export default function HistoryTimeline(props: HistoryTimelineProps) {
+  const translate = useTranslate();
   const [scope, setScope] = useState<'all' | 'current'>('all');
   const reference = scope === 'current' ? 'HEAD' : undefined;
   const timeline = useTimeline(props, reference);
@@ -76,10 +81,8 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
   return (
     <>
       <HistoryScope scope={scope} branch={props.branch} setScope={setScope} />
-      {timeline.state.kind === 'error' && <ErrorToast message={timeline.state.message} />}
-      {timeline.state.kind === 'ready' && timeline.state.commits.length === 0 && (
-        <p className="history-empty">Nothing saved yet. Once you save your first version it shows up here, and you can come back to it whenever you like.</p>
-      )}
+      {timeline.state.kind === 'error' && <ErrorToast message={translateReference(timeline.state.message, timeline.state.messageRef, translate)} />}
+      {timeline.state.kind === 'ready' && timeline.state.commits.length === 0 && <p className="history-empty">{translate('history.timeline.empty')}</p>}
       {graph.rows.map((row) => (
         <CommitRow
           key={row.commit.hash}
@@ -94,10 +97,12 @@ export default function HistoryTimeline(props: HistoryTimelineProps) {
           {...props}
         />
       ))}
-      {timeline.state.kind === 'loading' && <PanelReadStatus state={timeline.state} label="Git history" layout="history" retry={async () => {}} />}
+      {timeline.state.kind === 'loading' && (
+        <PanelReadStatus state={timeline.state} label={translate('history.timeline.label')} layout="history" retry={async () => {}} />
+      )}
       {!timeline.state.atEnd && timeline.state.kind !== 'loading' && (
         <button className="history-more" onClick={timeline.loadOlder}>
-          Show older
+          {translate('history.timeline.showOlder')}
         </button>
       )}
     </>
@@ -113,20 +118,21 @@ function HistoryScope({
   readonly branch: string | undefined;
   readonly setScope: (scope: 'all' | 'current') => void;
 }) {
+  const translate = useTranslate();
   return (
     <div className="history-graph-toolbar">
       {/* The branch name stays out of the label, where the narrow menu would cut it
           off, and is named in the tooltip instead. */}
-      <div className="history-graph-filter" title={scope === 'current' ? `Showing commits on ${branch ?? 'HEAD'}` : undefined}>
-        <span>Filter commits</span>
+      <div className="history-graph-filter" title={scope === 'current' ? translate('history.scope.showing', { branch: branch ?? 'HEAD' }) : undefined}>
+        <span>{translate('history.scope.label')}</span>
         {/* The app's own menu rather than a native select, so it looks and behaves
             like every other menu: a check at the row's end and no hover preview. */}
         <Dropdown<HistoryScopeName>
-          ariaLabel="Filter commits by branch"
+          ariaLabel={translate('history.scope.ariaLabel')}
           value={scope}
           options={[
-            { value: 'all', label: 'All branches' },
-            { value: 'current', label: 'Current branch' },
+            { value: 'all', label: translate('history.scope.all') },
+            { value: 'current', label: translate('history.scope.current') },
           ]}
           livePreview={false}
           onChange={(value) => setScope(parseHistoryScope(value))}
@@ -167,7 +173,7 @@ function useTimeline({ projectPath, branch, head }: HistoryTimelineProps, refere
       }
       setState((previous) => {
         if (!result.ok) {
-          return { ...previous, kind: 'error', message: result.error };
+          return { ...previous, kind: 'error', message: result.error, messageRef: result.errorRef };
         }
         // Keep expanded rows and older pages when the newest commits have not changed.
         const prefix = previous.commits.slice(0, result.value.commits.length);
@@ -219,7 +225,7 @@ async function appendHistory(
     return;
   }
   if (!result.ok) {
-    setState({ kind: 'error', commits: previous.commits, atEnd: false, message: result.error });
+    setState({ kind: 'error', commits: previous.commits, atEnd: false, message: result.error, messageRef: result.errorRef });
     return;
   }
   const commits = mergeCommits(previous.commits, result.value.commits);
@@ -255,6 +261,8 @@ interface CommitRowProps extends HistoryTimelineProps {
 
 function CommitRow(props: CommitRowProps) {
   const { commit } = props;
+  const translate = useTranslate();
+  const format = useFormat();
   return (
     <div
       className={`history-commit ${props.expanded ? 'open' : ''} ${props.previewing ? 'previewing' : ''}`}
@@ -272,7 +280,7 @@ function CommitRow(props: CommitRowProps) {
             <CommitAvatar name={commit.author} email={commit.email} url={props.avatar} />
             {/* The text is its own box: a flex row cannot ellipsize bare text. */}
             <span className="history-meta-text">
-              {commitAuthor(commit, props.userEmail)} · {relativeTime(commit.when)} ·{' '}
+              {commitAuthor(commit, props.userEmail, translate)} · {relativeTime(commit.when, Date.now(), { translate, format })} ·{' '}
               <span className="history-row-hash" title={commit.hash}>
                 {commit.shortHash}
               </span>
@@ -317,6 +325,7 @@ function CommitRefs({ commit, current, colors }: { readonly commit: HistoryCommi
 
 function CommitBody(props: CommitRowProps) {
   const { commit } = props;
+  const translate = useTranslate();
   return (
     <div className="history-commit-body">
       <HistoryCommitFiles commit={commit} projectPath={props.projectPath} onRestoreFile={props.onRestoreFile} />
@@ -327,17 +336,17 @@ function CommitBody(props: CommitRowProps) {
             onClick={() => (props.previewing ? props.onExitPreview() : props.onPreviewCommit?.(commit))}
           >
             <PreviewIcon size={12} />
-            {props.previewing ? 'Back to now' : 'Preview'}
+            {props.previewing ? translate('history.backToNow') : translate('history.commit.preview')}
           </button>
         )}
-        <span className="history-hash">{commit.isMerge ? 'Merge commit' : commit.shortHash}</span>
+        <span className="history-hash">{commit.isMerge ? translate('history.commit.merge') : commit.shortHash}</span>
         {props.onRestoreProject && (
           <MoreMenu
-            title="Commit actions"
+            title={translate('history.commit.actions')}
             width={230}
             items={[
               {
-                label: 'Restore project to this commit…',
+                label: translate('history.commit.restoreProject'),
                 onSelect: () => props.onRestoreProject?.(commit),
               },
             ]}

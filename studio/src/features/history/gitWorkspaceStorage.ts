@@ -3,6 +3,7 @@ import { mkdir, open, readFile, rename, writeFile, stat, copyFile } from 'node:f
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { gitWorkspaceBranch, gitWorkspaceLimits, parseGitWorkspaceManifest, type GitWorkspaceManifest } from './gitWorkspaceContract';
+import { ReferencedError } from '../../shared/referencedError';
 
 // Local commits have no GitHub copy. A successful action must acknowledge its
 // immutable bundle and atomic manifest in durable storage before reporting success.
@@ -52,7 +53,7 @@ export async function saveGitWorkspace(
     const headers = { 'x-studio-token': process.env['STUDIO_CONTAINER_TOKEN'] ?? '' };
     if (bundle !== undefined) {
       if ((await stat(bundle)).size > gitWorkspaceLimits.bundleBytes) {
-        throw new Error('Unpublished Git work exceeds the 96 MiB checkpoint limit. Push first.');
+        throw new ReferencedError('git.studio.unpublishedTooLarge', { size: '96 MiB' });
       }
       const bytes = await readFile(bundle);
       const digest = createHash('sha256').update(bytes).digest('hex');

@@ -7,6 +7,8 @@ import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { definedFields } from '../../../shared/core/boundary';
 import { variableEdit as bridge } from '../../ipc/variableEditBridge';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { useFailureText } from './useFailureText';
 import { createVariableHistory, type VariableUndo } from './variableHistory';
 import { createVariableRefresh } from './variableRefresh';
 import { createLiveVariables, createVariableSaves, liveVariableOf, VariablePreviewContext } from './liveVariableEdits';
@@ -16,6 +18,7 @@ import { fluidCheck, resolveValue } from './fluid';
 import { getHost, setHost } from '../style/model/host';
 import { CloseIcon, CheckIcon } from '../../ui/Icons';
 import Sheet from './VariableTable';
+import { messageRef } from '../../../shared/properties/i18n/messageRef';
 import { VariableScopeBadge } from './VariableScopeBadge';
 import DockableWindow, { type WindowMode } from '../../ui/DockableWindow';
 import { readWindowMode, storeWindowMode } from '../../ui/windowPreferences';
@@ -37,6 +40,7 @@ export interface VariablesViewProps {
   readonly onRecordUndo?: ((command: VariableUndo) => void) | undefined;
 }
 function useVariablesView(props: VariablesViewProps) {
+  const translate = useTranslate();
   const model = useVariableModel(props);
   const { project, refresh, showToast, onRecordUndo } = model;
   const writeWithUndo = createVariableHistory({
@@ -44,6 +48,7 @@ function useVariablesView(props: VariablesViewProps) {
     refresh,
     report: (message) => showToast?.(message, 'error'),
     record: onRecordUndo,
+    translate,
   });
   const save = useVariableSave(model, writeWithUndo);
   const move = useVariableMove(model, writeWithUndo);
@@ -76,6 +81,7 @@ function VariablesViewBody({
   readonly mode: WindowMode;
   readonly onModeChange: (mode: WindowMode) => void;
 }) {
+  const translate = useTranslate();
   const { hidden, file, group } = state;
   if (!group) {
     return undefined;
@@ -86,7 +92,7 @@ function VariablesViewBody({
     <DockableWindow
       mode={mode}
       onModeChange={onModeChange}
-      label="Variables"
+      label={translate('variables.title')}
       className="vars-view"
       hidden={hidden ?? false}
       minimumSize={{ width: 560, height: 280 }}
@@ -113,10 +119,11 @@ function VariablesViewBody({
 }
 
 function VariablesWindowHeader({ state }: { readonly state: ReturnType<typeof useVariablesView> }) {
+  const translate = useTranslate();
   return (
     <>
       <div className="vars-window-heading">
-        <button className="ghost cms-back" title="Close" onClick={state.onClose}>
+        <button className="ghost cms-back" title={translate('ui.close')} onClick={state.onClose}>
           <CloseIcon size={13} />
         </button>
         <span className="cms-detail-title" title={state.group?.label}>
@@ -124,14 +131,14 @@ function VariablesWindowHeader({ state }: { readonly state: ReturnType<typeof us
         </span>
         <VariableScopeBadge scope={state.group?.scope} />
         <span className={`cms-saved ${state.saved ? 'on' : ''}`}>
-          <CheckIcon size={11} /> Saved
+          <CheckIcon size={11} /> {translate('variables.saved')}
         </span>
       </div>
       <input
         maxLength={LIMITS.attrCharsMax}
         className="vars-search"
         value={state.query}
-        placeholder="Search variables"
+        placeholder={translate('variables.search')}
         spellCheck={false}
         onChange={(event) => state.setQuery(event.target.value)}
       />
@@ -264,6 +271,7 @@ function useVariableModel(props: VariablesViewProps) {
 type VariableModel = ReturnType<typeof useVariableModel>;
 type VariableHistory = ReturnType<typeof createVariableHistory>;
 function useVariableSave(model: VariableModel, writeWithUndo: VariableHistory) {
+  const failureText = useFailureText();
   const { project, showToast, refresh, markSaved, files } = model;
   // The latest read, for the frame to find a value's declaration; read at the
   // moment of the edit, so the callbacks below need not change with every read.
@@ -278,7 +286,7 @@ function useVariableSave(model: VariableModel, writeWithUndo: VariableHistory) {
   // held arrow is one step, however many writes it took.
   const writeOnce = useCallback(
     async (cell: VariableCell, value: string): Promise<boolean> => {
-      return writeWithUndo(cell.file, 'the value', `var:${cell.file}:${cell.name}`, async () => {
+      return writeWithUndo(cell.file, 'variables.undo.value', `var:${cell.file}:${cell.name}`, async () => {
         const result = await bridge('setCssVariable', {
           projectPath: project.path,
           file: cell.file,
@@ -288,7 +296,7 @@ function useVariableSave(model: VariableModel, writeWithUndo: VariableHistory) {
           value,
         });
         if (!result.ok) {
-          showToast?.(result.error || 'Could not write that value.', 'error');
+          showToast?.(failureText(result, 'variables.error.write'), 'error');
           await refresh();
           return false;
         }
@@ -297,7 +305,7 @@ function useVariableSave(model: VariableModel, writeWithUndo: VariableHistory) {
         return true;
       });
     },
-    [project.path, refresh, showToast, writeWithUndo, markSaved],
+    [project.path, refresh, showToast, writeWithUndo, markSaved, failureText],
   );
   const writeRef = useRef(writeOnce);
   writeRef.current = writeOnce;
@@ -328,6 +336,8 @@ function useVariableSave(model: VariableModel, writeWithUndo: VariableHistory) {
   return { save, preview };
 }
 function useVariableMove(model: VariableModel, writeWithUndo: VariableHistory) {
+  const translate = useTranslate();
+  const failureText = useFailureText();
   const { project, showToast, refresh, fileRef, firstSelectorRef } = model;
 
   // Dragging a row moves the declaration inside its rule — a row in a table of
@@ -349,7 +359,7 @@ function useVariableMove(model: VariableModel, writeWithUndo: VariableHistory) {
         // worse than not putting it back at all.
         await writeWithUndo(
           plan.moves.map((move) => move.file),
-          'the move',
+          'variables.undo.move',
           undefined,
           async () => {
             const result = await bridge('moveCssVariables', {
@@ -357,7 +367,7 @@ function useVariableMove(model: VariableModel, writeWithUndo: VariableHistory) {
               moves: plan.moves.map((move) => ('target' in move ? definedFields({ ...move, target: move.target ?? undefined }) : move)),
             });
             if (!result.ok) {
-              showToast?.(result.error || 'Could not move that.', 'error');
+              showToast?.(failureText(result, 'variables.error.move'), 'error');
             }
             await refresh();
             return result.ok;
@@ -370,10 +380,10 @@ function useVariableMove(model: VariableModel, writeWithUndo: VariableHistory) {
       assert(selectedFile !== undefined, 'Variable move: file selection is required');
       const range = headingRange(plan.block);
       if (!range) {
-        showToast?.('This heading is a name prefix, not a CSS comment.', 'error');
+        showToast?.(translate('variables.error.prefixHeading'), 'error');
         return;
       }
-      await writeWithUndo(selectedFile.rel, 'the group', undefined, async () => {
+      await writeWithUndo(selectedFile.rel, 'variables.undo.group', undefined, async () => {
         const result = await bridge(
           'moveCssHeading',
           definedFields({
@@ -385,17 +395,18 @@ function useVariableMove(model: VariableModel, writeWithUndo: VariableHistory) {
           }),
         );
         if (!result.ok) {
-          showToast?.(result.error || 'Could not move that.', 'error');
+          showToast?.(failureText(result, 'variables.error.move'), 'error');
         }
         await refresh();
         return result.ok;
       });
     },
-    [project.path, refresh, showToast, writeWithUndo, fileRef, firstSelectorRef],
+    [project.path, refresh, showToast, writeWithUndo, fileRef, firstSelectorRef, translate, failureText],
   );
   return { move };
 }
 function useVariableAdd(model: VariableModel, writeWithUndo: VariableHistory) {
+  const failureText = useFailureText();
   const { project, showToast, refresh } = model;
 
   // Adding a variable to a group. What the name is depends on the shape of the
@@ -441,23 +452,25 @@ function useVariableAdd(model: VariableModel, writeWithUndo: VariableHistory) {
       }
       await writeWithUndo(
         adds.map((added) => added.file),
-        'the variable',
+        'variables.undo.variable',
         undefined,
         async () => {
           const result = await bridge('addCssVariables', { projectPath: project.path, adds });
           if (!result.ok) {
-            showToast?.(result.error || 'Could not add that.', 'error');
+            showToast?.(failureText(result, 'variables.error.add'), 'error');
           }
           await refresh();
           return result.ok;
         },
       );
     },
-    [project.path, refresh, showToast, writeWithUndo],
+    [project.path, refresh, showToast, writeWithUndo, failureText],
   );
   return { add };
 }
 function useVariableRename(model: VariableModel) {
+  const translate = useTranslate();
+  const failureText = useFailureText();
   const { project, showToast, onRecordUndo, refresh } = model;
 
   // Renaming a variable — or a group of them, which is the same thing done to
@@ -471,7 +484,7 @@ function useVariableRename(model: VariableModel) {
       }
       const result = await bridge('renameCssVariables', { projectPath: project.path, renames });
       if (!result.ok) {
-        showToast?.(result.error || 'Could not rename that.', 'error');
+        showToast?.(failureText(result, 'variables.error.rename'), 'error');
         await refresh();
         return false;
       }
@@ -484,23 +497,26 @@ function useVariableRename(model: VariableModel) {
           renames: list,
         });
         if (!result.ok) {
-          showToast?.(result.error || 'Could not restore the rename.', 'error');
+          showToast?.(failureText(result, 'variables.error.restoreRename'), 'error');
         }
         await refresh();
       };
+      const undoLabel = renames.length > 1 ? 'variables.undo.groupRename' : 'variables.undo.rename';
       onRecordUndo?.({
-        label: renames.length > 1 ? 'the group rename' : 'the rename',
+        label: translate(undoLabel),
+        labelRef: messageRef(undoLabel),
         undo: () => apply(back),
         redo: () => apply(renames),
       });
       await refresh();
       return true;
     },
-    [project.path, refresh, showToast, onRecordUndo],
+    [project.path, refresh, showToast, onRecordUndo, translate, failureText],
   );
   return { rename };
 }
 function useVariableRetitle(model: VariableModel, writeWithUndo: VariableHistory) {
+  const failureText = useFailureText();
   const { project, showToast, refresh, file } = model;
 
   // A heading that is a comment in the file rather than a name its rows share.
@@ -520,25 +536,26 @@ function useVariableRetitle(model: VariableModel, writeWithUndo: VariableHistory
         title,
       });
       if (!result.ok) {
-        showToast?.(result.error || 'Could not rename that.', 'error');
+        showToast?.(failureText(result, 'variables.error.rename'), 'error');
         await refresh();
         return false;
       }
       await refresh();
       return true;
     },
-    [project.path, file, refresh, showToast],
+    [project.path, file, refresh, showToast, failureText],
   );
 
   const retitle = useCallback(
     async (block: VariableBlock, title: string) => {
-      return writeWithUndo(file?.rel, 'the heading', undefined, () => retitleOnce(block, title));
+      return writeWithUndo(file?.rel, 'variables.undo.heading', undefined, () => retitleOnce(block, title));
     },
     [file?.rel, writeWithUndo, retitleOnce],
   );
   return { retitle };
 }
 function useVariableSections(model: VariableModel, writeWithUndo: VariableHistory) {
+  const failureText = useFailureText();
   const { project, showToast, refresh, firstSelectorRef, file } = model;
 
   // Another heading, written directly above this one — so the new group starts
@@ -548,7 +565,7 @@ function useVariableSections(model: VariableModel, writeWithUndo: VariableHistor
     async (block: VariableBlock) => {
       assert(file !== undefined, 'Variable heading: file selection is required');
       const anchor = block.rows.map((row) => row.cells.find(Boolean)).find(Boolean);
-      await writeWithUndo(file?.rel, 'the group', undefined, async () => {
+      await writeWithUndo(file?.rel, 'variables.undo.group', undefined, async () => {
         const result = await bridge(
           'addCssSection',
           definedFields({
@@ -560,13 +577,13 @@ function useVariableSections(model: VariableModel, writeWithUndo: VariableHistor
           }),
         );
         if (!result.ok) {
-          showToast?.(result.error || 'Could not duplicate that.', 'error');
+          showToast?.(failureText(result, 'variables.error.duplicate'), 'error');
         }
         await refresh();
         return result.ok;
       });
     },
-    [project.path, file, refresh, showToast, writeWithUndo, firstSelectorRef],
+    [project.path, file, refresh, showToast, writeWithUndo, firstSelectorRef, failureText],
   );
 
   // Deleting a heading deletes the comment and nothing else: its variables join
@@ -578,20 +595,20 @@ function useVariableSections(model: VariableModel, writeWithUndo: VariableHistor
       if (!range) {
         return;
       }
-      await writeWithUndo(file.rel, 'deleting the group', undefined, async () => {
+      await writeWithUndo(file.rel, 'variables.undo.deleteGroup', undefined, async () => {
         const result = await bridge('removeCssSection', {
           projectPath: project.path,
           file: file.rel,
           ...range,
         });
         if (!result.ok) {
-          showToast?.(result.error || 'Could not delete that.', 'error');
+          showToast?.(failureText(result, 'variables.error.delete'), 'error');
         }
         await refresh();
         return result.ok;
       });
     },
-    [project.path, file, refresh, showToast, writeWithUndo],
+    [project.path, file, refresh, showToast, writeWithUndo, failureText],
   );
   return { duplicateSection, deleteSection };
 }

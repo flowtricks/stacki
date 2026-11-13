@@ -1,6 +1,7 @@
 // The content collections' IPC: the project's content config, its entries,
 // validation, renames across references, and sample data for the canvas.
 import path from 'node:path';
+import { englishText, messageRef } from '../../shared/properties/i18n/messageRef';
 
 import { definedFields, record } from '../../shared/core/boundary';
 import { assert } from '../../shared/core/assert';
@@ -13,6 +14,8 @@ import { astroRemoteService, firstImageField, type AstroRemoteService } from '..
 import { entryImage } from '../content/astroRecordReferences';
 import type { AstroRemoteEdit, AstroRemoteEditAnswer, AstroRemoteRead, AstroRemoteReadAnswer } from '../../shared/properties/astroContent';
 import type { RemoteResult } from '../../shared/properties/cmsRemote';
+import { DescribedError } from '../../shared/properties/describedError';
+import { described } from '../../shared/properties/i18n/messageRef';
 import { errorMessage, toPosix } from '../lib/mainHelpers';
 import { collectionOf } from './cmsFiles';
 import type { MainHost } from './mainHost';
@@ -92,8 +95,16 @@ async function answered<T>(run: () => Promise<T>): Promise<RemoteResult<T>> {
   try {
     return { ok: true, value: await run() };
   } catch (error: unknown) {
+    // A described refusal keeps its reference so the panel can say it in the language on screen.
+    if (error instanceof DescribedError) {
+      return {
+        ok: false,
+        message: error.problem.message.slice(0, 900),
+        ...(error.problem.messageRef === undefined ? {} : { messageRef: error.problem.messageRef }),
+      };
+    }
     const message = errorMessage(error).slice(0, 900);
-    return { ok: false, message: message || 'The content collection could not be read.' };
+    return message ? { ok: false, message } : { ok: false, ...described('cmsBackend.content.unreadable') };
   }
 }
 
@@ -308,7 +319,7 @@ async function fetchSampleValue(url: string): Promise<ReturnType<typeof parseSam
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(SAMPLE_VALUE_MS_MAX) });
     if (!response.ok) {
-      return { value: undefined, error: `Dev server returned ${response.status}` };
+      return { value: undefined, error: englishText(messageRef('error.pages.devServerStatus', { status: response.status })) };
     }
     const input: unknown = await response.json();
     return parseSampleValue(input);
@@ -321,7 +332,7 @@ async function fetchSampleEntry(url: string): Promise<ReturnType<typeof parseSam
   assert(url.includes('/__avb/data?'), 'A sample is read from the data route');
   const response = await fetch(url);
   if (!response.ok) {
-    return { entry: undefined, error: `Dev server returned ${response.status}` };
+    return { entry: undefined, error: englishText(messageRef('error.pages.devServerStatus', { status: response.status })) };
   }
   const input: unknown = await response.json();
   return parseSampleEntry(input);

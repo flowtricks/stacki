@@ -27,6 +27,7 @@ import type { createRooms } from '../features/collaboration/rooms';
 import { automaticSync } from '../features/github/automaticSync';
 import { RepositorySync } from '../features/github/sync';
 import { record, string } from '../shared/validation';
+import { described } from '../../vendor/stacki/shared/properties/i18n/messageRef';
 
 export function featureRoutes(root: string, rooms: ReturnType<typeof createRooms>) {
   const repository = githubFromEnvironment(root);
@@ -138,7 +139,7 @@ async function syncProject(publisher: Publisher, synchronization: RepositorySync
   if (publisher.state.kind === 'building') {
     return {
       kind: 'failed',
-      message: 'Publishing is already syncing GitHub. Wait until publishing finishes.',
+      ...described('publish.studio.error.alreadySyncing'),
     };
   }
   const input = body ? record(JSON.parse(body)) : {};

@@ -63,6 +63,7 @@ test('sign-in limits output before retaining it', async () => {
   assert.deepEqual(account.request(root, { action: 'status', id }), {
     kind: 'failed',
     message: 'GitHub sign-in returned too much output.',
+    messageRef: { key: 'publish.account.error.signInOutputLarge', params: { provider: 'GitHub' } },
   });
 });
 
@@ -80,6 +81,7 @@ test('sign-in expires and terminates a stalled child', async (context) => {
   assert.deepEqual(account.request(root, { action: 'status', id }), {
     kind: 'failed',
     message: 'GitHub sign-in expired. Please try again.',
+    messageRef: { key: 'publish.account.error.providerSignInExpired', params: { provider: 'GitHub' } },
   });
 });
 

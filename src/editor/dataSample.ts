@@ -3,6 +3,8 @@
 // (dataSuggest.ts).
 
 import { toRecord, toArray } from '../../shared/core/record';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import { englishText, messageRef, type MessageKey, type Translator, type TypedMessageRef } from '../../shared/properties/i18n/messageRef';
 import { parseDeclarations, firstObjectIn, objectEntries, kindOf, parseDestructures, referenceCallIn } from './dataSource';
 
 /** One step of a data path, and where in the path's text it ends. */
@@ -198,10 +200,74 @@ export function samplePreview(sample: unknown): string {
     const shown = list.length - (more ? 1 : 0);
     const count = toRecord(more)?.['count'];
     const total = more ? shown + (typeof count === 'number' ? count : 0) : shown;
-    return `${total} ${total === 1 ? 'item' : 'items'}`;
+    return englishText(messageRef('editor.dataTree.items', { count: total }));
   }
   const keys = shownKeys(sample);
-  return keys.length ? `${keys.length} ${keys.length === 1 ? 'field' : 'fields'}` : '{}';
+  return keys.length ? englishText(messageRef('editor.dataTree.fields', { count: keys.length })) : '{}';
+}
+
+/**
+ * The words of `samplePreview` as a reference the picker translates, or undefined when the preview is the value itself (`"hello"`, `42`) or a
+ * symbol. `samplePreview` stays the English line: search matches against it and logs print it.
+ */
+export function samplePreviewRef(sample: unknown): TypedMessageRef | undefined {
+  const kind = sampleKind(sample);
+  if (kind === 'date') {
+    return toRecord(sample)?.['value'] ? undefined : messageRef('editor.dataTree.kind.date');
+  }
+  if (kind === 'deep') {
+    return messageRef('editor.dataTree.deeper');
+  }
+  if (kind === 'more') {
+    return messageRef('editor.dataTree.more', { count: Number(toRecord(sample)?.['count']) });
+  }
+  if (kind === 'list') {
+    const list = toArray(sample) ?? [];
+    const more = list.find((x) => marker(x) === 'more');
+    const shown = list.length - (more ? 1 : 0);
+    const count = toRecord(more)?.['count'];
+    return messageRef('editor.dataTree.items', { count: more ? shown + (typeof count === 'number' ? count : 0) : shown });
+  }
+  if (kind === 'object') {
+    const count = shownKeys(sample).length;
+    return count > 0 ? messageRef('editor.dataTree.fields', { count }) : undefined;
+  }
+  return undefined;
+}
+
+/** A tree node's preview in the language `translate` speaks: its reference when it has one, else the English line. */
+export function previewText(node: Pick<TreeNode, 'preview' | 'previewRef'>, translate: Translator = ENGLISH_TRANSLATE): string {
+  if (node.previewRef === undefined) {
+    return node.preview;
+  }
+  return node.previewRef.params === undefined ? translate(node.previewRef.key) : translate(node.previewRef.key, node.previewRef.params);
+}
+
+/** The two fields a worded preview sets on a node: the English line in `preview`, the reference beside it in `previewRef`. */
+export function previewFields(ref: TypedMessageRef): { readonly preview: string; readonly previewRef: TypedMessageRef } {
+  return { preview: englishText(ref), previewRef: ref };
+}
+
+// The message that names each kind of tree node, for the kinds the picker draws as a word.
+const TREE_KIND_KEYS: Readonly<Record<string, MessageKey>> = {
+  text: 'editor.dataTree.kind.text',
+  number: 'editor.dataTree.kind.number',
+  boolean: 'editor.dataTree.kind.boolean',
+  list: 'editor.dataTree.kind.list',
+  object: 'editor.dataTree.kind.object',
+  date: 'editor.dataTree.kind.date',
+  'image url': 'editor.dataTree.kind.imageUrl',
+  imported: 'editor.dataTree.kind.imported',
+  function: 'editor.dataTree.kind.function',
+  value: 'editor.dataTree.kind.value',
+  empty: 'editor.dataTree.kind.empty',
+  'loop item': 'editor.dataTree.kind.loopItem',
+};
+
+/** The word a tree node's kind is drawn as, in the language `translate` speaks; a kind with no message (a schema's own type name) stays as it is. */
+export function treeKindLabel(kind: string, translate: Translator = ENGLISH_TRANSLATE): string {
+  const key = Object.hasOwn(TREE_KIND_KEYS, kind) ? TREE_KIND_KEYS[kind] : undefined;
+  return key === undefined ? kind : translate(key);
 }
 
 export const TREE_DEPTH_MAX = 6;
@@ -222,6 +288,8 @@ export interface TreeNode {
   key: string;
   kind: string;
   preview: string;
+  /** The same preview as a reference when it is worded ("3 items"), so the picker can translate it; `preview` is its English. */
+  previewRef?: TypedMessageRef | undefined;
   children: TreeNode[] | undefined;
   section?: string;
   nav?: { index: number; count: number };
@@ -243,8 +311,12 @@ export interface TreeNode {
    * something to call, and a binding to it would print the function itself.
    */
   unbindable?: string;
+  /** `unbindable` as a reference the picker translates. */
+  unbindableRef?: TypedMessageRef | undefined;
   /** A muted word in the value column where there is no value to show: "not set". */
   note?: string;
+  /** `note` as a reference the picker translates. */
+  noteRef?: TypedMessageRef | undefined;
   /**
    * A data file export written as a list but computed (`[...a, ...b]`): it is a list,
    * and its items are known only to the code. The loop's Source menu lists it, disabled.
@@ -287,6 +359,7 @@ export function sampleNode(path: string, key: string, value: unknown, depth: num
     key,
     kind,
     preview: samplePreview(value),
+    ...(samplePreviewRef(value) === undefined ? {} : { previewRef: samplePreviewRef(value) }),
     children: children && children.length ? children : undefined,
     ...(image === undefined ? {} : { image }),
     ...(entryCount === undefined ? {} : { entryCount }),

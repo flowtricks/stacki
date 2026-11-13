@@ -22,7 +22,8 @@ import { assert } from '../../shared/core/assert';
 import { isAtomicTemporary } from '../documents/atomicWrite';
 import { writeProjectText } from '../documents/documentWrites';
 import { APP_AUTH_LIMITS, type AppAuthStatus } from '../../shared/properties/appAuth';
-import { appsFailureMessage, type AppManifest, type AppsResult } from '../../shared/properties/apps';
+import { appsFailure, type AppManifest, type AppsResult } from '../../shared/properties/apps';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import { createAppFileBudget, runAppFileOperation } from '../project/appFilesStore';
 import { appNetFetch, createAppNetRate } from '../project/appNetFetch';
 import { createAppSignIns, type AppSignIns, type FlowOutcome } from '../project/appSignIn';
@@ -143,7 +144,7 @@ async function connect(
     await openBrowser(flow.authorizeURL);
     const outcome = await flow.done;
     if (!outcome.ok) {
-      throw new Error(outcome.message);
+      throw outcome.messageRef === undefined ? new Error(outcome.message) : new ReferencedError(outcome.messageRef.key, outcome.messageRef.params);
     }
     return outcome.value;
   } finally {
@@ -202,7 +203,7 @@ function withApp<T>(project: string, id: string, run: (project: string, manifest
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
       throw error;
     }
-    return { ok: false, message: appsFailureMessage(error) };
+    return { ok: false, ...appsFailure(error) };
   }
 }
 
@@ -213,7 +214,7 @@ async function withAppAsync<T>(project: string, id: string, run: (manifest: AppM
     if (error instanceof Error && error.message.startsWith('Assertion failed')) {
       throw error;
     }
-    return { ok: false, message: appsFailureMessage(error) };
+    return { ok: false, ...appsFailure(error) };
   }
 }
 

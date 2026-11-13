@@ -25,6 +25,7 @@ import { clearDrag } from '../../editor/dragState';
 import { parseNavigatorDrop } from './navigatorDrop';
 import { type LiveValue } from '../../ui/liveValue';
 import { assert } from '../../../shared/core/assert';
+import { useTranslate, useTranslateRich } from '../../lib/i18n/useTranslate';
 
 interface StructurePanelProps {
   readonly clientMode?: boolean;
@@ -75,12 +76,13 @@ interface StructurePanelProps {
 }
 
 export default function StructurePanel(props: StructurePanelProps) {
+  const translate = useTranslate();
   if (!props.pageState) {
     return <MissingPage currentPage={props.currentPage} />;
   }
   const projection = structureProjection(props.pageState);
   if (props.clientMode && projection.tag === 'parse-error') {
-    return <ErrorToast message="This page needs a Developer to fix its source before editing." />;
+    return <ErrorToast message={translate('structure.error.needsDeveloper')} />;
   }
   switch (projection.tag) {
     case 'valid':
@@ -95,21 +97,21 @@ export default function StructurePanel(props: StructurePanelProps) {
 }
 
 function MissingPage({ currentPage }: Pick<StructurePanelProps, 'currentPage'>) {
+  const translate = useTranslate();
+  const translateRich = useTranslateRich();
   const injected = currentPage?.kind === 'route';
   return (
     <div className="panel-section grow">
       <div className="panel-header">
-        <h2>Navigator</h2>
+        <h2>{translate('rail.navigator')}</h2>
       </div>
       <div className="props-empty">
-        {injected ? (
-          <>
-            <strong>{currentPage.route}</strong> comes from {currentPage.from ? <code>{currentPage.from}</code> : 'an integration'}, not from this project — it
-            can be previewed here, but its markup lives in a dependency and isn’t editable.
-          </>
-        ) : (
-          'Select a page to edit.'
-        )}
+        {injected
+          ? translateRich('structure.missing.injected', {
+              route: <strong>{currentPage.route}</strong>,
+              from: currentPage.from ? <code>{currentPage.from}</code> : translate('structure.missing.integration'),
+            })
+          : translate('structure.missing.select')}
       </div>
     </div>
   );
@@ -123,16 +125,23 @@ function ParseErrorPage({
 }: Pick<StructurePanelProps, 'devLog' | 'onCodeChange' | 'onOpenCodePanel'> & {
   readonly projection: Extract<StructureProjection, { readonly tag: 'parse-error' }>;
 }) {
+  const translate = useTranslate();
   const [diagnostic] = projection.diagnostics;
   return (
     <div className="panel-section grow">
       <div className="panel-header">
-        <h2>Code</h2>
+        <h2>{translate('rail.code')}</h2>
       </div>
       <div className="code-editor">
         <ErrorToast
-          message={diagnostic ? `${diagnostic.message}${diagnostic.near ? ` Near ${diagnostic.near}` : ''}` : 'This page contains a syntax error.'}
-          recovery={[{ label: 'Open code panel', run: onOpenCodePanel }]}
+          message={
+            diagnostic
+              ? diagnostic.near
+                ? translate('structure.error.syntaxNear', { message: diagnostic.message, near: diagnostic.near })
+                : diagnostic.message
+              : translate('structure.error.syntax')
+          }
+          recovery={[{ label: translate('structure.error.openCode'), run: onOpenCodePanel }]}
         />
         <div className="code-panel-editor">
           <CodeEditor language="astro" value={projection.state.source} onChange={onCodeChange} />
@@ -457,6 +466,7 @@ function dropOnTree(event: React.DragEvent<HTMLElement>, target: DropLocation, p
 }
 
 function NavigatorHeader({ state, nodes }: { readonly state: TreeState; readonly nodes: readonly NavigatorNode[] }) {
+  const translate = useTranslate();
   const toggleAll = (): void => {
     state.setToggled(collapseMap(nodes, { collapsed: state.allExpanded }));
     state.setAllExpanded((expanded) => !expanded);
@@ -464,10 +474,10 @@ function NavigatorHeader({ state, nodes }: { readonly state: TreeState; readonly
   return (
     <>
       <div className="panel-header">
-        <h2>Navigator</h2>
+        <h2>{translate('rail.navigator')}</h2>
         <button
           className="ghost"
-          aria-label={state.allExpanded ? 'Collapse all' : 'Expand all'}
+          aria-label={state.allExpanded ? translate('structure.collapseAll') : translate('structure.expandAll')}
           onMouseEnter={state.showTooltip}
           onMouseLeave={state.hideTooltip}
           onClick={() => {
@@ -480,7 +490,7 @@ function NavigatorHeader({ state, nodes }: { readonly state: TreeState; readonly
       </div>
       {state.tooltip && (
         <div className="rail-tooltip below" style={state.tooltip}>
-          {state.allExpanded ? 'Collapse all' : 'Expand all'}
+          {state.allExpanded ? translate('structure.collapseAll') : translate('structure.expandAll')}
         </div>
       )}
     </>
@@ -529,6 +539,7 @@ function NavigatorBody({
 type BodyDrag = 'idle' | 'dragging';
 
 function FrontmatterRow({ props }: { readonly props: EditableProps }) {
+  const translate = useTranslate();
   const importCount = props.pageState.model.imports.length;
   const selectedClass = props.selectedId === 'frontmatter' ? 'selected' : '';
   return (
@@ -541,15 +552,14 @@ function FrontmatterRow({ props }: { readonly props: EditableProps }) {
       <span className="icon">
         <CodeIcon size={12} />
       </span>
-      <span className="label">Frontmatter</span>
-      <span className="prop-preview">
-        {importCount} import{importCount === 1 ? '' : 's'}
-      </span>
+      <span className="label">{translate('structure.frontmatter')}</span>
+      <span className="prop-preview">{translate('structure.imports', { count: importCount })}</span>
     </div>
   );
 }
 
 function EmptyDropTarget({ props, state }: { readonly props: EditableProps; readonly state: TreeState }) {
+  const translate = useTranslate();
   const location = { parentId: undefined, index: 0 };
   const active = state.dropTarget?.kind === 'gap' && state.dropTarget.parentId === undefined && state.dropTarget.index === 0;
   return (
@@ -562,7 +572,7 @@ function EmptyDropTarget({ props, state }: { readonly props: EditableProps; read
         drop: (event) => dropOnTree(event, location, props, state),
       }}
     >
-      Drag components here
+      {translate('structure.dragHere')}
     </TreeDragRow>
   );
 }

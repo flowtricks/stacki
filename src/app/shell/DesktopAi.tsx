@@ -4,6 +4,7 @@
 // "Fix with AI" open a chat, and the two things the panel asks the app for:
 // the terminal (an agent's sign-in runs there) and the merge editor (an undo
 // whose file moved on since the agent's edit).
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { assert } from '../../../shared/core/assert';
 import type { WireMergeClash } from '../../../shared/ipc/ipcWire';
@@ -84,9 +85,10 @@ export function useAiRailButton(app: ShellView): { readonly active: boolean; rea
 
 /** The docked panel, inside the left panel. */
 export function AiTab({ app }: { readonly app: ShellView }) {
+  const translate = useTranslate();
   const state = useAiWindow();
   if (state.mode === 'floating') {
-    return <p className="ai-empty">The AI chat is in its own window.</p>;
+    return <p className="ai-empty">{translate('shell.ai.ownWindow')}</p>;
   }
   return <DockedAi app={app} />;
 }
@@ -134,6 +136,7 @@ export function AiHost({ app }: { readonly app: ShellView }) {
 
 function AiWindow({ app, mode, onModeChange }: { readonly app: ShellView; readonly mode: WindowMode; readonly onModeChange: (mode: WindowMode) => void }) {
   const { setTermOpen } = app;
+  const translate = useTranslate();
   return (
     <AiPanel
       projectPath={app.project.path}
@@ -142,7 +145,7 @@ function AiWindow({ app, mode, onModeChange }: { readonly app: ShellView; readon
         // The dock mounts its tab listener as it opens; a frame lets it settle first (terminalAgent.ts does the same).
         setTimeout(() => {
           if (!requestTerminalTab(command)) {
-            app.showToast(`Open the terminal and run ${command} to sign in.`, 'info');
+            app.showToast(translate('shell.ai.openTerminal', { command }), 'info');
           }
         }, 0);
       }}
@@ -154,7 +157,7 @@ function AiWindow({ app, mode, onModeChange }: { readonly app: ShellView; readon
         <DockableWindow
           mode={mode}
           onModeChange={onModeChange}
-          label="AI chat"
+          label={translate('rail.ai')}
           className="ai-frame"
           header={header}
           minimumSize={{ width: 340, height: 360 }}
@@ -169,15 +172,17 @@ function AiWindow({ app, mode, onModeChange }: { readonly app: ShellView; readon
 }
 
 function AiMerge({ merge }: { readonly merge: NonNullable<AiWindowState['merge']> }) {
+  const translate = useTranslate();
+  const beforeAgent = translate('shell.ai.beforeAgent');
   const settle = (resolution: MergeResolution | undefined): void => {
     setWindowState((current) => ({ ...current, merge: undefined }));
     merge.settle(resolution);
   };
   return (
     <MergeConflictModal
-      conflict={{ ok: false, conflicted: true, from: 'Before the agent', branch: 'Before the agent', files: [merge.clash] }}
-      branches={['Before the agent']}
-      trunk="Your file now"
+      conflict={{ ok: false, conflicted: true, from: beforeAgent, branch: beforeAgent, files: [merge.clash] }}
+      branches={[beforeAgent]}
+      trunk={translate('shell.ai.yourFileNow')}
       busy={undefined}
       onCancel={() => settle(undefined)}
       onResolve={(choices) => {

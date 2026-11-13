@@ -3,6 +3,8 @@
 // answers that there is nothing to read or write (webflow.ts).
 
 import type { StateKey } from './resolved';
+import type { TypedMessageRef } from '../../../../shared/properties/i18n/messageRef';
+import { failureOf } from './failureMessage';
 import type { NativeModel } from './styleTypes';
 import type { NativeStyleOptions } from './nativeStyles';
 import { type AnyElement } from './webflowElement';
@@ -38,10 +40,10 @@ export const NO_NATIVE: {
   readonly ok: false;
   readonly applied: false;
   readonly error: string;
+  readonly errorRef: TypedMessageRef;
 } = {
-  ok: false,
+  ...failureOf('styleModel.native.cssProject'),
   applied: false,
-  error: 'This project styles with CSS — write to a stylesheet.',
 };
 
 export async function applyNativePropertyAt(

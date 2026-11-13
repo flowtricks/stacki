@@ -182,7 +182,7 @@ const SEG = (TRACK - PAD * 2) / 4;
     (display.match(/\{BOXLESS\.map\(/g) || []).length === 2,
     'the two menus render the boxless group',
   );
-  check('with a tooltip saying what it does', /contents: (?:\(\s*)?<>/.test(display));
+  check('with a tooltip saying what it does', /contents: 'style\.displayControl\.tooltipContents'/.test(display));
   check(
     'and it is a supported value, so the bar keeps it',
     /const BOXLESS = \['none', 'contents'\]/.test(display) && /\.\.\.INLINE, \.\.\.BOXLESS/.test(display),

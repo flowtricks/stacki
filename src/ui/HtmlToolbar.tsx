@@ -3,6 +3,8 @@
 // caret is, and its tooltip names its keyboard shortcut. Buttons never take
 // focus from the text, so the selection they act on stays where it was.
 import type { ReactNode } from 'react';
+import type { MessageKey } from '../lib/i18n/localeContext';
+import { useTranslate } from '../lib/i18n/useTranslate';
 import Dropdown from './Dropdown';
 import type { FormatState, Mark, RichTextAction } from './richTextCommands';
 import {
@@ -39,35 +41,37 @@ interface Props {
 /** The platform's modifier as tooltips write it. */
 export const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl+';
 
-const BLOCK_OPTIONS: readonly {
+// Labels are keys, translated where the toolbar draws them: a module-level constant cannot call a hook.
+const BLOCK_CHOICES: readonly {
   readonly value: Block;
-  readonly label: string;
+  readonly label: MessageKey;
+  readonly level?: number;
   readonly hint: string;
 }[] = [
-  { value: 'p', label: 'Paragraph', hint: `${MOD}⌥0` },
-  { value: 'h1', label: 'Heading 1', hint: '#' },
-  { value: 'h2', label: 'Heading 2', hint: '##' },
-  { value: 'h3', label: 'Heading 3', hint: '###' },
-  { value: 'h4', label: 'Heading 4', hint: '####' },
-  { value: 'h5', label: 'Heading 5', hint: '#####' },
-  { value: 'h6', label: 'Heading 6', hint: '######' },
-  { value: 'blockquote', label: 'Quote', hint: '>' },
-  { value: 'pre', label: 'Code block', hint: '```' },
+  { value: 'p', label: 'ui.htmlToolbar.paragraph', hint: `${MOD}⌥0` },
+  { value: 'h1', label: 'ui.htmlToolbar.heading', level: 1, hint: '#' },
+  { value: 'h2', label: 'ui.htmlToolbar.heading', level: 2, hint: '##' },
+  { value: 'h3', label: 'ui.htmlToolbar.heading', level: 3, hint: '###' },
+  { value: 'h4', label: 'ui.htmlToolbar.heading', level: 4, hint: '####' },
+  { value: 'h5', label: 'ui.htmlToolbar.heading', level: 5, hint: '#####' },
+  { value: 'h6', label: 'ui.htmlToolbar.heading', level: 6, hint: '######' },
+  { value: 'blockquote', label: 'ui.htmlToolbar.quote', hint: '>' },
+  { value: 'pre', label: 'ui.htmlToolbar.codeBlock', hint: '```' },
 ];
 
 const MARK_BUTTONS: readonly {
   readonly mark: Mark;
-  readonly label: string;
+  readonly label: MessageKey;
   readonly keys: string;
   readonly icon: ReactNode;
 }[] = [
-  { mark: 'bold', label: 'Bold', keys: `${MOD}B`, icon: <BoldIcon size={14} /> },
-  { mark: 'italic', label: 'Italic', keys: `${MOD}I`, icon: <ItalicIcon size={14} /> },
-  { mark: 'underline', label: 'Underline', keys: `${MOD}U`, icon: <UnderlineIcon size={14} /> },
-  { mark: 'strike', label: 'Strikethrough', keys: `${MOD}⇧X`, icon: <StrikeIcon size={14} /> },
-  { mark: 'code', label: 'Inline code', keys: `${MOD}E`, icon: <InlineCodeIcon size={14} /> },
-  { mark: 'superscript', label: 'Superscript', keys: `${MOD}.`, icon: <ScriptIcon at="sup" /> },
-  { mark: 'subscript', label: 'Subscript', keys: `${MOD},`, icon: <ScriptIcon at="sub" /> },
+  { mark: 'bold', label: 'ui.htmlToolbar.bold', keys: `${MOD}B`, icon: <BoldIcon size={14} /> },
+  { mark: 'italic', label: 'ui.htmlToolbar.italic', keys: `${MOD}I`, icon: <ItalicIcon size={14} /> },
+  { mark: 'underline', label: 'ui.htmlToolbar.underline', keys: `${MOD}U`, icon: <UnderlineIcon size={14} /> },
+  { mark: 'strike', label: 'ui.htmlToolbar.strikethrough', keys: `${MOD}⇧X`, icon: <StrikeIcon size={14} /> },
+  { mark: 'code', label: 'ui.htmlToolbar.inlineCode', keys: `${MOD}E`, icon: <InlineCodeIcon size={14} /> },
+  { mark: 'superscript', label: 'ui.htmlToolbar.superscript', keys: `${MOD}.`, icon: <ScriptIcon at="sup" /> },
+  { mark: 'subscript', label: 'ui.htmlToolbar.subscript', keys: `${MOD},`, icon: <ScriptIcon at="sub" /> },
 ];
 
 // The letter x with a small figure raised (x²) or lowered (x₂).
@@ -82,24 +86,30 @@ function ScriptIcon(props: { readonly at: 'sup' | 'sub' }) {
 export function HtmlToolbar(props: Props) {
   const { format, onAction } = props;
   const visual = !props.source;
+  const translate = useTranslate();
+  const blockOptions = BLOCK_CHOICES.map((choice) => ({
+    value: choice.value,
+    label: translate(choice.label, { level: choice.level ?? 0 }),
+    hint: choice.hint,
+  }));
   return (
-    <div className="html-toolbar" role="toolbar" aria-label="Text formatting">
+    <div className="html-toolbar" role="toolbar" aria-label={translate('ui.htmlToolbar.ariaLabel')}>
       {visual && (
         <fieldset className="html-toolbar-controls" disabled={props.locked}>
           <Dropdown
             className="html-block-style"
-            ariaLabel="Text style"
+            ariaLabel={translate('ui.htmlToolbar.textStyle')}
             value={format.block}
             // Choosing is a click: hovering a style must not restyle the text.
             livePreview={false}
-            options={BLOCK_OPTIONS}
+            options={blockOptions}
             onChange={(block) => onAction({ kind: 'block', block })}
           />
           <span className="html-toolbar-group">
             {MARK_BUTTONS.map((button) => (
               <ToolButton
                 key={button.mark}
-                label={button.label}
+                label={translate(button.label)}
                 keys={button.keys}
                 pressed={format.marks.has(button.mark)}
                 onPress={() => onAction({ kind: 'mark', mark: button.mark })}
@@ -112,19 +122,19 @@ export function HtmlToolbar(props: Props) {
         </fieldset>
       )}
       {props.source && props.formattable && (
-        <button type="button" className="html-source-toggle html-format" title="Lay the HTML out to read" onClick={props.onFormat}>
-          Format
+        <button type="button" className="html-source-toggle html-format" title={translate('ui.htmlToolbar.formatTitle')} onClick={props.onFormat}>
+          {translate('ui.htmlToolbar.format')}
         </button>
       )}
       <button
         type="button"
         className="html-source-toggle"
         aria-pressed={props.source}
-        title={props.source ? 'Back to the visual editor' : `Edit the ${props.sourceLabel}`}
+        title={props.source ? translate('ui.htmlToolbar.backToVisual') : translate('ui.htmlToolbar.editSource', { source: props.sourceLabel })}
         onMouseDown={(event) => event.preventDefault()}
         onClick={props.onToggleSource}
       >
-        {props.source ? 'Visual' : props.sourceLabel}
+        {props.source ? translate('ui.htmlToolbar.visual') : props.sourceLabel}
       </button>
     </div>
   );
@@ -133,25 +143,46 @@ export function HtmlToolbar(props: Props) {
 // Links, lists, quote, rule, clearing, and history.
 function InsertButtons(props: Pick<Props, 'format' | 'onAction'>) {
   const { format, onAction } = props;
+  const translate = useTranslate();
   const quote = format.block === 'blockquote';
   return (
     <>
       <span className="html-toolbar-group">
-        <ToolButton label={format.link ? 'Edit link' : 'Link'} keys={`${MOD}K`} pressed={format.link !== undefined} onPress={() => onAction({ kind: 'link' })}>
+        <ToolButton
+          label={format.link ? translate('ui.htmlLink.edit') : translate('ui.htmlToolbar.link')}
+          keys={`${MOD}K`}
+          pressed={format.link !== undefined}
+          onPress={() => onAction({ kind: 'link' })}
+        >
           <LinkIcon size={14} />
         </ToolButton>
       </span>
       <span className="html-toolbar-group">
-        <ToolButton label="Bulleted list" keys={`${MOD}⇧8`} pressed={format.list === 'ul'} onPress={() => onAction({ kind: 'list', list: 'ul' })}>
+        <ToolButton
+          label={translate('ui.htmlToolbar.bulletedList')}
+          keys={`${MOD}⇧8`}
+          pressed={format.list === 'ul'}
+          onPress={() => onAction({ kind: 'list', list: 'ul' })}
+        >
           <BulletListIcon size={14} />
         </ToolButton>
-        <ToolButton label="Numbered list" keys={`${MOD}⇧7`} pressed={format.list === 'ol'} onPress={() => onAction({ kind: 'list', list: 'ol' })}>
+        <ToolButton
+          label={translate('ui.htmlToolbar.numberedList')}
+          keys={`${MOD}⇧7`}
+          pressed={format.list === 'ol'}
+          onPress={() => onAction({ kind: 'list', list: 'ol' })}
+        >
           <NumberListIcon size={14} />
         </ToolButton>
-        <ToolButton label="Quote" keys={`${MOD}⇧9`} pressed={quote} onPress={() => onAction({ kind: 'block', block: 'blockquote' })}>
+        <ToolButton
+          label={translate('ui.htmlToolbar.quote')}
+          keys={`${MOD}⇧9`}
+          pressed={quote}
+          onPress={() => onAction({ kind: 'block', block: 'blockquote' })}
+        >
           <QuoteIcon size={14} />
         </ToolButton>
-        <ToolButton label="Divider" keys="---" onPress={() => onAction({ kind: 'rule' })}>
+        <ToolButton label={translate('ui.htmlToolbar.divider')} keys="---" onPress={() => onAction({ kind: 'rule' })}>
           <RuleIcon size={14} />
         </ToolButton>
       </span>
@@ -162,15 +193,16 @@ function InsertButtons(props: Pick<Props, 'format' | 'onAction'>) {
 
 function HistoryButtons(props: Pick<Props, 'onAction'>) {
   const { onAction } = props;
+  const translate = useTranslate();
   return (
     <span className="html-toolbar-group">
-      <ToolButton label="Clear formatting" keys={`${MOD}\\`} onPress={() => onAction({ kind: 'clear' })}>
+      <ToolButton label={translate('ui.htmlToolbar.clearFormatting')} keys={`${MOD}\\`} onPress={() => onAction({ kind: 'clear' })}>
         <ClearFormatIcon size={14} />
       </ToolButton>
-      <ToolButton label="Undo" keys={`${MOD}Z`} onPress={() => onAction({ kind: 'history', step: 'undo' })}>
+      <ToolButton label={translate('ui.htmlToolbar.undo')} keys={`${MOD}Z`} onPress={() => onAction({ kind: 'history', step: 'undo' })}>
         <UndoIcon size={14} />
       </ToolButton>
-      <ToolButton label="Redo" keys={`${MOD}⇧Z`} onPress={() => onAction({ kind: 'history', step: 'redo' })}>
+      <ToolButton label={translate('ui.htmlToolbar.redo')} keys={`${MOD}⇧Z`} onPress={() => onAction({ kind: 'history', step: 'redo' })}>
         <RedoIcon size={14} />
       </ToolButton>
     </span>

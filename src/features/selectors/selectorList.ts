@@ -4,6 +4,7 @@
 // when the project has more than one. A locked stylesheet's selectors are
 // `kept`, so the Unused view never lists them: they are under Locked and All.
 import { assert } from '../../../shared/core/assert';
+import type { MessageRef } from '../../../shared/core/i18n/messageReference';
 import type { SelectorEntry, SelectorReport, SelectorVerdictKind } from '../../../shared/properties/selectorUsage';
 import type { StyleKeepList } from '../../../shared/properties/styleKeepList';
 
@@ -127,7 +128,21 @@ export function folderGroups(report: SelectorReport, sheets: readonly SelectorGr
 /** "Can't tell" entries grouped by their reason, largest group first, so each reason is explained once. */
 export interface ReasonGroup {
   readonly reason: string;
+  /** The reason as a message reference, when the report carried one: the panel words it in the person's language. */
+  readonly reasonRef?: MessageRef | undefined;
   readonly entries: readonly SelectorEntry[];
+}
+
+// A held row keeps the reason text it was listed under after its report is gone, so the references of reasons seen so far are
+// remembered by that text. Bounded: the reasons are a handful of sentences per project, and the cache starts over when it fills.
+const REASON_REFS_MAX = 256;
+const reasonRefs = new Map<string, MessageRef>();
+
+function rememberReasonRef(reason: string, reasonRef: MessageRef): void {
+  if (reasonRefs.size >= REASON_REFS_MAX) {
+    reasonRefs.clear();
+  }
+  reasonRefs.set(reason, reasonRef);
 }
 
 // `held` maps a row that has just left "Can't tell" to the reason it was
@@ -137,6 +152,9 @@ export function unknownReasons(report: SelectorReport, search: string, held: Rea
   const groups = new Map<string, SelectorEntry[]>();
   for (const entry of listedEntries(report)) {
     const { verdict } = entry;
+    if (verdict.kind === 'unknown' && verdict.reasonRef !== undefined) {
+      rememberReasonRef(verdict.reason, verdict.reasonRef);
+    }
     const reason = verdict.kind === 'unknown' ? verdict.reason : held.get(entry.id);
     if (reason === undefined) {
       continue;
@@ -150,7 +168,9 @@ export function unknownReasons(report: SelectorReport, search: string, held: Rea
     group.push(entry);
     groups.set(reason, group);
   }
-  return [...groups].map(([reason, entries]) => ({ reason, entries })).sort((left, right) => right.entries.length - left.entries.length);
+  return [...groups]
+    .map(([reason, entries]) => ({ reason, reasonRef: reasonRefs.get(reason), entries }))
+    .sort((left, right) => right.entries.length - left.entries.length);
 }
 
 /** The filter a panel opens on: the clean-up when there is one, otherwise everything. */

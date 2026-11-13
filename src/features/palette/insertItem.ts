@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import type { MessageKey } from '../../lib/i18n/localeContext';
+import type { Translator } from '../../lib/i18n/localeContext';
 import type { ScanComponent } from '../../../shared/properties/projectScan';
 import type { InsertFolderKey } from './insertFolders';
 
@@ -18,7 +20,11 @@ export type InsertChoice =
 
 export type InsertItem = InsertChoice & {
   readonly label: string;
+  /** The label's message when the label is our own word (Loop, Text); absent when it is a tag or a project name. `label` stays English for search and ids. */
+  readonly labelKey?: MessageKey;
   readonly sub?: string;
+  /** Like `labelKey`, for a `sub` that is a sentence of ours. */
+  readonly subKey?: MessageKey;
   readonly search?: string;
   readonly cat: 'components' | 'elements' | 'other';
   readonly icon: ReactNode;
@@ -32,3 +38,13 @@ export type InsertItem = InsertChoice & {
   /** What the preview route needs to render it; absent when the component has no file to address. */
   readonly preview?: ScanComponent;
 };
+
+/** What a row or card draws as the item's name: ours in the active language, a tag or project name as it is. */
+export function insertItemLabel(item: Pick<InsertItem, 'label' | 'labelKey'>, translate: Translator): string {
+  return item.labelKey === undefined ? item.label : translate(item.labelKey);
+}
+
+/** What a row draws as the item's note, translated when it is a sentence of ours. */
+export function insertItemSub(item: Pick<InsertItem, 'sub' | 'subKey'>, translate: Translator): string | undefined {
+  return item.subKey === undefined ? item.sub : translate(item.subKey);
+}

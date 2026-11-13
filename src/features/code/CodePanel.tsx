@@ -3,6 +3,7 @@ import type { EditorModel } from '../../editor/pageView';
 import { componentSourceRanges, sourceLineLabel, sourceNodeAtOffset, sourceRangeForSelection } from './codePanelModel';
 import CodeEditor from '../../ui/CodeEditor';
 import { CodeIcon } from '../../ui/Icons';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 interface CodePanelProps {
   readonly source: string;
@@ -15,6 +16,7 @@ interface CodePanelProps {
 }
 
 export default function CodePanel(props: CodePanelProps) {
+  const translate = useTranslate();
   const { source, relativePath, model, selectedId, onChange, onSelect, onOpenComponent } = props;
   const activeRange = useMemo(() => sourceRangeForSelection(model, selectedId, source.length), [model, selectedId, source.length]);
   const components = useMemo(() => componentSourceRanges(model?.nodes ?? [], source), [model, source]);
@@ -24,7 +26,7 @@ export default function CodePanel(props: CodePanelProps) {
       <header className="code-panel-header">
         <span className="code-panel-title">
           <CodeIcon size={14} />
-          Code
+          {translate('workspace.code.title')}
         </span>
         <span className="code-panel-path" title={relativePath}>
           {relativePath}

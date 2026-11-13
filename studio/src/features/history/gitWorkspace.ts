@@ -19,6 +19,7 @@ import {
   snapshotGitWorkspace,
   gitWorkspaceCommit,
 } from './gitWorkspaceObjects';
+import { ReferencedError } from '../../shared/referencedError';
 
 export interface GitWorkspaceState {
   readonly git: PublishGit;
@@ -43,7 +44,7 @@ export class GitWorkspace {
     const connection = published(await this.connection());
     const manifest = await readGitWorkspace(this.root);
     if (manifest && manifest.repository !== connection.repository) {
-      throw new Error('The repository changed. Recover your existing Git workspace first.');
+      throw new ReferencedError('git.studio.repositoryChanged');
     }
     const git = gitWorkspaceContext(this.root, connection);
     const exists = await access(path.join(git.directory, 'HEAD')).then(
@@ -92,7 +93,7 @@ export class GitWorkspace {
     const tree = selection ? await gitSelectedTree(git, branch.head, draft, selection) : draft;
     const changes = await gitWorkspaceChanges(run, branch.head, tree);
     if (!changes.length) {
-      throw new Error('There are no changes to commit.');
+      throw new ReferencedError('git.studio.noChanges');
     }
     const head = await gitWorkspaceCommit(run, tree, [branch.head], message || 'Update from Stacki');
     const snapshot = await gitWorkspaceCommit(run, draft, [head], 'Studio working draft');
@@ -122,7 +123,7 @@ export class GitWorkspace {
     const branch = gitBranchName(connection.branch);
     const current = remote.find((reference) => reference.name === branch);
     if (!current) {
-      throw new Error('The configured Git branch no longer exists.');
+      throw new ReferencedError('git.studio.branchMissing');
     }
     const head = await readGitWorkspaceBaseline(this.root).catch((error: unknown) => {
       if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {

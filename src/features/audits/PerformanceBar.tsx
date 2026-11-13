@@ -6,9 +6,13 @@
 // approximation and when they were taken), and failed (why, and Retry). "All
 // pages" measures every static page, up to a bound, and lists each one's score.
 import { useEffect, useState } from 'react';
+import type { Formatters } from '../../../shared/core/i18n/format';
 import { assert } from '../../../shared/core/assert';
 import { performanceFindings, performanceScore, type Measurement } from '../../../shared/page/auditPerformance';
 import type { AuditFinding } from '../../../shared/page/auditFindings';
+import type { Described, MessageKey } from '../../../shared/properties/i18n/messageRef';
+import { described } from '../../../shared/properties/i18n/messageRef';
+import { useFormat, useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { RefreshIcon, WarningTriangleIcon } from '../../ui/Icons';
 import { measureRoute } from './auditsBridge';
 import { auditState, updateAuditState, useAuditState, type MeasuredPage } from './auditStore';
@@ -22,20 +26,26 @@ const LOADING_STEP_MS = 3_000;
 
 export type Rating = 'good' | 'fair' | 'poor';
 
+const RATING_KEYS: Readonly<Record<Rating, MessageKey>> = {
+  good: 'auditsUi.perf.rating.good',
+  fair: 'auditsUi.perf.rating.fair',
+  poor: 'auditsUi.perf.rating.poor',
+};
+
 /** The five headline numbers, each with its thresholds (good up to, poor above) and what it means. */
 export const METRICS = [
-  { key: 'lcpMs', label: 'LCP', good: 2_500, poor: 4_000, hint: 'Largest Contentful Paint: when the biggest element appears. Good under 2.5 s.' },
-  { key: 'cls', label: 'CLS', good: 0.1, poor: 0.25, hint: 'Cumulative Layout Shift: how much content jumps while loading. Good under 0.1.' },
-  { key: 'tbtMs', label: 'TBT', good: 200, poor: 600, hint: 'Total Blocking Time: script work that blocks clicks and typing. Good under 200 ms.' },
-  {
-    key: 'transferBytes',
-    label: 'Transfer',
-    good: 2_000_000,
-    poor: 5_000_000,
-    hint: 'Everything downloaded. The dev server serves unbundled modules, so this runs high.',
-  },
-  { key: 'requests', label: 'Requests', good: 100, poor: 150, hint: 'Requests the page makes. The dev server serves one per module, so this runs high.' },
-] as const;
+  { key: 'lcpMs', labelKey: 'auditsUi.perf.metric.lcp.label', good: 2_500, poor: 4_000, hintKey: 'auditsUi.perf.metric.lcp.hint' },
+  { key: 'cls', labelKey: 'auditsUi.perf.metric.cls.label', good: 0.1, poor: 0.25, hintKey: 'auditsUi.perf.metric.cls.hint' },
+  { key: 'tbtMs', labelKey: 'auditsUi.perf.metric.tbt.label', good: 200, poor: 600, hintKey: 'auditsUi.perf.metric.tbt.hint' },
+  { key: 'transferBytes', labelKey: 'auditsUi.perf.metric.transfer.label', good: 2_000_000, poor: 5_000_000, hintKey: 'auditsUi.perf.metric.transfer.hint' },
+  { key: 'requests', labelKey: 'auditsUi.perf.metric.requests.label', good: 100, poor: 150, hintKey: 'auditsUi.perf.metric.requests.hint' },
+] as const satisfies readonly {
+  readonly key: string;
+  readonly labelKey: MessageKey;
+  readonly good: number;
+  readonly poor: number;
+  readonly hintKey: MessageKey;
+}[];
 type MetricKey = (typeof METRICS)[number]['key'];
 
 export function rating(value: number | undefined, thresholds: { readonly good: number; readonly poor: number }): Rating {
@@ -51,22 +61,22 @@ export function scoreRating(score: number): Rating {
   return score >= 90 ? 'good' : score >= 50 ? 'fair' : 'poor';
 }
 
-/** A metric as people read it: 1.2 s, 0.03, 180 ms, 1.8 MB, 42. */
-export function formatMetric(key: MetricKey, value: number | undefined): string {
+/** A metric as people read it: 1.2 s, 0.03, 180 ms, 1.8 MB, 42, with the person's number format. */
+export function formatMetric(key: MetricKey, value: number | undefined, format: Pick<Formatters, 'formatNumber' | 'formatBytes'>): string {
   if (value === undefined) {
     return '–';
   }
   switch (key) {
     case 'lcpMs':
-      return `${(value / 1000).toFixed(1)} s`;
+      return `${format.formatNumber(value / 1000, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} s`;
     case 'cls':
-      return value.toFixed(2);
+      return format.formatNumber(value, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     case 'tbtMs':
-      return `${Math.round(value)} ms`;
+      return `${format.formatNumber(Math.round(value), { maximumFractionDigits: 0 })} ms`;
     case 'transferBytes':
-      return value >= 1_000_000 ? `${(value / 1_000_000).toFixed(1)} MB` : `${Math.round(value / 1000)} KB`;
+      return format.formatBytes(value);
     case 'requests':
-      return String(Math.round(value));
+      return format.formatNumber(Math.round(value), { maximumFractionDigits: 0 });
     default: {
       const exhaustive: never = key;
       return exhaustive;
@@ -74,27 +84,19 @@ export function formatMetric(key: MetricKey, value: number | undefined): string 
   }
 }
 
-/** "just now", "10 s ago", "3 min ago". */
-export function measuredAgo(at: number, now: number): string {
-  const seconds = Math.max(0, Math.round((now - at) / 1000));
-  if (seconds < 5) {
-    return 'just now';
-  }
-  return seconds < 60 ? `${seconds} s ago` : `${Math.round(seconds / 60)} min ago`;
-}
-
 /** A failure in words: the browser's network codes, said plainly. */
-export function failureReason(message: string): string {
+export function failureReason(message: string): Described {
   if (/ERR_CONNECTION_REFUSED|ECONNREFUSED|ERR_CONNECTION_RESET/.test(message)) {
-    return 'Couldn’t reach the dev server.';
+    return described('auditsUi.perf.error.unreachable');
   }
   if (/destroyed|timed? ?out|ERR_TIMED_OUT/i.test(message)) {
-    return 'The page took too long to load.';
+    return described('auditsUi.perf.error.timeout');
   }
   if (/ERR_ABORTED|ERR_FAILED/.test(message)) {
-    return 'The page stopped loading.';
+    return described('auditsUi.perf.error.stopped');
   }
-  return message.length > 140 ? `${message.slice(0, 139)}…` : message;
+  // The browser's own text, as received: not ours to translate.
+  return { message: message.length > 140 ? `${message.slice(0, 139)}…` : message };
 }
 
 function metricsOf(measurement: Measurement): MeasuredPage['metrics'] {
@@ -108,7 +110,7 @@ async function measure(projectPath: string, devUrl: string, pages: readonly Meas
   updateAuditState((current) => ({ ...current, performance: { ...current.performance, running: true, problem: undefined, startedAt: Date.now() } }));
   const results: MeasuredPage[] = [];
   const findings: AuditFinding[] = [];
-  let problem: string | undefined;
+  let problem: Described | undefined;
   for (const page of pages.slice(0, MEASURED_PAGES_MAX)) {
     const measured = await measureRoute(projectPath, devUrl, page.route).catch((error: unknown) => ({ ok: false as const, error: String(error) }));
     if (!measured.ok) {
@@ -126,6 +128,9 @@ async function measure(projectPath: string, devUrl: string, pages: readonly Meas
 }
 
 export function PerformanceBar(props: { readonly measure: AuditsPanelProps['measure'] }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const format = useFormat();
   const state = useAuditState();
   const performance = state.performance;
   const targets = props.measure();
@@ -152,7 +157,7 @@ export function PerformanceBar(props: { readonly measure: AuditsPanelProps['meas
   if (devUrl === undefined) {
     return (
       <div className="audits-card">
-        <p className="audits-card-note">Start the preview to measure this page’s speed.</p>
+        <p className="audits-card-note">{translate('auditsUi.perf.startPreview')}</p>
       </div>
     );
   }
@@ -161,18 +166,19 @@ export function PerformanceBar(props: { readonly measure: AuditsPanelProps['meas
     void measure(targets.projectPath, devUrl, pages, stamp);
   };
   const page = performance.results.find((result) => result.route === route) ?? performance.results[0];
-  const pageName = route === undefined ? 'this page' : route;
   if (performance.running || (page === undefined && performance.problem === undefined)) {
     const elapsed = now - (performance.startedAt ?? now);
     return (
       <div className="audits-card audits-card-measuring" role="status">
         <div className="audits-card-head">
-          <span className="audits-card-title">Measuring {pageName}</span>
+          <span className="audits-card-title">
+            {route === undefined ? translate('auditsUi.perf.measuringThis') : translate('auditsUi.perf.measuring', { route })}
+          </span>
         </div>
         <div className="audits-progress" aria-hidden="true">
           <span />
         </div>
-        <p className="audits-card-note">{elapsed < LOADING_STEP_MS ? 'Loading the page in a hidden window…' : 'Collecting metrics…'}</p>
+        <p className="audits-card-note">{elapsed < LOADING_STEP_MS ? translate('auditsUi.perf.stepLoading') : translate('auditsUi.perf.stepCollecting')}</p>
       </div>
     );
   }
@@ -181,11 +187,13 @@ export function PerformanceBar(props: { readonly measure: AuditsPanelProps['meas
       <div className="audits-card audits-card-error" role="alert">
         <div className="audits-card-head">
           <WarningTriangleIcon size={14} />
-          <span className="audits-card-title">Couldn’t measure {pageName}</span>
+          <span className="audits-card-title">
+            {route === undefined ? translate('auditsUi.perf.failedThis') : translate('auditsUi.perf.failed', { route })}
+          </span>
         </div>
-        <p className="audits-card-note">{performance.problem}</p>
+        <p className="audits-card-note">{performance.problem === undefined ? '' : translateDescribed(performance.problem)}</p>
         <button className="audits-card-button" onClick={() => current !== undefined && run([current])}>
-          Retry
+          {translate('ui.retry')}
         </button>
       </div>
     );
@@ -194,9 +202,9 @@ export function PerformanceBar(props: { readonly measure: AuditsPanelProps['meas
     <div className="audits-card">
       <div className="audits-card-head">
         <ScoreRing score={page.score} />
-        <span className="audits-card-title">{page.route === route ? 'This page' : page.route}</span>
+        <span className="audits-card-title">{page.route === route ? translate('auditsUi.scope.page') : page.route}</span>
         <button className="audits-card-button secondary" disabled={performance.running} onClick={() => run(targets.pages)}>
-          All pages
+          {translate('auditsUi.perf.allPages')}
         </button>
       </div>
       <div className="audits-tiles">
@@ -204,12 +212,12 @@ export function PerformanceBar(props: { readonly measure: AuditsPanelProps['meas
           const value = page.metrics[metric.key];
           const level = rating(value, metric);
           return (
-            <div key={metric.key} className="audits-tile" title={metric.hint}>
+            <div key={metric.key} className="audits-tile" title={translate(metric.hintKey)}>
               <span className="audits-tile-label">
-                <span className={`audits-rating ${level}`} aria-label={level === 'good' ? 'Good' : level === 'fair' ? 'Needs work' : 'Poor'} />
-                {metric.label}
+                <span className={`audits-rating ${level}`} aria-label={translate(RATING_KEYS[level])} />
+                {translate(metric.labelKey)}
               </span>
-              <span className="audits-tile-value">{formatMetric(metric.key, value)}</span>
+              <span className="audits-tile-value">{formatMetric(metric.key, value, format)}</span>
             </div>
           );
         })}
@@ -225,8 +233,17 @@ export function PerformanceBar(props: { readonly measure: AuditsPanelProps['meas
         </div>
       )}
       <div className="audits-card-foot">
-        <span>Dev server · approximate · measured {performance.measuredAt === undefined ? '' : measuredAgo(performance.measuredAt, now)}</span>
-        <button className="ghost audits-icon-button" aria-label="Measure again" title="Measure again" onClick={() => current !== undefined && run([current])}>
+        <span>
+          {performance.measuredAt === undefined
+            ? translate('auditsUi.perf.footer')
+            : translate('auditsUi.perf.footerMeasured', { ago: format.formatRelativeTime(performance.measuredAt, now) })}
+        </span>
+        <button
+          className="ghost audits-icon-button"
+          aria-label={translate('auditsUi.perf.measureAgain')}
+          title={translate('auditsUi.perf.measureAgain')}
+          onClick={() => current !== undefined && run([current])}
+        >
           <RefreshIcon size={12} />
         </button>
       </div>
@@ -238,9 +255,10 @@ const RING_RADIUS = 15;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
 function ScoreRing({ score }: { readonly score: number }) {
+  const translate = useTranslate();
   const level = scoreRating(score);
   return (
-    <span className={`audits-ring ${level}`} role="img" aria-label={`Score ${score} out of 100`}>
+    <span className={`audits-ring ${level}`} role="img" aria-label={translate('auditsUi.perf.score', { score })}>
       <svg viewBox="0 0 36 36" width="36" height="36" aria-hidden="true">
         <circle cx="18" cy="18" r={RING_RADIUS} className="audits-ring-track" />
         <circle

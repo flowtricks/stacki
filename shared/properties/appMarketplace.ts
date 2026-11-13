@@ -14,6 +14,7 @@
 // asset. An install, by hand or by auto-update, writes only bytes whose digest
 // equals the index's, so a release replaced after review installs nothing.
 import { parseAppNetwork, type AppNetworkHost } from './appAuth';
+import { messageRef } from './i18n/messageRef';
 import { assert } from '../core/assert';
 import { record, text } from '../core/boundary';
 import { toArray } from '../core/record';
@@ -51,8 +52,8 @@ export const MARKETPLACE_SUBMISSIONS_URL = `${MARKETPLACE_ORIGIN}/api/marketplac
 export const MARKETPLACE_CHECK_URL = `${MARKETPLACE_ORIGIN}/api/marketplace/check`;
 /** The one license a marketplace app may carry: every listed app is open source under MIT. */
 export const MARKETPLACE_LICENSE = 'MIT';
-/** What the Marketplace tab and the install confirmation say about who answers for an app. */
-export const MARKETPLACE_DISCLAIMER = 'Community apps, MIT licensed. Stacki doesn’t review them; install apps you trust.';
+/** What the Marketplace tab and the install confirmation say about who answers for an app: the catalog key `apps.market.disclaimer`. */
+export const MARKETPLACE_DISCLAIMER_REF = messageRef('apps.market.disclaimer');
 
 export const MARKETPLACE_LIMITS = {
   /** The index file: 500 entries of about 1.5 KiB each, with room. */

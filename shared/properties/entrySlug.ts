@@ -14,6 +14,9 @@
 
 import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
+import { parseOptionalMessageRef, type MessageRef } from '../core/i18n/messageReference';
+import { ENGLISH_TRANSLATE } from './i18n/englishTranslator';
+import type { Translator } from './i18n/messageRef';
 
 export const ENTRY_SLUG_LIMITS = {
   /** Sanity's own slug default, and a URL segment anyone can still read. */
@@ -26,7 +29,7 @@ export const ENTRY_SLUG_LIMITS = {
 } as const;
 
 /** Whether an entry's id can be renamed here, and why not when it cannot. */
-export type EntrySlugRename = { readonly kind: 'editable' } | { readonly kind: 'locked'; readonly reason: string };
+export type EntrySlugRename = { readonly kind: 'editable' } | { readonly kind: 'locked'; readonly reason: string; readonly reasonRef?: MessageRef | undefined };
 
 /** What the Slug field edits: the id's last segment, its folder, and the slugs beside it. */
 export interface EntrySlug {
@@ -87,16 +90,16 @@ export function checkEntrySlug(typed: string, context: { readonly taken: readonl
 }
 
 /** What stops a slug being saved, said under the field; nothing when it can be. */
-export function slugProblem(check: SlugCheck): string | undefined {
+export function slugProblem(check: SlugCheck, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   switch (check.kind) {
     case 'ok':
       return undefined;
     case 'empty':
-      return 'A slug needs at least one letter or number';
+      return translate('cmsBackend.slug.empty');
     case 'tooLong':
-      return `At most ${ENTRY_SLUG_LIMITS.charsMax} characters`;
+      return translate('cmsBackend.slug.tooLong', { count: ENTRY_SLUG_LIMITS.charsMax });
     case 'taken':
-      return 'Another item already uses this slug';
+      return translate('cmsBackend.slug.taken');
     default: {
       const exhaustive: never = check;
       return exhaustive;
@@ -105,11 +108,11 @@ export function slugProblem(check: SlugCheck): string | undefined {
 }
 
 /** The slug typed text is saved as, when that differs from what was typed. */
-export function slugNote(check: SlugCheck): string | undefined {
+export function slugNote(check: SlugCheck, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   switch (check.kind) {
     case 'ok':
     case 'taken':
-      return check.normalised ? `Saved as “${check.slug}”` : undefined;
+      return check.normalised ? translate('cmsBackend.slug.saved', { slug: check.slug }) : undefined;
     case 'empty':
     case 'tooLong':
       return undefined;
@@ -180,7 +183,8 @@ function parseRename(input: unknown): EntrySlugRename {
   if (reason.length === 0 || reason.length > ENTRY_SLUG_LIMITS.reasonCharsMax) {
     throw new Error('A locked slug says why, briefly.');
   }
-  return { kind: 'locked', reason };
+  const reasonRef = parseOptionalMessageRef(value['reasonRef']);
+  return reasonRef === undefined ? { kind: 'locked', reason } : { kind: 'locked', reason, reasonRef };
 }
 
 // Cut at the last hyphen before the bound, so a long name loses whole words.

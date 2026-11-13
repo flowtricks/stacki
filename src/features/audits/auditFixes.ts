@@ -21,6 +21,7 @@ import type { AuditEdit, AuditFinding, AuditNewElement } from '../../../shared/p
 import type { EditBatchRequest, EditRequest } from '../../../shared/engine/editRequest';
 import type { PageDiskRead, PageEditError, PageEdited } from '../../../shared/ipc/pageSave';
 import type { Result } from '../../../shared/core/result';
+import { described, type Described } from '../../../shared/properties/i18n/messageRef';
 import { nodeGesture, propsGesture, sequence } from '../../editor/editGestures';
 import { insertGesture } from '../../editor/insertGestures';
 import { nodeAtPath } from '../../editor/editorTree';
@@ -52,11 +53,11 @@ export interface FixOutcome {
   /** Files written, the open page included. */
   readonly files: number;
   readonly fixed: number;
-  readonly failures: readonly { readonly file: string; readonly message: string }[];
+  readonly failures: readonly ({ readonly file: string } & Described)[];
 }
 
 /** The gesture a set of edits makes on `model`, or why it cannot be made. */
-export function fixGesture(model: EditorModel, edits: readonly AuditEdit[], options: { readonly coalesceKey: string }): Result<EditGesture, string> {
+export function fixGesture(model: EditorModel, edits: readonly AuditEdit[], options: { readonly coalesceKey: string }): Result<EditGesture, Described> {
   assert(edits.length > 0, 'fixGesture: a fix makes at least one edit');
   let gesture: EditGesture | undefined;
   const add = (next: EditGesture): void => {
@@ -92,40 +93,40 @@ function swapGesture(
   model: EditorModel,
   group: readonly Extract<AuditEdit, { readonly tag: 'raw-text' | 'text' }>[],
   coalesceKey: string,
-): Result<EditGesture, string> {
+): Result<EditGesture, Described> {
   const [first] = group;
   assert(first !== undefined, 'swapGesture: a group has an edit');
   const node = nodeAtPath<EditorNode>(model.nodes, first.path);
   if (first.tag === 'text') {
     if (node?.kind !== 'text' || node.value !== first.before || group.length !== 1) {
-      return { ok: false, error: 'The text this change is for has changed; search again.' };
+      return { ok: false, error: described('auditsUi.fix.textChanged') };
     }
     return { ok: true, value: nodeGesture(node.id, { ...node, value: first.value }, { coalesceKey, urgency: true }) };
   }
   if (node?.kind !== 'raw' || node.name.toLowerCase() !== first.expect.toLowerCase()) {
-    return { ok: false, error: `The <${first.expect}> this fix is for has moved; audit again.` };
+    return { ok: false, error: described('auditsUi.fix.moved', { element: `<${first.expect}>` }) };
   }
   let inner = node.inner;
   const ordered = [...group].sort((left, right) => (right.tag === 'raw-text' && left.tag === 'raw-text' ? right.offset - left.offset : 0));
   for (const edit of ordered) {
     if (edit.tag !== 'raw-text' || inner.slice(edit.offset, edit.offset + edit.before.length) !== edit.before) {
-      return { ok: false, error: 'The style block changed since the audit; audit again.' };
+      return { ok: false, error: described('auditsUi.fix.styleBlockChanged') };
     }
     inner = `${inner.slice(0, edit.offset)}${edit.after}${inner.slice(edit.offset + edit.before.length)}`;
   }
   return { ok: true, value: nodeGesture(node.id, { ...node, inner }, { coalesceKey, urgency: true }) };
 }
 
-function editGesture(model: EditorModel, edit: AuditEdit, coalesceKey: string): Result<EditGesture, string> {
+function editGesture(model: EditorModel, edit: AuditEdit, coalesceKey: string): Result<EditGesture, Described> {
   if (edit.tag === 'frontmatter-append') {
     return { ok: true, value: frontmatterGesture(edit.code, coalesceKey) };
   }
   if (edit.tag === 'file-text' || edit.tag === 'raw-text' || edit.tag === 'text') {
-    return { ok: false, error: 'A text swap is made with its node or its file, not on its own.' };
+    return { ok: false, error: described('auditsUi.fix.swapAlone') };
   }
   const node = nodeAtPath<EditorNode>(model.nodes, edit.path);
   if (node === undefined || node.name === undefined || node.name.toLowerCase() !== edit.expect.toLowerCase()) {
-    return { ok: false, error: `The <${edit.expect}> this fix is for has moved; audit again.` };
+    return { ok: false, error: described('auditsUi.fix.moved', { element: `<${edit.expect}>` }) };
   }
   switch (edit.tag) {
     case 'attributes':
@@ -192,7 +193,7 @@ export async function applyFixes(findings: readonly AuditFinding[], deps: FixDep
     }
   }
   const coalesceKey = `audit-fix:${crypto.randomUUID()}`;
-  const failures: { file: string; message: string }[] = [];
+  const failures: ({ file: string } & Described)[] = [];
   const written: { readonly path: string; readonly applied: readonly AppliedEdit[] }[] = [];
   let openGesture: { readonly gesture: EditGesture; readonly count: number } | undefined;
   const textWrites: TextWrite[] = [];
@@ -205,7 +206,7 @@ export async function applyFixes(findings: readonly AuditFinding[], deps: FixDep
       if (gesture.ok) {
         openGesture = { gesture: gesture.value, count: list.length };
       } else {
-        failures.push({ file, message: gesture.error });
+        failures.push({ file, ...gesture.error });
       }
       continue;
     }
@@ -215,7 +216,7 @@ export async function applyFixes(findings: readonly AuditFinding[], deps: FixDep
         textWrites.push(swapped.value);
         fixed += list.length;
       } else {
-        failures.push({ file, message: swapped.error });
+        failures.push({ file, ...swapped.error });
       }
       continue;
     }
@@ -224,7 +225,7 @@ export async function applyFixes(findings: readonly AuditFinding[], deps: FixDep
       written.push({ path, applied: outcome.value });
       fixed += list.length;
     } else {
-      failures.push({ file, message: outcome.error });
+      failures.push({ file, ...outcome.error });
     }
   }
   const work = written.length === 0 && textWrites.length === 0 ? undefined : joinedWork(stepWork(written, deps), textWork(textWrites, deps));
@@ -233,7 +234,7 @@ export async function applyFixes(findings: readonly AuditFinding[], deps: FixDep
       fixed += openGesture.count;
       return { files: written.length + textWrites.length + 1, fixed, failures };
     }
-    failures.push({ file: deps.open.path, message: 'The open page is busy saving; try again in a moment.' });
+    failures.push({ file: deps.open.path, ...described('auditsUi.fix.busy') });
   }
   if (work !== undefined) {
     deps.pushCommand({ label, undo: work.undo, redo: work.redo });
@@ -249,18 +250,18 @@ interface TextWrite {
 }
 
 // A stylesheet's swaps, made from the end back on the text as it is now; refused when a swap's bytes moved.
-async function fixTextFile(path: string, edits: readonly AuditEdit[], deps: FixDeps): Promise<Result<TextWrite, string>> {
+async function fixTextFile(path: string, edits: readonly AuditEdit[], deps: FixDeps): Promise<Result<TextWrite, Described>> {
   const before = await deps.readText(path);
   let after = before;
   const swaps = edits
     .filter((edit): edit is Extract<AuditEdit, { readonly tag: 'file-text' }> => edit.tag === 'file-text')
     .sort((left, right) => right.offset - left.offset);
   if (swaps.length !== edits.length) {
-    return { ok: false, error: 'Only text swaps are made in a stylesheet.' };
+    return { ok: false, error: described('auditsUi.fix.stylesheetSwapsOnly') };
   }
   for (const swap of swaps) {
     if (after.slice(swap.offset, swap.offset + swap.before.length) !== swap.before) {
-      return { ok: false, error: 'The stylesheet changed since the audit; audit again.' };
+      return { ok: false, error: described('auditsUi.fix.stylesheetChanged') };
     }
     after = `${after.slice(0, swap.offset)}${swap.after}${after.slice(swap.offset + swap.before.length)}`;
   }
@@ -295,10 +296,10 @@ function joinedWork(first: StepWork, second: StepWork): StepWork {
   };
 }
 
-async function fixFile(path: string, edits: readonly AuditEdit[], deps: FixDeps, coalesceKey: string): Promise<Result<readonly AppliedEdit[], string>> {
+async function fixFile(path: string, edits: readonly AuditEdit[], deps: FixDeps, coalesceKey: string): Promise<Result<readonly AppliedEdit[], Described>> {
   const read = await deps.readPage(path);
   if (!read.editable) {
-    return { ok: false, error: 'This file cannot be edited visually.' };
+    return { ok: false, error: described('auditsUi.fix.notEditable') };
   }
   const gesture = fixGesture(read.model, edits, { coalesceKey });
   if (!gesture.ok) {
@@ -317,11 +318,11 @@ async function fixFile(path: string, edits: readonly AuditEdit[], deps: FixDeps,
     case 'applied':
       return { ok: true, value: sent.replies.map((reply) => ({ checksum: reply.checksum, inverse: reply.inverse })) };
     case 'refused':
-      return { ok: false, error: `The file changed before the fix could be written (${sent.reason}).` };
+      return { ok: false, error: described('auditsUi.fix.fileChanged', { reason: sent.reason }) };
     case 'retry':
-      return { ok: false, error: sent.message };
+      return { ok: false, error: { message: sent.message } };
     case 'uncertain':
-      return { ok: false, error: sent.message };
+      return { ok: false, error: { message: sent.message } };
     default: {
       const exhaustive: never = sent;
       return exhaustive;

@@ -13,6 +13,8 @@ import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { useCustomFocus } from './model/fieldHooks';
 import { keepImportant, parseImportant } from './model/styleDisplay';
 import { CloseIcon, FloatLeftIcon, FloatRightIcon, ClearLeftIcon, ClearRightIcon, ClearBothIcon } from './PositionIcons';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -108,6 +110,7 @@ export function SegmentCustomInput({
 }: Pick<SegmentedIconControlProps, 'prop' | 'ariaLabel' | 'current' | 'busy' | 'setProp' | 'liveSetProp' | 'clearProp'> & {
   inputRef: React.RefObject<HTMLInputElement>;
 }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState(current);
   const focused = useRef(false);
   useEffect(() => {
@@ -127,7 +130,7 @@ export function SegmentCustomInput({
   return (
     <VariableConnect
       code
-      ariaLabel={`Connect ${ariaLabel} to a variable`}
+      ariaLabel={translate('style.positionSegments.connect', { name: ariaLabel })}
       disabled={busy}
       prop={prop}
       onPick={(binding) => {
@@ -140,7 +143,7 @@ export function SegmentCustomInput({
         ref={inputRef}
         className="embed-editor_value-input embed-editor_display-input"
         value={draft}
-        placeholder="custom value"
+        placeholder={translate('style.positionSegments.customValuePlaceholder')}
         spellCheck={false}
         disabled={busy}
         onChange={(event) => {
@@ -221,6 +224,7 @@ export function SegmentMenu({
   onPick: (value: string) => void;
   onEnterCustom: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <button
@@ -228,7 +232,7 @@ export function SegmentMenu({
         className="embed-editor_display-arrow"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`More ${ariaLabel} options`}
+        aria-label={translate('style.positionSegments.moreOptions', { name: ariaLabel })}
         disabled={busy}
         onClick={onToggle}
       >
@@ -241,7 +245,7 @@ export function SegmentMenu({
               <MenuItem key={segment.value} label={segment.label} selected={current === segment.value} onClick={() => onPick(segment.value)} />
             ))
           ) : (
-            <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
+            <MenuItem label={translate('style.positionSegments.custom')} selected={false} onClick={onEnterCustom} />
           )}
         </Popup>
       ) : undefined}
@@ -249,14 +253,18 @@ export function SegmentMenu({
   );
 }
 
-export const FLOAT_SEGS: readonly Seg[] = [
-  { value: 'none', icon: <CloseIcon />, label: 'None' },
-  { value: 'left', icon: <FloatLeftIcon />, label: 'Float left' },
-  { value: 'right', icon: <FloatRightIcon />, label: 'Float right' },
-];
-export const CLEAR_SEGS: readonly Seg[] = [
-  { value: 'none', icon: <CloseIcon />, label: 'None' },
-  { value: 'left', icon: <ClearLeftIcon />, label: 'Clear left' },
-  { value: 'right', icon: <ClearRightIcon />, label: 'Clear right' },
-  { value: 'both', icon: <ClearBothIcon />, label: 'Clear both' },
-];
+export function floatSegments(translate: Translator): readonly Seg[] {
+  return [
+    { value: 'none', icon: <CloseIcon />, label: translate('style.positionSegments.floatNone') },
+    { value: 'left', icon: <FloatLeftIcon />, label: translate('style.positionSegments.floatLeft') },
+    { value: 'right', icon: <FloatRightIcon />, label: translate('style.positionSegments.floatRight') },
+  ];
+}
+export function clearSegments(translate: Translator): readonly Seg[] {
+  return [
+    { value: 'none', icon: <CloseIcon />, label: translate('style.positionSegments.clearNone') },
+    { value: 'left', icon: <ClearLeftIcon />, label: translate('style.positionSegments.clearLeft') },
+    { value: 'right', icon: <ClearRightIcon />, label: translate('style.positionSegments.clearRight') },
+    { value: 'both', icon: <ClearBothIcon />, label: translate('style.positionSegments.clearBoth') },
+  ];
+}

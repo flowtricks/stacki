@@ -11,6 +11,8 @@
 import type { AppSummary } from '../../../shared/properties/apps';
 import { isReservedShortcut } from '../../../shared/properties/appShortcuts';
 import { assert } from '../../../shared/core/assert';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { ShortcutRecorder } from '../../ui/ShortcutRecorder';
 import { AppDetailsItem, AppDetailsList, AppDetailsSection } from './AppDetailsLayout';
 import {
@@ -26,6 +28,7 @@ import {
 
 /** The details popup's "Commands" section; nothing for an app without commands. */
 export function AppCommandSettings({ app, admin }: { readonly app: AppSummary; readonly admin: boolean }) {
+  const translate = useTranslate();
   const bound = useAppCommands();
   const commands = bound.filter((entry) => entry.app.manifest.id === app.manifest.id);
   if (commands.length === 0) {
@@ -36,27 +39,31 @@ export function AppCommandSettings({ app, admin }: { readonly app: AppSummary; r
     'Every command has a title',
   );
   const platform = shortcutPlatform();
-  const hint = commandShortcutHint(platform);
+  const hint = commandShortcutHint(platform, translate);
   return (
-    <AppDetailsSection title="Commands" hint="Run from the command palette, or anywhere in the editor with their keys.">
-      <AppDetailsList label={`${app.manifest.name} commands`}>
+    <AppDetailsSection title={translate('apps.commands.title')} hint={translate('apps.commands.hint')}>
+      <AppDetailsList label={translate('apps.commands.listLabel', { name: app.manifest.name })}>
         {commands.map((entry) => {
           const appId = app.manifest.id;
           const commandId = entry.command.id;
-          const held = heldNote(entry);
+          const held = heldNote(entry, translate);
           return (
             <AppDetailsItem key={commandId} label={entry.command.title} {...(held === undefined ? {} : { hint: held, tone: 'warning' as const })}>
               {admin ? (
                 <ShortcutRecorder
-                  ariaLabel={`Shortcut for ${entry.command.title}`}
+                  ariaLabel={translate('apps.commands.shortcutFor', { title: entry.command.title })}
                   value={wantedShortcut(entry)}
-                  emptyLabel="None"
+                  emptyLabel={translate('apps.commands.none')}
                   platform={platform}
                   format={platformShortcutLabel}
                   hint={hint}
                   accepts={isReservedShortcut}
-                  conflict={(shortcut) => shortcutHolder(bound, appId, commandId, shortcut)}
-                  reset={entry.rebind === undefined ? undefined : { label: 'Use the app’s own key', onReset: () => rebindCommand(appId, commandId, undefined) }}
+                  conflict={(shortcut) => shortcutHolder(bound, appId, commandId, shortcut, translate)}
+                  reset={
+                    entry.rebind === undefined
+                      ? undefined
+                      : { label: translate('apps.commands.useOwnKey'), onReset: () => rebindCommand(appId, commandId, undefined) }
+                  }
                   onClear={() => rebindCommand(appId, commandId, rebindFor(entry.command, undefined))}
                   onChange={(shortcut) => {
                     // The recorder only hands back what `accepts` took.
@@ -65,7 +72,7 @@ export function AppCommandSettings({ app, admin }: { readonly app: AppSummary; r
                   }}
                 />
               ) : (
-                <span className="apps-details-shortcut">{shortcutText(entry)}</span>
+                <span className="apps-details-shortcut">{shortcutText(entry, translate)}</span>
               )}
             </AppDetailsItem>
           );
@@ -81,16 +88,16 @@ function wantedShortcut({ shortcut, inUse }: BoundCommand): string | undefined {
 }
 
 /** Why a command's key does not run it, when an earlier app holds that key; undefined when it is free. */
-function heldNote({ inUse }: BoundCommand): string | undefined {
+function heldNote({ inUse }: BoundCommand, translate: Translator): string | undefined {
   if (inUse === undefined) {
     return undefined;
   }
   assert(inUse.holder.length > 0, 'A key in use names its holder');
-  return `${platformShortcutLabel(inUse.shortcut)} is in use by ${inUse.holder}, installed first.`;
+  return translate('apps.commands.inUse', { shortcut: platformShortcutLabel(inUse.shortcut), holder: inUse.holder });
 }
 
 /** The key as a non-admin sees it: read-only text. */
-function shortcutText(entry: BoundCommand): string {
+function shortcutText(entry: BoundCommand, translate: Translator): string {
   const wanted = wantedShortcut(entry);
-  return wanted === undefined ? 'None' : platformShortcutLabel(wanted);
+  return wanted === undefined ? translate('apps.commands.none') : platformShortcutLabel(wanted);
 }

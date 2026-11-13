@@ -16,6 +16,7 @@ import { assert } from '../../../shared/core/assert';
 import { appPopupSize, type AppSummary } from '../../../shared/properties/apps';
 import type { RoleView } from '../../../shared/properties/projectRoles';
 import DockableWindow, { type WindowMode } from '../../ui/DockableWindow';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import { CloseIcon } from '../../ui/Icons';
 import { requestPanelWidth } from '../../ui/panelWidthRequests';
 import { AppCustomFrames } from './AppCustomFrames';
@@ -95,6 +96,8 @@ function useOutlineRestore(shownAppId: string | undefined): void {
 }
 
 function AppWindow({ projectPath, running, hidden }: { readonly projectPath: string; readonly running: RunningApp; readonly hidden: boolean }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { app } = running;
   const size = appPopupSize(app.manifest.window);
   const changeMode = (next: WindowMode): void => {
@@ -124,7 +127,7 @@ function AppWindow({ projectPath, running, hidden }: { readonly projectPath: str
       {running.folderError !== undefined && (
         // Non-blocking: the last good version keeps running below it until the folder reads as valid again.
         <p className="apps-folder-error" role="status">
-          {appFolderErrorNotice(running.folderError)}
+          {appFolderErrorNotice(translateDescribed({ message: running.folderError, messageRef: running.folderErrorRef }), translate)}
         </p>
       )}
       <AppSetupGate projectPath={projectPath} app={app}>
@@ -146,13 +149,14 @@ function AppWindowHeader({ app }: { readonly app: AppSummary }) {
 }
 
 function AppWindowClose({ app }: { readonly app: AppSummary }) {
+  const translate = useTranslate();
   return (
     <button
       type="button"
       className="ghost apps-icon-button"
       onClick={() => stopApp(app.manifest.id)}
-      title="Close app"
-      aria-label={`Close ${app.manifest.name}`}
+      title={translate('apps.frame.closeApp')}
+      aria-label={translate('apps.frame.closeNamed', { name: app.manifest.name })}
     >
       <CloseIcon size={13} />
     </button>

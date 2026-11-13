@@ -1,3 +1,4 @@
+import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
 import VariableConnect from '../VariableConnect';
@@ -59,6 +60,7 @@ export default function LiveInput({
   onCommit,
   onVariablePick,
 }: LiveInputProps) {
+  const translate = useTranslate();
   const { draft, setDraft, focused, cancelLive, scheduleLive } = useLiveDraft(value, onLive);
   const commitScrub = (text: string) => {
     setDraft(text);
@@ -76,7 +78,7 @@ export default function LiveInput({
       <VariableConnect
         code
         className="is-fill"
-        ariaLabel={`Connect ${ariaLabel} to a variable`}
+        ariaLabel={translate('styleModel.shared.connectVariable', { label: ariaLabel })}
         disabled={busy}
         prop={prop}
         onPick={(binding) => (onVariablePick ?? onCommit)(binding)}

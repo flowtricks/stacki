@@ -3,7 +3,10 @@
 // locked stylesheets). Every
 // answer is parsed before the panel sees it.
 import { assert } from '../../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import { parseIpcPayload } from '../../../shared/ipc/ipcPayloads';
+import { propertyErrorTextFor } from '../../lib/i18n/propertyErrorText';
 import type { Result } from '../../../shared/core/result';
 import {
   parseSelectorRemovalResult,
@@ -46,7 +49,11 @@ export function prewarmSelectorReport(projectPath: string): () => void {
 }
 
 /** `cached` answers at once from earlier package searches; `search` is the full check. */
-export async function readSelectorReport(projectPath: string, packages: 'cached' | 'search' = 'search'): Promise<Result<SelectorReport, string>> {
+export async function readSelectorReport(
+  projectPath: string,
+  packages: 'cached' | 'search' = 'search',
+  translate: Translator = ENGLISH_TRANSLATE,
+): Promise<Result<SelectorReport, string>> {
   const input = parseIpcPayload('style:selectorUsage', { projectPath, packages });
   const answer: unknown = await window.avb.selectorUsage(input);
   // A malformed answer is a failed read the panel reports, never a crash.
@@ -54,9 +61,9 @@ export async function readSelectorReport(projectPath: string, packages: 'cached'
   try {
     result = parseSelectorReportResult(answer);
   } catch (error: unknown) {
-    return { ok: false, error: `The style check returned an unreadable answer: ${error instanceof Error ? error.message : String(error)}` };
+    return { ok: false, error: translate('selectors.bridge.unreadable', { detail: error instanceof Error ? error.message : String(error) }) };
   }
-  return result.ok ? result : { ok: false, error: result.error.message };
+  return result.ok ? result : { ok: false, error: propertyErrorTextFor(result.error, translate) };
 }
 
 export async function removeSelectors(
@@ -64,17 +71,23 @@ export async function removeSelectors(
   ids: readonly string[],
   files: readonly SelectorFileDigest[],
   reach: 'cleanup' | 'chosen' = 'cleanup',
+  translate: Translator = ENGLISH_TRANSLATE,
 ): Promise<Result<SelectorRemoval, string>> {
   const input = parseIpcPayload('style:removeSelectors', { projectPath, ids, files, reach });
   const result = parseSelectorRemovalResult(await window.avb.removeSelectors(input));
-  return result.ok ? result : { ok: false, error: result.error.message };
+  return result.ok ? result : { ok: false, error: propertyErrorTextFor(result.error, translate) };
 }
 
-export async function restoreSelectors(projectPath: string, changes: readonly SelectorFileChange[], to: 'before' | 'after'): Promise<void> {
+export async function restoreSelectors(
+  projectPath: string,
+  changes: readonly SelectorFileChange[],
+  to: 'before' | 'after',
+  translate: Translator = ENGLISH_TRANSLATE,
+): Promise<void> {
   const input = parseIpcPayload('style:restoreSelectors', { projectPath, changes, to });
   const result = parseSelectorRemovalResult(await window.avb.restoreSelectors(input));
   if (!result.ok) {
-    throw new Error(result.error.message);
+    throw new Error(propertyErrorTextFor(result.error, translate));
   }
 }
 

@@ -163,14 +163,14 @@ export function createAppOverrides(dependencies: AppOverrideDependencies): AppOv
     resolve: (session, call, answer): AppEditOutcome => {
       const entry = waiting.get(call);
       if (entry === undefined) {
-        return { applied: false, reason: 'Stacki is no longer waiting for that answer' };
+        return { applied: false, reason: 'Stacki is no longer waiting for that answer' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       // Any frame of the app may answer: the picker can be a custom frame of its own.
       if (entry.session.app.manifest.id !== session.app.manifest.id) {
-        return { applied: false, reason: 'That request was sent to another app' };
+        return { applied: false, reason: 'That request was sent to another app' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       if (entry.point !== answer.point) {
-        return { applied: false, reason: `That request is for ${entry.point}` };
+        return { applied: false, reason: `That request is for ${entry.point}` }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       finish(call, answer, 'answered');
       return { applied: true };

@@ -60,7 +60,9 @@ export function installCanvasText(
     if (!canvasTextSourceMatches(catalog.file, catalog.checksum)) {
       post({
         type: 'avb:text-refused',
+        // i18n-ignore: the English fallback beside the stable `reason` code, which the editor words in the person's language (useCanvasText); a frame older than the editor sends only this text.
         message: 'Text editing is waiting for the current source render.',
+        reason: 'waiting-render',
       });
       return;
     }

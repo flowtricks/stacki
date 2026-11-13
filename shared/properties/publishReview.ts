@@ -34,7 +34,9 @@ export function parseReviewReceipt(input: unknown): ReviewReceipt {
 
 export function reviewBranch(parent: string, tree: string): string {
   if (!/^[a-f0-9]{40}$/.test(parent) || !/^[a-f0-9]{40}$/.test(tree)) {
+    // i18n-ignore: programmer error; callers pass Git object ids they already validated.
     throw new Error('Review requires validated Git objects.');
   }
+  // i18n-ignore: a Git branch name, not interface text.
   return `stacki/review-${parent}-${tree}`;
 }

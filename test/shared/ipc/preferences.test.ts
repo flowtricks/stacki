@@ -6,7 +6,7 @@ import { parsePreferenceName, parsePreferences, parsePreferenceResult } from '#d
 
 test('desktop preference replies require boolean values and save status', () => {
   // Main always sends every preference, appsPersonHidden included (electron/main.ts), so none is optional here.
-  const preferences = { sound: true, usageCountsEnabled: false, appsPersonHidden: true, aiAskBeforeTrust: false };
+  const preferences = { sound: true, usageCountsEnabled: false, appsPersonHidden: true, aiAskBeforeTrust: false, aiTrackChanges: true };
   assert.deepEqual(parsePreferences(preferences), preferences);
   assert.deepEqual(parsePreferenceResult({ ...preferences, saved: true }), {
     ...preferences,
@@ -19,6 +19,8 @@ test('desktop preference replies require boolean values and save status', () => 
     { sound: true, usageCountsEnabled: true },
     { sound: true, usageCountsEnabled: true, appsPersonHidden: 'no' },
     { sound: true, usageCountsEnabled: true, appsPersonHidden: false, aiAskBeforeTrust: 'no' },
+    { sound: true, usageCountsEnabled: true, appsPersonHidden: false, aiAskBeforeTrust: false },
+    { sound: true, usageCountsEnabled: true, appsPersonHidden: false, aiAskBeforeTrust: false, aiTrackChanges: 'off' },
   ]) {
     assert.throws(() => parsePreferences(value));
   }
@@ -28,7 +30,7 @@ test('desktop preference replies require boolean values and save status', () => 
 });
 
 test('a preference change names a known preference', () => {
-  for (const name of ['sound', 'usageCountsEnabled', 'appsPersonHidden', 'aiAskBeforeTrust']) {
+  for (const name of ['sound', 'usageCountsEnabled', 'appsPersonHidden', 'aiAskBeforeTrust', 'aiTrackChanges']) {
     assert.equal(parsePreferenceName(name), name);
   }
   for (const name of [undefined, '', 'Sound', 'appsPerson', 17]) {

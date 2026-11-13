@@ -10,6 +10,7 @@ import { ChevronIcon, MenuItem, tooltipArrowStyle } from './components/MenuParts
 import { useCustomFocus, useDebouncedLive } from './model/fieldHooks';
 import { parseImportant } from './model/styleDisplay';
 import { useFollowingDraft } from './SizeKit';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 // Editable free-value field (unset, var(), …) shown in a segment bar's custom mode.
 export function SegmentCustomInput({
@@ -20,7 +21,7 @@ export function SegmentCustomInput({
   onLiveCommit,
   onClear,
   ariaLabel,
-  placeholder = 'custom value',
+  placeholder,
 }: {
   value: string;
   busy: boolean;
@@ -31,6 +32,7 @@ export function SegmentCustomInput({
   ariaLabel: string;
   placeholder?: string;
 }) {
+  const translate = useTranslate();
   const { draft, setDraft, focused } = useFollowingDraft(value);
   const { cancelLive, scheduleLive } = useDebouncedLive(onLiveCommit);
   const commit = () => {
@@ -66,8 +68,8 @@ export function SegmentCustomInput({
       }}
       disabled={busy}
       spellCheck={false}
-      placeholder={placeholder}
       aria-label={ariaLabel}
+      placeholder={placeholder ?? translate('style.sizeSegmentBar.customValuePlaceholder')}
     />
   );
 }
@@ -232,6 +234,7 @@ export function SegmentMenu({
   onPick: (value: string) => void;
   onEnterCustom: () => void;
 }) {
+  const translate = useTranslate();
   return (
     <>
       <button
@@ -252,7 +255,7 @@ export function SegmentMenu({
               <MenuItem key={segment.value} label={segment.menuLabel} selected={current === segment.value} onClick={() => onPick(segment.value)} />
             ))
           ) : (
-            <MenuItem label="Custom" selected={false} onClick={onEnterCustom} />
+            <MenuItem label={translate('style.sizeSegmentBar.custom')} selected={false} onClick={onEnterCustom} />
           )}
         </Popup>
       ) : undefined}

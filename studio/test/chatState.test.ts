@@ -4,9 +4,14 @@
 // The method is plain unit tests over the pure functions; the panel itself is covered by ai.browser.ts.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { formattersFor } from '../vendor/stacki/shared/core/i18n/format';
+import { ENGLISH_TRANSLATE } from '../vendor/stacki/shared/properties/i18n/englishTranslator';
 import { ageLabel, formatDuration } from '../src/features/ai/chatClock';
 import { chatSections, newThread, reorder, restoreChats, type ChatThread } from '../src/features/ai/chatState';
 import { matchFiles, mentionFiles, sameDraft, textSegments } from '../src/features/ai/mentionFiles';
+
+const { formatNumber } = formattersFor('en');
+const words = { translate: ENGLISH_TRANSLATE, formatNumber };
 
 function stored(id: string, extra: Record<string, unknown> = {}) {
   return { id, title: id, draft: '', images: [], model: 'm', messages: [], status: 'idle', ...extra };
@@ -109,13 +114,13 @@ test('the @ picker searches the project files, names first, bounded', () => {
 });
 
 test('durations and ages read the way the transcript and the list show them', () => {
-  assert.equal(formatDuration(1400), '1.4s');
-  assert.equal(formatDuration(12_300), '12s');
-  assert.equal(formatDuration(77_000), '1m 17s');
-  assert.equal(formatDuration(-5), '0.0s');
-  assert.equal(ageLabel(0, 1000), '');
-  assert.equal(ageLabel(1000, 1000), 'now');
-  assert.equal(ageLabel(0 + 1, 5 * 60_000 + 1), '5m');
-  assert.equal(ageLabel(1, 3 * 3_600_000 + 1), '3h');
-  assert.equal(ageLabel(1, 2 * 86_400_000 + 1), '2d');
+  assert.equal(formatDuration(1400, formatNumber), '1.4s');
+  assert.equal(formatDuration(12_300, formatNumber), '12s');
+  assert.equal(formatDuration(77_000, formatNumber), '1m 17s');
+  assert.equal(formatDuration(-5, formatNumber), '0.0s');
+  assert.equal(ageLabel(0, 1000, words), '');
+  assert.equal(ageLabel(1000, 1000, words), 'now');
+  assert.equal(ageLabel(0 + 1, 5 * 60_000 + 1, words), '5m');
+  assert.equal(ageLabel(1, 3 * 3_600_000 + 1, words), '3h');
+  assert.equal(ageLabel(1, 2 * 86_400_000 + 1, words), '2d');
 });

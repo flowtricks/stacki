@@ -29,6 +29,8 @@
 import { parser } from '@lezer/javascript';
 import type { SyntaxNode } from '@lezer/common';
 import { assert } from '../../shared/core/assert';
+import { ENGLISH_TRANSLATE } from '../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../shared/properties/i18n/messageRef';
 import { PROP_TAG_LIMITS, readPropTags } from '../../shared/properties/propTags';
 import { LOOP_SYNTAX_LIMITS } from './loopSyntax';
 import {
@@ -63,17 +65,17 @@ const NUMBER = /^-?\d+(?:\.\d+)?$/;
 const typescript = parser.configure({ dialect: 'ts' });
 
 /** Why a list's fields and items cannot be written, or undefined when they can. */
-export function listSettingsProblem(settings: ListSettings): string | undefined {
+export function listSettingsProblem(settings: ListSettings, translate: Translator = ENGLISH_TRANSLATE): string | undefined {
   const { fields, items } = settings;
-  const problem = fieldsProblem(fields);
+  const problem = fieldsProblem(fields, 1, translate);
   if (problem !== undefined) {
     return problem;
   }
   if (items.length > LIST_LIMITS.itemsMax) {
-    return 'That is too many items.';
+    return translate('editor.listType.items.tooMany');
   }
   for (const [index, item] of items.entries()) {
-    const itemIssue = itemProblem(fields, item, index);
+    const itemIssue = itemProblem(fields, item, index, translate);
     if (itemIssue !== undefined) {
       return itemIssue;
     }
@@ -81,48 +83,54 @@ export function listSettingsProblem(settings: ListSettings): string | undefined 
   return undefined;
 }
 
-function itemProblem(fields: readonly ItemFieldDeclaration[], item: ListItemValues, index: number): string | undefined {
+function itemProblem(fields: readonly ItemFieldDeclaration[], item: ListItemValues, index: number, translate: Translator): string | undefined {
   for (const field of fields) {
     const value = item[field.name] ?? '';
-    const where = `The ${field.name} of item ${index + 1}`;
+    const where = { name: field.name, number: index + 1 };
     if (field.kind === 'list' || field.kind === 'group') {
       const problem = nestedValueProblem(field.kind, value);
-      if (problem !== undefined) {
-        return `${where} ${problem}`;
+      if (problem === 'tooLong') {
+        return translate('editor.listType.item.tooLong', where);
+      }
+      if (problem === 'notList') {
+        return translate('editor.listType.item.notList', where);
+      }
+      if (problem === 'notObject') {
+        return translate('editor.listType.item.notObject', where);
       }
       continue;
     }
     if (value.length > LIST_LIMITS.valueCharsMax) {
-      return `${where} is too long.`;
+      return translate('editor.listType.item.tooLong', where);
     }
     if (field.kind === 'number' && value.trim() !== '' && !NUMBER.test(value.trim())) {
-      return `${where} has to be a number.`;
+      return translate('editor.listType.item.notNumber', where);
     }
     if (field.kind === 'switch' && value !== '' && value !== 'true' && value !== 'false') {
-      return `${where} is on or off.`;
+      return translate('editor.listType.item.notSwitch', where);
     }
     if (field.kind === 'option' && value !== '' && !field.options.includes(value)) {
-      return `${where} has to be one of its options.`;
+      return translate('editor.listType.item.notOption', where);
     }
   }
   return undefined;
 }
 
 // A nested list is an array literal and a nested group an object literal; a blank value is the empty one.
-function nestedValueProblem(kind: 'list' | 'group', value: string): string | undefined {
+function nestedValueProblem(kind: 'list' | 'group', value: string): 'tooLong' | 'notList' | 'notObject' | undefined {
   const text = value.trim();
   if (text === '') {
     return undefined;
   }
   if (text.length > LIST_LIMITS.nestedValueCharsMax) {
-    return 'is too long.';
+    return 'tooLong';
   }
   const tree = typescript.parse(`(${text}\n);`);
   const statement = tree.topNode.firstChild;
   const expression = statement?.name === 'ExpressionStatement' ? statement.firstChild?.nextSibling : undefined;
   const wanted = kind === 'list' ? 'ArrayExpression' : 'ObjectExpression';
   if (hasSyntaxError(tree.topNode) || expression?.name !== wanted) {
-    return kind === 'list' ? 'has to be a list.' : 'has to be an object.';
+    return kind === 'list' ? 'notList' : 'notObject';
   }
   return undefined;
 }

@@ -8,6 +8,9 @@ import LocalStep from './LocalStep';
 import CloudStep from './CloudStep';
 import './studioSetup.css';
 import InstallCommand from './InstallCommand';
+import InfoHint from '../../ui/InfoHint';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 
 interface Props {
   readonly projectPath: string;
@@ -17,21 +20,19 @@ interface Props {
 }
 
 export default function StudioSetup(props: Props) {
+  const translate = useTranslate();
   const [open, setOpen] = useState(false);
   const [revision, setRevision] = useState(0);
   const setup = useSetup(props.projectPath, revision);
-  const entry = studioEntry(setup.status, setup.activity);
+  const entry = studioEntry(setup.status, setup.activity, translate);
   return (
-    <section className="studio-project-settings" aria-label="Stacki Studio">
+    <section className="studio-project-settings" aria-label={translate('studioSetup.name')}>
       <div className="studio-project-settings-card">
-        <p className="studio-project-settings-intro">
-          Add browser-based editing and collaboration to this project. Setup installs Studio locally and guides you through cloud deployment. Already installed?
-          Open setup to continue configuring it.
-        </p>
         <div className="studio-install-actions">
           <div className="studio-install-option">
             <p className="studio-install-status" data-state={setup.status?.kind} role="status">
               {entry.status}
+              <InfoHint text={translate('settings.studio.info')} />
             </p>
             <button
               disabled={entry.loading || setup.activity.kind === 'busy'}
@@ -106,19 +107,20 @@ function SetupFooter({
   readonly onClose: () => void;
   readonly onStep: (step: number) => void;
 }) {
+  const translate = useTranslate();
   return (
     <footer>
       <button disabled={busy} onClick={onClose}>
-        Close
+        {translate('ui.close')}
       </button>
       {step > 0 && (
         <button disabled={busy} onClick={() => onStep(step - 1)}>
-          Back
+          {translate('studioSetup.back')}
         </button>
       )}
       {step < 2 && (
         <button className="primary" disabled={busy} onClick={() => onStep(step === 0 && !installed ? 2 : step + 1)}>
-          {step === 0 && !installed ? 'Set up with an agent' : 'Continue'}
+          {step === 0 && !installed ? translate('studioSetup.setUpWithAgent') : translate('ui.continue')}
         </button>
       )}
     </footer>
@@ -137,19 +139,20 @@ function useSetupStep(status: StudioStatus | undefined) {
 }
 
 function InstallStep({ status, activity, install }: ReturnType<typeof useSetup>) {
+  const translate = useTranslate();
   return (
     <>
-      <h3>{status?.kind === 'installed' ? 'Studio is installed' : 'Studio installation'}</h3>
-      <p>Browser editing and collaboration, installed in /studio.</p>
-      {!status && <p role="status">Checking this project…</p>}
+      <h3>{status?.kind === 'installed' ? translate('studioSetup.install.installed') : translate('studioSetup.install.title')}</h3>
+      <p>{translate('studioSetup.install.hint')}</p>
+      {!status && <p role="status">{translate('studioSetup.install.checking')}</p>}
       {status?.kind === 'blocked' && <ErrorToast message={status.message} />}
-      {status?.kind === 'installed' && <p role="status">Version {status.version}. Continue to local preview or cloud setup.</p>}
+      {status?.kind === 'installed' && <p role="status">{translate('studioSetup.install.version', { version: status.version })}</p>}
       {status?.kind === 'missing' && (
         <>
-          <p className="studio-setup-note">Version {status.desktopVersion}</p>
+          <p className="studio-setup-note">{translate('studioSetup.install.versionShort', { version: status.desktopVersion })}</p>
           {activity.kind === 'error' && (
             <button className="primary" onClick={() => void install()}>
-              Retry installation
+              {translate('studioSetup.install.retry')}
             </button>
           )}
         </>
@@ -160,12 +163,13 @@ function InstallStep({ status, activity, install }: ReturnType<typeof useSetup>)
 }
 
 function SetupSteps({ step, busy, onStep }: { readonly step: number; readonly busy: boolean; readonly onStep: (step: number) => void }) {
+  const translate = useTranslate();
   return (
-    <nav aria-label="Setup steps">
-      {['Install', 'Local preview', 'Go live'].map((label, index) => (
-        <button key={label} aria-current={step === index ? 'step' : undefined} disabled={busy} onClick={() => onStep(index)}>
+    <nav aria-label={translate('studioSetup.steps.label')}>
+      {(['studioSetup.steps.install', 'studioSetup.steps.local', 'studioSetup.steps.live'] as const).map((labelKey, index) => (
+        <button key={labelKey} aria-current={step === index ? 'step' : undefined} disabled={busy} onClick={() => onStep(index)}>
           <span>{index + 1}</span>
-          {label}
+          {translate(labelKey)}
         </button>
       ))}
     </nav>
@@ -173,38 +177,39 @@ function SetupSteps({ step, busy, onStep }: { readonly step: number; readonly bu
 }
 
 function SetupHeader({ busy, onClose }: { readonly busy: boolean; readonly onClose: () => void }) {
+  const translate = useTranslate();
   return (
     <header>
       <div>
-        <span className="studio-setup-eyebrow">OPTIONAL PROJECT ADD-ON</span>
-        <h2 id="studio-setup-title">Set up Stacki Studio</h2>
+        <span className="studio-setup-eyebrow">{translate('studioSetup.eyebrow')}</span>
+        <h2 id="studio-setup-title">{translate('studioSetup.setUp')}</h2>
       </div>
-      <button disabled={busy} onClick={onClose} aria-label="Close Studio setup">
+      <button disabled={busy} onClick={onClose} aria-label={translate('studioSetup.closeLabel')}>
         ×
       </button>
     </header>
   );
 }
 
-function studioEntry(status: StudioStatus | undefined, activity: StudioActivity) {
+function studioEntry(status: StudioStatus | undefined, activity: StudioActivity, translate: Translator) {
   if (!status) {
     return activity.kind === 'error'
-      ? { status: 'Could not check installation', label: 'Open Studio setup', loading: false }
-      : { status: 'Checking installation…', label: 'Checking Studio…', loading: true };
+      ? { status: translate('studioSetup.entry.failed'), label: translate('studioSetup.entry.open'), loading: false }
+      : { status: translate('studioSetup.entry.checking'), label: translate('studioSetup.entry.checkingLabel'), loading: true };
   }
   switch (status.kind) {
     case 'installed':
       return {
-        status: `Installed · ${status.version}`,
-        label: 'Manage Stacki Studio',
+        status: translate('studioSetup.entry.installed', { version: status.version }),
+        label: translate('studioSetup.entry.manage'),
         loading: false,
       };
     case 'missing':
-      return { status: 'Not installed', label: 'Add to project', loading: false };
+      return { status: translate('studioSetup.entry.missing'), label: translate('studioSetup.entry.add'), loading: false };
     case 'blocked':
       return {
-        status: 'Existing studio folder needs review',
-        label: 'Review Studio setup',
+        status: translate('studioSetup.entry.blocked'),
+        label: translate('studioSetup.entry.review'),
         loading: false,
       };
   }

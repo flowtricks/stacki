@@ -6,6 +6,7 @@
 // else branch, and a text connected to data. Each write goes through
 // settingsGestures.ts, which builds Desktop's gesture and plans it as Desktop does.
 import { useMemo } from 'react';
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import type { PropsPanelProps } from '../../../vendor/stacki/src/features/props/propsPanelTypes';
 import type { NewPropHost } from '../../../vendor/stacki/src/features/props/newPropModel';
 import { useListProps } from '../../../vendor/stacki/src/app/state/useListProps';
@@ -57,6 +58,7 @@ export function useStructureSettings(input: StructureInput): { readonly handlers
   const file = document.file;
   const listProps = useListProps('studio', input.component?.file);
   const { changePhase } = usePropertySaveGuard();
+  const translate = useTranslate();
   const options = useMemo(() => tagOptions(project, source), [project, source]);
   const layouts = useMemo(() => layoutOptions(project), [project]);
   const current = (): string => document.text.toString();
@@ -134,6 +136,7 @@ export function useStructureSettings(input: StructureInput): { readonly handlers
         },
         key,
         edit,
+        translate,
       ),
     onToggleElse: (want) => attempt(() => write(toggledElse(current(), selected, want)), undefined),
     onSetTextPieces: (pieces) => attempt(() => write(textPieces(current(), selected, pieces)), undefined),

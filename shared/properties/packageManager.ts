@@ -27,8 +27,10 @@ export function packageManagerLabel(manager: PackageManager): string {
     case 'pnpm':
       return 'pnpm';
     case 'yarn':
+      // i18n-ignore: package manager brand name, shown as the tool writes it.
       return 'Yarn';
     case 'bun':
+      // i18n-ignore: package manager brand name, shown as the tool writes it.
       return 'Bun';
     default: {
       const exhaustive: never = manager;

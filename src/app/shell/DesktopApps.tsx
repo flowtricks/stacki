@@ -2,6 +2,7 @@
 // long as the editor (events, update checks, floating windows), and the canvas
 // overlay layer with the paths it needs measured. The shared pieces are in
 // src/features/apps; this file supplies Desktop's commands, role and avatar.
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import React, { useEffect, useMemo, useRef } from 'react';
 import type { ShellView } from '../App';
 import AppsPanel from '../../features/apps/AppsPanel';
@@ -45,7 +46,10 @@ export function AppsTab({ app }: { readonly app: ShellView }) {
 export function DesktopAppsHost({ app }: { readonly app: ShellView }) {
   const appRef = useRef(app);
   appRef.current = app;
-  const host = useMemo(() => desktopAppHost(appRef), []);
+  const translate = useTranslate();
+  const translateRef = useRef(translate);
+  translateRef.current = translate;
+  const host = useMemo(() => desktopAppHost(appRef, translateRef), []);
   const role = useCurrentRole();
   const hover = useLiveValue(app.hoverNode);
   // An app opened from outside the panel (the command palette) shows in it.

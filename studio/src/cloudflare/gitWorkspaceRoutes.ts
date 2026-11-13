@@ -13,6 +13,7 @@ export async function readCloudGitWorkspace(environment: Environment) {
 }
 export function draftKey(request: Request, name: string): string {
   const namespace = gitDraftNamespace(request.headers.get('x-studio-draft') ?? 'legacy');
+  // i18n-ignore: an object-store key, not text a person reads.
   return namespace === 'legacy' ? name : `workspaces/${namespace}/${name}`;
 }
 export async function gitWorkspaceRoute(request: Request, environment: Environment) {

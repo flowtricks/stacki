@@ -92,3 +92,9 @@ test('only running sign-in states are pending', () => {
     assert.equal(accountSignInPending(parseAccountState(state)), false, state.kind);
   }
 });
+test('a failed sign-in keeps a valid message reference and drops a malformed one', () => {
+  const reference = { key: 'publish.account.error.sessionEnded' };
+  assert.deepEqual(parseAccountState({ kind: 'failed', message: 'Ended', messageRef: reference }), { kind: 'failed', message: 'Ended', messageRef: reference });
+  assert.deepEqual(parseAccountState({ kind: 'failed', message: 'Ended', messageRef: { key: 'not a key' } }), { kind: 'failed', message: 'Ended' });
+  assert.deepEqual(parseAccountState({ kind: 'failed', message: 'Ended', messageRef: 7 }), { kind: 'failed', message: 'Ended' });
+});

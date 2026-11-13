@@ -3,27 +3,30 @@ import { CheckIcon, CloseIcon, UploadCloudIcon } from '../../ui/Icons';
 import { PublishProviderIcon } from './PublishProviderIcon';
 import type { DesktopPublishState } from '../../../shared/properties/publishState';
 import { assert } from '../../../shared/core/assert';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import './publishing.css';
 
 // The one publish progress popup. Desktop renders it directly and Studio vendors it, so both
 // hosts show the same steps, progress, success, review and failure states; each host only maps
 // its own job status onto `DesktopPublishState`, the contract this popup accepts.
 
-export const PUBLISH_STATUS_RUNNING_NOTE = 'Keep Stacki open until publishing finishes.';
-
 interface Props {
   readonly state: DesktopPublishState;
   readonly close: () => void;
   /** A host-specific sentence under the result, such as an unconfirmed deployment. */
   readonly note?: string;
-  /** The footer line while publishing; it says whether the host must stay open. */
+  /** The footer line while publishing, already translated; it says whether the host must stay open. Desktop's default asks to keep Stacki open. */
   readonly runningNote?: string;
 }
 
-export function PublishStatus({ state, close, note, runningNote = PUBLISH_STATUS_RUNNING_NOTE }: Props) {
-  assert(runningNote.length > 0, 'A running publish always explains what to keep open');
+export function PublishStatus({ state, close, note, runningNote }: Props) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const footerNote = runningNote ?? translate('publish.status.keepOpen');
+  assert(footerNote.length > 0, 'A running publish always explains what to keep open');
   const busy = publishStatusBusy(state);
-  const title = publishStatusTitle(state);
+  const title = publishStatusTitle(state, translate);
   return (
     <Popup className="modal publish-status" label={title} onClose={close} dismissible={!busy}>
       {({ close: dismiss }) => (
@@ -37,13 +40,13 @@ export function PublishStatus({ state, close, note, runningNote = PUBLISH_STATUS
               <PublishRunning state={state} />
             ) : (
               <>
-                {state.kind === 'failed' && <p role="alert">{state.message}</p>}
+                {state.kind === 'failed' && <p role="alert">{translateDescribed(state)}</p>}
                 {state.kind === 'review-open' && (
                   <p>
                     <a href={state.url} target="_blank" rel="noreferrer">
-                      Open pull request
+                      {translate('publish.status.openPullRequest')}
                     </a>{' '}
-                    Your live site and current branch are unchanged.
+                    {translate('publish.status.unchanged')}
                   </p>
                 )}
                 <PublishResults state={state} />
@@ -53,10 +56,10 @@ export function PublishStatus({ state, close, note, runningNote = PUBLISH_STATUS
           </div>
           <div className="modal-footer">
             {busy ? (
-              <span>{runningNote}</span>
+              <span>{footerNote}</span>
             ) : (
               <button className="primary" onClick={dismiss}>
-                {state.kind === 'done' ? 'Done' : 'Close'}
+                {state.kind === 'done' ? translate('publish.common.done') : translate('ui.close')}
               </button>
             )}
           </div>
@@ -79,17 +82,17 @@ export function publishStatusBusy(state: DesktopPublishState): boolean {
   }
 }
 
-export function publishStatusTitle(state: DesktopPublishState): string {
+export function publishStatusTitle(state: DesktopPublishState, translate: Translator): string {
   switch (state.kind) {
     case 'idle':
     case 'running':
-      return 'Publishing';
+      return translate('publish.status.title.running');
     case 'review-open':
-      return 'Ready for review';
+      return translate('publish.status.title.review');
     case 'done':
-      return 'Published successfully';
+      return translate('publish.status.title.done');
     case 'failed':
-      return 'Publish needs attention';
+      return translate('publish.status.title.failed');
   }
 }
 
@@ -107,7 +110,15 @@ function PublishStatusSymbol({ state }: { readonly state: DesktopPublishState })
 }
 
 function PublishRunning({ state }: { readonly state: DesktopPublishState }) {
-  const message = state.kind === 'running' ? state.step : 'Preparing publish…';
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
+  const message =
+    state.kind === 'running'
+      ? translateDescribed({
+          message: state.step,
+          messageRef: state.stepRef,
+        })
+      : translate('publish.status.preparing');
   const progress = state.kind === 'running' ? state.progress : undefined;
   if (progress !== undefined) {
     assert(progress.completed < progress.total, 'A running publish has a step left to finish');
@@ -117,27 +128,32 @@ function PublishRunning({ state }: { readonly state: DesktopPublishState }) {
       <p role="status" aria-live="polite">
         {message}
       </p>
-      <progress max={progress?.total ?? 1} value={progress?.completed} aria-label="Publish progress" aria-valuetext={message} />
-      <small>{progress ? `Step ${progress.completed + 1} of ${progress.total}` : 'Preparing your project'}</small>
+      <progress max={progress?.total ?? 1} value={progress?.completed} aria-label={translate('publish.status.progress')} aria-valuetext={message} />
+      <small>
+        {progress
+          ? translate('publish.status.stepOf', { current: progress.completed + 1, total: progress.total })
+          : translate('publish.status.preparingProject')}
+      </small>
     </div>
   );
 }
 
 function PublishResults({ state }: { readonly state: DesktopPublishState }) {
+  const translate = useTranslate();
   if (state.kind === 'done' || state.kind === 'failed') {
     return (
       <div className="publish-status-results" role="status" aria-live="polite">
         {state.github && (
           <div>
             <PublishProviderIcon provider="github" />
-            <span>Changes pushed to GitHub</span>
+            <span>{translate('publish.status.githubDone')}</span>
             <CheckIcon size={14} />
           </div>
         )}
         {state.hosting && (
           <div>
             <UploadCloudIcon />
-            <span>Hosting deployment completed</span>
+            <span>{translate('publish.status.hostingDone')}</span>
             <CheckIcon size={14} />
           </div>
         )}

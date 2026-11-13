@@ -33,6 +33,7 @@ import {
 } from '../../shared/properties/instructions';
 import { digestOf } from '../documents/atomicWrite';
 import { describeWriteReport, documentHost } from '../documents/documentWrites';
+import { translateMain } from '../lib/mainLocale';
 
 /** Directory entries the walk reads in all, so a folder of a million files cannot stall the panel. */
 const ENTRIES_MAX = 200_000;
@@ -102,7 +103,12 @@ export function readSkillMeta(source: string): SkillMeta {
     const value: unknown = YAML.parse(split.yaml, { maxAliasCount: 0, prettyErrors: false });
     parsed = value;
   } catch (failure: unknown) {
-    return { kind: 'invalid', message: `The frontmatter is not valid YAML: ${failure instanceof Error ? failure.message.split('\n')[0] : String(failure)}` };
+    return {
+      kind: 'invalid',
+      message: translateMain('error.instructions.frontmatterInvalid', {
+        reason: failure instanceof Error ? (failure.message.split('\n')[0] ?? '') : String(failure),
+      }),
+    };
   }
   return parseSkillMeta(parsed);
 }
@@ -274,7 +280,7 @@ function entryFor(root: string, relative: string): InstructionEntry {
 // Only the head of a skill file is read: the frontmatter is bounded, the body is not needed.
 function skillOf(absolute: string, sizeBytes: number): SkillMeta {
   if (sizeBytes > INSTRUCTION_LIMITS.fileBytesMax) {
-    return { kind: 'invalid', message: 'This skill file is too large to read.' };
+    return { kind: 'invalid', message: translateMain('error.instructions.skillTooLarge') };
   }
   let head: string;
   try {

@@ -21,6 +21,7 @@ export function starterDefaults(catalog: readonly DefaultComponent[]): Component
   const text: Readonly<Record<string, string>> = {
     Heading: INSTANCE_HEADING,
     Paragraph: INSTANCE_PARAGRAPH,
+    // i18n-ignore: a component name written into the project as source code, not interface text.
     Button: 'Button Text',
   };
   const children: Readonly<Record<string, readonly string[]>> = {

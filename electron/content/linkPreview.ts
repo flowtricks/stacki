@@ -107,6 +107,7 @@ async function fetchLinkPreviewThumbnail(input: unknown, fetcher: Fetch): Promis
       return undefined;
     }
     const bytes = await readBounded(response, LINK_PREVIEW_FETCH.thumbnailBytesMax);
+    // i18n-ignore: A data URL, not interface text.
     return bytes === undefined ? undefined : `data:${known};base64,${Buffer.from(bytes).toString('base64')}`;
   } catch {
     // The thumbnail is optional: the card shows without one.
@@ -145,6 +146,7 @@ function request(accept: string): RequestInit {
   return {
     method: 'GET',
     redirect: 'follow',
+    // i18n-ignore: HTTP header value, not interface text.
     headers: { Accept: accept, 'User-Agent': 'Stacki link preview' },
     signal: AbortSignal.timeout(LINK_PREVIEW_FETCH.timeoutMs),
   };

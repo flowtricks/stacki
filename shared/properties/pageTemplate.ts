@@ -11,6 +11,9 @@ import { object, optional, record, text, list, count } from '../core/boundary';
 import { assert } from '../core/assert';
 import { err, ok, type Result } from '../core/result';
 import { parseConnectionId } from './cmsConnections';
+import type { MessageParams } from '../core/i18n/catalog';
+import { englishText, messageRef, type MessageKey } from './i18n/messageRef';
+import { parseMessageRef, type MessageRef } from '../core/i18n/messageReference';
 
 export const PAGE_TEMPLATE_LIMITS = {
   routeCharsMax: 256,
@@ -100,7 +103,15 @@ export const ADDRESS_LIMITS = {
 
 /** How a field's values would serve as page addresses, judged from the sample. */
 export type AddressFit =
-  { readonly kind: 'exact' } | { readonly kind: 'slugified'; readonly example: string } | { readonly kind: 'unusable'; readonly reason: string };
+  | { readonly kind: 'exact' }
+  | { readonly kind: 'slugified'; readonly example: string }
+  | { readonly kind: 'unusable'; readonly reason: string; readonly reasonRef?: MessageRef };
+
+// The English sentence stays in `reason` (logs, older readers); `reasonRef` is what the renderer translates (docs/i18n-playbook.md, section 7).
+function unusable(key: MessageKey, params?: MessageParams): AddressFit {
+  const reasonRef = messageRef(key, params);
+  return { kind: 'unusable', reason: englishText(reasonRef).slice(0, ADDRESS_LIMITS.reasonCharsMax), reasonRef };
+}
 
 /** A value in URL form. The generated pages' `toSlug` does the same, and a test holds the two together. */
 export function slugifyAddress(value: string): string {
@@ -126,15 +137,15 @@ export function addressFitOf(values: readonly unknown[]): AddressFit {
   for (const value of values.slice(0, ADDRESS_LIMITS.valuesReadMax)) {
     const text = typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
     if (text.length === 0) {
-      return { kind: 'unusable', reason: 'Some entries have no value' };
+      return unusable('pages.template.address.noValue');
     }
     if (text.length > ADDRESS_LIMITS.valueCharsMax) {
-      return { kind: 'unusable', reason: 'Too long for a page address' };
+      return unusable('pages.template.address.tooLong');
     }
     texts.push(text);
   }
   if (texts.length === 0) {
-    return { kind: 'unusable', reason: 'Some entries have no value' };
+    return unusable('pages.template.address.noValue');
   }
   assert(texts.length <= ADDRESS_LIMITS.valuesReadMax, 'addressFitOf: the values read stay within the limit');
   const urlSafe = texts.every((text) => /^[A-Za-z0-9][A-Za-z0-9._~-]*$/.test(text));
@@ -143,11 +154,11 @@ export function addressFitOf(values: readonly unknown[]): AddressFit {
   }
   const slugs = texts.map(slugifyAddress);
   if (slugs.includes('')) {
-    return { kind: 'unusable', reason: 'Some values have no letters or numbers' };
+    return unusable('pages.template.address.noLetters');
   }
   const repeated = repeatedValue(slugs);
   if (repeated !== undefined) {
-    return { kind: 'unusable', reason: `Two entries would share the address ${repeated}`.slice(0, ADDRESS_LIMITS.reasonCharsMax) };
+    return unusable('pages.template.address.repeated', { address: repeated });
   }
   const [example] = slugs;
   assert(example !== undefined, 'addressFitOf: at least one value was read');
@@ -531,7 +542,13 @@ function parseAddressFit(input: unknown): AddressFit {
       if (reason.length > ADDRESS_LIMITS.reasonCharsMax) {
         throw new Error('Page template: reason exceeds limit');
       }
-      return { kind: 'unusable', reason };
+      const rawRef = value['reasonRef'];
+      if (rawRef === undefined) {
+        return { kind: 'unusable', reason };
+      }
+      // A reference that fails its boundary parse is dropped: the English reason still shows (playbook section 7).
+      const parsedRef = parseMessageRef(rawRef);
+      return parsedRef.ok ? { kind: 'unusable', reason, reasonRef: parsedRef.value } : { kind: 'unusable', reason };
     }
     default:
       throw new Error('Page template: unknown address fit');

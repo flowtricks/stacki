@@ -414,30 +414,30 @@ function roleRefusal(method: AppMethod, rawParams: unknown, role: RoleView): str
   if (method === 'panels.open' || method === 'panels.openRight') {
     const panel = APP_METHODS[method].params(rawParams).panel;
     if (!canPanel(role, panel)) {
-      return `The ${role.name} role cannot open ${panel}`;
+      return `The ${role.name} role cannot open ${panel}`; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
   }
   // Reading pages that are not open is what the Pages panel shows: a role without it reads only the open page.
   if (method === 'page.getTree' || method === 'page.findByAttribute') {
     if (!canPanel(role, 'pages')) {
-      return `The ${role.name} role cannot read other pages`;
+      return `The ${role.name} role cannot read other pages`; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
   }
   // Opening a page is the Pages panel's; entering a component is editing it, as the editor's own double-click asks.
   if (method === 'page.open') {
     if (!canPanel(role, 'pages')) {
-      return `The ${role.name} role cannot open other pages`;
+      return `The ${role.name} role cannot open other pages`; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
   }
   if (method === 'component.open') {
     if (!can(role, 'component:edit')) {
-      return `The ${role.name} role cannot edit components`;
+      return `The ${role.name} role cannot edit components`; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
   }
   // An app's details are in the Apps panel: a role that cannot see it is not shown them by an app.
   if (method === 'app.openSettings') {
     if (!canPanel(role, 'apps')) {
-      return `The ${role.name} role cannot open the Apps panel`;
+      return `The ${role.name} role cannot open the Apps panel`; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
   }
   return undefined;
@@ -528,14 +528,14 @@ async function runMethod(method: AppMethod, rawParams: unknown, session: AppSess
         return refusedBy(host.snapshot);
       }
       if (!snapshotAllowed(session.app.manifest.id, (context.nowMs ?? Date.now)())) {
-        return { applied: false, reason: `One snapshot per ${APP_RPC_LIMITS.snapshotIntervalMs / 1000} s: try again in a moment` };
+        return { applied: false, reason: `One snapshot per ${APP_RPC_LIMITS.snapshotIntervalMs / 1000} s: try again in a moment` }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       const box =
         'ref' in target
           ? await refBox(context, target.ref)
           : await renderedBox(required(context.measure, 'Element measurements'), target.nodeId, target.occurrence);
       if (box === undefined) {
-        return { applied: false, reason: 'That element is not drawn on the canvas' };
+        return { applied: false, reason: 'That element is not drawn on the canvas' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       return host.snapshot.run(box, widthMax);
     }
@@ -559,7 +559,7 @@ async function runMethod(method: AppMethod, rawParams: unknown, session: AppSess
     case 'page.open': {
       const { path } = APP_METHODS['page.open'].params(rawParams);
       if (!host.pages().some((page) => page.path === path)) {
-        return { applied: false, reason: 'This project has no page at that path; page.list names them' };
+        return { applied: false, reason: 'This project has no page at that path; page.list names them' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
       }
       return openedWithin(host, path, host.openPage(path));
     }
@@ -825,7 +825,7 @@ async function openedWithin(host: AppHostCommands, path: string, started: AppEdi
   }
   return host.page()?.path === path
     ? { applied: true }
-    : { applied: false, reason: `The editor did not open ${path} within ${APP_RPC_LIMITS.navigateTimeoutMs / 1000} s` };
+    : { applied: false, reason: `The editor did not open ${path} within ${APP_RPC_LIMITS.navigateTimeoutMs / 1000} s` }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
 }
 
 /**
@@ -861,22 +861,22 @@ async function scrollCanvas(host: AppHostCommands, context: AppRpcContext, targe
     // The ref's copy as drawn now, aligned by the frame's own app scroll (frameAppScroll.ts).
     const box = await refBox(context, target.ref);
     if (box === undefined) {
-      return { applied: false, reason: 'That element is not drawn on the canvas' };
+      return { applied: false, reason: 'That element is not drawn on the canvas' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
     const told = tell({ type: 'avb:app-scroll', space: 'viewport', x: box.x, y: box.y, w: box.width, h: box.height, block: target.block });
-    return told ? { applied: true } : { applied: false, reason: 'The canvas is not showing a page' };
+    return told ? { applied: true } : { applied: false, reason: 'The canvas is not showing a page' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   if (!('nodeId' in target)) {
     const told = tell({ type: 'avb:app-scroll', space: 'page', x: target.x, y: target.y, w: 0, h: 0, block: target.block });
-    return told ? { applied: true } : { applied: false, reason: 'The canvas is not showing a page' };
+    return told ? { applied: true } : { applied: false, reason: 'The canvas is not showing a page' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   const box = context.measure === undefined ? undefined : await renderedBox(context.measure, target.nodeId, target.occurrence);
   if (context.measure !== undefined && box === undefined) {
-    return { applied: false, reason: `That element is not drawn on the canvas within ${APP_RPC_LIMITS.navigateTimeoutMs / 1000} s` };
+    return { applied: false, reason: `That element is not drawn on the canvas within ${APP_RPC_LIMITS.navigateTimeoutMs / 1000} s` }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   if (target.block === 'start' && box !== undefined) {
     const told = tell({ type: 'avb:app-scroll', space: 'viewport', x: box.x, y: box.y, w: box.width, h: box.height, block: 'start' });
-    return told ? { applied: true } : { applied: false, reason: 'The canvas is not showing a page' };
+    return told ? { applied: true } : { applied: false, reason: 'The canvas is not showing a page' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   return host.scrollTo.run(target);
 }
@@ -907,7 +907,7 @@ async function insertDragStep(context: AppRpcContext, session: AppSession, step:
       if (drag.view()?.appId === appId) {
         drag.cancel();
       }
-      return { applied: false, reason: 'The drag was cancelled' };
+      return { applied: false, reason: 'The drag was cancelled' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     case 'drop': {
       const dropped = await drag.drop(appId, x, y);
       if (dropped.kind === 'refused') {
@@ -944,7 +944,7 @@ async function highlightCanvas(
   }
   const page = context.host.page()?.path;
   if (!('ref' in target) && page === undefined) {
-    return { applied: false, reason: 'No page is open' };
+    return { applied: false, reason: 'No page is open' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   // An open-page id is a one-step ref: its copy on the page is the step's copy.
   const ref: AppNodeRef = 'ref' in target ? target.ref : { steps: [{ file: page ?? '', nodeId: target.nodeId, key: undefined, copy: target.occurrence ?? 0 }] };
@@ -1036,5 +1036,5 @@ export function eventForSession<E extends AppEventName>(session: AppSession, rol
 
 function describe(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
-  return message.slice(0, 500) || 'The request failed';
+  return message.slice(0, 500) || 'The request failed'; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
 }

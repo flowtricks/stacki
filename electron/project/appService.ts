@@ -23,7 +23,7 @@ import { inflateRawSync } from 'node:zlib';
 import { assert } from '../../shared/core/assert';
 import {
   APP_LIMITS,
-  appsFailureMessage,
+  appsFailure,
   compareAppVersions,
   stackiVersionProblem,
   type AppAvailableUpdate,
@@ -39,6 +39,8 @@ import {
   type AppUpdateOutcome,
   type AppsResult,
 } from '../../shared/properties/apps';
+import { described } from '../../shared/properties/i18n/messageRef';
+import { ReferencedError } from '../../shared/properties/i18n/referencedError';
 import { readAppBundle, type AppBundle, type InflateRaw } from '../../shared/properties/appBundle';
 import {
   MARKETPLACE_INDEX_URL,
@@ -122,9 +124,9 @@ export function createAppService(options: AppServiceOptions) {
 
   // Refuses a bundle this Stacki is too old to run, before it is held or written (docs/apps.md).
   const requireStackiVersion = (manifest: AppManifest): void => {
-    const problem = stackiVersionProblem(manifest.stackiVersionMin, options.stackiVersion);
-    if (problem !== undefined) {
-      throw new Error(`${manifest.name} ${manifest.version}: ${problem}`);
+    if (stackiVersionProblem(manifest.stackiVersionMin, options.stackiVersion) !== undefined) {
+      assert(manifest.stackiVersionMin !== undefined, 'A version problem names the version needed');
+      throw new ReferencedError('apps.error.versionTooOld', { name: manifest.name, version: manifest.version, minimum: manifest.stackiVersionMin });
     }
   };
 
@@ -134,7 +136,7 @@ export function createAppService(options: AppServiceOptions) {
     const lock = readAppsLock(projectRoot);
     const installed = lock.apps.find((app) => app.id === bundle.manifest.id);
     if (installed === undefined && lock.apps.length >= APP_LIMITS.appsMax) {
-      throw new Error(`A project has at most ${APP_LIMITS.appsMax} apps`);
+      throw new ReferencedError('apps.error.appLimit', { count: APP_LIMITS.appsMax });
     }
     const key = randomBytes(16).toString('hex');
     const info: AppStaged = { token: key, manifest: bundle.manifest, sha256, sizeBytes: archive.byteLength, source, replaces: installed?.version };
@@ -185,10 +187,10 @@ export function createAppService(options: AppServiceOptions) {
     const downloaded = await downloadApprovedVersion(options.fetch, app, approved);
     const bundle = readAppBundle(downloaded.bytes, inflate);
     if (bundle.manifest.id !== app.id) {
-      throw new Error(`The approved release holds the app "${bundle.manifest.id}", not "${app.id}".`);
+      throw new ReferencedError('apps.error.approvedWrongApp', { found: bundle.manifest.id, id: app.id });
     }
     if (bundle.manifest.version !== approved.version) {
-      throw new Error(`The approved release of ${app.name} is version ${bundle.manifest.version}, not ${approved.version}.`);
+      throw new ReferencedError('apps.error.approvedWrongVersion', { name: app.name, found: bundle.manifest.version, expected: approved.version });
     }
     assert(downloaded.sha256 === approved.sha256, 'A marketplace bundle carries the approved digest');
     return { bundle, sha256: downloaded.sha256 };
@@ -218,16 +220,15 @@ export function createAppService(options: AppServiceOptions) {
     const id = lock.id;
     const app = marketplaceApp(index, id);
     if (app === undefined) {
-      return { kind: 'failed', id, message: 'This app is no longer listed in the marketplace.' };
+      return { kind: 'failed', id, ...described('apps.error.noLongerListed') };
     }
     const next = approvedUpdate(app, lock.version);
     if (next === undefined) {
       return { kind: 'current', id };
     }
     // The index says which Stacki the version needs, so an update this Stacki cannot run is never offered.
-    const tooOld = stackiVersionProblem(next.stackiVersionMin, options.stackiVersion);
-    if (tooOld !== undefined) {
-      return { kind: 'failed', id, message: `${app.name} ${next.version}: ${tooOld}` };
+    if (stackiVersionProblem(next.stackiVersionMin, options.stackiVersion) !== undefined && next.stackiVersionMin !== undefined) {
+      return { kind: 'failed', id, ...described('apps.error.versionTooOld', { name: app.name, version: next.version, minimum: next.stackiVersionMin }) };
     }
     if (lock.update !== undefined && recordedStillWaits(lock)) {
       if (lock.update.version === next.version && lock.update.sha256 === next.sha256) {
@@ -264,14 +265,21 @@ export function createAppService(options: AppServiceOptions) {
     const downloaded = await downloadReleaseAsset(options.fetch, latest, auth);
     const bundle = readAppBundle(downloaded.bytes, inflate);
     if (bundle.manifest.id !== id) {
-      throw new Error(`The release holds the app "${bundle.manifest.id}", not "${id}".`);
+      throw new ReferencedError('apps.error.releaseWrongApp', { found: bundle.manifest.id, id });
     }
     if (compareAppVersions(bundle.manifest.version, lock.version) <= 0) {
       return { kind: 'current', id };
     }
-    const tooOld = stackiVersionProblem(bundle.manifest.stackiVersionMin, options.stackiVersion);
-    if (tooOld !== undefined) {
-      return { kind: 'failed', id, message: `${bundle.manifest.name} ${bundle.manifest.version}: ${tooOld}` };
+    if (stackiVersionProblem(bundle.manifest.stackiVersionMin, options.stackiVersion) !== undefined && bundle.manifest.stackiVersionMin !== undefined) {
+      return {
+        kind: 'failed',
+        id,
+        ...described('apps.error.versionTooOld', {
+          name: bundle.manifest.name,
+          version: bundle.manifest.version,
+          minimum: bundle.manifest.stackiVersionMin,
+        }),
+      };
     }
     const additions = appManifestAdditions(summary.manifest, bundle.manifest);
     if (lock.autoUpdate) {
@@ -315,7 +323,7 @@ export function createAppService(options: AppServiceOptions) {
     stageFile: (projectRoot: string, archive: Uint8Array, fileName: string): AppsResult<AppStaged> =>
       attemptSync(() => {
         if (archive.byteLength > APP_LIMITS.archiveBytesMax) {
-          throw new Error(`The app file exceeds ${APP_LIMITS.archiveBytesMax} bytes`);
+          throw new ReferencedError('error.apps.fileTooLarge', { bytes: APP_LIMITS.archiveBytesMax });
         }
         const name = fileName.replace(/^.*[\\/]/, '').slice(0, APP_LIMITS.assetNameCharsMax) || 'app.zip';
         return hold(projectRoot, archive, { kind: 'file', fileName: name }, sha256Hex(archive));
@@ -335,7 +343,7 @@ export function createAppService(options: AppServiceOptions) {
       attempt(async () => {
         const auth = await token(account);
         if (auth === undefined) {
-          throw new Error('Sign in with GitHub to list your repositories.');
+          throw new ReferencedError('apps.error.signInToListRepositories');
         }
         return listRepositories(options.fetch, auth, account);
       }),
@@ -350,7 +358,7 @@ export function createAppService(options: AppServiceOptions) {
         dropExpired();
         const entry = staged.get(key);
         if (entry === undefined || entry.projectRoot !== projectRoot) {
-          throw new Error('That app is no longer waiting to be installed. Choose it again.');
+          throw new ReferencedError('apps.error.noLongerWaiting');
         }
         staged.delete(key);
         const previous = readAppsLock(projectRoot).apps.find((app) => app.id === entry.staged.manifest.id);
@@ -391,7 +399,7 @@ export function createAppService(options: AppServiceOptions) {
             try {
               outcomes.push(await checkOne(projectRoot, summary, marketplace));
             } catch (error: unknown) {
-              outcomes.push({ kind: 'failed', id: summary.lock.id, message: appsFailureMessage(error) });
+              outcomes.push({ kind: 'failed', id: summary.lock.id, ...appsFailure(error) });
             }
           }
           return outcomes;
@@ -409,7 +417,7 @@ export function createAppService(options: AppServiceOptions) {
       attempt(async () => {
         const entry = readAppsLock(projectRoot).apps.find((app) => app.id === id);
         if (entry?.update === undefined) {
-          throw new Error('That app has no update waiting.');
+          throw new ReferencedError('apps.error.noUpdateWaiting');
         }
         const update = entry.update;
         const source = entry.source;
@@ -417,26 +425,26 @@ export function createAppService(options: AppServiceOptions) {
           // The approval is read again: a version withdrawn since the check installs nothing.
           const app = marketplaceApp(await loadIndex('fresh'), id);
           if (app === undefined) {
-            throw new Error('This app is no longer listed in the marketplace; nothing was installed.');
+            throw new ReferencedError('apps.error.noLongerListedNothingInstalled');
           }
           const approved = approvedVersion(app, update.version);
           if (approved === undefined) {
-            throw new Error('The marketplace no longer approves this version; nothing was installed.');
+            throw new ReferencedError('apps.error.marketplaceNoLongerApproves');
           }
           if (approved.sha256 !== update.sha256) {
-            throw new Error('The approved release changed since it was checked; nothing was installed.');
+            throw new ReferencedError('apps.error.approvedReleaseChanged');
           }
           const { bundle, sha256 } = await approvedBundle(app, approved);
           return install(projectRoot, bundle, { kind: 'marketplace', id, version: approved.version }, sha256, { autoUpdate: entry.autoUpdate });
         }
         if (source.kind !== 'github') {
-          throw new Error('An uploaded app has no updates; upload the new file instead.');
+          throw new ReferencedError('apps.error.uploadedNoUpdatesUpload');
         }
         const auth = await token(source.account);
         const asset = await releaseAsset(options.fetch, source, { tag: update.tag, token: auth });
         const downloaded = await downloadReleaseAsset(options.fetch, asset, auth);
         if (downloaded.sha256 !== update.sha256) {
-          throw new Error('The release changed since it was checked; nothing was installed.');
+          throw new ReferencedError('apps.error.releaseChanged');
         }
         const bundle = readAppBundle(downloaded.bytes, inflate);
         assert(bundle.manifest.id === id, 'An update is for its own app');
@@ -451,23 +459,23 @@ export function createAppService(options: AppServiceOptions) {
       attempt(async () => {
         const app = marketplaceApp(await loadIndex('fresh'), id);
         if (app === undefined) {
-          throw new Error(`The marketplace does not list "${id}".`);
+          throw new ReferencedError('apps.error.marketplaceDoesNotList', { id });
         }
         const approved = approvedVersion(app, version);
         if (approved === undefined) {
-          throw new Error(`${app.name} ${version} is not an approved version.`);
+          throw new ReferencedError('apps.error.notApprovedVersion', { name: app.name, version });
         }
         // Refused before the download: the index says which Stacki the version needs.
-        const tooOld = stackiVersionProblem(approved.stackiVersionMin, options.stackiVersion);
-        if (tooOld !== undefined) {
-          throw new Error(`${app.name} ${version}: ${tooOld}`);
+        if (stackiVersionProblem(approved.stackiVersionMin, options.stackiVersion) !== undefined) {
+          assert(approved.stackiVersionMin !== undefined, 'A version problem names the version needed');
+          throw new ReferencedError('apps.error.versionTooOld', { name: app.name, version, minimum: approved.stackiVersionMin });
         }
         const previous = readAppsLock(projectRoot).apps.find((entry) => entry.id === id);
         if (previous !== undefined && previous.source.kind !== 'marketplace') {
-          throw new Error(`An app with the id "${id}" is already installed from elsewhere. Remove it first.`);
+          throw new ReferencedError('apps.error.installedElsewhere', { id });
         }
         if (previous?.version === version) {
-          throw new Error(`${app.name} ${version} is already installed.`);
+          throw new ReferencedError('apps.error.alreadyInstalled', { name: app.name, version });
         }
         const { bundle, sha256 } = await approvedBundle(app, approved);
         // A new install starts with auto-update off; reinstalling keeps the admin's choice.
@@ -479,7 +487,7 @@ export function createAppService(options: AppServiceOptions) {
       attemptSync(() => {
         const next = updateLockEntry(projectRoot, id, (entry) => {
           if (entry.source.kind === 'file' || entry.source.kind === 'local') {
-            throw new Error('An uploaded app has no updates to install.');
+            throw new ReferencedError('apps.error.uploadedNoUpdatesToInstall');
           }
           return { ...entry, autoUpdate: policy.autoUpdate };
         });
@@ -525,9 +533,9 @@ export async function attempt<T>(run: () => Promise<T>): Promise<AppsResult<T>> 
 }
 
 // Expected failures become a message; a broken invariant still crashes (AGENTS.md §3).
-function failure(error: unknown): { readonly ok: false; readonly message: string } {
+function failure(error: unknown): { readonly ok: false } & ReturnType<typeof appsFailure> {
   if (error instanceof Error && error.message.startsWith('Assertion failed')) {
     throw error;
   }
-  return { ok: false, message: appsFailureMessage(error) };
+  return { ok: false, ...appsFailure(error) };
 }

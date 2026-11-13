@@ -1,6 +1,8 @@
 // Settling the panel after a change: upgrading the default selector, and
 // re-syncing focus when the context moves (EmbedEditor.tsx).
 
+import { described } from '../../../../shared/properties/i18n/messageRef';
+import { useTranslate, useTranslateDescribed } from '../../../lib/i18n/useTranslate';
 import { PLACEMENT_END } from '../../../editor/classAttr';
 import { useEffect } from 'react';
 import { hslaToRgba } from '../model/colorWrite';
@@ -195,6 +197,8 @@ export function useWriteNewRule(
   resolvedHook: ReturnType<typeof useResolved>,
   editorRefs: ReturnType<typeof useEditorRefs>,
 ) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   const { setBusyBoth, setSaveError } = busyState;
   const { setStatus } = scanState;
   const { settleEmbedWrite } = pendingWrites;
@@ -229,7 +233,7 @@ export function useWriteNewRule(
     const { embedDocument, region, embedContext, wrapper, bpMedia, firstStyles } = where;
     const fullSelector = where.selector;
     setBusyBoth(true);
-    setStatus('Saving…');
+    setStatus('Saving…'); // i18n-ignore: write-only status, never rendered.
     // try/finally so `busy` always clears even if creating the rule / writing throws
     // (a stuck busy would disable every button in the panel).
     try {
@@ -238,10 +242,10 @@ export function useWriteNewRule(
       if (firstStyles?.kind === 'class') {
         const outcome = (await getHost().addClass?.(firstStyles.className, PLACEMENT_END)) ?? {
           tag: 'refused',
-          message: 'This page cannot take a class here.',
+          ...described('styleModel.embed.hook.pageCannotTakeClass'),
         };
         if (outcome.tag === 'refused') {
-          setSaveError(`${fullSelector} is not on the element (${outcome.message}), so its rule was not written.`);
+          setSaveError(translate('styleModel.embed.hook.classNotOnElement', { selector: fullSelector, reason: translateDescribed(outcome) }));
           return;
         }
       }
@@ -255,7 +259,7 @@ export function useWriteNewRule(
         write,
       });
       if (!ok) {
-        setStatus('Nothing to save.');
+        setStatus('Nothing to save.'); // i18n-ignore: write-only status, never rendered.
         return;
       }
       const result =
@@ -272,7 +276,7 @@ export function useWriteNewRule(
       if (!settleEmbedWrite(embedDocument, result, 'rule')) {
         return;
       }
-      setStatus(`Added ${fullSelector}.`);
+      setStatus(`Added ${fullSelector}.`); // i18n-ignore: write-only status, never rendered.
     } finally {
       setBusyBoth(false);
     }
@@ -291,6 +295,7 @@ export function useCreateRule(
   resolvedHook: ReturnType<typeof useResolved>,
   writeNewRuleHook: ReturnType<typeof useWriteNewRule>,
 ) {
+  const translateDescribed = useTranslateDescribed();
   const { setStatus } = scanState;
   const { setSaveError } = busyState;
   const { documentByKey } = pendingWrites;
@@ -314,12 +319,12 @@ export function useCreateRule(
     const requested = selectorOverride ?? activeSelector;
     const plan = firstStylesPlan(requested);
     if (plan.kind === 'refused') {
-      setSaveError(plan.message);
+      setSaveError(translateDescribed(plan));
       return;
     }
     if (plan.kind === 'normal') {
       if (!where) {
-        setStatus('No embed here to write to — add an HTML embed first.');
+        setStatus('No embed here to write to — add an HTML embed first.'); // i18n-ignore: write-only status, never rendered.
         return;
       }
       void writeNewRule({ ...where, embedContext, wrapper: currentContext.wrapper, bpMedia, selector: requested }, write);
@@ -332,7 +337,7 @@ export function useCreateRule(
     const selector = plan.kind === 'block' ? requested : `.${plan.className}`;
     const target = plan.kind === 'class' ? where : blankTarget();
     if (!target) {
-      setStatus('No embed here to write to — add an HTML embed first.');
+      setStatus('No embed here to write to — add an HTML embed first.'); // i18n-ignore: write-only status, never rendered.
       return;
     }
     void writeNewRule({ ...target, embedContext, wrapper: currentContext.wrapper, bpMedia, selector, firstStyles }, write);
@@ -441,13 +446,13 @@ export function useEmptyContext(
     const { embedDocument, region } = where;
     void (async () => {
       setBusyBoth(true);
-      setStatus('Adding query…');
+      setStatus('Adding query…'); // i18n-ignore: write-only status, never rendered.
       // try/finally so a throw while scaffolding the query block can't leave `busy` stuck
       // true — that would wrongly disable every add button (transforms, shadows, …).
       try {
         const ok = path ? ensureNestPath(region, path) : contextKey ? ensureQueryBlock(region, contextKey) : false;
         if (!ok) {
-          setStatus('Couldn’t add the query.');
+          setStatus('Couldn’t add the query.'); // i18n-ignore: write-only status, never rendered.
           return;
         }
         await refreshDerived();
@@ -455,7 +460,7 @@ export function useEmptyContext(
         if (!settleEmbedWrite(embedDocument, result, 'rule')) {
           return;
         }
-        setStatus('Query added.');
+        setStatus('Query added.'); // i18n-ignore: write-only status, never rendered.
       } finally {
         setBusyBoth(false);
       }
@@ -619,6 +624,7 @@ export function useNativeSet(
   addQuery: ReturnType<typeof useAddQuery>,
   nativeAttempt: ReturnType<typeof useNativeAttempt>,
 ) {
+  const translate = useTranslate();
   const { selectedRef } = editorRefs;
   const { setNativeFallback, setStatus } = scanState;
   const { stateKey } = selectionState;
@@ -639,14 +645,16 @@ export function useNativeSet(
       });
       if (applied) {
         await refreshNative();
-        setStatus('Saved to Webflow class style.');
+        setStatus('Saved to Webflow class style.'); // i18n-ignore: write-only status, never rendered.
         return;
       }
       await clearCoercedNative(index, prop);
       setStatus(`Couldn’t set ${prop} as a Webflow style${reason ? ` (${reason})` : ''}` + ' — moving it to an embed.');
       // The status line isn't rendered, so surface the reason inline — otherwise the
       // fall-through to an embed is invisible and looks like "it always writes code".
-      setNativeFallback(`Webflow wouldn’t apply ${prop} to this class natively${reason ? ` (${reason})` : ''}` + ' — saved it to the embed instead.');
+      setNativeFallback(
+        reason ? translate('styleModel.embed.hook.nativeApplyFailedReason', { prop, reason }) : translate('styleModel.embed.hook.nativeApplyFailed', { prop }),
+      );
       writeEmbedProp({ ...write, value });
     });
   };
@@ -700,6 +708,7 @@ export function useNativeCreate(
   nativeAttempt: ReturnType<typeof useNativeAttempt>,
   createNativeClassHook: ReturnType<typeof useCreateNativeClass>,
 ) {
+  const translate = useTranslate();
   const { setNativeFallback, setStatus } = scanState;
   const { refreshNative } = nativeRefresh;
   const { runNativeOp } = nativeOps;
@@ -717,11 +726,15 @@ export function useNativeCreate(
       const { applied, created, reason } = await attemptNative('Creating Webflow class…', async () => createNativeClass(className, { ...write, value }));
       if (applied) {
         await refreshNative();
-        setStatus(created ? `Created Webflow class .${className}.` : 'Saved to Webflow class style.');
+        setStatus(created ? `Created Webflow class .${className}.` : 'Saved to Webflow class style.'); // i18n-ignore: write-only status, never rendered.
         return;
       }
       setStatus(`Couldn’t create .${className} as a Webflow class${reason ? ` (${reason})` : ''}` + ' — moving it to an embed.');
-      setNativeFallback(`Webflow wouldn’t create .${className} as a class${reason ? ` (${reason})` : ''}` + ' — saved it to the embed instead.');
+      setNativeFallback(
+        reason
+          ? translate('styleModel.embed.hook.nativeCreateFailedReason', { className, reason })
+          : translate('styleModel.embed.hook.nativeCreateFailed', { className }),
+      );
       writeEmbedProp({ ...write, value });
     });
   };

@@ -12,6 +12,7 @@ import type { EditBatchRequest, EditRequest } from '../../shared/engine/editRequ
 import { parsePageEditResult, type PageEditError, type PageEdited } from '../../shared/ipc/pageSave';
 import { parsePreviewVerdict, type PreviewRender, type PreviewVerdict } from '../../shared/page/previewToken';
 import type { Result } from '../../shared/core/result';
+import { parseOptionalMessageRef } from '../../shared/core/i18n/messageReference';
 
 export interface PageChangeEvent {
   readonly external: boolean;
@@ -370,10 +371,12 @@ export function restoreProjectFile(projectPath: string, reference: string, path:
     const ok = boolean(value['ok']);
     const missing = optional(boolean)(value['missing']);
     const message = optional(text)(value['message']);
+    const messageRef = parseOptionalMessageRef(value['messageRef']);
     return {
       ok,
       ...(missing === undefined ? {} : { missing }),
       ...(message === undefined ? {} : { message }),
+      ...(messageRef === undefined ? {} : { messageRef }),
     };
   });
 }
@@ -470,7 +473,8 @@ function parseProjectDialog(input: unknown): IpcResults['project:openDialog'] {
     return { canceled: false, projectPath: pathText(value['projectPath']) };
   }
   if (value['error'] !== undefined) {
-    return { canceled: false, error: text(value['error']) };
+    const errorRef = parseOptionalMessageRef(value['errorRef']);
+    return errorRef === undefined ? { canceled: false, error: text(value['error']) } : { canceled: false, error: text(value['error']), errorRef };
   }
   throw new Error('Project dialog result must contain a project path, error, or cancellation');
 }

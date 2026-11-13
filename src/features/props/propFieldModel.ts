@@ -3,6 +3,9 @@
 // placeholder (PropField.tsx).
 
 import { PropValuePolicyContext } from './propValuePolicy';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import type { ComponentProps } from 'react';
 import type { Attr } from '../../../shared/page/pageNode';
@@ -90,22 +93,22 @@ export function assetImportOf(expr: unknown, frontmatter: unknown) {
   return { ident: match[1] ?? '', spec: imported.spec };
 }
 
-export function boundsHint(field: FieldDefinition) {
+export function boundsHint(field: FieldDefinition, translate: Translator = ENGLISH_TRANSLATE) {
   const { min, max, step, minExclusive, maxExclusive } = field;
   const parts = [];
   if (min !== undefined && max !== undefined) {
     parts.push(`${minExclusive ? '>' : ''}${min}–${maxExclusive ? '<' : ''}${max}`);
   } else if (min !== undefined) {
-    parts.push(minExclusive ? `greater than ${min}` : `${min} or more`);
+    parts.push(minExclusive ? translate('props.bounds.greaterThan', { min }) : translate('props.bounds.orMore', { min }));
   } else if (max !== undefined) {
-    parts.push(maxExclusive ? `less than ${max}` : `${max} or less`);
+    parts.push(maxExclusive ? translate('props.bounds.lessThan', { max }) : translate('props.bounds.orLess', { max }));
   }
   if (step === 1) {
-    parts.push('whole numbers');
+    parts.push(translate('props.bounds.wholeNumbers'));
   } else if (step !== undefined) {
-    parts.push(`steps of ${step}`);
+    parts.push(translate('props.bounds.steps', { step }));
   }
-  return parts.length ? `Accepts ${parts.join(', ')}` : undefined;
+  return parts.length ? translate('props.bounds.accepts', { parts: parts.join(', ') }) : undefined;
 }
 
 export function isBoundValue(field: FieldDefinition, value: Attr | undefined) {
@@ -165,7 +168,8 @@ export function valueFromExpr(field: FieldDefinition, raw: string): Attr | undef
   return undefined;
 }
 
-export function controlWord(field: FieldDefinition) {
+// A stable id for `controlLabel` (which says it in the language on screen).
+export function controlKind(field: FieldDefinition) {
   if (field.type === 'boolean') {
     return 'toggle';
   }
@@ -176,24 +180,52 @@ export function controlWord(field: FieldDefinition) {
     return 'list';
   }
   if (field.type === 'enum' && field.options?.length) {
-    return 'options list';
+    return 'optionsList';
   }
   if (field.type === 'style') {
-    return 'CSS editor';
+    return 'cssEditor';
   }
   if (isMediaName(field.name)) {
-    return 'asset picker';
+    return 'assetPicker';
   }
   if (isHrefName(field.name)) {
-    return 'link settings';
+    return 'linkSettings';
   }
-  return 'normal field';
+  return 'normal';
 }
+/** "Use the toggle", "Use the CSS editor"…: the way back from an expression to the field's own control, in the language `translate` speaks. */
+export function controlLabel(field: FieldDefinition, translate: Translator = ENGLISH_TRANSLATE): string {
+  const word = controlKind(field);
+  switch (word) {
+    case 'toggle':
+      return translate('props.control.toggle');
+    case 'fields':
+      return translate('props.control.fields');
+    case 'list':
+      return translate('props.control.list');
+    case 'optionsList':
+      return translate('props.control.optionsList');
+    case 'cssEditor':
+      return translate('props.control.cssEditor');
+    case 'assetPicker':
+      return translate('props.control.assetPicker');
+    case 'linkSettings':
+      return translate('props.control.linkSettings');
+    case 'normal':
+      return translate('props.control.normal');
+    default: {
+      const exhaustive: never = word;
+      return exhaustive;
+    }
+  }
+}
+
 export function usePropField(props: PropFieldProps) {
   const state = usePropFieldModel(props);
   return { ...state, ...propFieldActions(state) };
 }
 export function usePropFieldModel(props: PropFieldProps) {
+  const translate = useTranslate();
   const policy = useContext(PropValuePolicyContext);
   // Choice controls show the effective fallback while isSet tracks authored values.
   const showsFallback = ['boolean', 'enum'].includes(props.field.type);
@@ -229,9 +261,9 @@ export function usePropFieldModel(props: PropFieldProps) {
     !/^(quality|format|formats|fallbackFormat|densities|widths|sizes)$/i.test(name) || !assetContext?.srcKind
       ? undefined
       : assetContext.srcKind === 'svg'
-        ? 'SVG sources are passed through unoptimized, so this has no effect.'
+        ? translate('props.field.svgNoEffect')
         : assetContext.srcKind === 'public'
-          ? 'Files in public/ are served as-is — import from src/assets to optimize.'
+          ? translate('props.field.publicAsIs')
           : undefined;
   assert(valueText.length <= LIMITS.attrCharsMax, 'PropField: value limit exceeded');
   assert((field.options?.length ?? 0) <= LIMITS.propOptionsMax, 'PropField: option limit exceeded');
@@ -267,6 +299,7 @@ export function usePropFieldModel(props: PropFieldProps) {
     shownAsAsset,
     showExpr,
     reason,
+    translate,
     placeholderFor,
     isExpr,
     isMediaAttr,
@@ -347,7 +380,7 @@ export function isColorField(field: FieldDefinition): boolean {
   return typeof field.default === 'string' && isColorText(field.default);
 }
 export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
-  const { setMenuPosition, onChange, setCustom, value, field, isSet, showExpr } = state;
+  const { translate, setMenuPosition, onChange, setCustom, value, field, isSet, showExpr } = state;
   const reset = () => {
     setMenuPosition(undefined);
     onChange(undefined, true);
@@ -366,7 +399,7 @@ export function propFieldActions(state: ReturnType<typeof usePropFieldModel>) {
       const code = value;
       setCustom(false);
       onChange(undefined, true);
-      reportCodeCleared(() => {
+      reportCodeCleared(translate, () => {
         setCustom(true);
         onChange(code, true);
       });

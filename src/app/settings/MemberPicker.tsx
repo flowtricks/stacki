@@ -1,4 +1,4 @@
-// The "GitHub username" field of a role card, with suggestions the way GitHub's own
+// The "Add GitHub username" field of a role card (its Add button sits inside the field's right end), with suggestions the way GitHub's own
 // picker offers them: after a 250 ms pause in typing, at most eight matching users with
 // their picture, login and name, the repository's collaborators and recent commit
 // authors first. ArrowUp and ArrowDown move through them, Enter picks the highlighted
@@ -17,11 +17,13 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { assert } from '../../../shared/core/assert';
 import { GITHUB_USER_SEARCH_LIMITS, githubUserQuery, type GitHubUserSearchResult, type GitHubUserSuggestion } from '../../../shared/ipc/githubUserSearch';
 import { sameLogin } from '../../../shared/properties/projectRoles';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { searchGitHubUsers } from '../../ipc/githubUserSearchBridge';
 import CommitAvatar from '../../features/history/CommitAvatar';
 import { memberAvatarURL, rememberMemberAvatar } from './memberAvatars';
 import './memberPicker.css';
 
+// The English texts, for tests; the picker shows them translated (settings.roles.members.unavailable, .noMatches).
 export const MEMBER_UNAVAILABLE_TEXT = "Can't search GitHub right now";
 export const MEMBER_NO_MATCHES_TEXT = 'No matches';
 
@@ -52,6 +54,7 @@ export function MemberPicker(props: {
   readonly addMember: (login: string) => boolean;
 }) {
   const { roleName, members, projectPath, addMember } = props;
+  const translate = useTranslate();
   const [typed, setTyped] = useState('');
   const [answer, setAnswer] = useState<Answer>({ kind: 'none' });
   const [presence, setPresence] = useState<Presence>('shown');
@@ -128,16 +131,17 @@ export function MemberPicker(props: {
       }}
     >
       <div className="app-role-member-field">
+        <PersonPlusIcon />
         <input
           role="combobox"
-          aria-label={`Add a GitHub username to ${roleName}`}
+          aria-label={translate('settings.roles.members.add.label', { name: roleName })}
           aria-autocomplete="list"
           aria-expanded={open}
           aria-controls={listId}
           aria-activedescendant={open ? activeDescendant(listId, users[highlight]) : undefined}
           autoComplete="off"
           spellCheck={false}
-          placeholder="GitHub username"
+          placeholder={translate('settings.roles.members.add.placeholder')}
           value={typed}
           onChange={(event) => {
             setTyped(event.target.value);
@@ -151,7 +155,7 @@ export function MemberPicker(props: {
             id={listId}
             role="listbox"
             className="app-role-suggestions"
-            aria-label={`GitHub users matching ${typed.trim()}`}
+            aria-label={translate('settings.roles.members.suggestions', { query: typed.trim() })}
             aria-busy={pending}
             style={{ height: listHeightPx(rowCount) }}
           >
@@ -166,21 +170,43 @@ export function MemberPicker(props: {
             ))}
             {status === 'unavailable' && (
               <li className="app-role-suggestion-status" role="status">
-                {MEMBER_UNAVAILABLE_TEXT}
+                {translate('settings.roles.members.unavailable')}
               </li>
             )}
             {status === 'no-matches' && (
               <li className="app-role-suggestion-status" role="status">
-                {MEMBER_NO_MATCHES_TEXT}
+                {translate('settings.roles.members.noMatches')}
               </li>
             )}
           </ul>
         )}
+        {/* Inside the field's right end, quiet until there is text to add. */}
+        <button type="submit" className="app-role-add-button" disabled={typed.trim() === ''}>
+          {translate('settings.roles.members.add.button')}
+        </button>
       </div>
-      <button type="submit" disabled={typed.trim() === ''}>
-        Add
-      </button>
     </form>
+  );
+}
+
+// A person with a plus, the add row's mark.
+function PersonPlusIcon() {
+  return (
+    <svg
+      className="app-role-add-icon"
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      aria-hidden="true"
+    >
+      <circle cx="6.5" cy="5.5" r="2.5" />
+      <path d="M2 13c.4-2.2 2.1-3.5 4.5-3.5 1 0 1.9.2 2.6.7" />
+      <path d="M12.5 8.5v4M10.5 10.5h4" />
+    </svg>
   );
 }
 

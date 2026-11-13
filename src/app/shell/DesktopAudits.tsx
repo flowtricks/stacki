@@ -20,7 +20,7 @@ import { absolutePath, type FixDeps } from '../../features/audits/auditFixes';
 import { terminalAgentHandler } from '../../features/terminal/terminalAgent';
 import { AuditsPanel } from '../appPanels';
 import { relativeTo } from '../../features/audits/auditScope';
-import { openAppSettings } from '../settings/Settings';
+import { openAppSettings } from '../settings/LazySettings';
 import { nextReveal, revealNode, type PendingReveal } from './auditReveal';
 import { AUDIT_VALUE_KIT } from './auditValueKit';
 import { selectFromPanel } from './panelSelection';

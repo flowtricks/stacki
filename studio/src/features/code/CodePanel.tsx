@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import StackiCodePanel from '../../../vendor/stacki/src/features/code/CodePanel';
 import CodeEditor from '../../../vendor/stacki/src/ui/CodeEditor';
+import { useTranslate } from '../../../vendor/stacki/src/lib/i18n/useTranslate';
 import { parsePageModel } from '../../../vendor/stacki/shared/page/pageNode';
 import { parsePage } from '../source/source';
 import type { SharedDocument } from '../collaboration/useDocument';
@@ -12,6 +13,7 @@ interface Props {
   readonly openComponent: (name: string, id: string) => void;
 }
 export function CodePanel({ document, selected, select, openComponent }: Props) {
+  const translate = useTranslate();
   const source = document?.text.toString() ?? '';
   const astro = document?.file.endsWith('.astro') ?? false;
   const model = useMemo(() => {
@@ -39,7 +41,7 @@ export function CodePanel({ document, selected, select, openComponent }: Props) 
       ) : (
         <>
           <div className="panel-header">
-            <h2>Code</h2>
+            <h2>{translate('workspace.code.title')}</h2>
             <span className="muted">{document.file.split('/').at(-1)}</span>
           </div>
           <div className="code-panel-editor">

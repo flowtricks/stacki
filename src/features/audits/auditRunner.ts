@@ -38,7 +38,7 @@ import {
 } from '../../../shared/page/auditStatic';
 import { HEADING_TAG_PROPS, headingPromotionFix, instanceIdFix } from '../../../shared/page/auditRepairs';
 import { nodeAt, traceAuthored } from '../../../shared/page/auditTrace';
-import { auditFinding } from '../../../shared/page/auditFindings';
+import { auditFinding, detailText } from '../../../shared/page/auditFindings';
 import type { ImportDecl, PageNode } from '../../../shared/page/pageNode';
 import type { ScanResult } from '../../../shared/properties/projectScan';
 import type { WireAssetEntry } from '../../../shared/ipc/ipcResults';
@@ -567,13 +567,16 @@ async function relocated(
     fix: finding.fix,
     ...(finding.excerpt === undefined ? {} : { excerpt: finding.excerpt }),
     ...(finding.measure === undefined ? {} : { measure: finding.measure }),
+    ...(finding.measureRef === undefined ? {} : { measureRef: finding.measureRef }),
   };
+  // The reference follows the detail only while the detail is unchanged (the constant case below rewrites it).
+  const withRef = finding.detailRef === undefined ? base : { ...base, detailRef: finding.detailRef };
   switch (authored?.kind) {
     case undefined:
       return finding;
     case 'node':
       return auditFinding({
-        ...base,
+        ...withRef,
         file: authored.file,
         fileKind: authored.file === context.pageFile ? 'page' : authored.file.includes('/layouts/') ? 'layout' : 'component',
         element: { path: authored.path, tag: authored.tag, line: undefined },
@@ -582,7 +585,7 @@ async function relocated(
       });
     case 'file':
       return auditFinding({
-        ...base,
+        ...withRef,
         file: authored.file,
         fileKind: 'component',
         element: undefined,
@@ -709,7 +712,7 @@ function socialFinding(file: string, route: string, element: RenderedNodeElement
     file: element.source?.file ?? file,
     fileKind: element.source === undefined || element.source.file === file ? 'page' : 'component',
     element: element.source === undefined ? undefined : { path: element.source.path, tag: element.tag, line: undefined },
-    detail: `${url} does not load (on ${route})`,
+    ...detailText('audits.detail.socialImageBroken', { url, route }),
     source: 'rendered',
     fix: undefined,
   });
@@ -730,7 +733,7 @@ async function socialImageFindings(pages: readonly SitePage[], io: AuditIO): Pro
           file: page.file,
           fileKind: 'page',
           element: undefined,
-          detail: `No og:image on ${page.route}`,
+          ...detailText('audits.detail.noSocialImage', { route: page.route }),
           source: 'rendered',
           fix: undefined,
         }),

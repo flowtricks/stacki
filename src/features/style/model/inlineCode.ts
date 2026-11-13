@@ -155,9 +155,16 @@ function conditionText(conditions: readonly string[]): string {
   return conditions.map((condition) => (condition === OTHERWISE ? condition : `when ${condition}`)).join(', ');
 }
 
-export function whenSet(test: string): string {
+// A test that is only a name (`maxWidth`): it reads as `maxWidth is set`; anything else is shown as written.
+export function plainTestName(test: string): string | undefined {
   const trimmed = test.trim();
-  return /^[A-Za-z_$][\w$.]*$/.test(trimmed) ? `${trimmed} is set` : trimmed;
+  return /^[A-Za-z_$][\w$.]*$/.test(trimmed) ? trimmed : undefined;
+}
+
+export function whenSet(test: string): string {
+  const name = plainTestName(test);
+  // i18n-ignore: this is a comment inside the read-only code view, which shows generated code, not interface text.
+  return name === undefined ? test.trim() : `${name} is set`;
 }
 
 function styleBlock(branches: readonly InlineBranch[]): string {

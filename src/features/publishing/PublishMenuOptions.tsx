@@ -3,6 +3,7 @@ import { ExternalIcon, GearIcon, UploadCloudIcon } from '../../ui/Icons';
 import { PublishProviderIcon } from './PublishProviderIcon';
 import type { PublishAvailability } from '../../../shared/properties/publishState';
 import { usePublishedSiteURL } from './usePublishedSiteURL';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 interface Props {
   readonly projectPath: string;
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function PublishMenuOptions({ projectPath, publish, openSettings, availability, repositoryURL, busy, provider, config }: Props) {
+  const translate = useTranslate();
   return (
     <>
       <GitHubPushOption availability={availability} repositoryURL={repositoryURL} busy={busy} publish={publish} />
@@ -23,7 +25,7 @@ export function PublishMenuOptions({ projectPath, publish, openSettings, availab
       <hr />
       <button onClick={openSettings}>
         <GearIcon />
-        <span>Publish settings…</span>
+        <span>{translate('publish.menu.settings')}</span>
       </button>
     </>
   );
@@ -37,25 +39,33 @@ function HostingDeployOption({
   provider,
   config,
 }: Pick<Props, 'projectPath' | 'availability' | 'busy' | 'publish' | 'provider' | 'config'>) {
+  const translate = useTranslate();
   const url = usePublishedSiteURL(projectPath, config);
   const current = availability.hosting === 'current';
   const descriptions = {
-    current: 'Up to date',
-    pending: 'Changes to deploy',
-    unknown: 'Deployment status unavailable',
-    unconfigured: 'Choose a hosting provider',
+    current: translate('publish.menu.hostingCurrent'),
+    pending: translate('publish.menu.hostingPending'),
+    unknown: translate('publish.menu.hostingUnknown'),
+    unconfigured: translate('publish.menu.hostingChoose'),
   } as const;
   return (
-    <span className="stacki-publish-option stacki-publish-hosting" title={current ? 'All changes are up to date' : undefined}>
+    <span className="stacki-publish-option stacki-publish-hosting" title={current ? translate('publish.upToDate') : undefined}>
       <button disabled={busy || current} onClick={() => publish('hosting')}>
         {provider === 'none' ? <UploadCloudIcon /> : <PublishProviderIcon provider={provider} />}
         <span>
-          Deploy to hosting
+          {translate('publish.menu.deploy')}
           <small>{descriptions[availability.hosting]}</small>
         </span>
       </button>
       {url !== undefined && (
-        <a className="stacki-publish-repository" href={url} target="_blank" rel="noopener noreferrer" aria-label="Open published site" title={`Open ${url}`}>
+        <a
+          className="stacki-publish-repository"
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={translate('publish.menu.openSite')}
+          title={translate('publish.menu.openUrl', { url })}
+        >
           <ExternalIcon size={12} />
         </a>
       )}
@@ -64,19 +74,20 @@ function HostingDeployOption({
 }
 
 function GitHubPushOption({ availability, repositoryURL, busy, publish }: Pick<Props, 'availability' | 'repositoryURL' | 'busy' | 'publish'>) {
+  const translate = useTranslate();
   const current = availability.github === 'current';
   const details = availability.githubPush;
   const description = current
-    ? 'No changes to push'
+    ? translate('publish.menu.noChangesToPush')
     : details === undefined
-      ? 'Commit count unavailable'
-      : `${details.commits} commit${details.commits === 1 ? '' : 's'} to push`;
+      ? translate('publish.menu.commitsUnavailable')
+      : translate('publish.menu.commitsToPush', { count: details.commits });
   return (
-    <span className="stacki-publish-option stacki-publish-github" title={current ? 'All changes are up to date' : undefined}>
+    <span className="stacki-publish-option stacki-publish-github" title={current ? translate('publish.upToDate') : undefined}>
       <button disabled={busy || current} onClick={() => publish('github')}>
         <PublishProviderIcon provider="github" />
         <span>
-          Push to GitHub
+          {translate('publish.menu.pushToGitHub')}
           <small>{description}</small>
         </span>
       </button>
@@ -86,8 +97,8 @@ function GitHubPushOption({ availability, repositoryURL, busy, publish }: Pick<P
           href={repositoryURL}
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="Open GitHub repository"
-          title="Open GitHub repository"
+          aria-label={translate('publish.menu.openRepository')}
+          title={translate('publish.menu.openRepository')}
         >
           <ExternalIcon size={12} />
         </a>

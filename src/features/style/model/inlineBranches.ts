@@ -11,9 +11,10 @@
 // branches) stays as written.
 
 import { assert } from '../../../../shared/core/assert';
+import { described, messageRef, englishText, type Described, type TypedMessageRef } from '../../../../shared/properties/i18n/messageRef';
 import { LIMITS } from '../../../../shared/core/limits';
 import { CONDITIONAL_LIMITS, readConditionalExpression, type ConditionalResult } from '../../../editor/conditionalValue';
-import { stringEnd, ternaryIndices, whenSet } from './inlineCode';
+import { plainTestName, stringEnd, ternaryIndices } from './inlineCode';
 
 /** One branch: when it applies, its literal's place in the expression, and its text. */
 export interface StyleBranch {
@@ -21,6 +22,8 @@ export interface StyleBranch {
   readonly key: string;
   /** `when maxWidth is set`, `otherwise (render is set)`, `otherwise`, `always`. */
   readonly label: string;
+  /** The same label as a message the panel translates; `label` stays the English text. */
+  readonly labelRef: TypedMessageRef;
   /** The literal's offsets in the expression (UTF-16), quotes included. */
   readonly start: number;
   readonly end: number;
@@ -32,45 +35,50 @@ export interface StyleBranch {
 
 export type StyleBranches =
   | { readonly tag: 'branches'; readonly expression: string; readonly branches: readonly StyleBranch[] }
-  | { readonly tag: 'unsupported'; readonly reason: string };
+  | { readonly tag: 'unsupported'; readonly reason: string; readonly reasonRef: TypedMessageRef };
 
 /** The branches of a style expression, or why it is not one the panel edits. */
+// The one branch of a plain string attribute.
+export function alwaysBranchLabel(): Pick<StyleBranch, 'label' | 'labelRef'> {
+  return branchLabel(messageRef('styleModel.inline.branch.always'));
+}
+
 export function readStyleBranches(expression: string): StyleBranches {
   if (expression.length > LIMITS.attrCharsMax) {
-    return unsupported('This style attribute is too long to edit here.');
+    return unsupported('styleModel.inline.reason.tooLongToEdit');
   }
   const whole = literalAt(expression, 0, expression.length);
   if (whole !== undefined) {
     // A template or string on its own: one branch, always applied.
     if (whole.form.kind === 'none') {
-      return unsupported('This style attribute renders nothing.');
+      return unsupported('styleModel.inline.reason.rendersNothing');
     }
-    return { tag: 'branches', expression, branches: [{ ...whole, key: '0', label: 'always' }] };
+    return { tag: 'branches', expression, branches: [{ ...whole, key: '0', ...branchLabel(messageRef('styleModel.inline.branch.always')) }] };
   }
   const model = readConditionalExpression(expression);
   if (model === undefined) {
-    return unsupported('Only a chain of conditions, each giving a text or template, can be edited here.');
+    return unsupported('styleModel.inline.reason.onlyChain');
   }
   if (!editableResult(model.otherwise)) {
-    return unsupported('A branch gives a value from a prop rather than text, so it is edited in Settings.');
+    return unsupported('styleModel.inline.reason.fromProp');
   }
   for (const group of model.groups) {
     if (!editableResult(group.value)) {
-      return unsupported('A branch gives a value from a prop rather than text, so it is edited in Settings.');
+      return unsupported('styleModel.inline.reason.fromProp');
     }
   }
   const branches = locateBranches(expression);
   if (branches === undefined) {
-    return unsupported('This conditional is written in a way the panel cannot place its branches in.');
+    return unsupported('styleModel.inline.reason.unplaceable');
   }
   // The text scan and the model must agree on the chain, or neither is trusted.
   if (branches.length !== model.groups.length + 1) {
-    return unsupported('This conditional is written in a way the panel cannot place its branches in.');
+    return unsupported('styleModel.inline.reason.unplaceable');
   }
   return { tag: 'branches', expression, branches };
 }
 
-export type BranchWrite = { readonly tag: 'written'; readonly expression: string } | { readonly tag: 'refused'; readonly message: string };
+export type BranchWrite = { readonly tag: 'written'; readonly expression: string } | ({ readonly tag: 'refused' } & Described);
 
 /**
  * The expression with one branch's text replaced, every other byte unchanged. The
@@ -82,16 +90,16 @@ export function writeStyleBranch(expression: string, branch: StyleBranch, body: 
   assert(branch.end <= expression.length, 'writeStyleBranch: a branch ends inside the expression');
   const literal = branchLiteral(branch, body.trim() === '' ? '' : body);
   if (literal === undefined) {
-    return { tag: 'refused', message: 'A value cannot hold a ` here.' };
+    return { tag: 'refused', ...described('styleModel.inline.refusal.backtick') };
   }
   const next = expression.slice(0, branch.start) + literal + expression.slice(branch.end);
   if (next.length > LIMITS.attrCharsMax) {
-    return { tag: 'refused', message: 'That would make the style attribute too long.' };
+    return { tag: 'refused', ...described('styleModel.inline.refusal.tooLong') };
   }
   // Written back, the branches read as before with the one text changed.
   const read = readStyleBranches(next);
   if (read.tag !== 'branches') {
-    return { tag: 'refused', message: 'That edit would break the style attribute’s code.' };
+    return { tag: 'refused', ...described('styleModel.inline.refusal.breaksCode') };
   }
   return { tag: 'written', expression: next };
 }
@@ -111,8 +119,21 @@ export function interpolationRanges(body: string): readonly { readonly from: num
   return ranges;
 }
 
-function unsupported(reason: string): StyleBranches {
-  return { tag: 'unsupported', reason };
+function unsupported(
+  key:
+    | 'styleModel.inline.reason.tooLongToEdit'
+    | 'styleModel.inline.reason.rendersNothing'
+    | 'styleModel.inline.reason.onlyChain'
+    | 'styleModel.inline.reason.fromProp'
+    | 'styleModel.inline.reason.unplaceable',
+): StyleBranches {
+  const reasonRef = messageRef(key);
+  return { tag: 'unsupported', reason: englishText(reasonRef), reasonRef };
+}
+
+// A branch's label: the English text next to the reference the panel translates.
+function branchLabel(labelRef: TypedMessageRef): Pick<StyleBranch, 'label' | 'labelRef'> {
+  return { label: englishText(labelRef), labelRef };
 }
 
 function editableResult(result: ConditionalResult): boolean {
@@ -132,7 +153,11 @@ function locateBranches(expression: string): StyleBranch[] | undefined {
       if (last === undefined) {
         return undefined;
       }
-      branches.push({ ...last, key: String(branches.length), label: previousTest === undefined ? 'always' : 'otherwise' });
+      branches.push({
+        ...last,
+        key: String(branches.length),
+        ...branchLabel(messageRef(previousTest === undefined ? 'styleModel.inline.branch.always' : 'styleModel.inline.branch.otherwise')),
+      });
       return branches;
     }
     const test = rest.slice(0, at.question).trim();
@@ -140,8 +165,14 @@ function locateBranches(expression: string): StyleBranch[] | undefined {
     if (value === undefined) {
       return undefined;
     }
-    const condition = whenSet(test.replace(/^\(([\s\S]*)\)$/, '$1'));
-    branches.push({ ...value, key: String(branches.length), label: branches.length === 0 ? `when ${condition}` : `otherwise (${condition})` });
+    const condition = test.replace(/^\(([\s\S]*)\)$/, '$1').trim();
+    const name = plainTestName(condition);
+    const first = branches.length === 0;
+    const labelRef =
+      name === undefined
+        ? messageRef(first ? 'styleModel.inline.branch.when' : 'styleModel.inline.branch.otherwiseWhen', { condition })
+        : messageRef(first ? 'styleModel.inline.branch.whenSet' : 'styleModel.inline.branch.otherwiseWhenSet', { name });
+    branches.push({ ...value, key: String(branches.length), ...branchLabel(labelRef) });
     previousTest = test;
     from += at.colon + 1;
   }
@@ -150,7 +181,7 @@ function locateBranches(expression: string): StyleBranch[] | undefined {
 
 // The one literal between `start` and `end` (spaces and redundant parentheses
 // around it allowed), or undefined when something else is there.
-function literalAt(expression: string, start: number, end: number): Omit<StyleBranch, 'key' | 'label'> | undefined {
+function literalAt(expression: string, start: number, end: number): Omit<StyleBranch, 'key' | 'label' | 'labelRef'> | undefined {
   let from = start;
   let to = end;
   for (let round = 0; round <= CONDITIONAL_LIMITS.parenthesesDepthMax; round += 1) {

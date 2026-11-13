@@ -280,8 +280,9 @@ test('Settings → Instructions lists, adds, refuses and removes hidden paths', 
   const rows = () => [...document.querySelectorAll('.instructions-hidden-row code')].map((code) => code.textContent);
   assert.deepEqual(rows(), ['docs/archive']);
   await type(byLabel('Path or pattern to hide'), '../outside');
+  assert.match(document.querySelector('[role="alert"]').textContent, /A hidden path stays inside the project\./, 'the reason shows while typing');
+  assert.equal(document.querySelector('.instructions-hidden-add button').disabled, true, 'Hide waits for a valid path');
   await submit(document.querySelector('.instructions-hidden-add'));
-  assert.match(document.querySelector('[role="alert"]').textContent, /A hidden path stays inside the project\./);
   assert.equal(writes.length, 0, 'a refused path writes nothing');
   await type(byLabel('Path or pattern to hide'), '**/CHANGELOG.md');
   await submit(document.querySelector('.instructions-hidden-add'));
@@ -289,10 +290,24 @@ test('Settings → Instructions lists, adds, refuses and removes hidden paths', 
   await type(byLabel('Path or pattern to hide'), 'docs/archive/');
   await submit(document.querySelector('.instructions-hidden-add'));
   assert.match(document.querySelector('[role="alert"]').textContent, /docs\/archive is already hidden\./);
+  assert.equal(document.querySelector('.instructions-hidden-add button').disabled, true, 'a duplicate cannot be added');
   await click(byLabel('Show docs/archive again'));
   assert.deepEqual(rows(), ['**/CHANGELOG.md']);
   assert.deepEqual(hiddenPaths(), ['**/CHANGELOG.md']);
   assert.equal(writes.length, 2);
+  await unmount();
+});
+
+test('Settings → Instructions empty state offers quick-add chips that hide on click', async () => {
+  reset({});
+  settingsSource = undefined;
+  await mount(React.createElement(panel.InstructionsSettings, { projectPath: '/project' }));
+  assert.equal(document.querySelector('.settings-empty-state-title').textContent, 'Nothing hidden');
+  const chips = () => [...document.querySelectorAll('.instructions-hidden-chip')].map((chip) => chip.textContent);
+  assert.deepEqual(chips(), ['docs/archive', '**/CHANGELOG.md', 'docs/drafts']);
+  await click(document.querySelector('.instructions-hidden-chip'));
+  assert.deepEqual(hiddenPaths(), ['docs/archive']);
+  assert.equal(document.querySelector('.settings-empty-state') ?? undefined, undefined, 'the list replaces the empty state inside the same card');
   await unmount();
 });
 

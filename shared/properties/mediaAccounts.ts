@@ -15,6 +15,7 @@
 
 import { record, text } from '../core/boundary';
 import { assert } from '../core/assert';
+import { MediaInputError } from './mediaInputError';
 import { BUNNY_REGIONS, MEDIA_HOSTING_LIMITS, parseBunnyRegion, parseMediaURL, type BunnyRegion } from './mediaHosting';
 
 export const MEDIA_ACCOUNT_LIMITS = {
@@ -89,10 +90,10 @@ export type MediaAccountConnect =
 function parseAccountKey(input: unknown, what: string): string {
   const key = text(input).trim();
   if (key.length === 0 || key.length > MEDIA_ACCOUNT_LIMITS.accountKeyCharsMax) {
-    throw new Error(`Paste the ${what}.`);
+    throw new MediaInputError('assets.input.key.paste', { what });
   }
   if (!/^[\x21-\x7e]+$/.test(key)) {
-    throw new Error(`The ${what} is printable characters on one line.`);
+    throw new MediaInputError('assets.input.key.printable', { what });
   }
   assert(!/\s/.test(key), 'An account key never holds whitespace');
   return key;
@@ -113,7 +114,7 @@ export function parseMediaAccountKey(input: unknown): MediaAccountKey {
 function parseLabel(input: unknown): string {
   const label = text(input).trim();
   if (label.length === 0 || label.length > MEDIA_HOSTING_LIMITS.labelCharsMax) {
-    throw new Error(`A connection name is 1–${MEDIA_HOSTING_LIMITS.labelCharsMax} characters.`);
+    throw new MediaInputError('assets.input.label', { max: MEDIA_HOSTING_LIMITS.labelCharsMax });
   }
   return label;
 }
@@ -121,7 +122,7 @@ function parseLabel(input: unknown): string {
 function parseName(input: unknown, what: string): string {
   const name = text(input).trim();
   if (name.length === 0 || name.length > MEDIA_ACCOUNT_LIMITS.nameCharsMax || /[\x00-\x1f\x7f/\\]/.test(name)) {
-    throw new Error(`Choose a ${what}.`);
+    throw new MediaInputError('assets.input.choose', { what });
   }
   return name;
 }
@@ -132,7 +133,7 @@ export function parseMediaAccountConnect(input: unknown): MediaAccountConnect {
     case 'r2': {
       const accountId = text(value['accountId']);
       if (!/^[a-f0-9]{32}$/.test(accountId)) {
-        throw new Error('Choose a Cloudflare account.');
+        throw new MediaInputError('assets.input.chooseAccount');
       }
       return {
         provider: 'r2',

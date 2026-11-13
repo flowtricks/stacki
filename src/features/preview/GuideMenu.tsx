@@ -1,4 +1,6 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { Translator } from '../../lib/i18n/localeContext';
 import type { GuidePersistence } from './guidePersistence';
 import { useCallback, useRef, useState, type ReactElement } from 'react';
 import { GuideIcon } from '../../ui/Icons';
@@ -38,7 +40,6 @@ import './guide.css';
 const MENU_WIDTH_PX = 280;
 const MENU_EDGE_PX = 8;
 const { columnPickMax, columnPickMin } = GUIDE_LIMITS;
-const COUNT_RANGE = `A whole number from ${columnPickMin} to ${columnPickMax}.`;
 const COUNT_SPAN = `${columnPickMin}–${columnPickMax}`;
 
 export interface GuideMenuProps {
@@ -53,10 +54,11 @@ export interface GuideMenuProps {
 }
 
 export function GuideMenu(props: GuideMenuProps) {
+  const translate = useTranslate();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [anchor, setAnchor] = useState<HTMLElement | undefined>(undefined);
   const close = useCallback(() => setAnchor(undefined), []);
-  const title = props.available ? 'Column guide — ⇧G' : 'Column guide — not shown in Canvas';
+  const title = props.available ? translate('preview.guide.tip') : translate('preview.guide.tipUnavailable');
   return (
     <div className="device-btns guide-btns">
       <button
@@ -64,7 +66,7 @@ export function GuideMenu(props: GuideMenuProps) {
         type="button"
         className={props.settings.visible && props.available ? 'on' : ''}
         data-tooltip={title}
-        aria-label="Column guide"
+        aria-label={translate('preview.guide.label')}
         aria-haspopup="dialog"
         aria-expanded={anchor !== undefined}
         disabled={!props.available}
@@ -73,7 +75,7 @@ export function GuideMenu(props: GuideMenuProps) {
         <GuideIcon size={13} />
       </button>
       {anchor !== undefined ? (
-        <LayerPopover anchorEl={anchor} ariaLabel="Column guide" span={menuSpan(anchor)} onClose={close}>
+        <LayerPopover anchorEl={anchor} ariaLabel={translate('preview.guide.label')} span={menuSpan(anchor)} onClose={close}>
           <GuideMenuRows {...props} />
         </LayerPopover>
       ) : undefined}
@@ -82,20 +84,21 @@ export function GuideMenu(props: GuideMenuProps) {
 }
 
 function GuideMenuRows({ settings, update, metrics, guide, persistence }: GuideMenuProps) {
+  const translate = useTranslate();
   // The menu is portaled outside the style panel, so style-panel-surface gives
   // its controls the panel's own button and field rules instead of the app-wide
   // ones (see styles.css).
   return (
     <div className="guide-menu style-panel-surface">
       {persistence?.problem && <ErrorToast message={persistence.problem} />}
-      <SwitchRow label="Guide" value={settings.visible} onChange={(visible) => update((previous) => ({ ...previous, visible }))} />
+      <SwitchRow label={translate('preview.guide.switch')} value={settings.visible} onChange={(visible) => update((previous) => ({ ...previous, visible }))} />
       <ColumnsRow settings={settings} update={update} metrics={metrics} />
       <ColorRow settings={settings} update={update} />
       <OpacityRow settings={settings} update={update} />
-      <SwitchRow label="Numbers" value={settings.numbers} onChange={(numbers) => update((previous) => ({ ...previous, numbers }))} />
+      <SwitchRow label={translate('preview.guide.numbers')} value={settings.numbers} onChange={(numbers) => update((previous) => ({ ...previous, numbers }))} />
       <div className="embed-editor_display-menu-divider" />
       <SizeRow
-        label="Margin"
+        label={translate('preview.guide.margin')}
         value={guide?.margin}
         setting={settings.margin}
         projectVariable={GUIDE_PROJECT_VARIABLES.margin}
@@ -103,7 +106,7 @@ function GuideMenuRows({ settings, update, metrics, guide, persistence }: GuideM
         onChange={(margin) => update((previous) => ({ ...previous, margin }))}
       />
       <SizeRow
-        label="Gutter"
+        label={translate('preview.guide.gutter')}
         value={guide?.gutter}
         setting={settings.gutter}
         projectVariable={GUIDE_PROJECT_VARIABLES.gutter}
@@ -111,7 +114,7 @@ function GuideMenuRows({ settings, update, metrics, guide, persistence }: GuideM
         onChange={(gutter) => update((previous) => ({ ...previous, gutter }))}
       />
       <SizeRow
-        label="Max width"
+        label={translate('preview.guide.widthMax')}
         value={guide?.widthMax}
         setting={settings.widthMax}
         projectVariable={GUIDE_PROJECT_VARIABLES.widthMax}
@@ -126,6 +129,7 @@ function GuideMenuRows({ settings, update, metrics, guide, persistence }: GuideM
 // Show the automatic binding only when it supplies a usable count, so the
 // field describes the overlay even on projects without layout variables.
 function ColumnsRow({ settings, update, metrics }: Pick<GuideMenuProps, 'settings' | 'update' | 'metrics'>) {
+  const translate = useTranslate();
   const reset = (): void => update((previous) => ({ ...previous, columns: GUIDE_DEFAULTS.columns }));
   const commit = (text: string): void => {
     if (text.trim() === '') {
@@ -140,13 +144,13 @@ function ColumnsRow({ settings, update, metrics }: Pick<GuideMenuProps, 'setting
   const changed = settings.columns.kind !== 'automatic';
   return (
     <div className="embed-editor_size-row">
-      <ResetLabel label="Columns" changed={changed} onReset={reset} />
+      <ResetLabel label={translate('preview.guide.columns')} changed={changed} onReset={reset} />
       <div className="embed-editor_field">
         <GuideField
           value={guideColumnText(settings.columns, metrics)}
-          ariaLabel="Column count"
-          title={`${COUNT_RANGE} Or connect a project variable.`}
-          variables="Connect the column count to a variable"
+          ariaLabel={translate('preview.guide.columnCount')}
+          title={translate('preview.guide.countRange', { minimum: columnPickMin, maximum: columnPickMax })}
+          variables={translate('preview.guide.connectCount')}
           variableProperty="column-count"
           onCommit={commit}
         />
@@ -156,6 +160,7 @@ function ColumnsRow({ settings, update, metrics }: Pick<GuideMenuProps, 'setting
 }
 
 function ColorRow({ settings, update }: Pick<GuideMenuProps, 'settings' | 'update'>) {
+  const translate = useTranslate();
   const commit = (text: string): void => {
     const color = parseGuideColor(text);
     if (color !== undefined) {
@@ -165,24 +170,25 @@ function ColorRow({ settings, update }: Pick<GuideMenuProps, 'settings' | 'updat
   return (
     <div className="embed-editor_size-row">
       <ResetLabel
-        label="Color"
+        label={translate('preview.guide.color')}
         changed={settings.color !== GUIDE_DEFAULTS.color}
         onReset={() => update((previous) => ({ ...previous, color: GUIDE_DEFAULTS.color }))}
       />
       <div className="embed-editor_type-field">
-        <ColorSwatch value={settings.color} ariaLabel="Guide color" onChange={commit} />
-        <GuideField value={settings.color} ariaLabel="Guide color" onCommit={commit} />
+        <ColorSwatch value={settings.color} ariaLabel={translate('preview.guide.colorLabel')} onChange={commit} />
+        <GuideField value={settings.color} ariaLabel={translate('preview.guide.colorLabel')} onCommit={commit} />
       </div>
     </div>
   );
 }
 
 function OpacityRow({ settings, update }: Pick<GuideMenuProps, 'settings' | 'update'>) {
+  const translate = useTranslate();
   const commit = (value: number): void => update((previous) => ({ ...previous, opacity: clampGuideOpacity(value) }));
   return (
     <div className="embed-editor_size-row">
       <ResetLabel
-        label="Opacity"
+        label={translate('preview.guide.opacity')}
         changed={settings.opacity !== GUIDE_DEFAULTS.opacity}
         onReset={() => update((previous) => ({ ...previous, opacity: GUIDE_DEFAULTS.opacity }))}
       />
@@ -192,14 +198,14 @@ function OpacityRow({ settings, update }: Pick<GuideMenuProps, 'settings' | 'upd
           min={GUIDE_LIMITS.opacityMin}
           max={GUIDE_LIMITS.opacityMax}
           step={GUIDE_LIMITS.opacityStep}
-          ariaLabel="Guide opacity"
+          ariaLabel={translate('preview.guide.opacityLabel')}
           onInput={commit}
           onCommit={commit}
         />
         <div className="embed-editor_field embed-editor_grad-num embed-editor_opacity-num">
           <GuideField
             value={String(settings.opacity)}
-            ariaLabel="Guide opacity"
+            ariaLabel={translate('preview.guide.opacityLabel')}
             inputMode="decimal"
             onCommit={(text) => {
               const value = Number.parseFloat(text);
@@ -225,12 +231,13 @@ function ResetLabel({ label, changed, onReset }: { readonly label: string; reado
 }
 
 function SwitchRow({ label, value, onChange }: { readonly label: string; readonly value: boolean; readonly onChange: (value: boolean) => void }) {
+  const translate = useTranslate();
   return (
     <div className="embed-editor_size-row">
       <span className="u-field-label embed-editor_size-label">{label}</span>
       <button type="button" className={`cms-toggle ${value ? 'on' : ''}`} aria-pressed={value} aria-label={label} onClick={() => onChange(!value)}>
         <span className="cms-toggle-knob" />
-        <span className="cms-toggle-label">{value ? 'On' : 'Off'}</span>
+        <span className="cms-toggle-label">{value ? translate('preview.guide.on') : translate('preview.guide.off')}</span>
       </button>
     </div>
   );
@@ -257,6 +264,7 @@ function SizeRow({
   readonly fallback: GuideLength;
   readonly onChange: (size: GuideSize | undefined) => void;
 }) {
+  const translate = useTranslate();
   const commit = (text: string): void => {
     if (text.trim() === '') {
       onChange(undefined);
@@ -274,8 +282,8 @@ function SizeRow({
         <GuideField
           value={sizeShown(value, setting, projectVariable, fallback)}
           ariaLabel={label}
-          title={sizeTitle(value, setting, projectVariable)}
-          variables={`Connect ${label} to a variable`}
+          title={sizeTitle(value, setting, projectVariable, translate)}
+          variables={translate('preview.guide.connectSize', { label })}
           onCommit={commit}
         />
       </div>
@@ -287,12 +295,13 @@ function SizeRow({
 // declare, so the field's text is not what the guide draws with. The column
 // variable must also hold a whole number.
 function GuideMenuNotes({ settings, guide, metrics }: Pick<GuideMenuProps, 'settings' | 'guide' | 'metrics'>) {
+  const translate = useTranslate();
   const missing = guide === undefined ? [] : missingVariables(settings, guide);
-  const countNotes = metrics === undefined ? [] : columnCountNotes(settings, metrics);
+  const countNotes = metrics === undefined ? [] : columnCountNotes(settings, metrics, translate);
   return (
     <>
       {missing.map((name) => (
-        <ErrorToast key={name} message={`${name} is not declared on this page, so its default is used.`} />
+        <ErrorToast key={name} message={translate('preview.guide.undeclared', { name })} />
       ))}
       {countNotes.map((note) => (
         <ErrorToast key={note} message={note} />
@@ -302,23 +311,23 @@ function GuideMenuNotes({ settings, guide, metrics }: Pick<GuideMenuProps, 'sett
 }
 
 // Automatic defaults need no warning; explain when an explicit connection falls back.
-function columnCountNotes(settings: GuideSettings, metrics: GuideMetrics): readonly string[] {
+function columnCountNotes(settings: GuideSettings, metrics: GuideMetrics, translate: Translator): readonly string[] {
   if (settings.columns.kind !== 'variable') {
     return [];
   }
   const name = settings.columns.name;
-  const note = columnCountNote(name, metrics.variableCounts[name]);
+  const note = columnCountNote(name, metrics.variableCounts[name], translate);
   return note === undefined ? [] : [note];
 }
 
-function columnCountNote(name: string, declared: number | undefined): string | undefined {
+function columnCountNote(name: string, declared: number | undefined, translate: Translator): string | undefined {
   if (declared === undefined) {
-    return `${name} is not declared on this page, or is not a whole number, so its default is ` + 'used.';
+    return translate('preview.guide.undeclaredCount', { name });
   }
   if (isGuideColumnPick(declared)) {
     return undefined;
   }
-  return `${name} is outside ${COUNT_SPAN}, so its default is used.`;
+  return translate('preview.guide.outside', { name, range: COUNT_SPAN });
 }
 
 // The panel's text field: follows its value while not focused, steps numbers
@@ -418,21 +427,23 @@ function sizeShown(value: GuideValue | undefined, setting: GuideSize | undefined
 
 // The field's tooltip: where the value comes from, what it is at this width,
 // and what the field takes.
-function sizeTitle(value: GuideValue | undefined, setting: GuideSize | undefined, projectVariable: string): string {
-  const accepts = 'A length (32px, 2rem) or a project variable (--name).';
+function sizeTitle(value: GuideValue | undefined, setting: GuideSize | undefined, projectVariable: string, translate: Translator): string {
   if (value === undefined) {
-    return accepts;
+    return translate('preview.guide.size.accepts');
   }
-  const px = `${Math.round(value.px)}px at this width`;
+  const px = Math.round(value.px);
   switch (value.source) {
     case 'project':
-      return `From the project's ${projectVariable}: ${px}.\n${accepts}`;
+      return translate('preview.guide.size.project', { variable: projectVariable, px });
     case 'variable':
-      return `${setting?.kind === 'variable' ? setting.name : 'Variable'}: ${px}.\n${accepts}`;
+      return translate('preview.guide.size.variable', {
+        name: setting?.kind === 'variable' ? setting.name : translate('preview.guide.size.variableFallback'),
+        px,
+      });
     case 'fixed':
-      return `${px}.\n${accepts}`;
+      return translate('preview.guide.size.fixed', { px });
     case 'default':
-      return `Default: ${px}.\n${accepts}`;
+      return translate('preview.guide.size.default', { px });
     default: {
       const exhaustive: never = value.source;
       return exhaustive;

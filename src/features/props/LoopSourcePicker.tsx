@@ -33,6 +33,9 @@ import { componentNameOf } from './dataPickerModel';
 import { RowPopup } from './LoopRows';
 import { pickerPaths, useBindOverrideOnPress } from './bindOverride';
 import { OverrideNote } from '../../ui/OverrideNote';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 
 /** The page's data, as the data picker reads it, for the Source picker. */
 export interface SourcePickerData {
@@ -83,6 +86,7 @@ export function SourcePicker(props: {
   readonly bound?: boolean;
   readonly onPick: (pick: SourcePick) => void;
 }) {
+  const translate = useTranslate();
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const newList = props.newList;
@@ -97,7 +101,7 @@ export function SourcePicker(props: {
   // A running app that answers `cms.bind` is asked first (docs/apps.md, "Overrides"); Alt-click skips it.
   const askApp = (): void =>
     override.ask(
-      { purpose: 'loop-source', current: props.current, paths: pickerPaths(sourceTree(props.catalog, props.data, sanity.samples)) },
+      { purpose: 'loop-source', current: props.current, paths: pickerPaths(sourceTree(props.catalog, props.data, sanity.samples, translate)) },
       {
         onPicked: (path) => {
           const pick = followed(pickOf(path), sanity.samples);
@@ -135,32 +139,32 @@ export function SourcePicker(props: {
       </button>
       <OverrideNote point="cms.bind" />
       {open && creating && newList !== undefined && (
-        <RowPopup anchor={anchor} heightPxMax={PICKER_HEIGHT_PX_MAX} label="New List property" onClose={() => setOpen(false)}>
+        <RowPopup anchor={anchor} heightPxMax={PICKER_HEIGHT_PX_MAX} label={translate('props.loop.source.newList')} onClose={() => setOpen(false)}>
           <NewPropForm host={newList.host} seed={newList.seed} onCancel={() => setCreating(false)} onCreated={() => setOpen(false)} />
         </RowPopup>
       )}
       {open && !creating && (
-        <RowPopup anchor={anchor} heightPxMax={PICKER_HEIGHT_PX_MAX} label="Source" onClose={() => setOpen(false)}>
+        <RowPopup anchor={anchor} heightPxMax={PICKER_HEIGHT_PX_MAX} label={translate('props.loop.source.title')} onClose={() => setOpen(false)}>
           <div className="loop-source-picker">
             <div className="loop-source-extras">
               {newList !== undefined && (
                 <button type="button" className="dp-new-prop" onClick={() => setCreating(true)}>
                   <PlusIcon size={11} />
-                  New List property
+                  {translate('props.loop.source.newList')}
                 </button>
               )}
               <button type="button" className="dp-row" onClick={() => choose({ kind: 'empty' })}>
                 <CloseIcon size={11} />
-                <span className="dp-key">None</span>
+                <span className="dp-key">{translate('props.loop.source.none')}</span>
               </button>
               <button type="button" className="dp-row" onClick={() => choose({ kind: 'list' })}>
                 <TextIcon size={11} />
-                <span className="dp-key">Custom list</span>
-                <span className="dp-preview">type the items</span>
+                <span className="dp-key">{translate('props.loop.source.customList')}</span>
+                <span className="dp-preview">{translate('props.loop.source.typeItems')}</span>
               </button>
             </div>
             <DataPicker
-              tree={sourceTree(props.catalog, props.data, sanity.samples)}
+              tree={sourceTree(props.catalog, props.data, sanity.samples, translate)}
               current={props.current}
               footer={false}
               sources="open"
@@ -260,11 +264,13 @@ export function sourceTree(
   catalog: LoopCatalog | undefined,
   data: SourcePickerData | undefined,
   sanitySamples: Readonly<Record<string, unknown>>,
+  translate: Translator = ENGLISH_TRANSLATE,
 ): readonly PickerNode[] {
   const collections: PickerNode[] = [];
   for (const collection of catalog?.collections ?? []) {
     const { source } = collection;
-    const preview = collection.count === undefined ? 'collection' : `${collection.count} items`;
+    const preview =
+      collection.count === undefined ? translate('props.loop.source.collection') : translate('props.loop.source.items', { count: collection.count });
     const path = sourcePath(source);
     const sample = source.kind === 'sanity' ? sanitySamples[source.collection] : data?.samples[source.collection];
     // An Astro entry keeps its fields under `data`; a Sanity document is its fields.

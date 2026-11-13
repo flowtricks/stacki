@@ -1,4 +1,6 @@
 import { ErrorToast } from '../../ui/ErrorToast';
+import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
+import type { DescribedTranslator, Translator } from '../../lib/i18n/localeContext';
 import { cmsTransport } from '../../ipc/editorEnvironment';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Data } from '../../../shared/core/boundary';
@@ -295,18 +297,20 @@ async function checkContent(
 
 function useFieldContext(projectPath: string, editor: ReturnType<typeof useContentEditor>) {
   const { entry, expanded, issues, setExpanded, state } = editor;
+  const translateDescribed = useTranslateDescribed();
+  const parserNote = state?.parserNote === undefined ? undefined : translateDescribed({ message: state.parserNote, messageRef: state.parserNoteRef });
   return useMemo<FieldContext>(
     () => ({
       projectPath,
       baseDir: entry ? directoryOf(entry.file) : '',
       parsed: Boolean(state?.parsed),
-      parserNote: state?.parserNote,
+      parserNote,
       expanded,
       expand: (key) => setExpanded((current) => new Set(current).add(key)),
       inFile: (path) => dataHasPath(entry?.data, path),
       issueAt: (path) => issueMessageAt(issues, path),
     }),
-    [entry, expanded, issues, projectPath, setExpanded, state?.parsed, state?.parserNote],
+    [entry, expanded, issues, parserNote, projectPath, setExpanded, state?.parsed],
   );
 }
 
@@ -338,6 +342,7 @@ interface EntryListProps {
 }
 
 function EntryList(props: EntryListProps) {
+  const translate = useTranslate();
   const filtered = useMemo(() => {
     const query = props.query.trim().toLowerCase();
     return props.entries.map((entry, index) => ({ entry, index })).filter(({ entry }) => !query || `${entry.title} ${entry.id}`.toLowerCase().includes(query));
@@ -350,7 +355,7 @@ function EntryList(props: EntryListProps) {
       </div>
       {props.entries.length > 7 && (
         <div className="cms-search">
-          <input value={props.query} placeholder="Search entries" onChange={(event) => props.onQuery(event.target.value)} />
+          <input value={props.query} placeholder={translate('contentUi.entry.search')} onChange={(event) => props.onQuery(event.target.value)} />
         </div>
       )}
       <div className="cms-item-list">
@@ -361,7 +366,7 @@ function EntryList(props: EntryListProps) {
           </div>
         ))}
         {props.entries.length === 0 && (
-          <div className="props-empty">{props.readOnly ? 'Nothing to show — this collection is built, not stored.' : 'No entries yet.'}</div>
+          <div className="props-empty">{props.readOnly ? translate('contentUi.entry.builtOnly') : translate('contentUi.entry.noneYet')}</div>
         )}
       </div>
     </div>
@@ -379,6 +384,7 @@ interface EntryDetailProps extends ContentViewProps, Editor {
 }
 
 function EntryDetail(props: EntryDetailProps) {
+  const translate = useTranslate();
   return (
     <div className="cms-detail">
       <DetailHeader {...props} />
@@ -388,26 +394,27 @@ function EntryDetail(props: EntryDetailProps) {
         <FormIssues issues={props.formIssues} />
         {props.entry && <EntryForm {...props} entry={props.entry} />}
         {props.entry?.hasBody && <BodyEditor {...props} entry={props.entry} />}
-        {!props.entry && !props.state.readOnly && <div className="props-empty">Select an entry to edit it.</div>}
+        {!props.entry && !props.state.readOnly && <div className="props-empty">{translate('contentUi.entry.select')}</div>}
       </div>
     </div>
   );
 }
 
 function DetailHeader(props: EntryDetailProps) {
+  const translate = useTranslate();
   return (
     <div className="cms-detail-head">
-      <button className="ghost cms-back" title="Close" onClick={props.onClose}>
+      <button className="ghost cms-back" title={translate('ui.close')} onClick={props.onClose}>
         <CloseIcon size={13} />
       </button>
       <span className="cms-detail-title">{props.entry ? props.entry.title : labelize(props.name)}</span>
       <span className={`cms-saved ${props.saved ? 'on' : ''}`}>
-        <CheckIcon size={11} /> Saved
+        <CheckIcon size={11} /> {translate('contentUi.entry.saved')}
       </span>
       {props.entry && !props.state.readOnly && (
         <button
           className="ghost content-id"
-          title="The id other entries point at"
+          title={translate('contentUi.entry.idTitle')}
           onClick={() => props.setRename({ to: props.entry?.id ?? '', plan: undefined, error: undefined })}
         >
           {props.entry.id}
@@ -419,24 +426,25 @@ function DetailHeader(props: EntryDetailProps) {
 }
 
 function EntryBanners({ state }: { readonly state: ContentEntries }) {
+  const translateDescribed = useTranslateDescribed();
   return (
     <>
       {state.readOnly && (
         <div className="content-banner">
           <HideIcon size={12} />
-          <span>{state.reason}</span>
+          <span>{translateDescribed({ message: state.reason ?? '', messageRef: state.reasonRef })}</span>
         </div>
       )}
       {state.parserNote && (
         <div className="content-banner soft">
           <HelpCircleIcon size={12} />
-          <span>{state.parserNote}</span>
+          <span>{translateDescribed({ message: state.parserNote, messageRef: state.parserNoteRef })}</span>
         </div>
       )}
       {state.idNote && (
         <div className="content-banner soft">
           <HelpCircleIcon size={12} />
-          <span>{state.idNote}</span>
+          <span>{translateDescribed({ message: state.idNote, messageRef: state.idNoteRef })}</span>
         </div>
       )}
       {state.collection.error && <ErrorToast message={state.collection.error} />}
@@ -452,10 +460,11 @@ function FormIssues({ issues }: { readonly issues: readonly WireValidationIssue[
 }
 
 function EntryForm(props: EntryDetailProps & { readonly entry: ContentEntry }) {
+  const translate = useTranslate();
   const fields = props.shape.freeform ? props.freeformFields : props.shape.fields;
   return (
     <div className="cms-card">
-      <h3>{props.shape.freeform ? 'Frontmatter' : 'Fields'}</h3>
+      <h3>{props.shape.freeform ? translate('contentUi.form.frontmatter') : translate('contentUi.form.fields')}</h3>
       {props.shape.union ? (
         <UnionField
           field={props.shape.union}
@@ -467,7 +476,7 @@ function EntryForm(props: EntryDetailProps & { readonly entry: ContentEntry }) {
       ) : (
         fields.map((field) => <RootField key={field.key} {...props} field={field} />)
       )}
-      {!props.shape.union && fields.length === 0 && <div className="props-empty">This collection has no fields.</div>}
+      {!props.shape.union && fields.length === 0 && <div className="props-empty">{translate('contentUi.collection.noFields')}</div>}
     </div>
   );
 }
@@ -495,10 +504,11 @@ function RootField(props: EntryDetailProps & { readonly field: FieldDescriptor }
 }
 
 function BodyEditor(props: EntryDetailProps & { readonly entry: ContentEntry }) {
+  const translate = useTranslate();
   return (
     <div className="cms-card">
-      <h3>Body</h3>
-      <div className="content-body-note">Markdown, written to the file exactly as it is typed here.</div>
+      <h3>{translate('contentUi.body.title')}</h3>
+      <div className="content-body-note">{translate('contentUi.body.note')}</div>
       <div className="content-body-editor">
         <CodeEditor key={props.entry.id} language="markdown" value={props.body ?? ''} onChange={(body: string) => props.change({ data: props.data, body })} />
       </div>
@@ -507,6 +517,7 @@ function BodyEditor(props: EntryDetailProps & { readonly entry: ContentEntry }) 
 }
 
 function RenameEditor(props: EntryDetailProps & { readonly entry: ContentEntry }) {
+  const translate = useTranslate();
   const rename = props.rename;
   if (!rename) {
     return undefined;
@@ -520,7 +531,7 @@ function RenameEditor(props: EntryDetailProps & { readonly entry: ContentEntry }
   return (
     <div className="content-rename">
       <div className="content-rename-row">
-        <label>Id</label>
+        <label>{translate('contentUi.entry.id')}</label>
         <input
           autoFocus
           value={rename.to}
@@ -528,10 +539,10 @@ function RenameEditor(props: EntryDetailProps & { readonly entry: ContentEntry }
           onChange={(event) => props.setRename({ to: event.target.value, plan: undefined, error: undefined })}
         />
         <button className="ghost" disabled={!rename.to.trim() || rename.to === props.entry.id} onClick={check}>
-          Check
+          {translate('contentUi.entry.rename.check')}
         </button>
         <button className="ghost" onClick={() => props.setRename(undefined)}>
-          Cancel
+          {translate('ui.cancel')}
         </button>
       </div>
       {rename.error && <ErrorToast message={rename.error} />}
@@ -557,42 +568,41 @@ async function executeRename(props: EntryDetailProps, rename: RenameState, entry
 }
 
 function RenamePlan({ plan, onRename }: { readonly plan: IpcResults['content:renamePlan']; readonly onRename: () => void }) {
+  const translate = useTranslate();
+  const translateDescribed = useTranslateDescribed();
   return (
     <div className="content-rename-plan">
-      <div>{moveDescription(plan.move)}</div>
-      <div>{pointerDescription(plan.pointers.length)}</div>
+      <div>{moveDescription(plan.move, translate, translateDescribed)}</div>
+      <div>{pointerDescription(plan.pointers.length, translate)}</div>
       {plan.pointers.slice(0, RENAME_POINTERS_SHOWN_MAX).map((pointer, index) => (
         <div key={index} className="content-pointer">
           {pointer.collection} › {pointer.entryTitle} › {pointer.path.join('.')}
         </div>
       ))}
-      {plan.pointers.length > RENAME_POINTERS_SHOWN_MAX && <div className="content-pointer">and {plan.pointers.length - RENAME_POINTERS_SHOWN_MAX} more</div>}
-      {plan.imageEdits.length > 0 && (
-        <div>
-          {plan.imageEdits.length} image path{plan.imageEdits.length === 1 ? '' : 's'} rewritten for the new folder.
-        </div>
+      {plan.pointers.length > RENAME_POINTERS_SHOWN_MAX && (
+        <div className="content-pointer">{translate('contentUi.entry.rename.pointersMore', { count: plan.pointers.length - RENAME_POINTERS_SHOWN_MAX })}</div>
       )}
+      {plan.imageEdits.length > 0 && <div>{translate('contentUi.entry.rename.imagePaths', { count: plan.imageEdits.length })}</div>}
       <button className="primary" onClick={onRename}>
-        Rename and update {plan.pointers.length} pointer{plan.pointers.length === 1 ? '' : 's'}
+        {translate('contentUi.entry.rename.submit', { count: plan.pointers.length })}
       </button>
     </div>
   );
 }
 
-function moveDescription(move: IpcResults['content:renamePlan']['move']): string {
+function moveDescription(move: IpcResults['content:renamePlan']['move'], translate: Translator, translateDescribed: DescribedTranslator): string {
   switch (move.kind) {
     case 'file':
-      return `The file becomes ${move.to}.`;
+      return translate('contentUi.entry.rename.moveFile', { path: move.to });
     case 'generated':
-      return move.note;
     case 'unknown':
-      return move.note;
+      return translateDescribed({ message: move.note, messageRef: move.noteRef });
     case 'key':
     case 'field':
-      return 'The id is written inside its data file.';
+      return translate('contentUi.entry.rename.moveInData');
   }
 }
 
-function pointerDescription(count: number): string {
-  return count === 0 ? 'Nothing else points at this entry.' : `${count} reference${count === 1 ? '' : 's'} will be updated:`;
+function pointerDescription(count: number, translate: Translator): string {
+  return count === 0 ? translate('contentUi.entry.rename.pointersNone') : translate('contentUi.entry.rename.pointers', { count });
 }

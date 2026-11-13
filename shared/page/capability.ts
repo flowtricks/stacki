@@ -1,6 +1,7 @@
 // What the visual editor may do with a projected node or attribute (plan §6).
 // A node the engine cannot edit safely says so, visibly, instead of falling
 // back to something that looks editable and writes somewhere else.
+// i18n-ignore-file: shared/page is a pure layer with no catalog; the English here is a diagnostic only (tests, logs), and the editor words capabilities from its own keys (src/editor/nodeCapability.ts).
 
 export const CAPABILITIES = [
   /** Visual intents may target it. */

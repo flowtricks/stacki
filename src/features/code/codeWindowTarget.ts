@@ -1,7 +1,7 @@
 import { assert } from '../../../shared/core/assert';
 import type { EditorNode } from '../../editor/pageView';
 import type { CodeEditorIndentation } from '../../ui/CodeEditor';
-import { codeIndentStyleFor } from '../../ui/codeEditorIndent';
+import { codeIndentStyleFor } from '../../ui/codeIndentStyle';
 
 export interface CodeWindowState {
   readonly kind?: 'file';
@@ -32,6 +32,7 @@ export const FRONTMATTER_SUBJECT: FrontmatterSubject = { id: 'frontmatter', kind
 // answer is `undefined`, and Enter is left unhandled.
 export function codeWindowFor(subject: CodeSubject): CodeWindowState | undefined {
   if (subject.kind === 'frontmatter') {
+    // i18n-ignore: `frontmatter` is the Astro term and stays English in every language (docs/i18n-playbook.md, glossary).
     return { targetId: 'frontmatter', title: 'Frontmatter', language: 'javascript' };
   }
   if (subject.kind === 'raw') {

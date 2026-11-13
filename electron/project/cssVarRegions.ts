@@ -8,6 +8,7 @@ import postcss from 'postcss';
 import type { Rule as PostcssRule, Root } from 'postcss';
 import path from 'path';
 import { assert } from '../../shared/core/assert';
+import { described, type Described, type MessageRef } from '../../shared/properties/i18n/messageRef';
 import { readAstroSheet, type StyleBlockWriting, type StyleRegion } from '../documents/astroStyleBlocks';
 import { CSS_VARIABLE_LIMITS, SKIPPED_DIRECTORIES, readDeclarations, toPosix, type Rule } from './cssVarRead';
 import { variableFiles as fs } from './variableWorkspace';
@@ -65,7 +66,7 @@ export function findAstroSources(projectPath: string): string[] {
 
 // A `<style>` in an expression is left out: whether it renders is decided at run
 // time, so listing it would state a value the page may never have.
-function unconditionalRegions(rel: string, text: string): { readonly regions: readonly StyleRegion[]; readonly unreadable: string | undefined } {
+function unconditionalRegions(rel: string, text: string): { readonly regions: readonly StyleRegion[]; readonly unreadable: Described | undefined } {
   const sheet = readAstroSheet(rel, text);
   return { regions: sheet.regions.filter((region) => !region.conditional), unreadable: sheet.unreadable };
 }
@@ -91,7 +92,11 @@ export function cssSections(file: string, text: string): readonly CssSection[] {
 }
 
 export type FoundRule =
-  { readonly ok: true; readonly rule: PostcssRule; readonly root: Root; readonly section: number } | { readonly ok: false; readonly error: string };
+  | { readonly ok: true; readonly rule: PostcssRule; readonly root: Root; readonly section: number }
+  | { readonly ok: false; readonly error: string; readonly errorRef?: MessageRef | undefined };
+
+// The literal tag the messages name, passed as a parameter so a message never carries markup the catalog would parse as a rich-text tag.
+const STYLE_TAG = '<style>';
 
 interface RuleQuery {
   readonly file: string;
@@ -138,10 +143,12 @@ export function findRule(text: string, { file, selector, declares, section }: Ru
   const candidates = declaring.length > 0 ? declaring : hits;
   const first = candidates[0];
   if (first === undefined) {
-    return { ok: false, error: `${selector} is no longer in ${file}.` };
+    const gone = described('variables.error.ruleGone', { selector, file });
+    return { ok: false, error: gone.message, errorRef: gone.messageRef };
   }
   if (candidates.length > 1) {
-    return { ok: false, error: `${selector} is in more than one <style> block of ${file}. Edit this one in the code.` };
+    const several = described('variables.error.ruleInSeveralBlocks', { selector, tag: STYLE_TAG, file });
+    return { ok: false, error: several.message, errorRef: several.messageRef };
   }
   return first;
 }
@@ -153,7 +160,7 @@ export function sectionAt(file: string, text: string, offset: number): number | 
 }
 
 /** Why `next` may not replace `text`: a write to an Astro file changes what is inside its `<style>` blocks and nothing else. */
-export function styleWriteProblem(file: string, text: string, next: string): string | undefined {
+export function styleWriteProblem(file: string, text: string, next: string): Described | undefined {
   if (!isAstroFile(file)) {
     return undefined;
   }
@@ -167,12 +174,12 @@ export function styleWriteProblem(file: string, text: string, next: string): str
     }
     return kept + source.slice(cursor);
   };
-  return outside(text) === outside(next) ? undefined : 'That would change the file outside its <style> block, so it was not saved.';
+  return outside(text) === outside(next) ? undefined : described('variables.error.outsideStyleBlock', { tag: STYLE_TAG });
 }
 
 export type AstroVariables =
   | { readonly kind: 'none' }
-  | { readonly kind: 'error'; readonly message: string }
+  | { readonly kind: 'error'; readonly message: string; readonly messageRef?: MessageRef | undefined }
   | { readonly kind: 'rules'; readonly sections: ReadonlyArray<{ readonly scope: VariableScope; readonly rules: readonly Rule[] }> };
 
 // Astro leaves these unhashed in a plain `<style>`, checked against its compiler:
@@ -208,7 +215,10 @@ export function readAstroVariables(rel: string, text: string): AstroVariables {
     try {
       rules = readDeclarations(blankOutside(text, region.start, region.start + region.text.length));
     } catch (error: unknown) {
-      return { kind: 'error', message: `The <style> block on line ${region.line}: ${error instanceof Error ? error.message : String(error)}` };
+      return {
+        kind: 'error',
+        ...described('variables.error.styleBlockLine', { tag: STYLE_TAG, line: region.line, detail: error instanceof Error ? error.message : String(error) }),
+      };
     }
     for (const reach of ['page', 'rendered', 'scoped'] as const) {
       const members = rules.filter((rule) => reachOf(rule, rel, written) === reach);
@@ -220,7 +230,7 @@ export function readAstroVariables(rel: string, text: string): AstroVariables {
   if (sections.length > 0) {
     return { kind: 'rules', sections };
   }
-  return unreadable === undefined ? { kind: 'none' } : { kind: 'error', message: unreadable };
+  return unreadable === undefined ? { kind: 'none' } : { kind: 'error', message: unreadable.message, messageRef: unreadable.messageRef };
 }
 
 /** The names `text` declares in its `<style>` blocks; none when they cannot be read. */

@@ -19,6 +19,8 @@
 // only has to match itself and a fixed one serves; the shared document, not a
 // checksum, is what orders concurrent writes.
 import { assert } from '../../../vendor/stacki/shared/core/assert';
+import { DescribedError } from '../../../vendor/stacki/shared/properties/describedError';
+import { described, type Described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 import { toDigest, toFilePath, toIntentId } from '../../../vendor/stacki/shared/core/brand';
 import { LIMITS } from '../../../vendor/stacki/shared/core/limits';
 import { toByteSpan, toByteString } from '../../../vendor/stacki/shared/core/span';
@@ -161,7 +163,7 @@ function planning(source: string, id: string) {
       }),
     );
     if (!result.ok) {
-      throw new Error(refusal(result.error));
+      throw new DescribedError(refusal(result.error));
     }
     return result.value.splices.map((splice) => ({
       start: offset(splice.range.start),
@@ -173,13 +175,13 @@ function planning(source: string, id: string) {
 }
 
 /** What the panel says when the planner will not write an attribute here. */
-function refusal(reason: string): string {
+function refusal(reason: string): Described {
   switch (reason) {
     case 'anchor-ambiguous':
-      return 'This attribute is written more than once. Edit it in Code.';
+      return described('settings.element.attr.ambiguous');
     case 'unsupported-operation':
-      return 'This attribute is code here. Edit it in Code.';
+      return described('settings.element.attr.code');
     default:
-      return `Cannot change this attribute safely: ${reason}`;
+      return described('settings.element.attr.unsafe', { reason });
   }
 }

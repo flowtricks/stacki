@@ -3,9 +3,13 @@ import { editVariables, hasVariableCommand } from './editorEnvironment';
 import type { PreloadBridge } from '../../shared/ipc/preloadApi';
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
 import { boolean, record, text } from '../../shared/core/boundary';
+import { parseOptionalMessageRef, type MessageRef } from '../../shared/core/i18n/messageReference';
+import { messageRef } from '../../shared/properties/i18n/messageRef';
 
 const RESTART = 'Stacki needs to be restarted before this can be used.';
-export type VariableEditResult = { readonly ok: false; readonly error: string } | { readonly ok: true; readonly css?: string };
+/** A refused edit: the English `error` plus, when the producer named the sentence, the reference the panel translates (`translateDescribed({ message: error, messageRef: errorRef })`). */
+export type VariableEditResult =
+  { readonly ok: false; readonly error: string; readonly errorRef?: MessageRef | undefined } | { readonly ok: true; readonly css?: string };
 
 // Preparing calls validates payloads outside the I/O catch. A bad program request
 // must remain loud; missing handlers and disk failures are expected operating errors.
@@ -64,13 +68,14 @@ export async function variableEdit<Name extends EditName>(
 ): Promise<VariableEditResult> {
   const invoke = edits[name](payload);
   if (!hasVariableCommand(name)) {
-    return { ok: false, error: RESTART };
+    return { ok: false, error: RESTART, errorRef: messageRef('variables.error.restart') };
   }
   let response: unknown;
   try {
     response = await invoke();
   } catch (error: unknown) {
-    return { ok: false, error: friendlyError(error) };
+    const friendly = friendlyError(error);
+    return friendly === RESTART ? { ok: false, error: friendly, errorRef: messageRef('variables.error.restart') } : { ok: false, error: friendly };
   }
   const value = record(response);
   if (name === 'readStyleFile') {
@@ -79,7 +84,10 @@ export async function variableEdit<Name extends EditName>(
   if (boolean(value['ok'])) {
     return { ok: true };
   }
-  return { ok: false, error: value['error'] === undefined ? '' : text(value['error']) };
+  const error = value['error'] === undefined ? '' : text(value['error']);
+  // A reference that fails to parse is dropped: the English beside it still shows.
+  const errorRef = parseOptionalMessageRef(value['errorRef'] ?? undefined);
+  return errorRef === undefined ? { ok: false, error } : { ok: false, error, errorRef };
 }
 
 export function friendlyError(error: unknown): string {

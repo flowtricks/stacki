@@ -188,5 +188,5 @@ function guideFromSource(source: string): GuideSettings {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'Could not save the project guide.';
+  return error instanceof Error ? error.message : 'Could not save the project guide.'; // i18n-ignore: stored fallback for a non-Error throw; every real failure carries the system's own message.
 }

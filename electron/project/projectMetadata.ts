@@ -8,6 +8,7 @@ import { err, ok, type Result } from '../../shared/core/result';
 import { METADATA_FILES, metadataSource, validateMetadata, type MetadataFile, type MetadataKind } from '../../shared/properties/projectMetadata';
 import { documentHost, describeWriteReport } from '../documents/documentWrites';
 import { readSource } from '../lib/mainLimits';
+import { translateMain } from '../lib/mainLocale';
 
 export function readProjectMetadata(root: string, kind: MetadataKind): Result<MetadataFile> {
   const target = metadataPath(root, kind);
@@ -42,7 +43,7 @@ export function writeProjectMetadata(
     return current;
   }
   if (current.value.source !== input.base) {
-    return err({ code: 'conflict', message: 'Project settings changed. Reload before saving.' });
+    return err({ code: 'conflict', message: translateMain('error.projectSettings.changed') });
   }
   try {
     fs.mkdirSync(path.dirname(target.value), { recursive: true });
@@ -69,7 +70,7 @@ export function writeProjectMetadata(
   if (saved.ok && saved.value.source !== input.source) {
     return err({
       code: 'write-race',
-      message: 'Project settings changed during save. Reload to inspect them.',
+      message: translateMain('error.projectSettings.changedDuringSave'),
     });
   }
   return saved;
@@ -85,7 +86,7 @@ function metadataPath(root: string, kind: MetadataKind): Result<string> {
         if (fs.lstatSync(candidate).isSymbolicLink()) {
           return err({
             code: 'invalid-path',
-            message: 'Project settings cannot be symbolic links.',
+            message: translateMain('error.projectSettings.symlink'),
           });
         }
       }
@@ -99,6 +100,6 @@ function metadataPath(root: string, kind: MetadataKind): Result<string> {
 function metadataFailure(error: unknown): Result<never> {
   return err({
     code: 'metadata',
-    message: error instanceof Error ? error.message : 'Could not access project settings.',
+    message: error instanceof Error ? error.message : translateMain('error.projectSettings.inaccessible'),
   });
 }

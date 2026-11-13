@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ok, err, type Result } from '../../../vendor/stacki/shared/core/result';
 import { STUDIO_PUBLISH_LIMITS as limits } from './publishLimits';
 import { publishFailure } from './publishFailure';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 export interface PublishInventory {
   readonly files: readonly string[];
@@ -22,7 +23,7 @@ export async function publishInventory(root: string, starts: readonly string[], 
   let directories = 0;
   for (let index = 0; index < pending.length; index++) {
     if (Date.now() > deadline) {
-      return err({ code: 'timeout', message: 'Publish inspection exceeded ten minutes.' });
+      return err({ code: 'timeout', ...described('publish.studio.error.inspectTimeout') });
     }
     const relative = pending[index];
     assert(relative !== undefined, 'Inventory cursor exists');
@@ -31,11 +32,11 @@ export async function publishInventory(root: string, starts: readonly string[], 
       return info;
     }
     if (info.value.isSymbolicLink()) {
-      return err({ code: 'link', message: 'Publish cannot include symbolic links: ' + relative });
+      return err({ code: 'link', ...described('publish.studio.error.symbolicLink', { path: relative }) });
     }
     if (info.value.isDirectory()) {
       if (++directories > limits.directoriesMax) {
-        return err({ code: 'directories', message: 'Publish exceeds 10,000 directories.' });
+        return err({ code: 'directories', ...described('publish.studio.error.directoryLimit') });
       }
       const entries = await inventoryDirectory(root, relative, deadline).then(ok, publishFailure);
       if (!entries.ok) {
@@ -45,7 +46,7 @@ export async function publishInventory(root: string, starts: readonly string[], 
         pending.push(entry);
       }
       if (pending.length > limits.filesMax + limits.directoriesMax) {
-        return err({ code: 'files', message: 'Publish exceeds the file/directory budget.' });
+        return err({ code: 'files', ...described('publish.studio.error.fileBudget') });
       }
     } else if (info.value.isFile()) {
       bytes += info.value.size;
@@ -53,11 +54,11 @@ export async function publishInventory(root: string, starts: readonly string[], 
       if (files.length > limits.filesMax || info.value.size > limits.fileBytesMax || bytes > bytesMax) {
         return err({
           code: 'size',
-          message: 'Publish exceeds its source, file count or 100 MiB file limit.',
+          ...described('publish.studio.error.sourceLimit'),
         });
       }
     } else {
-      return err({ code: 'file', message: 'Publish requires regular files: ' + relative });
+      return err({ code: 'file', ...described('publish.studio.error.regularFile', { path: relative }) });
     }
   }
   return ok({ files, bytes });
@@ -112,6 +113,6 @@ export async function publishDisk(root: string, requiredBytes: number): Promise<
     ? ok(undefined)
     : err({
         code: 'disk',
-        message: 'Not enough disk space for publishing. Use a larger Studio container and retry.',
+        ...described('publish.studio.error.diskLowPublishing'),
       });
 }

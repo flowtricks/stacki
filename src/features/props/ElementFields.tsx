@@ -2,6 +2,7 @@
 // and extra fields, and the settings group — tag, class, style, attributes
 // and slot (PropsPanel.tsx).
 
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { RichContext } from './RichContent';
 import { dataPickerPosition } from './dataPickerPosition';
 import { useState } from 'react';
@@ -24,6 +25,7 @@ import { assert } from '../../../shared/core/assert';
 import type { FieldFocus } from './fieldFocus';
 
 export function ElementContent({ state }: { readonly state: ElementState }) {
+  const translate = useTranslate();
   const draft = useCanvasTextDraft(state);
   const { node, loopContext, bindContext, onSetInline, showContentField, isSlot, contentPicker, setContentPicker, contentInsertRef } = state;
   const contentSet = (node.children?.length ?? 0) > 0;
@@ -32,7 +34,11 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
       {showContentField && (
         <div className="props-field" key="content">
           <label onClick={noLabelActivation}>
-            <ContentLabel active={contentSet} name={isSlot ? 'Fallback' : 'Content'} onReset={() => onSetInline([])} />
+            <ContentLabel
+              active={contentSet}
+              name={isSlot ? translate('props.element.fallback') : translate('props.element.content')}
+              onReset={() => onSetInline([])}
+            />
             {/* Text can hold data too — the same handle, the same picker,
                   dropping the same chip in at the caret. Without it, putting a
                   field into a sentence means knowing to type
@@ -50,6 +56,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
             <FieldDataPicker
               pos={contentPicker}
               bindContext={bindContext || loopContext}
+              // i18n-ignore: the label seeds a prop name (text), written as code.
               seed={{ fit: 'content', label: 'Text', value: plainContent(node.children) }}
               // A new prop lands where a picked one would: its words are the prop's default.
               onBindNew={(path) => {
@@ -72,7 +79,7 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
                 lineHeight: 1.5,
               }}
             >
-              Shown only when whatever uses this component passes nothing for the slot.
+              {translate('props.element.fallbackNote')}
             </div>
           )}
         </div>
@@ -82,12 +89,13 @@ export function ElementContent({ state }: { readonly state: ElementState }) {
 }
 
 function ContentLabel(props: { readonly active: boolean; readonly name: string; readonly onReset: () => void }) {
+  const translate = useTranslate();
   const [position, setPosition] = useState<FieldPosition>();
   return (
     <>
       <span
         className={`prop-label${props.active ? ' set' : ''}`}
-        title={props.active ? '⌥-click to reset to default' : undefined}
+        title={props.active ? translate('props.element.resetHint') : undefined}
         onClick={(event) => {
           event.preventDefault();
           if (!props.active) {
@@ -127,6 +135,7 @@ export function richContextProp(context: RichContext | undefined): {
 }
 
 export function ElementLooseText({ state }: { readonly state: ElementState }) {
+  const translate = useTranslate();
   const draft = useCanvasTextDraft(state);
   const { node, onSetContent, showLooseTextField, looseText } = state;
   return (
@@ -134,13 +143,13 @@ export function ElementLooseText({ state }: { readonly state: ElementState }) {
       {showLooseTextField && (
         <div className="props-field" key="loose-text">
           <label onClick={noLabelActivation}>
-            <ContentLabel active={!!looseText} name="Content" onReset={() => onSetContent('')} />
+            <ContentLabel active={!!looseText} name={translate('props.element.content')} onReset={() => onSetContent('')} />
           </label>
           <AutoTextarea
             key={node.id}
             minRows={1}
             value={looseText ? canvasDraftValue(looseText, draft) : ''}
-            placeholder="Text alongside the children below"
+            placeholder={translate('props.element.looseText')}
             onChange={(event) => onSetContent(event.target.value)}
           />
         </div>
@@ -242,13 +251,14 @@ export function ElementExtraFields({ state }: { readonly state: ElementState }) 
 }
 
 export function ElementSettingsHeader({ state }: { readonly state: ElementState }) {
+  const translate = useTranslate();
   const { settingsOpen, setSettingsOpen, hasSettings, settingsCount } = state;
   return (
     <>
       {hasSettings && (
         <div className={`props-group ${settingsOpen ? 'open' : ''}`}>
           <button type="button" className="props-group-head" aria-expanded={settingsOpen} onClick={() => setSettingsOpen((open) => !open)}>
-            <span className="props-group-name">Settings</span>
+            <span className="props-group-name">{translate('props.element.settings')}</span>
             {/* Something set in there is worth knowing about without opening
                   it — otherwise a class you gave the element looks lost. */}
             {!settingsOpen && settingsCount > 0 && <span className="props-group-count">{settingsCount}</span>}

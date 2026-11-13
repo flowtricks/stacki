@@ -69,7 +69,10 @@ function refusal(source, overrides) {
     assert.equal(result.ok, false, 'The rename is refused');
     assert.equal(read(), source, 'The component is untouched');
     assert.equal(readPage(), PAGE, 'The instances are untouched');
-    return result.error;
+    // The reference beside the English sentence is pinned in one place (the keys the editor words a rename with).
+    assert.equal(typeof result.error.messageRef?.key, 'string', 'The refusal carries a message reference');
+    const { messageRef: _messageRef, ...english } = result.error;
+    return english;
   });
 }
 

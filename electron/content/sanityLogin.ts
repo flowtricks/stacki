@@ -20,6 +20,8 @@ import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import { assert } from '../../shared/core/assert';
+import { DescribedError } from '../../shared/properties/describedError';
+import { described, type Described } from '../../shared/properties/i18n/messageRef';
 import { SANITY_LOGIN_TIMEOUT_MS, type SanityLoginRequest, type SanityLoginState, type SanityProjectChoice } from '../../shared/properties/cmsConnections';
 import type { CmsConnectionStore } from './cmsConnectionStore';
 import { SanityRequestError, createSanityEditorKey, sanityLoginURL, sanityLogout, sanityProjects, sanityTokenForSession } from './sanityApi';
@@ -89,7 +91,7 @@ export class SanityLogin {
       return this.start(projectRoot, request.id);
     }
     if (!current || current.id !== request.id) {
-      return { kind: 'failed', message: 'This Sanity sign-in is no longer running.' };
+      return { kind: 'failed', ...described('cmsBackend.sanity.signInGone') };
     }
     switch (request.action) {
       case 'status':
@@ -110,7 +112,7 @@ export class SanityLogin {
     const session = new Session(id, projectRoot);
     this.session = session;
     const server = http.createServer((request, response) => this.callback(session, request, response));
-    session.listen(server, () => session.end({ kind: 'failed', message: 'Sanity sign-in timed out.' }));
+    session.listen(server, () => session.end({ kind: 'failed', ...described('cmsBackend.sanity.signInTimedOut') }));
     server.on('error', (error) => this.fail(session, error));
     // Bound to localhost, not 127.0.0.1: Sanity accepts any http://localhost:<port> origin.
     server.listen(0, 'localhost', () => {
@@ -198,7 +200,7 @@ export class SanityLogin {
   }
 
   private fail(session: Session, error: unknown): void {
-    session.end({ kind: 'failed', message: failureMessage(error) });
+    session.end({ kind: 'failed', ...failureProblem(error) });
   }
 
   // Only the running sign-in moves on; a replaced one keeps its last state.
@@ -252,16 +254,16 @@ function sidOfURL(back: string | undefined): string | undefined {
   }
 }
 
-function failureMessage(error: unknown): string {
+function failureProblem(error: unknown): Described {
   if (error instanceof SanityRequestError && (error.status === 401 || error.status === 403)) {
-    return (
-      'Your role in this Sanity project cannot create API keys (Administrator or ' +
-      'Developer can). Ask an admin for one, then choose “Paste a Sanity key” ' +
-      'from the arrow beside “Log in with Sanity”.'
-    );
+    return described('cmsBackend.sanity.noKeyRole');
+  }
+  if (error instanceof DescribedError) {
+    return error.problem;
   }
   const message = error instanceof Error ? error.message : String(error);
-  return (message || 'Sanity sign-in failed.').slice(0, 900);
+  // Our own sentence for silence; anything the system or Sanity said stays as it was said.
+  return message.length > 0 ? { message: message.slice(0, 900) } : described('cmsBackend.sanity.signInFailed');
 }
 
 // The project and dataset the site itself reads, from its .env files, when one

@@ -202,6 +202,7 @@ export function fromCodexFields(fields: CodexFields): McpServerConfig | undefine
 function remoteHeaders(fields: CodexFields): readonly McpPair[] {
   const headers: McpPair[] = [];
   if (fields.bearerTokenEnvVar !== undefined) {
+    // i18n-ignore: HTTP header name, protocol text.
     headers.push({ name: 'Authorization', value: `Bearer \${${fields.bearerTokenEnvVar}}` });
   }
   headers.push(...fields.httpHeaders);

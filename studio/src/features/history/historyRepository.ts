@@ -11,9 +11,11 @@ import type { PublishConnection } from '../../shared/publishConnection';
 import type { Result } from '../../../vendor/stacki/shared/core/result';
 import type { HistoryLog } from '../../../vendor/stacki/src/features/history/historyBridge';
 import { publishGit, type PublishGit } from '../publishing/publishGit';
+import { published } from '../publishing/publishFailure';
 import { SerialQueue } from '../../shared/serialQueue';
 import { string } from '../../shared/validation';
 import { parseHistoryInfo, type HistoryInfo } from './historyContract';
+import { ReferencedError } from '../../shared/referencedError';
 
 // History has its own queue and private object store. Fetching Git must never block
 // collaborative saves, change the checkout, or retain installation credentials on disk.
@@ -86,7 +88,7 @@ export class HistoryRepository {
       const git = this.runner(snapshot.directory, connection.token);
       const reachable = await git(this.root, ['branch', '--contains', historyHash(request.commit), '--format=%(refname)']);
       if (!reachable.stdout) {
-        throw new Error('This commit is no longer available in the fetched history.');
+        throw new ReferencedError('git.studio.historyCommitGone');
       }
       return readCommitDiff(git, { ...request, projectPath: this.root });
     });
@@ -100,7 +102,7 @@ export class HistoryRepository {
       const git = this.runner(snapshot.directory, connection.token);
       const reachable = await git(this.root, ['branch', '--contains', commit, '--format=%(refname)']);
       if (!reachable.stdout) {
-        throw new Error('This commit is no longer available in the fetched history.');
+        throw new ReferencedError('git.studio.historyCommitGone');
       }
       const result = await log(git, {
         projectPath: this.root,
@@ -132,11 +134,8 @@ export class HistoryRepository {
   }
 
   private async connection() {
-    const connection = await this.loadConnection();
-    if (!connection.ok) {
-      throw new Error(connection.error.message);
-    }
-    return connection.value;
+    // `published` keeps the reference to our own sentence ("Connect a GitHub repository…") for the browser to translate.
+    return published(await this.loadConnection());
   }
 
   private async refresh(requestedDepth = 31) {
@@ -216,7 +215,7 @@ async function fetchHistory(
   const remoteHeads = await run(['ls-remote', '--heads', remote]);
   const heads = remoteHeads.split('\n').filter(Boolean);
   if (heads.length > 64) {
-    throw new Error('This repository exceeds the 64-branch history limit.');
+    throw new ReferencedError('git.studio.historyBranchLimit', { max: 64 });
   }
   const branches = heads.map((entry) => {
     const [hash, reference] = entry.split('\t');
@@ -226,7 +225,7 @@ async function fetchHistory(
     return name.slice('refs/heads/'.length);
   });
   if (!branches.includes(connection.branch)) {
-    throw new Error('The configured branch is no longer available.');
+    throw new ReferencedError('git.studio.historyBranchGone');
   }
   await run(['config', 'remote.origin.url', remote]);
   await run(['config', 'remote.origin.promisor', 'true']);

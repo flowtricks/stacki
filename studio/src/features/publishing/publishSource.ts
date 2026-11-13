@@ -10,6 +10,7 @@ import { STUDIO_PUBLISH_LIMITS as limits } from './publishLimits';
 import { publishInventory, publishDisk } from './publishInventory';
 import { publishGit, publishGitEnvironment, publishObject, type PublishGit } from './publishGit';
 import { publishFailure } from './publishFailure';
+import { described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 import type { PublishedFile, PublishSource } from '../../shared/publishSource';
 export type { PublishedFile, PublishSource } from '../../shared/publishSource';
@@ -80,7 +81,7 @@ export async function publishTreeFiles(
     }
     bytes += parsed.value.size;
     if (bytes > limits.sourceBytesMax) {
-      return err({ code: 'size', message: 'Captured source exceeds 8 GiB.' });
+      return err({ code: 'size', ...described('publish.studio.error.sourceTooLarge') });
     }
     files.push(parsed.value);
     return ok(undefined);
@@ -92,7 +93,7 @@ export async function publishTreeFiles(
 export function parsePublishTreeFile(value: string): Result<PublishedFile> {
   const match = /^(100644|100755) blob ([a-f0-9]{40}) +([0-9]+)\t(.+)$/.exec(value);
   if (!match) {
-    return err({ code: 'tree', message: 'Publish requires regular files, not links.' });
+    return err({ code: 'tree', ...described('publish.studio.error.noLinks') });
   }
   const [, mode, sha, rawSize, file] = match;
   const size = Number(rawSize);
@@ -109,7 +110,7 @@ export function parsePublishTreeFile(value: string): Result<PublishedFile> {
     file.startsWith('/') ||
     /[\x00-\x1f\\]/.test(file)
   ) {
-    return err({ code: 'tree', message: 'Invalid publish file or file exceeds 100 MiB.' });
+    return err({ code: 'tree', ...described('publish.studio.error.fileInvalid') });
   }
   return ok({ path: file, sha, mode, size });
 }

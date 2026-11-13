@@ -6,6 +6,7 @@ import { ok, err, type Result } from '../../../vendor/stacki/shared/core/result'
 import { stopPublishProcess } from '../../../vendor/stacki/electron/project/publishCommands';
 import { STUDIO_PUBLISH_LIMITS as limits } from './publishLimits';
 import { finishGitInput } from './publishGitInput';
+import { described, type Described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 import type { PublishGit } from '../../shared/publishSource';
 export type { PublishGit } from '../../shared/publishSource';
@@ -41,8 +42,10 @@ export function publishGitEnvironment(context: PublishGit): NodeJS.ProcessEnv {
           GIT_CONFIG_VALUE_5: 'Authorization: Basic ' + Buffer.from('x-access-token:' + context.authorization).toString('base64'),
         }
       : {}),
+    // i18n-ignore: the Git author identity written into commits, not interface text.
     GIT_AUTHOR_NAME: 'Stacki Studio',
     GIT_AUTHOR_EMAIL: 'studio@stacki.local',
+    // i18n-ignore: the Git committer identity written into commits, not interface text.
     GIT_COMMITTER_NAME: 'Stacki Studio',
     GIT_COMMITTER_EMAIL: 'studio@stacki.local',
   };
@@ -85,48 +88,47 @@ function collectPublishCommand(
     const collect = (chunk: Buffer, destination: 'stdout' | 'stderr') => {
       bytes += chunk.length;
       if (bytes > limits.commandOutputBytesMax) {
-        monitor.stop('Git exceeded the 1 MiB output limit.');
+        monitor.stop(described('publish.studio.error.gitOutputLimit'));
       } else if (destination === 'stdout') {
         stdout += chunk.toString('utf8');
       }
     };
     child.stdout.on('data', (chunk: Buffer) => collect(chunk, 'stdout'));
     child.stderr.on('data', (chunk: Buffer) => collect(chunk, 'stderr'));
-    child.once('error', () => monitor.stop('Could not start Git. Install Git and retry.'));
+    child.once('error', () => monitor.stop(described('publish.studio.error.gitStartFailed')));
     child.once('close', (code) => {
       monitor.dispose();
-      const message = monitor.failure();
+      const problem = monitor.failure();
       resolve(
-        code === 0 && !message
+        code === 0 && problem === undefined
           ? ok(output === 'verbatim' ? stdout : stdout.trim())
           : err({
               code: 'git',
-              message:
-                command === 'push'
-                  ? 'Git push was not confirmed. Check GitHub before retrying.'
-                  : message || `Git ${command} failed. Check repository access and retry.`,
+              ...(command === 'push'
+                ? described('publish.studio.error.gitPushUnconfirmed')
+                : (problem ?? described('publish.studio.error.gitFailed', { command }))),
             }),
       );
     });
-    finishGitInput(child.stdin, input, () => monitor.stop('Could not write to Git.'));
+    finishGitInput(child.stdin, input, () => monitor.stop(described('publish.studio.error.gitWriteFailed')));
   });
 }
 
 function monitorPublishCommand(child: ChildProcessWithoutNullStreams, root: string) {
-  let message = '';
+  let problem: Described | undefined;
   let checking = false;
   let finished = false;
-  const stop = (failure: string) => {
+  const stop = (failure: Described) => {
     if (finished) {
       return;
     }
-    if (!message) {
-      message = failure;
+    if (problem === undefined) {
+      problem = failure;
     }
     stopPublishProcess(child.pid);
     child.kill('SIGKILL');
   };
-  const timeout = setTimeout(() => stop('Git exceeded the ten-minute time limit.'), limits.commandTimeoutMs);
+  const timeout = setTimeout(() => stop(described('publish.studio.error.gitTimeLimit')), limits.commandTimeoutMs);
   // At most one disk request is outstanding, even if the filesystem is slow.
   const timer = setInterval(() => {
     if (checking) {
@@ -137,10 +139,10 @@ function monitorPublishCommand(child: ChildProcessWithoutNullStreams, root: stri
       .then(
         (space) => {
           if (space.bavail * space.bsize < limits.diskReserveBytes) {
-            stop('Not enough disk space. Use a larger Studio container and retry.');
+            stop(described('publish.studio.error.diskLow'));
           }
         },
-        () => stop('Could not inspect available disk space.'),
+        () => stop(described('publish.studio.error.diskInspect')),
       )
       .finally(() => {
         checking = false;
@@ -148,7 +150,7 @@ function monitorPublishCommand(child: ChildProcessWithoutNullStreams, root: stri
   }, 1000);
   return {
     stop,
-    failure: () => message,
+    failure: () => problem,
     dispose: () => {
       finished = true;
       clearTimeout(timeout);
@@ -158,5 +160,5 @@ function monitorPublishCommand(child: ChildProcessWithoutNullStreams, root: stri
 }
 
 export function publishObject(value: string): Result<string> {
-  return /^[a-f0-9]{40}$/.test(value) ? ok(value) : err({ code: 'git-object', message: 'Git returned an invalid object identifier.' });
+  return /^[a-f0-9]{40}$/.test(value) ? ok(value) : err({ code: 'git-object', ...described('publish.git.error.invalidObject') });
 }

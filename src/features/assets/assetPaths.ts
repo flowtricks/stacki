@@ -5,6 +5,8 @@
 import type { AssetRequest } from '../../ui/assetPick';
 import type { AssetPanelEntry } from './assetPanelBridge';
 import { BOUNDARY_LIMITS } from '../../../shared/core/boundary';
+import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
+import type { Translator } from '../../../shared/properties/i18n/messageRef';
 
 export const PICK_HOME = 'src/assets';
 export const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|ico|bmp)$/i;
@@ -26,21 +28,21 @@ export function kindMatches(kind: AssetRequest['mediaKind'], name: string): bool
   }
 }
 
-export function pickPrompt(kind: AssetRequest['mediaKind']): string {
+export function pickPrompt(kind: AssetRequest['mediaKind'], translate: Translator = ENGLISH_TRANSLATE): string {
   switch (kind) {
     case 'image':
-      return 'Choose an image';
+      return translate('assets.pick.image');
     case 'video':
-      return 'Choose a video';
+      return translate('assets.pick.video');
     case 'audio':
-      return 'Choose an audio file';
+      return translate('assets.pick.audio');
     case 'asset':
-      return 'Choose a file';
+      return translate('assets.pick.file');
   }
 }
 
-export function buildCrumbs(cwd: string): readonly { readonly rel: string; readonly label: string }[] {
-  const crumbs = [{ rel: '', label: 'Assets' }];
+export function buildCrumbs(cwd: string, translate: Translator = ENGLISH_TRANSLATE): readonly { readonly rel: string; readonly label: string }[] {
+  const crumbs = [{ rel: '', label: translate('assets.title') }];
   const parts = cwd ? cwd.split('/') : [];
   if (parts.length > BOUNDARY_LIMITS.depthMax) {
     throw new Error('Asset breadcrumbs: depth limit exceeded');
@@ -67,9 +69,13 @@ export function isInPickHome(rel: string): boolean {
   return rel === PICK_HOME || rel.startsWith(`${PICK_HOME}/`);
 }
 
-export function assetTitle(file: AssetFile, mode: { readonly editable: boolean; readonly picking: boolean }): string {
+export function assetTitle(
+  file: AssetFile,
+  mode: { readonly editable: boolean; readonly picking: boolean },
+  translate: Translator = ENGLISH_TRANSLATE,
+): string {
   if (mode.picking) {
-    return `Use /${file.rel}`;
+    return translate('assets.tile.use', { path: `/${file.rel}` });
   }
-  return mode.editable ? `/${file.rel} — click to edit` : `/${file.rel}`;
+  return mode.editable ? translate('assets.tile.clickToEdit', { path: `/${file.rel}` }) : `/${file.rel}`;
 }

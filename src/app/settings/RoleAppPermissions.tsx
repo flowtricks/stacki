@@ -14,6 +14,8 @@
 //
 // Stacki enforces only its own access: these values are signals the app reads
 // through `stacki.role.get()` and `stacki.role.can()` and must respect itself.
+import InfoHint from '../../ui/InfoHint';
+import { useTranslate } from '../../lib/i18n/useTranslate';
 import { assert } from '../../../shared/core/assert';
 import { APP_LIMITS, type AppSummary } from '../../../shared/properties/apps';
 import { APP_ACCESS_ALL, can, configuredAppPermission, roleView, type ProjectRole } from '../../../shared/properties/projectRoles';
@@ -67,6 +69,7 @@ function AppGroup(props: {
   readonly access: AppAccessChange;
 }) {
   const { app, role, usable } = props;
+  const translate = useTranslate();
   const { id: appId, name, permissions } = app.manifest;
   const values = permissions.map((permission) => configuredAppPermission(role.appPermissions, appId, permission));
   assert(values.length === permissions.length, 'Every permission has a value');
@@ -76,15 +79,19 @@ function AppGroup(props: {
   // Under Every app with the Apps panel on, the app is on and fixed; without the panel, its switch grants the panel.
   const fixed = props.scope === 'every-app' && usable;
   return (
-    <div className={`app-role-group app-role-app-group ${usable ? '' : 'is-off'}`} aria-label={`${name} permissions`} role="group">
+    <div
+      className={`app-role-group app-role-app-group ${usable ? '' : 'is-off'}`}
+      aria-label={translate('settings.roles.apps.group', { app: name })}
+      role="group"
+    >
       <div className="app-role-group-heading">
         <h4 className="app-role-app-heading">
           <RoleAppIcon app={app} />
           <span>{name}</span>
         </h4>
-        <span className="app-role-group-all" title={fixed ? 'Every app is on' : undefined}>
+        <span className="app-role-group-all" title={fixed ? translate('settings.roles.apps.everyAppOn') : undefined}>
           <Switch
-            label={`${role.name} can use ${name}`}
+            label={translate('settings.roles.apps.canUse', { role: role.name, app: name })}
             checked={usable}
             disabled={!props.editable || fixed}
             onToggle={() => props.access(appId, usable ? 'withdraw' : 'grant')}
@@ -94,11 +101,11 @@ function AppGroup(props: {
       {permissions.length > 1 && (
         <div className="app-role-toggle app-role-app-permission">
           <span className="app-role-app-permission-text">
-            <span className="app-role-toggle-label">All permissions</span>
+            <span className="app-role-toggle-label">{translate('settings.roles.apps.all')}</span>
           </span>
           {/* Mixed reads as off: switching it on turns every permission of the app on, and the app with it. */}
           <Switch
-            label={`All ${name} permissions`}
+            label={translate('settings.roles.apps.allOf', { app: name })}
             checked={all}
             disabled={!props.editable}
             onToggle={() =>
@@ -116,8 +123,11 @@ function AppGroup(props: {
         return (
           <div key={permission.id} className="app-role-toggle app-role-app-permission">
             <span className="app-role-app-permission-text">
-              <span className="app-role-toggle-label">{permission.label}</span>
-              {permission.description !== undefined && <span className="app-role-app-permission-description">{permission.description}</span>}
+              <span className="app-role-toggle-label">
+                {permission.label}
+                {/* App-provided (manifest) text, kept whole in the tip and not translated. */}
+                {permission.description !== undefined && <InfoHint text={permission.description} />}
+              </span>
             </span>
             <Switch
               label={permission.label}

@@ -10,6 +10,7 @@ import { assert } from '../../../shared/core/assert';
 import { APP_LIMITS } from '../../../shared/properties/apps';
 import { MARKETPLACE_LIMITS } from '../../../shared/properties/appMarketplace';
 import { appAccessFeature } from '../../../shared/properties/appsRpc';
+import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
 import { can, type RoleView } from '../../../shared/properties/projectRoles';
 
 /** One installed app, as the palette lists it. */
@@ -67,7 +68,10 @@ export interface PaletteAppsSource {
 /** One row of the empty Apps tab: something to do instead of an app to open. */
 export interface PaletteAppsAction {
   readonly key: 'connect' | 'buildApp' | 'browse';
+  /** English label: logs and tests. */
   readonly label: string;
+  /** What the row draws, translated by the renderer. */
+  readonly labelKey: MessageKey;
   readonly run: () => void;
 }
 
@@ -79,12 +83,29 @@ export interface PaletteAppsAction {
  */
 export function paletteAppsActions(source: PaletteAppsSource, role: RoleView): readonly PaletteAppsAction[] {
   assert(canSeePaletteApps(role), 'paletteApps: only a role with the Apps panel has an Apps tab');
-  const browse: PaletteAppsAction = { key: 'browse', label: 'Open Apps panel', run: source.browse };
-  const buildApp: PaletteAppsAction = { key: 'buildApp', label: 'Build an app', run: source.buildApp ?? source.browse };
+  // The English labels are for logs and tests; the row draws `labelKey` in the active language.
+  // i18n-ignore: English beside its labelKey.
+  const browse: PaletteAppsAction = { key: 'browse', label: 'Open Apps panel', labelKey: 'palette.apps.action.browse', run: source.browse };
+  // i18n-ignore: English beside its labelKey.
+  const buildApp: PaletteAppsAction = {
+    key: 'buildApp',
+    // i18n-ignore: English beside its labelKey.
+    label: 'Build an app',
+    labelKey: 'palette.apps.action.buildApp',
+    run: source.buildApp ?? source.browse,
+  };
   if (!role.isAdmin) {
     return [buildApp, browse];
   }
-  const actions: readonly PaletteAppsAction[] = [{ key: 'connect', label: 'Load App From GitHub', run: source.connect ?? source.browse }, buildApp, browse];
+  // i18n-ignore: English beside its labelKey.
+  const connect: PaletteAppsAction = {
+    key: 'connect',
+    // i18n-ignore: English beside its labelKey.
+    label: 'Load App From GitHub',
+    labelKey: 'palette.apps.action.connect',
+    run: source.connect ?? source.browse,
+  };
+  const actions: readonly PaletteAppsAction[] = [connect, buildApp, browse];
   assert(actions.at(-1) === browse, 'paletteApps: the panel is the last way on');
   return actions;
 }

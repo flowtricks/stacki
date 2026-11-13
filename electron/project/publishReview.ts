@@ -7,6 +7,7 @@ import { runPublishGit, parsePublishObject, publishFilesystemFailure } from './p
 import type { PublishSource } from './publishSnapshot';
 import type { PublishRepository } from './publishCommit';
 import { openPublishReview } from './publishReviewRequest';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 export async function submitPublishReview(
   root: string,
@@ -17,7 +18,7 @@ export async function submitPublishReview(
   const match = /^(?:https:\/\/github\.com\/|git@github\.com:)([\w.-]+\/[\w.-]+?)(?:\.git)?$/.exec(repository.remote);
   const name = match?.[1];
   if (!name) {
-    return err({ code: 'review', message: 'Reviews require a GitHub repository.' });
+    return err({ code: 'review', ...described('error.publish.reviewNeedsRepository') });
   }
   const parent = await reviewBase(root, source, repository);
   if (!parent.ok) {
@@ -54,7 +55,7 @@ async function reviewBase(root: string, source: PublishSource, repository: Publi
   if (!parent.ok) {
     return err({
       code: 'review-base',
-      message: 'Push an initial base branch before opening a review.',
+      ...described('error.publish.reviewNeedsPush'),
     });
   }
   const fetched = await runPublishGit(root, ['fetch', '--no-tags', '--no-write-fetch-head', repository.remote, parent.value], options);
@@ -62,13 +63,13 @@ async function reviewBase(root: string, source: PublishSource, repository: Publi
     return fetched;
   }
   if (source.head === undefined) {
-    return err({ code: 'review-base', message: 'Reviews require a committed local base.' });
+    return err({ code: 'review-base', ...described('error.publish.reviewNeedsBase') });
   }
   const ancestor = await runPublishGit(root, ['merge-base', '--is-ancestor', parent.value, source.head]);
   if (!ancestor.ok) {
     return err({
       code: 'review-base',
-      message: 'Pull the latest base branch before submitting a review.',
+      ...described('error.publish.reviewNeedsPull'),
     });
   }
   const original = await runPublishGit(root, ['rev-parse', parent.value + '^{tree}']);
@@ -76,7 +77,7 @@ async function reviewBase(root: string, source: PublishSource, repository: Publi
     return original;
   }
   if (original.value.trim() === source.tree) {
-    return err({ code: 'review-empty', message: 'There are no changes to submit for review.' });
+    return err({ code: 'review-empty', ...described('error.publish.reviewNoChanges') });
   }
   return parent;
 }
@@ -104,9 +105,10 @@ async function reviewCommit(root: string, tree: string, parent: string, branch: 
       ? commit
       : err({
           code: 'review-changed',
-          message: 'The review branch was changed externally. Review it on GitHub before retrying.',
+          ...described('error.publish.reviewBranchChanged'),
         });
   }
+  // i18n-ignore: the commit message is written to the repository history, not shown in Stacki.
   const created = await runPublishGit(root, ['commit-tree', tree, '-p', parent, '-m', 'Submit website changes for review']);
   if (!created.ok) {
     return created;
@@ -122,7 +124,7 @@ async function reviewCommit(root: string, tree: string, parent: string, branch: 
 async function reviewCredential(root: string, environment: NodeJS.ProcessEnv): Promise<Result<string>> {
   const configured = environment['GH_TOKEN'];
   if (configured !== undefined) {
-    return /^[\w-]{10,512}$/.test(configured) ? ok(configured) : err({ code: 'review-auth', message: 'Invalid GitHub review credential.' });
+    return /^[\w-]{10,512}$/.test(configured) ? ok(configured) : err({ code: 'review-auth', ...described('error.publish.reviewInvalidCredential') });
   }
   const response = await run('gh', ['auth', 'token', '--hostname', 'github.com'], root, {
     env: environment,
@@ -132,5 +134,5 @@ async function reviewCredential(root: string, environment: NodeJS.ProcessEnv): P
     return response;
   }
   const token = environment['GH_TOKEN'] ?? response.value.stdout.trim();
-  return /^[\w-]{10,512}$/.test(token) ? ok(token) : err({ code: 'review-auth', message: 'Sign in to GitHub before opening a review.' });
+  return /^[\w-]{10,512}$/.test(token) ? ok(token) : err({ code: 'review-auth', ...described('error.publish.reviewNeedsSignIn') });
 }

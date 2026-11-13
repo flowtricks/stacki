@@ -1,6 +1,6 @@
 // The MCP tab's JSON view: the whole `.mcp.json` in the app's syntax-highlighted editor, for people who
 // would rather manage servers as code. The text is checked as it is typed (a syntax error with its line and
-// column, then each server's problems by path), and Save, also Cmd+S, stays off until the text is valid. A file
+// column, then each server's problems by path), and Save, also Cmd+S, stays off until the text is valid and changed; a valid text shows no status line, only a problem does. A file
 // that changed on disk while there are unsaved edits is not overwritten: the view says so and offers Reload.
 // Revert drops the edits. The text of the file reaches this view through `readMcpText` only, and a save is
 // checked again in main.
@@ -133,7 +133,7 @@ export default function McpJsonView({
           <span>{translate(failure)}</span>
         </div>
       )}
-      {issues.length > 0 ? (
+      {issues.length > 0 && (
         <ul className="mcp-issues" role="alert">
           {issues.slice(0, ISSUES_SHOWN_MAX).map((issue) => (
             <li key={`${issue.line}:${issue.column}:${issue.code}`}>
@@ -146,8 +146,6 @@ export default function McpJsonView({
             </li>
           ))}
         </ul>
-      ) : (
-        <p className="secrets-hint">{translate(dirty ? 'settings.mcp.json.dirty' : 'settings.mcp.json.valid')}</p>
       )}
       <div className="mcp-form-actions">
         <button type="button" className="ghost" disabled={!dirty} onClick={discard}>

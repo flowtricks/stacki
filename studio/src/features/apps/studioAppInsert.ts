@@ -27,7 +27,7 @@ export function planStudioInsert(
   assert(place.kind !== 'replace', 'Studio refuses a replacement before planning it');
   const parsed = parsePage(page.text, { locs: true });
   if (!parsed.editable) {
-    return { kind: 'refused', reason: 'The open page cannot be edited' };
+    return { kind: 'refused', reason: 'The open page cannot be edited' }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   const model = parsePageModel(parsed.model);
   const choice = item.kind === 'element' ? { type: 'element', tag: item.tag } : { type: 'component', name: item.name };
@@ -46,13 +46,13 @@ export function planStudioInsert(
   if (item.kind === 'element') {
     // The quick insert's own contract takes HTML's tags: a custom element is Desktop's alone for now.
     if (!HTML_TAGS.includes(item.tag)) {
-      return { kind: 'refused', reason: `Studio inserts HTML's own elements; <${item.tag}> works in Stacki Desktop` };
+      return { kind: 'refused', reason: `Studio inserts HTML's own elements; <${item.tag}> works in Stacki Desktop` }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
     }
     return { kind: 'action', action: { kind: 'insert-content', ...target, content: { type: 'element', tag: item.tag } } };
   }
   const component = project.components.find((entry) => entry.name === item.name);
   if (component === undefined) {
-    return { kind: 'refused', reason: `This project has no component named ${item.name}` };
+    return { kind: 'refused', reason: `This project has no component named ${item.name}` }; // i18n-ignore: refusal returned to the app over the SDK for its developer, never drawn by Stacki.
   }
   return {
     kind: 'action',

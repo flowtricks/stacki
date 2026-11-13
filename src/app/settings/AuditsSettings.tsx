@@ -20,29 +20,39 @@ import { ChevronRightIcon, CloseIcon } from '../../ui/Icons';
 import MoreMenu from '../../ui/MoreMenu';
 import { Skeleton, SkeletonRows } from '../../ui/Skeleton';
 import { Switch } from '../../ui/Switch';
+import { useTranslate } from '../../lib/i18n/useTranslate';
+import type { MessageKey } from '../../lib/i18n/localeContext';
+import InfoHint from '../../ui/InfoHint';
 import { AUDIT_ICONS } from '../../features/audits/AuditIcons';
 import { readAuditIgnores, saveAuditIgnores, type StoredIgnores } from '../../features/audits/auditsBridge';
 import { updateAuditState } from '../../features/audits/auditStore';
+import { useAuditText } from '../../features/audits/useAuditText';
 import '../../features/audits/audits.css';
 import './roles.css';
 
 /** Placeholder rows drawn while the audit file is first read: a few checks' worth. */
 const AUDIT_SETTINGS_SKELETON_ROWS = 6;
 
-const CATEGORY_LABELS: Readonly<Record<AuditCategory, string>> = {
-  accessibility: 'Accessibility',
-  seo: 'SEO and launch',
-  content: 'Placeholders',
-  tokens: 'Design tokens',
-  performance: 'Speed',
+// Keys, not words: the language can change while the screen is open, so the text is looked up where it is drawn.
+const CATEGORY_KEYS: Readonly<Record<AuditCategory, MessageKey>> = {
+  accessibility: 'settings.audits.category.accessibility',
+  seo: 'settings.audits.category.seo',
+  content: 'settings.audits.category.content',
+  tokens: 'settings.audits.category.tokens',
+  performance: 'settings.audits.category.performance',
 };
-const PRIORITY_LABELS: Readonly<Record<AuditSettingPriority, string>> = { high: 'High', medium: 'Medium', low: 'Low' };
+const PRIORITY_KEYS: Readonly<Record<AuditSettingPriority, MessageKey>> = {
+  high: 'settings.audits.priority.high',
+  medium: 'settings.audits.priority.medium',
+  low: 'settings.audits.priority.low',
+};
 
 type State = { readonly kind: 'loading' } | { readonly kind: 'error'; readonly message: string } | { readonly kind: 'ready'; readonly stored: StoredIgnores };
 
 const DEFAULT_SETTING: AuditCheckSetting = { enabled: true, priority: undefined };
 
 export function AuditsSettings({ projectPath }: { readonly projectPath: string }) {
+  const translate = useTranslate();
   const role = useCurrentRole();
   const editable = can(role, 'settings:audits') || can(role, 'panel:audits');
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -86,9 +96,6 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
   const tokens = (next: AuditTokenSettings): AuditFile => ({ ...file, tokens: next });
   return (
     <div className="audits-settings">
-      <p className="audits-settings-intro">
-        Shared with the team in <code className="audits-path-chip">.stacki/audits.json</code>
-      </p>
       {problem !== undefined && (
         <p className="audits-note" role="alert">
           {problem}
@@ -101,8 +108,8 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
         return (
           <Section
             key={category}
-            title={CATEGORY_LABELS[category]}
-            summary={`${on} of ${ids.length} on`}
+            title={translate(CATEGORY_KEYS[category])}
+            summary={translate('settings.audits.summary', { on, total: ids.length })}
             open={open.has(category)}
             onToggle={() => toggleSection(category)}
             all={{
@@ -118,11 +125,13 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
             </div>
             {category === 'content' && (
               <div className="audits-settings-subpanel">
-                <h5>Phrases</h5>
-                <p className="audits-settings-hint">A single word must be the whole text to count; several words may be part of it.</p>
+                <h5>
+                  {translate('settings.audits.phrases.title')}
+                  <InfoHint text={translate('settings.audits.phrases.info')} />
+                </h5>
                 <ChipList
                   items={file.placeholders}
-                  placeholder="Add a phrase"
+                  placeholder={translate('settings.audits.phrases.add')}
                   disabled={!editable}
                   onChange={(placeholders) => void save({ ...file, placeholders })}
                 />
@@ -130,41 +139,41 @@ export function AuditsSettings({ projectPath }: { readonly projectPath: string }
             )}
             {category === 'tokens' && (
               <div className="audits-settings-subpanel">
-                <h5>Rules</h5>
+                <h5>{translate('settings.audits.rules.title')}</h5>
                 <div className="app-role-group audits-settings-grid">
                   <PlainSwitch
-                    label="Raw colours"
-                    description="Hex, rgb() and hsl() outside variables"
+                    label={translate('settings.audits.rules.colors')}
+                    description={translate('settings.audits.rules.colorsInfo')}
                     checked={file.tokens.colors}
                     disabled={!editable}
                     onToggle={() => void save(tokens({ ...file.tokens, colors: !file.tokens.colors }))}
                   />
                   <PlainSwitch
-                    label="Flag px"
-                    description="Any px value outside a variable definition"
+                    label={translate('settings.audits.rules.pxLabel')}
+                    description={translate('settings.audits.rules.px')}
                     checked={file.tokens.px}
                     disabled={!editable}
                     onToggle={() => void save(tokens({ ...file.tokens, px: !file.tokens.px }))}
                   />
                   <PlainSwitch
-                    label="Flag rem outside variables"
-                    description="rem belongs in variable definitions only"
+                    label={translate('settings.audits.rules.remLabel')}
+                    description={translate('settings.audits.rules.remInfo')}
                     checked={file.tokens.remOutsideVariables}
                     disabled={!editable}
                     onToggle={() => void save(tokens({ ...file.tokens, remOutsideVariables: !file.tokens.remOutsideVariables }))}
                   />
                 </div>
-                <h5>Properties that need variables</h5>
+                <h5>{translate('settings.audits.properties.title')}</h5>
                 <ChipList
                   items={file.tokens.properties}
-                  placeholder="Add a property, or padding* for every padding"
+                  placeholder={translate('settings.audits.properties.add')}
                   disabled={!editable}
                   onChange={(properties) => void save(tokens({ ...file.tokens, properties }))}
                 />
-                <h5>Raw values that are fine</h5>
+                <h5>{translate('settings.audits.allowed.title')}</h5>
                 <ChipList
                   items={file.tokens.allowed}
-                  placeholder="Add a value, such as 1px"
+                  placeholder={translate('settings.audits.allowed.add')}
                   disabled={!editable}
                   onChange={(allowed) => void save(tokens({ ...file.tokens, allowed: allowed.map((item) => item.toLowerCase()) }))}
                 />
@@ -186,6 +195,7 @@ function Section(props: {
   readonly all: { readonly checked: boolean; readonly disabled: boolean; readonly onToggle: () => void } | undefined;
   readonly children: ReactNode;
 }) {
+  const translate = useTranslate();
   return (
     <section className="audits-settings-section" data-open={props.open ? 'true' : 'false'}>
       <div className="app-role-group-heading audits-settings-heading">
@@ -196,8 +206,13 @@ function Section(props: {
         </button>
         {props.all !== undefined && (
           <span className="app-role-group-all">
-            All
-            <Switch label={`All ${props.title}`} checked={props.all.checked} disabled={props.all.disabled} onToggle={props.all.onToggle} />
+            {translate('settings.audits.all')}
+            <Switch
+              label={translate('settings.audits.allLabel', { title: props.title })}
+              checked={props.all.checked}
+              disabled={props.all.disabled}
+              onToggle={props.all.onToggle}
+            />
           </span>
         )}
       </div>
@@ -213,6 +228,8 @@ function CheckRow(props: {
   readonly onChange: (next: AuditCheckSetting) => void;
 }) {
   const check = AUDIT_CHECKS[props.id];
+  const translate = useTranslate();
+  const auditText = useAuditText();
   const Icon = AUDIT_ICONS[props.id];
   const priority = props.setting.priority;
   return (
@@ -221,28 +238,27 @@ function CheckRow(props: {
         <Icon size={14} />
       </span>
       <span className="app-role-app-permission-text">
-        <span className="app-role-toggle-label" title={check.title}>
-          {check.title}
-          {priority !== undefined && <span className="audits-settings-priority">{PRIORITY_LABELS[priority]}</span>}
-        </span>
-        <span className="app-role-app-permission-description audits-settings-description" title={check.why}>
-          {check.why}
+        <span className="app-role-toggle-label" title={auditText.checkTitle(props.id)}>
+          {auditText.checkTitle(props.id)}
+          {/* Why the check matters is audit-definition text (shared/page/auditFindings.ts), shown as the (i) tip. */}
+          <InfoHint text={auditText.checkWhy(props.id)} />
+          {priority !== undefined && <span className="audits-settings-priority">{translate(PRIORITY_KEYS[priority])}</span>}
         </span>
       </span>
       <span className="audits-settings-controls">
         {props.setting.enabled && props.editable && (
           <MoreMenu
             className="audits-icon-button"
-            title={`${check.title} priority`}
+            title={translate('settings.audits.priority.title', { name: auditText.checkTitle(props.id) })}
             width={170}
             items={[
               {
-                label: `Default (${PRIORITY_LABELS[check.priority]})`,
+                label: translate('settings.audits.priority.default', { priority: translate(PRIORITY_KEYS[check.priority]) }),
                 current: priority === undefined,
                 onSelect: () => props.onChange({ ...props.setting, priority: undefined }),
               },
               ...(['high', 'medium', 'low'] as const).map((level) => ({
-                label: PRIORITY_LABELS[level],
+                label: translate(PRIORITY_KEYS[level]),
                 current: priority === level,
                 onSelect: () => props.onChange({ ...props.setting, priority: level }),
               })),
@@ -250,7 +266,7 @@ function CheckRow(props: {
           />
         )}
         <Switch
-          label={check.title}
+          label={auditText.checkTitle(props.id)}
           checked={props.setting.enabled}
           disabled={!props.editable}
           onToggle={() => props.onChange({ ...props.setting, enabled: !props.setting.enabled })}
@@ -287,6 +303,7 @@ function ChipList(props: {
   readonly disabled: boolean;
   readonly onChange: (items: readonly string[]) => void;
 }) {
+  const translate = useTranslate();
   const [draft, setDraft] = useState('');
   const add = (): void => {
     const value = draft.trim();
@@ -305,7 +322,7 @@ function ChipList(props: {
             <button
               type="button"
               className="audits-chip-remove"
-              aria-label={`Remove ${item}`}
+              aria-label={translate('settings.audits.chip.remove', { item })}
               onClick={() => props.onChange(props.items.filter((each) => each !== item))}
             >
               <CloseIcon size={10} />
