@@ -40,6 +40,18 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.2 the 1.4.0 changes, through the Settings hover probe
+
+- The same app as 1.4.0, which never became public. 1.4.1 fixed the Windows `ELECTRON_RUN_AS_NODE`
+  probe crash, then failed on Linux (the create-stacki publish's test run) and Windows: the three
+  "hovering the (i) shows a tooltip" checks in `renderer/app/settingsLayout` need pointer input that
+  xvfb and Windows hidden windows never deliver. They run on macOS only now, as in
+  `appUiKitTooltip`; the keyboard-focus check still runs everywhere. No app code changed. Everything
+  in the 1.4.0 and 1.4.1 entries ships here; Desktop, the Studio bundle and `create-stacki` are
+  aligned at 1.4.2 (`create-stacki` 1.4.0 is on npm; 1.4.1 was never published).
+- Lesson: a new probe that moves the pointer belongs in the macOS-only set from the start. Search the
+  new tests for `sendInputEvent` before tagging.
+
 ## 1.4.1 the 1.4.0 changes, through Windows
 
 - The same app as 1.4.0, which never became public: Linux, macOS and Studio's browser test passed,
