@@ -1,0 +1,223 @@
+// German `assets` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/assets';
+
+export const messages = {
+  'assets.batch.compressed': {
+    one: '{count} Bild komprimiert.',
+    other: '{count} Bilder komprimiert.',
+  },
+  'assets.batch.deleteBody': 'Verschiebt die ausgewählten Assets in den Papierkorb. Verweise auf der Website bleiben erhalten.',
+  'assets.batch.deleteTitle': {
+    one: '{count} Asset löschen?',
+    other: '{count} Assets löschen?',
+  },
+  'assets.batch.deleted': {
+    one: '{count} Asset gelöscht.',
+    other: '{count} Assets gelöscht.',
+  },
+  'assets.batch.failed': '{name}: {error}', // same
+  'assets.batch.limit': 'Wähle höchstens {count} Dateien aus.',
+  'assets.batch.progress': '{index} von {total} · {name}',
+  'assets.compress.action': 'Komprimieren',
+  'assets.compress.close': 'Komprimierungsdialog schließen',
+  'assets.compress.description':
+    'Skaliert auf 95 % und konvertiert mit 95 % Qualität. Verweise auf der Website werden automatisch aktualisiert, die Originale kommen danach in den Papierkorb.', // review
+  'assets.compress.format': 'Wähle ein Dateiformat',
+  'assets.compress.skipped': '{count} bereits in diesem Format werden übersprungen.',
+  'assets.compress.title': {
+    one: '{count} Bild komprimieren',
+    other: '{count} Bilder komprimieren',
+  },
+  'assets.connect.accessKeyId': 'Zugriffsschlüssel-ID',
+  'assets.connect.accountId': 'Konto-ID',
+  'assets.connect.accountIdPlaceholder': '32 Zeichen, aus der R2-Übersicht',
+  'assets.connect.action': 'Verbinden',
+  'assets.connect.addressing.path': 'Im Pfad (Endpunkt/Bucket)',
+  'assets.connect.addressing.virtual': 'Als Subdomain (Bucket.Endpunkt)', // review
+  'assets.connect.advanced': 'Erweitert: Schlüssel manuell eingeben',
+  'assets.connect.bucket': 'Bucket', // same
+  'assets.connect.bucketAddress': 'Bucket-Adresse',
+  'assets.connect.bucketUrlPlaceholder': 'Die öffentliche URL deines Buckets',
+  'assets.connect.bunny.button': 'Mit Bunny verbinden',
+  'assets.connect.bunny.choose': 'Speicherzone',
+  'assets.connect.bunny.explain':
+    'Füge den API-Schlüssel deines Kontos ein: Stacki findet damit deine Speicherzonen und behält nur das Speicherpasswort der gewählten Zone, verschlüsselt. Der Kontoschlüssel wird nicht gespeichert.', // review
+  'assets.connect.bunny.find': 'Speicherzonen suchen',
+  'assets.connect.bunny.keyLabel': 'API-Schlüssel des Bunny-Kontos',
+  'assets.connect.bunny.noZones': 'Dieses Konto hat noch keine Speicherzonen.',
+  'assets.connect.bunny.open': 'Meinen Bunny-API-Schlüssel öffnen',
+  'assets.connect.bunny.publicLabel': 'Pull-Zone-URL',
+  'assets.connect.checking': 'Verbindung wird geprüft …',
+  'assets.connect.connecting': 'Verbindung wird hergestellt …',
+  'assets.connect.edit': '{label} bearbeiten',
+  'assets.connect.endpoint': 'Endpunkt',
+  'assets.connect.endpointPlaceholder': 'Endpunkt-URL',
+  'assets.connect.falkenstein': 'Falkenstein (de, primär)',
+  'assets.connect.hint.bunny':
+    'Das Passwort der Speicherzone findest du unter Storage → deine Zone → FTP & API Access. Die Pull-Zone-URL ist die mit der Zone verbundene CDN-Adresse (Pull zones → deine Zone → Hostnames).', // review
+  'assets.connect.hint.r2':
+    'Erstelle ein R2-API-Token mit Object Read & Write für diesen Bucket (R2 → Manage API tokens). Die öffentliche URL ist die öffentliche Entwicklungs-URL des Buckets oder seine eigene Domain (R2 → Bucket → Settings).', // review
+  'assets.connect.hint.s3':
+    'Jeder Host mit S3-API: AWS S3, Backblaze B2, DigitalOcean Spaces, Wasabi, MinIO. Die öffentliche URL ist die Adresse, über die die Dateien des Buckets ausgeliefert werden.', // review
+  'assets.connect.host': 'Host', // same
+  'assets.connect.looking': 'Suche läuft …',
+  'assets.connect.name': 'Name', // same
+  'assets.connect.publicUrl': 'Öffentliche URL',
+  'assets.connect.pullZonePlaceholder': 'Die URL deiner Pull-Zone',
+  'assets.connect.r2.button': 'Mit Cloudflare verbinden',
+  'assets.connect.r2.choose': 'Bucket', // same
+  'assets.connect.r2.explain':
+    'Cloudflare öffnet sich mit einem vorausgefüllten R2-Token für Lesen und Schreiben. Erstelle es und füge es hier ein: Stacki findet damit deine Buckets und behält nur die Schlüssel dieses Buckets, verschlüsselt.', // review
+  'assets.connect.r2.find': 'Buckets suchen',
+  'assets.connect.r2.keyLabel': 'Cloudflare-API-Token',
+  'assets.connect.r2.noBuckets': 'Dieses Token erreicht keine R2-Buckets. Erstelle zuerst einen Bucket oder prüfe die Konten des Tokens.',
+  'assets.connect.r2.open': 'Token in Cloudflare erstellen',
+  'assets.connect.r2.publicLabel': 'Öffentliche Bucket-URL',
+  'assets.connect.region': 'Region', // same
+  'assets.connect.save': 'Verbindung speichern',
+  'assets.connect.secretAccessKey': 'Geheimer Zugriffsschlüssel',
+  'assets.connect.title': 'Medienspeicher verbinden',
+  'assets.connect.useAccount': 'Stattdessen das Konto verwenden',
+  'assets.connect.zonePassword': 'Passwort der Speicherzone',
+  'assets.delete.action': 'Löschen',
+  'assets.delete.body': 'Die Datei kommt in deinen Papierkorb. Alles auf der Website, das noch auf {path} verweist, findet sie nicht mehr.',
+  'assets.delete.title': '{name} löschen?',
+  'assets.drop.limit': 'Lege höchstens {count} Dateien auf einmal ab.',
+  'assets.empty': 'Leerer Ordner. Lege Dateien hier ab oder nutze die Upload-Schaltfläche.',
+  'assets.error.allowance': 'Asset-Limit erreicht: 200 Dateien oder 100 MB. Entferne oder optimiere Assets, bevor du hochlädst.',
+  'assets.error.changesNotRestored': 'Die Asset-Änderungen konnten nicht wiederhergestellt werden',
+  'assets.error.changesNotSaved': 'Die Asset-Änderungen konnten nicht gespeichert werden',
+  'assets.error.folderHidden': 'Ordner mit versteckten Dateien oder symbolischen Links können nicht verschoben werden',
+  'assets.error.folderOutside': '{file} liegt in keinem der Asset-Ordner des Projekts',
+  'assets.error.folderUnsupportedEntry': 'Der Ordner enthält einen nicht unterstützten Eintrag',
+  'assets.error.invalidFolderName': 'Ungültiger Ordnername',
+  'assets.error.invalidName': 'Ungültiger Name',
+  'assets.error.moveAcrossRoots':
+    'Beim Verschieben zwischen public/ und src/ ändert sich, wie die Datei referenziert wird (URL oder Import), daher müssten auch die Verweise angepasst werden. Das wird noch nicht unterstützt: Verschiebe die Datei außerhalb der App und passe die Verweise von Hand an.', // review
+  'assets.error.moveIntoItself': 'Ein Ordner kann nicht in sich selbst verschoben werden.',
+  'assets.error.moveMax': 'Verschiebe höchstens {count} Assets auf einmal',
+  'assets.error.moveMaxEntries': 'Verschiebe höchstens {count} Dateien und Ordner auf einmal',
+  'assets.error.nameTaken': 'Es gibt bereits etwas mit diesem Namen.',
+  'assets.error.onlyFilesDeleted': 'Nur Dateien können gelöscht werden',
+  'assets.error.replaceAudioNotFile': '{name} ist eine Audiodatei; ersetze die Datei ebenfalls durch eine Audiodatei, nicht durch eine Datei.',
+  'assets.error.replaceAudioNotImage': '{name} ist eine Audiodatei; ersetze die Datei ebenfalls durch eine Audiodatei, nicht durch ein Bild.',
+  'assets.error.replaceAudioNotVideo': '{name} ist eine Audiodatei; ersetze die Datei ebenfalls durch eine Audiodatei, nicht durch ein Video.',
+  'assets.error.replaceExtension': '{name} muss durch eine andere {extension}-Datei ersetzt werden.',
+  'assets.error.replaceExtensionless': '{name} muss durch eine andere Datei ohne Endung ersetzt werden.',
+  'assets.error.replaceFileNotAudio': '{name} ist eine Datei; ersetze die Datei ebenfalls durch eine Datei, nicht durch eine Audiodatei.',
+  'assets.error.replaceFileNotImage': '{name} ist eine Datei; ersetze die Datei ebenfalls durch eine Datei, nicht durch ein Bild.',
+  'assets.error.replaceFileNotVideo': '{name} ist eine Datei; ersetze die Datei ebenfalls durch eine Datei, nicht durch ein Video.',
+  'assets.error.replaceImageNotAudio': '{name} ist ein Bild; ersetze die Datei ebenfalls durch ein Bild, nicht durch eine Audiodatei.',
+  'assets.error.replaceImageNotFile': '{name} ist ein Bild; ersetze die Datei ebenfalls durch ein Bild, nicht durch eine Datei.',
+  'assets.error.replaceImageNotVideo': '{name} ist ein Bild; ersetze die Datei ebenfalls durch ein Bild, nicht durch ein Video.',
+  'assets.error.replaceVideoNotAudio': '{name} ist ein Video; ersetze die Datei ebenfalls durch ein Video, nicht durch eine Audiodatei.',
+  'assets.error.replaceVideoNotFile': '{name} ist ein Video; ersetze die Datei ebenfalls durch ein Video, nicht durch eine Datei.',
+  'assets.error.replaceVideoNotImage': '{name} ist ein Video; ersetze die Datei ebenfalls durch ein Video, nicht durch ein Bild.',
+  'assets.error.singleName': 'Verwende einen einzelnen Ordner- oder Dateinamen',
+  'assets.error.sourceCode': '{name} ist Quellcode, kein Asset; bearbeite es stattdessen im Projekt.',
+  'assets.error.storageRemoveFailed': 'Das zuvor gespeicherte Asset konnte nicht entfernt werden',
+  'assets.error.storageSaveFailed': 'Das Asset konnte nicht im dauerhaften Speicher gesichert werden',
+  'assets.error.tooBig': 'Das Asset überschreitet {size} MB',
+  'assets.error.tooLarge': 'Diese Datei ist zu groß, um sie in der App zu bearbeiten (über 5 MB).',
+  'assets.error.uploadMax': 'Lade höchstens {count} Dateien auf einmal hoch.',
+  'assets.folderName': 'Ordnername',
+  'assets.header.newFolder': 'Neuer Ordner',
+  'assets.header.openFirst': 'Öffne zuerst public/ oder src/',
+  'assets.header.select': 'Auswählen',
+  'assets.header.selectTitle': 'Assets auswählen, um sie gemeinsam zu komprimieren oder zu löschen',
+  'assets.header.upload': 'Assets hochladen',
+  'assets.hosted.deleteFileBody':
+    'Die Datei wird beim Host gelöscht, und alles, was darauf verweist, findet sie nicht mehr. Hosts haben keinen Papierkorb, das lässt sich nicht rückgängig machen.', // review
+  'assets.hosted.deleteFolderBody':
+    'Der Ordner und alles darin werden beim Host gelöscht. Hosts haben keinen Papierkorb, das lässt sich nicht rückgängig machen.',
+  'assets.hosted.edit': 'Verbindung bearbeiten …',
+  'assets.hosted.loading': 'Wird geladen …',
+  'assets.hosted.openLink': 'Link öffnen',
+  'assets.hosted.refresh': 'Aktualisieren',
+  'assets.hosted.remove': 'Verbindung entfernen',
+  'assets.hosted.rename': 'Umbenennen',
+  'assets.hosted.truncated': 'Dieser Ordner enthält mehr Dateien, als das Panel auflistet.',
+  'assets.hosted.tryAgain': 'Erneut versuchen',
+  'assets.hosted.upload': 'Medien hochladen',
+  'assets.input.accountId': 'Eine Cloudflare-Konto-ID besteht aus 32 Buchstaben und Ziffern (a–f, 0–9).',
+  'assets.input.bucket': 'Ein Bucket-Name besteht aus 3–63 Kleinbuchstaben, Ziffern, Punkten und Bindestrichen.',
+  'assets.input.choose': '{what}: Wähle einen Wert aus.',
+  'assets.input.chooseAccount': 'Wähle ein Cloudflare-Konto aus.',
+  'assets.input.key.paste': '{what}: Pflichtfeld.',
+  'assets.input.key.printable': '{what}: nur druckbare Zeichen in einer Zeile.', // review
+  'assets.input.label': 'Ein Verbindungsname hat 1–{max} Zeichen.',
+  'assets.input.region': 'Eine Region besteht aus Kleinbuchstaben, Ziffern und Bindestrichen, z. B. us-east-1.',
+  'assets.input.secret.bunny': 'Bunny Storage verwendet das Passwort seiner Speicherzone.',
+  'assets.input.secret.keyPair': 'Dieser Host verwendet eine Zugriffsschlüssel-ID und einen geheimen Zugriffsschlüssel.',
+  'assets.input.storageZone': 'Ein Speicherzonenname besteht aus Buchstaben, Ziffern und Bindestrichen.',
+  'assets.input.url.endpointPath': 'Der S3-Endpunkt ist nur die API-Adresse, ohne Pfad.',
+  'assets.input.url.enter': '{what}: Pflichtfeld.',
+  'assets.input.url.https': '{what}: muss https verwenden (http nur für localhost).', // review
+  'assets.input.url.login': '{what}: darf keine Anmeldedaten enthalten.',
+  'assets.input.url.notUrl': '{what}: keine gültige URL.',
+  'assets.input.url.queryFragment': '{what}: darf weder Parameter noch Fragment enthalten.', // review
+  'assets.input.what.accessKeyId': 'Zugriffsschlüssel-ID',
+  'assets.input.what.account': 'Konto', // review
+  'assets.input.what.bucket': 'Bucket',
+  'assets.input.what.bunnyKey': 'Bunny-API-Schlüssel',
+  'assets.input.what.cloudflareToken': 'Cloudflare-API-Token',
+  'assets.input.what.endpoint': 'S3-Endpunkt',
+  'assets.input.what.fileUrl': 'Datei-URL',
+  'assets.input.what.publicBucketUrl': 'Öffentliche Bucket-URL',
+  'assets.input.what.publicUrl': 'Öffentliche URL',
+  'assets.input.what.pullZoneUrl': 'Pull-Zone-URL',
+  'assets.input.what.secretAccessKey': 'Geheimer Zugriffsschlüssel',
+  'assets.input.what.storagePassword': 'Speicherpasswort',
+  'assets.input.what.storageZone': 'Speicherzone',
+  'assets.link.copied': 'Link kopiert',
+  'assets.link.copyFailed': 'Link konnte nicht kopiert werden: {error}',
+  'assets.listing.label': 'Assets',
+  'assets.missing.message': 'Dieses Projekt hat noch keinen Ordner {folder}.',
+  'assets.missing.upload': 'Asset hochladen',
+  'assets.pick.audio': 'Wähle eine Audiodatei',
+  'assets.pick.file': 'Wähle eine Datei',
+  'assets.pick.image': 'Wähle ein Bild',
+  'assets.pick.video': 'Wähle ein Video',
+  'assets.provider.s3': 'S3-kompatibel',
+  'assets.request.failed': 'Die Medienanfrage ist fehlgeschlagen.',
+  'assets.selection.all': 'Alle Assets',
+  'assets.selection.compress': 'Ausgewählte Bilder komprimieren',
+  'assets.selection.compressAria': 'Ausgewählte Assets komprimieren',
+  'assets.selection.compressImages': {
+    one: '{count} Bild',
+    other: '{count} Bilder',
+  },
+  'assets.selection.compressNone': 'Keine der ausgewählten Dateien lässt sich komprimieren: nur PNG-, JPEG-, WebP-, AVIF- und TIFF-Bilder.',
+  'assets.selection.compressSome': {
+    one: '{images} komprimieren; {count} weitere Datei wird übersprungen (nur PNG, JPEG, WebP, AVIF und TIFF lassen sich komprimieren)',
+    other: '{images} komprimieren; {count} weitere Dateien werden übersprungen (nur PNG, JPEG, WebP, AVIF und TIFF lassen sich komprimieren)',
+  }, // review
+  'assets.selection.count': '{selected} von {total}',
+  'assets.selection.delete': 'Ausgewählte Assets löschen',
+  'assets.selection.limit': 'Wähle bis zu {count} Dateien gleichzeitig',
+  'assets.selection.select': '{name} auswählen',
+  'assets.selection.selectAll': 'Alle Assets auswählen',
+  'assets.selection.selectAllTitle': 'Alle auswählen',
+  'assets.selection.wait': 'Warte, bis der aktuelle Stapel fertig ist',
+  'assets.source.addConnector': 'Connector hinzufügen',
+  'assets.source.project': 'Projekt',
+  'assets.source.removeBody':
+    'Stacki vergisst diesen Host und seine Schlüssel. Die Dateien beim Host bleiben unberührt, und Links darauf funktionieren weiter.',
+  'assets.source.removeTitle': '{label} entfernen?',
+  'assets.source.switch': 'Quelle wechseln',
+  'assets.tile.clickToEdit': '{path} — zum Bearbeiten klicken',
+  'assets.tile.compress': 'Komprimieren …',
+  'assets.tile.copyLink': 'Link kopieren',
+  'assets.tile.options': 'Optionen für {name}',
+  'assets.tile.replace': 'Ersetzen …',
+  'assets.tile.use': '{path} verwenden',
+  'assets.title': 'Assets', // same
+  'assets.toast.alreadyGone': 'Dieses Asset war bereits weg.',
+  'assets.toast.nameGone': '{name} war bereits weg.',
+  'assets.toast.replaced': '{name} ersetzt.',
+  'assets.undo.move': '{name} verschieben',
+  'assets.undo.rename': 'in {name} umbenennen',
+  'assets.upload.limit': 'Lade 1 bis {max} Dateien auf einmal hoch.',
+  'assets.upload.nothing': 'Es wurde nichts hochgeladen.',
+} as const satisfies CatalogOf<MessageKey>;

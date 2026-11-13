@@ -1,0 +1,45 @@
+// English `menu` strings: the source of truth for every key beginning `menu.` (docs/i18n.md). Alphabetical.
+// Each key is a stable dotted name; the other four locales hold exactly these keys, checked by the compiler and the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+
+export const messages = {
+  'menu.app.about': 'About Stacki',
+  'menu.app.hide': 'Hide Stacki',
+  'menu.app.hideOthers': 'Hide Others',
+  'menu.app.quit': 'Quit Stacki',
+  'menu.app.services': 'Services',
+  'menu.app.showAll': 'Show All',
+  'menu.edit.copy': 'Copy',
+  'menu.edit.copySelection': 'Copy Selection',
+  'menu.edit.cut': 'Cut',
+  'menu.edit.insertElement': 'Insert Element…',
+  'menu.edit.paste': 'Paste',
+  'menu.edit.redo': 'Redo',
+  'menu.edit.selectAll': 'Select All',
+  'menu.edit.title': 'Edit',
+  'menu.edit.undo': 'Undo',
+  'menu.file.checkForUpdates': 'Check for Updates…',
+  'menu.file.closeProject': 'Close Project',
+  'menu.file.closeWindow': 'Close Window',
+  'menu.file.openProject': 'Open Project…',
+  'menu.file.quit': 'Quit',
+  'menu.file.settings': 'Settings…',
+  'menu.file.title': 'File',
+  'menu.view.actualSize': 'Actual Size',
+  'menu.view.forceReload': 'Force Reload',
+  'menu.view.fullScreen': 'Toggle Full Screen',
+  'menu.view.reload': 'Reload',
+  'menu.view.reloadAllCode': 'Reload All Code',
+  'menu.view.reloadWindow': 'Reload Window Only',
+  'menu.view.title': 'View',
+  'menu.view.toggleDevTools': 'Toggle Developer Tools',
+  'menu.view.zoomIn': 'Zoom In',
+  'menu.view.zoomOut': 'Zoom Out',
+  'menu.window.bringAllToFront': 'Bring All to Front',
+  'menu.window.close': 'Close',
+  'menu.window.minimize': 'Minimize',
+  'menu.window.title': 'Window',
+  'menu.window.zoom': 'Zoom',
+} as const satisfies CatalogOf<`menu.${string}`>;
+
+export type MessageKey = keyof typeof messages;

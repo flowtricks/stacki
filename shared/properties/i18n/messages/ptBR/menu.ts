@@ -1,0 +1,43 @@
+// Brazilian Portuguese `menu` strings. Held to English's keys by the compiler and to its placeholders by the parity test.
+import type { CatalogOf } from '../../../../core/i18n/catalog';
+import type { MessageKey } from '../en/menu';
+
+export const messages = {
+  'menu.app.about': 'Sobre o Stacki',
+  'menu.app.hide': 'Ocultar o Stacki',
+  'menu.app.hideOthers': 'Ocultar outros',
+  'menu.app.quit': 'Encerrar o Stacki',
+  'menu.app.services': 'Serviços',
+  'menu.app.showAll': 'Mostrar tudo',
+  'menu.edit.copy': 'Copiar',
+  'menu.edit.copySelection': 'Copiar seleção',
+  'menu.edit.cut': 'Cortar',
+  'menu.edit.insertElement': 'Inserir elemento…',
+  'menu.edit.paste': 'Colar',
+  'menu.edit.redo': 'Refazer',
+  'menu.edit.selectAll': 'Selecionar tudo',
+  'menu.edit.title': 'Editar',
+  'menu.edit.undo': 'Desfazer',
+  'menu.file.checkForUpdates': 'Verificar atualizações…',
+  'menu.file.closeProject': 'Fechar projeto',
+  'menu.file.closeWindow': 'Fechar janela',
+  'menu.file.openProject': 'Abrir projeto…',
+  'menu.file.quit': 'Sair',
+  'menu.file.settings': 'Configurações…',
+  'menu.file.title': 'Arquivo',
+  'menu.view.actualSize': 'Tamanho real',
+  'menu.view.forceReload': 'Forçar recarga',
+  'menu.view.fullScreen': 'Tela inteira',
+  'menu.view.reload': 'Recarregar',
+  'menu.view.reloadAllCode': 'Recarregar todo o código',
+  'menu.view.reloadWindow': 'Recarregar só a janela',
+  'menu.view.title': 'Exibir',
+  'menu.view.toggleDevTools': 'Mostrar ou ocultar as ferramentas do desenvolvedor',
+  'menu.view.zoomIn': 'Ampliar',
+  'menu.view.zoomOut': 'Reduzir',
+  'menu.window.bringAllToFront': 'Trazer tudo para a frente',
+  'menu.window.close': 'Fechar',
+  'menu.window.minimize': 'Minimizar',
+  'menu.window.title': 'Janela',
+  'menu.window.zoom': 'Zoom', // same
+} as const satisfies CatalogOf<MessageKey>;

@@ -1,3 +1,4 @@
+// i18n-ignore-file: these are developer diagnostics for a malformed locale value (a boundary parse error), not interface text.
 // Locale boundaries (docs/i18n.md): what storage hands back, and what the browser or the
 // operating system reports, become a `Locale` here and nowhere else. Nothing is cast.
 import { assert } from '../assert';

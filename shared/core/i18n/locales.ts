@@ -1,3 +1,4 @@
+// i18n-ignore-file: a language is always named in its own language (Deutsch, Français), so these names are the same whatever language the interface is in.
 // The interface languages Stacki ships, and the one source of truth for them (docs/i18n.md).
 // A language is added here, in `messages/`, and in `loadCatalog.ts`; the catalog-parity test
 // then holds the new catalog to English's keys and placeholders.

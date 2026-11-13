@@ -1,3 +1,4 @@
+// i18n-ignore-file: these are error results of the i18n machinery itself (a malformed catalog or call), developer diagnostics that have no catalog to be worded from.
 // Message catalogs: the types, and the pure functions that turn a message and its
 // parameters into text (docs/i18n.md). Nothing here touches the DOM, storage or the network,
 // so Desktop's main process, the renderer and Studio share it as it is.
@@ -102,10 +103,13 @@ export function pluralCategory(locale: Locale, count: number): PluralCategory {
   return category;
 }
 
-/** A message's text: a plain template, or the plural form for `params.count`, falling back to `other` for a form the catalog lacks. */
-export function formatMessage(locale: Locale, value: MessageValue, params: MessageParams): Result<string> {
+/**
+ * The template to fill for a message: a plain string as it is, or the plural form for `params.count`, falling back to `other`
+ * for a form the catalog lacks. Shared by `formatMessage` and the rich-text translator, so both pick the same form.
+ */
+export function pluralTemplate(locale: Locale, value: MessageValue, params: MessageParams): Result<string> {
   if (typeof value === 'string') {
-    return formatTemplate(value, params);
+    return ok(value);
   }
   const count = Object.hasOwn(params, 'count') ? params['count'] : undefined;
   if (typeof count !== 'number') {
@@ -116,8 +120,14 @@ export function formatMessage(locale: Locale, value: MessageValue, params: Messa
   }
   const category = pluralCategory(locale, count);
   const form = category === 'other' ? value.other : (value[category] ?? value.other);
-  assert(typeof form === 'string', 'formatMessage: every plural has an other form');
-  return formatTemplate(form, params);
+  assert(typeof form === 'string', 'pluralTemplate: every plural has an other form');
+  return ok(form);
+}
+
+/** A message's text: the template `pluralTemplate` picks, with the parameters filled in. */
+export function formatMessage(locale: Locale, value: MessageValue, params: MessageParams): Result<string> {
+  const template = pluralTemplate(locale, value, params);
+  return template.ok ? formatTemplate(template.value, params) : template;
 }
 
 /** Every template in a message: one for a string, one per form for a plural. */
