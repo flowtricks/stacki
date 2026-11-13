@@ -22,7 +22,8 @@ jobs:
           echo "::add-mask::${jwt}"
           response="$(mktemp)"
           status="$(curl -sS -o "${response}" -w '%{http_code}' -X POST -H "Authorization: Bearer ${jwt}" https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/create-stacki)"
-          if [ "${status}" = "200" ]; then
+          # Why: npm answers 201 Created when it issues the publish token; 200 alone refused a working setup.
+          if [ "${status}" = "200" ] || [ "${status}" = "201" ]; then
             echo "npm accepted the trusted publisher for this workflow"
           else
             echo "npm refused the OIDC exchange (HTTP ${status}):"
