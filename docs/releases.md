@@ -40,6 +40,26 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.0 Full translations, Payload CMS, git branch chip and faster first open
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.0.
+- **Languages**: the catalogs for Spanish, French, German and Brazilian Portuguese now cover the
+  interface, not a part of it, and are split into one file per feature under
+  `shared/properties/i18n/messages/<locale>/`. Menus and many error messages follow the Language
+  setting. The policy scan's `layout-unique` rule exempts these folders because each language
+  repeats the same file names (approved by the maintainer).
+- **CMS**: a Payload provider (API-key or email login) browses and edits through the CMS panel and
+  saves drafts, tested against a real Payload server (`docs/cms-testing.md`). Custom CMS is still
+  not browsable, and Studio cannot browse Payload yet.
+- **Git**: a branch chip beside Publish opens the branch switcher, it updates when the AI creates
+  or switches branch, and publishing from a non-default branch asks first.
+- **First open**: a dark boot screen with a circular spinner paints before any script, and the
+  editor shell and Settings load lazily (`docs/startup.md`).
+- **AI**: chat settings are remembered, a session pool keeps agents warm for the first message,
+  prompt suggestions are turned off, a chat title can come from the agent, and a Settings option
+  snapshots before and after each AI change.
+- **Settings**: the Instructions tab has an empty state.
+
 ## 1.3.0 Settings, Secrets and MCP, audit ignores, languages and AI polish
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.3.0.
