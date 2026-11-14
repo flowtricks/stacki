@@ -1,0 +1,52 @@
+name: Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  # The fast lane: formatting, the repository policy scan, and both type-check
+  # programs finish in a few minutes and fail a pull request before the full
+  # suite does. docs/enforcement.md maps each check to the rule it holds.
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix studio ci
+      - run: npm run format:check
+      - run: npm run check:policy
+      - run: npm run typecheck
+
+  # The full gate on every platform the app ships on, plus Linux. Linux has no
+  # display, so the Electron probes run under a virtual one.
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --prefix studio ci
+      # Electron's Linux browser probes require Chromium's setuid sandbox
+      # helper to be owned by root; npm installs it with ordinary file modes.
+      - if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      - if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm test
+      - if: runner.os != 'Linux'
+        run: npm test

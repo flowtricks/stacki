@@ -43,12 +43,12 @@ jobs:
     if: github.event_name == 'push'
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/Library/Caches/electron
@@ -101,12 +101,12 @@ jobs:
     if: github.event_name == 'push'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~\AppData\Local\electron\Cache
@@ -133,12 +133,12 @@ jobs:
     # glibc/libstdc++ requirements also work on newer desktop distributions.
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
-      - uses: actions/cache@v4
+      - uses: actions/cache@v5
         with:
           path: |
             ~/.cache/electron
@@ -183,7 +183,7 @@ jobs:
           export APPDIR="$(realpath squashfs-root)"
           xvfb-run --auto-servernum node ../dist/scripts/release/linuxSmoke.js \
             squashfs-root/AppRun
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: linux-install-smoke
           path: |
@@ -195,10 +195,10 @@ jobs:
     needs: build-linux
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: linux-install-smoke
       # Exercise the installed sandbox under Ubuntu's newer AppArmor policy.
@@ -214,8 +214,8 @@ jobs:
     needs: [draft, build-linux]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -233,7 +233,7 @@ jobs:
           npm run test:browser
       - run: npm run release:bundle
         working-directory: studio
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: stacki-studio
           path: studio/release/*.json

@@ -2325,7 +2325,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: cd app && zip -r ../heat-map.zip .
       - run: gh release create "$GITHUB_REF_NAME" heat-map.zip
         env:

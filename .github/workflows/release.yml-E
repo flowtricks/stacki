@@ -1,0 +1,299 @@
+name: Release
+
+on:
+  # A manual run validates Linux installers without publishing a release.
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # Create the draft release once, before any job uploads to it. The three
+  # electron-builder jobs start together, and each creates a draft for the tag
+  # when it finds none: v1.2.2 got two drafts within a second, the installers
+  # landed in one and the `gh release upload` steps in the other, and publish
+  # refused (missing latest.yml). With the draft already present,
+  # electron-builder reuses it (it matches tag_name against `v<version>`) and
+  # `gh release upload "$TAG"` has a single target.
+  #
+  # The job itself always runs, and only its steps check the event. A skipped
+  # job would skip every dependant, and build-linux and build-studio must still
+  # run on a manual dispatch; a job that succeeds as a no-op there leaves the
+  # graph and the dispatch behaviour exactly as they were.
+  draft:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create the draft release if the tag has none
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        # The title is the version without the "v", as electron-builder names its
+        # drafts. Viewing first keeps a re-run of the workflow from failing.
+        run: |
+          if gh release view "$TAG" --repo flowtricks/stacki-releases >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+          else
+            gh release create "$TAG" --repo flowtricks/stacki-releases \
+              --draft --title "${TAG#v}" --notes ""
+          fi
+
+  build-mac:
+    needs: draft
+    if: github.event_name == 'push'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+      - run: npm ci
+      - run: npm --prefix studio ci
+      # The full gate, as on every platform: a release is never built from code that
+      # fails it. npm test builds the app as its first step.
+      - run: npm test
+      - name: Validate mac signing secrets
+        run: |
+          test -n "$MAC_CSC_LINK" || { echo "MAC_CSC_LINK is missing"; exit 1; }
+          test -n "$MAC_CSC_KEY_PASSWORD" || { echo "MAC_CSC_KEY_PASSWORD is missing"; exit 1; }
+        env:
+          MAC_CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          MAC_CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      - run: npx electron-builder --mac --publish always
+        env:
+          DEBUG: electron-osx-sign*,electron-builder
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          CSC_LINK: 'data:application/x-pkcs12;base64,${{ secrets.MAC_CSC_LINK }}'
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          EP_PRE_RELEASE: false
+          # Upload into a draft. A release that is visible before every
+          # platform has uploaded becomes "latest" with only some of its
+          # assets, and the other platform's updater 404s on its missing
+          # channel file. The publish job below flips the draft once all
+          # builds have landed.
+          EP_DRAFT: true
+
+      # Electron 44 requires macOS 13 (Darwin 22). The older updater already
+      # honors this field, so incompatible Macs keep their working installation.
+      - name: Set the macOS update requirement before publishing
+        run: |
+          node dist/scripts/release/macUpdateMetadata.js
+          gh release upload "$TAG" release/latest-mac.yml \
+            --repo flowtricks/stacki-releases --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+
+  build-windows:
+    needs: draft
+    if: github.event_name == 'push'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+      - run: npm ci
+      - run: npm --prefix studio ci
+      - run: npm test
+      # Windows signing is optional, matching the existing release channel.
+      # Electron-builder signs when credentials exist and otherwise builds unsigned.
+      - run: npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          EP_PRE_RELEASE: false
+          EP_DRAFT: true
+
+  build-linux:
+    needs: draft
+    # Build native modules on the oldest supported Ubuntu so the resulting
+    # glibc/libstdc++ requirements also work on newer desktop distributions.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-electron-
+      - run: npm ci
+      - run: npm --prefix studio ci
+      - name: Prepare Electron sandbox for tests
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      - run: xvfb-run --auto-servernum npm test
+      - run: >-
+          npx electron-builder --linux
+          --publish ${{ github.event_name == 'push' && 'always' || 'never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          EP_PRE_RELEASE: false
+          EP_DRAFT: true
+      - name: Install and test Debian package
+        # Refresh the package index first: the runner image's index named archive files that
+        # were gone, and the install failed to fetch them (1.1.2, 1.1.4). Retries ride out DNS.
+        run: |
+          sudo apt-get update || { sleep 15; sudo apt-get update; }
+          sudo apt-get install --yes ./release/*.deb || { sleep 15; sudo apt-get update && sudo apt-get install --yes ./release/*.deb; }
+          test "$(stat -c '%u:%g:%a' /opt/Stacki/chrome-sandbox)" = '0:0:4755'
+          test "$(cat /opt/Stacki/resources/package-type)" = deb
+          xvfb-run --auto-servernum node dist/scripts/release/linuxSmoke.js /opt/Stacki/stacki
+      - name: Test portable AppImage payload and launcher
+        run: |
+          cd release
+          for appimage in ./*.AppImage; do
+            "$appimage" --appimage-extract >/dev/null
+            export APPIMAGE="$(realpath "$appimage")"
+          done
+          test ! -e squashfs-root/resources/package-type
+          test -f squashfs-root/resources/app-update.yml
+          if grep -q -- --no-sandbox squashfs-root/*.desktop; then exit 1; fi
+          # Extraction bypasses the FUSE runtime that normally sets APPDIR.
+          export APPDIR="$(realpath squashfs-root)"
+          xvfb-run --auto-servernum node ../dist/scripts/release/linuxSmoke.js \
+            squashfs-root/AppRun
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-install-smoke
+          path: |
+            release/*.deb
+            dist/scripts/release/linuxSmoke.js
+          retention-days: 3
+
+  test-linux-install:
+    needs: build-linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-install-smoke
+      # Exercise the installed sandbox under Ubuntu's newer AppArmor policy.
+      # No global sysctl changes or sandbox-disabling launch flags are needed.
+      - name: Install and launch on Ubuntu 24.04
+        run: |
+          sudo apt-get update || { sleep 15; sudo apt-get update; }
+          sudo apt-get install --yes ./release/*.deb
+          test "$(stat -c '%u:%g:%a' /opt/Stacki/chrome-sandbox)" = '0:0:4755'
+          xvfb-run --auto-servernum node dist/scripts/release/linuxSmoke.js /opt/Stacki/stacki
+
+  build-studio:
+    needs: [draft, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: studio/package-lock.json
+      - run: npm --prefix studio ci
+      - run: npm --prefix studio/test/fixtures/site ci --ignore-scripts
+      - run: npx playwright install --with-deps chromium
+        working-directory: studio
+      - run: npm run verify
+        working-directory: studio
+      - name: Test Studio in the browser
+        working-directory: studio
+        run: |
+          node dist/cli.mjs dev test/fixtures/site --background
+          npm run test:browser
+      - run: npm run release:bundle
+        working-directory: studio
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stacki-studio
+          path: studio/release/*.json
+      - name: Upload Studio to the draft release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release upload "$TAG" "studio/release/stacki-studio-${TAG#v}.json" \
+            --repo flowtricks/stacki-releases --clobber
+      # The stacki.build demo is optional: a failure here must never hold back a
+      # release, so these assets stay out of the publish job's required list and
+      # the site keeps serving its last good copy.
+      - name: Upload the optional Studio demo
+        if: github.event_name == 'push'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          npm --prefix studio run release:demo
+          gh release upload "$TAG" studio/.studio/demo-release/upload/* \
+            --repo flowtricks/stacki-releases --clobber
+
+  # Publish only when every platform has uploaded and both Linux installs work.
+  publish:
+    if: github.event_name == 'push'
+    needs: [draft, build-mac, build-windows, build-linux, test-linux-install, build-studio]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all platforms uploaded, then publish
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          assets=$(gh release view "$TAG" --repo flowtricks/stacki-releases \
+            --json assets --jq '[.assets[].name] | join(" ")')
+          echo "assets: $assets"
+          for required in latest-mac.yml latest.yml latest-linux.yml \
+            "stacki-studio-${TAG#v}.json"; do
+            case " $assets " in
+              *" $required "*) ;;
+              *) echo "missing $required — refusing to publish"; exit 1 ;;
+            esac
+          done
+          for suffix in AppImage deb; do
+            case " $assets " in
+              *".$suffix "*) ;;
+              *) echo "missing Linux .$suffix package — refusing to publish"; exit 1 ;;
+            esac
+          done
+          gh release edit "$TAG" --repo flowtricks/stacki-releases --draft=false --latest
+
+      # stacki.build bakes its /demo from the newest public release, so it is
+      # rebuilt as soon as this one is public. Best effort: the site also checks
+      # once a day for a release newer than the one it was built from, so a token
+      # without access to the site repository only delays the update.
+      - name: Rebuild stacki.build from this release
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: gh workflow run deploy.yml --repo flowtricks/stacki-marketing-site --ref main
