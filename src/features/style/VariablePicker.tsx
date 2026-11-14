@@ -1062,10 +1062,14 @@ export function revealInList(element: HTMLElement): void {
   }
   const listRect = list.getBoundingClientRect();
   const itemRect = element.getBoundingClientRect();
+  // As in centreInList: while the popup is still scaling open, rects are in the scaled box and
+  // scrollTop is not. An arrow pressed in that window scrolled short, leaving the row's edge cut.
+  const scale = list.offsetHeight > 0 && listRect.height > 0 ? listRect.height / list.offsetHeight : 1;
+  assert(scale > 0, 'revealInList: the list has a positive scale');
   if (itemRect.top < listRect.top) {
-    list.scrollTop -= Math.ceil(listRect.top - itemRect.top);
+    list.scrollTop -= Math.ceil((listRect.top - itemRect.top) / scale);
   } else if (itemRect.bottom > listRect.bottom) {
-    list.scrollTop += Math.ceil(itemRect.bottom - listRect.bottom);
+    list.scrollTop += Math.ceil((itemRect.bottom - listRect.bottom) / scale);
   }
 }
 

@@ -131,25 +131,41 @@ const check = (what, condition, detail) => {
              if (await js("document.querySelector('.embed-editor_varpicker')?.dataset.popupPhase === 'open'")) break;
              await wait(50);
            }
-           await wait(100);
+           // The phase turns to 'open' when the scale starts to settle, not when it has: on a slow
+           // runner the box is still growing for a while. Wait, within a bound, until two reads of the
+           // search row's top, one frame apart, agree.
+           let lastTop = Number.NaN;
+           for (let tries = 0; tries < 80; tries += 1) {
+             const now = await js("document.querySelector('.embed-editor_varpicker-searchrow')?.getBoundingClientRect().top ?? -1");
+             if (now === lastTop) break;
+             lastTop = now;
+             await wait(60);
+           }
            const before = await js(probe);
            await js("document.querySelector('.embed-editor_varpicker-list').scrollTop = 600");
            await wait(50);
            const scrolled = await js(probe);
            // Arrow keys: dispatched, walking well past the first screenful.
            let visible = true;
+           let failedStep = -1;
+           let failedInfo = '';
            for (let step = 0; step < 60; step += 1) {
              if (host === 'chip') {
                await js("document.querySelector('.embed-editor_varpicker-search').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))");
              } else {
                await js("window.__nav.current.move(1)");
              }
-             await wait(8);
-             const inSight = await js("(() => { const l = document.querySelector('.embed-editor_varpicker-list'); const row = l.querySelector('.is-selected, .is-active'); if (!row) return false; " +
-               "const a = l.getBoundingClientRect(), b = row.getBoundingClientRect(); return b.top >= a.top - 1 && b.bottom <= a.bottom + 1 })()");
-             if (!inSight) { visible = false; break; }
+             // The list scrolls the marked row into view on the next frame, which a slow runner
+             // delays: ask again, within a bound, before calling the row out of sight.
+             let inSight = false;
+             for (let tries = 0; tries < 40 && !inSight; tries += 1) {
+               await wait(25);
+               inSight = await js("(() => { const l = document.querySelector('.embed-editor_varpicker-list'); const row = l.querySelector('.is-selected, .is-active'); if (!row) return false; " +
+                 "const a = l.getBoundingClientRect(), b = row.getBoundingClientRect(); return b.top >= a.top - 1 && b.bottom <= a.bottom + 1 })()");
+             }
+             if (!inSight) { visible = false; failedStep = step; failedInfo = await js("(() => { const l = document.querySelector('.embed-editor_varpicker-list'); const a = l.getBoundingClientRect(); return [...l.querySelectorAll('.is-selected, .is-active')].map((r) => r.className + ' ' + Math.round(r.getBoundingClientRect().top - a.top) + '/' + Math.round(a.height)).join(' | ') })()"); break; }
            }
-           results.push({ host, height, where, top, before, scrolled, visible });
+           results.push({ host, height, where, top, before, scrolled, visible, failedStep, failedInfo });
          }
        }
        console.log(JSON.stringify(results));
@@ -193,7 +209,11 @@ const check = (what, condition, detail) => {
         `${before.searchTop} -> ${scrolled.searchTop}`,
       );
       check(`${label}: the page does not scroll`, scrolled.docScroll === 0, String(scrolled.docScroll));
-      check(`${label}: the arrows keep the marked row in sight`, result.visible === true);
+      check(
+        `${label}: the arrows keep the marked row in sight`,
+        result.visible === true,
+        `the row left sight at step ${result.failedStep}: ${result.failedInfo}`,
+      );
     }
   }
 
