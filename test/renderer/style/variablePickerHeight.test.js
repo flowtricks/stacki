@@ -117,7 +117,7 @@ const check = (what, condition, detail) => {
        const HOSTS = ['chip', 'code'];
        const probe = "(() => { const p = document.querySelector('.embed-editor_varpicker'); const l = p.querySelector('.embed-editor_varpicker-list'); " +
          "const r = p.getBoundingClientRect(); const sr = p.querySelector('.embed-editor_varpicker-searchrow'); const s = sr ? sr.getBoundingClientRect() : { top: -1 }; let inline = []; for (let n = l; n && n !== document.body; n = n.parentElement) { if (n.style.height || n.style.minHeight) inline.push(n.className + ':' + n.style.height + '/' + n.style.minHeight) } " +
-         "return { top: r.top, bottom: r.bottom, height: r.height, innerHeight: window.innerHeight, scrollHeight: l.scrollHeight, clientHeight: l.clientHeight, searchTop: s.top, docScroll: document.scrollingElement.scrollTop, inline, rem: parseFloat(getComputedStyle(document.documentElement).fontSize) } })()";
+         "return { top: r.top, bottom: r.bottom, height: r.height, innerHeight: window.innerHeight, scrollHeight: l.scrollHeight, clientHeight: l.clientHeight, searchTop: s.top, docScroll: document.scrollingElement.scrollTop, headingGaps: [...p.querySelectorAll('.embed-editor_varpicker-group-name, .embed-editor_varpicker-family-name')].map((h) => parseFloat(getComputedStyle(h).paddingBottom)), inline, rem: parseFloat(getComputedStyle(document.documentElement).fontSize) } })()";
        for (const host of HOSTS) for (const height of [500, 700, 1000]) {
          win.setContentSize(420, height);
          await wait(150);
@@ -165,6 +165,11 @@ const check = (what, condition, detail) => {
       const label = `${result.host} host, window ${result.height}, field at ${result.where}`;
       const { before, scrolled } = result;
       check(`${label}: at most 18rem`, before.height / before.rem <= capRem + 0.01, `${before.height / before.rem}rem`);
+      check(
+        `${label}: a heading leaves at least 0.25rem above its first row`,
+        before.headingGaps.length > 0 && before.headingGaps.every((gap) => gap / before.rem >= 0.25),
+        JSON.stringify(before.headingGaps),
+      );
       check(`${label}: no ancestor of the list sets a height of its own`, before.inline.length === 0, before.inline.join(' '));
       check(
         `${label}: at least the readable minimum (or what the window holds)`,

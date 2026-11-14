@@ -78,6 +78,11 @@ export class EmbedDocument {
   #code: string;
   #segments: string[];
   #regions: StyleRegion[];
+  // What the source held before the live writes since the last recorded step, while there are
+  // any. A live write (a hover preview, a scrub, a draft being typed) is not a step of its own:
+  // the step that undoes it is recorded by the commit that follows, and goes back to this text,
+  // so a preview that is abandoned leaves nothing to undo and one that is picked leaves one step.
+  #historyBase: string | undefined;
 
   constructor(source: EmbedSource, code: string, segments: string[], regions: StyleRegion[]) {
     // Segments interleave the regions: one before each, and one after the last.
@@ -101,9 +106,23 @@ export class EmbedDocument {
     return this.#regions;
   }
 
-  /** The source now holds `code`, serialized from these regions. */
+  /** The text an undo of the next committed write returns the source to. */
+  get historyBase(): string {
+    return this.#historyBase ?? this.#code;
+  }
+
+  /** The source now holds `code`, serialized from these regions: a committed write. */
   recordWritten(code: string): void {
     this.#code = code;
+    this.#historyBase = undefined;
+  }
+
+  /** The source now holds `code` from a live write: no step is recorded for it. */
+  recordLiveWritten(code: string): void {
+    const base = this.historyBase;
+    this.#code = code;
+    // Back where the live writes began: nothing is left to undo.
+    this.#historyBase = code === base ? undefined : base;
   }
 
   /** Take on a fresh read of the same source. */
@@ -112,6 +131,7 @@ export class EmbedDocument {
     this.#segments = fresh.segments;
     this.#regions = fresh.regions;
     this.#code = fresh.code;
+    this.#historyBase = undefined;
   }
 }
 
@@ -394,7 +414,7 @@ type FileWriteLane = {
   /** Settles when the last queued task has finished. Never rejects. */
   tail: Promise<void>;
   /** The flush queued behind the running task, not started yet. */
-  waiting: { readonly embedDocument: EmbedDocument; readonly result: Promise<EmbedWriteResult> } | undefined;
+  waiting: { readonly embedDocument: EmbedDocument; readonly result: Promise<EmbedWriteResult>; live: boolean } | undefined;
 };
 
 // Lanes are per file path, so two documents over one file still write in turn.
@@ -433,32 +453,43 @@ function queueOnLane<T>(path: string, task: () => Promise<T>): Promise<T> {
 
 // Queues one write of `embedDocument`'s current regions, or joins the one already
 // waiting for this document: it has not serialized yet, so it will carry this edit.
-function queueFileWrite(embedDocument: EmbedDocument, path: string): Promise<EmbedWriteResult> {
+function queueFileWrite(embedDocument: EmbedDocument, path: string, options: { readonly live: boolean }): Promise<EmbedWriteResult> {
   const lane = fileWriteLane(path);
   if (lane.waiting !== undefined && lane.waiting.embedDocument === embedDocument) {
+    // A commit that joins a live write is the step: the joined write must record it.
+    lane.waiting.live = lane.waiting.live && options.live;
     return lane.waiting.result;
   }
+  // Assigned just below, before the lane runs the task (it runs on a later tick).
+  const { live } = options;
+  let waiting: { readonly embedDocument: EmbedDocument; readonly result: Promise<EmbedWriteResult>; live: boolean } | undefined;
   const result = queueOnLane(path, () => {
     // Serializing starts now: an edit after this point needs a write of its own.
-    if (lane.waiting?.result === result) {
+    const liveNow = waiting?.live ?? live;
+    if (lane.waiting === waiting) {
       lane.waiting = undefined;
     }
-    return writeFileNow(embedDocument, path);
+    return writeFileNow(embedDocument, path, { live: liveNow });
   });
-  lane.waiting = { embedDocument, result };
+  waiting = { embedDocument, live, result };
+  lane.waiting = waiting;
   return result;
 }
 
 // The one place a stylesheet write is sent. The lane guarantees nothing else is in
 // flight for this file, so the document's code is what the file holds — the base.
-async function writeFileNow(embedDocument: EmbedDocument, path: string): Promise<EmbedWriteResult> {
+async function writeFileNow(embedDocument: EmbedDocument, path: string, options: { readonly live: boolean }): Promise<EmbedWriteResult> {
   const code = serializeDocument(embedDocument);
-  // What the file held before this write — the undo target, and the version the
-  // host checks the write against.
-  const before = embedDocument.code;
+  // What the file holds, which the host checks the write against; and the text an undo
+  // returns to, which differs from it while live writes are on the file (recordLiveWritten).
+  const base = embedDocument.code;
+  const undoTarget = embedDocument.historyBase;
   try {
-    if (before !== code) {
-      await styleTransport.writeStyleFile({ filePath: path, css: code, base: before });
+    if (base !== code) {
+      await styleTransport.writeStyleFile({ filePath: path, css: code, base });
+    }
+    // A live write is no step; the commit that follows it is, and goes back to undoTarget.
+    if (!options.live && undoTarget !== code) {
       // A <style> node's write goes through the page model, which the app
       // already snapshots — only stylesheets need their own history entry.
       const stylesIn = messageRef('shell.history.stylesIn', { name: embedDocument.source.label });
@@ -468,11 +499,15 @@ async function writeFileNow(embedDocument: EmbedDocument, path: string): Promise
         labelRef: stylesIn,
         // One step per file per burst: a slider drag writes on every tick.
         coalesceKey: `css:${path}`,
-        undo: () => writeStyleFileAndReload(embedDocument, path, before),
+        undo: () => writeStyleFileAndReload(embedDocument, path, undoTarget),
         redo: () => writeStyleFileAndReload(embedDocument, path, code),
       });
     }
-    embedDocument.recordWritten(code);
+    if (options.live) {
+      embedDocument.recordLiveWritten(code);
+    } else {
+      embedDocument.recordWritten(code);
+    }
     assert(embedDocument.code === code, 'writeFileNow: the document holds what was written');
     return { ok: true, code };
   } catch (error: unknown) {
@@ -494,7 +529,7 @@ export async function writeEmbedDocument(
   embedWriteCount += 1;
   const origin = embedDocument.source.origin;
   if (origin.kind === 'file' || origin.kind === 'astro') {
-    return queueFileWrite(embedDocument, origin.path);
+    return queueFileWrite(embedDocument, origin.path, { live });
   }
   const code = serializeDocument(embedDocument);
   const write = getHost().writeStyleNode;

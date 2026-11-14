@@ -13,7 +13,7 @@ import { PlusIcon } from './VariableIcons';
 import { varTypeAllowed, useSharedVars } from './sharedVars';
 import { VariablePicker } from './VariablePicker';
 import VariableHint from './VariableHint';
-import { type Chip, CHIP_MARK, fieldText, type PressedChip, serializeTokens, TokenField } from './TokenField';
+import { type Chip, CHIP_MARK, fieldText, type PressedChip, pressedChip, serializeTokens, TokenField } from './TokenField';
 import './embedEditor.css';
 import {
   childValue,
@@ -55,6 +55,11 @@ type VariableConnectProps = {
    *  is the worst place to change it from; opening one over a field that is
    *  already that size just puts a box in front of the box. */
   expanded?: boolean;
+  /**
+   * Open the chooser for this chip as soon as the field mounts: the large value editor opened by
+   * pressing a chip its field clipped is this field, and the same press asks for the chooser.
+   */
+  initialChip?: PressedChip;
   children: ReactNode;
 };
 
@@ -66,11 +71,23 @@ type VariableConnectProps = {
  * second opinion on a question already answered — and when the first answer
  * was "replace", it turned a picked variable into a wiped value.
  */
-export function connectCustomField(field: ReactElement, prop: string | undefined, onDraft: (value: string) => void): ReactNode {
+export function connectCustomField(
+  field: ReactElement,
+  prop: string | undefined,
+  openChip: PressedChip | undefined,
+  onDraft: (value: string) => void,
+): ReactNode {
   // The property travels with the value: without it the chooser in the big box
   // offered every variable, colours in a gap and sizes in a background.
   return (
-    <VariableConnect className="is-multiline" code onDraft={onDraft} onPick={onDraft} {...(prop === undefined ? {} : { prop })}>
+    <VariableConnect
+      className="is-multiline"
+      code
+      onDraft={onDraft}
+      onPick={onDraft}
+      {...(prop === undefined ? {} : { prop })}
+      {...(openChip === undefined ? {} : { initialChip: openChip })}
+    >
       {field}
     </VariableConnect>
   );
@@ -84,7 +101,7 @@ export default function VariableConnect(props: VariableConnectProps) {
   const { editorRef, dotRef, chipText, liveValue, selectionRef, readCaret, hintValue } = connect;
   const { chipTarget, setChipTarget, suggest, setSuggest, navigationRef } = connect;
   const anchor = (showToken ? editorRef.current : dotRef.current) ?? undefined;
-  const { openedRef } = connect;
+  const { openedRef, bigChipRef } = connect;
   // The value as it would be with `chosen` picked, worked out from the value
   // the chooser opened on: previews change the field, and a pick after three
   // of them must still be one change from where it started.
@@ -171,6 +188,17 @@ export default function VariableConnect(props: VariableConnectProps) {
   const endPreviewRef = useRef(endPreview);
   endPreviewRef.current = endPreview;
   useEffect(() => () => endPreviewRef.current(), []);
+  // The press that opened the large editor on a clipped chip also opens the chooser, once, here.
+  const openOnMountRef = useRef({ chip: props.initialChip, open: openChooser, disabled });
+  openOnMountRef.current = { chip: props.initialChip, open: openChooser, disabled };
+  useEffect(() => {
+    const { chip, open: openNow, disabled: off } = openOnMountRef.current;
+    if (chip !== undefined && off !== true) {
+      setChipTarget(chip);
+      openNow();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, []);
   const extraClassName = props.className ? ` ${props.className}` : '';
   const tokenClassName = showToken ? ' is-token' : '';
   return (
@@ -186,7 +214,10 @@ export default function VariableConnect(props: VariableConnectProps) {
           open,
           wrapRef,
           liveValue,
-          onOpen: setBig,
+          onOpen: (rect, chip) => {
+            bigChipRef.current = chip;
+            setBig(rect);
+          },
         }),
         (event) => suggestKeyDown(event, { suggest, navigationRef, onDismiss: () => setSuggest(undefined) }),
       )}
@@ -266,7 +297,13 @@ export default function VariableConnect(props: VariableConnectProps) {
         onPreview={preview}
         onPreviewEnd={endPreview}
         onClosePicker={closeChooser}
+        openChip={bigChipRef.current}
         onCloseBig={() => setBig(undefined)}
+        // Escape closes the editor and puts the caret back in the field it came from.
+        onCancelBig={() => {
+          setBig(undefined);
+          editorRef.current?.focus();
+        }}
         onSave={onPick}
       />
     </span>
@@ -301,6 +338,8 @@ function useVariableConnect({ prop, code, children }: VariableConnectProps) {
   // The value the chooser opened on, and whether the arrows have previewed another.
   const openedRef = useRef<{ readonly value: string; readonly previewed: boolean } | undefined>(undefined);
   const [big, setBig] = useState<DOMRect | undefined>(undefined);
+  // The chip whose press opened the large editor, if the press was on one.
+  const bigChipRef = useRef<PressedChip | undefined>(undefined);
   const wrapRef = useRef<HTMLSpanElement>(null);
   return {
     open,
@@ -323,6 +362,7 @@ function useVariableConnect({ prop, code, children }: VariableConnectProps) {
     setSuggest,
     navigationRef,
     openedRef,
+    bigChipRef,
     big,
     setBig,
     wrapRef,
@@ -400,6 +440,8 @@ function ConnectPopups({
   onPreviewEnd,
   onClosePicker,
   onCloseBig,
+  onCancelBig,
+  openChip,
   onSave,
 }: {
   picker: PickerOpening | undefined;
@@ -416,6 +458,8 @@ function ConnectPopups({
   onPreviewEnd: () => void;
   onClosePicker: () => void;
   onCloseBig: () => void;
+  onCancelBig: () => void;
+  openChip: PressedChip | undefined;
   onSave: (value: string) => void;
 }) {
   return (
@@ -443,7 +487,8 @@ function ConnectPopups({
           prop={prop}
           anchor={big}
           anchorEl={wrapRef.current ?? undefined}
-          onCancel={onCloseBig}
+          onCancel={onCancelBig}
+          {...(openChip === undefined ? {} : { openChip })}
           onSave={(next: string) => {
             onCloseBig();
             // The same path a picked variable takes — one way in and out of a
@@ -707,13 +752,18 @@ function bigEditorTriggers({
   open: boolean;
   wrapRef: RefObject<HTMLSpanElement>;
   liveValue: () => string;
-  onOpen: (rect: DOMRect) => void;
+  onOpen: (rect: DOMRect, chip: PressedChip | undefined) => void;
 }) {
-  const openBig = () => {
+  const openBig = (chip?: PressedChip) => {
     const wrap = wrapRef.current;
     if (wrap) {
-      onOpen(wrap.getBoundingClientRect());
+      onOpen(wrap.getBoundingClientRect(), chip);
     }
+  };
+  // The chip under a press or a key, in this field's token editor.
+  const chipAt = (target: EventTarget): PressedChip | undefined => {
+    const field = wrapRef.current?.querySelector<HTMLElement>('.embed-editor_varconnect-editor');
+    return field === null || field === undefined ? undefined : pressedChip(field, target);
   };
   return {
     onKeyDownCapture: (event: React.KeyboardEvent) => {
@@ -723,6 +773,16 @@ function bigEditorTriggers({
         event.preventDefault();
         event.stopPropagation();
         openBig();
+        return;
+      }
+      // Enter or Space on a chip acts as a press on it.
+      if ((event.key === 'Enter' || event.key === ' ') && !disabled && !big && !expanded && !open) {
+        const chip = chipAt(event.target);
+        if (chip !== undefined && wrapRef.current !== null && doesNotFit(wrapRef.current, liveValue())) {
+          event.preventDefault();
+          event.stopPropagation();
+          openBig(chip);
+        }
       }
     },
     onMouseDownCapture: (event: React.MouseEvent) => {
@@ -750,7 +810,8 @@ function bigEditorTriggers({
       }
       event.preventDefault();
       event.stopPropagation();
-      openBig();
+      // The same measurement decided both: a clipped chip opens the editor AND its chooser.
+      openBig(chipAt(event.target));
     },
   };
 }

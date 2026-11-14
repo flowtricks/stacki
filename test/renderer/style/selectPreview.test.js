@@ -9,7 +9,8 @@ const { repoPath } = require('../../helpers/sources.js');
 
 const settle = (milliseconds = 0) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
-const frame = () => new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+let runFrame;
+const frame = () => runFrame();
 
 (async () => {
   const esbuild = require('esbuild');
@@ -30,6 +31,24 @@ const frame = () => new Promise((resolve) => window.requestAnimationFrame(() => 
 
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+  // Frames the test runs by hand: a timer-driven frame could land inside an act and make
+  // "nothing has run yet" depend on machine load.
+  const pendingFrames = new Map();
+  let frameIdNext = 1;
+  dom.window.requestAnimationFrame = (callback) => {
+    const id = frameIdNext;
+    frameIdNext += 1;
+    pendingFrames.set(id, callback);
+    return id;
+  };
+  dom.window.cancelAnimationFrame = (id) => {
+    pendingFrames.delete(id);
+  };
+  runFrame = () => {
+    const callbacks = [...pendingFrames.values()];
+    pendingFrames.clear();
+    callbacks.forEach((callback) => callback(0));
+  };
   global.window = dom.window;
   global.document = dom.window.document;
   global.navigator = dom.window.navigator;

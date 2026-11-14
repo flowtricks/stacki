@@ -17,6 +17,9 @@ import { usePopupScrollLock } from '../../ui/popupScrollLock';
 // for it. Both open it the same two ways: pressing a field whose value does not
 // fit, and `=` in any field at all.
 
+/** Asks an open variable picker to put back what it is previewing (VariablePicker.tsx listens). */
+export const PICKER_RESTORE_EVENT = 'stacki:picker-restore';
+
 const LONG_VALUE = 34;
 const isLong = (value: string) => String(value).length > LONG_VALUE || String(value).includes('\n');
 
@@ -72,7 +75,14 @@ interface CustomValueProps {
    * connectCustomField). Passed in rather than imported: the picker opens this
    * editor, so importing it back would make the two modules a cycle.
    */
-  readonly connectField: (field: ReactElement, prop: string | undefined, onDraft: (value: string) => void) => ReactNode;
+  readonly connectField: (
+    field: ReactElement,
+    prop: string | undefined,
+    openChip: { readonly index: number; readonly binding: string } | undefined,
+    onDraft: (value: string) => void,
+  ) => ReactNode;
+  /** The chip whose press opened this editor: its field opens the chooser for it at once. */
+  readonly openChip?: { readonly index: number; readonly binding: string };
 }
 function CustomValue(props: CustomValueProps) {
   const state = useCustomValue(props);
@@ -116,6 +126,7 @@ function CustomValue(props: CustomValueProps) {
              has focus is usually the rich one in front of this. */
         />,
         props.prop,
+        props.openChip,
         state.setDraft,
       )}
       <div className="var-custom-foot">
@@ -126,11 +137,16 @@ function CustomValue(props: CustomValueProps) {
 }
 
 function useCustomValue({ value, anchor, onSave }: CustomValueProps) {
-  const [draft, setDraft] = useState(value);
+  const [draft, setDraftState] = useState(value);
   const boxRef = useRef<HTMLDivElement>(null);
   const fieldRef = useRef<HTMLTextAreaElement>(null);
   const draftRef = useRef(draft);
   draftRef.current = draft;
+  // The ref follows at once, so a commit right after a restore reads the restored value, not the last render's.
+  const setDraft = useCallback((next: string): void => {
+    draftRef.current = next;
+    setDraftState(next);
+  }, []);
   const position = useCustomPosition(boxRef, anchor);
   const commit = useCallback((): string => {
     const rich = boxRef.current?.querySelector<HTMLElement>('.embed-editor_varconnect-editor');
@@ -141,6 +157,7 @@ function useCustomValue({ value, anchor, onSave }: CustomValueProps) {
     return draftRef.current;
   }, []);
   useCustomClose(boxRef, commit, onSave);
+  useOutsidePressWithChooser(boxRef, commit, onSave);
   useCustomFocus(boxRef, fieldRef);
   return { draft, setDraft, boxRef, fieldRef, position, commit };
 }
@@ -178,6 +195,32 @@ function useCustomClose(boxRef: RefObject<HTMLDivElement>, commit: () => string,
     };
   }, [commit]);
   usePopupScrollLock(boxRef);
+}
+
+// A press outside both the editor and its open chooser closes the two together. The popups' own
+// dismissal only takes the topmost one (popupDismiss.ts), which would leave the editor behind the
+// chooser the press just closed. Without a chooser open the editor's own dismissal handles it.
+function useOutsidePressWithChooser(boxRef: RefObject<HTMLDivElement>, commit: () => string, onSave: (value: string) => void): void {
+  const latest = useRef({ commit, onSave });
+  latest.current = { commit, onSave };
+  useEffect(() => {
+    const press = (event: Event): void => {
+      const target = event.target;
+      if (!(target instanceof Node) || boxRef.current === null || boxRef.current.contains(target)) {
+        return;
+      }
+      const chooser = document.querySelector('.embed-editor_varpicker');
+      if (chooser === null || chooser.contains(target)) {
+        return;
+      }
+      // What the chooser is previewing goes back first, so the commit below reads the value the
+      // editor held, never a variable that was only being hovered.
+      chooser.dispatchEvent(new window.Event(PICKER_RESTORE_EVENT));
+      latest.current.onSave(latest.current.commit());
+    };
+    document.addEventListener('mousedown', press, true);
+    return () => document.removeEventListener('mousedown', press, true);
+  }, [boxRef]);
 }
 
 function useCustomFocus(boxRef: RefObject<HTMLDivElement>, fieldRef: RefObject<HTMLTextAreaElement>) {

@@ -21,6 +21,7 @@ import { useResolvedColor } from './model/computedColor';
 import { getHost } from './model/host';
 import { hasCanvas, queryCanvas } from '../../editor/canvasQuery';
 import { assert } from '../../../shared/core/assert';
+import { PICKER_RESTORE_EVENT } from './CustomValueEditor';
 import { resolveVariableValue, valuePredicateFor } from '../../../shared/properties/propertyValueAccepts';
 import { filterBySlot, isWholeSlot, VerdictCache, type Supports, type ValueSlot } from '../../../shared/properties/valueSlot';
 import { LIMITS } from '../../../shared/core/limits';
@@ -168,6 +169,12 @@ export function VariablePicker({
   // stays on the applied variable and the keyboard row is tinted instead.
   const markedBinding = typing === undefined ? (activeBinding ?? selectedBinding) : selectedBinding;
   const hover = useHoverPreview(typing === undefined ? onPreview : undefined, onPreviewEnd);
+  const endHover = hover.end;
+  useEffect(() => {
+    const element = ref.current;
+    element?.addEventListener(PICKER_RESTORE_EVENT, endHover);
+    return () => element?.removeEventListener(PICKER_RESTORE_EVENT, endHover);
+  });
   const holdSelected = useHoldSelectedInView(listRef, {
     rows: filtered.map((variable) => variable.binding).join('\n'),
     following: typing === undefined && activeBinding === undefined && search === '' && selectedBinding !== undefined,

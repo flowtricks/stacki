@@ -306,7 +306,7 @@ const check = (what, condition, detail) => {
       document.body.appendChild(host);
       const root = createRoot(host);
       await act(async () => {
-        root.render(connectCustomField(React.createElement('textarea', { value: '', onChange() {} }), prop, () => {}));
+        root.render(connectCustomField(React.createElement('textarea', { value: '', onChange() {} }), prop, undefined, () => {}));
       });
       await settle();
       await act(async () => clickIt(host.querySelector('.embed-editor_varconnect-dot')));

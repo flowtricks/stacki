@@ -413,6 +413,16 @@ export function TokenField({
         paint(element, fieldText(element), caretOffset(element), chipsOf(element));
       }}
       onKeyDown={(event) => {
+        // A chip that is the target of Enter or Space (assistive technology, or a press-like
+        // activation) acts as a press on it; the field's own Enter would only commit.
+        if ((event.key === 'Enter' || event.key === ' ') && !disabled) {
+          const chip = pressedChip(event.currentTarget, event.target);
+          if (chip !== undefined) {
+            event.preventDefault();
+            onChipClick(chip);
+            return;
+          }
+        }
         const direction = historyKey(event);
         if (direction !== undefined) {
           // The field's own history, not the page's: the app's ⌘Z listener

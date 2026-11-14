@@ -23,9 +23,10 @@ const path = require('node:path');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
 
 let act;
+let runFrame;
 const frame = () =>
   act(async () => {
-    await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+    runFrame();
   });
 
 (async () => {
@@ -52,6 +53,24 @@ export { useOptimisticClear } from './src/features/style/embed/useOptimisticClea
 
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<!doctype html><div id="root"></div>', { pretendToBeVisual: true });
+  // Frames the test runs by hand: a timer-driven frame could land inside an act and make
+  // "nothing has run yet" depend on machine load.
+  const pendingFrames = new Map();
+  let frameIdNext = 1;
+  dom.window.requestAnimationFrame = (callback) => {
+    const id = frameIdNext;
+    frameIdNext += 1;
+    pendingFrames.set(id, callback);
+    return id;
+  };
+  dom.window.cancelAnimationFrame = (id) => {
+    pendingFrames.delete(id);
+  };
+  runFrame = () => {
+    const callbacks = [...pendingFrames.values()];
+    pendingFrames.clear();
+    callbacks.forEach((callback) => callback(0));
+  };
   global.window = dom.window;
   global.document = dom.window.document;
   global.navigator = dom.window.navigator;

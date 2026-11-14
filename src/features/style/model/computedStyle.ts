@@ -211,7 +211,11 @@ export function useHighlight(authored: string, prop: string, values: readonly st
   // Seeded with the fallback: on the very first render there is nothing else to
   // have been showing.
   const last = useRef(settled || fallback);
-  const shown = settled || last.current;
+  // Only a value the control can show as one of its options is worth holding. A variable or
+  // a custom value (`var(--tt)`) is what was just cleared, and holding it kept its chip in
+  // the field until the page answered, or for good when it never did.
+  const held = values.includes(last.current) ? last.current : fallback;
+  const shown = settled || held;
   useEffect(() => {
     last.current = shown;
   }, [shown]);
