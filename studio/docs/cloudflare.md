@@ -156,6 +156,21 @@ Before inviting clients, verify GitHub login and denied access for an uninvited 
 
 Do not enable public access to the preview Container directly. The Worker is its authentication and origin boundary. The internal storage/AI/GitHub routes require the Container token.
 
+### App frames and signed file links
+
+App frames are sandboxed without `allow-same-origin`, so their own loads (stylesheets, scripts,
+the SDK) carry no session cookie. A signed-in load of `/studio/api/apps/files/<id>/<file>`
+therefore redirects to `/studio/api/apps/files/<id>/~<expires>.<signature>/<file>`, and the
+frame's relative loads stay under that link. A link serves GET and HEAD for that one app's folder,
+on the Studio host only, for at most eight hours and never past the session that made it. Every
+other request under it answers 404. The Worker forwards it to the container with the container
+token alone, no user. The signature is an HMAC under a key derived from `SESSION_SECRET` for this
+purpose, so rotating the secret ends every link. Anyone holding a link can read that app's
+bundle until it expires, which is exactly what the frame's own code can read. Bundle files are not
+made public, because a bundle is not guaranteed to be free of secrets.
+`src/cloudflare/appFileLinks.ts` states the full threat model. A top-level file or folder whose
+name starts with `~` cannot be loaded from an app folder.
+
 ## Local server configuration
 
 For an optional local AI server:

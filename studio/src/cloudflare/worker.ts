@@ -14,6 +14,7 @@ import { cmsConnectionRoute, cmsVault } from './cmsConnectionRoutes';
 import { CmsUnavailable, cmsForwarded } from '../features/cms/cmsConnectionVault';
 import { mediaConnectionRoute } from './mediaConnectionRoutes';
 import { mediaForwarded } from '../features/assets/mediaConnectionVault';
+import { appFileLinkRoute, appFileRedirect } from './appFileRoutes';
 
 export class PreviewContainer extends Container<Environment> {
   private readonly loginAttempts = new LoginAttempts((state, expires) => this.ctx.storage.transaction((storage) => claimLoginAttempt(storage, state, expires)));
@@ -90,6 +91,11 @@ async function route(request: Request, environment: Environment, context: Execut
   if (previewHost && url.pathname === '/__studio-entry') {
     return previewEntry(url, environment);
   }
+  // Before the session check: an app frame's own loads carry no cookie (appFileLinks.ts).
+  const linked = previewHost ? undefined : await appFileLinkRoute(request, url, environment);
+  if (linked) {
+    return linked;
+  }
   if (!previewHost) {
     const auth = routeLogin(request, (forwarded) => environment.PREVIEW.getByName('project').fetch(forwarded));
     if (auth) {
@@ -135,6 +141,10 @@ async function workerRoute(request: Request, url: URL, environment: Environment,
   }
   if (url.pathname === '/studio/api/preview-url') {
     return previewURL(url, environment, identity);
+  }
+  const appFile = await appFileRedirect(request, url, environment, identity);
+  if (appFile) {
+    return appFile;
   }
   // CMS and media hosting connections are kept here, never by the container
   // (cmsConnectionRoutes.ts, mediaConnectionRoutes.ts).
