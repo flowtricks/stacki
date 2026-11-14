@@ -32,6 +32,7 @@ const firstSettings = {
   pages: { version: 1, entries: ['about/', 'index.astro'] },
   componentSources: { version: 1, sources: [] },
   styles: { version: 1, keep: ['is-*'] },
+  variables: { version: 1, hiddenFromSuggestions: ['--light-100', '--tint-100'] },
   folders: { version: 1, folders: { components: ['src/ui'], assets: ['public', 'src/assets'] } },
   instructions: { version: 1, hidden: ['docs/archive', '**/CHANGELOG.md'] },
   audits: { version: 1, ignored: [{ id: 'img-alt|src/pages/index.astro|0.1|src="/a.png"', reason: 'Decorative hero' }] },

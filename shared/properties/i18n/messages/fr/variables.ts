@@ -46,6 +46,7 @@ export const messages = {
   'variables.group.options': 'Options du groupe',
   'variables.head.name': 'Nom',
   'variables.head.value': 'Valeur',
+  'variables.hidden.indicator': 'Masquée dans les suggestions de variables',
   'variables.menu.delete': 'Supprimer',
   'variables.menu.duplicate': 'Dupliquer',
   'variables.menu.rename': 'Renommer',
@@ -69,6 +70,9 @@ export const messages = {
   'variables.scope.writtenScoped': 'Le bloc est un {tag} simple : :root, html, body et :global() restent sans portée, tous les autres sélecteurs sont limités.',
   'variables.scroll.label': 'Faire défiler les valeurs des variables horizontalement',
   'variables.search': 'Rechercher des variables',
+  'variables.settings.hideFromSuggestions': 'Masquer dans les suggestions de variables',
+  'variables.settings.menu': 'Réglages de la variable',
+  'variables.settings.open': 'Réglages de {name}',
   'variables.title': 'Variables', // same
   'variables.type.color': 'Couleur',
   'variables.type.number': 'Nombre',
@@ -82,4 +86,6 @@ export const messages = {
   'variables.undo.rename': 'le renommage', // review
   'variables.undo.value': 'la valeur', // review
   'variables.undo.variable': 'la variable', // review
+  'variables.visibility.blocked': 'Les suggestions de variables ne sont pas filtrées : {detail} Le masquage est suspendu pour ne pas écraser ce fichier.',
+  'variables.visibility.saveFailed': 'Impossible d’enregistrer les variables masquées : {detail}',
 } as const satisfies CatalogOf<MessageKey>;

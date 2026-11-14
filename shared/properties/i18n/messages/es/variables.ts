@@ -46,6 +46,7 @@ export const messages = {
   'variables.group.options': 'Opciones del grupo',
   'variables.head.name': 'Nombre',
   'variables.head.value': 'Valor',
+  'variables.hidden.indicator': 'Oculta en las sugerencias de variables',
   'variables.menu.delete': 'Eliminar',
   'variables.menu.duplicate': 'Duplicar',
   'variables.menu.rename': 'Renombrar',
@@ -69,6 +70,9 @@ export const messages = {
   'variables.scope.writtenScoped': 'El bloque es un {tag} normal: :root, html, body y :global() no se limitan; el resto de selectores sí.',
   'variables.scroll.label': 'Desplazar los valores de las variables horizontalmente',
   'variables.search': 'Buscar variables',
+  'variables.settings.hideFromSuggestions': 'Ocultar de las sugerencias de variables',
+  'variables.settings.menu': 'Ajustes de la variable',
+  'variables.settings.open': 'Ajustes de {name}',
   'variables.title': 'Variables', // same
   'variables.type.color': 'Color',
   'variables.type.number': 'Número',
@@ -82,4 +86,6 @@ export const messages = {
   'variables.undo.rename': 'el cambio de nombre', // review
   'variables.undo.value': 'el valor', // review
   'variables.undo.variable': 'la variable', // review
+  'variables.visibility.blocked': 'Las sugerencias de variables no se están filtrando: {detail} Ocultar está en pausa para no sobrescribir ese archivo.',
+  'variables.visibility.saveFailed': 'No se pudo guardar qué variables están ocultas: {detail}',
 } as const satisfies CatalogOf<MessageKey>;

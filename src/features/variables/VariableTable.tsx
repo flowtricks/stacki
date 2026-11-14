@@ -12,6 +12,7 @@ import Cell from './VariableCell';
 import useListReorder from '../../ui/useListReorder';
 import MoreMenu from '../../ui/MoreMenu';
 import VariableTypeIcon from './VariableTypeIcon';
+import VariableNameCell, { type VariableVisibilityControl } from './VariableNameCell';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PencilIcon, CopyIcon, TrashIcon, DragIcon, PlusIcon } from '../../ui/Icons';
 import { CodeInline } from '../../ui/CodeBlock';
@@ -29,6 +30,8 @@ export interface SheetActions {
   readonly onDeleteSection?: ((block: VariableBlock) => void | Promise<void>) | undefined;
   readonly fluidOf?: VariableCellProps['fluidOf'];
   readonly onDraft?: VariableCellProps['onDraft'];
+  /** Which variables are hidden from suggestions, and the settings menu that changes it; absent, rows have no settings. */
+  readonly visibility?: VariableVisibilityControl | undefined;
 }
 export interface SheetProps extends SheetActions {
   readonly blocks: readonly VariableBlock[];
@@ -286,7 +289,7 @@ export default function Sheet(props: SheetProps) {
 }
 function SheetView({ state }: { readonly state: ReturnType<typeof useSheet> }) {
   const translate = useTranslate();
-  const { blocks, group, onSave, onAdd, onRename, onRetitle, onDuplicateSection, onDeleteSection, fluidOf, onDraft } = state;
+  const { blocks, group, onSave, onAdd, onRename, onRetitle, onDuplicateSection, onDeleteSection, fluidOf, onDraft, visibility } = state;
   const { slotOffsets, rowsDrag, scrollLanes } = state;
   return (
     <div className="vars-sheet">
@@ -311,6 +314,7 @@ function SheetView({ state }: { readonly state: ReturnType<typeof useSheet> }) {
             slotOffset={sheetOffset(slotOffsets, index).rows}
             fluidOf={fluidOf}
             onDraft={onDraft}
+            visibility={visibility}
             scrollLanes={scrollLanes}
             // The group's headings are the sheet's now; only a matrix, whose
             // columns are its own, still writes its own.
@@ -656,7 +660,7 @@ function TableFixedHead({ state }: { readonly state: ReturnType<typeof useVariab
 
 function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
   const translate = useTranslate();
-  const { block, onRename, labelTemplate, reorder, rowProps } = state;
+  const { block, onRename, labelTemplate, reorder, rowProps, visibility } = state;
   return (
     <>
       {block.rows.map((row, index) => (
@@ -672,7 +676,7 @@ function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariabl
           <span className="vars-grip" title={translate('variables.dragToReorder')}>
             <DragIcon size={11} />
           </span>
-          <div className="vars-name" title={row.name || row.label}>
+          <VariableNameCell name={row.name} title={row.name || row.label} visibility={visibility}>
             <VariableTypeIcon kind={row.cells.find((cell) => cell !== undefined)?.kind ?? ''} />
             <EditableName
               className="vars-name-text"
@@ -680,7 +684,7 @@ function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariabl
               title={row.name || row.label}
               onRename={(next) => onRename?.(rowRenames(block, row, next))}
             />
-          </div>
+          </VariableNameCell>
         </div>
       ))}
     </>

@@ -183,6 +183,8 @@ export const METADATA_ACCESS: Readonly<Record<MetadataKind, readonly AccessFeatu
   publish: ['publish'],
   roles: ['settings:roles'],
   styles: ['panel:selectors'],
+  // Hiding a variable from suggestions is part of working in the Variables panel, which the style panel opens.
+  variables: ['panel:style'],
 };
 
 /** The features that allow `channel` with `payload`, or undefined when it is not gated. */

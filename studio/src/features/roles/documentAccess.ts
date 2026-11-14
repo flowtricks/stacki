@@ -35,6 +35,7 @@ export const METADATA_ACCESS: Readonly<Record<MetadataKind, readonly AccessFeatu
   publish: ['publish'],
   roles: ['settings:roles'],
   styles: ['panel:selectors'],
+  variables: ['panel:style'],
 };
 
 /** A write refused for the sender's role: answered 403 over HTTP, an `error` message over the socket. */

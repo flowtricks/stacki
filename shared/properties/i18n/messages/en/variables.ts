@@ -45,6 +45,7 @@ export const messages = {
   'variables.group.options': 'Group options',
   'variables.head.name': 'Name',
   'variables.head.value': 'Value',
+  'variables.hidden.indicator': 'Hidden from variable suggestions',
   'variables.menu.delete': 'Delete',
   'variables.menu.duplicate': 'Duplicate',
   'variables.menu.rename': 'Rename',
@@ -68,6 +69,9 @@ export const messages = {
   'variables.scope.writtenScoped': 'The block is a plain {tag}: :root, html, body and :global() stay unscoped, every other selector is scoped.',
   'variables.scroll.label': 'Scroll variable values horizontally',
   'variables.search': 'Search variables',
+  'variables.settings.hideFromSuggestions': 'Hide from variable suggestions',
+  'variables.settings.menu': 'Variable settings',
+  'variables.settings.open': 'Settings for {name}',
   'variables.title': 'Variables',
   'variables.type.color': 'Colour',
   'variables.type.number': 'Number',
@@ -81,6 +85,8 @@ export const messages = {
   'variables.undo.rename': 'the rename',
   'variables.undo.value': 'the value',
   'variables.undo.variable': 'the variable',
+  'variables.visibility.blocked': 'Variable suggestions are not being filtered: {detail} Hiding is paused so that file is not overwritten.',
+  'variables.visibility.saveFailed': 'Could not save which variables are hidden: {detail}',
 } as const satisfies CatalogOf<`variables.${string}`>;
 
 export type MessageKey = keyof typeof messages;

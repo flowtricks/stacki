@@ -23,6 +23,7 @@ import { VariableScopeBadge } from './VariableScopeBadge';
 import DockableWindow, { type WindowMode } from '../../ui/DockableWindow';
 import { readWindowMode, storeWindowMode } from '../../ui/windowPreferences';
 import { variableCache } from './variableCache';
+import { useHiddenVariables } from './useHiddenVariables';
 import '../style/utilities.css';
 export { dropPlan, movesForDrop } from './variableRows';
 export { createScrollSync } from './variableScroll';
@@ -57,7 +58,8 @@ function useVariablesView(props: VariablesViewProps) {
   const retitle = useVariableRetitle(model, writeWithUndo);
   const sections = useVariableSections(model, writeWithUndo);
   const drafts = useVariableDrafts(model);
-  return { ...model, ...save, ...move, ...add, ...rename, ...retitle, ...sections, ...drafts };
+  const visibility = useVariableVisibility(model);
+  return { ...model, ...save, ...move, ...add, ...rename, ...retitle, ...sections, ...drafts, ...visibility };
 }
 
 export default function VariablesView(props: VariablesViewProps) {
@@ -99,6 +101,11 @@ function VariablesViewBody({
       storageKey="stacki.window.variables"
       header={<VariablesWindowHeader state={state} />}
     >
+      {state.visibilityBlocked !== undefined && (
+        <div className="vars-notice" role="alert">
+          {translate('variables.visibility.blocked', { detail: state.visibilityBlocked })}
+        </div>
+      )}
       <VariablePreviewContext.Provider value={state.preview}>
         <Sheet
           blocks={state.blocks}
@@ -112,10 +119,31 @@ function VariablesViewBody({
           onDeleteSection={state.deleteSection}
           fluidOf={state.fluidOf}
           onDraft={state.noteDraft}
+          visibility={state.visibility}
         />
       </VariablePreviewContext.Provider>
     </DockableWindow>
   );
+}
+
+// Which variables the suggestion dropdowns leave out (`.stacki/variables.json`). The panel itself still shows them all.
+// A toggle that cannot be saved (a corrupt file is never written over) reports through the toast the panel already has.
+function useVariableVisibility(model: { readonly project: { readonly path: string }; readonly showToast?: VariablesViewProps['showToast'] }) {
+  const translate = useTranslate();
+  const { state, isHidden, hide, show } = useHiddenVariables(model.project.path);
+  const { showToast } = model;
+  const setHidden = useCallback(
+    (name: string, change: { readonly hidden: boolean }): void => {
+      void (change.hidden ? hide(name) : show(name)).then((result) => {
+        if (!result.ok) {
+          showToast?.(translate('variables.visibility.saveFailed', { detail: result.error.message }), 'error');
+        }
+      });
+    },
+    [hide, show, showToast, translate],
+  );
+  const visibility = useMemo(() => ({ isHidden, setHidden }), [isHidden, setHidden]);
+  return { visibility, visibilityBlocked: state.kind === 'blocked' ? state.message : undefined };
 }
 
 function VariablesWindowHeader({ state }: { readonly state: ReturnType<typeof useVariablesView> }) {

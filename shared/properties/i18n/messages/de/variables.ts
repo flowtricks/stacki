@@ -46,6 +46,7 @@ export const messages = {
   'variables.group.options': 'Gruppenoptionen',
   'variables.head.name': 'Name', // same
   'variables.head.value': 'Wert',
+  'variables.hidden.indicator': 'In den Variablenvorschlägen ausgeblendet',
   'variables.menu.delete': 'Löschen',
   'variables.menu.duplicate': 'Duplizieren',
   'variables.menu.rename': 'Umbenennen',
@@ -70,6 +71,9 @@ export const messages = {
     'Der Block ist ein einfaches {tag}: :root, html, body und :global() bleiben unbegrenzt, alle anderen Selektoren sind begrenzt.',
   'variables.scroll.label': 'Variablenwerte horizontal scrollen',
   'variables.search': 'Variablen suchen',
+  'variables.settings.hideFromSuggestions': 'In Variablenvorschlägen ausblenden',
+  'variables.settings.menu': 'Variableneinstellungen',
+  'variables.settings.open': 'Einstellungen für {name}',
   'variables.title': 'Variablen',
   'variables.type.color': 'Farbe',
   'variables.type.number': 'Zahl',
@@ -83,4 +87,6 @@ export const messages = {
   'variables.undo.rename': 'die Umbenennung', // review
   'variables.undo.value': 'den Wert', // review
   'variables.undo.variable': 'die Variable', // review
+  'variables.visibility.blocked': 'Variablenvorschläge werden nicht gefiltert: {detail} Ausblenden ist pausiert, damit diese Datei nicht überschrieben wird.',
+  'variables.visibility.saveFailed': 'Ausgeblendete Variablen konnten nicht gespeichert werden: {detail}',
 } as const satisfies CatalogOf<MessageKey>;

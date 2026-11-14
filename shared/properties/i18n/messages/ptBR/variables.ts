@@ -45,6 +45,7 @@ export const messages = {
   'variables.group.options': 'Opções do grupo',
   'variables.head.name': 'Nome',
   'variables.head.value': 'Valor',
+  'variables.hidden.indicator': 'Oculta nas sugestões de variáveis',
   'variables.menu.delete': 'Excluir',
   'variables.menu.duplicate': 'Duplicar',
   'variables.menu.rename': 'Renomear',
@@ -68,6 +69,9 @@ export const messages = {
   'variables.scope.writtenScoped': 'O bloco é um {tag} comum: :root, html, body e :global() ficam sem escopo; os demais seletores são delimitados.',
   'variables.scroll.label': 'Rolar os valores das variáveis na horizontal',
   'variables.search': 'Pesquisar variáveis',
+  'variables.settings.hideFromSuggestions': 'Ocultar das sugestões de variáveis',
+  'variables.settings.menu': 'Configurações da variável',
+  'variables.settings.open': 'Configurações de {name}',
   'variables.title': 'Variáveis',
   'variables.type.color': 'Cor',
   'variables.type.number': 'Número',
@@ -81,4 +85,6 @@ export const messages = {
   'variables.undo.rename': 'a renomeação', // review
   'variables.undo.value': 'o valor', // review
   'variables.undo.variable': 'a variável', // review
+  'variables.visibility.blocked': 'As sugestões de variáveis não estão sendo filtradas: {detail} Ocultar está pausado para não sobrescrever esse arquivo.',
+  'variables.visibility.saveFailed': 'Não foi possível salvar quais variáveis estão ocultas: {detail}',
 } as const satisfies CatalogOf<MessageKey>;
