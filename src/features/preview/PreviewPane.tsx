@@ -1,12 +1,11 @@
 import { useCanvasText, type CanvasTextDocument } from './useCanvasText';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCanvasInteraction } from './useCanvasInteraction';
 import { usePreviewSource } from './usePreviewSource';
 import { PreviewFrame } from './PreviewFrame';
-import { usePreviewDimensions, usePreviewSizing, type CanvasWidthRequest } from './usePreviewSizing';
-import { PREVIEW_WIDTH_LIMITS } from './previewViewport';
+import { useCanvasWidthRequest, usePreviewDimensions, usePreviewSizing, type CanvasWidthRequest } from './usePreviewSizing';
 import CanvasView from './CanvasView';
 import type { DevDiagnosis } from './DevOffline';
 import type { OverlayInfo, RectMap, SpacingHover } from './PreviewOverlays';
@@ -102,7 +101,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
   const source = usePreviewSource(url, runtime.post);
   const dimensions = usePreviewDimensions();
   const sizing = usePreviewSizing(props.device, dimensions, props.onDevice);
-  useCanvasWidthRequest(props.canvasWidthRequest, sizing.setWidthRef);
+  useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
   const columnGuide = useColumnGuide({
     projectKey: props.projectPath,
     metrics: runtime.guide,
@@ -151,18 +150,6 @@ export default function PreviewPane(props: PreviewPaneProps) {
 }
 
 // Apply each new width request once, as the width field would.
-function useCanvasWidthRequest(request: CanvasWidthRequest | undefined, setWidthRef: { readonly current: (next: number) => void }): void {
-  const serial = request?.serial;
-  const widthPx = request?.widthPx;
-  useEffect(() => {
-    if (serial === undefined || widthPx === undefined) {
-      return;
-    }
-    const clamped = Math.min(PREVIEW_WIDTH_LIMITS.maximum, Math.max(PREVIEW_WIDTH_LIMITS.minimum, Math.round(widthPx)));
-    setWidthRef.current(clamped);
-  }, [serial, widthPx, setWidthRef]);
-}
-
 type Runtime = ReturnType<typeof usePreviewRuntime>;
 type Sizing = ReturnType<typeof usePreviewSizing>;
 

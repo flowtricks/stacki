@@ -21,7 +21,10 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
   const [available, setAvailable] = useState({ width: 0, height: 0 });
   const { customWidth, setCustomWidth, customHeight, setCustomHeight } = dimensions;
   const [resizing, setResizing] = useState(false);
-  const width = customWidth ?? deviceWidth(device);
+  // A custom width belongs to the custom device. Read on any other, it drew one frame at
+  // the old custom width after a device button was pressed, until the effect below
+  // cleared it.
+  const width = device === 'custom' ? (customWidth ?? deviceWidth(device)) : deviceWidth(device);
   // A fluid frame fills the canvas by CSS, so it follows a side-panel drag without React.
   useMeasuredSize(wrapRef, { fluid: width === undefined }, setAvailable);
   useDeviceShortcuts(onDevice);
@@ -40,10 +43,6 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
     setCustomWidth(next);
     onDevice('custom');
   };
-  // Read by an effect that applies a width asked from outside, which must not
-  // re-run each render because this closure is new.
-  const setWidthRef = useRef(setWidth);
-  setWidthRef.current = setWidth;
   const startResize = useResizeHandler({
     wrapRef,
     frameRef,
@@ -58,7 +57,6 @@ export function usePreviewSizing(device: PreviewDevice, dimensions: ReturnType<t
     wrapRef,
     frameRef,
     wrapWidth: available.width,
-    setWidthRef,
     viewport,
     setWidth,
     customHeight,
@@ -244,4 +242,18 @@ function resizeFrame(
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
+}
+
+// A width asked from outside (the style panel's query or Base pick). Applied while
+// rendering, not in an effect: the app moves the device to `custom` in the same update as
+// the request, and an effect would paint one frame with the custom device at the old
+// width (the readout and the frame a step behind the toolbar). The serial makes it apply
+// once per request, so a later hand resize is not undone by a re-render.
+export function useCanvasWidthRequest(request: CanvasWidthRequest | undefined, setCustomWidth: (width: number | undefined) => void): void {
+  const [appliedSerial, setAppliedSerial] = useState<number | undefined>(undefined);
+  if (request !== undefined && request.serial !== appliedSerial) {
+    const clamped = Math.min(PREVIEW_WIDTH_LIMITS.maximum, Math.max(PREVIEW_WIDTH_LIMITS.minimum, Math.round(request.widthPx)));
+    setAppliedSerial(request.serial);
+    setCustomWidth(clamped);
+  }
 }

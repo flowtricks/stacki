@@ -1243,6 +1243,7 @@
     "src/features/style/model/baseWidth.ts",
     "src/features/style/model/definedAnswers.ts",
     "src/features/style/model/background.ts",
+    "src/features/style/model/baseWidth.ts",
     "src/features/style/model/boxShadow.ts",
     "src/features/style/model/canvasAsk.ts",
     "src/features/style/model/caretAtX.ts",

@@ -71,6 +71,33 @@ export function canvasWidthForQuery(atContext: string, rootFontSizePx: number): 
   return { kind: 'width', widthPx };
 }
 
+/** Which sides of the width a query's conditions limit, read by the same parser as canvasWidthForQuery. */
+export type QueryWidthSides =
+  { readonly kind: 'sides'; readonly lower: boolean; readonly upper: boolean } | { readonly kind: 'none'; readonly reason: QueryWidthSkip };
+
+/**
+ * Whether a context's query is a lower bound (`width >= X`, `min-width`), an upper bound
+ * (`width < X`, `max-width`) or both (a range), as canvasWidthForQuery reads it, so the two
+ * can never disagree about a query.
+ */
+export function queryWidthSides(atContext: string, rootFontSizePx: number): QueryWidthSides {
+  assert(Number.isFinite(rootFontSizePx), 'queryWidthSides: a root font size is a number');
+  assert(rootFontSizePx > 0, 'queryWidthSides: a root font size is positive');
+  if (atContext.length > QUERY_WIDTH_LIMITS.queryCharsMax) {
+    return { kind: 'none', reason: 'unparsed' };
+  }
+  const innermost = (atContext.split(' › ').pop() ?? '').trim();
+  const media = /^@media\s+([\s\S]*)$/i.exec(innermost);
+  if (media === null) {
+    return { kind: 'none', reason: 'not-media' };
+  }
+  const bounds = boundsOf((media[1] ?? '').trim().toLowerCase(), rootFontSizePx);
+  if (!Array.isArray(bounds)) {
+    return { kind: 'none', reason: bounds };
+  }
+  return { kind: 'sides', lower: bounds.some((bound) => bound.side === 'lower'), upper: bounds.some((bound) => bound.side === 'upper') };
+}
+
 // The width bounds of a query's conditions, or why there are none to read. A
 // leading media type (`screen and …`) is allowed; `only` too.
 function boundsOf(query: string, rootFontSizePx: number): Bound[] | QueryWidthSkip {

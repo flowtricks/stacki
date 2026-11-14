@@ -324,9 +324,16 @@ export function useWindowState() {
   // features/style/model/queryWidth.ts). Counted, so asking for the same width
   // twice still applies it after the canvas was resized by hand in between.
   const [canvasWidthRequest, setCanvasWidthRequest] = useState<CanvasWidthRequest | undefined>(undefined);
+  // The device moves to `custom` in the same update as the request, so the toolbar's
+  // active device, the readout and the frame change in one commit; the pane applies the
+  // width while rendering it (PreviewPane useCanvasWidthRequest), not an effect later.
   const requestCanvasWidth = useCallback((widthPx: number) => {
     setCanvasWidthRequest((previous) => ({ widthPx, serial: (previous?.serial ?? 0) + 1 }));
+    setDevice('custom');
   }, []);
+  // The toolbar's desktop device, for the style panel's Base (model/baseWidth.ts): the
+  // same state update the device button makes, so the two can never land differently.
+  const showDesktopCanvas = useCallback(() => setDevice('desktop'), []);
   // Bumped every time the page itself makes the selection, so the navigator
   // scrolls the row into view — a counter, not the id, so clicking the same
   // element twice still reveals it.
@@ -379,6 +386,7 @@ export function useWindowState() {
     setDevice,
     canvasWidthRequest,
     requestCanvasWidth,
+    showDesktopCanvas,
     setFileText,
     setGitInfo,
     setPreviewInfo,

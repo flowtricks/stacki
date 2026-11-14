@@ -31,6 +31,7 @@ import {
 } from '../model/queryWrapper';
 import { reachOfWrapper, wrapperOnLayer, type WrapperReach } from '../model/queryReach';
 import { canvasWidthForQuery } from '../model/queryWidth';
+import { baseCanvasTarget } from '../model/baseWidth';
 import { isGlobalSelector, type MatchTarget } from '../model/selectors';
 import { selectedInstanceMarkup, selectedInstanceMarkupPending, selectedInstanceScope } from '../model/webflowElement';
 import { rememberChipProvenance, rememberedGreenChips } from '../model/chipProvenanceMemory';
@@ -664,6 +665,26 @@ export function useSelectorChips(
 // query's edge, still on the side the arithmetic put it.
 const ROOT_FONT_SIZE_PX = 16;
 
+// Puts the canvas where Base holds, through the host's one width or device action.
+function showBaseOnCanvas(atContexts: readonly string[]): void {
+  const target = baseCanvasTarget(atContexts, ROOT_FONT_SIZE_PX);
+  const host = getHost();
+  switch (target.kind) {
+    case 'width':
+      host.setCanvasWidth?.(target.widthPx);
+      return;
+    case 'desktop':
+      host.showDesktopCanvas?.();
+      return;
+    case 'keep':
+      return;
+    default: {
+      const exhaustive: never = target;
+      return exhaustive;
+    }
+  }
+}
+
 // Switch context, keeping or re-picking a selector styled there.
 export function useContextChange(
   selectionState: ReturnType<typeof useSelectionState>,
@@ -696,6 +717,12 @@ export function useContextChange(
         if (width.kind === 'width') {
           getHost().setCanvasWidth?.(width.widthPx);
         }
+      } else if (next === '') {
+        // Base moves the canvas to where Base is the layer in effect, judged by the
+        // queries this same dropdown lists for the element (styleContexts): below the
+        // smallest of mobile-first queries, above the largest of desktop-first ones, else
+        // the desktop preset through the toolbar's own desktop action (model/baseWidth.ts).
+        showBaseOnCanvas(styleContexts.map((entry) => entry.embedAtContext ?? ''));
       }
       if (!nextContext || !model) {
         return;

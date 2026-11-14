@@ -123,6 +123,11 @@ export type HostState = {
    *  moves the canvas inside it (model/queryWidth.ts). Absent where the host
    *  has no canvas to size. */
   setCanvasWidth: ((widthPx: number) => void) | undefined;
+  /** Put the canvas on the desktop preset, exactly as the toolbar's desktop device does
+   *  (one handler, so the width, the active device and the readout change together).
+   *  Choosing Base with no single query convention lands there (model/baseWidth.ts).
+   *  Absent where the host has no canvas to size. */
+  showDesktopCanvas: (() => void) | undefined;
   /** Put a class on the selected element. Typing a bare class in the selector
    *  box should land it on the element, the way a class field would — a rule
    *  for a class the element doesn't carry would never apply. Resolves once the
@@ -212,6 +217,7 @@ const state: HostState = {
   writeStyleNode: undefined,
   selectNode: undefined,
   setCanvasWidth: undefined,
+  showDesktopCanvas: undefined,
   recordUndo: undefined,
   addClass: undefined,
   addStyleBlock: undefined,

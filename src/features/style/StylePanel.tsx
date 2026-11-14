@@ -25,6 +25,7 @@ interface StylePanelProps {
   readonly onWriteStyleNode?: HostState['writeStyleNode'] | undefined;
   readonly onSelectNode?: HostState['selectNode'] | undefined;
   readonly onCanvasWidth?: HostState['setCanvasWidth'] | undefined;
+  readonly onDesktopCanvas?: HostState['showDesktopCanvas'] | undefined;
   readonly onRecordUndo?: HostState['recordUndo'] | undefined;
   readonly onAddClass?: HostState['addClass'] | undefined;
   readonly onAddStyleBlock?: HostState['addStyleBlock'] | undefined;
@@ -142,6 +143,7 @@ function hostState(props: StylePanelProps, inputs: HostInputs): HostState {
     writeStyleNode: props.onWriteStyleNode,
     selectNode: props.onSelectNode,
     setCanvasWidth: props.onCanvasWidth,
+    showDesktopCanvas: props.onDesktopCanvas,
     recordUndo: props.onRecordUndo,
     addClass: props.onAddClass,
     addStyleBlock: props.onAddStyleBlock,

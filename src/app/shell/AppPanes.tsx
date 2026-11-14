@@ -530,6 +530,7 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       }}
       onSelectNode={app.setSelectedId}
       onCanvasWidth={app.requestCanvasWidth}
+      onDesktopCanvas={app.showDesktopCanvas}
       onRecordUndo={app.pushCommand}
       onAddClass={(name, placement) =>
         selectedId
