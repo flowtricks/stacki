@@ -166,6 +166,28 @@ AI_BASE_URL=http://127.0.0.1:11434/v1 AI_MODEL=YOUR_MODEL npm run dev
 
 For local GitHub publishing, supply `GITHUB_APP_ID`, `GITHUB_INSTALLATION_ID`, `GITHUB_PRIVATE_KEY`, `GITHUB_REPOSITORY`, and optionally `GITHUB_BRANCH` in the server environment. The starting local checkout's Git HEAD becomes the baseline. Use a clean checkout corresponding to that repository and branch. No credentials are required for the ordinary local editor demo.
 
+## GitHub changes a running workspace cannot take
+
+Automatic GitHub sync writes site source under `src/` and the `.stacki` metadata the server reads
+on demand (`.stacki/roles.json`, `audits.json`, `instructions.json`, `variables.json`,
+`styles.json`, `components.json`, `component-sources.json`, `guide.json`, `pages.json` and
+`publish.json`). The reason for each file is in `src/features/github/syncPaths.ts`. Any other
+change (dependencies, Astro or Vite configuration, `public/` files, `.stacki/folders.json`, which
+the component preview reads once at startup) stops the sync with "Restart from a fresh repository
+revision". Studio keeps editing from its current revision.
+
+Studio has no button that restarts a workspace from a newer revision. A container start
+restores the revision Studio last recorded in R2, not GitHub's newest commit:
+
+- **The workspace has Git history** (someone has used the Git panel): **Pull from GitHub** merges
+  the commit with Git, runtime files included, and records the new remote head. The next container
+  start begins from that revision and runs `npm ci` when dependencies changed. A container starts
+  again after it sleeps (three idle minutes) or after a redeploy.
+- **The workspace has no Git history**: the recorded baseline (`metadata/base-sha` in R2) only
+  advances through a sync that succeeds, so a blocked change stays blocked across restarts. Make one
+  Git panel action (for example **Pull from GitHub**) to give the workspace Git history, then
+  follow the step above.
+
 ## Draft storage cleanup
 
 Studio automatically removes duplicate upload copies from private R2 after a confirmed GitHub

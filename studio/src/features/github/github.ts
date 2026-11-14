@@ -7,7 +7,7 @@ import type { ReviewReceipt } from '../../../vendor/stacki/shared/properties/pub
 import { parsePublishConnection } from '../../shared/publishConnection';
 import { publishedAssetTree } from '../storage/publishedAssetTree';
 import { treeChanges } from './treeChanges';
-import { independentlyDeployed } from './syncPaths';
+import { independentlyDeployed, syncableIncomingFile } from './syncPaths';
 import { createSign } from 'node:crypto';
 import { record, string } from '../../shared/validation';
 
@@ -135,11 +135,8 @@ export class GitHubRepository {
       if (independentlyDeployed(file)) {
         continue;
       }
-      // Runtime/config changes need a fresh container with dependencies installed.
-      if (
-        !/^src\/.+\.(astro|json|md|mdx|css|ts|js)$/.test(file) &&
-        !['.stacki/components.json', '.stacki/component-sources.json', '.stacki/guide.json', '.stacki/publish.json', '.stacki/pages.json'].includes(file)
-      ) {
+      // Runtime/config changes need a fresh container with dependencies installed (syncPaths.ts).
+      if (!syncableIncomingFile(file)) {
         throw new Error(`GitHub changed ${file}. Restart from a fresh repository revision before syncing runtime or binary changes.`);
       }
       files.push({
