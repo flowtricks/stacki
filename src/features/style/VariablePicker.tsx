@@ -53,6 +53,7 @@ export function VariablePicker({
   selectedBinding,
   typing,
   onPreview,
+  onPreviewEnd,
   onPick,
   onClose,
 }: {
@@ -74,6 +75,8 @@ export function VariablePicker({
    * other way is the caller's cue to put the original back.
    */
   onPreview?: (binding: string) => void;
+  /** Hovering ended without a pick (the pointer left the list, the window lost focus): put the value back. */
+  onPreviewEnd?: () => void;
   onPick: (binding: string) => void;
   onClose: () => void;
 }) {
@@ -98,6 +101,7 @@ export function VariablePicker({
   // applied variable to the one being previewed. Following typing, the mark
   // stays on the applied variable and the keyboard row is tinted instead.
   const markedBinding = typing === undefined ? (activeBinding ?? selectedBinding) : selectedBinding;
+  const hover = useHoverPreview(typing === undefined ? onPreview : undefined, onPreviewEnd);
   const holdSelected = useHoldSelectedInView(listRef, {
     rows: filtered.map((variable) => variable.binding).join('\n'),
     following: typing === undefined && activeBinding === undefined && search === '' && selectedBinding !== undefined,
@@ -133,6 +137,7 @@ export function VariablePicker({
         onWheel={holdSelected.release}
         onPointerDown={holdSelected.release}
         onTouchStart={holdSelected.release}
+        onPointerLeave={hover.end}
       >
         {loading && !vars.length ? (
           <div className="embed-editor_varpicker-empty">
@@ -149,11 +154,69 @@ export function VariablePicker({
             activeBinding={typing === undefined ? undefined : activeBinding}
             onToggleCollapse={toggleCollapse}
             onPick={onPick}
+            onHover={hover.enter}
           />
         )}
       </div>
     </Popup>
   );
+}
+
+// Hovering a row previews that variable on the canvas and in the field; leaving the list,
+// or the window losing focus, puts the original back. The preview is the same transient
+// draft the arrow keys use (VariableConnect's `preview`): never a write, a history entry
+// or a save. Rapid hovers are coalesced to one update per animation frame, the latest
+// winning, and a pending one is cancelled when the pointer leaves or the picker closes,
+// so a stale frame can never re-show a preview after the restore. Hover events are
+// pointer events dispatched by the page; nothing here depends on real pointer hardware.
+function useHoverPreview(
+  onPreview: ((binding: string) => void) | undefined,
+  onPreviewEnd: (() => void) | undefined,
+): { readonly enter: (binding: string) => void; readonly end: () => void } {
+  const frame = useRef<number | undefined>(undefined);
+  const latest = useRef({ onPreview, onPreviewEnd });
+  latest.current = { onPreview, onPreviewEnd };
+  const pending = useRef<string | undefined>(undefined);
+  const cancel = (): void => {
+    if (frame.current !== undefined) {
+      cancelAnimationFrame(frame.current);
+      frame.current = undefined;
+    }
+    pending.current = undefined;
+  };
+  const end = (): void => {
+    cancel();
+    latest.current.onPreviewEnd?.();
+  };
+  // The listener reads the latest `end` through a ref, so it is added once.
+  const endRef = useRef(end);
+  endRef.current = end;
+  useEffect(() => {
+    const onBlur = (): void => endRef.current();
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('blur', onBlur);
+      endRef.current();
+    };
+  }, []);
+  const enter = (binding: string): void => {
+    if (latest.current.onPreview === undefined) {
+      return;
+    }
+    pending.current = binding;
+    if (frame.current !== undefined) {
+      return;
+    }
+    frame.current = requestAnimationFrame(() => {
+      frame.current = undefined;
+      const next = pending.current;
+      pending.current = undefined;
+      if (next !== undefined) {
+        latest.current.onPreview?.(next);
+      }
+    });
+  };
+  return { enter, end };
 }
 
 // Which collections are collapsed, and the toggle for one.
@@ -223,6 +286,7 @@ export function PickerCollections({
   activeBinding,
   onToggleCollapse,
   onPick,
+  onHover,
 }: {
   variables: ProjectVariable[];
   query: string;
@@ -232,6 +296,8 @@ export function PickerCollections({
   activeBinding?: string | undefined;
   onToggleCollapse: (name: string) => void;
   onPick: (binding: string) => void;
+  /** The pointer is over this row: preview it. */
+  onHover?: ((binding: string) => void) | undefined;
 }) {
   return byCollection(variables).map(({ collection, groups }) => {
     // A search always expands (so matches aren't hidden behind a collapsed head).
@@ -257,6 +323,7 @@ export function PickerCollections({
                     selected={sameVariable(variable.binding, selectedBinding)}
                     active={variable.binding === activeBinding}
                     onPick={onPick}
+                    onHover={onHover}
                   />
                 ))}
               </div>
@@ -275,6 +342,7 @@ export function PickerItem({
   selected,
   active,
   onPick,
+  onHover,
 }: {
   variable: ProjectVariable;
   collection: string;
@@ -282,6 +350,7 @@ export function PickerItem({
   selected: boolean;
   active?: boolean;
   onPick: (binding: string) => void;
+  onHover?: ((binding: string) => void) | undefined;
 }) {
   const selectedClassName = `${selected ? 'is-selected' : ''}${active === true ? ' is-active' : ''}`;
   const groupPrefix = group ? `${group} / ` : '';
@@ -297,6 +366,7 @@ export function PickerItem({
       // the half-typed value first.
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => onPick(variable.binding)}
+      onPointerEnter={() => onHover?.(variable.binding)}
       title={`${collection} / ${groupPrefix}${variable.name}${valueSuffix}`}
     >
       {variable.type === 'Color' ? (

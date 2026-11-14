@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useRef, useState } from 'react';
+import { cloneElement, isValidElement, useEffect, useRef, useState } from 'react';
 import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { flushSync } from 'react-dom';
@@ -143,6 +143,21 @@ export default function VariableConnect(props: VariableConnectProps) {
     openedRef.current = { ...opened, previewed: true };
     draftTo(withChosen(chosen));
   };
+  // The pointer left the list, the window lost focus: the value goes back to what the
+  // chooser opened on, and stays there until another row is previewed. Idempotent.
+  // The preview is only ever a draft (draftTo), never a write, history entry or save.
+  const endPreview = (): void => {
+    const opened = openedRef.current;
+    if (opened !== undefined && opened.previewed) {
+      openedRef.current = { ...opened, previewed: false };
+      draftTo(opened.value);
+    }
+  };
+  // Unmounting with a preview still showing (the selection changed, the project switched)
+  // puts the original back too. A ref holds the latest closure so the cleanup sees it.
+  const endPreviewRef = useRef(endPreview);
+  endPreviewRef.current = endPreview;
+  useEffect(() => () => endPreviewRef.current(), []);
   const extraClassName = props.className ? ` ${props.className}` : '';
   const tokenClassName = showToken ? ' is-token' : '';
   return (
@@ -226,6 +241,7 @@ export default function VariableConnect(props: VariableConnectProps) {
         // calc() no longer throws the calc away. See insertBinding.ts.
         onPick={pick}
         onPreview={preview}
+        onPreviewEnd={endPreview}
         onClosePicker={closeChooser}
         onCloseBig={() => setBig(undefined)}
         onSave={onPick}
@@ -357,6 +373,7 @@ function ConnectPopups({
   liveValue,
   onPick,
   onPreview,
+  onPreviewEnd,
   onClosePicker,
   onCloseBig,
   onSave,
@@ -371,6 +388,7 @@ function ConnectPopups({
   liveValue: () => string;
   onPick: (binding: string) => void;
   onPreview: (binding: string) => void;
+  onPreviewEnd: () => void;
   onClosePicker: () => void;
   onCloseBig: () => void;
   onSave: (value: string) => void;
@@ -386,6 +404,7 @@ function ConnectPopups({
           {...(picker.selectedBinding === undefined ? {} : { selectedBinding: picker.selectedBinding })}
           {...(picker.typing === undefined ? {} : { typing: picker.typing })}
           onPreview={onPreview}
+          onPreviewEnd={onPreviewEnd}
           onPick={onPick}
           onClose={onClosePicker}
         />
