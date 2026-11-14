@@ -1,5 +1,8 @@
 # Releasing Desktop, Studio, and create-stacki
 
+> The step-by-step procedure for releasing a version is [release-runbook.md](./release-runbook.md).
+> This file is the history and rules reference.
+
 These are separate publication paths. A successful `Check` run publishes nothing:
 
 - A version tag starts `.github/workflows/release.yml`. Desktop installers, Linux install checks,
