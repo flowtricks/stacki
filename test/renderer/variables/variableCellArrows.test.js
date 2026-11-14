@@ -143,7 +143,8 @@ test('an arrow the variable chooser takes writes nothing; an arrow that nudges w
 
   await replaceWith('var(--');
   assert.ok(document.querySelector('.embed-editor_varpicker'), 'typing var(-- shows the chooser');
-  const marked = () => document.querySelector('.embed-editor_varpicker-item.is-active')?.textContent ?? '';
+  // Rows show a short label and the written value, not the full name, so the mark is read from the row's binding.
+  const marked = () => document.querySelector('.embed-editor_varpicker-item.is-active')?.getAttribute('data-binding') ?? '';
   assert.match(marked(), /space-1/);
   await arrow('ArrowDown');
   assert.match(marked(), /space-2/, '↓ moved the chooser’s mark');
