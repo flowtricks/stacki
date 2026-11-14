@@ -268,7 +268,7 @@ export function useInlineCard(
       setProp: ignoreWrite,
       onAdd: ignoreWrite,
       liveSetProp: ignoreLive,
-      clearProp: () => undefined,
+      clearProp: () => Promise.resolve(),
     };
   }
   const setProp: SetProp = (prop, typed, important) => {
@@ -281,7 +281,11 @@ export function useInlineCard(
     // The attribute has no live layer to scrub on the canvas: a field's live value
     // shows once it commits, and a cancelled one has nothing to put back.
     liveSetProp: ignoreLive,
-    clearProp: (prop: string | string[]) => write(Array.isArray(prop) ? prop : [prop], { tag: 'remove' }),
+    // The inline write is synchronous, so there is nothing to wait on after it.
+    clearProp: (prop: string | string[]) => {
+      write(Array.isArray(prop) ? prop : [prop], { tag: 'remove' });
+      return Promise.resolve();
+    },
   };
   if (style.kind === 'declarations') {
     // The whole list in the CSS code editor, written as the attribute's next text.

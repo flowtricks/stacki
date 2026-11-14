@@ -287,19 +287,45 @@ function useHoverPreview<T extends string>({
   // conclude there was nothing to undo and leave the preview applied. The consumer knows
   // what the preview overwrote, so asking it to restore is always safe.
   const emittedRef = useRef(false);
+  // The highlight is local state and paints on its own; the preview it implies is a write
+  // (canvas message, file save, undo bookkeeping) that must not run in the same task as that
+  // commit, or each row the pointer crosses waits on the previous row's work. So the preview
+  // goes out on the next animation frame, and rows crossed within one frame send only the last.
+  const wantedRef = useRef<T | undefined>(undefined);
+  const frameRef = useRef<number | undefined>(undefined);
+  const dropFrame = useCallback(() => {
+    if (frameRef.current !== undefined) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = undefined;
+    }
+    wantedRef.current = undefined;
+  }, []);
+  const flush = useCallback(() => {
+    frameRef.current = undefined;
+    const wanted = wantedRef.current;
+    wantedRef.current = undefined;
+    if (wanted === undefined || wanted === shownRef.current) {
+      return;
+    }
+    shownRef.current = wanted;
+    emittedRef.current = true;
+    onPreviewRef.current?.(wanted);
+  }, []);
   const cancelPreview = useCallback(() => {
+    dropFrame();
     shownRef.current = undefined;
     if (!emittedRef.current) {
       return;
     }
     emittedRef.current = false;
     onPreviewRef.current?.(undefined);
-  }, []);
-  // A pick replaces the preview: nothing to revert.
+  }, [dropFrame]);
+  // A pick replaces the preview: nothing to revert, and none still waiting for its frame.
   const commit = useCallback(() => {
+    dropFrame();
     shownRef.current = undefined;
     emittedRef.current = false;
-  }, []);
+  }, [dropFrame]);
 
   // Emit as the highlight moves. Headings can't be highlighted, so anything landed on
   // is a real option; re-emitting the committed value is exactly how scrubbing back to
@@ -315,23 +341,22 @@ function useHoverPreview<T extends string>({
     if (shownRef.current === undefined) {
       shownRef.current = value;
     } // baseline for this session
-    if (option.value === shownRef.current) {
-      return;
+    wantedRef.current = option.value;
+    if (option.value !== shownRef.current && frameRef.current === undefined) {
+      frameRef.current = window.requestAnimationFrame(flush);
     }
-    shownRef.current = option.value;
-    emittedRef.current = true;
-    onPreviewRef.current(option.value);
-  }, [open, activity, activeIndex, displayed, value]);
+  }, [open, activity, activeIndex, displayed, value, flush]);
 
   // A preview must never outlive the menu: revert if this control unmounts (the section
   // collapsed, the selection changed) while one is showing.
   useEffect(
     () => () => {
+      dropFrame();
       if (emittedRef.current) {
         onPreviewRef.current?.(undefined);
       }
     },
-    [],
+    [dropFrame],
   );
   return { cancelPreview, commit };
 }

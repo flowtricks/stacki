@@ -585,6 +585,12 @@ export type StyleCardProps = {
   activePicked: boolean;
   /** Whether the selected element's chips have finished landing (ScanState.settled). */
   selectionSettled: boolean;
+  /**
+   * The selected element has not been read yet: nothing about its rules is known, so a field
+   * drawn now would be the plain default that the real answer then replaces. The sections
+   * draw placeholders in the fields' shape until it lands.
+   */
+  selectionAwaiting: boolean;
   cssCodeOpen: boolean;
   onToggleCssCode: () => void;
   model: RuleModel;
@@ -624,7 +630,7 @@ export type StyleCardProps = {
   busy: boolean;
   pending: boolean;
   setProp: (prop: string, value: string, important: boolean) => void;
-  clearProp: (prop: string | string[]) => void;
+  clearProp: (prop: string | string[]) => Promise<void>;
   liveSetProp: LiveSetProp;
   onSelectSelector: (selector: string, prop?: string) => void;
   onAdd: (prop: string, value: string, important: boolean) => void;

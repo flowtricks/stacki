@@ -1232,6 +1232,7 @@
     "src/features/style/embed/useEditorScanning.ts",
     "src/features/style/embed/useEditorWrites.ts",
     "src/features/style/embed/useInlineTarget.ts",
+    "src/features/style/embed/useOptimisticClear.ts",
     "src/features/style/embedEditor.css",
     "src/features/style/gridTracks.ts",
     "src/features/style/model/background.ts",

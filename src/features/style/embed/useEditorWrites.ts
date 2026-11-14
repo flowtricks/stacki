@@ -110,13 +110,16 @@ export function useClearProp(
   const { ruleFor, rulesSetting } = writeNewRuleHook;
   const { propLayer } = addQuery;
 
-  const clearProp = (prop: string | string[]) => {
+  // Resolves once every write has finished and the model has been rebuilt from it, so the
+  // panel knows when its optimistic cleared look (useOptimisticClear.ts) can hand over.
+  const clearProp = (prop: string | string[]): Promise<void> => {
     const props = Array.isArray(prop) ? prop : [prop];
+    const settled: Promise<unknown>[] = [];
     props.forEach((prop) => liveOriginRef.current.delete(prop)); // clearing is a commit too
     const nativeProps = props.filter((prop) => propLayer(prop) === 'native');
     const embedProps = props.filter((prop) => propLayer(prop) === 'embed');
     if (nativeProps.length && selectedNativeIndex !== undefined) {
-      void nativeClearAt(selectedNativeIndex, nativeProps, optionsFor(currentContext, stateKey));
+      settled.push(nativeClearAt(selectedNativeIndex, nativeProps, optionsFor(currentContext, stateKey)));
     }
     // Each rule of the pick loses the properties it sets: clearing only the rule
     // whose value shows would surface the same property from an earlier rule.
@@ -128,7 +131,8 @@ export function useClearProp(
         byRule.set(rule.ruleId, entry);
       }
     }
-    byRule.forEach(({ rule, props: ruleProps }) => onClearProp(rule, ruleProps));
+    byRule.forEach(({ rule, props: ruleProps }) => settled.push(onClearProp(rule, ruleProps)));
+    return Promise.all(settled).then(() => undefined);
   };
   // Abandon the live writes for `prop` and put back what they overwrote — the dropdown
   // hover-scrub's counterpart to liveSetProp (closing the list without picking).
@@ -366,6 +370,8 @@ export function useSelectionCard(
     activePicked: selectedSelectorText !== undefined,
     // No scan at all (the panel's first moments) has nothing on its way to hold for.
     selectionSettled: scan === undefined || scan.settled,
+    // Set by a change of element until its first settled answer (ScanState.awaitingFirstAnswer).
+    selectionAwaiting: scan?.awaitingFirstAnswer === true,
     selectors: selectorChips,
     suggestions: selectorSuggestions,
     activeSelector,

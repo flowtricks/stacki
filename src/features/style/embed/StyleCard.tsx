@@ -17,6 +17,7 @@ import FlexChildSection from '../FlexChildSection';
 import EffectsSection from '../EffectsSection';
 import { groupProps } from '../model/sections';
 import { type ResolvedProp, type ResolvedStyle } from '../model/resolved';
+import { SkeletonRows, Skeleton } from '../../../ui/Skeleton';
 import { assert } from '../../../../shared/core/assert';
 import { queryKey } from '../model/css';
 import { PencilIcon, EmbedIcon, ComponentIcon, breakpointIcon } from './EditorBasics';
@@ -32,6 +33,7 @@ import {
 } from './ResolvedRows';
 import { ALIGN_PROPS, GRID_CONTROL_PROPS, LayoutModeSections, type SourceOption } from './LayoutRows';
 import { SelectorPicker, ADD_QUERY, PlusIcon } from './SelectorPicker';
+import { useOptimisticClear } from './useOptimisticClear';
 import { AddQueryForm, EditQueryForm, CssCodeSection, type StyleCardProps } from './QueryForms';
 
 export function StyleCard(card: StyleCardProps) {
@@ -350,8 +352,9 @@ export function sourceSelectOption(option: SourceOption) {
 }
 
 // What every section's controls are handed.
-export type SectionCard = Pick<StyleCardProps, 'busy' | 'resolving' | 'setProp' | 'clearProp' | 'liveSetProp' | 'onSelectSelector' | 'activeSelector'> & {
+export type SectionCard = Pick<StyleCardProps, 'busy' | 'resolving' | 'setProp' | 'liveSetProp' | 'onSelectSelector' | 'activeSelector'> & {
   read: (prop: string) => ResolvedProp | undefined;
+  clearProp: (prop: string | string[]) => void;
   onProvenance: (prop: string, anchor: DOMRect) => void;
 };
 
@@ -364,13 +367,14 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
   const groups = groupProps([...resolved.props.keys()], SECTION_ORDER);
   const sectionIds = groups.map((group) => group.def.id);
   const [closedSectionIds, toggleSection] = useSectionVisibility();
-  const read = (prop: string) => resolved.props.get(prop);
+  // One place for every section: a cleared property reads as unset until its save settles.
+  const { read, clearProp } = useOptimisticClear(resolved.props, card.clearProp);
   const section: SectionCard = {
     read,
     busy: card.busy,
     resolving: card.resolving,
     setProp: card.setProp,
-    clearProp: card.clearProp,
+    clearProp,
     liveSetProp: card.liveSetProp,
     onProvenance: openProvenance,
     onSelectSelector: card.onSelectSelector,
@@ -398,14 +402,40 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
           // here makes.
           mark={group.props.some((prop) => read(prop)?.source === 'selected') ? 'own' : group.props.length ? 'other' : undefined}
           headerAction={
-            group.def.id === 'spacing' ? <SpacingCenterButton read={read} busy={card.busy} setProp={card.setProp} clearProp={card.clearProp} /> : undefined
+            group.def.id === 'spacing' ? <SpacingCenterButton read={read} busy={card.busy} setProp={card.setProp} clearProp={clearProp} /> : undefined
           }
         >
-          {SECTION_CONTROLS[group.def.id]?.(section)}
-          <FallThroughRows props={fallThroughProps(group.def.id, group.props)} resolved={resolved} section={section} />
+          {card.selectionAwaiting ? (
+            <SectionPlaceholder rows={PLACEHOLDER_ROWS[group.def.id] ?? PLACEHOLDER_ROWS_DEFAULT} />
+          ) : (
+            <>
+              {SECTION_CONTROLS[group.def.id]?.(section)}
+              <FallThroughRows props={fallThroughProps(group.def.id, group.props)} resolved={resolved} section={section} />
+            </>
+          )}
         </SectionBlock>
       ))}
     </div>
+  );
+}
+
+// How many rows each section's placeholder draws while the selected element is being read.
+// Without an answer there is nothing to show (a field drawn now would be the plain default
+// that a variable chip then replaces), so the section holds a skeleton in the fields' shape.
+const PLACEHOLDER_ROWS: Readonly<Record<string, number>> = { typography: 7, size: 4, spacing: 4, layout: 3, position: 3, backgrounds: 3, borders: 3 };
+const PLACEHOLDER_ROWS_DEFAULT = 2;
+
+function SectionPlaceholder({ rows }: { readonly rows: number }) {
+  return (
+    <SkeletonRows
+      count={rows}
+      row={(widthPercent) => (
+        <div className="embed-editor_size-row">
+          <Skeleton width="30%" />
+          <Skeleton width={`${widthPercent}%`} height="1.75rem" />
+        </div>
+      )}
+    />
   );
 }
 

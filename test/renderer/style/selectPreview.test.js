@@ -9,6 +9,8 @@ const { repoPath } = require('../../helpers/sources.js');
 
 const settle = (milliseconds = 0) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
+const frame = () => new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+
 (async () => {
   const esbuild = require('esbuild');
   const buildDirectory = repoPath('node_modules/.stacki-test/select-preview');
@@ -80,6 +82,11 @@ const settle = (milliseconds = 0) => new Promise((resolve) => window.setTimeout(
     );
     await settle();
   });
+  // The preview goes out on the next animation frame (see instantFeedback.test.js).
+  assert.deepEqual(previews, []);
+  await act(async () => {
+    await frame();
+  });
   assert.deepEqual(previews, ['relative']);
 
   await act(async () => {
@@ -102,6 +109,9 @@ const settle = (milliseconds = 0) => new Promise((resolve) => window.setTimeout(
       }),
     );
     await settle();
+  });
+  await act(async () => {
+    await frame();
   });
   assert.deepEqual(previews, ['relative', undefined, 'relative']);
 
