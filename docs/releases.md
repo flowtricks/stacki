@@ -40,6 +40,33 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.5.0 Variable picker overhaul, hidden variables, faster style panel
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.5.0.
+- **Variable picker**: variables are offered by whether they fit the property's slot, and the
+  Weight, Font, line height, letter spacing and text transform pickers filter by computed value.
+  Suggestions are grouped, with view options and local and computed values; each row shows the
+  declaration written for the element. Hovering a variable previews it live on the canvas, a
+  dismissed picker always puts the original value back, and the popover is capped at 18rem in
+  every host with more room and a clearer hierarchy between rows.
+- **Hidden variables**: a variable can be hidden from picker suggestions (the applied one still
+  shows). The choice lives in the new tracked file `.stacki/variables.json`
+  (`{ "version": 1, "hiddenFromSuggestions": ["--name"] }`), shared by Desktop and Studio.
+- **Query dropdown**: the context dropdown groups its queries by where each is written, and Base
+  lands the canvas where Base is in effect for the project's convention.
+- **Style panel speed**: dropdown hover and label reset answer instantly, switching element paints
+  in one step, placeholders (not plain fields) hold the place while an element loads, and the
+  panel keeps its lists when a re-render brings the same ones.
+- **Fixes**: undo steps and a cleared segment bar's chip, a popover closes on scroll only when its
+  anchor moved, and the title bar's Play button is as tall as Publish.
+- **Icons**: a reset arrow for Clear and a pie chart for percentage variables (Central).
+- **CI**: GitHub Actions moved off Node 20 to the Node 24 majors (checkout v6, setup-node v6,
+  cache v5, upload-artifact v6, download-artifact v7). 1.5.0 is the first release built with them.
+- Tests: the marked-row check in `renderer/variables/variableCellArrows` reads the row's binding
+  (rows now show a label and the written value). `studio/test/demoAssetMap` retries folder removal
+  after Windows `EBUSY`, and `renderer/apps/appUiKitTooltip` waits, within a bound, for Escape to
+  hide the popup, the two 1.4.2 release-run flakes.
+
 ## 1.4.2 the 1.4.0 changes, through the Settings hover probe
 
 - The same app as 1.4.0, which never became public. 1.4.1 fixed the Windows `ELECTRON_RUN_AS_NODE`
