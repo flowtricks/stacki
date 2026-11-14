@@ -12,6 +12,7 @@ import { getHost, onHostChange } from '../model/host';
 import { buildSnapshot, onDocsReloaded, rebuildRules, primeDomMatches, scanHasElement, serializeElementId, scanPage, webflowApi } from '../model/webflow';
 import type { ElementSnapshot } from '../model/styleTypes';
 import { EMPTY_RULE_MODEL, computePlaceholders } from './EditorBasics';
+import { readScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
 import {
   placeholdersFor,
   readDesignerState,
@@ -176,7 +177,7 @@ export function useElementReset(
   selectionState: ReturnType<typeof useSelectionState>,
   nativeState: ReturnType<typeof useNativeState>,
 ) {
-  const { selectedElementKeyRef } = editorRefs;
+  const { classListRef, docsRef, primedRef, selectedElementKeyRef, settledElementKeyRef, targetRef } = editorRefs;
   const { setQuickSnapshot, setScan } = scanState;
   const { pendingDefaultRef, setSelectedSelectorText, setSelectedTokens, setStateKey, tokenIdentityRef } = selectionState;
   const { nativeIdentityRef, nativeModelRef, setNativeModel } = nativeState;
@@ -195,15 +196,29 @@ export function useElementReset(
       setSelectedTokens([]);
       setStateKey('');
       setQuickSnapshot(undefined); // drop the previous element's chips
-      // The chips are derived from these two models, and both are refilled by
-      // async reads. Left alone they keep listing the PREVIOUS element's
-      // selectors as if they were this one's. Blank them now and mark the scan
-      // unsettled: the well then keeps drawing its last settled list, inert,
-      // until the new one has landed whole (heldSelection.ts), so neither the
-      // blank nor the stages in between reach the screen.
-      setScan((previous) =>
-        previous ? { ...previous, rootSnapshot: undefined, model: EMPTY_RULE_MODEL, settled: false, awaitingFirstAnswer: true } : previous,
-      );
+      // An element seen before, under the same CSS, is drawn from its last settled
+      // answer at once (scanSnapshotCache.ts); the canvas's fresh answer follows and
+      // replaces it only where it differs. Its match target goes with it, so an edit
+      // made before that answer lands is made against this element, not the last one.
+      const remembered = elementKey ? readScanSnapshot(scanSnapshotKey(elementKey, docsRef.current)) : undefined;
+      if (remembered !== undefined) {
+        settledElementKeyRef.current = elementKey;
+        targetRef.current = remembered.target;
+        classListRef.current = [...remembered.classList];
+        primedRef.current = remembered.primed;
+        setScan(remembered.scan);
+      } else {
+        settledElementKeyRef.current = '';
+        // The chips are derived from these two models, and both are refilled by
+        // async reads. Left alone they keep listing the PREVIOUS element's
+        // selectors as if they were this one's. Blank them now and mark the scan
+        // unsettled: the well and the sections draw placeholders in their shape
+        // until the new answer has landed whole, so neither the blank, the previous
+        // element's chips nor the stages in between reach the screen.
+        setScan((previous) =>
+          previous ? { ...previous, rootSnapshot: undefined, model: EMPTY_RULE_MODEL, settled: false, awaitingFirstAnswer: true } : previous,
+        );
+      }
       setNativeModel(undefined);
       nativeModelRef.current = undefined;
       nativeIdentityRef.current = '';
@@ -213,10 +228,15 @@ export function useElementReset(
       pendingDefaultRef.current = true;
     },
     [
+      classListRef,
+      docsRef,
       nativeIdentityRef,
       nativeModelRef,
       pendingDefaultRef,
+      primedRef,
       selectedElementKeyRef,
+      settledElementKeyRef,
+      targetRef,
       setNativeModel,
       setQuickSnapshot,
       setScan,

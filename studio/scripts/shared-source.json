@@ -1225,7 +1225,7 @@
     "src/features/style/embed/StyleCard.tsx",
     "src/features/style/embed/editorModel.ts",
     "src/features/style/embed/editorSignatures.ts",
-    "src/features/style/embed/heldSelection.ts",
+    "src/features/style/embed/scanSnapshotCache.ts",
     "src/features/style/embed/useComponentSourceTick.ts",
     "src/features/style/embed/useEditorContexts.ts",
     "src/features/style/embed/useEditorElement.ts",

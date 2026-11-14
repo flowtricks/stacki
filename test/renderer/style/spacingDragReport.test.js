@@ -136,8 +136,12 @@ test('a drag reports its value to the canvas; the hover stays silent meanwhile',
       label('top').dispatchEvent(event);
       await wait(POLL_MS * 2);
     };
+    // The element's first class is the default pick, highlighted from the first paint;
+    // a click on it would deselect it, so it is clicked only when another is picked.
     const chip = await until('the class chip', () => panel.querySelector('.embed-editor_selector-chip'));
-    chip.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    if (!chip.classList.contains('is-active')) {
+      chip.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    }
     await until('the value on the top label', () => label('top')?.textContent === '2rem');
     await until('the label to be ready', () => !label('top').disabled);
 

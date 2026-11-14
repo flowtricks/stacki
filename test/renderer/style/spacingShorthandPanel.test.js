@@ -150,8 +150,12 @@ test('the spacing box reads a padding shorthand and writes drags back compact', 
       await until('the panel to settle', () => SIDES.every((each) => !label(each)?.disabled));
     };
 
+    // The element's first class is the default pick, highlighted from the first paint;
+    // a click on it would deselect it, so it is clicked only when another is picked.
     const chip = await until('the class chip', () => panel.querySelector('.embed-editor_selector-chip'));
-    chip.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    if (!chip.classList.contains('is-active')) {
+      chip.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    }
     await until('the shorthand on the four sides', () => (shown().every((text) => text === '2rem') ? shown() : undefined));
     assert.equal(disk, '.card { color: red; padding: 2rem; }', 'showing it writes nothing');
 

@@ -26,6 +26,7 @@ import {
 } from '../model/webflow';
 import type { ElementSnapshot, NativeModel } from '../model/styleTypes';
 import { type ScanState, type Phase } from './EditorBasics';
+import { rememberScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
 import {
   streamDocs,
   loadComponentDocs,
@@ -87,6 +88,9 @@ export function useEditorRefs() {
   const primedRef = useRef<{ target: MatchTarget; key: string } | undefined>(undefined);
   const lastSnapSigRef = useRef('');
   const lastScanAtRef = useRef(editorSession.scan?.scanAt ?? 0);
+  // The element whose settled answer is on screen ('' while none is): an unsettled pass
+  // for it (source-only, a streamed partial) is a step back and is not drawn over it.
+  const settledElementKeyRef = useRef('');
   return {
     appliedKeyRef,
     busyRef,
@@ -107,6 +111,7 @@ export function useEditorRefs() {
     selectedElementKeyRef,
     selectedRef,
     seqRef,
+    settledElementKeyRef,
     targetRef,
   };
 }
@@ -578,7 +583,7 @@ export function useContentRebuild(
 
 // Resolve the selected element against the cached content.
 export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, scanState: ReturnType<typeof useScanState>) {
-  const { appliedKeyRef, classListRef, pageDocsRef, primedRef, seqRef, targetRef } = editorRefs;
+  const { appliedKeyRef, classListRef, docsRef, pageDocsRef, primedRef, seqRef, settledElementKeyRef, targetRef } = editorRefs;
   const { setPhase, setScan, setScanningMore, setStatus } = scanState;
 
   // The cheap part — resolve the selected element against cached content.
@@ -590,6 +595,19 @@ export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, sc
       const asked = options.sourceOnly ? ({ kind: 'unasked' } as const) : await askCanvasAbout(serializeElementId(element), content.rules);
       const { target, rootSnapshot } = await resolveTarget(element, content.scan, asked);
       if (seq !== seqRef.current) {
+        return;
+      }
+      // A streamed partial is a step on the way (EditorBasics.tsx). So is a
+      // source-only pass that could not read the element's classes (markup a
+      // component renders): its list is the page's global selectors alone, and
+      // drawing it flashed them between two elements' chips. One that did read
+      // them is a real answer, shown while a busy canvas is still answering.
+      const sourceKnown = rootSnapshot.classList.length > 0;
+      const settled = !content.partial && (options.sourceOnly !== true || sourceKnown);
+      const elementKey = serializeElementId(element);
+      // This element's settled answer is already drawn (a remembered one, or an earlier
+      // pass): a step on the way to the next one must not replace it with less.
+      if (!settled && settledElementKeyRef.current === elementKey) {
         return;
       }
       targetRef.current = target;
@@ -612,13 +630,6 @@ export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, sc
       // Scaffolds come from the current context's own (writable) embeds — the
       // component's embeds while inside one, the page's otherwise.
       classListRef.current = rootSnapshot.classList;
-      // A streamed partial is a step on the way (EditorBasics.tsx). So is a
-      // source-only pass that could not read the element's classes (markup a
-      // component renders): its list is the page's global selectors alone, and
-      // drawing it flashed them between two elements' chips. One that did read
-      // them is a real answer, shown while a busy canvas is still answering.
-      const sourceKnown = rootSnapshot.classList.length > 0;
-      const settled = !content.partial && (options.sourceOnly !== true || sourceKnown);
       // Still waiting for this element's first settled answer if the selection reset said so
       // and this step is not it: a rescan of an element already shown never sets it.
       const landed: ScanState = {
@@ -626,13 +637,22 @@ export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, sc
         awaitingFirstAnswer: false,
       };
       setScan((previous) => ({ ...landed, awaitingFirstAnswer: !settled && previous?.awaitingFirstAnswer === true }));
+      if (settled) {
+        settledElementKeyRef.current = elementKey;
+        rememberScanSnapshot(scanSnapshotKey(elementKey, docsRef.current), {
+          scan: landed,
+          target,
+          classList: rootSnapshot.classList,
+          primed: options.sourceOnly ? undefined : { target, key: selectorKeyOf(content.rules) },
+        });
+      }
       setPhase('ready');
       setScanningMore(!!content.partial);
       if (!options.silent) {
         setStatus(resolveStatus(content, model));
       }
     },
-    [appliedKeyRef, classListRef, pageDocsRef, primedRef, seqRef, setPhase, setScan, setScanningMore, setStatus, targetRef],
+    [appliedKeyRef, classListRef, docsRef, pageDocsRef, primedRef, seqRef, setPhase, setScan, setScanningMore, setStatus, settledElementKeyRef, targetRef],
   );
   return { applyResolve };
 }

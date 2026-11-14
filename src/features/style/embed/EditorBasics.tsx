@@ -47,8 +47,9 @@ export type ScanState = {
   /** True once the element's selectors come from a complete resolve the canvas
    *  answered. False from the moment another element is selected until then: the
    *  model is blanked, then filled in steps (source-known first, then the DOM's
-   *  answer). The selector well keeps its last settled chips across those steps
-   *  rather than showing each one (heldSelection.ts). */
+   *  answer). The selector well draws a placeholder across those steps rather than
+   *  showing each one (SelectorPicker.tsx). An element remembered from an earlier
+   *  visit lands settled at once (scanSnapshotCache.ts). */
   settled: boolean;
 };
 

@@ -21,7 +21,7 @@ import { selectorKey, selectorsMatch } from '../model/resolved';
 import { SpinnerIcon } from './EditorBasics';
 import { InlineStyleChip } from './InlineStyleChip';
 import type { InlineChip } from './useInlineTarget';
-import { useHeldSelection } from './heldSelection';
+import { Skeleton } from '../../../ui/Skeleton';
 import { loneTypedClass, usePseudoTarget } from './editorModel';
 import { classRowMatch, classRows, classRowStep, fuzzySegments, isClassName, rankFuzzy, type ClassRow, type ClassRowList } from '../../../lib/fuzzyRank';
 import { chipAtCaret, chipPart, createPressWatch, type PressWatch } from '../model/selectorCaret';
@@ -52,15 +52,13 @@ export function SelectorPicker({
   inline,
 }: SelectorPickerProps) {
   const translate = useTranslate();
-  // Another element's chips land in stages; the well draws only the finished list,
-  // keeping the last one until then (heldSelection.ts).
-  const held = useHeldSelection({ selectors, activeSelector, activePicked }, { settled: settled ?? true });
-  const view = useSelectorView({
-    selectors: held.view.selectors,
-    activeSelector: held.view.activeSelector,
-    activePicked: held.view.activePicked,
-    onVisibleSelectorsChange,
-  });
+  // Another element's chips land in stages (the model is blanked, the source-known
+  // selectors land, then the canvas's answer). Until its answer has settled the well
+  // draws a placeholder in the chips' shape: neither the stages nor the previous
+  // element's chips, which would be another element's selectors offered as this one's.
+  // An element seen before is settled at once (scanSnapshotCache.ts).
+  const pending = settled === false;
+  const view = useSelectorView({ selectors, activeSelector, activePicked, onVisibleSelectorsChange });
   const field = useAddSelectorField({
     selectors,
     suggestions,
@@ -90,24 +88,22 @@ export function SelectorPicker({
             than "not counted yet". A spinner where the first chip will land says
             which one it is, and holds the box's height so nothing jumps when the
             chips arrive. */}
-          {loading && !view.shownSelectors.length ? (
+          {pending ? <SelectorChipsPlaceholder label={translate('styleModel.embed.picker.finding')} /> : undefined}
+          {!pending && loading && !view.shownSelectors.length ? (
             <div className="embed-editor_selector-loading" aria-live="polite">
               <SpinnerIcon />
               <span className="u-sr-only">{translate('styleModel.embed.picker.finding')}</span>
             </div>
           ) : undefined}
-          {view.shownSelectors.length || showInput || inline !== undefined ? (
+          {!pending && (view.shownSelectors.length || showInput || inline !== undefined) ? (
             <SelectorChips
               entries={view.shownSelectors}
-              // The held chips are the previous element's; so would its inline chip be.
-              inline={held.holding ? undefined : inline}
-              activeSelector={held.view.activeSelector}
+              inline={inline}
+              activeSelector={activeSelector}
               busy={busy}
-              // The held chips are the previous element's: a click on one would
-              // pick its selector for the element now selected.
-              onSelect={held.holding ? ignoreHeldPick : onSelect}
-              onDeselect={held.holding ? ignoreHeldPick : onDeselect}
-              onRemove={held.holding ? ignoreHeldPick : removeChip}
+              onSelect={onSelect}
+              onDeselect={onDeselect}
+              onRemove={removeChip}
             >
               {showInput ? (
                 <SelectorAddField
@@ -125,13 +121,26 @@ export function SelectorPicker({
           ) : undefined}
         </div>
       </div>
-      <SelectorFilterToggles view={view} />
+      <SelectorFilterToggles view={view} pending={pending} />
     </>
   );
 }
 
-// A pick on a held chip: the chip belongs to the previous element, so nothing happens.
-function ignoreHeldPick(): void {}
+// The chip widths a placeholder row draws: fixed, so the row never changes between renders.
+const PLACEHOLDER_CHIP_WIDTHS_REM = ['2.5rem', '4.5rem', '6rem'] as const;
+
+// The well while the selected element's chips are on their way: one row of chip-shaped
+// fills, a chip high, so the well keeps its height and nothing below it moves twice.
+function SelectorChipsPlaceholder({ label }: { readonly label: string }) {
+  return (
+    <div className="embed-editor_selector-chips is-placeholder" role="status" aria-busy="true">
+      {PLACEHOLDER_CHIP_WIDTHS_REM.map((width) => (
+        <Skeleton key={width} width={width} height="var(--embed-editor_chip-h)" />
+      ))}
+      <span className="u-sr-only">{label}</span>
+    </div>
+  );
+}
 
 // Keep the highlighted row visible while arrowing through a long list.
 export function useHighlightInView({ listRef, highlight, showList }: { listRef: React.RefObject<HTMLDivElement>; highlight: number; showList: boolean }) {
@@ -856,20 +865,40 @@ export function selectorKeyDown(event: ReactKeyboardEvent<HTMLInputElement>, add
 // row, so the panel rearranged itself under the pointer just as it became usable.
 // It is never disabled: the choice is remembered, so it can be set before there
 // is anything to hide, and greyed out it read as broken.
-export function SelectorFilterToggles({ view }: { view: SelectorView }) {
+//
+// While the chips are pending (`pending`), the counts are not known: a count from the
+// previous element would be a wrong number, so each label waits with a fill where its
+// count goes and the same label, counted, replaces it.
+export function SelectorFilterToggles({ view, pending = false }: { view: SelectorView; pending?: boolean }) {
   const translate = useTranslate();
   const { globals, inherited } = view;
   return (
     <>
       <label className="embed-editor_check embed-editor_selector-filter" title={translate('styleModel.embed.picker.hideGlobalsTip')}>
         <input type="checkbox" checked={view.filters.hideGlobals} onChange={(event) => view.setHideGlobals(event.target.checked)} />
-        <span>{translate('styleModel.embed.picker.hideGlobals', { count: globals.length })}</span>
+        {pending ? (
+          <PendingCount label={translate('styleModel.embed.picker.hideGlobalsPending')} />
+        ) : (
+          <span>{translate('styleModel.embed.picker.hideGlobals', { count: globals.length })}</span>
+        )}
       </label>
       <label className="embed-editor_check embed-editor_selector-filter" title={translate('styleModel.embed.picker.hideInheritedTip')}>
         <input type="checkbox" checked={view.filters.hideInherited} onChange={(event) => view.setHideInherited(event.target.checked)} />
-        <span>{translate('styleModel.embed.picker.hideInherited', { count: inherited.length })}</span>
+        {pending ? (
+          <PendingCount label={translate('styleModel.embed.picker.hideInheritedPending')} />
+        ) : (
+          <span>{translate('styleModel.embed.picker.hideInherited', { count: inherited.length })}</span>
+        )}
       </label>
     </>
+  );
+}
+
+function PendingCount({ label }: { readonly label: string }) {
+  return (
+    <span className="embed-editor_selector-filter-pending">
+      {label} <Skeleton width="1.25rem" />
+    </span>
   );
 }
 

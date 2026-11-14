@@ -382,8 +382,8 @@ export type SelectorPickerProps = {
   busy: boolean;
   /** Still scanning — the chips that will fill this well are on their way. */
   loading: boolean;
-  /** False while a newly selected element's chips are still landing; the well keeps
-   *  the previous list until they settle (heldSelection.ts). Absent means settled. */
+  /** False while a newly selected element's chips are still landing; the well draws
+   *  a placeholder until they settle (SelectorPicker.tsx). Absent means settled. */
   settled?: boolean;
   onSelect: (selector: string) => void;
   onDeselect: () => void;

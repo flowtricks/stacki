@@ -13,6 +13,7 @@ import {
   applyNativePropertyAt,
   applyNativeToNewBaseClass,
   blankStyleDocument,
+  nativeStylingAvailable,
   rebuildRules,
   removeNativePropertyAt,
   webflowApi,
@@ -67,15 +68,27 @@ export function useDefaultUpgrade(
   // selector actually STYLED in the current context — so if `.media_card_title` is
   // styled in `@container (…)` but the full combo isn't, we land on `.media_card_title`.
   // Runs once the model is ready for the new element; skips if you already picked.
-  useEffect(() => {
-    if (!pendingDefaultRef.current || !model) {
+  //
+  // Decided during render, not in an effect, for the reason useTokenDefault gives: an
+  // effect commits the raw default first, so every switch to an element whose first
+  // class is unstyled painted a frame with no highlighted chip and the fields keyed to
+  // the raw default, then remounted them (TypographySection is keyed by the selector),
+  // closing any menu opened in between. Setting the pick while rendering makes React
+  // render again before anything is painted; pendingDefaultRef makes it run once.
+  if (pendingDefaultRef.current && model) {
+    upgradeDefault();
+  }
+  function upgradeDefault(): void {
+    if (!model) {
       return;
     }
     // Wait until nativeModel is the CURRENT element's — it loads via a separate async
     // effect and lags the embed model on a switch. Defaulting off a stale nativeModel
     // would pick the previous element's native selectors (and clobber pendingDefaultRef),
     // leaving that selector stuck as a pending chip. Re-runs when nativeModel catches up.
-    if (nativeIdentityRef.current !== elementIdentity) {
+    // With no native styling (nativeStubs.ts) that read always answers empty, so there is
+    // nothing to wait for: waiting on it held the pick a commit behind the chips.
+    if (nativeStylingAvailable() && nativeIdentityRef.current !== elementIdentity) {
       return;
     }
     const activeContext = styleContexts.find((entry) => entry.key === context);
@@ -109,19 +122,7 @@ export function useDefaultUpgrade(
     if (initial !== undefined) {
       selectActiveSelector(initial.text);
     }
-  }, [
-    model,
-    nativeModel,
-    context,
-    styleContexts,
-    tokens,
-    elementIdentity,
-    snapshot,
-    selectActiveSelector,
-    defaultTokensRef,
-    nativeIdentityRef,
-    pendingDefaultRef,
-  ]);
+  }
 }
 
 // Re-read the selection when the panel regains focus.
