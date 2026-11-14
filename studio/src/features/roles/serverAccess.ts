@@ -96,6 +96,15 @@ const PREFIXES: readonly (readonly [string, RouteRule])[] = [
   ['/studio/api/ai/', { kind: 'features', features: ['panel:ai'] }],
 ];
 
+/**
+ * Every gated write path: the exact ones, and one path under each prefix. Tests walk it to
+ * prove that no request without a verified user reaches any of them (roles.test.ts,
+ * cloudflareAccess.test.ts).
+ */
+export function gatedRoutePaths(): readonly string[] {
+  return [...EXACT.keys(), ...PREFIXES.map(([prefix]) => (prefix.endsWith('/') ? prefix + 'probe' : prefix))];
+}
+
 /** The rule for a request, or undefined when it is a read or an ungated path. */
 export function routeRule(method: string | undefined, pathname: string): RouteRule | undefined {
   if (method === 'GET' || method === 'HEAD' || method === undefined) {
@@ -120,6 +129,9 @@ export async function requestRole(root: string, request: Pick<IncomingMessage, '
   if (!process.env['STUDIO_CONTAINER_TOKEN']) {
     return ADMIN_VIEW;
   }
+  // A hosted request without a user (the container token alone, as an app file link
+  // forwards) has no role: parseGitHubLogin throws, so a gated route fails closed,
+  // before the roles file is read and whether or not one exists.
   const header = request.headers['x-studio-user'];
   const login = parseGitHubLogin(typeof header === 'string' ? header : '');
   const stored = await readMetadataSource(root, 'roles');

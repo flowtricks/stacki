@@ -171,6 +171,16 @@ made public, because a bundle is not guaranteed to be free of secrets.
 `src/cloudflare/appFileLinks.ts` states the full threat model. A top-level file or folder whose
 name starts with `~` cannot be loaded from an app folder.
 
+### Identities and project roles
+
+The Worker forwards the signed-in GitHub login as `x-studio-user`, and the container trusts
+it only alongside the container token. Project roles (`.stacki/roles.json`) name GitHub logins,
+and the container parses every forwarded login as a GitHub username (`parseGitHubLogin` in
+`shared/properties/projectRoles.ts`). A request without a valid GitHub login never gets a role,
+so every role-gated write is refused, even when no roles file exists. A deployment that issues
+its own sign-in names (for example from a custom handoff route) must forward a GitHub login;
+otherwise every role-gated write is refused. Carrying other identities is not supported yet.
+
 ## Local server configuration
 
 For an optional local AI server:

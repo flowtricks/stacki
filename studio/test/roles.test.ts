@@ -14,7 +14,7 @@ import { once } from 'node:events';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { assertRouteAllowed, metadataFeatures, requestRole, RoleRefusal, routeRule } from '../src/features/roles/serverAccess';
+import { assertRouteAllowed, gatedRoutePaths, metadataFeatures, requestRole, RoleRefusal, routeRule } from '../src/features/roles/serverAccess';
 import { getEditorRole, getStudioRole, setEditorRole, setStudioRoles } from '../src/features/roles/roleStore';
 import { ADMIN_VIEW, DEFAULT_PROJECT_ROLES, roleViewOf } from '../vendor/stacki/shared/properties/projectRoles';
 
@@ -67,8 +67,13 @@ async function server(root: string) {
   const base = `http://127.0.0.1:${address.port}`;
   return {
     ran,
-    send: (user: string, method: string, route: string, body?: unknown) =>
-      fetch(base + route, { method, headers: { 'x-studio-user': user }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }),
+    // `user` undefined sends exactly `headers`, so a test can omit or garble the user header.
+    send: (user: string | undefined, method: string, route: string, body?: unknown, headers: Record<string, string> = {}) =>
+      fetch(base + route, {
+        method,
+        headers: user === undefined ? headers : { 'x-studio-user': user },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
     close: () => {
       instance.close();
       instance.closeAllConnections();
@@ -113,6 +118,39 @@ test('no roles file, or a local Studio, keeps every route open; a broken file fa
   assert.throws(() => assertRouteAllowed(closed, { kind: 'features', features: ['panel:code'] }, ''), RoleRefusal);
   delete process.env['STUDIO_CONTAINER_TOKEN'];
   assert.equal((await requestRole(broken, headers)).isAdmin, true, 'a local Studio has no sign-in: its user is admin');
+});
+
+// Issue #80: a request with no x-studio-user must never resolve to a role, least of all the
+// admin view a project without roles.json gives everyone.
+test('a hosted request that names no user reaches no gated route, with or without a roles file', async (context) => {
+  process.env['STUDIO_CONTAINER_TOKEN'] = 'test-token';
+  const withRoles = await project(JSON.stringify(roles));
+  const withoutRoles = await project(undefined);
+  const studios = [await server(withRoles), await server(withoutRoles)];
+  context.after(async () => {
+    for (const studio of studios) {
+      studio.close();
+    }
+    delete process.env['STUDIO_CONTAINER_TOKEN'];
+    await rm(withRoles, { recursive: true, force: true });
+    await rm(withoutRoles, { recursive: true, force: true });
+  });
+  const paths = gatedRoutePaths();
+  assert.ok(paths.length > 30, 'Every gated route is listed');
+  for (const pathname of paths) {
+    assert.ok(routeRule('POST', pathname), pathname + ' is gated');
+  }
+  for (const studio of studios) {
+    for (const header of [undefined, '', ' ', 'not a login!', '../owner']) {
+      for (const pathname of paths) {
+        const headers: Record<string, string> = header === undefined ? {} : { 'x-studio-user': header };
+        const response = await studio.send(undefined, 'POST', pathname, { kind: 'roles', source: '{}' }, headers);
+        assert.notEqual(response.status, 200, `${pathname} with user ${JSON.stringify(header)}`);
+      }
+    }
+    assert.deepEqual(studio.ran, []);
+  }
+  await assert.rejects(requestRole(withoutRoles, { headers: {} }), /login|GitHub|characters/i);
 });
 
 test('route rules cover writes only and settings files by kind', () => {
