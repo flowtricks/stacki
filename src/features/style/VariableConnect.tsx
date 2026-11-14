@@ -10,6 +10,7 @@ import { insertBindingAt, type ValueSelection } from './model/insertBinding';
 import { completeTypedVariable, fieldOffsetOf, replaceVariableAt, typedVariableAt, type TypedVariable } from './model/typedVariable';
 import type { PickerNavigation } from './VariablePicker';
 import { PlusIcon } from './VariableIcons';
+import { useExitRestore } from './pickerExit';
 import { varTypeAllowed, useSharedVars } from './sharedVars';
 import { VariablePicker } from './VariablePicker';
 import VariableHint from './VariableHint';
@@ -101,7 +102,7 @@ export default function VariableConnect(props: VariableConnectProps) {
   const { editorRef, dotRef, chipText, liveValue, selectionRef, readCaret, hintValue } = connect;
   const { chipTarget, setChipTarget, suggest, setSuggest, navigationRef } = connect;
   const anchor = (showToken ? editorRef.current : dotRef.current) ?? undefined;
-  const { openedRef, bigChipRef } = connect;
+  const { openedRef, bigChipRef, epochRef } = connect;
   // The value as it would be with `chosen` picked, worked out from the value
   // the chooser opened on: previews change the field, and a pick after three
   // of them must still be one change from where it started.
@@ -126,12 +127,9 @@ export default function VariableConnect(props: VariableConnectProps) {
     setOpen(true);
   };
   const closeChooser = (): void => {
-    const opened = openedRef.current;
+    // Closed without a pick: whatever was previewed goes back, then the session ends.
+    restore({ when: 'batched' });
     openedRef.current = undefined;
-    // Closed without a pick: whatever the arrows previewed goes back.
-    if (opened !== undefined && opened.previewed) {
-      draftTo(opened.value);
-    }
     setChipTarget(undefined);
     setSuggest(undefined);
     setOpen(false);
@@ -148,6 +146,8 @@ export default function VariableConnect(props: VariableConnectProps) {
       return;
     }
     const next = withChosen(chosen);
+    // A pick ends the session: a preview still in flight must not land after it.
+    epochRef.current += 1;
     openedRef.current = undefined;
     onPick(next);
     setChipTarget(undefined);
@@ -165,29 +165,41 @@ export default function VariableConnect(props: VariableConnectProps) {
     }
     return slotOfMarked(insertBindingAt(base, SLOT_MARK, selectionRef.current));
   };
-  const preview = (chosen: string): void => {
+  // A preview carries the epoch it was asked in. Restoring bumps the epoch, so a preview that was
+  // scheduled (a hover waiting for its frame) or sent before the restore is dropped when it arrives
+  // and can never be applied after it.
+  const preview = (chosen: string, epoch: number): void => {
     const opened = openedRef.current;
-    if (opened === undefined) {
+    if (opened === undefined || epoch !== epochRef.current) {
       return;
     }
     openedRef.current = { ...opened, previewed: true };
     draftTo(withChosen(chosen));
   };
-  // The pointer left the list, the window lost focus: the value goes back to what the
-  // chooser opened on, and stays there until another row is previewed. Idempotent.
+  // THE restore: the value goes back to the one the chooser opened on, which was captured once, at
+  // opening, and is the only source of truth for it. Idempotent, and it wins over any preview still in
+  // flight (the epoch). `now` flushes the field before the caller's own event goes on, so the blur a
+  // press causes commits the original; `batched` is for places already inside a render or an effect.
   // The preview is only ever a draft (draftTo), never a write, history entry or save.
-  const endPreview = (): void => {
+  const restore = ({ when }: { readonly when: 'now' | 'batched' }): void => {
+    epochRef.current += 1;
     const opened = openedRef.current;
-    if (opened !== undefined && opened.previewed) {
-      openedRef.current = { ...opened, previewed: false };
+    if (opened === undefined || !opened.previewed) {
+      return;
+    }
+    openedRef.current = { ...opened, previewed: false };
+    if (when === 'now') {
+      flushSync(() => draftTo(opened.value));
+    } else {
       draftTo(opened.value);
     }
   };
-  // Unmounting with a preview still showing (the selection changed, the project switched)
-  // puts the original back too. A ref holds the latest closure so the cleanup sees it.
-  const endPreviewRef = useRef(endPreview);
-  endPreviewRef.current = endPreview;
-  useEffect(() => () => endPreviewRef.current(), []);
+  const restoreRef = useRef(restore);
+  restoreRef.current = restore;
+  // Unmounting with a preview still showing (the selection changed, the project switched) puts the original back too.
+  useEffect(() => () => restoreRef.current({ when: 'batched' }), []);
+  // Every other way out (a press anywhere, the canvas, Escape, Tab, focus, scroll, selection): ahead of the close.
+  useExitRestore({ active: open || suggest !== undefined, restore: () => restoreRef.current({ when: 'now' }) });
   // The press that opened the large editor on a clipped chip also opens the chooser, once, here.
   const openOnMountRef = useRef({ chip: props.initialChip, open: openChooser, disabled });
   openOnMountRef.current = { chip: props.initialChip, open: openChooser, disabled };
@@ -243,6 +255,16 @@ export default function VariableConnect(props: VariableConnectProps) {
           field={field}
           editorRef={editorRef}
           setActive={connect.setActive}
+          guard={{
+            restoredValue: () => {
+              const opened = openedRef.current;
+              if (opened === undefined || !opened.previewed) {
+                return undefined;
+              }
+              restore({ when: 'batched' });
+              return opened.value;
+            },
+          }}
           onChip={(chip) => {
             // The chip is a toggle: pressing the one whose chooser is open closes it and leaves it
             // closed. The chip sits inside the chooser's anchor, so the dismiss logic does not also
@@ -295,7 +317,8 @@ export default function VariableConnect(props: VariableConnectProps) {
         onPick={pick}
         slot={open || suggest !== undefined ? pickSlot() : undefined}
         onPreview={preview}
-        onPreviewEnd={endPreview}
+        previewEpoch={() => epochRef.current}
+        onPreviewEnd={() => restore({ when: 'batched' })}
         onClosePicker={closeChooser}
         openChip={bigChipRef.current}
         onCloseBig={() => setBig(undefined)}
@@ -337,6 +360,8 @@ function useVariableConnect({ prop, code, children }: VariableConnectProps) {
   const navigationRef = useRef<PickerNavigation | undefined>(undefined);
   // The value the chooser opened on, and whether the arrows have previewed another.
   const openedRef = useRef<{ readonly value: string; readonly previewed: boolean } | undefined>(undefined);
+  // Bumped by every restore and pick: a preview asked before it is stale.
+  const epochRef = useRef(0);
   const [big, setBig] = useState<DOMRect | undefined>(undefined);
   // The chip whose press opened the large editor, if the press was on one.
   const bigChipRef = useRef<PressedChip | undefined>(undefined);
@@ -362,11 +387,18 @@ function useVariableConnect({ prop, code, children }: VariableConnectProps) {
     setSuggest,
     navigationRef,
     openedRef,
+    epochRef,
     bigChipRef,
     big,
     setBig,
     wrapRef,
   };
+}
+
+// What a field's commit asks the chooser first: with a preview showing, the original value (and the
+// preview put away), so a blur never commits what was only being looked at.
+interface PreviewGuard {
+  readonly restoredValue: () => string | undefined;
 }
 
 // The rich token editor over the wrapped input, wired to stand in for it.
@@ -380,9 +412,11 @@ function ConnectTokenField({
   field,
   editorRef,
   setActive,
+  guard,
   onChip,
 }: {
   connect: VariableConnectProps;
+  guard: PreviewGuard;
   ariaLabel: string;
   value: string;
   chips: Chip[];
@@ -407,7 +441,7 @@ function ConnectTokenField({
         placeholder={hintValue ? '' : childPlaceholder(connect.children)}
         {...(disabled === undefined ? {} : { disabled })}
         editorRef={editorRef}
-        {...tokenFieldHandlers({ field, setActive, disabled, onChip })}
+        {...tokenFieldHandlers({ field, guard, setActive, disabled, onChip })}
         {...(code === undefined ? {} : { code })}
         {...(stepMin === undefined ? {} : { stepMin })}
       />
@@ -437,6 +471,7 @@ function ConnectPopups({
   onPick,
   slot,
   onPreview,
+  previewEpoch,
   onPreviewEnd,
   onClosePicker,
   onCloseBig,
@@ -454,7 +489,8 @@ function ConnectPopups({
   liveValue: () => string;
   onPick: (binding: string) => void;
   slot: ValueSlot | undefined;
-  onPreview: (binding: string) => void;
+  onPreview: (binding: string, epoch: number) => void;
+  previewEpoch: () => number;
   onPreviewEnd: () => void;
   onClosePicker: () => void;
   onCloseBig: () => void;
@@ -474,6 +510,7 @@ function ConnectPopups({
           {...(picker.typing === undefined ? {} : { typing: picker.typing })}
           {...(slot === undefined ? {} : { slot })}
           onPreview={onPreview}
+          previewEpoch={previewEpoch}
           onPreviewEnd={onPreviewEnd}
           onPick={onPick}
           onClose={onClosePicker}
@@ -668,11 +705,13 @@ function pushDraft(field: WrappedField, next: string): void {
 // and a chip press that opens the picker.
 function tokenFieldHandlers({
   field,
+  guard,
   setActive,
   disabled,
   onChip,
 }: {
   field: WrappedField;
+  guard: PreviewGuard;
   setActive: (active: boolean) => void;
   disabled: boolean | undefined;
   onChip: (chip: PressedChip) => void;
@@ -682,7 +721,9 @@ function tokenFieldHandlers({
       setActive(true);
       field.childHandlers?.onFocus?.(field.fakeEvent());
     },
-    onCommit: (final: string) => {
+    onCommit: (shown: string) => {
+      // A blur while a preview shows commits the value the chooser opened on, never the preview.
+      const final = guard.restoredValue() ?? shown;
       const input = field.inputRef.current;
       if (input) {
         // Drive the controlled field directly. This guarantees its draft becomes

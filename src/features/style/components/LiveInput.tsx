@@ -61,9 +61,10 @@ export default function LiveInput({
   onVariablePick,
 }: LiveInputProps) {
   const translate = useTranslate();
-  const { draft, setDraft, focused, cancelLive, scheduleLive } = useLiveDraft(value, onLive);
+  const { draft, setDraft, focused, cancelLive, scheduleLive, settleLive } = useLiveDraft(value, onLive);
   const commitScrub = (text: string) => {
     setDraft(text);
+    settleLive();
     onCommit(text);
   };
   const scrub = useScrub({
@@ -81,7 +82,14 @@ export default function LiveInput({
         ariaLabel={translate('styleModel.shared.connectVariable', { label: ariaLabel })}
         disabled={busy}
         prop={prop}
-        onPick={(binding) => (onVariablePick ?? onCommit)(binding)}
+        onPick={(binding) => {
+          // The pick is the edit: a live preview still waiting for its timer must not land after it.
+          cancelLive();
+          settleLive();
+          // The field shows the pick even when it is the value already saved (no prop change follows then).
+          setDraft(binding);
+          (onVariablePick ?? onCommit)(binding);
+        }}
       >
         <input
           {...scrub.input}
@@ -97,6 +105,7 @@ export default function LiveInput({
           onBlur={() => {
             focused.current = false;
             cancelLive();
+            settleLive();
             onCommit(draft);
           }}
           onKeyDown={(event) => {
@@ -149,6 +158,12 @@ function useLiveDraft(value: string, onLive: (value: string) => void) {
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
   const liveTimer = useRef<number | undefined>(undefined);
+  // The text the pending timer will send, and the latest committed value and sender, for the unmount below.
+  const pendingText = useRef<string | undefined>(undefined);
+  // The last text sent live and not committed since: what the canvas may be showing that no save holds.
+  const liveSent = useRef<string | undefined>(undefined);
+  const latest = useRef({ value, onLive });
+  latest.current = { value, onLive };
   useEffect(() => {
     if (!focused.current) {
       setDraft(value);
@@ -159,14 +174,39 @@ function useLiveDraft(value: string, onLive: (value: string) => void) {
       window.clearTimeout(liveTimer.current);
       liveTimer.current = undefined;
     }
+    pendingText.current = undefined;
   }, []);
-  useEffect(() => cancelLive, [cancelLive]);
+  // Leaving with a live edit still waiting is dropped, EXCEPT when it is the committed value itself: that
+  // edit puts back what an earlier live edit already showed (a variable previewed from the picker and
+  // restored), and dropping it would leave the canvas on the preview with nothing to take it back.
+  useEffect(
+    () => () => {
+      const text = pendingText.current;
+      const settled = text !== undefined && text === latest.current.value;
+      cancelLive();
+      if (settled) {
+        latest.current.onLive(text);
+      } else if (liveSent.current !== undefined && liveSent.current !== latest.current.value) {
+        // Gone with a live edit shown and never committed: the canvas goes back to the saved value.
+        latest.current.onLive(latest.current.value);
+      }
+      liveSent.current = undefined;
+    },
+    [cancelLive],
+  );
+  // A commit, or a pick, makes what the canvas shows the saved value's business again.
+  const settleLive = useCallback(() => {
+    liveSent.current = undefined;
+  }, []);
   const scheduleLive = (text: string) => {
     cancelLive();
+    pendingText.current = text;
     liveTimer.current = window.setTimeout(() => {
       liveTimer.current = undefined;
+      pendingText.current = undefined;
+      liveSent.current = text;
       onLive(text);
     }, 100);
   };
-  return { draft, setDraft, focused, cancelLive, scheduleLive };
+  return { draft, setDraft, focused, cancelLive, scheduleLive, settleLive };
 }

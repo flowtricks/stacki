@@ -60,6 +60,8 @@ const HiddenIcon = centralIcon(centralEyeOff, 12);
 
 // The picker popup: search field + grouped variable list (name + value). Portaled to
 // <body>, anchored to the dot and clamped into the viewport.
+const ZERO_EPOCH = (): number => 0;
+
 export function VariablePicker({
   anchor,
   vars,
@@ -69,6 +71,7 @@ export function VariablePicker({
   slot,
   typing,
   onPreview,
+  previewEpoch = ZERO_EPOCH,
   onPreviewEnd,
   onPick,
   onClose,
@@ -92,7 +95,9 @@ export function VariablePicker({
    * variable in the value for now. Enter or a click makes it so; closing any
    * other way is the caller's cue to put the original back.
    */
-  onPreview?: (binding: string) => void;
+  onPreview?: (binding: string, epoch: number) => void;
+  /** The epoch a preview asked now belongs to: a restore bumps it, which drops every older preview. */
+  previewEpoch?: () => number;
   /** Hovering ended without a pick (the pointer left the list, the window lost focus): put the value back. */
   onPreviewEnd?: () => void;
   onPick: (binding: string) => void;
@@ -186,12 +191,12 @@ export function VariablePicker({
   }, [showAll, listed, prop, defined, selectedBinding, slot, suggested]);
   const filtered = query === '' ? offered : offered.filter((variable) => matchesQuery(variable, query));
   const drawn = useMemo(() => drawingOrder(filtered, listed, offered, { grouped }), [filtered, listed, offered, grouped]);
-  const { activeBinding, navigation } = usePickerNavigation(ref, drawn, { typing, search }, onPreview, onPick);
+  const { activeBinding, navigation } = usePickerNavigation(ref, drawn, { typing, search }, onPreview, previewEpoch, onPick);
   // With its own search box the arrows move the purple mark itself, from the
   // applied variable to the one being previewed. Following typing, the mark
   // stays on the applied variable and the keyboard row is tinted instead.
   const markedBinding = typing === undefined ? (activeBinding ?? selectedBinding) : selectedBinding;
-  const hover = useHoverPreview(typing === undefined ? onPreview : undefined, onPreviewEnd);
+  const hover = useHoverPreview({ onPreview: typing === undefined ? onPreview : undefined, previewEpoch, onPreviewEnd });
   const endHover = hover.end;
   useEffect(() => {
     const element = ref.current;
@@ -316,14 +321,20 @@ export function VariablePicker({
 // winning, and a pending one is cancelled when the pointer leaves or the picker closes,
 // so a stale frame can never re-show a preview after the restore. Hover events are
 // pointer events dispatched by the page; nothing here depends on real pointer hardware.
-function useHoverPreview(
-  onPreview: ((binding: string) => void) | undefined,
-  onPreviewEnd: (() => void) | undefined,
-): { readonly enter: (binding: string) => void; readonly end: () => void } {
+function useHoverPreview({
+  onPreview,
+  previewEpoch,
+  onPreviewEnd,
+}: {
+  readonly onPreview: ((binding: string, epoch: number) => void) | undefined;
+  readonly previewEpoch: () => number;
+  readonly onPreviewEnd: (() => void) | undefined;
+}): { readonly enter: (binding: string) => void; readonly end: () => void } {
   const frame = useRef<number | undefined>(undefined);
-  const latest = useRef({ onPreview, onPreviewEnd });
-  latest.current = { onPreview, onPreviewEnd };
-  const pending = useRef<string | undefined>(undefined);
+  const latest = useRef({ onPreview, previewEpoch, onPreviewEnd });
+  latest.current = { onPreview, previewEpoch, onPreviewEnd };
+  // The row waiting for its frame, with the epoch it was asked in: a restore in between makes it stale.
+  const pending = useRef<{ readonly binding: string; readonly epoch: number } | undefined>(undefined);
   const cancel = (): void => {
     if (frame.current !== undefined) {
       cancelAnimationFrame(frame.current);
@@ -350,7 +361,7 @@ function useHoverPreview(
     if (latest.current.onPreview === undefined) {
       return;
     }
-    pending.current = binding;
+    pending.current = { binding, epoch: latest.current.previewEpoch() };
     if (frame.current !== undefined) {
       return;
     }
@@ -358,8 +369,9 @@ function useHoverPreview(
       frame.current = undefined;
       const next = pending.current;
       pending.current = undefined;
-      if (next !== undefined) {
-        latest.current.onPreview?.(next);
+      // Stale by now (a restore bumped the epoch since the pointer entered): never applied.
+      if (next !== undefined && next.epoch === latest.current.previewEpoch()) {
+        latest.current.onPreview?.(next.binding, next.epoch);
       }
     });
   };
@@ -1043,7 +1055,8 @@ function usePickerNavigation(
     readonly typing: { readonly query: string; readonly navigationRef: MutableRefObject<PickerNavigation | undefined> } | undefined;
     readonly search: string;
   },
-  onPreview: ((binding: string) => void) | undefined,
+  onPreview: ((binding: string, epoch: number) => void) | undefined,
+  previewEpoch: () => number,
   onPick: (binding: string) => void,
 ): { readonly activeBinding: string | undefined; readonly navigation: PickerNavigation } {
   const [marked, setMarked] = useState<string | undefined>(undefined);
@@ -1065,7 +1078,7 @@ function usePickerNavigation(
       const binding = list[next]?.dataset['binding'];
       setMarked(binding);
       if (typing === undefined && binding !== undefined) {
-        onPreview?.(binding);
+        onPreview?.(binding, previewEpoch());
       }
     },
     pick: () => {
