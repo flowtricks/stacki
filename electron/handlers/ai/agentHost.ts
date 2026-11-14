@@ -87,7 +87,7 @@ import { described, noticeText } from './aiMessages';
 import { stopProcessTree } from '../../lib/nodeTools';
 import { AcpConnection, METHOD_NOT_FOUND, type AcpAnswer, type AcpRequestFailure } from './acpConnection';
 import { installAdapter, runNpm, type NpmRunner } from './agentInstaller';
-import { ADAPTERS, FALLBACK_OPTIONS, findCli, installedEntry } from './agentRegistry';
+import { ADAPTERS, FALLBACK_OPTIONS, findCli, installedEntry, type CliFileSystem } from './agentRegistry';
 import { realFileSystem, runnableCliPath } from './windowsCommand';
 import { ChangeLedger, parseLedgerTurns, serializeLedger, type LedgerDiff, type LedgerFiles, type TrackingMode } from './changeLedger';
 import { chatOption, CompactionCalls, eventsForUpdate, toolPaths } from './chatEvents';
@@ -160,6 +160,10 @@ export interface AgentHostDeps {
   readonly now: () => number;
   /** The person's home folder, where user skills live (`~/.claude/skills`); the operating system's by default. */
   readonly home?: () => string;
+  /** The platform the person's CLI is looked up for; the running one by default. Tests name Windows on any host. */
+  readonly platform?: NodeJS.Platform;
+  /** Where the CLI is looked for on PATH; tests give a fake one. */
+  readonly cliFileSystem?: CliFileSystem;
   readonly version: string;
   /** Ask before agents work in a new project (Settings); when off, opening the panel allows it. */
   readonly askBeforeTrust?: () => boolean;
@@ -1959,7 +1963,11 @@ export class AgentHost {
   }
 
   private cliPath(agent: AgentId): string | undefined {
-    return findCli(agent, this.deps.environment()['PATH'] ?? '');
+    return findCli(agent, {
+      environment: this.deps.environment(),
+      platform: this.deps.platform ?? process.platform,
+      ...(this.deps.cliFileSystem === undefined ? {} : { fileSystem: this.deps.cliFileSystem }),
+    });
   }
 
   private forEachProcess(action: (process: AgentProcess) => void): void {

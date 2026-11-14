@@ -31,7 +31,7 @@ import { toRecord } from '../../../shared/core/record';
 import type { Result } from '../../../shared/core/result';
 import { SETUP_DETAILS_CHARS_MAX, type SetupAccount, type SetupAction, type SetupState } from '../../../shared/ipc/aiChat';
 import { AGENTS, type AgentId } from '../../../shared/properties/ai/agentIds';
-import { findCli } from './agentRegistry';
+import { findCli, type CliFileSystem } from './agentRegistry';
 import { describeAttempt, realFileSystem, resolveWindowsCommand, type CommandFileSystem, type CommandLine, type ResolvedCommand } from './windowsCommand';
 import { described } from './aiMessages';
 import type { Described, TypedMessageRef } from '../../../shared/properties/i18n/messageRef';
@@ -104,6 +104,8 @@ export interface SetupDeps {
   readonly spawnTerminal?: (command: SetupCommand, environment: Readonly<Record<string, string | undefined>>) => Promise<SetupProcess>;
   readonly home?: string;
   readonly platform?: NodeJS.Platform;
+  /** Where the CLI is looked for on PATH; tests give a fake one. */
+  readonly cliFileSystem?: CliFileSystem;
   /** Where Windows shims are looked up; tests give a fake one. */
   readonly fileSystem?: CommandFileSystem;
   /** Stacki's own binary, the Node of last resort for a Windows shim. */
@@ -170,8 +172,12 @@ export class AgentSetup {
     return state;
   }
 
+  private cliFileSystem(): { readonly fileSystem?: CliFileSystem } {
+    return this.deps.cliFileSystem === undefined ? {} : { fileSystem: this.deps.cliFileSystem };
+  }
+
   private cli(agent: AgentId): string | undefined {
-    return findCli(agent, this.deps.environment()['PATH'] ?? '');
+    return findCli(agent, { environment: this.deps.environment(), platform: this.deps.platform ?? process.platform, ...this.cliFileSystem() });
   }
 
   private async detect(agent: AgentId): Promise<SetupState> {

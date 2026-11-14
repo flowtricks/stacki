@@ -87,6 +87,8 @@ export function staticToolPathGuesses(home: string, environment: Environment, pl
     api.join(local, 'Programs', 'Git', 'cmd'),
     api.join(local, 'Microsoft', 'WinGet', 'Links'),
     api.join(home, '.bun', 'bin'),
+    // Claude Code's native installer puts claude.exe here, as it does under ~/.local/bin elsewhere.
+    api.join(home, '.local', 'bin'),
     api.join(home, 'scoop', 'shims'),
     api.join(chocolatey, 'bin'),
   ].filter(Boolean);

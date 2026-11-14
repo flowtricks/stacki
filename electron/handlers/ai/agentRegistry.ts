@@ -14,7 +14,9 @@ import { createHash } from 'node:crypto';
 import { assert } from '../../../shared/core/assert';
 import { AGENTS, AGENT_IDS, type AgentId } from '../../../shared/properties/ai/agentIds';
 import type { ChatOption } from '../../../shared/properties/ai/chatModel';
+import { pathEnvironmentValue } from '../../lib/platform';
 import { resourcePath } from '../../lib/runtimePaths';
+import { pathExtensions } from './windowsCommand';
 
 export interface AdapterSpec {
   readonly agent: AgentId;
@@ -116,25 +118,56 @@ export function adapterPackageJson(spec: AdapterSpec): string {
   return source;
 }
 
+/** How `findCli` asks the disk about a candidate: tests give a fake one, so a Windows PATH is searched on any host. */
+export interface CliFileSystem {
+  /** The candidate resolved through links when it is a file, or undefined when it is not one. */
+  readonly resolveFile: (candidate: string) => string | undefined;
+}
+
+export interface FindCliOptions {
+  /** The environment the CLI would start in; its PATH is read case-insensitively on Windows, where the variable is `Path`. */
+  readonly environment: Readonly<Record<string, string | undefined>>;
+  readonly platform?: NodeJS.Platform;
+  readonly fileSystem?: CliFileSystem;
+}
+
+export const realCliFileSystem: CliFileSystem = {
+  resolveFile: (candidate) => {
+    try {
+      const real = fs.realpathSync(candidate);
+      return fs.statSync(real).isFile() ? real : undefined;
+    } catch {
+      return undefined;
+    }
+  },
+};
+
 /**
- * The person's own CLI for `agent` on `pathValue` (a PATH as the terminal's
- * login shell would start with), resolved through links: the adapter runs the
- * unmodified binary, which reads the person's sign-in itself.
+ * The person's own CLI for `agent` on the PATH of `options.environment` (as the
+ * terminal's login shell would start with), resolved through links: the adapter
+ * runs the unmodified binary, which reads the person's sign-in itself. The PATH
+ * is read through `pathEnvironmentValue`: a copy of the Windows environment is a
+ * plain object, and a bare `['PATH']` read on it misses `Path`, which made every
+ * installed CLI look missing (issue 82). On Windows the file names come from
+ * PATHEXT (always with the .exe and .cmd kinds), as the system's own lookup does.
  */
-export function findCli(agent: AgentId, pathValue: string): string | undefined {
-  const names = process.platform === 'win32' ? [`${AGENTS[agent].cli}.exe`, `${AGENTS[agent].cli}.cmd`] : [AGENTS[agent].cli];
-  const directories = pathValue.split(path.delimiter).filter((directory) => directory.length > 0);
+export function findCli(agent: AgentId, options: FindCliOptions): string | undefined {
+  const platform = options.platform ?? process.platform;
+  const fileSystem = options.fileSystem ?? realCliFileSystem;
+  const api = platform === 'win32' ? path.win32 : path.posix;
+  const cli = AGENTS[agent].cli;
+  const names = platform === 'win32' ? pathExtensions(options.environment).map((extension) => `${cli}${extension}`) : [cli];
+  const directories = pathEnvironmentValue(options.environment, platform)
+    .split(api.delimiter)
+    .map((directory) => (platform === 'win32' ? directory.trim().replace(/^"(.*)"$/, '$1') : directory))
+    .filter((directory) => directory.length > 0);
   assert(directories.length <= 4_096, 'findCli: a PATH is bounded');
+  assert(names.length > 0, 'findCli: at least one file name is tried');
   for (const directory of directories) {
     for (const name of names) {
-      const candidate = path.join(directory, name);
-      try {
-        const real = fs.realpathSync(candidate);
-        if (fs.statSync(real).isFile()) {
-          return real;
-        }
-      } catch {
-        continue;
+      const found = fileSystem.resolveFile(api.join(directory, name));
+      if (found !== undefined) {
+        return found;
       }
     }
   }

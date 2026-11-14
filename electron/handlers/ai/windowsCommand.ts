@@ -289,7 +289,7 @@ function searchDirectories(options: ResolveOptions): readonly string[] {
 }
 
 /** PATHEXT's executable kinds in the system's order, always including the two shim kinds so a bare `npm` finds `npm.cmd`. */
-function pathExtensions(environment: Readonly<Record<string, string | undefined>>): readonly string[] {
+export function pathExtensions(environment: Readonly<Record<string, string | undefined>>): readonly string[] {
   const key = Object.keys(environment).find((candidate) => candidate.toLowerCase() === 'pathext');
   const configured = (key === undefined ? undefined : environment[key]) ?? DEFAULT_PATHEXT;
   const wanted: readonly string[] = [...EXECUTABLE_EXTENSIONS, ...SHIM_EXTENSIONS];
