@@ -10,6 +10,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFile, readFile, rm, rename } from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { pathToFileURL } from 'node:url';
 import { createGitWorkspaceFixture } from './gitWorkspaceFixture';
 import { readGitWorkspace, writeLocalGitWorkspace } from '../src/features/history/gitWorkspaceStorage';
 import { gitWorkspaceBranch } from '../src/features/history/gitWorkspaceContract';
@@ -127,6 +129,71 @@ test('publishing retains explicit local commits in the pushed ancestry', async (
     assert.equal(await setup.git('rev-parse', 'main^'), local);
     assert.equal(await setup.git('show', 'main:src/pages/about.astro'), '<h1>Draft</h1>');
     assert.equal(gitWorkspaceBranch((await setup.workspace.load()).manifest).head, receipt.sha);
+  } finally {
+    await rm(setup.parent, { recursive: true, force: true });
+  }
+});
+// Issue #80: the hosted workspace is a blobless partial clone, and the publish repository fetched
+// its head over the local transport. That upload-pack must lazily fetch the missing blobs from the
+// promisor remote without the publish run's credentials (and Git 2.45+ refuses lazy fetches in
+// upload-pack outright), so publishing a private repository failed. Pointing the promisor at a path
+// that does not exist stands in for "no credentials": any lazy fetch from the workspace fails.
+async function bloblessPublishSetup() {
+  const setup = await createGitWorkspaceFixture();
+  await setup.git('config', 'receive.denyCurrentBranch', 'ignore');
+  await setup.git('config', 'uploadpack.allowFilter', 'true');
+  await writeFile(path.join(setup.remote, 'README.md'), 'Repository documentation the site never edits');
+  await setup.git('add', '.');
+  await setup.git('commit', '--quiet', '-m', 'Add repository documentation');
+  const head = await setup.git('rev-parse', 'HEAD');
+  const blob = await setup.git('rev-parse', 'HEAD:README.md');
+  const initial = await setup.workspace.load();
+  await rm(initial.git.directory, { recursive: true, force: true });
+  await setup.git('clone', '--quiet', '--bare', '--no-local', '--filter=blob:none', setup.remote, initial.git.directory);
+  await writeLocalGitWorkspace(setup.root, {
+    ...initial.manifest,
+    branches: initial.manifest.branches.map((branch) => ({ ...branch, head })),
+    remote: [{ name: 'main', head }],
+  });
+  await setup.workspace.commit(await setup.workspace.load(), 'Local heading', ['src/pages/index.astro']);
+  const state = await setup.workspace.load();
+  const run = gitWorkspaceRun(state.git);
+  assert.ok((await run(['rev-list', '--objects', '--missing=print', head])).includes('?' + blob), 'The workspace lacks the blob');
+  await run(['config', 'remote.origin.url', path.join(setup.parent, 'needs-credentials.git')]);
+  const source = published(await capturePublishSource(setup.root, path.join(setup.parent, 'publish')));
+  // A URL, as GitHub's is: Git names a blobless fetch's promisor after it, and a bare path is not a valid name.
+  return { setup, state, source, head, remote: pathToFileURL(setup.remote).href };
+}
+
+test('publishing from a blobless workspace never lazily fetches through the workspace', async () => {
+  const { setup, state, source, remote } = await bloblessPublishSetup();
+  try {
+    const receipt = await publishGitWorkspace(setup.root, source, setup.connection, state.manifest, { remote });
+    assert.equal(await setup.git('rev-parse', 'main'), receipt.sha);
+    assert.equal(await setup.git('rev-parse', 'main^'), gitWorkspaceBranch(state.manifest).head);
+    assert.equal(await setup.git('show', 'main:README.md'), 'Repository documentation the site never edits');
+    assert.equal(await setup.git('show', 'main:src/pages/about.astro'), '<h1>Draft</h1>');
+  } finally {
+    await rm(setup.parent, { recursive: true, force: true });
+  }
+});
+test('a new branch published from a blobless workspace starts from the GitHub head it contains', async () => {
+  const { setup, state, source, head, remote } = await bloblessPublishSetup();
+  try {
+    const local = gitWorkspaceBranch(state.manifest).head;
+    const manifest = {
+      ...state.manifest,
+      branch: 'feature',
+      branches: [
+        { ...gitWorkspaceBranch(state.manifest), head },
+        { name: 'feature', head: local, workspace: randomUUID() },
+      ],
+    };
+    const receipt = await publishGitWorkspace(setup.root, source, setup.connection, manifest, { remote });
+    assert.equal(await setup.git('rev-parse', 'feature'), receipt.sha);
+    assert.equal(await setup.git('rev-parse', 'main'), head, 'The default branch is untouched');
+    assert.equal(await setup.git('rev-parse', 'feature^'), local);
+    assert.equal(await setup.git('show', 'feature:README.md'), 'Repository documentation the site never edits');
   } finally {
     await rm(setup.parent, { recursive: true, force: true });
   }

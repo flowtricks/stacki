@@ -6,6 +6,7 @@ import { ok, err, type Result } from '../../../vendor/stacki/shared/core/result'
 import { stopPublishProcess } from '../../../vendor/stacki/electron/project/publishCommands';
 import { STUDIO_PUBLISH_LIMITS as limits } from './publishLimits';
 import { finishGitInput } from './publishGitInput';
+import { createStderrTail, gitDiagnosticDetail } from './publishGitDiagnostic';
 import { described, type Described } from '../../../vendor/stacki/shared/properties/i18n/messageRef';
 
 import type { PublishGit } from '../../shared/publishSource';
@@ -71,17 +72,27 @@ export function publishGit(
     detached: process.platform !== 'win32',
     stdio: ['pipe', 'pipe', 'pipe'],
   });
-  return collectPublishCommand(child, path.dirname(context.directory), args[0] ?? 'command', input, options.output ?? 'trimmed');
+  return collectPublishCommand(child, {
+    root: path.dirname(context.directory),
+    command: args[0] ?? 'command',
+    input,
+    output: options.output ?? 'trimmed',
+    secrets: context.authorization ? [context.authorization] : [],
+  });
 }
 
-function collectPublishCommand(
-  child: ChildProcessWithoutNullStreams,
-  root: string,
-  command: string,
-  input: string,
-  output: 'trimmed' | 'verbatim',
-): Promise<Result<string>> {
+interface PublishCommand {
+  readonly root: string;
+  readonly command: string;
+  readonly input: string;
+  readonly output: 'trimmed' | 'verbatim';
+  /** Exact values removed from the stderr detail shown on failure (publishGitDiagnostic.ts). */
+  readonly secrets: readonly string[];
+}
+
+function collectPublishCommand(child: ChildProcessWithoutNullStreams, { root, command, input, output, secrets }: PublishCommand): Promise<Result<string>> {
   const monitor = monitorPublishCommand(child, root);
+  const stderr = createStderrTail();
   return new Promise((resolve) => {
     let stdout = '';
     let bytes = 0;
@@ -91,6 +102,8 @@ function collectPublishCommand(
         monitor.stop(described('publish.studio.error.gitOutputLimit'));
       } else if (destination === 'stdout') {
         stdout += chunk.toString('utf8');
+      } else {
+        stderr.append(chunk);
       }
     };
     child.stdout.on('data', (chunk: Buffer) => collect(chunk, 'stdout'));
@@ -99,19 +112,25 @@ function collectPublishCommand(
     child.once('close', (code) => {
       monitor.dispose();
       const problem = monitor.failure();
-      resolve(
-        code === 0 && problem === undefined
-          ? ok(output === 'verbatim' ? stdout : stdout.trim())
-          : err({
-              code: 'git',
-              ...(command === 'push'
-                ? described('publish.studio.error.gitPushUnconfirmed')
-                : (problem ?? described('publish.studio.error.gitFailed', { command }))),
-            }),
-      );
+      if (code === 0 && problem === undefined) {
+        resolve(ok(output === 'verbatim' ? stdout : stdout.trim()));
+        return;
+      }
+      resolve(err({ code: 'git', ...publishCommandFailure(command, problem, gitDiagnosticDetail(stderr.text(), secrets)) }));
     });
     finishGitInput(child.stdin, input, () => monitor.stop(described('publish.studio.error.gitWriteFailed')));
   });
+}
+
+/** A push may have landed even when Git fails, so it says "not confirmed"; a limit the monitor hit wins over stderr. */
+function publishCommandFailure(command: string, problem: Described | undefined, detail: string): Described {
+  if (command === 'push') {
+    return detail ? described('publish.studio.error.gitPushUnconfirmedDetail', { detail }) : described('publish.studio.error.gitPushUnconfirmed');
+  }
+  if (problem !== undefined) {
+    return problem;
+  }
+  return detail ? described('publish.studio.error.gitFailedDetail', { command, detail }) : described('publish.studio.error.gitFailed', { command });
 }
 
 function monitorPublishCommand(child: ChildProcessWithoutNullStreams, root: string) {

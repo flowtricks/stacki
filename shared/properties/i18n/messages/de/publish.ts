@@ -246,8 +246,11 @@ export const messages = {
   'publish.studio.error.fileInvalid': 'Ungültige Veröffentlichungsdatei oder Datei größer als 100 MiB.',
   'publish.studio.error.gitBusy': 'Warte, bis der Git-Vorgang abgeschlossen ist, bevor du veröffentlichst.',
   'publish.studio.error.gitFailed': 'Git {command} ist fehlgeschlagen. Prüfe den Zugriff auf das Repository und versuche es erneut.',
+  'publish.studio.error.gitFailedDetail':
+    'Git {command} ist fehlgeschlagen. Prüfe den Zugriff auf das Repository und versuche es erneut. Git meldete: {detail}',
   'publish.studio.error.gitOutputLimit': 'Git hat das Ausgabelimit von 1 MiB überschritten.',
   'publish.studio.error.gitPushUnconfirmed': 'Der Git-Push wurde nicht bestätigt. Prüfe GitHub, bevor du es erneut versuchst.',
+  'publish.studio.error.gitPushUnconfirmedDetail': 'Der Git-Push wurde nicht bestätigt. Prüfe GitHub, bevor du es erneut versuchst. Git meldete: {detail}',
   'publish.studio.error.gitStartFailed': 'Git konnte nicht gestartet werden. Installiere Git und versuche es erneut.',
   'publish.studio.error.gitTimeLimit': 'Git hat das Zeitlimit von zehn Minuten überschritten.',
   'publish.studio.error.gitWriteFailed': 'Es konnte nicht in Git geschrieben werden.',
