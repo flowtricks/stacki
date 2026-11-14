@@ -7,9 +7,27 @@ interface DismissOptions extends Pick<PopupProps, 'dismissible' | 'keepOnScroll'
   readonly active: boolean;
   readonly mode: 'modal' | 'popover';
 }
+// A popup closed by the user pressing elsewhere, or by the page around it moving, does not hand focus back to
+// what opened it: the press already put focus where the person wanted it (or nowhere). The mark is read by
+// the popup's focus handling (Popup.tsx) when it closes. Escape and a pick carry none, and do restore it.
+export const DISMISSED_BY_ATTRIBUTE = 'data-popup-dismissed';
+
+function dismissedBy(surface: RefObject<HTMLDivElement>, close: () => void): () => void {
+  return () => {
+    surface.current?.setAttribute(DISMISSED_BY_ATTRIBUTE, 'outside');
+    close();
+  };
+}
+
+// A press on something that takes typed text goes through to it: focus must land there, and the press
+// does nothing to the popup's own controls. Anything else is swallowed so the press only dismisses.
+function takesTypedText(target: Event['target']): boolean {
+  return target instanceof window.Element && target.closest('input, textarea, select, [contenteditable="true"], [contenteditable=""]') !== null;
+}
+
 export function usePopupDismiss(surface: RefObject<HTMLDivElement>, options: DismissOptions, { close, finish }: PopupActions): void {
   const { active, anchor, within, dismissible = true, mode, onEscape } = options;
-  usePopupEnvironment(surface, options, close);
+  usePopupEnvironment(surface, options, dismissedBy(surface, close));
   useEffect(() => {
     if (!active || !dismissible) {
       return undefined;
@@ -26,9 +44,11 @@ export function usePopupDismiss(surface: RefObject<HTMLDivElement>, options: Dis
       outsidePress = outside(event.target);
       if (mode === 'popover' && outsidePress && popupIsTop(surface.current)) {
         // Anchored menus dismiss on press; native dialogs wait for a complete backdrop click.
-        event.preventDefault();
-        consumePopupClick(event.target);
-        close();
+        if (!takesTypedText(event.target)) {
+          event.preventDefault();
+          consumePopupClick(event.target);
+        }
+        dismissedBy(surface, close)();
       }
     };
     const click = (event: MouseEvent): void => {
@@ -53,7 +73,7 @@ export function usePopupDismiss(surface: RefObject<HTMLDivElement>, options: Dis
     const message = (event: MessageEvent<unknown>): void => {
       const kind = toRecord(event.data)?.['type'];
       if (mode === 'popover' && isCanvasPress(kind)) {
-        close();
+        dismissedBy(surface, close)();
       }
     };
     document.addEventListener('pointerdown', down, true);

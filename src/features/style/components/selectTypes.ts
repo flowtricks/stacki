@@ -28,8 +28,19 @@ export type SelectOption<T extends string> = {
   /** Render as a non-selectable group subheader — skipped by keyboard nav,
    *  type-ahead, and selection. Its `value` just needs to be unique. */
   heading?: boolean;
+  /** On a heading: it opens a group, drawn as one filled card with the indented options
+   *  that follow it (role=group, named by the heading). The context dropdown groups its
+   *  queries by stylesheet this way, so the source is named once, not on every row. */
+  group?: boolean;
   /** Indent the option to show it nests under the preceding heading. */
   indent?: boolean;
+  /** Pinned to the bottom of the open list, apart from the options above it (an
+   *  "Add …" row): it stays in view while the list scrolls. */
+  footer?: boolean;
+  /** The closed trigger's overline and chip when this option is selected, for an option
+   *  whose list row leaves them to its group's heading. Fall back to `overline`/`tag`. */
+  triggerOverline?: string;
+  triggerTag?: SelectTag;
   /** Text for the closed trigger when this option is selected — use when the
    *  list label is context-scoped (e.g. "Embed #1" under a group) but the trigger
    *  needs the full name ("Global Styles #1"). Falls back to `label`. */

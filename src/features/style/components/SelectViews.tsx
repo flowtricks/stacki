@@ -39,7 +39,11 @@ export function OptionLabel({
   const hasFirstLine = hasOverline || tag !== undefined;
   const hasSubline = subline !== undefined && subline.length > 0;
   if (!hasFirstLine && !hasSubline) {
-    return <span className="u-select-label">{label}</span>;
+    return (
+      <span className="u-select-label" onMouseEnter={titleWhenCut(label)}>
+        {label}
+      </span>
+    );
   }
   return (
     <span className="u-select-label has-overline">
@@ -49,10 +53,21 @@ export function OptionLabel({
           {hasOverline ? <span className="u-select-overline-text">{overline}</span> : undefined}
         </span>
       ) : undefined}
-      <span className="u-select-label-line">{label}</span>
+      <span className="u-select-label-line" onMouseEnter={titleWhenCut(label)}>
+        {label}
+      </span>
       {hasSubline ? <OptionSubline items={subline} /> : undefined}
     </span>
   );
+}
+
+// A label the row cuts with an ellipsis shows its whole text on hover; one shown whole
+// carries no title, so the pointer does not raise a tooltip that repeats the row.
+function titleWhenCut(label: string) {
+  return (event: { readonly currentTarget: HTMLElement }): void => {
+    const element = event.currentTarget;
+    element.title = element.scrollWidth > element.clientWidth ? label : '';
+  };
 }
 
 // Fitted after layout, before paint, and again whenever the row's width changes,
@@ -152,7 +167,8 @@ export function SelectTrigger<T extends string>({
   onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
 }) {
   const triggerLabel = selectedOption ? (selectedOption.triggerLabel ?? selectedOption.label) : '';
-  const triggerOverline = selectedOption?.overline;
+  const triggerOverline = selectedOption?.triggerOverline ?? selectedOption?.overline;
+  const triggerTag = selectedOption?.triggerTag ?? selectedOption?.tag;
   const triggerIcon = selectedOption?.triggerIcon ?? selectedOption?.icon;
   const shared = {
     ref: buttonRef,
@@ -190,7 +206,7 @@ export function SelectTrigger<T extends string>({
     <button {...shared} className="u-select-button" data-tone={selectedOption?.tone}>
       <span className="u-select-value">
         {icon}
-        <OptionLabel label={triggerLabel} overline={triggerOverline} tag={triggerOverline === undefined ? undefined : selectedOption?.tag} />
+        <OptionLabel label={triggerLabel} overline={triggerOverline} tag={triggerOverline === undefined ? undefined : triggerTag} />
       </span>
       {CHEVRON}
     </button>
@@ -266,19 +282,39 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
           {translate('styleModel.components.select.noMatches')}
         </div>
       ) : (
-        displayed.map((option, index) => (
-          <SelectRow
-            key={option.value}
-            option={option}
-            id={optionId(list.baseId, index)}
-            selected={option.value === props.value}
-            active={index === list.activeIndex}
-            dotColumn={dotColumn}
-            onActivate={() => list.onActivate(index)}
-            onChoose={() => list.onChoose(index)}
-            onCancel={list.onCancel}
-          />
-        ))
+        listSections(displayed).map((section) => {
+          const rows = section.indexes.map((index) => {
+            const option = displayed[index];
+            assert(option !== undefined, 'SelectList: a section names displayed rows');
+            return (
+              <SelectRow
+                key={option.value}
+                option={option}
+                id={optionId(list.baseId, index)}
+                selected={option.value === props.value}
+                active={index === list.activeIndex}
+                dotColumn={dotColumn}
+                onActivate={() => list.onActivate(index)}
+                onChoose={() => list.onChoose(index)}
+                onCancel={list.onCancel}
+              />
+            );
+          });
+          if (section.kind === 'rows') {
+            return rows;
+          }
+          // A group heading opens one filled card with its rows; the heading names it.
+          return (
+            <div
+              key={`group-${section.indexes[0] ?? 0}`}
+              className="u-select-group"
+              role="group"
+              aria-labelledby={optionId(list.baseId, section.indexes[0] ?? 0)}
+            >
+              {rows}
+            </div>
+          );
+        })
       )}
     </Popup>
   );
@@ -288,6 +324,28 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
 // can carry one holds it on every row, so the dots stand in one column; a list
 // with no dots at all holds none, so its rows carry no blank gutter.
 export type DotColumn = 'held' | 'none';
+
+/** A run of rows drawn loose, or a group: a `group` heading and the indented rows after it. */
+export type ListSection = { readonly kind: 'rows' | 'group'; readonly indexes: readonly number[] };
+
+/** The displayed rows cut into loose runs and groups, keeping their order and indexes. */
+export function listSections<T extends string>(options: readonly SelectOption<T>[]): ListSection[] {
+  const sections: { kind: 'rows' | 'group'; indexes: number[] }[] = [];
+  for (const [index, option] of options.entries()) {
+    const last = sections[sections.length - 1];
+    if (option.heading === true && option.group === true) {
+      sections.push({ kind: 'group', indexes: [index] });
+    } else if (last !== undefined && last.kind === 'group' && option.indent === true && option.heading !== true) {
+      last.indexes.push(index);
+    } else if (last !== undefined && last.kind === 'rows') {
+      last.indexes.push(index);
+    } else {
+      sections.push({ kind: 'rows', indexes: [index] });
+    }
+  }
+  assert(sections.reduce((total, section) => total + section.indexes.length, 0) === options.length, 'listSections: every row is drawn once');
+  return sections;
+}
 
 export function dotColumnFor<T extends string>(options: readonly SelectOption<T>[]): DotColumn {
   return options.some((option) => option.marked === true) ? 'held' : 'none';
@@ -315,9 +373,12 @@ export function SelectRow<T extends string>({
   const icon = present(option.icon) ? <span className="u-select-icon">{option.icon}</span> : undefined;
   if (option.heading) {
     return (
-      <div className="u-select-heading" role="presentation">
+      <div id={id} className={['u-select-heading', option.group ? 'is-group' : ''].filter(Boolean).join(' ')} role="presentation">
         {icon}
-        <span className="u-select-heading-label">{option.label}</span>
+        {option.tag === undefined ? undefined : <OptionTag tag={option.tag} />}
+        <span className="u-select-heading-label" title={option.label}>
+          {option.label}
+        </span>
       </div>
     );
   }
@@ -330,6 +391,7 @@ export function SelectRow<T extends string>({
         selected ? 'is-selected' : '',
         option.indent ? 'is-indented' : '',
         option.action ? 'has-action' : '',
+        option.footer ? 'is-footer' : '',
         (option.subline?.length ?? 0) > 0 ? 'has-subline' : '',
       ]
         .filter(Boolean)

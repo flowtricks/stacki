@@ -266,6 +266,30 @@ test('a value editor binds its whole value from the purple dot', async () => {
   await done();
 });
 
+test('dismissing the dot’s chooser by a press elsewhere leaves the code untouched and focus where it was pressed', async () => {
+  const { host, view, changes, done } = await mountEditor({ kind: 'value', prop: 'clip-path' }, 'inset(0.5rem round 2rem)');
+  const outside = document.createElement('div');
+  document.body.appendChild(outside);
+  const dot = host.querySelector('.embed-editor_varconnect.code-editor_frame > .embed-editor_varconnect-dot');
+  await act(async () => press(dot));
+  await settle();
+  assert.ok(document.querySelector('.embed-editor_varpicker'), 'the chooser is open');
+  // What a browser does with a press on a neutral area: the page takes the focus.
+  await act(async () => {
+    outside.dispatchEvent(new window.MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+    outside.dispatchEvent(new window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    document.activeElement?.blur?.();
+  });
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  await settle();
+  assert.ok(!document.querySelector('.embed-editor_varpicker'), 'the chooser closed');
+  assert.ok(!host.contains(document.activeElement), 'focus did not go back into the editor');
+  assert.equal(view.state.doc.toString(), 'inset(0.5rem round 2rem)', 'the code is as it was');
+  assert.deepEqual(changes, [], 'nothing was written');
+  outside.remove();
+  await done();
+});
+
 test('a rule editor offers variables in declaration values and has no bind dot', async () => {
   const { host, view, changes, done } = await mountEditor({ kind: 'declarations' }, '.a {\n  width: ');
   assert.ok(!host.querySelector('.embed-editor_varconnect-dot'), 'a whole rule has no one property to bind');

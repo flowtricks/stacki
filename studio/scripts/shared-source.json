@@ -1223,6 +1223,7 @@
     "src/features/style/embed/ResolvedRows.tsx",
     "src/features/style/embed/SelectorPicker.tsx",
     "src/features/style/embed/StyleCard.tsx",
+    "src/features/style/embed/contextGroups.ts",
     "src/features/style/embed/editorModel.ts",
     "src/features/style/embed/editorSignatures.ts",
     "src/features/style/embed/scanSnapshotCache.ts",

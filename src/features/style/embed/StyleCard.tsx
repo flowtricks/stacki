@@ -6,6 +6,11 @@ import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { useCallback, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import Select from '../components/Select';
+import type { SelectOption, SelectTag } from '../components/selectTypes';
+import { centralIcon } from '../../../ui/central/CentralIcon';
+import { homeRoundDoor as centralHomeRoundDoor } from '../../../ui/central/centralGeometry';
+import { groupContexts } from './contextGroups';
+import type { StyleContext } from '../model/resolved';
 import ElementTokenPicker from '../ElementTokenPicker';
 import SizeSection from '../SizeSection';
 import SpacingSection, { SpacingCenterButton } from '../SpacingSection';
@@ -184,15 +189,28 @@ export function StyleCardHead({ card, onVisibleSelectorsChange }: { card: StyleC
   );
 }
 
-// The style-context dropdown. Each context row can carry a pencil to rename its query;
-// the last option adds a query.
+// The style-context dropdown: Base pinned on top, then the queries grouped by where they
+// are written (contextGroups.ts), each group named once by its stylesheet chip and wrapper
+// selector, then "Add query" pinned at the foot. Each query row can carry a pencil to
+// rename it. The closed trigger still names the picked query's source and wrapper.
 export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: StyleCardProps; onAddQuery: () => void; onEditQuery: (query: string) => void }) {
   const translate = useTranslate();
   const { contexts, contextInfos, queryUses } = card;
-  // Each query row names the stylesheet its block is written in, in the words and
-  // icon "Add custom styles in" uses for that stylesheet, so the two read alike.
+  // Each group names the stylesheet its blocks are written in, in the words and icon
+  // "Add custom styles in" uses for that stylesheet, so the two read alike.
   const sourceByKey = new Map(card.sourceOptions.filter((option) => option.heading !== true).map((option) => [option.value, option]));
-  const options = contexts.map((styleContext) => {
+  const tagFor = (sourceKey: string | undefined): SelectTag | undefined => {
+    const source = sourceKey === undefined ? undefined : sourceByKey.get(sourceKey);
+    if (source === undefined) {
+      return undefined;
+    }
+    return {
+      label: source.triggerLabel ?? source.label,
+      icon: source.fromComponent ? <ComponentIcon /> : <EmbedIcon />,
+      tone: source.fromComponent ? 'component' : 'embed',
+    };
+  };
+  const optionFor = (styleContext: StyleContext, placement: 'base' | 'grouped' | 'loose'): SelectOption<string> => {
     // Editable when this stylesheet is where the query is written. A row can be here
     // for a query held in some other file (or for a native breakpoint, which is no
     // at-rule at all) — nothing to rename there, so no pencil. A nested chain's own
@@ -203,26 +221,18 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
     const inSourceDocument = styleContext.source === undefined || styleContext.source === card.sourceValue;
     const uses = inSourceDocument ? (queryUses.get(queryKey(query)) ?? 0) : 0;
     const info = contextInfos.find((entry) => entry.key === styleContext.key);
-    const source = styleContext.source === undefined ? undefined : sourceByKey.get(styleContext.source);
+    const tag = tagFor(styleContext.source);
     return {
       value: styleContext.key,
       label: styleContext.label,
-      // A query nested inside a rule names that rule on a line above it, as the
-      // selector chip below does (`.layout {@}`), so the two agree on where the
-      // styles sit. Base and a top-level query stay one line.
-      ...(info?.wrapper === undefined ? {} : { overline: info.wrapper }),
+      // In a group the header names the source and wrapper once; the closed trigger
+      // still shows them, so the picked query says where it is written.
+      ...(placement === 'grouped' ? { indent: true } : {}),
+      ...(info?.wrapper === undefined ? {} : placement === 'grouped' ? { triggerOverline: info.wrapper } : { overline: info.wrapper }),
+      ...(tag === undefined ? {} : placement === 'grouped' ? { triggerTag: tag } : { tag }),
       // The selectors written inside the query go under it, as they sit in the code.
       ...(info?.querySelectors === undefined ? {} : { subline: info.querySelectors }),
-      ...(source === undefined
-        ? {}
-        : {
-            tag: {
-              label: source.triggerLabel ?? source.label,
-              icon: source.fromComponent ? <ComponentIcon /> : <EmbedIcon />,
-              tone: source.fromComponent ? 'component' : 'embed',
-            },
-          }),
-      icon: breakpointIcon(styleContext.breakpoint ?? undefined),
+      icon: placement === 'base' ? <BaseContextIcon /> : breakpointIcon(styleContext.breakpoint ?? undefined),
       marked: info?.hasStyles ?? false,
       ...(uses > 0
         ? {
@@ -234,12 +244,45 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
           }
         : {}),
     };
-  });
+  };
+  const wrapperOf = (styleContext: StyleContext): string | undefined => contextInfos.find((entry) => entry.key === styleContext.key)?.wrapper;
+  const options: SelectOption<string>[] = [];
+  for (const group of groupContexts(contexts.map((context) => ({ context, wrapper: wrapperOf(context) })))) {
+    switch (group.kind) {
+      case 'base':
+        options.push(optionFor(group.item.context, 'base'));
+        break;
+      case 'loose':
+        options.push(optionFor(group.item.context, 'loose'));
+        break;
+      case 'group': {
+        const tag = tagFor(group.key.source);
+        // Named by its wrapper selector beside the stylesheet chip; a group with no
+        // wrapper is named by the stylesheet alone.
+        const label = group.key.wrapper ?? tag?.label ?? group.key.source ?? '';
+        options.push({
+          value: `${GROUP_HEADING_PREFIX}${group.key.source ?? ''}\u0000${group.key.wrapper ?? ''}`,
+          label,
+          heading: true,
+          group: true,
+          ...(group.key.wrapper === undefined || tag === undefined ? {} : { tag }),
+        });
+        for (const item of group.items) {
+          options.push(optionFor(item.context, 'grouped'));
+        }
+        break;
+      }
+      default: {
+        const exhaustive: never = group;
+        return exhaustive;
+      }
+    }
+  }
   return (
     <Select
       className="embed-editor_context-select"
       value={card.context}
-      options={[...options, { value: ADD_QUERY, label: translate('styleModel.embed.card.addQuery'), icon: <PlusIcon /> }]}
+      options={[...options, { value: ADD_QUERY, label: translate('styleModel.embed.card.addQuery'), icon: <PlusIcon />, footer: true }]}
       onChange={(next) => {
         if (next === ADD_QUERY) {
           onAddQuery();
@@ -251,6 +294,12 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
     />
   );
 }
+
+// A group heading's value: never a context key ('' or an `@…`/`bp:…` string) nor ADD_QUERY.
+const GROUP_HEADING_PREFIX = '\u0000group:';
+
+// Base is the layer no query overrides: a house, where the queries carry device glyphs.
+const BaseContextIcon = centralIcon(centralHomeRoundDoor);
 
 // The add-query and rename-query forms, one at a time, below the context dropdown.
 export function QueryForms({

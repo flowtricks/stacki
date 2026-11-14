@@ -7,6 +7,7 @@ import useScrub from './components/useScrub';
 import { handleArrowStep } from './model/numberStep';
 import VariableConnect from './VariableConnect';
 import { commitInPlace } from './model/commitInPlace';
+import { pickerPreviewKind } from './connectFieldHelpers';
 import { parseImportant } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -47,7 +48,7 @@ export function LiveInput({
         className={className}
         data-prop={dataProp}
         value={field.draft}
-        onChange={(event) => field.change(event.target.value)}
+        onChange={(event) => field.change(event.target.value, { source: pickerPreviewKind(event) ?? 'typed' })}
         onFocus={field.focus}
         onBlur={field.blur}
         onKeyDown={field.keyDown}
@@ -96,7 +97,20 @@ export function useLiveInputEditing({
       setDraft(value);
     }
   }, [value]);
-  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive(onLiveCommit);
+  // Whether a live write went out that no commit or clear has settled, and whether the person has edited the
+  // text since the last commit. A blur commits only after an edit or a live write: a field that shows its
+  // default (or the picker's preview, put back) was never edited, and writing what it shows would turn an
+  // unset property into a set one.
+  const wrote = useRef(false);
+  const edited = useRef(false);
+  const trackedLive =
+    onLiveCommit === undefined
+      ? undefined
+      : (...written: Parameters<NonNullable<LiveInputProps['onLiveCommit']>>): void => {
+          wrote.current = true;
+          onLiveCommit(...written);
+        };
+  const { cancelLive, liveNow, scheduleLive } = useDebouncedLive(trackedLive);
   const commit = (text = draft) => {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -106,6 +120,10 @@ export function useLiveInputEditing({
     const parsed = parseImportant(trimmed);
     onCommit(parsed.value, parsed.important);
   };
+  const settle = (): void => {
+    wrote.current = false;
+    edited.current = false;
+  };
   const scrub = useScrub({
     value: draft,
     disabled: busy,
@@ -113,15 +131,40 @@ export function useLiveInputEditing({
     onInput: liveNow,
     onCommit: (text) => {
       setDraft(text);
+      settle();
       commit(text);
     },
   });
   return {
     draft,
     scrub,
-    change: (text: string) => {
+    change: (text: string, { source }: { readonly source: 'typed' | 'preview' | 'restore' }) => {
       setDraft(text);
-      scheduleLive(text);
+      if (source === 'typed') {
+        edited.current = true;
+        scheduleLive(text);
+        return;
+      }
+      // The picker previewing a variable goes out live like typing.
+      if (source === 'preview') {
+        scheduleLive(text);
+        return;
+      }
+      // Putting the text the chooser opened on back is immediate (a timer could be cancelled by a blur or an
+      // unmount, leaving the preview on the canvas), and for an unset property it clears the live draft
+      // instead of writing the displayed default. It compares with nothing the panel reports: a live write
+      // can be read back as the value, so only the picker knows what the original was.
+      cancelLive();
+      if (!wrote.current) {
+        return;
+      }
+      wrote.current = false;
+      if (text.trim() === '') {
+        onClear();
+        return;
+      }
+      liveNow(text);
+      wrote.current = false;
     },
     focus: () => {
       focused.current = true;
@@ -129,11 +172,16 @@ export function useLiveInputEditing({
     blur: () => {
       focused.current = false;
       cancelLive();
+      if (!edited.current && !wrote.current) {
+        return;
+      }
+      settle();
       commit();
     },
     keyDown: (event: React.KeyboardEvent<HTMLInputElement>) => {
       const stepped = stepLiveKey(event);
       if (stepped !== undefined) {
+        edited.current = true;
         setDraft(stepped);
         scheduleLive(stepped);
       }

@@ -1300,6 +1300,84 @@ body.is-scrubbing * {
   white-space: nowrap;
 }
 
+/* A group: a heading and the rows under it on one quiet fill, set apart from the rows
+   around it by space, never a line (backgrounds, not borders). Its rows sit inside the
+   fill's padding, so their hover and selection fills stay concentric with it. */
+.u-select-group {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border-radius: calc(var(--radius-xl) - var(--space-3));
+  background: var(--color-bg-hover);
+}
+.u-select-group + .u-select-group,
+.u-select-group + .u-select-option,
+.u-select-option + .u-select-group {
+  margin-top: 0.5rem;
+}
+/* The group's name: once, small and muted, with its stylesheet chip. */
+.u-select-heading.is-group {
+  margin-top: 0;
+  padding: 0.25rem 0.75rem 0;
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-semibold);
+}
+.u-select-heading.is-group .u-select-tag {
+  flex: 0 0 auto;
+  max-width: 50%;
+}
+/* A grouped row needs no indent: the fill already says it belongs to the heading. */
+.u-select-group > .u-select-option.is-indented {
+  padding-left: 0.75rem;
+}
+/* A footer row ("Add query") stays at the foot of the scrolling list, a step apart. */
+.u-select-option.is-footer {
+  position: sticky;
+  bottom: calc(-1 * var(--space-3));
+  z-index: 1;
+  flex-shrink: 0;
+  margin-top: 0.5rem;
+  background: var(--surface-overlay);
+}
+.u-select-option.is-footer.is-active {
+  background: var(--color-bg-surface-high);
+}
+
+/* The context dropdown: taller rows, the condition at reading size, the selectors
+   written inside it in code type, and room for many queries before it scrolls. */
+.embed-editor_context-select .u-select-list {
+  max-height: min(20rem, 70vh);
+  gap: 0.25rem;
+}
+.embed-editor_context-select .u-select-option {
+  box-sizing: border-box;
+  min-height: 2.25rem;
+  padding: 0.5rem 0.75rem;
+  flex-shrink: 0;
+}
+/* A row outside a group sits in by the group's padding, so every row's trailing
+   column (dot, check, pencil) stands at the same x, grouped or not. */
+.embed-editor_context-select .u-select-list > .u-select-option {
+  margin-inline: 0.25rem;
+}
+.embed-editor_context-select .u-select-option .u-select-label,
+.embed-editor_context-select .u-select-option .u-select-label-line {
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+/* The picked query is filled, not only checked, so it is found at a glance among many. */
+.embed-editor_context-select .u-select-option.is-selected {
+  background: var(--color-bg-active);
+}
+.embed-editor_context-select .u-select-option .u-select-subline {
+  font-family: var(--font-family-mono);
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
 /* Trailing status dot, in its slot: orange normally, white on the selected row. */
 .u-select-dot {
   flex-shrink: 0;

@@ -163,7 +163,10 @@ const element = (id, name, className, children = []) => ({ id, kind: 'element', 
     }
   };
   const describe = (rows) => rows.map((row) => (row.textContent || '').trim()).join(' | ');
-  const nestedRow = (rows) => rows.find((row) => row.querySelector('.u-select-overline-text')?.textContent === '.developer_layout');
+  // The dropdown groups queries under a header naming their stylesheet and wrapper
+  // (embed/contextGroups.ts): a nested query is a row in the `.developer_layout` group.
+  const groupHeading = (row) => row.closest('.u-select-group')?.querySelector('.u-select-heading') ?? undefined;
+  const nestedRow = (rows) => rows.find((row) => groupHeading(row)?.querySelector('.u-select-heading-label')?.textContent === '.developer_layout');
   const queryRows = (rows, query) =>
     rows.filter((row) => row.querySelector('.u-select-label-line')?.textContent === query || row.querySelector('.u-select-label')?.textContent === query);
 
@@ -173,14 +176,14 @@ const element = (id, name, className, children = []) => ({ id, kind: 'element', 
     const nested = nestedRow(rows);
     check('developer_title: the nested query is listed', nested !== undefined, describe(rows));
     check(
-      'developer_title: on two lines, the wrapper over the query',
-      nested?.querySelector('.u-select-label-line')?.textContent === '@media (width < 42rem)',
+      "developer_title: the query, under its wrapper's header",
+      (nested?.querySelector('.u-select-label-line') ?? nested?.querySelector('.u-select-label'))?.textContent === '@media (width < 42rem)',
       nested?.textContent ?? '',
     );
     check('developer_title: the same query at the top level is a second row', queryRows(rows, '@media (width < 42rem)').length === 2, describe(rows));
     check(
-      'developer_title: each query row names its stylesheet',
-      queryRows(rows, '@media (width < 42rem)').every((row) => row.querySelector('.u-select-tag') !== null),
+      "developer_title: each query row's group names its stylesheet",
+      queryRows(rows, '@media (width < 42rem)').every((row) => groupHeading(row) !== undefined),
       describe(rows),
     );
     await closeRows();

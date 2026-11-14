@@ -2,7 +2,7 @@ import { forwardRef, useLayoutEffect, useRef } from 'react';
 import type { CSSProperties, ForwardedRef, ReactNode, RefObject, RefCallback, HTMLAttributes } from 'react';
 import { createPortal } from 'react-dom';
 import { POPUP_MOTION_MS, usePopupLifecycle } from './popupLifecycle';
-import { usePopupDismiss, popupIsTop } from './popupDismiss';
+import { usePopupDismiss, popupIsTop, DISMISSED_BY_ATTRIBUTE } from './popupDismiss';
 import './popup.css';
 import { PopupScopeContext, usePopupScope } from './popupScope';
 import { popupLayer } from './popupLayer';
@@ -211,7 +211,9 @@ function usePopupFocus(
     return () => {
       const focused = document.activeElement;
       // Unanchored editors own their focus; restoring their input can reopen them on blur.
-      const restore = mode === 'modal' || (anchor !== undefined && (focused === document.body || content?.contains(focused)));
+      // Not after a press elsewhere or the page moving (popupDismiss.ts): that left focus where the person put it.
+      const pressed = content?.getAttribute(DISMISSED_BY_ATTRIBUTE) !== null && content?.getAttribute(DISMISSED_BY_ATTRIBUTE) !== undefined;
+      const restore = mode === 'modal' || (!pressed && anchor !== undefined && (focused === document.body || content?.contains(focused)));
       const target = anchor ?? previousFocus;
       element?.close();
       if (restore && target instanceof window.HTMLElement && target.isConnected) {

@@ -84,3 +84,20 @@ export function updateChildRef(child: ReactElement<ChildFieldProps>, element: Fi
     }
   }
 }
+
+// A change that is only the picker previewing a variable (or putting the original back), not the person
+// typing: the wrapped field's own change handler can tell them apart by this mark on the event it gets,
+// so a preview is never taken as an edit (a blur must not commit it, and putting an unset value back
+// must clear the draft rather than write the displayed default).
+export const PICKER_PREVIEW_MARK = 'stackiPickerPreview';
+
+/** What a change from the picker is: showing a variable, or putting the value the chooser opened on back. */
+export type PickerPreviewKind = 'preview' | 'restore';
+
+/** The picker's kind of change, or undefined when the person typed it. */
+export function pickerPreviewKind(event: unknown): PickerPreviewKind | undefined {
+  if (typeof event !== 'object' || event === null || !(PICKER_PREVIEW_MARK in event)) {
+    return undefined;
+  }
+  return event[PICKER_PREVIEW_MARK] === 'restore' ? 'restore' : 'preview';
+}

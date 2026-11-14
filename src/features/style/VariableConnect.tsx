@@ -25,6 +25,8 @@ import {
   type FieldRefValue,
   type ChildFieldProps,
   updateChildRef,
+  PICKER_PREVIEW_MARK,
+  type PickerPreviewKind,
 } from './connectFieldHelpers';
 
 export { buildTokenHtml, serializeTokens } from './TokenField';
@@ -115,9 +117,9 @@ export default function VariableConnect(props: VariableConnectProps) {
   };
   // Shown, not written: the field's draft, the path typing takes, so the page
   // previews it the same way it previews a value being typed.
-  const draftTo = (next: string): void => {
+  const draftTo = (next: string, kind: PickerPreviewKind): void => {
     if (props.onDraft === undefined) {
-      pushDraft(field, next);
+      pushDraft(field, next, { preview: kind });
     } else {
       props.onDraft(next);
     }
@@ -174,7 +176,7 @@ export default function VariableConnect(props: VariableConnectProps) {
       return;
     }
     openedRef.current = { ...opened, previewed: true };
-    draftTo(withChosen(chosen));
+    draftTo(withChosen(chosen), 'preview');
   };
   // THE restore: the value goes back to the one the chooser opened on, which was captured once, at
   // opening, and is the only source of truth for it. Idempotent, and it wins over any preview still in
@@ -189,9 +191,9 @@ export default function VariableConnect(props: VariableConnectProps) {
     }
     openedRef.current = { ...opened, previewed: false };
     if (when === 'now') {
-      flushSync(() => draftTo(opened.value));
+      flushSync(() => draftTo(opened.value, 'restore'));
     } else {
-      draftTo(opened.value);
+      draftTo(opened.value, 'restore');
     }
   };
   const restoreRef = useRef(restore);
@@ -692,13 +694,14 @@ function fieldLiveValue(editorRef: RefObject<HTMLDivElement>, inputRef: MutableR
 // different field with the same look: the input behind it keeps the value from
 // before the edit, and whatever live preview that input drives while you type never
 // runs. A caller that wants the drafts itself (the big value editor) passes its own.
-function pushDraft(field: WrappedField, next: string): void {
+function pushDraft(field: WrappedField, next: string, { preview }: { readonly preview: PickerPreviewKind | 'typing' } = { preview: 'typing' }): void {
   const input = field.inputRef.current;
   if (!input) {
     return;
   }
   setInputValue(input, next);
-  field.childHandlersRef.current?.onChange?.(field.fakeEvent());
+  const event = field.fakeEvent();
+  field.childHandlersRef.current?.onChange?.(preview === 'typing' ? event : { ...event, [PICKER_PREVIEW_MARK]: preview });
 }
 
 // The token editor's focus and commit, handed over to the input it stands for,
