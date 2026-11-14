@@ -17,6 +17,10 @@
 //   placeholders (if any) to the final state, never through another state or back.
 // - `popovers` records each popover's open and close with the step that was running: a user
 //   step (`user(label, fn)`) may close one; a data step (`data(label, fn)`) never may.
+// - Deadlines never fire: a timer of one second or more is a deadline in the app (the canvas
+//   query's 1.5 s answer limit), and a test that holds answers for as long as it likes must not
+//   meet one. On a slow runner the held answers outlived it, the panel drew the element without
+//   its classes, and the late answer then re-picked the selector under an open menu.
 // Everything is driven by dispatched events: no real pointer, no real hover, no timing
 // thresholds. Fixtures only: the project path is fake and nothing touches a real project.
 
@@ -27,6 +31,13 @@ const { ROOT, repoPath } = require('./sources.js');
 const SIZE_PX = 240;
 const SETTLE_QUIET_TICKS = 4;
 const SETTLE_TICKS_MAX = 400;
+// The shortest timer treated as a deadline (see the header): it is replaced by one that fires
+// nothing, so `clearTimeout` still works on the handle it returns.
+const DEADLINE_MS_MIN = 1000;
+const realSetTimeout = global.setTimeout;
+global.setTimeout = (callback, delay, ...rest) =>
+  typeof delay === 'number' && delay >= DEADLINE_MS_MIN ? realSetTimeout(() => {}, 0) : realSetTimeout(callback, delay, ...rest);
+
 const POPOVER_SELECTOR = '[role="menu"],[role="listbox"],[role="dialog"],.embed-editor_varpicker';
 
 let environment;
