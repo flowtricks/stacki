@@ -100,8 +100,27 @@ export async function downloadGitBundle(digest: string, destination: string): Pr
   await writeFile(destination, bytes, { mode: 0o600 });
 }
 async function requireStored(response: Response): Promise<void> {
-  if (!response.ok) {
-    throw new Error(`Git checkpoint storage rejected the action (HTTP ${response.status}).`);
+  if (response.ok) {
+    return;
+  }
+  // The Worker answers each failure with a short plain-text reason; showing it is what
+  // tells "storage is busy" apart from "the upload was cut short". Bounded, never trusted as markup.
+  const reason = (await storageReason(response)).replace(/\s+/g, ' ').trim().slice(0, 300);
+  throw new Error(`Git checkpoint storage rejected the action (HTTP ${response.status})${reason ? ': ' + reason : '.'}`);
+}
+/** At most the first KiB of a refusal: a reason is one sentence, and the body is never needed whole. */
+async function storageReason(response: Response): Promise<string> {
+  if (!response.body) {
+    return '';
+  }
+  const reader = response.body.getReader();
+  try {
+    const first = await reader.read();
+    return first.done ? '' : new TextDecoder().decode(first.value.subarray(0, 1024));
+  } catch {
+    return '';
+  } finally {
+    await reader.cancel().catch(() => {});
   }
 }
 function manifestPath(root: string): string {
