@@ -201,7 +201,9 @@ export function useElementReset(
       // unsettled: the well then keeps drawing its last settled list, inert,
       // until the new one has landed whole (heldSelection.ts), so neither the
       // blank nor the stages in between reach the screen.
-      setScan((previous) => (previous ? { ...previous, rootSnapshot: undefined, model: EMPTY_RULE_MODEL, settled: false } : previous));
+      setScan((previous) =>
+        previous ? { ...previous, rootSnapshot: undefined, model: EMPTY_RULE_MODEL, settled: false, awaitingFirstAnswer: true } : previous,
+      );
       setNativeModel(undefined);
       nativeModelRef.current = undefined;
       nativeIdentityRef.current = '';

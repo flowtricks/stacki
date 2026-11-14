@@ -37,6 +37,13 @@ export type ScanState = {
   rememberedPageEmbedCount: number;
   errors: Array<{ label: string; message: string }>;
   inComponentContext: boolean;
+  /**
+   * Another element was selected and no settled answer for it has landed yet. Whatever the
+   * panel could draw from the blanked or source-only model is the plain default that the
+   * answer then replaces, so the sections hold placeholders instead. Never set by a rescan of
+   * the element already shown.
+   */
+  awaitingFirstAnswer: boolean;
   /** True once the element's selectors come from a complete resolve the canvas
    *  answered. False from the moment another element is selected until then: the
    *  model is blanked, then filled in steps (source-known first, then the DOM's

@@ -594,6 +594,7 @@ export function unselectedScanState(content: Content, rememberedPageEmbedCount: 
     inComponentContext: content.scan.inComponentContext,
     // No element, so no selectors on their way: nothing to hold for.
     settled: true,
+    awaitingFirstAnswer: false,
   };
 }
 
@@ -615,6 +616,7 @@ export function scanStateFor(
     errors: content.errors,
     inComponentContext: content.scan.inComponentContext,
     settled,
+    awaitingFirstAnswer: false,
   };
 }
 

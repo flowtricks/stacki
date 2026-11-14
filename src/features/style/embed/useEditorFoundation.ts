@@ -619,7 +619,12 @@ export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, sc
       // them is a real answer, shown while a busy canvas is still answering.
       const sourceKnown = rootSnapshot.classList.length > 0;
       const settled = !content.partial && (options.sourceOnly !== true || sourceKnown);
-      setScan(scanStateFor(content, { rootSnapshot, model, settled }, pageDocsRef.current.length));
+      // Still waiting for this element's first settled answer if the selection reset said so
+      // and this step is not it: a rescan of an element already shown never sets it.
+      setScan((previous) => ({
+        ...scanStateFor(content, { rootSnapshot, model, settled }, pageDocsRef.current.length),
+        awaitingFirstAnswer: !settled && previous?.awaitingFirstAnswer === true,
+      }));
       setPhase('ready');
       setScanningMore(!!content.partial);
       if (!options.silent) {
