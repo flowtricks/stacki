@@ -8,7 +8,7 @@
 // variables are left out, except the one applied to the property being edited, which stays listed and selected. Hiding
 // never affects the Variables panel, how a variable resolves, the canvas or the exported CSS.
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
-import type { Result } from '../../../shared/core/result';
+import type { Result } from '../../shared/core/result';
 import { hiddenVariablesStore, type HiddenVariablesState } from './hiddenVariables';
 
 export interface HiddenVariables {

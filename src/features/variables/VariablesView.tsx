@@ -23,7 +23,7 @@ import { VariableScopeBadge } from './VariableScopeBadge';
 import DockableWindow, { type WindowMode } from '../../ui/DockableWindow';
 import { readWindowMode, storeWindowMode } from '../../ui/windowPreferences';
 import { variableCache } from './variableCache';
-import { useHiddenVariables } from './useHiddenVariables';
+import { useHiddenVariables } from '../../ipc/useHiddenVariables';
 import '../style/utilities.css';
 export { dropPlan, movesForDrop } from './variableRows';
 export { createScrollSync } from './variableScroll';

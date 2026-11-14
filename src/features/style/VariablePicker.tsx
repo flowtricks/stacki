@@ -25,6 +25,8 @@ import { PICKER_RESTORE_EVENT } from './CustomValueEditor';
 import { resolveVariableValue, valuePredicateFor } from '../../../shared/properties/propertyValueAccepts';
 import { filterBySlot, isWholeSlot, VerdictCache, type Supports, type ValueSlot } from '../../../shared/properties/valueSlot';
 import { LIMITS } from '../../../shared/core/limits';
+import { useHiddenVariables } from '../../ipc/useHiddenVariables';
+import { suggestionNames } from '../../../shared/properties/variableVisibility';
 
 // Where the picker sits horizontally.
 //
@@ -53,10 +55,6 @@ export function pickerSpan(anchor: HTMLElement): { left: number; width: number }
 
 const OptionsIcon = centralIcon(centralSettings, 16);
 const HiddenIcon = centralIcon(centralEyeOff, 12);
-
-// The seam for "hidden from suggestions" (the project setting that keeps a variable out of the
-// pickers). It treats nothing as hidden until that setting is connected here.
-export const hiddenFromSuggestions = (_variable: ProjectVariable): boolean => false;
 
 // The picker popup: search field + grouped variable list (name + value). Portaled to
 // <body>, anchored to the dot and clamped into the viewport.
@@ -120,6 +118,23 @@ export function VariablePicker({
   // Session only: opening the picker always starts on the filtered list.
   const [showAll, setShowAll] = useState(false);
   const optionsMenu = useMenuTrigger();
+  // "Hidden from suggestions" (the Variables panel's setting, .stacki/variables.json): hidden names are
+  // left out of the list, except the variable applied to this property, and "show all" brings them back
+  // dimmed. The set is cached and live, so a toggle in the panel changes an open list.
+  const { hidden } = useHiddenVariables(getHost().projectPath);
+  const appliedName = selectedBinding === undefined ? undefined : customPropertyOf(selectedBinding);
+  const suggested = useMemo(
+    () =>
+      new Set(
+        suggestionNames(
+          listed.flatMap((variable) => customPropertyOf(variable.binding) ?? []),
+          hidden,
+          appliedName,
+        ),
+      ),
+    [listed, hidden, appliedName],
+  );
+  const suggestible = (variable: ProjectVariable): boolean => showAll || suggested.has(customPropertyOf(variable.binding) ?? '');
   const visibleHere = (variable: ProjectVariable): boolean =>
     sameVariable(variable.binding, selectedBinding) || defined === undefined || defined.has(customPropertyOf(variable.binding) ?? '');
   // Each row shows what the variable IS on the selected element: its computed value, not the
@@ -147,6 +162,7 @@ export function VariablePicker({
   // search narrows rows without dissolving a group.
   const offered = pickerVariables(listed, prop, '', { ...context, showAll })
     .filter(visibleHere)
+    .filter(suggestible)
     .map(withLocalValue);
   // Show all marks what the filter would have refused, so it can be shown muted and still be picked.
   const refused = useMemo(() => {
@@ -156,11 +172,12 @@ export function VariablePicker({
     const valid = new Set(
       pickerVariables(listed, prop, '', context)
         .filter(visibleHere)
+        .filter((variable) => suggested.has(customPropertyOf(variable.binding) ?? ''))
         .map((variable) => variable.binding),
     );
     return new Set(offered.filter((variable) => !valid.has(variable.binding)).map((variable) => variable.binding));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the inputs are the ones listed
-  }, [showAll, listed, prop, defined, selectedBinding, slot]);
+  }, [showAll, listed, prop, defined, selectedBinding, slot, suggested]);
   const filtered = query === '' ? offered : offered.filter((variable) => matchesQuery(variable, query));
   const drawn = useMemo(() => drawingOrder(filtered, listed, offered, { grouped }), [filtered, listed, offered, grouped]);
   const { activeBinding, navigation } = usePickerNavigation(ref, drawn, { typing, search }, onPreview, onPick);
@@ -269,6 +286,7 @@ export function VariablePicker({
             offered={offered}
             grouped={grouped}
             refused={refused}
+            hiddenNames={hidden}
             overridden={overriddenHere}
             query={query}
             collapsed={collapsed}
@@ -481,6 +499,7 @@ export function PickerCollections({
   offered,
   grouped = true,
   refused,
+  hiddenNames,
   overridden,
 }: {
   variables: ProjectVariable[];
@@ -492,6 +511,8 @@ export function PickerCollections({
   grouped?: boolean;
   /** Bindings listed by "show all" that are not valid for the property: drawn muted. */
   refused?: ReadonlySet<string> | undefined;
+  /** Names hidden from suggestions: listed (by "show all") dimmed with a mark. */
+  hiddenNames?: ReadonlySet<string> | undefined;
   /** Bindings whose computed value here differs from the stylesheet's, with the declared expression. */
   overridden?: ReadonlyMap<string, string> | undefined;
   query: string;
@@ -539,6 +560,7 @@ export function PickerCollections({
                         group={group}
                         {...(block.title === undefined ? {} : { label: shortLabel(`--${variable.name}`, block.title) })}
                         invalid={refused?.has(variable.binding) === true}
+                        hidden={hiddenNames?.has(customPropertyOf(variable.binding) ?? '') === true}
                         {...(overridden?.has(variable.binding) === true ? { declared: overridden.get(variable.binding) ?? '' } : {})}
                         selected={sameVariable(variable.binding, selectedBinding)}
                         active={variable.binding === activeBinding}
@@ -649,6 +671,7 @@ export function PickerItem({
   group,
   label,
   invalid = false,
+  hidden = false,
   declared,
   selected,
   active,
@@ -660,6 +683,8 @@ export function PickerItem({
   label?: string;
   /** Listed by "show all" though not valid for the property: muted, still pickable. */
   invalid?: boolean;
+  /** Hidden from suggestions in the Variables panel: dimmed, with the eye-off mark. */
+  hidden?: boolean;
   /** The stylesheet's declaration, given when the element's computed value differs from it. */
   declared?: string;
   collection: string;
@@ -670,11 +695,10 @@ export function PickerItem({
   onHover?: ((binding: string) => void) | undefined;
 }) {
   const translate = useTranslate();
-  const hidden = hiddenFromSuggestions(variable);
   const selectedClassName = `${selected ? 'is-selected' : ''}${active === true ? ' is-active' : ''}${invalid ? ' is-invalid' : ''}${hidden ? ' is-hidden' : ''}${declared === undefined ? '' : ' is-overridden'}`;
   const note = [
     invalid ? translate('style.variablePicker.notValidForProperty') : '',
-    hidden ? translate('style.variablePicker.hiddenFromSuggestions') : '',
+    hidden ? translate('variables.hidden.indicator') : '',
     declared === undefined ? '' : `${translate('style.variablePicker.overriddenHere')}: --${variable.name}: ${declared}`,
   ]
     .filter(Boolean)

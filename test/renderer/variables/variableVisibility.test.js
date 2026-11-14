@@ -46,7 +46,7 @@ const STYLESHEET = `:root {
   await esbuild.build({
     stdin: {
       contents: `export { default } from './src/features/variables/VariablesView';
-export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from './src/features/variables/hiddenVariables';`,
+export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from './src/ipc/hiddenVariables';`,
       resolveDir: repoPath('.'),
       loader: 'ts',
     },

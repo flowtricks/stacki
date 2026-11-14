@@ -12,8 +12,8 @@
 // `git pull` between two toggles does not lose either. A file that cannot be read or parsed is never written over: the
 // state is `blocked`, suggestions show every variable, and a toggle answers an error value instead of touching the file.
 // The file is created by the first hide, never before.
-import { assert } from '../../../shared/core/assert';
-import { err, ok, type AppError, type Result } from '../../../shared/core/result';
+import { assert } from '../../shared/core/assert';
+import { err, ok, type AppError, type Result } from '../../shared/core/result';
 import {
   EMPTY_VARIABLE_VISIBILITY,
   hiddenNameSet,
@@ -22,9 +22,9 @@ import {
   withHidden,
   withShown,
   type VariableVisibility,
-} from '../../../shared/properties/variableVisibility';
-import { readMetadata, writeMetadata } from '../../ipc/projectMetadataBridge';
-import { onWindowReturn } from '../../lib/windowReturn';
+} from '../../shared/properties/variableVisibility';
+import { readMetadata, writeMetadata } from './projectMetadataBridge';
+import { onWindowReturn } from '../lib/windowReturn';
 
 export type HiddenVariablesState =
   /** Nothing read yet: every variable is suggested until the file answers (a few milliseconds). */

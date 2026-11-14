@@ -724,7 +724,6 @@ export const messages = {
   'style.variableHint.inheritedTitle': 'Geerbt: {value}',
   'style.variablePicker.connectToVariable': 'Mit Variable verbinden',
   'style.variablePicker.groupVariables': 'Variablen gruppieren',
-  'style.variablePicker.hiddenFromSuggestions': 'Aus den Vorschlägen ausgeblendet',
   'style.variablePicker.localScope': 'Dieses Element',
   'style.variablePicker.noVariables': 'Keine Variablen gefunden.',
   'style.variablePicker.notValidForProperty': 'Kein gültiger Wert für diese Eigenschaft',

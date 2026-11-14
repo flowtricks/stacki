@@ -717,7 +717,6 @@ export const messages = {
   'style.variableHint.inheritedTitle': 'Inherited: {value}',
   'style.variablePicker.connectToVariable': 'Connect to variable',
   'style.variablePicker.groupVariables': 'Group variables',
-  'style.variablePicker.hiddenFromSuggestions': 'Hidden from suggestions',
   'style.variablePicker.localScope': 'This element',
   'style.variablePicker.noVariables': 'No variables found.',
   'style.variablePicker.notValidForProperty': 'Not a valid value for this property',
