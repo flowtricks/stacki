@@ -4,6 +4,7 @@
 // var() and calc() verbatim instead of evaluating them. Cleanup is synchronous.
 import { assert } from '../../shared/core/assert';
 import { PRELOAD_LIMITS } from './frameBasics';
+import { ownClasses } from './frameMeasure';
 import { inheritedProperty } from './styleInheritance';
 
 const STYLE_LIMITS = { rulesMax: 20_000, propertiesMax: 512, workMax: 200_000 } as const;
@@ -458,7 +459,9 @@ function elementLabel(element: Element): string {
   if (element.id) {
     return `#${element.id}`;
   }
-  const classes = Array.from(element.classList).map((name) => `.${name}`);
+  // The canvas's own classes (`stacki-opened`, `stacki-designer`) are not the project's: a label
+  // that named them would show them in the picker as something the project wrote.
+  const classes = ownClasses(element).map((name) => `.${name}`);
   return classes.length > 0 ? classes.join('') : element.tagName.toLowerCase();
 }
 

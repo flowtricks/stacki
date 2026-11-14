@@ -94,6 +94,10 @@ const frame = (url) => {
   global.Node = window.Node;
   global.MouseEvent = window.MouseEvent;
   global.requestAnimationFrame = window.requestAnimationFrame.bind(window);
+  // The preload reads styles through the page's global, as it does in a frame; without it the
+  // guide measurement that follows the first animation frame throws and ends this process
+  // before the checks finish, depending only on how soon that frame runs.
+  global.getComputedStyle = window.getComputedStyle.bind(window);
 
   const sent = [];
   window.parent = { postMessage: (message) => sent.push(message) };
