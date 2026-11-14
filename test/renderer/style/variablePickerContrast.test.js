@@ -53,7 +53,8 @@ const tokenUsedBy = (selector) => {
 const overlay = rgbOf(resolve('--color-bg-surface'));
 const selectedRow = over([124, 92, 255], 0.18, overlay);
 const selectedRowHover = over([124, 92, 255], 0.28, overlay);
-const searchFill = rgbOf(resolve('--color-bg-surface-raised'));
+// The search has no fill of its own: it sits on the menu surface.
+const searchFill = overlay;
 
 test('the picker text parts use a token that clears AA on the menu and on the selected row', () => {
   const parts = [
@@ -95,8 +96,8 @@ test('the selected row stays distinct from the menu and its name clears AA on it
 });
 
 test('the search field is no longer the black well, and its text and placeholder clear AA', () => {
-  assert.ok(/\.embed-editor_varpicker \.embed-editor_varpicker-search \{[^}]*background: var\(--color-bg-surface-raised\)/.test(embed));
-  for (const token of ['--color-text-primary', '--color-text-tertiary']) {
+  assert.ok(/\.embed-editor_varpicker \.embed-editor_varpicker-search \{[^}]*background: transparent/.test(embed));
+  for (const token of ['--color-text-primary', '--color-text-secondary']) {
     const ratio = contrast(rgbOf(resolve(token)), searchFill);
     console.log(`  search ${token}: ${ratio.toFixed(2)}:1 (black well was ${contrast(rgbOf(resolve(token)), [0, 0, 0]).toFixed(2)}:1)`);
     assert.ok(ratio >= AA_NORMAL);

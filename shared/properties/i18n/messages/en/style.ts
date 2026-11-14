@@ -716,9 +716,17 @@ export const messages = {
   'style.variableHint.inheritedAria': 'Inherited {name}: choose variable',
   'style.variableHint.inheritedTitle': 'Inherited: {value}',
   'style.variablePicker.connectToVariable': 'Connect to variable',
+  'style.variablePicker.groupVariables': 'Group variables',
+  'style.variablePicker.hiddenFromSuggestions': 'Hidden from suggestions',
+  'style.variablePicker.localScope': 'This element',
   'style.variablePicker.noVariables': 'No variables found.',
+  'style.variablePicker.notValidForProperty': 'Not a valid value for this property',
+  'style.variablePicker.otherGroup': 'Other',
+  'style.variablePicker.overriddenHere': 'Overridden on this element',
   'style.variablePicker.search': 'Search variables',
   'style.variablePicker.searchPlaceholder': 'Search variables, functions',
+  'style.variablePicker.showAll': 'Show all variables',
+  'style.variablePicker.viewOptions': 'View options',
 } as const satisfies CatalogOf<`style.${string}`>;
 
 export type MessageKey = keyof typeof messages;

@@ -8,6 +8,7 @@ import { assert } from '../../shared/core/assert';
 import { described, type MessageRef } from '../../shared/properties/i18n/messageRef';
 import { toPosix, findStylesheets, type VarEntry, type Rule, readDeclarations } from './cssVarRead';
 import { labelForRule, commonStem, namesOf, groupRules, findFamilies, prefixSections } from './cssVarGroups';
+import { shortLabel } from '../../shared/properties/variableGroups';
 import { resolveValue, colorOf, isUncomputableColor, kindOf } from './cssVarValues';
 import { findAstroSources, isAstroFile, readAstroVariables, relativeTo, type VariableScope } from './cssVarRegions';
 
@@ -299,10 +300,8 @@ export function describeCell(cell: Cell | undefined, map: Map<string, string>): 
   };
 }
 
-export const shortLabel = (name: string, prefix?: string): string => {
-  const body = name.replace(/^--/, '');
-  return prefix && body.startsWith(`${prefix}-`) ? body.slice(prefix.length + 1) : body;
-};
+// Shared with the variable picker, so both name a variable the same way under its group.
+export { shortLabel };
 
 /**
  * Every stylesheet and Astro `<style>` block in the project that declares custom

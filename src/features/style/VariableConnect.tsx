@@ -213,9 +213,18 @@ export default function VariableConnect(props: VariableConnectProps) {
           editorRef={editorRef}
           setActive={connect.setActive}
           onChip={(chip) => {
+            // The chip is a toggle: pressing the one whose chooser is open closes it and leaves it
+            // closed. The chip sits inside the chooser's anchor, so the dismiss logic does not also
+            // treat the press as an outside press (popupDismiss.ts), which would reopen it.
+            if (open && chipTarget?.index === chip.index) {
+              closeChooser();
+              return;
+            }
             setSuggest(undefined);
             setChipTarget(chip);
-            openChooser();
+            if (!open) {
+              openChooser();
+            }
           }}
         />
       ) : undefined}

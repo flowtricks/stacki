@@ -5655,10 +5655,18 @@
   box-shadow: var(--shadow-lg);
 }
 /* The search: compact, a raised fill rather than the black inset well, the glass inside it. */
+/* The search row: the field and the view-options button, with spacing only (no fill, no hairline). */
+.embed-editor_varpicker-searchrow {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: var(--space-2);
+  margin-bottom: 0.25rem;
+}
 .embed-editor_varpicker-searchbox {
   position: relative;
-  flex: none;
-  margin-bottom: var(--space-2);
+  flex: 1 1 auto;
+  min-width: 0;
 }
 .embed-editor_varpicker-search-icon {
   position: absolute;
@@ -5668,20 +5676,69 @@
   color: var(--color-text-secondary);
   pointer-events: none;
 }
-.embed-editor_varpicker .embed-editor_varpicker-search {
-  box-sizing: border-box;
-  width: 100%;
-  height: 2rem;
-  padding: 0 var(--space-3) 0 2rem;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: var(--color-bg-surface-raised);
+.embed-editor_varpicker-searchbox:focus-within .embed-editor_varpicker-search-icon {
   color: var(--color-text-primary);
 }
+.embed-editor_varpicker .embed-editor_varpicker-search {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  height: 1.75rem;
+  padding: 0 0.5rem 0 1.75rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  /* No fill of its own: it reads as part of the menu surface. */
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-family-sans);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+.embed-editor_varpicker .embed-editor_varpicker-search::placeholder {
+  color: var(--color-text-secondary);
+}
 .embed-editor_varpicker .embed-editor_varpicker-search:focus {
-  background: var(--color-bg-surface-high);
-  outline: 0.125rem solid var(--color-border-focus);
-  outline-offset: 0;
+  outline: none;
+}
+/* The ring is for the keyboard; a click leaves only the colour shift of the icon and text. */
+.embed-editor_varpicker .embed-editor_varpicker-search:focus-visible {
+  box-shadow: 0 0 0 0.0625rem var(--color-border-focus);
+}
+.embed-editor_varpicker-options {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.embed-editor_varpicker-options:hover,
+.embed-editor_varpicker-options[aria-expanded='true'] {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+/* Listed by "show all" but not valid for the property, or kept out of suggestions: still pickable. */
+.embed-editor_varpicker-item.is-invalid .embed-editor_varpicker-item-name,
+.embed-editor_varpicker-item.is-invalid .embed-editor_varpicker-item-value {
+  opacity: 0.6;
+}
+.embed-editor_varpicker-item.is-hidden {
+  opacity: 0.7;
+}
+.embed-editor_varpicker-item.is-overridden .embed-editor_varpicker-item-value::after {
+  content: ' ·';
+  color: var(--color-text-tertiary);
+}
+.embed-editor_varpicker-item-hidden {
+  flex: none;
+  display: inline-flex;
+  color: var(--color-text-secondary);
 }
 .embed-editor_varpicker-list {
   min-height: 0;
@@ -5736,10 +5793,44 @@
   flex-direction: column;
 }
 .embed-editor_varpicker-group-name {
-  padding: var(--space-2) var(--space-2) var(--space-1);
-  font-size: var(--font-size-xs);
+  padding: var(--space-2) var(--space-3) 0.125rem;
+  font-size: 0.75rem;
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-secondary);
+  /* One line: the whole selector list is in the tooltip. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A group of two or more rows: a quiet block on a faint fill, its heading small and secondary,
+   its rows indented a little. Three levels read apart by
+   size, weight and tone alone: the file (md, bold, primary), the group (0.75rem, medium, secondary)
+   and the row (sm, regular, primary). No borders. */
+.embed-editor_varpicker-family {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  margin-top: 0.5rem;
+  padding-bottom: var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-hover);
+}
+.embed-editor_varpicker-family-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0.125rem;
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  /* One line, truncated with the whole name in the tooltip. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.embed-editor_varpicker-family .embed-editor_varpicker-item {
+  padding-left: calc(var(--space-3) + 0.5rem);
 }
 .embed-editor_varpicker-item {
   display: flex;

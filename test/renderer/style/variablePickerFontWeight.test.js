@@ -57,6 +57,8 @@ const DECLARED = {
   'ls-tight': '-0.04em',
   'ls-alias': 'var(--ls-tight)',
   'ls-wide': '1.5rem',
+  'card-local': '0.5rem',
+  'sibling-local': '0.25rem',
 };
 // What the cascade computes on each element: `inside` sits under a section that
 // redefines --w and --rev; `outside` does not. A computed alias carries the
@@ -91,6 +93,8 @@ const COMPUTED = {
     '--ls-tight': '-0.04em',
     '--ls-alias': '-0.04em',
     '--ls-wide': '1.5rem',
+    '--sibling-local': '0.25rem',
+    '--card-local': '',
   },
   inside: {
     '--w': '1rem',
@@ -121,6 +125,9 @@ const COMPUTED = {
     '--ls-tight': '2em',
     '--ls-alias': '2em',
     '--ls-wide': '0.05rem',
+    '--sibling-local': '',
+    '--card-local': '0.5rem',
+    '--_mw': '40rem',
   },
 };
 
@@ -234,13 +241,15 @@ const COMPUTED = {
       );
     });
     await settle();
-    const names = () => [...document.querySelectorAll('.embed-editor_varpicker-item')].map((row) => row.dataset.binding.slice(6, -1));
+    const ordered = () => [...document.querySelectorAll('.embed-editor_varpicker-item')].map((row) => row.dataset.binding.slice(6, -1));
+    // The set shown, order aside: rows are drawn in the panel's grouped order (variableGroups.ts).
+    const names = () => ordered().sort();
     const close = async () => {
       await act(async () => root.unmount());
       host.remove();
       anchor.remove();
     };
-    return { names, close };
+    return { names, ordered, close };
   };
   const same = (label, actual, expected) =>
     check(label, JSON.stringify(actual) === JSON.stringify(expected), `${JSON.stringify(actual)} !== ${JSON.stringify(expected)}`);
@@ -362,11 +371,42 @@ const COMPUTED = {
   // --- The Letter spacing picker offers 0 and em or rem lengths from -1 to 1.
   {
     const outside = await open({ selected: 'outside', prop: 'letter-spacing' });
-    same('letter-spacing outside: small em/rem lengths, chain included', outside.names(), ['border', 'ls-alias', 'ls-tight', 'rev']);
+    same('letter-spacing outside: small em/rem lengths, chain included', outside.names(), ['border', 'ls-alias', 'ls-tight', 'rev', 'sibling-local']);
     await outside.close();
     const inside = await open({ selected: 'inside', prop: 'letter-spacing' });
-    same('letter-spacing inside: overrides swap which are valid', inside.names(), ['alias', 'border', 'ls-wide', 'w']);
+    same('letter-spacing inside: overrides swap which are valid', inside.names(), ['alias', 'border', 'card-local', 'ls-wide', 'w']);
     await inside.close();
+  }
+
+  // --- Locals: a variable defined only on the selected element's own scope.
+  {
+    const outside = await open({ selected: 'outside', prop: 'letter-spacing' });
+    check(
+      'a sibling scope local is listed for its own element',
+      outside.names().includes('sibling-local') && !outside.names().includes('card-local'),
+      outside.names().join(),
+    );
+    await outside.close();
+    const inside = await open({ selected: 'inside', prop: 'letter-spacing' });
+    check(
+      'selecting another element swaps the locals: the card local in, the sibling local out',
+      inside.names().includes('card-local') && !inside.names().includes('sibling-local'),
+      inside.names().join(),
+    );
+    const widthRow = document.querySelector('[data-binding="var(--w)"] .embed-editor_varpicker-item-value');
+    check(
+      'a row shows the value computed on this element, not the stylesheet declaration (400 at :root, 1rem here)',
+      widthRow?.textContent === '1rem' && /Overridden on this element/.test(document.querySelector('[data-binding="var(--w)"]')?.title ?? ''),
+      `${widthRow?.textContent} | ${document.querySelector('[data-binding="var(--w)"]')?.title}`,
+    );
+    await inside.close();
+    // The applied local is declared nowhere the stylesheets list, and fails the filter: it still leads the list, marked.
+    const applied = await open({ selected: 'inside', prop: 'font-weight', selectedBinding: 'var(--_mw)' });
+    check('the applied local is first in the list', applied.ordered()[0] === '_mw', applied.ordered().join());
+    const marked = document.querySelector('.embed-editor_varpicker-item.is-selected');
+    check('and marked selected although 40rem is no font weight', marked?.dataset.binding === 'var(--_mw)', marked?.dataset.binding);
+    check('with its computed value shown', marked?.querySelector('.embed-editor_varpicker-item-value')?.textContent === '40rem');
+    await applied.close();
   }
 
   // --- Other properties are not filtered.

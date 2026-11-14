@@ -2,10 +2,15 @@
 // how it closes, and keeping the panel still while it is open
 // (VariableConnect.tsx).
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, MutableRefObject } from 'react';
 import { SkeletonRows } from '../../ui/Skeleton';
 import { SearchIcon } from '../../ui/Icons';
+import { arrangeNames, shortLabel } from '../../../shared/properties/variableGroups';
+import Menu, { useMenuTrigger } from '../../ui/Menu';
+import { centralIcon } from '../../ui/central/CentralIcon';
+import { settings as centralSettings, eyeOff as centralEyeOff } from '../../ui/central/centralGeometry';
+import { useGrouped } from './pickerOptions';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import { type ProjectVariable } from './model/webflow';
@@ -44,6 +49,13 @@ export function pickerSpan(anchor: HTMLElement): { left: number; width: number }
   const left = Math.max(margin, Math.min(row.left, window.innerWidth - width - margin));
   return { left, width };
 }
+
+const OptionsIcon = centralIcon(centralSettings, 16);
+const HiddenIcon = centralIcon(centralEyeOff, 12);
+
+// The seam for "hidden from suggestions" (the project setting that keeps a variable out of the
+// pickers). It treats nothing as hidden until that setting is connected here.
+export const hiddenFromSuggestions = (_variable: ProjectVariable): boolean => false;
 
 // The picker popup: search field + grouped variable list (name + value). Portaled to
 // <body>, anchored to the dot and clamped into the viewport.
@@ -97,11 +109,60 @@ export function VariablePicker({
   const style = usePickerPosition(ref, anchor);
   usePickerFocus(searchRef);
   const query = search.trim().toLowerCase();
-  const defined = useDefinedVariables(vars);
-  const filtered = pickerVariables(vars, prop, query, { computed: defined, selectedBinding, slot }).filter(
-    (variable) => defined === undefined || defined.has(customPropertyOf(variable.binding) ?? ''),
-  );
-  const { activeBinding, navigation } = usePickerNavigation(ref, filtered, { typing, search }, onPreview, onPick);
+  // The applied variable is always listed, whichever scope declares it: one the stylesheets read
+  // here do not hold (a local custom property of the element or its component) gets a row of its
+  // own, first, labelled as this element's, with the value the page computes for it.
+  const localLabel = translate('style.variablePicker.localScope');
+  const listed = useMemo(() => withAppliedVariable(vars, selectedBinding, localLabel), [vars, selectedBinding, localLabel]);
+  const defined = useDefinedVariables(listed);
+  const [grouped, setGrouped] = useGrouped();
+  // Session only: opening the picker always starts on the filtered list.
+  const [showAll, setShowAll] = useState(false);
+  const optionsMenu = useMenuTrigger();
+  const visibleHere = (variable: ProjectVariable): boolean =>
+    sameVariable(variable.binding, selectedBinding) || defined === undefined || defined.has(customPropertyOf(variable.binding) ?? '');
+  // Each row shows what the variable IS on the selected element: its computed value, not the
+  // stylesheet's declaration. A value the page has not answered yet keeps the stylesheet's, and the
+  // answer swaps the text in place (rows are ordered by name, never by value).
+  const declaredLookup = useMemo(() => declaredValues(listed), [listed]);
+  const overriddenHere = new Map<string, string>();
+  const withLocalValue = (variable: ProjectVariable): ProjectVariable => {
+    const computed = defined?.get(customPropertyOf(variable.binding) ?? '');
+    if (variable.file === LOCAL_FILE) {
+      return { ...variable, value: computed ?? '' };
+    }
+    if (computed === undefined || computed === variable.value) {
+      return variable;
+    }
+    const stylesheetValue = resolveVariableValue(variable.value, (name) => declaredLookup.get(name)) ?? variable.value;
+    if (stylesheetValue !== computed) {
+      overriddenHere.set(variable.binding, variable.value);
+    }
+    return { ...variable, value: computed };
+  };
+  const context = { computed: defined, selectedBinding, slot };
+  // What the picker offers, before any search: the variables valid for the property at the slot, or
+  // with "show all" every one the element can see. Group structure is judged on this list, so a
+  // search narrows rows without dissolving a group.
+  const offered = pickerVariables(listed, prop, '', { ...context, showAll })
+    .filter(visibleHere)
+    .map(withLocalValue);
+  // Show all marks what the filter would have refused, so it can be shown muted and still be picked.
+  const refused = useMemo(() => {
+    if (!showAll) {
+      return new Set<string>();
+    }
+    const valid = new Set(
+      pickerVariables(listed, prop, '', context)
+        .filter(visibleHere)
+        .map((variable) => variable.binding),
+    );
+    return new Set(offered.filter((variable) => !valid.has(variable.binding)).map((variable) => variable.binding));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the inputs are the ones listed
+  }, [showAll, listed, prop, defined, selectedBinding, slot]);
+  const filtered = query === '' ? offered : offered.filter((variable) => matchesQuery(variable, query));
+  const drawn = useMemo(() => drawingOrder(filtered, listed, offered, { grouped }), [filtered, listed, offered, grouped]);
+  const { activeBinding, navigation } = usePickerNavigation(ref, drawn, { typing, search }, onPreview, onPick);
   // With its own search box the arrows move the purple mark itself, from the
   // applied variable to the one being previewed. Following typing, the mark
   // stays on the applied variable and the keyboard row is tinted instead.
@@ -124,18 +185,59 @@ export function VariablePicker({
       style={style}
     >
       {typing === undefined ? (
-        <div className="embed-editor_varpicker-searchbox">
-          <SearchIcon size={16} className="embed-editor_varpicker-search-icon" />
-          <input
-            ref={searchRef}
-            className="u-input embed-editor_varpicker-search"
-            value={search}
-            placeholder={translate('style.variablePicker.searchPlaceholder')}
-            spellCheck={false}
-            autoFocus
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={(event) => searchKeyDown(event, navigation)}
-            aria-label={translate('style.variablePicker.search')}
+        <div className="embed-editor_varpicker-searchrow">
+          <div className="embed-editor_varpicker-searchbox">
+            <SearchIcon size={16} className="embed-editor_varpicker-search-icon" />
+            <input
+              ref={searchRef}
+              className="embed-editor_varpicker-search"
+              value={search}
+              placeholder={translate('style.variablePicker.searchPlaceholder')}
+              spellCheck={false}
+              autoFocus
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => searchKeyDown(event, navigation)}
+              aria-label={translate('style.variablePicker.search')}
+            />
+          </div>
+          <button
+            type="button"
+            ref={optionsMenu.ref}
+            className="embed-editor_varpicker-options"
+            aria-label={translate('style.variablePicker.viewOptions')}
+            title={translate('style.variablePicker.viewOptions')}
+            aria-haspopup="menu"
+            aria-expanded={optionsMenu.open}
+            // Pressing it must not take focus (or the text) from the search box.
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={optionsMenu.toggle}
+          >
+            <OptionsIcon size={16} />
+          </button>
+          <Menu
+            open={optionsMenu.open}
+            anchor={optionsMenu.anchor}
+            label={translate('style.variablePicker.viewOptions')}
+            placement="below-end"
+            onClose={optionsMenu.close}
+            entries={[
+              {
+                kind: 'item',
+                id: 'group',
+                label: translate('style.variablePicker.groupVariables'),
+                checked: grouped,
+                keepOpen: true,
+                onSelect: () => setGrouped({ grouped: !grouped }),
+              },
+              {
+                kind: 'item',
+                id: 'show-all',
+                label: translate('style.variablePicker.showAll'),
+                checked: showAll,
+                keepOpen: true,
+                onSelect: () => setShowAll(!showAll),
+              },
+            ]}
           />
         </div>
       ) : undefined}
@@ -156,6 +258,11 @@ export function VariablePicker({
         ) : (
           <PickerCollections
             variables={filtered}
+            allVariables={listed}
+            offered={offered}
+            grouped={grouped}
+            refused={refused}
+            overridden={overriddenHere}
             query={query}
             collapsed={collapsed}
             selectedBinding={markedBinding}
@@ -266,6 +373,8 @@ export function pickerVariables(
     readonly slot?: ValueSlot | undefined;
     /** The engine's grammar check; defaults to the browser's CSS.supports when it has one. */
     readonly supports?: Supports | undefined;
+    /** List every variable, bypassing the validity filter and the curated narrowing. */
+    readonly showAll?: boolean | undefined;
   } = {},
 ): ProjectVariable[] {
   const declared = declaredValues(vars);
@@ -274,8 +383,8 @@ export function pickerVariables(
     context.computed?.get(customPropertyOf(variable.binding) ?? '') ?? resolveVariableValue(variable.value, lookup);
   const supports = context.supports ?? engineSupports();
   const typed =
-    prop?.startsWith('--') === true
-      ? // A custom property takes any value, so every variable is offered.
+    context.showAll === true || prop?.startsWith('--') === true
+      ? // A custom property takes any value, and "show all" bypasses the filter: every variable is offered.
         vars
       : engineKnows(prop, supports)
         ? // The browser's own grammar decides, at the slot the pick lands in (valueSlot.ts). The
@@ -292,12 +401,16 @@ export function pickerVariables(
           ]
         : vars.filter((variable) => legacyAllowed(variable, prop, context, computedOf));
   const sorted = [...typed].sort(
-    (left, right) => left.collection.localeCompare(right.collection) || left.group.localeCompare(right.group) || left.name.localeCompare(right.name),
+    (left, right) =>
+      Number(right.file === LOCAL_FILE) - Number(left.file === LOCAL_FILE) ||
+      left.collection.localeCompare(right.collection) ||
+      left.group.localeCompare(right.group) ||
+      left.name.localeCompare(right.name),
   );
   if (!query) {
     return sorted;
   }
-  return sorted.filter((variable) => `${variable.collection}/${variable.group}/${variable.name} ${variable.value}`.toLowerCase().includes(query));
+  return sorted.filter((variable) => matchesQuery(variable, query));
 }
 
 // Without an engine to ask (a test realm, a property the browser does not know), the variable's
@@ -357,8 +470,23 @@ export function PickerCollections({
   onToggleCollapse,
   onPick,
   onHover,
+  allVariables,
+  offered,
+  grouped = true,
+  refused,
+  overridden,
 }: {
   variables: ProjectVariable[];
+  /** Every variable the picker knows, so a scope is grouped the way the panel groups it however the list is narrowed. */
+  allVariables?: readonly ProjectVariable[] | undefined;
+  /** What the picker offers before the search: group sizes are judged on it. */
+  offered?: readonly ProjectVariable[] | undefined;
+  /** One flat list when false. */
+  grouped?: boolean;
+  /** Bindings listed by "show all" that are not valid for the property: drawn muted. */
+  refused?: ReadonlySet<string> | undefined;
+  /** Bindings whose computed value here differs from the stylesheet's, with the declared expression. */
+  overridden?: ReadonlyMap<string, string> | undefined;
   query: string;
   collapsed: ReadonlySet<string>;
   selectedBinding: string | undefined;
@@ -369,6 +497,7 @@ export function PickerCollections({
   /** The pointer is over this row: preview it. */
   onHover?: ((binding: string) => void) | undefined;
 }) {
+  const translate = useTranslate();
   return byCollection(variables).map(({ collection, groups }) => {
     // A search always expands (so matches aren't hidden behind a collapsed head).
     const open = !!query || !collapsed.has(collection);
@@ -381,27 +510,129 @@ export function PickerCollections({
           </span>
         </button>
         {open
-          ? groups.map(({ group, items }) => (
-              <div key={group || '_'} className="embed-editor_varpicker-group">
-                {group && !isRootScope(group) ? <div className="embed-editor_varpicker-group-name">{group}</div> : undefined}
-                {items.map((variable) => (
-                  <PickerItem
-                    key={variable.binding}
-                    variable={variable}
-                    collection={collection}
-                    group={group}
-                    selected={sameVariable(variable.binding, selectedBinding)}
-                    active={variable.binding === activeBinding}
-                    onPick={onPick}
-                    onHover={onHover}
-                  />
-                ))}
-              </div>
-            ))
+          ? groups.map(({ group, items }) => {
+              const blocks = blocksOf(collection, group, items, allVariables, offered, { grouped });
+              const scopeLabel = group && !isRootScope(group) ? group : undefined;
+              const hasNamedGroups = blocks.some((block) => block.title !== undefined);
+              const flatRun = blocks.some((block) => block.title === undefined);
+              return (
+                <div key={group || '_'} className="embed-editor_varpicker-group">
+                  {/* A scope with no ungrouped run still names itself, on one line. */}
+                  {scopeLabel !== undefined && !flatRun ? (
+                    <div className="embed-editor_varpicker-group-name" title={scopeLabel}>
+                      {scopeLabel}
+                    </div>
+                  ) : undefined}
+                  {blocks.map((block) => {
+                    const rows = block.items.map((variable) => (
+                      <PickerItem
+                        key={variable.binding}
+                        variable={variable}
+                        collection={collection}
+                        group={group}
+                        {...(block.title === undefined ? {} : { label: shortLabel(`--${variable.name}`, block.title) })}
+                        invalid={refused?.has(variable.binding) === true}
+                        {...(overridden?.has(variable.binding) === true ? { declared: overridden.get(variable.binding) ?? '' } : {})}
+                        selected={sameVariable(variable.binding, selectedBinding)}
+                        active={variable.binding === activeBinding}
+                        onPick={onPick}
+                        onHover={onHover}
+                      />
+                    ));
+                    // The ungrouped run is a card like the named groups when the scope has a label of
+                    // its own or the scope has named groups beside it; a small project with neither
+                    // keeps a plain list. Its heading is the scope's selector list (one line, the whole
+                    // list in the tooltip) or, for the plain root, a neutral "Other".
+                    const flatHeading =
+                      block.title === undefined ? (scopeLabel ?? (hasNamedGroups ? translate('style.variablePicker.otherGroup') : undefined)) : block.title;
+                    if (flatHeading === undefined) {
+                      return rows;
+                    }
+                    // A section's heading names the group for the eye and the reader alike: the rows
+                    // are options of the labelled group, the heading itself is not an option.
+                    return (
+                      <div key={`s:${block.title ?? ''}`} role="group" aria-label={flatHeading} className="embed-editor_varpicker-family">
+                        <div className="embed-editor_varpicker-family-name" aria-hidden="true" title={flatHeading}>
+                          {flatHeading}
+                        </div>
+                        {rows}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })
           : undefined}
       </div>
     );
   });
+}
+
+// The rows of one scope as blocks, in the panel's grouping (shared/properties/variableGroups.ts) for
+// every kind of variable. Whether something is a group is decided from what the picker OFFERS (the
+// validity filter and "show all" applied, the search not): a group of two or more offered variables
+// stays a group however far a search narrows it, and a group with no matching row is hidden. A group
+// offering one variable is a flat row under its FULL name, so `display-font` > `family` reads
+// `display-font-family`. With grouping off the rows are one flat list in the panel's order. (The panel
+// keeps a one-row section it was given; this list is for scanning.) Block order is stable: the flat
+// run first (ungrouped names, then each flattened one in section order), then the groups.
+function blocksOf(
+  collection: string,
+  group: string,
+  items: ProjectVariable[],
+  allVariables: readonly ProjectVariable[] | undefined,
+  offered: readonly ProjectVariable[] | undefined,
+  { grouped }: { readonly grouped: boolean },
+): Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }> {
+  const inScope = (variable: ProjectVariable): boolean => variable.collection === collection && variable.group === group;
+  const everyName = (allVariables ?? items).filter(inScope).map((variable) => `--${variable.name}`);
+  const byName = new Map<string, ProjectVariable>(items.map((variable): [string, ProjectVariable] => [`--${variable.name}`, variable]));
+  const blocks = arrangeNames(everyName, new Set(byName.keys()));
+  if (!blocks.some((block) => block.title !== undefined)) {
+    return [{ title: undefined, items }];
+  }
+  const resolved = blocks.map((block) => ({ title: block.title, items: block.names.flatMap((name) => byName.get(name) ?? []) }));
+  if (!grouped) {
+    return [{ title: undefined, items: resolved.flatMap((block) => block.items) }];
+  }
+  const offeredNames = new Set((offered ?? items).filter(inScope).map((variable) => `--${variable.name}`));
+  const offeredCount = new Map<string, number>();
+  for (const block of arrangeNames(everyName, offeredNames)) {
+    if (block.title !== undefined) {
+      offeredCount.set(block.title, block.names.length);
+    }
+  }
+  const flat: ProjectVariable[] = [];
+  const groups: Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }> = [];
+  for (const block of resolved) {
+    if (block.title === undefined || (offeredCount.get(block.title) ?? 0) < GROUP_ROWS_MIN) {
+      flat.push(...block.items);
+    } else {
+      groups.push(block);
+    }
+  }
+  return [...(flat.length > 0 ? [{ title: undefined, items: flat }] : []), ...groups];
+}
+
+// Offered rows a group needs to be drawn as a group.
+const GROUP_ROWS_MIN = 2;
+
+// `filtered` in the order the rows are drawn, so the keyboard walks what the eye sees.
+function drawingOrder(
+  filtered: ProjectVariable[],
+  allVariables: readonly ProjectVariable[],
+  offered: readonly ProjectVariable[],
+  options: { readonly grouped: boolean },
+): ProjectVariable[] {
+  const ordered: ProjectVariable[] = [];
+  for (const { collection, groups } of byCollection(filtered)) {
+    for (const { group, items } of groups) {
+      for (const block of blocksOf(collection, group, items, allVariables, offered, options)) {
+        ordered.push(...block.items);
+      }
+    }
+  }
+  return ordered;
 }
 
 // One variable: its type glyph, name and value, checked when it is the one applied.
@@ -409,12 +640,21 @@ export function PickerItem({
   variable,
   collection,
   group,
+  label,
+  invalid = false,
+  declared,
   selected,
   active,
   onPick,
   onHover,
 }: {
   variable: ProjectVariable;
+  /** The name drawn when the row sits under a group heading: the full name minus the group. */
+  label?: string;
+  /** Listed by "show all" though not valid for the property: muted, still pickable. */
+  invalid?: boolean;
+  /** The stylesheet's declaration, given when the element's computed value differs from it. */
+  declared?: string;
   collection: string;
   group: string;
   selected: boolean;
@@ -422,7 +662,16 @@ export function PickerItem({
   onPick: (binding: string) => void;
   onHover?: ((binding: string) => void) | undefined;
 }) {
-  const selectedClassName = `${selected ? 'is-selected' : ''}${active === true ? ' is-active' : ''}`;
+  const translate = useTranslate();
+  const hidden = hiddenFromSuggestions(variable);
+  const selectedClassName = `${selected ? 'is-selected' : ''}${active === true ? ' is-active' : ''}${invalid ? ' is-invalid' : ''}${hidden ? ' is-hidden' : ''}${declared === undefined ? '' : ' is-overridden'}`;
+  const note = [
+    invalid ? translate('style.variablePicker.notValidForProperty') : '',
+    hidden ? translate('style.variablePicker.hiddenFromSuggestions') : '',
+    declared === undefined ? '' : `${translate('style.variablePicker.overriddenHere')}: --${variable.name}: ${declared}`,
+  ]
+    .filter(Boolean)
+    .join('. ');
   const groupPrefix = group ? `${group} / ` : '';
   const valueSuffix = variable.value ? ` — ${variable.value}` : '';
   return (
@@ -431,13 +680,14 @@ export function PickerItem({
       className={`embed-editor_varpicker-item ${selectedClassName}`}
       aria-current={selected || undefined}
       data-binding={variable.binding}
+      aria-label={`--${variable.name}${variable.value ? `: ${variable.value}` : ''}`}
       // A press must not take focus from the field being typed in: the pick
       // puts the caret back after the variable, and a focus change would commit
       // the half-typed value first.
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => onPick(variable.binding)}
       onPointerEnter={() => onHover?.(variable.binding)}
-      title={`${collection} / ${groupPrefix}${variable.name}${valueSuffix}`}
+      title={`${collection} / ${groupPrefix}${variable.name}${valueSuffix}${note === '' ? '' : ` (${note})`}`}
     >
       {variable.type === 'Color' ? (
         <VariableSwatch binding={variable.binding} />
@@ -446,8 +696,13 @@ export function PickerItem({
           <VariableTypeIcon type={variable.type} />
         </span>
       )}
-      <span className="embed-editor_varpicker-item-name">{variable.name}</span>
+      <span className="embed-editor_varpicker-item-name">{label ?? variable.name}</span>
       <span className="embed-editor_varpicker-item-value">{variable.value}</span>
+      {hidden ? (
+        <span className="embed-editor_varpicker-item-hidden" aria-hidden="true">
+          <HiddenIcon />
+        </span>
+      ) : undefined}
       {selected ? (
         <span className="embed-editor_varpicker-item-check" aria-hidden="true">
           <CheckIcon />
@@ -455,6 +710,38 @@ export function PickerItem({
       ) : undefined}
     </button>
   );
+}
+
+// Marks the row made for an applied variable no stylesheet read here declares.
+export const LOCAL_FILE = '\u0000local';
+
+// `vars`, plus a first row for the applied variable when none of them is it.
+export function withAppliedVariable(vars: ProjectVariable[], selectedBinding: string | undefined, localLabel: string): ProjectVariable[] {
+  const property = selectedBinding === undefined ? undefined : customPropertyOf(selectedBinding);
+  if (property === undefined) {
+    return vars;
+  }
+  if (vars.some((variable) => customPropertyOf(variable.binding) === property)) {
+    return vars;
+  }
+  const local: ProjectVariable = {
+    collection: localLabel,
+    group: '',
+    name: property.slice(2),
+    value: '',
+    binding: `var(${property})`,
+    type: 'String',
+    file: LOCAL_FILE,
+  };
+  return [local, ...vars];
+}
+
+// Every word of the query must be found: in the scope, the full name (`button-background`), the name
+// with its dashes read as spaces (so `button background` finds it, group and name) or the value.
+export function matchesQuery(variable: ProjectVariable, query: string): boolean {
+  const words = query.split(/\s+/).filter(Boolean);
+  const text = `${variable.collection}/${variable.group}/${variable.name} ${variable.name.replace(/-/g, ' ')} ${variable.value}`.toLowerCase();
+  return words.every((word) => text.includes(word));
 }
 
 // Declared values by name without `--`, first declaration winning: the stylesheet-side lookup.
