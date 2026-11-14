@@ -5643,7 +5643,7 @@
 .embed-editor_varpicker {
   z-index: var(--z-tooltip);
   box-sizing: border-box;
-  max-height: min(60vh, 26.25rem);
+  /* The height cap is inline (VariablePicker.tsx, PICKER_HEIGHT_REM_MAX) with the room in the window. */
   display: flex;
   flex-direction: column;
   padding: var(--space-2);

@@ -1035,9 +1035,57 @@ export function usePickerFocus(searchRef: React.RefObject<HTMLInputElement>): vo
   }, [searchRef]);
 }
 
-// Drops below the row that owns the anchor (the dot's wrapper, or the chip's cell),
-// flipping above only if it would overflow the bottom. Its width and left edge come
-// from pickerSpan: the style panel's span inside the panel, the row's own otherwise.
+// The picker never grows past this, whatever room the window has, in every host (the chip control,
+// the code field's typing list, Studio and the demo all render VariablePicker). It is the one cap: the CSS
+// does not repeat it, because an inline max-height (the room left in the window) used to replace
+// the stylesheet's and let the list run the full height of a tall window.
+export const PICKER_HEIGHT_REM_MAX = 18;
+// Below this the list is not usable, so a short window still gets this much, never less than
+// what the window itself holds.
+export const PICKER_HEIGHT_REM_MIN = 10;
+const PICKER_GAP_REM = 0.25;
+const PICKER_EDGE_REM = 1;
+
+export type PickerPlacement =
+  | { readonly side: 'below'; readonly top: number; readonly heightMax: number }
+  | { readonly side: 'above'; readonly bottom: number; readonly heightMax: number };
+
+// Which side of the field the picker opens on, and the most height it may take there: at most
+// the cap, at most the room on that side minus the edge margin, at least the readable minimum
+// (clamped to the window). It opens below when its natural height fits there, else on the side
+// with more room. Pure, so the sizes can be tested without a layout engine.
+export function pickerPlacement(input: {
+  readonly rowTop: number;
+  readonly rowBottom: number;
+  readonly naturalHeight: number;
+  readonly viewportHeight: number;
+  readonly rootFontPx: number;
+}): PickerPlacement {
+  const { rowTop, rowBottom, naturalHeight, viewportHeight, rootFontPx } = input;
+  assert(rootFontPx > 0, 'pickerPlacement: the root font size is positive');
+  assert(viewportHeight > 0, 'pickerPlacement: the window has a height');
+  const edge = PICKER_EDGE_REM * rootFontPx;
+  const gap = PICKER_GAP_REM * rootFontPx;
+  const capPx = PICKER_HEIGHT_REM_MAX * rootFontPx;
+  const floorPx = Math.min(PICKER_HEIGHT_REM_MIN * rootFontPx, viewportHeight - 2 * edge);
+  const roomBelow = viewportHeight - (rowBottom + gap) - edge;
+  const roomAbove = rowTop - gap - edge;
+  const fit = (room: number): number => Math.max(floorPx, Math.min(capPx, room));
+  const wanted = Math.min(naturalHeight, capPx);
+  if (wanted <= roomBelow || roomBelow >= roomAbove) {
+    const heightMax = fit(roomBelow);
+    // Held by the top edge: filtering shortens it from the bottom, where the space belongs.
+    const top = Math.min(rowBottom + gap, Math.max(edge, viewportHeight - edge - heightMax));
+    return { side: 'below', top, heightMax };
+  }
+  // Held by the bottom edge, so the box stays against the field as the list shrinks.
+  const heightMax = fit(roomAbove);
+  return { side: 'above', bottom: Math.max(edge, viewportHeight - (rowTop - gap)), heightMax };
+}
+
+// Drops below the row that owns the anchor (the dot's wrapper, or the chip's cell), or above it
+// when there is more room there (pickerPlacement). Its width and left edge come from pickerSpan:
+// the style panel's span inside the panel, the row's own otherwise.
 export function usePickerPosition(ref: React.RefObject<HTMLDivElement>, anchor: HTMLElement): CSSProperties {
   // Measure the hidden first pass at the final width, so the height the positioning
   // effect reads is the height it will actually have.
@@ -1045,6 +1093,7 @@ export function usePickerPosition(ref: React.RefObject<HTMLDivElement>, anchor: 
     position: 'fixed',
     top: 0,
     ...pickerSpan(anchor),
+    maxHeight: `${PICKER_HEIGHT_REM_MAX}rem`,
     visibility: 'hidden',
   }));
   useLayoutEffect(() => {
@@ -1052,39 +1101,23 @@ export function usePickerPosition(ref: React.RefObject<HTMLDivElement>, anchor: 
     if (!element) {
       return;
     }
-    const margin = 8;
     const row = (anchor.parentElement ?? anchor).getBoundingClientRect();
     const { height } = element.getBoundingClientRect();
     const { left, width } = pickerSpan(anchor);
-    const below = row.bottom + 4;
-    if (below + height <= window.innerHeight - margin) {
-      // Below the row: its TOP is the edge that must stay put, and it already
-      // does. Filtering shortens it from the bottom, which is where the empty
-      // space belongs.
-      setStyle({
-        position: 'fixed',
-        top: below,
-        left,
-        width,
-        maxHeight: Math.max(0, window.innerHeight - below - margin),
-        visibility: 'visible',
-      });
-      return;
-    }
-    // Flipped above: anchor the BOTTOM to the row rather than working out a top
-    // from the height it happens to have right now.
-    //
-    // A top computed once is a top that stops being right the moment the list
-    // gets shorter — and the list gets shorter on every keystroke. The box then
-    // shrank away from the field it belongs to, leaving a growing gap between
-    // them while its top edge stayed nailed where it opened. Held by the bottom,
-    // it stays against the field and grows upward into the space it has.
+    const rootFontPx = Number.parseFloat(window.getComputedStyle(document.documentElement).fontSize) || 16;
+    const placement = pickerPlacement({
+      rowTop: row.top,
+      rowBottom: row.bottom,
+      naturalHeight: height,
+      viewportHeight: window.innerHeight,
+      rootFontPx,
+    });
     setStyle({
       position: 'fixed',
-      bottom: Math.max(margin, window.innerHeight - (row.top - 4)),
+      ...(placement.side === 'below' ? { top: placement.top } : { bottom: placement.bottom }),
       left,
       width,
-      maxHeight: Math.max(0, row.top - 4 - margin),
+      maxHeight: placement.heightMax,
       visibility: 'visible',
     });
   }, [ref, anchor]);
