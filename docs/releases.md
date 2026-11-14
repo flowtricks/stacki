@@ -40,9 +40,9 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
-## 1.5.0 Variable picker overhaul, hidden variables, faster style panel
+## 1.4.3 Variable picker overhaul, hidden variables, faster style panel
 
-- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.5.0.
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.3.
 - **Variable picker**: variables are offered by whether they fit the property's slot, and the
   Weight, Font, line height, letter spacing and text transform pickers filter by computed value.
   Suggestions are grouped, with view options and local and computed values; each row shows the
@@ -61,7 +61,7 @@ include later changes.
   anchor moved, and the title bar's Play button is as tall as Publish.
 - **Icons**: a reset arrow for Clear and a pie chart for percentage variables (Central).
 - **CI**: GitHub Actions moved off Node 20 to the Node 24 majors (checkout v6, setup-node v6,
-  cache v5, upload-artifact v6, download-artifact v7). 1.5.0 is the first release built with them.
+  cache v5, upload-artifact v6, download-artifact v7). 1.4.3 is the first release built with them.
 - Tests: the marked-row check in `renderer/variables/variableCellArrows` reads the row's binding
   (rows now show a label and the written value). `studio/test/demoAssetMap` retries folder removal
   after Windows `EBUSY`, and `renderer/apps/appUiKitTooltip` waits, within a bound, for Escape to
