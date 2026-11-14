@@ -5653,7 +5653,9 @@
   background: var(--color-bg-surface-overlay);
   box-shadow: var(--shadow-lg);
 }
-.embed-editor_varpicker-search {
+/* A tone lifted off the black inset well, so the field reads against the menu. */
+.embed-editor_varpicker .embed-editor_varpicker-search {
+  background: var(--color-bg-surface);
   flex: none;
   margin-bottom: var(--space-2);
 }
@@ -5667,7 +5669,7 @@
   margin: 0;
   padding: var(--space-3);
   font-size: var(--font-size-xs);
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
 }
 /* Collection heading — the top grouping level (bold, primary), a full-width toggle
    with a chevron; a hairline separates collections so each reads as its own block. */
@@ -5699,7 +5701,7 @@
 .embed-editor_varpicker-collection-arrow {
   flex: none;
   display: inline-flex;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   transition: transform var(--transition-fast);
 }
 .embed-editor_varpicker-collection-arrow.is-open {
@@ -5761,7 +5763,7 @@
   display: inline-flex;
   width: 16px;
   height: 16px;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
 }
 /* A colour variable's swatch, in the icon's place: its resolved fill over a
    checkerboard, so a translucent value reads as one. */
@@ -5789,7 +5791,10 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
-  color: var(--color-text-tertiary);
+  /* Secondary, not tertiary: the value is what tells two variables apart, and the
+     tertiary grey on the overlay was 4.6:1, readable but dim. Pinned by
+     test/renderer/style/variablePickerContrast.test.js. */
+  color: var(--color-text-secondary);
   font-family: var(--font-family-mono);
   font-size: var(--font-size-xs);
 }

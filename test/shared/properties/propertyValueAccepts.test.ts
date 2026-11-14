@@ -13,6 +13,9 @@ import assert from 'node:assert/strict';
 import {
   isOfferedFontWeight,
   isValidFontFamily,
+  isLetterSpacingLength,
+  isLineHeightMultiplier,
+  isValidTextTransform,
   isValidFontWeight,
   resolveVariableValue,
   valuePredicateFor,
@@ -114,11 +117,37 @@ test('variableAccepted combines resolution and the predicate', () => {
   assert.equal(variableAccepted('bold', lookup, isOfferedFontWeight), true);
 });
 
-test('the Weight picker offers numbers from 100 to 1000 only', () => {
-  for (const weight of ['100', '400', '700', '1000', '320', '999.5']) {
+test('the Weight picker offers multiples of 50 from 100 to 1000 only', () => {
+  for (const weight of ['100', '150', '200', '250', '350', '400', '500', '700', '950', '1000', '4e2', '400.0']) {
     assert.equal(isOfferedFontWeight(weight), true, weight);
   }
-  for (const weight of ['99', '90', '45', '23', '13', '7', '1.5', '0', '1001', '-100', '1rem', 'none', 'inherit', '']) {
+  for (const weight of [
+    '143',
+    '114',
+    '256',
+    '181',
+    '361',
+    '128',
+    '274',
+    '320',
+    '999.5',
+    '400.5',
+    '1050',
+    '99',
+    '90',
+    '45',
+    '23',
+    '13',
+    '7',
+    '1.5',
+    '0',
+    '1001',
+    '-100',
+    '1rem',
+    'none',
+    'inherit',
+    '',
+  ]) {
     assert.equal(isOfferedFontWeight(weight), false, weight);
   }
   for (const keyword of ['normal', 'bold', 'bolder', 'lighter']) {
@@ -194,4 +223,133 @@ test('font-family variables resolve through chains and fall back when missing', 
   assert.equal(variableAccepted('var(--nope, Arial)', lookup, isValidFontFamily), true);
   assert.equal(variableAccepted('var(--transform)', lookup, isValidFontFamily), false);
   assert.equal(variableAccepted('var(--nope)', lookup, isValidFontFamily), false);
+});
+
+test('line-height offers unitless numbers from 0 through 3 only', () => {
+  for (const value of ['0', '1', '1.1', '1.5', '3', '.5', '2.999']) {
+    assert.equal(isLineHeightMultiplier(value), true, value);
+  }
+  for (const value of [
+    '3.01',
+    '-0.1',
+    '4',
+    '1.5rem',
+    '150%',
+    '24px',
+    'normal',
+    'calc(1.5 * 1)',
+    'clamp(1, 2, 3)',
+    'var(--x)',
+    'none',
+    '',
+    'inherit',
+    '0.0625rem',
+  ]) {
+    assert.equal(isLineHeightMultiplier(value), false, JSON.stringify(value));
+  }
+  assert.equal(valuePredicateFor('line-height'), isLineHeightMultiplier);
+});
+
+test('line-height resolves chains and an ancestor override', () => {
+  const lookup = lookupOf({ 'display-line-height': 'var(--line-height-small)', 'line-height-small': '1.1', border: '0.0625rem' });
+  assert.equal(variableAccepted('var(--display-line-height)', lookup, isLineHeightMultiplier), true);
+  assert.equal(variableAccepted('var(--border)', lookup, isLineHeightMultiplier), false);
+  // An ancestor that redefines the variable changes the verdict: the lookup is the cascade there.
+  const overridden = lookupOf({ 'line-height-small': '150%' });
+  assert.equal(variableAccepted('var(--line-height-small)', overridden, isLineHeightMultiplier), false);
+});
+
+test('text-transform accepts its keywords, CSS-wide keywords and spec combinations', () => {
+  const valid = [
+    'none',
+    'capitalize',
+    'uppercase',
+    'LOWERCASE',
+    'full-width',
+    'full-size-kana',
+    'inherit',
+    'initial',
+    'unset',
+    'revert',
+    'revert-layer',
+    'capitalize full-width',
+    'full-width uppercase',
+    'uppercase full-size-kana',
+    'lowercase full-width full-size-kana',
+  ];
+  for (const value of valid) {
+    assert.equal(isValidTextTransform(value), true, value);
+  }
+  assert.equal(valuePredicateFor('text-transform'), isValidTextTransform);
+});
+
+test('text-transform refuses everything else', () => {
+  const invalid = [
+    'balance',
+    'ease',
+    '200ms',
+    '"Inter", sans-serif',
+    'Arial',
+    '1.5',
+    '0.0625rem',
+    'math-auto',
+    'auto',
+    'normal',
+    'bold',
+    '',
+    'uppercase lowercase',
+    'full-width full-width',
+    'none uppercase',
+    'inherit uppercase',
+    'uppercase full-width full-size-kana capitalize',
+    'var(--x)',
+    'clamp(1rem, 2vw, 3rem)',
+  ];
+  for (const value of invalid) {
+    assert.equal(isValidTextTransform(value), false, JSON.stringify(value));
+  }
+});
+
+test('text-transform resolves chains and keeps none', () => {
+  const lookup = lookupOf({ 'display-text-transform': 'none', 'h1-text-transform': 'var(--display-text-transform)', 'text-wrap': 'balance', ease: 'ease' });
+  assert.equal(variableAccepted('var(--h1-text-transform)', lookup, isValidTextTransform), true);
+  assert.equal(variableAccepted('var(--text-wrap)', lookup, isValidTextTransform), false);
+  assert.equal(variableAccepted('var(--ease)', lookup, isValidTextTransform), false);
+});
+
+test('letter-spacing offers 0 and em or rem lengths from -1 to 1', () => {
+  for (const value of ['0', '-0.05em', '0.02rem', '1em', '-1rem', '1rem', '-1em', '.5em', '0em', '0.0625rem']) {
+    assert.equal(isLetterSpacingLength(value), true, value);
+  }
+  for (const value of [
+    '1.01em',
+    '-1.01rem',
+    '-1.5rem',
+    '2em',
+    '1px',
+    '0.5px',
+    '5%',
+    '1vh',
+    '0.5',
+    '1',
+    'normal',
+    'inherit',
+    'initial',
+    'calc(1em + 0.1em)',
+    'calc(1em + 1rem)',
+    'clamp(0em, 1em, 2em)',
+    'var(--x)',
+    '',
+    '0.5 em',
+  ]) {
+    assert.equal(isLetterSpacingLength(value), false, JSON.stringify(value));
+  }
+  assert.equal(valuePredicateFor('letter-spacing'), isLetterSpacingLength);
+});
+
+test('letter-spacing resolves chains and an ancestor override', () => {
+  const lookup = lookupOf({ 'display-letter-spacing': 'var(--letter-spacing-tight)', 'letter-spacing-tight': '-0.04em' });
+  assert.equal(variableAccepted('var(--display-letter-spacing)', lookup, isLetterSpacingLength), true);
+  const overridden = lookupOf({ 'letter-spacing-tight': '2em' });
+  assert.equal(variableAccepted('var(--letter-spacing-tight)', overridden, isLetterSpacingLength), false);
 });

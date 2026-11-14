@@ -41,12 +41,22 @@ const DECLARED = {
   big: '1001',
   small: '23',
   floor: '99',
+  odd: '274',
   viewport: '320',
   'font-main': '"Inter", sans-serif',
   'font-alias': 'var(--font-main)',
   'font-plain': 'Helvetica Neue',
   'text-transform': 'none',
   'text-wrap': 'balance',
+  'lh-tight': '1.1',
+  'lh-alias': 'var(--lh-tight)',
+  'lh-body': '4',
+  'lh-pct': '150%',
+  'text-upper': 'uppercase',
+  'hover-ease': 'ease',
+  'ls-tight': '-0.04em',
+  'ls-alias': 'var(--ls-tight)',
+  'ls-wide': '1.5rem',
 };
 // What the cascade computes on each element: `inside` sits under a section that
 // redefines --w and --rev; `outside` does not. A computed alias carries the
@@ -65,12 +75,22 @@ const COMPUTED = {
     '--big': '1001',
     '--small': '23',
     '--floor': '99',
+    '--odd': '274',
     '--viewport': '320',
     '--font-main': '"Inter", sans-serif',
     '--font-alias': '"Inter", sans-serif',
     '--font-plain': 'Helvetica Neue',
     '--text-transform': 'none',
     '--text-wrap': 'balance',
+    '--lh-tight': '1.1',
+    '--lh-alias': '1.1',
+    '--lh-body': '4',
+    '--lh-pct': '150%',
+    '--text-upper': 'uppercase',
+    '--hover-ease': 'ease',
+    '--ls-tight': '-0.04em',
+    '--ls-alias': '-0.04em',
+    '--ls-wide': '1.5rem',
   },
   inside: {
     '--w': '1rem',
@@ -85,12 +105,22 @@ const COMPUTED = {
     '--big': '1001',
     '--small': '23',
     '--floor': '99',
+    '--odd': '274',
     '--viewport': '320',
     '--font-main': '1rem',
     '--font-alias': '1rem',
     '--font-plain': 'Helvetica Neue',
     '--text-transform': 'none',
     '--text-wrap': 'balance',
+    '--lh-tight': '4',
+    '--lh-alias': '4',
+    '--lh-body': '1.5',
+    '--lh-pct': '150%',
+    '--text-upper': 'balance',
+    '--hover-ease': 'ease',
+    '--ls-tight': '2em',
+    '--ls-alias': '2em',
+    '--ls-wide': '0.05rem',
   },
 };
 
@@ -179,7 +209,7 @@ const COMPUTED = {
     collection: 'src/styles/base.css',
     group: ':root',
     binding: `var(--${name})`,
-    type: /font/.test(name) ? 'FontFamily' : /^text-/.test(name) ? 'String' : /^\d+$/.test(value) ? 'Number' : 'Size',
+    type: /font/.test(name) ? 'FontFamily' : /^text-|ease/.test(name) ? 'String' : /^\d+$/.test(value) ? 'Number' : 'Size',
   }));
   const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
 
@@ -219,7 +249,7 @@ const COMPUTED = {
   {
     globalThis.__canvas = undefined;
     const { names, close } = await open({ selected: undefined });
-    same('no canvas: stylesheet-resolved weights only (alias chain included)', names(), ['alias', 'bold', 'viewport', 'w']);
+    same('no canvas: stylesheet-resolved weights only (alias chain included)', names(), ['alias', 'bold', 'w']);
     await close();
   }
 
@@ -227,12 +257,12 @@ const COMPUTED = {
   globalThis.__canvas = COMPUTED;
   {
     const { names, close } = await open({ selected: 'outside' });
-    same('outside the section: --w is 400, --rev is 1rem', names(), ['alias', 'bold', 'viewport', 'w']);
+    same('outside the section: --w is 400, --rev is 1rem', names(), ['alias', 'bold', 'w']);
     await close();
   }
   {
     const { names, close } = await open({ selected: 'inside' });
-    same('inside the section: --w is 1rem (hidden), --rev is 700 (shown)', names(), ['bold', 'rev', 'viewport']);
+    same('inside the section: --w is 1rem (hidden), --rev is 700 (shown)', names(), ['bold', 'rev']);
     await close();
   }
 
@@ -243,10 +273,10 @@ const COMPUTED = {
       release = resolve;
     });
     const { names, close } = await open({ selected: 'inside' });
-    same('before the page answers: the stylesheet-resolved list', names(), ['alias', 'bold', 'viewport', 'w']);
+    same('before the page answers: the stylesheet-resolved list', names(), ['alias', 'bold', 'w']);
     await act(async () => release());
     await settle();
-    same('after it answers: the element-computed list', names(), ['bold', 'rev', 'viewport']);
+    same('after it answers: the element-computed list', names(), ['bold', 'rev']);
     await close();
     globalThis.__canvasGate = undefined;
   }
@@ -302,6 +332,41 @@ const COMPUTED = {
     const { names, close } = await open({ selected: 'inside', selectedBinding: 'var(--text-wrap)', prop: 'font-family' });
     same('font-family: the applied failing variable stays listed', names(), ['font-plain', 'text-wrap']);
     await close();
+  }
+
+  // --- The Line height picker offers only unitless numbers from 0 to 3.
+  {
+    globalThis.__canvas = undefined;
+    const { names, close } = await open({ selected: undefined, prop: 'line-height' });
+    same('line-height, no canvas: multipliers only, chain included', names(), ['lh-alias', 'lh-tight']);
+    await close();
+    globalThis.__canvas = COMPUTED;
+    const outside = await open({ selected: 'outside', prop: 'line-height' });
+    same('line-height outside the section', outside.names(), ['lh-alias', 'lh-tight']);
+    await outside.close();
+    const inside = await open({ selected: 'inside', prop: 'line-height' });
+    same('line-height inside the section: the override makes lh-body valid', inside.names(), ['lh-body']);
+    await inside.close();
+  }
+
+  // --- The Text transform picker offers its keywords, none included.
+  {
+    const outside = await open({ selected: 'outside', prop: 'text-transform' });
+    same('text-transform outside: none and uppercase stay, balance and ease go', outside.names(), ['text-transform', 'text-upper']);
+    await outside.close();
+    const inside = await open({ selected: 'inside', prop: 'text-transform' });
+    same('text-transform inside: the overridden uppercase is hidden', inside.names(), ['text-transform']);
+    await inside.close();
+  }
+
+  // --- The Letter spacing picker offers 0 and em or rem lengths from -1 to 1.
+  {
+    const outside = await open({ selected: 'outside', prop: 'letter-spacing' });
+    same('letter-spacing outside: small em/rem lengths, chain included', outside.names(), ['border', 'ls-alias', 'ls-tight', 'rev']);
+    await outside.close();
+    const inside = await open({ selected: 'inside', prop: 'letter-spacing' });
+    same('letter-spacing inside: overrides swap which are valid', inside.names(), ['alias', 'border', 'ls-wide', 'w']);
+    await inside.close();
   }
 
   // --- Other properties are not filtered.

@@ -33,6 +33,9 @@ const FONT_WEIGHT_MAX = 1000;
 // below 100 (spacing steps, text sizes, `--viewport-min`) are never weights anyone
 // means, and offering them buried the real ones. The user's rule is 100 to 1000.
 const FONT_WEIGHT_OFFERED_MIN = 100;
+// ...and only the steps a weight scale is built from: 100, 150, 200 ... 1000. A project's
+// 143, 256 or 274 (fluid-size maxima, offsets) are numbers, not weights.
+const FONT_WEIGHT_OFFERED_STEP = 50;
 // A CSS number: optional sign, digits with an optional fraction, optional exponent. Units are not numbers.
 const CSS_NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i;
 
@@ -47,11 +50,16 @@ export function isValidFontWeight(computed: string): boolean {
 
 /**
  * Is `computed` a font weight the Weight picker offers: the same keywords, and
- * a number from 100 to 1000 inclusive. Narrower than CSS on purpose (see
+ * a multiple of 50 from 100 to 1000 inclusive. Narrower than CSS on purpose (see
  * FONT_WEIGHT_OFFERED_MIN); a fraction below 100 such as 1.5 is hidden.
  */
 export function isOfferedFontWeight(computed: string): boolean {
-  return acceptsFontWeight(computed, FONT_WEIGHT_OFFERED_MIN);
+  const accepted = acceptsFontWeight(computed, FONT_WEIGHT_OFFERED_MIN);
+  if (accepted === false || FONT_WEIGHT_KEYWORDS.has(computed.trim().toLowerCase())) {
+    return accepted;
+  }
+  // The number is parsed, so `4e2` and `400.0` normalise to 400 and pass; 400.5 does not.
+  return Number(computed.trim()) % FONT_WEIGHT_OFFERED_STEP === 0;
 }
 
 function acceptsFontWeight(computed: string, weightMin: number): boolean {
@@ -129,6 +137,11 @@ const NON_FONT_KEYWORDS: ReadonlySet<string> = new Set([
   'double',
   'ltr',
   'rtl',
+  'linear',
+  'ease',
+  'ease-in',
+  'ease-out',
+  'ease-in-out',
   'transparent',
   'currentcolor',
   'black',
@@ -204,15 +217,87 @@ function splitTopLevel(text: string): string[] | undefined {
   return items;
 }
 
+// Line height as a multiplier: a unitless number from 0 to 3. Lengths and percentages
+// are other kinds of line height and `normal` is not a number; the Line height picker
+// offers only the multipliers a type scale is built from.
+const LINE_HEIGHT_MAX = 3;
+const LINE_HEIGHT_MIN = 0;
+
+/** Is `computed` a unitless number from 0 through 3, such as `1.5`? */
+export function isLineHeightMultiplier(computed: string): boolean {
+  const trimmed = computed.trim();
+  if (CSS_NUMBER.test(trimmed)) {
+    const multiplier = Number(trimmed);
+    return multiplier >= LINE_HEIGHT_MIN && multiplier <= LINE_HEIGHT_MAX;
+  }
+  return false;
+}
+
+// Letter spacing as a small length: `0`, or a number of em or rem from -1 to 1. Other units
+// (px, %, vh), plain numbers, `normal` and the CSS-wide keywords are not offered, and a
+// calc() or clamp() has no static value here, so it is hidden too.
+const LETTER_SPACING_EXTENT_MAX = 1;
+const LETTER_SPACING_LENGTH = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(em|rem)$/i;
+
+/** Is `computed` `0`, or an em or rem length from -1 to 1 inclusive? */
+export function isLetterSpacingLength(computed: string): boolean {
+  const trimmed = computed.trim();
+  if (CSS_NUMBER.test(trimmed)) {
+    return Number(trimmed) === 0;
+  }
+  const match = LETTER_SPACING_LENGTH.exec(trimmed);
+  const amount = match?.[1];
+  if (amount === undefined) {
+    return false;
+  }
+  return Math.abs(Number(amount)) <= LETTER_SPACING_EXTENT_MAX;
+}
+
+const CSS_WIDE_KEYWORDS: ReadonlySet<string> = new Set(['inherit', 'initial', 'unset', 'revert', 'revert-layer']);
+const TEXT_TRANSFORM_CASES: ReadonlySet<string> = new Set(['capitalize', 'uppercase', 'lowercase']);
+const TEXT_TRANSFORM_WIDTHS: ReadonlySet<string> = new Set(['full-width', 'full-size-kana']);
+
+/**
+ * Is `computed` a `text-transform` value: `none`; one case keyword
+ * (capitalize, uppercase, lowercase), optionally with full-width and/or
+ * full-size-kana in any order; or a CSS-wide keyword alone. The CSS-wide keywords
+ * are offered here, unlike for the Weight picker, because the user wants
+ * `unset` and `inherit` as choices. `math-auto` is not widely supported, so it is refused.
+ */
+export function isValidTextTransform(computed: string): boolean {
+  const tokens = computed.trim().toLowerCase().split(/\s+/);
+  const first = tokens[0];
+  if (first === undefined || first === '' || tokens.length > 3) {
+    return false;
+  }
+  if (tokens.length === 1) {
+    return first === 'none' || CSS_WIDE_KEYWORDS.has(first) || TEXT_TRANSFORM_CASES.has(first) || TEXT_TRANSFORM_WIDTHS.has(first);
+  }
+  if (new Set(tokens).size !== tokens.length) {
+    return false;
+  }
+  const cases = tokens.filter((token) => TEXT_TRANSFORM_CASES.has(token));
+  const widths = tokens.filter((token) => TEXT_TRANSFORM_WIDTHS.has(token));
+  return cases.length <= 1 && cases.length + widths.length === tokens.length;
+}
+
+// One entry per property: its name and the predicate its variable picker applies. A
+// property that is not listed is not filtered. To filter another picker (text-wrap,
+// letter-spacing), add one line here and a predicate above.
+const PROPERTY_PREDICATES: ReadonlyMap<string, ValuePredicate> = new Map([
+  ['font-family', isValidFontFamily],
+  ['font-weight', isOfferedFontWeight],
+  ['letter-spacing', isLetterSpacingLength],
+  ['line-height', isLineHeightMultiplier],
+  ['text-transform', isValidTextTransform],
+]);
+
 /** The predicate for `property`, or undefined when its picker offers every variable. */
 export function valuePredicateFor(property: string | undefined): ValuePredicate | undefined {
-  if (property !== undefined && property.trim().toLowerCase() === 'font-weight') {
-    return isOfferedFontWeight;
+  if (property === undefined) {
+    return undefined;
   }
-  if (property !== undefined && property.trim().toLowerCase() === 'font-family') {
-    return isValidFontFamily;
-  }
-  return undefined;
+  return PROPERTY_PREDICATES.get(property.trim().toLowerCase());
 }
 
 /**
