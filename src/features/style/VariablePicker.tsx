@@ -5,6 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { CSSProperties, MutableRefObject } from 'react';
 import { SkeletonRows } from '../../ui/Skeleton';
+import { SearchIcon } from '../../ui/Icons';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import { type ProjectVariable } from './model/webflow';
@@ -15,7 +16,8 @@ import { useResolvedColor } from './model/computedColor';
 import { getHost } from './model/host';
 import { hasCanvas, queryCanvas } from '../../editor/canvasQuery';
 import { assert } from '../../../shared/core/assert';
-import { valuePredicateFor, variableAccepted } from '../../../shared/properties/propertyValueAccepts';
+import { resolveVariableValue, valuePredicateFor } from '../../../shared/properties/propertyValueAccepts';
+import { filterBySlot, isWholeSlot, VerdictCache, type Supports, type ValueSlot } from '../../../shared/properties/valueSlot';
 import { LIMITS } from '../../../shared/core/limits';
 
 // Where the picker sits horizontally.
@@ -51,6 +53,7 @@ export function VariablePicker({
   loading,
   prop,
   selectedBinding,
+  slot,
   typing,
   onPreview,
   onPreviewEnd,
@@ -63,6 +66,8 @@ export function VariablePicker({
   prop?: string;
   /** The currently-applied binding — highlighted and scrolled into view on open. */
   selectedBinding?: string;
+  /** Where the pick would land in the field's expression (valueSlot.ts); absent is the whole value. */
+  slot?: ValueSlot;
   /**
    * Set while a reference is being typed in the field: the list follows the
    * typed name instead of its own search, focus stays in the field, and the
@@ -93,7 +98,7 @@ export function VariablePicker({
   usePickerFocus(searchRef);
   const query = search.trim().toLowerCase();
   const defined = useDefinedVariables(vars);
-  const filtered = pickerVariables(vars, prop, query, { computed: defined, selectedBinding }).filter(
+  const filtered = pickerVariables(vars, prop, query, { computed: defined, selectedBinding, slot }).filter(
     (variable) => defined === undefined || defined.has(customPropertyOf(variable.binding) ?? ''),
   );
   const { activeBinding, navigation } = usePickerNavigation(ref, filtered, { typing, search }, onPreview, onPick);
@@ -119,17 +124,20 @@ export function VariablePicker({
       style={style}
     >
       {typing === undefined ? (
-        <input
-          ref={searchRef}
-          className="u-input embed-editor_varpicker-search"
-          value={search}
-          placeholder={translate('style.variablePicker.searchPlaceholder')}
-          spellCheck={false}
-          autoFocus
-          onChange={(event) => setSearch(event.target.value)}
-          onKeyDown={(event) => searchKeyDown(event, navigation)}
-          aria-label={translate('style.variablePicker.search')}
-        />
+        <div className="embed-editor_varpicker-searchbox">
+          <SearchIcon size={16} className="embed-editor_varpicker-search-icon" />
+          <input
+            ref={searchRef}
+            className="u-input embed-editor_varpicker-search"
+            value={search}
+            placeholder={translate('style.variablePicker.searchPlaceholder')}
+            spellCheck={false}
+            autoFocus
+            onChange={(event) => setSearch(event.target.value)}
+            onKeyDown={(event) => searchKeyDown(event, navigation)}
+            aria-label={translate('style.variablePicker.search')}
+          />
+        </div>
       ) : undefined}
       <div
         ref={listRef}
@@ -251,23 +259,38 @@ export function pickerVariables(
   vars: ProjectVariable[],
   prop: string | undefined,
   query: string,
-  context: { readonly computed?: ReadonlyMap<string, string> | undefined; readonly selectedBinding?: string | undefined } = {},
+  context: {
+    readonly computed?: ReadonlyMap<string, string> | undefined;
+    readonly selectedBinding?: string | undefined;
+    /** Where the pick would go in the field's expression; undefined is the whole value. */
+    readonly slot?: ValueSlot | undefined;
+    /** The engine's grammar check; defaults to the browser's CSS.supports when it has one. */
+    readonly supports?: Supports | undefined;
+  } = {},
 ): ProjectVariable[] {
-  const accepts = valuePredicateFor(prop);
-  const declared = accepts === undefined ? undefined : declaredValues(vars);
-  const typed = vars.filter((variable) => {
-    if (!varTypeAllowed(prop, variable.type)) {
-      return false;
-    }
-    if (accepts === undefined || declared === undefined) {
-      return true;
-    }
-    if (sameVariable(variable.binding, context.selectedBinding)) {
-      return true;
-    }
-    const computed = context.computed?.get(customPropertyOf(variable.binding) ?? '');
-    return computed === undefined ? variableAccepted(variable.value, (name) => declared.get(name), accepts) : accepts(computed);
-  });
+  const declared = declaredValues(vars);
+  const lookup = (name: string): string | undefined => declared.get(name);
+  const computedOf = (variable: ProjectVariable): string | undefined =>
+    context.computed?.get(customPropertyOf(variable.binding) ?? '') ?? resolveVariableValue(variable.value, lookup);
+  const supports = context.supports ?? engineSupports();
+  const typed =
+    prop?.startsWith('--') === true
+      ? // A custom property takes any value, so every variable is offered.
+        vars
+      : engineKnows(prop, supports)
+        ? // The browser's own grammar decides, at the slot the pick lands in (valueSlot.ts). The
+          // variable's type guess (Color, Size...) is not consulted: `10%` is no colour on its own
+          // and a colour-mix() percentage inside one.
+          [
+            ...filterBySlot(
+              vars.map((variable) => ({ item: variable, computed: computedOf(variable), keep: sameVariable(variable.binding, context.selectedBinding) })),
+              prop,
+              context.slot,
+              supports,
+              VERDICTS,
+            ),
+          ]
+        : vars.filter((variable) => legacyAllowed(variable, prop, context, computedOf));
   const sorted = [...typed].sort(
     (left, right) => left.collection.localeCompare(right.collection) || left.group.localeCompare(right.group) || left.name.localeCompare(right.name),
   );
@@ -275,6 +298,53 @@ export function pickerVariables(
     return sorted;
   }
   return sorted.filter((variable) => `${variable.collection}/${variable.group}/${variable.name} ${variable.value}`.toLowerCase().includes(query));
+}
+
+// Without an engine to ask (a test realm, a property the browser does not know), the variable's
+// guessed type and the curated narrowing decide, as before. The curated narrowing is for the
+// whole value only: inside calc() and the like it would hide valid factors.
+function legacyAllowed(
+  variable: ProjectVariable,
+  prop: string | undefined,
+  context: { readonly selectedBinding?: string | undefined; readonly slot?: ValueSlot | undefined },
+  computedOf: (variable: ProjectVariable) => string | undefined,
+): boolean {
+  if (!varTypeAllowed(prop, variable.type)) {
+    return false;
+  }
+  const accepts = valuePredicateFor(prop);
+  if (accepts === undefined || !isWholeSlot(context.slot)) {
+    return true;
+  }
+  if (sameVariable(variable.binding, context.selectedBinding)) {
+    return true;
+  }
+  const computed = computedOf(variable);
+  return computed !== undefined && accepts(computed);
+}
+
+// Verdicts shared by every picker, bounded (VALUE_SLOT_LIMITS.cacheEntriesMax).
+const VERDICTS = new VerdictCache();
+
+// The browser's CSS.supports, when this realm has one.
+function engineSupports(): Supports | undefined {
+  if (typeof CSS === 'undefined' || typeof CSS.supports !== 'function') {
+    return undefined;
+  }
+  return (property, value) => CSS.supports(property, value);
+}
+
+// Does the engine know this property? Every property it knows takes a CSS-wide keyword, so a
+// refusal of `inherit` means the name is the panel's own (or a typo), and the engine cannot judge it.
+function engineKnows(prop: string | undefined, supports: Supports | undefined): supports is Supports {
+  return supports !== undefined && prop !== undefined && !prop.startsWith('--') && supports(prop, 'inherit');
+}
+
+// The plain root scope is assumed, so its label is not drawn: `:root` and its spellings
+// (`html`, `:where(:root)`). Any other selector (.dark, [data-theme], .section, `:root` inside a
+// media query or state) is a different scope and keeps its label.
+export function isRootScope(group: string): boolean {
+  return /^(?::root|html|:where\(\s*:root\s*\))$/i.test(group.trim());
 }
 
 // The list: one collapsible head per collection, its groups beneath.
@@ -313,7 +383,7 @@ export function PickerCollections({
         {open
           ? groups.map(({ group, items }) => (
               <div key={group || '_'} className="embed-editor_varpicker-group">
-                {group ? <div className="embed-editor_varpicker-group-name">{group}</div> : undefined}
+                {group && !isRootScope(group) ? <div className="embed-editor_varpicker-group-name">{group}</div> : undefined}
                 {items.map((variable) => (
                   <PickerItem
                     key={variable.binding}

@@ -261,3 +261,30 @@ test('a dropdown opened after the answer stays open through a data refresh, keep
   }
   assert.ok(document.querySelector('.embed-editor_varpicker') === null, 'a real outside press closes it');
 });
+
+test('selecting an element seen before never paints plain fields either', async (context) => {
+  const panel = await mountPanel();
+  context.after(panel.unmount);
+  globalThis.__delayMs = 0;
+  panel.select('n2', 'heading big');
+  await wait(900);
+  panel.select('n1', 'plain');
+  await wait(900);
+  globalThis.__delayMs = DELAY_MS;
+  const frames = [];
+  const observer = new panel.dom.window.MutationObserver(() => frames.push(frameOf(panel.container)));
+  observer.observe(panel.container, { childList: true, subtree: true, attributes: true, characterData: true });
+  panel.select('n2', 'heading big');
+  await wait(DELAY_MS + 900);
+  observer.disconnect();
+  assert.ok(frames.length > 0, 'the panel changed');
+  assert.ok(
+    frames.every((frame) => frame.defaults === 0),
+    'the second visit draws no Default dropdown',
+  );
+  assert.ok(
+    frames.every((frame) => frame.placeholders > 0 || frame.chips >= 6),
+    'every frame is a placeholder or the chips',
+  );
+  assert.ok(frames[frames.length - 1].chips >= 6, 'the chips are there at the end');
+});

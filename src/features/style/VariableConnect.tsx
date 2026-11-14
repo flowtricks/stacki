@@ -3,6 +3,7 @@ import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { flushSync } from 'react-dom';
 import { type ProjectVariable } from './model/webflow';
+import { SLOT_MARK, slotOfMarked, type ValueSlot } from '../../../shared/properties/valueSlot';
 import { selectionOffsets, setCaretOffset } from './model/cssCode';
 import CustomValue, { doesNotFit } from './CustomValueEditor';
 import { insertBindingAt, type ValueSelection } from './model/insertBinding';
@@ -135,6 +136,18 @@ export default function VariableConnect(props: VariableConnectProps) {
     setChipTarget(undefined);
     setOpen(false);
   };
+  // Where the pick would land in the field's expression: the filter judges each variable's
+  // computed value there (valueSlot.ts), not against the property alone.
+  const pickSlot = (): ValueSlot | undefined => {
+    const base = openedRef.current?.value ?? liveValue();
+    if (suggest !== undefined) {
+      return slotOfMarked(completeTypedVariable(liveValue(), suggest, SLOT_MARK).value);
+    }
+    if (chipTarget !== undefined) {
+      return slotOfMarked(replaceVariableAt(base, chipTarget.index, SLOT_MARK));
+    }
+    return slotOfMarked(insertBindingAt(base, SLOT_MARK, selectionRef.current));
+  };
   const preview = (chosen: string): void => {
     const opened = openedRef.current;
     if (opened === undefined) {
@@ -240,6 +253,7 @@ export default function VariableConnect(props: VariableConnectProps) {
         // the caret was, or over what was selected, so picking one inside a
         // calc() no longer throws the calc away. See insertBinding.ts.
         onPick={pick}
+        slot={open || suggest !== undefined ? pickSlot() : undefined}
         onPreview={preview}
         onPreviewEnd={endPreview}
         onClosePicker={closeChooser}
@@ -372,6 +386,7 @@ function ConnectPopups({
   value,
   liveValue,
   onPick,
+  slot,
   onPreview,
   onPreviewEnd,
   onClosePicker,
@@ -387,6 +402,7 @@ function ConnectPopups({
   value: string;
   liveValue: () => string;
   onPick: (binding: string) => void;
+  slot: ValueSlot | undefined;
   onPreview: (binding: string) => void;
   onPreviewEnd: () => void;
   onClosePicker: () => void;
@@ -403,6 +419,7 @@ function ConnectPopups({
           {...(prop === undefined ? {} : { prop })}
           {...(picker.selectedBinding === undefined ? {} : { selectedBinding: picker.selectedBinding })}
           {...(picker.typing === undefined ? {} : { typing: picker.typing })}
+          {...(slot === undefined ? {} : { slot })}
           onPreview={onPreview}
           onPreviewEnd={onPreviewEnd}
           onPick={onPick}

@@ -621,10 +621,11 @@ export function useApplyResolve(editorRefs: ReturnType<typeof useEditorRefs>, sc
       const settled = !content.partial && (options.sourceOnly !== true || sourceKnown);
       // Still waiting for this element's first settled answer if the selection reset said so
       // and this step is not it: a rescan of an element already shown never sets it.
-      setScan((previous) => ({
+      const landed: ScanState = {
         ...scanStateFor(content, { rootSnapshot, model, settled }, pageDocsRef.current.length),
-        awaitingFirstAnswer: !settled && previous?.awaitingFirstAnswer === true,
-      }));
+        awaitingFirstAnswer: false,
+      };
+      setScan((previous) => ({ ...landed, awaitingFirstAnswer: !settled && previous?.awaitingFirstAnswer === true }));
       setPhase('ready');
       setScanningMore(!!content.partial);
       if (!options.silent) {

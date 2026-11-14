@@ -5643,21 +5643,45 @@
 .embed-editor_varpicker {
   z-index: var(--z-tooltip);
   box-sizing: border-box;
-  max-height: min(60vh, 420px);
+  max-height: min(60vh, 26.25rem);
   display: flex;
   flex-direction: column;
   padding: var(--space-2);
-  border: var(--border-width-thin) solid var(--color-border-default);
-  border-top: 0;
-  border-radius: 0 0 var(--radius-md) var(--radius-md);
-  background: var(--color-bg-surface-overlay);
+  /* One step darker than the overlay the other menus use, so the list reads as its own
+     surface; all four corners share the menu radius and the content is clipped to it. */
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-bg-surface);
   box-shadow: var(--shadow-lg);
 }
-/* A tone lifted off the black inset well, so the field reads against the menu. */
-.embed-editor_varpicker .embed-editor_varpicker-search {
-  background: var(--color-bg-surface);
+/* The search: compact, a raised fill rather than the black inset well, the glass inside it. */
+.embed-editor_varpicker-searchbox {
+  position: relative;
   flex: none;
   margin-bottom: var(--space-2);
+}
+.embed-editor_varpicker-search-icon {
+  position: absolute;
+  left: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+.embed-editor_varpicker .embed-editor_varpicker-search {
+  box-sizing: border-box;
+  width: 100%;
+  height: 2rem;
+  padding: 0 var(--space-3) 0 2rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface-raised);
+  color: var(--color-text-primary);
+}
+.embed-editor_varpicker .embed-editor_varpicker-search:focus {
+  background: var(--color-bg-surface-high);
+  outline: 0.125rem solid var(--color-border-focus);
+  outline-offset: 0;
 }
 .embed-editor_varpicker-list {
   min-height: 0;
