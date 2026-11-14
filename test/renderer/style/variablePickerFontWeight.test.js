@@ -60,6 +60,13 @@ const DECLARED = {
   'card-local': '0.5rem',
   'sibling-local': '0.25rem',
 };
+// The winning declarations the page traces for the element under the section (what the rows show).
+const WINNING = {
+  inside: {
+    '--w': { expression: '1rem', selector: '.section', file: '/project/base.css', depth: 1, ancestor: '.section' },
+    '--_mw': { expression: '40rem', selector: '.card', file: '/project/base.css', depth: 0, ancestor: '.card' },
+  },
+};
 // What the cascade computes on each element: `inside` sits under a section that
 // redefines --w and --rev; `outside` does not. A computed alias carries the
 // substituted value, as getComputedStyle gives it.
@@ -155,9 +162,10 @@ const COMPUTED = {
               const computed = globalThis.__canvas?.[elementPath];
               if (computed === undefined) return undefined;
               await globalThis.__canvasGate;
-              return { computedProps: Object.fromEntries(props.map((name) => [name, computed[name] ?? ''])) };
+              return { computedProps: Object.fromEntries(props.map((name) => [name, computed[name] ?? ''])), winning: globalThis.__winning?.[elementPath] ?? {} };
             };
-            export const onCanvasReady = () => () => {};
+            const ready = new Set(); globalThis.__ready = () => ready.forEach((listener) => listener());
+            export const onCanvasReady = (listener) => { ready.add(listener); return () => ready.delete(listener); };
             export const noteCanvasReady = () => {};
             export const tellCanvas = () => false;
             export const requestCanvasReports = () => false;
@@ -264,6 +272,7 @@ const COMPUTED = {
 
   // --- With a canvas: the selected element's computed values decide.
   globalThis.__canvas = COMPUTED;
+  globalThis.__winning = WINNING;
   {
     const { names, close } = await open({ selected: 'outside' });
     same('outside the section: --w is 400, --rev is 1rem', names(), ['alias', 'bold', 'w']);
@@ -278,6 +287,8 @@ const COMPUTED = {
   // --- Before the page answers, the stylesheet list shows; the answer refines it.
   {
     let release;
+    // A new page forgets what the last one answered, so the first frame is the stylesheet list.
+    globalThis.__ready();
     globalThis.__canvasGate = new Promise((resolve) => {
       release = resolve;
     });
@@ -395,7 +406,7 @@ const COMPUTED = {
     );
     const widthRow = document.querySelector('[data-binding="var(--w)"] .embed-editor_varpicker-item-value');
     check(
-      'a row shows the value computed on this element, not the stylesheet declaration (400 at :root, 1rem here)',
+      'a row shows the declaration that wins on this element, as written (400 at :root, 1rem here)',
       widthRow?.textContent === '1rem' && /Overridden on this element/.test(document.querySelector('[data-binding="var(--w)"]')?.title ?? ''),
       `${widthRow?.textContent} | ${document.querySelector('[data-binding="var(--w)"]')?.title}`,
     );
@@ -405,7 +416,7 @@ const COMPUTED = {
     check('the applied local is first in the list', applied.ordered()[0] === '_mw', applied.ordered().join());
     const marked = document.querySelector('.embed-editor_varpicker-item.is-selected');
     check('and marked selected although 40rem is no font weight', marked?.dataset.binding === 'var(--_mw)', marked?.dataset.binding);
-    check('with its computed value shown', marked?.querySelector('.embed-editor_varpicker-item-value')?.textContent === '40rem');
+    check('with the declaration written for it', marked?.querySelector('.embed-editor_varpicker-item-value')?.textContent === '40rem');
     await applied.close();
   }
 

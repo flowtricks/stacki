@@ -126,7 +126,12 @@ const check = (what, condition, detail) => {
            await js('window.__show(null)');
            await wait(30);
            await js('window.__show({ top: ' + top + ', host: ' + JSON.stringify(host) + ' })');
-           await wait(400);
+           // The popup opens with a slight scale; measure once it has settled.
+           for (let tries = 0; tries < 40; tries += 1) {
+             if (await js("document.querySelector('.embed-editor_varpicker')?.dataset.popupPhase === 'open'")) break;
+             await wait(50);
+           }
+           await wait(100);
            const before = await js(probe);
            await js("document.querySelector('.embed-editor_varpicker-list').scrollTop = 600");
            await wait(50);

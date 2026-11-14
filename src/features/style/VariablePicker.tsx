@@ -27,6 +27,8 @@ import { filterBySlot, isWholeSlot, VerdictCache, type Supports, type ValueSlot 
 import { LIMITS } from '../../../shared/core/limits';
 import { useHiddenVariables } from '../../ipc/useHiddenVariables';
 import { suggestionNames } from '../../../shared/properties/variableVisibility';
+import { sameExpression, WINNING_NAMES_MAX, type WinningDeclarationText } from '../../../shared/properties/winningDeclaration';
+import { cachedAnswer, rememberAnswer, type DefinedAnswer } from './model/definedAnswers';
 
 // Where the picker sits horizontally.
 //
@@ -113,7 +115,9 @@ export function VariablePicker({
   // own, first, labelled as this element's, with the value the page computes for it.
   const localLabel = translate('style.variablePicker.localScope');
   const listed = useMemo(() => withAppliedVariable(vars, selectedBinding, localLabel), [vars, selectedBinding, localLabel]);
-  const defined = useDefinedVariables(listed);
+  const answer = useDefinedVariables(listed);
+  const defined = answer?.names;
+  const winning = answer?.winning;
   const [grouped, setGrouped] = useGrouped();
   // Session only: opening the picker always starts on the filtered list.
   const [showAll, setShowAll] = useState(false);
@@ -137,24 +141,26 @@ export function VariablePicker({
   const suggestible = (variable: ProjectVariable): boolean => showAll || suggested.has(customPropertyOf(variable.binding) ?? '');
   const visibleHere = (variable: ProjectVariable): boolean =>
     sameVariable(variable.binding, selectedBinding) || defined === undefined || defined.has(customPropertyOf(variable.binding) ?? '');
-  // Each row shows what the variable IS on the selected element: its computed value, not the
-  // stylesheet's declaration. A value the page has not answered yet keeps the stylesheet's, and the
-  // answer swaps the text in place (rows are ordered by name, never by value).
-  const declaredLookup = useMemo(() => declaredValues(listed), [listed]);
+  // Each row shows the variable's value as WRITTEN for the selected element: the declaration that wins
+  // for it (the page traces the property up the element's parents), never a computed value. The computed
+  // value serves the swatch, the kind and the validity filter, and the tooltip's "Computes to" line.
+  // Until the page answers, or where it cannot trace a name, the row shows the stylesheet's own text
+  // (the :root declaration) and the answer swaps the text in place: rows are ordered by name, never by value.
   const overriddenHere = new Map<string, string>();
+  const detailOf = new Map<string, RowDetail>();
   const withLocalValue = (variable: ProjectVariable): ProjectVariable => {
-    const computed = defined?.get(customPropertyOf(variable.binding) ?? '');
-    if (variable.file === LOCAL_FILE) {
-      return { ...variable, value: computed ?? '' };
+    const property = customPropertyOf(variable.binding) ?? '';
+    const computed = defined?.get(property);
+    const written = traceableDeclaration(winning?.get(property), computed);
+    if (written !== undefined) {
+      detailOf.set(variable.binding, { declaration: written, computed });
+      if (variable.file !== LOCAL_FILE && !sameExpression(written.expression, variable.value)) {
+        overriddenHere.set(variable.binding, variable.value);
+      }
+      return { ...variable, value: written.expression };
     }
-    if (computed === undefined || computed === variable.value) {
-      return variable;
-    }
-    const stylesheetValue = resolveVariableValue(variable.value, (name) => declaredLookup.get(name)) ?? variable.value;
-    if (stylesheetValue !== computed) {
-      overriddenHere.set(variable.binding, variable.value);
-    }
-    return { ...variable, value: computed };
+    // No traced declaration: a local row has no stylesheet text, and shows none rather than a computed value.
+    return variable.file === LOCAL_FILE ? { ...variable, value: '' } : variable;
   };
   const context = { computed: defined, selectedBinding, slot };
   // What the picker offers, before any search: the variables valid for the property at the slot, or
@@ -288,6 +294,7 @@ export function VariablePicker({
             refused={refused}
             hiddenNames={hidden}
             overridden={overriddenHere}
+            details={detailOf}
             query={query}
             collapsed={collapsed}
             selectedBinding={markedBinding}
@@ -501,6 +508,7 @@ export function PickerCollections({
   refused,
   hiddenNames,
   overridden,
+  details,
 }: {
   variables: ProjectVariable[];
   /** Every variable the picker knows, so a scope is grouped the way the panel groups it however the list is narrowed. */
@@ -513,8 +521,10 @@ export function PickerCollections({
   refused?: ReadonlySet<string> | undefined;
   /** Names hidden from suggestions: listed (by "show all") dimmed with a mark. */
   hiddenNames?: ReadonlySet<string> | undefined;
-  /** Bindings whose computed value here differs from the stylesheet's, with the declared expression. */
+  /** Bindings whose winning declaration here differs from the stylesheet's base one, with that base text. */
   overridden?: ReadonlyMap<string, string> | undefined;
+  /** Where each row's text was written, and what it computes to, for the tooltip. */
+  details?: ReadonlyMap<string, RowDetail> | undefined;
   query: string;
   collapsed: ReadonlySet<string>;
   selectedBinding: string | undefined;
@@ -552,22 +562,26 @@ export function PickerCollections({
                     </div>
                   ) : undefined}
                   {blocks.map((block) => {
-                    const rows = block.items.map((variable) => (
-                      <PickerItem
-                        key={variable.binding}
-                        variable={variable}
-                        collection={collection}
-                        group={group}
-                        {...(block.title === undefined ? {} : { label: shortLabel(`--${variable.name}`, block.title) })}
-                        invalid={refused?.has(variable.binding) === true}
-                        hidden={hiddenNames?.has(customPropertyOf(variable.binding) ?? '') === true}
-                        {...(overridden?.has(variable.binding) === true ? { declared: overridden.get(variable.binding) ?? '' } : {})}
-                        selected={sameVariable(variable.binding, selectedBinding)}
-                        active={variable.binding === activeBinding}
-                        onPick={onPick}
-                        onHover={onHover}
-                      />
-                    ));
+                    const rows = block.items.map((variable) => {
+                      const detail = details?.get(variable.binding);
+                      return (
+                        <PickerItem
+                          key={variable.binding}
+                          variable={variable}
+                          collection={collection}
+                          group={group}
+                          {...(block.title === undefined ? {} : { label: shortLabel(`--${variable.name}`, block.title) })}
+                          invalid={refused?.has(variable.binding) === true}
+                          hidden={hiddenNames?.has(customPropertyOf(variable.binding) ?? '') === true}
+                          {...(overridden?.has(variable.binding) === true ? { declared: overridden.get(variable.binding) ?? '' } : {})}
+                          {...(detail === undefined ? {} : { detail })}
+                          selected={sameVariable(variable.binding, selectedBinding)}
+                          active={variable.binding === activeBinding}
+                          onPick={onPick}
+                          onHover={onHover}
+                        />
+                      );
+                    });
                     // The ungrouped run is a card like the named groups when the scope has a label of
                     // its own or the scope has named groups beside it; a small project with neither
                     // keeps a plain list. Its heading is the scope's selector list (one line, the whole
@@ -673,6 +687,7 @@ export function PickerItem({
   invalid = false,
   hidden = false,
   declared,
+  detail,
   selected,
   active,
   onPick,
@@ -685,8 +700,10 @@ export function PickerItem({
   invalid?: boolean;
   /** Hidden from suggestions in the Variables panel: dimmed, with the eye-off mark. */
   hidden?: boolean;
-  /** The stylesheet's declaration, given when the element's computed value differs from it. */
+  /** The stylesheet's base declaration, given when the declaration that wins for the element differs from it. */
   declared?: string;
+  /** Where the row's text was written for this element, and what it computes to. */
+  detail?: RowDetail;
   collection: string;
   group: string;
   selected: boolean;
@@ -699,12 +716,15 @@ export function PickerItem({
   const note = [
     invalid ? translate('style.variablePicker.notValidForProperty') : '',
     hidden ? translate('variables.hidden.indicator') : '',
-    declared === undefined ? '' : `${translate('style.variablePicker.overriddenHere')}: --${variable.name}: ${declared}`,
+    declared === undefined || detail === undefined
+      ? ''
+      : `${translate('style.variablePicker.overriddenHere')}: ${detail.declaration.selector}${detail.declaration.file === undefined ? '' : ` (${fileLabel(detail.declaration.file)})`}`,
   ]
     .filter(Boolean)
     .join('. ');
   const groupPrefix = group ? `${group} / ` : '';
   const valueSuffix = variable.value ? ` — ${variable.value}` : '';
+  const lines = detail === undefined ? [] : detailLines(variable.name, detail, translate);
   return (
     <button
       type="button"
@@ -718,7 +738,7 @@ export function PickerItem({
       onMouseDown={(event) => event.preventDefault()}
       onClick={() => onPick(variable.binding)}
       onPointerEnter={() => onHover?.(variable.binding)}
-      title={`${collection} / ${groupPrefix}${variable.name}${valueSuffix}${note === '' ? '' : ` (${note})`}`}
+      title={[`${collection} / ${groupPrefix}${variable.name}${valueSuffix}${note === '' ? '' : ` (${note})`}`, ...lines].join('\n')}
     >
       {variable.type === 'Color' ? (
         <VariableSwatch binding={variable.binding} />
@@ -741,6 +761,49 @@ export function PickerItem({
       ) : undefined}
     </button>
   );
+}
+
+/** Where one row's text was written for the selected element, and what it computes to there. */
+export interface RowDetail {
+  readonly declaration: WinningDeclarationText;
+  readonly computed: string | undefined;
+}
+
+// The winning declaration, when its text can be shown next to the swatch without contradicting it.
+// The page picks the winner with the browser's own cascade, so a declaration that holds a var() is
+// trusted as written. A literal (no var()) must read the same as what the element computes to; when
+// it does not (a condition the page could not evaluate), the row falls back to the stylesheet's text.
+export function traceableDeclaration(declaration: WinningDeclarationText | undefined, computed: string | undefined): WinningDeclarationText | undefined {
+  if (declaration === undefined || declaration.expression === '') {
+    return undefined;
+  }
+  if (/var\(|env\(/i.test(declaration.expression) || computed === undefined) {
+    return declaration;
+  }
+  return sameExpression(declaration.expression, computed) ? declaration : undefined;
+}
+
+// The tooltip's two lines: where it was written, and what it computes to.
+function detailLines(name: string, detail: RowDetail, translate: ReturnType<typeof useTranslate>): string[] {
+  const { declaration, computed } = detail;
+  const where =
+    declaration.file === undefined
+      ? translate('style.variablePicker.declaredOn', { name: `--${name}`, value: declaration.expression, selector: declaration.selector })
+      : translate('style.variablePicker.declaredIn', {
+          name: `--${name}`,
+          value: declaration.expression,
+          file: fileLabel(declaration.file),
+          selector: declaration.selector,
+        });
+  if (computed === undefined || sameExpression(computed, declaration.expression)) {
+    return [where];
+  }
+  return [where, translate('style.variablePicker.computesTo', { value: computed })];
+}
+
+// A file's last path segment: the tooltip names the file, the selector says where in it.
+function fileLabel(file: string): string {
+  return file.split('/').filter(Boolean).pop() ?? file;
 }
 
 // Marks the row made for an applied variable no stylesheet read here declares.
@@ -799,16 +862,19 @@ export function customPropertyOf(binding: string): string | undefined {
 // offered there. Asked of the page once per opening, since only the page
 // knows which rules reach the element; undefined until it answers, or when
 // there is no canvas or selection to ask, which shows every variable.
-function useDefinedVariables(vars: readonly ProjectVariable[]): ReadonlyMap<string, string> | undefined {
+function useDefinedVariables(vars: readonly ProjectVariable[]): DefinedAnswer | undefined {
   const names = [...new Set(vars.flatMap((variable) => customPropertyOf(variable.binding) ?? []))].sort();
   const key = names.join(' ');
-  const [defined, setDefined] = useState<{ readonly key: string; readonly names: ReadonlyMap<string, string> } | undefined>(undefined);
+  const host = getHost();
+  const path = host.selectedId ? host.pathOf?.(host.selectedId) : undefined;
+  const cacheKey = path === undefined ? undefined : `${path}\n${key}`;
+  // The last answer for this element, shown at once while the page is asked again; the fresh one
+  // replaces it in place.
+  const [fresh, setFresh] = useState<{ readonly key: string; readonly answer: DefinedAnswer } | undefined>(undefined);
   useEffect(() => {
-    const host = getHost();
-    const path = host.selectedId ? host.pathOf?.(host.selectedId) : undefined;
     const asked = key === '' ? [] : key.split(' ');
     // Past what one canvas question may hold, every variable is shown, unasked.
-    if (path === undefined || !hasCanvas() || asked.length === 0 || asked.length > LIMITS.scanEntriesMax) {
+    if (path === undefined || cacheKey === undefined || !hasCanvas() || asked.length === 0 || asked.length > LIMITS.scanEntriesMax) {
       return undefined;
     }
     let live = true;
@@ -816,25 +882,30 @@ function useDefinedVariables(vars: readonly ProjectVariable[]): ReadonlyMap<stri
       asked.every((name) => name.startsWith('--')),
       'Only custom properties are asked about',
     );
-    void queryCanvas(path, [], [], asked).then((answer) => {
-      if (live && answer !== undefined) {
-        // The computed value is kept with the name: it is what a property's value predicate judges.
-        setDefined({
-          key,
+    // Computed values for the swatch and validity; the winning declaration, traced up the parents, for the text.
+    void queryCanvas(path, [], [], asked, { winning: asked.slice(0, WINNING_NAMES_MAX) }).then((reply) => {
+      if (live && reply !== undefined) {
+        const answer: DefinedAnswer = {
           names: new Map(
             asked.flatMap((name): Array<[string, string]> => {
-              const value = (answer.computedProps[name] ?? '').trim();
+              const value = (reply.computedProps[name] ?? '').trim();
               return value === '' ? [] : [[name, value]];
             }),
           ),
-        });
+          winning: new Map(Object.entries(reply.winning)),
+        };
+        rememberAnswer(cacheKey, answer);
+        setFresh({ key: cacheKey, answer });
       }
     });
     return () => {
       live = false;
     };
-  }, [key]);
-  return defined?.key === key ? defined.names : undefined;
+  }, [key, path, cacheKey]);
+  if (cacheKey === undefined) {
+    return undefined;
+  }
+  return fresh?.key === cacheKey ? fresh.answer : cachedAnswer(cacheKey);
 }
 
 // A colour variable's swatch: what it resolves to on the selected element,

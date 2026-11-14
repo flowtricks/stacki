@@ -16,6 +16,7 @@ import { setCanvasInteraction, setCanvasSitePages } from './frameInteraction';
 import { isElement, isText } from './frameBasics';
 import { computeValues } from './frameColorProbe';
 import { queryAuthoredStyles } from './frameStyleSources';
+import { inspectWinningDeclarations } from './frameAuthoredStyles';
 import { list, pathText, text } from '../../shared/core/boundary';
 import { LIMITS } from '../../shared/core/limits';
 import { renderedPageImage, renderedPageType } from './framePageMetadata';
@@ -292,6 +293,7 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
   const props = Array.isArray(data['props']) ? data['props'] : [];
   const computedProps = props.length && styleHost ? computeProperties(styleHost, props) : {};
   const selectors = (Array.isArray(data['selectors']) ? data['selectors'] : []).filter((value): value is string => typeof value === 'string');
+  const winning = (Array.isArray(data['winning']) ? data['winning'] : []).filter((value): value is string => typeof value === 'string');
   const matched: Record<string, boolean | undefined> = {};
   for (const selector of selectors) {
     try {
@@ -317,6 +319,9 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
             els[0] ? 'element' : 'text',
           )
         : {}),
+      // Which declaration of each asked custom property wins for the selected element, traced up its
+      // parents (frameAuthoredStyles.ts): the picker's row text, never the computed value.
+      ...(winning.length > 0 && els[0] ? { winning: inspectWinningDeclarations(els[0], winning) } : {}),
       identity: els[0] ? identityOf(els[0]) : undefined,
       matched,
     },

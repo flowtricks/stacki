@@ -12,6 +12,7 @@ interface QueryMessage {
   readonly textParentPath?: string;
   readonly pageMetadata?: boolean;
   readonly pageText?: boolean;
+  readonly winning?: readonly string[];
 }
 interface PendingQuery {
   readonly resolve: (answer: CanvasAnswer | undefined) => void;
@@ -96,6 +97,8 @@ export function queryCanvas(
     readonly textParentPath?: string;
     readonly pageMetadata?: boolean;
     readonly pageText?: boolean;
+    /** Custom properties whose winning declaration is wanted, traced up the element's parents. */
+    readonly winning?: readonly string[];
   } = {},
 ): Promise<CanvasAnswer | undefined> {
   if (!frame || typeof path !== 'string') {
@@ -107,7 +110,7 @@ export function queryCanvas(
   assert(Number.isSafeInteger(nextId), 'Canvas query ID must remain a safe integer');
   assert(path.length <= LIMITS.attrCharsMax, 'Canvas query path exceeds limit');
   assert((context.textParentPath?.length ?? 0) <= LIMITS.attrCharsMax, 'Canvas text parent path exceeds limit');
-  for (const values of [selectors, compute, props]) {
+  for (const values of [selectors, compute, props, context.winning ?? []]) {
     assert(values.length <= LIMITS.scanEntriesMax, 'Canvas query list exceeds limit');
     for (const value of values) {
       assert(value.length <= LIMITS.attrCharsMax, 'Canvas query value exceeds limit');
@@ -193,6 +196,7 @@ export function receiveCanvasReply(input: unknown): void {
           computedProps: data.computedProps || {},
           authoredProps: data.authoredProps || {},
           inheritedSources: data.inheritedSources || {},
+          winning: data.winning || {},
           ...(data.pageImage === undefined ? {} : { pageImage: data.pageImage }),
           ...(data.pageType === undefined ? {} : { pageType: data.pageType }),
           ...(data.pageText === undefined ? {} : { pageText: data.pageText }),

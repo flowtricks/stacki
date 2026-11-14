@@ -23,6 +23,7 @@ const valid = {
   computedProps: { display: 'block' },
   authoredProps: { 'font-size': 'var(--heading-size)' },
   inheritedSources: { 'font-size': { label: '.heading', path: '0' } },
+  winning: { '--background': { expression: 'var(--brand)', selector: '.theme-dark', file: '/src/theme.css', depth: 1, ancestor: '.theme-dark' } },
 };
 assert.equal(parseCanvasReply(valid).ok, true);
 assert.equal(parseCanvasReply({ ...valid, identity: { ...valid.identity, id: undefined } }).ok, true);
@@ -53,6 +54,10 @@ for (const input of [
   },
   { ...valid, inheritedSources: PLATFORM_NULL },
   { ...valid, authoredProps: { 'font-size': 16 } },
+  { ...valid, winning: { '--a': { expression: 1 } } },
+  { ...valid, winning: 'var(--a)' },
+  { ...valid, winning: { '--a': { ...valid.winning['--background'], depth: -1 } } },
+  { ...valid, winning: Object.fromEntries(Array.from({ length: 513 }, (_, index) => [`--n${index}`, valid.winning['--background']])) },
   { ...valid, authoredProps: { color: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) } },
   { ...valid, identity: { ...valid.identity, classes: Array(100001).fill('a') } },
   { ...valid, identity: { ...valid.identity, tag: 'a'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) } },
@@ -77,6 +82,7 @@ async function main() {
     computedProps: valid.computedProps,
     authoredProps: valid.authoredProps,
     inheritedSources: valid.inheritedSources,
+    winning: valid.winning,
   });
 
   const cancelled = canvas.queryCanvas('1');
