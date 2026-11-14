@@ -75,7 +75,7 @@ test("at the landed width the browser matches none of the convention's queries",
     return { widthPx: target.widthPx, conditions: queries.map((query) => query.replace(/^@media\s+/, '')) };
   });
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-base-width-'));
-  context.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  context.after(() => fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
   const probe = path.join(directory, 'probe.js');
   fs.writeFileSync(
     probe,

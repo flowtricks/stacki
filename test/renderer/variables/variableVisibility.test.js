@@ -288,7 +288,7 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   );
 
   await act(async () => secondRoot.unmount());
-  fs.rmSync(directory, { recursive: true, force: true });
+  fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 
   if (failures.length) {
     console.error(`\nvariable-visibility: ${failures.length} failed, ${checked - failures.length} passed\n`);

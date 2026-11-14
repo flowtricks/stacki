@@ -13,7 +13,7 @@ import path from 'node:path';
 import { BAKE_RUNTIME_DIRECTORY } from '../src/features/bake/bakeProtocol';
 import { ASSET_URL_LIMITS, BAKE_ASSET_URLS_FILE, matchAssetURLs, parseAssetURLs } from '../src/features/bake/bakeAssetURLs';
 import { assetSiteURL, publicAssetResolver } from '../demo/assetURLs';
-import { bakeFixture, makeProject } from './demoFixture';
+import { bakeFixture, makeProject, REMOVE_OPTIONS } from './demoFixture';
 
 const BASE = '/demo/site/';
 const CHECK = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M2 8l4 4 8-8" stroke="currentColor" fill="none"/></svg>\n';
@@ -90,7 +90,7 @@ test('a real bake maps an imported src/assets SVG to the file the build emitted'
     const emitted = await readFile(path.join(out, url.slice(BASE.length)));
     assert.equal(createHash('sha256').update(emitted).digest('hex'), createHash('sha256').update(CHECK).digest('hex'), 'The URL serves the same file');
   } finally {
-    await rm(out, { recursive: true, force: true });
+    await rm(out, REMOVE_OPTIONS);
     await project.stop();
   }
 });

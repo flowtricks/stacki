@@ -13,6 +13,11 @@ import { bakeSite } from '../src/features/bake/bakeDemo';
 
 const studio = fileURLToPath(new URL('../', import.meta.url));
 
+// Windows reports EBUSY or EPERM for a folder whose files a just-finished build, a virus scanner or
+// the search indexer still holds. Node retries those codes with a linear backoff when asked; five
+// tries at 100 ms steps bound the wait at about a second and a half.
+export const REMOVE_OPTIONS = { recursive: true, force: true, maxRetries: 5, retryDelay: 100 } as const;
+
 export const FIXTURE_FILES: Readonly<Record<string, string>> = {
   'package.json': '{"name":"demo-fixture","type":"module"}',
   'astro.config.mjs': 'import { defineConfig } from "astro/config";\nexport default defineConfig({});\n',
@@ -235,7 +240,7 @@ export async function makeProject(): Promise<{ readonly root: string; readonly s
   // folder: Astro and Vite write their caches (.astro, .vite) into node_modules, and test files
   // bake in parallel, so a shared folder let one build overwrite another's cache.
   await linkFixturePackages(path.join(root, 'node_modules'));
-  return { root, stop: () => rm(root, { recursive: true, force: true }) };
+  return { root, stop: () => rm(root, REMOVE_OPTIONS) };
 }
 
 export async function bakeFixture(root: string, out: string, runtime = path.join(studio, 'dist')): Promise<void> {
@@ -288,7 +293,7 @@ export async function serveDemo(site: string): Promise<{ readonly url: string; r
     requests,
     stop: async () => {
       await new Promise((resolve) => server.close(resolve));
-      await rm(root, { recursive: true, force: true });
+      await rm(root, REMOVE_OPTIONS);
     },
   };
 }

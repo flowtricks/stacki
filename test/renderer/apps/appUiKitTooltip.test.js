@@ -82,6 +82,17 @@ const check = (what, condition, detail) => {
            await wait(100);
            return point;
          };
+         // Waits, within a bound, until the popup count is what the step expects. A slow runner
+         // delivers the key or finishes the exit motion later than any fixed sleep guesses; the
+         // last count is returned either way, so a real failure still reports what the page held.
+         const shownBecomes = async (wanted) => {
+           let count = await shown();
+           for (let attempt = 0; attempt < 80 && count !== wanted; attempt++) {
+             await wait(25);
+             count = await shown();
+           }
+           return count;
+         };
          const result = {};
 
          await hover('t0');
@@ -114,11 +125,10 @@ const check = (what, condition, detail) => {
          await away();
 
          await hover('t4');
-         result.beforeEscape = await shown();
+         result.beforeEscape = await shownBecomes(1);
          win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
          win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-         await wait(100);
-         result.escaped = await shown();
+         result.escaped = await shownBecomes(0);
          await away();
 
          await hover('t5');
