@@ -247,16 +247,20 @@ const NAMES = [
   const file = block('.embed-editor_varpicker-collection-name');
   const heading = block('.embed-editor_varpicker-family-name');
   const rowRule = block('.embed-editor_varpicker-item');
-  check('the file is md and bold', /font-size:\s*var\(--font-size-md\)/.test(file) && /font-weight:\s*var\(--font-weight-bold\)/.test(file), file);
+  check('the file is 0.8125rem and semibold', /font-size:\s*0\.8125rem/.test(file) && /font-weight:\s*600/.test(file), file);
   check(
-    'the group is 0.75rem, medium weight, secondary text',
-    /font-size:\s*0\.75rem/.test(heading) && /--font-weight-medium/.test(heading) && /--color-text-secondary/.test(heading),
+    'the group is 0.75rem, semibold, secondary text',
+    /font-size:\s*0\.75rem/.test(heading) && /font-weight:\s*600/.test(heading) && /--color-text-secondary/.test(heading),
     heading,
   );
-  check('the row is sm and regular', /font-size:\s*var\(--font-size-sm\)/.test(rowRule) && !/font-weight/.test(rowRule), rowRule);
   check(
-    'heading padding keeps the text inside the list edge, no negative offsets in the picker',
-    /padding:\s*var\(--space-2\) var\(--space-3\)/.test(heading) && !/margin-left:\s*-/.test(heading + rowRule + block('.embed-editor_varpicker-family')),
+    'the row is 0.875rem and carries no weight of its own (its name does)',
+    /font-size:\s*0\.875rem/.test(rowRule) && !/font-weight/.test(rowRule),
+    rowRule,
+  );
+  check(
+    'a heading keeps room beneath it and no negative offsets in the picker',
+    /padding:\s*0\.5rem 0\.125rem 0\.5rem/.test(heading) && !/margin-left:\s*-/.test(heading + rowRule + block('.embed-editor_varpicker-family')),
   );
   check('no borders on the group', !/\bborder(?!-radius)/.test(block('.embed-editor_varpicker-family')));
   await act(async () => root.unmount());

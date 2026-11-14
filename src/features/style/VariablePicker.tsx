@@ -770,16 +770,18 @@ export function PickerItem({
       )}
       <span className="embed-editor_varpicker-item-name">{label ?? variable.name}</span>
       <span className="embed-editor_varpicker-item-value">{variable.value}</span>
-      {hidden ? (
-        <span className="embed-editor_varpicker-item-hidden" aria-hidden="true">
-          <HiddenIcon />
-        </span>
-      ) : undefined}
-      {selected ? (
-        <span className="embed-editor_varpicker-item-check" aria-hidden="true">
-          <CheckIcon />
-        </span>
-      ) : undefined}
+      <span className="embed-editor_varpicker-item-marks">
+        {hidden ? (
+          <span className="embed-editor_varpicker-item-hidden" aria-hidden="true">
+            <HiddenIcon />
+          </span>
+        ) : undefined}
+        {selected ? (
+          <span className="embed-editor_varpicker-item-check" aria-hidden="true">
+            <CheckIcon />
+          </span>
+        ) : undefined}
+      </span>
     </button>
   );
 }

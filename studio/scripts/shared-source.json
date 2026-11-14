@@ -1240,6 +1240,7 @@
     "src/features/style/embedEditor.css",
     "src/features/style/gridTracks.ts",
     "src/features/style/pickerExit.ts",
+    "src/features/style/model/baseWidth.ts",
     "src/features/style/model/definedAnswers.ts",
     "src/features/style/model/background.ts",
     "src/features/style/model/boxShadow.ts",
