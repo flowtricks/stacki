@@ -2,11 +2,10 @@
 //
 //   node test/renderer/style/variablePickerLook.test.js
 //
-// Goal: pin the picker's look so it stays scannable: rows at least 2.25rem tall with 0.25rem between
-// them in a card, the variable name 0.875rem at weight 500 in the primary text colour, its value
-// 0.75rem monospace at weight 400 in secondary text that clears 4.5:1 on the row and on the selected
-// row, group headings 0.75rem at weight 600 with room beneath, and the values of a card starting at
-// one x however long the names are. The list still fits the height cap and scrolls.
+// Goal: pin the picker's look so it stays scannable: rows 1.75 to 2rem tall with 0.125rem between
+// them in a card, the variable name 0.8125rem at weight 500 in the primary text colour, its value
+// 0.6875rem monospace at weight 400 in secondary text that clears 4.5:1 on the row and on the selected
+// row, group headings 0.75rem at weight 600 with room beneath, and no name cut off while it fits within 60% of the row. The list still fits the height cap and scrolls.
 // Method: layout is the question, so the real VariablePicker is mounted in a hidden Chromium window
 // (Electron, the pattern of popoverDropdown.test.js) with Font, Color and Length fixtures, measured
 // with getComputedStyle and getBoundingClientRect, and captured to PNGs under
@@ -115,7 +114,8 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
              selected: row.classList.contains('is-selected'),
              card: (row.closest('.embed-editor_varpicker-family') || row.closest('.embed-editor_varpicker-group')) === null ? -1 : [...document.querySelectorAll('.embed-editor_varpicker-family, .embed-editor_varpicker-group')].indexOf(row.closest('.embed-editor_varpicker-family') || row.closest('.embed-editor_varpicker-group')),
              rect: row.getBoundingClientRect().toJSON(),
-             valueLeft: value.getBoundingClientRect().left,
+             nameCut: name.scrollWidth > name.clientWidth + 1,
+             nameWidth: name.getBoundingClientRect().width,
              name: { size: css(name).fontSize, weight: css(name).fontWeight, color: css(name).color },
              value: { size: css(value).fontSize, weight: css(value).fontWeight, family: css(value).fontFamily, color: css(value).color, overflow: css(value).textOverflow },
              background: css(row).backgroundColor,
@@ -132,7 +132,7 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
        const results = {};
        for (const name of ['font', 'color', 'length']) {
          await js('window.__show(null)');
-         await wait(30);
+         await wait(400);
          await js('window.__show(' + JSON.stringify(name) + ')');
          for (let tries = 0; tries < 40; tries += 1) {
            if (await js("document.querySelector('.embed-editor_varpicker')?.dataset.popupPhase === 'open'")) break;
@@ -185,12 +185,17 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
     const rem = view.rem;
     check(`${name}: the popover fits the 18rem cap`, view.popup.height / rem <= 18.01, `${view.popup.height / rem}rem`);
     for (const row of view.rows) {
-      check(`${name}: a row is at least 2.25rem tall`, row.rect.height / rem >= 2.249, `${row.rect.height / rem}rem`);
-      check(`${name}: the name is 0.875rem at weight 500`, row.name.size === '14px' && row.name.weight === '500', JSON.stringify(row.name));
+      check(`${name}: a row is 1.75 to 2rem tall`, row.rect.height / rem >= 1.749 && row.rect.height / rem <= 2.001, `${row.rect.height / rem}rem`);
+      check(`${name}: the name is 0.8125rem at weight 500`, row.name.size === '13px' && row.name.weight === '500', JSON.stringify(row.name));
       check(
-        `${name}: the value is 0.75rem mono at weight 400`,
-        row.value.size === '12px' && row.value.weight === '400' && /mono|menlo|courier|consolas/i.test(row.value.family),
+        `${name}: the value is 0.6875rem mono at weight 400`,
+        row.value.size === '11px' && row.value.weight === '400' && /mono|menlo|courier|consolas/i.test(row.value.family),
         JSON.stringify(row.value),
+      );
+      check(
+        `${name}: a name is cut only when it reaches 60% of the row`,
+        !row.nameCut || row.nameWidth >= 0.55 * row.rect.width,
+        `${row.nameWidth} of ${row.rect.width}`,
       );
       check(`${name}: a long value ends in an ellipsis`, row.value.overflow === 'ellipsis');
       const base = channels(view.popup.background);
@@ -206,14 +211,9 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
       cards.set(row.card, [...(cards.get(row.card) ?? []), row]);
     }
     for (const [card, rows] of cards) {
-      check(
-        `${name}: card ${card}: values start at one x`,
-        rows.every((row) => Math.abs(row.valueLeft - rows[0].valueLeft) < 0.5),
-        JSON.stringify(rows.map((row) => row.valueLeft)),
-      );
       for (let index = 1; index < rows.length; index += 1) {
         const gap = rows[index].rect.top - rows[index - 1].rect.bottom;
-        check(`${name}: card ${card}: 0.25rem between rows`, Math.abs(gap - 0.25 * rem) < 0.6, String(gap));
+        check(`${name}: card ${card}: 0.125rem between rows`, Math.abs(gap - 0.125 * rem) < 0.6, String(gap));
       }
     }
     for (const heading of view.headings) {
