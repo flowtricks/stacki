@@ -254,8 +254,8 @@ const NAMES = [
     heading,
   );
   check(
-    'the row is 0.875rem and carries no weight of its own (its name does)',
-    /font-size:\s*0\.875rem/.test(rowRule) && !/font-weight/.test(rowRule),
+    'the row is 0.8125rem and carries no weight of its own (its name does)',
+    /font-size:\s*0\.8125rem/.test(rowRule) && !/font-weight/.test(rowRule),
     rowRule,
   );
   check(
