@@ -1,5 +1,11 @@
 import { centralIcon } from '../../ui/central/CentralIcon';
-import { droplet as centralDroplet, font as centralFont, number as centralNumber, ruler as centralRuler } from '../../ui/central/centralGeometry';
+import {
+  droplet as centralDroplet,
+  font as centralFont,
+  number as centralNumber,
+  pieChartOne as centralPieChartOne,
+  ruler as centralRuler,
+} from '../../ui/central/centralGeometry';
 import type { IconProps } from '../../ui/IconBase';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -13,6 +19,8 @@ const sizeType: TypeEntry = { Icon: centralIcon(centralRuler), label: 'variables
 const TYPES: ReadonlyMap<string, TypeEntry> = new Map([
   ['color', { Icon: centralIcon(centralDroplet), label: 'variables.type.color' }],
   ['number', { Icon: centralIcon(centralNumber), label: 'variables.type.number' }],
+  // Titled Size: a percentage is a size in CSS, and the panel has no separate type name for it.
+  ['percentage', { Icon: centralIcon(centralPieChartOne), label: 'variables.type.size' }],
   ['font', { Icon: centralIcon(centralFont), label: 'variables.type.text' }],
 ]);
 

@@ -1,5 +1,9 @@
 import { centralIcon } from '../../../ui/central/CentralIcon';
-import { chevronDown as centralChevronDown, help as centralHelp, more as centralMore } from '../../../ui/central/centralGeometry';
+import {
+  chevronDown as centralChevronDown,
+  help as centralHelp,
+  arrowRotateCounterClockwise as centralArrowRotateCounterClockwise,
+} from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
 // The clip-path editor's view: its class tags, presets and source menu, fit
 // mode and scale variables, shortcut help, and the canvas (ClipPath.tsx).
@@ -8,7 +12,7 @@ const HelpGlyph = centralIcon(centralHelp, 12);
 
 const ChevronDownGlyph = centralIcon(centralChevronDown, 12);
 
-const MoreGlyph = centralIcon(centralMore, 12);
+const ResetGlyph = centralIcon(centralArrowRotateCounterClockwise, 12);
 
 import { createPortal } from 'react-dom';
 import { useTranslate } from '../../../lib/i18n/useTranslate';
@@ -136,7 +140,7 @@ export function ClipPathLabel({ editor }: EditorProps) {
       {isClipPathLabelMenuOpen && clipPathStyleOrigin === 'current' ? (
         <Popup mode="popover" portal={false} onClose={() => editor.setIsClipPathLabelMenuOpen(false)} className="clip-path_label-menu" role="menu">
           <button type="button" className="clip-path_label-menu-item" role="menuitem" onClick={() => void resetCurrentBreakpointClipPath()}>
-            <MoreGlyph className="clip-path_label-menu-icon" />
+            <ResetGlyph className="clip-path_label-menu-icon" />
             <span>{translate('ui.reset')}</span>
             <span className="clip-path_label-menu-shortcut">{translate('styleModel.shared.optionClick')}</span>
           </button>

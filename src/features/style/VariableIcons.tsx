@@ -6,7 +6,7 @@ import {
   droplet as centralDroplet,
   font as centralFont,
   number as centralNumber,
-  percent as centralPercent,
+  pieChartOne as centralPieChartOne,
   ruler as centralRuler,
 } from '../../ui/central/centralGeometry';
 // The glyphs the variable picker draws: a check, a plus, a chevron, and an
@@ -25,7 +25,7 @@ export const PlusIcon = centralIcon(centralAdd);
 // (Size included) uses the Size glyph.
 export const ColorTypeIcon = centralIcon(centralDroplet);
 export const NumberTypeIcon = centralIcon(centralNumber);
-export const PercentageTypeIcon = centralIcon(centralPercent);
+export const PercentageTypeIcon = centralIcon(centralPieChartOne);
 export const FontFamilyTypeIcon = centralIcon(centralFont);
 export const SizeTypeIcon = centralIcon(centralRuler);
 export function VariableTypeIcon({ type }: { type: string }) {

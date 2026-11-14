@@ -96,6 +96,10 @@ export function kindOf(value: unknown, resolved: unknown): string {
   if (/^-?\d*\.?\d+$/.test(text)) {
     return 'number';
   }
+  // A plain percentage has its own glyph in the Variables panel; calc() holding a % stays a size.
+  if (/^[+-]?(?:\d+\.?\d*|\.\d+)%$/.test(text)) {
+    return 'percentage';
+  }
   if (/^-?\d*\.?\d+([a-z%]+)$/i.test(text) || /^(calc|clamp|min|max)\(/i.test(text)) {
     return 'size';
   }

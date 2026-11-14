@@ -245,6 +245,35 @@ export const arrowRotateClockwise = {
   ),
 };
 
+export const arrowRotateCounterClockwise = {
+  name: 'arrow-rotate-counter-clockwise',
+  // Figma variant 9875:24842.
+  compact: (
+    <>
+      <path
+        d="M12.0208 20.25C16.5771 20.25 20.2708 16.5563 20.2708 12C20.2708 7.4437 16.5771 3.75 12.0208 3.75C9.2036 3.75 7.3207 4.9544 5.4998 7.0089M4.2402 14.75C5.3728 17.9543 8.4287 20.25 12.0208 20.25"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M4.75 4L4.75 7.25C4.75 7.6642 5.0858 8 5.5 8L8.75 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  // Figma variant 9875:24862.
+  standard: (
+    <>
+      <path
+        d="M12.0144 20.5C16.7088 20.5 20.5144 16.6944 20.5144 12C20.5144 7.3056 16.7088 3.5 12.0144 3.5C8.9592 3.5 6.9705 4.8748 5.0002 7.1988M3.998 14.8333C5.1649 18.1347 8.3134 20.5 12.0144 20.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path d="M4.5 3.75L4.5 7.75L8.5 7.75" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+};
+
 export const arrowUp = {
   name: 'arrowUp',
   // Figma variant 9278:27106.
@@ -5452,6 +5481,35 @@ export const warning = {
         strokeLinecap="round"
       />
       <path d="M12 16H12.01" stroke="currentColor" strokeLinecap="round" />
+    </>
+  ),
+};
+
+export const pieChartOne = {
+  name: 'pie-chart-1',
+  // Figma variant 7491:67091.
+  compact: (
+    <>
+      <path d="M12 2.75L12 12L20.7237 15.0833" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M12 21.25C17.1086 21.25 21.25 17.1086 21.25 12C21.25 6.89137 17.1086 2.75 12 2.75C6.89137 2.75 2.75 6.89137 2.75 12C2.75 17.1086 6.89137 21.25 12 21.25Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  // Figma variant 7491:67119.
+  standard: (
+    <>
+      <path d="M12 2.5L12 12L20.9594 15.1667" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" />
+      <path
+        d="M12 21.5C17.2467 21.5 21.5 17.2467 21.5 12C21.5 6.75329 17.2467 2.5 12 2.5C6.75329 2.5 2.5 6.75329 2.5 12C2.5 17.2467 6.75329 21.5 12 21.5Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </>
   ),
 };

@@ -1,6 +1,6 @@
 import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
-import { more as centralMore } from '../../../ui/central/centralGeometry';
+import { arrowRotateCounterClockwise as centralArrowRotateCounterClockwise } from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { MouseEvent, ReactNode, RefObject } from 'react';
@@ -10,7 +10,7 @@ import { panelBounds } from '../model/panelBox';
 import { useHoverTip } from './CssPropertyTip';
 import type { ScrubHandlers } from './useScrub';
 
-const MoreGlyph = centralIcon(centralMore, 12);
+const ResetGlyph = centralIcon(centralArrowRotateCounterClockwise, 12);
 
 type Props = {
   children: ReactNode;
@@ -257,7 +257,7 @@ function FieldLabelMenu({
           onReset();
         }}
       >
-        <MoreGlyph className="u-field-label-menu-icon" />
+        <ResetGlyph className="u-field-label-menu-icon" />
         <span>{resetLabel}</span>
         <span className="u-field-label-menu-shortcut">{translate('styleModel.shared.optionClick')}</span>
       </button>
