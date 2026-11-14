@@ -226,7 +226,11 @@ export function serializeTokens(root: HTMLElement, bare: string, varForm: string
   // The lone form is for a field holding one variable and nothing else — that is
   // what a native binding reads back as. Anything else writes var(…) per chip.
   let at = 0;
-  return out
+  // A space typed at the end of the text is inserted by Chromium as a non-breaking space
+  // (U+00A0), so it shows while typing, and the repaint keeps it in its own `.cx-space`
+  // element, where the browser never turns it back. CSS does not read U+00A0 as whitespace
+  // (`span<U+00A0>3` is a span to a line named "\u00A03"), so the value is saved with a space.
+  const value = out
     .replace(/\u0000/g, () => {
       const binding = chips[at++];
       if (chips.length === 1 && !hasText) {
@@ -234,7 +238,10 @@ export function serializeTokens(root: HTMLElement, bare: string, varForm: string
       }
       return binding || varForm;
     })
-    .replace(/\u200B/g, '');
+    .replace(/\u200B/g, '')
+    .replace(/\u00A0/g, ' ');
+  assert(!value.includes('\u00A0'), 'serializeTokens: a saved value holds no non-breaking space');
+  return value;
 }
 
 // Move a collapsed caret across the atomic chip when it sits right at the chip's edge —
