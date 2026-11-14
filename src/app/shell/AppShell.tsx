@@ -372,7 +372,7 @@ function PreviewButton({ app }: { readonly app: ShellView }) {
           togglePreview(app);
         }}
       >
-        <PlayIcon size={15} />
+        <PlayIcon size={16} />
       </button>
       {tooltip.value ? (
         <div className="rail-tooltip below" style={tooltip.value}>

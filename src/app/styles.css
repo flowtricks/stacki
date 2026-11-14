@@ -26,6 +26,9 @@
   --text-dim: #b8b8b8;
   --text-faint: #989898;
   --accent: #0099ff;
+  /* One height for the title bar's own controls: the Publish split button, the branch chip and the Play button
+     beside them. Before this the Play button was a separate 28px, so it stood taller than Publish. */
+  --titlebar-control-height: 1.5rem;
   /* A hovered accent button: the accent a step brighter, never a grey. */
   --accent-hover: color-mix(in srgb, var(--accent), #fff 14%);
   --accent-soft: rgba(0, 153, 255, 0.16);
@@ -335,6 +338,10 @@ html[data-platform='win32'] .titlebar {
   background: transparent;
   color: var(--text-dim);
   border-radius: 8px;
+}
+.titlebar-actions .titlebar-btn {
+  /* The cluster sits beside Publish, so it takes Publish's height (the width stays a comfortable target). */
+  height: var(--titlebar-control-height);
 }
 .titlebar-btn:hover:not(:disabled) {
   background: var(--bg-hover);
