@@ -581,6 +581,7 @@
     "shared/properties/propertyEditing.ts",
     "shared/properties/propertyErrors.ts",
     "shared/properties/propertyOptions.ts",
+    "shared/properties/propertyValueAccepts.ts",
     "shared/properties/publishCommands.ts",
     "shared/properties/publishConfig.ts",
     "shared/properties/publishDiscovery.ts",

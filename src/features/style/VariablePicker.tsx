@@ -15,6 +15,7 @@ import { useResolvedColor } from './model/computedColor';
 import { getHost } from './model/host';
 import { hasCanvas, queryCanvas } from '../../editor/canvasQuery';
 import { assert } from '../../../shared/core/assert';
+import { valuePredicateFor, variableAccepted } from '../../../shared/properties/propertyValueAccepts';
 import { LIMITS } from '../../../shared/core/limits';
 
 // Where the picker sits horizontally.
@@ -89,7 +90,9 @@ export function VariablePicker({
   usePickerFocus(searchRef);
   const query = search.trim().toLowerCase();
   const defined = useDefinedVariables(vars);
-  const filtered = pickerVariables(vars, prop, query).filter((variable) => defined === undefined || defined.has(customPropertyOf(variable.binding) ?? ''));
+  const filtered = pickerVariables(vars, prop, query, { computed: defined, selectedBinding }).filter(
+    (variable) => defined === undefined || defined.has(customPropertyOf(variable.binding) ?? ''),
+  );
   const { activeBinding, navigation } = usePickerNavigation(ref, filtered, { typing, search }, onPreview, onPick);
   // With its own search box the arrows move the purple mark itself, from the
   // applied variable to the one being previewed. Following typing, the mark
@@ -171,8 +174,37 @@ export function useCollapsedSet(): [ReadonlySet<string>, (name: string) => void]
 
 // Type-filter for the property being edited, then sort for a stable Collection →
 // Group → name view, then keep what the search matches.
-export function pickerVariables(vars: ProjectVariable[], prop: string | undefined, query: string): ProjectVariable[] {
-  const typed = vars.filter((variable) => varTypeAllowed(prop, variable.type));
+//
+// A property with a value predicate (font-weight: propertyValueAccepts.ts) keeps only the
+// variables whose COMPUTED value it accepts. The source of that value is, in order:
+//   1. `computed`: what the selected element's cascade gives each custom property, asked of
+//      the live canvas (useDefinedVariables), so an override on an ancestor, a theme class
+//      or an inline style counts;
+//   2. the stylesheet declarations in `vars`, with var() chains followed, until the canvas
+//      answers or when there is no canvas or element (Studio without one).
+// The applied variable stays listed even when it fails, so the field never shows a value
+// that is not in its own list.
+export function pickerVariables(
+  vars: ProjectVariable[],
+  prop: string | undefined,
+  query: string,
+  context: { readonly computed?: ReadonlyMap<string, string> | undefined; readonly selectedBinding?: string | undefined } = {},
+): ProjectVariable[] {
+  const accepts = valuePredicateFor(prop);
+  const declared = accepts === undefined ? undefined : declaredValues(vars);
+  const typed = vars.filter((variable) => {
+    if (!varTypeAllowed(prop, variable.type)) {
+      return false;
+    }
+    if (accepts === undefined || declared === undefined) {
+      return true;
+    }
+    if (sameVariable(variable.binding, context.selectedBinding)) {
+      return true;
+    }
+    const computed = context.computed?.get(customPropertyOf(variable.binding) ?? '');
+    return computed === undefined ? variableAccepted(variable.value, (name) => declared.get(name), accepts) : accepts(computed);
+  });
   const sorted = [...typed].sort(
     (left, right) => left.collection.localeCompare(right.collection) || left.group.localeCompare(right.group) || left.name.localeCompare(right.name),
   );
@@ -285,6 +317,18 @@ export function PickerItem({
   );
 }
 
+// Declared values by name without `--`, first declaration winning: the stylesheet-side lookup.
+function declaredValues(vars: readonly ProjectVariable[]): ReadonlyMap<string, string> {
+  const values = new Map<string, string>();
+  for (const variable of vars) {
+    const name = (customPropertyOf(variable.binding) ?? '').slice(2);
+    if (name !== '' && !values.has(name)) {
+      values.set(name, variable.value);
+    }
+  }
+  return values;
+}
+
 // The custom property a binding names: `--dark-900` from `var(--dark-900)` or itself.
 export function customPropertyOf(binding: string): string | undefined {
   return /--[\w-]+/.exec(binding)?.[0];
@@ -297,10 +341,10 @@ export function customPropertyOf(binding: string): string | undefined {
 // offered there. Asked of the page once per opening, since only the page
 // knows which rules reach the element; undefined until it answers, or when
 // there is no canvas or selection to ask, which shows every variable.
-function useDefinedVariables(vars: readonly ProjectVariable[]): ReadonlySet<string> | undefined {
+function useDefinedVariables(vars: readonly ProjectVariable[]): ReadonlyMap<string, string> | undefined {
   const names = [...new Set(vars.flatMap((variable) => customPropertyOf(variable.binding) ?? []))].sort();
   const key = names.join(' ');
-  const [defined, setDefined] = useState<{ readonly key: string; readonly names: ReadonlySet<string> } | undefined>(undefined);
+  const [defined, setDefined] = useState<{ readonly key: string; readonly names: ReadonlyMap<string, string> } | undefined>(undefined);
   useEffect(() => {
     const host = getHost();
     const path = host.selectedId ? host.pathOf?.(host.selectedId) : undefined;
@@ -316,7 +360,16 @@ function useDefinedVariables(vars: readonly ProjectVariable[]): ReadonlySet<stri
     );
     void queryCanvas(path, [], [], asked).then((answer) => {
       if (live && answer !== undefined) {
-        setDefined({ key, names: new Set(asked.filter((name) => (answer.computedProps[name] ?? '').trim() !== '')) });
+        // The computed value is kept with the name: it is what a property's value predicate judges.
+        setDefined({
+          key,
+          names: new Map(
+            asked.flatMap((name): Array<[string, string]> => {
+              const value = (answer.computedProps[name] ?? '').trim();
+              return value === '' ? [] : [[name, value]];
+            }),
+          ),
+        });
       }
     });
     return () => {
