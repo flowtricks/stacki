@@ -2,6 +2,7 @@ import { inOwnedPopup, isTopPopupLayer } from './popupOwnership';
 import { useEffect, type RefObject } from 'react';
 import type { PopupProps, PopupActions } from './Popup';
 import { toRecord } from '../../shared/core/record';
+import { popupLayer } from './popupLayer';
 interface DismissOptions extends Pick<PopupProps, 'dismissible' | 'keepOnScroll' | 'anchor' | 'within' | 'onEscape'> {
   readonly active: boolean;
   readonly mode: 'modal' | 'popover';
@@ -75,12 +76,23 @@ export function popupIsTop(surface: RefObject<HTMLDivElement>['current']): boole
 }
 
 // Canvas focus and viewport movement can happen outside this document's click stream.
+//
+// A scroll closes a popover only when what it sits on moved. Closing on every scroll
+// anywhere closed menus nobody touched: the panel's own data landing above an open menu
+// makes Chromium's scroll anchoring adjust the scroller (a scroll event that keeps the
+// anchor exactly where it was), a shrinking panel clamps its scroll, and another panel
+// (the navigator following the selection) scrolls on its own. Each of those closed the
+// Clear menu a person had just opened. The anchor's position on screen is the test: a
+// person scrolling the panel moves it, those do not. A portaled popover with no anchor
+// has nothing to measure and keeps closing on any outside scroll.
 function usePopupEnvironment(surface: RefObject<HTMLDivElement>, options: DismissOptions, close: () => void): void {
-  const { active, dismissible = true, keepOnScroll = false, mode } = options;
+  const { active, anchor, dismissible = true, keepOnScroll = false, mode } = options;
   useEffect(() => {
     if (!active || !dismissible || mode === 'modal') {
       return undefined;
     }
+    const reference = scrollReference(surface.current ?? undefined, anchor);
+    const origin = reference === undefined ? undefined : screenPosition(reference);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const blur = (): void => {
       clearTimeout(timer);
@@ -92,6 +104,9 @@ function usePopupEnvironment(surface: RefObject<HTMLDivElement>, options: Dismis
     };
     const scroll = (event: Event): void => {
       if (keepOnScroll || (event.target instanceof window.Node && surface.current?.contains(event.target))) {
+        return;
+      }
+      if (reference !== undefined && origin !== undefined && !movedOnScreen(origin, screenPosition(reference))) {
         return;
       }
       if (popupIsTop(surface.current)) {
@@ -107,7 +122,40 @@ function usePopupEnvironment(surface: RefObject<HTMLDivElement>, options: Dismis
       window.removeEventListener('scroll', scroll, true);
       window.removeEventListener('resize', close);
     };
-  }, [active, close, dismissible, keepOnScroll, mode, surface]);
+  }, [active, anchor, close, dismissible, keepOnScroll, mode, surface]);
+}
+
+// Under half a pixel is the same place: subpixel layout can differ between two reads.
+const MOVED_PX_MIN = 0.5;
+
+interface ScreenPosition {
+  readonly left: number;
+  readonly top: number;
+}
+
+// What the popover sits on: its anchor, or, for one drawn inline (not portaled), the
+// element it is drawn in, which carries it along when the panel scrolls.
+function scrollReference(surface: HTMLElement | undefined, anchor: HTMLElement | undefined): HTMLElement | undefined {
+  if (anchor !== undefined) {
+    return anchor;
+  }
+  const parent = surface?.parentElement ?? undefined;
+  if (parent === undefined || parent === popupLayer() || parent instanceof window.HTMLDialogElement) {
+    return undefined;
+  }
+  return parent;
+}
+
+function screenPosition(element: HTMLElement): ScreenPosition {
+  const box = element.getBoundingClientRect();
+  return { left: box.left, top: box.top };
+}
+
+function movedOnScreen(before: ScreenPosition, after: ScreenPosition): boolean {
+  if (Math.abs(after.top - before.top) >= MOVED_PX_MIN) {
+    return true;
+  }
+  return Math.abs(after.left - before.left) >= MOVED_PX_MIN;
 }
 
 let pendingClickCleanup: (() => void) | undefined;

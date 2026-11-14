@@ -10,6 +10,9 @@
 //
 // Pressing the row the editor belongs to is the exception: that press is meant
 // for the row, whose own handler toggles the editor shut.
+//
+// A scroll closes it only when the row it sits on moved on screen; a scroll that
+// moves nothing (scroll anchoring, another panel) leaves it open.
 
 const fs = require('fs');
 const path = require('path');
@@ -182,11 +185,23 @@ const settle = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
   unregisterPicker();
   picker.remove();
 
+  // A scroll that leaves the row where it was (scroll anchoring after the panel's data
+  // lands, another panel scrolling) is no reason to close: nothing it sits on moved.
+  await act(async () => {
+    events.dispatchEvent(new dom.window.Event('scroll'));
+    await settle(0);
+  });
+  check('a scroll that moves nothing leaves the editor open', closes === 0, `${closes} closes`);
+
+  // A person scrolling the panel carries the row away from the editor: that closes it.
+  const rowBox = row.getBoundingClientRect();
+  row.getBoundingClientRect = () => ({ ...rowBox, top: rowBox.top - 40, bottom: rowBox.bottom - 40, y: rowBox.y - 40 });
   await act(async () => {
     events.dispatchEvent(new dom.window.Event('scroll'));
     await settle(0);
   });
   check('scrolling outside still closes the editor', closes === 1, `${closes} closes`);
+  delete row.getBoundingClientRect;
 
   // --- a press that never becomes a click --------------------------------------
   // Dragging away from a press, or a context menu: the swallow must not be left

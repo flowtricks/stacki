@@ -205,7 +205,13 @@ async function mountStylePanel(fixture) {
     /** Selects another element the way Desktop does: classes unknown first, reported a moment later through the bridge queue. */
     select(id) {
       render({ ...current, node: { id }, renderedClasses: [], renderedClassesKnown: false });
-      bridge.enqueue(`classes report for ${id}`, () => render({ ...current, node: { id }, renderedClasses: classesOf(page, id), renderedClassesKnown: true }));
+      // A report that lands after the selection moved on describes an element no longer
+      // selected: the app drops it (AppPanes keys the classes by the selection).
+      bridge.enqueue(`classes report for ${id}`, () => {
+        if (current.node.id === id) {
+          render({ ...current, renderedClasses: classesOf(page, id), renderedClassesKnown: true });
+        }
+      });
     },
     settle: () => settle(container),
     user: (label, action) => popovers.step({ label, cause: 'user' }, action, () => settle(container)),
