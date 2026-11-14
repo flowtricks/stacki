@@ -16,7 +16,7 @@ import { setCanvasInteraction, setCanvasSitePages } from './frameInteraction';
 import { isElement, isText } from './frameBasics';
 import { computeValues } from './frameColorProbe';
 import { queryAuthoredStyles } from './frameStyleSources';
-import { inspectWinningDeclarations } from './frameAuthoredStyles';
+import { inspectScopedProperties, inspectWinningDeclarations, WINNING_LIMITS, type WinningDeclaration } from './frameAuthoredStyles';
 import { list, pathText, text } from '../../shared/core/boundary';
 import { LIMITS } from '../../shared/core/limits';
 import { renderedPageImage, renderedPageType } from './framePageMetadata';
@@ -304,6 +304,9 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
       matched[selector] = undefined; // not a selector this engine accepts
     }
   }
+  const answered = answerDeclarations(els[0], winning, { scoped: data['scoped'] === true });
+  // The computed value of each scoped name, for the swatch and the validity filter.
+  const scopedComputed = answered.scoped !== undefined && styleHost ? computeProperties(styleHost, Object.keys(answered.scoped)) : {};
   window.parent.postMessage(
     {
       type: 'avb:query-result',
@@ -311,7 +314,7 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
       ready: mapped,
       found: styleHost !== undefined,
       computed,
-      computedProps,
+      computedProps: { ...computedProps, ...scopedComputed },
       ...(styleHost
         ? queryAuthoredStyles(
             styleHost,
@@ -321,13 +324,32 @@ const answerQuery = (data: Record<string, unknown>, id: number) => {
         : {}),
       // Which declaration of each asked custom property wins for the selected element, traced up its
       // parents (frameAuthoredStyles.ts): the picker's row text, never the computed value.
-      ...(winning.length > 0 && els[0] ? { winning: inspectWinningDeclarations(els[0], winning) } : {}),
+      ...(answered.winning === undefined ? {} : { winning: answered.winning }),
+      // The custom properties declared in scope of the element (its own rules and its parents'): the picker lists
+      // the ones the project's stylesheets do not hold, such as a component's own `--_mw`.
+      ...(answered.scoped === undefined ? {} : { scoped: answered.scoped }),
       identity: els[0] ? identityOf(els[0]) : undefined,
       matched,
     },
     '*',
   );
 };
+
+// The winning declarations of the asked custom properties, and the ones declared in scope. The scoped names
+// are traced too (bounded together), so a local row shows its winner as written like any other.
+type Declared = Readonly<Record<string, WinningDeclaration>>;
+function answerDeclarations(
+  element: Element | undefined,
+  asked: readonly string[],
+  { scoped: wantScoped }: { readonly scoped: boolean },
+): { readonly winning?: Declared; readonly scoped?: Declared } {
+  if (element === undefined || (asked.length === 0 && !wantScoped)) {
+    return {};
+  }
+  const scoped = wantScoped ? inspectScopedProperties(element) : undefined;
+  const names = [...new Set([...asked, ...Object.keys(scoped ?? {})])].slice(0, WINNING_LIMITS.namesMax);
+  return { winning: inspectWinningDeclarations(element, names), ...(scoped === undefined ? {} : { scoped }) };
+}
 
 // A text run inherits its rendered parent's style, including styles inside a
 // component that the source tree cannot see. This host is only for computed

@@ -498,3 +498,82 @@ function sheetFile(sheet: CSSStyleSheet | undefined): string | undefined {
     return file.slice(0, 1024);
   }
 }
+
+// ---- The custom properties declared in scope of an element ----
+
+/** The most scoped names one question reports. */
+export const SCOPED_NAMES_MAX = 512;
+
+/**
+ * Every custom property declared by a rule that reaches `element` or one of its parents (or by an inline
+ * style on them), with the NEAREST such declaration of each (the later of two at one distance; the traced winner, not this, is what a row shows): the variables a component keeps for itself
+ * (`--_mw` on its own class) as well as the project's. A rule reaches an element when its selector matches
+ * it, so a sibling's own variables are not reported. Conditions on the rule (media, supports) are not judged
+ * here; the caller keeps only names the element actually computes. A nested rule's relative selector is not
+ * matched. Read-only: nothing is written to any stylesheet.
+ */
+export function inspectScopedProperties(element: Element): Readonly<Record<string, WinningDeclaration>> {
+  const styles = authoredStyles(element);
+  if (styles === undefined) {
+    return {};
+  }
+  const chain: Element[] = [];
+  for (let node: Element | undefined = element; node !== undefined && chain.length < PRELOAD_LIMITS.domDepthMax; node = node.parentElement ?? undefined) {
+    chain.push(node);
+  }
+  const found: Record<string, WinningDeclaration> = {};
+  let count = 0;
+  for (const style of styles.declarations) {
+    const names = Array.from(style).filter((name) => name.startsWith('--'));
+    if (names.length === 0) {
+      continue;
+    }
+    const depth = reachDepth(style, chain);
+    if (depth < 0) {
+      continue;
+    }
+    const owner = chain[depth];
+    if (owner === undefined) {
+      continue;
+    }
+    const where = describeDeclaration(style);
+    for (const name of names) {
+      const known = found[name];
+      if (known === undefined) {
+        if (count >= SCOPED_NAMES_MAX) {
+          continue;
+        }
+        count += 1;
+      } else if (known.depth < depth) {
+        continue;
+      }
+      found[name] = {
+        expression: style.getPropertyValue(name).replace(/\s+/g, ' ').trim(),
+        selector: where.selector,
+        ...(where.file === undefined ? {} : { file: where.file }),
+        depth,
+        ancestor: elementLabel(owner),
+      };
+    }
+  }
+  return found;
+}
+
+// How many parents up the first element is that this declaration block reaches; -1 when none.
+function reachDepth(style: CSSStyleDeclaration, chain: readonly Element[]): number {
+  const rule = style.parentRule;
+  if (rule === null) {
+    return chain.findIndex((node) => node instanceof HTMLElement && node.style === style);
+  }
+  const owner = rule instanceof CSSStyleRule ? rule : rule.parentRule instanceof CSSStyleRule ? rule.parentRule : undefined;
+  if (owner === undefined) {
+    return -1;
+  }
+  return chain.findIndex((node) => {
+    try {
+      return node.matches(owner.selectorText);
+    } catch {
+      return false;
+    }
+  });
+}

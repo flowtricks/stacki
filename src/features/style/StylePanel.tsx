@@ -63,7 +63,9 @@ export default function StylePanel(props: StylePanelProps) {
   const translate = useTranslate();
   const astroFiles = useStyleFiles(props.project?.path, props.openFilePath, readAstroStyleFiles);
   const lengthUnit = useStableLengthUnit(props.lengthUnit ?? PX_LENGTHS);
-  const host = hostState(props, files.files, astroFiles.files, lengthUnit);
+  const renderedClasses = useStableList(props.renderedClasses ?? NO_PATHS);
+  const projectClasses = useStableList(props.projectClasses ?? NO_PATHS);
+  const host = hostState(props, { files: files.files, astroFiles: astroFiles.files, lengthUnit, renderedClasses, projectClasses });
   // Children read the bridge during their own effects, which run before the
   // parent's effects. Publishing here ensures their first read is current.
   setHost(host);
@@ -100,10 +102,34 @@ function useStableLengthUnit(next: LengthUnit): LengthUnit {
   return held.current;
 }
 
-function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleFiles, lengthUnit: LengthUnit): HostState {
+// The same list, by content, keeps the array it had. The host compares every field by
+// identity (setHost), and a copy made on each render woke every host subscriber on every
+// render of the app around the panel: each computed-value hook in every field re-rendered
+// on a hover elsewhere in the app.
+function useStableList(next: readonly string[]): string[] {
+  const held = useRef<string[]>([...next]);
+  const same = held.current.length === next.length && held.current.every((item, index) => item === next[index]);
+  if (!same) {
+    held.current = [...next];
+  }
+  return held.current;
+}
+
+const NO_NODES: HostState['nodes'] = [];
+
+interface HostInputs {
+  readonly files: StyleFiles;
+  readonly astroFiles: StyleFiles;
+  readonly lengthUnit: LengthUnit;
+  readonly renderedClasses: string[];
+  readonly projectClasses: string[];
+}
+
+function hostState(props: StylePanelProps, inputs: HostInputs): HostState {
+  const { files, astroFiles, lengthUnit } = inputs;
   return {
     projectPath: props.project?.path,
-    nodes: props.model?.nodes ?? [],
+    nodes: props.model?.nodes ?? NO_NODES,
     selectedId: props.node?.id,
     pathOf: props.pathOf,
     device: props.device ?? 'desktop',
@@ -125,8 +151,8 @@ function hostState(props: StylePanelProps, files: StyleFiles, astroFiles: StyleF
     pageComponentPaths: props.pageComponentPaths ?? NO_PATHS,
     renderedClassesKnown: props.renderedClassesKnown ?? true,
     onSpacingHover: props.onSpacingHover,
-    renderedClasses: [...(props.renderedClasses ?? [])],
-    projectClasses: [...(props.projectClasses ?? [])],
+    renderedClasses: inputs.renderedClasses,
+    projectClasses: inputs.projectClasses,
     historyTick: props.historyTick ?? 0,
     pseudoRequest: props.pseudoRequest,
     pseudoRows: props.pseudoRows === true,

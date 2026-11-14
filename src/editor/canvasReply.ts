@@ -35,6 +35,7 @@ const reply = object({
   authoredProps: optional(dictionary(optional(text))),
   inheritedSources: optional(dictionary(parseStyleSource)),
   winning: optional(boundedWinning),
+  scoped: optional(boundedWinning),
 });
 export type CanvasReply = ReturnType<typeof reply>;
 // An answer's maps are the reply's own: a value the page could not resolve
@@ -51,6 +52,8 @@ export type CanvasAnswer = {
   readonly inheritedSources: NonNullable<CanvasReply['inheritedSources']>;
   /** The winning declaration of each custom property asked about with `winning`, as written. */
   readonly winning: NonNullable<CanvasReply['winning']>;
+  /** The custom properties declared in scope of the element, nearest declaration of each. */
+  readonly scoped: NonNullable<CanvasReply['scoped']>;
 };
 
 export function parseCanvasReply(input: unknown): Result<CanvasReply> {

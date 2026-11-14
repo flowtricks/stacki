@@ -72,6 +72,22 @@ const PAGE = {
       '--primary-family': win('var(--font-inter, system-ui, sans-serif)', ':root'),
     },
   },
+  // Inside a component: its own `--_mw` on .card (nearest) and `--_gap` on .section (one parent up); a media-gated one that does not compute.
+  card: {
+    computed: { ...BASE_COMPUTED, '--background': '#f3f3f3', '--_mw': '40rem', '--_gap': '2rem' },
+    winning: { '--_mw': win('40rem', '.card'), '--_gap': win('calc(1rem * 2)', '.section', '/project/src/components/Section.astro', 1) },
+    scoped: {
+      '--_gap': win('calc(1rem * 2)', '.section', '/project/src/components/Section.astro', 1),
+      '--_mw': win('40rem', '.card'),
+      '--_gated': win('1px', '.card @media'),
+    },
+  },
+  // A sibling component: it sees none of the card's locals.
+  sibling: {
+    computed: { ...BASE_COMPUTED, '--background': '#f3f3f3', '--_other': '9px' },
+    winning: {},
+    scoped: { '--_other': win('9px', '.sibling') },
+  },
   // A literal winner that disagrees with what the element computes to: a condition the page could not evaluate.
   conflict: {
     computed: { ...BASE_COMPUTED, '--background': '#f3f3f3' },
@@ -110,7 +126,9 @@ const PAGE = {
               await globalThis.__gate;
               const winning = {};
               for (const name of context?.winning ?? []) if (page.winning[name] !== undefined) winning[name] = page.winning[name];
-              return { computedProps: Object.fromEntries(props.map((name) => [name, page.computed[name] ?? ''])), winning };
+              const scoped = context?.scoped === true ? (page.scoped ?? {}) : {};
+              const computedProps = Object.fromEntries([...props, ...Object.keys(scoped)].map((name) => [name, page.computed[name] ?? '']));
+              return { computedProps, winning, scoped };
             };
             export const onCanvasReady = (listener) => { listeners.add(listener); return () => listeners.delete(listener); };
             export const noteCanvasReady = () => {};
@@ -128,6 +146,7 @@ const PAGE = {
             export const onHostChange = () => () => {};
             export const setHost = () => {};
             export const findNode = () => undefined;
+            export const walkNodes = () => {};
           `,
           loader: 'js',
         }),
@@ -175,7 +194,7 @@ const PAGE = {
     type: /family/.test(name) ? 'FontFamily' : /^(brand|light|literal|mix)/.test(name) ? 'Color' : 'String',
   }));
   const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
-  const open = async (selected) => {
+  const open = async (selected, extra = {}) => {
     globalThis.__selected = selected;
     const anchor = document.createElement('button');
     document.body.appendChild(anchor);
@@ -183,7 +202,7 @@ const PAGE = {
     document.body.appendChild(host);
     const root = createRoot(host);
     await act(async () => {
-      root.render(React.createElement(VariablePicker, { anchor, vars: variables, loading: false, prop: '--x', onPick() {}, onClose() {} }));
+      root.render(React.createElement(VariablePicker, { anchor, vars: variables, loading: false, prop: '--x', ...extra, onPick() {}, onClose() {} }));
     });
     const row = (name) => document.querySelector(`.embed-editor_varpicker-item[data-binding="var(--${name})"]`);
     const text = (name) => row(name)?.querySelector('.embed-editor_varpicker-item-value')?.textContent;
@@ -270,6 +289,42 @@ const PAGE = {
     eq('the fresh answer keeps it', again.text('background'), 'var(--brand)');
     await again.close();
     globalThis.__gate = undefined;
+  }
+
+  // --- Local scopes: the element's own and its parents' variables, grouped by selector, nearest first.
+  {
+    const view = await open('card');
+    await settle();
+    const rows = [...document.querySelectorAll('.embed-editor_varpicker-item')].map((row) => row.dataset.binding.slice(6, -1));
+    check('a component local is listed', rows.includes('_mw'), rows.join());
+    check('a parent scope local is listed', rows.includes('_gap'), rows.join());
+    check('a local that does not compute here is not listed', !rows.includes('_gated'), rows.join());
+    check('the nearest scope comes first', rows.indexOf('_mw') < rows.indexOf('_gap'), rows.join());
+    check('locals come before the project variables', rows.indexOf('_gap') < rows.indexOf('background'), rows.join());
+    const headings = [...document.querySelectorAll('.embed-editor_varpicker-group-name, .embed-editor_varpicker-family-name')].map((node) => node.textContent);
+    check(
+      'the scope selectors name the groups, nearest first',
+      headings.indexOf('.card') >= 0 && headings.indexOf('.card') < headings.indexOf('.section'),
+      headings.join(' | '),
+    );
+    eq('a local row shows its written text', view.text('_gap'), 'calc(1rem * 2)');
+    await view.close();
+  }
+  {
+    const view = await open('sibling');
+    await settle();
+    const rows = [...document.querySelectorAll('.embed-editor_varpicker-item')].map((row) => row.dataset.binding.slice(6, -1));
+    check('a sibling sees its own local', rows.includes('_other'), rows.join());
+    check("and not the card's", !rows.includes('_mw') && !rows.includes('_gap'), rows.join());
+    await view.close();
+  }
+  {
+    // The applied local stays listed and selected under a filter it fails, whichever scope declares it.
+    const view = await open('card', { prop: 'font-weight', selectedBinding: 'var(--_gap)' });
+    await settle();
+    const marked = document.querySelector('.embed-editor_varpicker-item.is-selected');
+    check('the applied local is listed and selected', marked?.dataset.binding === 'var(--_gap)', marked?.dataset.binding);
+    await view.close();
   }
 
   if (failures.length > 0) {

@@ -24,6 +24,7 @@ const valid = {
   authoredProps: { 'font-size': 'var(--heading-size)' },
   inheritedSources: { 'font-size': { label: '.heading', path: '0' } },
   winning: { '--background': { expression: 'var(--brand)', selector: '.theme-dark', file: '/src/theme.css', depth: 1, ancestor: '.theme-dark' } },
+  scoped: { '--_mw': { expression: '40rem', selector: '.card', depth: 0, ancestor: '.card' } },
 };
 assert.equal(parseCanvasReply(valid).ok, true);
 assert.equal(parseCanvasReply({ ...valid, identity: { ...valid.identity, id: undefined } }).ok, true);
@@ -56,6 +57,8 @@ for (const input of [
   { ...valid, authoredProps: { 'font-size': 16 } },
   { ...valid, winning: { '--a': { expression: 1 } } },
   { ...valid, winning: 'var(--a)' },
+  { ...valid, scoped: { '--a': { selector: '.a' } } },
+  { ...valid, scoped: [] },
   { ...valid, winning: { '--a': { ...valid.winning['--background'], depth: -1 } } },
   { ...valid, winning: Object.fromEntries(Array.from({ length: 513 }, (_, index) => [`--n${index}`, valid.winning['--background']])) },
   { ...valid, authoredProps: { color: 'x'.repeat(BOUNDARY_LIMITS.textLengthMax + 1) } },
@@ -83,6 +86,7 @@ async function main() {
     authoredProps: valid.authoredProps,
     inheritedSources: valid.inheritedSources,
     winning: valid.winning,
+    scoped: valid.scoped,
   });
 
   const cancelled = canvas.queryCanvas('1');

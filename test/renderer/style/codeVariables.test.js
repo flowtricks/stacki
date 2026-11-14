@@ -67,7 +67,7 @@ before(async () => {
     'code-variables',
     `
     export { CodeEditor } from './src/features/style/components/CssCodeEditor';
-    export { codeTypedVariableAt } from './src/features/style/model/codeVariableScope';
+    export { codeTypedVariableAt, codeSlotAt } from './src/features/style/model/codeVariableScope';
     export { EditorView } from '@codemirror/view';
     export { registerPopupLayer } from './src/ui/popupOwnership';
   `,
@@ -177,6 +177,31 @@ test('a reference is typed anywhere in a value, and only in a declaration value 
   assert.equal(codeTypedVariableAt(`${selectorText} {}`, selectorText.length, declarations), undefined, 'a selector is not a declaration');
   assert.throws(() => codeTypedVariableAt('x', -1, value), /the caret is not before the text/);
   assert.throws(() => codeTypedVariableAt('x', 0.5, value), /the caret is a whole offset/);
+});
+
+test('the slot a pick would land in is the declaration value around the typed reference', () => {
+  const { codeTypedVariableAt, codeSlotAt } = editorModule;
+  const value = { kind: 'value', prop: 'color' };
+  const declarations = { kind: 'declarations' };
+  const slotIn = (text, scope, caret = text.length) => {
+    const typed = codeTypedVariableAt(text, caret, scope);
+    return typed === undefined ? undefined : codeSlotAt(text, typed, scope);
+  };
+  assert.deepEqual(slotIn('color-mix(in srgb, red --', value), { before: 'color-mix(in srgb, red ', after: '' }, 'inside a function, in a value editor');
+  assert.deepEqual(slotIn('--', value), { before: '', after: '' }, 'the whole value');
+  assert.deepEqual(
+    slotIn('.a {\n  color: color-mix(in srgb, red --', declarations),
+    { before: 'color-mix(in srgb, red ', after: '' },
+    'only the declaration value, not the rule around it',
+  );
+  const text = '.a { width: calc(2rem * --); color: red; }';
+  assert.deepEqual(slotIn(text, declarations, text.indexOf('--)') + 2), { before: 'calc(2rem * ', after: ')' }, 'what follows up to the semicolon');
+  assert.equal(slotIn('.a { --gap: --', declarations), undefined, 'a custom property has no grammar to judge by');
+});
+
+test('the code editors hand the chooser the slot a pick lands in', () => {
+  const source = fs.readFileSync(repoPath('src/features/style/components/CodeVariables.tsx'), 'utf8');
+  assert.match(source, /\.\.\.pickerSlot\(scope, chooser, viewRef\.current\)/, 'a typed reference is judged at its place in the value');
 });
 
 test('typing -- in a value editor opens the chooser, filtered to the property, and Enter completes it', async () => {

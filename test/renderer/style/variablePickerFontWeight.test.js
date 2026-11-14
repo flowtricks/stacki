@@ -162,7 +162,7 @@ const COMPUTED = {
               const computed = globalThis.__canvas?.[elementPath];
               if (computed === undefined) return undefined;
               await globalThis.__canvasGate;
-              return { computedProps: Object.fromEntries(props.map((name) => [name, computed[name] ?? ''])), winning: globalThis.__winning?.[elementPath] ?? {} };
+              return { computedProps: Object.fromEntries(props.map((name) => [name, computed[name] ?? ''])), winning: globalThis.__winning?.[elementPath] ?? {}, scoped: {} };
             };
             const ready = new Set(); globalThis.__ready = () => ready.forEach((listener) => listener());
             export const onCanvasReady = (listener) => { ready.add(listener); return () => ready.delete(listener); };
@@ -181,6 +181,7 @@ const COMPUTED = {
             export const onHostChange = () => () => {};
             export const setHost = () => {};
             export const findNode = () => undefined;
+            export const walkNodes = () => {};
           `,
           loader: 'js',
         }),

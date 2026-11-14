@@ -14,6 +14,7 @@ import { useGrouped } from './pickerOptions';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import Popup from '../../ui/Popup';
 import { type ProjectVariable } from './model/webflow';
+import { varKind } from './model/projectResources';
 import { panelBox, panelSpan } from './model/panelBox';
 import { CheckIcon, VariableTypeIcon, ChevronRightIcon } from './VariableIcons';
 import { varTypeAllowed, byCollection } from './sharedVars';
@@ -119,8 +120,12 @@ export function VariablePicker({
   // here do not hold (a local custom property of the element or its component) gets a row of its
   // own, first, labelled as this element's, with the value the page computes for it.
   const localLabel = translate('style.variablePicker.localScope');
-  const listed = useMemo(() => withAppliedVariable(vars, selectedBinding, localLabel), [vars, selectedBinding, localLabel]);
-  const answer = useDefinedVariables(listed);
+  const withApplied = useMemo(() => withAppliedVariable(vars, selectedBinding, localLabel), [vars, selectedBinding, localLabel]);
+  const answer = useDefinedVariables(withApplied);
+  // What the page says is declared in scope of the element (its own rules and its parents'), beyond what the
+  // stylesheets read here hold: a component's own `--_mw`, grouped under the selector that declares it.
+  const listed = useMemo(() => withScopedVariables(withApplied, answer, localLabel), [withApplied, answer, localLabel]);
+  const scopeDepth = useMemo(() => scopeDepths(answer), [answer]);
   const defined = answer?.names;
   const winning = answer?.winning;
   const [grouped, setGrouped] = useGrouped();
@@ -164,10 +169,10 @@ export function VariablePicker({
       }
       return { ...variable, value: written.expression };
     }
-    // No traced declaration: a local row has no stylesheet text, and shows none rather than a computed value.
-    return variable.file === LOCAL_FILE ? { ...variable, value: '' } : variable;
+    // No traced declaration: the row's own source text (a local row carries its declaration's text, or none).
+    return variable;
   };
-  const context = { computed: defined, selectedBinding, slot };
+  const context = { computed: defined, selectedBinding, slot, scopeDepth };
   // What the picker offers, before any search: the variables valid for the property at the slot, or
   // with "show all" every one the element can see. Group structure is judged on this list, so a
   // search narrows rows without dissolving a group.
@@ -419,6 +424,8 @@ export function pickerVariables(
     readonly supports?: Supports | undefined;
     /** List every variable, bypassing the validity filter and the curated narrowing. */
     readonly showAll?: boolean | undefined;
+    /** How many parents up each local scope's selector is declared; nearer scopes sort first. */
+    readonly scopeDepth?: ReadonlyMap<string, number> | undefined;
   } = {},
 ): ProjectVariable[] {
   const declared = declaredValues(vars);
@@ -444,9 +451,11 @@ export function pickerVariables(
             ),
           ]
         : vars.filter((variable) => legacyAllowed(variable, prop, context, computedOf));
+  const depthOf = (variable: ProjectVariable): number => (variable.group === '' ? -1 : (context.scopeDepth?.get(variable.group) ?? 0));
   const sorted = [...typed].sort(
     (left, right) =>
       Number(right.file === LOCAL_FILE) - Number(left.file === LOCAL_FILE) ||
+      (left.file === LOCAL_FILE && right.file === LOCAL_FILE ? depthOf(left) - depthOf(right) : 0) ||
       left.collection.localeCompare(right.collection) ||
       left.group.localeCompare(right.group) ||
       left.name.localeCompare(right.name),
@@ -818,6 +827,47 @@ function fileLabel(file: string): string {
   return file.split('/').filter(Boolean).pop() ?? file;
 }
 
+// The variables declared in scope of the element that the stylesheets read here do not hold, as rows of
+// their own: the collection is the local one, the group the declaring selector. Only names the element
+// actually computes are listed (a rule behind a media query that does not apply is not).
+export function withScopedVariables(vars: ProjectVariable[], answer: DefinedAnswer | undefined, localLabel: string): ProjectVariable[] {
+  if (answer === undefined || answer.scoped.size === 0) {
+    return vars;
+  }
+  const known = new Set(vars.flatMap((variable) => customPropertyOf(variable.binding) ?? []));
+  const added: ProjectVariable[] = [];
+  for (const [name, declaration] of answer.scoped) {
+    if (known.has(name) || !answer.names.has(name) || added.length >= SCOPED_ROWS_MAX) {
+      continue;
+    }
+    added.push({
+      collection: localLabel,
+      group: declaration.selector,
+      name: name.slice(2),
+      value: declaration.expression,
+      binding: `var(${name})`,
+      type: varKind(name, answer.names.get(name) ?? declaration.expression),
+      file: LOCAL_FILE,
+    });
+  }
+  return added.length === 0 ? vars : [...added, ...vars];
+}
+
+// The most rows scoped declarations add: the canvas reports no more than this many names either.
+const SCOPED_ROWS_MAX = 512;
+
+// How far up each local scope's selector is declared, for the order of the scope groups.
+function scopeDepths(answer: DefinedAnswer | undefined): ReadonlyMap<string, number> {
+  const depths = new Map<string, number>();
+  for (const declaration of answer?.scoped.values() ?? []) {
+    const known = depths.get(declaration.selector);
+    if (known === undefined || declaration.depth < known) {
+      depths.set(declaration.selector, declaration.depth);
+    }
+  }
+  return depths;
+}
+
 // Marks the row made for an applied variable no stylesheet read here declares.
 export const LOCAL_FILE = '\u0000local';
 
@@ -895,16 +945,18 @@ function useDefinedVariables(vars: readonly ProjectVariable[]): DefinedAnswer | 
       'Only custom properties are asked about',
     );
     // Computed values for the swatch and validity; the winning declaration, traced up the parents, for the text.
-    void queryCanvas(path, [], [], asked, { winning: asked.slice(0, WINNING_NAMES_MAX) }).then((reply) => {
+    void queryCanvas(path, [], [], asked, { winning: asked.slice(0, WINNING_NAMES_MAX), scoped: true }).then((reply) => {
       if (live && reply !== undefined) {
         const answer: DefinedAnswer = {
+          // Everything the page computed: the names asked, and the scoped ones it added.
           names: new Map(
-            asked.flatMap((name): Array<[string, string]> => {
-              const value = (reply.computedProps[name] ?? '').trim();
-              return value === '' ? [] : [[name, value]];
+            Object.entries(reply.computedProps).flatMap(([name, text]): Array<[string, string]> => {
+              const value = (text ?? '').trim();
+              return name.startsWith('--') && value !== '' ? [[name, value]] : [];
             }),
           ),
           winning: new Map(Object.entries(reply.winning)),
+          scoped: new Map(Object.entries(reply.scoped)),
         };
         rememberAnswer(cacheKey, answer);
         setFresh({ key: cacheKey, answer });

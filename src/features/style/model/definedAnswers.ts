@@ -16,6 +16,8 @@ export interface DefinedAnswer {
   readonly names: ReadonlyMap<string, string>;
   /** The winning declaration by name, as written; names the page could not trace are absent. */
   readonly winning: ReadonlyMap<string, WinningDeclarationText>;
+  /** The custom properties declared in scope of the element (its rules' and its parents'), nearest declaration of each. */
+  readonly scoped: ReadonlyMap<string, WinningDeclarationText>;
 }
 
 // Elements kept; the picker asks about one at a time, so a handful is every recent selection.

@@ -201,6 +201,8 @@ async function mountStylePanel(fixture) {
     get props() {
       return current;
     },
+    /** The host state the panel published, as its subscribers read it. */
+    host: () => env.getHost(),
     rerender: (patch) => render({ ...current, ...patch }),
     /** Selects another element the way Desktop does: classes unknown first, reported a moment later through the bridge queue. */
     select(id) {

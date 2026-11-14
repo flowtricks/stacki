@@ -1,5 +1,6 @@
 import { assert } from '../../../../shared/core/assert';
 import { typedVariableAt, type TypedVariable } from './typedVariable';
+import { SLOT_MARK, slotOfMarked, type ValueSlot } from '../../../../shared/properties/valueSlot';
 
 // Where a code editor's text holds CSS values, so `--` can offer the
 // project's variables there and only there.
@@ -87,4 +88,34 @@ function declarationPropertyAt(text: string, typed: TypedVariable): string | und
     return property;
   }
   return undefined;
+}
+
+/**
+ * Where a pick would land in the property's value, so the picker judges each variable at that place
+ * (shared/properties/valueSlot.ts): `10%` is no colour on its own and a valid one inside `color-mix()`.
+ * The value is the whole text of a `value` editor, or the text after the colon up to the declaration's
+ * `;` or `}` in a `declarations` editor. A custom property's value has no grammar to judge by, and
+ * answers undefined.
+ */
+export function codeSlotAt(text: string, variable: CodeTypedVariable, scope: CodeVariableScope): ValueSlot | undefined {
+  const { start, end } = variable.typed;
+  assert(start <= end, 'codeSlotAt: the fragment does not end before it starts');
+  assert(end <= text.length, 'codeSlotAt: the fragment lies inside the text');
+  if (variable.prop === undefined) {
+    return undefined;
+  }
+  if (scope.kind === 'value') {
+    return slotOfMarked(`${text.slice(0, start)}${SLOT_MARK}${text.slice(end)}`);
+  }
+  const before = text.slice(Math.max(0, start - DECLARATION_CHARS_MAX), start);
+  const opener = Math.max(before.lastIndexOf(';'), before.lastIndexOf('{'), before.lastIndexOf('}'));
+  const declaration = before.slice(opener + 1);
+  const colon = declaration.indexOf(':');
+  if (colon < 0) {
+    return undefined;
+  }
+  const ahead = text.slice(end, end + DECLARATION_CHARS_MAX);
+  const closer = ahead.search(/[;}]/);
+  const valueAfter = closer < 0 ? ahead : ahead.slice(0, closer);
+  return slotOfMarked(`${declaration.slice(colon + 1).trimStart()}${SLOT_MARK}${valueAfter}`);
 }

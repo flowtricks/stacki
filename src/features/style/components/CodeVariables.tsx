@@ -4,7 +4,8 @@ import type { MutableRefObject, ReactNode, RefObject } from 'react';
 import type { Extension } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 import { assert } from '../../../../shared/core/assert';
-import { type CodeTypedVariable, type CodeVariableScope } from '../model/codeVariableScope';
+import type { ValueSlot } from '../../../../shared/properties/valueSlot';
+import { codeSlotAt, type CodeTypedVariable, type CodeVariableScope } from '../model/codeVariableScope';
 import { useSharedVars } from '../sharedVars';
 import { ConnectDot } from '../VariableConnect';
 import { VariablePicker, type PickerNavigation } from '../VariablePicker';
@@ -89,6 +90,7 @@ export function useCodeVariables(scope: CodeVariableScope, access: { readonly re
           vars={vars}
           loading={loading}
           {...pickerProp(scope, chooser)}
+          {...pickerSlot(scope, chooser, viewRef.current)}
           {...(chooser.kind === 'typing' ? { typing: { query: chooser.typed.typed.query, navigationRef } } : bindSelection(viewRef.current))}
           onPick={chooser.kind === 'typing' ? pickTyped : pickBind}
           onClose={() => setChooser(CLOSED)}
@@ -189,4 +191,13 @@ function pickerProp(scope: CodeVariableScope, chooser: ChooserState): { readonly
 function bindSelection(view: EditorView | undefined): { readonly selectedBinding?: string } {
   const text = view?.state.doc.toString().trim() ?? '';
   return /^var\(\s*--[A-Za-z0-9_-]+[^)]*\)$/i.test(text) ? { selectedBinding: text } : {};
+}
+
+// Where the typed reference sits in the declaration's value, so the chooser judges each variable there.
+function pickerSlot(scope: CodeVariableScope, chooser: ChooserState, view: EditorView | undefined): { readonly slot?: ValueSlot } {
+  if (chooser.kind !== 'typing' || view === undefined) {
+    return {};
+  }
+  const slot = codeSlotAt(view.state.doc.toString(), chooser.typed, scope);
+  return slot === undefined ? {} : { slot };
 }

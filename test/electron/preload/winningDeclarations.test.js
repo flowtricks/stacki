@@ -16,6 +16,7 @@ async function main() {
   const output = await require('esbuild').build({
     stdin: {
       contents: `export { inspectWinningDeclarations } from './electron/preload/frameAuthoredStyles';
+        export { inspectScopedProperties } from './electron/preload/frameAuthoredStyles';
         export { authoredStyleMutation } from './electron/preload/frameAuthoredStyles';`,
       resolveDir: ROOT,
       loader: 'ts',
@@ -44,11 +45,16 @@ async function main() {
     @media (min-width: 99999px) { :root { --cond: never; } }
     @layer first { .layered { --lay: first !important; } }
     @layer second { .layered { --lay: second !important; } }
+    .card { --_mw: 40rem; --_gap: 1rem; }
+    .section .card { --_mw: 50rem; }
+    .section { --_section: 3px; }
+    .sibling { --_other: 9px; }
     .spaced { --spaced:   calc( 1rem   +  2px ); }
   </style>
   <div class="theme-dark" style="--inline: 2px; --background: var(--brand)">
     <div id="inside"><span id="el" class="tile important layered spaced">x</span></div>
   </div>
+  <div class="section"><div id="card" class="card"><b id="in-card">c</b></div><div id="sib" class="sibling">s</div></div>
   <div id="outside">y</div>`;
   const exercise = `(() => {
     const el = document.getElementById('el');
@@ -65,13 +71,15 @@ async function main() {
     observer.disconnect();
     const after = Array.from(document.styleSheets).map((sheet) => Array.from(sheet.cssRules).map((rule) => rule.cssText).join(''));
     const inlineAfter = el.parentElement.parentElement.getAttribute('style');
+    const scopedCard = reader.inspectScopedProperties(document.getElementById('in-card'));
+    const scopedSibling = reader.inspectScopedProperties(document.getElementById('sib'));
     const many = reader.inspectWinningDeclarations(el, Array.from({ length: 513 }, (_, i) => '--n' + i));
     const sheet = document.styleSheets[0];
     Object.defineProperty(sheet, 'cssRules', { configurable: true, get() { throw new DOMException('Cross origin', 'SecurityError'); } });
     const inaccessible = reader.inspectWinningDeclarations(el, names);
     delete sheet.cssRules;
     const again = reader.inspectWinningDeclarations(el, ['--background']);
-    return { inside, sibling, ignored, before, after, inlineBefore, inlineAfter, many, inaccessible, again,
+    return { scopedCard, scopedSibling, inside, sibling, ignored, before, after, inlineBefore, inlineAfter, many, inaccessible, again,
       computedBackground: getComputedStyle(el).getPropertyValue('--background') };
   })()`;
   fs.writeFileSync(
@@ -133,6 +141,16 @@ async function main() {
   assert.equal(inside['--inline'].selector, 'style');
   assert.equal(inside['--inline'].ancestor, '.theme-dark');
   assert.equal(inside['--missing'], undefined, 'an undeclared name is not answered');
+  // Scoped properties: the element's own rules and its parents', nearest declaration, never a sibling's.
+  assert.equal(result.scopedCard['--_mw'].expression, '50rem', 'the more specific rule at the same scope is declared last');
+  assert.equal(result.scopedCard['--_mw'].depth, 1, 'declared on the card, one parent above the element');
+  assert.equal(result.scopedCard['--_mw'].ancestor, '#card', 'an id labels the element');
+  assert.equal(result.scopedCard['--_gap'].expression, '1rem');
+  assert.equal(result.scopedCard['--_section'].depth, 2);
+  assert.equal(result.scopedCard['--_section'].selector, '.section');
+  assert.equal(result.scopedCard['--_other'], undefined, "a sibling's own variable is not in scope");
+  assert.equal(result.scopedSibling['--_other'].expression, '9px');
+  assert.equal(result.scopedSibling['--_mw'], undefined, "the card's variables are not in the sibling's scope");
   // Probes leave nothing behind and do not look like an edit.
   assert.deepEqual(result.before, result.after, 'stylesheet declarations are restored');
   assert.equal(result.inlineBefore, result.inlineAfter, 'inline CSS is unchanged');

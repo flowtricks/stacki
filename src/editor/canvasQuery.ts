@@ -13,6 +13,7 @@ interface QueryMessage {
   readonly pageMetadata?: boolean;
   readonly pageText?: boolean;
   readonly winning?: readonly string[];
+  readonly scoped?: boolean;
 }
 interface PendingQuery {
   readonly resolve: (answer: CanvasAnswer | undefined) => void;
@@ -99,6 +100,8 @@ export function queryCanvas(
     readonly pageText?: boolean;
     /** Custom properties whose winning declaration is wanted, traced up the element's parents. */
     readonly winning?: readonly string[];
+    /** Also report the custom properties declared in scope of the element (its rules' and its parents'). */
+    readonly scoped?: boolean;
   } = {},
 ): Promise<CanvasAnswer | undefined> {
   if (!frame || typeof path !== 'string') {
@@ -197,6 +200,7 @@ export function receiveCanvasReply(input: unknown): void {
           authoredProps: data.authoredProps || {},
           inheritedSources: data.inheritedSources || {},
           winning: data.winning || {},
+          scoped: data.scoped || {},
           ...(data.pageImage === undefined ? {} : { pageImage: data.pageImage }),
           ...(data.pageType === undefined ? {} : { pageType: data.pageType }),
           ...(data.pageText === undefined ? {} : { pageText: data.pageText }),
