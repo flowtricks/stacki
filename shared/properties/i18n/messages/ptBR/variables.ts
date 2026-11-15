@@ -72,6 +72,7 @@ export const messages = {
   'variables.settings.hideFromSuggestions': 'Ocultar das sugestões de variáveis',
   'variables.settings.menu': 'Configurações da variável',
   'variables.settings.open': 'Configurações de {name}',
+  'variables.settings.showInSuggestions': 'Mostrar nas sugestões de variáveis',
   'variables.title': 'Variáveis',
   'variables.type.color': 'Cor',
   'variables.type.number': 'Número',

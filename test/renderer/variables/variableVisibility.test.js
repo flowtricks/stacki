@@ -4,16 +4,19 @@
 //   node test/renderer/variables/variableVisibility.test.js
 //
 // Method: mount the real VariablesView over a throwaway fixture project (never a user's project) whose metadata
-// transport is the real main-process reader and writer, so the file on disk is what is asserted. Hover and focus are
-// dispatched as events (no pointer, no timers). Steps: the icon is absent until the name is hovered or focused and its
-// space is reserved either way; clicking it opens the shared menu and does not start a rename; choosing the row writes
-// the file and draws the indicator; choosing it again shows the variable; rename still opens from a click; two quick
-// toggles both land; a corrupt file is reported and never written over; no file exists before the first hide.
+// transport is the real main-process reader and writer, so the file on disk is what is asserted. Events are dispatched
+// (no real pointer) and waits poll observable state (test/helpers/waitFor.js). Steps: the gear's visibility is the
+// stylesheet's alone (:hover, :focus-visible, aria-expanded) with no script flag; the gear opens a popup (role dialog,
+// not a menu); an outside press (repeated), Escape, a second press on the gear, another row's gear and choosing the
+// action each close it, one popup at a time; hovering, focusing, opening and closing write nothing; choosing writes
+// the file exactly once (a double click too) and the inverse action shows the variable again; the keyboard path;
+// rename still opens from a click; two quick writes both land; a corrupt file is reported and never written over.
 
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const failures = [];
 let checked = 0;
@@ -75,6 +78,7 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   global.HTMLInputElement = dom.window.HTMLInputElement;
 
   const toasts = [];
+  const writes = [];
   dom.window.avb = {
     cssVariables: async () => cssVars.readVariables(directory),
     addCssVariables: async () => ({ ok: true }),
@@ -92,7 +96,10 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
     readStyleFile: async () => ({ css: fs.readFileSync(file, 'utf8') }),
     // The project settings transport, backed by the real main-process reader and writer.
     projectMetadata: async ({ kind }) => metadata.readProjectMetadata(directory, kind),
-    writeProjectMetadata: async ({ write }) => metadata.writeProjectMetadata(directory, write),
+    writeProjectMetadata: async ({ write }) => {
+      writes.push(write);
+      return metadata.writeProjectMetadata(directory, write);
+    },
   };
 
   const React = require('react');
@@ -107,7 +114,8 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   const body = dom.window.document.body;
   const nameCell = (name) => all('.vars-name').find((cell) => cell.querySelector('.vars-name-text')?.textContent === name);
   const settingsButton = (name) => nameCell(name)?.querySelector('.vars-name-settings');
-  const menuRow = () => [...body.querySelectorAll('[role^="menuitem"]')].find((row) => /Hide from variable suggestions/.test(row.textContent));
+  const popup = () => body.querySelector('.vars-settings-popup');
+  const action = () => popup()?.querySelector('button.menu-row');
   const disk = () => (fs.existsSync(variablesFile) ? fs.readFileSync(variablesFile, 'utf8') : undefined);
   const event = (type, init = {}) => new dom.window.MouseEvent(type, { bubbles: true, ...init });
 
@@ -136,59 +144,144 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   );
   check('no file exists before the first hide', disk() === undefined && !fs.existsSync(path.join(directory, '.stacki')));
 
-  // --- the button appears on hover and keeps its space ------------------------------------------
+  // --- the button's visibility is the stylesheet's, so nothing in script can leave it stuck ------------------------
   const toolsBefore = nameCell('light-100').querySelector('.vars-name-tools');
   check('the button has its space before anything is hovered', !!toolsBefore);
-  check('and is not shown or focusable', settingsButton('light-100')?.hidden === true);
   const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
   check(
     'the reserved space is fixed, in rem',
     /\.vars-name-tools\s*{[^}]*flex:\s*none;[^}]*width:\s*1\.25rem;/.test(css) && !/\.vars-name-(tools|settings|hidden)\s*{[^}]*\dpx/.test(css),
   );
+  check('not shown, it is transparent and deaf to the pointer', /\.vars-name-settings\s*{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/.test(css));
+  check(
+    'shown by :hover on the cell, :focus-visible on the button and the open popup',
+    /\.vars-name:hover \.vars-name-settings,\s*\.vars-name-settings:focus-visible,\s*\.vars-name-settings\[aria-expanded='true'\]\s*{[^}]*opacity:\s*1;/.test(
+      css,
+    ),
+  );
+  check('a row being dragged hides it', /\.vars-row\.is-dragging \.vars-name-settings:not\(\[aria-expanded='true'\]\)\s*{[^}]*opacity:\s*0;/.test(css));
+  check('a touch screen always shows it', /@media \(hover: none\)\s*{\s*\.vars-name-settings\s*{[^}]*opacity:\s*1;/.test(css));
+  const source = fs.readFileSync(repoPath('src/features/variables/VariableNameCell.tsx'), 'utf8');
+  check('no script state drives it: no hover or focus handlers on the cell', !/onMouseEnter|onMouseLeave|onFocus|onBlur|useState/.test(source));
+  check('the button is never `hidden`, so Tab reaches it', settingsButton('light-100')?.hidden === false && settingsButton('dark-900')?.hidden === false);
+  check('the button is named for its variable', /light-100/.test(settingsButton('light-100')?.getAttribute('aria-label') || ''));
+  check('and announces a dialog it controls', settingsButton('light-100')?.getAttribute('aria-haspopup') === 'dialog');
+  check('closed, it reads as not expanded', settingsButton('light-100')?.getAttribute('aria-expanded') === 'false');
   await act(async () => {
     nameCell('light-100').dispatchEvent(event('mouseover', { relatedTarget: body }));
-  });
-  check('hovering the name shows the button', settingsButton('light-100')?.hidden === false);
-  check('in the same box, so nothing shifts', nameCell('light-100').querySelector('.vars-name-tools') === toolsBefore);
-  check('the other rows are untouched', settingsButton('dark-900')?.hidden === true);
-  check('the button is named for its variable', /light-100/.test(settingsButton('light-100')?.getAttribute('aria-label') || ''));
-  await act(async () => {
     nameCell('light-100').dispatchEvent(event('mouseout', { relatedTarget: body }));
-  });
-  check('moving off hides it again', settingsButton('light-100')?.hidden === true);
-
-  // --- keyboard: focus in the cell reveals it, and it takes focus ---------------------------------
-  await act(async () => {
     nameCell('dark-900').querySelector('.vars-rename').focus();
-  });
-  check('focus on the name reveals the button for the keyboard', settingsButton('dark-900')?.hidden === false);
-  await act(async () => {
     settingsButton('dark-900').focus();
-  });
-  check('and the button can take focus', dom.window.document.activeElement === settingsButton('dark-900'));
-  await act(async () => {
     settingsButton('dark-900').blur();
   });
-  check('leaving the cell hides it', settingsButton('dark-900')?.hidden === true);
+  check('hovering and focusing write nothing', disk() === undefined);
+  check('and open nothing', !popup() && settingsButton('dark-900')?.getAttribute('aria-expanded') === 'false');
 
-  // --- the menu --------------------------------------------------------------------------------
-  await act(async () => {
-    nameCell('light-100').dispatchEvent(event('mouseover', { relatedTarget: body }));
-  });
+  // --- the popup ---------------------------------------------------------------------------------
+  const open = async (name) => {
+    await act(async () => {
+      settingsButton(name).dispatchEvent(event('click'));
+    });
+    await waitFor({ what: `the settings popup of ${name} is open`, read: () => !!popup(), until: Boolean });
+  };
+  const close = async (what) =>
+    waitFor({ what: `the popup is gone after ${what}`, read: () => !popup() && !body.querySelector('[data-popup]'), until: Boolean });
+  const keydown = (target, key) => target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+
+  await open('light-100');
+  check('clicking the button opens a popup, a dialog and not a menu', popup()?.getAttribute('role') === 'dialog' && !body.querySelector('[role="menu"]'));
+  check('the popup is named', popup()?.getAttribute('aria-label') === 'Variable settings');
+  check('and titled with the variable', /--light-100/.test(popup()?.querySelector('.vars-settings-title')?.textContent || ''));
+  check('the button reads as expanded', settingsButton('light-100')?.getAttribute('aria-expanded') === 'true');
+  check('without starting a rename', all('.vars-rename-input').length === 0);
+  check('the action has its icon on the left', !!action()?.querySelector('.menu-icon svg') && action()?.firstElementChild?.className === 'menu-icon');
+  check('and focus is on it', dom.window.document.activeElement === action());
+  check('opening wrote nothing', disk() === undefined);
+
+  // Each way out closes it, every time.
+  const pressOutside = async () =>
+    act(async () => {
+      container.dispatchEvent(event('pointerdown'));
+      container.dispatchEvent(event('mousedown'));
+    });
+  await pressOutside();
+  await close('the first look');
+  for (let round = 0; round < 3; round += 1) {
+    await open('light-100');
+    await pressOutside();
+    await close(`an outside press (round ${round})`);
+    check(`an outside press closes it (round ${round})`, !popup() && settingsButton('light-100')?.getAttribute('aria-expanded') === 'false');
+  }
+  check('closing by an outside press wrote nothing', disk() === undefined);
+
+  await open('light-100');
+  await act(async () => keydown(action(), 'Escape'));
+  await close('Escape');
+  check('Escape closes it', !popup());
+  check('and returns focus to the gear', dom.window.document.activeElement === settingsButton('light-100'));
+
+  await open('light-100');
   await act(async () => {
     settingsButton('light-100').dispatchEvent(event('click'));
-    await settle(40);
   });
-  check('clicking the button opens the shared menu', !!menuRow(), body.innerHTML.slice(0, 200));
-  check('without starting a rename', all('.vars-rename-input').length === 0);
-  check('the row is a choice that is not checked yet', menuRow()?.getAttribute('aria-checked') === 'false', menuRow()?.outerHTML);
+  await close('a second press on the gear');
+  check('the gear toggles it shut', !popup());
 
+  await open('light-100');
   await act(async () => {
-    menuRow().dispatchEvent(event('click'));
-    await settle(150);
+    settingsButton('dark-900').dispatchEvent(event('pointerdown'));
+    settingsButton('dark-900').dispatchEvent(event('mousedown'));
   });
+  await close("another row's press");
+  // The press that closed the popup also swallows the click that follows it (popupDismiss), so the click that opens
+  // the other row is the next one.
+  await act(async () => {
+    settingsButton('dark-900').dispatchEvent(event('click'));
+  });
+  await act(async () => {
+    if (!popup()) {
+      settingsButton('dark-900').dispatchEvent(event('click'));
+    }
+  });
+  await waitFor({ what: 'the other row opens its own popup', read: () => !!popup(), until: Boolean });
+  check(
+    'only one popup is open, and it is the other row',
+    body.querySelectorAll('.vars-settings-popup').length === 1 && /--dark-900/.test(popup().textContent),
+  );
+  check('the first row reads as closed', settingsButton('light-100')?.getAttribute('aria-expanded') === 'false');
+  await pressOutside();
+  await close('cleanup');
+  check('opening and closing never wrote the file', disk() === undefined);
+
+  // --- keyboard ----------------------------------------------------------------------------------
+  await act(async () => {
+    settingsButton('light-100').focus();
+    settingsButton('light-100').click();
+  });
+  await waitFor({ what: 'the popup opens from the keyboard activation', read: () => !!popup(), until: Boolean });
+  check('Enter or Space on the gear (a native click) opens it with focus inside', popup()?.contains(dom.window.document.activeElement));
+  await act(async () => keydown(action(), 'ArrowDown'));
+  await act(async () => keydown(action(), 'End'));
+  check('arrow keys keep focus on the only action', dom.window.document.activeElement === action());
+  await act(async () => keydown(action(), 'Escape'));
+  await close('Escape from the keyboard');
+  check('the gear has focus again', dom.window.document.activeElement === settingsButton('light-100'));
+
+  // --- choosing writes the file exactly once ----------------------------------------------------------
+  await open('light-100');
+  check('the action offers to hide', /Hide from variable suggestions/.test(action()?.textContent || ''));
+  const writesBefore = writes.length;
+  await act(async () => {
+    action().dispatchEvent(event('click'));
+    action().dispatchEvent(event('click'));
+  });
+  await waitFor({ what: 'the hide is written', read: () => disk(), until: (value) => value !== undefined });
+  await settle(100);
   const hiddenOnce = '{\n  "version": 1,\n  "hiddenFromSuggestions": [\n    "--light-100"\n  ]\n}\n';
   check('choosing it writes .stacki/variables.json', disk() === hiddenOnce, String(disk()));
+  check('exactly once, even for a double click', writes.length - writesBefore === 1, String(writes.length - writesBefore));
+  await close('the choice');
+  check('and closes the popup', !popup() && settingsButton('light-100')?.getAttribute('aria-expanded') === 'false');
   check('the variable is marked hidden in the panel', !!nameCell('light-100').querySelector('.vars-name-hidden'));
   check(
     'the mark says why',
@@ -198,21 +291,15 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   check('the other variable has no mark', !nameCell('dark-900').querySelector('.vars-name-hidden'));
   check('the cached set answers at once', bundle.getHiddenVariables(directory).has('--light-100'));
 
-  // --- show it again ---------------------------------------------------------------------------
+  // --- show it again -----------------------------------------------------------------------------------
+  await open('light-100');
+  check('a hidden variable offers the inverse', /Show in variable suggestions/.test(action()?.textContent || ''), action()?.textContent);
   await act(async () => {
-    settingsButton('light-100').dispatchEvent(event('click'));
-    await settle(40);
+    action().dispatchEvent(event('click'));
   });
-  check('the row reads as checked while hidden', menuRow()?.getAttribute('aria-checked') === 'true', menuRow()?.outerHTML);
-  await act(async () => {
-    menuRow().dispatchEvent(event('click'));
-    await settle(150);
-  });
-  check(
-    'choosing it again shows the variable: the file keeps its shape, empty',
-    disk() === '{\n  "version": 1,\n  "hiddenFromSuggestions": []\n}\n',
-    String(disk()),
-  );
+  await waitFor({ what: 'the show is written', read: () => disk(), until: (value) => /\[\]/.test(value || '') });
+  check('choosing it shows the variable: the file keeps its shape, empty', disk() === '{\n  "version": 1,\n  "hiddenFromSuggestions": []\n}\n', String(disk()));
+  await close('the second choice');
   check('and the mark goes', !nameCell('light-100').querySelector('.vars-name-hidden'));
 
   // --- rename and the row are not broken by the button --------------------------------------------
@@ -272,13 +359,10 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   await act(async () => {
     nameCell('light-100').dispatchEvent(event('mouseover', { relatedTarget: body }));
   });
+  await open('light-100');
   await act(async () => {
-    settingsButton('light-100').dispatchEvent(event('click'));
-    await settle(40);
-  });
-  await act(async () => {
-    menuRow().dispatchEvent(event('click'));
-    await settle(150);
+    action().dispatchEvent(event('click'));
+    await settle(250);
   });
   check('a toggle does not overwrite it', disk() === corrupt, String(disk()));
   check(

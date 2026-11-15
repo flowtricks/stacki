@@ -7863,13 +7863,33 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: none;
   color: var(--text-faint);
   cursor: pointer;
+  /* Not shown: transparent and deaf to the pointer, but still focusable, so Tab from the name reaches it. */
+  opacity: 0;
+  pointer-events: none;
 }
-.vars-name-settings[hidden] {
-  display: none;
+/* Shown only by states the browser keeps true by itself: the pointer over the cell, keyboard focus on the button, and
+   its popup being open (aria-expanded). No script flag can leave it stuck on screen. */
+.vars-name:hover .vars-name-settings,
+.vars-name-settings:focus-visible,
+.vars-name-settings[aria-expanded='true'] {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* A row being dragged has no button, wherever the pointer is. */
+.vars-row.is-dragging .vars-name-settings:not([aria-expanded='true']) {
+  opacity: 0;
+  pointer-events: none;
+}
+/* A phone or tablet has no hover: the button is simply there. */
+@media (hover: none) {
+  .vars-name-settings {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .vars-name-settings:hover,
 .vars-name-settings:focus-visible,
-.vars-name-settings.is-open {
+.vars-name-settings[aria-expanded='true'] {
   background: rgba(255, 255, 255, 0.09);
   color: var(--text);
 }

@@ -74,6 +74,7 @@ export const messages = {
   'variables.settings.hideFromSuggestions': 'In Variablenvorschlägen ausblenden',
   'variables.settings.menu': 'Variableneinstellungen',
   'variables.settings.open': 'Einstellungen für {name}',
+  'variables.settings.showInSuggestions': 'In Variablenvorschlägen anzeigen',
   'variables.title': 'Variablen',
   'variables.type.color': 'Farbe',
   'variables.type.number': 'Zahl',
