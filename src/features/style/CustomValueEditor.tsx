@@ -79,6 +79,7 @@ interface CustomValueProps {
     field: ReactElement,
     prop: string | undefined,
     openChip: { readonly index: number; readonly binding: string } | undefined,
+    trigger: DOMRect | undefined,
     onDraft: (value: string) => void,
   ) => ReactNode;
   /** The chip whose press opened this editor: its field opens the chooser for it at once. */
@@ -127,6 +128,8 @@ function CustomValue(props: CustomValueProps) {
         />,
         props.prop,
         props.openChip,
+        // The field this editor opened from: its chooser never covers it (soak SP-10).
+        props.anchor,
         state.setDraft,
       )}
       <div className="var-custom-foot">

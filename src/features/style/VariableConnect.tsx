@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, useEffect, useRef, useState } from 'react';
+import { cloneElement, isValidElement, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { MutableRefObject, ReactElement, ReactNode, RefObject } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { flushSync } from 'react-dom';
@@ -63,6 +63,11 @@ type VariableConnectProps = {
    * pressing a chip its field clipped is this field, and the same press asks for the chooser.
    */
   initialChip?: PressedChip;
+  /**
+   * The control whose press opened this field (the clipped chip a large editor opened from). The
+   * chooser never covers it: a list over it took the next press of a quick double press as a pick.
+   */
+  trigger?: DOMRect;
   children: ReactNode;
 };
 
@@ -78,6 +83,7 @@ export function connectCustomField(
   field: ReactElement,
   prop: string | undefined,
   openChip: PressedChip | undefined,
+  trigger: DOMRect | undefined,
   onDraft: (value: string) => void,
 ): ReactNode {
   // The property travels with the value: without it the chooser in the big box
@@ -90,6 +96,7 @@ export function connectCustomField(
       onPick={onDraft}
       {...(prop === undefined ? {} : { prop })}
       {...(openChip === undefined ? {} : { initialChip: openChip })}
+      {...(trigger === undefined ? {} : { trigger })}
     >
       {field}
     </VariableConnect>
@@ -105,6 +112,31 @@ export default function VariableConnect(props: VariableConnectProps) {
   const { chipTarget, setChipTarget, suggest, setSuggest, navigationRef } = connect;
   const anchor = (showToken ? editorRef.current : dotRef.current) ?? undefined;
   const { openedRef, bigChipRef, epochRef } = connect;
+  // The press that closed the large editor, by its event time. The editor closes on the press's
+  // capture (CustomValueEditor's outside press), React renders that before the field's own handlers
+  // run, and the field then saw a press on a clipped chip with no editor open and opened it again:
+  // a press on the chip that opened the editor was a close and a reopen, never a toggle (soak
+  // SP-10). The press is named by its time, not a timer's flag, so a quick next press is its own.
+  const pressAtRef = useRef<number | undefined>(undefined);
+  const closedAtRef = useRef<number | undefined>(undefined);
+  // A layout effect, so it listens from the commit that opened the editor: a press in the frame
+  // before an ordinary effect ran (a quick double press under a slow CPU) went unnamed.
+  useLayoutEffect(() => {
+    if (big === undefined) {
+      return undefined;
+    }
+    // Capture on the window runs before the editor's own listener on the document.
+    const note = (event: Event): void => {
+      pressAtRef.current = event.timeStamp;
+    };
+    window.addEventListener('mousedown', note, true);
+    return () => window.removeEventListener('mousedown', note, true);
+  }, [big]);
+  const closeBig = (): void => {
+    closedAtRef.current = pressAtRef.current;
+    pressAtRef.current = undefined;
+    setBig(undefined);
+  };
   // The value as it would be with `chosen` picked, worked out from the value
   // the chooser opened on: previews change the field, and a pick after three
   // of them must still be one change from where it started.
@@ -231,6 +263,7 @@ export default function VariableConnect(props: VariableConnectProps) {
           open,
           wrapRef,
           liveValue,
+          closedByThisPress: (press) => closedAtRef.current !== undefined && closedAtRef.current === press.timeStamp,
           onOpen: (rect, chip) => {
             bigChipRef.current = chip;
             setBig(rect);
@@ -308,6 +341,7 @@ export default function VariableConnect(props: VariableConnectProps) {
         />
       ) : undefined}
       <ConnectPopups
+        trigger={props.trigger}
         picker={pickerOf({ open, anchor, suggest, chipTarget, applied, navigationRef })}
         applied={applied}
         prop={prop}
@@ -326,7 +360,7 @@ export default function VariableConnect(props: VariableConnectProps) {
         onPreviewEnd={(timing) => restore(timing)}
         onClosePicker={closeChooser}
         openChip={bigChipRef.current}
-        onCloseBig={() => setBig(undefined)}
+        onCloseBig={closeBig}
         // Escape closes the editor and puts the caret back in the field it came from.
         onCancelBig={() => {
           setBig(undefined);
@@ -483,7 +517,9 @@ function ConnectPopups({
   onCancelBig,
   openChip,
   onSave,
+  trigger,
 }: {
+  trigger: DOMRect | undefined;
   picker: PickerOpening | undefined;
   applied: ReturnType<typeof useAppliedVariable>;
   prop: string | undefined;
@@ -508,6 +544,8 @@ function ConnectPopups({
       {picker ? (
         <VariablePicker
           anchor={picker.anchor}
+          within={wrapRef.current ?? undefined}
+          {...(trigger === undefined ? {} : { trigger })}
           vars={applied.vars}
           loading={applied.loading}
           {...(prop === undefined ? {} : { prop })}
@@ -731,15 +769,21 @@ function tokenFieldHandlers({
       // A blur while a preview shows commits the value the chooser opened on, never the preview.
       const final = guard.restoredValue() ?? shown;
       const input = field.inputRef.current;
+      // Only text that differs from the field's goes through its change. A change is an edit to
+      // the field (LiveTextInput's blur commits after one), so pushing the text it already held
+      // made every blur a write: a chip pressed twice to toggle its picker passes focus through
+      // the field, and that blur wrote the shown value into the rule (soak SP-10).
       if (input) {
-        // Drive the controlled field directly. This guarantees its draft becomes
-        // the serialized expression before the latest blur closure commits it;
-        // a synthetic DOM input event could remain batched and commit the original
-        // bare variable instead.
-        flushSync(() => {
-          setInputValue(input, final);
-          field.childHandlersRef.current?.onChange?.(field.fakeEvent());
-        });
+        if (input.value !== final) {
+          // Drive the controlled field directly. This guarantees its draft becomes
+          // the serialized expression before the latest blur closure commits it;
+          // a synthetic DOM input event could remain batched and commit the original
+          // bare variable instead.
+          flushSync(() => {
+            setInputValue(input, final);
+            field.childHandlersRef.current?.onChange?.(field.fakeEvent());
+          });
+        }
       }
       field.childHandlersRef.current?.onBlur?.(field.fakeEvent());
       setActive(false);
@@ -791,6 +835,7 @@ function bigEditorTriggers({
   open,
   wrapRef,
   liveValue,
+  closedByThisPress,
   onOpen,
 }: {
   disabled: boolean | undefined;
@@ -799,6 +844,8 @@ function bigEditorTriggers({
   open: boolean;
   wrapRef: RefObject<HTMLSpanElement>;
   liveValue: () => string;
+  /** Whether the large editor closed on this very press: then the press was the toggle that closed it. */
+  closedByThisPress: (press: Event) => boolean;
   onOpen: (rect: DOMRect, chip: PressedChip | undefined) => void;
 }) {
   const openBig = (chip?: PressedChip) => {
@@ -837,12 +884,22 @@ function bigEditorTriggers({
       // React CHILD, so its presses capture through here: on a value long enough to
       // open the big editor, choosing a variable was taken as a press on the field —
       // the pick never landed and the big editor opened over it instead.
+      const target = event.target;
+      // The press on the field that closed its large editor (the chip it opened from, pressed again)
+      // is that close and nothing more: it must not open the editor, or the chip's chooser, again.
+      // Checked first: whether the field has rendered the close yet depends on the browser's order.
+      if (closedByThisPress(event.nativeEvent)) {
+        if (target instanceof Element && target.closest('.var-custom, .embed-editor_varpicker') === null) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
       if (disabled || big || expanded || open) {
         return;
       }
       // The dot and the swatch are their own controls; a press on those means
       // what it has always meant.
-      const target = event.target;
       if (
         target instanceof Element &&
         target.closest('.embed-editor_varconnect-dot, .embed-editor_varconnect-hint, ' + '.u-color-swatch, .embed-editor_varpicker, .var-custom')

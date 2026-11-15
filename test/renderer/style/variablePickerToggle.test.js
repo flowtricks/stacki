@@ -5,7 +5,10 @@
 // Goal: pressing the applied variable's chip while its dropdown is open closes it and it stays
 // closed (no close-then-reopen from the outside-press path); pressing again opens it; an outside
 // press and Escape close it; the keyboard toggles the same way; pressing a different chip while
-// open moves the dropdown to that chip instead of closing it.
+// open moves the dropdown to that chip instead of closing it. Toggling never writes: a chip
+// pressed open and shut passes focus through the field, and the field's blur once pushed the
+// text it already held through its change handler, which made it an edit and wrote the shown
+// value into the rule (soak SP-10); the real style field (LiveTextInput) must commit nothing.
 // Method: the real VariableConnect is mounted in jsdom over stubbed variables. Presses are
 // dispatched mouse and key events, so no real pointer is needed, and the test waits out the
 // popup's exit motion with a bounded poll.
@@ -27,7 +30,12 @@ const check = (what, condition, detail) => {
   fs.mkdirSync(buildDirectory, { recursive: true });
   const bundlePath = path.join(buildDirectory, 'variable-toggle.bundle.js');
   await esbuild.build({
-    entryPoints: [repoPath('src/features/style/VariableConnect.tsx')],
+    stdin: {
+      contents: `export { default } from './src/features/style/VariableConnect';
+        export { LiveInput } from './src/features/style/LiveTextInput';`,
+      resolveDir: repoPath('.'),
+      loader: 'ts',
+    },
     outfile: bundlePath,
     bundle: true,
     format: 'cjs',
@@ -83,6 +91,7 @@ const check = (what, condition, detail) => {
   const { createRoot } = require('react-dom/client');
   const { act } = React;
   const VariableConnect = require(bundlePath).default;
+  const { LiveInput } = require(bundlePath);
   const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
   const mouse = (type, init = {}) => new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, ...init });
 
@@ -147,6 +156,57 @@ const check = (what, condition, detail) => {
     check('Enter on the focused chip opens it (or the chip opens on press only: see report)', true);
   }
   await act(async () => root.unmount());
+
+  // The style panel's own field: toggling its chip's picker open and shut, with the field's focus
+  // passing through, commits nothing. Each press goes down on the chip as a person's does.
+  {
+    const fieldHost = document.createElement('div');
+    document.body.appendChild(fieldHost);
+    const fieldRoot = createRoot(fieldHost);
+    const writes = [];
+    await act(async () => {
+      fieldRoot.render(
+        React.createElement(LiveInput, {
+          value: ORIGINAL,
+          busy: false,
+          ariaLabel: 'Weight',
+          className: 'u-input',
+          prop: 'font-weight',
+          onCommit: (value) => writes.push(`commit ${value}`),
+          onLiveCommit: (value) => writes.push(`live ${value}`),
+          onClear: () => writes.push('clear'),
+        }),
+      );
+    });
+    await settle();
+    const fieldChip = () => fieldHost.querySelector('[data-chip]');
+    const editor = () => fieldHost.querySelector('.embed-editor_varconnect-editor');
+    const TOGGLES = 6;
+    for (let toggle = 0; toggle < TOGGLES; toggle += 1) {
+      const wasOpen = open();
+      await act(async () => {
+        // The browser's order: the press, then the focus change it causes.
+        fieldChip().dispatchEvent(mouse('pointerdown'));
+        fieldChip().dispatchEvent(mouse('mousedown'));
+        if (wasOpen) {
+          editor()?.focus();
+        } else {
+          editor()?.blur();
+        }
+        fieldChip().dispatchEvent(mouse('mouseup'));
+        fieldChip().dispatchEvent(mouse('click'));
+      });
+      await settle();
+      if (wasOpen) {
+        await closed();
+      }
+    }
+    await act(async () => editor()?.blur());
+    await settle();
+    check('toggling the style field chip open and shut writes nothing', writes.length === 0, JSON.stringify(writes));
+    check('an even number of presses leaves the picker closed', await closed());
+    await act(async () => fieldRoot.unmount());
+  }
 
   if (failures.length > 0) {
     console.error(`variablePickerToggle: ${failures.length} failed\n${failures.join('\n')}`);

@@ -5,8 +5,9 @@
 // Goal: an inline max-height (the room left in the window) once replaced the stylesheet's
 // cap, so on a tall window the picker ran from the top of the screen past the bottom with
 // every variable in it. The picker is now capped at PICKER_HEIGHT_REM_MAX, opens on the side of
-// the field with more room, never shrinks below a readable minimum, keeps the search row
-// pinned and scrolls only its list, and the arrow keys keep the marked row in sight.
+// the field with more room, keeps a readable height wherever a side has the room for it, never
+// covers the row it opened from (a short window gets a shorter list instead), keeps the search
+// row pinned and scrolls only its list, and the arrow keys keep the marked row in sight.
 // Method: this is a question about layout, so it runs in a real browser (Electron, hidden
 // window, the pattern of popoverDropdown.test.js). The real VariablePicker is mounted as each of
 // its hosts (the chip control with its search box, the code field's typing list) over a
@@ -267,6 +268,30 @@ const check = (what, condition, detail) => {
     check('near the bottom it opens above', low.side === 'above' && low.heightMax === 352, JSON.stringify(low));
     const short = pickerPlacement({ ...base, rowTop: 300, rowBottom: 328, viewportHeight: 600 });
     check('in a short window it keeps the minimum height', short.heightMax >= 160, JSON.stringify(short));
+    // The list never covers the row it opened from (soak SP-10: a list pulled up over its chip took
+    // the second press of a double click as a pick). With little room on both sides it is shorter.
+    const cramped = [
+      { rowTop: 90, rowBottom: 118, viewportHeight: 200 },
+      { rowTop: 40, rowBottom: 68, viewportHeight: 200 },
+      { rowTop: 150, rowBottom: 178, viewportHeight: 200 },
+      { rowTop: 300, rowBottom: 328, viewportHeight: 340 },
+      { rowTop: -20, rowBottom: 8, viewportHeight: 600 },
+    ];
+    // The control that opened the picker (a clipped chip under a large editor's field) bounds the
+    // room on its side, so the list stops short of it.
+    const opener = { top: 400, bottom: 428 };
+    const overOpener = pickerPlacement({ ...base, rowTop: 200, rowBottom: 228, viewportHeight: 1000, trigger: opener });
+    const overBottom = overOpener.side === 'below' ? overOpener.top + overOpener.heightMax : 1000 - overOpener.bottom;
+    const overTop = overOpener.side === 'below' ? overOpener.top : 1000 - overOpener.bottom - overOpener.heightMax;
+    check('a list never covers the control that opened it', overBottom <= opener.top || overTop >= opener.bottom, JSON.stringify(overOpener));
+    for (const row of cramped) {
+      const placed = pickerPlacement({ ...base, ...row });
+      const boxTop = placed.side === 'below' ? placed.top : row.viewportHeight - placed.bottom - placed.heightMax;
+      const boxBottom = placed.side === 'below' ? placed.top + placed.heightMax : row.viewportHeight - placed.bottom;
+      const clear = boxBottom <= row.rowTop || boxTop >= row.rowBottom;
+      check(`a list opened from ${JSON.stringify(row)} leaves its row uncovered`, clear, JSON.stringify(placed));
+      check(`a list opened from ${JSON.stringify(row)} has a height it can draw`, placed.heightMax >= 0, JSON.stringify(placed));
+    }
   }
 
   if (failures.length) {

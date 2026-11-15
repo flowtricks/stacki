@@ -76,8 +76,18 @@ export function VariablePicker({
   onPreviewEnd,
   onPick,
   onClose,
+  within,
+  trigger,
 }: {
   anchor: HTMLElement;
+  /**
+   * The whole control the picker belongs to (the field with its chips and dot). A press anywhere in
+   * it is the control's own (a chip toggles, the dot toggles), never an outside press: dismissing on
+   * it as well closed the picker on the press and the control's own handler opened it again.
+   */
+  within?: HTMLElement | undefined;
+  /** The control whose press opened the picker, when it is not the anchor's row: never covered. */
+  trigger?: DOMRect | undefined;
   vars: ProjectVariable[];
   loading: boolean;
   prop?: string;
@@ -113,7 +123,7 @@ export function VariablePicker({
   // nothing: what was collapsed outlives that.
   const [collapsed, toggleCollapse] = useCollapsedSet();
   const listRef = useRef<HTMLDivElement>(null);
-  const style = usePickerPosition(ref, anchor);
+  const style = usePickerPosition(ref, anchor, trigger);
   usePickerFocus(searchRef);
   const query = search.trim().toLowerCase();
   // The applied variable is always listed, whichever scope declares it: one the stylesheets read
@@ -202,6 +212,7 @@ export function VariablePicker({
   // stays on the applied variable and the keyboard row is tinted instead.
   const markedBinding = typing === undefined ? (activeBinding ?? selectedBinding) : selectedBinding;
   const hover = useHoverPreview({ onPreview: typing === undefined ? onPreview : undefined, previewEpoch, onPreviewEnd });
+  const pressGuard = usePressStartedInside(ref);
   const endHover = (): void => hover.end({ when: 'now' });
   useEffect(() => {
     const element = ref.current;
@@ -218,6 +229,7 @@ export function VariablePicker({
       mode="popover"
       onClose={onClose}
       anchor={anchor}
+      within={within}
       ref={ref}
       className="embed-editor_varpicker"
       role="dialog"
@@ -288,6 +300,7 @@ export function VariablePicker({
         onPointerDown={holdSelected.release}
         onTouchStart={holdSelected.release}
         onPointerLeave={() => hover.end({ when: 'now' })}
+        onClickCapture={pressGuard}
       >
         {loading && !vars.length ? (
           <div className="embed-editor_varpicker-empty">
@@ -317,6 +330,38 @@ export function VariablePicker({
       </div>
     </Popup>
   );
+}
+
+// A row is picked by a press that began in the picker. One that began on the chip (the picker
+// opened on its pointerdown, and its release, or the second press of a double click, landed on a
+// row the list put under the pointer) is the chip's press, never a pick: the click is stopped
+// before the row hears it. A keyboard click (Enter or Space on a row, `detail` 0) has no press.
+function usePressStartedInside(ref: React.RefObject<HTMLDivElement>): (event: React.MouseEvent) => void {
+  // Whether the last pointer press went down inside the picker. False until one does: the press
+  // that opened it went down on the chip.
+  const insideRef = useRef(false);
+  useEffect(() => {
+    const press = (event: Event): void => {
+      const picker = ref.current;
+      insideRef.current = picker !== null && event.target instanceof Node && picker.contains(event.target);
+    };
+    window.addEventListener('pointerdown', press, true);
+    window.addEventListener('mousedown', press, true);
+    return () => {
+      window.removeEventListener('pointerdown', press, true);
+      window.removeEventListener('mousedown', press, true);
+    };
+  }, [ref]);
+  return (event) => {
+    if (event.detail === 0) {
+      return;
+    }
+    if (insideRef.current) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  };
 }
 
 /**
@@ -1222,9 +1267,6 @@ export function usePickerFocus(searchRef: React.RefObject<HTMLInputElement>): vo
 // does not repeat it, because an inline max-height (the room left in the window) used to replace
 // the stylesheet's and let the list run the full height of a tall window.
 export const PICKER_HEIGHT_REM_MAX = 22;
-// Below this the list is not usable, so a short window still gets this much, never less than
-// what the window itself holds.
-export const PICKER_HEIGHT_REM_MIN = 10;
 const PICKER_GAP_REM = 0.25;
 const PICKER_EDGE_REM = 1;
 
@@ -1233,42 +1275,57 @@ export type PickerPlacement =
   | { readonly side: 'above'; readonly bottom: number; readonly heightMax: number };
 
 // Which side of the field the picker opens on, and the most height it may take there: at most
-// the cap, at most the room on that side minus the edge margin, at least the readable minimum
-// (clamped to the window). It opens below when its natural height fits there, else on the side
-// with more room. Pure, so the sizes can be tested without a layout engine.
+// the cap, and at most the room on that side between the gap and the edge margin. It opens below
+// when its natural height fits there, else on the side with more room. It never covers the row it
+// opened from: a list pulled up over its chip took the second press of a double click as a pick
+// (soak SP-10), so where neither side has the readable minimum the list is shorter, never on top
+// of the chip. Pure, so the sizes can be tested without a layout engine.
 export function pickerPlacement(input: {
   readonly rowTop: number;
   readonly rowBottom: number;
   readonly naturalHeight: number;
   readonly viewportHeight: number;
   readonly rootFontPx: number;
+  /** The control that opened the picker, when it is not the row (a large editor's own field opened
+   *  from a clipped chip): wholly above or below the row, it bounds the room on that side. */
+  readonly trigger?: { readonly top: number; readonly bottom: number } | undefined;
 }): PickerPlacement {
-  const { rowTop, rowBottom, naturalHeight, viewportHeight, rootFontPx } = input;
+  const { rowTop, rowBottom, naturalHeight, viewportHeight, rootFontPx, trigger } = input;
   assert(rootFontPx > 0, 'pickerPlacement: the root font size is positive');
   assert(viewportHeight > 0, 'pickerPlacement: the window has a height');
   const edge = PICKER_EDGE_REM * rootFontPx;
   const gap = PICKER_GAP_REM * rootFontPx;
   const capPx = PICKER_HEIGHT_REM_MAX * rootFontPx;
-  const floorPx = Math.min(PICKER_HEIGHT_REM_MIN * rootFontPx, viewportHeight - 2 * edge);
-  const roomBelow = viewportHeight - (rowBottom + gap) - edge;
-  const roomAbove = rowTop - gap - edge;
-  const fit = (room: number): number => Math.max(floorPx, Math.min(capPx, room));
+  let roomBelow = Math.max(0, viewportHeight - (rowBottom + gap) - edge);
+  let roomAbove = Math.max(0, rowTop - gap - edge);
+  if (trigger !== undefined) {
+    if (trigger.top >= rowBottom) {
+      roomBelow = Math.min(roomBelow, Math.max(0, trigger.top - gap - (rowBottom + gap)));
+    } else if (trigger.bottom <= rowTop) {
+      roomAbove = Math.min(roomAbove, Math.max(0, rowTop - gap - (trigger.bottom + gap)));
+    }
+  }
   const wanted = Math.min(naturalHeight, capPx);
   if (wanted <= roomBelow || roomBelow >= roomAbove) {
-    const heightMax = fit(roomBelow);
-    // Held by the top edge: filtering shortens it from the bottom, where the space belongs.
-    const top = Math.min(rowBottom + gap, Math.max(edge, viewportHeight - edge - heightMax));
-    return { side: 'below', top, heightMax };
+    const heightMax = Math.min(capPx, roomBelow);
+    // Held by the top edge, one gap under the row: filtering shortens it from the bottom.
+    const placement = { side: 'below', top: rowBottom + gap, heightMax } as const;
+    assert(placement.top > rowBottom, 'pickerPlacement: below the row, never over it');
+    assert(heightMax <= capPx, 'pickerPlacement: never past the cap');
+    return placement;
   }
-  // Held by the bottom edge, so the box stays against the field as the list shrinks.
-  const heightMax = fit(roomAbove);
-  return { side: 'above', bottom: Math.max(edge, viewportHeight - (rowTop - gap)), heightMax };
+  // Held by the bottom edge one gap over the row, so the box stays against the field as the list shrinks.
+  const heightMax = Math.min(capPx, roomAbove);
+  const placement = { side: 'above', bottom: viewportHeight - (rowTop - gap), heightMax } as const;
+  assert(viewportHeight - placement.bottom < rowTop, 'pickerPlacement: above the row, never over it');
+  assert(heightMax <= roomAbove, 'pickerPlacement: inside the room above');
+  return placement;
 }
 
 // Drops below the row that owns the anchor (the dot's wrapper, or the chip's cell), or above it
 // when there is more room there (pickerPlacement). Its width and left edge come from pickerSpan:
 // the style panel's span inside the panel, the row's own otherwise.
-export function usePickerPosition(ref: React.RefObject<HTMLDivElement>, anchor: HTMLElement): CSSProperties {
+export function usePickerPosition(ref: React.RefObject<HTMLDivElement>, anchor: HTMLElement, trigger: DOMRect | undefined): CSSProperties {
   // Measure the hidden first pass at the final width, so the height the positioning
   // effect reads is the height it will actually have.
   const [style, setStyle] = useState<CSSProperties>(() => ({
@@ -1293,6 +1350,7 @@ export function usePickerPosition(ref: React.RefObject<HTMLDivElement>, anchor: 
       naturalHeight: height,
       viewportHeight: window.innerHeight,
       rootFontPx,
+      trigger,
     });
     setStyle({
       position: 'fixed',
@@ -1302,7 +1360,7 @@ export function usePickerPosition(ref: React.RefObject<HTMLDivElement>, anchor: 
       maxHeight: placement.heightMax,
       visibility: 'visible',
     });
-  }, [ref, anchor]);
+  }, [ref, anchor, trigger]);
   return style;
 }
 

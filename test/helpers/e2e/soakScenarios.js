@@ -533,6 +533,11 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
   async function rapidToggle({ element, families }) {
     scenario = 'rapid-toggle';
     for (const family of families) {
+      // A segmented group's opener is one of its radios: a press on it sets the value (an edit, so
+      // a write), and opens nothing to toggle. Its own presses are the popover matrix's to check.
+      if (family.group !== undefined) {
+        continue;
+      }
       await closeEverything();
       if (current !== element) {
         await select(element, 'canvas');
@@ -541,7 +546,7 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
       if (point === undefined) {
         continue;
       }
-      await segment(`rapid toggle ${family.id} x${RAPID_TOGGLES}`, 'look', async () => {
+      const toggled = await segment(`rapid toggle ${family.id} x${RAPID_TOGGLES}`, 'look', async () => {
         for (let press = 0; press < RAPID_TOGGLES; press += 1) {
           await driver.pointerPress(point, { label: `toggle ${family.id}`, holdMs: 10 });
           await driver.sleep(40);
@@ -549,8 +554,16 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
       });
       const open = await openCount();
       if (open !== 0) {
+        // Where each press went down and what opened and closed: a press that reached something
+        // other than the chip (a row, a big editor) shows here.
+        const presses = toggled.recorded.inputs
+          .filter((input) => input.type === 'pointerdown' || input.type === 'click' || input.type === 'focusin')
+          .map((input) => `${input.type} at ${Math.round(input.t)} ${input.inPopover ? 'in popover: ' : ''}${input.target}`);
+        const popovers = toggled.recorded.popovers.map(
+          (popover) => `${popover.kind} ${popover.what} at ${Math.round(popover.t)}${popover.anchor === undefined ? '' : ` on ${popover.anchor}`}`,
+        );
         await report(
-          { invariant: 'toggle-parity', summary: `${family.id}: ${RAPID_TOGGLES} presses left ${open} popover(s) open`, evidence: {} },
+          { invariant: 'toggle-parity', summary: `${family.id}: ${RAPID_TOGGLES} presses left ${open} popover(s) open`, evidence: { presses, popovers } },
           `rapid toggle ${family.id}`,
         );
       }

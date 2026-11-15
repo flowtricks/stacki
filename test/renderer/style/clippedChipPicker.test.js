@@ -8,7 +8,8 @@
 // predicate that already opens the large editor (doesNotFit), so the two cannot disagree.
 // Inside the editor the chip toggles the chooser, Escape closes the chooser first and the editor
 // second (returning the caret to the field), a pick applies, Enter or Space on a chip acts as a
-// press, and a press outside closes both without leaving a hover preview behind.
+// press, and a press outside closes both without leaving a hover preview behind. The clipped chip
+// itself is a toggle: pressed again while its editor is open it closes both, and nothing reopens.
 // Method: the real VariableConnect in jsdom with stubbed variables. Presses and keys are
 // dispatched events, so no real pointer is needed on any runner. jsdom has no layout, so
 // "clipped" is doesNotFit's own fallback: a value longer than its character budget.
@@ -148,6 +149,25 @@ const check = (what, condition, detail) => {
     await settle();
     check('the second Escape closes the editor', !view.editorOpen());
     check('Escape saves nothing', view.picks.length === 0);
+    await view.done();
+  }
+
+  // --- The clipped chip is a toggle: pressed again while its editor is open, it closes the editor
+  // and the chooser and nothing opens again (it used to close on the press and reopen at once).
+  {
+    const view = await mount(LONG);
+    await view.press(fieldChip(view));
+    await settle();
+    check('a clipped chip opens the editor and the chooser', view.editorOpen() && view.pickerOpen());
+    await view.press(fieldChip(view));
+    await settle();
+    await settle();
+    check('pressing the same chip again closes the editor', !view.editorOpen());
+    check('and the chooser, and neither opens again', !view.pickerOpen());
+    check('a toggle picks nothing', view.picks.length === 0);
+    await view.press(fieldChip(view));
+    await settle();
+    check('a third press opens both again', view.editorOpen() && view.pickerOpen());
     await view.done();
   }
 
