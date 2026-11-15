@@ -5,9 +5,13 @@
 // Method: the real CodeEditor is bundled and mounted in jsdom, which has no layout,
 // so the scroller's height is stubbed and CodeMirror's estimated line heights stand
 // in for measured ones. Scrolling sets scrollTop and fires the scroll event the
-// browser would. The geometry on screen was checked by hand in Chromium.
+// browser would. The geometry on screen was checked by hand in Chromium. Pinned rows
+// come from the syntax tree, which CodeMirror may finish parsing after a mount on a slow
+// runner, so each editor is scrolled only once its tree covers the document (a bounded
+// wait, test/helpers/waitFor.js); that also keeps the "pins nothing" checks meaningful.
 const assert = require('node:assert/strict');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+const { waitFor } = require('../../helpers/waitFor.js');
 
 const lines = (...items) => items.join('\n');
 const STYLE = lines(
@@ -28,6 +32,7 @@ const STYLE = lines(
     stdin: {
       contents:
         `export { default as CodeEditor } from './src/ui/CodeEditor.tsx'; export { EditorView } from '@codemirror/view';` +
+        `export { syntaxTreeAvailable } from '@codemirror/language';` +
         `export { CodeEditor as CssCodeEditor } from './src/features/style/components/CssCodeEditor.tsx';` +
         `export { default as CodePanel } from './src/features/code/CodePanel.tsx'; export { codeWindowPinsHeaders } from './src/features/code/CodeWindow.tsx';`,
       resolveDir: ROOT,
@@ -57,7 +62,7 @@ const STYLE = lines(
   dom.window.Range.prototype.getBoundingClientRect = emptyRect;
   const React = require('react');
   const { createRoot } = require('react-dom/client');
-  const { CodeEditor, CodePanel, CssCodeEditor, EditorView, codeWindowPinsHeaders } = require(outfile);
+  const { CodeEditor, CodePanel, CssCodeEditor, EditorView, codeWindowPinsHeaders, syntaxTreeAvailable } = require(outfile);
   Object.defineProperty(dom.window.HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 400 });
   const settle = () => React.act(() => new Promise((resolve) => dom.window.requestAnimationFrame(() => setTimeout(resolve, 0))));
   const root = createRoot(document.getElementById('root'));
@@ -66,7 +71,14 @@ const STYLE = lines(
     await settle();
     return EditorView.findFromDOM(document.querySelector('.cm-editor'));
   };
+  const parsed = (view) =>
+    waitFor({
+      what: 'the syntax tree to cover the document',
+      read: () => syntaxTreeAvailable(view.state, view.state.doc.length),
+      until: (available) => available,
+    });
   const scrollTo = async (view, line) => {
+    await parsed(view);
     view.scrollDOM.scrollTop = view.lineBlockAt(view.state.doc.line(line).from).top + view.documentPadding.top;
     view.scrollDOM.dispatchEvent(new dom.window.Event('scroll'));
     await settle();
