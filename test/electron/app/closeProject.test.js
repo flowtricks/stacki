@@ -208,7 +208,8 @@ const settle = (ms = 30) => new Promise((resolve) => setTimeout(resolve, ms));
   );
   check(
     'the project to open next is consumed as it is handed over',
-    /const asked = pendingProject;\s*\n\s*pendingProject = undefined;/.test(main),
+    // The consuming read peeks (the boot channel peeks too, without consuming) and then clears it.
+    /const found = peekPendingProject\(\);\s*\n\s*pendingProject = undefined;/.test(main),
     'a pending project would be opened again on the next reload',
   );
   check(

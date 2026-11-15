@@ -18,7 +18,7 @@ import { varKind } from './model/projectResources';
 import { panelBox, panelSpan } from './model/panelBox';
 import { CheckIcon, VariableTypeIcon, ChevronRightIcon } from './VariableIcons';
 import { varTypeAllowed, byCollection } from './sharedVars';
-import { matchesVariableQuery, rankVariables } from './variableSearch';
+import { bestRank, matchesVariableQuery, rankVariables } from './variableSearch';
 import { functionSlotAt, ruleAccepts } from '../../../shared/properties/functionSlot';
 import { useResolvedColor } from './model/computedColor';
 import { getHost } from './model/host';
@@ -208,7 +208,7 @@ export function VariablePicker({
   }, [showAll, listed, prop, defined, selectedBinding, slot, suggested]);
   // With a search the rows are ranked (variableSearch.ts), best match first, and the list below keeps that order.
   const filtered = query === '' ? offered : rankVariables(offered, query);
-  const drawn = useMemo(() => drawingOrder(filtered, listed, offered, { grouped, ranked: query !== '' }), [filtered, listed, offered, grouped, query]);
+  const drawn = useMemo(() => drawingOrder(filtered, listed, offered, { grouped, query }), [filtered, listed, offered, grouped, query]);
   const { activeBinding, navigation } = usePickerNavigation(ref, drawn, { typing, search }, onPreview, previewEpoch, onPick);
   // With its own search box the arrows move the purple mark itself, from the
   // applied variable to the one being previewed. Following typing, the mark
@@ -650,7 +650,7 @@ export function PickerCollections({
         </button>
         {open
           ? groups.map(({ group, items }) => {
-              const blocks = blocksOf(collection, group, items, allVariables, offered, { grouped, ranked: query !== '' });
+              const blocks = blocksOf(collection, group, items, allVariables, offered, { grouped, query });
               const scopeLabel = group && !isRootScope(group) ? group : undefined;
               const hasNamedGroups = blocks.some((block) => block.title !== undefined);
               const flatRun = blocks.some((block) => block.title === undefined);
@@ -726,28 +726,29 @@ function blocksOf(
   items: ProjectVariable[],
   allVariables: readonly ProjectVariable[] | undefined,
   offered: readonly ProjectVariable[] | undefined,
-  options: { readonly grouped: boolean; readonly ranked?: boolean },
+  options: { readonly grouped: boolean; readonly query?: string },
 ): Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }> {
   const blocks = panelBlocksOf(collection, group, items, allVariables, offered, options);
-  return options.ranked === true ? rankedBlocks(blocks, items) : blocks;
+  return options.query !== undefined && options.query !== '' ? rankedBlocks(blocks, items, options.query) : blocks;
 }
 
 // A search puts the best match first: the rows of a block follow the ranking (`items` arrives in
-// ranked order), and the blocks follow their best row, so a group holding a name match is drawn
-// before one holding only value matches. A block with no row left is dropped, a group with a
-// match never is. The ungrouped run is a block like any other and is ranked with them.
+// ranked order), and the blocks follow the best TIER among their rows, so a group holding a name
+// match is drawn before one holding only value matches. Blocks of the same tier keep the panel's
+// order: the name tie-break inside a tier orders rows, and must not reshuffle groups the panel
+// draws in declaration order (`button` before `button-2`). A block with no row left is dropped, a
+// group with a match never is. The ungrouped run is a block like any other and is ranked with them.
 function rankedBlocks(
   blocks: Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }>,
   items: readonly ProjectVariable[],
+  query: string,
 ): Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }> {
   const position = new Map(items.map((variable, index): [ProjectVariable, number] => [variable, index]));
   const at = (variable: ProjectVariable): number => position.get(variable) ?? items.length;
   const sorted = blocks.map((block) => ({ title: block.title, items: [...block.items].sort((left, right) => at(left) - at(right)) }));
-  const best = (block: { readonly items: readonly ProjectVariable[] }): number => {
-    const first = block.items[0];
-    return first === undefined ? items.length : at(first);
-  };
-  return sorted.sort((left, right) => best(left) - best(right));
+  const tier = (block: { readonly items: readonly ProjectVariable[] }): number => bestRank(block.items, query) ?? Number.MAX_SAFE_INTEGER;
+  // Array.prototype.sort is stable, so equal tiers keep the panel's block order.
+  return sorted.sort((left, right) => tier(left) - tier(right));
 }
 
 function panelBlocksOf(
@@ -796,7 +797,7 @@ function drawingOrder(
   filtered: ProjectVariable[],
   allVariables: readonly ProjectVariable[],
   offered: readonly ProjectVariable[],
-  options: { readonly grouped: boolean; readonly ranked?: boolean },
+  options: { readonly grouped: boolean; readonly query?: string },
 ): ProjectVariable[] {
   const ordered: ProjectVariable[] = [];
   for (const { collection, groups } of byCollection(filtered)) {

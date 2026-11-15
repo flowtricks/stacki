@@ -21,6 +21,8 @@
 //   query's 1.5 s answer limit), and a test that holds answers for as long as it likes must not
 //   meet one. On a slow runner the held answers outlived it, the panel drew the element without
 //   its classes, and the late answer then re-picked the selector under an open menu.
+// - The clock the app reads (`performance.now`) stands still apart from a tick per reading, so a
+//   deadline measured on it cannot run out either.
 // Everything is driven by dispatched events: no real pointer, no real hover, no timing
 // thresholds. Fixtures only: the project path is fake and nothing touches a real project.
 
@@ -37,6 +39,21 @@ const DEADLINE_MS_MIN = 1000;
 const realSetTimeout = global.setTimeout;
 global.setTimeout = (callback, delay, ...rest) =>
   typeof delay === 'number' && delay >= DEADLINE_MS_MIN ? realSetTimeout(() => {}, 0) : realSetTimeout(callback, delay, ...rest);
+
+// A deadline the app measures on the clock (the switch hold's remaining time, the computed styles
+// wait) is a timer shorter than DEADLINE_MS_MIN once some of it has elapsed: a walk of many steps
+// let the hold's 1.5 s shrink to 700 ms, the timer then fired, the held element was released and
+// its open picker unmounted with no person involved. So the clock the app reads advances by a
+// microsecond per reading instead of with the wall: elapsed time never accumulates toward a
+// deadline, and the readings still increase strictly, which is all the app's ordering needs.
+let appClockMs = performance.now();
+Object.defineProperty(global.performance, 'now', {
+  configurable: true,
+  value: () => {
+    appClockMs += 0.001;
+    return appClockMs;
+  },
+});
 
 const POPOVER_SELECTOR = '[role="menu"],[role="listbox"],[role="dialog"],.embed-editor_varpicker';
 

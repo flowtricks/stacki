@@ -302,7 +302,7 @@ test('the chip is quiet on the default branch and amber on any other, with the f
   assert.equal(chip().dataset.state, 'quiet', 'it follows a branch changed outside the app on the next read');
 });
 
-test('the chip draws nothing without a repository or commits, a placeholder before the first read, and the last branch at once', async (context) => {
+test('the chip draws nothing without a repository or commits, nothing before the first read, and the last branch at once', async (context) => {
   const { BranchIndicator, forgetRememberedBranches } = await bundle('src/features/git/BranchIndicator.tsx', 'branch-indicator');
   forgetRememberedBranches();
   const root = installDom(context);
@@ -314,7 +314,9 @@ test('the chip draws nothing without a repository or commits, a placeholder befo
   assert.equal(document.querySelector('.stacki-branch-chip') ?? undefined, undefined);
   await show(undefined, '/never-read');
   assert.equal(document.querySelector('.stacki-branch-chip') ?? undefined, undefined);
-  assert.notEqual(document.querySelector('.stacki-branch-chip-skeleton .ui-skeleton') ?? undefined, undefined, 'a shape, never the word "Loading"');
+  // The startup rule is no splash and no skeleton while the first frame is the real app (12050923): a project nothing
+  // is known about draws no chip at all, and the word "Loading" never stands in for one.
+  assert.equal(document.querySelector('.stacki-branch-chip-skeleton') ?? undefined, undefined, 'no stand-in shape either');
   assert.doesNotMatch(document.body.textContent, /Loading|…/);
   await show(repository({ branch: 'feature/x' }), '/seen');
   await show(undefined, '/seen');

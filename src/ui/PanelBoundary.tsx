@@ -32,9 +32,13 @@ export default class PanelBoundary extends React.Component<PanelBoundaryProps, P
     return { failure: { message: error instanceof Error ? error.message : String(error), resetKey: undefined } };
   }
 
-  static getDerivedStateFromProps(props: PanelBoundaryProps, state: PanelBoundaryState): PanelBoundaryState | undefined {
+  // React's contract is a state object or null, never undefined: undefined logs a warning on every
+  // render of every panel, so "no change" is null here, the one place the platform requires it.
+  // eslint-disable-next-line stacki/no-null -- React's getDerivedStateFromProps answers null for "no change".
+  static getDerivedStateFromProps(props: PanelBoundaryProps, state: PanelBoundaryState): PanelBoundaryState | null {
     if (state.failure === undefined) {
-      return undefined;
+      // eslint-disable-next-line stacki/no-null -- see above.
+      return null;
     }
     // The failure remembers the key it happened under; a new key is a new
     // selection or page, and the panel tries again with it.
@@ -44,7 +48,8 @@ export default class PanelBoundary extends React.Component<PanelBoundaryProps, P
     if (state.failure.resetKey !== (props.resetKey ?? '')) {
       return { failure: undefined };
     }
-    return undefined;
+    // eslint-disable-next-line stacki/no-null -- see above.
+    return null;
   }
 
   // A class cannot call a hook: the context gives it the same translator.

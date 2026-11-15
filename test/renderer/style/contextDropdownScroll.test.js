@@ -263,7 +263,11 @@ const check = (what, condition, detail) => {
       JSON.stringify(out.typical900.trigger),
     );
     check('a dot says what it means, for the pointer and for a screen reader', out.typical900.dotTitles === true);
-    check('the typical list (with its Follow strip and Other section) fits in about 360px', out.typical900.listHeight <= 360, `${out.typical900.listHeight}`);
+    // "About 360px": the Follow strip and the one section header per group (the dropdown redesign) put the
+    // list at 361.9px in some runs and under 360 in others, as text line boxes round differently with
+    // the font that happens to be loaded. 2px of tolerance keeps the intent (a compact list, no scrollbar)
+    // without a rounding failing the gate; a real regression adds a row, which is 32px.
+    check('the typical list (with its Follow strip and Other section) fits in about 360px', out.typical900.listHeight <= 362, `${out.typical900.listHeight}`);
     check('the switch row toggles in place', out.switchStayedOpen === true);
     check('at the end the last group is fully visible above the footer', out.end.lastGroupBottom <= out.end.footerTop + 0.5, JSON.stringify(out.end));
     check('and fully visible inside the scroller', out.end.lastGroupBottom <= out.end.scrollerBottom + 0.5, JSON.stringify(out.end));
