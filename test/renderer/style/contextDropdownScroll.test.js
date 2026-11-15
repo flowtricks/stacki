@@ -38,16 +38,23 @@ const check = (what, condition, detail) => {
     import './src/features/style/embedEditor.css'
 
     const pencil = { icon: <span>p</span>, label: 'Edit', onSelect: () => {} }
-    const build = (rev) => {
+    const build = (rev, shape) => {
       const options = [{ value: '', label: 'Base' }]
       const heading = (value, label) => ({ value, label, heading: true, group: true })
       options.push(heading('g0', 'Grid .grid'))
       for (const [i, width] of ['30rem', '48rem', '64rem'].entries()) {
         options.push({ value: 'w' + i, label: '@media (width >= ' + width + ')', indent: true, marked: true, action: pencil })
       }
-      for (let g = 1; g <= 3; g += 1) {
-        options.push(heading('g' + g, 'src/styles/s' + g + '.css'))
-        options.push({ value: 'm' + g, label: '@media (prefers-reduced-motion: reduce)', indent: true, subline: ['*, ::before, ::after'], marked: rev >= 0 })
+      // The typical list: one more group with two rows. The long one: five single-row groups.
+      if (shape === 'typical') {
+        options.push(heading('g1', 'src/styles/base.css'))
+        options.push({ value: 'm1', label: '@media (prefers-reduced-motion: reduce)', indent: true, subline: ['*, ::before, ::after'], marked: true })
+        options.push({ value: 'm2', label: '@media (hover: hover)', indent: true, marked: true })
+      } else {
+        for (let g = 1; g <= 5; g += 1) {
+          options.push(heading('g' + g, 'src/styles/s' + g + '.css'))
+          options.push({ value: 'm' + g, label: '@media (prefers-reduced-motion: reduce)', indent: true, subline: ['*, ::before, ::after'], marked: rev >= 0 })
+        }
       }
       options.push({ value: '__add', label: 'Add query', footer: true })
       return options
@@ -56,10 +63,12 @@ const check = (what, condition, detail) => {
     function Harness() {
       const [value, setValue] = useState('')
       const [rev, setRev] = useState(0)
+      const [shape, setShape] = useState('long')
       window.__rev = setRev
+      window.__shape = setShape
       return (
         <div className="embed-editor_root" style={{ width: 320, margin: '40px 20px' }}>
-          <Select className="embed-editor_context-select" value={value} options={build(rev)} onChange={setValue} ariaLabel="Context" />
+          <Select className="embed-editor_context-select" value={value} options={build(rev, shape)} onChange={setValue} ariaLabel="Context" />
         </div>
       )
     }
@@ -140,6 +149,22 @@ const check = (what, condition, detail) => {
        await js("(() => { window.__q.scroller().scrollTop = 60; window.__rev(1); return true })()");
        await pollUntil({ what: 'rerendered', read: () => js('window.__q.rects().scrollTop'), until: () => true });
        out.afterRerender = await js('window.__q.rects().scrollTop');
+       // The cap: the typical list fits whole at 900px tall; at 500px the list shrinks, scrolls,
+       // and keeps its footer inside the window.
+       const reopen = async (height, shape) => {
+         await js("document.querySelector('.u-select-list') !== null && document.querySelector('.u-select-button').click(); true");
+         await pollUntil({ what: 'list closed', read: () => js("document.querySelector('.u-select-list') === null"), until: (closed) => closed });
+         win.setContentSize(700, height);
+         await pollUntil({ what: 'window resized', read: () => js('window.innerHeight'), until: (inner) => inner === height });
+         await js('window.__shape(' + JSON.stringify(shape) + '); true');
+         await js("document.querySelector('.u-select-button').click(); true");
+         await pollUntil({ what: 'list open again', read: () => js("document.querySelector('.u-select-list') !== null"), until: (open) => open });
+         await settled('menu opened again');
+         return js(\`(() => { const r = window.__q.rects(); const l = document.querySelector('.u-select-list').getBoundingClientRect(); return { ...r, maxHeight: getComputedStyle(document.querySelector('.u-select-list')).maxHeight, windowHeight: window.innerHeight, listTopNow: l.top, listBottomNow: l.bottom } })()\`);
+       };
+       out.typical900 = await reopen(900, 'typical');
+       out.long900 = await reopen(900, 'long');
+       out.long500 = await reopen(500, 'long');
        console.log(JSON.stringify(out));
        app.quit();
      });`,
@@ -162,6 +187,27 @@ const check = (what, condition, detail) => {
     check('at the end the last group is fully visible above the footer', out.end.lastGroupBottom <= out.end.footerTop + 0.5, JSON.stringify(out.end));
     check('and fully visible inside the scroller', out.end.lastGroupBottom <= out.end.scrollerBottom + 0.5, JSON.stringify(out.end));
     check('hovering a partly hidden row does not move the list', out.hoverMoved === 0, `moved ${out.hoverMoved}`);
+    check(
+      'the typical list (Base, a group of three, a group of two, the footer) has no scrollbar at 900px tall',
+      out.typical900.scrollMax === 0,
+      JSON.stringify(out.typical900),
+    );
+    check('the cap is 36rem at 900px tall (80vh is 720px)', out.long900.maxHeight === '576px', out.long900.maxHeight);
+    check(
+      'a list taller than the cap scrolls inside it, footer still below the rows',
+      out.long900.scrollMax > 0 && out.long900.footerTop >= out.long900.scrollerBottom - 0.5,
+      JSON.stringify(out.long900),
+    );
+    check(
+      'at 500px tall the list shrinks to the room and scrolls',
+      out.long500.scrollMax > 0 && out.long500.listHeight < out.long900.listHeight,
+      JSON.stringify(out.long500),
+    );
+    check(
+      'and keeps 8px to the window edge with its footer visible',
+      out.long500.footerBottom <= out.long500.windowHeight - 8 + 0.5 && out.long500.listTopNow >= 8 - 0.5,
+      JSON.stringify(out.long500),
+    );
     check('re-rendering the options keeps the scroll position', out.afterRerender === 60, `scrollTop ${out.afterRerender}`);
   }
 

@@ -1367,9 +1367,13 @@ body.is-scrubbing * {
 }
 
 /* The context dropdown: taller rows, the condition at reading size, the selectors
-   written inside it in code type, and room for many queries before it scrolls. */
+   written inside it in code type, and room for many queries before it scrolls: a typical
+   list (Base, a group of three, a group of two, the footer) fits without a scrollbar. The
+   cap is this dropdown's own; `--select-room` is the space the placement leaves it on the
+   side it opens to, so a short window shrinks it (and the rows scroll) rather than letting
+   it run off the edge. */
 .embed-editor_context-select .u-select-list {
-  max-height: min(20rem, 70vh);
+  max-height: min(36rem, 80vh, var(--select-room, 100vh));
   gap: 0.25rem;
 }
 .embed-editor_context-select .u-select-option {

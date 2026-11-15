@@ -119,7 +119,11 @@ test('every row holds the same trailing column, a cut label titles itself, and t
   label.dispatchEvent(new panel.window.MouseEvent('mouseenter', { bubbles: false }));
   assert.equal(label.title, text(label), 'a cut label carries its whole text');
   const css = fs.readFileSync(repoPath('src/features/style/utilities.css'), 'utf8');
-  assert.match(css, /\.embed-editor_context-select \.u-select-list \{\s*max-height: min\(20rem, 70vh\);/, 'the list is capped and scrolls inside');
+  assert.match(
+    css,
+    /\.embed-editor_context-select \.u-select-list \{\s*max-height: min\(36rem, 80vh, var\(--select-room, 100vh\)\);/,
+    'the list is capped and scrolls inside',
+  );
   assert.match(
     css,
     /\.u-select-list\.has-footer > \.u-select-scroll \{[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;[^}]*scrollbar-gutter: stable;/,

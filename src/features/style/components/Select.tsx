@@ -129,6 +129,10 @@ function useSelectState<T extends string>(props: Props<T>) {
   };
 }
 
+// The least margin a list keeps from the window's edge, and the gap between trigger and list.
+const LIST_EDGE_PX = 8;
+const LIST_TRIGGER_GAP_PX = 8;
+
 type PreviewActivity = 'active' | 'paused';
 type HighlightSource = 'keyboard' | 'pointer';
 
@@ -598,10 +602,19 @@ function useListPlacement({
     wasOpenRef.current = true;
     if (trigger && list) {
       const rect = trigger.getBoundingClientRect();
-      const listHeight = list.offsetHeight;
       const spaceBelow = window.innerHeight - rect.bottom;
       const spaceAbove = rect.top;
-      setDropUp(spaceBelow < listHeight + 8 && spaceAbove > spaceBelow);
+      const region = scrollRegionOf(list);
+      // A list with a pinned footer measures what it WANTS (all its rows), not what its cap
+      // allows: the cap is set from the room, so measuring the capped list would flip the
+      // direction as the cap changed. It then takes the room on its side, less the gap to the
+      // trigger and the window's edge, as the room it may grow into (`--select-room`).
+      const natural = region === list ? list.offsetHeight : list.offsetHeight - region.clientHeight + region.scrollHeight;
+      const up = spaceBelow < natural + LIST_EDGE_PX && spaceAbove > spaceBelow;
+      setDropUp(up);
+      if (region !== list) {
+        list.style.setProperty('--select-room', `${Math.max(0, Math.floor((up ? spaceAbove : spaceBelow) - LIST_EDGE_PX - LIST_TRIGGER_GAP_PX))}px`);
+      }
       if (variant === 'link') {
         clampLinkMenu(trigger, list);
       }
