@@ -64,7 +64,9 @@ export function registerPageTemplateHandlers(
       if (keyCopy !== undefined) {
         await preview.restartForProjectEnv(projectPath);
       }
-      if (devUrl) {
+      // An EmDash page has no getStaticPaths for the server to answer, and no content config changed: its entries
+      // come from EmDash itself, so the preview needs neither the restart nor the wait.
+      if (devUrl && draft.source.kind !== 'emdash') {
         await preview.restartForNewContentConfig(devUrl);
         await waitForPaths(devUrl, toPosix(path.relative(projectPath, created.pagePath)));
       }

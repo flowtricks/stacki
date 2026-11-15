@@ -27,6 +27,8 @@ export interface TemplatePageInput {
   /** The layout's name and its import path relative to the page. */
   readonly layout: { readonly name: string; readonly importPath: string } | undefined;
   readonly collection: CollectionFacts | undefined;
+  /** What the collection's EmDash schema says, for an `emdash` source. */
+  readonly emdash?: EmDashFacts | undefined;
   /** `explicit` writes `prerender = true`, which a server-output project needs for getStaticPaths to run. */
   readonly prerender: 'explicit' | 'inherited';
 }
@@ -38,6 +40,16 @@ export interface CollectionFacts {
   readonly heading: string | undefined;
   /** Astro 5 replaced `entry.render()` and `entry.slug` with `render(entry)` and `entry.id`. */
   readonly api: 'current' | 'legacy';
+}
+
+/**
+ * What an EmDash content type holds, as its own schema says (never as Stacki would define it): the field shown as
+ * the heading, the first image and the first rich text. Each is a field slug, or absent when the type has none.
+ */
+export interface EmDashFacts {
+  readonly heading: string | undefined;
+  readonly image: string | undefined;
+  readonly body: string | undefined;
 }
 
 const HEADING_FIELDS = ['title', 'name', 'heading'] as const;
@@ -63,6 +75,10 @@ export function pageTemplateText(input: TemplatePageInput): string {
       const facts = input.collection;
       assert(facts !== undefined, 'A content template is planned with its collection');
       return contentPageText(input, source, facts);
+    }
+    case 'emdash': {
+      assert(input.emdash !== undefined, 'An EmDash template is planned with its schema');
+      return emdashPageText(input, source, input.emdash);
     }
     case 'sanity':
       return externalPageText(input, sanityRequestLines(source), {
@@ -93,6 +109,39 @@ export function headingField(names: readonly string[]): string | undefined {
 }
 
 type ContentSource = Extract<DataSource, { readonly kind: 'content-collection' }>;
+type EmDashSource = Extract<DataSource, { readonly kind: 'emdash' }>;
+
+// An EmDash page reads its entry when it is requested, the way EmDash documents (`getEmDashEntry`), so a change
+// in the CMS shows on the next request with no rebuild. It has no `getStaticPaths`: Stacki lists the entries to
+// preview from EmDash itself (emdashPaths.ts). `decodeSlug` is EmDash's own, and a missing entry is a 404.
+function emdashPageText(input: TemplatePageInput, source: EmDashSource, facts: EmDashFacts): string {
+  const slug = `Astro.params.${input.route.param}`;
+  const components = [...(facts.image === undefined ? [] : ['Image']), ...(facts.body === undefined ? [] : ['PortableText'])];
+  const frontmatter = [
+    "import { decodeSlug, getEmDashEntry } from 'emdash';",
+    ...(components.length === 0 ? [] : [`import { ${components.join(', ')} } from 'emdash/ui';`]),
+    ...layoutImport(input),
+    '',
+    `const slug = decodeSlug(${slug});`,
+    'if (!slug) {',
+    "\treturn Astro.rewrite('/404');",
+    '}',
+    '',
+    `const { entry, error } = await getEmDashEntry(${quoted(source.collection)}, slug);`,
+    'if (error) {',
+    "\treturn new Response('Unable to load this page.', { status: 500 });",
+    '}',
+    'if (!entry) {',
+    "\treturn Astro.rewrite('/404');",
+    '}',
+  ];
+  const content = [
+    ...(facts.image === undefined ? [] : [`{entry.data${member(facts.image)} && <Image image={entry.data${member(facts.image)}} />}`]),
+    ...(facts.heading === undefined ? [] : [`<h1>{entry.data${member(facts.heading)}}</h1>`]),
+    ...(facts.body === undefined ? [] : [`<PortableText value={entry.data${member(facts.body)}} />`]),
+  ];
+  return pageText(input, frontmatter, content);
+}
 
 function contentPageText(input: TemplatePageInput, source: ContentSource, facts: CollectionFacts): string {
   const legacy = facts.api === 'legacy';
@@ -334,6 +383,11 @@ function pageText(input: TemplatePageInput, frontmatter: readonly string[], cont
   const layout = input.layout;
   const body = layout === undefined ? ['<article>', ...indented(content), '</article>'] : [`<${layout.name}>`, ...indented(content), `</${layout.name}>`];
   const text = ['---', ...frontmatter, '---', '', ...body, ''].join('\n');
+  if (input.source.kind === 'emdash') {
+    assert(text.includes('getEmDashEntry('), 'An EmDash template page reads its entry from EmDash');
+    assert(!text.includes('getStaticPaths'), 'An EmDash template page is served when requested');
+    return text;
+  }
   assert(text.includes('export async function getStaticPaths()'), 'A template page declares its paths');
   assert(text.includes('Astro.props'), 'A template page reads its entry');
   return text;

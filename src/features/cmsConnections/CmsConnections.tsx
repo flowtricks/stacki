@@ -13,6 +13,7 @@ import { SanitySignIn } from './SanitySignIn';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { CmsKeyForm, type CmsKeyKind } from './CmsKeyForm';
 import { PayloadStatus } from './PayloadStatus';
+import { EmDashSection } from './EmDashSection';
 import { SkeletonRows } from '../../ui/Skeleton';
 
 type Dialog = { readonly kind: 'sanity-login' } | { readonly kind: 'key'; readonly cms: CmsKeyKind };
@@ -39,6 +40,7 @@ export function CmsConnections({ projectPath }: { readonly projectPath: string }
       {list?.encryption === 'unavailable' && <p className="cms-connections-alert">{translate('cmsConnections.list.noEncryption')}</p>}
       {list === undefined ? <SkeletonRows count={2} /> : <ConnectionRows projectPath={projectPath} connections={list.connections} onRemove={remove} />}
       <ConnectionActions onOpen={setDialog} />
+      <EmDashSection projectPath={projectPath} />
       {dialog?.kind === 'sanity-login' && <SanitySignIn projectPath={projectPath} close={closed} />}
       {dialog?.kind === 'key' && <CmsKeyForm projectPath={projectPath} cms={dialog.cms} close={closed} />}
     </section>

@@ -1485,6 +1485,36 @@ While Stacki previews a project with a Sanity connection, its dev server gets
 `STACKI_SANITY_TOKEN` (the connection's key). Nothing else receives them, and a site opts in by
 reading them; production builds never see them.
 
+### EmDash
+
+EmDash (the `emdash` package, an Astro-native CMS whose content Astro reads at request time through the `_emdash`
+live collection) is detected from the project, not connected: there is no key and no connection record.
+`shared/properties/emdash.ts` is the contract; `electron/content/emdashProject.ts` reads the project.
+
+- Detection follows EmDash's documented setup: `emdash` in `package.json`, `emdash()` imported from `emdash/astro` in
+  the Astro config, and `emdashLoader()` / `_emdash` in `src/live.config.*`. What is missing, a static `output`, a local
+  database or uploads folder that `.gitignore` does not list, and an unreadable schema are reported as `EmDashProblem`
+  values the settings card words in each language.
+- Content types and fields are defined only in EmDash (its `_emdash_collections` and `_emdash_fields` tables) and Stacki
+  reads them from there, most exact first: the local SQLite database (opened with `readOnly: true` through Node's
+  `node:sqlite`; every statement is a fixed `SELECT`), then `.emdash/schema.json` (written by `emdash types`), then a seed
+  file (`.emdash/seed.json`, `seed/seed.json`, or `emdash.seed` in `package.json`). Each passes `parseEmDashSchema`; a
+  slug EmDash refuses is dropped, a field type Stacki does not know is `unsupported` and never bound.
+- A field's `binding` says how it fills an element: text, rich text (`PortableText` from `emdash/ui`), image (`Image`),
+  link, number, boolean, date, list, reference, or data (JSON, repeaters and blocks, written by hand).
+- `emdash:project` returns the detection result (read only, never a secret). Studio shows no EmDash card yet.
+- Dynamic routes: an EmDash route (`posts/[slug].astro`) declares no `getStaticPaths`, so `page:dynamicPaths` falls back
+  to the published entries in the local database (`emdashPaths.ts`) and the canvas previews each through the project's own
+  dev server, which renders from the same database. Page templates (`kind: 'emdash'`) write that route:
+  `getEmDashEntry(collection, decodeSlug(Astro.params.slug))` with the type's own heading, first image and first rich text,
+  never `getStaticPaths` or `prerender`, so a change in EmDash shows on the next request.
+- A local database and uploads folder are the designer's copy. A customer's real content reaches them through EmDash's own
+  CLI (`emdash login`, `emdash site export`, `emdash site import`), which Stacki only shows the commands for; Stacki holds
+  no EmDash credential. Pointing a deploy at the customer's own database and storage stays in the project's config.
+- Not built: Stacki does not edit EmDash content or types, the loop builder has no EmDash source (a list is written as
+  code), a Cloudflare D1 project is read only from `.wrangler/state` (unverified against a real D1 project), and
+  Studio cannot read an EmDash project.
+
 ### On-canvas text editing
 
 Desktop and Studio share the canvas text catalog and native text editor. In selection mode,

@@ -14,6 +14,7 @@ import { messages as componentProps } from './componentProps';
 import { messages as contentUi } from './contentUi';
 import { messages as dialog } from './dialog';
 import { messages as editor } from './editor';
+import { messages as emdash } from './emdash';
 import { messages as error } from './error';
 import { messages as git } from './git';
 import { messages as history } from './history';
@@ -53,6 +54,7 @@ export const messages = {
   ...contentUi,
   ...dialog,
   ...editor,
+  ...emdash,
   ...error,
   ...git,
   ...history,

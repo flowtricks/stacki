@@ -22,7 +22,10 @@ import { cmsSourcePath } from '../lib/contentPaths';
 import { toPosix } from '../lib/mainHelpers';
 import { CONTENT_CONFIG_PATH, addCollectionToConfig, createAstroCollection } from './astroCollectionConfig';
 import { configPathOf } from './contentConfig';
-import { headingField, pageTemplateText, type CollectionFacts } from './pageTemplateSource';
+import { headingField, pageTemplateText, type CollectionFacts, type EmDashFacts } from './pageTemplateSource';
+import { detectEmDash } from './emdashProject';
+import { headingFieldOf, type EmDashCollection } from '../../shared/properties/emdash';
+import { described } from '../../shared/properties/i18n/messageRef';
 
 /** What a template needs to know of the content config. */
 export interface TemplateConfig {
@@ -55,6 +58,7 @@ export async function planPageTemplate(draft: PageTemplateDraft, host: PageTempl
     source: draft.source,
     layout: layoutOf(draft, host.projectPath, pageRel),
     collection: collection?.facts,
+    emdash: await emdashFacts(draft.source, host.projectPath),
     prerender: serverOutput(host.projectPath) ? 'explicit' : 'inherited',
   });
   const changes: readonly PageTemplateChange[] = [{ path: pageRel, action: 'create', text }, ...(collection?.changes ?? [])];
@@ -156,6 +160,27 @@ async function collectionPlan(source: DataSource, host: PageTemplateHost): Promi
   return { facts: { body: found.hasBody === true ? 'rendered' : 'none', heading: headingField(fields), api }, changes: [] };
 }
 
+// An EmDash template shows what EmDash's own schema holds, so the collection must exist there; the plan refuses a
+// name EmDash does not list rather than writing a page that would always answer 404.
+async function emdashFacts(source: DataSource, projectPath: string): Promise<EmDashFacts | undefined> {
+  if (source.kind !== 'emdash') {
+    return undefined;
+  }
+  const project = await detectEmDash(projectPath);
+  if (project.kind === 'absent') {
+    throw new DescribedError(described('emdash.template.notEmDash'));
+  }
+  const collection: EmDashCollection | undefined = project.collections.find((candidate) => candidate.slug === source.collection);
+  if (collection === undefined) {
+    throw new DescribedError(described('emdash.template.noSuchCollection', { collection: source.collection }));
+  }
+  return {
+    heading: headingFieldOf(collection),
+    image: collection.fields.find((field) => field.type === 'image')?.slug,
+    body: collection.fields.find((field) => field.type === 'portableText')?.slug,
+  };
+}
+
 function newCollectionChanges(projectPath: string, name: string): readonly PageTemplateChange[] {
   const located = configPathOf(projectPath);
   const rel = located?.rel ?? CONTENT_CONFIG_PATH;
@@ -190,6 +215,8 @@ function envStatus(source: DataSource, env: ReadonlyMap<string, string>): readon
 function envNames(source: DataSource): readonly string[] {
   switch (source.kind) {
     case 'content-collection':
+      return [];
+    case 'emdash':
       return [];
     case 'sanity':
       return source.tokenEnv === undefined ? [] : [source.tokenEnv];

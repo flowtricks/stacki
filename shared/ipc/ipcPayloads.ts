@@ -622,6 +622,8 @@ export const IPC_PAYLOADS = {
   'audit:render': object({ ...project, devUrl: loopbackOrigin, route: routePath }),
   'audit:measure': object({ ...project, devUrl: loopbackOrigin, route: routePath }),
   'page:dynamicPaths': object({ ...project, pagePath: pathText, devUrl: maybeText }),
+  // What an EmDash project holds, read from its own files and database (read only).
+  'emdash:project': object({ ...project }),
   // A visual edit in the renderer's terms, authored against the checksum of
   // the page it shows; main turns it into an intent (step 6).
   'page:edit': parseEditRequest,

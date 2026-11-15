@@ -1,0 +1,14 @@
+{
+  "name": "emdash-fixture-site",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "astro dev", "build": "astro build" },
+  "dependencies": {
+    "@astrojs/node": "^10.0.0",
+    "@astrojs/react": "^5.0.0",
+    "astro": "^6.0.0",
+    "emdash": "^1.5.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  }
+}

@@ -275,6 +275,7 @@ function pageBridge() {
     revertComponentProperties: invoke('component:revertProperties'),
     componentUsage: invoke('component:usage'),
     dynamicPaths: invoke('page:dynamicPaths'),
+    emDashProject: invoke('emdash:project'),
     injectedRoutes: invoke('project:injectedRoutes'),
     sampleEntry: invoke('content:sampleEntry'),
     sampleValue: invoke('content:sampleValue'),

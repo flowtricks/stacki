@@ -167,3 +167,92 @@
   color: var(--text-dim);
   font-size: 12px;
 }
+
+/* EmDash: a card per project, in the Settings rows' soft fill; content types list their fields as plain rows. */
+.emdash-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-hover);
+  font-size: 12px;
+}
+.emdash-card h4 {
+  margin: 0;
+  font-size: 13px;
+}
+.emdash-card p {
+  margin: 0;
+}
+.emdash-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 12px;
+  margin: 0;
+}
+.emdash-facts dt {
+  color: var(--text-faint);
+}
+.emdash-facts dd {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.emdash-problems {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: #ffcf8a;
+}
+.emdash-collections {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.emdash-collection {
+  border-radius: 8px;
+  background: var(--bg-surface, rgba(255, 255, 255, 0.04));
+}
+.emdash-collection > summary {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.emdash-collection > summary > span {
+  font-weight: 400;
+  color: var(--text-faint);
+}
+.emdash-fields {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0 10px 8px;
+  list-style: none;
+}
+.emdash-field {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.emdash-field code {
+  color: var(--text-dim);
+}
+.emdash-field .emdash-field-kind {
+  margin-left: auto;
+  color: var(--text-faint);
+}
+.emdash-guide {
+  display: grid;
+  gap: 8px;
+}
+.emdash-guide pre {
+  margin: 0;
+}

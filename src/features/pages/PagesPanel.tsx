@@ -20,6 +20,8 @@ import MoreMenu from '../../ui/MoreMenu';
 import type { ConnectionKeyCopy, PageTemplateDraft } from '../../../shared/properties/pageTemplate';
 import { NewPageModal } from './PageDialogs';
 import { PageTemplateDialog, type ConnectSanity } from './PageTemplateDialog';
+import { EmDashTemplateDialog } from './EmDashTemplateDialog';
+import { EMDASH_HOST, readEmDashProject } from '../../ipc/emdashBridge';
 import { PageSearchPath } from './PageSearchPath';
 import { PageTreeView, type PageEditing, type PageTreeActions } from './PageTreeView';
 
@@ -56,6 +58,9 @@ export default function PagesPanel(props: PagesPanelProps) {
     setShowNew,
     showTemplate,
     setShowTemplate,
+    showEmDash,
+    setShowEmDash,
+    emdashPresent,
     query,
     setQuery,
     tree,
@@ -70,7 +75,12 @@ export default function PagesPanel(props: PagesPanelProps) {
 
   return (
     <div className="panel-section grow">
-      <PagesHeader createFolder={() => void openFolder()} createPage={() => setShowNew(true)} createTemplate={() => setShowTemplate(true)} />
+      <PagesHeader
+        createFolder={() => void openFolder()}
+        createPage={() => setShowNew(true)}
+        createTemplate={() => setShowTemplate(true)}
+        createEmDashTemplate={emdashPresent ? () => setShowEmDash(true) : undefined}
+      />
       <div style={{ padding: '0 12px 8px' }}>
         <input
           value={query}
@@ -105,6 +115,14 @@ export default function PagesPanel(props: PagesPanelProps) {
           }}
         />
       )}
+      {showEmDash && props.projectPath !== undefined && (
+        <EmDashTemplateDialog
+          projectPath={props.projectPath}
+          layouts={props.scan.layouts}
+          onClose={() => setShowEmDash(false)}
+          onCreate={(draft) => props.onCreateTemplate(draft, undefined)}
+        />
+      )}
       {showTemplate && props.projectPath !== undefined && (
         <PageTemplateDialog
           projectPath={props.projectPath}
@@ -122,6 +140,8 @@ function usePagesPanel(props: PagesPanelProps) {
   const translate = useTranslate();
   const [showNew, setShowNew] = useState(false);
   const [showTemplate, setShowTemplate] = useState(false);
+  const [showEmDash, setShowEmDash] = useState(false);
+  const emdashPresent = useEmDashPresent(props.projectPath);
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
   const [editing, setEditing] = useState<PageEditing>({ kind: 'none' });
@@ -151,6 +171,9 @@ function usePagesPanel(props: PagesPanelProps) {
     setShowNew,
     showTemplate,
     setShowTemplate,
+    showEmDash,
+    setShowEmDash,
+    emdashPresent,
     query,
     setQuery,
     tree,
@@ -357,23 +380,46 @@ function InjectedRoutes({
 
 // The two things `+` makes. A template gets the CMS icon its rows have in the tree.
 export function pageCreateMenuItems(
-  actions: { readonly createPage: () => void; readonly createTemplate: () => void },
+  actions: { readonly createPage: () => void; readonly createTemplate: () => void; readonly createEmDashTemplate?: (() => void) | undefined },
   translate: Translator = ENGLISH_TRANSLATE,
 ) {
+  const emdash = actions.createEmDashTemplate;
   return [
     { label: translate('pages.create.page'), icon: <FileIcon size={13} />, onSelect: actions.createPage },
     { label: translate('pages.create.template'), icon: <CmsIcon size={13} />, onSelect: actions.createTemplate },
+    // Only a project that uses EmDash is offered its template: its types come from EmDash itself.
+    ...(emdash === undefined ? [] : [{ label: translate('emdash.template.menu'), icon: <CmsIcon size={13} />, onSelect: emdash }]),
   ];
+}
+
+/** Whether the project uses EmDash, read once per project; false where the host cannot read it. */
+function useEmDashPresent(projectPath: string | undefined): boolean {
+  const [present, setPresent] = useState(false);
+  useEffect(() => {
+    let current = true;
+    if (EMDASH_HOST.available && projectPath !== undefined) {
+      readEmDashProject(projectPath).then(
+        (project) => current && setPresent(project.kind === 'present'),
+        () => current && setPresent(false),
+      );
+    }
+    return () => {
+      current = false;
+    };
+  }, [projectPath]);
+  return present;
 }
 
 function PagesHeader({
   createFolder,
   createPage,
   createTemplate,
+  createEmDashTemplate,
 }: {
   readonly createFolder: () => void;
   readonly createPage: () => void;
   readonly createTemplate: () => void;
+  readonly createEmDashTemplate: (() => void) | undefined;
 }) {
   // Creating pages and folders appears only for a role that may (shared/properties/projectRoles.ts).
   const translate = useTranslate();
@@ -391,7 +437,7 @@ function PagesHeader({
             title={translate('pages.new.button')}
             icon={<PlusIcon size={13} />}
             width={190}
-            items={pageCreateMenuItems({ createPage, createTemplate }, translate)}
+            items={pageCreateMenuItems({ createPage, createTemplate, createEmDashTemplate }, translate)}
           />
         </div>
       )}

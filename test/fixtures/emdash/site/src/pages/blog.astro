@@ -1,0 +1,17 @@
+---
+import { getEmDashCollection } from 'emdash';
+
+const { entries: posts, error } = await getEmDashCollection('posts', { orderBy: { published_at: 'desc' }, limit: 10 });
+if (error) {
+  console.error('Failed to load posts:', error);
+}
+---
+
+<main>
+	<h1>Blog</h1>
+	<ul>
+		{posts.map((post) => (
+			<li><a href={`/posts/${post.id}`}>{post.data.title}</a></li>
+		))}
+	</ul>
+</main>

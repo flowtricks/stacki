@@ -22,6 +22,8 @@ import { newPageText } from '../documents/componentFile';
 import { toPosix, errorMessage } from '../lib/mainHelpers';
 import type { MainHost } from './mainHost';
 import { routeForPage } from '../project/projectFiles';
+import { emDashPageEntries } from '../content/emdashPaths';
+import { detectEmDash } from '../content/emdashProject';
 import { parsePageSource, pageEditError, resolvePagesDirectory, fillRoute } from '../documents/pageRequests';
 import { translateMain, translateMainDescribed } from '../lib/mainLocale';
 import { DescribedError } from '../../shared/properties/describedError';
@@ -212,6 +214,9 @@ function registerProjectInjectedRoutesHandlers({ ipcMain }: Pick<MainHost, 'ipcM
   // The concrete URLs a dynamic page stands for, by asking the dev server to run
   // its getStaticPaths. Returns [] for a static page, and for any failure — a
   // page that can't answer is previewed at its own pattern, exactly as before.
+  // What an EmDash project holds, read from its files and its local database, read only.
+  ipcMain.handle('emdash:project', (_event, { projectPath }) => detectEmDash(path.resolve(projectPath)));
+
   ipcMain.handle('page:dynamicPaths', async (_event, { projectPath, pagePath, devUrl }) => {
     const pattern = routeForPage(projectPath, pagePath);
     if (!pattern.includes('[') || !devUrl) {
@@ -237,6 +242,14 @@ function registerProjectInjectedRoutesHandlers({ ipcMain }: Pick<MainHost, 'ipcM
           label: Object.values(params).map(String).join(' / ') || pattern,
         };
       });
+      if (entries.length === 0 && !data.error) {
+        // An EmDash page reads its entry at request time, so it declares no getStaticPaths: its pages are the entries in EmDash.
+        const emdash = await emDashPageEntries(projectPath, pagePath, pattern);
+        return {
+          entries: emdash.map((entry) => ({ params: entry.params, props: undefined, route: fillRoute(pattern, entry.params), label: entry.label })),
+          error: undefined,
+        };
+      }
       return { entries, error: data.error || undefined };
     } catch (error: unknown) {
       return { entries: [], error: errorMessage(error) };

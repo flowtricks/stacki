@@ -110,6 +110,7 @@ interface InvokeChannels {
   readonly revertComponentProperties: 'component:revertProperties';
   readonly componentUsage: 'component:usage';
   readonly dynamicPaths: 'page:dynamicPaths';
+  readonly emDashProject: 'emdash:project';
   readonly injectedRoutes: 'project:injectedRoutes';
   readonly sampleEntry: 'content:sampleEntry';
   readonly sampleValue: 'content:sampleValue';

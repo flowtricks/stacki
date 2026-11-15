@@ -1,0 +1,34 @@
+{
+  "collections": [
+    {
+      "slug": "posts",
+      "label": "Posts",
+      "labelSingular": "Post",
+      "supports": ["drafts", "revisions", "search"],
+      "fields": [
+        { "slug": "title", "label": "Title", "type": "string", "required": true },
+        { "slug": "featured_image", "label": "Featured Image", "type": "image", "required": false },
+        { "slug": "content", "label": "Content", "type": "portableText", "required": false },
+        { "slug": "excerpt", "label": "Excerpt", "type": "text", "required": false },
+        { "slug": "category", "label": "Category", "type": "select", "required": false, "validation": { "options": ["news", "guide"] } },
+        { "slug": "source_url", "label": "Source", "type": "url", "required": false },
+        { "slug": "reading_minutes", "label": "Reading time", "type": "integer", "required": false },
+        { "slug": "published_on", "label": "Published on", "type": "datetime", "required": false },
+        { "slug": "gallery", "label": "Gallery", "type": "repeater", "required": false },
+        { "slug": "layout_hint", "label": "Layout hint", "type": "hologram", "required": false }
+      ]
+    },
+    {
+      "slug": "case_studies",
+      "label": "Case studies",
+      "labelSingular": "Case study",
+      "urlPattern": "/work/{slug}",
+      "fields": [
+        { "slug": "title", "label": "Title", "type": "string", "required": true },
+        { "slug": "client", "label": "Client", "type": "string", "required": false },
+        { "slug": "result", "label": "Result", "type": "portableText", "required": false }
+      ]
+    }
+  ],
+  "version": "fixture"
+}

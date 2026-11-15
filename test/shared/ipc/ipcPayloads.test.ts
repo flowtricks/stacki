@@ -242,6 +242,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   },
   'pageTemplate:sample': { projectPath: '/site', request: { kind: 'http-json', url: 'https://api.example.com/items', headers: [] } },
   'project:setEnv': { projectPath: '/site', name: 'API_TOKEN', value: 'value' },
+  'emdash:project': { projectPath: '/site' },
   'secrets:list': { projectPath: '/site' },
   'secrets:read': { projectPath: '/site', revision: 'a'.repeat(64), index: 0 },
   'secrets:apply': { projectPath: '/site', revision: 'a'.repeat(64), change: { kind: 'remove', index: 0 } },

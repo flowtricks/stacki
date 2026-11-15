@@ -24,6 +24,7 @@ import type { MarketplaceIndex } from '../properties/appMarketplace';
 import type { AppRepositoryPlaceReply } from '../properties/appPlace';
 import type { MediaConnectionList, MediaListing, MediaResult, MediaSaveResult } from '../properties/mediaHosting';
 import type { DataSample, PageTemplatePlan } from '../properties/pageTemplate';
+import type { EmDashProject } from '../properties/emdash';
 import type { AstroRemoteEditAnswer, AstroRemoteReadAnswer } from '../properties/astroContent';
 import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
@@ -673,6 +674,7 @@ export interface IpcResults extends AiResults {
   readonly 'mcp:readCodex': McpCodexState;
   readonly 'mcp:revealCodex': McpResult<McpServerConfig>;
   readonly 'mcp:applyCodex': McpResult<McpCodexState>;
+  readonly 'emdash:project': EmDashProject;
   readonly 'page:dynamicPaths':
     | {
         readonly entries: ReadonlyArray<never>;

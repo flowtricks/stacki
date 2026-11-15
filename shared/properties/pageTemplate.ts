@@ -11,6 +11,7 @@ import { object, optional, record, text, list, count } from '../core/boundary';
 import { assert } from '../core/assert';
 import { err, ok, type Result } from '../core/result';
 import { parseConnectionId } from './cmsConnections';
+import { parseEmDashCollectionName } from './emdash';
 import type { MessageParams } from '../core/i18n/catalog';
 import { englishText, messageRef, type MessageKey } from './i18n/messageRef';
 import { parseMessageRef, type MessageRef } from '../core/i18n/messageReference';
@@ -80,6 +81,14 @@ export type DataSource =
       readonly slugPath: string;
       readonly slugTreatment: SlugTreatment;
       readonly fields: readonly TemplateField[];
+    }
+  | {
+      /**
+       * An EmDash content type, read at request time (`getEmDashEntry`): the page names the collection and nothing
+       * else. Which fields it shows comes from EmDash's own schema when the template is written.
+       */
+      readonly kind: 'emdash';
+      readonly collection: string;
     }
   | {
       readonly kind: 'http-json';
@@ -443,6 +452,8 @@ export function parseDataSource(input: unknown): DataSource {
         slugTreatment: parseTreatment(value['slugTreatment']),
         fields: parseFields(value['fields']),
       };
+    case 'emdash':
+      return { kind: 'emdash', collection: parseEmDashCollectionName(value['collection']) };
     case 'http-json':
       return {
         kind: 'http-json',
