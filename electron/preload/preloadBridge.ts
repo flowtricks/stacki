@@ -13,7 +13,20 @@ const invoke =
   (...args: undefined extends IpcPayloads[K] ? [payload?: IpcPayloads[K]] : [payload: IpcPayloads[K]]): Promise<unknown> =>
     ipcRenderer.invoke(channel, args[0]);
 
+// The boot path (electron/boot/bootChannels.ts): the seed for the first render, read synchronously here so it is
+// already in the page before any script runs, a save for the snapshot, and the report that the real shell painted.
+// The seed stays `unknown` until src/lib/bootSeed.ts parses it.
+function exposeBoot(): void {
+  const seed: unknown = ipcRenderer.sendSync('boot:read');
+  contextBridge.exposeInMainWorld('stackiBoot', {
+    seed,
+    save: (text: string): void => ipcRenderer.send('boot:save', text),
+    firstFrame: (): void => ipcRenderer.send('boot:first-frame'),
+  });
+}
+
 export function exposeBridge(): void {
+  exposeBoot();
   contextBridge.exposeInMainWorld('avb', {
     ...projectBridge(),
     ...cmsBridge(),

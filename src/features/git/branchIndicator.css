@@ -42,12 +42,6 @@
   background: rgba(255, 214, 10, 0.24);
   color: var(--amber);
 }
-.stacki-branch-chip-skeleton {
-  display: inline-flex;
-  align-items: center;
-  height: 24px;
-}
-
 /* The question asked before publishing from a branch other than the default (the dialog itself is the shared .confirm-dialog). */
 .stacki-branch-warning-problem {
   margin: 12px 0 0;

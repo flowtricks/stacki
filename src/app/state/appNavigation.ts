@@ -3,6 +3,7 @@
 // composing the lifecycle (App.tsx).
 
 import { markRenderer } from '../startupMarks';
+import { bootSnapshotFor } from '../../lib/bootSeed';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ScanResult } from '../../../shared/properties/projectScan';
@@ -85,13 +86,15 @@ export function useSelectPage(lifecycle: ReturnType<typeof useLifecycle>, coreSt
   );
 
   const loadProject = useCallback(
-    async (projectPath: string) => {
+    async (projectPath: string, options: { readonly keepLayout?: boolean } = {}) => {
       const name = projectPath.split(/[\\/]/).filter(Boolean).pop() ?? projectPath;
       setProject({ path: projectPath, name });
-      setLeftTab('navigator');
-      // Every project opens on desktop — a breakpoint left over from the
-      // last project isn't a choice the user made about this one.
-      setDevice('desktop');
+      // A window that opened with its last layout (src/lib/bootSeed.ts) keeps it; any other open starts on the
+      // navigator, on desktop: a panel or breakpoint left over from the last project isn't a choice made about this one.
+      if (options.keepLayout !== true) {
+        setLeftTab('navigator');
+        setDevice('desktop');
+      }
       void addRecentProject(projectPath).catch(() => {});
       // Starting the watch records the open project in the main process, which
       // allows file access only inside it. It goes out before the first await, so
@@ -111,7 +114,9 @@ export function useSelectPage(lifecycle: ReturnType<typeof useLifecycle>, coreSt
       const result = await rescan(projectPath);
       markRenderer('stacki:project-ready');
 
-      const first = result.pages.find((page) => page.name === 'index.astro') || result.pages[0] || undefined;
+      const remembered = options.keepLayout === true ? bootSnapshotFor(projectPath)?.pageName : undefined;
+      const first =
+        result.pages.find((page) => page.name === remembered) || result.pages.find((page) => page.name === 'index.astro') || result.pages[0] || undefined;
       if (first) {
         // Opening a page reports its own failures as toasts.
         void selectPage(first);
@@ -133,7 +138,7 @@ export function useSelectPage(lifecycle: ReturnType<typeof useLifecycle>, coreSt
     pendingProject()
       .then((path) => {
         if (path) {
-          return loadProject(path);
+          return loadProject(path, { keepLayout: true });
         }
         return undefined;
       })

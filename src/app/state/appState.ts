@@ -14,6 +14,7 @@ import type { DevDiagnosis } from '../../features/preview/DevOffline';
 import type { PreviewDevice } from '../../features/preview/PreviewToolbar';
 import type { CanvasWidthRequest } from '../../features/preview/usePreviewSizing';
 import type { VariableSelection } from '../../ipc/variablesBridge';
+import { bootSeed, bootSnapshotFor } from '../../lib/bootSeed';
 import { type CodeWindowState } from '../../features/code/codeWindowTarget';
 import { type CodeReveal } from '../../features/code/codePanelModel';
 import {
@@ -48,20 +49,26 @@ import type { PendingSave } from '../model/nodeFactory';
 // The open project, its scan, and the page and selection being edited.
 export function useProjectState() {
   const propertySave = usePropertySaveGuard();
-  const [project, setProject] = useState<ProjectIdentity | undefined>(undefined);
+  // The project this window opens and what the last session knew of it (src/lib/bootSeed.ts), so the first
+  // render is the real shell with its real page list; the scan that follows replaces it in place.
+  const seeded = bootSeed();
+  const [project, setProject] = useState<ProjectIdentity | undefined>(seeded.project);
 
   // ----------------------------------------------------------------
   // Model operations
   // ----------------------------------------------------------------
 
-  const projectRef = useRef<ProjectIdentity | undefined>(undefined);
+  const projectRef = useRef<ProjectIdentity | undefined>(seeded.project);
   projectRef.current = project;
-  const [scan, setScan] = useState<ScanResult>({
-    pages: [],
-    pageFolders: [],
-    layouts: [],
-    components: [],
-  });
+  const [scan, setScan] = useState<ScanResult>(
+    () =>
+      (seeded.project === undefined ? undefined : bootSnapshotFor(seeded.project.path)?.scan) ?? {
+        pages: [],
+        pageFolders: [],
+        layouts: [],
+        components: [],
+      },
+  );
   const [projectClasses, setProjectClasses] = useState<readonly string[]>([]);
   const [currentPage, setCurrentPage] = useState<CurrentPage | undefined>(undefined);
   // Drill-down trail: [page, component, nested component, …]. The last entry
@@ -250,12 +257,31 @@ export function useDataState() {
   };
 }
 
+// The panel the last session left open for the project this window opens, when it is one the rail still has.
+const SEEDED_LEFT_TABS: Readonly<Record<string, LeftTab>> = {
+  pages: 'pages',
+  navigator: 'navigator',
+  components: 'components',
+  assets: 'assets',
+  cms: 'cms',
+  variables: 'variables',
+  selectors: 'selectors',
+  code: 'code',
+  history: 'history',
+};
+
+function seededLeftTab(): LeftTab {
+  const seeded = bootSeed().project;
+  const remembered = seeded === undefined ? undefined : bootSnapshotFor(seeded.path)?.leftTab;
+  return (remembered === undefined ? undefined : SEEDED_LEFT_TABS[remembered]) ?? 'navigator';
+}
+
 // The left panel, the CMS views and the interactive preview.
 export function usePanelState(canvasReportState: ReturnType<typeof useCanvasReportState>, projectState: ReturnType<typeof useProjectState>) {
   const { setHoverNodeId } = canvasReportState;
   const { currentPage } = projectState;
 
-  const [leftTab, setLeftTab] = useState<LeftTab>('navigator');
+  const [leftTab, setLeftTab] = useState<LeftTab>(seededLeftTab);
   useEffect(() => {
     if (leftTab !== 'navigator') {
       setHoverNodeId(undefined);

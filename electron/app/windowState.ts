@@ -11,7 +11,10 @@
 // title bar out of reach. `fitWindowState` puts it back on a display, never larger than that display's work
 // area and never below the window's minimum.
 import { assert } from '../../shared/core/assert';
+import { createCoalescedSaver, type DebouncedSaver, type SaveClock } from '../../shared/core/debouncedSaver';
 import { err, ok, type Result } from '../../shared/core/result';
+
+export type { DebouncedSaver, SaveClock };
 import { HEIGHT_PX_MIN, WIDTH_PX_MIN } from './windowBounds';
 
 export const WINDOW_STATE_VERSION = 1;
@@ -214,52 +217,7 @@ export function fitWindowState(state: WindowState, displays: ReadonlyArray<Windo
   return { ...common, bounds, placement: 'primary' };
 }
 
-/** What `createDebouncedSaver` needs of a clock; the global timers are the real one. */
-export interface SaveClock<Timer> {
-  readonly now: () => number;
-  readonly setTimer: (task: () => void, delayMs: number) => Timer;
-  readonly clearTimer: (timer: Timer) => void;
-}
-
-export interface DebouncedSaver {
-  /** Asks for a save: it runs after the delay, or at the latest `saveWaitMsMax` after the first ask of a burst. */
-  readonly schedule: () => void;
-  /** Runs a waiting save now (the window is closing); a no-op when none waits. */
-  readonly flush: () => void;
-}
-
-/**
- * Coalesces the many resize and move events of a drag into few writes: one at most every `saveWaitMsMax`
- * during a continuous drag, and one `saveDelayMs` after it stops. At most one timer exists.
- */
+/** The window's saver: the shared debounce (shared/core/debouncedSaver.ts) with this file's timing. */
 export function createDebouncedSaver<Timer>(clock: SaveClock<Timer>, save: () => void): DebouncedSaver {
-  let timer: Timer | undefined;
-  let burstStartedAtMs: number | undefined;
-  const run = (): void => {
-    if (timer !== undefined) {
-      clock.clearTimer(timer);
-    }
-    timer = undefined;
-    burstStartedAtMs = undefined;
-    save();
-  };
-  return {
-    schedule(): void {
-      const nowMs = clock.now();
-      const startedAtMs = burstStartedAtMs ?? nowMs;
-      burstStartedAtMs = startedAtMs;
-      if (timer !== undefined) {
-        clock.clearTimer(timer);
-      }
-      const remainingMs = WINDOW_STATE_LIMITS.saveWaitMsMax - (nowMs - startedAtMs);
-      const delayMs = Math.max(0, Math.min(WINDOW_STATE_LIMITS.saveDelayMs, remainingMs));
-      assert(delayMs <= WINDOW_STATE_LIMITS.saveDelayMs, 'createDebouncedSaver: the wait is bounded');
-      timer = clock.setTimer(run, delayMs);
-    },
-    flush(): void {
-      if (timer !== undefined) {
-        run();
-      }
-    },
-  };
+  return createCoalescedSaver(clock, { delayMs: WINDOW_STATE_LIMITS.saveDelayMs, waitMsMax: WINDOW_STATE_LIMITS.saveWaitMsMax }, save);
 }

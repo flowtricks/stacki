@@ -3,11 +3,12 @@
 // fetched once the first frame is on screen and the renderer has nothing else to do (docs/startup.md).
 //
 // Marks (durations since navigation start, in the Performance panel's User Timing track):
-//   stacki:html-parsed    index.html's spinner is in the document (an inline script in index.html).
+//   stacki:html-parsed    the document is parsed (an inline script in index.html).
 //   stacki:shell-painted  React's first frame has been handed to the compositor.
 //   stacki:interactive    the renderer went idle after that: input is handled at once.
 //   stacki:project-ready  an opened project's pages are scanned and the first page selected.
 import { assert } from '../../shared/core/assert';
+import { reportFirstFrame } from '../lib/bootSeed';
 import { loadShell } from './shell/lazyShell';
 import { preloadSettings } from './settings/LazySettings';
 
@@ -29,7 +30,8 @@ export function runAfterFirstPaint(): void {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       markRenderer('stacki:shell-painted');
-      removeBootSpinner();
+      // The first real frame is on its way to the screen: main shows the window (nothing was drawn in front of it).
+      reportFirstFrame();
       whenIdle(() => {
         markRenderer('stacki:interactive');
         console.debug(describeRendererStart());
@@ -56,18 +58,4 @@ function describeRendererStart(): string {
     .filter((entry) => entry.name.startsWith('stacki:'))
     .map((entry) => `${entry.name.slice('stacki:'.length)}=${Math.round(entry.startTime)}ms`);
   return `[startup] renderer ${entries.join(' ')}`;
-}
-
-/** How long the spinner takes to fade; index.html's `transition` is the same number. */
-const SPINNER_FADE_MS = 120;
-
-// The ring index.html paints before any script. It fades and goes once the app has a frame, so it
-// is never left behind the panels. Absent (a test page, a second call): nothing to do.
-function removeBootSpinner(): void {
-  const spinner = document.getElementById('boot-spinner');
-  if (spinner === null) {
-    return;
-  }
-  spinner.classList.add('is-leaving');
-  setTimeout(() => spinner.remove(), SPINNER_FADE_MS + 30);
 }

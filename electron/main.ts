@@ -52,7 +52,9 @@ import * as thumbs from './project/thumbs';
 import { HEIGHT_PX_MIN, WIDTH_PX_MIN, openingBounds } from './app/windowBounds';
 import { fitWindowState, type FittedWindowState } from './app/windowState';
 import { readWindowState, toWindowDisplay, trackWindowState } from './app/windowStateStore';
-import { revealWhenPainted } from './app/windowReveal';
+import { createFirstFrameSignal, revealOnFirstFrame } from './app/windowReveal';
+import { createBootStore, type BootStore } from './boot/bootStore';
+import { registerBootChannels } from './boot/bootChannels';
 import { describeStartup, markStartup } from './app/startupTiming';
 import { isAppPage, isAllowedMedia, isBrowserLink, isPrivatePermission } from './app/windowSecurity';
 import { buildApplicationMenuTemplate } from './app/applicationMenu';
@@ -74,7 +76,7 @@ import { isAstroProject, hasDependencies } from './project/projectFiles';
 import { MEDIA_EXT } from './project/assetFiles';
 import { stopAllPreviews } from './preview/previewServers';
 import type { MainHost } from './handlers/mainHost';
-import { DevServers, registerDevServerHandlers } from './handlers/devServers';
+import { DevServers, registerDevServerHandlers, startProjectPreview } from './handlers/devServers';
 import { Thumbnails, registerThumbnailHandlers } from './handlers/thumbnails';
 import { removeLegacyComponentShots } from './project/legacyComponentShots';
 import { registerAssetHandlers } from './handlers/assetHandlers';
@@ -348,6 +350,10 @@ function restoredWindow(): FittedWindowState | undefined {
   }
 }
 
+// The renderer's report that its real shell has painted (boot:first-frame), which is what shows the window.
+const firstFrame = createFirstFrameSignal();
+let bootStore: BootStore | undefined;
+
 function createWindow() {
   // Where the last window was (its windowed size and place, maximized or full screen), fitted to the
   // displays connected now (windowState.ts). Read before the window exists, so it is created at its final
@@ -401,7 +407,7 @@ function createWindow() {
   }
   trackWindowState(mainWindow, screen, app.getPath('userData'), { now: Date.now, setTimer: setTimeout, clearTimer: (timer) => clearTimeout(timer) });
   markStartup('windowCreated');
-  revealWhenPainted(mainWindow, () => markStartup('windowShown'));
+  revealOnFirstFrame(mainWindow, firstFrame, () => markStartup('windowShown'));
   mainWindow.webContents.once('did-start-loading', () => markStartup('rendererLoading'));
   mainWindow.webContents.once('did-finish-load', () => {
     markStartup('rendererLoaded');
@@ -429,6 +435,7 @@ function createWindow() {
   // fresh start and belongs on the welcome screen, not back in the project this
   // one had. (A reload doesn't come through here, which is the difference the
   // reopen above is asking about.)
+  mainWindow.on('close', () => bootStore?.flush());
   mainWindow.on('closed', () => {
     openProjectRoot = undefined;
     stopWatchingProject();
@@ -522,11 +529,11 @@ let pendingProject: string | undefined = undefined;
 //   - the whole process restarted ("Reload All Code"), and memory is gone —
 //     relaunchApp left the path in a file. Consumed on read, so a later cold
 //     start doesn't silently skip the welcome screen.
-ipcMain.handle('project:pending', () => {
-  const asked = pendingProject;
-  pendingProject = undefined;
-  if (asked && fs.existsSync(asked)) {
-    return asked;
+// The project the renderer will pick up, without consuming it: what the boot channel seeds the first render with and
+// what the early dev-server start works on. `project:pending` below is the consuming read.
+function peekPendingProject(): string | undefined {
+  if (pendingProject && fs.existsSync(pendingProject)) {
+    return pendingProject;
   }
   if (!isDev) {
     return undefined;
@@ -534,19 +541,25 @@ ipcMain.handle('project:pending', () => {
   if (openProjectRoot && fs.existsSync(openProjectRoot)) {
     return openProjectRoot;
   }
-  let reopenPath: string | undefined = undefined;
   try {
     const input: unknown = JSON.parse(readSource(reopenFile()));
-    reopenPath = parseOptionalString(toRecord(input)?.['path']) || undefined;
+    const reopenPath = parseOptionalString(toRecord(input)?.['path']) || undefined;
+    return reopenPath && fs.existsSync(reopenPath) ? reopenPath : undefined;
   } catch {
     return undefined;
   }
+}
+
+ipcMain.handle('project:pending', () => {
+  const found = peekPendingProject();
+  pendingProject = undefined;
   try {
+    // Consumed on read, so a later cold start doesn't silently skip the welcome screen.
     fs.rmSync(reopenFile(), { force: true });
   } catch {
     /* non-fatal */
   }
-  return reopenPath && fs.existsSync(reopenPath) ? reopenPath : undefined;
+  return found;
 });
 
 // Native clipboard actions on the focused element, requested by the renderer
@@ -598,6 +611,26 @@ app.whenReady().then(
     registerAssetProtocol();
     protocol.handle(APP_SCHEME, (request) => serveAppRequest(request.url, openProjectRoot));
     refusePrivatePermissions();
+    // The boot path before the window: the snapshot the first render is seeded with, and, for a project the window
+    // will open, its dev server, started now so the canvas is not waiting for the renderer to ask (docs/startup.md).
+    bootStore = createBootStore(app.getPath('userData'), { now: Date.now, setTimer: setTimeout, clearTimer: (timer) => clearTimeout(timer) }, (projectPath) =>
+      fs.existsSync(projectPath),
+    );
+    registerBootChannels({
+      ipcMain: nativeIpcMain,
+      store: bootStore,
+      pendingProject: peekPendingProject,
+      isMainFrame: (event) => mainWindow !== undefined && event.sender === mainWindow.webContents && event.senderFrame === mainWindow.webContents.mainFrame,
+      onFirstFrame: firstFrame.fire,
+    });
+    const earlyProject = peekPendingProject();
+    if (earlyProject !== undefined) {
+      // Same containment the renderer's watch:start would set; the renderer's own call follows and replaces it.
+      noteProjectRoot(earlyProject);
+      startProjectPreview(devServers, thumbnails, earlyProject).catch((error: unknown) => {
+        console.warn('[startup] the early preview start failed; the renderer asks again:', error instanceof Error ? error.message : String(error));
+      });
+    }
     // The window first: it starts the renderer loading while this process does the rest of its
     // start (language, icon, menu), instead of the renderer waiting for all of it.
     createWindow();

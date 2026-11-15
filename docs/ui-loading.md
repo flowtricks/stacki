@@ -1,5 +1,8 @@
 # Instant UI: loading states
 
+**App startup is not covered here.** Startup never shows a skeleton, spinner or splash: the first frame is the real
+app (docs/startup.md). This page is for slow work inside the running app.
+
 **The rule.** UI shows instantly, with no delay. If loading is absolutely required and there is no way
 around it, show a skeleton loader, never plain text ("Loading…", "Reading…") and never a spinner.
 

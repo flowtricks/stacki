@@ -1,13 +1,13 @@
 // The branch chip beside Publish: which branch Publish will send, and a loud warning when it is not the default one.
 //
 // It never waits: the last branch read for this project paints in the first frame, the shared git info replaces it
-// when it arrives, and only a project nothing is known about yet shows a placeholder shape (docs/ui-loading.md). It
+// when it arrives, and a project nothing is known about yet draws no chip until the read answers. It
 // stays current without its own watcher: the app already re-reads git on window focus, on a timer and on every save,
 // and the shell adds the moment an AI turn ends (RefreshGitWhenAiTurnEnds), when a tool is most likely to have made a branch.
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { IpcResults } from '../../../shared/ipc/ipcResults';
 import { BranchIcon } from '../../ui/Icons';
-import { Skeleton } from '../../ui/Skeleton';
+import { bootSnapshotFor } from '../../lib/bootSeed';
 import { branchStatusOf, type BranchStatus } from './branchStatus';
 import './branchIndicator.css';
 
@@ -38,6 +38,11 @@ export function rememberBranchStatus(projectPath: string, status: BranchStatus):
   }
 }
 
+/** The branch state remembered for `projectPath` this session, or the last session's (the boot snapshot). Never a placeholder. */
+export function knownBranchStatus(projectPath: string): BranchStatus | undefined {
+  return remembered.get(projectPath) ?? bootSnapshotFor(projectPath)?.branch;
+}
+
 export function forgetRememberedBranches(): void {
   remembered.clear();
 }
@@ -46,14 +51,11 @@ export function BranchIndicator({ projectPath, info, onOpen }: Props) {
   const translate = useTranslate();
   const read = branchStatusOf(info);
   rememberBranchStatus(projectPath, read);
-  const status = read.kind === 'unknown' ? (remembered.get(projectPath) ?? read) : read;
+  const status = read.kind === 'unknown' ? (knownBranchStatus(projectPath) ?? read) : read;
   switch (status.kind) {
     case 'unknown':
-      return (
-        <span className="stacki-branch-chip-skeleton">
-          <Skeleton width="64px" height="14px" />
-        </span>
-      );
+      // Nothing is known about this project yet: nothing is drawn, rather than a stand-in shape.
+      return undefined;
     case 'hidden':
       return undefined;
     case 'default':

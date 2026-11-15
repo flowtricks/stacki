@@ -888,6 +888,24 @@ serialized writes; conflicts stop saving until the user reloads the project sett
 Opening a project without saved guide preferences uses defaults in memory. It does not create
 `.stacki/guide.json`; the first guide edit or migration of a readable legacy record creates it.
 
+`.stacki/breakpoints.json` contains `{ version: 2, laptop, tablet, phone }`, each `{ value, unit }` with
+`unit` `rem` or `px` (`shared/properties/projectBreakpoints.ts`). An entry is the query boundary
+`width < value unit`; defaults are the Lumos 64rem, 48rem and 30rem (1rem = 16px), and Desktop, the
+largest, is the full width with no number. Entries must strictly decrease in pixels from laptop to
+phone, each boundary from 281px to 7681px (what the canvas can draw); px is whole numbers, rem allows
+four decimals. `canvasWidthPx` is the only resolver: the largest whole pixel below the boundary (64rem
+is 1023, 1024px is 1023); the preview bar, canvas sizing and the all-breakpoints view read widths
+only through it. A version 1 file (whole pixel widths) is read as version 2 without being rewritten:
+the old defaults 1023/767/479 read as the rem defaults, other widths as px entries one pixel higher,
+so no canvas width moves. Unknown keys and every other bad shape are refused by
+`parseBreakpointsSource`, a `Result`; a refused file shows the defaults with a notice and is never
+overwritten. Reading never writes: the file is created by the first edit, and a save equal to the
+file's bytes, or to the defaults when there is no file, writes nothing. Desktop and Studio read it
+through the `breakpoints` metadata kind (witnessed, atomic writes; written with
+`settings:breakpoints`) into one per-project store (`src/ipc/projectBreakpoints.ts`). Stacki writes
+no media query from these numbers; authored queries keep their own unit and Base (`baseWidth.ts`)
+is read from those.
+
 `.stacki/pages.json` contains `{ version: 1, entries: [...] }`. Entries are relative to
 `src/pages`; folder keys end in `/`. Desktop and Studio apply the same order to sibling pages
 and folders. Reordering through gaps does not rename files or change routes. Unknown/new entries retain the
@@ -2155,3 +2173,13 @@ list of words, a method, an index signature) is not read: the panels show it as 
 field of an item in the default array literal (`arrayValue.ts`), kept exactly as written. The data picker reaches nested
 fields as `item.children[0].title`; the loop's Filters and Sort list a Group's fields by path (`address.city`) and a nested
 List as a field that is set or empty.
+
+## Boot snapshot (`shared/properties/bootSnapshot.ts`)
+
+The cross-process cache that lets a window's first frame show the last session's real state. Main reads
+`boot-snapshot.json` before the window exists and the preload hands it to the renderer synchronously as
+`window.stackiBoot.seed` (an `unknown` until `src/lib/bootSeed.ts` parses it); the renderer sends snapshots back with
+`stackiBoot.save(text)`. The raw channels `boot:read` (sendSync), `boot:save` and `boot:first-frame` (send) are outside
+the typed invoke contract and answer only the main window's top frame (`electron/boot/bootChannels.ts`). Versioned
+(`version: 1`), bounded (`BOOT_LIMITS`), parsed to a `Result`, ignored whole when invalid, never written to a project.
+See docs/startup.md.

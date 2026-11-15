@@ -5,6 +5,8 @@ import App from './app/App';
 import { mirrorLocalePreference } from './ipc/localeBridge';
 import { LocaleProvider } from './lib/i18n/LocaleProvider';
 import { runAfterFirstPaint } from './app/startupMarks';
+import { bootSeed } from './lib/bootSeed';
+import { loadShell } from './app/shell/lazyShell';
 import './app/styles.css';
 
 const rootElement = document.getElementById('root');
@@ -12,14 +14,27 @@ assert(rootElement !== null, 'Renderer root element exists.');
 document.documentElement.dataset['platform'] = window.avb.platform;
 trackWindowZoom();
 
-createRoot(rootElement).render(
-  <LocaleProvider onPreference={mirrorLocalePreference}>
-    <React.Suspense fallback={undefined}>
-      <App />
-    </React.Suspense>
-  </LocaleProvider>,
-);
-runAfterFirstPaint();
+// A window that opens a project renders the project's real shell in its first frame, so its chunk is awaited
+// first (nothing is drawn meanwhile: the window is still hidden, main shows it on the first real frame). A start
+// screen needs nothing awaited. A chunk that fails to load must not leave a blank window: render anyway, and the
+// app's own lazy boundary reports the failure.
+const shellReady =
+  bootSeed().project === undefined
+    ? Promise.resolve(undefined)
+    : loadShell().then(
+        () => undefined,
+        () => undefined,
+      );
+void shellReady.then(() => {
+  createRoot(rootElement).render(
+    <LocaleProvider onPreference={mirrorLocalePreference}>
+      <React.Suspense fallback={undefined}>
+        <App />
+      </React.Suspense>
+    </LocaleProvider>,
+  );
+  runAfterFirstPaint();
+});
 
 // The page zoom (⌘+ / ⌘−), as `--window-zoom`. The window's own buttons are drawn
 // by the system and never zoom, so space kept clear for them is divided by it

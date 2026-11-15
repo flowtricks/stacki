@@ -4,15 +4,17 @@ import Settings from './settings/LazySettings';
 import { useProjectRoles } from './roles/useProjectRoles';
 import { type ProjectIdentity } from './appTypes';
 import { useAppScope } from './state/appComposers';
-import { lazy, Suspense } from 'react';
-import { loadShell } from './shell/lazyShell';
+import { lazy, Suspense, useState } from 'react';
+import { loadShell, loadedShell } from './shell/lazyShell';
 import type { BindContext, CanvasRoute } from './shell/ProjectWindow';
-import { ShellSkeleton } from './shell/ShellSkeleton';
+import { useBootSnapshotWriter } from './boot/useBootSnapshotWriter';
 import { WelcomeView } from './shell/WelcomeView';
 import PanelBoundary from '../ui/PanelBoundary';
 
 // The project window (the editor shell and everything only it needs) loads behind the start screen
-// (lazyShell.ts); until it has, a project window shows its skeleton.
+// (lazyShell.ts). A window that opens a project awaits it before its first render (src/main.tsx), so the first
+// frame is the real shell; a project opened from the start screen before the chunk has arrived stays on the
+// start screen, which is real, until it does. No skeleton or placeholder stands in for the shell.
 const ProjectWindow = lazy(() => loadShell());
 
 export default function App() {
@@ -21,6 +23,8 @@ export default function App() {
   const defaultsCanvas = useDesktopDefaultsCanvas(scope);
   // The project's role (.stacki/roles.json and the signed-in GitHub user) drives what the UI shows.
   useProjectRoles(scope.project?.path);
+  // Keeps the next session's first frame real (src/app/boot): the page list, the open page and the left panel.
+  useBootSnapshotWriter({ project: scope.project, scan: scope.scan, pageName: scope.currentPage?.name, leftTab: scope.leftTab });
   const app: AppView = {
     ...scope,
     ...actions,
@@ -47,8 +51,19 @@ function AppContent({ app }: { readonly app: AppView }) {
   if (!project) {
     return <WelcomeView app={app} />;
   }
+  return <ShellHost app={app} project={project} />;
+}
+
+// Chosen once per project open: a shell whose chunk has loaded renders directly, in the first frame; one that has
+// not stays on the start screen until it arrives. Switching between the two later would remount the shell and
+// lose its state, so the choice is made when this mounts.
+function ShellHost({ app, project }: { readonly app: AppView; readonly project: ProjectIdentity }) {
+  const [Ready] = useState(() => loadedShell()?.default);
+  if (Ready !== undefined) {
+    return <Ready app={app} project={project} />;
+  }
   return (
-    <Suspense fallback={<ShellSkeleton />}>
+    <Suspense fallback={<WelcomeView app={app} />}>
       <ProjectWindow app={app} project={project} />
     </Suspense>
   );

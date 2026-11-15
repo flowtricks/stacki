@@ -92,6 +92,25 @@ try {
 // build has not got.
 const MORPH_TAG_HTML = MORPH_CLIENT ? "<script>import 'virtual:avb-morph';</script>" : '';
 
+/**
+ * Starts the project's dev server, or joins the start already running for it (one start per project, see
+ * `DevServers.run`). Main calls this as soon as it knows which project the window will open, before the
+ * renderer has loaded; the renderer's own `dev:start` then receives the same result.
+ */
+export function startProjectPreview(
+  devServers: DevServers,
+  thumbnails: Pick<Thumbnails, 'noteProjectOpened' | 'schedule'>,
+  projectPath: string,
+): Promise<IpcResults['dev:start']> {
+  thumbnails.noteProjectOpened();
+  return devServers.run(projectPath, async (assertActive) => {
+    const result = await devServers.start(projectPath, assertActive);
+    assertActive();
+    thumbnails.schedule(projectPath, 6000);
+    return { ...result, trailingSlash: devServers.readTrailingSlash(projectPath) };
+  });
+}
+
 export class DevServers {
   private server: DevServer | undefined = undefined;
   // Whether the running server's project had a content config when it started.
@@ -546,15 +565,7 @@ export function registerDevServerHandlers({
   readonly devServers: DevServers;
   readonly thumbnails: Thumbnails;
 }): void {
-  ipcMain.handle('dev:start', (_event, projectPath) => {
-    thumbnails.noteProjectOpened();
-    return devServers.run(projectPath, async (assertActive) => {
-      const result = await devServers.start(projectPath, assertActive);
-      assertActive();
-      thumbnails.schedule(projectPath, 6000);
-      return { ...result, trailingSlash: devServers.readTrailingSlash(projectPath) };
-    });
-  });
+  ipcMain.handle('dev:start', (_event, projectPath) => startProjectPreview(devServers, thumbnails, projectPath));
 
   ipcMain.handle('dev:stop', async () => {
     await devServers.pause();

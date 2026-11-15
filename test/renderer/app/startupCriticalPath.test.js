@@ -1,8 +1,7 @@
-// Goal: the first frame is a spinner on the dark surface and the first bundle stays small. index.html
-// paints one ring on the app's dark colour before any script runs, the app's script starts after that frame,
-// and the modules that only a project window or a closed dialog need (the editor shell, Settings, the
+// Goal: nothing is drawn in front of the app, and the first bundle stays small. index.html holds only the
+// app's surface colour and #root, the app's script starts at once, and the modules that only a project window or a closed dialog need (the editor shell, Settings, the
 // panels) are reached by dynamic import only, so a cold start parses none of them (docs/startup.md).
-// Method: index.html is read as text (spinner, colours, deferred start); the real renderer entry is
+// Method: index.html is read as text (no spinner or splash markup, colours, immediate start); the real renderer entry is
 // bundled with esbuild with code splitting and its metafile gives the entry chunk's STATIC import
 // closure, which must not contain the heavy modules; the same closure must still reach the start screen,
 // so the check cannot pass by bundling nothing. The surface colour is compared with styles.css and main.ts.
@@ -17,29 +16,27 @@ const styles = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
 const main = fs.readFileSync(repoPath('electron/main.ts'), 'utf8');
 const marks = fs.readFileSync(repoPath('src/app/startupMarks.ts'), 'utf8');
 
-test('index.html paints one ring on the dark surface before any script, outside #root', () => {
-  const spinner = html.indexOf('id="boot-spinner"');
-  assert.ok(spinner >= 0, 'the spinner is in the HTML itself');
-  assert.ok(spinner < html.indexOf('<script'), 'and precedes every script, so it needs no JS to appear');
-  assert.ok(spinner < html.indexOf('<div id="root">'), 'it is a sibling of #root, so the first render does not cut it off');
-  const markup = html.slice(html.lastIndexOf('<div', spinner), html.indexOf('<script', spinner));
-  assert.doesNotMatch(markup.replace(/<[^>]*>/g, '').trim(), /\S/, 'no text, no logo');
-  assert.equal((markup.match(/class="boot-ring"/g) ?? []).length, 1, 'one ring');
-  assert.match(html, /animation: boot-spin/, 'it turns, in CSS alone');
-  assert.match(html, /prefers-reduced-motion: reduce/, 'and holds still when asked');
-  assert.match(html, /transition: opacity 120ms/, 'it fades out');
-  assert.doesNotMatch(html, /<img|<svg|<h1|<p>/, 'no logo, no words');
+test('index.html draws nothing before the app: no spinner, splash, skeleton, logo or words', () => {
+  const body = html.slice(html.indexOf('<body>'), html.indexOf('</body>'));
+  const markup = body.replace(/<script[\s\S]*?<\/script>/g, '');
+  const text = markup.replace(/<[^>]*>/g, '').trim();
+  assert.equal(text, '', 'no words');
+  assert.deepEqual(markup.match(/<(?!\/)[a-z]+/g), ['<body', '<div'], 'the body holds #root and scripts only');
+  assert.doesNotMatch(markup, /<img|<svg|<h1|<p>/, 'no logo, no words');
+  assert.doesNotMatch(html, /boot-spinner|boot-ring|animation:|@keyframes|transition:/, 'no spinner, no animation, no fade');
+  assert.match(body, /<div id="root"><\/div>/);
 });
 
-test('the dark surface is the panel colour and the window colour, and the app starts after a frame', () => {
+test('the surface colour is the panel colour and the window colour, and the app script is not held back', () => {
   const surface = '#111111';
   assert.ok(html.includes(`background: ${surface}`), 'the page is the dark surface');
   assert.ok(styles.includes(`--bg-panel: ${surface}`), 'which is the panel surface');
   assert.ok(main.includes(`backgroundColor: '${surface}'`), 'which is the window background');
-  assert.ok(main.includes('show: false'), 'the window is shown on its first frame');
-  assert.ok(html.includes("void import('/src/main.tsx')"), 'the app is imported after a frame');
-  assert.ok(!html.includes('<script type="module" src='), 'no eager module script');
-  assert.ok(marks.includes("getElementById('boot-spinner')"), 'the app removes the spinner once it has painted');
+  assert.ok(main.includes('show: false'), 'the window is shown on its first real frame');
+  assert.ok(html.includes('<script type="module" src="/src/main.tsx"></script>'), 'the app starts at once, not after an animation frame');
+  assert.ok(!html.includes('requestAnimationFrame'), 'no frame is waited for before the app starts');
+  assert.ok(marks.includes('reportFirstFrame()'), 'the app tells main when its real shell has painted');
+  assert.ok(!marks.includes('boot-spinner'), 'there is no spinner to remove');
 });
 
 const HEAVY = [
@@ -91,7 +88,6 @@ test('the entry chunk statically imports none of the heavy modules', async () =>
   }
   assert.ok(included.has('src/app/App.tsx'), 'the closure reaches the app, so the check is not vacuous');
   assert.ok(included.has('src/app/shell/WelcomeView.tsx'), 'the start screen is in the first bundle');
-  assert.ok(included.has('src/app/shell/ShellSkeleton.tsx'), 'and so is the project window skeleton');
   for (const heavy of HEAVY) {
     assert.ok(!included.has(heavy), `${heavy} loads on demand, not in the first bundle`);
   }
