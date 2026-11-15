@@ -8,7 +8,7 @@
 // that is not a width, is out of the canvas's range, or is not smaller than the card above it is never written: the card says
 // why under its field (the message names the card at fault) and keeps what was typed so it can be fixed. Reading the file never
 // writes it: the file is created by the first edit.
-import { useEffect, useState, type ComponentType } from 'react';
+import { useEffect, useRef, useState, type ComponentType } from 'react';
 import {
   BREAKPOINT_KEYS,
   BREAKPOINT_LIMITS,
@@ -30,6 +30,11 @@ import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import type { IconProps } from '../../ui/Icons';
 import { DesktopIcon, LaptopIcon, PhoneIcon, TabletIcon } from '../../ui/Icons';
 import { Skeleton } from '../../ui/Skeleton';
+import { messageRef } from '../../../shared/properties/i18n/messageRef';
+import type { BreakpointSyncScan } from '../../../shared/properties/breakpointSyncPlan';
+import { applyBreakpointSyncRequest, breakpointSyncAvailable, restoreBreakpointSyncRequest, scanBreakpointSyncRequest } from '../../ipc/breakpointSyncBridge';
+import { BreakpointSyncDialog } from './BreakpointSyncDialog';
+import { applyRequest, type CheckedPlaces } from '../../../shared/properties/breakpointSyncSelection';
 import { SettingsNotice, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
 import './breakpointsSettings.css';
 
@@ -51,13 +56,41 @@ const ICON_SIZE_PX = 16;
 
 type Drafts = Readonly<Record<BreakpointKey, string>>;
 
-export function BreakpointsSettings({ projectPath }: { readonly projectPath: string }) {
+/** How long a scan may take before the dialog shows its skeleton rows instead of waiting for it. */
+const SCAN_SLOW_MS = 250;
+
+/** What the Undo list is told about a sync: a step that puts the files, and the number, back. */
+export interface BreakpointSyncUndo {
+  readonly label: string;
+  readonly labelRef: ReturnType<typeof messageRef>;
+  readonly undo: () => Promise<unknown>;
+  readonly redo: () => Promise<unknown>;
+}
+
+interface SyncRun {
+  readonly key: BreakpointKey;
+  readonly before: BreakpointSettings;
+  readonly after: BreakpointSettings;
+  readonly scan: BreakpointSyncScan | undefined;
+}
+
+export function BreakpointsSettings({
+  projectPath,
+  onRecordUndo,
+}: {
+  readonly projectPath: string;
+  readonly onRecordUndo?: ((command: BreakpointSyncUndo) => void) | undefined;
+}) {
   const translate = useTranslate();
   const role = useCurrentRole();
   const editable = can(role, 'settings:breakpoints');
   const { settings, state, save } = useProjectBreakpoints(projectPath);
   const indicator = useSaveIndicator();
   const [drafts, setDrafts] = useState<Drafts>(() => draftsOf(settings));
+  const [run, setRun] = useState<SyncRun>();
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string>();
+  const scanSerial = useRef(0);
   const [saveProblem, setSaveProblem] = useState<{ readonly key: BreakpointKey; readonly message: string }>();
   // The saved values are the truth: an edit in another window or a pull puts them back in the fields.
   useEffect(() => {
@@ -83,8 +116,71 @@ export function BreakpointsSettings({ projectPath }: { readonly projectPath: str
     const saved = await indicator.track(save(checked.value));
     if (saved.ok) {
       setSaveProblem(undefined);
+      void startSync(key, settings, checked.value);
     } else {
       setSaveProblem({ key, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
+    }
+  };
+
+  // After the number is saved, the project's media queries that still hold its old value are looked for; a dialog opens only when
+  // there are some (or when the search is slow, with skeleton rows). Nothing is written until the person confirms.
+  const startSync = async (key: BreakpointKey, before: BreakpointSettings, after: BreakpointSettings): Promise<void> => {
+    if (!breakpointSyncAvailable()) {
+      return;
+    }
+    scanSerial.current += 1;
+    const serial = scanSerial.current;
+    setSyncMessage(undefined);
+    const slow = window.setTimeout(() => {
+      if (scanSerial.current === serial) {
+        setRun({ key, before, after, scan: undefined });
+      }
+    }, SCAN_SLOW_MS);
+    const answer = await scanBreakpointSyncRequest(projectPath, { key, old: before[key], next: after[key] });
+    window.clearTimeout(slow);
+    if (scanSerial.current !== serial) {
+      return;
+    }
+    if (answer.ok && answer.scan.files.length > 0) {
+      setRun({ key, before, after, scan: answer.scan });
+    } else {
+      setRun(undefined);
+    }
+  };
+  const apply = async (current: SyncRun, checkedPlaces: CheckedPlaces): Promise<void> => {
+    if (current.scan === undefined) {
+      return;
+    }
+    setSyncBusy(true);
+    const result = await applyBreakpointSyncRequest(applyRequest(projectPath, current.key, current.scan, checkedPlaces));
+    setSyncBusy(false);
+    setRun(undefined);
+    if (!result.ok) {
+      setSyncMessage(translate('settings.breakpoints.sync.failed', { message: result.error ?? '' }));
+      return;
+    }
+    const notes: string[] = [];
+    if (result.places > 0) {
+      notes.push(translate('settings.breakpoints.sync.done', { count: result.places }));
+    }
+    if (result.skipped.length > 0) {
+      notes.push(translate('settings.breakpoints.sync.skippedFiles', { count: result.skipped.length }));
+    }
+    setSyncMessage(notes.length > 0 ? notes.join(' ') : undefined);
+    const journalId = result.journalId;
+    if (journalId !== undefined && onRecordUndo !== undefined) {
+      onRecordUndo({
+        label: translate('settings.breakpoints.sync.undoLabel'),
+        labelRef: messageRef('settings.breakpoints.sync.undoLabel'),
+        undo: async () => {
+          await restoreBreakpointSyncRequest(projectPath, journalId, 'undo');
+          await save(current.before);
+        },
+        redo: async () => {
+          await restoreBreakpointSyncRequest(projectPath, journalId, 'redo');
+          await save(current.after);
+        },
+      });
     }
   };
 
@@ -100,6 +196,7 @@ export function BreakpointsSettings({ projectPath }: { readonly projectPath: str
   return (
     <section className="breakpoints-settings" aria-label={translate('settings.tab.breakpoints')}>
       <SettingsSaveRow saving={indicator.state} />
+      {syncMessage !== undefined && <SettingsNotice message={syncMessage} />}
       {state.kind === 'blocked' && <SettingsNotice message={translate('settings.breakpoints.error.file', { message: state.message })} />}
       <SettingsSection
         title={translate('settings.tab.breakpoints')}
@@ -170,6 +267,17 @@ export function BreakpointsSettings({ projectPath }: { readonly projectPath: str
           })}
         </div>
       </SettingsSection>
+      {run !== undefined && (
+        <BreakpointSyncDialog
+          state={run.scan === undefined ? { kind: 'scanning' } : { kind: 'ready', scan: run.scan }}
+          busy={syncBusy}
+          onApply={(checkedPlaces) => void apply(run, checkedPlaces)}
+          onSkip={() => {
+            scanSerial.current += 1;
+            setRun(undefined);
+          }}
+        />
+      )}
     </section>
   );
 }

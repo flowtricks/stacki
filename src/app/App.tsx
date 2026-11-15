@@ -41,6 +41,7 @@ export default function App() {
         previewURL={app.devStatus === 'on' ? app.devUrl : undefined}
         pages={{ folder: app.scan.pagesFolder ?? 'src/pages', configFile: app.scan.astroConfig }}
         onOpenFile={(rel) => void app.openProjectFile(rel)}
+        onRecordUndo={app.pushCommand}
       />
     </>
   );

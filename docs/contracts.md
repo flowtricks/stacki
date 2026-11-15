@@ -906,6 +906,29 @@ through the `breakpoints` metadata kind (witnessed, atomic writes; written with
 no media query from these numbers; authored queries keep their own unit and Base (`baseWidth.ts`)
 is read from those.
 
+**Breakpoint sync.** Committing a changed breakpoint in Settings scans the project (Desktop only; Studio has no Settings
+dialog) for `@media` width bounds equal to its OLD value (`shared/properties/mediaBreakpointSync.ts`, executed in main by
+`electron/project/breakpointSync.ts`; channels `breakpointSync:scan`, `:apply`, `:restore`). Matching reads only `@media`
+preludes (comments and strings skipped) and only `width`, `min-width` and `max-width` in `px` or `rem`: `(width >= X)`,
+`(width < X)`, `(width <= X)`, `(X <= width)`, `(a < width <= b)` (each bound on its own), `(min-width: X)`, `(max-width: X)`,
+inside `only screen and`, `and` and comma lists, in any case and spacing, including nested in `@supports` and `@layer`. A bound
+is **exact** when it equals the old boundary in either unit (64rem = 1024px, 16px per rem). It is **inclusive** (ambiguous,
+unchecked) when it is 1px short in the form that includes its own edge: `(max-width: 1023px)`, `(width <= 1023px)`,
+`(width > 1023px)`, `63.9375rem`. `height`, `min-height`, `prefers-*`, `em`, `vw`, `calc()` and `@container` are never touched.
+Only the number+unit token is replaced (CRLF, tabs and minified text stay byte for byte): an exact match takes the new value as
+typed, an inclusive one the new boundary minus 1px; a Lumos project (rem only) is always written in rem. It scans `.css`,
+`.scss`, `.sass`, `.less`, `.pcss` files, `<style>` blocks of `.astro` pages and components (the editor's own style-region
+parser, blocks inside expressions left out) and `.html`, skipping dotted folders, `node_modules`, `dist`, `build`, `out`,
+`vendor`, `coverage` and plain folder or `*.ext` patterns in the root `.gitignore`, within named limits (files, bytes, depth,
+places). Nothing is written by a scan. Apply checks each file's digest against the scan (a changed file is skipped and
+reported), each edit's text, the bound count and locators of the result and that the CSS still parses, writes through the
+witnessed document writer, puts back the files already written on any failure, and journals the sync for Undo and Redo.
+`.stacki/breakpoint-sync.json` (`shared/properties/breakpointSyncRecord.ts`) holds, per breakpoint, `excluded` places (listed
+unchecked as "Not synced" on every later sync, whatever value they hold) and `linked` places with `appliedAt`; a place is a
+project-relative file and a locator (the masked prelude hashed, plus its ordinal), which survives the number and line changing.
+It is bounded, canonical (sorted, deduplicated), created by the first sync that has something to remember, and never written
+over when unreadable.
+
 `.stacki/pages.json` contains `{ version: 1, entries: [...] }`. Entries are relative to
 `src/pages`; folder keys end in `/`. Desktop and Studio apply the same order to sibling pages
 and folders. Reordering through gaps does not rename files or change routes. Unknown/new entries retain the

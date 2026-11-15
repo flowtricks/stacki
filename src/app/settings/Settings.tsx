@@ -18,7 +18,7 @@ import { useScrollEdges } from '../../ui/useScrollEdges';
 import { FolderSettings } from './FolderSettings';
 import { InstructionsSettings } from './InstructionsSettings';
 import { AuditsSettings } from './AuditsSettings';
-import { BreakpointsSettings } from './BreakpointsSettings';
+import { BreakpointsSettings, type BreakpointSyncUndo } from './BreakpointsSettings';
 import { SETTINGS_TABS, loadSettingsTab, saveSettingsTab, settingsTabAfterKey, type SettingsTab } from './settingsTab';
 import { RolesSettings } from './RolesSettings';
 import { useCurrentRole } from '../../lib/useCurrentRole';
@@ -36,6 +36,8 @@ interface Props {
   readonly pages?: { readonly folder: string; readonly configFile: string | undefined };
   /** Opens a project file in the code panel (the Folders tab's "Open …" links); Settings closes first. */
   readonly onOpenFile?: (rel: string) => void;
+  /** Records a step the Undo list can take back: the breakpoint sync's files and number. */
+  readonly onRecordUndo?: (command: BreakpointSyncUndo) => void;
 }
 
 // Who opens Settings besides the File menu: the title bar's gear on Windows and
@@ -248,7 +250,7 @@ function SettingsPanel(props: Props & { readonly tab: SettingsTab; readonly onCl
       );
     case 'breakpoints':
       return props.projectPath ? (
-        <BreakpointsSettings key={`breakpoints:${props.projectPath}`} projectPath={props.projectPath} />
+        <BreakpointsSettings key={`breakpoints:${props.projectPath}`} projectPath={props.projectPath} onRecordUndo={props.onRecordUndo} />
       ) : (
         <SettingsEmpty icon={icon}>{translate('settings.empty.breakpoints')}</SettingsEmpty>
       );
