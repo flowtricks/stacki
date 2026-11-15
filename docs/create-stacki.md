@@ -50,15 +50,17 @@ In the npm package settings, add a GitHub Actions trusted publisher:
 - Workflow filename: `publish-create-stacki.yml`
 - Allowed actions: enable direct publishing with `npm publish`.
 
-Push the reviewed source, bump the matching versions for the next release, and manually run the
-workflow from that revision. The workflow builds and checks the source and package before publishing.
+The Release button (docs/release-runbook.md) bumps the matching versions, tags them, and
+`release-post.yml` dispatches this workflow from the tag once the desktop release is public, then
+waits for the registry (30-second retries, at most 30 minutes). It skips its test run only when
+`Check` already passed that exact commit on every platform (`scripts/release/releasePlan.mts`). The workflow builds and checks the source and package before publishing.
 It requires GitHub-hosted runners and npm 11.5.1 or later. No long-lived npm token is needed.
 This workflow publishes only the npm installer; desktop releases have their own workflow.
 
 ## Completion checks
 
 A green `Check` workflow does not publish anything. A pushed version tag starts the Desktop
-release, but `Publish create-stacki` must also be dispatched from that tag. Keep the root, Studio,
+release, and `Release post` dispatches `Publish create-stacki` from that tag when it is public. Keep the root, Studio,
 Studio release manifest, and `create-stacki` versions aligned.
 
 Do not report that `npm create stacki@latest` is updated until the registry confirms it:

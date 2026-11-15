@@ -14,8 +14,8 @@ a person, for Claude Code, for Codex, and for Pi, because every gate calls the s
 | `pre-commit` | `git commit` | Prettier check, scan, ESLint on staged files | `--no-verify`, which agent hooks refuse |
 | `commit-msg` | `git commit` | Typed subject ≤ 72 characters, blank line, body | As above |
 | Local development | `npm run dev` or `npm run check:local` | All Desktop compiler targets, full lint, formatting, policy, test source paths, Studio static checks | Run directly at any time |
-| `pre-push` | `git push` | Full CI gate: clean builds, Desktop and Studio static checks and tests; a pushed version tag (`refs/tags/v<digit>…`) then runs the Linux preflight | As above |
-| CI (`npm test`) | Every pull request and push to `main` | Builds, `tsc` (app and scripts), ESLint, Prettier, scan, every test | **No**, once `main` requires the `Check` workflow |
+| `pre-push` | `git push` | Full CI gate: clean builds, Desktop and Studio static checks and tests; a pushed version tag (`refs/tags/v<digit>…`) then runs the Linux preflight. Skipped only when every pushed tree already passed the full gate here (a marker keyed by tree hash and gate version, `scripts/gate/gateMarker.ts`) or a tag names a commit on `origin/main` that `Check` passed; `npm run check:local` (and the static Linux preflight for a tag) still runs | As above |
+| CI (`npm test -- --shard=k/4`) | Every pull request and push to `main` | Builds, `tsc` (app and scripts), ESLint, Prettier, scan, every test: four shards per platform, static checks in shard 1, together exactly `npm test` (`scripts/gate/testShard.ts`); `test (<os>)` passes only when its four shards did | **No**, once `main` requires the `Check` workflow |
 
 The adapters are thin: `.claude/settings.json` and `.codex/hooks.json` call
 `scripts/agent/{claude,codex}.mts`; `.pi/extensions/stacki-policy/` imports the same modules. Git
@@ -43,7 +43,7 @@ Commands for people and agents:
   whole-tree static checks, so it is no substitute for `check:changed` or the full gate
   (`scripts/gate/gatePlan.ts`).
 
-The push hook compiles the test runner and runs the full gate, with live output and a 30-minute
+The push hook compiles the test runner and runs the full gate (unless the marker or green-tag proof above holds), with live output and a 30-minute
 limit per command. It clears `ELECTRON_RUN_AS_NODE` for its children so agent terminals do not
 silently run browser probes as Node programs. A failed build or test stops the push. This costs
 several minutes, but catches local regressions before GitHub starts a release. CI still checks

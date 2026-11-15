@@ -1,13 +1,14 @@
 # Releasing Desktop, Studio, and create-stacki
 
-> The step-by-step procedure for releasing a version is [release-runbook.md](./release-runbook.md).
-> This file is the history and rules reference.
+> Releasing is the **Release button** (Actions > Release button); [release-runbook.md](./release-runbook.md)
+> has the one-time setup, the stages and what to do when one fails. This file is the history and rules reference.
 
 These are separate publication paths. A successful `Check` run publishes nothing:
 
 - A version tag starts `.github/workflows/release.yml`. Desktop installers, Linux install checks,
   and the Studio browser test must finish before the draft release becomes public.
-- `.github/workflows/publish-create-stacki.yml` is manually dispatched from the same tested tag.
+- `.github/workflows/publish-create-stacki.yml` is dispatched from the same tested tag by
+  `.github/workflows/release-post.yml` once the desktop release is public.
   See [create-stacki publication](./create-stacki.md) for authentication and registry verification.
 
 Run the fast checks and complete regression suite locally before pushing. Also run Studio's
@@ -16,9 +17,9 @@ the Desktop regression gate does not run that separate Studio browser scenario.
 
 Pushing a version tag runs the Linux preflight automatically: the `pre-push` hook runs it after the
 full gate has rebuilt `dist/`, and a failure stops the tag reaching GitHub, so no release build
-starts. `npm run release` pushes the version commit before the tag, so after a failure that commit
-is on `main` and the tag exists only locally: fix the finding and release a new version rather than
-moving the tag. Run `npm run check:linux` by hand (about 30 seconds) to find problems before
+starts. The release scripts push the bump commit and the tag in one atomic push, so after a failure
+neither reached GitHub and the tag exists only locally: fix the finding, delete the local tag, and
+run again; never move a pushed tag. Run `npm run check:linux` by hand (about 30 seconds) to find problems before
 tagging. It checks, on a Mac, the ways the Linux release job has failed:
 
 - relative imports and package or workflow paths match their files' case exactly (macOS ignores

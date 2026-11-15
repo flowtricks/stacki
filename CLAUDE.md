@@ -7,4 +7,4 @@
 - While iterating, `env -u ELECTRON_RUN_AS_NODE npm test -- <suite>` runs only the named suites:
   incremental builds, no clean, no whole-tree checks. It never replaces the full gate.
 - `docs/enforcement.md` maps every AGENTS.md rule to the check that holds it.
-- Releasing a version: follow docs/release-runbook.md (patch versions only: 1.4.x).
+- Releasing a version: the Release button (Actions > Release button); docs/release-runbook.md has setup and failures (patch versions only: 1.4.x).
