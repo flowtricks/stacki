@@ -888,23 +888,30 @@ serialized writes; conflicts stop saving until the user reloads the project sett
 Opening a project without saved guide preferences uses defaults in memory. It does not create
 `.stacki/guide.json`; the first guide edit or migration of a readable legacy record creates it.
 
-`.stacki/breakpoints.json` contains `{ version: 3, breakpoints: [...] }` (`shared/properties/projectBreakpoints.ts`): an ordered
-list of `{ id, name?, direction, value, unit }`, `unit` `rem` or `px`. A `down` breakpoint is `width < X` (a device narrower than
-Desktop; its canvas is X less 1px, so 64rem is 1023px); an `up` one is `width >= X` (a device wider than Desktop; its canvas is
-exactly X, so 100rem is 1600px). Desktop is always there and is the full width. The defaults, with no file, are the Lumos 64rem,
-48rem and 30rem `down` breakpoints with the ids `laptop`, `tablet` and `phone`, whose names read in the person's language until
-renamed. The list is strictly decreasing in pixels with every `up` before every `down` (so an `up` is larger than every `down`),
-each boundary from 281px to 7681px (what the canvas can draw), px whole and rem to four decimals; ids (`bp-1`) and names (1 to 24
-characters) are unique; at most 11 breakpoints; the list may be empty. `canvasWidthPx` is the only resolver; the preview bar (the
-`up` ones widest first, Desktop, the `down` ones, the canvas; shortcuts 1 to 9 follow that order), canvas sizing and the
-all-breakpoints view read widths only through it, and icons are chosen by position (`breakpointDevices.ts`). Versions 1 (whole
-pixel widths) and 2 (laptop, tablet, phone as `{ value, unit }`) are read as version 3 without being rewritten, with no canvas
-width moving. Unknown keys and every other bad shape are refused by `parseBreakpointsSource`, a `Result`; a refused file shows
-the defaults with a notice and is never overwritten. Reading never writes: the file is created by the first edit, and a save
-equal to the file's bytes, or to the defaults when there is no file, writes nothing. Removing a breakpoint never edits project
-CSS. Desktop and Studio read it through the `breakpoints` metadata kind (witnessed, atomic writes; written with
-`settings:breakpoints`) into one per-project store (`src/ipc/projectBreakpoints.ts`). Stacki writes no media query from these
-numbers; authored queries keep their own unit and Base (`baseWidth.ts`) is read from those.
+`.stacki/breakpoints.json` contains `{ version: 4, desktop: { value, unit }, breakpoints: [...] }`
+(`shared/properties/projectBreakpoints.ts`): Desktop's frame width and an ordered list of `{ id, name?, value, unit }`,
+`unit` `rem` or `px`. Desktop is 90rem (1440px) unless set. It is **never a media query**: its only uses are the width of the
+Desktop frame in the side-by-side (all breakpoints) view and the line that decides on which side of Desktop a breakpoint is. The
+single canvas's Desktop button is still the full available width. A breakpoint has no stored direction: it is DERIVED from its
+number against Desktop's (`directionOf`). Wider than Desktop it is `up`, the query `width >= X` (mobile first), and its canvas is
+exactly X (100rem is 1600px); narrower it is `down`, `width < X`, canvas X less 1px (64rem is 1023px); equal to Desktop is refused.
+The defaults, with no file, are the Lumos 64rem, 48rem and 30rem breakpoints (ids `laptop`, `tablet`, `phone`, names read in the
+person's language until renamed) around a 90rem Desktop. The list is strictly decreasing in pixels with Desktop in it (the wider
+ones, Desktop, the narrower ones), so each card's neighbours, Desktop among them, are its limits, and Desktop may only move between
+the largest narrower breakpoint and the smallest wider one (`desktopBlocker` names the breakpoint in the way); each boundary from
+281px to 7681px (what the canvas can draw), px whole and rem to four decimals; ids (`bp-1`; `desktop` is reserved) and names (1 to
+24 characters) are unique; at most 11 breakpoints; the list may be empty. `canvasWidthPx` is the only resolver; the preview bar
+(wider ones widest first, Desktop, narrower ones, the canvas; shortcuts 1 to 9 follow that order), canvas sizing and the
+all-breakpoints view read widths only through it, and icons are chosen by position (`breakpointIcon.ts`). Versions 1 (whole pixel
+widths), 2 (laptop, tablet, phone as `{ value, unit }`) and 3 (a list with a stored `direction`) are read as version 4 without being
+rewritten: Desktop is 90rem when absent, a stored direction is ignored and recomputed from the number (a file that disagrees with
+itself is read as derived), and no canvas width moves. Unknown keys and every other bad shape are refused by
+`parseBreakpointsSource`, a `Result`; a refused file shows the defaults with a notice and is never overwritten. Reading never
+writes: the file is created by the first edit, and a save equal to the file's bytes, or to the defaults when there is no file, writes
+nothing. Removing a breakpoint never edits project CSS. Desktop and Studio read it through the `breakpoints` metadata kind
+(witnessed, atomic writes; written with `settings:breakpoints`) into one per-project store (`src/ipc/projectBreakpoints.ts`, whose
+state carries `config`, `list`, `resolved` and `desktop`). Stacki writes no media query from these numbers; authored queries keep
+their own unit and Base (`baseWidth.ts`) is read from those.
 
 **Where breakpoints are used.** Settings > Breakpoints shows each breakpoint's places before anything is changed: `breakpointSync:usage`
 (`scanBreakpointUsage`) answers, for the breakpoints' CURRENT saved values, the places per file (one pass for all, files cached

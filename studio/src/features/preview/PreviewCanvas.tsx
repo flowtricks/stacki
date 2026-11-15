@@ -166,12 +166,18 @@ function PreviewSurface({
   readonly interactive?: boolean;
 }) {
   const loading = usePreviewLoading(props.preview.url, sizing.wrapRef, props.device === 'canvas', props.preview.retry);
-  const { resolved: breakpoints } = useProjectBreakpoints(props.projectName);
+  const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectName);
   return (
     <div className="preview-frame-wrap" ref={sizing.wrapRef} data-preview-loading={!loading.ready} aria-busy={!loading.ready}>
       {props.preview.url &&
         (props.device === 'canvas' ? (
-          <CanvasView breakpoints={breakpoints} key={loading.attempt} url={props.preview.renderURL ?? props.preview.url} refreshKey={loading.attempt} />
+          <CanvasView
+            breakpoints={breakpoints}
+            desktopFramePx={desktopFramePx}
+            key={loading.attempt}
+            url={props.preview.renderURL ?? props.preview.url}
+            refreshKey={loading.attempt}
+          />
         ) : (
           <DesignFrame key={loading.attempt} interactive={interactive ?? false} props={props} sizing={sizing} shownGuide={shownGuide} />
         ))}

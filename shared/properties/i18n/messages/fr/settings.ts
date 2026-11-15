@@ -15,11 +15,8 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Très grand',
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Bureau',
-  'settings.breakpoints.desktopWidth': 'Pleine largeur',
-  'settings.breakpoints.direction.down': 'Plus étroit que (<)',
-  'settings.breakpoints.direction.group': 'Direction', // same
-  'settings.breakpoints.direction.up': 'Plus large que (>=)',
-  'settings.breakpoints.error.direction': 'Un point d’arrêt plus large doit être supérieur à tous les plus étroits.',
+  'settings.breakpoints.desktopNote': 'Largeur du cadre dans la vue côte à côte. Jamais utilisée comme media query.',
+  'settings.breakpoints.error.desktopFlips': '{name} ({limit}) passerait de l’autre côté de Bureau.',
   'settings.breakpoints.error.file':
     'Le fichier des points d’arrêt est inutilisable : les valeurs par défaut s’affichent et le fichier reste intact. {message}',
   'settings.breakpoints.error.name': 'Un nom compte de 1 à {maximum} caractères, et chacun est différent.',
@@ -28,13 +25,14 @@ export const messages = {
   'settings.breakpoints.error.pxWhole': 'Les largeurs en px sont des nombres entiers. Utilisez rem pour les décimales, comme 62.5rem.',
   'settings.breakpoints.error.range': 'Utilisez une largeur de {minimum} à {maximum}, en px ou rem.',
   'settings.breakpoints.error.same': '{other} utilise déjà {value}.',
+  'settings.breakpoints.error.sameAsDesktop': 'Doit différer de Bureau ({value}).',
   'settings.breakpoints.error.save': 'Impossible d’enregistrer les points d’arrêt : {message}',
   'settings.breakpoints.error.syntax': 'Saisissez une largeur comme 64rem, 62.5rem ou 1024px. Un nombre seul est en px.',
   'settings.breakpoints.explain':
-    'Chaque point d’arrêt est la largeur où commence son appareil, sous la forme width < valeur : 64rem signifie width < 64rem. L’aperçu saute 1px en dessous (64rem donne 1023px, 30rem donne 479px ; 1rem vaut 16px). Saisissez rem ou px, un nombre seul est en px, et chacun doit être plus petit que celui du dessus.',
+    'Un nombre plus large que Bureau est une requête width >= valeur ; un plus étroit est width < valeur. L’aperçu saute à la largeur où il commence : 64rem donne 1023px, 100rem donne 1600px (1rem vaut 16px). Saisissez rem ou px, un nombre seul est en px, et les nombres doivent descendre dans la liste. Bureau n’est que la largeur du cadre dans la vue côte à côte.',
+  'settings.breakpoints.frame': 'cadre de {width}px',
   'settings.breakpoints.full': 'Vous pouvez avoir jusqu’à {count} points d’arrêt.',
-  'settings.breakpoints.intro':
-    'Enregistré dans .stacki/breakpoints.json, donc Stacki Desktop et Studio le partagent. Bureau est la pleine largeur et n’a pas de nombre.',
+  'settings.breakpoints.intro': 'Enregistré dans .stacki/breakpoints.json, donc Stacki Desktop et Studio le partagent.',
   'settings.breakpoints.laptop': 'Ordinateur portable',
   'settings.breakpoints.nameLabel': 'Nom de {device}',
   'settings.breakpoints.phone': 'Téléphone',
@@ -47,6 +45,8 @@ export const messages = {
   'settings.breakpoints.removeConfirm': 'Retirer',
   'settings.breakpoints.removeNote': 'Retirer un point d’arrêt ne modifie pas votre CSS.',
   'settings.breakpoints.removeTitle': 'Retirer {name} ?',
+  'settings.breakpoints.side.down': 'plus étroit que Bureau',
+  'settings.breakpoints.side.up': 'plus large que Bureau',
   'settings.breakpoints.sync.all': 'Tout',
   'settings.breakpoints.sync.apply': { one: 'Mettre à jour {count} endroit', other: 'Mettre à jour {count} endroits' },
   'settings.breakpoints.sync.checkFile': 'Mettre à jour les endroits dans {file}',

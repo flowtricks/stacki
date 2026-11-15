@@ -17,17 +17,16 @@ interface CanvasBreakpoint {
   readonly width: number;
   readonly viewportHeight: number;
 }
-// The all-breakpoints canvas draws Desktop at a fixed 1440 and every breakpoint at the project's width (`.stacki/breakpoints.json`), in
-// the preview bar's order: the wider ones, Desktop, then the narrower ones.
-const DESKTOP_FRAME_WIDTH = 1_440;
-function canvasBreakpoints(resolved: readonly ResolvedBreakpoint[], translate: Translator): readonly CanvasBreakpoint[] {
+// The all-breakpoints canvas draws Desktop at the project's Desktop frame width (90rem, 1440px, unless set in Settings: never a media
+// query) and every breakpoint at its width (`.stacki/breakpoints.json`), in the preview bar's order: the wider ones, Desktop, the narrower ones.
+function canvasBreakpoints(resolved: readonly ResolvedBreakpoint[], desktopFramePx: number, translate: Translator): readonly CanvasBreakpoint[] {
   const frames: CanvasBreakpoint[] = [];
   for (const device of barDevices(resolved)) {
     if (device.breakpoint !== undefined) {
       const width = device.breakpoint.widthPx;
       frames.push({ key: device.key, label: breakpointLabel(device.breakpoint, translate), width, viewportHeight: viewportHeightFor(device.breakpoint) });
     } else if (device.key === 'desktop') {
-      frames.push({ key: 'desktop', label: translate('preview.canvas.desktop'), width: DESKTOP_FRAME_WIDTH, viewportHeight: 900 });
+      frames.push({ key: 'desktop', label: translate('preview.canvas.desktop'), width: desktopFramePx, viewportHeight: 900 });
     }
   }
   return frames;
@@ -65,6 +64,8 @@ interface ViewState {
 interface CanvasViewProps {
   /** The project's breakpoints: one frame each is drawn at its canvas width. */
   readonly breakpoints: readonly ResolvedBreakpoint[];
+  /** The width of the Desktop frame, in pixels. */
+  readonly desktopFramePx: number;
   readonly url: string;
   readonly refreshKey: string | number;
   readonly onPreviewLoaded?: () => void;
@@ -74,7 +75,7 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
-export default function CanvasView({ url: renderURL, refreshKey, onPreviewLoaded, breakpoints }: CanvasViewProps) {
+export default function CanvasView({ url: renderURL, refreshKey, onPreviewLoaded, breakpoints, desktopFramePx }: CanvasViewProps) {
   const startDrag = usePointerDrag();
   const wrapRef = React.useRef<HTMLDivElement>(null);
   const iframesRef = React.useRef<FrameElements>({});
@@ -86,7 +87,10 @@ export default function CanvasView({ url: renderURL, refreshKey, onPreviewLoaded
   const viewRef = React.useRef<ViewState | undefined>(undefined);
   viewRef.current = view;
   const translate = useTranslate();
-  const frames = React.useMemo(() => layoutFrames(heights, canvasBreakpoints(breakpoints, translate)), [heights, breakpoints, translate]);
+  const frames = React.useMemo(
+    () => layoutFrames(heights, canvasBreakpoints(breakpoints, desktopFramePx, translate)),
+    [heights, breakpoints, desktopFramePx, translate],
+  );
   const lastFrame = frames.at(-1);
   if (!lastFrame) {
     throw new Error('Canvas requires at least one breakpoint');

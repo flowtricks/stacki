@@ -105,7 +105,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
   });
   const source = usePreviewSource(url, runtime.post);
   const dimensions = usePreviewDimensions();
-  const { resolved: breakpoints } = useProjectBreakpoints(props.projectPath);
+  const { resolved: breakpoints, desktopFramePx } = useProjectBreakpoints(props.projectPath);
   const sizing = usePreviewSizing(props.device, dimensions, breakpoints, props.onDevice);
   useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
   // A fluid canvas is 1px wide until its container is measured: that is not a width to follow.
@@ -153,6 +153,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
           }}
           sizing={sizing}
           breakpoints={breakpoints}
+          desktopFramePx={desktopFramePx}
           shownGuide={columnGuide.shown}
         />
       </div>
@@ -171,8 +172,11 @@ function PreviewContent({
   sizing,
   shownGuide,
   breakpoints,
+  desktopFramePx,
 }: {
   readonly breakpoints: readonly ResolvedBreakpoint[];
+  /** The width of the Desktop frame in the side-by-side view. */
+  readonly desktopFramePx: number;
   readonly props: PreviewPaneProps;
   readonly url: string | undefined;
   readonly runtime: Runtime;
@@ -186,6 +190,7 @@ function PreviewContent({
     return (
       <CanvasView
         breakpoints={breakpoints}
+        desktopFramePx={desktopFramePx}
         url={url}
         refreshKey={props.refreshKey ?? 0}
         {...(props.onPreviewLoaded === undefined ? {} : { onPreviewLoaded: props.onPreviewLoaded })}

@@ -15,11 +15,8 @@ export const messages = {
   'settings.breakpoints.defaultName.up1': 'Extragroß',
   'settings.breakpoints.defaultName.up2': 'Ultra', // same
   'settings.breakpoints.desktop': 'Desktop', // same
-  'settings.breakpoints.desktopWidth': 'Volle Breite',
-  'settings.breakpoints.direction.down': 'Schmaler als (<)',
-  'settings.breakpoints.direction.group': 'Richtung',
-  'settings.breakpoints.direction.up': 'Breiter als (>=)',
-  'settings.breakpoints.error.direction': 'Ein breiterer Breakpoint muss größer sein als jeder schmalere.',
+  'settings.breakpoints.desktopNote': 'Rahmenbreite in der Nebeneinander-Ansicht. Nie als Media Query verwendet.',
+  'settings.breakpoints.error.desktopFlips': '{name} ({limit}) läge dann auf der anderen Seite von Desktop.',
   'settings.breakpoints.error.file':
     'Die Breakpoint-Datei ist nicht nutzbar, daher werden die Standardwerte angezeigt und die Datei bleibt unverändert. {message}',
   'settings.breakpoints.error.name': 'Ein Name hat 1 bis {maximum} Zeichen, und jeder ist anders.',
@@ -28,13 +25,14 @@ export const messages = {
   'settings.breakpoints.error.pxWhole': 'px-Breiten sind ganze Zahlen. Verwende rem für Dezimalstellen, etwa 62.5rem.',
   'settings.breakpoints.error.range': 'Verwende eine Breite von {minimum} bis {maximum}, in px oder rem.',
   'settings.breakpoints.error.same': '{other} nutzt bereits {value}.',
+  'settings.breakpoints.error.sameAsDesktop': 'Muss sich von Desktop unterscheiden ({value}).',
   'settings.breakpoints.error.save': 'Die Breakpoints konnten nicht gespeichert werden: {message}',
   'settings.breakpoints.error.syntax': 'Gib eine Breite wie 64rem, 62.5rem oder 1024px ein. Eine bloße Zahl gilt als px.',
   'settings.breakpoints.explain':
-    'Jeder Breakpoint ist die Breite, ab der sein Gerät beginnt, als width < Wert: 64rem bedeutet width < 64rem. Die Vorschau springt 1px darunter (64rem sind 1023px, 30rem sind 479px; 1rem sind 16px). Gib rem oder px ein, eine bloße Zahl gilt als px, und jeder Wert muss kleiner sein als der darüber.',
+    'Eine Zahl, die breiter als Desktop ist, ist eine Abfrage width >= Wert; eine schmalere ist width < Wert. Die Vorschau springt zur Breite, ab der es beginnt: 64rem sind 1023px, 100rem sind 1600px (1rem sind 16px). Gib rem oder px ein, eine bloße Zahl gilt als px, und die Zahlen müssen in der Liste abnehmen. Desktop ist nur die Rahmenbreite in der Nebeneinander-Ansicht.',
+  'settings.breakpoints.frame': '{width}px Rahmen',
   'settings.breakpoints.full': 'Du kannst bis zu {count} Breakpoints haben.',
-  'settings.breakpoints.intro':
-    'Gespeichert in .stacki/breakpoints.json, daher teilen Stacki Desktop und Studio ihn. Desktop ist die volle Breite und hat keine Zahl.',
+  'settings.breakpoints.intro': 'Gespeichert in .stacki/breakpoints.json, daher teilen Stacki Desktop und Studio ihn.',
   'settings.breakpoints.laptop': 'Laptop', // same
   'settings.breakpoints.nameLabel': 'Name von {device}',
   'settings.breakpoints.phone': 'Smartphone',
@@ -47,6 +45,8 @@ export const messages = {
   'settings.breakpoints.removeConfirm': 'Entfernen',
   'settings.breakpoints.removeNote': 'Das Entfernen eines Breakpoints ändert dein CSS nicht.',
   'settings.breakpoints.removeTitle': '{name} entfernen?',
+  'settings.breakpoints.side.down': 'schmaler als Desktop',
+  'settings.breakpoints.side.up': 'breiter als Desktop',
   'settings.breakpoints.sync.all': 'Alle',
   'settings.breakpoints.sync.apply': { one: '{count} Stelle aktualisieren', other: '{count} Stellen aktualisieren' },
   'settings.breakpoints.sync.checkFile': 'Stellen in {file} aktualisieren',

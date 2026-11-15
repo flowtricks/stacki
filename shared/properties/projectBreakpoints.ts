@@ -1,33 +1,40 @@
-// `.stacki/breakpoints.json`: the breakpoints the preview bar jumps to.
+// `.stacki/breakpoints.json`: Desktop's frame width and the breakpoints the preview bar jumps to.
 //
-//   { "version": 3,
+//   { "version": 4,
+//     "desktop": { "value": 90, "unit": "rem" },
 //     "breakpoints": [
-//       { "id": "bp-1", "name": "Large", "direction": "up",   "value": 100, "unit": "rem" },
-//       { "id": "laptop",                 "direction": "down", "value": 64,  "unit": "rem" },
-//       { "id": "tablet",                 "direction": "down", "value": 48,  "unit": "rem" },
-//       { "id": "phone",                  "direction": "down", "value": 30,  "unit": "rem" } ] }
+//       { "id": "bp-1", "name": "Large", "value": 100, "unit": "rem" },
+//       { "id": "laptop",                 "value": 64,  "unit": "rem" },
+//       { "id": "tablet",                 "value": 48,  "unit": "rem" },
+//       { "id": "phone",                  "value": 30,  "unit": "rem" } ] }
 //
-// The bar lists Desktop in the middle, always full width and always there. A `down` breakpoint is a device narrower than
-// Desktop: its entry is the query boundary `width < X`, and its canvas is the largest whole pixel below it (64rem is 1023px).
-// An `up` breakpoint is a device wider than Desktop: its entry is `width >= X`, mobile first, and its canvas is exactly X
-// (100rem is 1600px). A project with Lumos breakpoints (min-width 30rem, 48rem, 64rem) needs no file: those are the defaults,
-// as `down` breakpoints named by their ids. Any rem or px numbers work.
+// Desktop is the base of the bar and always full width in the editor's single canvas. Its value here is NOT a media query and is
+// never written into one: it is only the width of the Desktop frame in the side-by-side (all breakpoints) view, 90rem (1440px) by
+// default, and the line that decides on which side of Desktop a breakpoint falls.
 //
-// Order is part of the file: the list is strictly decreasing in pixels, every `up` before every `down`, so a card's neighbours
-// are its limits (an `up` is above all the `down` ones, whatever its unit). A breakpoint may be removed (the list may be empty),
-// and up to `BREAKPOINT_LIMITS.countMax` may exist. `id` is stable (the sync record and the preview device are named by it);
-// `name` is optional, and absent for a built-in one it reads as the translated Laptop, Tablet or Phone.
+// A breakpoint has no direction to choose: it is DERIVED from its number against Desktop's. Wider than Desktop it is an `up`
+// breakpoint, the query `width >= X` (mobile first), and its canvas is exactly X (100rem is 1600px). Narrower, it is a `down`
+// breakpoint, the query `width < X`, and its canvas is the largest whole pixel below it (64rem is 1023px). Equal to Desktop is not
+// allowed. The project's own Lumos breakpoints (min-width 30rem, 48rem, 64rem) are the defaults, as `down` breakpoints named by
+// their ids. Any rem or px numbers work.
+//
+// The list is strictly decreasing in pixels, Desktop included: the wider ones, Desktop, the narrower ones. So a card's neighbours are
+// its limits, and Desktop may only move between the largest narrower breakpoint and the smallest wider one (it never flips one to
+// the other side). A breakpoint may be removed (the list may be empty), and up to `BREAKPOINT_LIMITS.countMax` may exist. `id` is
+// stable (the sync record and the preview device are named by it); `name` is optional, and absent for a built-in one it reads as the
+// translated Laptop, Tablet or Phone.
 //
 // It is a tracked project file in the same family as `.stacki/guide.json`, shared by Desktop and Studio and committed with the
-// project. The file is created by the first edit, never by reading, and never written with the defaults unless the person
-// edited. Versions 1 (whole pixel widths) and 2 (laptop, tablet and phone as `{ value, unit }`) are read as version 3 and
-// rewritten only by an edit: version 1's exactly-old-defaults read as the rem defaults, anything else as px entries one pixel
-// above the old canvas width, so no canvas width moves.
+// project. The file is created by the first edit, never by reading, and never written with the defaults unless the person edited.
+// Versions 1 (whole pixel widths), 2 (laptop, tablet and phone as `{ value, unit }`) and 3 (a list with a stored `direction`) are read
+// as version 4 and rewritten only by an edit: Desktop is 90rem when absent, a stored direction is ignored and recomputed from the
+// number (a file that disagrees with itself is simply read as derived), version 1's exactly-old-defaults read as the rem defaults,
+// anything else as px entries one pixel above the old canvas width, so no canvas width moves.
 //
-// Boundary: `parseBreakpointsSource` takes the file's bytes (or `undefined` when there is no file) and answers a `Result`.
-// A hand-edited, merged or truncated file is an error value, never a crash: callers show the defaults, say why, and refuse to
-// write over the file until it is fixed. The bounds sit next to the code that enforces them (AGENTS.md section 10);
-// shared/core/limits.ts is gate-defining, so they live here.
+// Boundary: `parseBreakpointsSource` takes the file's bytes (or `undefined` when there is no file) and answers a `Result`. A
+// hand-edited, merged or truncated file is an error value, never a crash: callers show the defaults, say why, and refuse to write
+// over the file until it is fixed. The bounds sit next to the code that enforces them (AGENTS.md section 10); shared/core/limits.ts is
+// gate-defining, so they live here.
 import { assert } from '../core/assert';
 import { err, ok, type AppError, type Result } from '../core/result';
 
@@ -69,11 +76,12 @@ export interface Breakpoint {
   readonly id: string;
   /** Typed by the person; undefined for a built-in one that was never renamed. */
   readonly name: string | undefined;
+  /** Derived from the number against Desktop's (`directionOf`); never stored, never chosen. */
   readonly direction: BreakpointDirection;
   readonly setting: BreakpointSetting;
 }
 
-/** The breakpoints, strictly decreasing in pixels, every `up` before every `down`. */
+/** The breakpoints, strictly decreasing in pixels: the `up` ones (wider than Desktop), then the `down` ones. The direction is derived, never typed. */
 export type BreakpointList = readonly Breakpoint[];
 
 /** A breakpoint with the canvas width it resolves to. */
@@ -175,45 +183,99 @@ export function checkedSetting(candidate: { readonly value: unknown; readonly un
   return ok(setting);
 }
 
-/** Which neighbour a breakpoint is out of order with: it must be smaller than the one above, or larger than the one below. */
+/** The width of the Desktop frame in the side-by-side view unless the project says otherwise: 90rem, 1440px. */
+export const DESKTOP_DEFAULT: BreakpointSetting = { value: 90, unit: 'rem' };
+
+/** Desktop's frame width and the breakpoints around it. The one value a project's breakpoints are read and written as. */
+export interface BreakpointConfig {
+  readonly desktop: BreakpointSetting;
+  readonly list: BreakpointList;
+}
+
+/** The Lumos breakpoints around a 90rem Desktop. */
+export const BREAKPOINT_DEFAULT_CONFIG: BreakpointConfig = { desktop: DESKTOP_DEFAULT, list: BREAKPOINT_DEFAULT_LIST };
+
+/**
+ * The side of Desktop a number is on: wider is `up` (`width >= X`), narrower is `down` (`width < X`), and a number equal to Desktop's
+ * is on neither side (undefined) and is refused. The one derivation: the bar, Settings, the sync and the style panel all read it.
+ */
+export function directionOf(setting: BreakpointSetting, desktop: BreakpointSetting): BreakpointDirection | undefined {
+  const pixels = boundaryPx(setting);
+  const base = boundaryPx(desktop);
+  if (pixels === base) {
+    return undefined;
+  }
+  return pixels > base ? 'up' : 'down';
+}
+
+/** The width of the Desktop frame in the side-by-side view, in pixels. Never a media query. */
+export function desktopFramePx(desktop: BreakpointSetting): number {
+  return Math.ceil(boundaryPx(desktop));
+}
+
+/** The list with each direction set from its number against Desktop. A number equal to Desktop's keeps its old direction (it is refused by `checkedConfig`). */
+export function withDerivedDirections(desktop: BreakpointSetting, list: BreakpointList): BreakpointList {
+  return list.map((breakpoint) => ({ ...breakpoint, direction: directionOf(breakpoint.setting, desktop) ?? breakpoint.direction }));
+}
+
+/** One place in the whole descending sequence: Desktop or a breakpoint. */
+export interface SequenceEntry {
+  readonly id: string;
+  /** undefined for a breakpoint with no name of its own (a built-in one), and for Desktop. */
+  readonly breakpoint: Breakpoint | undefined;
+  readonly setting: BreakpointSetting;
+}
+
+/** The ids reserved for Desktop. */
+export const DESKTOP_ID = 'desktop';
+
+/**
+ * The wider breakpoints, Desktop, then the narrower ones: the order the cards and the bar draw, and the order the numbers must descend
+ * in. A breakpoint is on the side its `direction` says, in the list's order, so an edit that keeps a card in its place is checked against
+ * the cards around it (and Desktop) and not re-sorted.
+ */
+export function sequenceOf(config: BreakpointConfig): readonly SequenceEntry[] {
+  const entry = (breakpoint: Breakpoint): SequenceEntry => ({ id: breakpoint.id, breakpoint, setting: breakpoint.setting });
+  const wider = config.list.filter((breakpoint) => breakpoint.direction === 'up').map(entry);
+  const narrower = config.list.filter((breakpoint) => breakpoint.direction === 'down').map(entry);
+  return [...wider, { id: DESKTOP_ID, breakpoint: undefined, setting: config.desktop }, ...narrower];
+}
+
+/** Which neighbour an entry is out of order with: it must be smaller than the one above, or larger than the one below. */
 export interface OrderConflict {
-  readonly index: number;
-  readonly against: Breakpoint;
+  readonly against: SequenceEntry;
   readonly relation: 'smaller' | 'larger';
 }
 
-/**
- * The first breakpoint that is not smaller than the one above it, as `smaller` against that neighbour. `up` breakpoints come
- * before `down` ones, so an `up` that is not larger than a `down` shows as the `down` not being smaller than it.
- */
-export function firstOrderConflict(list: BreakpointList): OrderConflict | undefined {
-  for (let index = 1; index < list.length; index += 1) {
-    const above = list[index - 1];
-    const current = list[index];
-    assert(above !== undefined, 'firstOrderConflict: the neighbour above exists');
-    assert(current !== undefined, 'firstOrderConflict: the breakpoint exists');
-    if (boundaryPx(current.setting) >= boundaryPx(above.setting)) {
-      return { index, against: above, relation: 'smaller' };
-    }
+/** How the entry `id` conflicts with its neighbours, from its own side: smaller than the one above, else larger than the one below. */
+export function conflictAt(config: BreakpointConfig, id: string): OrderConflict | undefined {
+  const sequence = sequenceOf(config);
+  const index = sequence.findIndex((entry) => entry.id === id);
+  const current = sequence[index];
+  if (current === undefined) {
+    return undefined;
+  }
+  const above = sequence[index - 1];
+  if (above !== undefined && boundaryPx(current.setting) >= boundaryPx(above.setting)) {
+    return { against: above, relation: 'smaller' };
+  }
+  const below = sequence[index + 1];
+  if (below !== undefined && boundaryPx(current.setting) <= boundaryPx(below.setting)) {
+    return { against: below, relation: 'larger' };
   }
   return undefined;
 }
 
-/** How the breakpoint at `index` conflicts with its neighbours, from its own side: smaller than above, else larger than below. */
-export function conflictAt(list: BreakpointList, index: number): OrderConflict | undefined {
-  const current = list[index];
-  if (current === undefined) {
-    return undefined;
-  }
-  const above = list[index - 1];
-  if (above !== undefined && boundaryPx(current.setting) >= boundaryPx(above.setting)) {
-    return { index, against: above, relation: 'smaller' };
-  }
-  const below = list[index + 1];
-  if (below !== undefined && boundaryPx(current.setting) <= boundaryPx(below.setting)) {
-    return { index, against: below, relation: 'larger' };
-  }
-  return undefined;
+/**
+ * The breakpoint that would end up on the other side of Desktop (or on it) if Desktop were `next`, or undefined when it can move
+ * there: Desktop may only stay between the largest narrower breakpoint and the smallest wider one.
+ */
+export function desktopBlocker(config: BreakpointConfig, next: BreakpointSetting): Breakpoint | undefined {
+  const nextPx = boundaryPx(next);
+  return config.list.find((breakpoint) => {
+    const pixels = boundaryPx(breakpoint.setting);
+    return breakpoint.direction === 'up' ? pixels <= nextPx : pixels >= nextPx;
+  });
 }
 
 const ID_PATTERN = /^[a-z][a-z0-9-]*$/;
@@ -223,16 +285,19 @@ export function isBreakpointName(name: string): boolean {
   return name.trim().length > 0 && name.length <= BREAKPOINT_LIMITS.nameCharsMax && !/[\u0000-\u001f\u007f]/.test(name);
 }
 
-/** The list as a set of breakpoints: each valid, ids and names unique, the count bounded, strictly decreasing. */
-export function checkedList(list: BreakpointList): Result<BreakpointList> {
-  if (list.length > BREAKPOINT_LIMITS.countMax) {
+/** Desktop and the breakpoints as a set: each valid, ids and names unique, the count bounded, none equal to Desktop, strictly decreasing, directions derived. */
+export function checkedConfig(config: BreakpointConfig): Result<BreakpointConfig> {
+  const desktop = checkedSetting(config.desktop);
+  if (!desktop.ok) {
+    return failure(desktop.error.code.replace('breakpoints-', ''), `desktop: ${desktop.error.message.replace('.stacki/breakpoints.json: ', '')}`);
+  }
+  if (config.list.length > BREAKPOINT_LIMITS.countMax) {
     return failure('count', `at most ${BREAKPOINT_LIMITS.countMax} breakpoints`);
   }
   const ids = new Set<string>();
   const names = new Set<string>();
-  let seenDown = false;
-  for (const breakpoint of list) {
-    if (breakpoint.id.length === 0 || breakpoint.id.length > BREAKPOINT_LIMITS.idCharsMax || !ID_PATTERN.test(breakpoint.id)) {
+  for (const breakpoint of config.list) {
+    if (breakpoint.id.length === 0 || breakpoint.id.length > BREAKPOINT_LIMITS.idCharsMax || !ID_PATTERN.test(breakpoint.id) || breakpoint.id === DESKTOP_ID) {
       return failure('id', 'a breakpoint id is lower-case letters, digits and hyphens');
     }
     if (ids.has(breakpoint.id)) {
@@ -253,23 +318,24 @@ export function checkedList(list: BreakpointList): Result<BreakpointList> {
     if (!setting.ok) {
       return setting;
     }
-    if (breakpoint.direction === 'down') {
-      seenDown = true;
-    } else if (seenDown) {
-      return failure('order', 'every wider breakpoint comes before every narrower one');
+    if (directionOf(breakpoint.setting, config.desktop) === undefined) {
+      return failure('desktop-equal', `${breakpoint.id} must differ from Desktop`);
     }
   }
-  const conflict = firstOrderConflict(list);
-  if (conflict !== undefined) {
-    return failure('order', `${conflict.against.id} must be larger than ${list[conflict.index]?.id ?? ''}`);
+  const derived: BreakpointConfig = { desktop: desktop.value, list: withDerivedDirections(desktop.value, config.list) };
+  const sequence = derived.list.map((breakpoint) => boundaryPx(breakpoint.setting));
+  for (let index = 1; index < sequence.length; index += 1) {
+    if ((sequence[index] ?? 0) >= (sequence[index - 1] ?? 0)) {
+      return failure('order', `${derived.list[index - 1]?.id ?? ''} must be larger than ${derived.list[index]?.id ?? ''}`);
+    }
   }
-  return ok(list);
+  return ok(derived);
 }
 
-/** The file's bytes to the list. `undefined` (no file yet) reads as the defaults. */
-export function parseBreakpointsSource(source: string | undefined): Result<BreakpointList> {
+/** The file's bytes to the configuration. `undefined` (no file yet) reads as the defaults. */
+export function parseBreakpointsSource(source: string | undefined): Result<BreakpointConfig> {
   if (source === undefined) {
-    return ok(BREAKPOINT_DEFAULT_LIST);
+    return ok(BREAKPOINT_DEFAULT_CONFIG);
   }
   if (source.length > BREAKPOINT_LIMITS.fileBytesMax) {
     return failure('limit', `larger than ${BREAKPOINT_LIMITS.fileBytesMax} bytes`);
@@ -283,27 +349,46 @@ export function parseBreakpointsSource(source: string | undefined): Result<Break
   return parseBreakpoints(input);
 }
 
-/** A parsed JSON value to the list, every field checked. Versions 1 and 2 are migrated in memory. */
-export function parseBreakpoints(input: unknown): Result<BreakpointList> {
+/** A parsed JSON value to the configuration, every field checked. Versions 1, 2 and 3 are migrated in memory. */
+export function parseBreakpoints(input: unknown): Result<BreakpointConfig> {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     return failure('shape', 'expected an object');
   }
   const fields = new Map<string, unknown>(Object.entries(input));
   const version = fields.get('version');
-  if (version === 3) {
-    return parseVersionThree(fields);
+  if (version === 4 || version === 3) {
+    return parseListed(fields, version);
   }
   if (version === 1 || version === 2) {
     return parseLegacy(fields, version);
   }
-  return failure('version', 'unsupported version, expected 3');
+  return failure('version', 'unsupported version, expected 4');
 }
 
-function parseVersionThree(fields: ReadonlyMap<string, unknown>): Result<BreakpointList> {
+function parseListed(fields: ReadonlyMap<string, unknown>, version: 3 | 4): Result<BreakpointConfig> {
+  const allowed = version === 4 ? ['version', 'desktop', 'breakpoints'] : ['version', 'breakpoints'];
   for (const name of fields.keys()) {
-    if (name !== 'version' && name !== 'breakpoints') {
+    if (!allowed.includes(name)) {
       return failure('shape', `unknown field "${name}"`);
     }
+  }
+  let desktop: BreakpointSetting = DESKTOP_DEFAULT;
+  if (version === 4 && fields.has('desktop')) {
+    const raw = fields.get('desktop');
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      return failure('shape', 'desktop must be an object with a value and a unit');
+    }
+    const inner = new Map<string, unknown>(Object.entries(raw));
+    for (const name of inner.keys()) {
+      if (name !== 'value' && name !== 'unit') {
+        return failure('shape', `unknown field "${name}" in desktop`);
+      }
+    }
+    const setting = checkedSetting({ value: inner.get('value'), unit: inner.get('unit') });
+    if (!setting.ok) {
+      return failure(setting.error.code.replace('breakpoints-', ''), `desktop: ${setting.error.message.replace('.stacki/breakpoints.json: ', '')}`);
+    }
+    desktop = setting.value;
   }
   const entries = fields.get('breakpoints');
   if (!Array.isArray(entries)) {
@@ -315,47 +400,51 @@ function parseVersionThree(fields: ReadonlyMap<string, unknown>): Result<Breakpo
   const list: Breakpoint[] = [];
   // The array is bounded above, so this loop is too.
   for (const entry of entries) {
-    const breakpoint = parseEntry(entry);
+    const breakpoint = parseEntry(entry, version);
     if (!breakpoint.ok) {
       return breakpoint;
     }
     list.push(breakpoint.value);
   }
-  return checkedList(list);
+  return checkedConfig({ desktop, list: withDerivedDirections(desktop, list) });
 }
 
-function parseEntry(input: unknown): Result<Breakpoint> {
+// Version 3 held a `direction` per breakpoint: it is read and ignored, the direction being recomputed from the number.
+function parseEntry(input: unknown, version: 3 | 4): Result<Breakpoint> {
   if (typeof input !== 'object' || input === null || Array.isArray(input)) {
     return failure('shape', 'a breakpoint must be an object');
   }
   const fields = new Map<string, unknown>(Object.entries(input));
+  const allowed = version === 3 ? ['id', 'name', 'direction', 'value', 'unit'] : ['id', 'name', 'value', 'unit'];
   for (const name of fields.keys()) {
-    if (name !== 'id' && name !== 'name' && name !== 'direction' && name !== 'value' && name !== 'unit') {
+    if (!allowed.includes(name)) {
       return failure('shape', `unknown field "${name}" in a breakpoint`);
     }
   }
   const id = fields.get('id');
   const name = fields.get('name');
-  const direction = fields.get('direction');
   if (typeof id !== 'string') {
     return failure('id', 'a breakpoint needs an id');
   }
   if (name !== undefined && typeof name !== 'string') {
     return failure('name', 'a name must be text');
   }
-  if (direction !== 'up' && direction !== 'down') {
-    return failure('direction', 'direction must be "up" or "down"');
+  if (version === 3) {
+    const stored = fields.get('direction');
+    if (stored !== 'up' && stored !== 'down') {
+      return failure('direction', 'direction must be "up" or "down"');
+    }
   }
   const setting = checkedSetting({ value: fields.get('value'), unit: fields.get('unit') });
   if (!setting.ok) {
     return setting;
   }
-  return ok({ id, name, direction, setting: setting.value });
+  return ok({ id, name, direction: 'down', setting: setting.value });
 }
 
 // Versions 1 and 2 held laptop, tablet and phone only. Version 2: `{ value, unit }` each. Version 1: whole pixel canvas widths,
 // whose boundary is one pixel more; exactly the old defaults become the rem defaults, which resolve to the same widths.
-function parseLegacy(fields: ReadonlyMap<string, unknown>, version: 1 | 2): Result<BreakpointList> {
+function parseLegacy(fields: ReadonlyMap<string, unknown>, version: 1 | 2): Result<BreakpointConfig> {
   for (const name of fields.keys()) {
     if (name !== 'version' && !isBuiltinBreakpointId(name)) {
       return failure('shape', `unknown field "${name}"`);
@@ -396,7 +485,7 @@ function parseLegacy(fields: ReadonlyMap<string, unknown>, version: 1 | 2): Resu
     assert(tablet !== undefined, 'parseLegacy: tablet was read above');
     assert(phone !== undefined, 'parseLegacy: phone was read above');
     if (laptop === 1023 && tablet === 767 && phone === 479) {
-      return ok(BREAKPOINT_DEFAULT_LIST);
+      return ok(BREAKPOINT_DEFAULT_CONFIG);
     }
     for (const width of widths) {
       settings.push({ value: width + 1, unit: 'px' });
@@ -407,35 +496,36 @@ function parseLegacy(fields: ReadonlyMap<string, unknown>, version: 1 | 2): Resu
     assert(setting !== undefined, 'parseLegacy: a setting exists for each built-in breakpoint');
     return { id, name: undefined, direction: 'down', setting };
   });
-  return checkedList(list);
+  return checkedConfig({ desktop: DESKTOP_DEFAULT, list: withDerivedDirections(DESKTOP_DEFAULT, list) });
 }
 
-/** The pretty-printed version 3 file text: fixed key order, two-space indent, a trailing newline, so equal lists are equal bytes. */
-export function serializeBreakpoints(list: BreakpointList): string {
-  const checked = checkedList(list);
-  assert(checked.ok, 'serializeBreakpoints: the breakpoints are a valid list');
-  const entries = list.map((breakpoint) => ({
+/** The pretty-printed version 4 file text: fixed key order, two-space indent, a trailing newline, no stored direction, so equal configurations are equal bytes. */
+export function serializeBreakpoints(config: BreakpointConfig): string {
+  const checked = checkedConfig(config);
+  assert(checked.ok, 'serializeBreakpoints: the configuration is valid');
+  const entries = config.list.map((breakpoint) => ({
     id: breakpoint.id,
     ...(breakpoint.name === undefined ? {} : { name: breakpoint.name }),
-    direction: breakpoint.direction,
     value: breakpoint.setting.value,
     unit: breakpoint.setting.unit,
   }));
-  const text = JSON.stringify({ version: 3, breakpoints: entries }, undefined, 2) + '\n';
+  const text = JSON.stringify({ version: 4, desktop: { value: config.desktop.value, unit: config.desktop.unit }, breakpoints: entries }, undefined, 2) + '\n';
   assert(text.length <= BREAKPOINT_LIMITS.fileBytesMax, 'serializeBreakpoints: within the file bound');
   return text;
 }
 
-export function breakpointsEqual(first: BreakpointList, second: BreakpointList): boolean {
+/** Whether two configurations are the same (the direction is derived from the numbers, so it is not compared). */
+export function breakpointsEqual(first: BreakpointConfig, second: BreakpointConfig): boolean {
   return (
-    first.length === second.length &&
-    first.every((breakpoint, index) => {
-      const other = second[index];
+    first.desktop.value === second.desktop.value &&
+    first.desktop.unit === second.desktop.unit &&
+    first.list.length === second.list.length &&
+    first.list.every((breakpoint, index) => {
+      const other = second.list[index];
       return (
         other !== undefined &&
         breakpoint.id === other.id &&
         breakpoint.name === other.name &&
-        breakpoint.direction === other.direction &&
         breakpoint.setting.value === other.setting.value &&
         breakpoint.setting.unit === other.setting.unit
       );
@@ -443,23 +533,32 @@ export function breakpointsEqual(first: BreakpointList, second: BreakpointList):
   );
 }
 
-/** The list with a breakpoint inserted where its boundary puts it: ups before downs, each strictly decreasing. */
-export function withBreakpointAdded(list: BreakpointList, breakpoint: Breakpoint): BreakpointList {
+/** The configuration with a breakpoint inserted where its number puts it, its direction derived. */
+export function withBreakpointAdded(config: BreakpointConfig, breakpoint: Pick<Breakpoint, 'id' | 'name' | 'setting'>): BreakpointConfig {
   const pixels = boundaryPx(breakpoint.setting);
-  const at = list.findIndex((other) => boundaryPx(other.setting) < pixels);
-  return at === -1 ? [...list, breakpoint] : [...list.slice(0, at), breakpoint, ...list.slice(at)];
+  const created: Breakpoint = { ...breakpoint, direction: directionOf(breakpoint.setting, config.desktop) ?? 'down' };
+  const at = config.list.findIndex((other) => boundaryPx(other.setting) < pixels);
+  const list = at === -1 ? [...config.list, created] : [...config.list.slice(0, at), created, ...config.list.slice(at)];
+  return { desktop: config.desktop, list: withDerivedDirections(config.desktop, list) };
 }
 
-export function withBreakpointRemoved(list: BreakpointList, id: string): BreakpointList {
-  return list.filter((breakpoint) => breakpoint.id !== id);
+export function withBreakpointRemoved(config: BreakpointConfig, id: string): BreakpointConfig {
+  return { desktop: config.desktop, list: config.list.filter((breakpoint) => breakpoint.id !== id) };
 }
 
-export function withBreakpointSetting(list: BreakpointList, id: string, setting: BreakpointSetting): BreakpointList {
-  return list.map((breakpoint) => (breakpoint.id === id ? { ...breakpoint, setting } : breakpoint));
+/** One breakpoint's number changed in place (its direction follows the new number). */
+export function withBreakpointSetting(config: BreakpointConfig, id: string, setting: BreakpointSetting): BreakpointConfig {
+  const list = config.list.map((breakpoint) => (breakpoint.id === id ? { ...breakpoint, setting } : breakpoint));
+  return { desktop: config.desktop, list: withDerivedDirections(config.desktop, list) };
 }
 
-export function withBreakpointName(list: BreakpointList, id: string, name: string | undefined): BreakpointList {
-  return list.map((breakpoint) => (breakpoint.id === id ? { ...breakpoint, name } : breakpoint));
+export function withBreakpointName(config: BreakpointConfig, id: string, name: string | undefined): BreakpointConfig {
+  return { desktop: config.desktop, list: config.list.map((breakpoint) => (breakpoint.id === id ? { ...breakpoint, name } : breakpoint)) };
+}
+
+/** Desktop's frame width changed; the directions are recomputed (the caller has checked `desktopBlocker`). */
+export function withDesktop(config: BreakpointConfig, desktop: BreakpointSetting): BreakpointConfig {
+  return { desktop, list: withDerivedDirections(desktop, config.list) };
 }
 
 /** An id no breakpoint in the list has: `bp-1`, `bp-2`, … */
@@ -485,11 +584,11 @@ export function uniqueBreakpointName(list: BreakpointList, name: string, label: 
   return candidate;
 }
 
-/** The `up` breakpoints, widest first, then Desktop's place, then the `down` ones. The bar and the cards draw this order. */
-export function barOrder(list: BreakpointList): { readonly up: readonly Breakpoint[]; readonly down: readonly Breakpoint[] } {
-  return { up: list.filter((breakpoint) => breakpoint.direction === 'up'), down: list.filter((breakpoint) => breakpoint.direction === 'down') };
-}
-
 function failure(code: string, detail: string): Result<never, AppError> {
   return err({ code: `breakpoints-${code}`, message: `.stacki/breakpoints.json: ${detail}` });
+}
+
+/** One breakpoint's number replaced WITHOUT deriving directions: the card keeps its place, to be checked against its neighbours with `conflictAt`. */
+export function withSettingInPlace(config: BreakpointConfig, id: string, setting: BreakpointSetting): BreakpointConfig {
+  return { desktop: config.desktop, list: config.list.map((breakpoint) => (breakpoint.id === id ? { ...breakpoint, setting } : breakpoint)) };
 }

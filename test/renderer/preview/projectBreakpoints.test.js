@@ -35,8 +35,8 @@ export { breakpointsStore, forgetBreakpointStores } from './src/ipc/projectBreak
 export { useProjectBreakpoints } from './src/ipc/useProjectBreakpoints';
 export { baseCanvasTarget } from './src/features/style/model/baseWidth';
 export { macbookAir, studioDisplayXdr, television, smartwatch1, studioDisplay, tablet, phone } from './src/ui/central/centralGeometry';
-export { DesktopIcon, LaptopIcon, StudioDisplayXdrIcon, TelevisionIcon, SmartwatchIcon } from './src/ui/Icons';
-export { serializeBreakpoints, BREAKPOINT_DEFAULTS, BREAKPOINT_DEFAULT_LIST, resolveBreakpoints } from './shared/properties/projectBreakpoints';`,
+export { DesktopIcon, LaptopIcon, StudioDisplayXdrIcon, TelevisionIcon, SmartwatchIcon, TabletIcon } from './src/ui/Icons';
+export { serializeBreakpoints, BREAKPOINT_DEFAULTS, BREAKPOINT_DEFAULT_LIST, BREAKPOINT_DEFAULT_CONFIG, resolveBreakpoints } from './shared/properties/projectBreakpoints';`,
     resolveDir: ROOT,
     loader: 'ts',
   },
@@ -101,6 +101,7 @@ function setup() {
 const settle = (ms = 20) => act(() => new Promise((resolve) => setTimeout(resolve, ms)));
 const bar = () => [...document.querySelectorAll('.device-btns button')].map((button) => button.getAttribute('aria-label'));
 const fieldFor = (label) => document.querySelector(`input[aria-label="${label} width in pixels"]`);
+const desktopField = () => document.querySelector('input[aria-label="Desktop width in pixels"]');
 const nameFor = (label) => document.querySelector(`input[aria-label="Name of ${label}"]`);
 const card = (label) => fieldFor(label).closest('.breakpoints-card');
 const cardIds = () => [...document.querySelectorAll('.breakpoints-card')].map((each) => each.getAttribute('data-breakpoint'));
@@ -151,16 +152,26 @@ async function mount(name, initial, onRecordUndo) {
   return { root, storage };
 }
 
-const versionThree = (breakpoints) => JSON.stringify({ version: 3, breakpoints });
-const down = (id, value, unit = 'rem', extra = {}) => ({ id, direction: 'down', value, unit, ...extra });
-const up = (id, value, unit = 'rem', extra = {}) => ({ id, direction: 'up', value, unit, ...extra });
+const versionFour = (breakpoints, desktop = { value: 90, unit: 'rem' }) => JSON.stringify({ version: 4, desktop, breakpoints });
+const entryOf = (id, value, unit = 'rem', extra = {}) => ({ id, value, unit, ...extra });
+const down = entryOf;
+const up = entryOf;
 
 test('defaults: 64rem, 48rem and 30rem as width < X, a bar of 1023, 767 and 479, no reset button, nothing written', async () => {
   const { root, storage } = await mount('fixture-defaults', undefined);
   assert.deepEqual(bar(), ['Desktop — 1', 'Laptop (1023px) — 2', 'Tablet (767px) — 3', 'Phone (479px) — 4', 'Canvas — all breakpoints — 5']);
   assert.deepEqual(cardIds(), ['desktop', 'laptop', 'tablet', 'phone']);
   assert.deepEqual([fieldFor('Laptop').value, fieldFor('Tablet').value, fieldFor('Phone').value], ['64rem', '48rem', '30rem']);
-  assert.deepEqual([rowText('Laptop'), rowText('Tablet'), rowText('Phone')], ['Matches width < 64rem', 'Matches width < 48rem', 'Matches width < 30rem']);
+  assert.deepEqual(
+    [rowText('Laptop'), rowText('Tablet'), rowText('Phone')],
+    ['Matches width < 64rem · narrower than Desktop', 'Matches width < 48rem · narrower than Desktop', 'Matches width < 30rem · narrower than Desktop'],
+  );
+  assert.equal(desktopField().value, '90rem', 'Desktop has a number: 90rem by default');
+  assert.equal(
+    document.querySelector('[data-breakpoint="desktop"] .breakpoints-query').textContent,
+    'Frame width in the side-by-side view. Never used as a media query.',
+  );
+  assert.equal(document.querySelector('[data-breakpoint="desktop"] .breakpoints-canvas').textContent, '1440px frame');
   assert.ok(document.querySelector('.breakpoints-reset') === null, 'there is no reset button');
   assert.ok(!/reset/i.test(document.body.textContent), 'nothing says reset');
   assert.equal(storage.state.writes.length, 0, 'reading and rendering never write');
@@ -252,25 +263,27 @@ test('each new icon exists in both variants, and all of them differ from one ano
   assert.equal(new Set(drawn).size, drawn.length, 'the bar draws five different icons');
 });
 
-test('editing a number saves version 3 once and the bar follows', async () => {
+test('editing a number saves version 4 once and the bar follows', async () => {
   const { root, storage } = await mount('fixture-edit', undefined);
   const tablet = fieldFor('Tablet');
   await act(async () => {
     tablet.focus();
     setValue(tablet, '800');
   });
-  assert.equal(rowText('Tablet'), 'Matches width < 800px', 'a bare number reads as px, live');
+  assert.equal(rowText('Tablet'), 'Matches width < 800px · narrower than Desktop', 'a bare number reads as px, live');
   await act(async () => tablet.blur());
   await settle();
   assert.equal(storage.state.writes.length, 1);
-  assert.equal(JSON.parse(storage.state.source).version, 3);
+  assert.equal(JSON.parse(storage.state.source).version, 4);
+  assert.deepEqual(JSON.parse(storage.state.source).desktop, { value: 90, unit: 'rem' }, 'Desktop is written with the list');
   assert.deepEqual(
-    saved(storage).map((entry) => [entry.id, entry.direction, entry.value, entry.unit]),
+    saved(storage).map((entry) => [entry.id, entry.value, entry.unit, 'direction' in entry]),
     [
-      ['laptop', 'down', 64, 'rem'],
-      ['tablet', 'down', 800, 'px'],
-      ['phone', 'down', 30, 'rem'],
+      ['laptop', 64, 'rem', false],
+      ['tablet', 800, 'px', false],
+      ['phone', 30, 'rem', false],
     ],
+    'no direction is written',
   );
   assert.equal(fieldFor('Tablet').value, '800px');
   assert.deepEqual(bar().slice(1, 4), ['Laptop (1023px) — 2', 'Tablet (799px) — 3', 'Phone (479px) — 4']);
@@ -339,7 +352,7 @@ test('invalid and out-of-order entries write nothing and the card says why under
 });
 
 test('each card leads with the bar icon for its device, in a tile, with its query and resolved canvas width', async () => {
-  const list = versionThree([
+  const list = versionFour([
     up('bp-2', 120, 'rem', { name: 'Huge' }),
     up('bp-1', 100, 'rem', { name: 'Large' }),
     down('laptop', 64),
@@ -364,11 +377,10 @@ test('each card leads with the bar icon for its device, in a tile, with its quer
   });
   assert.equal(new Set(barIcons.slice(0, 6)).size, 6, 'six different icons for six devices');
   assert.equal(card('Huge').querySelector('.breakpoints-canvas').textContent, '1920px canvas');
-  assert.equal(rowText('Huge'), 'Matches width >= 120rem');
-  assert.equal(rowText('Laptop'), 'Matches width < 64rem');
+  assert.equal(rowText('Huge'), 'Matches width >= 120rem · wider than Desktop');
+  assert.equal(rowText('Laptop'), 'Matches width < 64rem · narrower than Desktop');
   assert.equal(card('Watch').querySelector('.breakpoints-canvas').textContent, '287px canvas');
-  assert.equal(document.querySelector('[data-breakpoint="desktop"] .breakpoints-pill').textContent, 'Full width');
-  assert.ok(document.querySelector('[data-breakpoint="desktop"] input') === null, 'Desktop has no number and no remove button');
+  assert.ok(document.querySelector('[data-breakpoint="desktop"] input') !== null, 'Desktop has a number');
   assert.ok(document.querySelector('[data-breakpoint="desktop"] .breakpoints-remove') === null);
   root.unmount();
 });
@@ -376,61 +388,84 @@ test('each card leads with the bar icon for its device, in a tile, with its quer
 const addButton = () => document.querySelector('.breakpoints-add');
 const addCard = () => document.querySelector('[data-breakpoint="new"]');
 const addValue = () => addCard().querySelector('.breakpoints-input');
-const directionButton = (text) => [...addCard().querySelectorAll('.breakpoints-direction button')].find((button) => button.textContent.startsWith(text));
-
-test('adding a wider breakpoint: a card with a name and a direction, inserted by size, saved as width >= X', async () => {
+test('adding a breakpoint: no direction to choose, the side follows the number, it is inserted by size and saved without one', async () => {
   const { root, storage } = await mount('fixture-add-up', undefined);
   await click(addButton());
   assert.ok(addCard(), 'a card to fill in appears');
+  assert.ok(addCard().querySelector('.breakpoints-direction') === null, 'there is no wider or narrower to choose');
+  assert.ok(!/Wider than|Narrower than/.test(addCard().textContent));
   assert.equal(addButton().disabled, true, 'one card is added at a time');
-  assert.equal(addCard().querySelector('.breakpoints-name-input').value, 'Large', 'the default name for the first wider breakpoint');
-  assert.equal(directionButton('Wider').getAttribute('aria-checked'), 'true', 'wider is where a new one starts');
+  const nameInput = addCard().querySelector('.breakpoints-name-input');
+  assert.equal(nameInput.value, '', 'the name reads as text, empty until typed');
+  assert.equal(nameInput.getAttribute('placeholder'), 'Large', 'with the default name as its placeholder');
+  assert.equal(document.activeElement, addValue(), 'the value is focused as the card opens');
   assert.equal(storage.state.writes.length, 0, 'nothing is written until it is added');
+  assert.equal(addCard().querySelector('.breakpoints-query').textContent, 'Matches width >= 100rem · wider than Desktop');
   await act(async () => {
-    setValue(addValue(), '100rem');
+    setValue(addValue(), '120rem');
   });
+  assert.equal(addCard().querySelector('.breakpoints-query').textContent, 'Matches width >= 120rem · wider than Desktop', 'live as it is typed');
+  assert.equal(addCard().querySelector('.breakpoints-canvas').textContent, '1920px canvas');
   await key(addValue(), 'Enter');
   await settle();
   assert.ok(addCard() === null, 'the card becomes a breakpoint');
   assert.deepEqual(cardIds(), ['bp-1', 'desktop', 'laptop', 'tablet', 'phone']);
   assert.equal(storage.state.writes.length, 1);
-  assert.deepEqual(savedValue(storage, 'bp-1'), { id: 'bp-1', name: 'Large', direction: 'up', value: 100, unit: 'rem' });
+  assert.deepEqual(savedValue(storage, 'bp-1'), { id: 'bp-1', name: 'Large', value: 120, unit: 'rem' });
   assert.deepEqual(bar(), [
-    'Large (1600px) — 1',
+    'Large (1920px) — 1',
     'Desktop — 2',
     'Laptop (1023px) — 3',
     'Tablet (767px) — 4',
     'Phone (479px) — 5',
     'Canvas — all breakpoints — 6',
   ]);
-  assert.equal(rowText('Large'), 'Matches width >= 100rem');
-  // A second one, wider still, goes above and takes the next default name.
+  assert.equal(rowText('Large'), 'Matches width >= 120rem · wider than Desktop');
+  // A second one, wider than Desktop but narrower than the first, goes under it and takes the next default name.
   await click(addButton());
-  assert.equal(addCard().querySelector('.breakpoints-name-input').value, 'Extra large');
-  await act(async () => setValue(addValue(), '120rem'));
+  assert.equal(addCard().querySelector('.breakpoints-name-input').getAttribute('placeholder'), 'Extra large');
+  await act(async () => setValue(addValue(), '100rem'));
   await click(addCard().querySelector('.breakpoints-add-confirm'));
   await settle();
-  assert.deepEqual(cardIds(), ['bp-2', 'bp-1', 'desktop', 'laptop', 'tablet', 'phone']);
-  assert.equal(bar()[0], 'Extra large (1920px) — 1');
+  assert.deepEqual(cardIds(), ['bp-1', 'bp-2', 'desktop', 'laptop', 'tablet', 'phone']);
+  assert.equal(bar()[1], 'Extra large (1600px) — 2');
   root.unmount();
 });
 
-test('adding a narrower breakpoint: switch the direction, it lands among the narrower ones by size', async () => {
+test('a number narrower than Desktop is a width < X breakpoint among the narrower ones', async () => {
   const { root, storage } = await mount('fixture-add-down', undefined);
   await click(addButton());
-  await click(directionButton('Narrower'));
-  assert.equal(addCard().querySelector('.breakpoints-name-input').value, 'Small', 'the name follows the direction');
   await act(async () => setValue(addValue(), '40rem'));
+  assert.equal(addCard().querySelector('.breakpoints-query').textContent, 'Matches width < 40rem · narrower than Desktop');
+  assert.equal(addCard().querySelector('.breakpoints-name-input').getAttribute('placeholder'), 'Small', 'the default name follows the side');
+  assert.equal(addCard().querySelector('.breakpoints-canvas').textContent, '639px canvas');
   await key(addValue(), 'Enter');
   await settle();
   assert.deepEqual(cardIds(), ['desktop', 'laptop', 'tablet', 'bp-1', 'phone']);
-  assert.deepEqual(savedValue(storage, 'bp-1'), { id: 'bp-1', name: 'Small', direction: 'down', value: 40, unit: 'rem' });
-  assert.equal(rowText('Small'), 'Matches width < 40rem');
+  assert.deepEqual(savedValue(storage, 'bp-1'), { id: 'bp-1', name: 'Small', value: 40, unit: 'rem' });
+  assert.equal(rowText('Small'), 'Matches width < 40rem · narrower than Desktop');
   assert.equal(bar()[3], 'Small (639px) — 4');
   root.unmount();
 });
 
-test('adds that do not fit write nothing and say why: syntax, order across directions, the same value, the name, the count', async () => {
+test('the add card shows the icon the new breakpoint will get, live', async () => {
+  const { root } = await mount('fixture-add-icon', undefined);
+  await click(addButton());
+  const tileIcon = () => addCard().querySelector('.breakpoints-tile svg').innerHTML;
+  const draw = (Icon) =>
+    renderToStaticMarkup(React.createElement(Icon, { size: 16 }))
+      .replace(/^<svg[^>]*>/, '')
+      .replace(/<\/svg>$/, '');
+  await act(async () => setValue(addValue(), '100rem'));
+  assert.equal(tileIcon(), draw(api.StudioDisplayXdrIcon), 'the first wider one is the studio display');
+  await act(async () => setValue(addValue(), '18rem'));
+  assert.equal(tileIcon(), draw(api.SmartwatchIcon), 'narrower than the phone is the watch');
+  await act(async () => setValue(addValue(), '40rem'));
+  assert.equal(tileIcon(), draw(api.TabletIcon), 'between the others, the nearest device');
+  root.unmount();
+});
+
+test('adds that do not fit write nothing and say why: syntax, the same as Desktop, the same value, the name, the count', async () => {
   const { root, storage } = await mount('fixture-add-bad', undefined);
   await click(addButton());
   const attempt = async (value) => {
@@ -438,7 +473,8 @@ test('adds that do not fit write nothing and say why: syntax, order across direc
     return addCard().querySelector('[role="alert"]')?.textContent;
   };
   assert.match(await attempt('abc'), /Type a width like 64rem/);
-  assert.match(await attempt('40rem'), /A wider breakpoint must be larger than every narrower one/);
+  assert.match(await attempt('90rem'), /It must differ from Desktop \(90rem\)/);
+  assert.match(await attempt('1440px'), /It must differ from Desktop \(90rem\)/);
   assert.match(await attempt('64rem'), /Laptop already uses 64rem/);
   assert.equal(addCard().querySelector('.breakpoints-add-confirm').disabled, true);
   await act(async () => setValue(addCard().querySelector('.breakpoints-name-input'), 'laptop'));
@@ -450,11 +486,76 @@ test('adds that do not fit write nothing and say why: syntax, order across direc
   await key(addValue(), 'Escape');
   assert.ok(addCard() === null, 'Escape closes the card');
   root.unmount();
-  const crowded = Array.from({ length: 11 }, (_, index) => down(`bp-${index + 1}`, 100 - index * 5, 'rem', { name: `N${index}` }));
-  const full = await mount('fixture-add-full', versionThree(crowded));
+  const crowded = Array.from({ length: 11 }, (_, index) => down(`bp-${index + 1}`, 85 - index * 5, 'rem', { name: `N${index}` }));
+  const full = await mount('fixture-add-full', versionFour(crowded));
   assert.equal(addButton().disabled, true, 'eleven is the most');
   assert.match(document.body.textContent, /up to 11 breakpoints/);
   full.root.unmount();
+});
+
+test('the add card is one deliberate layout: Cancel then Add, Add blue and disabled while the value is wrong', async () => {
+  const { root } = await mount('fixture-add-actions', undefined);
+  await click(addButton());
+  const actions = [...addCard().querySelectorAll('.breakpoints-add-actions button')];
+  assert.deepEqual(
+    actions.map((button) => button.textContent),
+    ['Cancel', 'Add'],
+  );
+  assert.ok(actions[1].classList.contains('primary'), 'Add is the shared primary variant');
+  assert.equal(actions[1].disabled, true, 'nothing to add yet');
+  await act(async () => setValue(addValue(), '100rem'));
+  assert.equal(actions[1].disabled, false);
+  await act(async () => setValue(addValue(), 'nope'));
+  assert.equal(actions[1].disabled, true);
+  const order = [...addCard().querySelectorAll('input, button')].map((element) => element.className.split(' ')[0]);
+  assert.deepEqual(order, ['breakpoints-name-input', 'breakpoints-input', 'breakpoints-add-cancel', 'primary'.length ? 'primary' : '']);
+  await click(actions[0]);
+  assert.ok(addCard() === null, 'Cancel closes it');
+  root.unmount();
+});
+
+test('Desktop has a number: its frame width, never a media query; moving it is limited by the breakpoints around it', async () => {
+  const { root, storage } = await mount('fixture-desktop', undefined);
+  assert.equal(desktopField().value, '90rem');
+  await type(desktopField(), '1600px');
+  assert.equal(storage.state.writes.length, 1);
+  assert.deepEqual(JSON.parse(storage.state.source).desktop, { value: 1600, unit: 'px' });
+  assert.equal(document.querySelector('[data-breakpoint="desktop"] .breakpoints-canvas').textContent, '1600px frame');
+  assert.deepEqual(
+    saved(storage).map((entry) => entry.id),
+    ['laptop', 'tablet', 'phone'],
+    'the breakpoints are untouched',
+  );
+  assert.deepEqual(bar().slice(0, 2), ['Desktop — 1', 'Laptop (1023px) — 2'], 'the bar does not change: Desktop is still full width');
+  // Below the largest narrower breakpoint is refused, naming it.
+  const writes = storage.state.writes.length;
+  await type(desktopField(), '60rem');
+  assert.equal(storage.state.writes.length, writes, 'nothing is written');
+  assert.match(card('Desktop').querySelector('[role="alert"]').textContent, /Laptop \(64rem\) would end up on the other side of Desktop/);
+  await key(desktopField(), 'Escape');
+  await type(desktopField(), 'abc');
+  assert.match(card('Desktop').querySelector('[role="alert"]').textContent, /Type a width like 64rem/);
+  root.unmount();
+  const wide = await mount('fixture-desktop-wide', versionFour([up('bp-1', 100, 'rem', { name: 'Large' }), down('laptop', 64)]));
+  await type(desktopField(), '100rem');
+  assert.match(card('Desktop').querySelector('[role="alert"]').textContent, /Large \(100rem\) would end up on the other side of Desktop/);
+  await type(desktopField(), '70rem');
+  assert.equal(wide.storage.state.writes.length, 1, 'between the two is allowed');
+  wide.root.unmount();
+});
+
+test('a breakpoint cannot be typed across Desktop: the card says so', async () => {
+  const { root, storage } = await mount('fixture-cross', undefined);
+  await type(fieldFor('Laptop'), '95rem');
+  assert.match(card('Laptop').querySelector('[role="alert"]').textContent, /Laptop must be smaller than Desktop \(90rem\)/);
+  assert.equal(storage.state.writes.length, 0);
+  await key(fieldFor('Laptop'), 'Escape');
+  root.unmount();
+  const wider = await mount('fixture-cross-up', versionFour([up('bp-1', 100, 'rem', { name: 'Large' })]));
+  await type(fieldFor('Large'), '80rem');
+  assert.match(card('Large').querySelector('[role="alert"]').textContent, /Large must be larger than Desktop \(90rem\)/);
+  assert.equal(wider.storage.state.writes.length, 0);
+  wider.root.unmount();
 });
 
 test('removing a breakpoint writes the list without it; the bar loses it; one undo step goes back', async () => {
@@ -554,7 +655,7 @@ test('a corrupt file shows the defaults, explains itself, disables every field a
   root.unmount();
 });
 
-test('versions 1 and 2 read at the same widths and reading does not rewrite them; an edit writes version 3', async () => {
+test('versions 1 and 2 read at the same widths and reading does not rewrite them; an edit writes version 4', async () => {
   const versionOne = JSON.stringify({ version: 1, laptop: 1100, tablet: 800, phone: 500 });
   const first = await mount('fixture-versionOne', versionOne);
   assert.deepEqual(bar().slice(1, 4), ['Laptop (1100px) — 2', 'Tablet (800px) — 3', 'Phone (500px) — 4']);
@@ -562,7 +663,7 @@ test('versions 1 and 2 read at the same widths and reading does not rewrite them
   assert.equal(first.storage.state.writes.length, 0);
   assert.equal(first.storage.state.source, versionOne);
   await type(fieldFor('Phone'), '450px');
-  assert.equal(JSON.parse(first.storage.state.source).version, 3);
+  assert.equal(JSON.parse(first.storage.state.source).version, 4);
   first.root.unmount();
   const defaults = await mount('fixture-versionOne-defaults', JSON.stringify({ version: 1, laptop: 1023, tablet: 767, phone: 479 }));
   assert.deepEqual([fieldFor('Laptop').value, fieldFor('Tablet').value, fieldFor('Phone').value], ['64rem', '48rem', '30rem']);

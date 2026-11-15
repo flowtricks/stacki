@@ -10,14 +10,17 @@
 // Reading the file never writes it: the file is created by the first edit.
 import { useEffect, useRef, useState } from 'react';
 import {
-  BREAKPOINT_DEFAULT_LIST,
   BREAKPOINT_LIMITS,
+  DESKTOP_ID,
   boundaryPx,
   breakpointCondition,
   breakpointsEqual,
   canvasWidthPx,
-  checkedList,
+  checkedConfig,
   conflictAt,
+  desktopBlocker,
+  desktopFramePx,
+  directionOf,
   formatBreakpoint,
   isBreakpointName,
   isBuiltinBreakpointId,
@@ -29,7 +32,10 @@ import {
   withBreakpointName,
   withBreakpointRemoved,
   withBreakpointSetting,
+  withDesktop,
+  withSettingInPlace,
   type Breakpoint,
+  type BreakpointConfig,
   type BreakpointDirection,
   type BreakpointList,
 } from '../../../shared/properties/projectBreakpoints';
@@ -41,16 +47,17 @@ import { useCurrentRole } from '../../lib/useCurrentRole';
 import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import { readMetadata } from '../../ipc/projectMetadataBridge';
 import { confirmDialog } from '../../ui/ConfirmDialog';
-import { CloseIcon, DesktopIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
+import { DesktopIcon, PlusIcon, TrashIcon } from '../../ui/Icons';
 import { Skeleton } from '../../ui/Skeleton';
 import { messageRef } from '../../../shared/properties/i18n/messageRef';
 import type { BreakpointSyncScan } from '../../../shared/properties/breakpointSyncPlan';
 import { applyBreakpointSyncRequest, breakpointSyncAvailable, restoreBreakpointSyncRequest, scanBreakpointSyncRequest } from '../../ipc/breakpointSyncBridge';
 import { deviceIconComponent } from '../../features/preview/deviceIcons';
-import { iconFor } from '../../features/preview/breakpointDevices';
+import { iconFor, type DeviceIconKind } from '../../features/preview/breakpointDevices';
 import { breakpointLabel } from '../../features/preview/breakpointLabel';
 import { BreakpointSyncDialog } from './BreakpointSyncDialog';
 import { BreakpointUsageLine, BreakpointUsageList, hasUsage } from './BreakpointUsage';
+import { BreakpointAddCard, type AddDraft } from './BreakpointAddCard';
 import { useBreakpointUsage } from './useBreakpointUsage';
 import { applyRequest, type CheckedPlaces } from '../../../shared/properties/breakpointSyncSelection';
 import { SettingsNotice, SettingsSaveRow, SettingsSection, useSaveIndicator } from './SettingsLayout';
@@ -71,18 +78,12 @@ export interface BreakpointSyncUndo {
 
 interface SyncRun {
   readonly id: string;
-  readonly before: BreakpointList;
-  readonly after: BreakpointList;
+  readonly before: BreakpointConfig;
+  readonly after: BreakpointConfig;
   readonly scan: BreakpointSyncScan | undefined;
 }
 
 type Drafts = Readonly<Record<string, string>>;
-
-interface AddDraft {
-  readonly direction: BreakpointDirection;
-  readonly name: string;
-  readonly value: string;
-}
 
 const DEFAULT_NAMES: Readonly<Record<BreakpointDirection, readonly MessageKey[]>> = {
   up: ['settings.breakpoints.defaultName.up0', 'settings.breakpoints.defaultName.up1', 'settings.breakpoints.defaultName.up2'],
@@ -102,11 +103,11 @@ export function BreakpointsSettings({
   const translate = useTranslate();
   const role = useCurrentRole();
   const editable = can(role, 'settings:breakpoints');
-  const { list, resolved, state, save } = useProjectBreakpoints(projectPath);
+  const { config, list, resolved, state, save } = useProjectBreakpoints(projectPath);
   const indicator = useSaveIndicator();
   const usage = useBreakpointUsage(projectPath, list);
   const [usageOpen, setUsageOpen] = useState<ReadonlySet<string>>(new Set());
-  const [drafts, setDrafts] = useState<Drafts>(() => draftsOf(list));
+  const [drafts, setDrafts] = useState<Drafts>(() => draftsOf(config));
   const [names, setNames] = useState<Drafts>(() => namesOf(list, translate));
   const [adding, setAdding] = useState<AddDraft>();
   const [run, setRun] = useState<SyncRun>();
@@ -116,13 +117,13 @@ export function BreakpointsSettings({
   const [saveProblem, setSaveProblem] = useState<{ readonly id: string; readonly message: string }>();
   // The saved list is the truth: an edit in another window or a pull puts it back in the fields.
   useEffect(() => {
-    setDrafts(draftsOf(list));
+    setDrafts(draftsOf(config));
     setNames(namesOf(list, translate));
     setSaveProblem(undefined);
-  }, [list, translate]);
+  }, [config, list, translate]);
 
   const label = (breakpoint: Breakpoint): string => breakpointLabel(breakpoint, translate);
-  const record = (before: BreakpointList, after: BreakpointList, name: string): void => {
+  const record = (before: BreakpointConfig, after: BreakpointConfig, name: string): void => {
     onRecordUndo?.({
       label: name,
       labelRef: messageRef('settings.breakpoints.undoLabel'),
@@ -132,28 +133,56 @@ export function BreakpointsSettings({
   };
 
   const commitValue = async (id: string): Promise<void> => {
-    const entry = parseBreakpointEntry(drafts[id] ?? '');
+    const draft = drafts[id] ?? '';
+    const entry = parseBreakpointEntry(draft);
+    if (!entry.ok) {
+      return;
+    }
+    if (id === DESKTOP_ID) {
+      return commitDesktop(entry.value, draft);
+    }
     const current = list.find((breakpoint) => breakpoint.id === id);
-    if (!entry.ok || current === undefined || valueProblem(list, id, drafts[id] ?? '', translate) !== undefined) {
+    if (current === undefined || valueProblem(config, id, draft, translate) !== undefined) {
       // The card already says why; nothing is written and what was typed stays to be fixed.
       return;
     }
-    const next = withBreakpointSetting(list, id, entry.value);
-    const checked = checkedList(next);
+    const checked = checkedConfig(withBreakpointSetting(config, id, entry.value));
     if (!checked.ok) {
       return;
     }
-    if (breakpointsEqual(checked.value, list)) {
+    if (breakpointsEqual(checked.value, config)) {
       // The same boundary again is not an edit; the field only drops what was typed around it ("64 rem" back to "64rem").
-      setDrafts(draftsOf(list));
+      setDrafts(draftsOf(config));
       return;
     }
     const saved = await indicator.track(save(checked.value));
     if (saved.ok) {
       setSaveProblem(undefined);
-      void startSync(id, list, checked.value);
+      void startSync(id, config, checked.value);
     } else {
       setSaveProblem({ id, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
+    }
+  };
+
+  // Desktop's number is only the width of its frame in the side-by-side view: no query holds it, so there is nothing to sync.
+  const commitDesktop = async (setting: Breakpoint['setting'], draft: string): Promise<void> => {
+    if (desktopProblem(config, draft, { translate, label }) !== undefined) {
+      return;
+    }
+    const checked = checkedConfig(withDesktop(config, setting));
+    if (!checked.ok) {
+      return;
+    }
+    if (breakpointsEqual(checked.value, config)) {
+      setDrafts(draftsOf(config));
+      return;
+    }
+    const saved = await indicator.track(save(checked.value));
+    if (saved.ok) {
+      setSaveProblem(undefined);
+      record(config, checked.value, translate('settings.breakpoints.desktop'));
+    } else {
+      setSaveProblem({ id: DESKTOP_ID, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
     }
   };
 
@@ -167,7 +196,7 @@ export function BreakpointsSettings({
     if (nameProblem(list, id, typed, { translate, label }) !== undefined) {
       return;
     }
-    const next = withBreakpointName(list, id, typed);
+    const next = withBreakpointName(config, id, typed);
     const saved = await indicator.track(save(next));
     if (!saved.ok) {
       setSaveProblem({ id, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
@@ -188,36 +217,36 @@ export function BreakpointsSettings({
         return;
       }
     }
-    const next = withBreakpointRemoved(list, breakpoint.id);
+    const next = withBreakpointRemoved(config, breakpoint.id);
     const saved = await indicator.track(save(next));
     if (saved.ok) {
       setSyncMessage(undefined);
-      record(list, next, name);
+      record(config, next, name);
     } else {
       setSaveProblem({ id: breakpoint.id, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
     }
   };
 
-  const startAdd = (direction: BreakpointDirection): void => setAdding({ direction, name: suggestedName(list, direction, translate, label), value: '' });
-  const addProblem = adding === undefined ? undefined : problemForAdd(list, adding, translate, label);
+  const startAdd = (): void => setAdding({ name: '', value: '' });
+  const addView = adding === undefined ? undefined : previewForAdd(config, adding, translate, label);
+  const addProblem = adding === undefined || addView === undefined ? undefined : problemForAdd(config, adding, addView.name, translate, label);
   const commitAdd = async (): Promise<void> => {
-    if (adding === undefined || addProblem !== undefined || adding.value.trim() === '') {
+    if (adding === undefined || addView === undefined || addProblem !== undefined || adding.value.trim() === '') {
       return;
     }
     const entry = parseBreakpointEntry(adding.value);
     if (!entry.ok) {
       return;
     }
-    const created: Breakpoint = { id: nextBreakpointId(list), name: adding.name.trim(), direction: adding.direction, setting: entry.value };
-    const next = withBreakpointAdded(list, created);
-    const checked = checkedList(next);
+    const created = { id: nextBreakpointId(list), name: addView.name, setting: entry.value };
+    const checked = checkedConfig(withBreakpointAdded(config, created));
     if (!checked.ok) {
       return;
     }
     const saved = await indicator.track(save(checked.value));
     if (saved.ok) {
       setAdding(undefined);
-      record(list, checked.value, created.name ?? '');
+      record(config, checked.value, created.name);
     } else {
       setSaveProblem({ id: created.id, message: translate('settings.breakpoints.error.save', { message: saved.error.message }) });
     }
@@ -225,9 +254,9 @@ export function BreakpointsSettings({
 
   // After a number is saved, the project's media queries that still hold its old value are looked for; a dialog opens only when
   // there are some (or when the search is slow, with skeleton rows). Nothing is written until the person confirms.
-  const startSync = async (id: string, before: BreakpointList, after: BreakpointList): Promise<void> => {
-    const old = before.find((breakpoint) => breakpoint.id === id);
-    const next = after.find((breakpoint) => breakpoint.id === id);
+  const startSync = async (id: string, before: BreakpointConfig, after: BreakpointConfig): Promise<void> => {
+    const old = before.list.find((breakpoint) => breakpoint.id === id);
+    const next = after.list.find((breakpoint) => breakpoint.id === id);
     if (!breakpointSyncAvailable() || old === undefined || next === undefined) {
       return;
     }
@@ -304,9 +333,11 @@ export function BreakpointsSettings({
   const renderCard = (breakpoint: Breakpoint) => {
     const Icon = deviceIconComponent(iconFor({ ...breakpoint, widthPx: canvasWidthPx(breakpoint) }, resolved));
     const draft = drafts[breakpoint.id] ?? formatBreakpoint(breakpoint.setting);
-    const problem = valueProblem(list, breakpoint.id, draft, translate) ?? (saveProblem?.id === breakpoint.id ? saveProblem.message : undefined);
+    const problem = valueProblem(config, breakpoint.id, draft, translate) ?? (saveProblem?.id === breakpoint.id ? saveProblem.message : undefined);
     const typed = parseBreakpointEntry(draft);
-    const shown: Breakpoint = typed.ok ? { ...breakpoint, setting: typed.value } : breakpoint;
+    const shown: Breakpoint = typed.ok
+      ? { ...breakpoint, setting: typed.value, direction: directionOf(typed.value, config.desktop) ?? breakpoint.direction }
+      : breakpoint;
     const name = label(breakpoint);
     const nameIssue = nameProblem(list, breakpoint.id, (names[breakpoint.id] ?? name).trim(), { translate, label });
     return (
@@ -342,13 +373,13 @@ export function BreakpointsSettings({
             }}
           />
           <span className="breakpoints-query" id={`breakpoints-query-${breakpoint.id}`}>
-            {translate('settings.breakpoints.query', { condition: breakpointCondition(shown) })}
+            {`${translate('settings.breakpoints.query', { condition: breakpointCondition(shown) })} · ${translate(shown.direction === 'up' ? 'settings.breakpoints.side.up' : 'settings.breakpoints.side.down')}`}
           </span>
           <BreakpointUsageLine
             id={breakpoint.id}
             name={name}
             state={usage.state}
-            pending={typed.ok && problem === undefined && !breakpointsEqual([shown], [breakpoint])}
+            pending={typed.ok && problem === undefined && (shown.setting.value !== breakpoint.setting.value || shown.setting.unit !== breakpoint.setting.unit)}
             expanded={usageOpen.has(breakpoint.id)}
             onExpand={() => setUsageOpen(toggledId(usageOpen, breakpoint.id))}
           />
@@ -403,6 +434,58 @@ export function BreakpointsSettings({
       </div>
     );
   };
+  const renderDesktop = () => {
+    const draft = drafts[DESKTOP_ID] ?? formatBreakpoint(config.desktop);
+    const problem = desktopProblem(config, draft, { translate, label }) ?? (saveProblem?.id === DESKTOP_ID ? saveProblem.message : undefined);
+    const typed = parseBreakpointEntry(draft);
+    const frame = desktopFramePx(typed.ok ? typed.value : config.desktop);
+    return (
+      <div className="breakpoints-card breakpoints-desktop-card" data-breakpoint={DESKTOP_ID} data-invalid={problem === undefined ? undefined : ''}>
+        <span className="breakpoints-tile" aria-hidden="true">
+          <DesktopIcon size={ICON_SIZE_PX} />
+        </span>
+        <div className="breakpoints-text">
+          <span className="breakpoints-name">{translate('settings.breakpoints.desktop')}</span>
+          <span className="breakpoints-query" id="breakpoints-query-desktop">
+            {translate('settings.breakpoints.desktopNote')}
+          </span>
+        </div>
+        <div className="breakpoints-field">
+          <input
+            className="breakpoints-input"
+            type="text"
+            autoComplete="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            value={draft}
+            disabled={!editable || blocked}
+            maxLength={BREAKPOINT_LIMITS.entryCharsMax}
+            aria-label={translate('settings.breakpoints.widthLabel', { device: translate('settings.breakpoints.desktop') })}
+            aria-describedby="breakpoints-query-desktop"
+            aria-invalid={problem === undefined ? undefined : true}
+            onChange={(event) => setDrafts({ ...drafts, [DESKTOP_ID]: event.currentTarget.value })}
+            onBlur={() => void commitValue(DESKTOP_ID)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.currentTarget.blur();
+              } else if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                setSaveProblem(undefined);
+                setDrafts({ ...drafts, [DESKTOP_ID]: formatBreakpoint(config.desktop) });
+              }
+            }}
+          />
+          <span className="breakpoints-canvas">{translate('settings.breakpoints.frame', { width: frame })}</span>
+        </div>
+        {problem !== undefined && (
+          <p className="breakpoints-problem" role="alert">
+            {problem}
+          </p>
+        )}
+      </div>
+    );
+  };
   return (
     <section className="breakpoints-settings" aria-label={translate('settings.tab.breakpoints')}>
       <SettingsSaveRow saving={indicator.state} />
@@ -414,95 +497,29 @@ export function BreakpointsSettings({
       >
         <div className="breakpoints-cards">
           {ups.map(renderCard)}
-          <div className="breakpoints-card" data-breakpoint="desktop">
-            <span className="breakpoints-tile" aria-hidden="true">
-              <DesktopIcon size={ICON_SIZE_PX} />
-            </span>
-            <div className="breakpoints-text">
-              <span className="breakpoints-name">{translate('settings.breakpoints.desktop')}</span>
-            </div>
-            <span className="breakpoints-pill">{translate('settings.breakpoints.desktopWidth')}</span>
-          </div>
+          {renderDesktop()}
           {downs.map(renderCard)}
-          {adding !== undefined && (
-            <div className="breakpoints-card breakpoints-add-card" data-breakpoint="new" data-invalid={addProblem === undefined ? undefined : ''}>
-              <span className="breakpoints-tile" aria-hidden="true">
-                <PlusIcon size={ICON_SIZE_PX} />
-              </span>
-              <div className="breakpoints-text">
-                <input
-                  className="breakpoints-name-input"
-                  type="text"
-                  value={adding.name}
-                  maxLength={BREAKPOINT_LIMITS.nameCharsMax}
-                  spellCheck={false}
-                  aria-label={translate('settings.breakpoints.nameLabel', { device: adding.name })}
-                  onChange={(event) => setAdding({ ...adding, name: event.currentTarget.value })}
-                />
-                <div className="breakpoints-direction" role="radiogroup" aria-label={translate('settings.breakpoints.direction.group')}>
-                  {(['up', 'down'] as const).map((direction) => (
-                    <button
-                      key={direction}
-                      type="button"
-                      role="radio"
-                      aria-checked={adding.direction === direction}
-                      className={adding.direction === direction ? 'on' : ''}
-                      onClick={() => setAdding({ ...adding, direction, name: suggestedName(list, direction, translate, label) })}
-                    >
-                      {translate(direction === 'up' ? 'settings.breakpoints.direction.up' : 'settings.breakpoints.direction.down')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="breakpoints-field">
-                <input
-                  className="breakpoints-input"
-                  type="text"
-                  autoComplete="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  autoFocus
-                  value={adding.value}
-                  placeholder={adding.direction === 'up' ? '100rem' : '20rem'}
-                  maxLength={BREAKPOINT_LIMITS.entryCharsMax}
-                  aria-label={translate('settings.breakpoints.widthLabel', { device: adding.name })}
-                  aria-invalid={addProblem === undefined ? undefined : true}
-                  onChange={(event) => setAdding({ ...adding, value: event.currentTarget.value })}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault();
-                      void commitAdd();
-                    } else if (event.key === 'Escape') {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setAdding(undefined);
-                    }
-                  }}
-                />
-                <span className="breakpoints-add-actions">
-                  <button
-                    type="button"
-                    className="breakpoints-add-confirm"
-                    disabled={addProblem !== undefined || adding.value.trim() === ''}
-                    onClick={() => void commitAdd()}
-                  >
-                    {translate('settings.breakpoints.addConfirm')}
-                  </button>
-                  <button type="button" className="breakpoints-add-cancel" aria-label={translate('ui.cancel')} onClick={() => setAdding(undefined)}>
-                    <CloseIcon size={12} />
-                  </button>
-                </span>
-              </div>
-              {addProblem !== undefined && adding.value.trim() !== '' && (
-                <p className="breakpoints-problem" role="alert">
-                  {addProblem}
-                </p>
-              )}
-            </div>
+          {adding !== undefined && addView !== undefined && (
+            <BreakpointAddCard
+              projectPath={projectPath}
+              draft={adding}
+              onChange={setAdding}
+              icon={addView.icon}
+              condition={addView.condition}
+              side={addView.direction}
+              canvasPx={addView.canvasPx}
+              placeholderValue={addView.placeholderValue}
+              suggestedName={addView.suggestedName}
+              candidate={addView.candidate}
+              problem={addProblem}
+              canAdd={addProblem === undefined && adding.value.trim() !== ''}
+              onAdd={() => void commitAdd()}
+              onCancel={() => setAdding(undefined)}
+            />
           )}
         </div>
         <div className="breakpoints-actions">
-          <button type="button" className="breakpoints-add" disabled={!editable || blocked || full || adding !== undefined} onClick={() => startAdd('up')}>
+          <button type="button" className="breakpoints-add" disabled={!editable || blocked || full || adding !== undefined} onClick={() => startAdd()}>
             <PlusIcon size={12} />
             {translate('settings.breakpoints.add')}
           </button>
@@ -534,8 +551,11 @@ function toggledId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
   return next;
 }
 
-function draftsOf(list: BreakpointList): Drafts {
-  return Object.fromEntries(list.map((breakpoint) => [breakpoint.id, formatBreakpoint(breakpoint.setting)]));
+function draftsOf(config: BreakpointConfig): Drafts {
+  return {
+    [DESKTOP_ID]: formatBreakpoint(config.desktop),
+    ...Object.fromEntries(config.list.map((breakpoint) => [breakpoint.id, formatBreakpoint(breakpoint.setting)])),
+  };
 }
 
 function namesOf(list: BreakpointList, translate: Translator): Drafts {
@@ -568,9 +588,8 @@ function suggestedName(list: BreakpointList, direction: BreakpointDirection, tra
 }
 
 // Why this card's typed value cannot be saved, or undefined when it can (or is the saved value untouched).
-function valueProblem(list: BreakpointList, id: string, draft: string, translate: Translator): string | undefined {
-  const index = list.findIndex((breakpoint) => breakpoint.id === id);
-  const current = list[index];
+function valueProblem(config: BreakpointConfig, id: string, draft: string, translate: Translator): string | undefined {
+  const current = config.list.find((breakpoint) => breakpoint.id === id);
   if (current === undefined || draft === formatBreakpoint(current.setting)) {
     return undefined;
   }
@@ -578,7 +597,27 @@ function valueProblem(list: BreakpointList, id: string, draft: string, translate
   if (!entry.ok) {
     return entryProblem(entry.error.code, translate);
   }
-  return orderProblem(withBreakpointSetting(list, id, entry.value), index, translate);
+  return orderProblem(withSettingInPlace(config, id, entry.value), id, translate);
+}
+
+// Why Desktop's typed frame width cannot be saved: not a width, or it would put a breakpoint on the other side of Desktop (or on it).
+function desktopProblem(
+  config: BreakpointConfig,
+  draft: string,
+  naming: { readonly translate: Translator; readonly label: (breakpoint: Breakpoint) => string },
+): string | undefined {
+  const { translate, label } = naming;
+  if (draft === formatBreakpoint(config.desktop)) {
+    return undefined;
+  }
+  const entry = parseBreakpointEntry(draft);
+  if (!entry.ok) {
+    return entryProblem(entry.error.code, translate);
+  }
+  const blocker = desktopBlocker(config, entry.value);
+  return blocker === undefined
+    ? undefined
+    : translate('settings.breakpoints.error.desktopFlips', { name: label(blocker), limit: formatBreakpoint(blocker.setting) });
 }
 
 function entryProblem(code: string, translate: Translator): string {
@@ -594,21 +633,20 @@ function entryProblem(code: string, translate: Translator): string {
   return translate('settings.breakpoints.error.syntax');
 }
 
-// The breakpoint that does not fit between its neighbours, named, with the limit it has to stay within.
-function orderProblem(list: BreakpointList, index: number, translate: Translator): string | undefined {
-  const conflict = conflictAt(list, index);
-  const row = list[index];
+// The breakpoint that does not fit between its neighbours (Desktop among them), named, with the limit it has to stay within.
+function orderProblem(config: BreakpointConfig, id: string, translate: Translator): string | undefined {
+  const conflict = conflictAt(config, id);
+  const row = config.list.find((breakpoint) => breakpoint.id === id);
   if (conflict === undefined || row === undefined) {
     return undefined;
   }
-  const params = {
-    row: breakpointLabel(row, translate),
-    above: breakpointLabel(conflict.against, translate),
-    limit: formatBreakpoint(conflict.against.setting),
-  };
+  const against =
+    conflict.against.breakpoint === undefined ? translate('settings.breakpoints.desktop') : breakpointLabel(conflict.against.breakpoint, translate);
+  const limit = formatBreakpoint(conflict.against.setting);
+  const name = breakpointLabel(row, translate);
   return conflict.relation === 'smaller'
-    ? translate('settings.breakpoints.error.order', params)
-    : translate('settings.breakpoints.error.orderBelow', { row: params.row, below: params.above, limit: params.limit });
+    ? translate('settings.breakpoints.error.order', { row: name, above: against, limit })
+    : translate('settings.breakpoints.error.orderBelow', { row: name, below: against, limit });
 }
 
 function nameProblem(
@@ -622,8 +660,55 @@ function nameProblem(
   return isBreakpointName(name) && !taken ? undefined : translate('settings.breakpoints.error.name', { maximum: BREAKPOINT_LIMITS.nameCharsMax });
 }
 
-function problemForAdd(list: BreakpointList, adding: AddDraft, translate: Translator, label: (breakpoint: Breakpoint) => string): string | undefined {
-  const nameIssue = nameProblem(list, '', adding.name.trim(), { translate, label });
+// What the card being filled in will be, as far as it is typed: its name (the default while the field is empty), the icon, the query and the
+// canvas it would have (a placeholder value stands in until the value parses), and the breakpoint itself once the value does.
+function previewForAdd(
+  config: BreakpointConfig,
+  adding: AddDraft,
+  translate: Translator,
+  label: (breakpoint: Breakpoint) => string,
+): {
+  readonly name: string;
+  readonly suggestedName: string;
+  readonly icon: DeviceIconKind;
+  readonly condition: string;
+  readonly canvasPx: number;
+  readonly placeholderValue: string;
+  readonly candidate: Breakpoint | undefined;
+  readonly direction: BreakpointDirection;
+} {
+  const placeholderValue = '100rem';
+  const entry = parseBreakpointEntry(adding.value);
+  const fallback = parseBreakpointEntry(placeholderValue);
+  const setting = entry.ok ? entry.value : fallback.ok ? fallback.value : { value: 100, unit: 'rem' as const };
+  // The side is the number's, against Desktop's: wider is `width >= X`, narrower is `width < X`. Empty, it is the wider one the placeholder is.
+  const direction = directionOf(setting, config.desktop) ?? 'up';
+  const suggested = suggestedName(config.list, direction, translate, label);
+  const name = adding.name.trim() === '' ? suggested : adding.name.trim();
+  const full = config.list.length >= BREAKPOINT_LIMITS.countMax;
+  const created: Breakpoint = { id: full ? 'bp-new' : nextBreakpointId(config.list), name, direction, setting };
+  const resolved = resolveBreakpoints(withBreakpointAdded(config, created).list);
+  const item = resolved.find((breakpoint) => breakpoint.id === created.id);
+  return {
+    name,
+    suggestedName: suggested,
+    icon: item === undefined ? 'tablet' : iconFor(item, resolved),
+    condition: breakpointCondition(created),
+    canvasPx: canvasWidthPx(created),
+    placeholderValue,
+    candidate: entry.ok && directionOf(entry.value, config.desktop) !== undefined ? created : undefined,
+    direction,
+  };
+}
+
+function problemForAdd(
+  config: BreakpointConfig,
+  adding: AddDraft,
+  name: string,
+  translate: Translator,
+  label: (breakpoint: Breakpoint) => string,
+): string | undefined {
+  const nameIssue = nameProblem(config.list, '', name, { translate, label });
   if (nameIssue !== undefined) {
     return nameIssue;
   }
@@ -634,15 +719,15 @@ function problemForAdd(list: BreakpointList, adding: AddDraft, translate: Transl
   if (!entry.ok) {
     return entryProblem(entry.error.code, translate);
   }
-  if (list.length >= BREAKPOINT_LIMITS.countMax) {
+  if (config.list.length >= BREAKPOINT_LIMITS.countMax) {
     return translate('settings.breakpoints.full', { count: BREAKPOINT_LIMITS.countMax });
   }
-  const created: Breakpoint = { id: nextBreakpointId(list), name: adding.name.trim(), direction: adding.direction, setting: entry.value };
-  const twin = list.find((breakpoint) => boundaryPx(breakpoint.setting) === boundaryPx(created.setting));
+  if (directionOf(entry.value, config.desktop) === undefined) {
+    return translate('settings.breakpoints.error.sameAsDesktop', { value: formatBreakpoint(config.desktop) });
+  }
+  const twin = config.list.find((breakpoint) => boundaryPx(breakpoint.setting) === boundaryPx(entry.value));
   if (twin !== undefined) {
     return translate('settings.breakpoints.error.same', { other: label(twin), value: formatBreakpoint(twin.setting) });
   }
-  return checkedList(withBreakpointAdded(list, created)).ok ? undefined : translate('settings.breakpoints.error.direction');
+  return undefined;
 }
-
-export { BREAKPOINT_DEFAULT_LIST, resolveBreakpoints };

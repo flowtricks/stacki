@@ -164,35 +164,16 @@
 .breakpoints-add-card {
   background: rgba(255, 255, 255, 0.07);
 }
-.breakpoints-direction {
-  display: inline-flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: 7px;
-  background: var(--bg-input);
-  align-self: flex-start;
-}
-.breakpoints-direction button {
-  height: 22px;
-  padding: 0 8px;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--text-faint);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-.breakpoints-direction button.on {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--text);
-}
-.breakpoints-direction button:focus-visible {
-  outline: 2px solid var(--accent);
+.breakpoints-spacer {
+  width: 28px;
+  height: 1px;
 }
 .breakpoints-add-actions {
-  display: inline-flex;
-  gap: 4px;
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
 }
 .breakpoints-add-confirm,
 .breakpoints-add,
@@ -200,8 +181,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 26px;
-  padding: 0 10px;
+  height: 28px;
+  padding: 0 14px;
   border: 0;
   border-radius: 6px;
   background: var(--bg-hover);
@@ -210,9 +191,15 @@
   font-size: 12px;
   cursor: pointer;
 }
-.breakpoints-add-confirm {
+/* Add is the primary button: blue at rest, hovered and pressed (it is only ever dimmed, while there is nothing to add), never grey. */
+.breakpoints-add-confirm.primary {
   background: var(--accent);
   color: #fff;
+}
+.breakpoints-add-confirm.primary:hover:not(:disabled),
+.breakpoints-add-confirm.primary:active:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.1);
 }
 .breakpoints-add-confirm:disabled,
 .breakpoints-add:disabled {
@@ -324,6 +311,9 @@
   .breakpoints-remove {
     grid-column: 3;
     grid-row: 1;
+  }
+  .breakpoints-spacer {
+    display: none;
   }
   .breakpoints-field {
     grid-column: 2 / -1;

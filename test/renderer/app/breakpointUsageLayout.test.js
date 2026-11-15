@@ -147,7 +147,56 @@ app.whenReady().then(async () => {
     const overflow = await js(\`(() => { const list = document.querySelector('[data-breakpoint="laptop"] .breakpoints-usage-files'); const card = document.querySelector('[data-breakpoint="laptop"]');
       return { listScrollsSideways: list.scrollWidth > list.clientWidth, cardScrollsSideways: card.scrollWidth > card.clientWidth, maxHeight: getComputedStyle(list).maxHeight, overflowX: getComputedStyle(list).overflowX,
         pageScrollsSideways: document.querySelector('.app-settings-scroll').scrollWidth > document.querySelector('.app-settings-scroll').clientWidth }; })()\`);
-    results[width] = { collapsed, expanded, rows, overflow };
+    // The add state: its input column is every card's input column, its actions sit at the bottom right, and a narrow window stacks it.
+    await js("document.querySelector('[data-breakpoint=\\"laptop\\"] .breakpoints-usage-toggle').click()");
+    await js("document.querySelector('.breakpoints-add').click()");
+    await pollUntil({ what: 'the add card', read: () => js("document.querySelector('[data-breakpoint=\\"new\\"]') !== null"), until: (shown) => shown });
+    await pollUntil({ what: 'motion over', read: () => js(MOTION_SETTLED_EXPRESSION), until: (settled) => settled });
+    const add = await js(\`(() => {
+  const box = (element) => element.getBoundingClientRect();
+  const card = document.querySelector('[data-breakpoint="new"]');
+  const other = document.querySelector('[data-breakpoint="phone"]');
+  const input = card.querySelector('.breakpoints-input');
+  const text = card.querySelector('.breakpoints-text');
+  const field = card.querySelector('.breakpoints-field');
+  const actions = card.querySelector('.breakpoints-add-actions');
+  const buttons = [...actions.querySelectorAll('button')];
+  const primary = buttons[1];
+  const desktop = document.querySelector('[data-breakpoint="desktop"] .breakpoints-input');
+  const order = [...card.querySelectorAll('input, button')].map((element) => element.className.split(' ')[0]);
+  return {
+    inputRightGap: Math.abs(box(card).right - box(input).right - (box(other).right - box(other.querySelector('.breakpoints-input')).right)),
+    inputWidthGap: Math.abs(box(input).width - box(other.querySelector('.breakpoints-input')).width),
+    desktopInputWidthGap: Math.abs(box(input).width - box(desktop).width),
+    actionsRightGap: box(card).right - box(actions).right,
+    actionsBottomGap: box(card).bottom - box(actions).bottom,
+    actionsLeftOfCard: box(buttons[0]).left > box(card).left + box(card).width / 3,
+    labels: buttons.map((button) => button.textContent),
+    primaryBackground: getComputedStyle(primary).backgroundColor,
+    primaryDisabled: primary.disabled,
+    stacked: box(field).top >= box(text).bottom - 1,
+    order,
+    cardScrollsSideways: card.scrollWidth > card.clientWidth,
+    pageScrollsSideways: document.querySelector('.app-settings-scroll').scrollWidth > document.querySelector('.app-settings-scroll').clientWidth,
+    focusedIsValue: document.activeElement === input,
+    hasDirection: card.querySelector('.breakpoints-direction') !== null,
+    subtitle: card.querySelector('.breakpoints-query').textContent,
+    tile: card.querySelector('.breakpoints-tile svg') !== null,
+  };
+})()\`);
+    const addShots = process.env.STACKI_SETTINGS_SHOTS;
+    if (addShots && (width === 960 || width === 560)) {
+      fs.mkdirSync(addShots, { recursive: true });
+      await js("document.querySelector('.app-settings-scroll').scrollTop = 0");
+      await js("document.querySelector('[data-breakpoint=\\"new\\"]').scrollIntoView({ block: 'center' })");
+      await pollUntil({ what: 'settled', read: () => js(MOTION_SETTLED_EXPRESSION), until: (settled) => settled });
+      fs.writeFileSync(path.join(addShots, 'breakpoints-add-' + width + '.png'), (await win.webContents.capturePage()).toPNG());
+      await js("document.querySelector('.app-settings-scroll').scrollTop = 0");
+      fs.writeFileSync(path.join(addShots, 'breakpoints-top-' + width + '.png'), (await win.webContents.capturePage()).toPNG());
+    }
+    await js("document.querySelector('.breakpoints-add-cancel').click()");
+    await js("document.querySelector('[data-breakpoint=\\"laptop\\"] .breakpoints-usage-toggle').click()");
+    results[width] = { collapsed, expanded, rows, overflow, add };
     const dir = process.env.STACKI_SETTINGS_SHOTS;
     if (dir && width === 720) {
       fs.mkdirSync(dir, { recursive: true });
@@ -241,6 +290,39 @@ app.whenReady().then(async () => {
         JSON.stringify(Object.values(found.collapsed).map((box) => box.cardHeight)),
       );
       const kinds = found.rows.map((row) => row.kind);
+      const add = found.add;
+      check(
+        `${width}px add: the value is in the same column and width as every card's (within 1px)`,
+        add.inputRightGap <= 1 && add.inputWidthGap <= 1 && add.desktopInputWidthGap <= 1,
+        JSON.stringify(add),
+      );
+      check(
+        `${width}px add: Cancel then Add at the bottom right of the card`,
+        add.labels.join(',') === 'Cancel,Add' &&
+          add.actionsRightGap >= 0 &&
+          add.actionsRightGap <= 20 &&
+          add.actionsBottomGap >= 0 &&
+          add.actionsBottomGap <= 20 &&
+          add.actionsLeftOfCard,
+        JSON.stringify(add),
+      );
+      check(
+        `${width}px add: Add is blue, not grey, and dimmed while there is nothing to add`,
+        add.primaryDisabled === true && add.primaryBackground !== 'rgba(0, 0, 0, 0)',
+        JSON.stringify(add),
+      );
+      check(
+        `${width}px add: no direction control, the value has focus, there is an icon and a one-line subtitle with the side`,
+        add.hasDirection === false && add.focusedIsValue === true && add.tile === true && add.subtitle === 'Matches width >= 100rem · wider than Desktop',
+        JSON.stringify(add),
+      );
+      check(
+        `${width}px add: tab order is name, value, Cancel, Add`,
+        add.order.join(',') === 'breakpoints-name-input,breakpoints-input,breakpoints-add-cancel,primary',
+        add.order.join(','),
+      );
+      check(`${width}px add: nothing scrolls sideways`, !add.cardScrollsSideways && !add.pageScrollsSideways, JSON.stringify(add));
+      check(`${width}px add: a narrow window stacks the value under the text`, width > 760 || add.stacked === true, JSON.stringify(add));
       check(`${width}px: the files are component, page, css and style tag`, kinds.join(',') === 'component,page,css,style', kinds.join(','));
       check(
         `${width}px: the kinds are icons with their words as the tooltip and label`,
