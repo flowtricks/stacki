@@ -8,7 +8,7 @@
 // with an expired one, and with forged identity headers, including the real container token.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { startWorkerRuntime, studioCookie, WORKER_TEST } from './workerRuntime';
+import { startWorkerRuntime, studioCookie, WORKER_TEST, WORKER_RUNTIME_LIMITS } from './workerRuntime';
 import { gatedRoutePaths } from '../src/features/roles/serverAccess';
 
 const WORKER_ANSWERED = [
@@ -20,7 +20,7 @@ const WORKER_ANSWERED = [
 ];
 const CONTAINER_READS = ['/studio/api/project', '/studio/api/assets', '/studio/api/apps/files/notes/index.html', '/studio/sync', '/', '/studio/preview.js'];
 
-test('without a verified session nothing reaches the container or a Worker-answered route', async (context) => {
+test('without a verified session nothing reaches the container or a Worker-answered route', { timeout: WORKER_RUNTIME_LIMITS.testFileMs }, async (context) => {
   const runtime = await startWorkerRuntime();
   context.after(() => runtime.dispose());
   const expired = await studioCookie(-1000);
@@ -34,7 +34,6 @@ test('without a verified session nothing reaches the container or a Worker-answe
   // Control: the same request with a valid session does reach the stub, so the check below can fail.
   const control = await runtime.fetch(WORKER_TEST.studioOrigin + '/studio/api/project', { headers: { cookie: await studioCookie(60_000) } });
   assert.equal(control.headers.get('x-stub-preview'), 'reached');
-  await control.body?.cancel();
   const paths = [...gatedRoutePaths(), ...WORKER_ANSWERED, ...CONTAINER_READS];
   assert.ok(paths.length > 40);
   for (const origin of [WORKER_TEST.studioOrigin, WORKER_TEST.previewOrigin]) {
@@ -51,14 +50,14 @@ test('without a verified session nothing reaches the container or a Worker-answe
           assert.equal(response.headers.get('x-stub-preview'), null, label + ' reached the container');
           // 401 for the API and preview host; the editor's own pages answer the sign-in page instead.
           assert.ok(response.status === 401 || (!pathname.startsWith('/studio/api/') && origin === WORKER_TEST.studioOrigin), `${label}: ${response.status}`);
-          await response.body?.cancel();
         }
       }
     }
   }
+  assert.deepEqual(runtime.unexpectedLogs([]), [], 'The runtime logged no unexpected warning or error');
 });
 
-test('the internal routes the container calls need the container token', async (context) => {
+test('the internal routes the container calls need the container token', { timeout: WORKER_RUNTIME_LIMITS.testFileMs }, async (context) => {
   const runtime = await startWorkerRuntime();
   context.after(() => runtime.dispose());
   for (const pathname of [
@@ -70,7 +69,7 @@ test('the internal routes the container calls need the container token', async (
     for (const headers of [{}, { 'x-studio-token': 'wrong' }, { cookie: await studioCookie(60_000) }]) {
       const response = await runtime.fetch(WORKER_TEST.studioOrigin + pathname, { method: 'POST', headers, body: '{}' });
       assert.equal(response.status, 403, pathname);
-      await response.body?.cancel();
     }
   }
+  assert.deepEqual(runtime.unexpectedLogs([]), [], 'The runtime logged no unexpected warning or error');
 });

@@ -9,7 +9,7 @@
 // signed numeric id without asking GitHub.
 import { build } from 'esbuild';
 import { fileURLToPath } from 'node:url';
-import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
+import { Miniflare, Response as MiniflareResponse, convertV4MiniflareOptions } from 'miniflare';
 import { signSession } from '../src/features/auth/session';
 
 export const WORKER_TEST = {
@@ -89,7 +89,30 @@ export default {
 };
 `;
 
+export const WORKER_RUNTIME_LIMITS = {
+  /** workerd startup, including the bundle; a hung start fails with this message, not the step limit. */
+  startMs: 120_000,
+  /** workerd shutdown. */
+  disposeMs: 30_000,
+  /** Runtime log entries kept for assertions; older ones are only counted. */
+  logEntriesKept: 500,
+  /** A test file's whole run; far below the gate's per-step limit. */
+  testFileMs: 180_000,
+} as const satisfies Record<string, number>;
+
+/** One entry the runtime logged (workerd's own errors and the Worker's console). */
+export interface RuntimeLogEntry {
+  readonly level: string;
+  readonly message: string;
+}
+
 export interface WorkerRuntime {
+  /**
+   * The warnings and errors the runtime logged that match none of `expected`. workerd logs
+   * a write to a connection the client already closed ("Broken pipe") as an error; the
+   * tests read every response body so that never happens, and this proves it.
+   */
+  readonly unexpectedLogs: (expected: readonly RegExp[]) => readonly RuntimeLogEntry[];
   /** Calls the Worker's fetch handler with a Request built in workerd (DIRECT_PATH). */
   readonly direct: (request: DirectRequest) => Promise<WorkerResponse>;
   readonly fetch: (url: string, init?: WorkerInit) => Promise<WorkerResponse>;
@@ -120,8 +143,20 @@ export async function startWorkerRuntime(): Promise<WorkerRuntime> {
   if (script === undefined) {
     throw new Error('esbuild produced no Worker bundle');
   }
+  // Kept, not printed: a flood of runtime lines on a slow runner once filled the gate's
+  // output buffer. Tests assert on them instead (unexpectedLogs).
+  const logs: RuntimeLogEntry[] = [];
+  let logCount = 0;
   const miniflare = new Miniflare(
     convertV4MiniflareOptions({
+      logRequests: false,
+      handleStructuredLogs: (entry: { readonly level: string; readonly message: string }) => {
+        logCount++;
+        logs.push({ level: entry.level, message: entry.message });
+        if (logs.length > WORKER_RUNTIME_LIMITS.logEntriesKept) {
+          logs.shift();
+        }
+      },
       workers: [
         {
           name: 'studio',
@@ -151,12 +186,20 @@ export async function startWorkerRuntime(): Promise<WorkerRuntime> {
       ],
     }),
   );
+  await bounded(miniflare.ready, WORKER_RUNTIME_LIMITS.startMs, 'workerd did not start');
   return {
-    direct: (request) => miniflare.dispatchFetch('http://localhost' + DIRECT_PATH, { method: 'POST', body: JSON.stringify(request) }),
-    fetch: (url, init) => (init === undefined ? miniflare.dispatchFetch(url) : miniflare.dispatchFetch(url, init)),
+    unexpectedLogs: (expected) => {
+      const quiet = new Set(['debug', 'info', 'log']);
+      const problems = logs.filter((entry) => !quiet.has(entry.level) && !expected.some((pattern) => pattern.test(entry.message)));
+      // Entries older than the kept window cannot be checked; say so rather than pass silently.
+      const dropped = logCount - logs.length;
+      return dropped > 0 ? [...problems, { level: 'error', message: `${dropped} runtime log entries exceeded the kept window` }] : problems;
+    },
+    direct: (request) => drained(miniflare.dispatchFetch('http://localhost' + DIRECT_PATH, { method: 'POST', body: JSON.stringify(request) })),
+    fetch: (url, init) => drained(init === undefined ? miniflare.dispatchFetch(url) : miniflare.dispatchFetch(url, init)),
     drafts: () => miniflare.getR2Bucket('DRAFTS'),
     origin: () => miniflare.ready,
-    dispose: () => miniflare.dispose(),
+    dispose: () => bounded(miniflare.dispose(), WORKER_RUNTIME_LIMITS.disposeMs, 'workerd did not shut down'),
   };
 }
 
@@ -167,4 +210,35 @@ export async function studioCookie(lifetimeMs: number): Promise<string> {
     WORKER_TEST.sessionSecret,
   );
   return '__Host-studio=' + token;
+}
+
+/** `promise`, or a clear failure after `limitMs`; the timer never holds the process open. */
+async function bounded<T>(promise: Promise<T>, limitMs: number, failure: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${failure} within ${limitMs} ms`)), limitMs);
+    timer.unref();
+  });
+  try {
+    return await Promise.race([promise, expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([101, 204, 205, 304]);
+
+/**
+ * The response with its body already read to the end. A body left unread or cancelled
+ * closes the connection while workerd is still writing, which it logs as a Broken pipe
+ * error; on a slow runner hundreds of those flooded the gate's output (CI run 43660235328).
+ */
+async function drained(pending: Promise<WorkerResponse>): Promise<WorkerResponse> {
+  const response = await pending;
+  const bytes = await response.arrayBuffer();
+  return new MiniflareResponse(NULL_BODY_STATUSES.has(response.status) ? null : bytes, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
 }

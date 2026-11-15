@@ -8,7 +8,7 @@
 // on a response proves the request reached the container.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { startWorkerRuntime, studioCookie, WORKER_TEST, type WorkerResponse } from './workerRuntime';
+import { startWorkerRuntime, studioCookie, WORKER_TEST, type WorkerResponse, WORKER_RUNTIME_LIMITS } from './workerRuntime';
 import { record } from '../src/shared/validation';
 
 const HOUR_MS = 3_600_000;
@@ -18,7 +18,7 @@ function reached(response: WorkerResponse): boolean {
   return response.headers.get('x-stub-preview') === 'reached';
 }
 
-test('app frames load their files through signed links that open nothing else', async (context) => {
+test('app frames load their files through signed links that open nothing else', { timeout: WORKER_RUNTIME_LIMITS.testFileMs }, async (context) => {
   const runtime = await startWorkerRuntime();
   context.after(() => runtime.dispose());
   const cookie = await studioCookie(HOUR_MS);
@@ -129,4 +129,5 @@ test('app frames load their files through signed links that open nothing else', 
       assert.equal(reached(response), false);
     }
   });
+  assert.deepEqual(runtime.unexpectedLogs([]), [], 'The runtime logged no unexpected warning or error');
 });

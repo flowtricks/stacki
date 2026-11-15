@@ -14,7 +14,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { connect } from 'node:net';
-import { startWorkerRuntime, WORKER_TEST, type WorkerRuntime } from './workerRuntime';
+import { startWorkerRuntime, WORKER_TEST, type WorkerRuntime, WORKER_RUNTIME_LIMITS } from './workerRuntime';
 
 const RAW_RESPONSE_TIMEOUT_MS = 30_000;
 const RAW_RESPONSE_BYTES_MAX = 64 * 1024;
@@ -109,106 +109,115 @@ function rawHead(digest: string, contentLength: string): string {
   );
 }
 
-test('Git checkpoint uploads reach R2 only whole, declared, in limit and matching their digest', async (context) => {
-  const runtime = await startWorkerRuntime();
-  context.after(() => runtime.dispose());
+test(
+  'Git checkpoint uploads reach R2 only whole, declared, in limit and matching their digest',
+  { timeout: WORKER_RUNTIME_LIMITS.testFileMs },
+  async (context) => {
+    const runtime = await startWorkerRuntime();
+    context.after(() => runtime.dispose());
 
-  await context.test('a declared body streams into R2 under its digest', async () => {
-    const body = new Uint8Array(256 * 1024).map((_, index) => index % 251);
-    const digest = digestOf(body);
-    const response = await runtime.fetch('https://studio.test' + bundlePath(digest), {
-      method: 'PUT',
-      headers: { 'x-studio-token': WORKER_TEST.containerToken },
-      body,
+    await context.test('a declared body streams into R2 under its digest', async () => {
+      const body = new Uint8Array(256 * 1024).map((_, index) => index % 251);
+      const digest = digestOf(body);
+      const response = await runtime.fetch('https://studio.test' + bundlePath(digest), {
+        method: 'PUT',
+        headers: { 'x-studio-token': WORKER_TEST.containerToken },
+        body,
+      });
+      assert.equal(response.status, 204, await response.text());
+      const bucket = await runtime.drafts();
+      const object = await bucket.get('git-bundles/' + digest);
+      assert.ok(object, 'The checkpoint is stored');
+      assert.equal(digestOf(new Uint8Array(await object.arrayBuffer())), digest);
+      const read = await runtime.fetch('https://studio.test' + bundlePath(digest), { headers: { 'x-studio-token': WORKER_TEST.containerToken } });
+      assert.equal(read.status, 200);
+      assert.equal(digestOf(new Uint8Array(await read.arrayBuffer())), digest);
     });
-    assert.equal(response.status, 204, await response.text());
-    const bucket = await runtime.drafts();
-    const object = await bucket.get('git-bundles/' + digest);
-    assert.ok(object, 'The checkpoint is stored');
-    assert.equal(digestOf(new Uint8Array(await object.arrayBuffer())), digest);
-    const read = await runtime.fetch('https://studio.test' + bundlePath(digest), { headers: { 'x-studio-token': WORKER_TEST.containerToken } });
-    assert.equal(read.status, 200);
-    assert.equal(digestOf(new Uint8Array(await read.arrayBuffer())), digest);
-  });
 
-  await context.test('a body without Content-Length is refused with 411 before R2 sees it', async () => {
-    const body = new TextEncoder().encode('streamed without a length');
-    const digest = digestOf(body);
-    const answer = await directPut(runtime, digest, body, {}, { streamed: true });
-    assert.equal(answer.status, 411);
-    assert.match(answer.text, /Content-Length/);
-    assert.equal(await stored(runtime, digest), false);
-  });
-
-  await context.test('a malformed Content-Length is refused as missing', async () => {
-    const body = new TextEncoder().encode('1234');
-    const digest = digestOf(body);
-    // Leading and trailing spaces are not here: Fetch trims header values, so " 4" is 4.
-    for (const header of ['+4', '4.0', '0x4', '4e0', '4, 4', '-4', '']) {
-      const answer = await directPut(runtime, digest, body, { 'content-length': header }, { streamed: true });
-      assert.equal(answer.status, 411, `Content-Length ${JSON.stringify(header)}`);
-    }
-    assert.equal(await stored(runtime, digest), false);
-  });
-
-  await context.test('a declared length above 96 MiB is refused with 413 without reading the body', async () => {
-    const body = new TextEncoder().encode('tiny');
-    const digest = digestOf(body);
-    for (const header of [String(96 * 1024 ** 2 + 1), '9007199254740993', '9'.repeat(16)]) {
-      const answer = await directPut(runtime, digest, body, { 'content-length': header }, { streamed: true });
-      assert.equal(answer.status, 413, header);
-      assert.match(answer.text, /96 MiB/);
-    }
-    assert.equal(await stored(runtime, digest), false);
-  });
-
-  await context.test('an empty checkpoint is refused', async () => {
-    const digest = digestOf(new Uint8Array(0));
-    const answer = await directPut(runtime, digest, new Uint8Array(0), { 'content-length': '0' }, { streamed: true });
-    assert.equal(answer.status, 400);
-    assert.equal(await stored(runtime, digest), false);
-  });
-
-  await context.test('a body longer than its Content-Length is refused and stores nothing', async () => {
-    const whole = new Uint8Array(4096).fill(7);
-    const declared = whole.subarray(0, 1000);
-    for (const digest of [digestOf(whole), digestOf(declared)]) {
-      const answer = await directPut(runtime, digest, whole, { 'content-length': String(declared.length) }, { streamed: true });
-      assert.notEqual(answer.status, 204, answer.text);
-      assert.ok(answer.status >= 400);
-      assert.equal(await stored(runtime, digest), false);
-    }
-  });
-
-  await context.test('a body shorter than its Content-Length is refused and stores nothing', async () => {
-    const whole = new Uint8Array(4096).fill(42);
-    const digest = digestOf(whole);
-    const answer = await rawRequest(runtime, rawHead(digest, String(whole.length)), whole.subarray(0, 1000));
-    if (answer.status !== 'reset') {
-      assert.equal(answer.status, 400, answer.text);
+    await context.test('a body without Content-Length is refused with 411 before R2 sees it', async () => {
+      const body = new TextEncoder().encode('streamed without a length');
+      const digest = digestOf(body);
+      const answer = await directPut(runtime, digest, body, {}, { streamed: true });
+      assert.equal(answer.status, 411);
       assert.match(answer.text, /Content-Length/);
-    }
-    assert.equal(await stored(runtime, digest), false);
-  });
-
-  await context.test('a body whose SHA-256 is not its key is refused precisely and stores nothing', async () => {
-    const body = new TextEncoder().encode('these bytes are not the named checkpoint');
-    const digest = digestOf(new TextEncoder().encode('another checkpoint'));
-    const response = await runtime.fetch('https://studio.test' + bundlePath(digest), {
-      method: 'PUT',
-      headers: { 'x-studio-token': WORKER_TEST.containerToken },
-      body,
+      assert.equal(await stored(runtime, digest), false);
     });
-    assert.equal(response.status, 502);
-    assert.match(await response.text(), /^Git checkpoint storage failed: /);
-    assert.equal(await stored(runtime, digest), false);
-  });
 
-  await context.test('uploads without the container token never reach storage', async () => {
-    const body = new TextEncoder().encode('unauthenticated');
-    const digest = digestOf(body);
-    const response = await runtime.fetch('https://studio.test' + bundlePath(digest), { method: 'PUT', body });
-    assert.equal(response.status, 403);
-    assert.equal(await stored(runtime, digest), false);
-  });
-});
+    await context.test('a malformed Content-Length is refused as missing', async () => {
+      const body = new TextEncoder().encode('1234');
+      const digest = digestOf(body);
+      // Leading and trailing spaces are not here: Fetch trims header values, so " 4" is 4.
+      for (const header of ['+4', '4.0', '0x4', '4e0', '4, 4', '-4', '']) {
+        const answer = await directPut(runtime, digest, body, { 'content-length': header }, { streamed: true });
+        assert.equal(answer.status, 411, `Content-Length ${JSON.stringify(header)}`);
+      }
+      assert.equal(await stored(runtime, digest), false);
+    });
+
+    await context.test('a declared length above 96 MiB is refused with 413 without reading the body', async () => {
+      const body = new TextEncoder().encode('tiny');
+      const digest = digestOf(body);
+      for (const header of [String(96 * 1024 ** 2 + 1), '9007199254740993', '9'.repeat(16)]) {
+        const answer = await directPut(runtime, digest, body, { 'content-length': header }, { streamed: true });
+        assert.equal(answer.status, 413, header);
+        assert.match(answer.text, /96 MiB/);
+      }
+      assert.equal(await stored(runtime, digest), false);
+    });
+
+    await context.test('an empty checkpoint is refused', async () => {
+      const digest = digestOf(new Uint8Array(0));
+      const answer = await directPut(runtime, digest, new Uint8Array(0), { 'content-length': '0' }, { streamed: true });
+      assert.equal(answer.status, 400);
+      assert.equal(await stored(runtime, digest), false);
+    });
+
+    await context.test('a body longer than its Content-Length is refused and stores nothing', async () => {
+      const whole = new Uint8Array(4096).fill(7);
+      const declared = whole.subarray(0, 1000);
+      for (const digest of [digestOf(whole), digestOf(declared)]) {
+        const answer = await directPut(runtime, digest, whole, { 'content-length': String(declared.length) }, { streamed: true });
+        assert.notEqual(answer.status, 204, answer.text);
+        assert.ok(answer.status >= 400);
+        assert.equal(await stored(runtime, digest), false);
+      }
+    });
+
+    await context.test('a body shorter than its Content-Length is refused and stores nothing', async () => {
+      const whole = new Uint8Array(4096).fill(42);
+      const digest = digestOf(whole);
+      const answer = await rawRequest(runtime, rawHead(digest, String(whole.length)), whole.subarray(0, 1000));
+      if (answer.status !== 'reset') {
+        assert.equal(answer.status, 400, answer.text);
+        assert.match(answer.text, /Content-Length/);
+      }
+      assert.equal(await stored(runtime, digest), false);
+    });
+
+    await context.test('a body whose SHA-256 is not its key is refused precisely and stores nothing', async () => {
+      const body = new TextEncoder().encode('these bytes are not the named checkpoint');
+      const digest = digestOf(new TextEncoder().encode('another checkpoint'));
+      const response = await runtime.fetch('https://studio.test' + bundlePath(digest), {
+        method: 'PUT',
+        headers: { 'x-studio-token': WORKER_TEST.containerToken },
+        body,
+      });
+      assert.equal(response.status, 502);
+      assert.match(await response.text(), /^Git checkpoint storage failed: /);
+      assert.equal(await stored(runtime, digest), false);
+    });
+
+    await context.test('uploads without the container token never reach storage', async () => {
+      const body = new TextEncoder().encode('unauthenticated');
+      const digest = digestOf(body);
+      const response = await runtime.fetch('https://studio.test' + bundlePath(digest), { method: 'PUT', body });
+      assert.equal(response.status, 403);
+      assert.equal(await stored(runtime, digest), false);
+    });
+    assert.deepEqual(
+      runtime.unexpectedLogs([/^Git checkpoint upload ended early/, /^Git checkpoint storage failed/, /disconnected/i]),
+      [],
+      'The runtime logged no unexpected warning or error',
+    );
+  },
+);
