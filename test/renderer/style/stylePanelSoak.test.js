@@ -46,62 +46,20 @@ const { repoPath } = require('../../helpers/sources.js');
 // showing ("did not show this run"): delete it then, and the invariant guards the fix.
 const KNOWN_FAILURES = Object.freeze([
   {
-    id: 'SP-01',
-    title: 'inherited and computed values blank out on every element switch (Default dropdowns, empty fields, 0 for 0px, Auto for auto)',
-    invariant: 'provisional-state',
-    pattern: /painted (select\|\|Default\||text\|\|\||spacing\|\|(0|Auto)\||segmented\|)/,
-    cause:
-      'src/features/style/model/computedStyle.ts: answers are keyed by host.selectedId and read "" while pending; useStableStyleValue drops the held value on a new selection',
-  },
-  {
-    id: 'SP-01',
-    title: 'inherited and computed values blank out on every element switch (same element before and after)',
-    invariant: 'flicker',
-    pattern: /left its settled state (hint|spacing|text\|\|\d|select|segmented)/,
-    cause: 'src/features/style/model/computedStyle.ts (as above)',
-  },
-  {
-    id: 'SP-02',
-    title: "a switch paints in steps: header first, the previous element's chips under the new header, hints later",
-    invariant: 'painted-in-steps',
-    pattern: /reached its settled state in \d+ steps/,
-    cause: 'header, declared fields and computed hints commit in separate renders (useEditorFoundation settled pass vs computedStyle cache)',
-  },
-  {
-    id: 'SP-02',
-    title: "the previous element's chip shown under the new element",
-    invariant: 'provisional-state',
-    pattern: /painted chip\|var\(|before settling on absent/,
-    cause: "as SP-02: the previous element's rows (its chips, its layout controls) outlive the header by a frame or more",
-  },
-  {
-    id: 'SP-07',
-    title: 'settled chips drop to plain fields (Default, empty) and come back when a control is pressed during a switch',
-    invariant: 'flicker',
-    pattern: /left its settled state chip\|/,
-    cause:
-      'the source-only pass still repaints over a settled answer when a press lands mid-switch (useEditorFoundation applyContent; 68feb2a3 covers the switch without a press)',
-  },
-  {
-    id: 'SP-08',
-    title: 'filter counts ("Hide global selectors (n)") change after their first paint',
-    invariant: 'count-changed',
-    pattern: /filter counts changed/,
-    cause: 'counts come from the source-only selector list, then from the canvas answer',
-  },
-  {
     id: 'SP-03',
     title: 'the panel paints a frame with no controls between two elements',
     invariant: 'blank-panel',
     pattern: /no controls between/,
-    cause: 'EmbedEditor renders nothing for one commit while the new selection has no content yet',
+    cause:
+      'a switch shown past its 1.5 s hold (StylePanel useSwitchHold) with the answer still owed draws section placeholders: a slow canvas, or one that re-renders when a class-expression element is selected (two canvas-ready per selection)',
   },
   {
     id: 'SP-04',
     title: 'a chip pressed right after a switch opens its picker, which then closes itself',
     invariant: 'popover-closed-itself',
     pattern: /varpicker.*unmounted/,
-    cause: 'sections keyed by the selected element (89b454d2): the switch commits after the press and remounts Typography with the picker in it',
+    cause:
+      'left only on a freshly reloaded canvas: the picker opened on the element still shown unmounts about 230 ms later with no panel commit (no switch, no section change); see VariablePicker / VariableConnect / pickerExit',
   },
   {
     id: 'SP-05',
@@ -138,7 +96,8 @@ const KNOWN_FAILURES = Object.freeze([
     title: 'rows move under the pointer on a switch: the panel keeps scrollTop while the content above changes height',
     invariant: 'scroll-jump',
     pattern: /panel scroll jumped/,
-    cause: 'no scroll anchoring across a switch: sections above Typography (Layout, Flex child, header chips) differ per element',
+    cause:
+      'left at 4x and 6x only (paragraph <-> nested label): StylePanel useSwitchScrollAnchor holds the first surviving row, but rows below it whose sections change still move while scrollTop does',
   },
   {
     id: 'SP-14',
