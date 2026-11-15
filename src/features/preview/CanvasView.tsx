@@ -8,7 +8,7 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
 import { barDevices } from './breakpointDevices';
-import { breakpointLabel } from './breakpointLabel';
+import { breakpointLabel } from '../../lib/breakpointLabel';
 
 interface CanvasBreakpoint {
   /** `desktop`, or a breakpoint's id. */

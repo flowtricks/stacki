@@ -5,7 +5,7 @@ import { ChevronRightIcon, PanelRightIcon } from '../../ui/Icons';
 import type { ResolvedBreakpoint } from '../../../shared/properties/projectBreakpoints';
 import { barDevices, shortcutOf, type BarDevice, type PreviewDevice } from './breakpointDevices';
 import { deviceIconComponent } from './deviceIcons';
-import { breakpointLabel } from './breakpointLabel';
+import { breakpointLabel } from '../../lib/breakpointLabel';
 import { PreviewSizeControls } from './PreviewSizeControls';
 import { GuideMenu, type GuideMenuProps } from './GuideMenu';
 import type { PreviewSizeControlsProps } from './PreviewSizeControls';

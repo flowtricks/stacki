@@ -54,7 +54,7 @@ import type { BreakpointSyncScan } from '../../../shared/properties/breakpointSy
 import { applyBreakpointSyncRequest, breakpointSyncAvailable, restoreBreakpointSyncRequest, scanBreakpointSyncRequest } from '../../ipc/breakpointSyncBridge';
 import { deviceIconComponent } from '../../features/preview/deviceIcons';
 import { iconFor, type DeviceIconKind } from '../../features/preview/breakpointDevices';
-import { breakpointLabel } from '../../features/preview/breakpointLabel';
+import { breakpointLabel } from '../../lib/breakpointLabel';
 import { BreakpointSyncDialog } from './BreakpointSyncDialog';
 import { BreakpointUsageLine, BreakpointUsageList, hasUsage } from './BreakpointUsage';
 import { BreakpointAddCard, type AddDraft } from './BreakpointAddCard';

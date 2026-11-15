@@ -982,7 +982,6 @@
     "src/features/preview/ToolbarOverflow.tsx",
     "src/features/preview/ToolbarTooltip.tsx",
     "src/features/preview/breakpointDevices.ts",
-    "src/features/preview/breakpointLabel.ts",
     "src/features/preview/canvasContentBinding.ts",
     "src/features/preview/canvasTextBinding.ts",
     "src/features/preview/canvasTextOverlay.ts",

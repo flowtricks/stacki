@@ -179,16 +179,20 @@ export function previewAround(css: string, bound: WidthBound, token: string): st
   const left = flat(head).trimStart();
   const right = flat(tail).trimEnd();
   const half = Math.floor(MEDIA_SYNC_LIMITS.previewCharsMax / 2);
+  assert(bound.preludeStart <= bound.start, 'previewAround: the bound is inside its prelude');
   const clippedLeft = left.length > half ? `…${left.slice(left.length - half)}` : left;
   const clippedRight = right.length > half ? `${right.slice(0, half)}…` : right;
   return `@media${clippedLeft.startsWith(' ') ? '' : ' '}${clippedLeft}${token}${clippedRight}`;
 }
 
 function near(first: number, second: number): boolean {
+  assert(!Number.isNaN(first), 'near: the first width is a number');
+  assert(!Number.isNaN(second), 'near: the second width is a number');
   return Math.abs(first - second) < 1e-6;
 }
 
 function isMediaKeyword(css: string, at: number): boolean {
+  assert(at >= 0, 'isMediaKeyword: a position inside the text');
   if (css.slice(at, at + 6).toLowerCase() !== '@media') {
     return false;
   }
@@ -305,6 +309,8 @@ function isDigit(char: string): boolean {
 }
 
 function readDimension(css: string, from: number, to: number): Token {
+  assert(from <= to, 'readDimension: a forward range');
+  assert(to <= css.length, 'readDimension: the range is inside the text');
   let index = from;
   while (index < to && isDigit(css[index] ?? '')) {
     index += 1;
@@ -448,5 +454,7 @@ function hashText(text: string): string {
     hash ^= text.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193);
   }
-  return (hash >>> 0).toString(16).padStart(8, '0');
+  const hex = (hash >>> 0).toString(16).padStart(8, '0');
+  assert(hex.length === 8, 'hashText: eight hex digits');
+  return hex;
 }
