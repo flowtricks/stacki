@@ -64,36 +64,6 @@ const KNOWN_FAILURES = Object.freeze([
       'left only on a freshly reloaded canvas: the picker opened on the element still shown unmounts about 230 ms later with no panel commit (no switch, no section change); see VariablePicker / VariableConnect / pickerExit',
   },
   {
-    id: 'SP-05',
-    title: 'a variable-picker hover preview sticks after leaving by window blur or scroll',
-    invariant: 'preview-stuck',
-    pattern: /after hover and (window-blur|scroll|tab)/,
-    cause:
-      'src/features/style/pickerExit.ts: the exits restore on visibility "hidden" and on scrolls the picker hears, not on window blur or the panel scroller',
-  },
-  {
-    id: 'SP-09',
-    title: 'hovering variable-picker rows writes the hovered variable into the CSS file; leaving writes the old one back',
-    invariant: 'source-written',
-    pattern: /(hover .* picker rows|picker by|hover picker row)/,
-    cause:
-      'the hover preview goes through the write path (VariableConnect preview / liveSetProp) instead of a canvas-only draft; see VariablePicker useHoverPreview',
-  },
-  {
-    id: 'SP-10',
-    title: 'the variable picker opens over its own chip: a quick second press on the chip picks a row and writes it',
-    invariant: 'source-written',
-    pattern: /^rapid toggle/,
-    cause: 'picker placement lets the list cover the anchor (VariablePicker / LayerPopover positioning)',
-  },
-  {
-    id: 'SP-10',
-    title: 'rapid presses on a chip leave the picker open (a press landed on the picker, not the chip)',
-    invariant: 'toggle-parity',
-    pattern: /presses left/,
-    cause: 'as SP-10',
-  },
-  {
     id: 'SP-12',
     title: 'rows move under the pointer on a switch: the panel keeps scrollTop while the content above changes height',
     invariant: 'scroll-jump',
