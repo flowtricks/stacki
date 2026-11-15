@@ -78,6 +78,7 @@ const ladder = new CanvasClickRetry({
     canvas.contentWindow?.location.reload();
   },
   notice: (event) => remember(state.notices, event),
+  requestRender: () => post({ type: 'avb:request-render' }),
 });
 
 // The frame announces each document's rendering itself, at its DOMContentLoaded,
@@ -106,12 +107,20 @@ function judge(
   return { tag: 'current' };
 }
 
+// `?drop-renders=N` loses the first N announcements, as an editor whose listener
+// mounted late does: the ladder has to ask for the rendering again.
+let rendersToDrop = Number(new URLSearchParams(location.search).get('drop-renders') ?? '0');
+
 window.addEventListener('message', (event: MessageEvent<unknown>) => {
   if (event.source !== canvas.contentWindow) {
     return;
   }
   const message = parsePreviewMessage(event.data);
   if (message === undefined) {
+    return;
+  }
+  if (message.kind === 'render' && rendersToDrop > 0) {
+    rendersToDrop -= 1;
     return;
   }
   switch (message.kind) {
@@ -177,3 +186,12 @@ window.addEventListener('message', (event: MessageEvent<unknown>) => {
     }
   }
 });
+
+// The canvas loads only once every listener above is in place, so no
+// announcement can arrive before the host can hear it (the dropped ones above
+// stand in for that race on purpose).
+const source = canvas.dataset['src'];
+if (source === undefined) {
+  throw new Error('Assertion failed: the canvas iframe names its page in data-src');
+}
+canvas.src = source;

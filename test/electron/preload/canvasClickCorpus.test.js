@@ -263,7 +263,14 @@ const CORPUS = [
   }
 })();
 
-function report({ results, churn, mixed, native }) {
+function report({ results, churn, mixed, native, lost, error }) {
+  check('the probe ran to the end', error === undefined, error);
+  if (error !== undefined) {
+    return;
+  }
+  check('a lost announcement: the click still selects', lost.selection?.path === '0', JSON.stringify(lost));
+  check('a lost announcement: healed without a reload', lost.reloads === 0, JSON.stringify(lost));
+  check('a lost announcement: nothing is said', lost.notices.length === 0, JSON.stringify(lost));
   for (const result of results) {
     const scenario = CORPUS.find((entry) => entry.name === result.name);
     for (const [index, click] of scenario.clicks.entries()) {
@@ -321,7 +328,7 @@ const scenarios = JSON.parse(fs.readFileSync(path.join(DIRECTORY, 'scenarios.jso
 app.on('window-all-closed', () => {});
 
 const host = (pageName, openFile) => '<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0}iframe{position:fixed;inset:0;width:100%;height:100%;border:0}</style></head>' +
-  '<body><iframe src="/pages/' + pageName + '.html#avb-design"></iframe>' +
+  '<body><iframe data-src="/pages/' + pageName + '.html#avb-design"></iframe>' +
   '<script>window.openFileForHost=' + JSON.stringify(openFile ?? null) + '</script><script src="/host.js"></script>' +
   '<script>canvasHost.openFile = window.openFileForHost ?? undefined</script></body></html>';
 
@@ -363,50 +370,100 @@ app.whenReady().then(async () => {
     height: 800,
     webPreferences: { preload: PRELOAD, contextIsolation: true, nodeIntegration: false, nodeIntegrationInSubFrames: true },
   });
-  const hostJs = (code) => win.webContents.executeJavaScript(code);
-  const frame = () => win.webContents.mainFrame.frames[0];
-  const pageJs = (code) => frame().executeJavaScript(code);
-  const state = () => hostJs('JSON.parse(JSON.stringify(canvasHost))');
-  const open = async (name, openFile, rendersMin = 1) => {
-    await win.loadURL(origin + '/host/' + name + (openFile ? '?open=' + encodeURIComponent(openFile) : ''));
-    await pollUntil({ what: name + ' vouched for', read: state, until: (seen) => seen.renders >= rendersMin || seen.problems.length > 0 });
+  // Every call into a page is bounded: a frame that is reloading (the ladder's
+  // own reload, a page navigating) can drop a call without ever answering it,
+  // which left the probe waiting until the spawn bound killed it.
+  const CALL_MS_MAX = 5000;
+  const bounded = (call, what) =>
+    Promise.race([call, new Promise((_, reject) => setTimeout(() => reject(new Error(what + ': no answer in ' + CALL_MS_MAX + ' ms')), CALL_MS_MAX))]);
+  const hostJs = (code) => bounded(win.webContents.executeJavaScript(code), 'host');
+  // Page code runs through the host, in the iframe's own realm (same origin):
+  // a subframe's WebFrameMain can be swapped by a navigation and then never
+  // answer, where the host's reference to the iframe always names the live page.
+  // The answer crosses back as JSON: a page value from another realm is not
+  // always structured-clonable.
+  const pageJs = (code) =>
+    hostJs(
+      '(() => { const page = document.querySelector("iframe").contentWindow; if (!page || page.location.href === "about:blank") { return { failed: "no canvas page yet" }; } try { const value = page.eval(' +
+        JSON.stringify(code) +
+        '); return { value: value === undefined ? undefined : JSON.parse(JSON.stringify(value)) }; } catch (error) { return { failed: String(error) }; } })()',
+    ).then((answer) => {
+      if (answer.failed !== undefined) {
+        throw new Error(answer.failed + ' in: ' + code.slice(0, 120));
+      }
+      return answer.value;
+    });
+  // A read for a poll: a call that failed reads as nothing yet, and the poll goes on.
+  const soft = (read) => () => read().catch(() => undefined);
+  const readState = () => hostJs('JSON.parse(JSON.stringify(canvasHost))');
+  const state = soft(readState);
+  // Opens a page and waits, bounded, until its frame has vouched for it (or
+  // said why it cannot). A page that never does is a failure, said as one.
+  const open = async (name, openFile, { dropRenders = 0 } = {}) => {
+    const query = new URLSearchParams();
+    if (openFile) {
+      query.set('open', openFile);
+    }
+    if (dropRenders > 0) {
+      query.set('drop-renders', String(dropRenders));
+    }
+    await win.loadURL(origin + '/host/' + name + '?' + query.toString());
+    if (dropRenders > 0) {
+      await pollUntil({ what: name + ' framed', read: soft(() => pageJs('document.readyState')), until: (value) => value === 'complete' });
+      return;
+    }
+    const vouched = await pollUntil({ what: name + ' vouched for', read: state, until: (seen) => seen !== undefined && (seen.renders >= 1 || seen.problems.length > 0) });
+    if (vouched.kind !== 'reached') {
+      throw new Error(name + ': the frame never vouched for its rendering: ' + JSON.stringify(vouched.value));
+    }
   };
   const centre = (selector) =>
-    pageJs('(() => { const element = document.querySelector(' + JSON.stringify(selector) + '); if (!element) { return undefined; } const box = element.getBoundingClientRect(); return { x: Math.round(box.left + Math.min(box.width / 2, 40)), y: Math.round(box.top + box.height / 2) }; })()');
+    // From the element's live box at click time, brought into view first: a
+    // runner's window can be shorter than asked for, and fonts change heights.
+    pageJs('(() => { const element = document.querySelector(' + JSON.stringify(selector) + '); if (!element) { return undefined; } const box = element.getBoundingClientRect(); if (box.top < 0 || box.bottom > innerHeight) { if (getComputedStyle(element).position !== "fixed") { element.scrollIntoView({ block: "center" }); } } const live = element.getBoundingClientRect(); const x = Math.round(live.left + Math.min(live.width / 2, 40)); const y = Math.round(live.top + live.height / 2); return x >= 0 && y >= 0 && x < innerWidth && y < innerHeight ? { x, y } : undefined; })()');
   // Pointer events as the browser would deliver them to whatever it hit-tests at the point.
   const press = (point) =>
-    pageJs('(() => { const x = ' + point.x + ', y = ' + point.y + '; const target = document.elementFromPoint(x, y); if (!target) { return false; } const init = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, view: window, button: 0 }; for (const type of ["mousemove", "mousedown", "mouseup"]) { target.dispatchEvent(new MouseEvent(type, init)); } (document.elementFromPoint(x, y) ?? target).dispatchEvent(new MouseEvent("click", { ...init, detail: 1 })); return true; })()');
+    pageJs('(() => { const x = ' + point.x + ', y = ' + point.y + '; const target = document.elementFromPoint(x, y); if (!target) { throw new Error("nothing at " + x + "," + y); } const init = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, view: window, button: 0 }; for (const type of ["mousemove", "mousedown", "mouseup"]) { target.dispatchEvent(new MouseEvent(type, init)); } (document.elementFromPoint(x, y) ?? target).dispatchEvent(new MouseEvent("click", { ...init, detail: 1 })); return true; })()');
   const clickAndSee = async (point, deliver) => {
-    const before = await state();
+    const before = await readState();
     await deliver(point);
-    const seen = await pollUntil({ what: 'a selection', read: state, until: (now) => now.selections.length > before.selections.length, pollCountMax: 300 });
-    return { selection: seen.value.selections.at(-1), hover: seen.value.hovers.at(-1), point };
+    const seen = await pollUntil({ what: 'a selection', read: state, until: (now) => now !== undefined && now.selections.length > before.selections.length, pollCountMax: 300 });
+    const selected = seen.kind === 'reached';
+    return { selection: selected ? seen.value.selections.at(-1) : undefined, hover: seen.value?.hovers.at(-1), point };
   };
-  const output = { results: [], churn: undefined, mixed: undefined, native: undefined };
+  const output = { results: [], churn: undefined, mixed: undefined, native: undefined, lost: undefined };
   try {
     for (const scenario of scenarios) {
       await open(scenario.name, scenario.openFile);
       if (scenario.prepare) {
         await pageJs(scenario.prepare);
         if (scenario.awaitRenders) {
-          await pollUntil({ what: scenario.name + ' re-vouched', read: state, until: (seen) => seen.renders >= scenario.awaitRenders });
+          await pollUntil({ what: scenario.name + ' re-vouched', read: state, until: (seen) => seen !== undefined && seen.renders >= scenario.awaitRenders });
         }
       }
       const clicks = [];
       for (const click of scenario.clicks) {
-        const point = await pollUntil({ what: click.at + ' laid out', read: () => centre(click.at), until: (value) => value !== undefined });
+        const point = await pollUntil({ what: click.at + ' laid out', read: soft(() => centre(click.at)), until: (value) => value !== undefined });
         clicks.push(await clickAndSee(point.value, press));
       }
-      const seen = await state();
+      const seen = await readState();
       output.results.push({ name: scenario.name, clicks, notices: seen.notices, reloads: seen.reloads, log: await hostJs('canvasClickLog()') });
     }
+
+    // An announcement the editor never heard (its listener mounted after the
+    // frame spoke): the first click must still select, without a reload.
+    await open('plain', undefined, { dropRenders: 2 });
+    const lostPoint = (await pollUntil({ what: '#title laid out', read: soft(() => centre('#title')), until: (value) => value !== undefined })).value;
+    const lost = await clickAndSee(lostPoint, press);
+    const lostState = await readState();
+    output.lost = { selection: lost.selection, reloads: lostState.reloads, notices: lostState.notices, log: await hostJs('canvasClickLog()') };
 
     // Churn: the page is patched (its stamp changes, the patcher says so) at
     // random moments while clicks land on random items.
     await open('churn');
     const random = mulberry32(20261114);
     const churn = { clicks: 0, renders: 0, retried: 0, notices: 0, wrong: [], missing: [] };
-    const before = await state();
+    const before = await readState();
     const rendersBefore = before.renders;
     const queriesBefore = before.queries;
     // The page's patch, as the patcher applies one: a new stamp, then avb:morphed.
@@ -416,12 +473,12 @@ app.whenReady().then(async () => {
     for (let index = 0; index < 40; index++) {
       const item = Math.floor(random() * 30);
       const mode = CHURN_MODES[Math.floor(random() * CHURN_MODES.length)];
-      const point = await centre('#item' + item);
+      const point = (await pollUntil({ what: 'item ' + item + ' in view', read: soft(() => centre('#item' + item)), until: (value) => value !== undefined })).value;
       churn.clicks += 1;
       const churned = async (at) => {
         const before = mode === 'patch-before' || mode === 'patch-around' ? 'window.repatch();' : '';
         const after = mode === 'patch-after' || mode === 'patch-around' ? 'window.repatch();' : '';
-        await pageJs('(() => { ' + before + ' const x = ' + at.x + ', y = ' + at.y + '; const target = document.elementFromPoint(x, y); const init = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, view: window, button: 0, detail: 1 }; for (const type of ["mousemove", "mousedown", "mouseup", "click"]) { target.dispatchEvent(new MouseEvent(type, init)); } ' + after + ' })()');
+        await pageJs('(() => { ' + before + ' const x = ' + at.x + ', y = ' + at.y + '; const target = document.elementFromPoint(x, y); if (!target) { throw new Error("nothing at " + x + "," + y); } const init = { bubbles: true, cancelable: true, composed: true, clientX: x, clientY: y, view: window, button: 0, detail: 1 }; for (const type of ["mousemove", "mousedown", "mouseup", "click"]) { target.dispatchEvent(new MouseEvent(type, init)); } ' + after + ' })()');
       };
       try {
         const seen = await clickAndSee(point, churned);
@@ -435,7 +492,7 @@ app.whenReady().then(async () => {
         await pageJs('clearInterval(window.churnTimer)');
       }
     }
-    const after = await state();
+    const after = await readState();
     churn.renders = after.renders - rendersBefore;
     churn.notices = after.notices.filter((event) => event.kind === 'show').length;
     churn.retried = after.queries - queriesBefore;
@@ -443,12 +500,33 @@ app.whenReady().then(async () => {
 
     // A rendering that mixes two versions of one file: reloaded once, still hoverable.
     await open('mixed-versions');
-    await pollUntil({ what: 'the reload', read: state, until: (seen) => seen.reloads >= 1 });
-    await pollUntil({ what: 'the reloaded page', read: state, until: (seen) => seen.problems.length >= 2 });
-    const titlePoint = (await pollUntil({ what: 'title laid out', read: () => centre('#title'), until: (value) => value !== undefined })).value;
-    await pageJs('(() => { const target = document.elementFromPoint(' + titlePoint.x + ', ' + titlePoint.y + '); target.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: ' + titlePoint.x + ', clientY: ' + titlePoint.y + ' })); })()');
-    const mixed = (await pollUntil({ what: 'a hover', read: state, until: (seen) => seen.hovers.length > 0 })).value;
-    output.mixed = { problems: mixed.problems, reloads: mixed.reloads, hover: mixed.hovers.at(-1) };
+    await pollUntil({ what: 'the reload', read: state, until: (seen) => seen !== undefined && seen.reloads >= 1 });
+    await pollUntil({ what: 'the reloaded page', read: state, until: (seen) => seen !== undefined && seen.problems.length >= 2 });
+    // The reloaded page may still be laying out: the move is made once the
+    // title is under the point, measured again on each try.
+    await pollUntil({
+      what: 'a move over the reloaded title',
+      read: soft(() =>
+        pageJs(
+          '(() => { const title = document.getElementById("title"); if (!title) { return false; } const box = title.getBoundingClientRect(); const x = Math.round(box.left + Math.min(box.width / 2, 40)), y = Math.round(box.top + box.height / 2); const target = document.elementFromPoint(x, y); if (!target) { return false; } target.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: x, clientY: y })); return true; })()',
+        ),
+      ),
+      until: (moved) => moved === true,
+    });
+    // The reloaded frame may hear that move before it has walked its markers
+    // (a hover of nothing); each poll moves the pointer off and back again,
+    // so the hover is said again once the frame knows the page.
+    const mixed = (
+      await pollUntil({
+        what: 'a hover of the title',
+        read: soft(async () => {
+          await pageJs('(() => { const title = document.getElementById("title"); const box = title.getBoundingClientRect(); for (const dx of [2, 0]) { const x = Math.round(box.left + Math.min(box.width / 2, 40)) + dx, y = Math.round(box.top + box.height / 2); document.elementFromPoint(x, y)?.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: x, clientY: y })); } document.documentElement.dispatchEvent(new MouseEvent("mouseleave")); const x = Math.round(box.left + Math.min(box.width / 2, 40)), y = Math.round(box.top + box.height / 2); document.elementFromPoint(x, y)?.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: x, clientY: y })); return true; })()');
+          return readState();
+        }),
+        until: (seen) => seen !== undefined && seen.hovers.at(-1) === '0',
+      })
+    ).value;
+    output.mixed = mixed === undefined ? { problems: [], reloads: 0, hover: undefined } : { problems: mixed.problems, reloads: mixed.reloads, hover: mixed.hovers.at(-1) };
 
     // Native input, where a hidden window receives it (macOS): the same pages, the real pointer.
     if (process.platform === 'darwin') {
@@ -457,13 +535,13 @@ app.whenReady().then(async () => {
         const scenario = scenarios.find((entry) => entry.name === name);
         await open(name);
         const click = scenario.clicks[0];
-        const point = (await pollUntil({ what: click.at + ' laid out', read: () => centre(click.at), until: (value) => value !== undefined })).value;
+        const point = (await pollUntil({ what: click.at + ' laid out', read: soft(() => centre(click.at)), until: (value) => value !== undefined })).value;
         // A hidden window takes native pointer moves on macOS, but not presses, so
         // native input checks the hover; the clicks above cover the press.
-        const hoversBefore = (await state()).hovers.length;
+        const hoversBefore = (await readState()).hovers.length;
         win.webContents.sendInputEvent({ type: 'mouseMove', x: point.x + 1, y: point.y + 1 });
         win.webContents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y });
-        const seen = (await pollUntil({ what: name + ' native hover', read: state, until: (now) => now.hovers.length > hoversBefore })).value;
+        const seen = (await pollUntil({ what: name + ' native hover', read: state, until: (now) => now !== undefined && now.hovers.length > hoversBefore })).value;
         output.native.push({ name, expect: click.expect, hover: seen.hovers.at(-1) });
       }
     }

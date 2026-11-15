@@ -267,8 +267,11 @@ export function setRenderListener(listener: () => void): void {
 }
 
 // Said once per rendering that cannot be vouched for, so the app can heal the
-// canvas instead of refusing every click on it.
+// canvas instead of refusing every click on it — and again when the app asks
+// (reportRender), since a report sent before its listener mounted is lost.
+let renderProblem: FrameRenderProblem | undefined;
 const reportRenderProblem = (problem: FrameRenderProblem): void => {
+  renderProblem = problem;
   try {
     window.parent.postMessage({ type: 'avb:render-problem', problem }, '*');
   } catch {
@@ -281,6 +284,7 @@ const announceRender = () => {
   const seq = renderSeq;
   renderToken = undefined; // Until this rendering's digest is known, events carry none.
   renderStamps = undefined;
+  renderProblem = undefined;
   const reading = readManifest();
   if (reading.kind === 'problem') {
     reportRenderProblem(reading.problem);
@@ -317,6 +321,9 @@ const announceRender = () => {
 // frame, without rehashing or briefly clearing its token.
 export function reportRender(): void {
   if (renderToken === undefined || renderStamps === undefined) {
+    if (renderProblem !== undefined) {
+      reportRenderProblem(renderProblem);
+    }
     return;
   }
   try {

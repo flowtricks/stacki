@@ -66,6 +66,7 @@ Frame-side shapes that used to make clicks or hovers disappear without any messa
 | Forged or malformed stamp in page content | Whole rendering dropped: every click "still loading" | Stamp skipped with the shared parser |
 | Page changes under a resting pointer | Outline stuck on the old box | Hover re-hit-tested with the new token |
 | Hover before any rendering is vouched for | Outline hidden | Drawn: it is a picture of the frame's own boxes |
+| Announcement sent before the editor listened (slow start, a reload racing the listener) | Every click waited out the ladder and reloaded (`stale:no-render`) | A `no-render` retry asks again (`avb:request-render`); the frame re-sends its rendering or its render problem |
 
 Shapes that already worked and are covered by the corpus test: `pointer-events: none` overlays, fixed
 headers on a scrolled page, transforms, shadow DOM (the host is selected), SVG internals (the `svg`),

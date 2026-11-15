@@ -184,7 +184,7 @@ function harness(onQuery = () => {}) {
   let nowMs = 0;
   let timerSeq = 0;
   const timers = [];
-  const events = { queries: [], pages: 0, reloads: 0, notices: [] };
+  const events = { queries: [], pages: 0, reloads: 0, notices: [], renderRequests: 0 };
   const host = {
     nowMs: () => nowMs,
     schedule: (delayMs, run) => {
@@ -205,6 +205,9 @@ function harness(onQuery = () => {}) {
       events.reloads += 1;
     },
     notice: (event) => events.notices.push(event),
+    requestRender: () => {
+      events.renderRequests += 1;
+    },
   };
   const advance = (ms) => {
     const until = nowMs + ms;
@@ -236,6 +239,18 @@ test('a superseded click looks again and selects once the canvas catches up', ()
   advance(10_000);
   assert.deepEqual(events.notices, [], 'nothing is said about a click that selected');
   assert.equal(events.reloads, 0);
+});
+
+test('a click refused for want of a rendering asks the frame to say it again', () => {
+  const { ladder, events } = harness();
+  const id = ladder.begin({ x: 3, y: 4 });
+  ladder.failed(id, stale('no-render', undefined));
+  assert.equal(events.renderRequests, 1, 'an announcement sent before the editor listened is asked for again');
+  ladder.rendered(); // The frame's answer: look now.
+  assert.deepEqual(events.queries, [{ id, x: 3, y: 4 }]);
+  const other = ladder.begin({ x: 3, y: 4 });
+  ladder.failed(other, stale('superseded', undefined));
+  assert.equal(events.renderRequests, 1, 'a rendering that moved on was announced; nothing to ask');
 });
 
 test('a newer click replaces one still being retried', () => {

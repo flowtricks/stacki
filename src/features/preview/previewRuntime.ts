@@ -576,6 +576,7 @@ function useClickLadder(iframeRef: React.RefObject<HTMLIFrameElement>, refs: Run
       selectPage: () => applyClick({ path: undefined, occurrence: 0, outside: false, pseudo: undefined }, refs, settersRef.current),
       reloadCanvas: () => refs.props.current.onRefresh?.(),
       notice: (event) => refs.props.current.onCanvasNotice(event),
+      requestRender: () => iframeRef.current?.contentWindow?.postMessage({ type: 'avb:request-render' }, '*'),
     });
     clicksRef.current = ladder;
     return () => {

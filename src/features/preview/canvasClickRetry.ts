@@ -36,6 +36,8 @@ export interface CanvasClickRetryHost {
   readonly selectPage: () => void;
   readonly reloadCanvas: () => void;
   readonly notice: (event: CanvasNoticeEvent) => void;
+  /** Asks the frame to say again which rendering it shows (`avb:request-render`). */
+  readonly requestRender: () => void;
 }
 
 /** A click the person made, as the ladder needs it. */
@@ -128,6 +130,13 @@ export class CanvasClickRetry {
         pending.attempt += 1;
         pending.phase = 'delay';
         pending.cancel = this.host.schedule(step.delayMs, () => this.look(id));
+        if (problem.kind === 'stale' && problem.reason === 'no-render') {
+          // The frame may have announced its rendering before the editor was
+          // listening (a slow start, a reload racing the listener); unasked, it
+          // never says it again, and every click waited out the ladder and
+          // reloaded. Asking costs one message; the answer prompts the look.
+          this.host.requestRender();
+        }
         return;
       case 'reload-canvas':
         this.log('reloaded', code, pending.attempt);

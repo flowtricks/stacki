@@ -188,11 +188,16 @@ test('the editor’s fresh look answers with the current token and never reaches
 });
 
 test('a rendering mixing two versions of one file says so instead of falling silent', async () => {
-  const { sent } = await frame(
+  const { sent, fromApp } = await frame(
     `<!doctype html><html><body><!--avb-s:0--><p>x</p><!--avb-e:0-->${stampComment(page)}${stampComment({ ...page, checksum: 'b'.repeat(64) })}</body></html>`,
   );
   assert.equal(of(sent, 'avb:render').length, 0, 'no token is vouched for');
   assert.deepEqual(of(sent, 'avb:render-problem').at(-1), { type: 'avb:render-problem', problem: 'conflicting-stamps' });
+  // The editor missed the report (its listener mounted late) and asks: it is said again.
+  sent.length = 0;
+  fromApp({ type: 'avb:request-render' });
+  assert.deepEqual(of(sent, 'avb:render-problem'), [{ type: 'avb:render-problem', problem: 'conflicting-stamps' }]);
+  assert.equal(of(sent, 'avb:render').length, 0, 'and still no token is vouched for');
 });
 
 test('a forged stamp is skipped, not fatal to the whole rendering', async () => {
