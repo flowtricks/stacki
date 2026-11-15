@@ -19,6 +19,7 @@
 import { pathToFileURL } from 'node:url';
 import { parse } from 'yaml';
 import { assert } from '../policy/assert.mts';
+import { systemReporter } from './actionsReport.mts';
 import {
   flowtricksEnvironment,
   pollUntil,
@@ -455,7 +456,12 @@ async function main(argumentsList: readonly string[]): Promise<number> {
   const bootstrap = systemCommandRunner(process.env);
   const runner = systemCommandRunner(flowtricksEnvironment(process.env, bootstrap));
   const rows = await verifyRelease(options.value, runner, systemHttpFetcher(), systemSleeper);
-  console.log(renderTable(rows));
+  const table = renderTable(rows);
+  console.log(table);
+  // In a workflow the table is also the job summary, so the result is readable without the log.
+  if (process.env['GITHUB_STEP_SUMMARY'] !== undefined) {
+    systemReporter(process.env).summary(`## Verify ${options.value.version}: ${exitCodeFor(rows) === 0 ? 'PASS' : 'FAIL'}\n\n\`\`\`\n${table}\n\`\`\``);
+  }
   return exitCodeFor(rows);
 }
 
