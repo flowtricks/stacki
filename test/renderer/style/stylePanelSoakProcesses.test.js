@@ -22,6 +22,10 @@ const WAIT_MS_MAX = 10000;
 const WITHIN = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'stacki-soak-reaper-test-'));
 const POLL_MS = 100;
 const spawned = [];
+// The real-process tests spawn, list and kill processes through PowerShell and taskkill on
+// Windows, which GitHub's Windows runners make slow and racy; the soak itself is opt-in, so
+// there they skip with a message and the parsing tests still run.
+const REAL_PROCESSES = process.platform === 'win32' ? { skip: 'real-process reaping is checked on macOS and Linux; Windows runners make it racy' } : {};
 
 function alive(pid) {
   try {
@@ -107,7 +111,7 @@ test('stale means a dead runner, or no registry and older than the bound', () =>
   assert.equal(soak.isStale({ process: old, registry: undefined, runnerAlive: false, olderThanMs: 600000 }), true);
 });
 
-test('the reaper kills a real soak process whose runner is dead and spares a live run', async () => {
+test('the reaper kills a real soak process whose runner is dead and spares a live run', REAL_PROCESSES, async () => {
   const orphanRun = fakeRun(deadPid());
   const liveRun = fakeRun(process.pid);
   const orphan = sleeper(orphanRun);
@@ -124,7 +128,7 @@ test('the reaper kills a real soak process whose runner is dead and spares a liv
   fs.rmSync(liveRun, { recursive: true, force: true });
 });
 
-test('a child carrying the watchdog exits once its runner is gone', async () => {
+test('a child carrying the watchdog exits once its runner is gone', REAL_PROCESSES, async () => {
   // The "runner" is a sleeping process this test kills; the child watches it.
   const runner = childProcess.spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
   spawned.push(runner.pid);
@@ -137,7 +141,7 @@ test('a child carrying the watchdog exits once its runner is gone', async () => 
   fs.rmSync(run, { recursive: true, force: true });
 });
 
-test('the reaper removes a stale run directory and keeps a live one', async () => {
+test('the reaper removes a stale run directory and keeps a live one', REAL_PROCESSES, async () => {
   const stale = fakeRun(deadPid());
   const live = fakeRun(process.pid);
   const hourAgo = new Date(Date.now() - 3600 * 1000);

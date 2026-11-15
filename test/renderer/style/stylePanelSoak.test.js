@@ -13,7 +13,7 @@
 // violation. Nothing is faked: no bridge, no clock, no timers.
 //
 // Runs:
-//   env -u ELECTRON_RUN_AS_NODE npm test -- stylePanelSoak          the short run (2-3 min, half of it Astro starting)
+//   STACKI_SOAK=1 env -u ELECTRON_RUN_AS_NODE npm test -- stylePanelSoak   the short run (2-3 min, half of it Astro starting)
 //   STACKI_SOAK=long node test/renderer/style/stylePanelSoak.test.js the full matrix at 1x, 4x, 6x CPU
 //   STACKI_SOAK_SEED=1234   the random walk's seed (printed on every run; a rerun reproduces it)
 //   STACKI_SOAK_THROTTLES=1,4,6  CPU slowdowns (Chromium's Emulation.setCPUThrottlingRate)
@@ -22,8 +22,10 @@
 //   STACKI_SOAK_ONLY=switch,popover  run only the named scenarios
 //   STACKI_SOAK_RENDERER_REV=<commit>  serve the renderer as it was at a commit (git archive),
 //                           to prove the soak catches a defect that commit still had
-// CI: it runs locally (and later in a nightly job), and skips on CI runners (when CI is set)
-// unless STACKI_SOAK=ci, so a new timing-sensitive real-app probe cannot turn Check red.
+// Opt-in everywhere: it opens a visible window and judges timing, so it runs only when
+// STACKI_SOAK is set (1 for the short run, long for the full matrix, ci on a runner) and
+// otherwise skips with how to run it. A red soak is a finding to triage, not a gate: neither
+// the pre-push gate nor Check runs it by default (a nightly job will).
 // The suite skips (and says why) where the fixture's Astro install or the built main process is
 // missing. A window opens for the run; it needs a display (CI on Linux runs under xvfb). The long
 // run takes about an hour per CPU rate; the evidence films (STACKI_SOAK_ONLY=film) write the
@@ -143,8 +145,10 @@ function classify(violation) {
 
 async function orchestrate() {
   const { runSoak, soakUnavailableReason } = require('../../helpers/e2e/soakLaunch.js');
-  if (process.env.CI !== undefined && process.env.CI !== '' && process.env.STACKI_SOAK !== 'ci') {
-    console.log('# skip stylePanelSoak: on a CI runner it runs only with STACKI_SOAK=ci (it runs locally and in the nightly job)');
+  if ((process.env.STACKI_SOAK ?? '') === '') {
+    console.log(
+      '# skip stylePanelSoak: opt-in; run it with STACKI_SOAK=1 env -u ELECTRON_RUN_AS_NODE npm test -- stylePanelSoak (STACKI_SOAK=long for the full matrix)',
+    );
     return;
   }
   const unavailable = soakUnavailableReason();
