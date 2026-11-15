@@ -203,6 +203,27 @@ const ALLOWED: Readonly<Record<string, Readonly<Record<string, Allowed>>>> = {
   'electron/project/thumbs.ts': {
     writeFileSync: { count: 2, reason: 'project thumbnails in userData' },
   },
+  // App state in userData, never in a project: the window's bounds and the boot snapshot of recent projects.
+  'electron/app/windowStateStore.ts': {
+    writeFileSync: { count: 1, reason: "the temporary copy of the window's saved bounds in userData" },
+    renameSync: { count: 1, reason: 'puts that bounds file in place whole (atomic save)' },
+  },
+  'electron/boot/bootStore.ts': {
+    writeFileSync: { count: 1, reason: 'the temporary copy of the boot snapshot (recent projects) in userData' },
+    renameSync: { count: 1, reason: 'puts that boot snapshot in place whole (atomic save)' },
+  },
+  // The EmDash installer scaffolds project configuration, not website documents: the Astro
+  // integration config it merges into, the live collections config it creates, and the ignore
+  // rules it appends. The merge is verified after it lands and the original is put back when it fails.
+  'electron/handlers/emdashInstall.ts': {
+    writeFileSync: {
+      count: 3,
+      reason:
+        'the exclusive temporary copy of the merged Astro config, its restore of the original when the merge fails the check, and the new live config file',
+    },
+    renameSync: { count: 1, reason: 'puts the merged Astro config in place whole (atomic save)' },
+    appendFileSync: { count: 1, reason: 'the ignore rules of EmDash appended to .gitignore; never a page, chunk or stylesheet' },
+  },
 };
 
 function sources(directory: string): readonly string[] {

@@ -71,6 +71,28 @@ function registerPageReadHandlers({ ipcMain, documents, noteAppWrite }: Pick<Mai
     const code = edit.tag === 'code-patch';
     const gone = code ? ('merge-conflict' as const) : ('anchor-moved' as const);
     const stated = { authoredChecksum, gone };
+    if (edit.tag === 'revert' && edit.hunks.length === 0) {
+      // Undo of an edit that wrote nothing (a move onto the place the node already had answers an
+      // empty inverse): there is nothing to restore, so the page is answered as it is, written
+      // not at all. An intent needs a hunk to name, so this never reaches the actor's planner.
+      const disk = documents.current(pagePath);
+      if (!disk.ok) {
+        return {
+          ok: false as const,
+          error: pageEditError(pagePath, { tag: 'rejected', reason: 'write-failed', message: disk.error.message, diskChecksum: undefined }),
+        };
+      }
+      if (disk.value.checksum !== authoredChecksum) {
+        const reason = 'region-externally-modified' as const;
+        return {
+          ok: false as const,
+          error: pageEditError(pagePath, { tag: 'rejected', reason, message: describeRejection(reason), diskChecksum: disk.value.checksum }),
+        };
+      }
+      const unchanged = decodeUtf8(disk.value.bytes);
+      assert(unchanged.ok, 'The actor holds UTF-8 page bytes');
+      return { ok: true as const, ...parsePageSource(pagePath, unchanged.value), checksum: disk.value.checksum, inverse: [] };
+    }
     const report = documents.submitEdit(pagePath, stated, (base) => buildEdit(edit, base));
     if (report.tag !== 'applied') {
       return { ok: false as const, error: pageEditError(pagePath, report) };
