@@ -5,7 +5,9 @@ import { useEffect, useRef } from 'react';
 import type { SyncFile, SyncFileKind } from '../../../shared/properties/breakpointSyncPlan';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
-import { ChevronDownIcon, ChevronRightIcon, ExternalIcon } from '../../ui/Icons';
+import type { ComponentType } from 'react';
+import type { IconProps } from '../../ui/Icons';
+import { ChevronDownIcon, ChevronRightIcon, CodeIcon, ComponentIcon, DropletIcon, ExternalIcon, FileIcon } from '../../ui/Icons';
 import { fileCheck, middleEllipsis, placeKey, placeLabel, type CheckedPlaces } from '../../../shared/properties/breakpointSyncSelection';
 import './breakpointSyncDialog.css';
 
@@ -18,6 +20,17 @@ const KIND_LABELS: Readonly<Record<SyncFileKind, MessageKey>> = {
   page: 'settings.breakpoints.sync.kind.page',
   component: 'settings.breakpoints.sync.kind.component',
 };
+
+// The icon of each kind of file, the ones the app already uses for it: a component is the green cube of the Navigator and the Components
+// panel, a page is the Pages panel's file, a stylesheet has no icon of its own so it wears the generic code one, and an HTML file with a
+// `<style>` tag wears the Style panel's droplet. A place inside a page, a component or an HTML file is a `<style>` tag, marked the same way.
+const KIND_ICONS: Readonly<Record<SyncFileKind, ComponentType<IconProps>>> = {
+  css: CodeIcon,
+  style: DropletIcon,
+  page: FileIcon,
+  component: ComponentIcon,
+};
+const KIND_ICON_PX = 14;
 
 const FLAG_LABELS = {
   notSynced: 'settings.breakpoints.sync.notSynced',
@@ -63,7 +76,7 @@ export function SyncFileRow(props: {
           aria-label={translate('settings.breakpoints.sync.checkFile', { file: props.file.rel })}
           onChange={props.onCheckFile}
         />
-        <span className="breakpoint-sync-pill">{translate(KIND_LABELS[props.file.kind])}</span>
+        <KindIcon kind={props.file.kind} />
         <span className="breakpoint-sync-path" title={props.file.rel}>
           {middleEllipsis(props.file.rel, PATH_CHARS_MAX)}
         </span>
@@ -92,6 +105,11 @@ export function SyncFileRow(props: {
                   aria-label={translate('settings.breakpoints.sync.checkPlace', { line: place.line })}
                   onChange={() => props.onCheckPlace(place)}
                 />
+                {props.file.kind !== 'css' && (
+                  <span className="breakpoint-sync-style-tag" role="img" data-tooltip={translate(KIND_LABELS.style)} aria-label={translate(KIND_LABELS.style)}>
+                    <DropletIcon size={11} />
+                  </span>
+                )}
                 <span className="breakpoint-sync-line">{translate('settings.breakpoints.sync.line', { line: place.line })}</span>
                 <span className="breakpoint-sync-change">
                   <code className="breakpoint-sync-before">{place.beforeText}</code>
@@ -104,5 +122,17 @@ export function SyncFileRow(props: {
         </ul>
       )}
     </div>
+  );
+}
+
+// A file's kind as an icon in a column of fixed width, so the paths line up; the kind's words are its tooltip and its label.
+function KindIcon(props: { readonly kind: SyncFileKind }) {
+  const translate = useTranslate();
+  const Icon = KIND_ICONS[props.kind];
+  const label = translate(KIND_LABELS[props.kind]);
+  return (
+    <span className="breakpoint-sync-kind" data-kind={props.kind} role="img" data-tooltip={label} aria-label={label}>
+      <Icon size={KIND_ICON_PX} />
+    </span>
   );
 }

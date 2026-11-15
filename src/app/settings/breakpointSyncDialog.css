@@ -70,7 +70,6 @@
 .breakpoint-sync-open:hover {
   background: rgba(255, 255, 255, 0.07);
 }
-.breakpoint-sync-pill,
 .breakpoint-sync-flag {
   flex: none;
   padding: 1px 8px;
@@ -164,4 +163,25 @@
 }
 .breakpoint-sync-link:focus-visible {
   outline: 2px solid var(--accent);
+}
+
+/* A file's kind is an icon in a column of its own, centered on the path's line. */
+.breakpoint-sync-kind {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  color: var(--text-faint);
+}
+.breakpoint-sync-kind[data-kind='component'] {
+  color: var(--component-green);
+}
+.breakpoint-sync-style-tag {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 14px;
+  height: 18px;
+  color: var(--text-faint);
 }

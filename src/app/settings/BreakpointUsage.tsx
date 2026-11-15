@@ -16,7 +16,7 @@ import {
   type PlaceChoice,
 } from '../../../shared/properties/breakpointSyncSelection';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import { ChevronDownIcon, ChevronRightIcon } from '../../ui/Icons';
+import { ChevronRightIcon } from '../../ui/Icons';
 import { Skeleton } from '../../ui/Skeleton';
 import { SyncFileRow } from './SyncFileRows';
 import type { UsageState } from './useBreakpointUsage';
@@ -71,20 +71,24 @@ export function BreakpointUsageLine(props: LineProps) {
       : props.pending
         ? `${translate('settings.breakpoints.usage.willPlaces', { count: will.places })} ${translate('settings.breakpoints.usage.inFiles', { count: will.files })}`
         : `${translate('settings.breakpoints.usage.places', { count: found.places })} · ${translate('settings.breakpoints.usage.files', { count: found.files })}`;
+  const text = <span className="breakpoints-usage-line">{line}</span>;
   return (
     <span className="breakpoints-usage">
-      <span className="breakpoints-usage-line">{line}</span>
-      {found.places > 0 && (
+      {found.places > 0 ? (
+        // The whole line is the disclosure: its text and its chevron, on one line, centered on each other.
         <button
           type="button"
           className="breakpoints-usage-toggle"
           aria-expanded={props.expanded}
-          aria-label={translate('settings.breakpoints.usage.expand', { name: props.name })}
-          data-tooltip={translate('settings.breakpoints.usage.expand', { name: props.name })}
+          aria-controls={`breakpoints-usage-list-${props.id}`}
+          aria-label={`${translate('settings.breakpoints.usage.expand', { name: props.name })}: ${line}`}
           onClick={props.onExpand}
         >
-          {props.expanded ? <ChevronDownIcon size={12} /> : <ChevronRightIcon size={12} />}
+          {text}
+          <ChevronRightIcon size={12} className="breakpoints-usage-chevron" />
         </button>
+      ) : (
+        text
       )}
       {props.state.problem !== undefined && (
         <span className="breakpoints-usage-problem">{translate('settings.breakpoints.usage.problem', { message: props.state.problem })}</span>
@@ -113,7 +117,7 @@ export function BreakpointUsageList(props: ListProps) {
   };
   const all = new Set(files.flatMap((file) => file.occurrences.map((place) => placeKey(file.rel, place.locator))));
   return (
-    <div className="breakpoints-usage-list">
+    <div className="breakpoints-usage-list" id={`breakpoints-usage-list-${props.id}`}>
       <div className="breakpoint-sync-bar">
         <button type="button" disabled={!props.editable} onClick={() => void choose(all)}>
           {translate('settings.breakpoints.sync.all')}

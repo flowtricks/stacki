@@ -239,7 +239,7 @@ test('a changed number scans, opens the dialog with the count, and writes nothin
   assert.equal(title(), 'Update 4 media queries?');
   assert.equal(calls.apply.length, 0, 'nothing is written before the primary button');
   assert.deepEqual(
-    rows().map((row) => row.querySelector('.breakpoint-sync-pill').textContent),
+    rows().map((row) => row.querySelector('.breakpoint-sync-kind').getAttribute('aria-label')),
     ['CSS file', 'Page', 'Component'],
   );
   const boxes = rows().map((row) => row.querySelector('.breakpoint-sync-row input'));
@@ -437,7 +437,7 @@ test('the chevron opens the files of one card: kind pills, paths, counts, boxes;
   const rows = [...list.querySelectorAll('.breakpoint-sync-file')];
   assert.deepEqual(
     rows.map((row) => [
-      row.querySelector('.breakpoint-sync-pill').textContent,
+      row.querySelector('.breakpoint-sync-kind').getAttribute('aria-label'),
       row.querySelector('.breakpoint-sync-path').getAttribute('title'),
       row.querySelector('.breakpoint-sync-count').textContent,
     ]),
