@@ -3126,6 +3126,33 @@ export const plug = {
   ),
 };
 
+export const macbookAir = {
+  name: 'macbookAir',
+  // Figma variant 9136:30931 (file ZzsjnrZ9Xq5MxLHjuvrYLm, central-icon-system-v1.35; component set 9136:30866).
+  compact: (
+    <>
+      <path
+        d="M21.25 13.75V6.75C21.25 5.64543 20.3546 4.75 19.25 4.75H4.75C3.64543 4.75 2.75 5.64543 2.75 6.75V13.75M1.75 16.75V18.25C1.75 18.8023 2.19772 19.25 2.75 19.25H21.25C21.8023 19.25 22.25 18.8023 22.25 18.25V16.75H15.3165C15.1578 16.75 15.0014 16.7878 14.8601 16.8602L14.3149 17.1398C14.1736 17.2122 14.0172 17.25 13.8585 17.25H10.2212C10.0755 17.25 9.93155 17.2182 9.79945 17.1567L9.12555 16.8433C8.99345 16.7818 8.84951 16.75 8.70382 16.75H1.75Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  // Figma variant 9136:30971.
+  standard: (
+    <>
+      <path
+        d="M21.5 15.5V6.5C21.5 5.39543 20.6046 4.5 19.5 4.5H4.5C3.39543 4.5 2.5 5.39543 2.5 6.5V15.5M1.5 17.5V18.5C1.5 19.0523 1.94772 19.5 2.5 19.5H21.5C22.0523 19.5 22.5 19.0523 22.5 18.5V17.5H15L14 18H10L9 17.5H1.5Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+};
+
 export const mail = {
   name: 'mail',
   // Figma variant 5658:58223.

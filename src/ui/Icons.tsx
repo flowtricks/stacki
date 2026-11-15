@@ -28,6 +28,7 @@ import {
   copy as centralCopy,
   corner as centralCorner,
   database as centralDatabase,
+  macbookAir as centralMacbookAir,
   studioDisplay as centralStudioDisplay,
   drag as centralDrag,
   droplet as centralDroplet,
@@ -330,10 +331,8 @@ export const MinimizeIcon = centralIcon(centralCollapse);
 
 export const DesktopIcon = centralIcon(centralStudioDisplay);
 
-// TEMPORARY: Central's macbook-air outline is not in this repository yet (its Figma file could not be reached), and path data is
-// never drawn by hand (docs/central-icons.md). Until `macbookAir` is added to central/centralGeometry.tsx from its Figma variants,
-// the laptop device wears the desktop glyph. Swap this one line when the geometry lands.
-export const LaptopIcon = centralIcon(centralStudioDisplay);
+// Central's macbook-air: the Laptop device in the preview bar and in Settings > Breakpoints.
+export const LaptopIcon = centralIcon(centralMacbookAir);
 
 export const TabletIcon = centralIcon(centralTablet);
 

@@ -32,6 +32,8 @@ export { BreakpointsSettings } from './src/app/settings/BreakpointsSettings';
 export { breakpointsStore, forgetBreakpointStores } from './src/ipc/projectBreakpoints';
 export { useProjectBreakpoints } from './src/ipc/useProjectBreakpoints';
 export { baseCanvasTarget } from './src/features/style/model/baseWidth';
+export { macbookAir } from './src/ui/central/centralGeometry';
+export { DesktopIcon, LaptopIcon } from './src/ui/Icons';
 export { serializeBreakpoints, BREAKPOINT_DEFAULTS, BREAKPOINT_DEFAULT_SETTINGS } from './shared/properties/projectBreakpoints';`,
     resolveDir: ROOT,
     loader: 'ts',
@@ -275,6 +277,24 @@ test('each card leads with the preview bar icon for its device, in a tile, with 
   });
   assert.equal(rowText('Tablet'), 'Matches width < 1000px');
   root.unmount();
+});
+
+test('the Laptop icon is Central macbook-air, drawn differently from Desktop, in both variants', () => {
+  const api = require(output);
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const pathsOf = (Icon, size) => [...renderToStaticMarkup(React.createElement(Icon, { size })).matchAll(/ d="([^"]+)"/g)].map((match) => match[1]);
+  assert.ok(api.macbookAir.compact, 'the 1.5 stroke variant exists');
+  assert.ok(api.macbookAir.standard, 'the 1 stroke variant exists');
+  for (const size of [13, 16, 20]) {
+    const laptop = pathsOf(api.LaptopIcon, size);
+    const desktop = pathsOf(api.DesktopIcon, size);
+    assert.ok(laptop.length > 0 && desktop.length > 0, `both draw paths at ${size}px`);
+    assert.notDeepEqual(laptop, desktop, `Laptop is not the Desktop glyph at ${size}px`);
+  }
+  assert.ok(
+    pathsOf(api.LaptopIcon, 13).some((pathData) => pathData.startsWith('M21.25 13.75V6.75')),
+    'the compact outline is the Figma variant 9136:30931',
+  );
 });
 
 test('the cards and the first section have their spacing in the stylesheets', () => {
