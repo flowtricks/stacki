@@ -105,16 +105,54 @@ const KNOWN_FAILURES = Object.freeze([
     id: 'SP-05',
     title: 'a variable-picker hover preview sticks after leaving by window blur or scroll',
     invariant: 'preview-stuck',
-    pattern: /after hover and (window-blur|scroll)/,
+    pattern: /after hover and (window-blur|scroll|tab)/,
     cause:
       'src/features/style/pickerExit.ts: the exits restore on visibility "hidden" and on scrolls the picker hears, not on window blur or the panel scroller',
   },
   {
+    id: 'SP-09',
+    title: 'hovering variable-picker rows writes the hovered variable into the CSS file; leaving writes the old one back',
+    invariant: 'source-written',
+    pattern: /(hover .* picker rows|picker by|hover picker row)/,
+    cause:
+      'the hover preview goes through the write path (VariableConnect preview / liveSetProp) instead of a canvas-only draft; see VariablePicker useHoverPreview',
+  },
+  {
+    id: 'SP-10',
+    title: 'the variable picker opens over its own chip: a quick second press on the chip picks a row and writes it',
+    invariant: 'source-written',
+    pattern: /^rapid toggle/,
+    cause: 'picker placement lets the list cover the anchor (VariablePicker / LayerPopover positioning)',
+  },
+  {
+    id: 'SP-10',
+    title: 'rapid presses on a chip leave the picker open (a press landed on the picker, not the chip)',
+    invariant: 'toggle-parity',
+    pattern: /presses left/,
+    cause: 'as SP-10',
+  },
+  {
+    id: 'SP-12',
+    title: 'rows move under the pointer on a switch: the panel keeps scrollTop while the content above changes height',
+    invariant: 'scroll-jump',
+    pattern: /panel scroll jumped/,
+    cause: 'no scroll anchoring across a switch: sections above Typography (Layout, Flex child, header chips) differ per element',
+  },
+  {
+    id: 'SP-13',
+    title: 'spacing box values move by about 1.5 px when its editor opens or a switch lands',
+    invariant: 'layout-shift',
+    pattern: /moved/,
+    cause: 'src/features/style/SpacingSection.tsx / SpacingBox.tsx: label boxes resize with their text',
+  },
+  {
     id: 'SP-06',
-    title: 'after undo or redo the field and its label show the previous step while canvas and file show the new one',
+    title:
+      'the panel is one write behind its own edits to a page <style is:global>: after a set the label stays unset (so Clear cannot reach it), after undo and redo the field and label show the previous step',
     invariant: 'state-disagrees',
-    pattern: /after (undo|redo)/,
-    cause: 'the panel reads its field state from a scan the history step does not refresh',
+    pattern: /after (clear|undo|redo)/,
+    cause:
+      "the resolved model re-reads the page's style block one edit late (useStyleFiles readAstroStyleFiles for the open page vs the page:edit write); canvas and file are right, the panel is not",
   },
 ]);
 

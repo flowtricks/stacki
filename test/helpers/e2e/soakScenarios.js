@@ -227,19 +227,20 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
   }
 
   // One action, recorded from just before it until the panel settles, then checked.
-  async function segment(label, kind, act, { holdMs = 0 } = {}) {
+  async function segment(label, kind, act, { holdMs = 0, editedKey } = {}) {
     step += 1;
     await driver.settle();
     await readRecording(driver.contents);
     const before = await driver.evaluate('window.__soak.snapshot()');
-    const filesBefore = kind === 'look' ? driver.projectSnapshot() : undefined;
+    // Looking, hovering and closing never write; a hover preview is a draft, never a save.
+    const filesBefore = kind === 'look' || kind === 'preview' ? driver.projectSnapshot() : undefined;
     const actResult = await act();
     if (holdMs > 0) {
       await driver.sleep(holdMs);
     }
     const settled = await driver.settle();
     const recording = await readRecording(driver.contents);
-    const recorded = { action: { label, kind }, before, ...recording };
+    const recorded = { action: { label, kind, editedKey }, before, ...recording };
     const { violations, warnings } = checkSegment(recorded);
     if (filesBefore !== undefined) {
       const changes = fileChanges(filesBefore, driver.projectSnapshot());
@@ -653,7 +654,8 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
         async () => {
           await driver.pointerPress(fieldPoint, { label: `press ${family.id} field` });
           await driver.sleep(80);
-          await driver.menu('selectAll', 'select all');
+          // The field starts empty (each cycle picks an unset property), so nothing to select first.
+
           await driver.typeText(value);
           await driver.key('Enter', { label: 'key Enter' });
         },
@@ -674,7 +676,7 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     ];
     const readings = { base };
     for (const [label, act, expected, declares] of stages) {
-      await segment(label, 'edit', act);
+      await segment(label, 'edit', act, { editedKey: family.key });
       const stage = label.split(' ')[0];
       const reading = await read();
       readings[stage] = reading;
@@ -755,16 +757,21 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
       results.skipped.push({ scenario, action: `type ${family.id}`, why: 'field not found' });
       return;
     }
-    await segment(`type ${typed} + ArrowUp x3 in ${family.id}`, 'edit', async () => {
-      await driver.pointerPress(point, { label: `press ${family.id} field` });
-      await driver.sleep(60);
-      await driver.menu('selectAll', 'select all');
-      await driver.typeText(typed);
-      for (let press = 0; press < 3; press += 1) {
-        await driver.key('Up', { label: 'key ArrowUp' });
-        await driver.sleep(30);
-      }
-    });
+    await segment(
+      `type ${typed} + ArrowUp x3 in ${family.id}`,
+      'edit',
+      async () => {
+        await driver.pointerPress(point, { label: `press ${family.id} field` });
+        await driver.sleep(60);
+        await driver.menu('selectAll', 'select all');
+        await driver.typeText(typed);
+        for (let press = 0; press < 3; press += 1) {
+          await driver.key('Up', { label: 'key ArrowUp' });
+          await driver.sleep(30);
+        }
+      },
+      { editedKey: family.key },
+    );
     await segment(`switch ${element}->${other} mid-edit`, 'switch', () => select(other, 'canvas'));
     const otherStyleAfter = await canvasStyle(family.property);
     if (otherStyleAfter !== otherStyleBefore) {

@@ -113,6 +113,10 @@ function stateViolations(segment) {
   const full = frames.filter((frame) => Object.keys(frame.controls ?? {}).length >= 3);
   const transitionFrames = new Set();
   for (const key of controlKeys(full)) {
+    // The field being typed into shows each keystroke: those states are the person's own.
+    if (key === segment.action.editedKey) {
+      continue;
+    }
     const before = controlValue(segment.before.controls?.[key]);
     const settled = controlValue(finalFrame.controls?.[key]);
     let reachedSettled = false;
