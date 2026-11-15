@@ -65,13 +65,26 @@ export function setDeclOnRule(rule: Rule, prop: string, declared: DeclarationVal
 export const STYLE_OPEN = /<style\b[^>]*>/gi;
 export const STYLE_CLOSE = '</style>';
 
-/** Locate every `<style>...</style>` region and capture its inner CSS + offsets. */
+/**
+ * Locate every `<style>...</style>` region and capture its inner CSS + offsets. Only the
+ * markup is searched: a `<style` written in a component's frontmatter (a comment, a string)
+ * or inside an HTML comment is text, not a tag. Read as a tag, it swallowed the real block
+ * after it into one region that did not parse, and every rule in that block went unoffered
+ * (SP-14: a component's own `<style is:global>` class got no chip).
+ */
 export function extractStyleRegions(code: string): StyleRegion[] {
   const regions: StyleRegion[] = [];
   const lower = code.toLowerCase();
-  STYLE_OPEN.lastIndex = 0;
+  const comments = htmlCommentRanges(lower);
+  STYLE_OPEN.lastIndex = frontmatterEnd(code);
   // A global regex advances `lastIndex` on every match, so each tag is visited once.
   for (let match = STYLE_OPEN.exec(code); match !== null; match = STYLE_OPEN.exec(code)) {
+    const at = match.index;
+    const comment = comments.find((range) => range.start <= at && at < range.end);
+    if (comment !== undefined) {
+      STYLE_OPEN.lastIndex = comment.end;
+      continue;
+    }
     const innerStart = match.index + match[0].length;
     const closeIndex = lower.indexOf(STYLE_CLOSE, innerStart);
     if (closeIndex === -1) {
@@ -87,6 +100,44 @@ export function extractStyleRegions(code: string): StyleRegion[] {
     STYLE_OPEN.lastIndex = closeIndex + STYLE_CLOSE.length;
   }
   return regions;
+}
+
+// An Astro file's frontmatter: a `---` fence on the first line, closed by the next line that
+// is `---`. The offset just past the closing fence, or 0 when the file has none (a stylesheet,
+// an embed) or the fence never closes.
+const FRONTMATTER_OPEN = /^\uFEFF?[ \t]*---[ \t]*\r?\n/;
+const FRONTMATTER_CLOSE = /^[ \t]*---[ \t]*$/m;
+export function frontmatterEnd(code: string): number {
+  const open = FRONTMATTER_OPEN.exec(code);
+  if (open === null) {
+    return 0;
+  }
+  const rest = code.slice(open[0].length);
+  const close = FRONTMATTER_CLOSE.exec(rest);
+  if (close === null) {
+    return 0;
+  }
+  const end = open[0].length + close.index + close[0].length;
+  assert(end <= code.length, 'frontmatterEnd: the fence ends inside the file');
+  return end;
+}
+
+// The `<!-- … -->` comments of lowercased markup, as offsets. At most one per four characters
+// of text, so the walk is bounded by the text's length.
+function htmlCommentRanges(lower: string): { readonly start: number; readonly end: number }[] {
+  const ranges: { start: number; end: number }[] = [];
+  const rangesMax = Math.ceil(lower.length / 4);
+  for (let start = lower.indexOf('<!--'); start !== -1 && ranges.length < rangesMax; start = lower.indexOf('<!--', start + 4)) {
+    const close = lower.indexOf('-->', start + 4);
+    const end = close === -1 ? lower.length : close + 3;
+    ranges.push({ start, end });
+    if (close === -1) {
+      break;
+    }
+    start = end - 4;
+  }
+  assert(ranges.length <= rangesMax, 'htmlCommentRanges: bounded by the text');
+  return ranges;
 }
 
 /** Parse a region's CSS into a postcss Root, recording any parse error. Returns the
