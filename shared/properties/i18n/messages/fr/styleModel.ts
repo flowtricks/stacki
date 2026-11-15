@@ -217,8 +217,8 @@ export const messages = {
   'styleModel.embed.picker.kind.tag': 'balise',
   'styleModel.embed.picker.suggestions': 'Suggestions de sélecteurs',
   'styleModel.embed.query.add': 'Ajouter',
-  'styleModel.embed.query.mobileFirst': 'Mobile first',
-  'styleModel.embed.query.desktopFirst': 'Desktop first',
+  'styleModel.embed.query.mobileFirst': 'Mobile first', // same
+  'styleModel.embed.query.desktopFirst': 'Desktop first', // same
   'styleModel.embed.query.direction': 'Sens de la requête',
   'styleModel.embed.query.breakpoints': 'Points d’arrêt',
   'styleModel.embed.query.alreadyAdded': 'Déjà ajoutée',

@@ -215,10 +215,10 @@ export const messages = {
   'styleModel.embed.picker.kind.tag': 'Tag',
   'styleModel.embed.picker.suggestions': 'Selektorvorschläge',
   'styleModel.embed.query.add': 'Hinzufügen',
-  'styleModel.embed.query.mobileFirst': 'Mobile first',
-  'styleModel.embed.query.desktopFirst': 'Desktop first',
+  'styleModel.embed.query.mobileFirst': 'Mobile first', // same
+  'styleModel.embed.query.desktopFirst': 'Desktop first', // same
   'styleModel.embed.query.direction': 'Richtung der Abfrage',
-  'styleModel.embed.query.breakpoints': 'Breakpoints',
+  'styleModel.embed.query.breakpoints': 'Breakpoints', // same
   'styleModel.embed.query.alreadyAdded': 'Bereits hinzugefügt',
   'styleModel.embed.query.custom': 'Eigener Wert',
   'styleModel.embed.query.customPlaceholder': '40rem oder 1100px',

@@ -5,7 +5,7 @@
 // its options re-render, The list is flat (no group cards), rows are
 // 32px, every row ends in the same 16px check slot, left and right insets match when nothing
 // scrolls, the trigger is one line, and the typical list (Base, three width queries, an Other section, Add
-// query) fits in about 300px without a scrollbar. The cap is 36rem (80vh), shrinking to the room.
+// query) fits in about 360px without a scrollbar. The cap is 36rem (80vh), shrinking to the room.
 //
 // Method: layout is a browser question, so this runs in a real Electron window (the pattern of
 // popoverDropdown.test.js; skipped without Electron). It mounts the real Select with rows shaped as
@@ -36,7 +36,8 @@ const check = (what, condition, detail) => {
     import { createRoot } from 'react-dom/client'
     import Select from './src/features/style/components/Select'
     import { deviceIcon, WidthIcon } from './src/features/style/embed/breakpointIcons'
-    import { PinIcon, ChevronDownIcon } from './src/ui/Icons'
+    import { PinIcon, ChevronDownIcon, FilterIcon } from './src/ui/Icons'
+    import { EmbedIcon, ComponentIcon } from './src/features/style/embed/EditorBasics'
     import './src/features/style/tokens.css'
     import './src/features/style/utilities.css'
     import './src/features/style/embedEditor.css'
@@ -45,8 +46,8 @@ const check = (what, condition, detail) => {
     const build = (rev, shape, pinned) => {
       const options = [{ value: '__follow', label: 'Follow canvas size', icon: <PinIcon />, header: true, switch: true, checked: !pinned }]
       options.push({ value: '', label: 'Base', icon: <WidthIcon /> })
-      const heading = (value, label) => ({ value, label, heading: true })
-      options.push(heading('g0', '.grid'))
+      const heading = (value, label) => ({ value, label, heading: true, icon: <EmbedIcon /> })
+      options.push({ value: 'g0', label: '.grid', heading: true, tag: { label: 'Grid', icon: <ComponentIcon />, tone: 'component' } })
       const rows = [['≥ 64rem', 'w0'], ['≥ 48rem', 'w1'], ['≥ 30rem', 'w2']]
       for (const [label, value] of rows) {
         options.push({ value, label, title: '@media (width ' + label + ')', icon: <WidthIcon />, marked: true, action: pencil, ...(value === 'w0' ? { triggerPrefix: 'Grid .grid' } : {}) })
@@ -58,7 +59,7 @@ const check = (what, condition, detail) => {
           options.push({ value: 'k' + g, label: 'Tablet', detail: '< 48rem', icon: deviceIcon('tablet'), marked: true })
         }
       }
-      options.push(heading('other', 'Other'))
+      options.push({ value: 'other', label: 'Other', heading: true, icon: <FilterIcon /> })
       options.push({ value: 'o1', label: '@media (prefers-reduced-motion: reduce)', subline: ['*, ::before, ::after'], marked: true })
       options.push({ value: '__add', label: 'Add query', footer: true })
       return options
@@ -167,7 +168,7 @@ const check = (what, condition, detail) => {
          await js("document.querySelector('.u-select-button').click(); true");
          await pollUntil({ what: 'list open again', read: () => js("document.querySelector('.u-select-list') !== null"), until: (open) => open });
          await settled('menu opened again');
-         return js(\`(() => { const r = window.__q.rects(); const l = document.querySelector('.u-select-list').getBoundingClientRect(); const inset = (el) => { const e = el.getBoundingClientRect(), p = document.querySelector('.u-select-list').getBoundingClientRect(); return { left: e.left - p.left, right: p.right - e.right } }; return { ...r, base: inset(document.querySelector('.u-select-list [role=option]')), second: inset(document.querySelectorAll('.u-select-scroll [role=option]')[1]), rowHeight: document.querySelectorAll('.u-select-scroll [role=option]')[0].offsetHeight, checkWidths: [...document.querySelectorAll('.u-select-list [role=option] .u-select-check')].map((c) => c.offsetWidth), cards: document.querySelectorAll('.u-select-group').length, headerOutside: document.querySelector('.u-select-header') !== null && !document.querySelector('.u-select-scroll').contains(document.querySelector('.u-select-header')), trigger: (() => { const t = document.querySelector('.u-select-button').getBoundingClientRect(); return { height: t.height, oneLine: document.querySelector('.u-select-button .has-prefix') !== null && document.querySelector('.u-select-button .has-overline') === null } })(), dotTitles: [...document.querySelectorAll('.u-select-dot')].every((d) => d.title === 'Has styles here' && d.getAttribute('aria-label') === 'Has styles here'), maxHeight: getComputedStyle(document.querySelector('.u-select-list')).maxHeight, windowHeight: window.innerHeight, listTopNow: l.top, listBottomNow: l.bottom } })()\`);
+         return js(\`(() => { const r = window.__q.rects(); const l = document.querySelector('.u-select-list').getBoundingClientRect(); const inset = (el) => { const e = el.getBoundingClientRect(), p = document.querySelector('.u-select-list').getBoundingClientRect(); return { left: e.left - p.left, right: p.right - e.right } }; return { ...r, base: inset(document.querySelector('.u-select-list [role=option]')), second: inset(document.querySelectorAll('.u-select-scroll [role=option]')[1]), rowHeight: document.querySelectorAll('.u-select-scroll [role=option]')[0].offsetHeight, checkWidths: [...document.querySelectorAll('.u-select-list [role=option] .u-select-check')].map((c) => c.offsetWidth), cards: document.querySelectorAll('.u-select-group').length, headings: (() => { const scroll = document.querySelector('.u-select-scroll'); const firstIcon = scroll.querySelector('[role=option] .u-select-icon').getBoundingClientRect().left; return [...scroll.querySelectorAll('.u-select-heading')].map((h) => { const lead = (h.querySelector('.u-select-tag') ?? h.querySelector('.u-select-icon')).getBoundingClientRect(); const prev = h.previousElementSibling.getBoundingClientRect(); const next = h.nextElementSibling.getBoundingClientRect(); const box = h.getBoundingClientRect(); const rowIcon = (h.nextElementSibling.querySelector('.u-select-icon') ?? scroll.querySelector('[role=option] .u-select-icon')).getBoundingClientRect().left; return { text: h.textContent, height: h.offsetHeight, leadLeft: lead.left, rowIconLeft: rowIcon, firstIconLeft: firstIcon, above: box.top - prev.bottom, below: next.top - box.bottom, afterBase: h.previousElementSibling.getAttribute('role') === 'option' && h.previousElementSibling.textContent.startsWith('Base') } }) })(), headerOutside: document.querySelector('.u-select-header') !== null && !document.querySelector('.u-select-scroll').contains(document.querySelector('.u-select-header')), trigger: (() => { const t = document.querySelector('.u-select-button').getBoundingClientRect(); return { height: t.height, oneLine: document.querySelector('.u-select-button .has-prefix') !== null && document.querySelector('.u-select-button .has-overline') === null } })(), dotTitles: [...document.querySelectorAll('.u-select-dot')].every((d) => d.title === 'Has styles here' && d.getAttribute('aria-label') === 'Has styles here'), maxHeight: getComputedStyle(document.querySelector('.u-select-list')).maxHeight, windowHeight: window.innerHeight, listTopNow: l.top, listBottomNow: l.bottom } })()\`);
        };
        out.typical900 = await reopen(900, 'typical');
        out.long900 = await reopen(900, 'long');
@@ -221,6 +222,33 @@ const check = (what, condition, detail) => {
       JSON.stringify(out.typical900.base),
     );
     check('and so do its rows below the first', Math.abs(out.typical900.second.left - out.typical900.second.right) <= 1, JSON.stringify(out.typical900.second));
+    for (const [name, state] of [
+      ['typical', out.typical900],
+      ['long', out.long900],
+    ]) {
+      for (const heading of state.headings) {
+        check(`${name}: header "${heading.text}" is 28px tall`, Math.abs(heading.height - 28) <= 0.5, `${heading.height}`);
+        check(
+          `${name}: header "${heading.text}" starts exactly on the rows' icon column`,
+          Math.abs(heading.leadLeft - heading.rowIconLeft) <= 1 && Math.abs(heading.leadLeft - heading.firstIconLeft) <= 1,
+          JSON.stringify(heading),
+        );
+        check(
+          `${name}: header "${heading.text}" has ${heading.afterBase ? 16 : 12}px above and 4px below`,
+          Math.abs(heading.above - (heading.afterBase ? 16 : 12)) <= 1 && Math.abs(heading.below - 4) <= 1,
+          JSON.stringify(heading),
+        );
+      }
+    }
+    const grid = out.typical900.headings.find((heading) => heading.text.includes('.grid'));
+    const other = out.typical900.headings.find((heading) => heading.text.includes('Other'));
+    check('Other has the same height as the Grid header', Math.abs(grid.height - other.height) <= 0.5, JSON.stringify([grid.height, other.height]));
+    check('Other has the same left edge as the Grid header', Math.abs(grid.leadLeft - other.leadLeft) <= 1, JSON.stringify([grid.leadLeft, other.leadLeft]));
+    check(
+      'Other has the same spacing as the Grid header',
+      Math.abs(grid.below - other.below) <= 1 && Math.abs(grid.above - other.above - 4) <= 1,
+      JSON.stringify([grid.above, other.above]),
+    );
     check('the list is flat: no group cards', out.typical900.cards === 0, `${out.typical900.cards} cards`);
     check('the Follow canvas size strip is pinned outside the scrolling rows', out.typical900.headerOutside === true);
     check('rows are 32px', Math.abs(out.typical900.rowHeight - 32) <= 0.5, `${out.typical900.rowHeight}`);
@@ -235,7 +263,7 @@ const check = (what, condition, detail) => {
       JSON.stringify(out.typical900.trigger),
     );
     check('a dot says what it means, for the pointer and for a screen reader', out.typical900.dotTitles === true);
-    check('the typical list (with its Follow strip and Other section) fits in about 300px', out.typical900.listHeight <= 310, `${out.typical900.listHeight}`);
+    check('the typical list (with its Follow strip and Other section) fits in about 360px', out.typical900.listHeight <= 360, `${out.typical900.listHeight}`);
     check('the switch row toggles in place', out.switchStayedOpen === true);
     check('at the end the last group is fully visible above the footer', out.end.lastGroupBottom <= out.end.footerTop + 0.5, JSON.stringify(out.end));
     check('and fully visible inside the scroller', out.end.lastGroupBottom <= out.end.scrollerBottom + 0.5, JSON.stringify(out.end));

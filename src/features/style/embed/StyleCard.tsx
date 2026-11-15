@@ -9,7 +9,7 @@ import Select from '../components/Select';
 import type { SelectOption, SelectTag } from '../components/selectTypes';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { homeRoundDoor as centralHomeRoundDoor } from '../../../ui/central/centralGeometry';
-import { PinIcon } from '../../../ui/Icons';
+import { FilterIcon, PinIcon } from '../../../ui/Icons';
 import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
 import { breakpointLabel } from '../../../lib/breakpointLabel';
 import { iconFor } from '../../../../shared/properties/breakpointIcon';
@@ -245,7 +245,7 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
       placement === 'base' ? (
         <BaseContextIcon />
       ) : width === undefined ? (
-        breakpointIcon(styleContext.breakpoint ?? undefined)
+        (breakpointIcon(styleContext.breakpoint ?? undefined) ?? <FilterIcon />)
       ) : width.breakpoint === undefined ? (
         <WidthIcon />
       ) : (
@@ -300,7 +300,8 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
           value: `${GROUP_HEADING_PREFIX}${group.key.source ?? ''}\u0000${group.key.wrapper ?? ''}`,
           label,
           heading: true,
-          ...(group.key.wrapper === undefined || tag === undefined ? {} : { tag }),
+          // One header for every group: a component or file chip with its selector, or (no selector) the file's own icon and path.
+          ...(group.key.wrapper === undefined || tag === undefined ? (tag?.icon === undefined ? {} : { icon: tag.icon }) : { tag }),
         });
         for (const item of group.items) {
           options.push(optionFor(item.context, 'section'));
@@ -318,7 +319,7 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
   }
   // The queries that are not about width close the list as one plain section, labelled Other.
   if (otherRows.length > 0) {
-    options.push({ value: OTHER_HEADING, label: translate('styleModel.embed.card.other'), heading: true }, ...otherRows);
+    options.push({ value: OTHER_HEADING, label: translate('styleModel.embed.card.other'), heading: true, icon: <FilterIcon /> }, ...otherRows);
   }
   return (
     <Select

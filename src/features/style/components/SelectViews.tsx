@@ -383,7 +383,7 @@ export function SelectRow<T extends string>({
   const icon = present(option.icon) ? <span className="u-select-icon">{option.icon}</span> : undefined;
   if (option.heading) {
     return (
-      <div id={id} className="u-select-heading" role="presentation">
+      <div id={id} className={option.tag === undefined ? 'u-select-heading' : 'u-select-heading has-tag'} role="presentation">
         {icon}
         {option.tag === undefined ? undefined : <OptionTag tag={option.tag} />}
         <span className="u-select-heading-label" title={option.label}>

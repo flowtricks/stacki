@@ -4,7 +4,7 @@
 // Phone, Tablet and Laptop with their own icons, a custom `>= 40rem` keeps the neutral ruler, and
 // the closed trigger shows the official icon before the condition.
 // Method: a real Electron window (skipped without Electron) mounts ContextSwitcher with the rows a
-// Grid component's stylesheet produces, under the real tokens and stylesheets, opens it, and reads
+// Grid component's stylesheet and a global file produce (a custom width, a motion query), under the real tokens and stylesheets, opens it, and reads
 // each row's icon markup: the three breakpoint rows must differ from each other and from the ruler
 // row. Set STACKI_DROPDOWN_SHOTS=<directory> to save a screenshot (context-switcher-mobile-first.png).
 
@@ -34,18 +34,19 @@ const check = (what, condition, detail) => {
     import './src/features/style/embedEditor.css'
 
     const at = (value) => '@media (width >= ' + value + ')'
-    const context = (value) => ({ key: 'patterns.css\\u0000' + at(value), label: at(value), breakpoint: undefined, embedAtContext: at(value), source: 'patterns' })
+    const context = (value, source = 'patterns') => ({ key: source + '.css\\u0000' + at(value), label: at(value), breakpoint: undefined, embedAtContext: at(value), source })
+    const motion = { key: 'base.css\\u0000motion', label: '@media (prefers-reduced-motion: reduce)', breakpoint: undefined, embedAtContext: '@media (prefers-reduced-motion: reduce)', source: 'base' }
     const contexts = [
       { key: '', label: 'Base', breakpoint: 'main', embedAtContext: '' },
-      context('64rem'), context('48rem'), context('30rem'), context('40rem'),
+      context('64rem'), context('48rem'), context('30rem'), context('40rem'), context('80rem', 'base'), motion,
     ]
-    const infos = contexts.map((c) => ({ key: c.key, wrapper: c.key === '' ? undefined : '.grid', hasStyles: c.key !== '' }))
+    const infos = contexts.map((c) => ({ key: c.key, wrapper: c.source === 'base' || c.key === '' ? undefined : '.grid', hasStyles: c.key !== '', ...(c === motion ? { querySelectors: ['*, ::before, ::after'] } : {}) }))
 
     function Harness() {
       const [value, setValue] = useState(contexts[1].key)
       const card = {
         contexts, contextInfos: infos, context: value, onContext: setValue, queryUses: new Map(),
-        sourceOptions: [{ value: 'patterns', label: 'patterns.css', fromComponent: true }], sourceValue: 'patterns',
+        sourceOptions: [{ value: 'patterns', label: 'patterns.css', fromComponent: true }, { value: 'base', label: 'src/styles/base.css', fromComponent: false }], sourceValue: 'patterns',
         contextFollow: { following: true, onFollow: () => {}, onHold: () => {} },
       }
       return (
@@ -85,7 +86,7 @@ const check = (what, condition, detail) => {
     `const { app, BrowserWindow } = require('electron');
      app.on('window-all-closed', () => app.quit());
      app.whenReady().then(async () => {
-       const win = new BrowserWindow({ show: false, width: 420, height: 520 });
+       const win = new BrowserWindow({ show: false, width: 420, height: 700 });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
        const js = (code) => win.webContents.executeJavaScript(code);
        const { waitFor, MOTION_SETTLED_EXPRESSION } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});

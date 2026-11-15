@@ -216,8 +216,8 @@ export const messages = {
   'styleModel.embed.picker.kind.tag': 'etiqueta',
   'styleModel.embed.picker.suggestions': 'Sugerencias de selectores',
   'styleModel.embed.query.add': 'Añadir',
-  'styleModel.embed.query.mobileFirst': 'Mobile first',
-  'styleModel.embed.query.desktopFirst': 'Desktop first',
+  'styleModel.embed.query.mobileFirst': 'Mobile first', // same
+  'styleModel.embed.query.desktopFirst': 'Desktop first', // same
   'styleModel.embed.query.direction': 'Dirección de la consulta',
   'styleModel.embed.query.breakpoints': 'Puntos de interrupción',
   'styleModel.embed.query.alreadyAdded': 'Ya añadida',
