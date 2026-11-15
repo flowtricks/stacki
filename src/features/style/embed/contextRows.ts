@@ -52,9 +52,7 @@ export function describeCondition(atContext: string, resolved: readonly Resolved
   const single = bounds.length === 1 ? bounds[0] : undefined;
   const breakpoint = single === undefined ? undefined : breakpointOf(single, resolved);
   const condition =
-    breakpoint === undefined
-      ? lowerFirst(bounds).map(symbolic).join(', ')
-      : `${breakpoint.direction === 'up' ? '≥' : '<'} ${formatBreakpoint(breakpoint.setting)}`;
+    breakpoint === undefined ? lowerFirst(bounds).map(symbolic).join(', ') : `${direction === 'up' ? '≥' : '<'} ${formatBreakpoint(breakpoint.setting)}`;
   // A range is ordered by its upper boundary, as it ends where the next query takes over.
   const ordering = direction === 'down' ? bounds.filter((bound) => bound.side === 'upper') : bounds;
   const reference = ordering.map(pixelsOf).reduce((smallest, next) => Math.min(smallest, next), Number.POSITIVE_INFINITY);
@@ -62,12 +60,14 @@ export function describeCondition(atContext: string, resolved: readonly Resolved
   return { kind: 'width', condition, direction, boundaryPx: reference, breakpoint };
 }
 
-// The breakpoint whose boundary this single bound is, on that breakpoint's side of the bar.
+// The project breakpoint whose boundary this single bound is, by value alone: `>= 64rem`, `< 64rem`,
+// `min-width: 1024px` and `max-width: 1023px` all name the 64rem breakpoint (Laptop), whichever side the
+// breakpoint's own direction is on; the direction only decides the operator written. When two breakpoints
+// share a boundary, the one whose direction matches the query's side wins.
 function breakpointOf(bound: WidthBound, resolved: readonly ResolvedBreakpoint[]): ResolvedBreakpoint | undefined {
-  return resolved.find((breakpoint) => {
-    const side = breakpoint.direction === 'up' ? 'lower' : 'upper';
-    return bound.side === side && classifyBound(bound, breakpoint) !== undefined;
-  });
+  const matching = resolved.filter((breakpoint) => classifyBound(bound, breakpoint) !== undefined);
+  const sameSide = bound.side === 'lower' ? 'up' : 'down';
+  return matching.find((breakpoint) => breakpoint.direction === sameSide) ?? matching[0];
 }
 
 // A range reads from its lower bound to its upper, whichever way it was written.

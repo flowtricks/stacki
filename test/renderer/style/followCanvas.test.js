@@ -72,7 +72,7 @@ test('unchecking the matched row edits every size: Base, canvas where it was, pi
   context.after(() => panel.unmount());
   await open(panel);
   assert.match(checkedRow(), /≥ 48rem/, 'the matched row is the checked one');
-  await panel.user('uncheck the matched row', () => press(panel, row('≥ 48rem')));
+  await panel.user('uncheck the matched row', () => press(panel, row('Tablet')));
   assert.equal(shown(panel), 'Base', 'the target is Base');
   assert.deepEqual(canvasRequests, [], 'the canvas did not move: uncheck is not a click on Base');
   assert.ok(trigger(panel).querySelector('.u-select-mark'), 'the trigger says it is pinned');
@@ -88,11 +88,11 @@ test('checking the matched row again follows again, without moving the canvas', 
   const { panel, canvasRequests } = await mount(1000);
   context.after(() => panel.unmount());
   await open(panel);
-  await panel.user('uncheck', () => press(panel, row('≥ 48rem')));
+  await panel.user('uncheck', () => press(panel, row('Tablet')));
   await resizeTo(panel, 1100);
   await open(panel);
   assert.equal(checkedRow(), 'Base', 'pinned: Base is checked, not the row that holds');
-  await panel.user('check the matching row', () => press(panel, row('≥ 64rem')));
+  await panel.user('check the matching row', () => press(panel, row('Laptop')));
   assert.match(shown(panel), /≥ 64rem/);
   assert.ok(trigger(panel).querySelector('.u-select-mark') === null, 'no pin once following');
   assert.deepEqual(canvasRequests, [], 'the canvas is already inside that query');
@@ -117,7 +117,7 @@ test('choosing another query pins to it, and moves the canvas inside it', async 
   const { panel, canvasRequests } = await mount(1000);
   context.after(() => panel.unmount());
   await open(panel);
-  await panel.user('pick 30rem', () => press(panel, row('≥ 30rem')));
+  await panel.user('pick 30rem', () => press(panel, row('Phone')));
   assert.deepEqual(canvasRequests, [480]);
   await resizeTo(panel, 1100);
   assert.match(shown(panel), /≥ 30rem/, 'the choice is held through a resize');
@@ -145,7 +145,7 @@ test('with no known canvas width nothing follows, and a pick is not pinned', asy
   context.after(() => panel.unmount());
   assert.equal(shown(panel), 'Base');
   await open(panel);
-  await panel.user('pick 48rem', () => press(panel, row('≥ 48rem')));
+  await panel.user('pick 48rem', () => press(panel, row('Tablet')));
   assert.ok(trigger(panel).querySelector('.u-select-mark') === null);
 });
 
@@ -208,7 +208,7 @@ test('the pin on the trigger lets go of the hold', async (context) => {
   const { panel, canvasRequests } = await mount(1000);
   context.after(() => panel.unmount());
   await open(panel);
-  await panel.user('uncheck the matched row', () => press(panel, row('≥ 48rem')));
+  await panel.user('uncheck the matched row', () => press(panel, row('Tablet')));
   assert.equal(shown(panel), 'Base');
   const pin = trigger(panel).querySelector('.u-select-pin');
   assert.equal(pin.title, 'Follow canvas size');

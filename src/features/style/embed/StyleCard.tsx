@@ -255,7 +255,8 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
     return {
       value: styleContext.key,
       label,
-      ...(width?.breakpoint === undefined ? {} : { detail: width.condition }),
+      // The list names the breakpoint and mutes its condition; the closed trigger shows the official icon and the condition alone.
+      ...(width?.breakpoint === undefined ? {} : { detail: width.condition, triggerLabel: width.condition }),
       ...(placement === 'base' ? {} : { title: query }),
       // The closed trigger names where the query is written, on its one line.
       ...(prefix === undefined ? {} : { triggerPrefix: prefix }),

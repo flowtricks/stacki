@@ -80,9 +80,10 @@ test('a flat list: Base, section labels with their queries widest first, an Othe
   assert.deepEqual(readList(), [
     { row: 'Base' },
     { heading: 'src/styles/patterns.css .grid' },
-    { row: '≥ 64rem', title: '@media (width >= 64rem)' },
-    { row: '≥ 48rem', title: '@media (width >= 48rem)' },
-    { row: '≥ 30rem', title: '@media (width >= 30rem)' },
+    // Named by boundary alone: `>= 64rem` is the Laptop's boundary, whichever side the breakpoint is on.
+    { row: 'Laptop', title: '@media (width >= 64rem)' },
+    { row: 'Tablet', title: '@media (width >= 48rem)' },
+    { row: 'Phone', title: '@media (width >= 30rem)' },
     { heading: 'Other' },
     { row: '@media (prefers-reduced-motion: reduce)', title: '@media (prefers-reduced-motion: reduce)' },
     { row: 'Add query' },
@@ -119,26 +120,45 @@ test('queries that are not about width are a plain Other section: always shown, 
   assert.deepEqual(panel.writes, [], 'nothing was written');
 });
 
-test('a width query is named for its project breakpoint only on the breakpoint side and boundary', async (context) => {
+test("a width query is named for the project breakpoint whose boundary it is, on either side, with that breakpoint's icon", async (context) => {
   const panel = await mountStylePanel(BREAKPOINT_FIXTURE);
   context.after(() => panel.unmount());
   await panel.user('open the context dropdown', () => press(panel, trigger(panel)));
-  const rows = readList().filter((entry) => entry.row !== undefined);
-  assert.deepEqual(rows.slice(0, 6), [
+  const entries = readList().filter((entry) => entry.row !== undefined);
+  assert.deepEqual(entries.slice(0, 6), [
     { row: 'Base' },
-    // Bounded from below first, widest first: not breakpoints (those are `down`), so bare conditions.
-    { row: '≥ 64rem', title: '@media (width >= 64rem)' },
+    // Bounded from below first, widest first: `>= 64rem` is the Laptop's boundary; `>= 40rem` is no breakpoint's.
+    { row: 'Laptop', title: '@media (width >= 64rem)' },
     { row: '≥ 40rem', title: '@media (width >= 40rem)' },
-    // Then bounded from above, widest first: the Laptop, Tablet and Phone boundaries, `max-width: 767px` being Tablet's 1px-under form.
+    // Then bounded from above, widest first; `max-width: 767px` is Tablet's 1px-under form.
     { row: 'Laptop', title: '@media (width < 64rem)' },
     { row: 'Tablet', title: '@media (max-width: 767px)' },
     { row: 'Phone', title: '@media (width < 30rem)' },
   ]);
-  const laptop = [...list().querySelectorAll('[role="option"]')].find((row) => rowLabel(row).startsWith('Laptop'));
-  assert.equal(text(laptop.querySelector('.u-select-detail')), '< 64rem', 'the muted condition follows the name');
-  assert.ok(laptop.querySelector('.u-select-icon svg'), 'with the preview bar icon');
-  const bare = [...list().querySelectorAll('[role="option"]')].find((row) => rowLabel(row) === '≥ 40rem');
-  assert.ok(bare.querySelector('.u-select-icon svg'), 'a bare width has a neutral width icon');
+  const option = (title) => [...list().querySelectorAll('[role="option"]')].find((row) => row.title === title);
+  const icon = (title) => option(title).querySelector('.u-select-icon svg').outerHTML;
+  assert.equal(icon('@media (width >= 64rem)'), icon('@media (width < 64rem)'), 'both sides of the Laptop boundary wear the Laptop icon');
+  assert.notEqual(icon('@media (width >= 40rem)'), icon('@media (width < 64rem)'), 'a boundary no breakpoint has keeps the neutral ruler');
+  assert.notEqual(icon('@media (max-width: 767px)'), icon('@media (width < 64rem)'), 'Tablet has its own');
+  assert.equal(text(option('@media (width >= 64rem)').querySelector('.u-select-detail')), '≥ 64rem', "the muted condition keeps the query's own operator");
+  assert.equal(text(option('@media (width < 64rem)').querySelector('.u-select-detail')), '< 64rem');
+});
+
+test('a mobile-first project with the default breakpoints shows Laptop, Tablet and Phone with their icons, and the trigger shows the icon and the condition', async (context) => {
+  const panel = await mountStylePanel(FIXTURE);
+  context.after(() => panel.unmount());
+  await panel.user('open the context dropdown', () => press(panel, trigger(panel)));
+  const icons = ['64rem', '48rem', '30rem'].map(
+    (value) =>
+      [...list().querySelectorAll('[role="option"]')].find((row) => row.title === `@media (width >= ${value})`).querySelector('.u-select-icon svg').outerHTML,
+  );
+  assert.equal(new Set(icons).size, 3, 'three different official icons, none of them the ruler repeated');
+  const arrow = (name) => key(panel, list(), name);
+  await panel.user('down', () => arrow('ArrowDown'));
+  await panel.user('Enter', () => arrow('Enter'));
+  assert.match(text(trigger(panel)), /≥ 64rem/, 'the trigger shows the condition');
+  assert.ok(trigger(panel).querySelector('.u-select-icon svg'), 'after the official icon');
+  assert.equal(trigger(panel).querySelector('.u-select-icon svg').outerHTML, icons[0], 'the Laptop icon');
 });
 
 test('arrow keys run across the sections, skipping the section labels, and the trigger is one line naming its source', async (context) => {
@@ -150,7 +170,7 @@ test('arrow keys run across the sections, skipping the section labels, and the t
     await panel.user(`arrow down ${step}`, () => key(panel, list(), 'ArrowDown'));
     seen.push(rowLabel(list().querySelector('[data-active="true"]')));
   }
-  assert.deepEqual(seen, ['≥ 64rem', '≥ 48rem', '≥ 30rem', '@media (prefers-reduced-motion: reduce)', 'Add query']);
+  assert.deepEqual(seen, ['Laptop', 'Tablet', 'Phone', '@media (prefers-reduced-motion: reduce)', 'Add query']);
   for (let step = 0; step < 3; step += 1) {
     await panel.user('arrow up', () => key(panel, list(), 'ArrowUp'));
   }
@@ -238,7 +258,13 @@ test('ordering and naming rules: direction and boundary must both match; ties ke
   assert.equal(described('@media (width < 64rem)').breakpoint.id, 'laptop');
   assert.equal(described('@media (max-width: 1023px)').breakpoint.id, 'laptop', 'the inclusive form one pixel under');
   assert.equal(described('@media (width <= 1024px)').breakpoint.id, 'laptop', 'px for rem');
-  assert.equal(described('@media (width >= 64rem)').breakpoint, undefined, 'the other direction is not the Laptop');
+  assert.equal(described('@media (width >= 64rem)').breakpoint.id, 'laptop', 'matched by boundary, whichever side');
+  assert.equal(described('@media (min-width: 1024px)').breakpoint.id, 'laptop');
+  assert.equal(described('@media (width > 1023px)').breakpoint.id, 'laptop', 'the 1px-inclusive form');
+  assert.equal(described('@media (width >= 64rem)').condition, '≥ 64rem', "the operator is the query's own");
+  const shared = BREAKPOINT_DEFAULTS.concat([{ id: 'bp-up', name: 'Wide', direction: 'up', setting: { value: 64, unit: 'rem' }, widthPx: 1024 }]);
+  assert.equal(describeCondition('@media (width >= 64rem)', shared).breakpoint.id, 'bp-up', "two breakpoints on one boundary: the one on the query's side");
+  assert.equal(describeCondition('@media (width < 64rem)', shared).breakpoint.id, 'laptop');
   assert.equal(described('@media (width < 63rem)').breakpoint, undefined, 'another value is not the Laptop');
   assert.equal(described('@media (30rem <= width < 48rem)').breakpoint, undefined, 'a range is not one breakpoint');
   assert.equal(described('@media (30rem <= width < 48rem)').condition, '≥ 30rem, < 48rem');
