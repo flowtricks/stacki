@@ -22,6 +22,8 @@
 //   STACKI_SOAK_ONLY=switch,popover  run only the named scenarios
 //   STACKI_SOAK_RENDERER_REV=<commit>  serve the renderer as it was at a commit (git archive),
 //                           to prove the soak catches a defect that commit still had
+// CI: it runs locally (and later in a nightly job), and skips on CI runners (when CI is set)
+// unless STACKI_SOAK=ci, so a new timing-sensitive real-app probe cannot turn Check red.
 // The suite skips (and says why) where the fixture's Astro install or the built main process is
 // missing. A window opens for the run; it needs a display (CI on Linux runs under xvfb). The long
 // run takes about an hour per CPU rate; the evidence films (STACKI_SOAK_ONLY=film) write the
@@ -181,6 +183,10 @@ function classify(violation) {
 
 async function orchestrate() {
   const { runSoak, soakUnavailableReason } = require('../../helpers/e2e/soakLaunch.js');
+  if (process.env.CI !== undefined && process.env.CI !== '' && process.env.STACKI_SOAK !== 'ci') {
+    console.log('# skip stylePanelSoak: on a CI runner it runs only with STACKI_SOAK=ci (it runs locally and in the nightly job)');
+    return;
+  }
   const unavailable = soakUnavailableReason();
   if (unavailable !== undefined) {
     console.log(`# skip stylePanelSoak: ${unavailable}`);
