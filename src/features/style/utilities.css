@@ -874,14 +874,15 @@ body.is-scrubbing * {
 
 .u-select {
   position: relative;
-  z-index: var(--z-modal);
+  /* A closed select sits below the variable-connect dot that overlaps its neighbour. */
+  z-index: var(--z-style-field);
   width: 100%;
 }
-/* An open select must sit above sibling selects (all at --z-modal), or a later
+/* An open select must sit above sibling selects and the connect dot, or a later
    sibling's trigger paints over this one's dropdown. Lift its whole stacking
-   context one step so the menu clears neighbouring controls. */
+   context to the popover tier so the menu clears neighbouring controls. */
 .u-select.is-open {
-  z-index: calc(var(--z-modal) + 1);
+  z-index: var(--z-style-popover);
 }
 .u-select.is-disabled {
   opacity: 0.5;

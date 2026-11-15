@@ -226,4 +226,11 @@
   --z-overlay: 100;
   --z-modal: 1000;
   --z-tooltip: 10000;
+
+  /* Style-panel layering, lowest to highest. Controls and the variable-connect dot sit in
+     one stacking context (the wrappers that hold them create none), so their z-indexes
+     compete directly and a closed field must never outrank the dot that overlaps it. */
+  --z-style-field: var(--z-raised);
+  --z-style-connect: calc(var(--z-raised) + 10);
+  --z-style-popover: calc(var(--z-modal) + 1);
 }

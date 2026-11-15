@@ -5478,7 +5478,7 @@
   position: absolute;
   top: -4px;
   left: -1px;
-  z-index: 4;
+  z-index: var(--z-style-connect);
   display: inline-flex;
   align-items: center;
   justify-content: center;
