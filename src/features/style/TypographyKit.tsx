@@ -21,6 +21,7 @@ import { ChevronIcon, MenuItem } from './components/MenuParts';
 import { displayOf, type Display, withImportant } from './model/styleDisplay';
 import { LiveInput } from './LiveTextInput';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { useSelectorState } from './model/selectorScope';
 export { LiveInput, type LiveInputProps, useLiveInputEditing, useDebouncedLive, stepLiveKey } from './LiveTextInput';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
@@ -277,11 +278,11 @@ export function SegBar(props: SegBarProps) {
   // `forceCustom` keeps the input open even when the seeded value happens to match a
   // segment (e.g. Order seeds `1`, which is also the "Last" preset) — the user
   // explicitly asked for a custom value, so don't collapse back to that segment.
-  const [forceCustom, setForceCustom] = useState(false);
+  const [forceCustom, setForceCustom] = useSelectorState(false);
   // The just-seeded custom value. `current` derives from the committed style, which
   // lags a beat behind the write (and won't sync into the focused input), so the seed
   // drives the field until the user edits it or picks a segment.
-  const [seed, setSeed] = useState<string | undefined>(undefined);
+  const [seed, setSeed] = useSelectorState<string | undefined>(undefined);
   const customMode = forceCustom || !supported.has(current);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);

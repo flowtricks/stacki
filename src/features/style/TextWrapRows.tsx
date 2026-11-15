@@ -1,7 +1,6 @@
 // How text breaks and wraps: word-break and white-space, overflow-wrap, and
 // truncation with text-overflow (TypographySection.tsx).
 
-import { useState } from 'react';
 import Select, { type SelectOption } from './components/Select';
 import SegmentedControl from './components/SegmentedControl';
 import { useHighlight } from './model/computedStyle';
@@ -10,6 +9,7 @@ import ImportantMark from './components/ImportantMark';
 import { type Props, CUSTOM, PropLabel, LiveInput, useSegCustomFocus } from './TypographyKit';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
+import { useSelectorState } from './model/selectorScope';
 
 // ─────────────── Breaking (word-break / white-space) ───────────────
 
@@ -150,7 +150,7 @@ export function BreakSelect({
 }: { definition: BreakDefinition } & Props) {
   const { prop, labelKey, ariaLabelKey, fallback, options } = definition;
   const translate = useTranslate();
-  const [forceCustom, setForceCustom] = useState(false);
+  const [forceCustom, setForceCustom] = useSelectorState(false);
   const display = displayOf(read(prop));
   const onClear = () => {
     setForceCustom(false);
@@ -211,7 +211,7 @@ export const WRAP_OPTIONS: ReadonlyArray<readonly [string, string]> = [
 // A single full-width row: the "Wrap" label + the overflow-wrap dropdown.
 export function WrapRow({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
   const translate = useTranslate();
-  const [forceCustom, setForceCustom] = useState(false);
+  const [forceCustom, setForceCustom] = useSelectorState(false);
   const display = displayOf(read('overflow-wrap'));
   const onClear = () => {
     setForceCustom(false);

@@ -10,6 +10,8 @@ import type { SelectOption, SelectTag } from '../components/selectTypes';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { homeRoundDoor as centralHomeRoundDoor } from '../../../ui/central/centralGeometry';
 import { groupContexts } from './contextGroups';
+import { getHost } from '../model/host';
+import { SelectorScopeContext } from '../model/selectorScope';
 import type { StyleContext } from '../model/resolved';
 import ElementTokenPicker from '../ElementTokenPicker';
 import SizeSection from '../SizeSection';
@@ -402,6 +404,8 @@ export function sourceSelectOption(option: SourceOption) {
 
 // What every section's controls are handed.
 export type SectionCard = Pick<StyleCardProps, 'busy' | 'resolving' | 'setProp' | 'liveSetProp' | 'onSelectSelector' | 'activeSelector'> & {
+  /** The selected element: sections whose fields hold per-element state are keyed by it. */
+  elementKey: string;
   read: (prop: string) => ResolvedProp | undefined;
   clearProp: (prop: string | string[]) => void;
   onProvenance: (prop: string, anchor: DOMRect) => void;
@@ -418,7 +422,10 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
   const [closedSectionIds, toggleSection] = useSectionVisibility();
   // One place for every section: a cleared property reads as unset until its save settles.
   const { read, clearProp } = useOptimisticClear(resolved.props, card.clearProp);
+  // Read during render: a switch re-renders the card (the scan resets), and the host holds it.
+  const elementKey = getHost().selectedId ?? '';
   const section: SectionCard = {
+    elementKey,
     read,
     busy: card.busy,
     resolving: card.resolving,
@@ -430,41 +437,43 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
     activeSelector: card.activeSelector,
   };
   return (
-    <div className="embed-editor_decls">
-      {groups.map((group) => (
-        <SectionBlock
-          key={group.def.id}
-          label={translate(group.def.labelKey)}
-          open={!closedSectionIds.has(group.def.id)}
-          onToggle={(event) => {
-            const open = !closedSectionIds.has(group.def.id);
-            toggleSection({
-              id: group.def.id,
-              ids: sectionIds,
-              next: open ? 'closed' : 'open',
-              scope: event.shiftKey ? 'all' : 'one',
-            });
-          }}
-          // A dot whenever anything in the section reaches the element, and
-          // blue once the picked selector is one of the things setting it —
-          // `source === 'selected'` is the same test every property label in
-          // here makes.
-          mark={group.props.some((prop) => read(prop)?.source === 'selected') ? 'own' : group.props.length ? 'other' : undefined}
-          headerAction={
-            group.def.id === 'spacing' ? <SpacingCenterButton read={read} busy={card.busy} setProp={card.setProp} clearProp={clearProp} /> : undefined
-          }
-        >
-          {card.selectionAwaiting ? (
-            <SectionPlaceholder rows={PLACEHOLDER_ROWS[group.def.id] ?? PLACEHOLDER_ROWS_DEFAULT} />
-          ) : (
-            <>
-              {SECTION_CONTROLS[group.def.id]?.(section)}
-              <FallThroughRows props={fallThroughProps(group.def.id, group.props)} resolved={resolved} section={section} />
-            </>
-          )}
-        </SectionBlock>
-      ))}
-    </div>
+    <SelectorScopeContext.Provider value={`${elementKey}\u0000${card.activeSelector}`}>
+      <div className="embed-editor_decls">
+        {groups.map((group) => (
+          <SectionBlock
+            key={group.def.id}
+            label={translate(group.def.labelKey)}
+            open={!closedSectionIds.has(group.def.id)}
+            onToggle={(event) => {
+              const open = !closedSectionIds.has(group.def.id);
+              toggleSection({
+                id: group.def.id,
+                ids: sectionIds,
+                next: open ? 'closed' : 'open',
+                scope: event.shiftKey ? 'all' : 'one',
+              });
+            }}
+            // A dot whenever anything in the section reaches the element, and
+            // blue once the picked selector is one of the things setting it —
+            // `source === 'selected'` is the same test every property label in
+            // here makes.
+            mark={group.props.some((prop) => read(prop)?.source === 'selected') ? 'own' : group.props.length ? 'other' : undefined}
+            headerAction={
+              group.def.id === 'spacing' ? <SpacingCenterButton read={read} busy={card.busy} setProp={card.setProp} clearProp={clearProp} /> : undefined
+            }
+          >
+            {card.selectionAwaiting ? (
+              <SectionPlaceholder rows={PLACEHOLDER_ROWS[group.def.id] ?? PLACEHOLDER_ROWS_DEFAULT} />
+            ) : (
+              <>
+                {SECTION_CONTROLS[group.def.id]?.(section)}
+                <FallThroughRows props={fallThroughProps(group.def.id, group.props)} resolved={resolved} section={section} />
+              </>
+            )}
+          </SectionBlock>
+        ))}
+      </div>
+    </SelectorScopeContext.Provider>
   );
 }
 
@@ -497,7 +506,7 @@ export const SECTION_ORDER = ['flex-child', 'layout', 'position', 'spacing', 'si
 export const SECTION_CONTROLS: Readonly<Record<string, (section: SectionCard) => ReactNode>> = {
   'flex-child': (section) => (
     <FlexChildSection
-      key={section.activeSelector}
+      key={section.elementKey}
       read={section.read}
       busy={section.busy}
       setProp={section.setProp}
@@ -562,10 +571,14 @@ export const SECTION_CONTROLS: Readonly<Record<string, (section: SectionCard) =>
       onSelectSelector={section.onSelectSelector}
     />
   ),
-  // Keyed by selector so the font/weight custom-mode state resets per element.
+  // Keyed by the element, not the selector: its fields hold what they showed a moment ago
+  // while the page is asked (useHighlight), which must not carry to another element, but the
+  // selector can change with no one pressing anything (the default pick settling), and a key
+  // on it remounted the section and closed every popup open in it. Custom-mode state is
+  // scoped to the selector instead (model/selectorScope.ts).
   typography: (section) => (
     <TypographySection
-      key={section.activeSelector}
+      key={section.elementKey}
       read={section.read}
       busy={section.busy}
       setProp={section.setProp}

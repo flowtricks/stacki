@@ -9,6 +9,7 @@ import { useStyleHint } from './model/computedStyle';
 import { type Props, CUSTOM, PropLabel, LiveInput } from './TypographyKit';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
+import { useSelectorState } from './model/selectorScope';
 
 // The Typography section of the style panel. Like the Size section, every control
 // is always rendered and driven by the resolved model: a property is blue when the
@@ -65,7 +66,7 @@ export function FontFamilyField(props: Props) {
   const { read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = props;
   const display = displayOf(read('font-family'));
   const translate = useTranslate();
-  const [forceCustom, setForceCustom] = useState(false);
+  const [forceCustom, setForceCustom] = useSelectorState(false);
   const { options, byPrimary } = fontOptions(useProjectFonts(), translate);
   const computed = useStyleHint(display.present ? '' : 'font-family');
   const current = display.present ? display.value : computed;
@@ -219,7 +220,7 @@ export function WeightField(props: Props) {
   const { read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = props;
   const translate = useTranslate();
   const display = displayOf(read('font-weight'));
-  const [forceCustom, setForceCustom] = useState(false);
+  const [forceCustom, setForceCustom] = useSelectorState(false);
   const computed = useStyleHint(display.present ? '' : 'font-weight');
   const normalized = normalizeWeight(display.present ? display.value : computed);
   const matched = WEIGHT_VALUES.has(normalized) ? normalized : undefined;

@@ -226,6 +226,14 @@ async function mountStylePanel(fixture) {
         }
       });
     },
+    /** The page changes an element's classes at runtime (a script adds one) and reports them, as the canvas does. */
+    setPageClasses(id, classes) {
+      const element = page.window.document.querySelector(`[data-avb-p="${id}"]`);
+      element.className = classes.join(' ');
+      if (current.node.id === id) {
+        render({ ...current, renderedClasses: [...classes], renderedClassesKnown: true });
+      }
+    },
     settle: () => settle(container),
     user: (label, action) => popovers.step({ label, cause: 'user' }, action, () => settle(container)),
     data: (label, action) => popovers.step({ label, cause: 'data' }, action, () => settle(container)),
@@ -357,7 +365,10 @@ function createPopoverLog(window) {
     for (const [element, name] of open) {
       if (!now.has(element) || element.getAttribute('data-popup-phase') === 'closing') {
         open.delete(element);
-        events.push({ kind: 'close', name, step: current.label, cause: current.cause });
+        // How it went: dismissed (its own exit, an outside press, Escape, a scroll rule) or
+        // unmounted under it (its owner re-rendered it away: a remount, a key change).
+        const how = element.getAttribute('data-popup-phase') === 'closing' ? 'dismissed' : 'unmounted';
+        events.push({ kind: 'close', name, how, step: current.label, cause: current.cause });
       }
     }
   };

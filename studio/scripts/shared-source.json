@@ -1303,6 +1303,7 @@
     "src/features/style/model/sections.ts",
     "src/features/style/model/selectorCaret.ts",
     "src/features/style/model/selectorParse.ts",
+    "src/features/style/model/selectorScope.ts",
     "src/features/style/model/selectors.ts",
     "src/features/style/model/spacingShorthand.ts",
     "src/features/style/model/styleDisplay.ts",

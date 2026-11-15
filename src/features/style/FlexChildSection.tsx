@@ -9,6 +9,7 @@ import SegmentPill from './components/SegmentPill';
 import { displayOf, displayText } from './model/styleDisplay';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
+import { useSelectorState } from './model/selectorScope';
 
 // The Flex Child section — the controls that apply to the selected element when it
 // is a child of a flex (or grid) container: its sizing (the `flex` shorthand), its
@@ -345,7 +346,7 @@ function useFlexSizing({ read, setProp, clearProp }: Props) {
   // custom value (unset / var() / a keyword) that belongs in the single input.
   const isTriple = splitTopLevelSpaces(current).length === 3;
   const [panelOpen, setPanelOpen] = useState(false);
-  const [singleCustom, setSingleCustom] = useState(false);
+  const [singleCustom, setSingleCustom] = useSelectorState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
