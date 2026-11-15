@@ -8,9 +8,11 @@
 // on its own row after the chips, never between them; a class typed there goes
 // last among the element's classes; ← and → do not move a caret among chips;
 // Backspace with nothing typed takes off the last chip; Delete on a selected
-// chip takes off the class or attribute it names, but only when that name is
-// written literally on the element. Typed text finds classes fuzzily. A name
-// typed without a dot is a class, unless it is a tag, so it lands on the element.
+// chip takes off the class or attribute it names, wherever the element's tag
+// writes it literally (a class:list entry included); the chip goes at once, the
+// focus moves to its neighbour, and a held key takes no more than one chip.
+// Typed text finds classes fuzzily. A name typed without a dot is a class,
+// unless it is a tag, so it lands on the element.
 // (The Settings panel's class field does put its caret between chips, from the
 // same gap arithmetic: test/renderer/props/classInputCaret.test.js.)
 //
@@ -225,11 +227,45 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   // 1g. Removal: what is safe, and every refusal.
   const { classRemoval, attributeRemoval } = bundle;
   const removed = classRemoval(plainClass('hero_title text-style-h1'), 'text-style-h1');
-  check('a literal class is removed from class="…"', removed.tag === 'edit' && removed.value?.value === 'hero_title', JSON.stringify(removed));
+  check('a literal class is removed from class="…"', removed.tag === 'edit' && removed.patch.class?.value === 'hero_title', JSON.stringify(removed));
   const last = classRemoval(plainClass('only'), 'only');
-  check('the last literal class drops the attribute', last.tag === 'edit' && last.key === 'class' && last.value === undefined, JSON.stringify(last));
-  check('a class from class={className} is refused', classRemoval({ class: { type: 'expr', value: 'className' } }, 'hero').tag === 'refused');
-  check('a class inside class:list is refused', classRemoval(list('["hero", cond && "x"]'), 'hero').tag === 'refused');
+  check('the last literal class drops the attribute', last.tag === 'edit' && 'class' in last.patch && last.patch.class === undefined, JSON.stringify(last));
+  const computedClass = classRemoval({ class: { type: 'expr', value: 'className' } }, 'hero');
+  check(
+    'a class from class={className} is refused, naming the code and where it is',
+    computedClass.tag === 'refused' && /className/.test(computedClass.reason) && computedClass.site?.attribute === 'class',
+    JSON.stringify(computedClass),
+  );
+  const inList = classRemoval(list('["hero", cond && "x"]'), 'hero');
+  check(
+    'a class inside class:list is removed from the list',
+    inList.tag === 'edit' && inList.patch['class:list']?.value === '[cond && "x"]',
+    JSON.stringify(inList),
+  );
+  const guarded = classRemoval(list('["hero", cond && "x"]'), 'x');
+  check('a guarded class:list entry goes whole', guarded.tag === 'edit' && guarded.patch['class:list']?.value === '["hero"]', JSON.stringify(guarded));
+  const both = classRemoval({ class: { type: 'string', value: 'a hero' }, 'class:list': { type: 'expr', value: "['hero', 'b']" } }, 'hero');
+  check(
+    'a class in both class and class:list leaves both, in one patch',
+    both.tag === 'edit' && both.patch.class?.value === 'a' && both.patch['class:list']?.value === "['b']",
+    JSON.stringify(both),
+  );
+  const emptied = classRemoval(list("['hero']"), 'hero');
+  check('a class:list left empty drops the attribute', emptied.tag === 'edit' && 'class:list' in emptied.patch && emptied.patch['class:list'] === undefined);
+  const fromProp = classRemoval(list("['a', className]"), 'hero');
+  check(
+    'a class only a computed entry could give is refused with that entry',
+    fromProp.tag === 'refused' && /className/.test(fromProp.reason) && fromProp.site?.snippet.code === 'className' && fromProp.site.attribute === 'class:list',
+    JSON.stringify(fromProp),
+  );
+  const broken = classRemoval(list("['hero', "), 'hero');
+  check(
+    'a class:list that does not parse is refused and nothing is written',
+    broken.tag === 'refused' && /couldn’t read/.test(broken.reason),
+    JSON.stringify(broken),
+  );
+  const long = classRemoval(list(`[${'veryLongName'.repeat(20)}]`), 'hero');
+  check('the quoted code is cut short', long.tag === 'refused' && long.reason.includes('…') && long.reason.length < 220, JSON.stringify(long));
   check('a class not written on the element is refused', classRemoval(plainClass('a'), 'b').tag === 'refused');
   const spread = classRemoval({ '...rest': { type: 'spread', value: 'rest' } }, 'b');
   check('and the refusal mentions a spread when there is one', spread.tag === 'refused' && /spread/.test(spread.reason), JSON.stringify(spread));
@@ -238,7 +274,7 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
     throws(() => classRemoval(plainClass('a'), ''), /class name is given/),
   );
   const attribute = attributeRemoval({ 'data-foo': { type: 'string', value: '1' } }, 'data-foo');
-  check('a literal attribute is removed', attribute.tag === 'edit' && attribute.key === 'data-foo' && attribute.value === undefined);
+  check('a literal attribute is removed', attribute.tag === 'edit' && 'data-foo' in attribute.patch && attribute.patch['data-foo'] === undefined);
   check('a bare attribute is removed', attributeRemoval({ hidden: { type: 'bare' } }, 'hidden').tag === 'edit');
   check('a bound attribute is refused', attributeRemoval({ 'data-foo': { type: 'expr', value: 'x' } }, 'data-foo').tag === 'refused');
   check('a missing attribute is refused', attributeRemoval({}, 'data-foo').tag === 'refused');
@@ -403,6 +439,75 @@ const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
   });
   check('a click below the chips puts the field at the end', fieldAtEnd(), slot()?.outerHTML);
   await act(async () => root.unmount());
+
+  // 4. Delete on a chip, as a person presses it: the chip goes at once, a held key
+  // takes no more than the one chip, the neighbour takes the focus and the
+  // selection, the result is announced, and a refused removal puts the chip back.
+  let answer = { tag: 'applied' };
+  const asked = [];
+  let release = () => undefined;
+  bundle.setHost({
+    removeClass: (name) => {
+      asked.push(name);
+      return new Promise((resolve) => {
+        release = () => resolve(answer);
+      });
+    },
+  });
+  const selected = [];
+  const LIST_CHIPS = [chip('.card'), chip('.is-open'), chip('.is-wide')];
+  const second = createRoot(document.getElementById('root'));
+  const renderList = (selectors, activeSelector) =>
+    act(async () => {
+      second.render(
+        React.createElement(bundle.SelectorPicker, {
+          selectors,
+          suggestions: [],
+          activeSelector,
+          activePicked: false,
+          busy: false,
+          loading: false,
+          onSelect: (selector) => selected.push(selector),
+          onDeselect: () => selected.push(''),
+          onAdd: () => {},
+        }),
+      );
+    });
+  await renderList(LIST_CHIPS, '.is-open');
+  const labels = () => chipElements().map((element) => element.textContent);
+  const chipNamed = (text) => chipElements().find((element) => element.textContent === text);
+  chipNamed('.is-open').focus();
+  await act(async () => {
+    chipNamed('.is-open').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Delete', bubbles: true, cancelable: true }));
+  });
+  check('Delete on the active chip asks once', same(asked, ['is-open']), JSON.stringify(asked));
+  check('and the chip goes before the host answers', same(labels(), ['.card', '.is-wide']), JSON.stringify(labels()));
+  await act(async () => {
+    document.activeElement?.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Delete', repeat: true, bubbles: true, cancelable: true }));
+  });
+  check('a held key does not take another chip', same(asked, ['is-open']), JSON.stringify(asked));
+  await act(async () => {
+    release();
+    await Promise.resolve();
+  });
+  check('the neighbour after it takes the selection', selected.at(-1) === '.is-wide', JSON.stringify(selected));
+  check('and the focus, so the next Delete keeps going', document.activeElement === chipNamed('.is-wide'), document.activeElement?.outerHTML);
+  const status = () => document.querySelector('[role="status"][aria-live="polite"]')?.textContent;
+  check('the removal is announced', status() === 'Removed .is-open', status());
+  // The list catches up (the source no longer names it): nothing is left hidden.
+  await renderList([chip('.card'), chip('.is-wide')], '.is-wide');
+  check('and once the list catches up it stays gone', same(labels(), ['.card', '.is-wide']), JSON.stringify(labels()));
+  answer = { tag: 'refused', message: 'no' };
+  await act(async () => {
+    chipNamed('.card').dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true }));
+  });
+  check('Backspace on a chip removes it too', same(asked, ['is-open', 'card']) && same(labels(), ['.is-wide']), JSON.stringify({ asked, labels: labels() }));
+  await act(async () => {
+    release();
+    await Promise.resolve();
+  });
+  check('a refused removal puts the chip back where it was', same(labels(), ['.card', '.is-wide']), JSON.stringify(labels()));
+  await act(async () => second.unmount());
 
   if (failures.length) {
     console.error(`selectorCaret: ${failures.length} of ${checked} checks failed\n${failures.join('\n')}`);

@@ -59,6 +59,7 @@ export function SelectorPicker({
   // An element seen before is settled at once (scanSnapshotCache.ts).
   const pending = settled === false;
   const view = useSelectorView({ selectors, activeSelector, activePicked, onVisibleSelectorsChange });
+  const removal = useChipRemoval({ shown: view.shownSelectors, activeSelector, onSelect, onDeselect });
   const field = useAddSelectorField({
     selectors,
     suggestions,
@@ -67,11 +68,12 @@ export function SelectorPicker({
     onSelect,
     onDeselect,
     onAdd,
-    shown: view.shownSelectors,
+    shown: removal.visible,
+    removeChip: removal.remove,
   });
   const { add, showInput } = field;
   const removeChip = (entry: ClassifiedSelector) => {
-    removeChipFromElement(entry, { activeSelector, onDeselect });
+    removal.remove(entry, 'chip');
   };
 
   return (
@@ -89,15 +91,16 @@ export function SelectorPicker({
             which one it is, and holds the box's height so nothing jumps when the
             chips arrive. */}
           {pending ? <SelectorChipsPlaceholder label={translate('styleModel.embed.picker.finding')} /> : undefined}
-          {!pending && loading && !view.shownSelectors.length ? (
+          {!pending && loading && !removal.visible.length ? (
             <div className="embed-editor_selector-loading" aria-live="polite">
               <SpinnerIcon />
               <span className="u-sr-only">{translate('styleModel.embed.picker.finding')}</span>
             </div>
           ) : undefined}
-          {!pending && (view.shownSelectors.length || showInput || inline !== undefined) ? (
+          {!pending && (removal.visible.length || showInput || inline !== undefined) ? (
             <SelectorChips
-              entries={view.shownSelectors}
+              chipsRef={removal.chipsRef}
+              entries={removal.visible}
               inline={inline}
               activeSelector={activeSelector}
               busy={busy}
@@ -122,6 +125,9 @@ export function SelectorPicker({
         </div>
       </div>
       <SelectorFilterToggles view={view} pending={pending} />
+      <span className="u-sr-only" role="status" aria-live="polite">
+        {removal.announcement}
+      </span>
     </>
   );
 }
@@ -179,11 +185,12 @@ function onSelectorFocusRequest(listener: () => void): () => void {
 // decides whether that is safe; the host shows a refusal). A tag, a substring
 // match like `[class*="text-"]` or a compound is part of a selector, not a thing
 // written on the element, so Delete leaves it alone. Returns whether a removal
-// was asked for.
+// was asked for. `outcome.onRequested` runs before the host answers, so the chip
+// can go at once; `onRefused` puts it back.
 export function removeChipFromElement(
   entry: ClassifiedSelector,
   panel: { readonly activeSelector: string; readonly onDeselect: () => void },
-  onApplied: () => void = () => undefined,
+  outcome: ChipRemovalOutcome = {},
 ): boolean {
   const part = chipPart(entry.selector.text, loneTypedClass(entry.selector.text));
   const host = getHost();
@@ -192,17 +199,107 @@ export function removeChipFromElement(
     return false;
   }
   const wasActive = selectorsMatch(entry.selector.text, panel.activeSelector);
-  void request.then((outcome) => {
+  outcome.onRequested?.();
+  void request.then((answer) => {
     // The removed chip can't stay the edit target: nothing it names is left.
-    if (outcome.tag === 'refused') {
+    if (answer.tag === 'refused') {
+      outcome.onRefused?.();
       return;
     }
     if (wasActive) {
       panel.onDeselect();
     }
-    onApplied();
+    outcome.onApplied?.({ wasActive });
   });
   return true;
+}
+
+export interface ChipRemovalOutcome {
+  readonly onRequested?: () => void;
+  readonly onApplied?: (removed: { readonly wasActive: boolean }) => void;
+  readonly onRefused?: () => void;
+}
+
+// Chips taken off but not yet gone from the list the panel is given: the list
+// follows the source and the canvas, which answer after the write. Bounded: one
+// entry per Delete still in flight, and a person does not queue more than this.
+const HIDDEN_CHIPS_MAX = 64;
+
+// What Delete on a chip does around the removal: the chip goes at once (and comes
+// back if the host refuses), the neighbouring chip takes the focus and, when the
+// removed chip was the edit target, the selection, so the next Delete keeps going;
+// and the result is said aloud for a screen reader.
+export function useChipRemoval({
+  shown,
+  activeSelector,
+  onSelect,
+  onDeselect,
+}: {
+  readonly shown: readonly ClassifiedSelector[];
+  readonly activeSelector: string;
+  readonly onSelect: (selector: string) => void;
+  readonly onDeselect: () => void;
+}) {
+  const translate = useTranslate();
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(() => new Set());
+  const [announcement, setAnnouncement] = useState('');
+  const chipsRef = useRef<HTMLDivElement>(null);
+  // A key the list no longer holds has landed: nothing is left to hide.
+  const shownKeys = shown.map((entry) => entry.selector.key).join('\n');
+  useEffect(() => {
+    const present = new Set(shownKeys.split('\n'));
+    setHidden((current) => {
+      const kept = [...current].filter((key) => present.has(key));
+      return kept.length === current.size ? current : new Set(kept);
+    });
+  }, [shownKeys]);
+  const visible = shown.filter((entry) => !hidden.has(entry.selector.key));
+  const remove = (entry: ClassifiedSelector, focus: 'chip' | 'stay') => {
+    const at = visible.findIndex((candidate) => candidate.selector.key === entry.selector.key);
+    const neighbour = at < 0 ? undefined : (visible[at + 1] ?? visible[at - 1]);
+    const key = entry.selector.key;
+    return removeChipFromElement(
+      entry,
+      { activeSelector, onDeselect },
+      {
+        onRequested: () => {
+          setHidden((current) => {
+            assert(current.size < HIDDEN_CHIPS_MAX, 'useChipRemoval: hidden chips are released as the list catches up');
+            return new Set([...current, key]);
+          });
+        },
+        onRefused: () => {
+          setHidden((current) => new Set([...current].filter((hiddenKey) => hiddenKey !== key)));
+        },
+        onApplied: ({ wasActive }) => {
+          setAnnouncement(translate('styleModel.embed.picker.chipRemoved', { name: entry.selector.display ?? entry.selector.text }));
+          if (neighbour === undefined) {
+            return;
+          }
+          if (wasActive) {
+            onSelect(neighbour.selector.text);
+          }
+          if (focus === 'chip') {
+            focusChip(chipsRef.current ?? undefined, neighbour.selector.key);
+          }
+        },
+      },
+    );
+  };
+  return { visible, remove, announcement, chipsRef };
+}
+
+// The chip for `key`, focused so the keyboard stays in the field after its neighbour went.
+function focusChip(container: HTMLElement | undefined, key: string): void {
+  if (container === undefined) {
+    return;
+  }
+  for (const chip of container.querySelectorAll<HTMLElement>('[data-selector-key]')) {
+    if (chip.dataset['selectorKey'] === key) {
+      chip.focus();
+      return;
+    }
+  }
 }
 
 // The add-selector field's state: the draft, the suggestion list and its highlight,
@@ -216,8 +313,11 @@ export function useAddSelectorField({
   onDeselect,
   onAdd,
   shown,
+  removeChip,
 }: Pick<SelectorPickerProps, 'selectors' | 'suggestions' | 'activeSelector' | 'busy' | 'onSelect' | 'onDeselect' | 'onAdd'> & {
   readonly shown: readonly ClassifiedSelector[];
+  /** Takes a chip off; `stay` keeps the focus where it is (the add field). */
+  readonly removeChip: (entry: ClassifiedSelector, focus: 'chip' | 'stay') => boolean;
 }) {
   const [draft, setDraft] = useState('');
   const [open, setOpen] = useState(false);
@@ -337,7 +437,7 @@ export function useAddSelectorField({
       return false;
     }
     assert(index === shown.length - 1, 'onCaretKey: Backspace takes the last chip');
-    return removeChipFromElement(entry, { activeSelector, onDeselect });
+    return removeChip(entry, 'stay');
   };
   const add = { draft, setDraft, open, setOpen, highlight, setHighlight, typed, list, refusal, setRefused, showList };
   return { add, showInput, listRef, inputRef, onWellMouseDown, apply, onFocus, onBlur, onCaretKey };
@@ -546,6 +646,7 @@ function withHits(suggestion: SelectorSuggestion, indexes: readonly number[]): R
 // The chips, with the add field (children) after the last one, on a row of its
 // own. It never stands between two chips: see SelectorPicker.
 export function SelectorChips({
+  chipsRef,
   entries,
   activeSelector,
   busy,
@@ -555,6 +656,8 @@ export function SelectorChips({
   inline,
   children,
 }: {
+  /** The row's element, where a removal finds the neighbouring chip to focus. */
+  chipsRef?: React.RefObject<HTMLDivElement> | undefined;
   entries: readonly ClassifiedSelector[];
   /** The style attribute's chip, after every selector: it outranks them all. */
   inline?: InlineChip | undefined;
@@ -570,7 +673,7 @@ export function SelectorChips({
   // deselect to offer.
   const deselectable = usePseudoTarget() === undefined;
   return (
-    <div className="embed-editor_selector-chips">
+    <div ref={chipsRef} className="embed-editor_selector-chips">
       {entries.map((entry) => (
         <SelectorChip
           key={entry.selector.key}
@@ -625,6 +728,7 @@ function SelectorChip({
         ref={ref}
         type="button"
         className={chipClassName(entry, state)}
+        data-selector-key={entry.selector.key}
         disabled={busy}
         aria-pressed={active}
         aria-label={selectorAccessibleLabel(entry, label)}
@@ -656,6 +760,11 @@ function SelectorChip({
           // Kept from the app's Delete shortcut, which would delete the element.
           event.preventDefault();
           event.stopPropagation();
+          // A held key repeats: the first press removes this chip and moves the focus
+          // to its neighbour, which a repeat must not take as well.
+          if (event.repeat) {
+            return;
+          }
           onRemove?.(entry);
         }}
         title={truncated ? undefined : chipTitle(label, entry, state, translate)}

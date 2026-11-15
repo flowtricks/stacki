@@ -196,6 +196,7 @@ export const messages = {
   'styleModel.embed.picker.chipInstancePending': 'from this instance, no styles yet',
   'styleModel.embed.picker.chipOtherQuery': 'styled in another query',
   'styleModel.embed.picker.chipPending': 'no styles yet',
+  'styleModel.embed.picker.chipRemoved': 'Removed {name}',
   'styleModel.embed.picker.classRefusal': 'Check the class name and retry.',
   'styleModel.embed.picker.create': 'Create {name}',
   'styleModel.embed.picker.finding': 'Finding the selectors that style this element…',
