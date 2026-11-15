@@ -7,8 +7,8 @@
 // Windows tool guesses must include the native installer's folder.
 // Methodology: findCli, AgentSetup and AgentHost from dist/ with the platform
 // named `win32` and an in-memory file system keyed by Windows paths, so the
-// cases run the same on macOS, Linux and Windows; the POSIX case uses a real
-// temporary folder with no links. ELECTRON_RUN_AS_NODE is deleted, never emptied.
+// cases run the same on macOS, Linux and Windows; the POSIX case does the same with POSIX paths,
+// so no real folder, executable bit or host path rule is involved. ELECTRON_RUN_AS_NODE is deleted, never emptied.
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -59,19 +59,13 @@ test('Windows: PATHEXT decides the names, and the .cmd and .bat shims are still 
 });
 
 test('macOS and Linux: PATH is read as before, and a bare name is the only name tried', () => {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'stacki-cli-lookup-'));
-  try {
-    const cli = path.join(directory, 'claude');
-    fs.writeFileSync(cli, '#!/bin/sh\n', { mode: 0o755 });
-    fs.writeFileSync(path.join(directory, 'codex.exe'), 'not a posix CLI');
-    const real = fs.realpathSync(cli);
-    for (const platform of ['darwin', 'linux'] as const) {
-      assert.equal(findCli('claude', { environment: { PATH: `/nonexistent${path.delimiter}${directory}`, Path: '/elsewhere' }, platform }), real);
-      assert.equal(findCli('codex', { environment: { PATH: directory }, platform }), undefined);
-      assert.equal(findCli('claude', { environment: { Path: directory }, platform }), undefined);
-    }
-  } finally {
-    fs.rmSync(directory, REMOVE_OPTIONS);
+  const directory = '/home/tim/.local/bin';
+  const cli = `${directory}/claude`;
+  for (const platform of ['darwin', 'linux'] as const) {
+    const fileSystem = fakeDisk(cli, `${directory}/codex.exe`);
+    assert.equal(findCli('claude', { environment: { PATH: `/nonexistent:${directory}`, Path: '/elsewhere' }, platform, fileSystem }), cli);
+    assert.equal(findCli('codex', { environment: { PATH: directory }, platform, fileSystem }), undefined);
+    assert.equal(findCli('claude', { environment: { Path: directory }, platform, fileSystem }), undefined);
   }
 });
 

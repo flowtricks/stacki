@@ -104,6 +104,8 @@ export interface SetupDeps {
   readonly spawnTerminal?: (command: SetupCommand, environment: Readonly<Record<string, string | undefined>>) => Promise<SetupProcess>;
   readonly home?: string;
   readonly platform?: NodeJS.Platform;
+  /** The platform whose PATH rules find the CLI, when it differs from `platform` (a test runs real files on the host it is on). */
+  readonly cliPlatform?: NodeJS.Platform;
   /** Where the CLI is looked for on PATH; tests give a fake one. */
   readonly cliFileSystem?: CliFileSystem;
   /** Where Windows shims are looked up; tests give a fake one. */
@@ -177,7 +179,11 @@ export class AgentSetup {
   }
 
   private cli(agent: AgentId): string | undefined {
-    return findCli(agent, { environment: this.deps.environment(), platform: this.deps.platform ?? process.platform, ...this.cliFileSystem() });
+    return findCli(agent, {
+      environment: this.deps.environment(),
+      platform: this.deps.cliPlatform ?? this.deps.platform ?? process.platform,
+      ...this.cliFileSystem(),
+    });
   }
 
   private async detect(agent: AgentId): Promise<SetupState> {

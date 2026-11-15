@@ -80,6 +80,8 @@ function fakeCli(script: (process: FakeProcess) => void) {
     spawnTerminal: async (command: { command: string; args: readonly string[] }) => make(command),
     home: bin,
     platform: 'darwin',
+    // The fake CLI is a real file in a real folder, so it is found by the host's own PATH rules (a .cmd on Windows).
+    cliPlatform: process.platform,
   });
   const install = (name: string) => fs.writeFileSync(path.join(bin, process.platform === 'win32' ? `${name}.cmd` : name), '#!/bin/sh\n', { mode: 0o755 });
   return { bin, setup, started, states, opened, lines, install };
