@@ -5691,7 +5691,7 @@
   background: transparent;
   color: var(--color-text-primary);
   font-family: var(--font-family-sans);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 400;
 }
 .embed-editor_varpicker .embed-editor_varpicker-search::placeholder {
@@ -5775,7 +5775,7 @@
   cursor: pointer;
 }
 .embed-editor_varpicker-collection-name {
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-text-primary);
 }
@@ -5797,7 +5797,8 @@
 .embed-editor_varpicker-group-name {
   /* Room below the heading so the first row never touches it. */
   padding: 0.25rem 0.625rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
+  font-family: var(--font-family-sans);
   font-weight: 500;
   color: var(--color-text-secondary);
   /* One line: the whole selector list is in the tooltip. */
@@ -5825,7 +5826,8 @@
   gap: var(--space-2);
   /* Room below the heading so the first row never touches it. */
   padding: 0.5rem 0.125rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: 0.6875rem;
+  font-family: var(--font-family-sans);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--color-text-secondary);
@@ -5843,14 +5845,14 @@
   align-items: center;
   column-gap: 0.5rem;
   width: 100%;
-  min-height: 1.875rem;
+  min-height: 1.75rem;
   box-sizing: border-box;
   padding: 0.25rem 0.5rem;
   border: 0;
   border-radius: 0.5rem;
   background: transparent;
   color: var(--color-text-primary);
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   text-align: left;
   cursor: pointer;
 }
@@ -5914,7 +5916,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 500;
   color: var(--color-text-primary);
 }
@@ -5930,7 +5932,7 @@
      test/renderer/style/variablePickerContrast.test.js. */
   color: var(--color-text-secondary);
   font-family: var(--font-family-mono);
-  font-size: 0.6875rem;
+  font-size: 0.625rem;
   font-weight: 400;
 }
 

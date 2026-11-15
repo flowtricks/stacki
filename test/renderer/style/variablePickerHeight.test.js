@@ -181,11 +181,11 @@ const check = (what, condition, detail) => {
   if (!line) {
     check('the probe ran in a browser', false, (run.stderr || run.stdout || '').slice(0, 600));
   } else {
-    const capRem = 18;
+    const capRem = 22;
     for (const result of JSON.parse(line)) {
       const label = `${result.host} host, window ${result.height}, field at ${result.where}`;
       const { before, scrolled } = result;
-      check(`${label}: at most 18rem`, before.height / before.rem <= capRem + 0.01, `${before.height / before.rem}rem`);
+      check(`${label}: at most 22rem`, before.height / before.rem <= capRem + 0.01, `${before.height / before.rem}rem`);
       check(
         `${label}: a heading leaves at least 0.25rem above its first row`,
         before.headingGaps.length > 0 && before.headingGaps.every((gap) => gap / before.rem >= 0.25),
@@ -234,9 +234,9 @@ const check = (what, condition, detail) => {
     const { pickerPlacement } = require(placementBundle);
     const base = { naturalHeight: 3000, rootFontPx: 16 };
     const roomy = pickerPlacement({ ...base, rowTop: 100, rowBottom: 128, viewportHeight: 2000 });
-    check('a tall window still caps the height', roomy.side === 'below' && roomy.heightMax === 288, JSON.stringify(roomy));
+    check('a tall window still caps the height', roomy.side === 'below' && roomy.heightMax === 352, JSON.stringify(roomy));
     const low = pickerPlacement({ ...base, rowTop: 900, rowBottom: 928, viewportHeight: 1000 });
-    check('near the bottom it opens above', low.side === 'above' && low.heightMax === 288, JSON.stringify(low));
+    check('near the bottom it opens above', low.side === 'above' && low.heightMax === 352, JSON.stringify(low));
     const short = pickerPlacement({ ...base, rowTop: 300, rowBottom: 328, viewportHeight: 600 });
     check('in a short window it keeps the minimum height', short.heightMax >= 160, JSON.stringify(short));
   }

@@ -1212,7 +1212,7 @@ export function usePickerFocus(searchRef: React.RefObject<HTMLInputElement>): vo
 // the code field's typing list, Studio and the demo all render VariablePicker). It is the one cap: the CSS
 // does not repeat it, because an inline max-height (the room left in the window) used to replace
 // the stylesheet's and let the list run the full height of a tall window.
-export const PICKER_HEIGHT_REM_MAX = 18;
+export const PICKER_HEIGHT_REM_MAX = 22;
 // Below this the list is not usable, so a short window still gets this much, never less than
 // what the window itself holds.
 export const PICKER_HEIGHT_REM_MIN = 10;

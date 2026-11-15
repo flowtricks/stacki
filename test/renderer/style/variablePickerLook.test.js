@@ -3,7 +3,7 @@
 //   node test/renderer/style/variablePickerLook.test.js
 //
 // Goal: pin the picker's look so it stays scannable: rows 1.75 to 2rem tall with 0.125rem between
-// them in a card, the variable name 0.8125rem at weight 500 in the primary text colour, its value
+// them in a card, the variable name 0.75rem at weight 500 in the primary text colour, its value
 // 0.6875rem monospace at weight 400 in secondary text that clears 4.5:1 on the row and on the selected
 // row, group headings 0.75rem at weight 600 with room beneath, and no name cut off while it fits within 60% of the row. The list still fits the height cap and scrolls.
 // Method: layout is the question, so the real VariablePicker is mounted in a hidden Chromium window
@@ -183,13 +183,13 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
   };
   for (const [name, view] of Object.entries(JSON.parse(line))) {
     const rem = view.rem;
-    check(`${name}: the popover fits the 18rem cap`, view.popup.height / rem <= 18.01, `${view.popup.height / rem}rem`);
+    check(`${name}: the popover fits the 22rem cap`, view.popup.height / rem <= 22.01, `${view.popup.height / rem}rem`);
     for (const row of view.rows) {
-      check(`${name}: a row is 1.75 to 2rem tall`, row.rect.height / rem >= 1.749 && row.rect.height / rem <= 2.001, `${row.rect.height / rem}rem`);
-      check(`${name}: the name is 0.8125rem at weight 500`, row.name.size === '13px' && row.name.weight === '500', JSON.stringify(row.name));
+      check(`${name}: a row is 1.625 to 1.75rem tall`, row.rect.height / rem >= 1.624 && row.rect.height / rem <= 1.751, `${row.rect.height / rem}rem`);
+      check(`${name}: the name is 0.75rem at weight 500`, row.name.size === '12px' && row.name.weight === '500', JSON.stringify(row.name));
       check(
-        `${name}: the value is 0.6875rem mono at weight 400`,
-        row.value.size === '11px' && row.value.weight === '400' && /mono|menlo|courier|consolas/i.test(row.value.family),
+        `${name}: the value is 0.625rem mono at weight 400`,
+        row.value.size === '10px' && row.value.weight === '400' && /mono|menlo|courier|consolas/i.test(row.value.family),
         JSON.stringify(row.value),
       );
       check(
@@ -218,16 +218,12 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
     }
     for (const heading of view.headings) {
       check(
-        `${name}: a heading is 0.75rem with room beneath`,
-        heading.size === '12px' && Number.parseFloat(heading.paddingBottom) >= 0.5 * rem - 0.1,
+        `${name}: a heading is 0.6875rem with room beneath`,
+        heading.size === '11px' && Number.parseFloat(heading.paddingBottom) >= 0.5 * rem - 0.1,
         JSON.stringify(heading),
       );
     }
-    check(
-      `${name}: the file heading is 0.8125rem at 600`,
-      view.collection.size === '13px' && view.collection.weight === '600',
-      JSON.stringify(view.collection),
-    );
+    check(`${name}: the file heading is 0.75rem at 600`, view.collection.size === '12px' && view.collection.weight === '600', JSON.stringify(view.collection));
   }
   if (failures.length > 0) {
     console.error(`variable-picker-look: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);

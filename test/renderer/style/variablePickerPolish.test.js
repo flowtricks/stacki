@@ -128,8 +128,8 @@ const check = (what, condition, detail) => {
   check('the popover has no border', !/\bborder:/.test(popover));
   const search = block('.embed-editor_varpicker .embed-editor_varpicker-search');
   check(
-    'the search is at most 1.75rem tall, borderless, regular weight, 0.8125rem',
-    /height:\s*1\.75rem;/.test(search) && /border:\s*0;/.test(search) && /font-weight:\s*400;/.test(search) && /font-size:\s*0\.8125rem;/.test(search),
+    'the search is at most 1.75rem tall, borderless, regular weight, 0.75rem',
+    /height:\s*1\.75rem;/.test(search) && /border:\s*0;/.test(search) && /font-weight:\s*400;/.test(search) && /font-size:\s*0\.75rem;/.test(search),
     search,
   );
   check('it has no fill of its own', /background:\s*transparent;/.test(search), search);
