@@ -22,6 +22,7 @@ import { displayOf, displayText, keepImportant, parseImportant } from './model/s
 import ImportantMark from './components/ImportantMark';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
+import { useHoverPreview } from './connectFieldHelpers';
 
 export type SetProp = (prop: string, value: string, important: boolean) => void;
 export type ClearProp = (prop: string | string[]) => void;
@@ -282,6 +283,7 @@ export function LiveText({ prop, placeholder, props, dragging }: { prop: string;
       ariaLabel={translate('style.effectsKit.connect', { name: prop })}
       disabled={busy}
       prop={prop}
+      canvasProperty={prop}
       onPick={(binding) => {
         const kept = keepImportant(binding, display);
         setProp(prop, kept.value, kept.important);
@@ -454,6 +456,7 @@ export function CustomInput(props: CustomInputProps) {
       ariaLabel={translate('style.effectsKit.connect', { name: prop })}
       disabled={busy}
       prop={prop}
+      canvasProperty={prop}
       onPick={(binding) => {
         const kept = keepImportant(binding, parseImportant(value));
         setProp(prop, kept.value, kept.important);
@@ -504,6 +507,8 @@ export interface PresetSelectRowProps {
   allowCustom?: boolean;
 }
 export function PresetSelectRow(row: PresetSelectRowProps) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { prop, label, options, presets, props, allowCustom = true } = row;
   const translate = useTranslate();
   const { read, busy, setProp, liveSetProp, clearProp } = props;
@@ -534,7 +539,7 @@ export function PresetSelectRow(row: PresetSelectRowProps) {
     setProp(prop, choice, keptImportant);
   };
   // "Custom…" has no value of its own to show, so landing on it reverts the preview.
-  const preview = (option: string | undefined) => liveSetProp(prop, option === CUSTOM ? undefined : option, keptImportant);
+  const preview = (option: string | undefined) => hoverPreview(prop, option === CUSTOM ? undefined : option, keptImportant);
   const inputValue = forceCustom && isPreset && !display.important ? '' : displayText(display);
   const selectOptions = presetSelectOptions({
     options,

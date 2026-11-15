@@ -173,6 +173,7 @@ export function OpacityNumberField(props: OpacityFieldProps) {
         ariaLabel={translate('style.opacityRow.connectOpacity')}
         disabled={busy}
         prop="opacity"
+        canvasProperty="opacity"
         onPick={(binding) => {
           const kept = keepImportant(binding, { important });
           setProp('opacity', kept.value, kept.important);

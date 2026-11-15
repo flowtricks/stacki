@@ -10,6 +10,7 @@ import { type Props, CUSTOM, PropLabel, LiveInput, useSegCustomFocus } from './T
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
 import { useSelectorState } from './model/selectorScope';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // ─────────────── Breaking (word-break / white-space) ───────────────
 
@@ -66,6 +67,8 @@ export type EnumSelectProps = {
 } & Pick<Props, 'read' | 'busy' | 'setProp' | 'clearProp' | 'liveSetProp'>;
 
 export function EnumSelect(props: EnumSelectProps) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { prop, ariaLabel, fallback, options: choices, forceCustom, setForceCustom } = props;
   const { read, busy, setProp, clearProp, liveSetProp } = props;
   const translate = useTranslate();
@@ -111,7 +114,7 @@ export function EnumSelect(props: EnumSelectProps) {
       value={customMode ? CUSTOM : (matched ?? shownComputed)}
       options={options}
       onChange={pick}
-      onPreview={(value) => liveSetProp(prop, value === CUSTOM ? undefined : (value ?? undefined), false)}
+      onPreview={(value) => hoverPreview(prop, value === CUSTOM ? undefined : (value ?? undefined), false)}
       ariaLabel={ariaLabel}
       disabled={busy}
       customInput={

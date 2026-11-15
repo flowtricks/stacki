@@ -16,6 +16,7 @@ import { CloseIcon, RelativeIcon, AbsoluteIcon, FixedIcon, StickyIcon } from './
 import { type SetProp, type ClearProp, type LiveSetProp, type Read, type Props, SegmentedIconControl, floatSegments, clearSegments } from './PositionSegments';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey } from '../../lib/i18n/localeContext';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // The Position section: a position-type dropdown (with a Custom escape hatch), an
 // inset box (top/right/bottom/left, like the spacing box), a z-index field, and
@@ -69,6 +70,7 @@ function LiveField({
       ariaLabel={translate('style.positionSection.connect', { name: ariaLabel })}
       disabled={busy}
       prop={prop}
+      canvasProperty={prop}
       onPick={(binding) => {
         const kept = keepImportant(binding, display);
         setProp(prop, kept.value, kept.important);
@@ -274,7 +276,9 @@ function PositionCustomField({ read, busy, setProp }: { read: Read; busy: boolea
   );
 }
 
-function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; busy: boolean; setProp: SetProp; liveSetProp: LiveSetProp }) {
+function PositionControl({ read, busy, setProp }: { read: Read; busy: boolean; setProp: SetProp }) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const translate = useTranslate();
   const current = effectiveValue(read, 'position');
   const isPreset = POSITION_PRESET_VALUES.has(current);
@@ -321,7 +325,7 @@ function PositionControl({ read, busy, setProp, liveSetProp }: { read: Read; bus
           setProp('position', next, false);
         }
       }}
-      onPreview={(next) => liveSetProp('position', next === CUSTOM ? undefined : (next ?? undefined), false)}
+      onPreview={(next) => hoverPreview('position', next === CUSTOM ? undefined : (next ?? undefined), false)}
       ariaLabel={translate('style.positionSection.position')}
     />
   );
@@ -577,7 +581,7 @@ export default function PositionSection(props: Props) {
   return (
     <div className="embed-editor_position">
       <Row label={rowLabel(translate('style.positionSection.position'), 'position')}>
-        <PositionControl read={read} busy={props.busy} setProp={props.setProp} liveSetProp={props.liveSetProp} />
+        <PositionControl read={read} busy={props.busy} setProp={props.setProp} />
       </Row>
 
       {/* Always there, whatever `position` says — the same reasoning as the

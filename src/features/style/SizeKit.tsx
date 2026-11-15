@@ -131,6 +131,7 @@ export function LivePropField({
         ariaLabel={translate('style.sizeKit.connect', { name: label })}
         disabled={busy}
         prop={prop}
+        canvasProperty={prop}
         onPick={(binding) => {
           const kept = keepImportant(binding, display);
           setProp(prop, kept.value, kept.important);

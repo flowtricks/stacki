@@ -8,7 +8,6 @@ import { handleArrowStep } from './model/numberStep';
 import { followWhileRendering } from './model/fieldHooks';
 import VariableConnect from './VariableConnect';
 import { commitInPlace } from './model/commitInPlace';
-import { pickerPreviewKind, useFieldPreview, type FieldPreview } from './connectFieldHelpers';
 import { parseImportant } from './model/styleDisplay';
 import { useStyleHint } from './model/computedStyle';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -32,10 +31,10 @@ export function LiveInput({
   onClear,
 }: LiveInputProps) {
   const translate = useTranslate();
-  // The picker's hover preview goes to the canvas alone, for the property this field edits; a field with no
-  // property has nowhere to show it but in itself.
-  const fieldPreview = useFieldPreview(prop ?? dataProp, value);
-  const field = useLiveInputEditing({ value, busy, onCommit, onLiveCommit, onClear, fieldPreview });
+  const field = useLiveInputEditing({ value, busy, onCommit, onLiveCommit, onClear });
+  // The field holds the property's whole value, so the picker previews a hovered variable on the canvas
+  // as that property (VariableConnect owns the preview; it never reaches this field's live write).
+  const canvasProperty = prop ?? dataProp;
   // A computed value is a hint, never a draft that blur could write into CSS.
   const computed = useStyleHint(value.trim() ? '' : (prop ?? ''));
   return (
@@ -44,10 +43,8 @@ export function LiveInput({
       ariaLabel={translate('style.liveTextInput.connect', { name: ariaLabel || translate('style.liveTextInput.value') })}
       disabled={busy}
       {...(prop === undefined ? {} : { prop })}
-      onPick={(binding) => {
-        fieldPreview.picked(binding);
-        onCommit(binding, false);
-      }}
+      {...(canvasProperty === undefined ? {} : { canvasProperty })}
+      onPick={(binding) => onCommit(binding, false)}
     >
       <input
         {...field.scrub.input}
@@ -55,7 +52,7 @@ export function LiveInput({
         className={className}
         data-prop={dataProp}
         value={field.draft}
-        onChange={(event) => field.change(event.target.value, { source: pickerPreviewKind(event) ?? 'typed' })}
+        onChange={(event) => field.change(event.target.value)}
         onFocus={field.focus}
         onBlur={field.blur}
         onKeyDown={field.keyDown}
@@ -88,19 +85,15 @@ export type LiveInputProps = {
 
 // The input's editing state: a draft that follows `value` while nobody is
 // typing, live writes while someone is, and the commit (or clear) on blur.
-// The picker's preview is neither: it is shown through `fieldPreview` (the canvas
-// alone) and taken back through it, and it never reaches a live write.
+// The picker's preview never reaches it (VariableConnect shows it itself).
 export function useLiveInputEditing({
   value,
   busy,
   onCommit,
   onLiveCommit,
   onClear,
-  fieldPreview,
 }: Pick<LiveInputProps, 'value' | 'busy' | 'onCommit' | 'onClear'> & {
   onLiveCommit: LiveInputProps['onLiveCommit'] | undefined;
-  /** Shows the picker's previewed text on the canvas, and takes it away: never a write. */
-  fieldPreview?: FieldPreview | undefined;
 }) {
   const [draft, setDraft] = useState(value);
   const focused = useRef(false);
@@ -152,37 +145,10 @@ export function useLiveInputEditing({
   return {
     draft,
     scrub,
-    change: (text: string, { source }: { readonly source: 'typed' | 'preview' | 'restore' }) => {
+    change: (text: string) => {
       setDraft(text);
-      if (source === 'typed') {
-        edited.current = true;
-        scheduleLive(text);
-        return;
-      }
-      // The picker previewing a variable is shown, never written: a live write here put every hovered
-      // variable into the stylesheet (and the original back on the way out), each one a save, a history
-      // entry and a file the dev server reloaded. The canvas shows it through the preview channel alone.
-      if (source === 'preview') {
-        fieldPreview?.show(text);
-        return;
-      }
-      // Putting the text the chooser opened on back takes the canvas preview away at once (no timer a blur or
-      // an unmount could cancel). A live write of typing that went out before the chooser opened is still the
-      // person's edit, so it is put back as before; for an unset property that clears the live draft instead
-      // of writing the displayed default. It compares with nothing the panel reports: a live write can be
-      // read back as the value, so only the picker knows what the original was.
-      fieldPreview?.takeBack();
-      cancelLive();
-      if (!wrote.current) {
-        return;
-      }
-      wrote.current = false;
-      if (text.trim() === '') {
-        onClear();
-        return;
-      }
-      liveNow(text);
-      wrote.current = false;
+      edited.current = true;
+      scheduleLive(text);
     },
     focus: () => {
       focused.current = true;

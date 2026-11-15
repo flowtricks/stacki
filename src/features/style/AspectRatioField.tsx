@@ -11,6 +11,7 @@ import { displayOf, parseImportant } from './model/styleDisplay';
 import { type SetProp, type ClearProp, type LiveSetProp, type Props, SizeLabel, withImportant, useFollowingDraft, stepSizeKey } from './SizeKit';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // ─────────────────────────── Aspect ratio ───────────────────────────
 
@@ -189,6 +190,7 @@ export function RatioOtherInput({
       ariaLabel={translate('style.aspectRatioField.connect', { name: shownLabel })}
       disabled={busy}
       prop={prop}
+      canvasProperty={prop}
       onPick={(binding) => onCommit(binding, false)}
     >
       <input
@@ -229,6 +231,8 @@ export const ratioOptions = (translate: Translator): SelectOption<string>[] => [
 ];
 
 export function AspectRatioField({ read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector }: Props) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const translate = useTranslate();
   const display = displayOf(read('aspect-ratio'));
   const current = display.present ? display.value : '';
@@ -262,7 +266,7 @@ export function AspectRatioField({ read, busy, setProp, clearProp, liveSetProp, 
           ariaLabel={translate('style.aspectRatioField.aspectRatio')}
           disabled={busy}
           onChange={onSelect}
-          onPreview={(choice) => liveSetProp('aspect-ratio', choice === 'custom' || choice === 'other' ? undefined : (choice ?? undefined), false)}
+          onPreview={(choice) => hoverPreview('aspect-ratio', choice === 'custom' || choice === 'other' ? undefined : (choice ?? undefined), false)}
           customInput={
             key === 'other' ? (
               <RatioOtherInput

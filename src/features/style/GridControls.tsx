@@ -15,6 +15,7 @@ import { countTracks, NEW_COLUMN, NEW_ROW, repeatTracks, isUniformTracks } from 
 import { GRID_ITEM_ALIGN, gridKeyword, GridAlignIcon, X_ALIGN_ICONS, Y_ALIGN_ICONS, xAlignLabels, yAlignLabels, cap, CustomizeIcon } from './GridIcons';
 import { GridDirectionControl, GridContentControl, CountField } from './GridFlowControls';
 import { displayOf, displayText, parseImportant } from './model/styleDisplay';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // The grid controls in the Layout section (shown when Display is grid). Mirrors
 // Webflow: Columns/Rows track counts, Direction (+ dense), Align (justify-items X /
@@ -419,7 +420,9 @@ function ConfigureGridButton({ busy, customTracks, onOpen }: { busy: boolean; cu
 
 // Align: the preview box and the X (justify-items) / Y (align-items) axis dropdowns.
 function GridAlignRow({ props }: { props: GridControlsProps }) {
-  const { read, busy, setProp, clearProp, liveSetProp } = props;
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
+  const { read, busy, setProp, clearProp } = props;
   const translate = useTranslate();
   const alignAxis = (axis: 'X' | 'Y', prop: string) => (
     <GridAlignAxis
@@ -429,7 +432,7 @@ function GridAlignRow({ props }: { props: GridControlsProps }) {
       busy={busy}
       read={read}
       onSet={(next) => writeText(setProp, prop, next)}
-      onPreview={(next) => liveSetProp(prop, next, false)}
+      onPreview={(next) => hoverPreview(prop, next, false)}
       onClear={() => clearProp(prop)}
       onProvenance={props.onProvenance}
       onSelectSelector={props.onSelectSelector}

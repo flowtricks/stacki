@@ -321,7 +321,14 @@ export function useBgFieldEditing({
 export function BgFieldInput({ prop, label, placeholder, field }: { prop: string; label: string; placeholder: string; field: BgFieldEditing }) {
   const translate = useTranslate();
   return (
-    <VariableConnect code ariaLabel={translate('style.backgroundKit.connect', { name: label })} disabled={field.busy} prop={prop} onPick={field.pick}>
+    <VariableConnect
+      code
+      ariaLabel={translate('style.backgroundKit.connect', { name: label })}
+      disabled={field.busy}
+      prop={prop}
+      canvasProperty={prop}
+      onPick={field.pick}
+    >
       <input
         {...field.scrub.input}
         className="u-input embed-editor_size-input"

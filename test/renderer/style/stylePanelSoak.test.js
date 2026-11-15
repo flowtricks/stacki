@@ -343,6 +343,16 @@ async function runInElectron({ window, project, options }) {
           families: [family('weight'), family('font-family'), family('size'), family('color')],
           exitPaths: ['outside-press', 'canvas-press-same', 'canvas-press-other', 'escape', 'tab', 'shift-tab', 'window-blur', 'scroll'],
         });
+        // Every other family with a picker, by the commonest ways out: no hover of any field writes.
+        await runner.hoverPreview({
+          element: 'headingOne',
+          families: typeFamilies.filter((candidate) => candidate.field !== undefined && !['weight', 'font-family', 'size', 'color'].includes(candidate.id)),
+          exitPaths: ['outside-press', 'escape', 'tab'],
+        });
+      });
+      await guarded('select-scrub', async () => {
+        // The plain paragraph's font and weight are named values, so their dropdowns show (a heading's are variables).
+        await runner.selectScrub({ element: 'plain', families: typeFamilies, exitPaths: ['outside-press', 'escape', 'canvas-press-same'] });
       });
       await guarded('picker-arrow', async () => {
         await runner.arrowPreview({ element: 'headingOne', families: [family('size'), family('font-family')] });

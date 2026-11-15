@@ -714,6 +714,90 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     }
   }
 
+  // (iii) A dropdown's hover-scrub is a look too: every option the pointer rests on shows on the
+  // canvas and is never written, checked at every hovered option, and each way out puts the page
+  // and the control back. Families with a menu (a select's chevron or a "more" arrow) take part.
+  async function selectScrub({ element, families, exitPaths }) {
+    scenario = 'select-scrub';
+    for (const family of families) {
+      // A select's own button (shown while the value is a named one, not a variable), else a menu arrow.
+      const opener =
+        family.select === undefined
+          ? finders.arrow(family)
+          : `document.querySelector('button.u-select-button[aria-label=${JSON.stringify(family.select)}]') || undefined`;
+      if (opener === 'undefined') {
+        continue;
+      }
+      for (const exitPath of exitPaths) {
+        await closeEverything();
+        if (current !== element) {
+          await select(element, 'canvas');
+        }
+        await driver.settle();
+        const property = family.property;
+        const styleBefore = await canvasStyle(property);
+        const fieldBefore = await fieldState(family);
+        const opened = await pressPanel(opener, `press ${family.id} menu`);
+        await driver.settle();
+        if (!opened || (await openCount()) === 0) {
+          continue;
+        }
+        const filesAtOpen = driver.projectSnapshot();
+        const writtenDuring = [];
+        await segment(`scrub ${family.id} options`, 'preview', async () => {
+          for (let index = 0; index < HOVER_ROWS; index += 1) {
+            const point = await driver.panelPoint(finders.listOption(index + 1), { scroll: false });
+            if (point !== undefined) {
+              await driver.hover(point, `hover ${family.id} option ${index + 1}`);
+              await driver.sleep(HOVER_DWELL_MS);
+              const changes = fileChanges(filesAtOpen, driver.projectSnapshot());
+              if (changes.length > 0) {
+                writtenDuring.push({ row: index + 1, files: changes.map((change) => change.file) });
+              }
+            }
+          }
+        });
+        if (writtenDuring.length > 0) {
+          await report(
+            {
+              invariant: 'source-written',
+              summary: `scrub ${family.id} options: options ${writtenDuring.map((written) => written.row).join(', ')} wrote ${writtenDuring[0].files.join(', ')} while only hovered`,
+              evidence: { writtenDuring },
+            },
+            `scrub ${family.id} options`,
+          );
+        }
+        await segment(`leave ${family.id} menu by ${exitPath}`, exitPath === 'canvas-press-other' ? 'switch' : 'look', () => exitBy(exitPath));
+        if (exitPath === 'canvas-press-other') {
+          await select(element, 'canvas');
+          await driver.settle();
+        }
+        if ((await openCount()) > 0) {
+          await driver.hover({ x: 5, y: 5 }, 'move pointer away');
+          await closeEverything();
+        }
+        const styleAfter = await canvasStyle(property);
+        const fieldAfter = await fieldState(family);
+        if (styleAfter !== styleBefore) {
+          await report(
+            {
+              invariant: 'preview-stuck',
+              summary: `${family.id}: canvas ${property} ${styleBefore} -> ${styleAfter} after a scrub and ${exitPath}`,
+              evidence: {},
+            },
+            `leave menu by ${exitPath}`,
+          );
+        }
+        if (fieldAfter !== fieldBefore) {
+          await report(
+            { invariant: 'preview-stuck', summary: `${family.id}: field ${fieldBefore} -> ${fieldAfter} after a scrub and ${exitPath}`, evidence: {} },
+            `leave menu by ${exitPath}`,
+          );
+        }
+      }
+    }
+  }
+
   async function fieldState(family) {
     const snapshot = await driver.evaluate('window.__soak.snapshot()');
     const key = Object.keys(snapshot.controls ?? {}).find((name) => name === family.key);
@@ -1046,6 +1130,7 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     rapidToggle,
     hoverPreview,
     arrowPreview,
+    selectScrub,
     editCycle,
     typeThenSwitch,
     breakpoints,

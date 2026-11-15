@@ -7,6 +7,7 @@
 //      (canvas message, file save, undo bookkeeping) ran in the same task as the highlight's
 //      commit, so each row crossed waited on the one before. Now the highlight commits alone
 //      and the preview goes out on the next animation frame, once, for the row last landed on.
+//      The preview is canvas-only (PreviewPropContext): it never goes out as liveSetProp, a write.
 //   2. Resetting from the blue label showed the old value and the blue label until the save
 //      and the model rebuild behind it finished, though the canvas had already changed.
 //      Now the label and field read as unset in the same event, and hand back to the model
@@ -37,7 +38,8 @@ const frame = () =>
   await esbuild.build({
     stdin: {
       contents: `export { WeightField } from './src/features/style/FontFields'
-export { useOptimisticClear } from './src/features/style/embed/useOptimisticClear'`,
+export { useOptimisticClear } from './src/features/style/embed/useOptimisticClear'
+export { PreviewPropContext } from './src/features/style/connectFieldHelpers'`,
       resolveDir: ROOT,
       loader: 'tsx',
     },
@@ -92,7 +94,9 @@ export { useOptimisticClear } from './src/features/style/embed/useOptimisticClea
   const React = require('react');
   const { createRoot } = require('react-dom/client');
   act = React.act;
-  const { WeightField, useOptimisticClear } = require(bundlePath);
+  const { WeightField, useOptimisticClear, PreviewPropContext } = require(bundlePath);
+  // A hover-scrub is a look: it reaches the canvas-only preview, never liveSetProp (a write).
+  const liveWrites = [];
 
   const declared = (value) => ({
     source: 'selected',
@@ -118,15 +122,19 @@ export { useOptimisticClear } from './src/features/style/embed/useOptimisticClea
     const optimistic = useOptimisticClear(model, baseClear);
     const read = held ? optimistic.read : (prop) => model.get(prop);
     const clearProp = held ? optimistic.clearProp : baseClear;
-    return React.createElement(WeightField, {
-      read,
-      busy: false,
-      setProp: () => {},
-      clearProp,
-      liveSetProp: (prop, value) => previews.push(value),
-      onProvenance: () => {},
-      onSelectSelector: () => {},
-    });
+    return React.createElement(
+      PreviewPropContext.Provider,
+      { value: (prop, value) => previews.push(value) },
+      React.createElement(WeightField, {
+        read,
+        busy: false,
+        setProp: () => {},
+        clearProp,
+        liveSetProp: (prop, value) => liveWrites.push(value),
+        onProvenance: () => {},
+        onSelectSelector: () => {},
+      }),
+    );
   }
   const root = createRoot(document.getElementById('root'));
   const render = () =>
@@ -172,6 +180,7 @@ export { useOptimisticClear } from './src/features/style/embed/useOptimisticClea
   });
   await frame();
   assert.deepEqual(previews, [undefined], 'leaving reverts once');
+  assert.deepEqual(liveWrites, [], 'no hover went out as a live write');
   await act(async () => {
     document.querySelector('.u-select-button').click(); // close
   });

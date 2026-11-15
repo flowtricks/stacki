@@ -406,13 +406,19 @@ test("the panel previews an edit, settles it by its save, and skips a grouped ru
 
 // ───────────────────────────── The hover preview ─────────────────────────────
 
-const SHOW = { type: 'avb:hover-style', op: 'show', path: 'src/pages/index.astro:0.1', property: 'font-size', value: 'var(--display)', important: false };
+const SIZE_DISPLAY = { property: 'font-size', value: 'var(--display)', important: false };
+const SHOW = { type: 'avb:hover-style', op: 'show', path: 'src/pages/index.astro:0.1', declarations: [SIZE_DISPLAY] };
 const CLEAR = { type: 'avb:hover-style', op: 'clear' };
+const SETTLE = { type: 'avb:hover-style', op: 'settle' };
+const withDeclaration = (change) => ({ ...SHOW, declarations: [{ ...SIZE_DISPLAY, ...change }] });
 
-test('hover style messages accept a show and a clear, and refuse every malformed shape', () => {
+test('hover style messages accept a show, a clear and a settle, and refuse every malformed shape', () => {
   assert.deepEqual(contract.parseHoverStyleMessage(SHOW), SHOW);
-  assert.deepEqual(contract.parseHoverStyleMessage({ ...SHOW, important: true }), { ...SHOW, important: true });
+  assert.deepEqual(contract.parseHoverStyleMessage(withDeclaration({ important: true })), withDeclaration({ important: true }));
+  const two = { ...SHOW, declarations: [SIZE_DISPLAY, { property: 'line-height', value: '1.2', important: false }] };
+  assert.deepEqual(contract.parseHoverStyleMessage(two), two);
   assert.deepEqual(contract.parseHoverStyleMessage(CLEAR), CLEAR);
+  assert.deepEqual(contract.parseHoverStyleMessage(SETTLE), SETTLE);
   const limits = contract.HOVER_STYLE_LIMITS;
   const bad = [
     undefined,
@@ -425,15 +431,20 @@ test('hover style messages accept a show and a clear, and refuse every malformed
     { ...SHOW, path: 7 },
     { ...SHOW, path: 'a\nb' },
     { ...SHOW, path: 'a'.repeat(limits.pathCharsMax + 1) },
-    { ...SHOW, property: 'Font-Size' },
-    { ...SHOW, property: 'font-size: 3px' },
-    { ...SHOW, property: undefined },
-    { ...SHOW, value: '' },
-    { ...SHOW, value: '1px; color: red' },
-    { ...SHOW, value: '1px !important' },
-    { ...SHOW, value: 3 },
-    { ...SHOW, important: 'true' },
-    { ...SHOW, important: undefined },
+    { ...SHOW, declarations: [] },
+    { ...SHOW, declarations: SIZE_DISPLAY },
+    { ...SHOW, declarations: [SIZE_DISPLAY, SIZE_DISPLAY] },
+    { ...SHOW, declarations: Array.from({ length: limits.declarationsMax + 1 }, (_, index) => ({ ...SIZE_DISPLAY, property: `--p${index}` })) },
+    { ...SHOW, declarations: ['font-size'] },
+    withDeclaration({ property: 'Font-Size' }),
+    withDeclaration({ property: 'font-size: 3px' }),
+    withDeclaration({ property: undefined }),
+    withDeclaration({ value: '' }),
+    withDeclaration({ value: '1px; color: red' }),
+    withDeclaration({ value: '1px !important' }),
+    withDeclaration({ value: 3 }),
+    withDeclaration({ important: 'true' }),
+    withDeclaration({ important: undefined }),
   ];
   for (const input of bad) {
     assert.equal(contract.parseHoverStyleMessage(input), undefined, JSON.stringify(input));
@@ -455,7 +466,7 @@ test("a hover preview is set on the node's elements only, and clear leaves each 
   assert.equal(attribute('other'), undefined, 'another node is left alone');
   assert.equal(frame.hoverStyleCount(), 2);
   // A new show replaces the last: the first property goes back before the next is set.
-  frame.receiveLiveRules({ ...SHOW, property: 'font-weight', value: '700', important: true });
+  frame.receiveLiveRules(withDeclaration({ property: 'font-weight', value: '700', important: true }));
   assert.equal(document.getElementById('copy').style.getPropertyValue('font-size'), '10px');
   assert.equal(document.getElementById('one').style.getPropertyPriority('font-weight'), 'important');
   frame.receiveLiveRules(CLEAR);
@@ -467,7 +478,43 @@ test("a hover preview is set on the node's elements only, and clear leaves each 
   frame.receiveLiveRules({ ...SHOW, path: 'src/pages/index.astro:9' });
   assert.equal(frame.hoverStyleCount(), 0);
   assert.equal(attribute('one'), undefined);
+  // A preview of several declarations sets and restores each.
+  frame.receiveLiveRules({ ...SHOW, declarations: [SIZE_DISPLAY, { property: 'line-height', value: '1.2', important: false }] });
+  assert.equal(document.getElementById('copy').style.getPropertyValue('line-height'), '1.2');
+  frame.receiveLiveRules(CLEAR);
+  assert.equal(attribute('copy'), 'color: red; font-size: 10px;');
   dom.window.close();
+});
+
+test('a settling preview stays until the page computes it without the preview, and no longer than the window', () => {
+  installDom(devStyle('src/styles/global.css', '#one { font-size: 10px }'));
+  document.body.innerHTML = `<h1 id="one" data-avb-p="${SHOW.path}">One</h1>`;
+  const frame = loadFrame();
+  const one = () => document.getElementById('one');
+  frame.receiveLiveRules(withDeclaration({ value: '21px' }));
+  frame.receiveLiveRules(SETTLE);
+  step(3);
+  assert.equal(one().style.getPropertyValue('font-size'), '21px', 'the save has not landed: the preview stays');
+  // The save lands: the page's own sheet now holds the value.
+  document.querySelector('style').textContent = '#one { font-size: 21px }';
+  step();
+  assert.equal(one().hasAttribute('style'), false, 'the page agrees: the preview is gone, the attribute with it');
+  assert.equal(frame.hoverStyleCount(), 0);
+  // A save that never lands: the page's own value comes back once the window is spent.
+  frame.receiveLiveRules(withDeclaration({ value: '30px' }));
+  frame.receiveLiveRules(SETTLE);
+  step(contract.HOVER_STYLE_LIMITS.settleFramesMax - 2);
+  assert.equal(one().style.getPropertyValue('font-size'), '30px', 'inside the window');
+  step(2);
+  assert.equal(one().hasAttribute('style'), false, 'past the window');
+  // A clear during a settle takes it away at once; a settle with nothing shown does nothing.
+  frame.receiveLiveRules(withDeclaration({ value: '40px' }));
+  frame.receiveLiveRules(SETTLE);
+  frame.receiveLiveRules(CLEAR);
+  assert.equal(one().hasAttribute('style'), false);
+  frame.receiveLiveRules(SETTLE);
+  step();
+  assert.equal(frame.hoverStyleCount(), 0);
 });
 
 test('a hover preview past the element bound previews the first copies and leaves the rest', () => {
@@ -480,6 +527,23 @@ test('a hover preview past the element bound previews the first copies and leave
   assert.equal(document.getElementById(`p${count - 1}`).hasAttribute('style'), false);
   frame.receiveLiveRules(CLEAR);
   assert.equal(document.querySelectorAll('[style]').length, 0);
+});
+
+test("the panel's hover controller clears and settles only its own properties, and settles only the previewed value", () => {
+  const posted = [];
+  const controller = edits.createHoverStyle((message) => posted.push(message.op));
+  controller.clear(['font-size']);
+  controller.settle('font-size', '21px');
+  assert.deepEqual(posted, [], 'nothing shown: nothing to take away');
+  controller.show(SHOW.path, [SIZE_DISPLAY]);
+  controller.clear(['color']);
+  assert.deepEqual(posted, ['show'], "another field's restore leaves this preview alone");
+  controller.settle('font-size', 'var(--display)');
+  assert.deepEqual(posted, ['show', 'settle'], 'a write of the previewed value settles it');
+  assert.deepEqual(controller.showing(), []);
+  controller.show(SHOW.path, [SIZE_DISPLAY]);
+  controller.settle('font-size', '12px');
+  assert.deepEqual(posted, ['show', 'settle', 'show', 'clear'], 'a write of anything else clears it at once');
 });
 
 test('in a real browser the canvas shows the value before the save and agrees after it', (context) => {

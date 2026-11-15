@@ -200,15 +200,19 @@ export function parseLiveRuleMessage(input: unknown): LiveRuleMessage | undefine
 
 // ───────────────────────────── Hover style ─────────────────────────────
 
-// The variable picker's hover preview. A hovered variable is shown on the selected element
-// and nowhere else, and never written: it is a look, so it must not save, enter history, mark
-// the project dirty, autosave or snapshot (soak SP-09: it used to go out as a live write). The
-// rule channel above cannot carry it, since it patches only rules the page's stylesheets
-// already hold under the source's own sheet: a rule in a file another one @imports (Lumos's
-// global.css), a grouped rule's member and a rule the first edit would create are all out of
-// its reach, and those are exactly the rules a hover lands on. So the frame sets the hovered
-// declaration inline on the element the panel shows, and `clear` puts the element's own
-// inline style back exactly. One hover preview is up at a time: `show` replaces the last.
+// Every hover preview of the Style panel: a variable hovered or arrowed in the picker, an option
+// hovered or arrowed in a dropdown. It is shown on the selected element and nowhere else, and
+// never written: it is a look, so it must not save, enter history, mark the project dirty,
+// autosave or snapshot (soak SP-09: it used to go out as a live write). The rule channel above
+// cannot carry it, since it patches only rules the page's stylesheets already hold under the
+// source's own sheet: a rule in a file another one @imports (Lumos's global.css), a grouped
+// rule's member and a rule the first edit would create are all out of its reach, and those are
+// exactly the rules a hover lands on. So the frame sets the hovered declarations inline on the
+// element the panel shows. One hover preview is up at a time: `show` replaces the last; `clear`
+// puts each element's own inline style back exactly, at once (the hover ended without a pick);
+// `settle` (a pick is being saved) keeps the preview until the page computes the same values
+// without it, at most `settleFramesMax` frames, so a pick never flashes the old value while its
+// save lands, then puts the inline style back exactly as `clear` does.
 
 export const HOVER_STYLE_MESSAGE = 'avb:hover-style';
 
@@ -216,19 +220,29 @@ export const HOVER_STYLE_LIMITS = {
   /** Renderings of one node a preview may set (loop copies of the selected node). */
   elementsMax: 64,
   pathCharsMax: 1_000,
+  /** Declarations one preview sets: a dropdown option can stand for a few longhands. */
+  declarationsMax: 8,
+  /** How long a settling preview waits for the page to agree before it goes anyway. */
+  settleFramesMax: 180,
 } as const satisfies Record<string, number>;
+
+/** One declaration a hover preview shows. */
+export interface HoverDeclaration {
+  readonly property: string;
+  readonly value: string;
+  readonly important: boolean;
+}
 
 export type HoverStyleMessage =
   | {
       readonly type: typeof HOVER_STYLE_MESSAGE;
       readonly op: 'show';
-      /** The selected node's rendered path (the frame's `data-avb-path` tags). */
+      /** The selected node's rendered path (the frame's `data-avb-p` tags). */
       readonly path: string;
-      readonly property: string;
-      readonly value: string;
-      readonly important: boolean;
+      readonly declarations: readonly HoverDeclaration[];
     }
-  | { readonly type: typeof HOVER_STYLE_MESSAGE; readonly op: 'clear' };
+  | { readonly type: typeof HOVER_STYLE_MESSAGE; readonly op: 'clear' }
+  | { readonly type: typeof HOVER_STYLE_MESSAGE; readonly op: 'settle' };
 
 /** A hover preview message for the frame, or undefined when `input` is not one (or is malformed). */
 export function parseHoverStyleMessage(input: unknown): HoverStyleMessage | undefined {
@@ -241,12 +255,54 @@ export function parseHoverStyleMessage(input: unknown): HoverStyleMessage | unde
   if (input.op === 'clear') {
     return { type: HOVER_STYLE_MESSAGE, op: 'clear' };
   }
+  if (input.op === 'settle') {
+    return { type: HOVER_STYLE_MESSAGE, op: 'settle' };
+  }
   if (input.op !== 'show') {
     return undefined;
   }
   // A path is only ever compared with the frame's own tags, so anything but control characters may be in it.
   const path = 'path' in input ? fragment(input.path, HOVER_STYLE_LIMITS.pathCharsMax, /[\0-\x1f]/) : undefined;
   if (path === undefined) {
+    return undefined;
+  }
+  const declarations = 'declarations' in input ? hoverDeclarationsOf(input.declarations) : undefined;
+  if (declarations === undefined) {
+    return undefined;
+  }
+  return { type: HOVER_STYLE_MESSAGE, op: 'show', path, declarations };
+}
+
+// One to declarationsMax declarations, each a property the frame can set and a value that stays one
+// declaration, with `!important` as its own boolean; a property named twice is refused.
+function hoverDeclarationsOf(input: unknown): readonly HoverDeclaration[] | undefined {
+  if (!Array.isArray(input)) {
+    return undefined;
+  }
+  const values: readonly unknown[] = input;
+  if (values.length === 0) {
+    return undefined;
+  }
+  if (values.length > HOVER_STYLE_LIMITS.declarationsMax) {
+    return undefined;
+  }
+  const declarations: HoverDeclaration[] = [];
+  for (const value of values) {
+    const declaration = hoverDeclarationOf(value);
+    if (declaration === undefined) {
+      return undefined;
+    }
+    if (declarations.some((known) => known.property === declaration.property)) {
+      return undefined;
+    }
+    declarations.push(declaration);
+  }
+  assert(declarations.length === values.length, 'hoverDeclarationsOf: every entry parsed');
+  return declarations;
+}
+
+function hoverDeclarationOf(input: unknown): HoverDeclaration | undefined {
+  if (typeof input !== 'object' || input === null) {
     return undefined;
   }
   const property = 'property' in input ? fragment(input.property, LIVE_RULE_LIMITS.propertyCharsMax, VALUE_BREAKOUT) : undefined;
@@ -256,7 +312,7 @@ export function parseHoverStyleMessage(input: unknown): HoverStyleMessage | unde
   if (!PROPERTY.test(property)) {
     return undefined;
   }
-  // The same value shape a rule edit carries, `!important` as its own boolean.
+  // The same value shape a rule edit carries.
   const edit = parseLiveRuleEdit({
     kind: 'value',
     value: 'value' in input ? input.value : undefined,
@@ -265,8 +321,8 @@ export function parseHoverStyleMessage(input: unknown): HoverStyleMessage | unde
   if (edit === undefined) {
     return undefined;
   }
-  assert(edit.kind === 'value', 'parseHoverStyleMessage: a value edit parses as one');
-  return { type: HOVER_STYLE_MESSAGE, op: 'show', path, property, value: edit.value, important: edit.important };
+  assert(edit.kind === 'value', 'hoverDeclarationOf: a value edit parses as one');
+  return { property, value: edit.value, important: edit.important };
 }
 
 // ───────────────────────────── Matching ─────────────────────────────

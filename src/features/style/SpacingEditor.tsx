@@ -72,6 +72,7 @@ export function SpacingEditor(props: SpacingEditorProps) {
           ariaLabel={translate('style.spacingEditor.connect', { name: humanLabel(prop, translate) })}
           disabled={false}
           prop={prop}
+          canvasProperty={prop}
           onPick={editor.pick}
         >
           <input

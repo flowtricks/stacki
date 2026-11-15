@@ -12,6 +12,7 @@ import { imageUrlOf, assetSourceCandidates, FallbackImg } from './BackgroundLaye
 import { LayerEditor } from './BackgroundLayerEditor';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // The Backgrounds section — Webflow parity. `background` is a stack of layers
 // (images + gradients) painted over a single background-color. The layer list
@@ -104,6 +105,8 @@ export default function BackgroundSection(props: Props) {
 
 // Clipping — background-clip. "None" writes border-box explicitly.
 function ClippingRow(props: Props) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { read, busy, setProp, clearProp } = props;
   const translate = useTranslate();
   const clipDisplay = displayOf(read('background-clip'));
@@ -126,7 +129,7 @@ function ClippingRow(props: Props) {
           value={clip}
           options={clipOptions(translate)}
           onChange={(next) => setProp('background-clip', next, clipDisplay.important)}
-          onPreview={(next) => props.liveSetProp('background-clip', next ?? undefined, clipDisplay.important)}
+          onPreview={(next) => hoverPreview('background-clip', next ?? undefined, clipDisplay.important)}
           ariaLabel={translate('style.backgroundSection.backgroundClipping')}
           disabled={busy}
         />

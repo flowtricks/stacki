@@ -79,6 +79,7 @@ export function ValueField({
       ariaLabel={translate('styleModel.shared.connectVariable', { label: prop })}
       disabled={busy}
       prop={prop}
+      canvasProperty={prop}
       onPick={onPick}
     >
       <textarea

@@ -85,72 +85,60 @@ export function updateChildRef(child: ReactElement<ChildFieldProps>, element: Fi
   }
 }
 
-// A change that is only the picker previewing a variable (or putting the original back), not the person
-// typing: the wrapped field's own change handler can tell them apart by this mark on the event it gets,
-// so a preview is never taken as an edit (a blur must not commit it, and putting an unset value back
-// must clear the draft rather than write the displayed default).
-export const PICKER_PREVIEW_MARK = 'stackiPickerPreview';
-
-/** What a change from the picker is: showing a variable, or putting the value the chooser opened on back. */
-export type PickerPreviewKind = 'preview' | 'restore';
-
-/** The picker's kind of change, or undefined when the person typed it. */
-export function pickerPreviewKind(event: unknown): PickerPreviewKind | undefined {
-  if (typeof event !== 'object' || event === null || !(PICKER_PREVIEW_MARK in event)) {
-    return undefined;
-  }
-  return event[PICKER_PREVIEW_MARK] === 'restore' ? 'restore' : 'preview';
-}
-
 /**
- * Shows `value` for `prop` on the canvas only, or with `undefined` takes that showing away again. It is the
- * picker preview's one way onto the page: never a write, a history entry, a dirty flag, an autosave or a git
- * snapshot, so nothing about the project changes while a person only looks (useEditorWrites' previewProp).
+ * Shows a value for a property (or a few) on the canvas only, or with `undefined` takes that showing away.
+ * The shape is liveSetProp's, so a dropdown's hover-scrub swaps one for the other. It is every hover
+ * preview's one way onto the page (a picker row, a dropdown option): never a write, a history entry, a
+ * dirty flag, an autosave or a git snapshot, so nothing about the project changes while a person only
+ * looks (useEditorWrites' previewProp).
  */
-export type PreviewProp = (prop: string, value: string | undefined) => void;
+export type PreviewProp = (prop: string | readonly string[], value: string | undefined, important: boolean) => void;
 
-// Outside a style card (the audits, the variables sheet) there is no canvas rule to preview on: the field
-// shows the preview and nothing else does.
+// Outside a style card (the audits, the variables sheet) there is nothing on the canvas to preview on:
+// the control shows the preview and nothing else does.
 const previewNowhere: PreviewProp = () => undefined;
 
-/** The style card's canvas-only preview, for the fields inside it (StyleCard provides it). */
+/** The style card's canvas-only preview, for the controls inside it (StyleCard provides it). */
 export const PreviewPropContext = createContext<PreviewProp>(previewNowhere);
+
+/** The canvas-only preview a dropdown's hover-scrub calls in place of liveSetProp. */
+export function useHoverPreview(): PreviewProp {
+  return useContext(PreviewPropContext);
+}
 
 /** A field's canvas preview: shows the picker's previewed text for the field's property, and takes it back. */
 export interface FieldPreview {
   readonly show: (text: string) => void;
   /** Idempotent: with nothing shown, nothing is sent. */
   readonly takeBack: () => void;
-  /** A pick of `picked` is being committed: a pick of the saved value changes nothing, so its preview goes now. */
-  readonly picked: (picked: string) => void;
+  /** A pick: the preview is now the write's to settle (useEditorWrites' setProp), not this field's to take back. */
+  readonly handOver: () => void;
 }
 
 /**
- * The canvas preview of the field editing `prop` (undefined: a field with no property shows the preview in
- * itself alone). What it put up is remembered, so it is always taken back: by the picker's restore; by the
- * field's saved `value` changing, which is a pick's save landing (the page then shows the picked value
- * itself, so taking the preview back earlier would flash the old one); and by the field going away with it
- * still up, since the picker's own restore cannot reach a field that is unmounting (its input is gone) and a
- * selection or project change unmounts both at once.
+ * The canvas preview of the field whose whole value is `prop` (undefined: a field that is one part of a
+ * value, such as a shadow's offset, shows the preview in itself alone, since the text is not the
+ * property's value). What it put up is remembered, so it is always taken back: by the picker's restore,
+ * and by the field going away with it still up (a selection or project change). A pick hands it over:
+ * its write settles the preview (useEditorWrites' setProp), so nothing here takes it back after.
  */
-export function useFieldPreview(prop: string | undefined, value: string): FieldPreview {
+export function useFieldPreview(prop: string | undefined): FieldPreview {
   const previewProp = useContext(PreviewPropContext);
   // The property a preview is up for, or undefined when none is.
   const shownRef = useRef<string | undefined>(undefined);
-  const latest = useRef({ previewProp, prop, value });
-  latest.current = { previewProp, prop, value };
+  const latest = useRef({ previewProp, prop });
+  latest.current = { previewProp, prop };
   const takeBack = (): void => {
     const shown = shownRef.current;
     if (shown === undefined) {
       return;
     }
     shownRef.current = undefined;
-    latest.current.previewProp(shown, undefined);
+    latest.current.previewProp(shown, undefined, false);
   };
   const takeBackRef = useRef(takeBack);
   takeBackRef.current = takeBack;
   useEffect(() => () => takeBackRef.current(), []);
-  useEffect(() => takeBackRef.current(), [value]);
   return {
     show: (text) => {
       const target = latest.current.prop;
@@ -162,13 +150,11 @@ export function useFieldPreview(prop: string | undefined, value: string): FieldP
         takeBack();
       }
       shownRef.current = target;
-      latest.current.previewProp(target, text);
+      latest.current.previewProp(target, text, false);
     },
     takeBack,
-    picked: (picked) => {
-      if (picked === latest.current.value) {
-        takeBack();
-      }
+    handOver: () => {
+      shownRef.current = undefined;
     },
   };
 }

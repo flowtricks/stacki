@@ -10,6 +10,7 @@ import { type Props, CUSTOM, PropLabel, LiveInput } from './TypographyKit';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
 import { useSelectorState } from './model/selectorScope';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // The Typography section of the style panel. Like the Size section, every control
 // is always rendered and driven by the resolved model: a property is blue when the
@@ -63,6 +64,8 @@ export function quoteFamily(name: string): string {
 }
 
 export function FontFamilyField(props: Props) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = props;
   const display = displayOf(read('font-family'));
   const translate = useTranslate();
@@ -111,7 +114,7 @@ export function FontFamilyField(props: Props) {
         onPreview={(value) => {
           const previewed = value ?? undefined;
           const font = previewed && previewed !== CUSTOM ? quoteFamily(previewed) : undefined;
-          liveSetProp('font-family', font, false);
+          hoverPreview('font-family', font, false);
         }}
         ariaLabel={translate('style.fontFields.fontFamily')}
         disabled={busy}
@@ -217,6 +220,8 @@ export function normalizeWeight(value: string): string {
 }
 
 export function WeightField(props: Props) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { read, busy, setProp, clearProp, liveSetProp, onProvenance, onSelectSelector } = props;
   const translate = useTranslate();
   const display = displayOf(read('font-weight'));
@@ -259,7 +264,7 @@ export function WeightField(props: Props) {
         value={customMode ? CUSTOM : (matched ?? '')}
         options={weightOptions(translate)}
         onChange={pick}
-        onPreview={(value) => liveSetProp('font-weight', value === CUSTOM ? undefined : (value ?? undefined), false)}
+        onPreview={(value) => hoverPreview('font-weight', value === CUSTOM ? undefined : (value ?? undefined), false)}
         ariaLabel={translate('style.fontFields.fontWeight')}
         disabled={busy}
         customInput={

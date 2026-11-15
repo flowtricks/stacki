@@ -147,6 +147,7 @@ function GapInput({
       ariaLabel={translate('style.gapControl.connect', { name: ariaLabel })}
       disabled={field.busy}
       prop={field.prop}
+      canvasProperty={field.prop}
       onPick={(binding) => field.onCommit(binding)}
     >
       <input {...inputProps} className="u-input embed-editor_size-input" disabled={field.busy} spellCheck={false} placeholder="0" aria-label={ariaLabel} />

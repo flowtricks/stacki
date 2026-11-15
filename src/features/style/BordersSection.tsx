@@ -292,6 +292,7 @@ function StyleCustomField({
       ariaLabel={translate('style.bordersSection.connectBorderStyle')}
       disabled={busy}
       prop="border-style"
+      canvasProperty="border-style"
       onPick={(binding) => write(binding, { live: false })}
     >
       <input

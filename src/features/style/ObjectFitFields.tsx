@@ -18,6 +18,7 @@ import { displayOf, type Display } from './model/styleDisplay';
 import { type SetProp, type ClearProp, type LiveSetProp, type Props, SizeLabel, withImportant, useFollowingDraft, stepSizeKey } from './SizeKit';
 import { RatioOtherInput } from './AspectRatioField';
 import { useTranslate } from '../../lib/i18n/useTranslate';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // ─────────────────────── Image fit (object-fit / object-position) ───────────────────────
 
@@ -88,6 +89,7 @@ export function ObjectPositionInput({
       ariaLabel={translate('style.objectFitFields.connect', { name: label })}
       disabled={busy}
       prop="object-position"
+      canvasProperty="object-position"
       onPick={(binding) => onCommit(binding)}
     >
       <input
@@ -273,6 +275,8 @@ export function ObjectFitSelect({
   clearProp: ClearProp;
   liveSetProp: LiveSetProp;
 }) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const translate = useTranslate();
   const [forceCustom, setForceCustom] = useState(false);
   const fitValue = fit.value.trim().toLowerCase();
@@ -301,7 +305,7 @@ export function ObjectFitSelect({
       ariaLabel={translate('style.objectFitFields.objectFit')}
       disabled={busy}
       onChange={pickFit}
-      onPreview={(choice) => liveSetProp('object-fit', choice === FIT_CUSTOM ? undefined : (choice ?? undefined), false)}
+      onPreview={(choice) => hoverPreview('object-fit', choice === FIT_CUSTOM ? undefined : (choice ?? undefined), false)}
       customInput={
         fitCustom ? (
           <RatioOtherInput

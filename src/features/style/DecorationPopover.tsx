@@ -12,6 +12,7 @@ import { type Props, LiveInput } from './TypographyKit';
 import { PopLabel, LengthRow } from './TypographyColumns';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // ─────────────────────────── Text-decoration advanced options ───────────────────────────
 
@@ -106,6 +107,8 @@ export const skipInkOptions = (translate: Translator): SelectOption<string>[] =>
 // The Decoration & underline popover body: Line / Style / Color compose the
 // `text-decoration` shorthand; Thick and Skip ink are their own longhands.
 export function DecorationPopover(props: Props) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { read, busy, setProp, liveSetProp } = props;
   const translate = useTranslate();
   const display = displayOf(read('text-decoration'));
@@ -115,11 +118,7 @@ export function DecorationPopover(props: Props) {
     (mode === 'live' ? liveSetProp : setProp)('text-decoration', composeDecoration(next), display.important);
   // A preview that ends (the menu closed without a pick) puts the live write back.
   const preview = (value: string | undefined, next: (value: string) => DecorParts) => {
-    if (value === undefined) {
-      liveSetProp('text-decoration', undefined, display.important);
-    } else {
-      write(next(value), 'live');
-    }
+    hoverPreview('text-decoration', value === undefined ? undefined : composeDecoration(next(value)), display.important);
   };
   const rowProps = { props, parts, shorthandSet: display.isSelected, write };
   const skip = displayOf(read('text-decoration-skip-ink'));
@@ -154,7 +153,7 @@ export function DecorationPopover(props: Props) {
             value={skip.present ? skip.value.trim().toLowerCase() : 'auto'}
             options={skipInkOptions(translate)}
             onChange={(value) => setProp('text-decoration-skip-ink', value, skip.important)}
-            onPreview={(value) => liveSetProp('text-decoration-skip-ink', value ?? undefined, skip.important)}
+            onPreview={(value) => hoverPreview('text-decoration-skip-ink', value ?? undefined, skip.important)}
             ariaLabel={translate('style.decorationPopover.skipInk')}
             disabled={busy}
           />

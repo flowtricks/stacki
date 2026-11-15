@@ -213,6 +213,7 @@ function DistanceRow({
           disabled={busy}
           className="is-fill"
           prop="perspective"
+          canvasProperty="perspective"
           onPick={(binding) => onCommit(binding)}
         >
           <input

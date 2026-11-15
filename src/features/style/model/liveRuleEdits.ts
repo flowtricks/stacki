@@ -7,10 +7,14 @@
 
 import { assert } from '../../../../shared/core/assert';
 import {
+  HOVER_STYLE_LIMITS,
+  HOVER_STYLE_MESSAGE,
   LIVE_RULE_LIMITS,
   LIVE_RULE_MESSAGE,
   liveRuleKey,
   parseLiveRuleTarget,
+  type HoverDeclaration,
+  type HoverStyleMessage,
   type LiveRuleEdit,
   type LiveRuleMessage,
   type LiveRuleTarget,
@@ -141,3 +145,58 @@ export function projectRelative(path: string, projectPath: string | undefined): 
   }
   return relative;
 }
+
+// ───────────────────────────── Hover previews ─────────────────────────────
+
+/**
+ * The panel's half of the hover preview (shared/properties/liveRules.ts `avb:hover-style`): what is
+ * shown on the selected element while a picker row or a dropdown option is hovered, and never
+ * written. One preview is up at a time. `clear` takes it away when the hover ends without a pick;
+ * `settle` hands it to the frame when a write of the previewed value starts (a pick), so the canvas
+ * keeps it until the page holds that value instead of flashing the old one; a write of anything
+ * else clears it. Both only act for the properties the preview showed, so a field's late restore
+ * never takes away another field's preview.
+ */
+export function createHoverStyle(post: (message: HoverStyleMessage) => void) {
+  let shown: readonly HoverDeclaration[] | undefined = undefined;
+  const owns = (properties: readonly string[]): boolean =>
+    shown !== undefined && properties.some((property) => shown?.some((declaration) => declaration.property === property) === true);
+  const clear = (properties: readonly string[]): void => {
+    if (!owns(properties)) {
+      return;
+    }
+    shown = undefined;
+    post({ type: HOVER_STYLE_MESSAGE, op: 'clear' });
+  };
+  return {
+    show(path: string, declarations: readonly HoverDeclaration[]): void {
+      assert(declarations.length > 0, 'Hover style: a preview shows something');
+      assert(declarations.length <= HOVER_STYLE_LIMITS.declarationsMax, 'Hover style: declarations stay bounded');
+      shown = declarations;
+      post({ type: HOVER_STYLE_MESSAGE, op: 'show', path, declarations });
+    },
+    clear,
+    /** A write of `value` to `property` starts: a preview of that very value settles, any other goes now. */
+    settle(property: string, value: string): void {
+      if (!owns([property])) {
+        return;
+      }
+      const previewed = shown?.find((declaration) => declaration.property === property);
+      if (previewed === undefined || previewed.value !== value) {
+        clear([property]);
+        return;
+      }
+      shown = undefined;
+      post({ type: HOVER_STYLE_MESSAGE, op: 'settle' });
+    },
+    /** For tests and the panel's unmount: the properties the preview shows now. */
+    showing(): readonly string[] {
+      return shown === undefined ? [] : shown.map((declaration) => declaration.property);
+    },
+  };
+}
+
+/** The panel's hover preview, sent to whichever canvas frame is registered. */
+export const hoverStyle = createHoverStyle((message) => {
+  tellCanvas(message);
+});

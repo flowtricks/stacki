@@ -91,6 +91,7 @@ function ExpressionField({
       ariaLabel={`${title} expression`}
       disabled={busy}
       prop={prop}
+      canvasProperty={prop}
       onPick={(next) => {
         setText(next);
         commit(next);

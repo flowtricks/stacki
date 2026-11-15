@@ -10,6 +10,7 @@ import ImportantMark from './components/ImportantMark';
 import { displayOf } from './model/styleDisplay';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { Translator } from '../../lib/i18n/localeContext';
+import { useHoverPreview } from './connectFieldHelpers';
 
 // Webflow's flex-alignment control: a live preview grid on the left (3×3 click
 // targets under a real-flex bar preview) plus the X / Y axis dropdowns. The X axis
@@ -309,6 +310,8 @@ type AxisSelectProps = Pick<Props, 'busy' | 'read' | 'onSet' | 'onLive' | 'onCle
   fallback: string;
 };
 function AxisSelect(props: AxisSelectProps) {
+  // A hover-scrub is a look, never a write: the option under the pointer shows on the canvas alone.
+  const hoverPreview = useHoverPreview();
   const { axis, prop, value, values, fallback, busy, onSet, onLive, onClear } = props;
   const translate = useTranslate();
   const [forceCustom, setForceCustom] = useState(false);
@@ -335,7 +338,7 @@ function AxisSelect(props: AxisSelectProps) {
   // Hover scrub: preview the option under the pointer on the canvas, and put the
   // original back when the list closes without a pick. "Custom" has no value of its own
   // to show, so landing on it reverts rather than previewing `unset`.
-  const preview = (option: string | undefined) => onLive(prop, option === CUSTOM ? undefined : option);
+  const preview = (option: string | undefined) => hoverPreview(prop, option === CUSTOM ? undefined : option, false);
 
   return (
     <div className="embed-editor_align-axis">

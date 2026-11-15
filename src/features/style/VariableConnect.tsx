@@ -25,8 +25,7 @@ import {
   type FieldRefValue,
   type ChildFieldProps,
   updateChildRef,
-  PICKER_PREVIEW_MARK,
-  type PickerPreviewKind,
+  useFieldPreview,
 } from './connectFieldHelpers';
 
 export { buildTokenHtml, serializeTokens } from './TokenField';
@@ -68,6 +67,12 @@ type VariableConnectProps = {
    * chooser never covers it: a list over it took the next press of a quick double press as a pick.
    */
   trigger?: DOMRect;
+  /**
+   * The CSS property whose whole value this field holds, when it does: the chooser's preview is then
+   * shown on the canvas as that property (never written). A field that is one part of a value (a
+   * shadow's offset, one transform) leaves it out, and the preview shows in the field alone.
+   */
+  canvasProperty?: string;
   children: ReactNode;
 };
 
@@ -111,7 +116,8 @@ export default function VariableConnect(props: VariableConnectProps) {
   const { editorRef, dotRef, chipText, liveValue, selectionRef, readCaret, hintValue } = connect;
   const { chipTarget, setChipTarget, suggest, setSuggest, navigationRef } = connect;
   const anchor = (showToken ? editorRef.current : dotRef.current) ?? undefined;
-  const { openedRef, bigChipRef, epochRef } = connect;
+  const { openedRef, bigChipRef, epochRef, setPreviewText } = connect;
+  const canvas = useFieldPreview(props.canvasProperty);
   // The press that closed the large editor, by its event time. The editor closes on the press's
   // capture (CustomValueEditor's outside press), React renders that before the field's own handlers
   // run, and the field then saw a press on a clipped chip with no editor open and opened it again:
@@ -147,13 +153,19 @@ export default function VariableConnect(props: VariableConnectProps) {
     }
     return insertBindingAt(base, chosen, selectionRef.current);
   };
-  // Shown, not written: the field's draft, the path typing takes, so the page
-  // previews it the same way it previews a value being typed.
-  const draftTo = (next: string, kind: PickerPreviewKind): void => {
-    if (props.onDraft === undefined) {
-      pushDraft(field, next, { preview: kind });
+  // Shown, never written, and never handed to the field: the field this wraps writes what reaches its
+  // change handler (a live write as you type), so a preview that went through it was a save per hovered
+  // row (soak SP-09), and every field had to be taught to tell the two apart. The preview is this
+  // wrapper's own: its token editor shows it in place of the field's value, and the canvas shows it on
+  // the selected element when the field holds a property's whole value (canvasProperty). Putting the
+  // original back is dropping it: the field never changed.
+  const draftTo = (next: string, kind: 'preview' | 'restore'): void => {
+    if (kind === 'preview') {
+      setPreviewText(next);
+      canvas.show(next);
     } else {
-      props.onDraft(next);
+      setPreviewText(undefined);
+      canvas.takeBack();
     }
   };
   const openChooser = (): void => {
@@ -180,9 +192,14 @@ export default function VariableConnect(props: VariableConnectProps) {
       return;
     }
     const next = withChosen(chosen);
-    // A pick ends the session: a preview still in flight must not land after it.
+    // A pick ends the session: a preview still in flight must not land after it. The canvas keeps the
+    // preview for the write to settle; the field shows the pick once its value arrives.
     epochRef.current += 1;
     openedRef.current = undefined;
+    canvas.handOver();
+    // The field keeps showing the pick until its own value arrives (the effect on the field's value
+    // below), so no frame paints the value the pick replaced.
+    setPreviewText(next);
     onPick(next);
     setChipTarget(undefined);
     setOpen(false);
@@ -208,9 +225,8 @@ export default function VariableConnect(props: VariableConnectProps) {
       return;
     }
     openedRef.current = { ...opened, previewed: true };
-    // Flushed: a preview arrives from an animation frame or a key, outside React's batching, and
-    // the field's input takes the text at once (pushDraft), so a batched render painted the input
-    // and the chip a frame apart.
+    // Flushed: a preview arrives from an animation frame or a key, outside React's batching, and the
+    // field and the canvas should show it in the same frame.
     flushSync(() => draftTo(withChosen(chosen), 'preview'));
   };
   // THE restore: the value goes back to the one the chooser opened on, which was captured once, at
@@ -376,12 +392,17 @@ export default function VariableConnect(props: VariableConnectProps) {
 // holds, the input it wraps, and where the caret was last seen.
 function useVariableConnect({ prop, code, children }: VariableConnectProps) {
   const [open, setOpen] = useState(false);
+  // The variable the chooser previews (hovered or arrowed), shown in place of the field's own value.
+  const [previewText, setPreviewText] = useState<string | undefined>(undefined);
   // True while the token editor's contentEditable holds focus — keeps it mounted even if
   // the user edits the value down to a non-variable mid-type (so focus/caret aren't lost).
   const [active, setActive] = useState(false);
   const dotRef = useRef<HTMLButtonElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
-  const value = childValue(children);
+  const ownValue = childValue(children);
+  const value = previewText ?? ownValue;
+  // The field's own value moved (a pick's save landed, the selection changed): it is what to show.
+  useEffect(() => setPreviewText(undefined), [ownValue]);
   const placeholder = childPlaceholder(children);
   // A variable hint uses the same catalog and chips, but stays outside the
   // editable value so reading or focusing it cannot create a local declaration.
@@ -427,6 +448,7 @@ function useVariableConnect({ prop, code, children }: VariableConnectProps) {
     navigationRef,
     openedRef,
     epochRef,
+    setPreviewText,
     bigChipRef,
     big,
     setBig,
@@ -735,14 +757,13 @@ function fieldLiveValue(editorRef: RefObject<HTMLDivElement>, inputRef: MutableR
 // different field with the same look: the input behind it keeps the value from
 // before the edit, and whatever live preview that input drives while you type never
 // runs. A caller that wants the drafts itself (the big value editor) passes its own.
-function pushDraft(field: WrappedField, next: string, { preview }: { readonly preview: PickerPreviewKind | 'typing' } = { preview: 'typing' }): void {
+function pushDraft(field: WrappedField, next: string): void {
   const input = field.inputRef.current;
   if (!input) {
     return;
   }
   setInputValue(input, next);
-  const event = field.fakeEvent();
-  field.childHandlersRef.current?.onChange?.(preview === 'typing' ? event : { ...event, [PICKER_PREVIEW_MARK]: preview });
+  field.childHandlersRef.current?.onChange?.(field.fakeEvent());
 }
 
 // The token editor's focus and commit, handed over to the input it stands for,

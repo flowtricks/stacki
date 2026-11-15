@@ -3,15 +3,15 @@
 // navigation, and the selection, context and source cards (EmbedEditor.tsx).
 
 import { useTranslate } from '../../../lib/i18n/useTranslate';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { saveEmbedSource } from '../model/toolPreferences';
 import { hslaToRgba } from '../model/colorWrite';
 import { writtenValue } from '../model/lengthUnit';
 import { contextKeyOf, ruleOnLayer } from '../model/resolved';
 import { parseImportant } from '../model/styleDisplay';
-import { HOVER_STYLE_MESSAGE, parseHoverStyleMessage, type HoverStyleMessage } from '../../../../shared/properties/liveRules';
+import { HOVER_STYLE_LIMITS, HOVER_STYLE_MESSAGE, parseHoverStyleMessage, type HoverDeclaration } from '../../../../shared/properties/liveRules';
+import { hoverStyle } from '../model/liveRuleEdits';
 import { assert } from '../../../../shared/core/assert';
-import { tellCanvas } from '../../../editor/canvasQuery';
 import { getHost } from '../model/host';
 import type { PreviewProp } from '../connectFieldHelpers';
 import { pseudoPickPending, usePanelLayer } from './editorModel';
@@ -53,6 +53,9 @@ export function useSetProp(
   const { autoSelectForEdit } = autoSelect;
 
   const setProp: SetProp = (prop, typed, important) => {
+    // A pick (or any write) of a previewed property takes the preview's place: the canvas keeps it until
+    // the page holds the written value, so the old one never flashes between the hover and the save.
+    hoverStyle.settle(prop, writtenValue(prop, typed));
     // A gap or a padding cannot go below zero. Here rather than in the fields
     // themselves: a value reaches this point from a typed edit, an arrow step, a
     // drag, a variable pick and the add-property row, and a rule enforced in one
@@ -120,6 +123,8 @@ export function useClearProp(
   // panel knows when its optimistic cleared look (useOptimisticClear.ts) can hand over.
   const clearProp = (prop: string | string[]): Promise<void> => {
     const props = Array.isArray(prop) ? prop : [prop];
+    // Clearing is a write too; the page then computes the property's own cascade, not the preview.
+    hoverStyle.clear(props);
     const settled: Promise<unknown>[] = [];
     props.forEach((prop) => liveOriginRef.current.delete(prop)); // clearing is a commit too
     const nativeProps = props.filter((prop) => propLayer(prop) === 'native');
@@ -180,6 +185,8 @@ export function useLiveSetProp(
 
   const liveSetProp: LiveSetProp = (propOrProps, typed, important) => {
     const props = typeof propOrProps === 'string' ? [propOrProps] : propOrProps;
+    // Typing over a preview replaces it with what is typed, which the live write shows.
+    hoverStyle.clear(props);
     // `undefined` = abandon this property's live writes and put back what they
     // overwrote — the hover-scrub's counterpart (a dropdown closed without picking, a
     // field's edit cancelled). Nothing to undo if no live write happened.
@@ -240,46 +247,36 @@ export function useLiveSetProp(
   return { liveSetProp, previewProp };
 }
 
-// The picker's hover preview: the hovered value shown on the canvas and nowhere else. It goes to the frame
-// as a hover style (shared/properties/liveRules.ts), set inline on the selected element, and no save
-// follows: nothing is mutated, written, put in history or marked dirty, so taking it back is only telling
-// the frame to put the element's own style back, and a restore can never race a write. Fields route the
-// picker's preview here (LiveTextInput, components/LiveInput) instead of through liveSetProp, whose writes
-// are typing. A state or pseudo-element context has no element to show it on: there the field alone shows it.
+// Every hover preview of the panel: the hovered value shown on the canvas and nowhere else (a picker row,
+// a dropdown option). It goes to the frame as a hover style (shared/properties/liveRules.ts), set inline
+// on the selected element, and no save follows: nothing is mutated, written, put in history or marked
+// dirty, so taking it back is only telling the frame to put the element's own style back, and a restore
+// can never race a write. Fields and dropdowns reach it through PreviewPropContext with liveSetProp's own
+// shape, so a hover-scrub that used to call liveSetProp calls this instead; `undefined` takes it back. A
+// state or pseudo-element context has no element to show it on: there the control alone shows it.
 function useCanvasPreview({ stateKey, activeSelector }: { readonly stateKey: string; readonly activeSelector: string | undefined }): PreviewProp {
-  // The property whose preview is up, or undefined.
-  const shownRef = useRef<string | undefined>(undefined);
-  const clear = (): void => {
-    if (shownRef.current === undefined) {
-      return;
-    }
-    shownRef.current = undefined;
-    tellCanvas({ type: HOVER_STYLE_MESSAGE, op: 'clear' });
-  };
   // Leaving the panel with a preview still up (a project switch) puts the element's own style back.
-  const clearRef = useRef(clear);
-  clearRef.current = clear;
-  useEffect(() => () => clearRef.current(), []);
-  return (prop, text) => {
-    const message = text === undefined ? undefined : hoverStyleOf(prop, text, { stateKey, activeSelector });
-    if (message === undefined) {
-      clear();
+  useEffect(() => () => hoverStyle.clear(hoverStyle.showing()), []);
+  return (propOrProps, typed, important) => {
+    const props: readonly string[] = typeof propOrProps === 'string' ? [propOrProps] : propOrProps;
+    assert(props.length > 0, 'Canvas preview: a preview names a property');
+    const shown = typed === undefined ? undefined : hoverDeclarationsOf(props, typed, { important, stateKey, activeSelector });
+    if (shown === undefined) {
+      hoverStyle.clear(props);
       return;
     }
-    assert(message.property === prop, 'Canvas preview: the message shows the property asked for');
-    shownRef.current = prop;
-    tellCanvas(message);
-    assert(shownRef.current !== undefined, 'Canvas preview: a shown preview is remembered for its restore');
+    hoverStyle.show(shown.path, shown.declarations);
+    assert(hoverStyle.showing().length === shown.declarations.length, 'Canvas preview: the shown properties are remembered');
   };
 }
 
-// The frame message that shows `text` for `prop` on the selected element, or undefined when there is
-// nowhere to show it: no selection, a value the property does not take, a state or pseudo-element.
-function hoverStyleOf(
-  prop: string,
-  text: string,
-  { stateKey, activeSelector }: { readonly stateKey: string; readonly activeSelector: string | undefined },
-): Extract<HoverStyleMessage, { readonly op: 'show' }> | undefined {
+// What the frame shows for `typed` on the selected element, or undefined when there is nowhere to show
+// it: no selection, a value a property does not take, a state or pseudo-element context.
+function hoverDeclarationsOf(
+  props: readonly string[],
+  typed: string,
+  { important, stateKey, activeSelector }: { readonly important: boolean; readonly stateKey: string; readonly activeSelector: string | undefined },
+): { readonly path: string; readonly declarations: readonly HoverDeclaration[] } | undefined {
   if (stateKey.length > 0) {
     return undefined;
   }
@@ -287,15 +284,6 @@ function hoverStyleOf(
     if (activeSelector.includes('::')) {
       return undefined;
     }
-  }
-  const parsed = parseImportant(text.trim());
-  const value = writtenValue(prop, parsed.value);
-  if (value.length === 0) {
-    return undefined;
-  }
-  // A half-made value is not sent: the frame would drop the declaration and show nothing.
-  if (!isSupportedCssValue(prop, value)) {
-    return undefined;
   }
   const host = getHost();
   const nodeId = host.selectedId;
@@ -306,9 +294,23 @@ function hoverStyleOf(
   if (path === undefined) {
     return undefined;
   }
+  // A field's text may carry its own flag (`12px !important`); a dropdown passes it apart.
+  const parsed = parseImportant(typed.trim());
+  const declarations: HoverDeclaration[] = [];
+  for (const prop of props.slice(0, HOVER_STYLE_LIMITS.declarationsMax)) {
+    const value = writtenValue(prop, parsed.value);
+    if (value.length === 0) {
+      return undefined;
+    }
+    // A half-made value is not sent: the frame would drop the declaration and show nothing.
+    if (!isSupportedCssValue(prop, value)) {
+      return undefined;
+    }
+    declarations.push({ property: prop, value, important: important || parsed.important });
+  }
   // Parsed as the frame will parse it, so the panel never sends what the frame refuses.
-  const message = parseHoverStyleMessage({ type: HOVER_STYLE_MESSAGE, op: 'show', path, property: prop, value, important: parsed.important });
-  return message?.op === 'show' ? message : undefined;
+  const message = parseHoverStyleMessage({ type: HOVER_STYLE_MESSAGE, op: 'show', path, declarations });
+  return message?.op === 'show' ? { path: message.path, declarations: message.declarations } : undefined;
 }
 
 // The source dropdown: every embed, grouped by component.

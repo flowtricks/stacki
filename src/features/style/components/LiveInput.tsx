@@ -5,7 +5,6 @@ import VariableConnect from '../VariableConnect';
 import { handleArrowStep } from '../model/numberStep';
 import { commitInPlace } from '../model/commitInPlace';
 import useScrub from './useScrub';
-import { pickerPreviewKind, useFieldPreview } from '../connectFieldHelpers';
 
 // The panel's value field.
 //
@@ -62,7 +61,6 @@ export default function LiveInput({
   onVariablePick,
 }: LiveInputProps) {
   const translate = useTranslate();
-  const fieldPreview = useFieldPreview(prop, value);
   const { draft, setDraft, focused, cancelLive, scheduleLive, settleLive } = useLiveDraft(value, onLive);
   const commitScrub = (text: string) => {
     setDraft(text);
@@ -84,10 +82,10 @@ export default function LiveInput({
         ariaLabel={translate('styleModel.shared.connectVariable', { label: ariaLabel })}
         disabled={busy}
         prop={prop}
+        canvasProperty={prop}
         onPick={(binding) => {
           // The pick is the edit: a live preview still waiting for its timer must not land after it.
           cancelLive();
-          fieldPreview.picked(binding);
           settleLive();
           // The field shows the pick even when it is the value already saved (no prop change follows then).
           setDraft(binding);
@@ -100,17 +98,7 @@ export default function LiveInput({
           value={draft}
           onChange={(event) => {
             setDraft(event.target.value);
-            // The picker's preview is shown, never written: a live write here put each hovered variable
-            // into the stylesheet. It reaches the canvas through the preview channel alone, and its
-            // restore takes it away there (connectFieldHelpers' PreviewProp).
-            const kind = pickerPreviewKind(event);
-            if (kind === undefined) {
-              scheduleLive(event.target.value);
-            } else if (kind === 'preview') {
-              fieldPreview.show(event.target.value);
-            } else {
-              fieldPreview.takeBack();
-            }
+            scheduleLive(event.target.value);
           }}
           onFocus={() => {
             focused.current = true;

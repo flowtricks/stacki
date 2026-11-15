@@ -3,16 +3,19 @@
 //   node test/renderer/style/variableHoverPreview.test.js
 //
 // Goal: pointing at a row (or moving the keyboard mark, which shares the path) shows that
-// variable in the field and on the canvas through the field's transient draft channel
-// (onDraft), and every way out without a pick restores exactly the value the chooser
-// opened on: leaving the list, Escape, an outside press, the window losing focus,
-// unmounting (a selection or project change). A pick commits the last previewed value
-// without passing through the original. A preview never commits: onPick, the only path to
-// the stylesheet, history, the dirty flag and saves, is not called until a pick. Rapid
-// hovers coalesce to one draft per animation frame, the latest winning.
+// variable in the field and on the canvas, through the canvas-only preview channel
+// (PreviewPropContext) and the wrapper's own display, and every way out without a pick
+// restores exactly the value the chooser opened on: leaving the list, Escape, an outside
+// press, the window losing focus, unmounting (a selection or project change). A pick
+// commits the last previewed value without passing through the original. A preview never
+// reaches the wrapped field: neither its change handler (where every field's live write
+// starts, soak SP-09) nor its onDraft is called, and onPick, the only path to the
+// stylesheet, history, the dirty flag and saves, is not called until a pick. Rapid hovers
+// coalesce to one preview per animation frame, the latest winning.
 // Method: the real VariableConnect is mounted in jsdom with the project's variables
-// stubbed. Hover is dispatched as pointerover/pointerout and keys as keydown events, so
-// no real pointer is needed and the test behaves the same on every platform.
+// stubbed, inside a PreviewPropContext that logs what reaches the canvas. Hover is
+// dispatched as pointerover/pointerout and keys as keydown events, so no real pointer is
+// needed and the test behaves the same on every platform.
 
 const fs = require('fs');
 const path = require('path');
@@ -31,7 +34,12 @@ const check = (what, condition, detail) => {
   fs.mkdirSync(buildDirectory, { recursive: true });
   const bundlePath = path.join(buildDirectory, 'variable-hover-preview.bundle.js');
   await esbuild.build({
-    entryPoints: [repoPath('src/features/style/VariableConnect.tsx')],
+    stdin: {
+      contents: `export { default } from './src/features/style/VariableConnect';
+        export { PreviewPropContext } from './src/features/style/connectFieldHelpers';`,
+      resolveDir: repoPath('.'),
+      loader: 'ts',
+    },
     outfile: bundlePath,
     bundle: true,
     format: 'cjs',
@@ -87,22 +95,41 @@ const check = (what, condition, detail) => {
   const { createRoot } = require('react-dom/client');
   const { act } = React;
   const VariableConnect = require(bundlePath).default;
+  const { PreviewPropContext } = require(bundlePath);
   const settle = () => act(async () => new Promise((resolve) => setTimeout(resolve, 30)));
   const mouse = (type, init = {}) => new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, ...init });
 
   const ORIGINAL = 'var(--w-regular)';
   const mount = async () => {
+    // What the canvas showed, in order: a previewed value, or the original once it is taken back.
     const drafts = [];
     const picks = [];
+    // What reached the wrapped field: anything here is a write path.
+    const reached = [];
+    const previewProp = (prop, value) => {
+      check('a preview names the field property', prop === 'font-weight', prop);
+      drafts.push(value ?? ORIGINAL);
+    };
     const host = document.createElement('div');
     document.body.appendChild(host);
     const root = createRoot(host);
     await act(async () => {
       root.render(
         React.createElement(
-          VariableConnect,
-          { onPick: (value) => picks.push(value), onDraft: (value) => drafts.push(value), ariaLabel: 'Weight', prop: 'font-weight', code: true },
-          React.createElement('input', { className: 'u-input', value: ORIGINAL, onChange() {} }),
+          PreviewPropContext.Provider,
+          { value: previewProp },
+          React.createElement(
+            VariableConnect,
+            {
+              onPick: (value) => picks.push(value),
+              onDraft: (value) => reached.push(`draft ${value}`),
+              ariaLabel: 'Weight',
+              prop: 'font-weight',
+              canvasProperty: 'font-weight',
+              code: true,
+            },
+            React.createElement('input', { className: 'u-input', value: ORIGINAL, onChange: (event) => reached.push(`change ${event.target.value}`) }),
+          ),
         ),
       );
     });
@@ -119,8 +146,10 @@ const check = (what, condition, detail) => {
     const done = async () => {
       await act(async () => root.unmount());
       host.remove();
+      check('nothing reached the wrapped field (no change, no draft): a preview is never a write', reached.length === 0, JSON.stringify(reached));
     };
-    return { drafts, picks, hover, leaveList, key, open, rowOf, root, host, done };
+    const shownChip = () => host.querySelector('[data-chip]')?.getAttribute('data-binding') ?? undefined;
+    return { drafts, picks, hover, leaveList, key, open, rowOf, root, host, done, shownChip };
   };
   const last = (list) => list[list.length - 1];
 
@@ -130,7 +159,8 @@ const check = (what, condition, detail) => {
     check('the picker opened', view.open());
     await view.hover('w-bold');
     await settle();
-    check('hover previews the row in the draft', last(view.drafts) === 'var(--w-bold)', JSON.stringify(view.drafts));
+    check('hover previews the row on the canvas', last(view.drafts) === 'var(--w-bold)', JSON.stringify(view.drafts));
+    check('and in the field', view.shownChip() === 'var(--w-bold)', view.shownChip());
     check('a preview is not a commit', view.picks.length === 0);
     await view.hover('w-light');
     await settle();
@@ -138,6 +168,7 @@ const check = (what, condition, detail) => {
     await view.leaveList();
     await settle();
     check('leaving the list restores the original', last(view.drafts) === ORIGINAL, JSON.stringify(view.drafts));
+    check('and the field shows it again', view.shownChip() === ORIGINAL, view.shownChip());
     const count = view.drafts.length;
     await view.leaveList();
     await settle();

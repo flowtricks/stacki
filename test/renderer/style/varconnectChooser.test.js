@@ -6,7 +6,9 @@
 // as they do in an editor. A pressed chip opens the chooser marked on that
 // chip's variable and a pick swaps only that chip; typing `var(--` or `--`
 // opens the chooser filtered by the typed name, driven by the field's keys;
-// ⌘Z and ⇧⌘Z walk the field's own history; and a wheel over a chooser opened
+// ⌘Z and ⇧⌘Z walk the field's own history; the arrows preview a variable on
+// the canvas-only channel and in the field, never through the field's change or
+// onDraft (a write path), and every way out puts it back; and a wheel over a chooser opened
 // from the custom-value box is not refused by the box's scroll lock.
 // Method: the real VariableConnect is bundled with a two-variable project and
 // mounted in jsdom; typing is replayed as beforeinput, DOM change and input,
@@ -35,7 +37,7 @@ const check = (what, condition, detail) => {
   const bundlePath = path.join(buildDirectory, 'varconnect-chooser.bundle.js');
   await esbuild.build({
     stdin: {
-      contents: `export { default, connectCustomField } from './src/features/style/VariableConnect';\nexport { wheelBelongsTo } from './src/ui/popupScrollLock';\nexport { registerPopupLayer } from './src/ui/popupOwnership';`,
+      contents: `export { default, connectCustomField } from './src/features/style/VariableConnect';\nexport { PreviewPropContext } from './src/features/style/connectFieldHelpers';\nexport { wheelBelongsTo } from './src/ui/popupScrollLock';\nexport { registerPopupLayer } from './src/ui/popupOwnership';`,
       resolveDir: repoPath('.'),
       loader: 'ts',
     },
@@ -107,7 +109,7 @@ const check = (what, condition, detail) => {
   const { act } = React;
   const VariableConnect = require(bundlePath).default;
 
-  const { wheelBelongsTo } = require(bundlePath);
+  const { wheelBelongsTo, PreviewPropContext } = require(bundlePath);
   const press = (element) => element.dispatchEvent(new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true }));
   const clickIt = (element) => {
     press(element);
@@ -144,13 +146,27 @@ const check = (what, condition, detail) => {
     document.body.appendChild(host);
     const root = createRoot(host);
     const picked = [];
+    // What the canvas-only preview showed, in order (the value it opened on once taken back): the
+    // arrows preview there and in the field, never through the field's own change or onDraft.
     const drafts = [];
+    const reached = [];
     await act(async () => {
       root.render(
         React.createElement(
-          VariableConnect,
-          { onPick: (next) => picked.push(next), onDraft: (next) => drafts.push(next), ariaLabel: 'Gap', prop: 'row-gap', code: true },
-          React.createElement('input', { className: 'u-input', value, onChange() {} }),
+          PreviewPropContext.Provider,
+          { value: (prop, next) => drafts.push(next ?? value) },
+          React.createElement(
+            VariableConnect,
+            {
+              onPick: (next) => picked.push(next),
+              onDraft: (next) => reached.push(next),
+              ariaLabel: 'Gap',
+              prop: 'row-gap',
+              canvasProperty: 'row-gap',
+              code: true,
+            },
+            React.createElement('input', { className: 'u-input', value, onChange: (event) => reached.push(event.target.value) }),
+          ),
         ),
       );
     });
@@ -159,7 +175,7 @@ const check = (what, condition, detail) => {
       await act(async () => root.unmount());
       host.remove();
     };
-    return { host, picked, drafts, done, editor: host.querySelector('.embed-editor_varconnect-editor') };
+    return { host, picked, drafts, reached, done, editor: host.querySelector('.embed-editor_varconnect-editor') };
   };
 
   // --- A pressed chip opens the chooser on its own variable, and a pick swaps that chip only.
@@ -183,7 +199,7 @@ const check = (what, condition, detail) => {
   // each variable in the value; Enter takes it; Escape or a press outside puts
   // the original back.
   for (const ending of ['Enter', 'Escape', 'outside']) {
-    const { host, picked, drafts, done } = await mount('calc(var(--brand) + 1rem)');
+    const { host, picked, drafts, reached, done } = await mount('calc(var(--brand) + 1rem)');
     await act(async () => press(host.querySelector('[data-chip]')));
     await settle();
     const search = document.querySelector('.embed-editor_varpicker-search');
@@ -213,6 +229,7 @@ const check = (what, condition, detail) => {
       check(`${ending}: the chooser closes`, !document.querySelector('.embed-editor_varpicker'));
       check(`${ending}: nothing is applied`, picked.length === 0, JSON.stringify(picked));
       check(`${ending}: the original value comes back`, drafts.at(-1) === 'calc(var(--brand) + 1rem)', JSON.stringify(drafts.at(-1)));
+      check(`${ending}: no preview reached the field (its change or onDraft)`, reached.length === 0, JSON.stringify(reached));
     }
     await done();
   }
@@ -277,7 +294,8 @@ const check = (what, condition, detail) => {
 
   // --- ⌘Z and ⇧⌘Z walk the field's own history, even after a code repaint.
   {
-    const { editor, drafts, done } = await mount('');
+    // The field's own typing is reported through onDraft, the channel typing takes.
+    const { editor, reached: drafts, done } = await mount('');
     await act(async () => {
       editor.focus();
       caretAtEnd(editor);

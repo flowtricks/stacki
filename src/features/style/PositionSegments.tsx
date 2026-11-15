@@ -133,6 +133,7 @@ export function SegmentCustomInput({
       ariaLabel={translate('style.positionSegments.connect', { name: ariaLabel })}
       disabled={busy}
       prop={prop}
+      canvasProperty={prop}
       onPick={(binding) => {
         // `current` is the field's text, flag and all: a pick keeps the flag.
         const kept = keepImportant(binding, parseImportant(current));

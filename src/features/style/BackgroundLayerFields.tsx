@@ -65,6 +65,7 @@ export function LayerLonghandField({
       ariaLabel={translate('style.backgroundLayerFields.connect', { name: label })}
       disabled={busy}
       prop={prop}
+      canvasProperty={prop}
       onPick={(binding) => setProp(prop, binding, false)}
     >
       <input
@@ -676,6 +677,7 @@ export function LayerColorField({
         disabled={busy}
         className="is-fill"
         prop="background-color"
+        canvasProperty="background-color"
         onPick={(binding) => {
           setDraft(binding);
           setProp('background-image', listFor(binding), false);

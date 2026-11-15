@@ -1330,15 +1330,22 @@ live in `LIVE_RULE_LIMITS`; a sheet over `sheetRulesMax` rules is refused with a
 members of a grouped rule the save splits are not previewed; their saves show them.
 
 `avb:hover-style` (`liveRules.ts`, `frameLiveRules.ts`, through the same `receiveLiveRules`
-entry) is the variable picker's hover preview, and it is never a write: no save, history entry,
-dirty flag, autosave or snapshot follows it. `show` names the selected node's rendered path, a
-property and a value with a boolean `important`; the frame sets that declaration inline on the
-node's elements (at most `HOVER_STYLE_LIMITS.elementsMax`), recording each element's own inline
-value. One preview is up at a time: `show` replaces the last, and `clear` (idempotent) restores
-each element's style attribute exactly, removing one the preview added. The panel sends it from
-`useEditorWrites` (`previewProp`, handed to fields by `PreviewPropContext`) and clears it on every
-way out of the picker, when the field's saved value changes (a pick's save landing), and when
-the field or the panel unmounts. A state or pseudo-element context is previewed in the field only.
+entry) is every hover preview of the Style panel, and it is never a write: no save, history
+entry, dirty flag, autosave or snapshot follows it. Two kinds of hover use it: a variable hovered
+or arrowed in the picker, and an option hovered or arrowed in a dropdown (`Select`'s hover-scrub,
+a deliberate scrub-to-preview, so canvas-only too). `show` names the selected node's rendered path
+and one to `declarationsMax` declarations (property, value, boolean `important`); the frame sets
+them inline on the node's elements (at most `elementsMax`), recording each element's own inline
+values. One preview is up at a time: `show` replaces the last; `clear` (idempotent) restores each
+element's style attribute exactly, removing one the preview added; `settle` (a pick of the
+previewed value is being saved) keeps the preview until the page computes the same values
+without it, at most `settleFramesMax` frames, then restores as `clear` does. The panel sends it
+through `PreviewPropContext` (`useEditorWrites`' `previewProp`, with liveSetProp's shape, and the
+`hoverStyle` controller in `model/liveRuleEdits.ts`): `VariableConnect` owns a picker preview (the
+wrapped field never sees it) and shows it on the canvas when the field holds a property's whole
+value (`canvasProperty`); a field that is one part of a value previews in the field alone. A write
+of the previewed value settles it, any other write or a way out clears it, and so does unmounting.
+A state or pseudo-element context is previewed in the control only.
 
 ## Canvas interaction mode
 
