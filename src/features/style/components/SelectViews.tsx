@@ -2,6 +2,7 @@ import { useTranslate } from '../../../lib/i18n/useTranslate';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { check as centralCheck, chevronDown as centralChevronDown } from '../../../ui/central/centralGeometry';
 import Popup from '../../../ui/Popup';
+import { Switch } from '../../../ui/Switch';
 // What a Select draws: the trigger, the list and its rows, each row's action
 // (Select.tsx).
 
@@ -29,19 +30,38 @@ export function OptionLabel({
   overline,
   tag,
   subline,
+  prefix,
+  detail,
 }: {
   readonly label: string;
   readonly overline: string | undefined;
   readonly tag?: SelectTag | undefined;
   readonly subline?: readonly string[] | undefined;
+  readonly prefix?: string | undefined;
+  readonly detail?: string | undefined;
 }) {
   const hasOverline = overline !== undefined && overline.length > 0;
   const hasFirstLine = hasOverline || tag !== undefined;
   const hasSubline = subline !== undefined && subline.length > 0;
+  if (prefix !== undefined && prefix.length > 0 && !hasFirstLine && !hasSubline) {
+    // One line: the prefix gives way (an ellipsis) so the label after it stays whole.
+    return (
+      <span className="u-select-label has-prefix">
+        <span className="u-select-prefix" onMouseEnter={titleWhenCut(prefix)}>
+          {prefix}
+        </span>
+        <span className="u-select-prefix-separator" aria-hidden="true">
+          ·
+        </span>
+        <span className="u-select-main">{label}</span>
+      </span>
+    );
+  }
   if (!hasFirstLine && !hasSubline) {
     return (
       <span className="u-select-label" onMouseEnter={titleWhenCut(label)}>
         {label}
+        {detail === undefined ? undefined : <span className="u-select-detail">{detail}</span>}
       </span>
     );
   }
@@ -203,10 +223,15 @@ export function SelectTrigger<T extends string>({
     );
   }
   return (
-    <button {...shared} className="u-select-button" data-tone={selectedOption?.tone}>
+    <button {...shared} className="u-select-button" data-tone={selectedOption?.tone} title={selectedOption?.title}>
       <span className="u-select-value">
         {icon}
-        <OptionLabel label={triggerLabel} overline={triggerOverline} tag={triggerOverline === undefined ? undefined : triggerTag} />
+        <OptionLabel
+          label={triggerLabel}
+          overline={triggerOverline}
+          tag={triggerOverline === undefined ? undefined : triggerTag}
+          prefix={selectedOption?.triggerPrefix}
+        />
         {present(selectedOption?.triggerMark) ? <span className="u-select-mark">{selectedOption?.triggerMark}</span> : undefined}
       </span>
       {CHEVRON}
@@ -261,31 +286,19 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
       />
     );
   };
-  const footerIndexes = displayed.flatMap((option, index) => (option.footer === true ? [index] : []));
+  const pinned = (key: 'header' | 'footer'): number[] => displayed.flatMap((option, index) => (option[key] === true ? [index] : []));
+  const headerIndexes = pinned('header');
+  const footerIndexes = pinned('footer');
+  const pinnedAway = (option: SelectOption<T> | undefined): boolean => option?.header === true || option?.footer === true;
   const body =
     displayed.length === 0 ? (
       <div className="u-select-empty" role="presentation">
         {translate('styleModel.components.select.noMatches')}
       </div>
     ) : (
-      listSections(displayed).map((section) => {
-        const rows = section.indexes.filter((index) => displayed[index]?.footer !== true).map(row);
-        if (section.kind === 'rows') {
-          return rows;
-        }
-        // A group heading opens one filled card with its rows; the heading names it.
-        return (
-          <div
-            key={`group-${section.indexes[0] ?? 0}`}
-            className="u-select-group"
-            role="group"
-            aria-labelledby={optionId(list.baseId, section.indexes[0] ?? 0)}
-          >
-            {rows}
-          </div>
-        );
-      })
+      displayed.flatMap((option, index) => (pinnedAway(option) ? [] : [row(index)]))
     );
+  const framed = headerIndexes.length > 0 || footerIndexes.length > 0;
   return (
     <Popup
       mode="popover"
@@ -293,7 +306,9 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
       anchor={list.trigger}
       onClose={list.onCancel}
       ref={list.listRef}
-      className={['u-select-list', list.dropUp ? 'is-up' : '', footerIndexes.length > 0 ? 'has-footer' : ''].filter(Boolean).join(' ')}
+      className={['u-select-list', list.dropUp ? 'is-up' : '', framed ? 'has-footer' : '', headerIndexes.length > 0 ? 'has-header' : '']
+        .filter(Boolean)
+        .join(' ')}
       role="listbox"
       tabIndex={-1}
       label={ariaLabel}
@@ -320,15 +335,16 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
           />
         </div>
       ) : undefined}
-      {footerIndexes.length === 0 ? (
+      {!framed ? (
         body
       ) : (
         // A pinned footer is a sibling of the scrolling region, never a row inside it: rows
         // sliding under a sticky row left a strip of the last card peeking round it, and the
         // scrollbar ran down behind it. Outside, the rows end exactly where the footer begins.
         <>
+          {headerIndexes.length > 0 ? <div className="u-select-header">{headerIndexes.map(row)}</div> : undefined}
           <div className="u-select-scroll">{body}</div>
-          <div className="u-select-footer">{footerIndexes.map(row)}</div>
+          {footerIndexes.length > 0 ? <div className="u-select-footer">{footerIndexes.map(row)}</div> : undefined}
         </>
       )}
     </Popup>
@@ -339,28 +355,6 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
 // can carry one holds it on every row, so the dots stand in one column; a list
 // with no dots at all holds none, so its rows carry no blank gutter.
 export type DotColumn = 'held' | 'none';
-
-/** A run of rows drawn loose, or a group: a `group` heading and the indented rows after it. */
-export type ListSection = { readonly kind: 'rows' | 'group'; readonly indexes: readonly number[] };
-
-/** The displayed rows cut into loose runs and groups, keeping their order and indexes. */
-export function listSections<T extends string>(options: readonly SelectOption<T>[]): ListSection[] {
-  const sections: { kind: 'rows' | 'group'; indexes: number[] }[] = [];
-  for (const [index, option] of options.entries()) {
-    const last = sections[sections.length - 1];
-    if (option.heading === true && option.group === true) {
-      sections.push({ kind: 'group', indexes: [index] });
-    } else if (last !== undefined && last.kind === 'group' && option.indent === true && option.heading !== true) {
-      last.indexes.push(index);
-    } else if (last !== undefined && last.kind === 'rows') {
-      last.indexes.push(index);
-    } else {
-      sections.push({ kind: 'rows', indexes: [index] });
-    }
-  }
-  assert(sections.reduce((total, section) => total + section.indexes.length, 0) === options.length, 'listSections: every row is drawn once');
-  return sections;
-}
 
 export function dotColumnFor<T extends string>(options: readonly SelectOption<T>[]): DotColumn {
   return options.some((option) => option.marked === true) ? 'held' : 'none';
@@ -385,10 +379,11 @@ export function SelectRow<T extends string>({
   onChoose: () => void;
   onCancel: () => void;
 }) {
+  const translate = useTranslate();
   const icon = present(option.icon) ? <span className="u-select-icon">{option.icon}</span> : undefined;
   if (option.heading) {
     return (
-      <div id={id} className={['u-select-heading', option.group ? 'is-group' : ''].filter(Boolean).join(' ')} role="presentation">
+      <div id={id} className="u-select-heading" role="presentation">
         {icon}
         {option.tag === undefined ? undefined : <OptionTag tag={option.tag} />}
         <span className="u-select-heading-label" title={option.label}>
@@ -397,6 +392,7 @@ export function SelectRow<T extends string>({
       </div>
     );
   }
+  const hasStyles = translate('styleModel.components.select.hasStyles');
   return (
     <div
       id={id}
@@ -407,16 +403,20 @@ export function SelectRow<T extends string>({
         option.indent ? 'is-indented' : '',
         option.action ? 'has-action' : '',
         option.footer ? 'is-footer' : '',
+        option.header ? 'is-header' : '',
         (option.subline?.length ?? 0) > 0 ? 'has-subline' : '',
       ]
         .filter(Boolean)
         .join(' ')}
       role="option"
       aria-selected={selected}
+      title={option.title}
       data-active={active || undefined}
       onMouseEnter={onActivate}
       onPointerDown={(event) => {
-        if (event.pointerType === 'mouse' && event.button === 0) {
+        // A switch row changes the list in place and acts on the click alone:
+        // acting on the press as well would toggle it twice.
+        if (event.pointerType === 'mouse' && event.button === 0 && option.switch !== true) {
           event.preventDefault();
           onChoose();
         }
@@ -424,23 +424,31 @@ export function SelectRow<T extends string>({
       onClick={onChoose}
     >
       {icon}
-      <OptionLabel label={option.label} overline={option.overline} tag={option.tag} subline={option.subline} />
+      <OptionLabel label={option.label} overline={option.overline} tag={option.tag} subline={option.subline} detail={option.detail} />
       {/* Fixed trailing slots, held open whether or not they are filled, so every
           row's dot stands in one column and every row's check or pencil in the
           one after it. The end slot ends the row, so icons align down the left
           edge (a rule across the app). */}
       {dotColumn === 'held' ? (
-        <span className="u-select-dot-slot" aria-hidden="true">
-          {option.marked ? <span className="u-select-dot" /> : undefined}
+        <span className="u-select-dot-slot">
+          {option.marked ? <span className="u-select-dot" role="img" title={hasStyles} aria-label={hasStyles} /> : undefined}
         </span>
       ) : undefined}
       <span className="u-select-check">
-        {selected ? CHECK : undefined}
+        {option.switch ? undefined : selected ? CHECK : undefined}
         {option.action ? <RowAction action={option.action} onCancel={onCancel} /> : undefined}
       </span>
+      {option.switch ? (
+        // The row is the control (a press anywhere on it toggles); the switch only shows the state.
+        <span className="u-select-switch">
+          <Switch label={option.label} checked={selected} onToggle={NOOP} />
+        </span>
+      ) : undefined}
     </div>
   );
 }
+
+const NOOP = (): void => undefined;
 
 const CheckIcon = centralIcon(centralCheck);
 export const CHECK = <CheckIcon />;

@@ -140,6 +140,7 @@ export const messages = {
   'styleModel.components.position.cell': 'Position {x} {y}', // same
   'styleModel.components.position.group': 'Position', // same
   'styleModel.components.select.noMatches': 'Aucun résultat',
+  'styleModel.components.select.hasStyles': 'A des styles ici',
   'styleModel.components.select.search': 'Rechercher',
   'styleModel.components.select.searchNamed': 'Rechercher {label}',
   'styleModel.css.noRule': 'Aucune règle CSS trouvée dans le texte modifié.',
@@ -157,6 +158,7 @@ export const messages = {
   'styleModel.embed.card.addIn': 'Ajouter des styles personnalisés dans :',
   'styleModel.embed.card.addQuery': 'Ajouter une requête',
   'styleModel.embed.card.followCanvas': 'Suivre la taille du canevas',
+  'styleModel.embed.card.other': 'Autres',
   'styleModel.embed.card.context': 'Contexte de style',
   'styleModel.embed.card.editQuery': 'Modifier {query}',
   'styleModel.embed.card.fetching': 'Récupération des intégrations…',

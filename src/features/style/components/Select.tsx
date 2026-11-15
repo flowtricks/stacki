@@ -184,7 +184,9 @@ function useSelectOptions<T extends string>({
 }) {
   // The trigger always reflects the real selected value, independent of any filter.
   const selectedOption = useMemo(
-    () => options.find((option) => !option.heading && option.value === value) ?? options.find((option) => !option.heading),
+    () =>
+      options.find((option) => !option.heading && option.value === value) ??
+      options.find((option) => !option.heading && option.header !== true && option.footer !== true),
     [options, value],
   );
   const displayed = useMemo(() => filterOptions(options, query, { searchable }), [options, query, searchable]);
@@ -444,6 +446,9 @@ function useMenuActions<T extends string>(input: MenuActionsInput<T>) {
       }
       commitPreview(); // committed — the pick replaces the preview, no revert
       onChange(option.value);
+      if (option.switch === true) {
+        return; // A switch changes the list in place: the list stays open where it is.
+      }
       setOpen(false);
       window.requestAnimationFrame(() => refs.button.current?.focus({ preventScroll: true }));
     },

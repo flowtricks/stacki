@@ -165,21 +165,25 @@ const element = (id, name, className, children = []) => ({ id, kind: 'element', 
   const describe = (rows) => rows.map((row) => (row.textContent || '').trim()).join(' | ');
   // The dropdown groups queries under a header naming their stylesheet and wrapper
   // (embed/contextGroups.ts): a nested query is a row in the `.developer_layout` group.
-  const groupHeading = (row) => row.closest('.u-select-group')?.querySelector('.u-select-heading') ?? undefined;
+  // The list is flat: a row belongs to the section label that precedes it.
+  const groupHeading = (row) => {
+    for (let node = row.previousElementSibling; node !== null; node = node.previousElementSibling) {
+      if (node.classList.contains('u-select-heading')) {
+        return node;
+      }
+    }
+    return undefined;
+  };
   const nestedRow = (rows) => rows.find((row) => groupHeading(row)?.querySelector('.u-select-heading-label')?.textContent === '.developer_layout');
-  const queryRows = (rows, query) =>
-    rows.filter((row) => row.querySelector('.u-select-label-line')?.textContent === query || row.querySelector('.u-select-label')?.textContent === query);
+  // A width query reads as its condition (`< 42rem`); its raw text is the row's tooltip.
+  const queryRows = (rows, query) => rows.filter((row) => row.title === query);
 
   // 1. developer_title: inside the wrapper, nothing in the query for it.
   {
     const rows = await openRows();
     const nested = nestedRow(rows);
     check('developer_title: the nested query is listed', nested !== undefined, describe(rows));
-    check(
-      "developer_title: the query, under its wrapper's header",
-      (nested?.querySelector('.u-select-label-line') ?? nested?.querySelector('.u-select-label'))?.textContent === '@media (width < 42rem)',
-      nested?.textContent ?? '',
-    );
+    check("developer_title: the query, under its wrapper's header", nested?.title === '@media (width < 42rem)', nested?.textContent ?? '');
     check('developer_title: the same query at the top level is a second row', queryRows(rows, '@media (width < 42rem)').length === 2, describe(rows));
     check(
       "developer_title: each query row's group names its stylesheet",
@@ -233,7 +237,7 @@ const element = (id, name, className, children = []) => ({ id, kind: 'element', 
     wide?.click();
     await wait(400);
     check('picking it sets the canvas to its bound', widths[widths.length - 1] === 1280, JSON.stringify(widths));
-    check('and the width change does not return the panel to Base', /min-width: 80rem/.test(trigger()?.textContent ?? ''), trigger()?.textContent ?? '');
+    check('and the width change does not return the panel to Base', /≥ 80rem/.test(trigger()?.textContent ?? ''), trigger()?.textContent ?? '');
   }
   // The rule it must not trip still holds for a real switch to Desktop.
   setHost({ device: 'desktop' });

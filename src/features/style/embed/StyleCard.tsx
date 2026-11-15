@@ -9,7 +9,12 @@ import Select from '../components/Select';
 import type { SelectOption, SelectTag } from '../components/selectTypes';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { homeRoundDoor as centralHomeRoundDoor } from '../../../ui/central/centralGeometry';
-import { PinIcon } from '../../../ui/Icons';
+import { DesktopIcon, LaptopIcon, PhoneIcon, PinIcon, SmartwatchIcon, StudioDisplayXdrIcon, TabletIcon, TelevisionIcon } from '../../../ui/Icons';
+import { ruler as centralRuler } from '../../../ui/central/centralGeometry';
+import { useProjectBreakpoints } from '../../../ipc/useProjectBreakpoints';
+import { breakpointLabel } from '../../../lib/breakpointLabel';
+import { iconFor, type DeviceIconKind } from '../../../../shared/properties/breakpointIcon';
+import { describeCondition } from './contextRows';
 import { groupContexts } from './contextGroups';
 import { getHost } from '../model/host';
 import { SelectorScopeContext } from '../model/selectorScope';
@@ -218,7 +223,8 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
       tone: source.fromComponent ? 'component' : 'embed',
     };
   };
-  const optionFor = (styleContext: StyleContext, placement: 'base' | 'grouped' | 'loose'): SelectOption<string> => {
+  const { resolved } = useProjectBreakpoints(getHost().projectPath);
+  const optionFor = (styleContext: StyleContext, placement: 'base' | 'section' | 'other'): SelectOption<string> => {
     // Editable when this stylesheet is where the query is written. A row can be here
     // for a query held in some other file (or for a native breakpoint, which is no
     // at-rule at all) — nothing to rename there, so no pencil. A nested chain's own
@@ -230,17 +236,32 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
     const uses = inSourceDocument ? (queryUses.get(queryKey(query)) ?? 0) : 0;
     const info = contextInfos.find((entry) => entry.key === styleContext.key);
     const tag = tagFor(styleContext.source);
+    const condition = placement === 'base' || query === '' ? undefined : describeCondition(styleContext.embedAtContext ?? '', resolved);
+    const width = condition?.kind === 'width' ? condition : undefined;
+    // A width query reads as its project breakpoint (`Laptop`, then the muted `< 64rem`), or as
+    // the bare condition; the raw query stays in the tooltip. Anything else keeps its raw text.
+    const label = width === undefined ? styleContext.label : width.breakpoint === undefined ? width.condition : breakpointLabel(width.breakpoint, translate);
+    const icon =
+      placement === 'base' ? (
+        <BaseContextIcon />
+      ) : width === undefined ? (
+        breakpointIcon(styleContext.breakpoint ?? undefined)
+      ) : width.breakpoint === undefined ? (
+        <WidthIcon />
+      ) : (
+        deviceIcon(iconFor(width.breakpoint, resolved))
+      );
+    const prefix = placement === 'base' ? undefined : (info?.wrapper ?? (placement === 'other' ? tag?.label : undefined));
     return {
       value: styleContext.key,
-      label: styleContext.label,
-      // In a group the header names the source and wrapper once; the closed trigger
-      // still shows them, so the picked query says where it is written.
-      ...(placement === 'grouped' ? { indent: true } : {}),
-      ...(info?.wrapper === undefined ? {} : placement === 'grouped' ? { triggerOverline: info.wrapper } : { overline: info.wrapper }),
-      ...(tag === undefined ? {} : placement === 'grouped' ? { triggerTag: tag } : { tag }),
-      // The selectors written inside the query go under it, as they sit in the code.
-      ...(info?.querySelectors === undefined ? {} : { subline: info.querySelectors }),
-      icon: placement === 'base' ? <BaseContextIcon /> : breakpointIcon(styleContext.breakpoint ?? undefined),
+      label,
+      ...(width?.breakpoint === undefined ? {} : { detail: width.condition }),
+      ...(placement === 'base' ? {} : { title: query }),
+      // The closed trigger names where the query is written, on its one line.
+      ...(prefix === undefined ? {} : { triggerPrefix: prefix }),
+      // The selectors written inside a query that is not about width go under it, as they sit in the code.
+      ...(placement === 'other' && info?.querySelectors !== undefined ? { subline: info.querySelectors } : {}),
+      ...(icon === undefined ? {} : { icon }),
       // A held choice says so on the closed trigger, beside its name, and the pin lets go of it.
       ...(card.contextFollow !== undefined && !card.contextFollow.following ? { triggerMark: <FollowPin onFollow={card.contextFollow.onFollow} /> } : {}),
       marked: info?.hasStyles ?? false,
@@ -257,43 +278,53 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
   };
   const wrapperOf = (styleContext: StyleContext): string | undefined => contextInfos.find((entry) => entry.key === styleContext.key)?.wrapper;
   const options: SelectOption<string>[] = [];
-  for (const group of groupContexts(contexts.map((context) => ({ context, wrapper: wrapperOf(context) })))) {
+  let otherRows: SelectOption<string>[] = [];
+  for (const group of groupContexts(
+    contexts.map((context) => ({ context, wrapper: wrapperOf(context) })),
+    resolved,
+  )) {
     switch (group.kind) {
       case 'base':
         options.push(optionFor(group.item.context, 'base'));
         break;
       case 'loose':
-        options.push(optionFor(group.item.context, 'loose'));
+        options.push(optionFor(group.item.context, 'section'));
         break;
       case 'group': {
         const tag = tagFor(group.key.source);
         // Named by its wrapper selector beside the stylesheet chip; a group with no
-        // wrapper is named by the stylesheet alone.
+        // wrapper is named by the stylesheet alone. A flat label, not a card.
         const label = group.key.wrapper ?? tag?.label ?? group.key.source ?? '';
         options.push({
           value: `${GROUP_HEADING_PREFIX}${group.key.source ?? ''}\u0000${group.key.wrapper ?? ''}`,
           label,
           heading: true,
-          group: true,
           ...(group.key.wrapper === undefined || tag === undefined ? {} : { tag }),
         });
         for (const item of group.items) {
-          options.push(optionFor(item.context, 'grouped'));
+          options.push(optionFor(item.context, 'section'));
         }
         break;
       }
+      case 'other':
+        otherRows = group.items.map((item) => optionFor(item.context, 'other'));
+        break;
       default: {
         const exhaustive: never = group;
         return exhaustive;
       }
     }
   }
+  // The queries that are not about width close the list as one plain section, labelled Other.
+  if (otherRows.length > 0) {
+    options.push({ value: OTHER_HEADING, label: translate('styleModel.embed.card.other'), heading: true }, ...otherRows);
+  }
   return (
     <Select
       className="embed-editor_context-select"
       value={card.context}
       options={[
-        ...options,
+        // Follow canvas size heads the list as a switch: on, the target follows the canvas width.
         ...(card.contextFollow === undefined
           ? []
           : [
@@ -301,17 +332,19 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
                 value: FOLLOW_CANVAS,
                 label: translate('styleModel.embed.card.followCanvas'),
                 icon: <PinIcon />,
-                footer: true,
+                header: true,
+                switch: true,
                 checked: card.contextFollow.following,
               },
             ]),
+        ...options,
         { value: ADD_QUERY, label: translate('styleModel.embed.card.addQuery'), icon: <PlusIcon />, footer: true },
       ]}
       onChange={(next) => {
         if (next === ADD_QUERY) {
           onAddQuery();
         } else if (next === FOLLOW_CANVAS) {
-          // A toggle: checked it holds where the panel is, unchecked it follows the canvas again.
+          // A switch: on it holds where the panel is, off it follows the canvas again.
           if (card.contextFollow?.following === true) {
             card.contextFollow.onHold();
           } else {
@@ -325,6 +358,24 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
     />
   );
 }
+
+// The Other section label's value: never a context key nor ADD_QUERY.
+const OTHER_HEADING = '\u0000other';
+
+const WidthIcon = centralIcon(centralRuler);
+
+const DEVICE_ICONS: Readonly<Record<DeviceIconKind, () => ReactNode>> = {
+  desktop: () => <DesktopIcon />,
+  laptop: () => <LaptopIcon />,
+  tablet: () => <TabletIcon />,
+  phone: () => <PhoneIcon />,
+  studioDisplayXdr: () => <StudioDisplayXdrIcon />,
+  television: () => <TelevisionIcon />,
+  smartwatch: () => <SmartwatchIcon />,
+  canvas: () => <DesktopIcon />,
+};
+// The preview bar's and Settings' icon for a breakpoint.
+const deviceIcon = (kind: DeviceIconKind): ReactNode => DEVICE_ICONS[kind]();
 
 // The Follow canvas size row's value: neither a context key nor ADD_QUERY.
 const FOLLOW_CANVAS = '\u0000follow-canvas';

@@ -1,16 +1,18 @@
-// Goal: the style-context dropdown scrolls like a native menu. Its pinned "Add query" footer is
-// never overlapped by the rows (the last group card is fully reachable and fully visible at the
-// end of the scroll), only the rows scroll (one scrollbar, no scroll chaining to the panel
-// behind), and the list never moves by itself: not on open, not when the pointer crosses a
-// partly hidden row, and not when the options re-render while it is open.
+// Goal: the style-context dropdown is compact and scrolls like a native menu. Its Follow canvas
+// size strip and its "Add query" footer are pinned outside the scrolling rows (rows never slide
+// under them), only the rows scroll (one scrollbar, no chaining to the page behind), and the list
+// never moves by itself: not on open, not when the pointer crosses a partly hidden row, not when
+// its options re-render, The list is flat (no group cards), rows are
+// 32px, every row ends in the same 16px check slot, left and right insets match when nothing
+// scrolls, the trigger is one line, and the typical list (Base, three width queries, an Other section, Add
+// query) fits in about 300px without a scrollbar. The cap is 36rem (80vh), shrinking to the room.
 //
 // Method: layout is a browser question, so this runs in a real Electron window (the pattern of
-// popoverDropdown.test.js; skipped without Electron). It mounts the real Select with the
-// context dropdown's rows (a Base row, a group of three width queries with a pencil, a second
-// group with a monospace subline, more groups so the list scrolls, and the footer) under the
-// real tokens and stylesheets, then measures rects and scrollTop. Presses are dispatched
-// events; every wait polls observable state (test/helpers/waitFor.js). Nothing here is
-// wall-clock dependent and no real project is touched.
+// popoverDropdown.test.js; skipped without Electron). It mounts the real Select with rows shaped as
+// the context dropdown builds them, under the real tokens and stylesheets, then measures rects and
+// scrollTop. Presses are dispatched events; every wait polls observable state
+// (test/helpers/waitFor.js). Nothing is wall-clock dependent and no real project is touched. Set
+// STACKI_DROPDOWN_SHOTS=<directory> to also save screenshots of the typical, long and pinned lists.
 
 const fs = require('fs');
 const path = require('path');
@@ -38,37 +40,39 @@ const check = (what, condition, detail) => {
     import './src/features/style/embedEditor.css'
 
     const pencil = { icon: <span>p</span>, label: 'Edit', onSelect: () => {} }
-    const build = (rev, shape) => {
-      const options = [{ value: '', label: 'Base' }]
-      const heading = (value, label) => ({ value, label, heading: true, group: true })
-      options.push(heading('g0', 'Grid .grid'))
-      for (const [i, width] of ['30rem', '48rem', '64rem'].entries()) {
-        options.push({ value: 'w' + i, label: '@media (width >= ' + width + ')', indent: true, marked: true, action: pencil })
+    const build = (rev, shape, pinned) => {
+      const options = [{ value: '__follow', label: 'Follow canvas size', icon: <span>pin</span>, header: true, switch: true, checked: !pinned }]
+      options.push({ value: '', label: 'Base', icon: <span>h</span> })
+      const heading = (value, label) => ({ value, label, heading: true })
+      options.push(heading('g0', '.grid'))
+      const rows = [['≥ 64rem', 'w0'], ['≥ 48rem', 'w1'], ['≥ 30rem', 'w2']]
+      for (const [label, value] of rows) {
+        options.push({ value, label, title: '@media (width ' + label + ')', icon: <span>r</span>, marked: true, action: pencil, ...(value === 'w0' ? { triggerPrefix: 'Grid .grid' } : {}) })
       }
-      // The typical list: one more group with two rows. The long one: five single-row groups.
-      if (shape === 'typical') {
-        options.push(heading('g1', 'src/styles/base.css'))
-        options.push({ value: 'm1', label: '@media (prefers-reduced-motion: reduce)', indent: true, subline: ['*, ::before, ::after'], marked: true })
-        options.push({ value: 'm2', label: '@media (hover: hover)', indent: true, marked: true })
-      } else {
-        for (let g = 1; g <= 5; g += 1) {
+      if (shape === 'long') {
+        for (let g = 1; g <= 9; g += 1) {
           options.push(heading('g' + g, 'src/styles/s' + g + '.css'))
-          options.push({ value: 'm' + g, label: '@media (prefers-reduced-motion: reduce)', indent: true, subline: ['*, ::before, ::after'], marked: rev >= 0 })
+          options.push({ value: 'l' + g, label: 'Laptop', detail: '< 64rem', icon: <span>l</span>, marked: rev >= 0 })
+          options.push({ value: 'k' + g, label: 'Tablet', detail: '< 48rem', icon: <span>t</span>, marked: true })
         }
       }
+      options.push(heading('other', 'Other'))
+      options.push({ value: 'o1', label: '@media (prefers-reduced-motion: reduce)', subline: ['*, ::before, ::after'], marked: true })
       options.push({ value: '__add', label: 'Add query', footer: true })
       return options
     }
 
     function Harness() {
-      const [value, setValue] = useState('')
+      const [value, setValue] = useState('w0')
+      const [pinned, setPinned] = useState(false)
+      window.__pin = setPinned
       const [rev, setRev] = useState(0)
       const [shape, setShape] = useState('long')
       window.__rev = setRev
       window.__shape = setShape
       return (
         <div className="embed-editor_root" style={{ width: 320, margin: '40px 20px' }}>
-          <Select className="embed-editor_context-select" value={value} options={build(rev, shape)} onChange={setValue} ariaLabel="Context" />
+          <Select className="embed-editor_context-select" value={value} options={build(rev, shape, pinned)} onChange={(next) => { if (next === '__follow') { setPinned((was) => !was) } else { setValue(next) } }} ariaLabel="Context" />
         </div>
       )
     }
@@ -115,6 +119,8 @@ const check = (what, condition, detail) => {
        // Helpers inside the page. The scroller is the nearest scrolling ancestor of the first row.
        await js(\`window.__q = {
          scroller() {
+           const region = document.querySelector('.u-select-list > .u-select-scroll');
+           if (region) return region;
            let el = document.querySelector('.u-select-list [role=option]');
            while (el && el.parentElement) { el = el.parentElement; const o = getComputedStyle(el).overflowY; if ((o === 'auto' || o === 'scroll') && el.scrollHeight > el.clientHeight) return el; if (el.classList.contains('u-select-list')) break; }
            return document.querySelector('.u-select-list');
@@ -122,8 +128,8 @@ const check = (what, condition, detail) => {
          footer() { return document.querySelector('.u-select-option.is-footer'); },
          rects() {
            const s = window.__q.scroller(), f = window.__q.footer(), l = document.querySelector('.u-select-list');
-           const groups = [...document.querySelectorAll('.u-select-group')];
-           const last = groups[groups.length - 1].getBoundingClientRect();
+           const inRegion = [...s.querySelectorAll('[role=option]')].filter((o) => !o.classList.contains('is-footer') && !o.classList.contains('is-header'));
+           const last = inRegion[inRegion.length - 1].getBoundingClientRect();
            const sr = s.getBoundingClientRect(), fr = f.getBoundingClientRect(), lr = l.getBoundingClientRect();
            return { scrollTop: s.scrollTop, scrollMax: s.scrollHeight - s.clientHeight, scrollerBottom: sr.bottom, scrollerIsList: s === l,
              footerTop: fr.top, footerBottom: fr.bottom, lastGroupBottom: last.bottom, lastGroupTop: last.top, listTop: lr.top, listBottom: lr.bottom, listHeight: lr.height };
@@ -133,7 +139,6 @@ const check = (what, condition, detail) => {
        await js("document.querySelector('.u-select-button').click(); true");
        await pollUntil({ what: 'list open', read: () => js("document.querySelector('.u-select-list') !== null"), until: (open) => open });
        await settled('menu opened');
-       out.dbg = await js("JSON.stringify({g: document.querySelectorAll('.u-select-group').length, f: !!document.querySelector('.is-footer'), l: !!document.querySelector('.u-select-list'), h: document.body.innerHTML.slice(0,300)})"); console.error(out.dbg);
        out.open = await js('window.__q.rects()');
        out.listStyle = await js("(() => { const s = window.__q.scroller(); const c = getComputedStyle(s); return { overscroll: c.overscrollBehaviorY, overflowY: c.overflowY, gutter: c.scrollbarGutter } })()");
        out.scrollers = await js("(() => { let n = 0; for (const el of document.querySelectorAll('.u-select-list, .u-select-list *')) { const o = getComputedStyle(el).overflowY; if ((o === 'auto' || o === 'scroll') && el.scrollHeight > el.clientHeight) n += 1; } return n })()");
@@ -160,11 +165,36 @@ const check = (what, condition, detail) => {
          await js("document.querySelector('.u-select-button').click(); true");
          await pollUntil({ what: 'list open again', read: () => js("document.querySelector('.u-select-list') !== null"), until: (open) => open });
          await settled('menu opened again');
-         return js(\`(() => { const r = window.__q.rects(); const l = document.querySelector('.u-select-list').getBoundingClientRect(); const inset = (el) => { const e = el.getBoundingClientRect(), p = document.querySelector('.u-select-list').getBoundingClientRect(); return { left: e.left - p.left, right: p.right - e.right } }; return { ...r, base: inset(document.querySelector('.u-select-list [role=option]')), group: inset(document.querySelector('.u-select-group')), maxHeight: getComputedStyle(document.querySelector('.u-select-list')).maxHeight, windowHeight: window.innerHeight, listTopNow: l.top, listBottomNow: l.bottom } })()\`);
+         return js(\`(() => { const r = window.__q.rects(); const l = document.querySelector('.u-select-list').getBoundingClientRect(); const inset = (el) => { const e = el.getBoundingClientRect(), p = document.querySelector('.u-select-list').getBoundingClientRect(); return { left: e.left - p.left, right: p.right - e.right } }; return { ...r, base: inset(document.querySelector('.u-select-list [role=option]')), second: inset(document.querySelectorAll('.u-select-scroll [role=option]')[1]), rowHeight: document.querySelectorAll('.u-select-scroll [role=option]')[0].offsetHeight, checkWidths: [...document.querySelectorAll('.u-select-list [role=option] .u-select-check')].map((c) => c.offsetWidth), cards: document.querySelectorAll('.u-select-group').length, headerOutside: document.querySelector('.u-select-header') !== null && !document.querySelector('.u-select-scroll').contains(document.querySelector('.u-select-header')), trigger: (() => { const t = document.querySelector('.u-select-button').getBoundingClientRect(); return { height: t.height, oneLine: document.querySelector('.u-select-button .has-prefix') !== null && document.querySelector('.u-select-button .has-overline') === null } })(), dotTitles: [...document.querySelectorAll('.u-select-dot')].every((d) => d.title === 'Has styles here' && d.getAttribute('aria-label') === 'Has styles here'), maxHeight: getComputedStyle(document.querySelector('.u-select-list')).maxHeight, windowHeight: window.innerHeight, listTopNow: l.top, listBottomNow: l.bottom } })()\`);
        };
        out.typical900 = await reopen(900, 'typical');
        out.long900 = await reopen(900, 'long');
        out.long500 = await reopen(500, 'long');
+       // Pinning from the strip: the switch row toggles in place without closing.
+       await js("document.querySelector('.u-select-header [role=option]').click(); true");
+       await pollUntil({ what: 'switch off', read: () => js("document.querySelector('.u-select-header [role=option]').getAttribute('aria-selected')"), until: (selected) => selected === 'false' });
+       out.switchStayedOpen = await js("document.querySelector('.u-select-list') !== null");
+       const shots = process.env.STACKI_DROPDOWN_SHOTS;
+       if (shots) {
+         const fs = require('fs');
+         const shoot = async (name) => { const image = await win.webContents.capturePage(); fs.writeFileSync(require('path').join(shots, name + '.png'), image.toPNG()); };
+         await js("document.querySelector('.u-select-list') !== null && document.querySelector('.u-select-button').click(); true");
+         await pollUntil({ what: 'list closed before shots', read: () => js("document.querySelector('.u-select-list') === null"), until: (closed) => closed });
+         win.setContentSize(700, 700);
+         await pollUntil({ what: 'resized', read: () => js('window.innerHeight'), until: (inner) => inner === 700 });
+         // A window resize closes an open popover, and its event lands a frame late: let it pass first.
+         await js('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))');
+         for (const [name, shape, pinned] of [['typical', 'typical', false], ['long', 'long', false], ['pinned', 'typical', true]]) {
+           await js('window.__shape(' + JSON.stringify(shape) + '); window.__pin(' + pinned + '); true');
+           await js("document.querySelector('.u-select-list') === null && document.querySelector('.u-select-button').click(); true");
+           await pollUntil({ what: 'list open for shot', read: () => js("document.querySelector('.u-select-list') !== null"), until: (open) => open });
+           await settled('menu opened for shot');
+           await js('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))');
+           await shoot(name);
+           await js("document.querySelector('.u-select-button').click(); true");
+           await pollUntil({ what: 'list closed after shot', read: () => js("document.querySelector('.u-select-list') === null"), until: (closed) => closed });
+         }
+       }
        console.log(JSON.stringify(out));
        app.quit();
      });`,
@@ -188,12 +218,28 @@ const check = (what, condition, detail) => {
       Math.abs(out.typical900.base.left - out.typical900.base.right) <= 1,
       JSON.stringify(out.typical900.base),
     );
-    check('and so do its group cards', Math.abs(out.typical900.group.left - out.typical900.group.right) <= 1, JSON.stringify(out.typical900.group));
+    check('and so do its rows below the first', Math.abs(out.typical900.second.left - out.typical900.second.right) <= 1, JSON.stringify(out.typical900.second));
+    check('the list is flat: no group cards', out.typical900.cards === 0, `${out.typical900.cards} cards`);
+    check('the Follow canvas size strip is pinned outside the scrolling rows', out.typical900.headerOutside === true);
+    check('rows are 32px', Math.abs(out.typical900.rowHeight - 32) <= 0.5, `${out.typical900.rowHeight}`);
+    check(
+      'every row ends in the same 16px check slot',
+      out.typical900.checkWidths.every((width) => width === 16),
+      JSON.stringify(out.typical900.checkWidths),
+    );
+    check(
+      'the trigger is one line, as tall as the other controls',
+      out.typical900.trigger.oneLine === true && out.typical900.trigger.height <= 36,
+      JSON.stringify(out.typical900.trigger),
+    );
+    check('a dot says what it means, for the pointer and for a screen reader', out.typical900.dotTitles === true);
+    check('the typical list (with its Follow strip and Other section) fits in about 300px', out.typical900.listHeight <= 310, `${out.typical900.listHeight}`);
+    check('the switch row toggles in place', out.switchStayedOpen === true);
     check('at the end the last group is fully visible above the footer', out.end.lastGroupBottom <= out.end.footerTop + 0.5, JSON.stringify(out.end));
     check('and fully visible inside the scroller', out.end.lastGroupBottom <= out.end.scrollerBottom + 0.5, JSON.stringify(out.end));
     check('hovering a partly hidden row does not move the list', out.hoverMoved === 0, `moved ${out.hoverMoved}`);
     check(
-      'the typical list (Base, a group of three, a group of two, the footer) has no scrollbar at 900px tall',
+      'the typical list (Base, three width queries, an Other section, the footer) has no scrollbar at 900px tall',
       out.typical900.scrollMax === 0,
       JSON.stringify(out.typical900),
     );

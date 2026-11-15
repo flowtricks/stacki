@@ -159,8 +159,16 @@ const SHEETS = [
     host.querySelector('.embed-editor_context-select .u-select-button')?.click();
     await wait(120);
     const rows = [...document.querySelectorAll('.u-select-option')];
-    // Grouped under a header naming its wrapper (embed/contextGroups.ts).
-    const nested = rows.find((row) => row.closest('.u-select-group')?.querySelector('.u-select-heading-label')?.textContent === '.button');
+    // Listed after a section label naming its wrapper (embed/contextGroups.ts).
+    const headingOf = (row) => {
+      for (let node = row.previousElementSibling; node !== null; node = node.previousElementSibling) {
+        if (node.classList.contains('u-select-heading')) {
+          return node;
+        }
+      }
+      return undefined;
+    };
+    const nested = rows.find((row) => headingOf(row)?.querySelector('.u-select-heading-label')?.textContent === '.button');
     nested?.click();
     await wait(300);
     const swatch = [...host.querySelectorAll('.u-color-swatch')].find((button) => button.getAttribute('aria-label') === 'all border color');

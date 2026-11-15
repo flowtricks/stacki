@@ -30,12 +30,19 @@ export type SelectOption<T extends string> = {
   heading?: boolean;
   /** Whether the row is drawn checked, when that is not "its value is the control's value" (a row that toggles a setting, like Follow canvas size). */
   checked?: boolean;
-  /** On a heading: it opens a group, drawn as one filled card with the indented options
-   *  that follow it (role=group, named by the heading). The context dropdown groups its
-   *  queries by stylesheet this way, so the source is named once, not on every row. */
-  group?: boolean;
   /** Indent the option to show it nests under the preceding heading. */
   indent?: boolean;
+  /** Muted text after the label in a list row (a breakpoint's condition beside its name). */
+  detail?: string;
+  /** The row's tooltip: the whole, raw text of what the row stands for. */
+  title?: string;
+  /** In the closed trigger, text before the label (the selector a query is nested in), cut with an ellipsis
+   *  when the trigger is narrow while the label itself stays whole. */
+  triggerPrefix?: string;
+  /** A row that is a switch: the switch ends it instead of a check, and choosing it does not close the list. */
+  switch?: boolean;
+  /** Pinned to the top of the open list, apart from the rows below it (a setting that applies to them all). */
+  header?: boolean;
   /** Pinned to the bottom of the open list, apart from the options above it (an
    *  "Add …" row): it stays in view while the list scrolls. */
   footer?: boolean;
