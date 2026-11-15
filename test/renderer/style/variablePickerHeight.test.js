@@ -117,7 +117,7 @@ const check = (what, condition, detail) => {
     scriptPath,
     `const { app, BrowserWindow } = require('electron');
      app.on('window-all-closed', () => app.quit());
-     const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+     const { MOTION_SETTLED_EXPRESSION, pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      // A page script that throws ends the probe with its error, instead of leaving Electron
      // running until the spawn bound kills it with nothing to show (run 43645343733).
      process.on('unhandledRejection', (error) => {
@@ -166,6 +166,9 @@ const check = (what, condition, detail) => {
              lastTop = now;
              await wait(60);
            }
+           // Two equal reads can also mean no frame ran between them on a starved runner, with the
+           // box still scaling (stress: 15.58 -> 8 for the pinned search row): wait for the motion too.
+           await pollUntil({ what: 'the picker motion over', read: () => js(MOTION_SETTLED_EXPRESSION), until: (settled) => settled });
            const before = await js(probe);
            await js("document.querySelector('.embed-editor_varpicker-list').scrollTop = 600");
            await wait(50);
