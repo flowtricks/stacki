@@ -6,6 +6,11 @@
 //   npm test -- --list               the suites, without running them
 //   npm test -- --jobs=4             at most four suites at once
 //   npm test -- --electron-jobs=2    at most two suites that open Electron windows at once
+//   npm test -- --shard=2/4          the full gate's builds and only shard 2 of 4's suites; shard 1
+//                                    also runs the static checks (testShard.ts), for CI's matrix
+//
+// A full, unsharded run that passes writes a marker for the tree it built (gateMarker.ts), which
+// lets the pre-push hook skip running the identical gate on the identical tree again.
 //
 // Naming suites builds what they load over the existing tree and skips the
 // clean and the whole-tree static checks (gatePlan.ts says why); the stop hook
@@ -32,18 +37,35 @@ import {
 } from './testPool';
 import { repositoryRoot } from '../lib/repoRoot';
 import { discoverTestFiles, selectSuites, startsElectron, suitesFor, type Suite } from './testDiscovery';
+import { gateVersion, markerFolder, workingTreeHash, writeMarker } from './gateMarker';
+import { parseShard, suitesInShard, type Shard } from './testShard';
 
 const root = repositoryRoot();
 const flags = process.argv.slice(2).filter((argument) => argument.startsWith('--'));
-const unknownFlags = flags.filter((flag) => !flag.startsWith('--jobs=') && !flag.startsWith('--electron-jobs=') && flag !== '--list');
+const unknownFlags = flags.filter(
+  (flag) => !flag.startsWith('--jobs=') && !flag.startsWith('--electron-jobs=') && !flag.startsWith('--shard=') && flag !== '--list',
+);
 if (unknownFlags.length > 0) {
-  console.error(`Unknown flag: ${unknownFlags.join(', ')} (supported: --jobs=<n>, --electron-jobs=<n>, --list)`);
+  console.error(`Unknown flag: ${unknownFlags.join(', ')} (supported: --jobs=<n>, --electron-jobs=<n>, --shard=<k>/<n>, --list)`);
   process.exit(1);
 }
+const shardFlag = flags.find((flag) => flag.startsWith('--shard='));
+const shardParsed = shardFlag === undefined ? undefined : parseShard(shardFlag.slice('--shard='.length));
+if (typeof shardParsed === 'string') {
+  console.error(shardParsed);
+  process.exit(1);
+}
+const shard: Shard | undefined = shardParsed;
 const jobs = parseJobs(flags.find((flag) => flag.startsWith('--jobs='))?.slice('--jobs='.length), os.availableParallelism());
 const electronJobs = parseElectronJobs(flags.find((flag) => flag.startsWith('--electron-jobs='))?.slice('--electron-jobs='.length), jobs);
 const queries = process.argv.slice(2).filter((argument) => !argument.startsWith('--'));
-const { selected, unmatched } = selectSuites(suitesFor(discoverTestFiles(root)), queries);
+if (shard !== undefined && queries.length > 0) {
+  console.error('--shard splits the full gate; it cannot be combined with named suites.');
+  process.exit(1);
+}
+const matched = selectSuites(suitesFor(discoverTestFiles(root)), queries);
+const unmatched = matched.unmatched;
+const selected = shard === undefined ? matched.selected : suitesInShard(matched.selected, shard);
 if (selected.length === 0 || unmatched.length > 0) {
   console.error(`No test suite matches: ${unmatched.join(', ')} (npm test -- --list)`);
   process.exit(1);
@@ -68,7 +90,9 @@ const testEnvironment = {
   NODE_OPTIONS: withDockPreload(process.env['NODE_OPTIONS'], path.join(root, 'test', 'helpers', 'hideDockPreload.js')),
 };
 const typeScript = path.join(root, 'node_modules', 'typescript', 'bin', 'tsc');
-const plan = gatePlanFor({ queries, selected });
+const plan = gatePlanFor(shard === undefined ? { queries, selected } : { queries, selected, shard });
+// Taken before anything runs, compared after: a marker names only a tree that held still (gateMarker.ts).
+const treeHashAtStart = plan.kind === 'full' && shard === undefined ? workingTreeHash(root) : undefined;
 // Node >= 22.18 strips types itself (package.json engines).
 const cleanCommand: TestCommand = {
   name: 'build:clean',
@@ -292,8 +316,10 @@ async function runPhases(): Promise<readonly TestOutcome[]> {
   const buildsStartedMs = Date.now();
   await runBuilds();
   console.log(`\n[gate] builds done in ${((Date.now() - buildsStartedMs) / 1000).toFixed(1)}s`);
-  if (plan.kind === 'full') {
+  if (plan.staticChecks === 'run') {
     await runStaticChecks();
+  } else if (shard !== undefined) {
+    console.log(`\n[gate] Shard ${shard.index}/${shard.count}: the static checks run in shard 1.`);
   }
   testsStartedMs = Date.now();
   console.log(`\n[gate] ${names.length} test suites, ${jobs} at a time, ${electronJobs} of them with Electron windows`);
@@ -327,6 +353,24 @@ function summarize(outcomes: readonly TestOutcome[]): void {
     console.error(`\nQuarantined tests now pass — remove them: ${healed.join(', ')}`);
   }
   process.exitCode = unexpected.length > 0 || healed.length > 0 ? 1 : 0;
+  if (process.exitCode === 0) {
+    recordPass();
+  }
+}
+
+// Only a full, unsharded, passing run whose tree did not change while it ran earns a marker.
+function recordPass(): void {
+  if (treeHashAtStart === undefined) {
+    return;
+  }
+  const folder = markerFolder(root);
+  const treeHashAtEnd = workingTreeHash(root);
+  if (folder === undefined || treeHashAtEnd !== treeHashAtStart) {
+    console.log('\n[gate] The tree changed during the run (or git could not hash it): no pre-push marker written.');
+    return;
+  }
+  writeMarker(folder, { treeHash: treeHashAtStart, gateVersion: gateVersion(), finishedAt: new Date().toISOString() });
+  console.log(`\n[gate] Marker written for tree ${treeHashAtStart.slice(0, 12)}: pushing this exact tree skips the pre-push gate.`);
 }
 
 runPhases().then(summarize, (error: unknown) => {

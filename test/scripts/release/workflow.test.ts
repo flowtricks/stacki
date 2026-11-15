@@ -35,7 +35,8 @@ function verifySandboxSteps(steps: readonly Record<string, unknown>[]): void {
     if (step['if'] === undefined) {
       return true;
     }
-    return step['if'] === "runner.os == 'Linux'";
+    // The release `tests` job also gates each step on the plan; the platform clause must still name Linux.
+    return text(step['if']).includes("runner.os == 'Linux'");
   });
   const commands = setup.map(command).join('\n');
   assert.ok(commands.includes('sudo chown root:root node_modules/electron/dist/chrome-sandbox'));
@@ -46,7 +47,7 @@ function verifySandboxSteps(steps: readonly Record<string, unknown>[]): void {
 test('Check and Release prepare the Linux sandbox after install and before Electron tests', () => {
   const check = workflowJobs('.github/workflows/check.yml');
   const release = workflowJobs('.github/workflows/release.yml');
-  for (const job of [check['test'], release['build-linux']]) {
+  for (const job of [check['shard'], release['tests']]) {
     const steps = jobSteps(job);
     verifySandboxSteps(steps);
     // Reproduce the missing setup, wrong runner guard, and wrong-order regressions.

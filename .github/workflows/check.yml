@@ -6,6 +6,11 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  # The per-platform aggregate jobs read this run's shard results.
+  actions: read
+
 jobs:
   # The fast lane: formatting, the repository policy scan, and both type-check
   # programs finish in a few minutes and fail a pull request before the full
@@ -24,13 +29,19 @@ jobs:
       - run: npm run check:policy
       - run: npm run typecheck
 
-  # The full gate on every platform the app ships on, plus Linux. Linux has no
-  # display, so the Electron probes run under a virtual one.
-  test:
+  # The full gate on every platform the app ships on, split into four shards per
+  # platform so the slowest platform finishes in about a quarter of the time.
+  # Each shard runs the full gate's clean builds and its share of the suites
+  # (a stable hash of each suite's path, scripts/gate/testShard.ts); shard 1 also
+  # runs the static checks, so the four shards together run exactly `npm test`.
+  # Linux has no display, so the Electron probes run under a virtual one.
+  shard:
+    name: test shard (${{ matrix.os }}, ${{ matrix.shard }}/4)
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+        shard: [1, 2, 3, 4]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -47,6 +58,31 @@ jobs:
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
       - if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum npm test
+        run: xvfb-run --auto-servernum npm test -- --shard=${{ matrix.shard }}/4
       - if: runner.os != 'Linux'
-        run: npm test
+        run: npm test -- --shard=${{ matrix.shard }}/4
+
+  # One job per platform under the name branch protection and the release
+  # scripts have always read (`test (<os>)`). It passes only when all four of
+  # its platform's shards passed in this run attempt; it runs even when a shard
+  # failed, so the platform reports red instead of skipped.
+  test:
+    name: test (${{ matrix.os }})
+    needs: shard
+    if: ${{ !cancelled() }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ubuntu-latest
+    steps:
+      # The aggregate needs only the scripts; cone-mode sparse checkouts keep root files such as .nvmrc.
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - run: node --experimental-strip-types scripts/release/checkShards.mts --os=${{ matrix.os }} --run-id=${{ github.run_id }} --attempt=${{ github.run_attempt }}
+        env:
+          GH_TOKEN: ${{ github.token }}

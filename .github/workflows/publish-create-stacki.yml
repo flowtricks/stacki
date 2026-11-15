@@ -6,6 +6,8 @@ on:
 permissions:
   contents: read
   id-token: write
+  # The test plan reads check.yml's result for this commit.
+  actions: read
 
 jobs:
   publish:
@@ -35,13 +37,23 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+      # The suite already passed this exact commit in check.yml on every platform
+      # (release.yml waited for that before it published), so it runs here only
+      # when that cannot be shown (scripts/release/releasePlan.mts). The package
+      # build and the pack check below always run.
+      - id: plan
+        run: node --experimental-strip-types scripts/release/releasePlan.mts --sha="$GITHUB_SHA" --wait-minutes=30 --force-tests=false
+        env:
+          GH_TOKEN: ${{ github.token }}
       - run: npm install --global npm@11
       - run: npm ci
       - run: npm --prefix studio ci
-      - run: |
+      - if: steps.plan.outputs.run_tests == 'true'
+        run: |
           sudo chown root:root node_modules/electron/dist/chrome-sandbox
           sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
-      - run: xvfb-run --auto-servernum npm test
+      - if: steps.plan.outputs.run_tests == 'true'
+        run: xvfb-run --auto-servernum npm test
       - run: npm run create-stacki:build
       - run: npm pack --dry-run
         working-directory: packages/create-stacki

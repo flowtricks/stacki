@@ -3,11 +3,79 @@ name: Release
 on:
   # A manual run validates Linux installers without publishing a release.
   workflow_dispatch:
+    inputs:
+      force_tests:
+        description: Run the whole suite on every platform even if Check already passed this commit
+        type: boolean
+        default: false
   push:
     tags:
       - 'v*'
 
 jobs:
+  # Decides once whether the suite must run here: check.yml passed this exact
+  # commit on every platform (skip it), or anything else (run it, as before).
+  # The tag push that starts this run also starts Check on the same commit, so
+  # the plan waits for that run, bounded. Builds and packaging never wait for
+  # it: they run beside it, and publish needs both. scripts/release/releasePlan.mts
+  # holds the rule; any doubt, an API failure, or the force_tests input or the
+  # RELEASE_FORCE_TESTS repository variable runs the tests.
+  plan:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      run_tests: ${{ steps.plan.outputs.run_tests }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          sparse-checkout: scripts
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - id: plan
+        run: node --experimental-strip-types scripts/release/releasePlan.mts --sha="$GITHUB_SHA" --wait-minutes=45 --force-tests="${FORCE_TESTS}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FORCE_TESTS: ${{ inputs.force_tests || vars.RELEASE_FORCE_TESTS }}
+
+  # The whole suite on the three release platforms, only when the plan says
+  # Check has not already passed this commit. The job always runs, so publish
+  # can need it plainly; when the suite is not needed its one step says why.
+  tests:
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - if: needs.plan.outputs.run_tests != 'true'
+        run: echo "Skipping the suite on ${{ matrix.os }}; the plan job's summary names the Check run that passed this exact commit."
+      - if: needs.plan.outputs.run_tests == 'true'
+        uses: actions/checkout@v6
+      - if: needs.plan.outputs.run_tests == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - if: needs.plan.outputs.run_tests == 'true'
+        run: npm ci
+      - if: needs.plan.outputs.run_tests == 'true'
+        run: npm --prefix studio ci
+      - name: Prepare Electron sandbox for tests
+        if: needs.plan.outputs.run_tests == 'true' && runner.os == 'Linux'
+        run: |
+          sudo chown root:root node_modules/electron/dist/chrome-sandbox
+          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
+      # The full gate, as on every platform: a release is never published from
+      # code that fails it on any of them.
+      - if: needs.plan.outputs.run_tests == 'true' && runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm test
+      - if: needs.plan.outputs.run_tests == 'true' && runner.os != 'Linux'
+        run: npm test
+
   # Create the draft release once, before any job uploads to it. The three
   # electron-builder jobs start together, and each creates a draft for the tag
   # when it finds none: v1.2.2 got two drafts within a second, the installers
@@ -58,9 +126,9 @@ jobs:
             ${{ runner.os }}-electron-
       - run: npm ci
       - run: npm --prefix studio ci
-      # The full gate, as on every platform: a release is never built from code that
-      # fails it. npm test builds the app as its first step.
-      - run: npm test
+      # The packaging build (npm run dist:mac's first half). The suite runs in
+      # the tests job or already passed in Check; publish needs one of them.
+      - run: npm run build
       - name: Validate mac signing secrets
         run: |
           test -n "$MAC_CSC_LINK" || { echo "MAC_CSC_LINK is missing"; exit 1; }
@@ -116,7 +184,7 @@ jobs:
             ${{ runner.os }}-electron-
       - run: npm ci
       - run: npm --prefix studio ci
-      - run: npm test
+      - run: npm run build
       # Windows signing is optional, matching the existing release channel.
       # Electron-builder signs when credentials exist and otherwise builds unsigned.
       - run: npx electron-builder --win --publish always
@@ -148,11 +216,7 @@ jobs:
             ${{ runner.os }}-electron-
       - run: npm ci
       - run: npm --prefix studio ci
-      - name: Prepare Electron sandbox for tests
-        run: |
-          sudo chown root:root node_modules/electron/dist/chrome-sandbox
-          sudo chmod 4755 node_modules/electron/dist/chrome-sandbox
-      - run: xvfb-run --auto-servernum npm test
+      - run: npm run build
       - run: >-
           npx electron-builder --linux
           --publish ${{ github.event_name == 'push' && 'always' || 'never' }}
@@ -260,9 +324,11 @@ jobs:
             --repo flowtricks/stacki-releases --clobber
 
   # Publish only when every platform has uploaded and both Linux installs work.
+  # The suite counts too: `tests` either ran it on all three platforms or
+  # confirmed that Check had (it always runs, so a plain `needs` holds).
   publish:
     if: github.event_name == 'push'
-    needs: [draft, build-mac, build-windows, build-linux, test-linux-install, build-studio]
+    needs: [draft, plan, tests, build-mac, build-windows, build-linux, test-linux-install, build-studio]
     runs-on: ubuntu-latest
     steps:
       - name: Verify all platforms uploaded, then publish
