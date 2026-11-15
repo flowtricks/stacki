@@ -203,6 +203,36 @@ test('a locked stylesheet or folder keeps its unused selectors out of every clea
   assert.equal(fs.readFileSync(path.join(root, 'src/styles/patterns.css'), 'utf8'), '');
 });
 
+test('explicit stylesheet and folder locks take priority over outside-HTML uncertainty', async () => {
+  const patterns = '.pattern-unused { color: red }\n.pattern-used { color: blue }\nh1 { color: green }\n';
+  const root = project({
+    'src/styles/patterns.css': patterns,
+    'src/lumos/utilities.css': '.utility-unused { color: red }\n',
+    'src/styles/unlocked.css': '.unlocked-unused { color: red }\n',
+    'src/pages/index.astro': '---\nimport { content } from \'../lib/content\';\n---\n<h1 class="pattern-used">Hello</h1><article set:html={content} />\n',
+    'src/lib/content.ts': "export const content = await fetch('https://example.com/content').then(response => response.text());\n",
+  });
+  const locks = parseStyleKeepList({ version: 1, keep: [], lockedStylesheets: ['src/styles/patterns.css', 'src/lumos/'] });
+  const locked = await checkSelectorUsage(root, locks);
+  assert.deepEqual(kinds(locked.report), {
+    '.pattern-unused': 'kept',
+    '.pattern-used': 'used',
+    h1: 'untracked',
+    '.unlocked-unused': 'unknown',
+    '.utility-unused': 'kept',
+  });
+  assert.deepEqual(verdictOf(locked.report, '.pattern-unused'), { kind: 'kept', names: ['pattern-unused'] });
+  const entry = locked.report.entries.find((candidate) => candidate.selector === '.pattern-unused');
+  assert.ok(entry, 'the locked selector exists in the report');
+  const refused = await removeUnusedSelectors(root, locks, { ids: [entry.id], files: locked.report.files });
+  assert.equal(refused.ok ? 'ok' : refused.error.code, 'changed');
+  assert.equal(fs.readFileSync(path.join(root, 'src/styles/patterns.css'), 'utf8'), patterns);
+
+  const unlocked = await report(root);
+  assert.equal(verdictOf(unlocked, '.pattern-unused').kind, 'unknown', 'unlocking restores the uncertainty instead of permitting cleanup');
+  assert.equal(verdictOf(unlocked, '.utility-unused').kind, 'unknown');
+});
+
 test('only top-level names are requirements; keyframes, comments and other languages are left alone', async () => {
   const root = project({
     'src/styles/global.css':
