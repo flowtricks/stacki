@@ -82,10 +82,18 @@ const check = (what, condition, detail) => {
            first: Boolean(slot && row.firstElementChild === slot),
          };
        };
+       // Waits on the rows themselves, bounded, rather than a fixed pause: a hidden window on
+       // the Linux runner (xvfb) can lay the popup out late, or let a window event close it
+       // before it paints, so the press is repeated (bounded) until the rows are there.
+       const openRows = () => [...document.querySelectorAll('.dd-popup .dd-option')];
        const rows = async (dropdown) => {
-         dropdown.querySelector('.dd-trigger').click();
-         await settle();
-         const found = [...document.querySelectorAll('.dd-popup .dd-option')].map((row) => ({ label: row.textContent, ...icon(row) }));
+         for (let attempt = 0; attempt < 5 && openRows().length === 0; attempt += 1) {
+           dropdown.querySelector('.dd-trigger').click();
+           for (let poll = 0; poll < 40 && openRows().length === 0; poll += 1) {
+             await tick();
+           }
+         }
+         const found = openRows().map((row) => ({ label: row.textContent, ...icon(row) }));
          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
          await settle();
          return found;
@@ -153,7 +161,7 @@ const check = (what, condition, detail) => {
       check("at Desktop's option icon size, before the label", trigger.size === 16 && trigger.first, seen(trigger));
       check("a component row draws the Navigator's component cube", childRows[0] && startsWithCube(childRows[0].path), seen(childRows));
       check("a tag:a row draws the Navigator's link icon", childRows[1] && childRows[1].glyph === 'link', seen(childRows));
-      check('rows draw their icon first, at 16px', childRows[0].first && childRows[0].size === 16 && childRows[1].size === 16, seen(childRows));
+      check('rows draw their icon first, at 16px', childRows[0]?.first && childRows[0]?.size === 16 && childRows[1]?.size === 16, seen(childRows));
       check('an unknown icon draws none', childRows[2] && childRows[2].path === undefined && childRows[2].label === 'Odd', seen(childRows));
       check('an option with no icon draws none', childRows[3] && childRows[3].path === undefined, seen(childRows));
       check('choosing another value moves its icon to the trigger', triggerAfter.glyph === 'link', seen(triggerAfter));
