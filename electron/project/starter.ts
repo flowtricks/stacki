@@ -44,8 +44,16 @@ type OnLog = (text: string) => void;
 // A scaffolder only downloads a template, so a run this long has stalled, and the wizard
 // cannot be closed while it waits.
 const RUN_TIMEOUT_MS = 5 * 60 * 1000;
+/** The message of the error a stopped run rejects with, so a caller can tell a cancel from a failure. */
+export const RUN_CANCELLED = 'The command was cancelled.';
 
-const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog): Promise<string> =>
+/** A caller that must be able to stop a run, or give it more (or less) time than a scaffolder needs. */
+interface RunOptions {
+  readonly signal?: AbortSignal;
+  readonly timeoutMs?: number;
+}
+
+const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog, options: RunOptions = {}): Promise<string> =>
   new Promise((resolve, reject) => {
     let proc;
     try {
@@ -68,10 +76,22 @@ const run = (cmd: string, args: readonly string[], cwd: string, onLog?: OnLog): 
       return;
     }
     const child = proc;
+    const timeoutMs = options.timeoutMs ?? RUN_TIMEOUT_MS;
     const timer = setTimeout(() => {
       stopProcessTree(child);
-      reject(new Error(`${path.basename(cmd)} ${args[0] ?? ''} took over 5 minutes and was stopped.`));
-    }, RUN_TIMEOUT_MS);
+      reject(new Error(`${path.basename(cmd)} ${args[0] ?? ''} took over ${Math.round(timeoutMs / 60000)} minutes and was stopped.`));
+    }, timeoutMs);
+    // Cancel stops the whole process tree and settles at once; the `exit` that follows is then ignored by the promise.
+    const cancel = (): void => {
+      clearTimeout(timer);
+      stopProcessTree(child);
+      reject(new Error(RUN_CANCELLED));
+    };
+    if (options.signal?.aborted === true) {
+      cancel();
+    } else {
+      options.signal?.addEventListener('abort', cancel, { once: true });
+    }
     let tail = '';
     const onOut = (chunk: { toString(): string }): void => {
       // Progress spinners are drawn with cursor moves and line clears; strip

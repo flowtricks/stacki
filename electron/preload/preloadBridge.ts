@@ -289,6 +289,9 @@ function pageBridge() {
     componentUsage: invoke('component:usage'),
     dynamicPaths: invoke('page:dynamicPaths'),
     emDashProject: invoke('emdash:project'),
+    emDashInstallPlan: invoke('emdash:installPlan'),
+    emDashInstall: invoke('emdash:install'),
+    emDashInstallCancel: invoke('emdash:installCancel'),
     injectedRoutes: invoke('project:injectedRoutes'),
     sampleEntry: invoke('content:sampleEntry'),
     sampleValue: invoke('content:sampleValue'),
@@ -487,6 +490,12 @@ function eventBridge() {
       const listener = (_event: unknown, chunk: unknown) => callback(chunk);
       ipcRenderer.on('create:log', listener);
       return () => ipcRenderer.removeListener('create:log', listener);
+    },
+    // Live output of the command that adds EmDash to the open project, shown in its dialog.
+    onEmDashInstallLog: (callback: (chunk: unknown) => void) => {
+      const listener = (_event: unknown, chunk: unknown) => callback(chunk);
+      ipcRenderer.on('emdash:installLog', listener);
+      return () => ipcRenderer.removeListener('emdash:installLog', listener);
     },
     onFsChanged: (callback: (data: unknown) => void) => {
       const listener = (_event: unknown, data: unknown) => callback(data);

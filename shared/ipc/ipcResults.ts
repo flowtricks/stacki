@@ -25,6 +25,7 @@ import type { AppRepositoryPlaceReply } from '../properties/appPlace';
 import type { MediaConnectionList, MediaListing, MediaResult, MediaSaveResult } from '../properties/mediaHosting';
 import type { DataSample, PageTemplatePlan } from '../properties/pageTemplate';
 import type { EmDashProject } from '../properties/emdash';
+import type { EmDashInstallPlan, EmDashInstallResult } from '../properties/emdashInstall';
 import type { AstroRemoteEditAnswer, AstroRemoteReadAnswer } from '../properties/astroContent';
 import type { RepositoryResult } from '../ipc/publishRepository';
 import type { PublishDiscovery } from '../properties/publishDiscovery';
@@ -675,6 +676,9 @@ export interface IpcResults extends AiResults {
   readonly 'mcp:revealCodex': McpResult<McpServerConfig>;
   readonly 'mcp:applyCodex': McpResult<McpCodexState>;
   readonly 'emdash:project': EmDashProject;
+  readonly 'emdash:installPlan': EmDashInstallPlan;
+  readonly 'emdash:install': EmDashInstallResult;
+  readonly 'emdash:installCancel': { readonly ok: true };
   readonly 'page:dynamicPaths':
     | {
         readonly entries: ReadonlyArray<never>;

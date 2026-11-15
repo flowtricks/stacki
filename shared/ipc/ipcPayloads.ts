@@ -64,6 +64,7 @@ import { parsePropertyChange, propertySource } from '../properties/propertyEditi
 import { parseEdit, parseEditBatchRequest, parseEditRequest } from '../engine/editRequest';
 import { parsePreviewRender } from '../page/previewToken';
 import { AI_PAYLOADS } from './aiChat';
+import { parseEmDashInstallRequest } from '../properties/emdashInstall';
 // Complete invoke-channel inventory. Every main-process listener receives the
 // parsed shape below; payload field names retain the existing renderer protocol.
 import { object, text, pathText, boolean, count, optional, nullable, list, dictionary, data, digest, record } from '../core/boundary';
@@ -624,6 +625,9 @@ export const IPC_PAYLOADS = {
   'page:dynamicPaths': object({ ...project, pagePath: pathText, devUrl: maybeText }),
   // What an EmDash project holds, read from its own files and database (read only).
   'emdash:project': object({ ...project }),
+  'emdash:installPlan': object({ ...project }),
+  'emdash:install': parseEmDashInstallRequest,
+  'emdash:installCancel': object({ ...project }),
   // A visual edit in the renderer's terms, authored against the checksum of
   // the page it shows; main turns it into an intent (step 6).
   'page:edit': parseEditRequest,

@@ -24,12 +24,14 @@ import type { MainHost } from './mainHost';
 import { routeForPage } from '../project/projectFiles';
 import { emDashPageEntries } from '../content/emdashPaths';
 import { detectEmDash } from '../content/emdashProject';
+import { registerEmDashInstallHandlers } from './emdashInstall';
 import { parsePageSource, pageEditError, resolvePagesDirectory, fillRoute } from '../documents/pageRequests';
 import { translateMain, translateMainDescribed } from '../lib/mainLocale';
 import { DescribedError } from '../../shared/properties/describedError';
 
-export function registerPageHandlers(host: Pick<MainHost, 'documents' | 'ipcMain' | 'noteAppWrite'>): void {
+export function registerPageHandlers(host: Pick<MainHost, 'documents' | 'ipcMain' | 'noteAppWrite' | 'send'>): void {
   registerPageReadHandlers(host);
+  registerEmDashInstallHandlers(host);
   registerPageMoveHandlers(host);
   registerProjectInjectedRoutesHandlers(host);
 }

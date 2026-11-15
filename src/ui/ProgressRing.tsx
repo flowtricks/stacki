@@ -57,6 +57,8 @@ export function ringDrawnLength(value: number | undefined): number {
 
 export interface ProgressRingProps {
   readonly value: number | undefined;
+  /** Work of unknown length: a quarter arc that turns, instead of a fill. `value` is ignored. */
+  readonly indeterminate?: boolean;
   readonly tone?: RingTone;
   readonly sizePx?: number;
   /** The accessible name, which should carry the reading too ("Context 41% used"). */
@@ -72,7 +74,8 @@ export function ProgressRing(props: ProgressRingProps) {
   const tone = props.tone ?? ringToneFor(props.value);
   const stroke = strokeUnits(sizePx);
   const radius = (VIEW_BOX_PX - stroke) / 2;
-  const drawn = ringDrawnLength(props.value);
+  const indeterminate = props.indeterminate === true;
+  const drawn = indeterminate ? FULL_LENGTH / 4 : ringDrawnLength(props.value);
   const identifier = useId();
   const [tooltip, setTooltip] = useState<TooltipState>({ kind: 'closed' });
   const hasTooltip = props.tooltip !== undefined;
@@ -96,7 +99,14 @@ export function ProgressRing(props: ProgressRingProps) {
         onFocus={hasTooltip ? (event) => show(event.currentTarget) : undefined}
         onBlur={hasTooltip ? hide : undefined}
       >
-        <svg width={sizePx} height={sizePx} viewBox={`0 0 ${VIEW_BOX_PX} ${VIEW_BOX_PX}`} aria-hidden="true" focusable="false">
+        <svg
+          className={indeterminate ? 'progress-ring-turning' : undefined}
+          width={sizePx}
+          height={sizePx}
+          viewBox={`0 0 ${VIEW_BOX_PX} ${VIEW_BOX_PX}`}
+          aria-hidden="true"
+          focusable="false"
+        >
           <circle className="progress-ring-track" cx={VIEW_BOX_PX / 2} cy={VIEW_BOX_PX / 2} r={radius} strokeWidth={stroke} fill="none" />
           {/* A round cap on an empty dash still paints a dot, so an unknown or zero value draws no arc. */}
           {drawn > 0 && (

@@ -31,8 +31,20 @@
   background: var(--color-bg-surface-high, #4a4a4a);
   font-size: 12px;
 }
+/* Work of unknown length turns its arc; with reduced motion it holds still and the label says what is happening. */
+.progress-ring-turning {
+  animation: progress-ring-turn 900ms linear infinite;
+}
+@keyframes progress-ring-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .progress-ring-fill {
     transition: none;
+  }
+  .progress-ring-turning {
+    animation: none;
   }
 }

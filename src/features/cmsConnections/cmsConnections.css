@@ -169,31 +169,6 @@
 }
 
 /* EmDash: a card per project, in the Settings rows' soft fill; content types list their fields as plain rows. */
-/* The EmDash popup (the shared menu surface): its own scroll, contained, so the page behind never moves. */
-.emdash-popup {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 12px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  font-size: 12px;
-}
-.emdash-popup h4 {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0;
-  font-size: 13px;
-}
-.emdash-popup p {
-  margin: 0;
-  color: var(--text-dim);
-  line-height: 1.6;
-}
-.emdash-popup p > strong {
-  color: var(--text);
-}
 /* The connected mark on an EmDash button: a dot over the icon's corner, out of flow so the button never changes size. */
 .cms-connect-icon {
   position: relative;
@@ -278,4 +253,228 @@
 }
 .emdash-guide pre {
   margin: 0;
+}
+/* The EmDash dialog (EmDashDialog.tsx): the shared modal, filled instead of lined. Nothing in it scrolls sideways: every
+   flex and grid child may shrink (min-width 0), code wraps, file names are cut with an ellipsis, and only the body
+   scrolls, vertically, inside the dialog's own height. */
+.modal.emdash-dialog {
+  width: min(520px, calc(100vw - 48px));
+  max-height: calc(100dvh - 64px);
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  overflow: hidden;
+}
+.emdash-dialog-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px 0 16px;
+}
+.emdash-dialog-header h4 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+}
+.emdash-dialog-body {
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  gap: 10px;
+  font-size: 12px;
+}
+.emdash-dialog-body * {
+  min-width: 0;
+}
+.emdash-dialog-body p {
+  margin: 0;
+  color: var(--text-dim);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.emdash-dialog-body p > strong {
+  color: var(--text);
+  font-size: 13px;
+}
+.emdash-install {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* One compact line with an icon, on a warning tint. */
+.emdash-dialog-body .emdash-install-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #3a3017;
+  color: #e6c76a;
+}
+.emdash-install-warning > svg {
+  flex: none;
+}
+.emdash-dialog-body .emdash-install-problem {
+  color: #ff9b92;
+}
+.emdash-dialog-body .emdash-install-summary {
+  color: var(--text-faint);
+}
+/* A disclosure: a soft fill, the summary a full-width row. */
+.emdash-more {
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.emdash-more > summary {
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--text-dim);
+}
+.emdash-more-body {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+.emdash-more-body h6 {
+  margin: 4px 0 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-faint);
+}
+.emdash-more > .emdash-code,
+.emdash-more > .emdash-install-log,
+.emdash-more > ul,
+.emdash-more > p {
+  margin: 0 10px 10px;
+}
+/* Code wraps; the copy button sits in the corner. */
+.emdash-code {
+  position: relative;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.emdash-code pre {
+  margin: 0;
+  padding: 8px 32px 8px 10px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow-x: hidden;
+}
+.emdash-code .emdash-code-copy {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+}
+.emdash-install-files,
+.emdash-install-steps {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.emdash-install-steps {
+  counter-reset: emdash-step;
+}
+.emdash-install-steps > li {
+  counter-increment: emdash-step;
+  color: var(--text-dim);
+}
+.emdash-install-steps > li > span::before,
+.emdash-install-steps > li > details > summary::before {
+  content: counter(emdash-step) '. ';
+}
+.emdash-install-steps > li > details > summary {
+  cursor: pointer;
+}
+.emdash-install-steps > li > details > .emdash-code {
+  margin-top: 6px;
+}
+.emdash-install-files > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.emdash-install-files code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono, ui-monospace, monospace);
+  color: var(--text-dim);
+}
+.emdash-pill {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--bg-active, rgba(255, 255, 255, 0.1));
+  color: var(--text-faint);
+  font-size: 10px;
+}
+.emdash-pill[data-change='create'] {
+  color: var(--green);
+}
+.emdash-install-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.emdash-install-status > span {
+  flex: 1;
+}
+.emdash-install-log {
+  max-height: 200px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.emdash-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.emdash-dialog-body .emdash-install-note {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+}
+.emdash-checklist {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.emdash-checklist > li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  color: var(--text-dim);
+}
+.emdash-checklist > li[data-done='true'] {
+  color: var(--text);
+}
+.emdash-check-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: var(--bg-active, rgba(255, 255, 255, 0.1));
+}
+.emdash-checklist > li[data-done='true'] .emdash-check-mark {
+  background: var(--green);
+  color: #0b0b0b;
+}
+.emdash-checklist summary {
+  cursor: pointer;
+}
+.emdash-checklist details > .emdash-code {
+  margin-top: 6px;
 }

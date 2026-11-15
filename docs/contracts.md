@@ -1529,6 +1529,17 @@ live collection) is detected from the project, not connected: there is no key an
 - A local database and uploads folder are the designer's copy. A customer's real content reaches them through EmDash's own
   CLI (`emdash login`, `emdash site export`, `emdash site import`), which Stacki only shows the commands for; Stacki holds
   no EmDash credential. Pointing a deploy at the customer's own database and storage stays in the project's config.
+- Adding EmDash to an open Astro project (`shared/properties/emdashInstall.ts`, `electron/handlers/emdashInstall.ts`,
+  `electron/parse/emdashConfig.ts`) follows EmDash's own "Add EmDash to an existing Astro project" guide. `emdash:installPlan`
+  (read only) names the command and every file that can change; `emdash:install` must carry that exact command, or main
+  refuses (`notConfirmed`) and runs nothing; `emdash:installCancel` aborts the run; output streams on `emdash:installLog`.
+  Order of a run: save unsaved work as one commit named `Before Adding EmDash` (through the Publish commit path; a failed
+  save installs nothing), the package manager's add command (fixed package names, args array, no shell, project folder,
+  `EMDASH_INSTALL_LIMITS.runMsMax`, cancellable), `src/live.config.ts` only when absent, the missing `.gitignore` lines,
+  the Astro config merged with the TypeScript parser by small insertions (verified before and after writing, original bytes
+  restored if the check fails; a different existing adapter or an unreadable shape leaves it untouched and is reported),
+  then EmDash's key command only when there is no `.env`, its output never logged. Nothing is reverted on failure; the
+  result lists the files that changed. `complete` is true only when `detectEmDash` finds the project wired afterwards.
 - Not built: Stacki does not edit EmDash content or types, the loop builder has no EmDash source (a list is written as
   code), a Cloudflare D1 project is read only from `.wrangler/state` (unverified against a real D1 project), and
   Studio cannot read an EmDash project.

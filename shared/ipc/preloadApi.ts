@@ -111,6 +111,9 @@ interface InvokeChannels {
   readonly componentUsage: 'component:usage';
   readonly dynamicPaths: 'page:dynamicPaths';
   readonly emDashProject: 'emdash:project';
+  readonly emDashInstallPlan: 'emdash:installPlan';
+  readonly emDashInstall: 'emdash:install';
+  readonly emDashInstallCancel: 'emdash:installCancel';
   readonly injectedRoutes: 'project:injectedRoutes';
   readonly sampleEntry: 'content:sampleEntry';
   readonly sampleValue: 'content:sampleValue';
@@ -318,6 +321,7 @@ export type PreloadBridge = InvokeSurface & {
   readonly onAppPersonChanged: (callback: () => void) => () => void;
   readonly onAppAuthChanged: (callback: (data: unknown) => void) => () => void;
   readonly onCreateLog: (callback: (data: unknown) => void) => () => void;
+  readonly onEmDashInstallLog: (callback: (data: unknown) => void) => () => void;
   readonly onFsChanged: (callback: (data: unknown) => void) => () => void;
   /** A Markdown file the Instructions panel lists changed outside the app, or the hidden paths did: `{ files }`, project-relative. */
   readonly onInstructionsChanged: (callback: (data: unknown) => void) => () => void;
