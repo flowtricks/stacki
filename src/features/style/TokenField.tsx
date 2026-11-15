@@ -667,20 +667,118 @@ export function codeKeyEdit(
 }
 
 const NUMBER_WITH_UNIT = /^[-+]?(?:\d+\.?\d*|\.\d+)[a-zA-Z%]*/;
+const IDENTIFIER = /^-{0,2}[A-Za-z_][\w-]*/;
+
+// How far a scan for a matching bracket looks. A value longer than this is not one typed by hand.
+const BRACKET_SCAN_MAX = 4_096;
+
+// The token right after the caret that a typed `(` wraps: a chip (one mark), a function call
+// (`var(--a)`, `min(1px, 2px)`: through its matching bracket), a number with its unit, or a bare
+// identifier. Empty when what follows is a space, an operator, a comma, a `)` or the end.
+function wrappedToken(rest: string): string {
+  if (rest.startsWith(CHIP_MARK)) {
+    return CHIP_MARK;
+  }
+  const word = IDENTIFIER.exec(rest)?.[0];
+  if (word !== undefined) {
+    if (rest[word.length] !== '(') {
+      return word;
+    }
+    // A call wraps whole, or not at all when its own bracket is still open.
+    const end = matchingBracket(rest, word.length);
+    return end === undefined ? '' : rest.slice(0, end + 1);
+  }
+  return NUMBER_WITH_UNIT.exec(rest)?.[0] ?? '';
+}
+
+// The index of the `)` that closes the `(` at `open`, or undefined when it is never closed.
+function matchingBracket(text: string, open: number): number | undefined {
+  assert(text[open] === '(', 'matchingBracket: starts at an open bracket');
+  let depth = 0;
+  const limit = Math.min(text.length, open + BRACKET_SCAN_MAX);
+  for (let index = open; index < limit; index++) {
+    if (text[index] === '(') {
+      depth += 1;
+    } else if (text[index] === ')') {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return undefined;
+}
+
+// Is `at` inside a string or a `url(` (where a bracket is text, not structure)?
+function insideLiteral(text: string, at: number): boolean {
+  let quote: string | undefined;
+  let url = false;
+  for (let index = Math.max(0, at - BRACKET_SCAN_MAX); index < at; index++) {
+    const ch = text[index];
+    if (quote !== undefined) {
+      if (ch === '\\') {
+        index += 1;
+      } else if (ch === quote) {
+        quote = undefined;
+      }
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+    } else if (url) {
+      if (ch === ')') {
+        url = false;
+      }
+    } else if (ch === '(' && /url$/i.test(text.slice(Math.max(0, index - 3), index))) {
+      url = true;
+    }
+  }
+  return quote !== undefined || url;
+}
+
+// More `)` than `(` in the text: a closer is already waiting, so a new `(` must not bring its own.
+function hasSurplusCloser(text: string): boolean {
+  let balance = 0;
+  const limit = Math.min(text.length, BRACKET_SCAN_MAX);
+  for (let index = 0; index < limit; index++) {
+    if (text[index] === '(') {
+      balance += 1;
+    } else if (text[index] === ')') {
+      balance -= 1;
+    }
+  }
+  return balance < 0;
+}
 
 // The bracket pairing for one key at caret `at`, or undefined when it doesn't apply.
+//
+// A `(` typed in front of a token wraps it (`calc|32px` → `calc(32px)`, `calc|[chip]` →
+// `calc([chip])`) with the caret after the token, before the new `)`; anywhere else it brings an empty pair, the caret between. The
+// field's text stands a chip in as one mark, so the same rule serves chips and literal tokens.
 export function bracketEdit(text: string, at: number, key: string): { text: string; caret: number } | undefined {
   if (key === '(') {
-    // `calc|32px` is a value being wrapped, so the closing bracket goes after it.
-    const wrapped = NUMBER_WITH_UNIT.exec(text.slice(at))?.[0] ?? '';
+    if (insideLiteral(text, at)) {
+      return undefined;
+    }
+    if (hasSurplusCloser(text)) {
+      return { text: `${text.slice(0, at)}(${text.slice(at)}`, caret: at + 1 };
+    }
+    const wrapped = wrappedToken(text.slice(at));
     const closeAt = at + wrapped.length;
-    return { text: `${text.slice(0, at)}(${wrapped})${text.slice(closeAt)}`, caret: at + 1 };
+    // Around a token the caret ends after it, so what is typed next goes inside the pair; with
+    // nothing to wrap it stays between the two brackets.
+    return { text: `${text.slice(0, at)}(${wrapped})${text.slice(closeAt)}`, caret: at + 1 + wrapped.length };
   }
   if (key === ')' && text[at] === ')') {
     return { text, caret: at + 1 };
   }
   if (key === 'Backspace' && text[at - 1] === '(' && text[at] === ')') {
     return { text: text.slice(0, at - 1) + text.slice(at + 1), caret: at - 1 };
+  }
+  if (key === 'Backspace' && text[at - 1] === '(' && !insideLiteral(text, at - 1)) {
+    // The pair a `(` made around a token: taking the `(` takes its `)` too.
+    const wrapped = wrappedToken(text.slice(at));
+    if (wrapped !== '' && text[at + wrapped.length] === ')') {
+      return { text: text.slice(0, at - 1) + wrapped + text.slice(at + wrapped.length + 1), caret: at - 1 };
+    }
   }
   return undefined;
 }

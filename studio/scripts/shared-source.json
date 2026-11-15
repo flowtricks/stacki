@@ -1340,6 +1340,7 @@
     "src/features/style/usePopupOpen.ts",
     "src/features/style/useStyleFiles.ts",
     "src/features/style/utilities.css",
+    "src/features/style/variableSearch.ts",
     "src/features/variables/FluidBadge.tsx",
     "src/features/variables/VariableCell.tsx",
     "src/features/variables/VariableNameCell.tsx",

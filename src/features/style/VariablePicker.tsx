@@ -18,6 +18,7 @@ import { varKind } from './model/projectResources';
 import { panelBox, panelSpan } from './model/panelBox';
 import { CheckIcon, VariableTypeIcon, ChevronRightIcon } from './VariableIcons';
 import { varTypeAllowed, byCollection } from './sharedVars';
+import { matchesVariableQuery, rankVariables } from './variableSearch';
 import { useResolvedColor } from './model/computedColor';
 import { getHost } from './model/host';
 import { hasCanvas, queryCanvas } from '../../editor/canvasQuery';
@@ -204,8 +205,9 @@ export function VariablePicker({
     return new Set(offered.filter((variable) => !valid.has(variable.binding)).map((variable) => variable.binding));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the inputs are the ones listed
   }, [showAll, listed, prop, defined, selectedBinding, slot, suggested]);
-  const filtered = query === '' ? offered : offered.filter((variable) => matchesQuery(variable, query));
-  const drawn = useMemo(() => drawingOrder(filtered, listed, offered, { grouped }), [filtered, listed, offered, grouped]);
+  // With a search the rows are ranked (variableSearch.ts), best match first, and the list below keeps that order.
+  const filtered = query === '' ? offered : rankVariables(offered, query);
+  const drawn = useMemo(() => drawingOrder(filtered, listed, offered, { grouped, ranked: query !== '' }), [filtered, listed, offered, grouped, query]);
   const { activeBinding, navigation } = usePickerNavigation(ref, drawn, { typing, search }, onPreview, previewEpoch, onPick);
   // With its own search box the arrows move the purple mark itself, from the
   // applied variable to the one being previewed. Following typing, the mark
@@ -517,7 +519,7 @@ export function pickerVariables(
   if (!query) {
     return sorted;
   }
-  return sorted.filter((variable) => matchesQuery(variable, query));
+  return rankVariables(sorted, query);
 }
 
 // Without an engine to ask (a test realm, a property the browser does not know), the variable's
@@ -624,7 +626,7 @@ export function PickerCollections({
         </button>
         {open
           ? groups.map(({ group, items }) => {
-              const blocks = blocksOf(collection, group, items, allVariables, offered, { grouped });
+              const blocks = blocksOf(collection, group, items, allVariables, offered, { grouped, ranked: query !== '' });
               const scopeLabel = group && !isRootScope(group) ? group : undefined;
               const hasNamedGroups = blocks.some((block) => block.title !== undefined);
               const flatRun = blocks.some((block) => block.title === undefined);
@@ -700,6 +702,36 @@ function blocksOf(
   items: ProjectVariable[],
   allVariables: readonly ProjectVariable[] | undefined,
   offered: readonly ProjectVariable[] | undefined,
+  options: { readonly grouped: boolean; readonly ranked?: boolean },
+): Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }> {
+  const blocks = panelBlocksOf(collection, group, items, allVariables, offered, options);
+  return options.ranked === true ? rankedBlocks(blocks, items) : blocks;
+}
+
+// A search puts the best match first: the rows of a block follow the ranking (`items` arrives in
+// ranked order), and the blocks follow their best row, so a group holding a name match is drawn
+// before one holding only value matches. A block with no row left is dropped, a group with a
+// match never is. The ungrouped run is a block like any other and is ranked with them.
+function rankedBlocks(
+  blocks: Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }>,
+  items: readonly ProjectVariable[],
+): Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }> {
+  const position = new Map(items.map((variable, index): [ProjectVariable, number] => [variable, index]));
+  const at = (variable: ProjectVariable): number => position.get(variable) ?? items.length;
+  const sorted = blocks.map((block) => ({ title: block.title, items: [...block.items].sort((left, right) => at(left) - at(right)) }));
+  const best = (block: { readonly items: readonly ProjectVariable[] }): number => {
+    const first = block.items[0];
+    return first === undefined ? items.length : at(first);
+  };
+  return sorted.sort((left, right) => best(left) - best(right));
+}
+
+function panelBlocksOf(
+  collection: string,
+  group: string,
+  items: ProjectVariable[],
+  allVariables: readonly ProjectVariable[] | undefined,
+  offered: readonly ProjectVariable[] | undefined,
   { grouped }: { readonly grouped: boolean },
 ): Array<{ readonly title: string | undefined; readonly items: ProjectVariable[] }> {
   const inScope = (variable: ProjectVariable): boolean => variable.collection === collection && variable.group === group;
@@ -740,7 +772,7 @@ function drawingOrder(
   filtered: ProjectVariable[],
   allVariables: readonly ProjectVariable[],
   offered: readonly ProjectVariable[],
-  options: { readonly grouped: boolean },
+  options: { readonly grouped: boolean; readonly ranked?: boolean },
 ): ProjectVariable[] {
   const ordered: ProjectVariable[] = [];
   for (const { collection, groups } of byCollection(filtered)) {
@@ -951,9 +983,7 @@ export function withAppliedVariable(vars: ProjectVariable[], selectedBinding: st
 // Every word of the query must be found: in the scope, the full name (`button-background`), the name
 // with its dashes read as spaces (so `button background` finds it, group and name) or the value.
 export function matchesQuery(variable: ProjectVariable, query: string): boolean {
-  const words = query.split(/\s+/).filter(Boolean);
-  const text = `${variable.collection}/${variable.group}/${variable.name} ${variable.name.replace(/-/g, ' ')} ${variable.value}`.toLowerCase();
-  return words.every((word) => text.includes(word));
+  return matchesVariableQuery(variable, query);
 }
 
 // Declared values by name without `--`, first declaration winning: the stylesheet-side lookup.

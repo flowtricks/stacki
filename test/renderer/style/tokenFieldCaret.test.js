@@ -65,12 +65,35 @@ const check = (what, condition, detail) => {
   // --- the opening bracket ----------------------------------------------------
   //
   // Typed before a number it wraps the number and its unit; anywhere else it pairs.
-  assert.deepEqual(bracketEdit('calc32px', 4, '('), { text: 'calc(32px)', caret: 5 });
-  assert.deepEqual(bracketEdit('calc32px)', 4, '('), { text: 'calc(32px))', caret: 5 });
-  assert.deepEqual(bracketEdit('calc-1.5rem 4px', 4, '('), { text: 'calc(-1.5rem) 4px', caret: 5 });
-  assert.deepEqual(bracketEdit('calc50%', 4, '('), { text: 'calc(50%)', caret: 5 });
+  assert.deepEqual(bracketEdit('calc32px', 4, '('), { text: 'calc(32px)', caret: 9 });
+  // A closer already waiting (more `)` than `(`) is never doubled.
+  assert.deepEqual(bracketEdit('calc32px)', 4, '('), { text: 'calc(32px)', caret: 5 });
+  assert.deepEqual(bracketEdit('calc-1.5rem 4px', 4, '('), { text: 'calc(-1.5rem) 4px', caret: 12 });
+  assert.deepEqual(bracketEdit('calc50%', 4, '('), { text: 'calc(50%)', caret: 8 });
   assert.deepEqual(bracketEdit('calc', 4, '('), { text: 'calc()', caret: 5 });
   assert.deepEqual(bracketEdit('calc var(--a)', 4, '('), { text: 'calc() var(--a)', caret: 5 });
+
+  // --- smart closing: a `(` wraps the token after it ---------------------------
+  //
+  // The field's text stands a chip in as one mark (U+0000), so the cases below are the chip cases.
+  const chipMark = '\u0000';
+  assert.deepEqual(bracketEdit(`calc${chipMark}`, 4, '('), { text: `calc(${chipMark})`, caret: 6 }, 'before a chip, at the end of the field');
+  assert.deepEqual(bracketEdit(`calc${chipMark} * 2`, 4, '('), { text: `calc(${chipMark}) * 2`, caret: 6 }, 'only the chip is wrapped');
+  assert.deepEqual(bracketEdit('calcvar(--a) + 1px', 4, '('), { text: 'calc(var(--a)) + 1px', caret: 5 + 'var(--a)'.length }, 'a var() wraps whole');
+  assert.deepEqual(bracketEdit('calcmin(1px, 2px)', 4, '('), { text: 'calc(min(1px, 2px))', caret: 5 + 'min(1px, 2px)'.length }, 'a nested call wraps whole');
+  assert.deepEqual(bracketEdit('calcdisplay', 4, '('), { text: 'calc(display)', caret: 12 }, 'an identifier wraps');
+  assert.deepEqual(bracketEdit('calc(min2rem)', 8, '('), { text: 'calc(min(2rem))', caret: 13 }, 'nested: the outer closer is kept');
+  assert.deepEqual(bracketEdit('calc()', 5, '('), { text: 'calc(())', caret: 6 }, 'before a ) it brings an empty pair');
+  assert.deepEqual(bracketEdit('calc(1px, )', 10, '('), { text: 'calc(1px, ())', caret: 11 }, 'after a comma it brings an empty pair');
+  assert.deepEqual(bracketEdit('calc(1px * )', 11, '('), { text: 'calc(1px * ())', caret: 12 }, 'after an operator it brings an empty pair');
+  assert.deepEqual(bracketEdit('calc ', 4, '('), { text: 'calc() ', caret: 5 }, 'before a space it brings an empty pair');
+  assert.deepEqual(bracketEdit('calcmin(', 4, '('), { text: 'calc()min(', caret: 5 }, 'an unfinished call is not wrapped');
+  assert.equal(bracketEdit('url(a', 5, '('), undefined, 'inside url( a bracket is text');
+  assert.equal(bracketEdit('"a', 2, '('), undefined, 'inside a string a bracket is text');
+  assert.deepEqual(bracketEdit('calc()', 5, ')'), { text: 'calc()', caret: 6 }, 'typing ) steps over the auto-inserted one');
+  assert.deepEqual(bracketEdit('calc()', 5, 'Backspace'), { text: 'calc', caret: 4 }, 'backspace takes an empty pair');
+  assert.deepEqual(bracketEdit(`calc(${chipMark})`, 5, 'Backspace'), { text: `calc${chipMark}`, caret: 4 }, 'backspace takes the pair around a chip');
+  assert.deepEqual(bracketEdit('calc(2rem + 1px)', 5, 'Backspace'), undefined, 'a pair around more than one token stays');
 
   // --- layout -----------------------------------------------------------------
   //

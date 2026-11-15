@@ -116,6 +116,18 @@ export default function VariableConnect(props: VariableConnectProps) {
   const { editorRef, dotRef, chipText, liveValue, selectionRef, readCaret, hintValue } = connect;
   const { chipTarget, setChipTarget, suggest, setSuggest, navigationRef } = connect;
   const anchor = (showToken ? editorRef.current : dotRef.current) ?? undefined;
+  // The caret moved without typing (arrows, Home, End, a press): the chooser opens when it lands in a
+  // reference being typed and closes when it leaves one. Up and Down are the chooser's own keys.
+  const refreshSuggest = (change: { readonly key: string | undefined }): void => {
+    if (disabled) {
+      return;
+    }
+    if (change.key !== undefined && !CARET_KEYS.includes(change.key)) {
+      return;
+    }
+    const next = typedAtSelection(liveValue(), selectionRef.current);
+    setSuggest((current) => (sameTyped(current, next) ? current : next));
+  };
   const { openedRef, bigChipRef, epochRef, setPreviewText } = connect;
   const canvas = useFieldPreview(props.canvasProperty);
   // The press that closed the large editor, by its event time. The editor closes on the press's
@@ -270,7 +282,7 @@ export default function VariableConnect(props: VariableConnectProps) {
     <span
       ref={wrapRef}
       className={`embed-editor_varconnect${extraClassName}${tokenClassName}`}
-      {...connectWrapperHandlers({ showToken, field, readCaret })}
+      {...connectWrapperHandlers({ showToken, field, readCaret, onCaretMoved: refreshSuggest })}
       {...composeKeyDownCapture(
         bigEditorTriggers({
           disabled,
@@ -828,12 +840,29 @@ function tokenFieldHandlers({
 // stayed dark unless it also had focus. Hand enter and leave over the same way
 // focus and blur are handed over, and only while the editor is the thing on top;
 // otherwise the input hears them itself.
-function connectWrapperHandlers({ showToken, field, readCaret }: { showToken: boolean; field: WrappedField; readCaret: () => void }) {
+function connectWrapperHandlers({
+  showToken,
+  field,
+  readCaret,
+  onCaretMoved,
+}: {
+  showToken: boolean;
+  field: WrappedField;
+  readCaret: () => void;
+  /** Called after the caret moved by key or press (not by typing): the chooser follows it. */
+  onCaretMoved: (change: { readonly key: string | undefined }) => void;
+}) {
   return {
     onMouseEnter: showToken ? (event: React.MouseEvent) => field.childHandlersRef.current?.onMouseEnter?.(event) : undefined,
     onMouseLeave: showToken ? (event: React.MouseEvent) => field.childHandlersRef.current?.onMouseLeave?.(event) : undefined,
-    onKeyUp: readCaret,
-    onMouseUp: readCaret,
+    onKeyUp: (event: React.KeyboardEvent) => {
+      readCaret();
+      onCaretMoved({ key: event.key });
+    },
+    onMouseUp: () => {
+      readCaret();
+      onCaretMoved({ key: undefined });
+    },
     onSelect: readCaret,
     onFocus: readCaret,
   };
@@ -1029,6 +1058,17 @@ function useCaretTracker(editorRef: RefObject<HTMLDivElement>, inputRef: Mutable
 // serialized value. Each chip serializes to its OWN binding — a value can hold
 // several, and they need not be the same variable — so the lengths are read off
 // the chips themselves rather than assumed equal.
+const CARET_KEYS: readonly string[] = ['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Backspace', 'Delete'];
+
+function sameTyped(left: TypedVariable | undefined, right: TypedVariable | undefined): boolean {
+  if (left === undefined || right === undefined) {
+    return left === right;
+  }
+  return left.start === right.start && left.end === right.end && left.query === right.query;
+}
+
+const ZERO_WIDTH_SPACE = '\u200B';
+
 function serializedOffset(editor: HTMLElement, at: number): number {
   const bindings = Array.from(editor.querySelectorAll<HTMLElement>('[data-chip]')).map((node) => node.dataset['binding'] ?? '');
   let length = 0;
@@ -1036,7 +1076,10 @@ function serializedOffset(editor: HTMLElement, at: number): number {
   for (const ch of fieldText(editor).slice(0, at)) {
     if (ch === CHIP_MARK) {
       length += (bindings[chip++] ?? '').length;
-    } else {
+    } else if (ch !== ZERO_WIDTH_SPACE) {
+      // The zero-width spaces that hold a caret beside a chip are text in the field but
+      // nothing in the value (serializeTokens strips them), so they add no offset. Counted,
+      // they pushed the caret one past the reference being typed and the chooser never opened.
       length += 1;
     }
   }
