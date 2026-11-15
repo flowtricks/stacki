@@ -17,7 +17,7 @@ export const messages = {
   'emdash.binding.text': 'Text', // same
   'emdash.button.connected': 'Eingerichtet',
   'emdash.collection.fields': { one: '{count} Feld', other: '{count} Felder' },
-  'emdash.details': 'Details',
+  'emdash.details': 'Details', // same
   'emdash.field.required': 'Pflicht',
   'emdash.field.unsupported': 'Unbekannter Typ',
   'emdash.guide.analyze': 'Prüfe, was importiert wird (die lokale Website muss leer sein):',
