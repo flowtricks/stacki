@@ -44,6 +44,37 @@ Use an isolated checkout when other tasks are editing the working directory. Mat
 Studio, Studio release manifest, and npm starter versions. Never move an existing release tag to
 include later changes.
 
+## 1.4.4
+
+- Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.4.
+- **Breakpoints**: breakpoints are set per project and live in `.stacki/breakpoints.json`, shared by
+  Desktop and Studio. A Laptop breakpoint joins Tablet and Phone, you can add and remove your own
+  (wider than Desktop too), and Desktop's frame width is configurable. Each card shows where its
+  breakpoint is used (CSS files, style tags, components), and changing one can update the matching
+  media queries across the project, with a preview of every place before anything is written.
+- **Style panel follows the canvas**: the edit target follows the canvas width by default and
+  holds a chosen query for the session. The query dropdown is flat and compact, one section header
+  per group, fits a typical list without scrolling, and scrolls like a menu when it is longer. Add
+  query suggests the project's breakpoints.
+- **Class expressions**: `class:list` and other class expressions are read with a real parser, so
+  Delete on a chip removes a class written inside `class:list` and the keyboard keeps going.
+- **Variables**: an eye over each value hides it from suggestions. Suggestions follow the grammar
+  slot at the caret, and search ranks by name first.
+- **EmDash**: add EmDash to the open project from a dialog; it shows as a button in the CMS row
+  with a status popup, and it no longer blanks the canvas.
+- **Publishing**: choose the owner (your account or an organization) when creating a new repository.
+- **Startup**: the first frame is the real app, drawn from a boot snapshot, and the window reopens
+  at its last size, place and mode.
+- **Fixes**: hovering in the Style panel never writes a file; undo after an inline style edit keeps
+  the undo; switching elements paints in one step; a late canvas click never closes a new picker;
+  inserting a Grid selects the Grid; typed spaces in value fields stay spaces; Claude Code and Codex
+  are found on a Windows Path; blue buttons stay blue on hover and pressed; the German "Details"
+  label is marked as the same word as English.
+- **Studio**: hosted app frame files load through signed links, Git checkpoints are stored in R2,
+  and a private repository can be published from a blobless workspace.
+- **Release tooling**: the release is prepared by script, `Check` runs in shards, and the push gate
+  skips only trees already proven. Several tests were made reliable on all three platforms.
+
 ## 1.4.3 Variable picker overhaul, hidden variables, faster style panel
 
 - Desktop, the Studio source bundle and `create-stacki` are aligned at 1.4.3.
