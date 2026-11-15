@@ -12,7 +12,9 @@
 // (sendInputEvent mouse moves, presses and wheel turns); removal, a text change
 // and a second hover without leaving the first are page script, as an app's
 // re-render would do them. After each step the page reports how many tooltip
-// popups are in the document, which the test checks.
+// popups are in the document, which the test checks; each read waits, bounded,
+// for the count the step expects (test/helpers/waitFor.js) and keeps the last
+// count it saw, so a slow runner gets time and a real failure still shows.
 const fs = require('fs');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
@@ -63,93 +65,112 @@ const check = (what, condition, detail) => {
     `const { app, BrowserWindow } = require('electron');
      const path = require('path');
      app.on('window-all-closed', () => {});
-     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+     const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        try {
          const win = new BrowserWindow({ show: false, width: 400, height: 500 });
          await win.loadFile(path.join(__dirname, 'app.html'));
-         await wait(400);
          const js = (code) => win.webContents.executeJavaScript(code);
          const shown = () => js("document.querySelectorAll('.popup-tooltip').length");
-         const centre = (id) => js(\`(() => { const box = document.querySelector('#\${id} .stacki-kit-mount > span').getBoundingClientRect(); return { x: Math.round(box.left + 10), y: Math.round(box.top + box.height / 2) }; })()\`);
-         const away = async () => {
+         const centre = (id) => js(\`(() => { const target = document.querySelector('#\${id} .stacki-kit-mount > span'); if (!target) { return undefined; } const box = target.getBoundingClientRect(); return { x: Math.round(box.left + 10), y: Math.round(box.top + box.height / 2) }; })()\`);
+         // Every read waits, bounded, until the popup count is what the step expects
+         // (test/helpers/waitFor.js), never a fixed sleep: a slow runner delivers the move,
+         // press or key, and finishes the exit motion, later than any sleep guesses. The last
+         // count is returned either way, so a real failure still reports what the page held.
+         const shownBecomes = async (wanted) => (await pollUntil({ what: wanted + ' tooltip popups', read: shown, until: (count) => count === wanted })).value;
+         // The pointer's arrival is observable as :hover; waiting on it (not on a sleep) keeps a
+         // later move from being coalesced with this one into a single jump on a slow frame.
+         const hoverIn = (selector) => js(\`document.querySelector(\${JSON.stringify(selector)}) !== null\`);
+         const pointerOff = async () => {
            win.webContents.sendInputEvent({ type: 'mouseMove', x: 390, y: 480 });
-           await wait(250); // Past the exit motion of a tooltip closed by leaving.
+           await pollUntil({ what: 'the pointer off the list', read: () => hoverIn('#list:hover'), until: (inside) => inside === false });
+         };
+         const away = async () => {
+           await pointerOff();
+           await shownBecomes(0); // Past the exit motion of a tooltip closed by leaving.
          };
          const hover = async (id) => {
-           const point = await centre(id);
+           const located = await pollUntil({ what: id + ' laid out', read: () => centre(id), until: (point) => point !== undefined });
+           const point = located.value ?? { x: 0, y: 0 };
            win.webContents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y });
-           await wait(100);
+           await pollUntil({ what: 'the pointer on ' + id, read: () => hoverIn('#' + id + ' :hover'), until: (inside) => inside === true });
            return point;
-         };
-         // Waits, within a bound, until the popup count is what the step expects. A slow runner
-         // delivers the key or finishes the exit motion later than any fixed sleep guesses; the
-         // last count is returned either way, so a real failure still reports what the page held.
-         const shownBecomes = async (wanted) => {
-           let count = await shown();
-           for (let attempt = 0; attempt < 80 && count !== wanted; attempt++) {
-             await wait(25);
-             count = await shown();
-           }
-           return count;
          };
          const result = {};
 
          await hover('t0');
-         result.hovered = await shown();
+         result.hovered = await shownBecomes(1);
          await js("document.getElementById('t0').remove()");
-         await wait(100);
-         result.removed = await shown();
+         result.removed = await shownBecomes(0);
          await away();
 
          const point = await hover('t1');
-         result.beforePress = await shown();
+         result.beforePress = await shownBecomes(1);
          win.webContents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: 1 });
          win.webContents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: 1 });
-         await wait(100);
-         result.pressed = await shown();
+         result.pressed = await shownBecomes(0);
          await away();
 
          const wheelAt = await hover('t2');
-         result.beforeWheel = await shown();
+         result.beforeWheel = await shownBecomes(1);
          win.webContents.sendInputEvent({ type: 'mouseWheel', x: wheelAt.x, y: wheelAt.y, deltaX: 0, deltaY: -60 });
-         await wait(150);
-         result.wheeled = await shown();
+         result.wheeled = await shownBecomes(0);
+         // The wheel scrolls the list smoothly, over several frames after the event; each of
+         // those scroll events would dismiss the next step's tooltip, so the step ends only
+         // once the list's scroll position has held still between two polls.
+         let scrollTopLast = -1;
+         await pollUntil({
+           what: 'the wheel scroll settled',
+           read: () => js("document.getElementById('list').scrollTop"),
+           until: (scrollTop) => {
+             const settled = scrollTop === scrollTopLast;
+             scrollTopLast = scrollTop;
+             return settled;
+           },
+         });
          await away();
 
          await hover('t3');
-         result.beforeScroll = await shown();
+         result.beforeScroll = await shownBecomes(1);
          await js("document.getElementById('list').scrollTop += 40");
-         await wait(150);
-         result.scrolled = await shown();
+         result.scrolled = await shownBecomes(0);
          await away();
 
          await hover('t4');
          result.beforeEscape = await shownBecomes(1);
+         // Keys go to the focused page; a hidden window is not focused by itself.
+         win.webContents.focus();
          win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
          win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
          result.escaped = await shownBecomes(0);
          await away();
 
          await hover('t5');
-         result.beforeText = await shown();
+         result.beforeText = await shownBecomes(1);
          await js("document.getElementById('t5').setAttribute('text', 'Row 5, renamed')");
-         await wait(100);
-         result.retexted = await shown();
+         result.retexted = await shownBecomes(0);
          await away();
 
          // A second tooltip hovered while the first still shows (a row slid under the pointer).
          await hover('t6');
+         await shownBecomes(1);
          result.first = await js("document.querySelector('.popup-tooltip') && document.querySelector('.popup-tooltip').textContent");
          await js("document.querySelector('#t7 .stacki-kit-mount > span').dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))");
-         await wait(100);
-         result.second = await js("[...document.querySelectorAll('.popup-tooltip')].filter((popup) => popup.dataset.popupPhase !== 'closing').map((popup) => popup.textContent)");
-         result.secondCount = await shown();
-         await away();
+         const openTexts = "[...document.querySelectorAll('.popup-tooltip')].filter((popup) => popup.dataset.popupPhase !== 'closing').map((popup) => popup.textContent)";
+         result.second = (await pollUntil({ what: 'the second tooltip open', read: () => js(openTexts), until: (texts) => texts.includes('Row 7 has a long name') })).value;
+         // The first one's exit motion ends, leaving the second alone.
+         result.secondCount = await shownBecomes(1);
+         // The pointer never entered t7 (its hover was page script), so leaving cannot close it.
+         await pointerOff();
 
-         // A dismissed tooltip opens again on the next hover.
+         // A dismissed tooltip opens again on the next hover. The wheel and the scroll above
+         // moved t1 out of the list's view, so it is scrolled back first (that scroll also
+         // dismisses t7), and only a popup with t1's own text counts as it opening again.
+         await js("document.getElementById('t1').scrollIntoView({ block: 'nearest' })");
+         await shownBecomes(0);
          await hover('t1');
-         result.again = await shown();
+         const popupsOfFirstRow = "[...document.querySelectorAll('.popup-tooltip')].filter((popup) => popup.textContent === 'Row 1 has a long name').length";
+         result.again = (await pollUntil({ what: "t1's popup open again", read: () => js(popupsOfFirstRow), until: (count) => count === 1 })).value;
          win.destroy();
          console.log(JSON.stringify(result));
        } catch (error) {
