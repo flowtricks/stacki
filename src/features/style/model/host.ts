@@ -71,6 +71,8 @@ export type HostState = {
   selectedId: string | undefined;
   /** Canvas breakpoint: desktop | tablet | phone. */
   device: string;
+  /** The canvas's rendered width in CSS pixels (fit and custom included), or undefined while unknown. The panel follows it (embed/contextFollow.ts). */
+  canvasWidthPx: number | undefined;
   /** Stylesheets in the project, from style:listFiles. */
   files: Array<{ rel: string; name: string; path: string; size: number }>;
   /** Component files holding a `<style is:global>` block, from
@@ -206,6 +208,7 @@ const state: HostState = {
   pathOf: undefined,
   historyTick: 0,
   device: 'desktop',
+  canvasWidthPx: undefined,
   files: [],
   astroFiles: [],
   openFilePath: undefined,

@@ -98,6 +98,55 @@ export function queryWidthSides(atContext: string, rootFontSizePx: number): Quer
   return { kind: 'sides', lower: bounds.some((bound) => bound.side === 'lower'), upper: bounds.some((bound) => bound.side === 'upper') };
 }
 
+/** Whether a canvas width is inside a query, and the interval it holds. */
+export type QueryWidthMatch =
+  /** `lowerPx` is 0 and `upperPx` Infinity when the query has no bound on that side. */
+  | { readonly kind: 'match'; readonly lowerPx: number; readonly upperPx: number }
+  | { readonly kind: 'miss' }
+  /** The query says nothing measurable about width: it takes no part in following the canvas. */
+  | { readonly kind: 'ignored'; readonly reason: QueryWidthSkip };
+
+/**
+ * Whether a canvas `widthPx` wide is inside a context's width query, read by the same parser
+ * as canvasWidthForQuery (so a pick of a query and the following of the canvas can never
+ * disagree about what a query means). Boundaries are exact: `width >= 30rem` holds at 480
+ * and not at 479; `width > 30rem` not at 480. Anything the reader cannot measure is
+ * `ignored`, never a guess.
+ */
+export function queryWidthMatch(atContext: string, widthPx: number, rootFontSizePx: number): QueryWidthMatch {
+  assert(Number.isFinite(widthPx), 'queryWidthMatch: a canvas width is a number');
+  assert(Number.isFinite(rootFontSizePx), 'queryWidthMatch: a root font size is a number');
+  assert(rootFontSizePx > 0, 'queryWidthMatch: a root font size is positive');
+  if (atContext.length > QUERY_WIDTH_LIMITS.queryCharsMax) {
+    return { kind: 'ignored', reason: 'unparsed' };
+  }
+  const innermost = (atContext.split(' › ').pop() ?? '').trim();
+  const media = /^@media\s+([\s\S]*)$/i.exec(innermost);
+  if (media === null) {
+    return { kind: 'ignored', reason: 'not-media' };
+  }
+  const bounds = boundsOf((media[1] ?? '').trim().toLowerCase(), rootFontSizePx);
+  if (!Array.isArray(bounds)) {
+    return { kind: 'ignored', reason: bounds };
+  }
+  let lowerPx = 0;
+  let upperPx = Number.POSITIVE_INFINITY;
+  for (const bound of bounds) {
+    if (bound.side === 'lower') {
+      if (bound.inclusive ? widthPx < bound.px : widthPx <= bound.px) {
+        return { kind: 'miss' };
+      }
+      lowerPx = Math.max(lowerPx, bound.px);
+    } else {
+      if (bound.inclusive ? widthPx > bound.px : widthPx >= bound.px) {
+        return { kind: 'miss' };
+      }
+      upperPx = Math.min(upperPx, bound.px);
+    }
+  }
+  return { kind: 'match', lowerPx, upperPx };
+}
+
 // The width bounds of a query's conditions, or why there are none to read. A
 // leading media type (`screen and …`) is allowed; `only` too.
 function boundsOf(query: string, rootFontSizePx: number): Bound[] | QueryWidthSkip {
