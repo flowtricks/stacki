@@ -91,18 +91,38 @@ test('a replace applies, returns the new checksum, and the actor holds it', () =
   });
 });
 
-test('a text identical to the file rewrites it unchanged, as one empty hunk', () => {
+test('a text identical to the file is applied without touching the file', () => {
   directory((root) => {
     const file = path.join(root, 'index.astro');
     fs.writeFileSync(file, '<h1>Hi</h1>\n');
-    const { documents } = host();
-    const report = documents.writeText(file, '<h1>Hi</h1>\n', sha256('<h1>Hi</h1>\n'));
-    assert.deepEqual(report, {
-      tag: 'applied',
-      checksum: sha256('<h1>Hi</h1>\n'),
-      inverse: [], // Nothing changed, so there is nothing to undo.
-    });
+    const past = new Date(Date.now() - 60_000);
+    fs.utimesSync(file, past, past); // An mtime a rewrite would visibly move.
+    const before = fs.statSync(file);
+    const { documents, lines } = host();
+    let renames = 0;
+    withFailure(
+      'renameSync',
+      (original, ...argumentsList) => {
+        renames += 1;
+        return original(...argumentsList);
+      },
+      () => {
+        const report = documents.writeText(file, '<h1>Hi</h1>\n', sha256('<h1>Hi</h1>\n'));
+        assert.deepEqual(report, {
+          tag: 'applied',
+          checksum: sha256('<h1>Hi</h1>\n'),
+          inverse: [], // Nothing changed, so there is nothing to undo.
+        });
+      },
+    );
+    const after = fs.statSync(file);
+    assert.equal(renames, 0, 'no save file is renamed over the page');
+    assert.equal(after.mtimeMs, before.mtimeMs, 'the mtime is unchanged');
+    assert.equal(after.ino, before.ino, 'the same file, not a replacement');
     assert.equal(fs.readFileSync(file, 'utf8'), '<h1>Hi</h1>\n');
+    assert.deepEqual(fs.readdirSync(root), ['index.astro'], 'no lock or save file was made');
+    assert.equal(documents.echoes(file), false, 'the actor wrote nothing it could hear back');
+    assert.equal(JSON.parse(lines[0]).outcome, 'unchanged', 'the log tells a no-op from a write');
   });
 });
 

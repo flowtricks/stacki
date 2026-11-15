@@ -45,12 +45,13 @@ import {
   type ActorEffect,
   type ActorState,
   type ActorStep,
+  type InFlight,
   type Submission,
 } from '#dist/shared/engine/documentActor.js';
 import { SIMULATOR_PROJECTOR } from './candidate.ts';
 import { planEngine } from './enginePlanner.ts';
 import { FakeDisk } from './fakeDisk.ts';
-import { checkBounds, checkCommitted, checkGeneration, checkOutcome, checkQuiescent } from './invariants.ts';
+import { checkBounds, checkCommitted, checkGeneration, checkOutcome, checkQuiescent, checkUnchanged } from './invariants.ts';
 import { oracleIntent, oracleSplices } from './oracleIntent.ts';
 import { ORACLE_SCENARIOS, type OracleScenario } from './oracles.ts';
 import { Prng } from './prng.ts';
@@ -516,6 +517,11 @@ class World {
         this.holdCurrent(path);
         this.log(`  refresh ${path} gen ${effect.generation}`);
         return;
+      case 'unchanged':
+        checkUnchanged(effect);
+        this.count('outcome:unchanged');
+        this.log(`  unchanged ${effect.intent.id}: no write`);
+        return;
       case 'disk-error':
         this.log(`  disk error for ${effect.intentId}`);
         return;
@@ -650,8 +656,8 @@ class World {
       this.count(`code:rejected ${decision.reason}`);
       return;
     }
-    const phase = result.state.phase;
-    assert(phase.tag === 'planned', 'A planned decision leaves the actor planned');
+    const phase = plannedIn(intent, result);
+    assert(phase !== undefined, 'A planned decision has its plan');
     if (phase.candidate.projection.tag === 'parse-error') {
       this.count('code:invalid');
     }
@@ -1299,14 +1305,31 @@ function isSeparatorByte(byte: number): boolean {
 }
 
 function decisionFor(intent: Intent, result: ActorStep): RemapDecision | undefined {
-  const phase = result.state.phase;
-  if (phase.tag === 'planned') {
-    assert(phase.intent.id === intent.id, 'The planned intent is the head of the queue');
-    return { tag: 'planned', plan: phase.plan };
+  const planned = plannedIn(intent, result);
+  if (planned !== undefined) {
+    return { tag: 'planned', plan: planned.plan };
   }
   const reason = rejectionOf(intent, result);
   assert(reason !== undefined, 'An idle step plans its head or rejects it');
   return reason === 'write-failed' ? undefined : { tag: 'rejected', reason };
+}
+
+// What the step planned for `intent`: the planned phase, or a plan that left
+// the bytes as they were and was applied with no write (documentActor.ts
+// `unchanged`). A judge holds either to the same rules: where it would land.
+function plannedIn(intent: Intent, result: ActorStep): InFlight | undefined {
+  const phase = result.state.phase;
+  if (phase.tag === 'planned') {
+    assert(phase.intent.id === intent.id, 'The planned intent is the head of the queue');
+    return phase;
+  }
+  for (const effect of result.effects) {
+    if (effect.tag === 'unchanged') {
+      assert(effect.intent.id === intent.id, 'An unchanged plan is the head of the queue');
+      return effect;
+    }
+  }
+  return undefined;
 }
 
 function rejectionOf(intent: Intent, result: ActorStep): RejectionReason | undefined {

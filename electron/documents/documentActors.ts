@@ -106,8 +106,8 @@ export class DocumentActors {
    * the file should read, computed from the bytes of `baseChecksum`. Written
    * as the hunks where the two differ — a `rewrite-text`, never a whole-file
    * replacement — and only while the file holds exactly those bytes; anything
-   * else is refused, never merged. Text that equals the file's is written
-   * again unchanged. */
+   * else is refused, never merged. Text that equals the file's is applied
+   * without a write: the file, its mtime and the watchers are left alone. */
   writeText(file: string, text: string, baseChecksum: Digest): WriteReport {
     const entry = this.#entry(file);
     if (!entry.ok) {
@@ -165,7 +165,13 @@ export class DocumentActors {
     assert(settled !== undefined, 'A settled actor reported the intent it accepted');
     if (settled.outcome.tag === 'applied') {
       const commit = settled.committed;
-      assert(commit !== undefined, 'An applied intent was committed');
+      if (commit === undefined) {
+        // Applied without a write: the plan left the bytes as they were.
+        const snapshot = entry.value.state.snapshot;
+        assert(snapshot !== undefined, 'An unchanged edit leaves the actor its snapshot');
+        assert(snapshot.checksum === settled.outcome.checksum, 'An unchanged edit names the bytes on disk');
+        return { tag: 'applied', checksum: snapshot.checksum, bytes: snapshot.bytes, inverse: [] };
+      }
       return {
         tag: 'applied',
         checksum: settled.outcome.checksum,
@@ -532,6 +538,7 @@ export class DocumentActors {
         this.#logCommit(entry, effect);
         return;
       case 'refreshed':
+      case 'unchanged': // Nothing was written: the outcome that follows says applied, and no commit is logged.
         return;
       default: {
         const exhaustive: never = effect;
@@ -546,7 +553,11 @@ export class DocumentActors {
       case 'applied': {
         assert(entry.state.snapshot?.checksum === outcome.checksum, 'The commit is the snapshot');
         const commit = settled.committed;
-        assert(commit !== undefined, 'An applied intent was committed');
+        if (commit === undefined) {
+          // Applied without a write: the text was the file's (documentActor.ts `unchanged`).
+          assert(outcome.changedRanges.length === 0, 'An unwritten intent changed no range');
+          return { tag: 'applied', checksum: outcome.checksum, inverse: [] };
+        }
         // A replacement of bytes with the same bytes changes nothing: no hunk.
         const changed = minimalSplices(commit.plan.splices).filter((splice) => splice.range.start < splice.range.end || splice.replacementBytes.length > 0);
         return { tag: 'applied', checksum: outcome.checksum, inverse: inverseEdits(changed) };

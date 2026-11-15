@@ -13,6 +13,7 @@
 //   7. The actor never commits an older snapshot over a newer one. (checkGeneration)
 //   8. Queue, parser, diff and snapshot bounds hold.          (checkBounds)
 //   9. The same seed produces the same results.               (the suite runs seeds twice)
+//  10. A plan applied without a write changed no byte.         (checkUnchanged)
 import { assert } from '#dist/shared/core/assert.js';
 import type { Intent, Outcome } from '#dist/shared/engine/intent.js';
 import { LIMITS } from '#dist/shared/core/limits.js';
@@ -33,6 +34,13 @@ export function checkQuiescent(accepted: ReadonlyMap<string, Intent>, terminal: 
     assert(terminal.has(id), `Invariant 1: accepted intent ${id} reached a terminal outcome`);
   }
   assert(terminal.size === accepted.size, 'Invariant 1: no outcome without an accepted intent');
+}
+
+/** A plan applied with no write (documentActor.ts `unchanged`) changes no
+ * byte: its candidate is its base, which is what lets the actor skip the write. */
+export function checkUnchanged(effect: Extract<ActorEffect, { tag: 'unchanged' }>): void {
+  assert(effect.candidate.checksum === effect.base.checksum, 'An unchanged plan leaves the checksum');
+  assert(equalBytes(effect.candidate.bytes, effect.base.bytes), 'An unchanged plan leaves every byte');
 }
 
 export function checkCommitted(effect: Committed): void {

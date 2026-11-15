@@ -107,6 +107,53 @@ test('a fresh rewrite-text applies through idle → planned → written → idle
   assert.equal(disk.lockHeld(PAGE), false, 'the lock is released');
 });
 
+test('a plan that leaves the bytes as they are is applied without a lock, a replace or a commit', () => {
+  const disk = fakeWith(TEXT);
+  let replaces = 0;
+  let locks = 0;
+  const counting: DocumentDisk = {
+    read: (path) => disk.read(path),
+    lock: (path) => {
+      locks += 1;
+      return disk.lock(path);
+    },
+    unlock: (lock) => disk.unlock(lock),
+    replace: (path, bytes) => {
+      replaces += 1;
+      return disk.replace(path, bytes);
+    },
+  };
+  const before = disk.read(PAGE);
+  assert.ok(before.ok, 'the page is on the fake disk');
+  // The one empty hunk the host sends for a text equal to the file's (documentEntry.ts UNCHANGED).
+  const intent = toIntent({
+    id: toIntentId('actor-test-unchanged'),
+    file: PAGE,
+    authoredChecksum: sha256(encodeUtf8(TEXT)),
+    anchor: { span: toByteSpan(0, encodeUtf8(TEXT).length), path: [], expectedKind: 'document' },
+    operation: { tag: 'rewrite-text', hunks: [{ span: toByteSpan(0, 0), text: '' }] },
+  });
+  const { state, outcomes, steps } = run(submitted(intent), setup(counting));
+  assert.deepEqual(
+    steps.map((step) => step.state.phase.tag),
+    ['idle'],
+    'planned to nothing, it never leaves idle',
+  );
+  const checksum = sha256(encodeUtf8(TEXT));
+  assert.deepEqual(outcomes, [{ tag: 'applied', intentId: intent.id, changedRanges: [], checksum }]);
+  assert.equal(
+    steps.flatMap((step) => step.effects).some((effect) => effect.tag === 'committed'),
+    false,
+    'no commit: nothing changed, so nothing joins the commit log',
+  );
+  assert.equal(replaces, 0, 'the file is never replaced');
+  assert.equal(locks, 0, 'no lock is taken for a write that does not happen');
+  const after = disk.read(PAGE);
+  assert.ok(after.ok, 'the page is still there');
+  assert.equal(after.value.generation, before.value.generation, 'the disk saw no write');
+  assert.equal(state.snapshot?.checksum, checksum, 'the actor holds the bytes it read');
+});
+
 test('a full queue backpressures the next submission and keeps the queue intact', () => {
   let state = createActor(PAGE);
   for (let index = 0; index < LIMITS.intentsPendingMax; index++) {

@@ -13,6 +13,9 @@
 //   written → re-read, verify the checksum, release the lock, commit
 //                                                      (§5.2 steps 9–10)
 //
+// A plan whose candidate is the base, byte for byte, never leaves idle: it is
+// applied without a write (`unchanged` below), so a no-op can never touch disk.
+//
 // Honest limit, a product contract (plan §5.2): a byte check cannot close the
 // kernel's check-to-use race against an uncooperative writer, because no
 // portable API offers compare-and-swap on a pathname. The lock excludes only
@@ -139,6 +142,10 @@ export type ActorEffect =
       readonly generation: number;
     } & InFlight)
   | { readonly tag: 'refreshed'; readonly previousGeneration: number; readonly generation: number }
+  /** A plan whose candidate is its base, byte for byte: applied with no write
+   * and no commit. It carries what was planned so a judge (the simulator) can
+   * still check the plan; nothing about it reaches the disk or the commit log. */
+  | ({ readonly tag: 'unchanged' } & InFlight)
   /** Why a disk call failed, for the rejection notice; never logged. */
   | { readonly tag: 'disk-error'; readonly intentId: Intent['id']; readonly message: string }
   /** The lock could not be released. The real disk breaks a lock whose owner is
@@ -351,8 +358,28 @@ function stepIdle(state: ActorState, dependencies: ActorDependencies): ActorStep
     return reject(current, intent, checked.error.reason, parses + checked.error.parses, earlier);
   }
   const candidate = checked.value;
+  if (candidate.checksum === base.checksum) {
+    return unchanged(current, { intent, base, plan, candidate }, parses + 1, earlier);
+  }
   const phase: ActorPhase = { tag: 'planned', intent, base, plan, candidate };
   return { state: { ...current, phase }, effects: earlier, parses: parses + 1 };
+}
+
+// A plan that leaves the file's bytes exactly as they are (a value set to the
+// value it has, a text equal to the file's) is applied by writing nothing: no
+// lock, no replace, no commit. A replace of identical bytes still renames a
+// new file over the old one, which changes its mtime, wakes every watcher (the
+// dev server re-renders the canvas twice) and looks like an edit to git and to
+// the editor's own history, all for a change that does not exist. The bytes
+// were read in this very step, and the outcome says the file holds what the
+// intent wanted; it carries no changed range, because no byte changed.
+function unchanged(state: ActorState, planned: InFlight, parses: number, earlier: readonly ActorEffect[]): ActorStep {
+  assert(state.snapshot === planned.base, 'An unchanged plan is planned against the snapshot just read');
+  assert(planned.candidate.bytes.length === planned.base.bytes.length, 'An unchanged candidate has the base length');
+  assert(state.phase.tag === 'idle', 'An unchanged plan leaves the actor idle');
+  assert(parses <= LIMITS.parseTasksInFlightMax, 'A step runs at most the parse bound');
+  const outcome: Outcome = { tag: 'applied', intentId: planned.intent.id, changedRanges: [], checksum: planned.base.checksum };
+  return { state, effects: [...earlier, { tag: 'unchanged', ...planned }, { tag: 'outcome', outcome }], parses };
 }
 
 // The authored snapshot: the one the client sent, or the current one when it

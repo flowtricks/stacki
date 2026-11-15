@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
+import mainFs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { mainHarness } from '../../helpers/mainHarness.ts';
@@ -257,6 +258,70 @@ test('an edit writes only its splice; its inverse restores every byte', async (c
   });
   assert.ok(undone.ok, 'the inverse applies');
   assert.equal(fs.readFileSync(file, 'utf8'), SIBLINGS);
+});
+
+// Elements whose classes come from an expression, beside a plain one: the field that shows such
+// a class used to send its value back unchanged whenever the selection moved between two of them.
+const EXPRESSION_CLASSES = [
+  '---',
+  'const classes = (suffix: string) => ["card", `card_${suffix}`].join(" ");',
+  'const active = true;',
+  '---',
+  '<div class={classes("one")}>One</div>',
+  '<div class:list={["card", active && "is-active"]}>Two</div>',
+  '<div class={`card ${active ? "is-on" : ""}`}>Three</div>',
+  '<p class="plain" title="Old">Four</p>',
+  '',
+].join('\n');
+
+test('an edit that sets a value the source already holds writes nothing at all', async (context) => {
+  const harness = fixture();
+  context.after(harness.dispose);
+  const file = path.join(harness.root, 'src/pages/index.astro');
+  fs.writeFileSync(file, EXPRESSION_CLASSES);
+  const past = new Date(Date.now() - 60_000);
+  fs.utimesSync(file, past, past); // An mtime any rewrite would visibly move.
+  const page = await read(harness, file);
+  assert.ok(page.editable, 'the page parses');
+  const unchanged: readonly { readonly at: readonly number[]; readonly name: string; readonly value: { type: 'string' | 'expr'; value: string } }[] = [
+    { at: [0], name: 'class', value: { type: 'expr', value: 'classes("one")' } },
+    { at: [1], name: 'class:list', value: { type: 'expr', value: '["card", active && "is-active"]' } },
+    { at: [2], name: 'class', value: { type: 'expr', value: '`card ${active ? "is-on" : ""}`' } },
+    { at: [3], name: 'title', value: { type: 'string', value: 'Old' } },
+  ];
+  const before = fs.statSync(file);
+  const watcher = fs.watch(path.dirname(file));
+  const heard: string[] = [];
+  watcher.on('change', (kind, name) => heard.push(`${kind} ${String(name)}`));
+  context.after(() => watcher.close());
+  // The default export is the module object the main process's CommonJS code calls into; the
+  // namespace imported above is a frozen view of it and cannot be patched.
+  const renameSync = mainFs.renameSync;
+  let renames = 0;
+  mainFs.renameSync = (...argumentsList: Parameters<typeof fs.renameSync>) => {
+    renames += 1;
+    renameSync(...argumentsList);
+  };
+  context.after(() => {
+    mainFs.renameSync = renameSync;
+  });
+  for (const { at, name, value } of unchanged) {
+    const node = nodeAt(page, at);
+    assert.ok('props' in node, `the node at ${at.join('/')} has attributes`);
+    assert.deepEqual(node.props?.[name], value, `the request names the value ${name} already has`);
+    const applied = await edit(harness, file, page.checksum, { tag: 'set-attribute', target: refAt(page, at), name, value });
+    assert.ok(applied.ok, `setting ${name} to its own value applies`);
+    assert.equal(applied.value.checksum, page.checksum, 'the page is the page it was');
+    assert.deepEqual(applied.value.inverse, [], 'there is nothing to undo');
+  }
+  // One watcher turn after the last request: a write's events would have arrived by now.
+  await new Promise((resolve) => setImmediate(resolve));
+  const after = fs.statSync(file);
+  assert.equal(fs.readFileSync(file, 'utf8'), EXPRESSION_CLASSES, 'the bytes are identical');
+  assert.equal(renames, 0, 'no save file is renamed over the page');
+  assert.equal(after.mtimeMs, before.mtimeMs, 'the mtime is unchanged');
+  assert.equal(after.ino, before.ino, 'the same file, not a replacement');
+  assert.deepEqual(heard, [], 'the folder watcher heard nothing');
 });
 
 test('renames and node rewrites write only their bytes; inverses restore them', async (context) => {
