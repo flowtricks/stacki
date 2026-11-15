@@ -215,18 +215,21 @@ test('the frame announces the token shared computes; events carry it', async () 
   });
   window.document.querySelector('p').dispatchEvent(context);
   assert.equal(context.defaultPrevented, true, 'the designer replaces the browser menu');
-  assert.deepEqual(
-    sent.find((message) => message.type === 'avb:context-node'),
-    {
-      type: 'avb:context-node',
-      path: click.path,
-      occurrence: click.occurrence,
-      outside: false,
-      left: 10,
-      top: 12,
-      token: announced.token,
-    },
-  );
+  const contextMessage = sent.find((message) => message.type === 'avb:context-node');
+  assert.ok(contextMessage, 'the context menu is reported');
+  // The press time is stamped on the epoch clock so the renderer can tell a press from a stale one (popupDismiss.ts); it varies per run.
+  const { pressedAtMs, ...contextRest } = contextMessage;
+  assert.equal(typeof pressedAtMs, 'number', 'the context press carries its time');
+  assert.ok(Number.isFinite(pressedAtMs), 'the press time is a finite number');
+  assert.deepEqual(contextRest, {
+    type: 'avb:context-node',
+    path: click.path,
+    occurrence: click.occurrence,
+    outside: false,
+    left: 10,
+    top: 12,
+    token: announced.token,
+  });
 });
 
 test('late editor registration recovers the current render', async () => {

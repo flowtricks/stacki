@@ -351,8 +351,13 @@ const HOST_HELPERS = `
   const probe = path.join(probeDirectory, 'probe.js');
   fs.writeFileSync(
     probe,
-    `const { app, BrowserWindow } = require('electron');
+    `const { app, BrowserWindow, ipcMain } = require('electron');
      app.disableHardwareAcceleration();
+     // The preload's top frame asks main for the boot seed synchronously (electron/boot/bootChannels.ts); with no
+     // listener that call never returns and the probe hangs, so this probe answers it as main does with no snapshot.
+     ipcMain.on('boot:read', (event) => {
+       event.returnValue = undefined;
+     });
      app.on('window-all-closed', () => app.quit());
      const { waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {

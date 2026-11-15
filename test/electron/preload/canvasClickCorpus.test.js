@@ -317,7 +317,7 @@ function report({ results, churn, mixed, native, lost, error }) {
 // with nothing of this file's Node process.
 function PROBE(directory) {
   return `
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain } = require('electron');
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
@@ -326,6 +326,11 @@ const DIRECTORY = ${JSON.stringify(directory)};
 const PRELOAD = ${JSON.stringify(repoPath('dist/electron/preload/preload.js'))};
 const scenarios = JSON.parse(fs.readFileSync(path.join(DIRECTORY, 'scenarios.json'), 'utf8'));
 app.on('window-all-closed', () => {});
+// The preload's top frame asks main for the boot seed synchronously (electron/boot/bootChannels.ts); with no
+// listener that call never returns and the whole probe hangs, so this probe answers it as main does for a window with no boot snapshot.
+ipcMain.on('boot:read', (event) => {
+  event.returnValue = undefined;
+});
 
 const host = (pageName, openFile) => '<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0}iframe{position:fixed;inset:0;width:100%;height:100%;border:0}</style></head>' +
   '<body><iframe data-src="/pages/' + pageName + '.html#avb-design"></iframe>' +
