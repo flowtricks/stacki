@@ -14,7 +14,8 @@
 // Method: one page in Electron's Chromium, built from the shared module's
 // `ui.css` and `ui.js` exactly as an app serves them. Each icon is identified by
 // its named Central glyph or Central's component cube path.
-// The page reports what it saw as JSON, which the test checks.
+// The page reports what it saw as JSON, which the test checks. Each read waits, bounded,
+// for the state it reads, never a fixed pause.
 const fs = require('fs');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
@@ -67,10 +68,18 @@ const check = (what, condition, detail) => {
     `const { app, BrowserWindow } = require('electron');
      const path = require('path');
      app.on('window-all-closed', () => {});
-     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+     const { waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      const page = \`(async () => { try {
        const tick = () => new Promise((resolve) => setTimeout(resolve, 50));
-       const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
+       // Waits, bounded (pollCountMax ticks of 50 ms), until read() holds; the checks below
+       // report the state either way, so a slow runner gets time and a failure still shows.
+       const pollCountMax = 100;
+       const until = async (read) => {
+         for (let poll = 0; poll < pollCountMax && !read(); poll += 1) {
+           await tick();
+         }
+       };
+       const triggerText = (dropdown) => (dropdown.querySelector('.dd-trigger') || {}).textContent || '';
        // What one icon slot shows: its path, its size, and whether it leads the row.
        const icon = (row) => {
          const slot = row && row.querySelector('.dd-icon');
@@ -95,17 +104,18 @@ const check = (what, condition, detail) => {
          }
          const found = openRows().map((row) => ({ label: row.textContent, ...icon(row) }));
          document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-         await settle();
+         // Escape closes the popup after its exit motion.
+         await until(() => document.querySelector('.dd-popup') === null);
          return found;
        };
        const children = document.getElementById('children');
        const trigger = icon(children.querySelector('.dd-trigger'));
        const childRows = await rows(children);
        children.value = 'link';
-       await tick();
+       await until(() => triggerText(children).includes('Link'));
        const triggerAfter = icon(children.querySelector('.dd-trigger'));
        children.value = 'odd';
-       await tick();
+       await until(() => triggerText(children).includes('Odd'));
        const triggerUnknown = icon(children.querySelector('.dd-trigger'));
 
        const data = document.getElementById('data');
@@ -116,7 +126,7 @@ const check = (what, condition, detail) => {
          { value: 'x', label: 'Unknown', icon: 'nope' },
        ];
        data.value = 'h';
-       await tick();
+       await until(() => triggerText(data).includes('Heading'));
        const dataTrigger = icon(data.querySelector('.dd-trigger'));
        const dataRows = await rows(data);
        const readBack = data.options.map((option) => option.icon);
@@ -130,7 +140,11 @@ const check = (what, condition, detail) => {
        try {
          const win = new BrowserWindow({ show: false, width: 400, height: 500 });
          await win.loadFile(path.join(__dirname, 'app.html'));
-         await wait(400);
+         await waitFor({
+           what: 'both dropdowns drawn',
+           read: () => win.webContents.executeJavaScript("document.querySelectorAll('stacki-dropdown .dd-trigger').length"),
+           until: (count) => count === 2,
+         });
          const result = await win.webContents.executeJavaScript(page);
          win.destroy();
          console.log(JSON.stringify(result));

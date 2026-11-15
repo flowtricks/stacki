@@ -5,6 +5,7 @@
 // Method: jsdom has no layout, so this bundles the real TitleActions and DesktopPublishButton for the browser, mounts them in
 // one `.titlebar` under the app's real stylesheets in a hidden Chromium window (as branchChipLook.test.js does), and compares
 // getBoundingClientRect heights. It reads boxes only: no hover or pointer is involved, so it holds on Windows and Linux too.
+// Each read waits, bounded, for the bar to be drawn and settled, never a fixed pause.
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
@@ -61,13 +62,24 @@ const PROBE = `const { app, BrowserWindow } = require('electron');
 const path = require('path');
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => app.quit());
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const { MOTION_SETTLED_EXPRESSION, pollUntil, waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+// A page error or a wait past its bound ends the probe with its message, not at the spawn bound.
+process.on('unhandledRejection', (error) => {
+  console.error('probe failed: ' + String((error && error.stack) || error));
+  app.exit(1);
+});
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 900, height: 300, backgroundColor: '#191919' });
   const out = {};
   for (const [name, query] of Object.entries({ wide: 'width=760', wideLit: 'width=760&preview=on', narrow: 'width=360', narrowLit: 'width=360&preview=on' })) {
     await win.loadURL('file://' + path.join(__dirname, 'index.html') + '?' + query);
-    await sleep(700);
+    // Every control drawn, bounded (test/helpers/waitFor.js), rather than a fixed pause.
+    await waitFor({
+      what: 'the ' + name + ' title bar drawn',
+      read: () => win.webContents.executeJavaScript("document.querySelector('.titlebar .stacki-publish-split') !== null"),
+      until: (seen) => seen === true,
+    });
+    await pollUntil({ what: 'the ' + name + ' bar settled', read: () => win.webContents.executeJavaScript(MOTION_SETTLED_EXPRESSION), until: (settled) => settled });
     out[name] = await win.webContents.executeJavaScript(\`(() => {
       const height = (element) => (element ? element.getBoundingClientRect().height : -1);
       return {

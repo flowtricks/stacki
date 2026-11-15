@@ -15,7 +15,8 @@
 // Method: jsdom has no layout, so this is measured in a real Chromium. The rows
 // are the real `AppRow` (rendered in the page with react-dom/client), under the app's stylesheets, in a
 // 280px-wide panel. Hover is a real mouse move through the DevTools protocol,
-// so `:hover` matches as it does for a person.
+// so `:hover` matches as it does for a person. Each read waits, bounded, for the hover or
+// focus to land and the fades to finish, never a fixed pause.
 const fs = require('fs');
 const path = require('path');
 const { buildSync } = require('esbuild');
@@ -164,34 +165,44 @@ const summary = (id, name, description, update) => ({
          };
        });
      })()\`;
+     // A page error or a wait past its bound ends the probe with its message, not at the spawn bound.
+     process.on('unhandledRejection', (error) => {
+       console.error('probe failed: ' + String((error && error.stack) || error));
+       app.exit(1);
+     });
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 600, height: 600 });
-       // A short pause for the hover to land, then until the row's fades finish: slowed
-       // motion outlasts any fixed sleep. Bounded so a stuck animation still fails.
-       const settle = async () => {
-         await new Promise((resolve) => setTimeout(resolve, 300));
+       const { waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+       const js = (code) => win.webContents.executeJavaScript(code);
+       // Waits, bounded (test/helpers/waitFor.js), until the page shows what the step did (the
+       // hover or focus landed), then until the row's fades finish: slowed motion outlasts any
+       // fixed sleep. Bounded so a stuck animation still fails.
+       const settle = async (what, landed) => {
+         await waitFor({ what, read: () => js(landed), until: (done) => done === true });
          await win.webContents.executeJavaScript("Promise.race([Promise.all(document.getAnimations().map((animation) => animation.finished)), new Promise((resolve) => setTimeout(resolve, 5000))]).then(() => true)");
        };
        await win.loadFile(path.join(__dirname, 'index.html'));
+       await waitFor({ what: 'both rows drawn', read: () => js("document.querySelectorAll('.apps-row-main').length"), until: (count) => count === 2 });
        const cdp = win.webContents.debugger;
        // The Linux preflight's slow-motion profile may already hold the protocol; share it.
        if (!cdp.isAttached()) {
          cdp.attach('1.3');
        }
        const move = (x, y) => cdp.sendCommand('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+       const offRows = "document.querySelector('.apps-row-main:hover') === null";
        await move(590, 590);
-       await settle();
+       await settle('the pointer off the rows', offRows);
        const rest = await win.webContents.executeJavaScript(measure);
        const hovered = [];
        for (let index = 0; index < rest.length; index += 1) {
          const row = rest[index].row;
          await move(Math.round(row.left + 40), Math.round((row.top + row.bottom) / 2));
-         await settle();
+         await settle('the pointer on row ' + index, "document.querySelectorAll('.apps-row-main')[" + index + "].matches(':hover')");
          hovered.push((await win.webContents.executeJavaScript(measure))[index]);
        }
        await move(590, 590);
        await win.webContents.executeJavaScript("document.querySelector('.apps-row-select').focus({ focusVisible: true })");
-       await settle();
+       await settle('the pointer off and the first row focused', offRows + " && document.activeElement === document.querySelector('.apps-row-select')");
        const focused = (await win.webContents.executeJavaScript(measure))[0];
        console.log(JSON.stringify({ rest, hovered, focused }));
        app.quit();

@@ -10,7 +10,8 @@
 // Electron's Chromium. Hover and clicks are real input events from the browser's
 // own pipeline, so the :hover rules are the ones a person meets. The pill's place
 // is read mid-slide and after it, and compared with the tabs' layout offsets.
-// The reduced-motion pass emulates the media feature over the DevTools protocol.
+// The reduced-motion pass emulates the media feature over the DevTools protocol. Apart from
+// the deliberate mid-slide sample, each read waits, bounded, for the state it reads.
 const fs = require('fs');
 const path = require('path');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
@@ -80,6 +81,7 @@ const check = (what, condition, detail) => {
      const path = require('path');
      app.on('window-all-closed', () => app.quit());
      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+     const { MOTION_SETTLED_EXPRESSION, pollUntil, waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      const read = \`(() => {
        const tabs = [...document.querySelectorAll('.apps-view-tab')];
        const pill = document.querySelector('.apps-view-tab-indicator');
@@ -115,7 +117,11 @@ const check = (what, condition, detail) => {
          });
          await win.loadFile(path.join(__dirname, 'index.html'));
        }
-       await wait(400);
+       await waitFor({
+         what: 'the tabs and their pill drawn',
+         read: () => win.webContents.executeJavaScript("document.querySelectorAll('.apps-view-tab').length > 1 && document.querySelector('.apps-view-tab-indicator') !== null"),
+         until: (drawn) => drawn,
+       });
        // The pill turns on its slide a frame after it is placed; a hidden window on a slow
        // runner can take longer than the pause, so wait for it, within a bound.
        for (let attempt = 0; attempt < 50 && !reduced; attempt += 1) {
@@ -125,9 +131,15 @@ const check = (what, condition, detail) => {
          await wait(100);
        }
        const js = (code) => win.webContents.executeJavaScript(code);
+       // A move is over once the pointer's :hover has arrived where it went and the colour
+       // change it starts has finished, both bounded, rather than after a fixed pause.
        const move = async (x, y) => {
          win.webContents.sendInputEvent({ type: 'mouseMove', x, y });
-         await wait(250);
+         const hovered = 'JSON.stringify([...document.querySelectorAll(".apps-view-tab")].map((tab) => tab.matches(":hover")))';
+         const target = \`JSON.stringify([...document.querySelectorAll(".apps-view-tab")].map((tab) => { const box = tab.getBoundingClientRect(); return \${x} >= box.left && \${x} < box.right && \${y} >= box.top && \${y} < box.bottom; }))\`;
+         const wanted = await js(target);
+         await pollUntil({ what: 'the pointer at ' + x + ',' + y, read: () => js(hovered), until: (seen) => seen === wanted });
+         await pollUntil({ what: 'the hover motion over', read: () => js(MOTION_SETTLED_EXPRESSION), until: (settled) => settled });
        };
        const click = async (x, y) => {
          win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
@@ -146,7 +158,7 @@ const check = (what, condition, detail) => {
        await click(marketplace.x, marketplace.y);
        await wait(70);
        out.mid = await js(read);
-       await wait(400);
+       await pollUntil({ what: 'the clicked tab on', read: () => js("document.querySelectorAll('.apps-view-tab')[1].classList.contains('on')"), until: (on) => on });
        // Measure once the pill's slide has finished; slowed motion outlasts the sleep. Bounded.
        await js("Promise.race([Promise.all(document.getAnimations().map((animation) => animation.finished)), new Promise((resolve) => setTimeout(resolve, 5000))]).then(() => true)");
        out.after = await js(read);

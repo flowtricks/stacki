@@ -19,7 +19,8 @@
 // are bundled for the browser and mounted with React in a real Chromium
 // (Electron's), under the app's stylesheets, in a 900×700 window. The probe
 // measures each state, clicks where a state needs it, and saves a screenshot of
-// each state beside the page (node_modules/.stacki-test/share-app-layout/).
+// each state beside the page (node_modules/.stacki-test/share-app-layout/). It measures once
+// the modal is drawn and its motion is over, a bounded wait, never after a fixed pause.
 const fs = require('fs');
 const path = require('path');
 const { buildSync } = require('esbuild');
@@ -131,7 +132,17 @@ const STATES = ['default', 'public', 'problems', 'success'];
      // Each state closes its window before the next opens; the probe quits once all are measured.
      app.on('window-all-closed', () => {});
      const measure = \`(async () => {
-       await new Promise((resolve) => setTimeout(resolve, 150));
+       // Waits, bounded (pollCountMax ticks of 50 ms), until read() holds, rather than a fixed
+       // pause: a slow runner mounts the modal and slides its tab pill later than any guess.
+       const pollCountMax = 100;
+       const until = async (read) => {
+         for (let poll = 0; poll < pollCountMax && !read(); poll += 1) {
+           await new Promise((resolve) => setTimeout(resolve, 50));
+         }
+       };
+       const motionSettled = () => document.getAnimations().every((animation) => animation.playState !== 'running' || animation.effect === null || animation.effect.getTiming().iterations === Infinity);
+       await until(() => document.querySelector('.apps-share .apps-connect-header') !== null && document.querySelector('.apps-share .apps-connect-footer') !== null);
+       await until(motionSettled);
        const box = (element) => {
          if (!element) return undefined;
          const r = element.getBoundingClientRect();
@@ -146,7 +157,7 @@ const STATES = ['default', 'public', 'problems', 'success'];
        let expanded;
        if (details) {
          details.click();
-         await new Promise((resolve) => setTimeout(resolve, 100));
+         await until(() => details.getAttribute('aria-expanded') === 'true');
          expanded = { findings: modal.querySelectorAll('.apps-share-scan-detail .apps-scan-finding').length, ariaExpanded: details.getAttribute('aria-expanded') };
        }
        const indicator = modal.querySelector('.ui-tabs-indicator');
@@ -186,6 +197,11 @@ const STATES = ['default', 'public', 'problems', 'success'];
          viewport: window.innerHeight,
        };
      })()\`;
+     // A page error ends the probe with its message instead of leaving it to the spawn bound.
+     process.on('unhandledRejection', (error) => {
+       console.error('probe failed: ' + String((error && error.stack) || error));
+       app.exit(1);
+     });
      app.whenReady().then(async () => {
        const results = {};
        for (const state of ${JSON.stringify(STATES)}) {

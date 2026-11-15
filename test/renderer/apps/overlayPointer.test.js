@@ -14,7 +14,8 @@
 // draws the real overlay view (AppOverlayView from AppOverlayLayer.tsx, with
 // the app's own stylesheets, bundled by esbuild) over a canvas frame that runs
 // the built preload, as the app does. Wheels and clicks are real input
-// (`webContents.sendInputEvent`), aimed at:
+// (`webContents.sendInputEvent`); each outcome is awaited, bounded, on the frame's scroll
+// position or the clicks the page records, not after a fixed pause. They are aimed at:
 //   - a heat map, which takes no pointer: the frame scrolls natively,
 //   - an interactive, draggable box, the pill of an interactive label, an
 //     interactive pin, and the drag surface a press puts over the layer: the
@@ -185,6 +186,7 @@ function hostPage() {
      app.disableHardwareAcceleration();
      app.on('window-all-closed', () => app.quit());
      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+     const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        const win = new BrowserWindow({
          show: false, width: ${CANVAS.width}, height: ${CANVAS.height}, useContentSize: true,
@@ -205,8 +207,7 @@ function hostPage() {
          // Wheels at a point from a known place; reads where the frame settles, within a bound.
          const wheel = async (x, y) => {
            await scrollTo(1000);
-           await sleep(50);
-           const start = await frameY();
+           const start = (await pollUntil({ what: 'the frame at 1000', read: frameY, until: (y) => y === 1000 })).value;
            win.webContents.sendInputEvent({ type: 'mouseMove', x, y });
            for (let tick = 0; tick < 4; tick += 1) {
              win.webContents.sendInputEvent({ type: 'mouseWheel', x, y, deltaX: 0, deltaY: -120, canScroll: true });
@@ -226,8 +227,9 @@ function hostPage() {
            win.webContents.sendInputEvent({ type: 'mouseMove', x, y });
            win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
            win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-           await sleep(250);
          };
+         // Each click's outcome is awaited, bounded (test/helpers/waitFor.js), where it has one.
+         const clicks = () => run('({ clicked: window.clicked, frame: window.frameClicks })');
          const hit = (x, y) => run('(() => { const e = document.elementFromPoint(' + x + ', ' + y + '); return e ? (e.className || e.tagName) : "" })()');
          const surface = () => run('!!document.querySelector(".app-overlay-drag-surface")');
 
@@ -253,11 +255,15 @@ function hostPage() {
          // Clicks while the capture is on: the label's hit area off its pill, the pin, then bare canvas.
          await run('window.clicked = []; window.frameClicks = []; true');
          await scrollTo(0);
-         await sleep(100);
+         await pollUntil({ what: 'the frame at the top', read: frameY, until: (y) => y === 0 });
          await click(520, 330);
+         await pollUntil({ what: "the label's click", read: clicks, until: (seen) => seen.clicked.length > 0 });
          await click(612, 388);
+         // The pin's click is checked for what it must not do, which has no event to wait on.
+         await sleep(250);
          out.itemClicks = { clicked: await run('window.clicked'), frame: await run('window.frameClicks') };
          await click(700, 150);
+         await pollUntil({ what: "the bare canvas's click", read: clicks, until: (seen) => seen.frame.includes('test:click') });
          out.bareClick = { clicked: await run('window.clicked'), frame: await run('window.frameClicks') };
 
          // The drag surface: there while the store holds an item, taking wheels for the frame; gone when it lets go.

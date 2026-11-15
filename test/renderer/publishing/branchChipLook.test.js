@@ -6,6 +6,7 @@
 // app's real stylesheets in ONE hidden Chromium window (as settingsLayout.test.js does), and feeds it what real git says about
 // throwaway repositories made for the run (the project is never touched). It reads computed styles and boxes. Set
 // STACKI_BRANCH_SHOTS to a folder to also write PNGs of the bar on main, on a feature branch, on a detached HEAD, and the dialog.
+// Each read waits, bounded, for what it reads to be drawn and settled, never a fixed pause.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -61,11 +62,23 @@ const path = require('path');
 const fs = require('fs');
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => app.quit());
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const { MOTION_SETTLED_EXPRESSION, pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+// A page error or a wait past its bound ends the probe with its message, not at the spawn bound.
+process.on('unhandledRejection', (error) => {
+  console.error('probe failed: ' + String((error && error.stack) || error));
+  app.exit(1);
+});
+// Waits, bounded (test/helpers/waitFor.js), for what a step drew and for its motion to end;
+// the reads that follow report what was there either way.
+const drawn = async (what, expression) => {
+  await pollUntil({ what, read: () => js(expression), until: (seen) => seen === true });
+  await pollUntil({ what: what + ', settled', read: () => js(MOTION_SETTLED_EXPRESSION), until: (settled) => settled });
+};
+let js;
 const cases = JSON.parse(process.env.STACKI_CASES);
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 800, height: 420, backgroundColor: '#191919' });
-  const js = (code) => win.webContents.executeJavaScript(code);
+  js = (code) => win.webContents.executeJavaScript(code);
   const dir = process.env.STACKI_BRANCH_SHOTS;
   const shoot = async (name) => {
     if (dir) {
@@ -76,7 +89,7 @@ app.whenReady().then(async () => {
   const out = {};
   for (const [name, info] of Object.entries(cases)) {
     await win.loadURL('file://' + path.join(__dirname, 'index.html') + '?case=' + Date.now() + '#' + encodeURIComponent(JSON.stringify(info)));
-    await sleep(700);
+    await drawn('the ' + name + ' bar', "document.querySelector('.titlebar .stacki-publish-split') !== null");
     out[name] = await js(\`(() => {
       const chip = document.querySelector('.stacki-branch-chip');
       const bar = document.querySelector('.titlebar');
@@ -98,11 +111,11 @@ app.whenReady().then(async () => {
   }
   // The question: open the menu on the feature branch and start a GitHub push.
   await win.loadURL('file://' + path.join(__dirname, 'index.html') + '?case=' + Date.now() + '#' + encodeURIComponent(JSON.stringify(cases.feature)));
-  await sleep(700);
+  await drawn('the feature bar', "document.querySelector('.titlebar .stacki-publish-split') !== null");
   await js("document.querySelector('[aria-label=\\"More publish options\\"]').click()");
-  await sleep(300);
+  await drawn('the publish menu', "document.querySelector('.stacki-publish-github > button') !== null");
   await js("document.querySelector('.stacki-publish-github > button').click()");
-  await sleep(900);
+  await drawn('the branch warning', "document.querySelector('.stacki-branch-warning') !== null");
   out.dialog = await js(\`(() => {
     const dialog = document.querySelector('.stacki-branch-warning');
     if (!dialog) return { shown: false };

@@ -24,6 +24,8 @@
 // the window, right-aligned, with headings, separators and shortcut hints, from
 // children or the `items` property. A popover shows the element's own content
 // in the editor's popover and puts the same nodes back when it closes. The page reports what it saw as JSON, which the test checks.
+// Each read waits, bounded, for the state it reads (test/helpers/waitFor.js in the probe, a
+// bounded poll in the page), never a fixed pause.
 const fs = require('fs');
 const path = require('path');
 const { repoPath } = require('../../helpers/sources.js');
@@ -81,7 +83,7 @@ const check = (what, condition, detail) => {
     `const { app, BrowserWindow } = require('electron');
      const path = require('path');
      app.on('window-all-closed', () => {});
-     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+     const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      const atRest = \`(() => {
        const button = document.querySelector('#button button');
        const holder = document.querySelector('#button .stacki-kit-content');
@@ -101,22 +103,37 @@ const check = (what, condition, detail) => {
          rowSwitchName: row && row.querySelector('.ui-switch').getAttribute('aria-label'),
          hiddenRow: Boolean(document.querySelector('#hidden .ui-switch-row')),
          hiddenName: hiddenSwitch && hiddenSwitch.getAttribute('aria-label'),
-         iconName: document.querySelector('#icon button').getAttribute('aria-label'),
+         iconName: (document.querySelector('#icon button') || { getAttribute: () => undefined }).getAttribute('aria-label'),
          iconGlyph: Boolean(document.querySelector('#icon button svg')),
-         iconText: document.querySelector('#icon button').textContent,
+         iconText: (document.querySelector('#icon button') || {}).textContent,
          menuButton: (document.querySelector('#menu button.stacki-kit-menu-button') || { getAttribute: () => undefined }).getAttribute('aria-label'),
        };
      })()\`;
      const refill = \`(async () => { try {
        const tick = () => new Promise((resolve) => setTimeout(resolve, 50));
-       // Escape closes a popup after its exit motion.
-       const settle = () => new Promise((resolve) => setTimeout(resolve, 400));
+       // Waits, bounded (pollCountMax ticks of 50 ms), until read() gives a truthy value, and
+       // returns the last value either way: a slow runner opens, closes and fades a popup
+       // later than any fixed pause, and a real failure still reaches the checks below.
+       const pollCountMax = 100;
+       const until = async (read) => {
+         let value = read();
+         for (let poll = 0; poll < pollCountMax && !value; poll += 1) {
+           await tick();
+           value = read();
+         }
+         return value;
+       };
+       // The finite animations and transitions running now, finished or at a bound.
+       const motionOver = () => Promise.race([
+         Promise.all(document.getAnimations().filter((animation) => animation.effect && animation.effect.getTiming().iterations !== Infinity).map((animation) => animation.finished)),
+         new Promise((resolve) => setTimeout(resolve, 5000)),
+       ]);
        const button = document.getElementById('button');
        button.textContent = 'Save';
        const dropdown = document.getElementById('dropdown');
        dropdown.replaceChildren(new Option('Three', 'three'), new Option('Four', 'four'));
        dropdown.value = 'four';
-       await tick();
+       await until(() => button.innerText.trim() === 'Save' && (dropdown.querySelector('.dd-trigger') || {}).textContent === 'Four');
        const afterRefill = {
          button: (button.querySelector('button') || {}).textContent,
          buttonShown: button.innerText.trim(),
@@ -125,7 +142,7 @@ const check = (what, condition, detail) => {
        };
        dropdown.options = ['red', { value: 'blue', label: 'Blue sky', group: 'Cool' }, { value: 'grey', disabled: true }];
        dropdown.value = 'blue';
-       await tick();
+       await until(() => ((dropdown.querySelector('.dd-trigger') || {}).textContent || '').includes('Blue'));
        const asData = {
          trigger: (dropdown.querySelector('.dd-trigger') || {}).textContent,
          options: dropdown.options,
@@ -141,7 +158,7 @@ const check = (what, condition, detail) => {
        }
        dropdown.options = undefined;
        dropdown.value = 'three';
-       await tick();
+       await until(() => ((dropdown.querySelector('.dd-trigger') || {}).textContent || '').includes('Three'));
        const backToChildren = {
          trigger: (dropdown.querySelector('.dd-trigger') || {}).textContent,
          options: dropdown.options.map((option) => option.value),
@@ -150,12 +167,12 @@ const check = (what, condition, detail) => {
        let toggles = 0;
        labelled.addEventListener('change', () => { toggles += 1; });
        labelled.querySelector('.ui-switch-row-label').click();
-       await tick();
+       await until(() => toggles > 0);
        const menu = document.getElementById('menu');
        let chosen = 'none';
        menu.addEventListener('select', (event) => { chosen = event.detail.value; });
        menu.querySelector('.stacki-kit-menu-button').click();
-       await tick();
+       await until(() => document.querySelectorAll('.stacki-kit-menu [role^="menuitem"]').length === 3);
        const rows = [...document.querySelectorAll('.stacki-kit-menu [role^="menuitem"]')];
        const checkedRow = rows.find((row) => row.getAttribute('aria-checked') === 'true');
        const opened = {
@@ -165,7 +182,9 @@ const check = (what, condition, detail) => {
          iconFirst: Boolean(rows[0] && rows[0].firstElementChild.classList.contains('dd-icon')),
        };
        rows[2].dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-       await settle();
+       // The highlight fades in: read its colours once the motion is over.
+       await tick();
+       await motionOver();
        const dangerRow = getComputedStyle(rows[2]);
        const danger = {
          fill: dangerRow.backgroundColor,
@@ -174,7 +193,7 @@ const check = (what, condition, detail) => {
          restText: getComputedStyle(rows[0]).color,
        };
        rows[2].click();
-       await tick();
+       await until(() => document.querySelector('.stacki-kit-menu') === null);
        const menuState = { opened, chosen, closed: document.querySelector('.stacki-kit-menu') === null, danger };
 
        const toggle = document.getElementById('toggle');
@@ -182,12 +201,10 @@ const check = (what, condition, detail) => {
        toggle.addEventListener('change', () => { toggleChanges += 1; });
        const pressedBefore = toggle.querySelector('button').getAttribute('aria-pressed');
        toggle.querySelector('button').click();
-       await settle();
-       // The fill fades in; slowed motion outlasts the sleep, so wait for it, within a bound.
-       await Promise.race([
-         Promise.all(document.getAnimations().map((animation) => animation.finished)),
-         new Promise((resolve) => setTimeout(resolve, 5000)),
-       ]);
+       // The fill fades in; slowed motion outlasts any sleep, so wait for it, within a bound.
+       await until(() => toggle.querySelector('button').getAttribute('aria-pressed') === 'true');
+       await tick();
+       await motionOver();
        const toggleButton = toggle.querySelector('button');
        const pressed = {
          before: pressedBefore,
@@ -199,8 +216,7 @@ const check = (what, condition, detail) => {
 
        const right = document.getElementById('right');
        right.querySelector('.stacki-kit-menu-button').click();
-       await settle();
-       const popup = document.querySelector('.stacki-kit-menu');
+       const popup = await until(() => document.querySelector('.stacki-kit-menu'));
        // Measure after the opening motion, which scales the popup: a fixed sleep is too
        // short when the Linux preflight slows motion, so wait until the popup's box holds
        // still across two reads. Bounded so a popup that never settles still fails.
@@ -226,13 +242,14 @@ const check = (what, condition, detail) => {
          rows: popup.querySelectorAll('[role^="menuitem"]').length,
        };
        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-       await settle();
+       // Escape closes a popup after its exit motion.
+       await until(() => document.querySelector('.stacki-kit-menu') === null);
        right.items = [{ kind: 'heading', label: 'Data' }, { value: 'a', label: 'A', shortcut: '⌘A' }, { kind: 'separator' }, { value: 'b', label: 'B', checked: true }];
        right.querySelector('.stacki-kit-menu-button').click();
-       await tick();
+       await until(() => document.querySelectorAll('.stacki-kit-menu .dd-list > *').length === 4);
        const asItems = [...document.querySelectorAll('.stacki-kit-menu .dd-list > *')].map((row) => row.getAttribute('role') + ':' + row.textContent);
        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-       await settle();
+       await until(() => document.querySelector('.stacki-kit-menu') === null);
        const badItems = [];
        for (const bad of [[{ kind: 'line' }], [{ value: 'a' }], [{ value: 'a', label: 'A', danger: 'yes' }]]) {
          try { right.items = bad; badItems.push('accepted'); } catch (error) { badItems.push(error.name); }
@@ -245,7 +262,7 @@ const check = (what, condition, detail) => {
        input.dataset.mark = 'kept';
        const closedShown = input.getBoundingClientRect().width;
        popover.querySelector('button').click();
-       await tick();
+       await until(() => document.querySelector('.stacki-kit-popover') && input.getBoundingClientRect().width > 0);
        const panel = document.querySelector('.stacki-kit-popover');
        const openState = {
          open: popover.open,
@@ -254,7 +271,7 @@ const check = (what, condition, detail) => {
          expanded: popover.querySelector('button').getAttribute('aria-expanded'),
        };
        document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-       await settle();
+       await until(() => document.querySelector('.stacki-kit-popover') === null);
        const closedState = {
          open: popover.open,
          back: popover.contains(document.getElementById('status')),
@@ -268,9 +285,13 @@ const check = (what, condition, detail) => {
        try {
          const win = new BrowserWindow({ show: false, width: 400, height: 500 });
          await win.loadFile(path.join(__dirname, 'app.html'));
-         await wait(400);
          const js = (code) => win.webContents.executeJavaScript(code);
-         const rest = await js(atRest);
+         // Every element drawn (bounded, test/helpers/waitFor.js), not a fixed pause after load.
+         const rest = (await pollUntil({
+           what: 'every kit element drawn',
+           read: () => js(atRest),
+           until: (seen) => typeof seen.button === 'string' && typeof seen.reset === 'string' && seen.trigger !== undefined && seen.iconName !== undefined && seen.menuButton !== undefined,
+         })).value;
          const changes = await js(refill);
          await js(\`(() => {
            window.searchEvents = [];
@@ -281,10 +302,11 @@ const check = (what, condition, detail) => {
            search.querySelector('input').focus();
          })()\`);
          win.webContents.insertText('pin');
-         await wait(200);
+         const lastEvent = () => js('window.searchEvents[window.searchEvents.length - 1]');
+         await pollUntil({ what: 'the typed change heard', read: lastEvent, until: (event) => event === 'change:pin' });
          win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
          win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
-         await wait(200);
+         await pollUntil({ what: 'the clearing change heard', read: lastEvent, until: (event) => event === 'change:' });
          const search = await js(\`({ events: window.searchEvents, value: document.getElementById('search').value, field: document.querySelector('#search input').value })\`);
          win.destroy();
          console.log(JSON.stringify({ rest, changes, search }));

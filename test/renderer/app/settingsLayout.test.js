@@ -6,8 +6,8 @@
 // z-index, so a tip appended to the body was invisible behind Settings (the bug this test pins).
 // Method: jsdom has neither layout nor a top layer, so this bundles the real SettingsLayout, Switch, Dropdown and
 // InfoHint for the browser, mounts them with React in a modal <dialog> under the app's real stylesheets in a hidden
-// Chromium window (as splitButtonStyle.test.js does), moves a real pointer over each (i) with sendInputEvent, waits for
-// the tooltip delay, and reads boxes, computed styles and the tooltip. Set STACKI_SETTINGS_SHOTS to a folder to also
+// Chromium window (as splitButtonStyle.test.js does), moves a real pointer over each (i) with sendInputEvent, waits
+// (bounded, test/helpers/waitFor.js) for the tooltip to show and settle, and reads boxes, computed styles and the tooltip. Set STACKI_SETTINGS_SHOTS to a folder to also
 // write PNGs (the Editor settings, Roles permissions and Audits rows with a tip showing), so the look can be checked by eye.
 const fs = require('fs');
 const path = require('path');
@@ -105,12 +105,22 @@ const path = require('path');
 const fs = require('fs');
 app.disableHardwareAcceleration();
 app.on('window-all-closed', () => app.quit());
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const { MOTION_SETTLED_EXPRESSION, pollUntil, waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+// A page error or a wait past its bound ends the probe with its message, not at the spawn bound.
+process.on('unhandledRejection', (error) => {
+  console.error('probe failed: ' + String((error && error.stack) || error));
+  app.exit(1);
+});
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 1000, height: 760 });
   await win.loadFile(path.join(__dirname, 'index.html'));
-  await sleep(400);
   const js = (code) => win.webContents.executeJavaScript(code);
+  await waitFor({
+    what: 'the settings page drawn in its modal',
+    read: () => js("document.querySelectorAll('.app-settings-section').length > 1 && document.querySelector('dialog').matches(':modal')"),
+    until: (drawn) => drawn,
+  });
+  await pollUntil({ what: 'the opening motion over', read: () => js(MOTION_SETTLED_EXPRESSION), until: (settled) => settled });
   const measured = await js(\`(() => {
     const box = (element) => element.getBoundingClientRect();
     const style = (element) => getComputedStyle(element);
@@ -155,7 +165,11 @@ app.whenReady().then(async () => {
     if (!point) { tips[name] = { missing: true }; continue; }
     win.webContents.sendInputEvent({ type: 'mouseMove', x: point.x - 30, y: point.y });
     win.webContents.sendInputEvent({ type: 'mouseMove', x: point.x, y: point.y });
-    await sleep(900);
+    // The tip opens after its hover delay and fades in: wait, bounded, until it shows and its
+    // motion is over (a slow runner outlasts any fixed pause); the checks read it either way.
+    const tipShown = "(() => { const tip = document.querySelector('[role=tooltip]'); return tip !== null && Number(getComputedStyle(tip).opacity) > 0; })()";
+    await pollUntil({ what: 'the ' + name + ' tip shown', read: () => js(tipShown), until: (shown) => shown });
+    await pollUntil({ what: 'the ' + name + ' tip settled', read: () => js(MOTION_SETTLED_EXPRESSION), until: (settled) => settled });
     tips[name] = await js(\`(() => {
       const tip = document.querySelector('[role=tooltip]');
       if (!tip) return { shown: false };
@@ -167,12 +181,14 @@ app.whenReady().then(async () => {
     })()\`);
     await shoot('settings-tip-' + name);
     win.webContents.sendInputEvent({ type: 'mouseMove', x: 5, y: 5 });
-    await sleep(100);
+    await pollUntil({ what: 'the ' + name + ' tip gone', read: () => js("document.querySelector('[role=tooltip]') === null"), until: (gone) => gone });
   }
   // Keyboard focus shows the tip with no wait.
   win.webContents.focus();
   await js(\`document.querySelector(\${JSON.stringify(targets.track)}).focus()\`);
-  await sleep(50);
+  // "At once": polled for under the 500 ms hover delay, so a slow frame is tolerated but a
+  // tip that waited for the delay is not.
+  await pollUntil({ what: 'the focus tip', read: () => js("document.querySelector('[role=tooltip]') !== null"), until: (shown) => shown, pollCountMax: 8 });
   const focusTip = await js(\`(() => { const tip = document.querySelector('[role=tooltip]'); return tip ? { shown: true, text: tip.textContent } : { shown: false }; })()\`);
   await shoot('settings-tip-focus');
   console.log(JSON.stringify({ measured, tips, focusTip }));
