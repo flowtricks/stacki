@@ -221,6 +221,7 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
 
   async function begin() {
     await driver.waitForApp();
+    await driver.setPageFocus('focused');
     await installRecorder(driver.contents);
     await driver.sleep(500);
     await driver.settle();
@@ -353,12 +354,16 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
         return true;
       case 'window-blur': {
         await driver.note({ kind: 'action', action: 'blur window' });
+        // The page holds emulated focus (begin), which no other window can take: drop it so the
+        // window really blurs, then give it back as a person's return to the window would.
+        await driver.setPageFocus('unfocused');
         const other = new electron.BrowserWindow({ width: 200, height: 120, show: true });
         other.focus();
         await driver.sleep(300);
         other.destroy();
         window.focus();
         driver.contents.focus();
+        await driver.setPageFocus('focused');
         return true;
       }
       case 'scroll': {

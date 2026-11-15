@@ -14,6 +14,7 @@
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const assert = require('node:assert/strict');
 
 const CANVAS_WAIT_MS_MAX = 120000;
 const CANVAS_POLL_MS = 250;
@@ -281,12 +282,31 @@ function createDriver(window, project) {
   }
 
   let debuggerAttached = false;
-  async function setCpuThrottling(rate) {
+  const devtools = (method, parameters) => {
     if (!debuggerAttached) {
       contents.debugger.attach('1.3');
       debuggerAttached = true;
     }
-    await contents.debugger.sendCommand('Emulation.setCPUThrottlingRate', { rate });
+    return contents.debugger.sendCommand(method, parameters);
+  };
+  async function setCpuThrottling(rate) {
+    await devtools('Emulation.setCPUThrottlingRate', { rate });
+  }
+
+  // A person types into a window they are looking at, which the system has focused. The soak's
+  // window often is not: it opens behind the terminal, or another app takes the front while a
+  // long run goes on. In an unfocused page Chromium moves document.activeElement but fires no
+  // focus or blur events, so `element.blur()` commits nothing: Enter in a field only wrote its
+  // live draft, and every clear, undo and redo after it compared against a set that never
+  // happened (the SP-06 report). Focus emulation gives the page the focus the person's window
+  // has; the window-blur exit turns it off to take that focus away for real.
+  async function setPageFocus(state) {
+    assert(state === 'focused' || state === 'unfocused', `setPageFocus: unknown state ${state}`);
+    await devtools('Emulation.setFocusEmulationEnabled', { enabled: state === 'focused' });
+    if (state === 'focused') {
+      const focused = await evaluate('document.hasFocus()');
+      assert(focused === true, 'setPageFocus: the page has focus once focus is emulated');
+    }
   }
 
   // The window's real painted frames while `act` runs and for `durationMs` after, cropped to
@@ -349,6 +369,7 @@ function createDriver(window, project) {
     readProjectFile,
     projectSnapshot,
     setCpuThrottling,
+    setPageFocus,
     screenshot,
     film,
   };
