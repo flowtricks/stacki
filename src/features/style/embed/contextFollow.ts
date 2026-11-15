@@ -36,8 +36,7 @@ export function parseFollowMode(stored: unknown): FollowMode {
   if (typeof parsed !== 'object' || parsed === null) {
     return 'follow';
   }
-  const record = parsed as Record<string, unknown>;
-  return record['follow'] === false ? 'pinned' : 'follow';
+  return Reflect.get(parsed, 'follow') === false ? 'pinned' : 'follow';
 }
 
 /** The record for a mode, or undefined for the default, which is stored as nothing. */

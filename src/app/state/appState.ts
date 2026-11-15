@@ -357,6 +357,9 @@ export function useWindowState() {
   // features/style/model/queryWidth.ts). Counted, so asking for the same width
   // twice still applies it after the canvas was resized by hand in between.
   const [canvasWidthRequest, setCanvasWidthRequest] = useState<CanvasWidthRequest | undefined>(undefined);
+  // The width the canvas is actually drawn at (fit, device and custom alike), reported by the
+  // preview, which the style panel's context dropdown follows (style/embed/contextFollow.ts).
+  const [canvasWidthPx, setCanvasWidthPx] = useState<number | undefined>(undefined);
   // The device moves to `custom` in the same update as the request, so the toolbar's
   // active device, the readout and the frame change in one commit; the pane applies the
   // width while rendering it (PreviewPane useCanvasWidthRequest), not an effect later.
@@ -418,6 +421,8 @@ export function useWindowState() {
     setCreateRequest,
     setDevice,
     canvasWidthRequest,
+    canvasWidthPx,
+    setCanvasWidthPx,
     requestCanvasWidth,
     showDesktopCanvas,
     setFileText,

@@ -78,6 +78,8 @@ interface PreviewPaneProps {
   /** A width asked of the canvas from outside (the style panel's media query
    *  pick), applied as a typed width is: a `custom` device at that width. */
   readonly canvasWidthRequest?: CanvasWidthRequest | undefined;
+  /** Told the width the canvas is drawn at, in CSS pixels, whenever it changes (undefined: no canvas, or not measured yet). */
+  readonly onViewportWidth?: ((widthPx: number | undefined) => void) | undefined;
   /** The open project: the column guide's settings are kept per project. */
   readonly projectPath?: string | undefined;
   /** More paths for the canvas to measure (the elements app overlays anchor to). */
@@ -106,6 +108,9 @@ export default function PreviewPane(props: PreviewPaneProps) {
   const { widths: breakpoints } = useProjectBreakpoints(props.projectPath);
   const sizing = usePreviewSizing(props.device, dimensions, breakpoints, props.onDevice);
   useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
+  // A fluid canvas is 1px wide until its container is measured: that is not a width to follow.
+  const measured = props.device !== 'canvas' && (sizing.width !== undefined || sizing.wrapWidth > 0);
+  useReportedWidth(measured ? sizing.viewport.width : undefined, props.onViewportWidth);
   const columnGuide = useColumnGuide({
     projectKey: props.projectPath,
     metrics: runtime.guide,
@@ -318,4 +323,16 @@ function PreviewPlaceholder({ props }: { readonly props: PreviewPaneProps }) {
       )}
     </div>
   );
+}
+
+// Tells the host the canvas width when it changes, and that there is none once the pane goes.
+// The callback is read through a ref, so a host that passes a new function each render
+// reports nothing extra.
+function useReportedWidth(widthPx: number | undefined, report: ((widthPx: number | undefined) => void) | undefined): void {
+  const reportRef = React.useRef(report);
+  reportRef.current = report;
+  React.useEffect(() => {
+    reportRef.current?.(widthPx);
+  }, [widthPx]);
+  React.useEffect(() => () => reportRef.current?.(undefined), []);
 }

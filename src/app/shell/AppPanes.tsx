@@ -103,6 +103,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         device={app.device}
         onDevice={app.setDevice}
         canvasWidthRequest={app.canvasWidthRequest}
+        onViewportWidth={app.setCanvasWidthPx}
         projectPath={app.project.path}
         judgeEvent={app.judgeEvent}
         onCanvasNotice={app.onCanvasNotice}
@@ -529,6 +530,7 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       }}
       onSelectNode={app.setSelectedId}
       onCanvasWidth={app.requestCanvasWidth}
+      canvasWidthPx={app.canvasWidthPx}
       onDesktopCanvas={app.showDesktopCanvas}
       onRecordUndo={app.pushCommand}
       // Each write names the element the panel is SHOWING, which is not the app's selection

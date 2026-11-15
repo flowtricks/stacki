@@ -52,7 +52,10 @@ export function followedContextKey(contexts: readonly FollowContext[], widthPx: 
 }
 
 // Strictly more specific, so a tie keeps the first listed.
-function moreSpecific(candidate: { readonly lowerPx: number; readonly upperPx: number }, held: { readonly lowerPx: number; readonly upperPx: number }): boolean {
+function moreSpecific(
+  candidate: { readonly lowerPx: number; readonly upperPx: number },
+  held: { readonly lowerPx: number; readonly upperPx: number },
+): boolean {
   const candidateSpan = candidate.upperPx - candidate.lowerPx;
   const heldSpan = held.upperPx - held.lowerPx;
   if (candidateSpan !== heldSpan) {

@@ -26,6 +26,8 @@ interface StylePanelProps {
   readonly model?: { readonly nodes: HostState['nodes'] } | undefined;
   readonly node?: { readonly id: string } | undefined;
   readonly device?: string;
+  /** The canvas's rendered width, which the context dropdown follows (HostState). */
+  readonly canvasWidthPx?: number | undefined;
   readonly pathOf?: HostState['pathOf'];
   readonly onWriteStyleNode?: HostState['writeStyleNode'] | undefined;
   readonly onSelectNode?: HostState['selectNode'] | undefined;
@@ -577,6 +579,7 @@ function hostState(props: StylePanelProps, inputs: HostInputs): HostState {
     selectedId: props.node?.id,
     pathOf: props.pathOf,
     device: props.device ?? 'desktop',
+    canvasWidthPx: props.canvasWidthPx,
     files,
     astroFiles,
     openFilePath: props.openFilePath,

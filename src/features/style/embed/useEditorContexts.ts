@@ -32,6 +32,8 @@ import {
 import { reachOfWrapper, wrapperOnLayer, type WrapperReach } from '../model/queryReach';
 import { canvasWidthForQuery } from '../model/queryWidth';
 import { baseCanvasTarget } from '../model/baseWidth';
+import { followedContextKey } from '../model/followWidth';
+import { useCanvasWidthPx, useFollowMode } from './contextFollow';
 import { isGlobalSelector, type MatchTarget } from '../model/selectors';
 import { selectedInstanceMarkup, selectedInstanceMarkupPending, selectedInstanceScope } from '../model/webflowElement';
 import { rememberChipProvenance, rememberedGreenChips } from '../model/chipProvenanceMemory';
@@ -158,7 +160,13 @@ export function useStyleContexts(
       setContext(currentContext.key);
     }
   }, [currentContext, context, stickyContextRef, setContext]);
-  useDesktopReturnsToBase(currentContext, setContext);
+  // While the panel follows the canvas width, the device change moves the target by width (it
+  // is the canvas width that changed); the Desktop-returns-to-Base rule is for a panel that
+  // does not follow, and would fight the follow here.
+  const [followMode] = useFollowMode(getHost().projectPath);
+  const canvasWidthKnown = useCanvasWidthPx() !== undefined;
+  const followsCanvas = followMode === 'follow' && canvasWidthKnown;
+  useDesktopReturnsToBase({ currentContext, followsCanvas }, setContext);
   // The selection moved somewhere the chosen nested query cannot reach: writing
   // there would do nothing, so the panel goes back to Base.
   const contextReach = reachOf(context).kind;
@@ -244,7 +252,12 @@ export function useWrapperReach(
 // (model/deviceContext.ts says why and which contexts stay). It reacts to the
 // host's device CHANGING to desktop: pressing Desktop while already on it is no
 // switch, and so changes nothing.
-function useDesktopReturnsToBase(currentContext: StyleContext, setContext: (context: ContextKey) => void): void {
+function useDesktopReturnsToBase(
+  { currentContext, followsCanvas }: { readonly currentContext: StyleContext; readonly followsCanvas: boolean },
+  setContext: (context: ContextKey) => void,
+): void {
+  const followsCanvasRef = useRef(followsCanvas);
+  followsCanvasRef.current = followsCanvas;
   // Read through a ref so the subscription is made once, not on every context change.
   const currentContextRef = useRef(currentContext);
   currentContextRef.current = currentContext;
@@ -256,6 +269,9 @@ function useDesktopReturnsToBase(currentContext: StyleContext, setContext: (cont
         return;
       }
       deviceLast = device;
+      if (followsCanvasRef.current) {
+        return;
+      }
       const next = contextAfterDevice(currentContextRef.current, deviceTargetOf(device));
       switch (next.kind) {
         case 'base':
@@ -694,37 +710,51 @@ export function useContextChange(
   selectorPick: ReturnType<typeof useSelectorPick>,
   styleContextsHook: ReturnType<typeof useStyleContexts>,
 ) {
-  const { pendingDefaultRef, setContext } = selectionState;
+  const { context, pendingDefaultRef, setContext } = selectionState;
   const { nativeModel } = nativeState;
   const { model } = elementTokens;
   const { activeSelector } = activeSelectorHook;
   const { selectActiveSelector } = selectorPick;
   const { styleContexts } = styleContextsHook;
+  const [followMode, setFollowMode] = useFollowMode(getHost().projectPath);
+  const canvasWidthPx = useCanvasWidthPx();
+  // The row that holds at the canvas's width, whether or not the panel is following it.
+  const matchedKey = useMemo(
+    () => (canvasWidthPx === undefined ? undefined : followedContextKey(styleContexts, canvasWidthPx, ROOT_FONT_SIZE_PX)),
+    [canvasWidthPx, styleContexts],
+  );
 
   // Switching context auto-selects a selector that has styles in the new query:
   // keep the current pick if it's styled there, otherwise jump to the strongest.
-  const onContextChange = useCallback(
-    (next: ContextKey) => {
-      pendingDefaultRef.current = false;
+  // `canvas` says whether the switch moves the canvas to the query's width: a person's pick
+  // does; following the canvas, or unchecking the matched query, must not (the canvas is
+  // where the person put it, and it is the target that moves, never the other way round).
+  const changeContext = useCallback(
+    (next: ContextKey, options: { readonly canvas: 'move' | 'keep'; readonly selector: 'repick' | 'keep' }) => {
+      if (options.selector === 'repick') {
+        pendingDefaultRef.current = false;
+      }
       setContext(next);
       const nextContext = styleContexts.find((entry) => entry.key === next);
       // A picked media query moves the canvas inside it, so the styles written
       // there show (model/queryWidth.ts). The canvas becomes a `custom` width,
       // never `desktop`, so this can't trip the Desktop-returns-to-Base rule
       // (model/deviceContext.ts) and undo the pick it was made for.
-      if (nextContext?.embedAtContext) {
-        const width = canvasWidthForQuery(nextContext.embedAtContext, ROOT_FONT_SIZE_PX);
-        if (width.kind === 'width') {
-          getHost().setCanvasWidth?.(width.widthPx);
+      if (options.canvas === 'move') {
+        if (nextContext?.embedAtContext) {
+          const width = canvasWidthForQuery(nextContext.embedAtContext, ROOT_FONT_SIZE_PX);
+          if (width.kind === 'width') {
+            getHost().setCanvasWidth?.(width.widthPx);
+          }
+        } else if (next === '') {
+          // Base moves the canvas to where Base is the layer in effect, judged by the
+          // queries this same dropdown lists for the element (styleContexts): below the
+          // smallest of mobile-first queries, above the largest of desktop-first ones, else
+          // the desktop preset through the toolbar's own desktop action (model/baseWidth.ts).
+          showBaseOnCanvas(styleContexts.map((entry) => entry.embedAtContext ?? ''));
         }
-      } else if (next === '') {
-        // Base moves the canvas to where Base is the layer in effect, judged by the
-        // queries this same dropdown lists for the element (styleContexts): below the
-        // smallest of mobile-first queries, above the largest of desktop-first ones, else
-        // the desktop preset through the toolbar's own desktop action (model/baseWidth.ts).
-        showBaseOnCanvas(styleContexts.map((entry) => entry.embedAtContext ?? ''));
       }
-      if (!nextContext || !model) {
+      if (options.selector === 'keep' || !nextContext || !model) {
         return;
       }
       // Only selectors with styles IN this context (drop the dimmed other-context ones).
@@ -748,5 +778,49 @@ export function useContextChange(
     },
     [styleContexts, model, nativeModel, activeSelector, selectActiveSelector, pendingDefaultRef, setContext],
   );
-  return { onContextChange };
+  const changeContextRef = useRef(changeContext);
+  changeContextRef.current = changeContext;
+
+  // The dropdown's pick. Three different things can happen to a row press, and they are told
+  // apart here, in one place:
+  //   - the checked, matched row while following: UNCHECK. The target becomes Base and the
+  //     panel is pinned; the canvas stays exactly where it is, so edits apply to every size
+  //     without resizing the canvas;
+  //   - the matched row while pinned: CHECK AGAIN. The panel follows the canvas again; the
+  //     canvas is already inside that query, so it does not move either;
+  //   - any other row, Base included: a choice. The panel is pinned to it and the canvas moves
+  //     to show it (Base lands where Base is the layer in effect), as picking always has.
+  const onContextChange = useCallback(
+    (next: ContextKey) => {
+      if (followMode === 'follow' && next !== '' && next === context && next === matchedKey) {
+        setFollowMode('pinned');
+        changeContext('', { canvas: 'keep', selector: 'keep' });
+        return;
+      }
+      if (followMode === 'pinned' && next !== '' && next === matchedKey) {
+        setFollowMode('follow');
+        changeContext(next, { canvas: 'keep', selector: 'keep' });
+        return;
+      }
+      if (followMode === 'follow' && canvasWidthPx !== undefined) {
+        setFollowMode('pinned');
+      }
+      changeContext(next, { canvas: 'move', selector: 'repick' });
+    },
+    [followMode, context, matchedKey, canvasWidthPx, changeContext, setFollowMode],
+  );
+
+  // While following, the target is the row that holds at the canvas's width. It moves the
+  // target only: no write, no canvas move, and the active selector stays where it is. The
+  // dropdown, if open, just checks the new row in place.
+  const following = followMode === 'follow' && matchedKey !== undefined;
+  useEffect(() => {
+    if (following && matchedKey !== undefined && matchedKey !== context) {
+      changeContextRef.current(matchedKey, { canvas: 'keep', selector: 'keep' });
+    }
+  }, [following, matchedKey, context]);
+
+  // Pinned only means something where there is a canvas width to follow.
+  const pinned = followMode === 'pinned' && canvasWidthPx !== undefined;
+  return { onContextChange, pinned };
 }

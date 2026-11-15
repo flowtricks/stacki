@@ -156,6 +156,7 @@ export const messages = {
   'styleModel.embed.branch.pickerLabel': 'Ramo do atributo de estilo a editar',
   'styleModel.embed.card.addIn': 'Adicionar estilos personalizados em:',
   'styleModel.embed.card.addQuery': 'Adicionar consulta',
+  'styleModel.embed.card.pinned': 'Fixado: redimensionar a tela não muda o destino',
   'styleModel.embed.card.context': 'Contexto de estilo',
   'styleModel.embed.card.editQuery': 'Editar {query}',
   'styleModel.embed.card.fetching': 'Buscando embeds…',

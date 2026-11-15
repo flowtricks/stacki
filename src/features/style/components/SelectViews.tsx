@@ -207,6 +207,7 @@ export function SelectTrigger<T extends string>({
       <span className="u-select-value">
         {icon}
         <OptionLabel label={triggerLabel} overline={triggerOverline} tag={triggerOverline === undefined ? undefined : triggerTag} />
+        {present(selectedOption?.triggerMark) ? <span className="u-select-mark">{selectedOption?.triggerMark}</span> : undefined}
       </span>
       {CHEVRON}
     </button>

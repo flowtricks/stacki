@@ -156,6 +156,7 @@ export const messages = {
   'styleModel.embed.branch.pickerLabel': 'Rama del atributo de estilo que se edita',
   'styleModel.embed.card.addIn': 'Añadir estilos personalizados en:',
   'styleModel.embed.card.addQuery': 'Añadir consulta',
+  'styleModel.embed.card.pinned': 'Fijado: cambiar el tamaño del lienzo no cambia el destino',
   'styleModel.embed.card.context': 'Contexto de estilo',
   'styleModel.embed.card.editQuery': 'Editar {query}',
   'styleModel.embed.card.fetching': 'Obteniendo incrustaciones…',

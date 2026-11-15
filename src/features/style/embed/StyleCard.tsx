@@ -9,6 +9,7 @@ import Select from '../components/Select';
 import type { SelectOption, SelectTag } from '../components/selectTypes';
 import { centralIcon } from '../../../ui/central/CentralIcon';
 import { homeRoundDoor as centralHomeRoundDoor } from '../../../ui/central/centralGeometry';
+import { PinIcon } from '../../../ui/Icons';
 import { groupContexts } from './contextGroups';
 import { getHost } from '../model/host';
 import { SelectorScopeContext } from '../model/selectorScope';
@@ -240,6 +241,16 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
       // The selectors written inside the query go under it, as they sit in the code.
       ...(info?.querySelectors === undefined ? {} : { subline: info.querySelectors }),
       icon: placement === 'base' ? <BaseContextIcon /> : breakpointIcon(styleContext.breakpoint ?? undefined),
+      // A held choice says so on the closed trigger, beside its name.
+      ...(card.contextPinned
+        ? {
+            triggerMark: (
+              <span title={translate('styleModel.embed.card.pinned')}>
+                <PinIcon />
+              </span>
+            ),
+          }
+        : {}),
       marked: info?.hasStyles ?? false,
       ...(uses > 0
         ? {

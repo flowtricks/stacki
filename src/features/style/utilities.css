@@ -1121,6 +1121,17 @@ body.is-scrubbing * {
 .u-select-label-line {
   font-size: var(--font-size-sm);
 }
+.u-select-mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+  color: var(--color-text-tertiary);
+}
+.u-select-mark svg {
+  width: 0.75rem;
+  height: 0.75rem;
+}
 .u-select-icon {
   flex: 0 0 auto;
   display: inline-flex;

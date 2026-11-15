@@ -600,6 +600,8 @@ export type StyleCardProps = {
   contextInfos: ContextInfo[];
   context: ContextKey;
   onContext: (context: ContextKey) => void;
+  /** The edit target is pinned to a choice rather than following the canvas width (contextFollow.ts); the trigger says so. */
+  contextPinned: boolean;
   onAddQuery: (query: string, mode: 'wrap' | 'nest') => void;
   onRenameQuery: (from: string, to: string) => void;
   /** How many blocks in the source stylesheet each query is written in — the

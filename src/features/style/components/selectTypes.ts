@@ -48,6 +48,8 @@ export type SelectOption<T extends string> = {
   /** Icon for the closed trigger when this option is selected. Falls back to
    *  `icon` — use when the trigger icon differs from the list-row icon. */
   triggerIcon?: ReactNode;
+  /** A small mark after the closed trigger's label when this option is selected (a pin: the choice is held, not followed). */
+  triggerMark?: ReactNode;
   /** Opaque tone token exposed on the trigger as `data-tone` when this option is
    *  selected, so the consumer can color the trigger per option (via its CSS). */
   tone?: string;
