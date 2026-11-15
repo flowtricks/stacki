@@ -37,7 +37,10 @@ const text = (element) => element.textContent.replace(/\s+/g, ' ').trim();
 
 // The open list as sections: loose rows and groups with their header and rows.
 function readList() {
-  return [...list().children].map((child) => {
+  // The scrolling region holds Base and the groups; the pinned footer is its sibling.
+  const scroll = list().querySelector(':scope > .u-select-scroll');
+  const footer = list().querySelector(':scope > .u-select-footer');
+  return [...scroll.children, ...footer.children].map((child) => {
     if (child.classList.contains('u-select-group')) {
       const heading = child.querySelector('.u-select-heading');
       const chip = heading.querySelector('.u-select-tag');
@@ -69,8 +72,10 @@ test('Base on top, queries grouped by source and sorted by width, Add query at t
     assert.ok(document.getElementById(group.getAttribute('aria-labelledby')), 'named by its header');
   }
   assert.equal(list().querySelectorAll('[role="option"] .u-select-tag').length, 0, 'no row repeats its stylesheet chip');
-  assert.ok(list().lastElementChild.classList.contains('is-footer'), 'Add query is the pinned footer');
-  assert.ok(list().firstElementChild.querySelector('svg'), 'Base carries its icon');
+  assert.ok(list().lastElementChild.classList.contains('u-select-footer'), 'Add query is pinned below the scrolling rows');
+  assert.ok(list().lastElementChild.lastElementChild.classList.contains('is-footer'), 'Add query is the footer row');
+  assert.ok(list().querySelector('.u-select-scroll .is-footer') === null, 'the footer is not inside the scrolling region');
+  assert.ok(list().querySelector('.u-select-scroll').firstElementChild.querySelector('svg'), 'Base carries its icon');
 });
 
 test("arrow keys run across the groups, skipping headers, and the trigger names the pick's source", async (context) => {
@@ -115,7 +120,13 @@ test('every row holds the same trailing column, a cut label titles itself, and t
   assert.equal(label.title, text(label), 'a cut label carries its whole text');
   const css = fs.readFileSync(repoPath('src/features/style/utilities.css'), 'utf8');
   assert.match(css, /\.embed-editor_context-select \.u-select-list \{\s*max-height: min\(20rem, 70vh\);/, 'the list is capped and scrolls inside');
-  assert.match(css, /\.u-select-option\.is-footer \{\s*position: sticky;/, 'with the footer pinned');
+  assert.match(
+    css,
+    /\.u-select-list\.has-footer > \.u-select-scroll \{[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;[^}]*scrollbar-gutter: stable;/,
+    'the rows scroll in a contained region',
+  );
+  assert.match(css, /\.u-select-list\.has-footer \{[^}]*overflow: hidden;/, 'and the footer is pinned outside it');
+  assert.doesNotMatch(css, /\.u-select-option\.is-footer \{[^}]*position: sticky/, 'never as a sticky row inside the scrolling list');
   assert.doesNotMatch(
     css.slice(css.indexOf('.u-select-group {'), css.indexOf('.embed-editor_context-select .u-select-option .u-select-subline')),
     /(^|[\s;{])border(-(top|right|bottom|left|width|style|color))?\s*:/,
@@ -141,4 +152,31 @@ test('grouping keeps loose queries after the groups and states its bound', () =>
     () => groupContexts(Array.from({ length: CONTEXT_GROUP_ENTRIES_MAX + 1 }, () => ({ context: context('x', 'one', ''), wrapper: undefined }))),
     /bounded/,
   );
+});
+
+test('the open list is positioned once on open; hovering rows and re-rendering never write its scroll position', async (context) => {
+  const panel = await mountStylePanel(FIXTURE);
+  context.after(() => panel.unmount());
+  const proto = panel.window.Element.prototype;
+  const original = Object.getOwnPropertyDescriptor(proto, 'scrollTop');
+  let writes = 0;
+  Object.defineProperty(proto, 'scrollTop', {
+    configurable: true,
+    get: original?.get,
+    set(value) {
+      writes += 1;
+      original?.set?.call(this, value);
+    },
+  });
+  context.after(() => (original ? Object.defineProperty(proto, 'scrollTop', original) : delete proto.scrollTop));
+  await panel.user('open the context dropdown', () => press(panel, trigger(panel)));
+  const opened = writes;
+  assert.ok(opened <= 1, `at most one positioning write on open (${opened})`);
+  const rows = [...list().querySelectorAll('[role="option"]')];
+  for (const row of rows) {
+    await panel.user('hover a row', () => press(panel, row, 'mouseover'));
+    row.dispatchEvent(new panel.window.MouseEvent('mouseenter', { bubbles: false }));
+  }
+  assert.equal(writes, opened, 'crossing rows with the pointer never scrolls the list');
+  assert.deepEqual(panel.popovers.spontaneousCloses(), [], "the list closed only by the person's choice");
 });

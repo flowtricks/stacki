@@ -1156,10 +1156,35 @@ body.is-scrubbing * {
   max-height: 268px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* The scrollbar takes its own column, so it never narrows the rows or shifts them
+     when it appears. */
+  scrollbar-gutter: stable;
   padding: var(--space-3);
   border-radius: var(--radius-xl);
   background: var(--surface-overlay);
   box-shadow: var(--shadow-lg);
+}
+/* A list with a pinned footer: the list is the frame and clips; the rows scroll in their own
+   region and the footer sits below it, so nothing ever slides under the footer. */
+.u-select-list.has-footer {
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.u-select-list.has-footer > .u-select-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: var(--space-3) var(--space-3) 0;
+}
+.u-select-list.has-footer > .u-select-footer {
+  flex: 0 0 auto;
+  padding: 0.5rem var(--space-3) var(--space-3);
 }
 /* Flip above the button when there's no room below. */
 .u-select-list.is-up {
@@ -1333,14 +1358,9 @@ body.is-scrubbing * {
 .u-select-group > .u-select-option.is-indented {
   padding-left: 0.75rem;
 }
-/* A footer row ("Add query") stays at the foot of the scrolling list, a step apart. */
+/* A footer row ("Add query") is pinned below the scrolling rows, outside them (.u-select-footer). */
 .u-select-option.is-footer {
-  position: sticky;
-  bottom: calc(-1 * var(--space-3));
-  z-index: 1;
   flex-shrink: 0;
-  margin-top: 0.5rem;
-  background: var(--surface-overlay);
 }
 .u-select-option.is-footer.is-active {
   background: var(--color-bg-surface-high);
@@ -1360,8 +1380,14 @@ body.is-scrubbing * {
 }
 /* A row outside a group sits in by the group's padding, so every row's trailing
    column (dot, check, pencil) stands at the same x, grouped or not. */
-.embed-editor_context-select .u-select-list > .u-select-option {
+.embed-editor_context-select .u-select-list > .u-select-option,
+.embed-editor_context-select .u-select-scroll > .u-select-option,
+.embed-editor_context-select .u-select-footer > .u-select-option {
   margin-inline: 0.25rem;
+}
+/* The group cards and rows are the scroll region's own flow; its gap is the list's. */
+.embed-editor_context-select .u-select-scroll {
+  gap: 0.25rem;
 }
 .embed-editor_context-select .u-select-option .u-select-label,
 .embed-editor_context-select .u-select-option .u-select-label-line {

@@ -1,0 +1,173 @@
+// Goal: the style-context dropdown scrolls like a native menu. Its pinned "Add query" footer is
+// never overlapped by the rows (the last group card is fully reachable and fully visible at the
+// end of the scroll), only the rows scroll (one scrollbar, no scroll chaining to the panel
+// behind), and the list never moves by itself: not on open, not when the pointer crosses a
+// partly hidden row, and not when the options re-render while it is open.
+//
+// Method: layout is a browser question, so this runs in a real Electron window (the pattern of
+// popoverDropdown.test.js; skipped without Electron). It mounts the real Select with the
+// context dropdown's rows (a Base row, a group of three width queries with a pencil, a second
+// group with a monospace subline, more groups so the list scrolls, and the footer) under the
+// real tokens and stylesheets, then measures rects and scrollTop. Presses are dispatched
+// events; every wait polls observable state (test/helpers/waitFor.js). Nothing here is
+// wall-clock dependent and no real project is touched.
+
+const fs = require('fs');
+const path = require('path');
+const { ROOT, repoPath } = require('../../helpers/sources.js');
+
+const failures = [];
+let checked = 0;
+const check = (what, condition, detail) => {
+  checked++;
+  if (!condition) {
+    failures.push(`  ${what}${detail ? `\n    ${detail}` : ''}`);
+  }
+};
+
+(async () => {
+  const esbuild = require('esbuild');
+  const buildDirectory = repoPath('node_modules/.stacki-test/context-scroll');
+  fs.mkdirSync(buildDirectory, { recursive: true });
+  const entry = `
+    import React, { useState } from 'react'
+    import { createRoot } from 'react-dom/client'
+    import Select from './src/features/style/components/Select'
+    import './src/features/style/tokens.css'
+    import './src/features/style/utilities.css'
+    import './src/features/style/embedEditor.css'
+
+    const pencil = { icon: <span>p</span>, label: 'Edit', onSelect: () => {} }
+    const build = (rev) => {
+      const options = [{ value: '', label: 'Base' }]
+      const heading = (value, label) => ({ value, label, heading: true, group: true })
+      options.push(heading('g0', 'Grid .grid'))
+      for (const [i, width] of ['30rem', '48rem', '64rem'].entries()) {
+        options.push({ value: 'w' + i, label: '@media (width >= ' + width + ')', indent: true, marked: true, action: pencil })
+      }
+      for (let g = 1; g <= 3; g += 1) {
+        options.push(heading('g' + g, 'src/styles/s' + g + '.css'))
+        options.push({ value: 'm' + g, label: '@media (prefers-reduced-motion: reduce)', indent: true, subline: ['*, ::before, ::after'], marked: rev >= 0 })
+      }
+      options.push({ value: '__add', label: 'Add query', footer: true })
+      return options
+    }
+
+    function Harness() {
+      const [value, setValue] = useState('')
+      const [rev, setRev] = useState(0)
+      window.__rev = setRev
+      return (
+        <div className="embed-editor_root" style={{ width: 320, margin: '40px 20px' }}>
+          <Select className="embed-editor_context-select" value={value} options={build(rev)} onChange={setValue} ariaLabel="Context" />
+        </div>
+      )
+    }
+    createRoot(document.getElementById('root')).render(<Harness />)
+  `;
+  await esbuild.build({
+    stdin: { contents: entry, resolveDir: ROOT, loader: 'jsx' },
+    outfile: path.join(buildDirectory, 'bundle.js'),
+    bundle: true,
+    format: 'iife',
+    jsx: 'automatic',
+    logLevel: 'silent',
+  });
+  fs.writeFileSync(
+    path.join(buildDirectory, 'index.html'),
+    '<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="bundle.css">' +
+      '<style>body{margin:0;background:#111;height:2000px}</style><div id="root"></div><script src="bundle.js"></script>',
+  );
+  const electronPath = (() => {
+    try {
+      return require('electron');
+    } catch {
+      return undefined;
+    }
+  })();
+  if (typeof electronPath !== 'string') {
+    console.log('context-dropdown-scroll: skipped, no Electron to lay it out in');
+    return;
+  }
+
+  const scriptPath = path.join(buildDirectory, 'probe.js');
+  fs.writeFileSync(
+    scriptPath,
+    `const { app, BrowserWindow } = require('electron');
+     app.on('window-all-closed', () => app.quit());
+     app.whenReady().then(async () => {
+       const win = new BrowserWindow({ show: false, width: 700, height: 600 });
+       win.webContents.on('console-message', (...a) => console.error('CONSOLE ' + JSON.stringify(a).slice(0, 400)));
+       await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
+       const js = (code) => win.webContents.executeJavaScript(code).catch((error) => { console.error('PROBE FAIL ' + String(error).slice(0, 300) + ' IN ' + code.slice(0, 120)); throw error; });
+       const { MOTION_SETTLED_EXPRESSION, waitFor: pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+       const settled = (what) => pollUntil({ what, read: () => js(MOTION_SETTLED_EXPRESSION), until: (still) => still });
+       await pollUntil({ what: 'trigger drawn', read: () => js("document.querySelector('.u-select-button') !== null"), until: (drawn) => drawn });
+       // Helpers inside the page. The scroller is the nearest scrolling ancestor of the first row.
+       await js(\`window.__q = {
+         scroller() {
+           let el = document.querySelector('.u-select-list [role=option]');
+           while (el && el.parentElement) { el = el.parentElement; const o = getComputedStyle(el).overflowY; if ((o === 'auto' || o === 'scroll') && el.scrollHeight > el.clientHeight) return el; if (el.classList.contains('u-select-list')) break; }
+           return document.querySelector('.u-select-list');
+         },
+         footer() { return document.querySelector('.u-select-option.is-footer'); },
+         rects() {
+           const s = window.__q.scroller(), f = window.__q.footer(), l = document.querySelector('.u-select-list');
+           const groups = [...document.querySelectorAll('.u-select-group')];
+           const last = groups[groups.length - 1].getBoundingClientRect();
+           const sr = s.getBoundingClientRect(), fr = f.getBoundingClientRect(), lr = l.getBoundingClientRect();
+           return { scrollTop: s.scrollTop, scrollMax: s.scrollHeight - s.clientHeight, scrollerBottom: sr.bottom, scrollerIsList: s === l,
+             footerTop: fr.top, footerBottom: fr.bottom, lastGroupBottom: last.bottom, lastGroupTop: last.top, listTop: lr.top, listBottom: lr.bottom, listHeight: lr.height };
+         },
+       }; true\`);
+       const out = {};
+       await js("document.querySelector('.u-select-button').click(); true");
+       await pollUntil({ what: 'list open', read: () => js("document.querySelector('.u-select-list') !== null"), until: (open) => open });
+       await settled('menu opened');
+       out.dbg = await js("JSON.stringify({g: document.querySelectorAll('.u-select-group').length, f: !!document.querySelector('.is-footer'), l: !!document.querySelector('.u-select-list'), h: document.body.innerHTML.slice(0,300)})"); console.error(out.dbg);
+       out.open = await js('window.__q.rects()');
+       out.listStyle = await js("(() => { const s = window.__q.scroller(); const c = getComputedStyle(s); return { overscroll: c.overscrollBehaviorY, overflowY: c.overflowY, gutter: c.scrollbarGutter } })()");
+       out.scrollers = await js("(() => { let n = 0; for (const el of document.querySelectorAll('.u-select-list, .u-select-list *')) { const o = getComputedStyle(el).overflowY; if ((o === 'auto' || o === 'scroll') && el.scrollHeight > el.clientHeight) n += 1; } return n })()");
+       // Scroll to the end: the last card must end above the footer.
+       await js("(() => { const s = window.__q.scroller(); s.scrollTop = s.scrollHeight; return true })()");
+       out.end = await js('window.__q.rects()');
+       // Hover a row that is partly hidden at the foot: the list must not move.
+       await js("(() => { const s = window.__q.scroller(); s.scrollTop = 40; return true })()");
+       const before = await js('window.__q.rects().scrollTop');
+       await js("(() => { const rows = [...document.querySelectorAll('.u-select-list [role=option]')].filter((r) => !r.classList.contains('is-footer')); const s = window.__q.scroller().getBoundingClientRect(); const part = rows.find((r) => { const b = r.getBoundingClientRect(); return b.bottom > s.bottom - 2 && b.top < s.bottom; }) || rows[rows.length - 1]; part.dispatchEvent(new MouseEvent('mouseover', { bubbles: true })); part.dispatchEvent(new MouseEvent('mouseenter')); return true })()");
+       out.hoverMoved = await pollUntil({ what: 'hover settled', read: () => js('window.__q.rects().scrollTop'), until: () => true }).then(() => js('window.__q.rects().scrollTop')).then((after) => after - before);
+       // Re-render with new option arrays while open: scrollTop must hold.
+       await js("(() => { window.__q.scroller().scrollTop = 60; window.__rev(1); return true })()");
+       await pollUntil({ what: 'rerendered', read: () => js('window.__q.rects().scrollTop'), until: () => true });
+       out.afterRerender = await js('window.__q.rects().scrollTop');
+       console.log(JSON.stringify(out));
+       app.quit();
+     });`,
+  );
+
+  const { spawnSync } = require('child_process');
+  const run = spawnSync(electronPath, [scriptPath], { encoding: 'utf8', timeout: 90000 });
+  const line = (run.stdout || '').split('\n').find((candidate) => candidate.trim().startsWith('{'));
+  if (!line) {
+    check('the probe ran in a browser', false, (run.stderr || run.stdout || '').slice(0, 600));
+  } else {
+    const out = JSON.parse(line);
+    check('the list opens at the top, not scrolled by itself', out.open.scrollTop === 0, `scrollTop ${out.open.scrollTop}`);
+    check('the footer is not inside the scrolling region', out.open.scrollerIsList === false, JSON.stringify(out.open));
+    check('the footer sits below the scrolling region', out.open.footerTop >= out.open.scrollerBottom - 0.5, JSON.stringify(out.open));
+    check('the list scrolls (the fixture is taller than the cap)', out.open.scrollMax > 0, JSON.stringify(out.open));
+    check('only one region scrolls', out.scrollers === 1, `${out.scrollers} scrolling regions`);
+    check('scrolling does not chain to the page behind', out.listStyle.overscroll === 'contain', out.listStyle.overscroll);
+    check('the scrollbar never moves the rows', out.listStyle.gutter.includes('stable'), out.listStyle.gutter);
+    check('at the end the last group is fully visible above the footer', out.end.lastGroupBottom <= out.end.footerTop + 0.5, JSON.stringify(out.end));
+    check('and fully visible inside the scroller', out.end.lastGroupBottom <= out.end.scrollerBottom + 0.5, JSON.stringify(out.end));
+    check('hovering a partly hidden row does not move the list', out.hoverMoved === 0, `moved ${out.hoverMoved}`);
+    check('re-rendering the options keeps the scroll position', out.afterRerender === 60, `scrollTop ${out.afterRerender}`);
+  }
+
+  if (failures.length) {
+    console.error(`context-dropdown-scroll: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
+    process.exit(1);
+  }
+  console.log(`context-dropdown-scroll: ${checked} passed  [real layout]`);
+})();

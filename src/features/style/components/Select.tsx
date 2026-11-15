@@ -66,7 +66,7 @@ function useSelectState<T extends string>(props: Props<T>) {
   const optionsState = useSelectOptions({ options, value, query, searchable });
   const { selectedOption, displayed, firstSelectable, lastSelectable, selectedIndex } = optionsState;
   const highlight = usePreviewHighlight(selectedIndex);
-  const { activeIndex, activity: previewActivity, activateIndex } = highlight;
+  const { activeIndex, activity: previewActivity, activateIndex, sourceRef } = highlight;
 
   const preview = useHoverPreview({
     open,
@@ -104,7 +104,7 @@ function useSelectState<T extends string>(props: Props<T>) {
     setActiveIndex: activateIndex,
     setQuery,
   });
-  const dropUp = useListPlacement({ open, activeIndex, query, variant, refs });
+  const dropUp = useListPlacement({ open, activeIndex, query, variant, refs, sourceRef });
   return {
     open,
     setOpen,
@@ -130,6 +130,7 @@ function useSelectState<T extends string>(props: Props<T>) {
 }
 
 type PreviewActivity = 'active' | 'paused';
+type HighlightSource = 'keyboard' | 'pointer';
 
 function usePreviewDismiss({
   setOpen,
@@ -154,12 +155,16 @@ function usePreviewDismiss({
 function usePreviewHighlight(selectedIndex: number) {
   const [activeIndex, setActiveIndex] = useState(selectedIndex);
   const [activity, setActivity] = useState<PreviewActivity>('active');
-  const activateIndex = useCallback((index: number) => {
+  // Who moved the highlight. A pointer crossing rows must never scroll the list (the row is
+  // already under the pointer); only the keyboard and a new filter bring the row into view.
+  const sourceRef = useRef<HighlightSource>('keyboard');
+  const activateIndex = useCallback((index: number, source: HighlightSource = 'keyboard') => {
+    sourceRef.current = source;
     setActivity('active');
     setActiveIndex(index);
   }, []);
   const pause = useCallback(() => setActivity('paused'), []);
-  return { activeIndex, activity, activateIndex, pause };
+  return { activeIndex, activity, activateIndex, pause, sourceRef };
 }
 
 function useSelectOptions<T extends string>({
@@ -568,12 +573,14 @@ function useListPlacement({
   query,
   variant,
   refs,
+  sourceRef,
 }: {
   readonly open: boolean;
   readonly activeIndex: number;
   readonly query: string;
   readonly variant: 'default' | 'link';
   readonly refs: SelectRefs;
+  readonly sourceRef: RefObject<HighlightSource>;
 }): boolean {
   const [dropUp, setDropUp] = useState(false);
   // Distinguishes the open transition from in-list navigation (drives the one-time
@@ -599,12 +606,13 @@ function useListPlacement({
         clampLinkMenu(trigger, list);
       }
     }
-    if (list) {
+    if (list && (opening || sourceRef.current !== 'pointer')) {
       scrollActiveIntoList(list, { opening });
     }
     // `activeIndex` and `query` are what move the active row; the effect reads it
     // from the DOM rather than from them.
-  }, [open, activeIndex, query, variant, rootRef, listRef]);
+  }, [open, activeIndex, query, variant, rootRef, listRef, sourceRef]);
+  useKeepScroll({ open }, listRef);
   return dropUp;
 }
 
@@ -637,33 +645,78 @@ function clampLinkMenu(trigger: HTMLDivElement, listElement: HTMLDivElement): vo
   assert(listElement.style.transform === '', 'clampLinkMenu: the open motion owns transform');
 }
 
-// Vertical scroll — only the LIST's own overflow (never scrollIntoView, whose inline
+// The element that scrolls: the list itself, or its scrolling region when a pinned footer
+// sits beside it (the footer must never scroll away, nor rows slide under it).
+function scrollRegionOf(listElement: HTMLDivElement): HTMLElement {
+  return listElement.querySelector<HTMLElement>(':scope > .u-select-scroll') ?? listElement;
+}
+
+// Vertical scroll — only the list's own overflow (never scrollIntoView, whose inline
 // axis would slide the whole panel sideways). On OPEN, bring the selected option's
-// group heading right under the (sticky) search so the selection sits near the top;
-// while navigating, just keep the active option in view.
+// group (its card, or its heading) to the top, but only when the selection is not already
+// inside the first screenful: a list that fits opens at rest, at scrollTop 0. Offsets, not
+// rects: the popup scales open, and a rect measured mid-motion is a few pixels off, which
+// scrolled a list that needed no scrolling. While navigating by key, just keep the active
+// option in view, with no animation and no move at all when it is already visible.
 function scrollActiveIntoList(listElement: HTMLDivElement, moment: { readonly opening: boolean }): void {
-  const active = listElement.querySelector<HTMLElement>('[data-active="true"]');
+  const region = scrollRegionOf(listElement);
+  const active = region.querySelector<HTMLElement>('[data-active="true"]');
   if (!active) {
     return;
   }
-  const searchHeight = listElement.querySelector<HTMLElement>('.u-select-search')?.offsetHeight ?? 0;
+  const searchHeight = region.querySelector<HTMLElement>('.u-select-search')?.offsetHeight ?? 0;
   if (moment.opening) {
-    let node = active.previousElementSibling;
-    while (isHTMLElementInDocument(node, active.ownerDocument) && !node.classList.contains('u-select-heading')) {
-      node = node.previousElementSibling;
+    const card = active.closest<HTMLElement>('.u-select-group');
+    let anchor: HTMLElement = active;
+    if (card !== null && region.contains(card)) {
+      anchor = card;
+    } else {
+      let node = active.previousElementSibling;
+      while (isHTMLElementInDocument(node, active.ownerDocument) && !node.classList.contains('u-select-heading')) {
+        node = node.previousElementSibling;
+      }
+      anchor = isHTMLElementInDocument(node, active.ownerDocument) ? node : active;
     }
-    const heading = isHTMLElementInDocument(node, active.ownerDocument) ? node : undefined;
-    const anchor = heading ?? active;
-    listElement.scrollTop = Math.max(0, anchor.offsetTop - searchHeight);
+    const paddingTop = Number.parseFloat(window.getComputedStyle(region).paddingTop) || 0;
+    const top = anchor.offsetTop - region.offsetTop;
+    const bottom = active.offsetTop - region.offsetTop + active.offsetHeight;
+    // Already inside the first screenful: nothing to scroll to.
+    region.scrollTop = bottom <= region.clientHeight ? 0 : Math.max(0, top - paddingTop - searchHeight);
     return;
   }
-  const listRect = listElement.getBoundingClientRect();
+  const regionRect = region.getBoundingClientRect();
   const activeRect = active.getBoundingClientRect();
-  if (activeRect.top < listRect.top + searchHeight) {
-    listElement.scrollTop -= listRect.top + searchHeight - activeRect.top;
-  } else if (activeRect.bottom > listRect.bottom) {
-    listElement.scrollTop += activeRect.bottom - listRect.bottom;
+  if (activeRect.top < regionRect.top + searchHeight) {
+    region.scrollTop -= regionRect.top + searchHeight - activeRect.top;
+  } else if (activeRect.bottom > regionRect.bottom) {
+    region.scrollTop += activeRect.bottom - regionRect.bottom;
   }
+}
+
+// If the scrolling element is replaced while the list stays open (a remount under it), the
+// new one starts at 0 and the rows jump. The position is remembered as the person scrolls
+// and put back on the replacement, so a re-render never moves what they were reading.
+function useKeepScroll({ open }: { readonly open: boolean }, listRef: RefObject<HTMLDivElement>): void {
+  const remembered = useRef<{ readonly element: HTMLElement; scrollTop: number } | undefined>(undefined);
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!open || !list) {
+      remembered.current = undefined;
+      return undefined;
+    }
+    const region = scrollRegionOf(list);
+    const previous = remembered.current;
+    if (previous !== undefined && previous.element !== region) {
+      region.scrollTop = previous.scrollTop;
+    }
+    const record = { element: region, scrollTop: region.scrollTop };
+    remembered.current = record;
+    const onScroll = () => {
+      record.scrollTop = region.scrollTop;
+    };
+    region.addEventListener('scroll', onScroll, { passive: true });
+    return () => region.removeEventListener('scroll', onScroll);
+  });
 }
 
 type KeyInput = {

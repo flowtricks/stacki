@@ -228,7 +228,7 @@ export type SelectListProps<T extends string> = {
   onQuery: (query: string) => void;
   onListKeyDown: (event: KeyboardEvent<HTMLDivElement>) => void;
   onSearchKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
-  onActivate: (index: number) => void;
+  onActivate: (index: number, source: 'pointer') => void;
   onLeave: () => void;
   onChoose: (index: number) => void;
   onCancel: () => void;
@@ -243,6 +243,48 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
   // Read from the whole option list, not the filtered rows, so typing a search
   // never opens or closes the dot column under the pointer.
   const dotColumn = dotColumnFor(props.options);
+  const row = (index: number) => {
+    const option = displayed[index];
+    assert(option !== undefined, 'SelectList: a section names displayed rows');
+    return (
+      <SelectRow
+        key={option.value}
+        option={option}
+        id={optionId(list.baseId, index)}
+        selected={option.value === props.value}
+        active={index === list.activeIndex}
+        dotColumn={dotColumn}
+        onActivate={() => list.onActivate(index, 'pointer')}
+        onChoose={() => list.onChoose(index)}
+        onCancel={list.onCancel}
+      />
+    );
+  };
+  const footerIndexes = displayed.flatMap((option, index) => (option.footer === true ? [index] : []));
+  const body =
+    displayed.length === 0 ? (
+      <div className="u-select-empty" role="presentation">
+        {translate('styleModel.components.select.noMatches')}
+      </div>
+    ) : (
+      listSections(displayed).map((section) => {
+        const rows = section.indexes.filter((index) => displayed[index]?.footer !== true).map(row);
+        if (section.kind === 'rows') {
+          return rows;
+        }
+        // A group heading opens one filled card with its rows; the heading names it.
+        return (
+          <div
+            key={`group-${section.indexes[0] ?? 0}`}
+            className="u-select-group"
+            role="group"
+            aria-labelledby={optionId(list.baseId, section.indexes[0] ?? 0)}
+          >
+            {rows}
+          </div>
+        );
+      })
+    );
   return (
     <Popup
       mode="popover"
@@ -250,7 +292,7 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
       anchor={list.trigger}
       onClose={list.onCancel}
       ref={list.listRef}
-      className={['u-select-list', list.dropUp ? 'is-up' : ''].filter(Boolean).join(' ')}
+      className={['u-select-list', list.dropUp ? 'is-up' : '', footerIndexes.length > 0 ? 'has-footer' : ''].filter(Boolean).join(' ')}
       role="listbox"
       tabIndex={-1}
       label={ariaLabel}
@@ -277,44 +319,16 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
           />
         </div>
       ) : undefined}
-      {displayed.length === 0 ? (
-        <div className="u-select-empty" role="presentation">
-          {translate('styleModel.components.select.noMatches')}
-        </div>
+      {footerIndexes.length === 0 ? (
+        body
       ) : (
-        listSections(displayed).map((section) => {
-          const rows = section.indexes.map((index) => {
-            const option = displayed[index];
-            assert(option !== undefined, 'SelectList: a section names displayed rows');
-            return (
-              <SelectRow
-                key={option.value}
-                option={option}
-                id={optionId(list.baseId, index)}
-                selected={option.value === props.value}
-                active={index === list.activeIndex}
-                dotColumn={dotColumn}
-                onActivate={() => list.onActivate(index)}
-                onChoose={() => list.onChoose(index)}
-                onCancel={list.onCancel}
-              />
-            );
-          });
-          if (section.kind === 'rows') {
-            return rows;
-          }
-          // A group heading opens one filled card with its rows; the heading names it.
-          return (
-            <div
-              key={`group-${section.indexes[0] ?? 0}`}
-              className="u-select-group"
-              role="group"
-              aria-labelledby={optionId(list.baseId, section.indexes[0] ?? 0)}
-            >
-              {rows}
-            </div>
-          );
-        })
+        // A pinned footer is a sibling of the scrolling region, never a row inside it: rows
+        // sliding under a sticky row left a strip of the last card peeking round it, and the
+        // scrollbar ran down behind it. Outside, the rows end exactly where the footer begins.
+        <>
+          <div className="u-select-scroll">{body}</div>
+          <div className="u-select-footer">{footerIndexes.map(row)}</div>
+        </>
       )}
     </Popup>
   );
