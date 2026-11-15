@@ -13,7 +13,7 @@ import { SanitySignIn } from './SanitySignIn';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { CmsKeyForm, type CmsKeyKind } from './CmsKeyForm';
 import { PayloadStatus } from './PayloadStatus';
-import { EmDashSection } from './EmDashSection';
+import { EmDashButton } from './EmDashButton';
 import { SkeletonRows } from '../../ui/Skeleton';
 
 type Dialog = { readonly kind: 'sanity-login' } | { readonly kind: 'key'; readonly cms: CmsKeyKind };
@@ -39,8 +39,7 @@ export function CmsConnections({ projectPath }: { readonly projectPath: string }
       {error && <ErrorToast message={error} />}
       {list?.encryption === 'unavailable' && <p className="cms-connections-alert">{translate('cmsConnections.list.noEncryption')}</p>}
       {list === undefined ? <SkeletonRows count={2} /> : <ConnectionRows projectPath={projectPath} connections={list.connections} onRemove={remove} />}
-      <ConnectionActions onOpen={setDialog} />
-      <EmDashSection projectPath={projectPath} />
+      <ConnectionActions projectPath={projectPath} onOpen={setDialog} />
       {dialog?.kind === 'sanity-login' && <SanitySignIn projectPath={projectPath} close={closed} />}
       {dialog?.kind === 'key' && <CmsKeyForm projectPath={projectPath} cms={dialog.cms} close={closed} />}
     </section>
@@ -80,8 +79,9 @@ function ConnectionRows(props: {
 // Sanity as a split button, like Publish: its login where the host has one, a
 // pasted key behind the arrow (and in front where there is no login, as in
 // Studio until Sanity registers Stacki for OAuth). Payload and custom CMSs sit
-// beside it as buttons of their own.
-function ConnectionActions({ onOpen }: { readonly onOpen: (dialog: Dialog) => void }) {
+// beside it as buttons of their own; EmDash (detected from the project, nothing to paste) opens its status popup, and
+// Custom CMS, the catch-all, stays last.
+function ConnectionActions({ projectPath, onOpen }: { readonly projectPath: string; readonly onOpen: (dialog: Dialog) => void }) {
   const translate = useTranslate();
   return (
     <div className="cms-connection-actions">
@@ -98,6 +98,7 @@ function ConnectionActions({ onOpen }: { readonly onOpen: (dialog: Dialog) => vo
         {/* i18n-ignore: Payload is a product name. */}
         Payload
       </button>
+      <EmDashButton projectPath={projectPath} />
       <button type="button" onClick={() => onOpen({ kind: 'key', cms: 'custom' })}>
         <CmsIcon size={14} />
         {translate('cmsConnections.kind.custom')}

@@ -401,6 +401,19 @@ export const sanityIconPath =
 // Simple Icons Payload CMS mark (CC0).
 export const payloadIconPath = 'M11.068 0 22.08 6.625v12.573L13.787 24V11.427L2.769 4.808 11.068 0ZM1.92 18.302l8.31-4.812' + 'v9.812l-8.31-5Z';
 
+// The EmDash mark: a rounded square with an em dash in it, on its own 118-unit grid (viewBox 0 0 118 118). Supplied by the
+// project owner as EmDash's own mark; the path data is exactly as supplied and only the two fills changed, white to
+// currentColor (EmDashIcon in Icons.tsx). EmDash is MIT licensed (github.com/emdash-cms/emdash); the licence covers the
+// code, not the name, so the mark is used only to label the EmDash button.
+export const emDashFramePath =
+  'M0 96.5264V21.2236C0 9.50233 9.50229 0 21.2236 0V9.41993L20.9189 9.42383C14.5407 9.58525 9.41992 14.8066 9.41992 21.2236' +
+  'V96.5264C9.41992 102.944 14.5407 108.165 20.9189 108.326L21.2236 108.33H96.5263L96.831 108.326C103.108 108.167 108.167 ' +
+  '103.108 108.326 96.831L108.33 96.5264V21.2236C108.33 14.7048 103.045 9.41993 96.5263 9.41993V0C108.248 0 117.75 9.5023 ' +
+  '117.75 21.2236V96.5264C117.75 108.248 108.248 117.75 96.5263 117.75H21.2236C9.50232 117.75 0 108.248 0 96.5264ZM96.5263 0' +
+  'V9.41993H21.2236V0H96.5263Z';
+export const emDashDashPath = 'M28.2598 53.3799H90.0645V63.6807H28.2598V53.3799Z';
+export const EMDASH_GRID_UNITS = 118;
+
 // The Stacki mark: the rounded square of the wordmark (welcome/StackiLogo.tsx),
 // on its own 458-unit grid. Shared so the mark and the wordmark never drift apart.
 export const stackiMarkPath =

@@ -169,21 +169,44 @@
 }
 
 /* EmDash: a card per project, in the Settings rows' soft fill; content types list their fields as plain rows. */
-.emdash-card {
+/* The EmDash popup (the shared menu surface): its own scroll, contained, so the page behind never moves. */
+.emdash-popup {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 12px;
-  border-radius: 10px;
-  background: var(--bg-hover);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   font-size: 12px;
 }
-.emdash-card h4 {
+.emdash-popup h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   font-size: 13px;
 }
-.emdash-card p {
+.emdash-popup p {
   margin: 0;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+.emdash-popup p > strong {
+  color: var(--text);
+}
+/* The connected mark on an EmDash button: a dot over the icon's corner, out of flow so the button never changes size. */
+.cms-connect-icon {
+  position: relative;
+  display: inline-flex;
+}
+.cms-connect-status {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
 }
 .emdash-facts {
   display: grid;

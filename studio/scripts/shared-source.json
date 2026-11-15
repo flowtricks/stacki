@@ -838,7 +838,7 @@
     "src/features/cms/videoLinkCard.css",
     "src/features/cmsConnections/CmsConnections.tsx",
     "src/features/cmsConnections/CmsKeyForm.tsx",
-    "src/features/cmsConnections/EmDashSection.tsx",
+    "src/features/cmsConnections/EmDashButton.tsx",
     "src/features/cmsConnections/PayloadStatus.tsx",
     "src/features/cmsConnections/SanitySignIn.tsx",
     "src/features/cmsConnections/cmsConnections.css",

@@ -1,9 +1,24 @@
-// EmDash in Settings: what Stacki found in the project (EmDash is detected from its own files, there is no key to
-// paste), the content types and fields it defines, what is missing, and how to preview with a customer's real
-// content. Content types are read from EmDash and only shown here; nothing on this card edits them.
-import { useEffect, useState } from 'react';
+// EmDash in Settings: a button in the CMS row, beside Payload and Custom CMS, that opens a popup with what Stacki found
+// in the project (EmDash is detected from its own files, there is no key to paste), the content types and fields it
+// defines, what is missing, and how to preview with a customer's real content. Content types are read from EmDash and
+// only shown here; nothing in the popup edits them.
+//
+// Lifetime: Popup owns it. An outside press, Escape and a scroll that moves the button close it, every time; this file
+// closes it for no other reason. Escape returns focus to the button. The button toggles it (a native button, so Enter
+// and Space open it).
+//
+// Placement: below the button, flipped above when there is no room, from the button's box at open and clamped to the
+// window by placeMenu. The popup scrolls inside itself (overscroll contained); the page behind never moves.
+//
+// Data: the project is read when the button mounts, so the connected mark shows without opening the popup and the popup
+// renders what is already known at once; skeleton rows show only while that first read is still out.
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { CodeBlock } from '../../ui/CodeBlock';
-import { CmsIcon } from '../../ui/Icons';
+import { EmDashIcon } from '../../ui/Icons';
+import Popup from '../../ui/Popup';
+import { placeMenu } from '../../ui/menuModel';
+import type { MenuPosition } from '../../ui/menuModel';
+import '../../ui/menu.css';
 import { SkeletonRows } from '../../ui/Skeleton';
 import { EMDASH_HOST, readEmDashProject } from '../../ipc/emdashBridge';
 import { useTranslate } from '../../lib/i18n/useTranslate';
@@ -61,15 +76,21 @@ const GUIDE_COMMANDS = {
   import: 'npx emdash site import customer.emdash --plan <digest> --confirm',
 } as const;
 
-export function EmDashSection({ projectPath }: { readonly projectPath: string }) {
+const POPUP_WIDTH_PX = 360;
+// Title 28 + padding 24 + three skeleton rows, before the real size is measured.
+const POPUP_HEIGHT_PX_ESTIMATE = 160;
+
+export function EmDashButton({ projectPath }: { readonly projectPath: string }) {
   const translate = useTranslate();
   const [project, setProject] = useState<EmDashProject | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<HTMLButtonElement | undefined>(undefined);
   useEffect(() => {
     let current = true;
     if (EMDASH_HOST.available) {
       readEmDashProject(projectPath).then(
         (found) => current && setProject(found),
-        // A project that cannot be read is shown as having no EmDash: the card never blocks the other connections.
+        // A project that cannot be read is shown as having no EmDash: the button never blocks the other connections.
         () => current && setProject({ kind: 'absent' }),
       );
     }
@@ -81,14 +102,84 @@ export function EmDashSection({ projectPath }: { readonly projectPath: string })
     return <></>;
   }
   return (
-    <section className="emdash-card" aria-label={translate('emdash.title')} data-cms="emdash">
+    <>
+      <button
+        type="button"
+        ref={(element) => setAnchor(element ?? undefined)}
+        data-cms="emdash"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <span className="cms-connect-icon">
+          <EmDashIcon size={14} />
+          {project?.kind === 'present' && <span className="cms-connect-status" role="img" aria-label={translate('emdash.button.connected')} />}
+        </span>
+        {/* i18n-ignore: EmDash is a product name. */}
+        EmDash
+      </button>
+      <EmDashPopup open={open} anchor={anchor} project={project} onClose={() => setOpen(false)} />
+    </>
+  );
+}
+
+function EmDashPopup(props: {
+  readonly open: boolean;
+  readonly anchor: HTMLElement | undefined;
+  readonly project: EmDashProject | undefined;
+  readonly onClose: () => void;
+}) {
+  const translate = useTranslate();
+  const surface = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<MenuPosition | undefined>(undefined);
+  // Measured after the content is in, so a project that arrives while the popup is open is placed by its real size.
+  useLayoutEffect(() => {
+    if (!props.open || props.anchor === undefined) {
+      return;
+    }
+    const box = props.anchor.getBoundingClientRect();
+    const measured = surface.current?.getBoundingClientRect();
+    const size = {
+      width: measured !== undefined && measured.width > 0 ? measured.width : POPUP_WIDTH_PX,
+      height: measured !== undefined && measured.height > 0 ? measured.height : POPUP_HEIGHT_PX_ESTIMATE,
+    };
+    setPosition(
+      placeMenu(
+        { left: box.left, top: box.top, width: box.width, height: box.height },
+        size,
+        { width: window.innerWidth, height: window.innerHeight },
+        'below-start',
+      ),
+    );
+  }, [props.open, props.anchor, props.project]);
+  return (
+    <Popup
+      mode="popover"
+      open={props.open}
+      anchor={props.anchor}
+      onClose={props.onClose}
+      ref={surface}
+      className="menu-surface emdash-popup"
+      role="dialog"
+      label={translate('emdash.title')}
+      style={{
+        position: 'fixed',
+        left: position?.left ?? 0,
+        top: position?.top ?? 0,
+        width: POPUP_WIDTH_PX,
+        maxHeight: position?.heightMax ?? 'calc(100dvh - 16px)',
+      }}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
       <h4>
-        <CmsIcon size={14} /> {translate('emdash.title')}
+        <EmDashIcon size={14} />
+        {/* i18n-ignore: EmDash is a product name. */}
+        EmDash
       </h4>
-      {project === undefined && <SkeletonRows count={3} />}
-      {project?.kind === 'absent' && <Absent />}
-      {project?.kind === 'present' && <PresentCard project={project} />}
-    </section>
+      {props.project === undefined && <SkeletonRows count={3} />}
+      {props.project?.kind === 'absent' && <Absent />}
+      {props.project?.kind === 'present' && <PresentCard project={props.project} />}
+    </Popup>
   );
 }
 

@@ -18,6 +18,7 @@ export const messages = {
   'emdash.binding.reference': 'Referência',
   'emdash.binding.richText': 'Texto formatado',
   'emdash.binding.text': 'Texto',
+  'emdash.button.connected': 'Configurado',
   'emdash.field.required': 'obrigatório',
   'emdash.field.unsupported': 'Tipo desconhecido',
   'emdash.guide.analyze': 'Confira o que será importado (o site local precisa estar vazio):',

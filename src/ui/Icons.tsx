@@ -135,6 +135,17 @@ export const PayloadIcon = (props: IconProps) => (
   </I24>
 );
 
+// The EmDash mark, drawn on its own 118-unit grid and scaled into the 24-unit frame the other CMS marks share, so it
+// takes the same size and colour as Payload's and Sanity's.
+export const EmDashIcon = (props: IconProps) => (
+  <I24 {...props}>
+    <g fill="currentColor" transform={`scale(${24 / paths.EMDASH_GRID_UNITS})`}>
+      <path d={paths.emDashFramePath} />
+      <path d={paths.emDashDashPath} />
+    </g>
+  </I24>
+);
+
 // Media hosts in the Assets panel's sources. Simplified marks drawn here, never
 // loaded from the hosts: the cloud for Cloudflare R2, the rabbit for Bunny, and a
 // plain bucket for any other S3-compatible host.
