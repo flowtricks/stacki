@@ -1329,6 +1329,17 @@ live in `LIVE_RULE_LIMITS`; a sheet over `sheetRulesMax` rules is refused with a
 `rules-over-cap` problem rather than searched in part. Rules nested in other style rules and
 members of a grouped rule the save splits are not previewed; their saves show them.
 
+`avb:hover-style` (`liveRules.ts`, `frameLiveRules.ts`, through the same `receiveLiveRules`
+entry) is the variable picker's hover preview, and it is never a write: no save, history entry,
+dirty flag, autosave or snapshot follows it. `show` names the selected node's rendered path, a
+property and a value with a boolean `important`; the frame sets that declaration inline on the
+node's elements (at most `HOVER_STYLE_LIMITS.elementsMax`), recording each element's own inline
+value. One preview is up at a time: `show` replaces the last, and `clear` (idempotent) restores
+each element's style attribute exactly, removing one the preview added. The panel sends it from
+`useEditorWrites` (`previewProp`, handed to fields by `PreviewPropContext`) and clears it on every
+way out of the picker, when the field's saved value changes (a pick's save landing), and when
+the field or the panel unmounts. A state or pseudo-element context is previewed in the field only.
+
 ## Canvas interaction mode
 
 The canvas cursor toggle starts in selection mode for each project session. The parent sends

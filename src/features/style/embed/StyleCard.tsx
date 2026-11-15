@@ -41,6 +41,7 @@ import {
 import { ALIGN_PROPS, GRID_CONTROL_PROPS, LayoutModeSections, type SourceOption } from './LayoutRows';
 import { SelectorPicker, ADD_QUERY, PlusIcon } from './SelectorPicker';
 import { useOptimisticClear } from './useOptimisticClear';
+import { PreviewPropContext } from '../connectFieldHelpers';
 import { AddQueryForm, EditQueryForm, CssCodeSection, type StyleCardProps } from './QueryForms';
 
 export function StyleCard(card: StyleCardProps) {
@@ -70,10 +71,13 @@ export function StyleCard(card: StyleCardProps) {
       {/* A style attribute the panel can only show (inlineCode `readonly`) keeps its
         controls in view, disabled: a fieldset disables every control inside it. */}
       <fieldset className="embed-editor_controls" disabled={card.inlineCode?.kind === 'readonly'}>
-        <StyleSections card={card} openProvenance={provenance.openProvenance} />
-        <div className="embed-editor_rule-foot">
-          <AddPropertyRow busy={busy} onAdd={card.onAdd} />
-        </div>
+        {/* Every field's picker previews through this, on the canvas alone: a hover is never a write. */}
+        <PreviewPropContext.Provider value={card.previewProp}>
+          <StyleSections card={card} openProvenance={provenance.openProvenance} />
+          <div className="embed-editor_rule-foot">
+            <AddPropertyRow busy={busy} onAdd={card.onAdd} />
+          </div>
+        </PreviewPropContext.Provider>
       </fieldset>
 
       {shown && provenanceResolved !== undefined ? (

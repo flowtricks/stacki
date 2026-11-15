@@ -11,10 +11,13 @@
 // Now the original is captured once when the picker opens, every way out (a press anywhere including
 // the canvas, Escape, Tab, window blur, the canvas's click message, selection change, unmount, the chip
 // toggle) runs one idempotent restore ahead of the browser's own focus change, and each preview carries
-// an epoch that the restore bumps, so a late preview is dropped.
+// an epoch that the restore bumps, so a late preview is dropped. The preview reaches the canvas through
+// the style card's preview channel (PreviewPropContext) alone, never the field's live write: a live
+// write is a save, and the real app wrote every hovered variable into the stylesheet (soak SP-09).
 // Method: the real VariableConnect and LiveInput in jsdom over a fake project: timers and animation
 // frames are VIRTUAL (the test advances time), and the canvas is a fake bridge that delays and reorders
-// the messages the field sends (a frame applies the newest by sequence number). Named cases pin each
+// the messages the field and the preview channel send (a frame applies the newest by sequence number),
+// and every live write is counted, since nothing here types. Named cases pin each
 // cause; then a seeded loop of 200 random hover/leave/wait/exit sequences must always end at the
 // original, or at the picked value when the sequence picks, in the canvas, the field, the chip and the
 // committed value, with the picker closed and no timer left. Events are dispatched, never real input.
@@ -41,6 +44,7 @@ const check = (what, condition, detail) => {
     stdin: {
       contents: `export { default as VariableConnect } from './src/features/style/VariableConnect';
         export { default as LiveInput } from './src/features/style/components/LiveInput';
+        export { PreviewPropContext } from './src/features/style/connectFieldHelpers';
         export { getHost, setHost } from './src/features/style/model/host';`,
       resolveDir: repoPath('.'),
       loader: 'ts',
@@ -122,7 +126,7 @@ const check = (what, condition, detail) => {
   const React = require('react');
   const { createRoot } = require('react-dom/client');
   const { act } = React;
-  const { VariableConnect, LiveInput, getHost, setHost } = require(bundlePath);
+  const { VariableConnect, LiveInput, PreviewPropContext, getHost, setHost } = require(bundlePath);
   const mouse = (type, init = {}) => new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, ...init });
   const keydown = (target, key) => target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 
@@ -155,7 +159,7 @@ const check = (what, condition, detail) => {
 
   // The project and the page: the committed value, and a canvas fed by a bridge that delays and reorders.
   const mount = async (random) => {
-    const model = { saved: ORIGINAL, commits: [], canvas: ORIGINAL, lastApplied: 0, sent: 0, unmounted: false };
+    const model = { saved: ORIGINAL, commits: [], lives: [], canvas: ORIGINAL, lastApplied: 0, sent: 0, unmounted: false };
     const post = (value) => {
       model.sent += 1;
       const message = { sequence: model.sent, value };
@@ -181,14 +185,27 @@ const check = (what, condition, detail) => {
         post(value);
         setSaved(value);
       };
-      return React.createElement(LiveInput, {
-        value: saved,
-        busy: false,
-        ariaLabel: 'Weight',
-        prop: 'font-weight',
-        onLive: (value) => post(value),
-        onCommit: commit,
-      });
+      // The preview channel shows a value on the canvas and takes it back to the page's own (the saved
+      // value); the live write is the field's typing, which writes, so a preview must never reach it.
+      const previewProp = (prop, value) => {
+        check('a preview names the field property', prop === 'font-weight', prop);
+        post(value ?? model.saved);
+      };
+      return React.createElement(
+        PreviewPropContext.Provider,
+        { value: previewProp },
+        React.createElement(LiveInput, {
+          value: saved,
+          busy: false,
+          ariaLabel: 'Weight',
+          prop: 'font-weight',
+          onLive: (value) => {
+            model.lives.push(value);
+            post(value);
+          },
+          onCommit: commit,
+        }),
+      );
     }
     await act(async () => root.render(React.createElement(Project)));
     await advance(50);
@@ -237,6 +254,8 @@ const check = (what, condition, detail) => {
       check(`${label}: the chip names it`, shown === undefined || `var(--${shown})` === expected, shown);
     }
     check(`${label}: no timer is left`, clock.timers.size === 0, `${clock.timers.size} left`);
+    // Nothing here types: every value the canvas showed came through the preview channel or a commit.
+    check(`${label}: no preview went out as a live write`, view.model.lives.length === 0, JSON.stringify(view.model.lives));
   };
   const flat = () => 0.5;
 

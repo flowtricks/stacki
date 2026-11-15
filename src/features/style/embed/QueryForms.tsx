@@ -32,6 +32,7 @@ import {
 import { selectorLayerOf } from '../model/selectors';
 import type { ElementSnapshot, ParsedRule } from '../model/styleTypes';
 import { type LiveSetProp } from './EditorBasics';
+import type { PreviewProp } from '../connectFieldHelpers';
 import { usePanelLayer } from './editorModel';
 import { type SourceOption, type SelectorSuggestion } from './LayoutRows';
 import { useHighlightInView, queryModes, type QuerySuggestion, type QueryComboProps } from './SelectorPicker';
@@ -632,6 +633,8 @@ export type StyleCardProps = {
   setProp: (prop: string, value: string, important: boolean) => void;
   clearProp: (prop: string | string[]) => Promise<void>;
   liveSetProp: LiveSetProp;
+  /** The picker's hover preview: shown on the canvas, never written (connectFieldHelpers' PreviewProp). */
+  previewProp: PreviewProp;
   onSelectSelector: (selector: string, prop?: string) => void;
   onAdd: (prop: string, value: string, important: boolean) => void;
   onSaveCssRule: (rule: ParsedRule, css: string) => void;

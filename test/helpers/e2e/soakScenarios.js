@@ -53,7 +53,7 @@ const FAMILIES = Object.freeze([
     label: 'Weight',
     chevron: 'Font weight',
   },
-  { id: 'size', key: 'font-size', property: 'font-size', field: 'input[data-prop="font-size"]', label: 'Size' },
+  { id: 'size', key: 'font-size', property: 'font-size', field: 'input[data-prop="font-size"]', label: 'Size', previewShows: true },
   { id: 'line-height', key: 'line-height', property: 'line-height', field: 'input[data-prop="line-height"]', label: 'Height' },
   { id: 'color', key: 'color', property: 'color', field: 'input[data-prop="color"]', label: 'Color', swatch: 'Text color' },
   { id: 'letter-spacing', key: 'letter-spacing', property: 'letter-spacing', field: 'input[data-prop="letter-spacing"]', label: 'Letter spacing' },
@@ -82,6 +82,10 @@ const FAMILIES = Object.freeze([
 const SWITCH_DELAYS_MS = Object.freeze([0, 16, 50, 120, 300, 1000, 1600]);
 const HOLD_OPEN_MS = 700;
 const RAPID_TOGGLES = 6;
+// Picker rows one hover pass points at, and how long it rests on each: past a frame and the
+// 100 ms a typed live write waits, so a preview that went through the write path would land.
+const HOVER_ROWS = 3;
+const HOVER_DWELL_MS = 120;
 const WALK_STEPS_DEFAULT = 300;
 const SCREENSHOTS_MAX = 40;
 const RECORDINGS_MAX = 80;
@@ -573,18 +577,45 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
           continue;
         }
         let previewed = false;
+        // The segment compares the files before and after the hovers; a write that a later hover
+        // or the restore undoes is caught only here, at every row, while the preview shows.
+        const filesAtOpen = driver.projectSnapshot();
+        const writtenDuring = [];
         await segment(`hover ${family.id} picker rows`, 'preview', async () => {
-          for (let index = 0; index < 3; index += 1) {
+          for (let index = 0; index < HOVER_ROWS; index += 1) {
             const point = await driver.panelPoint(finders.pickerItem(index), { scroll: false });
             if (point !== undefined) {
               await driver.hover(point, `hover picker row ${index}`);
-              await driver.sleep(120);
+              await driver.sleep(HOVER_DWELL_MS);
               if ((await canvasStyle(property)) !== styleBefore) {
                 previewed = true;
+              }
+              const changes = fileChanges(filesAtOpen, driver.projectSnapshot());
+              if (changes.length > 0) {
+                writtenDuring.push({ row: index, files: changes.map((change) => change.file) });
               }
             }
           }
         });
+        if (writtenDuring.length > 0) {
+          await report(
+            {
+              invariant: 'source-written',
+              summary: `hover ${family.id} picker rows: rows ${writtenDuring.map((written) => written.row).join(', ')} wrote ${writtenDuring[0].files.join(', ')} while only hovered`,
+              evidence: { writtenDuring },
+            },
+            `hover ${family.id} picker rows`,
+          );
+        }
+        // A preview that never reaches the canvas is no preview. Only where the fixture's first
+        // rows resolve to different values (font sizes do; its weights and families are all one
+        // Inter 500) can the page show it, so only those families say so.
+        if (!previewed && family.previewShows === true) {
+          await report(
+            { invariant: 'preview-missing', summary: `${family.id}: hovering ${HOVER_ROWS} picker rows never changed the canvas ${property}`, evidence: {} },
+            `hover ${family.id} picker rows`,
+          );
+        }
         await segment(`leave ${family.id} picker by ${exitPath}`, exitPath === 'canvas-press-other' ? 'switch' : 'look', () => exitBy(exitPath));
         if (exitPath === 'canvas-press-other') {
           await select(element, 'canvas');

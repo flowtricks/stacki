@@ -198,6 +198,77 @@ export function parseLiveRuleMessage(input: unknown): LiveRuleMessage | undefine
   return until === undefined ? undefined : { type: LIVE_RULE_MESSAGE, op: 'drop', rule, until };
 }
 
+// ───────────────────────────── Hover style ─────────────────────────────
+
+// The variable picker's hover preview. A hovered variable is shown on the selected element
+// and nowhere else, and never written: it is a look, so it must not save, enter history, mark
+// the project dirty, autosave or snapshot (soak SP-09: it used to go out as a live write). The
+// rule channel above cannot carry it, since it patches only rules the page's stylesheets
+// already hold under the source's own sheet: a rule in a file another one @imports (Lumos's
+// global.css), a grouped rule's member and a rule the first edit would create are all out of
+// its reach, and those are exactly the rules a hover lands on. So the frame sets the hovered
+// declaration inline on the element the panel shows, and `clear` puts the element's own
+// inline style back exactly. One hover preview is up at a time: `show` replaces the last.
+
+export const HOVER_STYLE_MESSAGE = 'avb:hover-style';
+
+export const HOVER_STYLE_LIMITS = {
+  /** Renderings of one node a preview may set (loop copies of the selected node). */
+  elementsMax: 64,
+  pathCharsMax: 1_000,
+} as const satisfies Record<string, number>;
+
+export type HoverStyleMessage =
+  | {
+      readonly type: typeof HOVER_STYLE_MESSAGE;
+      readonly op: 'show';
+      /** The selected node's rendered path (the frame's `data-avb-path` tags). */
+      readonly path: string;
+      readonly property: string;
+      readonly value: string;
+      readonly important: boolean;
+    }
+  | { readonly type: typeof HOVER_STYLE_MESSAGE; readonly op: 'clear' };
+
+/** A hover preview message for the frame, or undefined when `input` is not one (or is malformed). */
+export function parseHoverStyleMessage(input: unknown): HoverStyleMessage | undefined {
+  if (typeof input !== 'object' || input === null) {
+    return undefined;
+  }
+  if (!('type' in input) || input.type !== HOVER_STYLE_MESSAGE || !('op' in input)) {
+    return undefined;
+  }
+  if (input.op === 'clear') {
+    return { type: HOVER_STYLE_MESSAGE, op: 'clear' };
+  }
+  if (input.op !== 'show') {
+    return undefined;
+  }
+  // A path is only ever compared with the frame's own tags, so anything but control characters may be in it.
+  const path = 'path' in input ? fragment(input.path, HOVER_STYLE_LIMITS.pathCharsMax, /[\0-\x1f]/) : undefined;
+  if (path === undefined) {
+    return undefined;
+  }
+  const property = 'property' in input ? fragment(input.property, LIVE_RULE_LIMITS.propertyCharsMax, VALUE_BREAKOUT) : undefined;
+  if (property === undefined) {
+    return undefined;
+  }
+  if (!PROPERTY.test(property)) {
+    return undefined;
+  }
+  // The same value shape a rule edit carries, `!important` as its own boolean.
+  const edit = parseLiveRuleEdit({
+    kind: 'value',
+    value: 'value' in input ? input.value : undefined,
+    important: 'important' in input ? input.important : undefined,
+  });
+  if (edit === undefined) {
+    return undefined;
+  }
+  assert(edit.kind === 'value', 'parseHoverStyleMessage: a value edit parses as one');
+  return { type: HOVER_STYLE_MESSAGE, op: 'show', path, property, value: edit.value, important: edit.important };
+}
+
 // ───────────────────────────── Matching ─────────────────────────────
 
 /** Layers order the cascade but do not change what a rule matches, and the panel's

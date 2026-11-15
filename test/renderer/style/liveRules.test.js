@@ -8,7 +8,9 @@
 // preview until the page's own sheet holds the value, and no longer than the
 // settle window; a sheet over the rule cap is refused loudly rather than half
 // searched; a grouped rule's member is not previewed; and only a declaration's
-// newest edit may settle it.
+// newest edit may settle it. The variable picker's hover preview (`avb:hover-style`)
+// is set inline on the selected node's elements only, never written, and `clear`
+// leaves each element's style attribute exactly as it was, including absent.
 // Method: the contract is parsed with good input and every bad shape; the frame
 // half runs in jsdom with dev stylesheets shaped like Vite's (`data-vite-dev-id`
 // and Astro's `[data-astro-cid-…]` scope) and a hand-stepped animation frame, so
@@ -401,6 +403,84 @@ test("the panel previews an edit, settles it by its save, and skips a grouped ru
 });
 
 // ───────────────────────────── The frame half, in Chromium ─────────────────────────────
+
+// ───────────────────────────── The hover preview ─────────────────────────────
+
+const SHOW = { type: 'avb:hover-style', op: 'show', path: 'src/pages/index.astro:0.1', property: 'font-size', value: 'var(--display)', important: false };
+const CLEAR = { type: 'avb:hover-style', op: 'clear' };
+
+test('hover style messages accept a show and a clear, and refuse every malformed shape', () => {
+  assert.deepEqual(contract.parseHoverStyleMessage(SHOW), SHOW);
+  assert.deepEqual(contract.parseHoverStyleMessage({ ...SHOW, important: true }), { ...SHOW, important: true });
+  assert.deepEqual(contract.parseHoverStyleMessage(CLEAR), CLEAR);
+  const limits = contract.HOVER_STYLE_LIMITS;
+  const bad = [
+    undefined,
+    JSON.parse('null'),
+    'avb:hover-style',
+    { ...SHOW, type: 'avb:live-rule' },
+    { type: 'avb:hover-style' },
+    { ...SHOW, op: 'set' },
+    { ...SHOW, path: '' },
+    { ...SHOW, path: 7 },
+    { ...SHOW, path: 'a\nb' },
+    { ...SHOW, path: 'a'.repeat(limits.pathCharsMax + 1) },
+    { ...SHOW, property: 'Font-Size' },
+    { ...SHOW, property: 'font-size: 3px' },
+    { ...SHOW, property: undefined },
+    { ...SHOW, value: '' },
+    { ...SHOW, value: '1px; color: red' },
+    { ...SHOW, value: '1px !important' },
+    { ...SHOW, value: 3 },
+    { ...SHOW, important: 'true' },
+    { ...SHOW, important: undefined },
+  ];
+  for (const input of bad) {
+    assert.equal(contract.parseHoverStyleMessage(input), undefined, JSON.stringify(input));
+  }
+});
+
+test("a hover preview is set on the node's elements only, and clear leaves each style attribute as it was", () => {
+  const dom = installDom('');
+  document.body.innerHTML = [
+    `<h1 id="one" data-avb-p="${SHOW.path}">One</h1>`,
+    `<h1 id="copy" data-avb-p="${SHOW.path}" style="color: red; font-size: 10px">Copy</h1>`,
+    '<h1 id="other" data-avb-p="src/pages/index.astro:0.2">Other</h1>',
+  ].join('');
+  const frame = loadFrame();
+  const attribute = (id) => document.getElementById(id).getAttribute('style') ?? undefined;
+  assert.equal(frame.receiveLiveRules(SHOW), true, 'the frame takes the hover message through its live-rule entry');
+  assert.equal(document.getElementById('one').style.getPropertyValue('font-size'), 'var(--display)');
+  assert.equal(document.getElementById('copy').style.getPropertyValue('font-size'), 'var(--display)', 'a loop copy previews too');
+  assert.equal(attribute('other'), undefined, 'another node is left alone');
+  assert.equal(frame.hoverStyleCount(), 2);
+  // A new show replaces the last: the first property goes back before the next is set.
+  frame.receiveLiveRules({ ...SHOW, property: 'font-weight', value: '700', important: true });
+  assert.equal(document.getElementById('copy').style.getPropertyValue('font-size'), '10px');
+  assert.equal(document.getElementById('one').style.getPropertyPriority('font-weight'), 'important');
+  frame.receiveLiveRules(CLEAR);
+  assert.equal(attribute('one'), undefined, 'a style attribute the preview added goes again');
+  assert.equal(attribute('copy'), 'color: red; font-size: 10px;', "the copy's own inline style is back as it was");
+  assert.equal(frame.hoverStyleCount(), 0);
+  // Clear is idempotent, and a show for a node that is not on the page sets nothing.
+  frame.receiveLiveRules(CLEAR);
+  frame.receiveLiveRules({ ...SHOW, path: 'src/pages/index.astro:9' });
+  assert.equal(frame.hoverStyleCount(), 0);
+  assert.equal(attribute('one'), undefined);
+  dom.window.close();
+});
+
+test('a hover preview past the element bound previews the first copies and leaves the rest', () => {
+  installDom('');
+  const count = contract.HOVER_STYLE_LIMITS.elementsMax + 3;
+  document.body.innerHTML = Array.from({ length: count }, (_, index) => `<p id="p${index}" data-avb-p="${SHOW.path}">${index}</p>`).join('');
+  const frame = loadFrame();
+  frame.receiveLiveRules(SHOW);
+  assert.equal(frame.hoverStyleCount(), contract.HOVER_STYLE_LIMITS.elementsMax);
+  assert.equal(document.getElementById(`p${count - 1}`).hasAttribute('style'), false);
+  frame.receiveLiveRules(CLEAR);
+  assert.equal(document.querySelectorAll('[style]').length, 0);
+});
 
 test('in a real browser the canvas shows the value before the save and agrees after it', (context) => {
   const electronPath = (() => {

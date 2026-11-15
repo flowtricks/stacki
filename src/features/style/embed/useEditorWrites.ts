@@ -3,11 +3,17 @@
 // navigation, and the selection, context and source cards (EmbedEditor.tsx).
 
 import { useTranslate } from '../../../lib/i18n/useTranslate';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { saveEmbedSource } from '../model/toolPreferences';
 import { hslaToRgba } from '../model/colorWrite';
 import { writtenValue } from '../model/lengthUnit';
 import { contextKeyOf, ruleOnLayer } from '../model/resolved';
+import { parseImportant } from '../model/styleDisplay';
+import { HOVER_STYLE_MESSAGE, parseHoverStyleMessage, type HoverStyleMessage } from '../../../../shared/properties/liveRules';
+import { assert } from '../../../../shared/core/assert';
+import { tellCanvas } from '../../../editor/canvasQuery';
+import { getHost } from '../model/host';
+import type { PreviewProp } from '../connectFieldHelpers';
 import { pseudoPickPending, usePanelLayer } from './editorModel';
 import type { ParsedRule } from '../model/styleTypes';
 import { optionsFor } from '../model/nativeStyles';
@@ -230,7 +236,79 @@ export function useLiveSetProp(
     }
     onLiveSetProps(embedWrites);
   };
-  return { liveSetProp };
+  const previewProp = useCanvasPreview({ stateKey, activeSelector });
+  return { liveSetProp, previewProp };
+}
+
+// The picker's hover preview: the hovered value shown on the canvas and nowhere else. It goes to the frame
+// as a hover style (shared/properties/liveRules.ts), set inline on the selected element, and no save
+// follows: nothing is mutated, written, put in history or marked dirty, so taking it back is only telling
+// the frame to put the element's own style back, and a restore can never race a write. Fields route the
+// picker's preview here (LiveTextInput, components/LiveInput) instead of through liveSetProp, whose writes
+// are typing. A state or pseudo-element context has no element to show it on: there the field alone shows it.
+function useCanvasPreview({ stateKey, activeSelector }: { readonly stateKey: string; readonly activeSelector: string | undefined }): PreviewProp {
+  // The property whose preview is up, or undefined.
+  const shownRef = useRef<string | undefined>(undefined);
+  const clear = (): void => {
+    if (shownRef.current === undefined) {
+      return;
+    }
+    shownRef.current = undefined;
+    tellCanvas({ type: HOVER_STYLE_MESSAGE, op: 'clear' });
+  };
+  // Leaving the panel with a preview still up (a project switch) puts the element's own style back.
+  const clearRef = useRef(clear);
+  clearRef.current = clear;
+  useEffect(() => () => clearRef.current(), []);
+  return (prop, text) => {
+    const message = text === undefined ? undefined : hoverStyleOf(prop, text, { stateKey, activeSelector });
+    if (message === undefined) {
+      clear();
+      return;
+    }
+    assert(message.property === prop, 'Canvas preview: the message shows the property asked for');
+    shownRef.current = prop;
+    tellCanvas(message);
+    assert(shownRef.current !== undefined, 'Canvas preview: a shown preview is remembered for its restore');
+  };
+}
+
+// The frame message that shows `text` for `prop` on the selected element, or undefined when there is
+// nowhere to show it: no selection, a value the property does not take, a state or pseudo-element.
+function hoverStyleOf(
+  prop: string,
+  text: string,
+  { stateKey, activeSelector }: { readonly stateKey: string; readonly activeSelector: string | undefined },
+): Extract<HoverStyleMessage, { readonly op: 'show' }> | undefined {
+  if (stateKey.length > 0) {
+    return undefined;
+  }
+  if (activeSelector !== undefined) {
+    if (activeSelector.includes('::')) {
+      return undefined;
+    }
+  }
+  const parsed = parseImportant(text.trim());
+  const value = writtenValue(prop, parsed.value);
+  if (value.length === 0) {
+    return undefined;
+  }
+  // A half-made value is not sent: the frame would drop the declaration and show nothing.
+  if (!isSupportedCssValue(prop, value)) {
+    return undefined;
+  }
+  const host = getHost();
+  const nodeId = host.selectedId;
+  if (nodeId === undefined) {
+    return undefined;
+  }
+  const path = host.pathOf?.(nodeId);
+  if (path === undefined) {
+    return undefined;
+  }
+  // Parsed as the frame will parse it, so the panel never sends what the frame refuses.
+  const message = parseHoverStyleMessage({ type: HOVER_STYLE_MESSAGE, op: 'show', path, property: prop, value, important: parsed.important });
+  return message?.op === 'show' ? message : undefined;
 }
 
 // The source dropdown: every embed, grouped by component.
@@ -452,7 +530,7 @@ export function useSourceCard(
   const { selectedRule } = writeNewRuleHook;
   const { setProp } = setPropHook;
   const { clearProp } = clearPropHook;
-  const { liveSetProp } = liveSetPropHook;
+  const { liveSetProp, previewProp } = liveSetPropHook;
   const { nativeStyleName, sourceNote, sourceOptions } = sourceOptionsHook;
 
   const cardSource = {
@@ -473,6 +551,7 @@ export function useSourceCard(
     setProp,
     clearProp,
     liveSetProp,
+    previewProp,
     onAdd: setProp,
     onSaveCssRule,
     onRemoveRule,

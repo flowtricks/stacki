@@ -13,11 +13,14 @@
 
 import { assert } from '../../shared/core/assert';
 import { err, ok, type Result } from '../../shared/core/result';
+import { elementsWithPath } from './frameRegions';
 import {
+  HOVER_STYLE_LIMITS,
   LIVE_RULE_LIMITS,
   isConditionAtRule,
   liveRuleKey,
   normalizeAtRule,
+  parseHoverStyleMessage,
   parseLiveRuleMessage,
   selectorKeyOf,
   sheetPathIsAstroStyle,
@@ -55,8 +58,11 @@ const overrides = new Map<string, Override>();
 const patchesByKey = new Map<string, readonly Patch[]>();
 let settleScheduled = false;
 
-/** Applies an app message if it is one; false when it was something else. */
+/** Applies an app message if it is one (a rule preview or a hover preview); false when it was something else. */
 export function receiveLiveRules(input: unknown): boolean {
+  if (receiveHoverStyle(input)) {
+    return true;
+  }
   const message = parseLiveRuleMessage(input);
   if (message === undefined) {
     return false;
@@ -94,6 +100,91 @@ export function receiveLiveRules(input: unknown): boolean {
   assert(overrides.size <= LIVE_RULE_LIMITS.entriesMax, 'receiveLiveRules: previews stay bounded');
   assert(patchesByKey.size <= overrides.size, 'receiveLiveRules: patches belong to held previews');
   return true;
+}
+
+// ───────────────────────────── Hover style ─────────────────────────────
+
+/** One element a hover preview set, and its own inline declaration before it. */
+interface HoverEntry {
+  readonly element: ElementCSSInlineStyle & Element;
+  readonly value: string;
+  readonly priority: string;
+  /** Whether the element had a style attribute at all: one the preview added goes again. */
+  readonly hadStyle: boolean;
+}
+
+// The hover preview that is up, if any. A look, never a write: nothing here reaches the
+// project, and `clear` leaves each element's style attribute exactly as it was.
+let hover: { readonly property: string; readonly entries: readonly HoverEntry[] } | undefined = undefined;
+
+function receiveHoverStyle(input: unknown): boolean {
+  const message = parseHoverStyleMessage(input);
+  if (message === undefined) {
+    return false;
+  }
+  clearHoverStyle();
+  switch (message.op) {
+    case 'clear':
+      break;
+    case 'show': {
+      const entries: HoverEntry[] = [];
+      for (const element of elementsWithPath(message.path)) {
+        if (entries.length >= HOVER_STYLE_LIMITS.elementsMax) {
+          break; // Loop copies past the bound keep their own look; the selected one is among the first.
+        }
+        if (!hasInlineStyle(element)) {
+          continue;
+        }
+        entries.push({
+          element,
+          value: element.style.getPropertyValue(message.property),
+          priority: element.style.getPropertyPriority(message.property),
+          hadStyle: element.hasAttribute('style'),
+        });
+        element.style.setProperty(message.property, message.value, message.important ? 'important' : '');
+      }
+      hover = { property: message.property, entries };
+      break;
+    }
+    default: {
+      const exhaustive: never = message;
+      return exhaustive;
+    }
+  }
+  assert(hover === undefined || hover.entries.length <= HOVER_STYLE_LIMITS.elementsMax, 'receiveHoverStyle: bounded');
+  return true;
+}
+
+// Puts each element's own inline declaration back, newest first, and forgets the preview. Idempotent.
+function clearHoverStyle(): void {
+  const shown = hover;
+  hover = undefined;
+  if (shown === undefined) {
+    return;
+  }
+  for (let index = shown.entries.length - 1; index >= 0; index -= 1) {
+    const entry = shown.entries[index];
+    assert(entry !== undefined, 'clearHoverStyle: index within entries');
+    if (entry.value === '') {
+      entry.element.style.removeProperty(shown.property);
+    } else {
+      entry.element.style.setProperty(shown.property, entry.value, entry.priority);
+    }
+    if (!entry.hadStyle) {
+      if (entry.element.style.length === 0) {
+        entry.element.removeAttribute('style');
+      }
+    }
+  }
+}
+
+function hasInlineStyle(element: Element): element is ElementCSSInlineStyle & Element {
+  return 'style' in element && element.style instanceof Object && 'setProperty' in element.style;
+}
+
+/** The elements a hover preview is set on now: for tests, which check that `clear` leaves none. */
+export function hoverStyleCount(): number {
+  return hover?.entries.length ?? 0;
 }
 
 /** How many previews are held: for tests, which check that nothing outlives its window. */

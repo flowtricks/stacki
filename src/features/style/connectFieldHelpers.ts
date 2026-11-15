@@ -2,7 +2,7 @@
 // placeholder, the variable a binding names, and setting the field's value or
 // ref the way React expects (VariableConnect.tsx).
 
-import { isValidElement } from 'react';
+import { createContext, isValidElement, useContext, useEffect, useRef } from 'react';
 import type { ReactElement, ReactNode, Ref, RefCallback } from 'react';
 
 // Read the current value out of the wrapped <input> child, so callers don't have to
@@ -100,4 +100,75 @@ export function pickerPreviewKind(event: unknown): PickerPreviewKind | undefined
     return undefined;
   }
   return event[PICKER_PREVIEW_MARK] === 'restore' ? 'restore' : 'preview';
+}
+
+/**
+ * Shows `value` for `prop` on the canvas only, or with `undefined` takes that showing away again. It is the
+ * picker preview's one way onto the page: never a write, a history entry, a dirty flag, an autosave or a git
+ * snapshot, so nothing about the project changes while a person only looks (useEditorWrites' previewProp).
+ */
+export type PreviewProp = (prop: string, value: string | undefined) => void;
+
+// Outside a style card (the audits, the variables sheet) there is no canvas rule to preview on: the field
+// shows the preview and nothing else does.
+const previewNowhere: PreviewProp = () => undefined;
+
+/** The style card's canvas-only preview, for the fields inside it (StyleCard provides it). */
+export const PreviewPropContext = createContext<PreviewProp>(previewNowhere);
+
+/** A field's canvas preview: shows the picker's previewed text for the field's property, and takes it back. */
+export interface FieldPreview {
+  readonly show: (text: string) => void;
+  /** Idempotent: with nothing shown, nothing is sent. */
+  readonly takeBack: () => void;
+  /** A pick of `picked` is being committed: a pick of the saved value changes nothing, so its preview goes now. */
+  readonly picked: (picked: string) => void;
+}
+
+/**
+ * The canvas preview of the field editing `prop` (undefined: a field with no property shows the preview in
+ * itself alone). What it put up is remembered, so it is always taken back: by the picker's restore; by the
+ * field's saved `value` changing, which is a pick's save landing (the page then shows the picked value
+ * itself, so taking the preview back earlier would flash the old one); and by the field going away with it
+ * still up, since the picker's own restore cannot reach a field that is unmounting (its input is gone) and a
+ * selection or project change unmounts both at once.
+ */
+export function useFieldPreview(prop: string | undefined, value: string): FieldPreview {
+  const previewProp = useContext(PreviewPropContext);
+  // The property a preview is up for, or undefined when none is.
+  const shownRef = useRef<string | undefined>(undefined);
+  const latest = useRef({ previewProp, prop, value });
+  latest.current = { previewProp, prop, value };
+  const takeBack = (): void => {
+    const shown = shownRef.current;
+    if (shown === undefined) {
+      return;
+    }
+    shownRef.current = undefined;
+    latest.current.previewProp(shown, undefined);
+  };
+  const takeBackRef = useRef(takeBack);
+  takeBackRef.current = takeBack;
+  useEffect(() => () => takeBackRef.current(), []);
+  useEffect(() => takeBackRef.current(), [value]);
+  return {
+    show: (text) => {
+      const target = latest.current.prop;
+      if (target === undefined) {
+        return;
+      }
+      // The field's property changed under a preview (it should not): the old one comes down first.
+      if (shownRef.current !== undefined && shownRef.current !== target) {
+        takeBack();
+      }
+      shownRef.current = target;
+      latest.current.previewProp(target, text);
+    },
+    takeBack,
+    picked: (picked) => {
+      if (picked === latest.current.value) {
+        takeBack();
+      }
+    },
+  };
 }
