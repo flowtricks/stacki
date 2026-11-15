@@ -323,7 +323,8 @@ test('publish settings show the connected accounts and never start a sign-in', a
   const repositories = parseRepositoryResult((await answer(call, '/studio/api/publish/repository', post({ action: 'list', account: 'stacki-demo' }))).body);
   assert.equal(repositories.ok ? repositories.value.connected : '', DEMO_REPOSITORY);
   const create = parseRepositoryResult(
-    (await answer(call, '/studio/api/publish/repository', post({ action: 'create', account: 'stacki-demo', name: 'x', private: true }))).body,
+    (await answer(call, '/studio/api/publish/repository', post({ action: 'create', account: 'stacki-demo', owner: 'stacki-demo', name: 'x', private: true })))
+      .body,
   );
   assert.deepEqual(create, { ok: false, error: CONNECTIONS_REASON });
   const signIn = parseAccountState(

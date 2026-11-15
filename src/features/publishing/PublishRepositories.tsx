@@ -4,7 +4,9 @@ import { RefreshIcon } from '../../ui/Icons';
 import Dropdown from '../../ui/Dropdown';
 import Popup from '../../ui/Popup';
 import { publishingRepositories } from '../../ipc/publishRepositoryBridge';
-import type { PublishingRepositories, RepositoryRequest } from '../../../shared/ipc/publishRepository';
+import type { OrganizationAccess, PublishingRepositories, RepositoryRequest } from '../../../shared/ipc/publishRepository';
+import { Skeleton } from '../../ui/Skeleton';
+import { CodeInline } from '../../ui/CodeBlock';
 import { cleanError } from '../../lib/cleanError';
 import { useTranslate, useTranslateDescribed } from '../../lib/i18n/useTranslate';
 import type { MessageRef } from '../../../shared/core/i18n/messageReference';
@@ -59,6 +61,7 @@ export function PublishRepositories(props: Props) {
         <NewRepository
           key={account}
           {...props}
+          owners={ownersOf(displayed)}
           close={() => setAdding(false)}
           created={(value, repository) => {
             setState({ kind: 'ready', value });
@@ -103,14 +106,33 @@ function RepositoryChoice(props: Props & { readonly state: SettledState | undefi
   );
 }
 
+/** What the owner picker can offer: `undefined` until the first list settles, so the picker draws a skeleton and nothing waits. */
+interface Owners {
+  readonly organizations: readonly string[];
+  readonly access: OrganizationAccess;
+}
+function ownersOf(state: SettledState | undefined): Owners | undefined {
+  if (state === undefined) {
+    return undefined;
+  }
+  if (state.kind === 'ready') {
+    return { organizations: state.value.organizations, access: state.value.organizationAccess };
+  }
+  return { organizations: [], access: 'failed' };
+}
+
+/** The command that adds the one scope organizations need. A shell command, so it is shown as highlighted code; Stacki never handles the token. */
+export const GRANT_ORGANIZATION_ACCESS_COMMAND = 'gh auth refresh --hostname github.com --scopes read:org';
+
 interface NewRepositoryProps extends Props {
+  readonly owners: Owners | undefined;
   readonly close: () => void;
   readonly created: (value: PublishingRepositories, repository: string) => void;
 }
 function NewRepository(props: NewRepositoryProps) {
   const translate = useTranslate();
   const translateDescribed = useTranslateDescribed();
-  const { name, setName, visibility, setVisibility, state, error, create } = useNewRepository(props);
+  const { name, setName, owner, setOwner, visibility, setVisibility, state, error, create } = useNewRepository(props);
   return (
     <Popup
       className="modal publish-settings publish-new-repository"
@@ -126,6 +148,7 @@ function NewRepository(props: NewRepositoryProps) {
               {translate('publish.repositories.create.name')}
               <input value={name} maxLength={100} disabled={state === 'creating'} onChange={(event) => setName(event.target.value)} />
             </label>
+            <OwnerField {...props} owner={owner} setOwner={setOwner} disabled={state === 'creating'} />
             <div className="publish-field">
               <span className="publish-label">{translate('publish.repositories.visibility')}</span>
               <Dropdown
@@ -141,7 +164,7 @@ function NewRepository(props: NewRepositoryProps) {
                 disabled={state === 'creating'}
               />
             </div>
-            <p className="hint-text">{translate('publish.repositories.create.hint', { account: props.account })}</p>
+            <p className="hint-text">{translate('publish.repositories.create.hint', { owner })}</p>
             {error && <ErrorToast message={translateDescribed(error)} />}
           </div>
           <div className="modal-footer">
@@ -158,7 +181,67 @@ function NewRepository(props: NewRepositoryProps) {
   );
 }
 
+interface OwnerFieldProps extends Pick<NewRepositoryProps, 'account' | 'owners'> {
+  readonly owner: string;
+  readonly setOwner: (owner: string) => void;
+  readonly disabled: boolean;
+}
+function OwnerField(props: OwnerFieldProps) {
+  const translate = useTranslate();
+  const { owners } = props;
+  const label = translate('publish.repositories.create.owner');
+  if (owners === undefined) {
+    return (
+      <div className="publish-field" aria-busy="true">
+        <span className="publish-label">{label}</span>
+        <Skeleton height="2rem" />
+      </div>
+    );
+  }
+  const personal = { value: props.account, label: translate('publish.repositories.create.personal', { account: props.account }) };
+  return (
+    <div className="publish-field">
+      <span className="publish-label">{label}</span>
+      <Dropdown
+        ariaLabel={translate('publish.repositories.create.ownerLabel')}
+        value={props.owner}
+        options={[personal, ...owners.organizations.map((organization) => ({ value: organization, label: organization }))]}
+        onChange={props.setOwner}
+        searchable={owners.organizations.length > 6}
+        searchPlaceholder={translate('publish.repositories.find')}
+        livePreview={false}
+        menuClassName="publish-dropdown"
+        disabled={props.disabled}
+      />
+      <OrganizationHint access={owners.access} />
+    </div>
+  );
+}
+
+// A missing scope is the one hidden-organization cause the person can fix here, so it gets the command; the rest get a plain hint.
+function OrganizationHint({ access }: { readonly access: OrganizationAccess }) {
+  const translate = useTranslate();
+  switch (access) {
+    case 'needsScope':
+      return (
+        <>
+          <p className="hint-text">{translate('publish.repositories.create.orgAccessNeeded')}</p>
+          <CodeInline text={GRANT_ORGANIZATION_ACCESS_COMMAND} />
+        </>
+      );
+    case 'failed':
+      return <p className="hint-text">{translate('publish.repositories.create.orgAccessFailed')}</p>;
+    case 'available':
+      return <p className="hint-text">{translate('publish.repositories.create.orgMissing')}</p>;
+    default: {
+      const exhaustive: never = access;
+      return exhaustive;
+    }
+  }
+}
+
 function useNewRepository(props: NewRepositoryProps) {
+  const [owner, setOwner] = useState(props.account);
   const [name, setName] = useState(props.projectPath.split(/[/\\]/).at(-1) ?? 'website');
   const [visibility, setVisibility] = useState<'private' | 'public'>('private');
   const [state, setState] = useState<'editing' | 'creating'>('editing');
@@ -173,11 +256,12 @@ function useNewRepository(props: NewRepositoryProps) {
       const result = await publishingRepositories(props.projectPath, {
         action: 'create',
         account: props.account,
+        owner,
         name,
         private: visibility === 'private',
       });
       if (result.ok) {
-        props.created(result.value, `${props.account}/${name}`);
+        props.created(result.value, `${owner}/${name}`);
       } else {
         setError({ message: result.error, messageRef: result.errorRef });
       }
@@ -188,7 +272,7 @@ function useNewRepository(props: NewRepositoryProps) {
       props.busy(false);
     }
   }
-  return { name, setName, visibility, setVisibility, state, error, create };
+  return { name, setName, owner, setOwner, visibility, setVisibility, state, error, create };
 }
 
 function useRepositoryList(projectPath: string, account: string) {

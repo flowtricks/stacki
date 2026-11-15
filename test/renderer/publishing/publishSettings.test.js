@@ -46,6 +46,8 @@ function fixture(context, source) {
         revision: 'a'.repeat(64),
         repositories: ['owner/site'],
         mode: 'editable',
+        organizations: [],
+        organizationAccess: 'available',
         notice: '',
       },
     }),

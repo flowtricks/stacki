@@ -46,6 +46,8 @@ function fixture(context, config = DEFAULT_PUBLISH_CONFIG) {
         revision: 'a'.repeat(64),
         repositories: [],
         mode: 'editable',
+        organizations: [],
+        organizationAccess: 'available',
         notice: '',
       },
     }),

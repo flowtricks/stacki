@@ -45,6 +45,8 @@ function managedRepository(repository: string, action: string) {
       connected,
       repositories: [connected],
       mode: 'managed',
+      organizations: [],
+      organizationAccess: 'available',
       revision: createHash('sha256').update(connected).digest('hex'),
       notice: notice.message,
       noticeRef: notice.messageRef,
