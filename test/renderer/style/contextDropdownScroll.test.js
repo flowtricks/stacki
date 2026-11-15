@@ -117,6 +117,13 @@ const check = (what, condition, detail) => {
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
        const js = (code) => win.webContents.executeJavaScript(code).catch((error) => { console.error('PROBE FAIL ' + String(error).slice(0, 300) + ' IN ' + code.slice(0, 120)); throw error; });
        const { MOTION_SETTLED_EXPRESSION, waitFor: pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+       // The viewport is emulated, not the window resized: a runner's screen can be shorter than the 900px
+       // the cap check needs (Windows 768px, macOS about 875px), and the OS then clamps setContentSize, so
+       // window.innerHeight never reached the request and the probe waited until its 90s bound.
+       if (!win.webContents.debugger.isAttached()) {
+         win.webContents.debugger.attach('1.3');
+       }
+       const setViewportHeight = (height) => win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', { width: 700, height, deviceScaleFactor: 0, mobile: false });
        const settled = (what) => pollUntil({ what, read: () => js(MOTION_SETTLED_EXPRESSION), until: (still) => still });
        await pollUntil({ what: 'trigger drawn', read: () => js("document.querySelector('.u-select-button') !== null"), until: (drawn) => drawn });
        // Helpers inside the page. The scroller is the nearest scrolling ancestor of the first row.
@@ -162,7 +169,7 @@ const check = (what, condition, detail) => {
        const reopen = async (height, shape) => {
          await js("document.querySelector('.u-select-list') !== null && document.querySelector('.u-select-button').click(); true");
          await pollUntil({ what: 'list closed', read: () => js("document.querySelector('.u-select-list') === null"), until: (closed) => closed });
-         win.setContentSize(700, height);
+         await setViewportHeight(height);
          await pollUntil({ what: 'window resized', read: () => js('window.innerHeight'), until: (inner) => inner === height });
          await js('window.__shape(' + JSON.stringify(shape) + '); true');
          await js("document.querySelector('.u-select-button').click(); true");
@@ -183,7 +190,7 @@ const check = (what, condition, detail) => {
          const shoot = async (name) => { const image = await win.webContents.capturePage(); fs.writeFileSync(require('path').join(shots, name + '.png'), image.toPNG()); };
          await js("document.querySelector('.u-select-list') !== null && document.querySelector('.u-select-button').click(); true");
          await pollUntil({ what: 'list closed before shots', read: () => js("document.querySelector('.u-select-list') === null"), until: (closed) => closed });
-         win.setContentSize(700, 700);
+         await setViewportHeight(700);
          await pollUntil({ what: 'resized', read: () => js('window.innerHeight'), until: (inner) => inner === 700 });
          // A window resize closes an open popover, and its event lands a frame late: let it pass first.
          await js('new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))');

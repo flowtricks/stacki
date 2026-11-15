@@ -136,7 +136,12 @@ function backgroundRules() {
       });
       if (value !== undefined) {
         for (const selector of rule.selectors) {
-          rules.push({ file: path.relative(ROOT, file), line: rule.source.start.line, selector: selector.replace(/\s+/g, ' '), value });
+          rules.push({
+            file: path.relative(ROOT, file).split(path.sep).join('/'),
+            line: rule.source.start.line,
+            selector: selector.replace(/\s+/g, ' '),
+            value,
+          });
         }
       }
     });

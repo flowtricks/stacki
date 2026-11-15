@@ -294,6 +294,15 @@ test('an edit that sets a value the source already holds writes nothing at all',
   const heard: string[] = [];
   watcher.on('change', (kind, name) => heard.push(`${kind} ${String(name)}`));
   context.after(() => watcher.close());
+  // macOS delivers file events late, and a watcher opened after the seeding write can still hear it
+  // (the rename of index.astro that the fixture's own writeFileSync made). Let the watcher go quiet,
+  // within a bound, and forget those events: only what the edits themselves cause is judged below.
+  let heardBeforeTurn = -1;
+  for (let turn = 0; turn < 40 && heardBeforeTurn !== heard.length; turn += 1) {
+    heardBeforeTurn = heard.length;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  heard.length = 0;
   // The default export is the module object the main process's CommonJS code calls into; the
   // namespace imported above is a frozen view of it and cannot be patched.
   const renameSync = mainFs.renameSync;
