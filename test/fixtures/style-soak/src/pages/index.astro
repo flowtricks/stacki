@@ -7,6 +7,7 @@ import Eyebrow from "@/components/typography/Eyebrow.astro";
 import Paragraph from "@/components/typography/Paragraph.astro";
 import SoakCard from "@/components/SoakCard.astro";
 import SoakGlobalCard from "@/components/SoakGlobalCard.astro";
+import SoakClassed from "@/components/SoakClassed.astro";
 import "@/styles/soak.css";
 
 // Classes computed at render time: the panel cannot read them from the source, only from the
@@ -15,6 +16,10 @@ import "@/styles/soak.css";
 // large DOM) then take as long as they do there, which is what opens the panel's race windows.
 const fillerRows = Array.from({ length: 1200 }, (_, index) => index);
 const expressionClasses = (suffix: string) => ["soak-expr", `soak-expr_${suffix}`, "text-style-h3"].join(" ");
+// Every other shape a class expression takes in a real site (class:list, a template literal, a
+// ternary, a class handed to a component): selecting any of them must never write the page.
+const isWide = true;
+const variant = "a";
 ---
 <Layout theme="dark">
   <Section>
@@ -25,6 +30,10 @@ const expressionClasses = (suffix: string) => ["soak-expr", `soak-expr_${suffix}
       <Paragraph id="soak-paragraph">A paragraph whose type comes from the Lumos text styles.</Paragraph>
       <div id="soak-expr-one" class={expressionClasses("one")}>Classes from an expression, one</div>
       <div id="soak-expr-two" class={expressionClasses("two")}>Classes from an expression, two</div>
+      <div id="soak-list" class:list={["soak-expr", "soak-list", isWide && "is-wide"]}>Classes from class:list</div>
+      <div id="soak-template" class={`soak-expr soak-template_${variant}`}>Classes from a template literal</div>
+      <div id="soak-ternary" class={isWide ? "soak-expr is-wide" : "soak-expr"}>Classes from a ternary</div>
+      <SoakClassed id="soak-classed" class={expressionClasses("classed")}>Classes handed to a component</SoakClassed>
       <p id="soak-plain" class="soak-plain">A plain paragraph with no variables at all.</p>
       <p id="soak-inline" class="soak-plain" style="color: rgb(200, 40, 40); letter-spacing: 0.05em;">A paragraph with inline styles.</p>
       <p id="soak-ext" class="soak-ext">A paragraph styled only by an external stylesheet.</p>
