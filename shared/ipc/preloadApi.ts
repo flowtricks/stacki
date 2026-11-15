@@ -56,6 +56,9 @@ interface InvokeChannels {
   readonly moveCssVariables: 'css:moveVariables';
   readonly addCssVariables: 'css:addVariables';
   readonly renameCssVariables: 'css:renameVariables';
+  readonly scanBreakpointSync: 'breakpointSync:scan';
+  readonly applyBreakpointSync: 'breakpointSync:apply';
+  readonly restoreBreakpointSync: 'breakpointSync:restore';
   readonly setCssSectionTitle: 'css:setSectionTitle';
   readonly removeCssSection: 'css:removeSection';
   readonly addCssSection: 'css:addSection';

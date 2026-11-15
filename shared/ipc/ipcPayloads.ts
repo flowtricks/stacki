@@ -1,6 +1,7 @@
 import { parseLocaleSet } from './localeChannel';
 import { parseMergeResolution } from './mergeResolution';
 import { parseAccountRequest } from './publishAccount';
+import { parseSyncApply, parseSyncRestore, parseSyncScan } from '../properties/breakpointSyncPlan';
 import { parseCmsCheckRequest, parseCmsConnectionDraft, parseConnectionId, parseSanityLoginRequest } from '../properties/cmsConnections';
 import {
   parseRemoteCollectionName,
@@ -387,6 +388,9 @@ export const IPC_PAYLOADS = {
   'css:moveHeading': object({ ...project, ...cssRange, selector: text, before: cssTarget }),
   'css:moveVariables': object({ ...project, moves: optional(list(cssMove)) }),
   'css:removeSection': object({ ...project, ...cssRange }),
+  'breakpointSync:scan': parseSyncScan,
+  'breakpointSync:apply': parseSyncApply,
+  'breakpointSync:restore': parseSyncRestore,
   'css:renameVariables': object({ ...project, renames: list(object({ from: text, to: text })) }),
   'css:setSectionTitle': object({ ...project, ...cssRange, title: optional(text) }),
   'css:setVariable': object({

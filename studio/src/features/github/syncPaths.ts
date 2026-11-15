@@ -22,6 +22,8 @@ export const INCOMING_METADATA = {
   audits: { file: '.stacki/audits.json', sync: 'live' },
   // Preview breakpoint widths, read by the preview bar (projectBreakpoints.ts).
   breakpoints: { file: '.stacki/breakpoints.json', sync: 'live' },
+  // Which media-query places each breakpoint's sync leaves alone (breakpointSyncRecord.ts).
+  breakpointSync: { file: '.stacki/breakpoint-sync.json', sync: 'live' },
   // Package component sources, read on each component scan (componentSources.ts).
   componentSources: { file: '.stacki/component-sources.json', sync: 'live' },
   // Insertion defaults, read on each defaults load (loadDefaults.ts).

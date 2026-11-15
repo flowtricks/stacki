@@ -43,6 +43,7 @@ const firstSettings = {
   styles: { version: 1, keep: ['is-*'] },
   folders: { version: 1, folders: { components: ['src/ui'], assets: ['public', 'src/assets'] } },
   instructions: { version: 1, hidden: ['docs/archive'] },
+  breakpointSync: { version: 1, laptop: { excluded: [{ file: 'src/pages/index.astro', locator: '2d535645:0' }] } },
   breakpoints: { version: 2, laptop: { value: 1100, unit: 'px' }, tablet: { value: 48, unit: 'rem' }, phone: { value: 30, unit: 'rem' } },
   variables: { version: 1, hiddenFromSuggestions: ['--light-100', '--tint-100'] },
   audits: { version: 1, ignored: [{ id: 'img-alt|src/pages/index.astro|0.1|src="/a.png"', reason: 'Decorative hero' }] },

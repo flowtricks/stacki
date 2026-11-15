@@ -70,6 +70,10 @@ export const CHANNEL_ACCESS: Readonly<Partial<Record<IpcChannel, readonly Access
   'css:moveVariables': ['panel:variables'],
   'css:removeSection': ['panel:variables'],
   'css:renameVariables': ['panel:variables'],
+  // Syncing a breakpoint into the project's queries is part of editing breakpoints in Settings.
+  'breakpointSync:scan': ['settings:breakpoints'],
+  'breakpointSync:apply': ['settings:breakpoints'],
+  'breakpointSync:restore': ['settings:breakpoints'],
   'css:setSectionTitle': ['panel:variables'],
   'css:setVariable': ['panel:variables'],
   'style:writeFile': ['panel:style', 'panel:selectors', 'code:edit'],
@@ -174,6 +178,7 @@ export const METADATA_ACCESS: Readonly<Record<MetadataKind, readonly AccessFeatu
   audits: ['panel:audits', 'settings:audits'],
   // The preview widths are a project setting, edited in Settings.
   breakpoints: ['settings:breakpoints'],
+  breakpointSync: ['settings:breakpoints'],
   componentSources: ['settings:folders'],
   components: ['component:edit'],
   folders: ['settings:folders'],
