@@ -119,6 +119,8 @@ the GitHub button pushes from CI, where no hook runs and `Check` is the gate.
   it to `''`; `path.join` and both separators in assertions; bounded retries on `EBUSY`/`EPERM`/
   `ENOTEMPTY`; wait for observable state with a bound, never a fixed sleep; no reliance on fonts,
   locale or timezone; every wait and loop bounded.
+- **No token-shaped literals in tests**: never write a complete token-shaped literal in a test
+  (GitHub push protection blocks the push); assemble fake tokens at run time.
 - **Known flakes**: add a signature to `knownFlakes.mts` only with its own regression test in
   `test/scripts/release/rerunPolicy.test.ts` (a matching excerpt and a near miss).
 - **Credentials**: nobody pastes tokens into chat or code; the scripts only test that secrets exist.
