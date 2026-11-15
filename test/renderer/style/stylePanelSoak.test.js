@@ -53,15 +53,15 @@ const KNOWN_FAILURES = Object.freeze([
     invariant: 'blank-panel',
     pattern: /no controls between/,
     cause:
-      'a switch shown past its 1.5 s hold (StylePanel useSwitchHold) with the answer still owed draws section placeholders: a slow canvas, or one that re-renders when a class-expression element is selected (two canvas-ready per selection)',
+      'a switch shown past its 1.5 s hold (StylePanel useSwitchHold) with the answer still owed draws section placeholders: a slow canvas, or one that re-renders when a class-expression element is selected (two canvas-ready per selection). Seen at 6x only on the current tree: 2 frames, switching to an expression element with a press 300 ms after it',
   },
   {
     id: 'SP-12',
-    title: 'rows move under the pointer on a switch: the panel keeps scrollTop while the content above changes height',
+    title: 'rows move under the pointer after a switch or a canvas-press-other exit: the scroll changes while the content above changes height',
     invariant: 'scroll-jump',
     pattern: /panel scroll jumped/,
     cause:
-      'left at 4x and 6x only (paragraph <-> nested label): StylePanel useSwitchScrollAnchor holds the first surviving row, but rows below it whose sections change still move while scrollTop does',
+      'not the switch frame: logged at 4x, every surviving row keeps its offset at the switch commit (StylePanel useSwitchScrollAnchor, move 0). The jumps come later, from a layout change after a press, which also ends the 2 s anchor hold: the scroll lands near 1574 in two steps (about 66 px, then 324 px) with rows displaced in between, e.g. "switch to paragraph, press margin after 1600 ms", nested label <-> paragraph, and the same after exit by canvas-press-other. What moves the layout after the press is not yet traced',
   },
   {
     id: 'SP-14',

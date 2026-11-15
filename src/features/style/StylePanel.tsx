@@ -324,19 +324,24 @@ function useSwitchHold(props: StylePanelProps, renderedClasses: string[]): Shown
   return live;
 }
 
-// A row the panel can find again after a switch: a field by its property, a section by
-// its title. Both exist for every element that shows them, whatever else changed.
+// A row the panel can find again after a switch: a field by its property, a dropdown or a
+// segmented group by its label, a section by its title. `content` is what the row shows, so
+// rows that look the same on both elements can be told from rows that changed.
 interface ScrollAnchor {
   readonly key: string;
+  readonly content: string;
   readonly offsetPx: number;
 }
 
-// The visible rows remembered across a switch, top first. The first that is still there
-// afterwards is the anchor; a few are kept because the topmost one may be a row only the
-// previous element had (its Layout rows, say).
-const SCROLL_ANCHOR_CANDIDATES_MAX = 24;
-const SCROLL_ANCHOR_SELECTOR = '[data-prop], .embed-editor_section-title';
+// The visible rows remembered across a switch, top first, bounded: the panel shows a few
+// dozen rows at once.
+const SCROLL_ANCHOR_CANDIDATES_MAX = 64;
+// Every row the panel can draw, with room: a sanity bound on the scans above.
+const SCROLL_ANCHOR_ROWS_MAX = 4096;
+const SCROLL_ANCHOR_SELECTOR = '[data-prop], .embed-editor_section-title, button.u-select-button[aria-label], [role="group"][aria-label]';
 const SCROLL_RESERVE_PROPERTY = '--switch-scroll-reserve';
+// Moves within this of each other are one move: tops are measured to the half pixel.
+const SCROLL_MOVE_PX_TOLERANCE = 0.5;
 
 function panelScroller(host: HTMLElement | undefined): HTMLElement | undefined {
   const root = host?.querySelector(':scope > .embed-editor_root');
@@ -345,35 +350,92 @@ function panelScroller(host: HTMLElement | undefined): HTMLElement | undefined {
 
 function anchorKeyOf(element: Element): string {
   const prop = element.getAttribute('data-prop');
-  return prop === null ? `section:${(element.textContent ?? '').trim()}` : `prop:${prop}`;
+  if (prop !== null) {
+    return `prop:${prop}`;
+  }
+  const label = element.getAttribute('aria-label');
+  return label === null ? `section:${(element.textContent ?? '').trim()}` : `label:${label}`;
 }
 
+function anchorContentOf(element: Element): string {
+  const value = element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement ? element.value : '';
+  const row = element.closest('.embed-editor_varconnect') ?? element;
+  return `${value}|${(row.textContent ?? '').trim()}`;
+}
+
+// The rows on screen now, top first: the first SCROLL_ANCHOR_CANDIDATES_MAX visible ones.
 function visibleAnchors(scroller: HTMLElement): ScrollAnchor[] {
   const topPx = scroller.getBoundingClientRect().top;
   const anchors: ScrollAnchor[] = [];
   const seen = new Set<string>();
-  for (const element of scroller.querySelectorAll(SCROLL_ANCHOR_SELECTOR)) {
+  const elements = scroller.querySelectorAll(SCROLL_ANCHOR_SELECTOR);
+  assert(elements.length <= SCROLL_ANCHOR_ROWS_MAX, 'visibleAnchors: the panel has a bounded number of rows');
+  for (const element of elements) {
     if (anchors.length >= SCROLL_ANCHOR_CANDIDATES_MAX) {
       break;
     }
-    const offsetPx = element.getBoundingClientRect().top - topPx;
     const key = anchorKeyOf(element);
+    const offsetPx = element.getBoundingClientRect().top - topPx;
     if (offsetPx >= 0 && !seen.has(key)) {
       seen.add(key);
-      anchors.push({ key, offsetPx });
+      anchors.push({ key, content: anchorContentOf(element), offsetPx });
     }
   }
-  assert(anchors.length <= SCROLL_ANCHOR_CANDIDATES_MAX, 'visibleAnchors: the candidates are bounded');
   return anchors;
 }
 
-function findAnchor(scroller: HTMLElement, key: string): Element | undefined {
-  for (const element of scroller.querySelectorAll(SCROLL_ANCHOR_SELECTOR)) {
-    if (anchorKeyOf(element) === key) {
-      return element;
+// The rows named by `keys`, wherever they are now. Searched in full, not by the first rows:
+// a deep scroll's rows come late in the panel's order, and a bounded scan from the top
+// found only the rows above the screen, whose moves are not the ones under the pointer.
+function anchorsByKey(scroller: HTMLElement, keys: ReadonlySet<string>): ScrollAnchor[] {
+  const topPx = scroller.getBoundingClientRect().top;
+  const anchors: ScrollAnchor[] = [];
+  const seen = new Set<string>();
+  const elements = scroller.querySelectorAll(SCROLL_ANCHOR_SELECTOR);
+  assert(elements.length <= SCROLL_ANCHOR_ROWS_MAX, 'anchorsByKey: the panel has a bounded number of rows');
+  for (const element of elements) {
+    const key = anchorKeyOf(element);
+    if (keys.has(key) && !seen.has(key)) {
+      seen.add(key);
+      anchors.push({ key, content: anchorContentOf(element), offsetPx: element.getBoundingClientRect().top - topPx });
     }
   }
-  return undefined;
+  return anchors;
+}
+
+/**
+ * How far to scroll so the most rows stay where they were. Each row the switch did not
+ * change (same key, same content) moved by some amount; rows in a stretch of the panel the
+ * switch left alone all moved by the same amount, and that amount, the most common one,
+ * holds the most of them still. With no unchanged row, the first row that survived anchors.
+ * Undefined when no remembered row is still there.
+ */
+function anchorMovePx(before: readonly ScrollAnchor[], after: readonly ScrollAnchor[]): number | undefined {
+  const afterByKey = new Map(after.map((anchor) => [anchor.key, anchor]));
+  let firstSurvivingPx: number | undefined;
+  const moves: number[] = [];
+  for (const anchor of before) {
+    const now = afterByKey.get(anchor.key);
+    if (now === undefined) {
+      continue;
+    }
+    const movedPx = now.offsetPx - anchor.offsetPx;
+    firstSurvivingPx ??= movedPx;
+    if (now.content === anchor.content) {
+      moves.push(movedPx);
+    }
+  }
+  let bestPx = firstSurvivingPx;
+  let bestCount = 0;
+  for (const candidatePx of moves) {
+    const count = moves.filter((movedPx) => Math.abs(movedPx - candidatePx) <= SCROLL_MOVE_PX_TOLERANCE).length;
+    if (count > bestCount) {
+      bestCount = count;
+      bestPx = candidatePx;
+    }
+  }
+  assert(bestCount <= moves.length, 'anchorMovePx: a move is counted among the moves');
+  return bestPx;
 }
 
 /**
@@ -384,7 +446,7 @@ function findAnchor(scroller: HTMLElement, key: string): Element | undefined {
  * because the switch replaces the rows it would anchor to, and a shorter element clamped
  * the scroll. So the switch is anchored here: the visible rows are noted in the render
  * that switches (the previous element is still painted), and before the new one is
- * painted the scroll moves by however far the first surviving row moved. A shorter
+ * painted the scroll moves by however far most of the unchanged rows moved (anchorMovePx). A shorter
  * element gets room at the end (SCROLL_RESERVE_PROPERTY) rather than a clamped scroll,
  * until the next switch.
  */
@@ -402,31 +464,75 @@ function useSwitchScrollAnchor(hostRef: React.RefObject<HTMLDivElement>, shownId
     pendingRef.current = undefined;
     const scroller = panelScroller(hostRef.current ?? undefined);
     if (anchors === undefined || scroller === undefined) {
-      return;
+      return undefined;
     }
     restoreScrollAnchor(scroller, anchors);
+    return holdScrollAnchor(scroller);
   }, [hostRef, shownId]);
 }
 
-function restoreScrollAnchor(scroller: HTMLElement, anchors: readonly ScrollAnchor[]): void {
-  const topPx = scroller.getBoundingClientRect().top;
-  for (const anchor of anchors) {
-    const element = findAnchor(scroller, anchor.key);
-    if (element === undefined) {
-      continue;
+// How long after a switch the rows stay anchored while the new element's sections settle
+// (a refreshed answer, a section's placeholders giving way to its fields), and what ends it
+// early: the person scrolling or pressing, after which where the rows go is theirs.
+const SCROLL_ANCHOR_HOLD_MS = 2000;
+const POPUP_ROLES = '[role="menu"],[role="dialog"],[role="listbox"]';
+const SCROLL_ANCHOR_RELEASE_EVENTS = ['wheel', 'pointerdown', 'keydown', 'touchstart'] as const;
+
+/**
+ * Keeps the switch's anchor for SCROLL_ANCHOR_HOLD_MS. The switch's first paint is anchored
+ * by restoreScrollAnchor, but the element's content still changes height in the commits
+ * that follow, and the scroll then clamped or the browser's own anchoring picked a row of a
+ * section that had changed: the rows moved 38 px under the pointer a frame later. Each
+ * resize of the content is anchored the same way, before it is painted (a ResizeObserver
+ * runs after layout, before paint), with the browser's own anchoring off meanwhile so the
+ * two never both move the scroll. Returns the cleanup.
+ */
+function holdScrollAnchor(scroller: HTMLElement): () => void {
+  let anchors = visibleAnchors(scroller);
+  scroller.style.setProperty('overflow-anchor', 'none');
+  const observer = new ResizeObserver(() => {
+    // A picker or menu is anchored where it opened, and a scroll of the panel closes it:
+    // with one open the rows are left where the layout puts them.
+    if (document.querySelector(POPUP_ROLES) === null) {
+      restoreScrollAnchor(scroller, anchors);
     }
-    const movedPx = element.getBoundingClientRect().top - topPx - anchor.offsetPx;
-    const targetPx = scroller.scrollTop + movedPx;
-    // Room for the target when the new element's content ends too soon for it. Measured
-    // without the previous switch's room, which this one replaces.
-    scroller.style.setProperty(SCROLL_RESERVE_PROPERTY, '0px');
-    const scrollMaxPx = scroller.scrollHeight - scroller.clientHeight;
-    const reservePx = Math.max(0, Math.ceil(targetPx - scrollMaxPx));
-    scroller.style.setProperty(SCROLL_RESERVE_PROPERTY, `${reservePx}px`);
-    // Instant, said explicitly: a smooth scroll would show the rows sliding into place.
-    scroller.scrollTo({ top: targetPx, behavior: 'instant' });
+    anchors = visibleAnchors(scroller);
+  });
+  for (const child of scroller.children) {
+    observer.observe(child);
+  }
+  const release = () => {
+    observer.disconnect();
+    window.clearTimeout(timer);
+    scroller.style.removeProperty('overflow-anchor');
+    for (const type of SCROLL_ANCHOR_RELEASE_EVENTS) {
+      scroller.removeEventListener(type, release, true);
+    }
+  };
+  const timer = window.setTimeout(release, SCROLL_ANCHOR_HOLD_MS);
+  for (const type of SCROLL_ANCHOR_RELEASE_EVENTS) {
+    scroller.addEventListener(type, release, { capture: true, passive: true });
+  }
+  return release;
+}
+
+function restoreScrollAnchor(scroller: HTMLElement, anchors: readonly ScrollAnchor[]): void {
+  const movedPx = anchorMovePx(anchors, anchorsByKey(scroller, new Set(anchors.map((anchor) => anchor.key))));
+  if (movedPx === undefined) {
     return;
   }
+  if (Math.abs(movedPx) <= SCROLL_MOVE_PX_TOLERANCE) {
+    return;
+  }
+  const targetPx = scroller.scrollTop + movedPx;
+  // Room for the target when the new element's content ends too soon for it. Measured
+  // without the previous switch's room, which this one replaces.
+  scroller.style.setProperty(SCROLL_RESERVE_PROPERTY, '0px');
+  const scrollMaxPx = scroller.scrollHeight - scroller.clientHeight;
+  const reservePx = Math.max(0, Math.ceil(targetPx - scrollMaxPx));
+  scroller.style.setProperty(SCROLL_RESERVE_PROPERTY, `${reservePx}px`);
+  // Instant, said explicitly: a smooth scroll would show the rows sliding into place.
+  scroller.scrollTo({ top: targetPx, behavior: 'instant' });
 }
 
 // A rescan builds a new setting object each time; the host compares by identity,
