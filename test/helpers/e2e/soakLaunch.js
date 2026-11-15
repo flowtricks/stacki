@@ -135,6 +135,11 @@ async function startRendererServer(root) {
     cacheDir: repoPath('node_modules/.stacki-test/soak-vite'),
     logLevel: 'warn',
     clearScreen: false,
+    // Vite's dependency scan reads every .html file under the root when none are named, and
+    // studio/demo/index.html imports `__APP__/...` placeholders that only the Studio build fills in:
+    // on a cold cache the scan failed with an unresolved import and the page never loaded (the 1.4.4
+    // release run, on all three platforms). The renderer's one entry is all this server serves.
+    optimizeDeps: { entries: ['index.html'] },
     server: { port, strictPort: true, host: '127.0.0.1', hmr: false, watch: noWatcher, fs: { strict: root === ROOT } },
   });
   await server.listen();
