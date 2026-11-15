@@ -13,6 +13,8 @@ import type { PreviewCrumb, PreviewDevice } from './PreviewToolbar';
 import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
 import { PreviewToolbar } from './PreviewToolbar';
+import type { BreakpointWidths } from '../../../shared/properties/projectBreakpoints';
+import { useProjectBreakpoints } from '../../ipc/useProjectBreakpoints';
 import { usePreviewRuntime, type CanvasSelectInfo, type JudgeCanvasEvent, type PreviewRuntimeProps } from './previewRuntime';
 import type { CanvasNoticeEvent } from './canvasClickRetry';
 import type { PreviewReloadReason } from './previewMessages';
@@ -101,7 +103,8 @@ export default function PreviewPane(props: PreviewPaneProps) {
   });
   const source = usePreviewSource(url, runtime.post);
   const dimensions = usePreviewDimensions();
-  const sizing = usePreviewSizing(props.device, dimensions, props.onDevice);
+  const { widths: breakpoints } = useProjectBreakpoints(props.projectPath);
+  const sizing = usePreviewSizing(props.device, dimensions, breakpoints, props.onDevice);
   useCanvasWidthRequest(props.canvasWidthRequest, dimensions.setCustomWidth);
   const columnGuide = useColumnGuide({
     projectKey: props.projectPath,
@@ -112,6 +115,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
   return (
     <>
       <PreviewToolbar
+        breakpoints={breakpoints}
         crumbs={props.crumbs ?? []}
         {...(props.onCrumb === undefined ? {} : { onCrumb: props.onCrumb })}
         activeDevice={sizing.activeDevice}
@@ -143,6 +147,7 @@ export default function PreviewPane(props: PreviewPaneProps) {
             },
           }}
           sizing={sizing}
+          breakpoints={breakpoints}
           shownGuide={columnGuide.shown}
         />
       </div>
@@ -160,7 +165,9 @@ function PreviewContent({
   runtime,
   sizing,
   shownGuide,
+  breakpoints,
 }: {
+  readonly breakpoints: BreakpointWidths;
   readonly props: PreviewPaneProps;
   readonly url: string | undefined;
   readonly runtime: Runtime;
@@ -172,7 +179,12 @@ function PreviewContent({
   }
   if (url && props.device === 'canvas') {
     return (
-      <CanvasView url={url} refreshKey={props.refreshKey ?? 0} {...(props.onPreviewLoaded === undefined ? {} : { onPreviewLoaded: props.onPreviewLoaded })} />
+      <CanvasView
+        breakpoints={breakpoints}
+        url={url}
+        refreshKey={props.refreshKey ?? 0}
+        {...(props.onPreviewLoaded === undefined ? {} : { onPreviewLoaded: props.onPreviewLoaded })}
+      />
     );
   }
   if (url) {
@@ -239,8 +251,8 @@ function DesignPreview({
           {...measuredOutlines(runtime)}
           scale={scale}
           {...(props.spacingHover === undefined ? {} : { spacingHover: props.spacingHover })}
-          selPath={props.selPath}
-          selPseudo={props.selPseudo}
+          selPath={runtime.pendingSelection?.path ?? props.selPath}
+          selPseudo={runtime.pendingSelection === undefined ? props.selPseudo : runtime.pendingSelection.pseudo}
           hoverPseudo={runtime.hoverPseudo}
           focusPath={props.focusPath}
           focusWhole={props.focusWhole ?? false}
@@ -259,7 +271,8 @@ function measuredOutlines(runtime: Runtime) {
   return {
     rects: runtime.rects,
     spacing: runtime.spacing,
-    selOcc: runtime.selOcc,
+    // A click being judged is drawn as the selection already (previewRuntime.ts PendingSelection).
+    selOcc: runtime.pendingSelection === undefined ? runtime.selOcc : runtime.pendingSelection.occurrence,
     hoverPath: runtime.hoverPath,
     hoverOcc: runtime.hoverOcc,
     textMarks: runtime.textMarks,
