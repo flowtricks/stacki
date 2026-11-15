@@ -11,7 +11,7 @@
 // jsdom has neither bidi nor layout. Each character's drawn box comes from a Range: their
 // left edges must rise through the text, which fails on any reordering, and the ones
 // inside the chip must be a suffix of the selector. Then the same chips are hovered,
-// clicked and widened. Without Electron the layout half is skipped, as
+// clicked and widened, each step waiting, bounded, on what it reads next. Without Electron the layout half is skipped, as
 // popoverDropdown.test.js does.
 
 const assert = require('node:assert/strict');
@@ -122,11 +122,25 @@ assert.match(css, /\.embed-editor_selector-chip-text \{[^}]*direction: rtl;[^}]*
       return { text: chip.textContent, label: chip.getAttribute('aria-label'), lefts, shown, scrollWidth: cutBox.scrollWidth, clientWidth: cutBox.clientWidth };
     };
     const pause = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+    // A bounded wait inside the page (it cannot require test/helpers/waitFor.js): poll every
+    // 50 ms, at most 200 times, and return the last value read either way, for the checks.
+    const waitIn = async (read, done) => {
+      let value = read();
+      for (let poll = 0; poll < 200 && !done(value); poll += 1) {
+        await pause(50);
+        value = read();
+      }
+      return value;
+    };
     const narrow = chips().map(chipBox);
 
     const chip = chips()[1];
     chip.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-    await pause(650);
+    // The tooltip opens after its hover delay and then scales open: wait for it to be open.
+    await waitIn(
+      () => document.querySelector('[role="tooltip"]'),
+      (shown) => shown !== null && shown.getAttribute('data-popup-phase') !== 'opening' && shown.getAnimations().length === 0,
+    );
     const tip = document.querySelector('[role="tooltip"]');
     const tipBox = tip?.getBoundingClientRect();
     const tooltip = {
@@ -135,12 +149,25 @@ assert.match(css, /\.embed-editor_selector-chip-text \{[^}]*direction: rtl;[^}]*
       inside: tipBox !== undefined && tipBox.left >= 0 && tipBox.right <= window.innerWidth,
       title: chip.getAttribute('title'),
     };
+    const picksBefore = window.picks.length;
     chip.click();
-    await pause(50);
+    await waitIn(
+      () => ({ picks: window.picks.length, tip: document.querySelector('[role="tooltip"]') }),
+      (seen) => seen.picks > picksBefore && seen.tip === null,
+    );
     const clicked = { picks: [...window.picks], pressed: chip.getAttribute('aria-pressed'), tipGone: document.querySelector('[role="tooltip"]') === null };
 
     document.getElementById('panel').style.width = `${wideWidth}px`;
-    await pause(50);
+    // The chips re-cut after the widening is observed: wait until two reads agree.
+    let shownLast = '';
+    await waitIn(
+      () => JSON.stringify(chips().map((each) => chipBox(each).shown)),
+      (shownNow) => {
+        const still = shownNow === shownLast;
+        shownLast = shownNow;
+        return still;
+      },
+    );
     const wide = chips().map(chipBox);
     return { narrow, tooltip, clicked, wide };
   };
@@ -155,7 +182,8 @@ assert.match(css, /\.embed-editor_selector-chip-text \{[^}]*direction: rtl;[^}]*
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 900, height: 600 });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
-       await new Promise((resolve) => setTimeout(resolve, 300));
+       const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+       await pollUntil({ what: 'the chips drawn', read: () => win.webContents.executeJavaScript("document.querySelectorAll('.embed-editor_selector-chip').length"), until: (count) => count > 0 });
        const out = await win.webContents.executeJavaScript(fs.readFileSync(${JSON.stringify(measurePath)}, 'utf8'));
        console.log(JSON.stringify(out));
        app.quit();

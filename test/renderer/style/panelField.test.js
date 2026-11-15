@@ -14,7 +14,8 @@
 // unit; a ring around the input alone leaves the `%` outside the box it belongs
 // to. The ring is the box's.
 //
-// Both are questions about rendered boxes, so this runs in a real browser.
+// Both are questions about rendered boxes, so this runs in a real browser. Each step
+// waits, bounded, on the state it reads next (test/helpers/waitFor.js), not a fixed sleep.
 
 const fs = require('fs');
 const path = require('path');
@@ -130,7 +131,12 @@ const check = (what, condition, detail) => {
          }
          throw new Error('Transition popup did not become ' + state);
        };
-       await new Promise((r) => setTimeout(r, 400));
+       const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+       await pollUntil({
+         what: 'the transition rows drawn',
+         read: () => js("document.querySelectorAll('.embed-editor_transitions .embed-editor_bg-layer-main').length"),
+         until: (count) => count >= 2,
+       });
        // A window that is not on screen does not run transitions, so a transitioned
        // box-shadow would read as its starting value forever. Nothing here is about
        // the animation.
@@ -142,7 +148,6 @@ const check = (what, condition, detail) => {
        const clickAt = async (x, y) => {
          win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
          win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-         await new Promise((r) => setTimeout(r, 220));
        };
        // The effects section is long; the row has to be on screen before a press
        // at its coordinates means anything.
@@ -152,8 +157,21 @@ const check = (what, condition, detail) => {
          "r.scrollIntoView({ block: 'center' }); const b = r.getBoundingClientRect(); " +
          "return { x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) } " +
          "})()");
-       const layerRow = await rowAt(1);
-       await new Promise((r) => setTimeout(r, 120));
+       // Pressed once the scrolled row holds still: two reads of its centre agree.
+       const rowStill = async (n) => {
+         let last = 'none';
+         const held = await pollUntil({
+           what: 'row ' + n + ' still after scrolling',
+           read: () => rowAt(n),
+           until: (point) => {
+             const still = JSON.stringify(point) === last;
+             last = JSON.stringify(point);
+             return still;
+           },
+         });
+         return held.value;
+       };
+       const layerRow = await rowStill(1);
        if (layerRow) await clickAt(layerRow.x, layerRow.y);
        await waitForPopup('open');
        const opening = {
@@ -189,10 +207,12 @@ const check = (what, condition, detail) => {
          "slider: slider && Math.round(slider.getBoundingClientRect().width) } })()");
        // Close the open one first — it is drawn over the rows, so a press aimed at
        // another row would land on the popover instead.
+       // Keys go to the focused page; a hidden window is not focused by itself.
+       win.webContents.focus();
        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
        await waitForPopup('closed');
-       const plainRow = await rowAt(0);
+       const plainRow = await rowStill(0);
        if (plainRow) await clickAt(plainRow.x, plainRow.y);
        await waitForPopup('open');
        out.plainFields = await js("(() => { const pop = " +

@@ -9,7 +9,8 @@
 // Method: layout is the question, so the real VariablePicker is mounted in a hidden Chromium window
 // (Electron, the pattern of popoverDropdown.test.js) with Font, Color and Length fixtures, measured
 // with getComputedStyle and getBoundingClientRect, and captured to PNGs under
-// node_modules/.stacki-test/picker-look for a person to look at.
+// node_modules/.stacki-test/picker-look for a person to look at. Each measure waits, bounded,
+// for the picker to be open and still (test/helpers/waitFor.js), not a fixed sleep.
 
 const fs = require('fs');
 const path = require('path');
@@ -99,11 +100,17 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
     `const { app, BrowserWindow } = require('electron');
      const fs = require('fs');
      app.on('window-all-closed', () => app.quit());
+     // A page script that throws ends the probe with its error, not a silent spawn timeout.
+     process.on('unhandledRejection', (error) => {
+       console.error('probe failed: ' + String((error && error.stack) || error));
+       app.exit(1);
+     });
+     const { MOTION_SETTLED_EXPRESSION, pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 380, height: 520, useContentSize: true });
        await win.loadFile(${JSON.stringify(path.join(directory, 'index.html'))});
        const js = (code) => win.webContents.executeJavaScript(code);
-       const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+       await pollUntil({ what: 'the harness mounted', read: () => js("typeof window.__show === 'function'"), until: (mounted) => mounted });
        const measure = \`(() => {
          const popup = document.querySelector('.embed-editor_varpicker');
          const css = (node) => getComputedStyle(node);
@@ -131,14 +138,17 @@ const { ROOT, repoPath } = require('../../helpers/sources.js');
        })()\`;
        const results = {};
        for (const name of ['font', 'color', 'length']) {
+         // Bounded waits on the picker itself (test/helpers/waitFor.js): gone, then open and
+         // done scaling open, so a slow runner never measures it mid-motion.
          await js('window.__show(null)');
-         await wait(400);
+         await pollUntil({ what: 'the picker closed', read: () => js("document.querySelector('.embed-editor_varpicker') === null"), until: (closed) => closed });
          await js('window.__show(' + JSON.stringify(name) + ')');
-         for (let tries = 0; tries < 40; tries += 1) {
-           if (await js("document.querySelector('.embed-editor_varpicker')?.dataset.popupPhase === 'open'")) break;
-           await wait(50);
-         }
-         await wait(150);
+         await pollUntil({
+           what: 'the ' + name + ' picker open',
+           read: () => js("document.querySelector('.embed-editor_varpicker')?.dataset.popupPhase === 'open'"),
+           until: (open) => open,
+         });
+         await pollUntil({ what: 'the ' + name + ' picker still', read: () => js(MOTION_SETTLED_EXPRESSION), until: (still) => still });
          results[name] = await js(measure);
          const image = await win.webContents.capturePage();
          fs.writeFileSync(${JSON.stringify(directory)} + '/' + name + '.png', image.toPNG());

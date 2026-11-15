@@ -16,7 +16,7 @@
 // <button>, so `justify-content: center` centred it in a full-width row, and
 // `button:hover` painted a pill around that button instead of the row. Both are
 // invisible to jsdom, which has no cascade to speak of and no layout at all — so
-// this is measured in a real browser.
+// this is measured in a real browser, each read after a bounded wait on the state it reads.
 
 const fs = require('fs');
 const path = require('path');
@@ -115,11 +115,16 @@ const check = (what, condition, detail) => {
      const path = require('path');
      app.disableHardwareAcceleration();
      app.on('window-all-closed', () => app.quit());
-     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+     const { MOTION_SETTLED_EXPRESSION, pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 720, height: 900 });
        await win.loadFile(path.join(__dirname, 'index.html'));
-       await sleep(800);
+       // Bounded waits on what is read next (test/helpers/waitFor.js), not fixed sleeps: the
+       // modal drawn, and its sheet done easing into place before it is measured at rest.
+       const js = (code) => win.webContents.executeJavaScript(code);
+       await pollUntil({ what: 'the grid modal drawn', read: () => js("document.querySelector('.embed-editor_grid-track') !== null"), until: (drawn) => drawn });
+       const settled = (what) => pollUntil({ what, read: () => js(MOTION_SETTLED_EXPRESSION), until: (still) => still });
+       await settled('the sheet in place');
        const read = () => win.webContents.executeJavaScript(\`(() => {
          const row = document.querySelector('.embed-editor_grid-track');
          const main = row.querySelector('.embed-editor_grid-track-main');
@@ -158,15 +163,18 @@ const check = (what, condition, detail) => {
            return { x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) };
          })()\`);
          win.webContents.sendInputEvent({ type: 'mouseMove', x: pt.x, y: pt.y });
-         await sleep(150);
-         const over = await win.webContents.executeJavaScript(
-           \`document.querySelector('.embed-editor_grid-track').matches(':hover')\`,
-         );
-         if (over) {
+         const over = await pollUntil({
+           what: 'the row under the pointer',
+           read: () => js("document.querySelector('.embed-editor_grid-track').matches(':hover')"),
+           until: (hovering) => hovering,
+           pollCountMax: 6,
+         });
+         if (over.kind === 'reached') {
            break;
          }
        }
-       await sleep(150);
+       // The hover paints through a transition: read it once that has run.
+       await settled('the hover painted');
        const hovered = await read();
        console.log(JSON.stringify({ resting, hovered }));
        app.quit();

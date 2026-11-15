@@ -117,13 +117,20 @@ const check = (what, condition, detail) => {
     scriptPath,
     `const { app, BrowserWindow } = require('electron');
      app.on('window-all-closed', () => app.quit());
+     // A probe error ends the run with its message, not a silent spawn timeout.
+     process.on('unhandledRejection', (error) => {
+       console.error('probe failed: ' + String((error && error.stack) || error));
+       app.exit(1);
+     });
+     const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 700, height: 500 });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
        const js = (code) => win.webContents.executeJavaScript(code);
-       await new Promise((r) => setTimeout(r, 300));
+       await pollUntil({ what: 'the source menu trigger drawn', read: () => js("document.querySelector('.u-select-link') !== null"), until: (drawn) => drawn });
        await js("document.querySelector('.u-select-link').click(); true");
        const lefts = [];
+       // Deliberate sampling through the open motion, at a fixed pace: not a wait.
        for (let i = 0; i < 8; i += 1) {
          await new Promise((r) => setTimeout(r, 30));
          lefts.push(await js("(() => { const l = document.querySelector('.u-select-list'); return l ? l.getBoundingClientRect().left : null })()"));
@@ -133,13 +140,16 @@ const check = (what, condition, detail) => {
        // which read 8px margins as 9.98px on Linux CI; wait for the popup to
        // leave its opening phase and for its transitions to finish, bounded.
        const settled = await js(\`(async () => {
+         // An animation that never finishes (a throttled window) must not hang the probe:
+         // each wait on one is capped, and the inset checks then report what they measure.
+         const finishedWithin = (animations) => Promise.race([Promise.all(animations.map((a) => a.finished)), new Promise((r) => setTimeout(r, 5000))]);
          for (let i = 0; i < 100; i += 1) {
            const list = document.querySelector('.u-select-list');
            const phased = list ? list.closest('[data-popup-phase]') : null;
            const opening = phased !== null && phased.getAttribute('data-popup-phase') === 'opening';
            if (list && !opening) {
-             await Promise.all(list.getAnimations({ subtree: true }).map((a) => a.finished));
-             if (phased) { await Promise.all(phased.getAnimations().map((a) => a.finished)); }
+             await finishedWithin(list.getAnimations({ subtree: true }));
+             if (phased) { await finishedWithin(phased.getAnimations()); }
              return true;
            }
            await new Promise((r) => setTimeout(r, 30));

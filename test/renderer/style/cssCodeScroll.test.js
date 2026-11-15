@@ -15,6 +15,7 @@
 // layout and every fault here is one of layout. Each box sits in a 280px panel
 // and is measured as drawn; typing is replayed as `input.type` transactions. What
 // a page cannot measure, the scrollbar track's inset, is read from the stylesheet.
+// Each measure waits, bounded, for the layout to hold still instead of a fixed sleep.
 // Without Electron the layout half is skipped, as popoverDropdown.test.js does.
 
 const assert = require('node:assert/strict');
@@ -133,7 +134,22 @@ const check = (what, condition, detail) => {
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 500, height: 900 });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
-       await new Promise((resolve) => setTimeout(resolve, 300));
+       const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+       // Measured once every box is drawn and its layout holds still between two polls
+       // (CodeMirror measures and redraws over a few frames after mounting), not after a sleep.
+       let layoutLast = '';
+       await pollUntil({
+         what: 'every code box drawn and still',
+         read: () =>
+           win.webContents.executeJavaScript(
+             "JSON.stringify(['rule', 'short-rule', 'preview', 'clip', 'tall-rule', 'tall-preview'].map((id) => { const panel = document.getElementById(id); const box = panel && panel.querySelector('.cm-scroller, .embed-editor_css-code-preview'); const lines = panel ? panel.querySelectorAll('.cm-line, .embed-editor_css-code-line').length : 0; return box && lines > 0 ? [box.scrollWidth, box.scrollHeight, box.clientWidth, lines] : null; }))",
+           ),
+         until: (layout) => {
+           const still = layout === layoutLast && !layout.includes('null');
+           layoutLast = layout;
+           return still;
+         },
+       });
        const out = await win.webContents.executeJavaScript(fs.readFileSync(${JSON.stringify(measurePath)}, 'utf8'));
        console.log(JSON.stringify(out));
        app.quit();
@@ -271,7 +287,13 @@ async function measure() {
       view.dispatch({ changes: { from: head, insert: 'x' }, selection: { anchor: head + 1 }, scrollIntoView: true, userEvent: 'input.type' });
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
-    await wait(100);
+    // CodeMirror scrolls the caret into view in its next measure cycle: wait, bounded, until the
+    // sideways scroll holds still between two polls.
+    let scrollLeftLast = -1;
+    for (let poll = 0; poll < 100 && view.scrollDOM.scrollLeft !== scrollLeftLast; poll += 1) {
+      scrollLeftLast = view.scrollDOM.scrollLeft;
+      await wait(50);
+    }
     const coordinates = view.coordsAtPos(view.state.selection.main.head);
     const bounds = view.scrollDOM.getBoundingClientRect();
     return { left: coordinates.left, boxLeft: bounds.left, boxRight: bounds.left + view.scrollDOM.clientWidth, scrollLeft: view.scrollDOM.scrollLeft };

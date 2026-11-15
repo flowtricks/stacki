@@ -16,7 +16,8 @@
 // has none, and would report every one of these as fine. It mounts the actual
 // LayerPopover with a real Select inside it, opens the menu, and asks the page
 // the only question that matters: at the option's own coordinates, is the
-// option what you would hit?
+// option what you would hit? Each step waits, bounded, on the state it reads next
+// (test/helpers/waitFor.js), including the popover's and the menu's opening motion.
 
 const fs = require('fs');
 const path = require('path');
@@ -118,15 +119,23 @@ const check = (what, condition, detail) => {
        const win = new BrowserWindow({ show: false, width: 900, height: 700 });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
        const js = (code) => win.webContents.executeJavaScript(code);
+       // Bounded waits on what the next step reads (test/helpers/waitFor.js), not fixed sleeps.
+       const { MOTION_SETTLED_EXPRESSION, pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+       const settled = (what) => pollUntil({ what, read: () => js(MOTION_SETTLED_EXPRESSION), until: (still) => still });
        // A real press, from the browser's own input pipeline — a dispatched event
        // would be delivered to the element it is dispatched ON, which is exactly
        // the question being asked here.
        const clickAt = async (x, y) => {
          win.webContents.sendInputEvent({ type: 'mouseDown', x, y, button: 'left', clickCount: 1 });
          win.webContents.sendInputEvent({ type: 'mouseUp', x, y, button: 'left', clickCount: 1 });
-         await new Promise((r) => setTimeout(r, 60));
        };
-       await new Promise((r) => setTimeout(r, 400));
+       // The popover scales open: its trigger is measured once it is drawn and still.
+       await pollUntil({
+         what: 'the popover and its trigger drawn',
+         read: () => js("document.querySelector('.embed-editor_layer-popover-box') !== null && document.querySelector('.u-select-button') !== null"),
+         until: (drawn) => drawn,
+       });
+       await settled('the popover opened');
 
        const out = {};
        out.box = await js("(() => { const b = " +
@@ -147,11 +156,13 @@ const check = (what, condition, detail) => {
        // is still settling; press again until the list opens, a bounded number of times.
        for (let attempt = 0; attempt < 20; attempt += 1) {
          await clickAt(trigger.x, trigger.y);
-         await new Promise((r) => setTimeout(r, 100));
-         if (await js("!!document.querySelector('.u-select-list')")) {
+         const listed = await pollUntil({ what: 'the list open', read: () => js("!!document.querySelector('.u-select-list')"), until: (open) => open, pollCountMax: 10 });
+         if (listed.kind === 'reached') {
            break;
          }
        }
+       // The menu scales open too; hit-test its option once it is still.
+       await settled('the menu opened');
        out.opened = await js("!!document.querySelector('.u-select-list')");
        if (!out.opened) {
          // Report at once rather than throwing below and leaving the probe to time out.
@@ -175,6 +186,8 @@ const check = (what, condition, detail) => {
        // And pressing there must not shut the popover. Record what any close is
        // actually reacting to, so a failure here names its own cause.
        await clickAt(out.hit.x, out.hit.y);
+       // The pick closes the menu; read what happened once it has.
+       await pollUntil({ what: 'the menu closed by the pick', read: () => js("document.querySelector('.u-select-list') === null"), until: (closed) => closed });
        out.why = await js('window.__why');
        out.afterPick = await js("({ popover: " +
          "!!document.querySelector('.embed-editor_layer-popover'), " +
@@ -183,7 +196,11 @@ const check = (what, condition, detail) => {
        // A box that really does outgrow the screen still scrolls — the reason the
        // overflow was there in the first place.
        await js('window.__setTall(true)');
-       await new Promise((r) => setTimeout(r, 200));
+       await pollUntil({
+         what: 'the tall box marked as scrolling',
+         read: () => js("document.querySelector('.embed-editor_layer-popover-box').className.includes('is-scrolling')"),
+         until: (scrolling) => scrolling,
+       });
        out.tall = await js("(() => { const b = " +
          "document.querySelector('.embed-editor_layer-popover-box'); " +
          "return { overflow: getComputedStyle(b).overflowY, scrollingClass: " +

@@ -13,6 +13,7 @@
 // hidden Electron window, presses each key with sendInputEvent, leaves the field with Tab, and
 // records every value the field hands to its callbacks: the live ones while typing and the commit
 // on leaving. Each value has to hold no U+00A0, and the last one has to be the typed text itself.
+// Each key waits, bounded, until the field shows it (test/helpers/waitFor.js), not a fixed pause.
 // The values are ones a person types with a space in the middle: a span, a line pair and a track
 // list.
 
@@ -94,7 +95,7 @@ const shown = (text) => JSON.stringify(text).replaceAll(NO_BREAK_SPACE, '<U+00A0
     scriptPath,
     `const { app, BrowserWindow } = require('electron');
      app.on('window-all-closed', () => app.quit());
-     const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+     const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 600, height: 400 });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
@@ -108,20 +109,46 @@ const shown = (text) => JSON.stringify(text).replaceAll(NO_BREAK_SPACE, '<U+00A0
        };
        const typed = ${JSON.stringify(TYPED)};
        const out = { editable: [] };
+       // Keys go to the focused page; a hidden window is not focused by itself.
+       win.webContents.focus();
+       // Every step waits, bounded, on what it reads next (test/helpers/waitFor.js).
+       const fieldText = (index) =>
+         js("(() => { const field = document.querySelector('#field-" + index + " [contenteditable]'); return field ? field.textContent : undefined; })()");
+       await pollUntil({ what: 'the fields drawn', read: () => fieldText(typed.length - 1), until: (text) => text !== undefined });
        for (let index = 0; index < typed.length; index++) {
          // A press focuses the field as a person's click does.
          const point = await js("(() => { const r = document.querySelector('#field-" + index + " [contenteditable]').getBoundingClientRect(); " +
            "return { x: Math.round(r.x + 8), y: Math.round(r.y + r.height / 2) } })()");
          win.webContents.sendInputEvent({ type: 'mouseDown', x: point.x, y: point.y, button: 'left', clickCount: 1 });
          win.webContents.sendInputEvent({ type: 'mouseUp', x: point.x, y: point.y, button: 'left', clickCount: 1 });
-         await pause(150);
+         await pollUntil({ what: 'the press to focus field ' + index, read: () => js('document.activeElement?.isContentEditable === true'), until: (focused) => focused });
          out.editable.push(await js("document.activeElement?.isContentEditable === true"));
+         let typedSoFar = '';
          for (const character of typed[index]) {
            press(character === ' ' ? 'Space' : character, character);
-           await pause(60);
+           typedSoFar += character;
+           // The key has landed once the field shows it (a no-break space read as a space here
+           // only; the checks below are on the saved values, which must hold none).
+           const prefix = typedSoFar;
+           await pollUntil({
+             what: 'field ' + index + ' to show ' + JSON.stringify(prefix),
+             read: () => fieldText(index),
+             until: (text) => text !== undefined && text.replace(/\\u00a0/g, ' ').endsWith(prefix),
+           });
          }
          press('Tab');
-         await pause(300);
+         await pollUntil({ what: 'Tab to leave field ' + index, read: () => js('document.activeElement?.isContentEditable === true'), until: (focused) => focused === false });
+         // The commit on leaving lands after the blur: wait until the saved values stop changing.
+         let savedLast = -1;
+         await pollUntil({
+           what: 'field ' + index + ' to commit',
+           read: () => js('(window.saved[' + index + '] || []).length'),
+           until: (count) => {
+             const still = count > 0 && count === savedLast;
+             savedLast = count;
+             return still;
+           },
+         });
        }
        out.saved = await js('window.saved');
        console.log(JSON.stringify(out));
