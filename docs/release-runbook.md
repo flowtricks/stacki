@@ -119,6 +119,20 @@ the GitHub button pushes from CI, where no hook runs and `Check` is the gate.
   it to `''`; `path.join` and both separators in assertions; bounded retries on `EBUSY`/`EPERM`/
   `ENOTEMPTY`; wait for observable state with a bound, never a fixed sleep; no reliance on fonts,
   locale or timezone; every wait and loop bounded.
+- **Rules for new tests** (each one is a CI failure that passed locally): never read the DOM
+  straight after an action; wait for the state the check is about with `pollUntil`/`waitFor` from
+  `test/helpers/waitFor.js` (bounded, 50 ms polls, a message with the last value seen), never a
+  fixed sleep. Syntax highlighting and CodeMirror's syntax tree can finish after a mount or an edit
+  (a per-update parse budget, then an idle callback): wait for the token marks or for
+  `syntaxTreeAvailable` before checking colours or anything built from the tree. Popups scale open
+  and fade out: wait for `MOTION_SETTLED_EXPRESSION` before measuring one, and for it to be gone
+  before the next step. A resize, scroll or wheel event can land frames after the call that caused
+  it and close a popover: wait for the event itself (or the scroll position to hold still), not
+  just the new size. Keys go to the focused page: call `webContents.focus()` before sending them,
+  since a hidden window is not focused by itself. Wait for `:hover` to arrive after a pointer move
+  before the next move. A probe whose page script throws must exit with the error
+  (`unhandledRejection` → `app.exit(1)`), not hang until the spawn bound. Under load,
+  `npm run check:linux -- --only=<suite>` replays a probe with Linux-runner frame delays.
 - **No token-shaped literals in tests**: never write a complete token-shaped literal in a test
   (GitHub push protection blocks the push); assemble fake tokens at run time.
 - **Known flakes**: add a signature to `knownFlakes.mts` only with its own regression test in
