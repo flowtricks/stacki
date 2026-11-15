@@ -49,6 +49,9 @@ export function publishRepositories(body: unknown): unknown {
       revision: sha256Hex(DEMO_REPOSITORY),
       repositories: [DEMO_REPOSITORY],
       mode: 'managed',
+      // The demo has no account to list organizations for, so the picker has nothing beyond the connected account.
+      organizations: [],
+      organizationAccess: 'available',
       notice: 'This demo is connected to a sample repository.',
     },
   };
