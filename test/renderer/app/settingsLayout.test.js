@@ -115,6 +115,13 @@ app.whenReady().then(async () => {
   const win = new BrowserWindow({ show: false, width: 1000, height: 760 });
   await win.loadFile(path.join(__dirname, 'index.html'));
   const js = (code) => win.webContents.executeJavaScript(code);
+  // The OS clamps a window to the screen, and a short screen (1280x661 here) left the page under 760px, so a
+  // tooltip near the bottom fell outside it. The viewport is emulated at the size the checks are written for.
+  if (!win.webContents.debugger.isAttached()) {
+    win.webContents.debugger.attach('1.3');
+  }
+  await win.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride', { width: 1000, height: 760, deviceScaleFactor: 0, mobile: false });
+  await waitFor({ what: 'the emulated viewport', read: () => js('[innerWidth, innerHeight]'), until: ([width, height]) => width === 1000 && height === 760 });
   await waitFor({
     what: 'the settings page drawn in its modal',
     read: () => js("document.querySelectorAll('.app-settings-section').length > 1 && document.querySelector('dialog').matches(':modal')"),
