@@ -35,7 +35,13 @@ export type PreviewMessage =
   | { readonly kind: 'modifiers'; readonly shiftKey: boolean; readonly altKey: boolean }
   /** `pseudo` names the ::before or ::after the pointer is on, when it is on one. */
   /** `deep` labels a deep hover's node inside a closed component (shared/properties/deepOutline.ts). */
-  | ({ readonly kind: 'hover-node'; readonly pseudo: PseudoLayer | undefined; readonly deep: DeepHoverNode | undefined } & LocatedEvent)
+  /** `boxes` are the node's boxes as the frame measured them with the hit, so the outline needs no second round trip; undefined when it measured none. */
+  | ({
+      readonly kind: 'hover-node';
+      readonly pseudo: PseudoLayer | undefined;
+      readonly deep: DeepHoverNode | undefined;
+      readonly boxes: readonly Box[] | undefined;
+    } & LocatedEvent)
   | ({
       readonly kind: 'click-node';
       readonly outside: boolean;
@@ -46,6 +52,8 @@ export type PreviewMessage =
       readonly box: CanvasClickBox | undefined;
       /** The editor's click query this answers (`avb:click-query`), or undefined for a click the person made. */
       readonly replay: number | undefined;
+      /** As for a hover: the boxes of the node the click named. */
+      readonly boxes: readonly Box[] | undefined;
     } & LocatedEvent)
   | ({ readonly kind: 'open-node' } & LocatedEvent)
   | ({ readonly kind: 'context-node'; readonly outside: boolean; readonly pseudo: PseudoLayer | undefined } & LocatedEvent & ContextPoint)
@@ -203,7 +211,13 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         altKey: boolean(value['altKey']),
       };
     case 'avb:hover-node':
-      return { kind: 'hover-node', ...parseLocatedMessage(value), pseudo: parseLocatedPseudo(value), deep: parseDeepHoverNode(value['deep']) };
+      return {
+        kind: 'hover-node',
+        ...parseLocatedMessage(value),
+        pseudo: parseLocatedPseudo(value),
+        deep: parseDeepHoverNode(value['deep']),
+        boxes: parseSentBoxes(value['boxes']),
+      };
     case 'avb:click-node':
       return {
         kind: 'click-node',
@@ -214,6 +228,7 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         y: coordinateOf(value['y']),
         box: canvasClickBox(value['box']),
         replay: optional(parseReplayId)(value['replay']),
+        boxes: parseSentBoxes(value['boxes']),
       };
     case 'avb:context-node':
       return {
@@ -357,6 +372,19 @@ function parseLocatedPseudo(value: Readonly<Record<string, unknown>>): PseudoLay
     throw new Error('Preview pseudo-element: expected the node it belongs to');
   }
   return pseudo;
+}
+
+// The boxes a hover or click carries. They only save a round trip: the track and its rects
+// message stay the source of truth, so boxes that do not parse are dropped, never the event.
+function parseSentBoxes(input: unknown): readonly Box[] | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+  try {
+    return list(parseBox)(input);
+  } catch {
+    return undefined;
+  }
 }
 
 function parseBox(input: unknown): Box {

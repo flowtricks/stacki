@@ -184,6 +184,36 @@ const settle = (ms = 40) => new Promise((resolve) => setTimeout(resolve, ms));
     check('re-entering restores canvas hover', entered?.path === '0.1');
   }
 
+  // The hover and the click carry the node's boxes, so the editor draws the outline from the
+  // event itself instead of asking for them (previewRuntime.ts drawSentBoxes). The renderer's
+  // parser must accept them, and must keep the event when they are malformed.
+  {
+    pointAt('eyebrow', 30); // A hover is said when it changes, so leave the node first.
+    const hover = pointAt('word', 400);
+    const parsed = parsePreviewMessage(hover);
+    check(
+      'a hover carries the box of the node it names',
+      Array.isArray(hover?.boxes) && hover.boxes.length === 1 && hover.boxes[0].y === 300 && hover.boxes[0].h === 400,
+      JSON.stringify(hover),
+    );
+    check(
+      'and the renderer reads those boxes',
+      parsed?.kind === 'hover-node' && parsed.boxes?.length === 1 && parsed.boxes[0].w === 900,
+      JSON.stringify(parsed),
+    );
+    const damaged = parsePreviewMessage({ ...hover, boxes: [{ x: 'left', y: 0, w: 1, h: 1 }] });
+    check(
+      'boxes that do not parse cost only the boxes',
+      damaged?.kind === 'hover-node' && damaged.path === '0.1' && damaged.boxes === undefined,
+      JSON.stringify(damaged),
+    );
+    const element = window.document.querySelector('[data-box="word"]');
+    sent.length = 0;
+    element.dispatchEvent(new window.MouseEvent('click', { bubbles: true, cancelable: true, clientX: 100, clientY: 400 }));
+    const click = sent.filter((message) => message.type === 'avb:click-node').pop();
+    check('a click carries the same boxes', Array.isArray(click?.boxes) && click.boxes.length === 1 && click.boxes[0].y === 300, JSON.stringify(click));
+  }
+
   // An event with no coordinates — something synthesised — has no point to
   // judge, and is answered as before rather than refused.
   {
