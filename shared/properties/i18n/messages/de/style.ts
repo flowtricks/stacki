@@ -579,6 +579,7 @@ export const messages = {
   'style.spacingSection.margin': 'Margin', // same
   'style.spacingSection.padding': 'Padding', // same
   'style.stylePanel.loadError': 'Die Stylesheet-Quellen konnten nicht geladen werden. {error}',
+  'style.stylePanel.elementChanged': 'Dieses Element hat sich geändert, während das nächste geladen wurde, daher wurde nichts geschrieben. Versuche es erneut.',
   'style.stylePanel.selectElement': 'Wähle ein Element aus, um es zu gestalten.',
   'style.textStrokeShadow.addShadow': 'Schatten hinzufügen',
   'style.textStrokeShadow.addTextShadow': 'Textschatten hinzufügen',

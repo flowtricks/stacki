@@ -483,7 +483,6 @@ function sameIndicator(previous: TabIndicator | undefined, next: TabIndicator | 
 }
 
 export function StyleTab({ app }: { readonly app: ShellView }) {
-  const translate = useTranslate();
   const { selectedId } = app;
   const pageFile = app.editStack[app.editStack.length - 1]?.path || app.currentPage?.path || undefined;
   // Each component the page uses, read as it loads (StylePanel): the first instance
@@ -532,24 +531,13 @@ export function StyleTab({ app }: { readonly app: ShellView }) {
       onCanvasWidth={app.requestCanvasWidth}
       onDesktopCanvas={app.showDesktopCanvas}
       onRecordUndo={app.pushCommand}
-      onAddClass={(name, placement) =>
-        selectedId
-          ? app.addClassToNode(selectedId, name, placement, app.pathFor(selectedId))
-          : Promise.resolve({ tag: 'refused', message: translate('shell.refusal.noElement') })
-      }
-      onAddStyleBlock={(request) =>
-        selectedId
-          ? app.addStyleBlock(selectedId, request, app.pathFor(selectedId))
-          : Promise.resolve({ tag: 'refused', message: translate('shell.refusal.noElement') })
-      }
-      onRemoveClass={(name) =>
-        selectedId
-          ? app.removeClassFromNode(selectedId, name, app.pathFor(selectedId))
-          : Promise.resolve({ tag: 'refused', message: translate('shell.refusal.noElement') })
-      }
-      onRemoveAttribute={(name) =>
-        selectedId ? app.removeAttributeFromNode(selectedId, name) : Promise.resolve({ tag: 'refused', message: translate('shell.refusal.noElement') })
-      }
+      // Each write names the element the panel is SHOWING, which is not the app's selection
+      // while the panel holds the previous element across a switch (StylePanel
+      // useSwitchHold): the edit lands on the element the person sees.
+      onAddClass={(name, placement, nodeId) => app.addClassToNode(nodeId, name, placement, app.pathFor(nodeId))}
+      onAddStyleBlock={(request, nodeId) => app.addStyleBlock(nodeId, request, app.pathFor(nodeId))}
+      onRemoveClass={(name, nodeId) => app.removeClassFromNode(nodeId, name, app.pathFor(nodeId))}
+      onRemoveAttribute={(name, nodeId) => app.removeAttributeFromNode(nodeId, name)}
       onSetInlineStyle={(nodeId, style) => {
         // The Settings style field's own write (desktopAppHost.ts setStyle): one
         // declaration edit when the attribute stays a plain string.

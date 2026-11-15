@@ -578,6 +578,7 @@ export const messages = {
   'style.spacingSection.margin': 'Margem', // review
   'style.spacingSection.padding': 'Preenchimento', // review
   'style.stylePanel.loadError': 'Não foi possível carregar as fontes das folhas de estilo. {error}',
+  'style.stylePanel.elementChanged': 'Este elemento mudou enquanto o próximo carregava, então nada foi gravado. Tente novamente.',
   'style.stylePanel.selectElement': 'Selecione um elemento para estilizá-lo.',
   'style.textStrokeShadow.addShadow': 'Adicionar uma sombra',
   'style.textStrokeShadow.addTextShadow': 'Adicionar uma sombra de texto',

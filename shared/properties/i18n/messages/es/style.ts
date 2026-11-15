@@ -578,6 +578,7 @@ export const messages = {
   'style.spacingSection.margin': 'Margen', // review
   'style.spacingSection.padding': 'Relleno', // review
   'style.stylePanel.loadError': 'No se pudieron cargar las fuentes de las hojas de estilo. {error}',
+  'style.stylePanel.elementChanged': 'Este elemento cambió mientras se cargaba el siguiente, así que no se escribió nada. Inténtalo de nuevo.',
   'style.stylePanel.selectElement': 'Selecciona un elemento para darle estilo.',
   'style.textStrokeShadow.addShadow': 'Añadir una sombra',
   'style.textStrokeShadow.addTextShadow': 'Añadir una sombra de texto',

@@ -574,6 +574,7 @@ export const messages = {
   'style.spacingSection.margin': 'Margin',
   'style.spacingSection.padding': 'Padding',
   'style.stylePanel.loadError': 'Could not load stylesheet sources. {error}',
+  'style.stylePanel.elementChanged': 'This element changed while the next one was loading, so nothing was written. Try again.',
   'style.stylePanel.selectElement': 'Select an element to style it.',
   'style.textStrokeShadow.addShadow': 'Add a shadow',
   'style.textStrokeShadow.addTextShadow': 'Add a text shadow',

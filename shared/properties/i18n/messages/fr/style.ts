@@ -580,6 +580,7 @@ export const messages = {
   'style.spacingSection.margin': 'Marge', // review
   'style.spacingSection.padding': 'Remplissage', // review
   'style.stylePanel.loadError': 'Impossible de charger les sources des feuilles de style. {error}',
+  'style.stylePanel.elementChanged': 'Cet élément a changé pendant le chargement du suivant, rien n’a donc été écrit. Réessayez.',
   'style.stylePanel.selectElement': 'Sélectionnez un élément pour le styler.',
   'style.textStrokeShadow.addShadow': 'Ajouter une ombre',
   'style.textStrokeShadow.addTextShadow': 'Ajouter une ombre de texte',

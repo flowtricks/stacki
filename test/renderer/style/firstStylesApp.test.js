@@ -65,7 +65,7 @@ async function firstStyles(app, at, request) {
   await select(app, at);
   let outcome;
   await gesture(app, async () => {
-    outcome = await __panels.StylePanel.onAddStyleBlock({ placement: PLACEMENT_END, ...request });
+    outcome = await __panels.StylePanel.onAddStyleBlock({ placement: PLACEMENT_END, ...request }, __panels.StylePanel.node.id);
   });
   return outcome;
 }
@@ -185,7 +185,7 @@ test('a Markdown page is refused: it has no place for a style block', async (con
   await select(app, [0]);
   let outcome;
   await gesture(app, async () => {
-    outcome = await __panels.StylePanel.onAddStyleBlock({ css: RULE, className: 'class', placement: PLACEMENT_END });
+    outcome = await __panels.StylePanel.onAddStyleBlock({ css: RULE, className: 'class', placement: PLACEMENT_END }, __panels.StylePanel.node.id);
   });
   assert.equal(outcome.tag, 'refused');
   assert.equal(fs.readFileSync(page, 'utf8'), text);

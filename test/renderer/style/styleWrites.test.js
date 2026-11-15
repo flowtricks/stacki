@@ -107,7 +107,8 @@ async function addClass(app, at, className) {
   await select(app, at);
   let outcome;
   await gesture(app, async () => {
-    outcome = await __panels.StylePanel.onAddClass(className);
+    // The panel names the element it shows; here that is the selection just made.
+    outcome = await __panels.StylePanel.onAddClass(className, { kind: 'end' }, __panels.StylePanel.node.id);
   });
   return outcome;
 }

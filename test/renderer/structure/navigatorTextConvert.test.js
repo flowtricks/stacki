@@ -144,7 +144,7 @@ test('a class typed on bare text is refused and the page keeps saving', async (c
   await select(app, run);
   let outcome;
   await gesture(app, async () => {
-    outcome = await __panels.StylePanel.onAddClass('codey', 'after');
+    outcome = await __panels.StylePanel.onAddClass('codey', 'after', __panels.StylePanel.node.id);
   });
   assert.equal(outcome.tag, 'refused');
   assert.match(outcome.message, /no tag to hold a class/);

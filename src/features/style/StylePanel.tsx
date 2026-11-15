@@ -1,8 +1,10 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import { requestSelectorFocus } from './embed/SelectorPicker';
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useStyleFiles } from './useStyleFiles';
-import type { HostState } from './model/host';
+import type { ClassOutcome, HostNode, HostState, StyleBlockRequest } from './model/host';
+import type { ClassPlacement } from '../../editor/classAttr';
+import { findNode } from './model/host';
 import { setHost } from './model/host';
 import { prefetchComponentSources } from './model/componentSourceCache';
 import { awaitComputedStyles, computedStylesSettled, prefetchComputedStyles } from './model/computedStyle';
@@ -30,10 +32,12 @@ interface StylePanelProps {
   readonly onCanvasWidth?: HostState['setCanvasWidth'] | undefined;
   readonly onDesktopCanvas?: HostState['showDesktopCanvas'] | undefined;
   readonly onRecordUndo?: HostState['recordUndo'] | undefined;
-  readonly onAddClass?: HostState['addClass'] | undefined;
-  readonly onAddStyleBlock?: HostState['addStyleBlock'] | undefined;
-  readonly onRemoveClass?: HostState['removeClass'] | undefined;
-  readonly onRemoveAttribute?: HostState['removeAttribute'] | undefined;
+  // The element writes name the node they are for: the element the panel is SHOWING, which
+  // is the previous one while the panel holds it across a switch (useSwitchHold).
+  readonly onAddClass?: ((className: string, placement: ClassPlacement, nodeId: string) => Promise<ClassOutcome>) | undefined;
+  readonly onAddStyleBlock?: ((request: StyleBlockRequest, nodeId: string) => Promise<ClassOutcome>) | undefined;
+  readonly onRemoveClass?: ((className: string, nodeId: string) => Promise<ClassOutcome>) | undefined;
+  readonly onRemoveAttribute?: ((attributeName: string, nodeId: string) => Promise<ClassOutcome>) | undefined;
   readonly onSetInlineStyle?: HostState['setInlineStyle'] | undefined;
   /** The open page's component files, read ahead for the chips' colours (HostState). */
   readonly pageComponentPaths?: readonly string[] | undefined;
@@ -70,9 +74,10 @@ export default function StylePanel(props: StylePanelProps) {
   const renderedClasses = useStableList(props.renderedClasses ?? NO_PATHS);
   const projectClasses = useStableList(props.projectClasses ?? NO_PATHS);
   const selection = useSwitchHold(props, renderedClasses);
+  const writes = useShownElementWrites(props, selection);
   const host = hostState(
     { ...props, ...selection.props },
-    { files: files.files, astroFiles: astroFiles.files, lengthUnit, renderedClasses: selection.renderedClasses, projectClasses },
+    { files: files.files, astroFiles: astroFiles.files, lengthUnit, renderedClasses: selection.renderedClasses, projectClasses, writes },
   );
   // Children read the bridge during their own effects, which run before the
   // parent's effects. Publishing here ensures their first read is current.
@@ -107,6 +112,8 @@ type SelectionProps = Pick<StylePanelProps, 'node' | 'renderedClassesKnown' | 's
 interface ShownSelection {
   readonly props: SelectionProps;
   readonly renderedClasses: string[];
+  /** The page tree the selection was made in: the node the panel shows is this tree's. */
+  readonly nodes: HostState['nodes'];
 }
 
 // The longest the panel keeps showing the previous element after another is selected.
@@ -126,7 +133,80 @@ function selectionOf(props: StylePanelProps, renderedClasses: string[]): ShownSe
       pseudoRequest: props.pseudoRequest,
     },
     renderedClasses,
+    nodes: props.model?.nodes ?? NO_NODES,
   };
+}
+
+type ElementWrites = Pick<HostState, 'addClass' | 'addStyleBlock' | 'removeClass' | 'removeAttribute' | 'setInlineStyle'>;
+
+// What makes a node the same element after the tree is re-read: node ids are tree paths, so
+// an insertion before it puts another element at its id. Its kind, name and attributes
+// (classes included) are what the person saw in the panel.
+function sameElement(shown: HostNode | undefined, current: HostNode | undefined): boolean {
+  if (shown === undefined || current === undefined) {
+    return false;
+  }
+  if (shown === current) {
+    return true;
+  }
+  if (shown.kind !== current.kind || shown.name !== current.name) {
+    return false;
+  }
+  return JSON.stringify(shown.props ?? {}) === JSON.stringify(current.props ?? {});
+}
+
+/**
+ * The element writes the panel makes (classes, a first style block, attributes, the inline
+ * style), each bound to the element the panel SHOWS. Across a switch the panel holds the
+ * previous element for up to SWITCH_HOLD_MS_MAX while the app has already selected the next
+ * one, and the app's own callbacks wrote to its selection: an edit made to what the person
+ * saw landed on another element. Each write now names the shown node, and is refused in
+ * plain words, writing nothing, when that node is no longer the same element in the tree
+ * the app holds now (an edit moved it during the hold).
+ */
+function useShownElementWrites(props: StylePanelProps, selection: ShownSelection): ElementWrites {
+  const translate = useTranslate();
+  const shownId = selection.props.node?.id;
+  // Read when a write runs, not when it was bound: the tree can change after the render.
+  const treeRef = useRef({ shown: selection.nodes, current: props.model?.nodes ?? NO_NODES });
+  treeRef.current = { shown: selection.nodes, current: props.model?.nodes ?? NO_NODES };
+  const { onAddClass, onAddStyleBlock, onRemoveClass, onRemoveAttribute, onSetInlineStyle } = props;
+  return useMemo(() => {
+    // Undefined when the write may go ahead for `nodeId`, else why it may not.
+    const refusalFor = (nodeId: string | undefined): string | undefined => {
+      if (nodeId === undefined) {
+        return translate('shell.refusal.noElement');
+      }
+      const tree = treeRef.current;
+      if (tree.shown === tree.current) {
+        return undefined;
+      }
+      return sameElement(findNode(tree.shown, nodeId), findNode(tree.current, nodeId)) ? undefined : translate('style.stylePanel.elementChanged');
+    };
+    const guarded = (write: (nodeId: string) => Promise<ClassOutcome>): Promise<ClassOutcome> => {
+      const refusal = refusalFor(shownId);
+      if (refusal !== undefined || shownId === undefined) {
+        return Promise.resolve({ tag: 'refused', message: refusal ?? translate('shell.refusal.noElement') });
+      }
+      return write(shownId);
+    };
+    return {
+      addClass: onAddClass === undefined ? undefined : (className, placement) => guarded((nodeId) => onAddClass(className, placement, nodeId)),
+      addStyleBlock: onAddStyleBlock === undefined ? undefined : (request) => guarded((nodeId) => onAddStyleBlock(request, nodeId)),
+      removeClass: onRemoveClass === undefined ? undefined : (className) => guarded((nodeId) => onRemoveClass(className, nodeId)),
+      removeAttribute: onRemoveAttribute === undefined ? undefined : (attributeName) => guarded((nodeId) => onRemoveAttribute(attributeName, nodeId)),
+      // Addressed by the node the panel read its style attribute from (useInlineTarget, the
+      // shown element); a node that is no longer that element is not written.
+      setInlineStyle:
+        onSetInlineStyle === undefined
+          ? undefined
+          : (nodeId, style) => {
+              if (refusalFor(nodeId) === undefined) {
+                onSetInlineStyle(nodeId, style);
+              }
+            },
+    };
+  }, [onAddClass, onAddStyleBlock, onRemoveClass, onRemoveAttribute, onSetInlineStyle, shownId, translate]);
 }
 
 // How many times a switch reads the next element's values again because they were dropped
@@ -380,6 +460,7 @@ interface HostInputs {
   readonly lengthUnit: LengthUnit;
   readonly renderedClasses: string[];
   readonly projectClasses: string[];
+  readonly writes: ElementWrites;
 }
 
 function hostState(props: StylePanelProps, inputs: HostInputs): HostState {
@@ -401,11 +482,7 @@ function hostState(props: StylePanelProps, inputs: HostInputs): HostState {
     setCanvasWidth: props.onCanvasWidth,
     showDesktopCanvas: props.onDesktopCanvas,
     recordUndo: props.onRecordUndo,
-    addClass: props.onAddClass,
-    addStyleBlock: props.onAddStyleBlock,
-    removeClass: props.onRemoveClass,
-    removeAttribute: props.onRemoveAttribute,
-    setInlineStyle: props.onSetInlineStyle,
+    ...inputs.writes,
     pageComponentPaths: props.pageComponentPaths ?? NO_PATHS,
     renderedClassesKnown: props.renderedClassesKnown ?? true,
     onSpacingHover: props.onSpacingHover,
