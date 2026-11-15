@@ -1,5 +1,6 @@
 import type { Attr } from '../../shared/page/pageNode';
 import { assert } from '../../shared/core/assert';
+import { classExpressionOccurrences } from '../../shared/engine/classExpressionRemoval';
 type ClassProps = Readonly<Record<string, Attr>>;
 interface ClassEdit {
   readonly key: string;
@@ -39,6 +40,16 @@ export const PLACEMENT_END: ClassPlacement = { kind: 'end' };
 
 const quoted = (name: string): string => JSON.stringify(name);
 
+// A new entry is quoted the way the list already quotes its strings, so a list
+// written with single quotes does not gain the one double-quoted entry.
+function quotedLike(code: string, name: string): string {
+  const quote = /(['"])/.exec(code)?.[1];
+  if (quote === "'" && !name.includes("'") && !name.includes('\\')) {
+    return `'${name}'`;
+  }
+  return quoted(name);
+}
+
 /** Every class name the attribute mentions literally. */
 export function namesIn(prop: Attr | undefined): readonly string[] {
   if (!prop) {
@@ -62,13 +73,28 @@ export function namesIn(prop: Attr | undefined): readonly string[] {
   return out;
 }
 
-/** Whether the element already carries `name`, however its classes are written. */
+/**
+ * Whether the element already carries `name`, however its classes are written.
+ * An expression is read the way removal reads it (classExpressionRemoval.ts): a
+ * class:list object key counts (`{ active: on }`), a string compared against
+ * (`kind === "b"`) does not. Code that does not parse falls back to its quoted words.
+ */
 export function hasClass(props: ClassProps | undefined, name: unknown): boolean {
   const clean = String(name || '').trim();
   if (!clean) {
     return true;
   }
-  return ['class', LIST].some((key) => namesIn(props?.[key]).includes(clean));
+  if (/\s/.test(clean)) {
+    return false;
+  }
+  return ['class', LIST].some((key) => {
+    const prop = props?.[key];
+    if (prop?.type !== 'expr') {
+      return namesIn(prop).includes(clean);
+    }
+    const count = classExpressionOccurrences(prop.value, clean, key === LIST ? 'list' : 'string');
+    return count === undefined ? namesIn(prop).includes(clean) : count > 0;
+  });
 }
 
 /**
@@ -97,7 +123,7 @@ export function withClass(props: ClassProps | undefined, name: unknown, placemen
     if (!text.startsWith('[') || at < 0) {
       // A list that isn't written as one — `class:list={props.classes}`. It
       // still takes an array, so wrap it in the one being added to.
-      return { key: LIST, value: { type: 'expr', value: `[${text}, ${quoted(clean)}]` } };
+      return { key: LIST, value: { type: 'expr', value: `[${text}, ${quotedLike(text, clean)}]` } };
     }
     const head = text.slice(0, at);
     const tail = text.slice(at);
@@ -109,7 +135,7 @@ export function withClass(props: ClassProps | undefined, name: unknown, placemen
       const indent = (head.match(/\n([ \t]*)\S/) || [, '  '])[1];
       const comma = /,\s*$/.test(head) ? '' : ',';
       const closingIndent = last.match(/^[ \t]*/)?.[0] ?? '';
-      const opening = `${head.replace(/\s+$/, '')}${comma}\n${indent}${quoted(clean)},`;
+      const opening = `${head.replace(/\s+$/, '')}${comma}\n${indent}${quotedLike(text, clean)},`;
       return {
         key: LIST,
         value: {
@@ -123,7 +149,7 @@ export function withClass(props: ClassProps | undefined, name: unknown, placemen
       return { key: LIST, value: { type: 'expr', value: placed } };
     }
     const comma = /\[\s*$/.test(head) ? '' : ', ';
-    return { key: LIST, value: { type: 'expr', value: `${head}${comma}${quoted(clean)}${tail}` } };
+    return { key: LIST, value: { type: 'expr', value: `${head}${comma}${quotedLike(text, clean)}${tail}` } };
   }
 
   const cls = props?.['class'];
@@ -179,9 +205,9 @@ function placedInList(text: string, name: string, placement: ClassPlacement): st
   const end = anchor.index + anchor[0].length;
   assert(start < end, 'placedInList: the anchor entry is not empty');
   if (placement.kind === 'before') {
-    return `${text.slice(0, start)}${quoted(name)}, ${text.slice(start)}`;
+    return `${text.slice(0, start)}${quotedLike(text, name)}, ${text.slice(start)}`;
   }
-  return `${text.slice(0, end)}, ${quoted(name)}${text.slice(end)}`;
+  return `${text.slice(0, end)}, ${quotedLike(text, name)}${text.slice(end)}`;
 }
 
 function escapeRegExp(text: string): string {

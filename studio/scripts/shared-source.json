@@ -237,6 +237,7 @@
     "shared/core/result.ts",
     "shared/core/span.ts",
     "shared/engine/byteSearch.ts",
+    "shared/engine/classExpressionRemoval.ts",
     "shared/engine/codePatch.ts",
     "shared/engine/diff.ts",
     "shared/engine/documentActor.ts",

@@ -63,6 +63,13 @@ const stringValue = (value) => ({ type: 'string', value });
   check('and stays a list', withClass(oneLine, 'hero').key === 'class:list');
   check('a class already in the list is not added again', withClass(oneLine, 'card') === undefined);
   check('an empty list still takes one', withClass({ 'class:list': expr('[]') }, 'hero').value.value === '["hero"]');
+  // The list's own quotes, and what "already there" means in a list (the way removal reads it).
+  check('a single-quoted list gets a single-quoted entry', withClass({ 'class:list': expr("['card']") }, 'hero').value.value === "['card', 'hero']");
+  check('an object key is a class the element carries', hasClass({ 'class:list': expr('["a", { active: on }]') }, 'active'));
+  check('so it is not added twice', withClass({ 'class:list': expr('["a", { active: on }]') }, 'active') === undefined);
+  check('a string compared against is not a class', !hasClass({ 'class:list': expr('[kind === "b" && "a"]') }, 'b'));
+  check('so it is added', withClass({ 'class:list': expr('[kind === "b" && "a"]') }, 'b')?.value.value === '[kind === "b" && "a", "b"]');
+  check('code that does not parse falls back to its quoted words', hasClass({ 'class:list': expr('["a", ') }, 'a'));
   check(
     'a list that is not written as a list is wrapped in one',
     withClass({ 'class:list': expr('props.classes') }, 'hero').value.value === '[props.classes, "hero"]',
