@@ -171,3 +171,11 @@
     background-position: -200% 0;
   }
 }
+/* An integration's routes: quiet, and closed until asked (PagesPanel.tsx, InjectedRoutes). */
+.pages-injected-head {
+  opacity: 0.7;
+  cursor: pointer;
+}
+.pages-injected-head:hover {
+  opacity: 1;
+}

@@ -651,6 +651,8 @@ const avbPreviewRoute = {
                 // 'project' is a file under src/pages, 'external' came from an
                 // integration, 'internal' is Astro's own (404, and friends).
                 origin: r.origin || null,
+                // 'page' or 'endpoint' (an integration's API route is not a page the editor lists).
+                type: r.type || null,
                 entrypoint: r.entrypoint || null,
                 params: r.params || [],
               }))

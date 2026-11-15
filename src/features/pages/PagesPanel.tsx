@@ -348,32 +348,47 @@ function InjectedRoutes({
   readonly select: ((route: WireInjectedRoute) => void) | undefined;
 }) {
   const translate = useTranslate();
+  // Collapsed until asked: these are an integration's pages, which are not the project's own.
+  const [open, setOpen] = useState(false);
   if (routes.length === 0) {
     return undefined;
   }
   return (
     <div className="vars-table pages-injected">
-      <h3 className="list-item folder pages-injected-head">
+      <h3
+        className="list-item folder pages-injected-head"
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setOpen(!open);
+          }
+        }}
+      >
         <span className="icon">
           <FolderIcon size={13} />
         </span>
         <span className="label">{translate('pages.injected.from', { source: routes[0]?.from ?? translate('pages.injected.integrations') })}</span>
-        <span className="sub">{translate('pages.injected.previewOnly')}</span>
+        <span className="sub">{translate('pages.injected.count', { count: String(routes.length) })}</span>
       </h3>
-      {routes.map((route) => (
-        <div
-          key={route.route}
-          className={`list-item ${currentPage?.route === route.route ? 'active' : ''}`}
-          style={{ paddingLeft: 22 }}
-          title={`${route.route}${route.entrypoint ? `\n${route.entrypoint}` : ''}`}
-          onClick={() => select?.(route)}
-        >
-          <span className="icon">
-            <FileIcon size={13} />
-          </span>
-          <span className="label">{route.route}</span>
-        </div>
-      ))}
+      {open &&
+        routes.map((route) => (
+          <div
+            key={route.route}
+            className={`list-item ${currentPage?.route === route.route ? 'active' : ''}`}
+            style={{ paddingLeft: 22 }}
+            title={`${route.route}${route.entrypoint ? `\n${route.entrypoint}` : ''}`}
+            onClick={() => select?.(route)}
+          >
+            <span className="icon">
+              <FileIcon size={13} />
+            </span>
+            <span className="label">{route.route}</span>
+          </div>
+        ))}
     </div>
   );
 }

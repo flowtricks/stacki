@@ -29,9 +29,15 @@ import { parsePageSource, pageEditError, resolvePagesDirectory, fillRoute } from
 import { translateMain, translateMainDescribed } from '../lib/mainLocale';
 import { DescribedError } from '../../shared/properties/describedError';
 
-export function registerPageHandlers(host: Pick<MainHost, 'documents' | 'ipcMain' | 'noteAppWrite' | 'send'>): void {
+/** The project's running preview, which adding EmDash restarts and whose address the EmDash admin button opens. */
+export interface PagePreviews {
+  readonly current: () => { readonly url: string; readonly projectPath: string } | undefined;
+  readonly restart: (projectPath: string) => Promise<string | undefined>;
+}
+
+export function registerPageHandlers(host: Pick<MainHost, 'documents' | 'ipcMain' | 'noteAppWrite' | 'send'>, previews: PagePreviews): void {
   registerPageReadHandlers(host);
-  registerEmDashInstallHandlers(host);
+  registerEmDashInstallHandlers(host, previews);
   registerPageMoveHandlers(host);
   registerProjectInjectedRoutesHandlers(host);
 }

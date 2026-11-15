@@ -13,7 +13,7 @@
 // Everything that crosses to the renderer passes the parsers below (AGENTS.md rule 5).
 
 import { assert } from '../core/assert';
-import { boolean, list, object, pathText, record, text } from '../core/boundary';
+import { boolean, list, object, optional, pathText, record, text } from '../core/boundary';
 import { parseEmDashProject, type EmDashProject } from './emdash';
 import { PACKAGE_MANAGERS, type PackageManager } from './packageManager';
 
@@ -24,6 +24,10 @@ export const EMDASH_INSTALL_LIMITS = {
   runMsMax: 10 * 60 * 1000,
   /** Files named in a plan or a result. */
   filesMax: 16,
+  /** After the config changes the preview restarts; the run waits this long for the EmDash admin to answer. */
+  devServerWaitMsMax: 90_000,
+  /** How often the admin address is asked while waiting. */
+  devServerPollMs: 1000,
   /** What the error classifier reads: the end of the output, where the reason is. */
   outputTailCharsMax: 4000,
 } as const satisfies Record<string, number>;
@@ -46,6 +50,8 @@ export const EMDASH_LIVE_CONFIG_TEXT = [
 export const EMDASH_IGNORE_LINES = ['data.db', 'uploads/', '.env'] as const;
 /** The guide's key command. Stacki runs it itself (its output is never shown, so a key is never on screen) only when the project has no .env yet. */
 export const EMDASH_SECRETS_COMMAND = 'npx emdash secrets generate --write .env';
+/** EmDash's own database setup: `emdash init` creates the local SQLite file and runs the core migrations (its CLI reference). */
+export const EMDASH_INIT_ARGUMENTS = ['emdash', 'init'] as const;
 export const EMDASH_SECRETS_ARGUMENTS = ['emdash', 'secrets', 'generate', '--write', '.env'] as const;
 /** The commit made first when the project has uncommitted work, so everything before EmDash stays one step back in History. */
 export const EMDASH_SAVE_MESSAGE = 'Before Adding EmDash';
@@ -78,6 +84,10 @@ export type EmDashInstallWarning = (typeof EMDASH_INSTALL_WARNINGS)[number];
 
 /** Why nothing can be added: the plan is `unavailable` and the dialog says which. */
 /** What the run did to the Astro config: wrote a new one, merged EmDash into the person's, found it already there, or left it alone and why. */
+/** The project's preview after the install: running again and answering, never running to begin with, or not back in time. */
+export const EMDASH_PREVIEW_STATES = ['running', 'notRunning', 'failed'] as const;
+export type EmDashPreviewState = (typeof EMDASH_PREVIEW_STATES)[number];
+
 export const EMDASH_CONFIG_OUTCOMES = ['created', 'merged', 'unchanged', 'otherAdapter', 'unusualShape'] as const;
 export type EmDashConfigOutcome = (typeof EMDASH_CONFIG_OUTCOMES)[number];
 
@@ -126,6 +136,11 @@ export type EmDashInstallResult =
       /** Stacki ran EmDash's key command; false when a .env already existed or the command did not finish. */
       readonly keyGenerated: boolean;
       readonly config: EmDashConfigOutcome;
+      readonly preview: EmDashPreviewState;
+      /** The EmDash admin on the preview's own address; undefined unless the preview is running and answered. */
+      readonly adminUrl: string | undefined;
+      /** EmDash's own `init` created and migrated the local database. */
+      readonly databaseReady: boolean;
       /** The config's `output` was static or unset and is now server: the site renders pages on request. */
       readonly onDemand: boolean;
       readonly project: EmDashProject;
@@ -187,6 +202,8 @@ export function classifyInstallFailure(output: string): EmDashInstallFailure {
   return 'other';
 }
 
+const parseOptionalText = optional(text);
+
 function oneOf<T extends string>(allowed: readonly T[], what: string): (input: unknown) => T {
   return (input: unknown): T => {
     const found = allowed.find((candidate) => candidate === input);
@@ -242,6 +259,9 @@ export function parseEmDashInstallResult(input: unknown): EmDashInstallResult {
         saved: boolean(value['saved']),
         keyGenerated: boolean(value['keyGenerated']),
         config: oneOf(EMDASH_CONFIG_OUTCOMES, 'config outcome')(value['config']),
+        preview: oneOf(EMDASH_PREVIEW_STATES, 'preview state')(value['preview']),
+        adminUrl: parseOptionalText(value['adminUrl']),
+        databaseReady: boolean(value['databaseReady']),
         onDemand: boolean(value['onDemand']),
         project: parseEmDashProject(value['project']),
         changedFiles: bounded(parseChangedFiles(value['changedFiles']), 'files'),

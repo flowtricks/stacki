@@ -18,6 +18,7 @@ const { repoPath } = require('../../helpers/sources.js');
 const { addArguments, cancelEmDashInstall, installCommandText, planEmDashInstall, runEmDashInstall } = require('#dist/electron/handlers/emdashInstall.js');
 const shared = require('#dist/shared/properties/emdashInstall.js');
 const { detectEmDash } = require('#dist/electron/content/emdashProject.js');
+const { emDashConfigIsWired } = require('#dist/electron/parse/emdashConfig.js');
 const { RUN_CANCELLED } = require('#dist/electron/project/starter.js');
 
 const FIXTURE = repoPath('test/fixtures/emdash/site');
@@ -36,10 +37,14 @@ function plainProject(extra = {}) {
 function fakes(root, options = {}) {
   const calls = [];
   const commits = [];
+  const restarts = [];
+  const asked = [];
+  const pauses = [];
   const deps = {
     runCommand: async (program, args, cwd, onLog, runOptions) => {
       calls.push({ program, args: [...args], cwd, options: runOptions });
-      onLog(`ran ${program}\n`);
+      // Like the real runner, it reports what it prints; the key command is handed a logger that drops it.
+      onLog(`ran ${program} ${args.join(' ')}\n`);
       if (options.fail !== undefined && args[0] !== 'emdash') {
         throw new Error(options.fail);
       }
@@ -54,11 +59,17 @@ function fakes(root, options = {}) {
         manifest.dependencies = { ...manifest.dependencies, emdash: '^1.5.0' };
         fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify(manifest, null, 2));
       }
-      if (args[0] === 'emdash') {
+      if (args[0] === 'emdash' && args[1] === 'secrets') {
         if (options.keyFails === true) {
           throw new Error('no key');
         }
         fs.writeFileSync(path.join(root, '.env'), 'EMDASH_ENCRYPTION_KEY=generated-by-emdash\n');
+      }
+      if (args[0] === 'emdash' && args[1] === 'init') {
+        if (options.initFails === true) {
+          throw new Error('no init');
+        }
+        fs.writeFileSync(path.join(root, 'data.db'), 'sqlite');
       }
       return '';
     },
@@ -70,8 +81,20 @@ function fakes(root, options = {}) {
       }
     },
     detect: detectEmDash,
+    verifyConfig: options.verifyConfig ?? emDashConfigIsWired,
+    restartPreview: async (cwd) => {
+      restarts.push(cwd);
+      return options.origin;
+    },
+    answers: async (url) => {
+      asked.push(url);
+      return asked.length > (options.answerAfter ?? 0);
+    },
+    pause: async (milliseconds) => {
+      pauses.push(milliseconds);
+    },
   };
-  return { deps, calls, commits };
+  return { deps, calls, commits, restarts, asked, pauses };
 }
 
 const run = (root, deps, logs = [], command = undefined) =>
@@ -146,6 +169,67 @@ test('a project with no Astro config gets the guide’s complete one; a differen
   assert.equal((await run(odd, fakes(odd).deps)).config, 'unusualShape');
 });
 
+test('when the written config fails its check, the original bytes are put back exactly and the step is left for the person', async () => {
+  const root = plainProject();
+  const original = '// My config.\r\nimport { defineConfig } from "astro/config";\r\nexport default defineConfig({ site: "https://example.com" });\r\n';
+  fs.writeFileSync(path.join(root, 'astro.config.mjs'), original);
+  const before = fs.readFileSync(path.join(root, 'astro.config.mjs'));
+  const seen = [];
+  const { deps } = fakes(root, {
+    verifyConfig: (text) => {
+      seen.push(text);
+      return false;
+    },
+  });
+  const result = await run(root, deps);
+  assert.equal(seen.length, 1, 'the written file was read back and checked');
+  assert.notEqual(seen[0], original, 'what was checked was the merged text');
+  assert.ok(fs.readFileSync(path.join(root, 'astro.config.mjs')).equals(before), 'byte for byte as it was, line endings included');
+  assert.equal(result.kind, 'installed');
+  assert.equal(result.config, 'unusualShape');
+  assert.equal(result.complete, false, 'never claimed done');
+  assert.ok(result.manual.includes('astroConfig'));
+  assert.ok(!fs.readdirSync(root).some((name) => name.endsWith('.tmp')), 'no temporary file is left');
+});
+
+test('EmDash initialises its own database, then the preview is restarted and asked, in bounds, until the admin answers', async () => {
+  const root = plainProject();
+  const { deps, calls, restarts, asked, pauses } = fakes(root, { origin: 'http://127.0.0.1:4321', answerAfter: 2 });
+  const result = await run(root, deps);
+  assert.deepEqual(calls.at(-1).args, [...shared.EMDASH_INIT_ARGUMENTS], 'EmDash’s own init, from a fixed argument list');
+  assert.equal(result.databaseReady, true);
+  assert.deepEqual(restarts, [root], 'the project’s preview is restarted once, after the config changed');
+  assert.deepEqual(asked, ['http://127.0.0.1:4321/_emdash/admin/', 'http://127.0.0.1:4321/_emdash/admin/', 'http://127.0.0.1:4321/_emdash/admin/']);
+  assert.deepEqual(pauses, [shared.EMDASH_INSTALL_LIMITS.devServerPollMs, shared.EMDASH_INSTALL_LIMITS.devServerPollMs]);
+  assert.equal(result.preview, 'running');
+  assert.equal(result.adminUrl, 'http://127.0.0.1:4321/_emdash/admin/');
+});
+
+test('a preview that never comes back is reported after a bounded wait, with no address to open', async () => {
+  const root = plainProject();
+  const { deps, asked } = fakes(root, { origin: 'http://127.0.0.1:4321', answerAfter: 100000 });
+  const result = await run(root, deps);
+  assert.equal(result.preview, 'failed');
+  assert.equal(result.adminUrl, undefined);
+  assert.equal(
+    asked.length,
+    Math.ceil(shared.EMDASH_INSTALL_LIMITS.devServerWaitMsMax / shared.EMDASH_INSTALL_LIMITS.devServerPollMs),
+    'asked at most the stated number of times',
+  );
+  assert.equal(result.kind, 'installed', 'the install itself is still reported as done');
+});
+
+test('no running preview is left alone and not started; a failed init is not a failed install', async () => {
+  const root = plainProject();
+  const { deps, restarts } = fakes(root, { initFails: true });
+  const result = await run(root, deps);
+  assert.equal(result.preview, 'notRunning');
+  assert.equal(result.adminUrl, undefined);
+  assert.deepEqual(restarts, [root]);
+  assert.equal(result.databaseReady, false);
+  assert.equal(result.kind, 'installed');
+});
+
 test('nothing runs without the command that was shown: a different or empty confirmation is refused', async () => {
   const root = plainProject();
   const { deps, calls, commits } = fakes(root, { dirty: true });
@@ -206,7 +290,12 @@ test('the key command is skipped when a .env exists, never logged, and a failure
   fs.writeFileSync(path.join(withEnv, '.env'), 'EXISTING=1\n');
   const first = fakes(withEnv);
   const done = await run(withEnv, first.deps);
-  assert.equal(first.calls.length, 1, 'only the package command');
+  assert.deepEqual(
+    first.calls.map((call) => call.args[1]),
+    [first.calls[0].args[1], 'init'],
+    'the package command and EmDash’s init, but no key command',
+  );
+  assert.ok(!first.calls.some((call) => call.args[1] === 'secrets'));
   assert.equal(done.keyGenerated, false);
   assert.equal(fs.readFileSync(path.join(withEnv, '.env'), 'utf8'), 'EXISTING=1\n', 'the existing .env is untouched');
   const root = plainProject();
@@ -215,7 +304,7 @@ test('the key command is skipped when a .env exists, never logged, and a failure
   const result = await run(root, second.deps, logs);
   assert.equal(result.kind, 'installed');
   assert.equal(result.keyGenerated, false);
-  assert.ok(!logs.some((text) => /generated|KEY|ran npx/.test(text)), 'the key command writes no log');
+  assert.ok(!logs.some((text) => /secrets/.test(text)), 'the key command’s output never reaches the log');
 });
 
 test('unsaved work is saved first as one commit named exactly "Before Adding EmDash", then the install runs', async () => {

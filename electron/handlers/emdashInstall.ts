@@ -22,6 +22,7 @@ import {
   EMDASH_INSTALL_LIMITS,
   EMDASH_LIVE_CONFIG_FILE,
   EMDASH_LIVE_CONFIG_TEXT,
+  EMDASH_INIT_ARGUMENTS,
   EMDASH_SAVE_MESSAGE,
   EMDASH_SECRETS_ARGUMENTS,
   EMDASH_PACKAGES,
@@ -33,6 +34,7 @@ import {
   type EmDashInstallResult,
   type EmDashInstallWarning,
   type EmDashConfigOutcome,
+  type EmDashPreviewState,
 } from '../../shared/properties/emdashInstall';
 import { PNPM_TOLERATE_IGNORED_BUILDS, detectPackageManager } from '../project/packageManager';
 import type { PackageManager } from '../../shared/properties/packageManager';
@@ -70,6 +72,14 @@ export interface EmDashInstallDeps {
   /** Saves everything as one commit with this message, through the app's own commit path; rejects when git refuses. */
   readonly commitAll: (root: string, message: string) => Promise<void>;
   readonly detect: (root: string) => Promise<EmDashProject>;
+  /** The check the written config must pass when read back; injected so a test can force the rollback. */
+  readonly verifyConfig: (text: string) => boolean;
+  /** Restarts the project's running preview so it loads the new integration; its address, or undefined when none of ours runs. */
+  readonly restartPreview: (root: string) => Promise<string | undefined>;
+  /** Whether the address answers with anything but a server error. */
+  readonly answers: (url: string) => Promise<boolean>;
+  /** Waits this long between asks; injected so a test does not sleep. */
+  readonly pause: (milliseconds: number) => Promise<void>;
 }
 
 export const DEFAULT_INSTALL_DEPS: EmDashInstallDeps = {
@@ -90,6 +100,18 @@ export const DEFAULT_INSTALL_DEPS: EmDashInstallDeps = {
     await commit(git, { projectPath: root, message });
   },
   detect: detectEmDash,
+  verifyConfig: emDashConfigIsWired,
+  // The real preview is main's; the handler registration replaces this (registerEmDashInstallHandlers).
+  restartPreview: async () => undefined,
+  answers: async (url) => {
+    try {
+      const response = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(5000) });
+      return response.status < 500;
+    } catch {
+      return false;
+    }
+  },
+  pause: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
 };
 
 /** The package manager's arguments that add the guide's five packages. Fixed names only. */
@@ -208,12 +230,16 @@ export async function runEmDashInstall(root: string, request: EmDashInstallReque
     if (installed.kind !== 'done') {
       return installed.result;
     }
+    const preview = await restartAndWait(root, deps, onLog);
     const project = await deps.detect(root);
     return {
       kind: 'installed',
       complete: emDashIsWired(project),
       saved: plan.saveFirst,
       keyGenerated: installed.keyGenerated,
+      databaseReady: installed.databaseReady,
+      preview: preview.state,
+      adminUrl: preview.adminUrl,
       config: installed.config,
       onDemand: installed.onDemand,
       project,
@@ -225,8 +251,32 @@ export async function runEmDashInstall(root: string, request: EmDashInstallReque
   }
 }
 
+// The preview is restarted by main's own dev-server code (Astro never loads an integration added to a running server), then
+// asked, on a bounded schedule, until the EmDash admin answers. A project whose preview is not running is left that way: the
+// preview starts for the person when they open the project, and nothing here starts a second server.
+async function restartAndWait(
+  root: string,
+  deps: EmDashInstallDeps,
+  onLog: (text: string) => void,
+): Promise<{ readonly state: EmDashPreviewState; readonly adminUrl: string | undefined }> {
+  const origin = await deps.restartPreview(root);
+  if (origin === undefined) {
+    return { state: 'notRunning', adminUrl: undefined };
+  }
+  const adminUrl = `${origin.replace(/\/$/, '')}/_emdash/admin/`;
+  const asks = Math.ceil(EMDASH_INSTALL_LIMITS.devServerWaitMsMax / EMDASH_INSTALL_LIMITS.devServerPollMs);
+  for (let ask = 0; ask < asks; ask += 1) {
+    if (await deps.answers(adminUrl)) {
+      onLog('\n> the preview is back and EmDash answers\n');
+      return { state: 'running', adminUrl };
+    }
+    await deps.pause(EMDASH_INSTALL_LIMITS.devServerPollMs);
+  }
+  return { state: 'failed', adminUrl: undefined };
+}
+
 type InstallStep =
-  | { readonly kind: 'done'; readonly keyGenerated: boolean; readonly config: EmDashConfigOutcome; readonly onDemand: boolean }
+  | { readonly kind: 'done'; readonly keyGenerated: boolean; readonly databaseReady: boolean; readonly config: EmDashConfigOutcome; readonly onDemand: boolean }
   | { readonly kind: 'stopped'; readonly result: EmDashInstallResult };
 
 // The package manager command, then the two files Stacki writes itself (never over a file that exists), then EmDash's own
@@ -249,7 +299,7 @@ async function install(
     await context.deps.runCommand(windows ? `${plan.manager}.cmd` : plan.manager, addArguments(plan.manager), root, context.onLog, options);
     writeLiveConfigIfAbsent(root);
     appendIgnoreLines(root);
-    config = registerInAstroConfig(root);
+    config = registerInAstroConfig(root, context.deps.verifyConfig);
   } catch (error: unknown) {
     const changedFiles = changedSince(root, context.before);
     const message = error instanceof Error ? error.message : String(error);
@@ -269,13 +319,22 @@ async function install(
       keyGenerated = false;
     }
   }
-  return { kind: 'done', keyGenerated, config: config.outcome, onDemand: config.onDemand };
+  // EmDash's own `init` creates and migrates the local database, so the first visit has one and nothing asks the person to
+  // run a server to get it. Not a failure if it does not finish: the preview creates the database on its first request.
+  let databaseReady = false;
+  try {
+    await context.deps.runCommand(windows ? 'npx.cmd' : 'npx', EMDASH_INIT_ARGUMENTS, root, context.onLog, options);
+    databaseReady = fs.existsSync(path.join(root, 'data.db'));
+  } catch {
+    databaseReady = false;
+  }
+  return { kind: 'done', keyGenerated, databaseReady, config: config.outcome, onDemand: config.onDemand };
 }
 
 // Registers EmDash in the project's Astro config: merged into the person's own (every untouched byte kept), or the guide's
 // complete config when there is none. The merged text was already verified by the parser; it is written to a temporary file
 // and moved into place, read back and checked once more, and the original bytes are put back if that check fails.
-function registerInAstroConfig(root: string): { readonly outcome: EmDashConfigOutcome; readonly onDemand: boolean } {
+function registerInAstroConfig(root: string, verifyConfig: (text: string) => boolean): { readonly outcome: EmDashConfigOutcome; readonly onDemand: boolean } {
   const name = ASTRO_CONFIG_FILES.find((candidate) => fs.existsSync(path.join(root, candidate)));
   if (name === undefined) {
     writeAtomically(path.join(root, ASTRO_CONFIG_FILES[0]), newEmDashConfig());
@@ -292,7 +351,7 @@ function registerInAstroConfig(root: string): { readonly outcome: EmDashConfigOu
       return { outcome: merged.kind, onDemand: false };
     case 'merged': {
       writeAtomically(target, merged.text);
-      if (!emDashConfigIsWired(fs.readFileSync(target, 'utf8'))) {
+      if (!verifyConfig(fs.readFileSync(target, 'utf8'))) {
         fs.writeFileSync(target, original);
         return { outcome: 'unusualShape', onDemand: false };
       }
@@ -425,14 +484,26 @@ function astroMajor(root: string, declared: unknown): number | undefined {
 }
 
 /** The three channels: the plan (read only), the run (which names the command shown) and its cancel. */
-export function registerEmDashInstallHandlers({ ipcMain, send }: Pick<MainHost, 'ipcMain' | 'send'>): void {
+export function registerEmDashInstallHandlers(
+  { ipcMain, send }: Pick<MainHost, 'ipcMain' | 'send'>,
+  previews: {
+    readonly current: () => { readonly url: string; readonly projectPath: string } | undefined;
+    readonly restart: (projectPath: string) => Promise<string | undefined>;
+  },
+): void {
+  const deps: EmDashInstallDeps = { ...DEFAULT_INSTALL_DEPS, restartPreview: previews.restart };
   ipcMain.handle('emdash:installPlan', (_event, { projectPath }) => planEmDashInstall(path.resolve(projectPath)));
   ipcMain.handle('emdash:install', (_event, { projectPath, confirmedCommand }) =>
     runEmDashInstall(path.resolve(projectPath), {
       confirmedCommand,
+      deps,
       onLog: (text) => send('emdash:installLog', text.slice(0, MAIN_LIMITS.logChunkCharsMax)),
     }),
   );
+  ipcMain.handle('emdash:adminUrl', (_event, { projectPath }) => {
+    const preview = previews.current();
+    return { url: preview !== undefined && path.resolve(preview.projectPath) === path.resolve(projectPath) ? preview.url : undefined };
+  });
   ipcMain.handle('emdash:installCancel', (_event, { projectPath }) => {
     cancelEmDashInstall(path.resolve(projectPath));
     return { ok: true } as const;

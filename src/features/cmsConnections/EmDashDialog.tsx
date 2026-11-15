@@ -6,13 +6,13 @@
 // What it shows: the project as detected (not set up, or the content types, missing pieces and the preview guide), and for a
 // project without EmDash the section that adds it to this project (EmDashInstall) beside the starter command for a new site.
 import { useState } from 'react';
-import { CloseIcon, EmDashIcon } from '../../ui/Icons';
+import { CloseIcon, EmDashIcon, WarningTriangleIcon } from '../../ui/Icons';
 import Popup from '../../ui/Popup';
 import { SkeletonRows } from '../../ui/Skeleton';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { EmDashProject } from '../../../shared/properties/emdash';
 import { ChangedFiles, Check, EmDashInstall, type EmDashInstalled } from './EmDashInstall';
-import { EmDashAbsent, EmDashPresent } from './EmDashDetails';
+import { EmDashAbsent, EmDashAdminButton, EmDashCollections, EmDashPresent, EmDashPresentDetails, EmDashStatusLine } from './EmDashDetails';
 
 export interface EmDashDialogProps {
   readonly projectPath: string;
@@ -47,7 +47,7 @@ export function EmDashDialog({ projectPath, project, onProject, onClose }: EmDas
             </button>
           </div>
           <div className="modal-body emdash-dialog-body">
-            {installed !== undefined && <Outcome installed={installed} />}
+            {installed !== undefined && <Outcome installed={installed} projectPath={projectPath} />}
             {project === undefined && <SkeletonRows count={3} />}
             {project?.kind === 'absent' && (
               <EmDashAbsent>
@@ -64,7 +64,7 @@ export function EmDashDialog({ projectPath, project, onProject, onClose }: EmDas
                 )}
               </EmDashAbsent>
             )}
-            {project?.kind === 'present' && <EmDashPresent project={project} />}
+            {project?.kind === 'present' && installed === undefined && <EmDashPresent project={project} projectPath={projectPath} />}
           </div>
         </>
       )}
@@ -72,9 +72,11 @@ export function EmDashDialog({ projectPath, project, onProject, onClose }: EmDas
   );
 }
 
-// What follows a successful install, as a checklist: each line is done (a tick) or still ahead, and what is ahead has its
-// exact code one disclosure away. Nothing here claims more than the run did and detection found.
-function Outcome({ installed }: { readonly installed: EmDashInstalled }) {
+// What follows a successful install: a short header, a tight checklist of what was done, ONE primary button that opens the EmDash
+// admin on the preview's own address, and everything else behind one collapsed Details. What is still ahead appears only when
+// it is real (a config Stacki could not edit safely, a preview that did not come back), as one line with its code one
+// disclosure away. Nothing here claims more than the run did and detection found.
+function Outcome({ installed, projectPath }: { readonly installed: EmDashInstalled; readonly projectPath: string }) {
   const translate = useTranslate();
   const configDone = installed.config === 'created' || installed.config === 'merged' || installed.config === 'unchanged';
   const configLabel =
@@ -83,12 +85,11 @@ function Outcome({ installed }: { readonly installed: EmDashInstalled }) {
       : installed.config === 'unusualShape'
         ? translate('emdash.install.config.unusualShape')
         : translate('emdash.install.check.config');
+  const present = installed.project.kind === 'present' ? installed.project : undefined;
   return (
     <section className="emdash-install" aria-label={translate('emdash.install.title')} role="status">
-      <p>
-        <strong>{translate(installed.complete ? 'emdash.install.done.complete' : 'emdash.install.done.partial')}</strong>
-      </p>
-      <ul className="emdash-checklist">
+      <h5 className="emdash-install-heading">{translate(installed.complete ? 'emdash.install.ready' : 'emdash.install.done.partial')}</h5>
+      <ul className="emdash-checklist" data-size="small">
         <Check done label={translate('emdash.install.check.installed')} />
         <Check done={configDone} label={configLabel} step={configDone ? undefined : 'astroConfig'} />
         {installed.manual.includes('liveConfig') && <Check done={false} label={translate('emdash.install.manual.liveConfig')} step="liveConfig" />}
@@ -97,11 +98,28 @@ function Outcome({ installed }: { readonly installed: EmDashInstalled }) {
           label={translate(installed.keyGenerated ? 'emdash.install.check.key' : 'emdash.install.manual.secrets')}
           step={installed.keyGenerated ? undefined : 'secrets'}
         />
-        <Check done={false} label={translate('emdash.install.manual.admin')} />
+        {installed.databaseReady && <Check done label={translate('emdash.install.check.database')} />}
       </ul>
-      {installed.onDemand && <p>{translate('emdash.install.onDemand')}</p>}
-      {installed.saved && <p>{translate('emdash.install.savedNote')}</p>}
-      <ChangedFiles files={installed.changedFiles} />
+      {installed.preview === 'failed' && (
+        <p className="emdash-install-warning">
+          <WarningTriangleIcon size={13} />
+          <span>{translate('emdash.install.previewFailed')}</span>
+        </p>
+      )}
+      {installed.preview !== 'failed' && (
+        <EmDashAdminButton projectPath={projectPath} address={installed.adminUrl} label={translate('emdash.install.openSetup')} />
+      )}
+      <details className="emdash-more">
+        <summary>{translate('emdash.details')}</summary>
+        <div className="emdash-more-body">
+          {installed.onDemand && <p>{translate('emdash.install.onDemand')}</p>}
+          {installed.saved && <p>{translate('emdash.install.savedNote')}</p>}
+          <ChangedFiles files={installed.changedFiles} />
+          {present !== undefined && <EmDashStatusLine project={present} />}
+          {present !== undefined && <EmDashCollections project={present} />}
+          {present !== undefined && <EmDashPresentDetails project={present} />}
+        </div>
+      </details>
     </section>
   );
 }

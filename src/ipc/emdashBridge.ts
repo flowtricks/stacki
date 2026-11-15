@@ -3,6 +3,8 @@
 // is not available there yet (studio/scripts/shared-source.json). Every reply is parsed before a component
 // sees it.
 import { parseIpcPayload } from '../../shared/ipc/ipcPayloads';
+import { parseOkResult } from '../../shared/ipc/ipcContract';
+import { record } from '../../shared/core/boundary';
 import { parseEmDashProject, type EmDashProject } from '../../shared/properties/emdash';
 import { parseEmDashInstallPlan, parseEmDashInstallResult, type EmDashInstallPlan, type EmDashInstallResult } from '../../shared/properties/emdashInstall';
 
@@ -37,4 +39,21 @@ export function onEmDashInstallLog(callback: (text: string) => void): () => void
       callback(chunk);
     }
   });
+}
+
+/** The EmDash admin on the project's own preview address, when the preview runs; undefined otherwise. */
+export async function readEmDashAdminUrl(projectPath: string): Promise<string | undefined> {
+  const answer = await window.avb.emDashAdminUrl(parseIpcPayload('emdash:adminUrl', { projectPath }));
+  const url = parseOptionalAddress(answer);
+  return url === undefined ? undefined : `${url.replace(/\/$/, '')}/_emdash/admin/`;
+}
+
+/** Opens an address in the person's own browser. Only addresses main produced reach here. */
+export async function openEmDashAdmin(url: string): Promise<void> {
+  parseOkResult(await window.avb.openExternal(parseIpcPayload('shell:openExternal', url)));
+}
+
+function parseOptionalAddress(input: unknown): string | undefined {
+  const value = record(input)['url'];
+  return typeof value === 'string' && /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\])(:\d+)?(\/|$)/.test(value) ? value : undefined;
 }

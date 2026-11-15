@@ -26,3 +26,9 @@ export async function cancelEmDashInstall(_projectPath: string): Promise<void> {
 export function onEmDashInstallLog(_callback: (text: string) => void): () => void {
   return () => {};
 }
+
+export async function readEmDashAdminUrl(_projectPath: string): Promise<string | undefined> {
+  return undefined;
+}
+
+export async function openEmDashAdmin(_url: string): Promise<void> {}

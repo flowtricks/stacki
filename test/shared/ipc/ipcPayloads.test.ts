@@ -246,6 +246,7 @@ const metadataSamples: Readonly<Record<string, unknown>> = {
   'emdash:installPlan': { projectPath: '/site' },
   'emdash:install': { projectPath: '/site', confirmedCommand: 'npm install emdash' },
   'emdash:installCancel': { projectPath: '/site' },
+  'emdash:adminUrl': { projectPath: '/site' },
   'secrets:list': { projectPath: '/site' },
   'secrets:read': { projectPath: '/site', revision: 'a'.repeat(64), index: 0 },
   'secrets:apply': { projectPath: '/site', revision: 'a'.repeat(64), change: { kind: 'remove', index: 0 } },

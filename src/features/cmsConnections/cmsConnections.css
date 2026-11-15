@@ -183,44 +183,43 @@
   border-radius: 50%;
   background: var(--green);
 }
-.emdash-facts {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 12px;
-  margin: 0;
-}
-.emdash-facts dt {
+/* What a project that has EmDash shows: one quiet status line, the content types as compact cards, the rest behind Details. */
+.emdash-dialog-body .emdash-status-line {
   color: var(--text-faint);
-}
-.emdash-facts dd {
-  margin: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .emdash-problems {
   display: grid;
-  gap: 6px;
+  gap: var(--emdash-gap-small);
   margin: 0;
   padding: 0;
   list-style: none;
-  color: #ffcf8a;
+  color: #e6c76a;
+}
+.emdash-problems > li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--emdash-gap-small);
+}
+.emdash-problems > li > svg {
+  flex: none;
+  margin-top: 2px;
 }
 .emdash-collections {
   display: grid;
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--emdash-gap-small);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 .emdash-collection {
   border-radius: 8px;
-  background: var(--bg-surface, rgba(255, 255, 255, 0.04));
+  background: var(--bg-hover);
 }
 .emdash-collection > summary {
-  display: flex;
-  gap: 8px;
-  align-items: baseline;
-  padding: 8px 10px;
+  display: grid;
+  gap: 2px;
+  padding: var(--emdash-gap-small) var(--emdash-gap);
   cursor: pointer;
   font-weight: 600;
 }
@@ -232,12 +231,12 @@
   display: grid;
   gap: 2px;
   margin: 0;
-  padding: 0 10px 8px;
+  padding: 0 var(--emdash-gap) var(--emdash-gap-small);
   list-style: none;
 }
 .emdash-field {
   display: flex;
-  gap: 8px;
+  gap: var(--emdash-gap-small);
   align-items: baseline;
 }
 .emdash-field code {
@@ -249,15 +248,21 @@
 }
 .emdash-guide {
   display: grid;
-  gap: 8px;
+  gap: var(--emdash-gap-small);
 }
 .emdash-guide pre {
   margin: 0;
 }
-/* The EmDash dialog (EmDashDialog.tsx): the shared modal, filled instead of lined. Nothing in it scrolls sideways: every
-   flex and grid child may shrink (min-width 0), code wraps, file names are cut with an ellipsis, and only the body
-   scrolls, vertically, inside the dialog's own height. */
+
+/* The EmDash dialog (EmDashDialog.tsx): the shared modal, filled instead of lined.
+   One grid for every state: the header, the heading, the status row, the cards and the buttons all start at the same left
+   edge and end at the same right edge (--emdash-pad), and spacing comes from three steps (16, 12, 8). Nothing scrolls
+   sideways: every flex and grid child may shrink (min-width 0), code wraps, file names are cut with an ellipsis, and only
+   the body scrolls, vertically, inside the dialog's own height. */
 .modal.emdash-dialog {
+  --emdash-pad: 16px;
+  --emdash-gap: 12px;
+  --emdash-gap-small: 8px;
   width: min(520px, calc(100vw - 48px));
   max-height: calc(100dvh - 64px);
   display: flex;
@@ -268,8 +273,8 @@
 .emdash-dialog-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 14px 12px 0 16px;
+  gap: var(--emdash-gap-small);
+  padding: var(--emdash-pad) var(--emdash-pad) 0;
 }
 .emdash-dialog-header h4 {
   flex: 1;
@@ -277,13 +282,18 @@
   margin: 0;
   font-size: 13px;
 }
-.emdash-dialog-body {
+.emdash-dialog-header .emdash-dialog-close {
+  /* The icon, not its padding, meets the content's right edge. */
+  margin-right: -6px;
+}
+.modal-body.emdash-dialog-body {
   min-height: 0;
   min-width: 0;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  gap: 10px;
+  gap: var(--emdash-gap);
+  padding: var(--emdash-gap) var(--emdash-pad) var(--emdash-pad);
   font-size: 12px;
 }
 .emdash-dialog-body * {
@@ -295,21 +305,27 @@
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
-.emdash-dialog-body p > strong {
+.emdash-dialog-body p > strong,
+.emdash-install-heading {
   color: var(--text);
   font-size: 13px;
+  font-weight: 600;
 }
 .emdash-install {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--emdash-gap);
+}
+.emdash-install-heading {
+  margin: 0;
+  line-height: 1.4;
 }
 /* One compact line with an icon, on a warning tint. */
 .emdash-dialog-body .emdash-install-warning {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: var(--emdash-gap-small);
+  padding: var(--emdash-gap-small) var(--emdash-gap);
   border-radius: 6px;
   background: #3a3017;
   color: #e6c76a;
@@ -323,34 +339,34 @@
 .emdash-dialog-body .emdash-install-summary {
   color: var(--text-faint);
 }
-/* A disclosure: a soft fill, the summary a full-width row. */
-.emdash-more {
-  border-radius: 8px;
+.emdash-dialog-body .emdash-install-note {
+  padding: var(--emdash-gap-small) var(--emdash-gap);
+  border-radius: 6px;
   background: var(--bg-hover);
 }
+/* A disclosure is a plain row at the content edge; what opens under it is flush with it, and cards carry their own fill. */
 .emdash-more > summary {
-  padding: 8px 10px;
+  padding: 0;
   cursor: pointer;
   color: var(--text-dim);
 }
+.emdash-more[open] > summary {
+  margin-bottom: var(--emdash-gap-small);
+}
 .emdash-more-body {
   display: grid;
-  gap: 8px;
-  padding: 0 10px 10px;
+  gap: var(--emdash-gap-small);
 }
 .emdash-more-body h6 {
-  margin: 4px 0 0;
+  margin: var(--emdash-gap-small) 0 0;
   font-size: 11px;
   font-weight: 500;
   color: var(--text-faint);
 }
-.emdash-more > .emdash-code,
-.emdash-more > .emdash-install-log,
-.emdash-more > ul,
-.emdash-more > p {
-  margin: 0 10px 10px;
+.emdash-more-body h6:first-child {
+  margin-top: 0;
 }
-/* Code wraps; the copy button sits in the corner. */
+/* Code in a card of its own: the same inner padding on every side, the copy button in a reserved corner. */
 .emdash-code {
   position: relative;
   border-radius: 6px;
@@ -358,11 +374,23 @@
 }
 .emdash-code pre {
   margin: 0;
-  padding: 8px 32px 8px 10px;
+  padding: var(--emdash-gap-small) 36px var(--emdash-gap-small) var(--emdash-gap);
+  overflow-x: hidden;
   white-space: pre-wrap;
+  text-align: left;
+}
+/* Words: break at spaces, never inside a highlighted token (react-dom, --no-audit stay whole). */
+.emdash-code[data-wrap='words'] pre {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.emdash-code[data-wrap='words'] pre code span {
+  white-space: nowrap;
+}
+/* Anywhere: output with no spaces at all still wraps, so nothing scrolls sideways. */
+.emdash-code[data-wrap='anywhere'] pre {
   overflow-wrap: anywhere;
   word-break: break-word;
-  overflow-x: hidden;
 }
 .emdash-code .emdash-code-copy {
   position: absolute;
@@ -377,27 +405,10 @@
   padding: 0;
   list-style: none;
 }
-.emdash-install-steps {
-  counter-reset: emdash-step;
-}
-.emdash-install-steps > li {
-  counter-increment: emdash-step;
-  color: var(--text-dim);
-}
-.emdash-install-steps > li > span::before,
-.emdash-install-steps > li > details > summary::before {
-  content: counter(emdash-step) '. ';
-}
-.emdash-install-steps > li > details > summary {
-  cursor: pointer;
-}
-.emdash-install-steps > li > details > .emdash-code {
-  margin-top: 6px;
-}
 .emdash-install-files > li {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
+  gap: var(--emdash-gap-small);
   align-items: center;
 }
 .emdash-install-files code {
@@ -417,33 +428,42 @@
 .emdash-pill[data-change='create'] {
   color: var(--green);
 }
+/* The status row: ring and text on the left, Cancel on the right, all on one centre line. */
 .emdash-install-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: var(--emdash-gap-small);
 }
-.emdash-install-status > span {
+.emdash-install-status > span:not(.progress-ring) {
   flex: 1;
+  text-align: left;
+  color: var(--text-dim);
+}
+.emdash-install-status > button {
+  flex: none;
 }
 .emdash-install-log {
+  border-radius: 6px;
+}
+/* The log scrolls inside its own card, so the card keeps the content's edges whether or not a scrollbar shows. */
+.emdash-install-log pre {
   max-height: 200px;
-  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+.emdash-install-log .emdash-code-copy {
+  right: 12px;
+}
 .emdash-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 8px;
-}
-.emdash-dialog-body .emdash-install-note {
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--bg-hover);
+  gap: var(--emdash-gap-small);
 }
 .emdash-checklist {
   display: grid;
-  gap: 6px;
+  gap: var(--emdash-gap-small);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -451,7 +471,7 @@
 .emdash-checklist > li {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
-  gap: 8px;
+  gap: var(--emdash-gap-small);
   align-items: start;
   color: var(--text-dim);
 }
@@ -464,7 +484,6 @@
   justify-content: center;
   width: 16px;
   height: 16px;
-  margin-top: 1px;
   border-radius: 50%;
   background: var(--bg-active, rgba(255, 255, 255, 0.1));
 }
@@ -475,6 +494,18 @@
 .emdash-checklist summary {
   cursor: pointer;
 }
-.emdash-checklist details > .emdash-code {
-  margin-top: 6px;
+.emdash-checklist details[open] > summary {
+  margin-bottom: var(--emdash-gap-small);
+}
+/* The success checklist is a tight block in small type. */
+.emdash-checklist[data-size='small'] {
+  gap: 6px;
+  font-size: 11px;
+}
+.emdash-checklist[data-size='small'] .emdash-check-mark {
+  width: 14px;
+  height: 14px;
+}
+.emdash-checklist[data-size='small'] > li {
+  grid-template-columns: 14px minmax(0, 1fr);
 }

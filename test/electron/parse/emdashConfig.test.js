@@ -86,6 +86,14 @@ test('an existing integrations array keeps its entries and gains the missing one
   assert.equal(count(reactOnly, 'emdash({'), 1);
 });
 
+test('entries added to a list written over several lines go on lines of their own, after the last entry and before its trailing comma', () => {
+  const source =
+    'import { defineConfig } from "astro/config";\nimport sitemap from "@astrojs/sitemap";\nexport default defineConfig({\n  integrations: [\n    sitemap({\n      filter: (page) => true,\n    }),\n  ],\n});\n';
+  const { text } = merged(source);
+  assert.match(text, /    \}\),\n    react\(\),\n    emdash\(\{ database: [^\n]*\}\),\n  \],/);
+  assert.deepEqual(mergeEmDashConfig(text), { kind: 'unchanged' });
+});
+
 test('the existing Node adapter is kept as it is', () => {
   assert.match(merged(CASES['output already server with the Node adapter']).text, /mode: "middleware"/);
 });

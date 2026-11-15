@@ -629,9 +629,12 @@ export const IPC_PAYLOADS = {
   'page:dynamicPaths': object({ ...project, pagePath: pathText, devUrl: maybeText }),
   // What an EmDash project holds, read from its own files and database (read only).
   'emdash:project': object({ ...project }),
+  // Adding EmDash to this project: the plan (read only), the run (which names the command the person was shown) and its cancel.
   'emdash:installPlan': object({ ...project }),
   'emdash:install': parseEmDashInstallRequest,
   'emdash:installCancel': object({ ...project }),
+  // The address the project's preview answers on, for the EmDash admin button.
+  'emdash:adminUrl': object({ ...project }),
   // A visual edit in the renderer's terms, authored against the checksum of
   // the page it shows; main turns it into an intent (step 6).
   'page:edit': parseEditRequest,

@@ -117,6 +117,7 @@ interface InvokeChannels {
   readonly emDashInstallPlan: 'emdash:installPlan';
   readonly emDashInstall: 'emdash:install';
   readonly emDashInstallCancel: 'emdash:installCancel';
+  readonly emDashAdminUrl: 'emdash:adminUrl';
   readonly injectedRoutes: 'project:injectedRoutes';
   readonly sampleEntry: 'content:sampleEntry';
   readonly sampleValue: 'content:sampleValue';

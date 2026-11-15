@@ -60,6 +60,9 @@ function readInjectedRoutes(projectPath: string): InjectedRoute[] {
     }
     const entrypoint = record?.['entrypoint'];
     const params = record?.['params'];
+    if (isRouteWithoutPage(pattern, entrypoint, record?.['type'])) {
+      continue;
+    }
     injected.push({
       route: pattern,
       // Astro writes a string here or omits it; anything else is not a route
@@ -70,6 +73,27 @@ function readInjectedRoutes(projectPath: string): InjectedRoute[] {
     });
   }
   return injected;
+}
+
+// Routes an integration injects that are not pages a person designs: EmDash's admin app and its whole `/_emdash` API (found
+// in the real app, where adding EmDash filled the Pages panel with dozens of its own admin and API routes), and any
+// endpoint for any integration, which answers data rather than a page. EmDash's routes are recognised by their address and
+// by the package their entrypoint lives in, so a changed address is still hidden; a page of the person's own that happens to
+// be called `/emdash-news` is a project file and never reaches this list.
+const ENDPOINT_FILE = /\.(?:ts|js|mts|mjs|cts|cjs)$/i;
+
+function isRouteWithoutPage(pattern: string, entrypoint: unknown, type: unknown): boolean {
+  if (pattern === '/_emdash' || pattern.startsWith('/_emdash/')) {
+    return true;
+  }
+  if (packageOf(entrypoint) === 'emdash') {
+    return true;
+  }
+  if (type === 'endpoint') {
+    return true;
+  }
+  // An older routes.json carries no type: an entrypoint that is code, not a page file, is an endpoint.
+  return (type === undefined || type === null) && typeof entrypoint === 'string' && ENDPOINT_FILE.test(entrypoint);
 }
 
 export { readInjectedRoutes };

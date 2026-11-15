@@ -11,7 +11,23 @@ import { useTranslate } from '../../lib/i18n/useTranslate';
 /** How long the check mark stays after a copy. */
 const COPIED_MS = 1500;
 
-export function EmDashCode({ text, language, label }: { readonly text: string; readonly language: CodeLanguage; readonly label: string }) {
+/**
+ * `words` (a command or a snippet) wraps at spaces and keeps each highlighted token whole, so `react-dom` and a flag are never
+ * split; `anywhere` (install output, whose lines can have no space at all) breaks wherever it must so nothing scrolls sideways.
+ */
+export type EmDashCodeWrap = 'words' | 'anywhere';
+
+export function EmDashCode({
+  text,
+  language,
+  label,
+  wrap = 'words',
+}: {
+  readonly text: string;
+  readonly language: CodeLanguage;
+  readonly label: string;
+  readonly wrap?: EmDashCodeWrap;
+}) {
   const translate = useTranslate();
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -32,7 +48,7 @@ export function EmDashCode({ text, language, label }: { readonly text: string; r
     );
   };
   return (
-    <div className="emdash-code">
+    <div className="emdash-code" data-wrap={wrap}>
       <CodeBlock text={text} language={language} label={label} />
       <button
         type="button"

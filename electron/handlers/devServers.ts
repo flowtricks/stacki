@@ -229,6 +229,20 @@ export class DevServers {
     return this.restartAt(server.projectPath, server.url);
   }
 
+  /**
+   * Restarts this project's dev server because an integration was added to its Astro config, which a running server never
+   * loads. The address the server answers on afterwards, or undefined when none of ours runs for the project.
+   */
+  async restartForNewIntegration(projectPath: string): Promise<string | undefined> {
+    const server = this.server;
+    if (server === undefined || server.external === true || !sameFilesystemPath(server.projectPath, projectPath)) {
+      return undefined;
+    }
+    this.pushLog('\n[stacki] an integration was added to the Astro config; restarting the preview so it is loaded.\n');
+    await this.restartAt(server.projectPath, server.url);
+    return this.server?.url;
+  }
+
   private async restartAt(projectPath: string, devUrl: string): Promise<boolean> {
     await this.pause();
     const restarted = await this.run(projectPath, async (assertActive) => ({

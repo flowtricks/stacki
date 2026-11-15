@@ -9,9 +9,9 @@ export const messages = {
   'pages.delete.page': 'Seite löschen',
   'pages.folder.count': { one: '{count} Seite', other: '{count} Seiten' },
   'pages.folder.new': 'Neuer Ordner',
+  'pages.injected.count': '{count} · nur Vorschau',
   'pages.injected.from': 'Von {source}',
   'pages.injected.integrations': 'Integrationen',
-  'pages.injected.previewOnly': 'nur Vorschau',
   'pages.layout': 'Layout', // same
   'pages.new.button': 'Neue Seite',
   'pages.new.create': 'Seite erstellen',

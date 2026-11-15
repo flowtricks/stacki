@@ -24,6 +24,7 @@ import {
 } from '../../../shared/properties/emdashInstall';
 import type { EmDashInstallPlan } from '../../../shared/properties/emdashInstall';
 import { FAILURE_KEYS, REFUSAL_KEYS, WARNING_KEYS, logTail } from './emdashInstallModel';
+import type { MessageKey } from '../../../shared/properties/i18n/messageRef';
 
 type Ready = Extract<EmDashInstallPlan, { readonly kind: 'ready' }>;
 export type EmDashInstalled = Extract<EmDashInstallResult, { readonly kind: 'installed' }>;
@@ -108,6 +109,7 @@ export function EmDashInstall({ projectPath, onDismiss, onInstalled, onRunningCh
 
   return (
     <section className="emdash-install" aria-label={translate('emdash.install.title')}>
+      <h5 className="emdash-install-heading">{translate(headingKey(phase))}</h5>
       {phase.kind === 'planning' && <SkeletonRows count={2} />}
       {phase.kind === 'planFailed' && <p className="emdash-install-problem">{translate('emdash.install.planFailed')}</p>}
       {phase.kind === 'unavailable' && <p className="emdash-install-problem">{translate(REFUSAL_KEYS[phase.reason])}</p>}
@@ -116,6 +118,25 @@ export function EmDashInstall({ projectPath, onDismiss, onInstalled, onRunningCh
       {phase.kind === 'ended' && <Ended phase={phase} onRetry={() => setPhase({ kind: 'ready', plan: phase.plan })} />}
     </section>
   );
+}
+
+// The heading says what state the dialog is in, never the one it left.
+function headingKey(phase: Phase): MessageKey {
+  switch (phase.kind) {
+    case 'running':
+      return 'emdash.install.heading.running';
+    case 'ended':
+      return phase.result.kind === 'cancelled' ? 'emdash.install.heading.cancelled' : 'emdash.install.heading.failed';
+    case 'planning':
+    case 'planFailed':
+    case 'unavailable':
+    case 'ready':
+      return 'emdash.absent.title';
+    default: {
+      const exhaustive: never = phase;
+      return exhaustive;
+    }
+  }
 }
 
 function Preview({ plan, onConfirm, onDismiss }: { readonly plan: Ready; readonly onConfirm: () => void; readonly onDismiss: () => void }) {
@@ -158,8 +179,8 @@ function Running({ log, stopping, onCancel }: { readonly log: string; readonly s
   const translate = useTranslate();
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const element = scroller.current;
-    if (element !== null) {
+    const element = scroller.current?.querySelector('pre');
+    if (element !== null && element !== undefined) {
       element.scrollTop = element.scrollHeight;
     }
   }, [log]);
@@ -167,7 +188,7 @@ function Running({ log, stopping, onCancel }: { readonly log: string; readonly s
     <>
       <div className="emdash-install-status" role="status">
         <ProgressRing value={undefined} indeterminate sizePx={20} label={translate('emdash.install.running')} />
-        <span>{translate(stopping ? 'emdash.install.stopping' : 'emdash.install.running')}</span>
+        <span>{translate(stopping ? 'emdash.install.stopping' : 'emdash.install.status.running')}</span>
         <button type="button" disabled={stopping} onClick={onCancel}>
           {translate('ui.cancel')}
         </button>
@@ -175,7 +196,7 @@ function Running({ log, stopping, onCancel }: { readonly log: string; readonly s
       <details className="emdash-more" open>
         <summary>{translate('emdash.install.log')}</summary>
         <div className="emdash-install-log" ref={scroller}>
-          <EmDashCode text={logTail(log)} language="shell" label={translate('emdash.install.log')} />
+          <EmDashCode text={logTail(log)} language="shell" label={translate('emdash.install.log')} wrap="anywhere" />
         </div>
       </details>
     </>
@@ -187,12 +208,12 @@ function Ended({ phase, onRetry }: { readonly phase: Extract<Phase, { readonly k
   const { result } = phase;
   return (
     <>
-      <p className="emdash-install-problem">{result.kind === 'cancelled' ? translate('emdash.install.cancelled') : translate(FAILURE_KEYS[result.reason])}</p>
+      {result.kind === 'failed' && <p className="emdash-install-problem">{translate(FAILURE_KEYS[result.reason])}</p>}
       <ChangedFiles files={result.changedFiles} />
       <details className="emdash-more">
         <summary>{translate('emdash.install.log')}</summary>
         <div className="emdash-install-log">
-          <EmDashCode text={logTail(phase.log)} language="shell" label={translate('emdash.install.log')} />
+          <EmDashCode text={logTail(phase.log)} language="shell" label={translate('emdash.install.log')} wrap="anywhere" />
         </div>
       </details>
       <div className="emdash-actions">

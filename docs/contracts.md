@@ -888,23 +888,23 @@ serialized writes; conflicts stop saving until the user reloads the project sett
 Opening a project without saved guide preferences uses defaults in memory. It does not create
 `.stacki/guide.json`; the first guide edit or migration of a readable legacy record creates it.
 
-`.stacki/breakpoints.json` contains `{ version: 2, laptop, tablet, phone }`, each `{ value, unit }` with
-`unit` `rem` or `px` (`shared/properties/projectBreakpoints.ts`). An entry is the query boundary
-`width < value unit`; defaults are the Lumos 64rem, 48rem and 30rem (1rem = 16px), and Desktop, the
-largest, is the full width with no number. Entries must strictly decrease in pixels from laptop to
-phone, each boundary from 281px to 7681px (what the canvas can draw); px is whole numbers, rem allows
-four decimals. `canvasWidthPx` is the only resolver: the largest whole pixel below the boundary (64rem
-is 1023, 1024px is 1023); the preview bar, canvas sizing and the all-breakpoints view read widths
-only through it. A version 1 file (whole pixel widths) is read as version 2 without being rewritten:
-the old defaults 1023/767/479 read as the rem defaults, other widths as px entries one pixel higher,
-so no canvas width moves. Unknown keys and every other bad shape are refused by
-`parseBreakpointsSource`, a `Result`; a refused file shows the defaults with a notice and is never
-overwritten. Reading never writes: the file is created by the first edit, and a save equal to the
-file's bytes, or to the defaults when there is no file, writes nothing. Desktop and Studio read it
-through the `breakpoints` metadata kind (witnessed, atomic writes; written with
-`settings:breakpoints`) into one per-project store (`src/ipc/projectBreakpoints.ts`). Stacki writes
-no media query from these numbers; authored queries keep their own unit and Base (`baseWidth.ts`)
-is read from those.
+`.stacki/breakpoints.json` contains `{ version: 3, breakpoints: [...] }` (`shared/properties/projectBreakpoints.ts`): an ordered
+list of `{ id, name?, direction, value, unit }`, `unit` `rem` or `px`. A `down` breakpoint is `width < X` (a device narrower than
+Desktop; its canvas is X less 1px, so 64rem is 1023px); an `up` one is `width >= X` (a device wider than Desktop; its canvas is
+exactly X, so 100rem is 1600px). Desktop is always there and is the full width. The defaults, with no file, are the Lumos 64rem,
+48rem and 30rem `down` breakpoints with the ids `laptop`, `tablet` and `phone`, whose names read in the person's language until
+renamed. The list is strictly decreasing in pixels with every `up` before every `down` (so an `up` is larger than every `down`),
+each boundary from 281px to 7681px (what the canvas can draw), px whole and rem to four decimals; ids (`bp-1`) and names (1 to 24
+characters) are unique; at most 11 breakpoints; the list may be empty. `canvasWidthPx` is the only resolver; the preview bar (the
+`up` ones widest first, Desktop, the `down` ones, the canvas; shortcuts 1 to 9 follow that order), canvas sizing and the
+all-breakpoints view read widths only through it, and icons are chosen by position (`breakpointDevices.ts`). Versions 1 (whole
+pixel widths) and 2 (laptop, tablet, phone as `{ value, unit }`) are read as version 3 without being rewritten, with no canvas
+width moving. Unknown keys and every other bad shape are refused by `parseBreakpointsSource`, a `Result`; a refused file shows
+the defaults with a notice and is never overwritten. Reading never writes: the file is created by the first edit, and a save
+equal to the file's bytes, or to the defaults when there is no file, writes nothing. Removing a breakpoint never edits project
+CSS. Desktop and Studio read it through the `breakpoints` metadata kind (witnessed, atomic writes; written with
+`settings:breakpoints`) into one per-project store (`src/ipc/projectBreakpoints.ts`). Stacki writes no media query from these
+numbers; authored queries keep their own unit and Base (`baseWidth.ts`) is read from those.
 
 **Breakpoint sync.** Committing a changed breakpoint in Settings scans the project (Desktop only; Studio has no Settings
 dialog) for `@media` width bounds equal to its OLD value (`shared/properties/mediaBreakpointSync.ts`, executed in main by
@@ -912,8 +912,9 @@ dialog) for `@media` width bounds equal to its OLD value (`shared/properties/med
 preludes (comments and strings skipped) and only `width`, `min-width` and `max-width` in `px` or `rem`: `(width >= X)`,
 `(width < X)`, `(width <= X)`, `(X <= width)`, `(a < width <= b)` (each bound on its own), `(min-width: X)`, `(max-width: X)`,
 inside `only screen and`, `and` and comma lists, in any case and spacing, including nested in `@supports` and `@layer`. A bound
-is **exact** when it equals the old boundary in either unit (64rem = 1024px, 16px per rem). It is **inclusive** (ambiguous,
-unchecked) when it is 1px short in the form that includes its own edge: `(max-width: 1023px)`, `(width <= 1023px)`,
+is **exact** when it equals the old boundary in either unit (64rem = 1024px, 16px per rem). For an `up` (`width >= X`)
+breakpoint, `(width > X)` and `(X < width)` are the **exclusive** form (ambiguous, unchecked, rewritten as written). It is
+**inclusive** (ambiguous, unchecked) when it is 1px short in the form that includes its own edge: `(max-width: 1023px)`, `(width <= 1023px)`,
 `(width > 1023px)`, `63.9375rem`. `height`, `min-height`, `prefers-*`, `em`, `vw`, `calc()` and `@container` are never touched.
 Only the number+unit token is replaced (CRLF, tabs and minified text stay byte for byte): an exact match takes the new value as
 typed, an inclusive one the new boundary minus 1px; a Lumos project (rem only) is always written in rem. It scans `.css`,
@@ -923,7 +924,7 @@ parser, blocks inside expressions left out) and `.html`, skipping dotted folders
 places). Nothing is written by a scan. Apply checks each file's digest against the scan (a changed file is skipped and
 reported), each edit's text, the bound count and locators of the result and that the CSS still parses, writes through the
 witnessed document writer, puts back the files already written on any failure, and journals the sync for Undo and Redo.
-`.stacki/breakpoint-sync.json` (`shared/properties/breakpointSyncRecord.ts`) holds, per breakpoint, `excluded` places (listed
+`.stacki/breakpoint-sync.json` (`shared/properties/breakpointSyncRecord.ts`) holds, per breakpoint id, `excluded` places (listed
 unchecked as "Not synced" on every later sync, whatever value they hold) and `linked` places with `appliedAt`; a place is a
 project-relative file and a locator (the masked prelude hashed, plus its ordinal), which survives the number and line changing.
 It is bounded, canonical (sorted, deduplicated), created by the first sync that has something to remember, and never written
@@ -1563,6 +1564,19 @@ live collection) is detected from the project, not connected: there is no key an
   restored if the check fails; a different existing adapter or an unreadable shape leaves it untouched and is reported),
   then EmDash's key command only when there is no `.env`, its output never logged. Nothing is reverted on failure; the
   result lists the files that changed. `complete` is true only when `detectEmDash` finds the project wired afterwards.
+- After the config and key, EmDash's own `npx emdash init` creates and migrates the local database (an unfinished init is not a
+  failed install). Then the running preview is restarted through `DevServers.restartForNewIntegration` (Astro never loads an
+  integration added to a running server) and the run asks `<origin>/_emdash/admin/` on a bounded schedule
+  (`EMDASH_INSTALL_LIMITS.devServerWaitMsMax`) until it answers; the result says `preview` is `running`, `notRunning` or
+  `failed` and carries `adminUrl` only when it answered. `emdash:adminUrl` returns the running preview's origin for the open
+  project (loopback only, parsed again in the renderer), and the admin opens in the person's own browser through
+  `shell:openExternal`, never from a string the project or a page supplied.
+- Framing: EmDash answers every page with `X-Frame-Options: SAMEORIGIN`, which blanks the canvas (an iframe of another
+  origin; the log shows ERR_BLOCKED_BY_RESPONSE). `electron/app/previewFraming.ts` drops that header and any CSP
+  `frame-ancestors` from frame responses from loopback hosts only; nothing else in a response changes.
+- Pages panel: routes injected by an integration that are not pages never reach `project:injectedRoutes`: anything under
+  `/_emdash`, any route whose entrypoint lives in the `emdash` package, and any endpoint (Astro's route `type`, or a code
+  entrypoint when the type is absent). Another integration's HTML routes stay, in a collapsed, quiet group.
 - Not built: Stacki does not edit EmDash content or types, the loop builder has no EmDash source (a list is written as
   code), a Cloudflare D1 project is read only from `.wrangler/state` (unverified against a real D1 project), and
   Studio cannot read an EmDash project.

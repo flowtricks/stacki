@@ -122,6 +122,47 @@ const { packageOf } = require('#dist/electron/lib/installedPackages.js');
     check('and a path outside a package names none', packageOf('/tmp/.avb/paths.js') === undefined);
   }
 
+  {
+    // EmDash's integration injects its admin app and its whole API as routes (found in the real app: the Pages panel filled
+    // with dozens of `/_emdash/...` rows after EmDash was added). They are not pages a person designs, so they are not
+    // listed; an endpoint of any integration is data, not a page; another integration's HTML pages still are.
+    const emdash = 'node_modules/emdash/dist/astro/routes';
+    fs.writeFileSync(
+      path.join(avbDirectory, 'routes.json'),
+      JSON.stringify([
+        { pattern: '/', origin: 'project', entrypoint: 'src/pages/index.astro', params: [] },
+        { pattern: '/blog/[slug]', origin: 'project', entrypoint: 'src/pages/blog/[slug].astro', params: ['slug'] },
+        { pattern: '/_emdash/admin/[...path]', origin: 'external', entrypoint: emdash + '/admin.astro', params: ['path'] },
+        { pattern: '/_emdash/api/admin/allowed-domains', origin: 'external', entrypoint: emdash + '/api/allowed-domains.ts', params: [] },
+        { pattern: '/_emdash/api/comments/bulk', origin: 'external', entrypoint: emdash + '/api/comments/bulk.ts', type: 'endpoint', params: [] },
+        { pattern: '/renamed-admin/[...path]', origin: 'external', entrypoint: emdash + '/admin.astro', params: ['path'] },
+        { pattern: '/gallery', origin: 'external', entrypoint: 'node_modules/gallery-kit/pages/gallery.astro', type: 'page', params: [] },
+        { pattern: '/gallery/api/likes', origin: 'external', entrypoint: 'node_modules/gallery-kit/pages/likes.ts', type: 'endpoint', params: [] },
+        { pattern: '/gallery/feed.json', origin: 'external', entrypoint: 'node_modules/gallery-kit/pages/feed.json.js', params: [] },
+      ]),
+    );
+    const routes = read(directory);
+    check(
+      'no EmDash route is listed, by address or by the package it lives in',
+      !routes.some((route) => /_emdash|renamed-admin/.test(route.route)),
+      JSON.stringify(routes.map((route) => route.route)),
+    );
+    check(
+      'an endpoint is never a page, with or without a type',
+      !routes.some((route) => /likes|feed\.json/.test(route.route)),
+      JSON.stringify(routes.map((route) => route.route)),
+    );
+    check(
+      'another integration’s HTML page is still listed',
+      routes.length === 1 && routes[0].route === '/gallery' && routes[0].from === 'gallery-kit',
+      JSON.stringify(routes),
+    );
+    check(
+      'the project’s own pages, dynamic ones included, are not touched (they are files, listed elsewhere)',
+      !routes.some((route) => route.route === '/blog/[slug]'),
+    );
+  }
+
   if (failures.length) {
     console.error(`injected-routes: ${failures.length} of ${checked} failed\n${failures.join('\n')}`);
     process.exit(1);

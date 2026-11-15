@@ -692,6 +692,7 @@ export interface IpcResults extends AiResults {
   readonly 'emdash:installPlan': EmDashInstallPlan;
   readonly 'emdash:install': EmDashInstallResult;
   readonly 'emdash:installCancel': { readonly ok: true };
+  readonly 'emdash:adminUrl': { readonly url: string | undefined };
   readonly 'page:dynamicPaths':
     | {
         readonly entries: ReadonlyArray<never>;

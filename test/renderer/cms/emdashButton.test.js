@@ -67,6 +67,8 @@ const READY_PLAN = {
 let planAnswer = async () => READY_PLAN;
 let installAnswer = async () => ({ kind: 'failed', reason: 'other', changedFiles: [] });
 const installs = [];
+const opened = [];
+let previewUrl = 'http://127.0.0.1:4321';
 const cancels = [];
 const logListeners = new Set();
 window.avb = {
@@ -78,6 +80,11 @@ window.avb = {
   emDashInstall: async (input) => {
     installs.push(input);
     return installAnswer();
+  },
+  emDashAdminUrl: async () => ({ url: previewUrl }),
+  openExternal: async (address) => {
+    opened.push(address);
+    return { ok: true };
   },
   emDashInstallCancel: async (input) => {
     cancels.push(input);
@@ -134,6 +141,8 @@ const popupShown = (what) => waitFor({ what, read: () => popup() !== null, until
 async function mount(element) {
   asked.length = 0;
   installs.length = 0;
+  opened.length = 0;
+  previewUrl = 'http://127.0.0.1:4321';
   cancels.length = 0;
   logListeners.clear();
   document.body.innerHTML = '<div id="root"></div>';
@@ -334,7 +343,8 @@ test('confirming runs the command that was shown, once, with progress, live outp
   assert.deepEqual(installs, [{ projectPath: '/project', confirmedCommand: READY_PLAN.command }], 'one run, naming the command shown');
   assert.ok(popup().querySelector('.progress-ring'), 'a progress ring');
   assert.ok(popup().querySelector('.progress-ring-turning'), 'turning, because the length is unknown');
-  assert.match(popup().querySelector('[role="status"]').textContent, /Adding EmDash…/);
+  assert.match(popup().querySelector('[role="status"]').textContent, /Installing packages…/);
+  assert.match(popup().querySelector('.emdash-install-heading').textContent, /^Adding EmDash$/, 'the heading names the state, not the one before');
   await pushLog('added 1 package\n');
   await waitFor({
     what: 'the output shows live',
@@ -351,7 +361,7 @@ test('confirming runs the command that was shown, once, with progress, live outp
   assert.match(popup().querySelector('[role="status"]').textContent, /Stopping…/);
   await act(async () => finish({ kind: 'cancelled', changedFiles: ['package.json'] }));
   await settle();
-  assert.match(popup().textContent, /Cancelled\./);
+  assert.match(popup().querySelector('.emdash-install-heading').textContent, /Adding EmDash was cancelled/);
   assert.match(popup().textContent, /Changed files \(1\)/);
   assert.match(popup().textContent, /Nothing was reverted\./);
   assert.equal(popup().querySelector('.emdash-dialog-close').disabled, false);
@@ -370,12 +380,15 @@ test('a failure is one plain sentence with the log behind a disclosure, the chan
   assert.ok(buttonNamed('Add EmDash to this project'), 'back at the preview');
 });
 
-test('success: the project is re-read, the button gets its mark, and the dialog shows the set-up state', async () => {
+test('success: a short header, a tight checklist, one primary button, and everything else behind one Details', async () => {
   installAnswer = async () => ({
     kind: 'installed',
     complete: true,
     saved: true,
     keyGenerated: true,
+    databaseReady: true,
+    preview: 'running',
+    adminUrl: 'http://127.0.0.1:4321/_emdash/admin/',
     config: 'merged',
     onDemand: true,
     project: PRESENT,
@@ -387,19 +400,32 @@ test('success: the project is re-read, the button gets its mark, and the dialog 
   await openLoaded();
   await act(async () => buttonNamed('Add EmDash to this project').dispatchEvent(event('click')));
   await settle();
-  assert.ok(button().querySelector('.cms-connect-status'), 'the mark follows');
-  assert.match(popup().textContent, /EmDash is set up\. Next:/);
+  assert.ok(button().querySelector('.cms-connect-status'), 'the button’s mark follows');
+  assert.equal(popup().querySelector('.emdash-install-heading').textContent, 'EmDash is ready');
   const ticks = [...popup().querySelectorAll('.emdash-checklist > li')].map((item) => [item.getAttribute('data-done'), item.textContent.trim()]);
   assert.deepEqual(ticks, [
     ['true', 'EmDash installed'],
     ['true', 'Astro config updated'],
     ['true', 'Local key created'],
-    ['false', 'Finish setup at /_emdash/admin'],
+    ['true', 'Database ready'],
   ]);
-  assert.match(popup().textContent, /saved as “Before Adding EmDash” in History/);
-  assert.match(popup().textContent, /Your site now renders pages on request\./);
-  assert.match(popup().textContent, /Changed files \(2\)/);
-  assert.ok(popup().querySelector('.emdash-collection'), 'the content types are listed');
+  const primary = [...popup().querySelectorAll('button.primary')];
+  assert.deepEqual(
+    primary.map((item) => item.textContent.trim()),
+    ['Open EmDash setup'],
+    'one primary button',
+  );
+  assert.equal(popup().querySelectorAll(':scope .emdash-install > details').length, 1, 'one disclosure at the top level');
+  assert.equal(detailsNamed('Details').open, false, 'collapsed by default');
+  const details = detailsNamed('Details').textContent;
+  assert.match(details, /saved as “Before Adding EmDash” in History/);
+  assert.match(details, /Your site now renders pages on request\./);
+  assert.match(details, /Changed files \(2\)/);
+  assert.ok(detailsNamed('Details').querySelector('.emdash-collection'), 'the content types are in Details');
+  assert.ok(popup().querySelector('.emdash-install-warning') === null, 'no warning when nothing needs doing');
+  assert.doesNotMatch(popup().textContent.replace(details, ''), /dev server|Run the dev server|run the dev server/i);
+  await act(async () => primary[0].dispatchEvent(event('click')));
+  assert.deepEqual(opened, ['http://127.0.0.1:4321/_emdash/admin/'], 'opens the admin on the preview’s own address');
 });
 
 test('success that still needs the config: the remaining steps are named, never called done', async () => {
@@ -409,6 +435,9 @@ test('success that still needs the config: the remaining steps are named, never 
     complete: false,
     saved: false,
     keyGenerated: false,
+    databaseReady: false,
+    preview: 'failed',
+    adminUrl: undefined,
     config: 'otherAdapter',
     onDemand: false,
     project: unwired,
@@ -420,7 +449,13 @@ test('success that still needs the config: the remaining steps are named, never 
   await act(async () => buttonNamed('Add EmDash to this project').dispatchEvent(event('click')));
   await settle();
   assert.match(popup().textContent, /Packages installed\. Still to do:/);
-  assert.doesNotMatch(popup().textContent, /EmDash is set up\./);
+  assert.doesNotMatch(popup().textContent, /EmDash is ready/);
+  assert.match(
+    popup().querySelector('.emdash-install-warning').textContent,
+    /The preview did not restart\. Reopen the project\./,
+    'one short line, with an icon',
+  );
+  assert.ok(buttonNamed('Open EmDash setup') === undefined, 'no admin button without a preview that answered');
   const pending = [...popup().querySelectorAll('.emdash-checklist > li[data-done="false"]')].map((item) => item.textContent.trim());
   assert.ok(
     pending.some((text) => /different adapter, so Stacki left it/.test(text)),
@@ -436,7 +471,7 @@ test('a plan that cannot be made says why in one line and offers no way to run',
   await mountRow();
   await openLoaded();
   assert.match(popup().querySelector('.emdash-install-problem').textContent, /EmDash needs Astro 6 or later\./);
-  assert.equal(buttonNamed('Add EmDash to this project'), undefined);
+  assert.ok(buttonNamed('Add EmDash to this project') === undefined);
 });
 
 test('a project that uses EmDash shows the connected mark and lists its content types exactly as EmDash defines them', async () => {
@@ -450,10 +485,24 @@ test('a project that uses EmDash shows the connected mark and lists its content 
   assert.ok(rows.some((row) => /Title.*title.*required.*Text/.test(row)));
   assert.ok(rows.some((row) => /Featured Image.*featured_image.*Image/.test(row)));
   assert.ok(rows.some((row) => /Layout hint.*Unknown type/.test(row)));
-  assert.match(popup().querySelector('.emdash-facts').textContent, /data\.db/);
+  assert.match(popup().querySelector('.emdash-status-line').textContent, /^2 content types · data\.db · when requested \(server\)$/);
+  assert.ok(popup().querySelector('.emdash-facts') === null, 'the key/value table is gone');
+  assert.equal(detailsNamed('Details').open, false, 'the notes and the guide are behind Details');
+  assert.ok(buttonNamed('Open EmDash admin'), 'the admin opens from one primary button');
+  await act(async () => buttonNamed('Open EmDash admin').dispatchEvent(event('click')));
+  assert.deepEqual(opened, ['http://127.0.0.1:4321/_emdash/admin/']);
   assert.match(popup().textContent, /uploads folder is not in \.gitignore/);
   assert.equal(popup().querySelectorAll('input, textarea, select').length, 0, 'nothing here edits a content type');
   assert.ok(popup().querySelector('.emdash-install') === null, 'no install section for a project that has EmDash');
+});
+
+test('without a running preview there is no admin button, and the status line is the only summary', async () => {
+  answer = async () => PRESENT;
+  await mountRow();
+  previewUrl = undefined;
+  await openLoaded();
+  assert.ok(buttonNamed('Open EmDash admin') === undefined);
+  assert.ok(popup().querySelector('.emdash-status-line'));
 });
 
 test('the guide shows the EmDash commands for copying a customer site', async () => {

@@ -81,7 +81,7 @@ export function mergeEmDashConfig(source: string): EmDashConfigResult {
   if (adapter === 'other') {
     return { kind: 'otherAdapter' };
   }
-  const integrations = planIntegrations(options, imports.bindings);
+  const integrations = planIntegrations(source, options, imports.bindings);
   if (integrations === 'unusual') {
     return { kind: 'unusualShape' };
   }
@@ -97,11 +97,11 @@ export function mergeEmDashConfig(source: string): EmDashConfigResult {
     added.push(`adapter: ${imports.bindings.node}({ mode: ${quote}standalone${quote} })`);
   }
   if (integrations.kind === 'add') {
-    const entries = integrationLines(imports.bindings, { react: true, emdash: true }, indent);
+    const entries = integrationLines(imports.bindings, { react: true, emdash: true }, `,\n${indent}${indent}`);
     added.push(`integrations: [\n${indent}${indent}${entries}\n${indent}]`);
   }
   if (integrations.kind === 'append') {
-    const entries = integrationLines(imports.bindings, { react: integrations.needsReact, emdash: integrations.needsEmDash }, indent);
+    const entries = integrationLines(imports.bindings, { react: integrations.needsReact, emdash: integrations.needsEmDash }, integrations.separator);
     edits.push({ start: integrations.at, end: integrations.at, text: `${integrations.leading}${entries}` });
   }
   if (added.length > 0) {
@@ -279,10 +279,17 @@ function planAdapter(options: ts.ObjectLiteralExpression, file: ts.SourceFile, b
 type IntegrationsPlan =
   | { readonly kind: 'ok' }
   | { readonly kind: 'add' }
-  | { readonly kind: 'append'; readonly at: number; readonly leading: string; readonly needsReact: boolean; readonly needsEmDash: boolean }
+  | {
+      readonly kind: 'append';
+      readonly at: number;
+      readonly leading: string;
+      readonly separator: string;
+      readonly needsReact: boolean;
+      readonly needsEmDash: boolean;
+    }
   | 'unusual';
 
-function planIntegrations(options: ts.ObjectLiteralExpression, bindings: Bindings): IntegrationsPlan {
+function planIntegrations(source: string, options: ts.ObjectLiteralExpression, bindings: Bindings): IntegrationsPlan {
   const existing = property(options, 'integrations');
   if (existing === undefined) {
     return { kind: 'add' };
@@ -301,13 +308,21 @@ function planIntegrations(options: ts.ObjectLiteralExpression, bindings: Binding
     return { kind: 'ok' };
   }
   const last = list.elements.at(-1);
-  // After the last element (and its trailing comma, if any), or just inside an empty list.
-  const at = last === undefined ? list.getStart() + 1 : list.elements.hasTrailingComma ? last.getEnd() + 1 : last.getEnd();
-  const leading = last === undefined || list.elements.hasTrailingComma ? '' : ', ';
-  return { kind: 'append', at, leading, needsReact, needsEmDash };
+  if (last === undefined) {
+    return { kind: 'append', at: list.getStart() + 1, leading: '', separator: ', ', needsReact, needsEmDash };
+  }
+  // A list written over several lines gets each new entry on a line of its own, at the last entry's indentation, before any
+  // trailing comma (which then stays after the new last entry); a list on one line gets them after a comma and a space.
+  if (source.slice(list.getStart(), last.getEnd()).includes('\n')) {
+    const lineStart = source.lastIndexOf('\n', last.getStart() - 1) + 1;
+    const lineIndent = /^[ \t]*/.exec(source.slice(lineStart, last.getStart()))?.[0] ?? '';
+    return { kind: 'append', at: last.getEnd(), leading: `,\n${lineIndent}`, separator: `,\n${lineIndent}`, needsReact, needsEmDash };
+  }
+  const trailing = list.elements.hasTrailingComma;
+  return { kind: 'append', at: trailing ? last.getEnd() + 1 : last.getEnd(), leading: trailing ? '' : ', ', separator: ', ', needsReact, needsEmDash };
 }
 
-function integrationLines(bindings: Bindings, include: { readonly react: boolean; readonly emdash: boolean }, indent: string): string {
+function integrationLines(bindings: Bindings, include: { readonly react: boolean; readonly emdash: boolean }, separator: string): string {
   const parts: string[] = [];
   if (include.react) {
     parts.push(`${bindings.react}()`);
@@ -315,7 +330,7 @@ function integrationLines(bindings: Bindings, include: { readonly react: boolean
   if (include.emdash) {
     parts.push(`${bindings.emdash}({ database: ${EMDASH_DATABASE}, storage: ${EMDASH_STORAGE} })`);
   }
-  return parts.join(`,\n${indent}${indent}`);
+  return parts.join(separator);
 }
 
 function indentOf(source: string, options: ts.ObjectLiteralExpression): string {

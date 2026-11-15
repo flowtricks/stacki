@@ -1,6 +1,9 @@
 // What the EmDash dialog says about the project: the not-set-up state (a headline, with room for the install section), and for a project that uses EmDash the content types and fields as EmDash defines them, what
 // is missing, where the types came from, and how to preview with a customer's real content.
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
+import { WarningTriangleIcon } from '../../ui/Icons';
+import { openEmDashAdmin, readEmDashAdminUrl } from '../../ipc/emdashBridge';
 import { EmDashCode } from './EmDashCode';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import type { EmDashBinding, EmDashCollection, EmDashProblem, EmDashProject, EmDashSchemaSource } from '../../../shared/properties/emdash';
@@ -57,46 +60,108 @@ const GUIDE_COMMANDS = {
   import: 'npx emdash site import customer.emdash --plan <digest> --confirm',
 } as const;
 
+/** The not-set-up state. Its heading belongs to the install section, which says what state the dialog is in. */
 export function EmDashAbsent({ children }: { readonly children?: ReactNode }) {
+  return <>{children}</>;
+}
+
+/** One quiet line of what the project has: content types, database file, how pages are rendered. */
+export function EmDashStatusLine({ project }: { readonly project: Present }) {
+  const translate = useTranslate();
+  return (
+    <p className="emdash-status-line">
+      {translate('emdash.status.line', {
+        count: project.collections.length,
+        database: project.databaseFile ?? '–',
+        mode: translate(OUTPUT_KEYS[project.output]),
+      })}
+    </p>
+  );
+}
+
+/** The content types as compact cards, each with its field count and its fields one disclosure away. Never editable here. */
+export function EmDashCollections({ project }: { readonly project: Present }) {
+  return (
+    <ul className="emdash-collections">
+      {project.collections.map((collection) => (
+        <Collection key={collection.slug} collection={collection} />
+      ))}
+    </ul>
+  );
+}
+
+/** Everything that is not needed at a glance: what is missing, where the types came from, the note, the customer-content guide. */
+export function EmDashPresentDetails({ project }: { readonly project: Present }) {
   const translate = useTranslate();
   return (
     <>
-      <p>
-        <strong>{translate('emdash.absent.title')}</strong>
-      </p>
-      {children}
+      {project.problems.length > 0 && (
+        <ul className="emdash-problems">
+          {project.problems.map((problem) => (
+            <li key={problem}>
+              <WarningTriangleIcon size={12} />
+              <span>{translate(PROBLEM_KEYS[problem])}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {project.schemaSource !== undefined && <p>{translate(SOURCE_KEYS[project.schemaSource])}</p>}
+      <p>{translate('emdash.hint.definedInEmDash')}</p>
+      <Guide />
     </>
   );
 }
 
-export function EmDashPresent({ project }: { readonly project: Present }) {
+/** A project that has EmDash: the status line, the content-type cards and, when the preview runs, the button that opens its admin. */
+export function EmDashPresent({ project, projectPath }: { readonly project: Present; readonly projectPath: string }) {
   const translate = useTranslate();
   return (
     <>
-      <dl className="emdash-facts">
-        <dt>{translate('emdash.status.collections')}</dt>
-        <dd>{project.collections.length}</dd>
-        <dt>{translate('emdash.status.database')}</dt>
-        <dd>{project.databaseFile ?? '–'}</dd>
-        <dt>{translate('emdash.status.output')}</dt>
-        <dd>{translate(OUTPUT_KEYS[project.output])}</dd>
-      </dl>
-      {project.schemaSource !== undefined && <p>{translate(SOURCE_KEYS[project.schemaSource])}</p>}
-      {project.problems.length > 0 && (
-        <ul className="emdash-problems">
-          {project.problems.map((problem) => (
-            <li key={problem}>{translate(PROBLEM_KEYS[problem])}</li>
-          ))}
-        </ul>
-      )}
-      <ul className="emdash-collections">
-        {project.collections.map((collection) => (
-          <Collection key={collection.slug} collection={collection} />
-        ))}
-      </ul>
-      <p>{translate('emdash.hint.definedInEmDash')}</p>
-      <Guide />
+      <EmDashStatusLine project={project} />
+      <EmDashCollections project={project} />
+      <EmDashAdminButton projectPath={projectPath} label={translate('emdash.open.admin')} />
+      <details className="emdash-more">
+        <summary>{translate('emdash.details')}</summary>
+        <div className="emdash-more-body">
+          <EmDashPresentDetails project={project} />
+        </div>
+      </details>
     </>
+  );
+}
+
+/** The primary button that opens the EmDash admin on the preview's own address; absent while no preview runs. */
+export function EmDashAdminButton({
+  projectPath,
+  label,
+  address,
+}: {
+  readonly projectPath: string;
+  readonly label: string;
+  readonly address?: string | undefined;
+}) {
+  const [url, setUrl] = useState<string | undefined>(address);
+  useEffect(() => {
+    let current = true;
+    if (address === undefined) {
+      readEmDashAdminUrl(projectPath).then(
+        (found) => current && setUrl(found),
+        () => undefined,
+      );
+    }
+    return () => {
+      current = false;
+    };
+  }, [projectPath, address]);
+  if (url === undefined) {
+    return undefined;
+  }
+  return (
+    <div className="emdash-actions">
+      <button type="button" className="primary" onClick={() => void openEmDashAdmin(url).catch(() => undefined)}>
+        {label}
+      </button>
+    </div>
   );
 }
 
@@ -107,7 +172,7 @@ function Collection({ collection }: { readonly collection: EmDashCollection }) {
       <details className="emdash-collection">
         <summary>
           {collection.label}
-          <span>{collection.urlPattern ?? collection.slug}</span>
+          <span>{translate('emdash.collection.fields', { count: collection.fields.length })}</span>
         </summary>
         <ul className="emdash-fields">
           {collection.fields.map((field) => (

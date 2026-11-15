@@ -295,6 +295,7 @@ function pageBridge() {
     emDashInstallPlan: invoke('emdash:installPlan'),
     emDashInstall: invoke('emdash:install'),
     emDashInstallCancel: invoke('emdash:installCancel'),
+    emDashAdminUrl: invoke('emdash:adminUrl'),
     injectedRoutes: invoke('project:injectedRoutes'),
     sampleEntry: invoke('content:sampleEntry'),
     sampleValue: invoke('content:sampleValue'),

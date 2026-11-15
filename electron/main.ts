@@ -87,6 +87,7 @@ import { registerCssVariableHandlers } from './handlers/cssVariableHandlers';
 import { registerBreakpointSyncHandlers } from './handlers/breakpointSyncHandlers';
 import { registerGitHandlers } from './handlers/gitHandlers';
 import { registerPageHandlers } from './handlers/pageHandlers';
+import { allowLoopbackFraming } from './app/previewFraming';
 import { registerPageTemplateHandlers } from './handlers/pageTemplateHandlers';
 import { registerPreviewHandlers } from './handlers/previewHandlers';
 import { registerProjectHandlers } from './handlers/projectHandlers';
@@ -612,6 +613,8 @@ app.whenReady().then(
     registerAssetProtocol();
     protocol.handle(APP_SCHEME, (request) => serveAppRequest(request.url, openProjectRoot));
     refusePrivatePermissions();
+    // The canvas frames the project's own dev server; a site's own no-framing rule must not blank it (previewFraming.ts).
+    allowLoopbackFraming(session.defaultSession);
     // The boot path before the window: the snapshot the first render is seeded with, and, for a project the window
     // will open, its dev server, started now so the canvas is not waiting for the renderer to ask (docs/startup.md).
     bootStore = createBootStore(app.getPath('userData'), { now: Date.now, setTimer: setTimeout, clearTimer: (timer) => clearTimeout(timer) }, (projectPath) =>
@@ -1129,7 +1132,7 @@ registerBreakpointSyncHandlers(host);
 registerGitHandlers(host);
 registerGitRepositoryHandlers(host);
 registerImageConversionHandler(host);
-registerPageHandlers(host);
+registerPageHandlers(host, { current: () => devServers.current(), restart: (projectPath) => devServers.restartForNewIntegration(projectPath) });
 registerPageTemplateHandlers(
   host,
   {

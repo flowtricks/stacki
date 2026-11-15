@@ -36,9 +36,13 @@ export const WARNING_KEYS: Readonly<Record<EmDashInstallWarning, MessageKey>> = 
   otherAdapter: 'emdash.install.warning.otherAdapter',
 };
 
-/** The end of the log, at most `INSTALL_LOG_LINES_SHOWN` lines. */
+/** The end of the log, at most `INSTALL_LOG_LINES_SHOWN` lines, without blank lines before the first or after the last. */
 export function logTail(log: string): string {
   const lines = log.split('\n');
   const shown = lines.length > INSTALL_LOG_LINES_SHOWN ? lines.slice(lines.length - INSTALL_LOG_LINES_SHOWN) : lines;
-  return shown.join('\n').slice(-EMDASH_INSTALL_LIMITS.logCharsMax);
+  return shown
+    .join('\n')
+    .slice(-EMDASH_INSTALL_LIMITS.logCharsMax)
+    .replace(/^(?:[ \t]*\n)+/, '')
+    .replace(/(?:\n[ \t]*)+$/, '');
 }
