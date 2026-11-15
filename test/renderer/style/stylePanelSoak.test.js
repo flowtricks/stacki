@@ -158,7 +158,18 @@ async function orchestrate() {
   console.log(
     `# stylePanelSoak ${options.mode} run on ${options.rendererRevision || `${options.tree.head.slice(0, 8)}${options.tree.dirty.length > 0 ? ' + uncommitted' : ''}`}, seed ${options.seed}, CPU ${options.throttles.join('x, ')}x, walk ${options.walkSteps} steps`,
   );
-  const { code } = await runSoak({ scenarioModule: __filename, options, keepDirectory: false });
+  const { code, directory, leftovers } = await runSoak({ scenarioModule: __filename, options, keepDirectory: false });
+  // Nothing of this run may outlive it: no process naming its directory, and no directory.
+  const { processesOfRun } = require('../../helpers/e2e/soakProcesses.js');
+  const remaining = processesOfRun(directory);
+  if (leftovers.length > 0 || remaining.length > 0) {
+    console.error(`not ok - soak processes outlived the run: ${[...new Set([...leftovers, ...remaining.map((entry) => entry.pid)])].join(', ')}`);
+    process.exitCode = 1;
+  }
+  if (fs.existsSync(directory)) {
+    console.error(`not ok - the run directory ${directory} was not removed`);
+    process.exitCode = 1;
+  }
   const reportFile = path.join(options.outDirectory, 'report.json');
   if (code !== 0 || !fs.existsSync(reportFile)) {
     console.error(`not ok - the soak did not finish (exit ${code})`);
@@ -356,8 +367,11 @@ async function runInElectron({ window, project, options }) {
         await runner.hoverPreview({
           element: 'headingOne',
           families: [family('weight'), family('font-family'), family('size'), family('color')],
-          exitPaths: ['outside-press', 'canvas-press-same', 'canvas-press-other', 'escape', 'tab', 'window-blur', 'scroll'],
+          exitPaths: ['outside-press', 'canvas-press-same', 'canvas-press-other', 'escape', 'tab', 'shift-tab', 'window-blur', 'scroll'],
         });
+      });
+      await guarded('picker-arrow', async () => {
+        await runner.arrowPreview({ element: 'headingOne', families: [family('size'), family('font-family')] });
       });
       await guarded('edit-cycle', async () => {
         await editEverySource(runner, family);

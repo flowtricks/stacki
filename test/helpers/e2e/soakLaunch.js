@@ -15,6 +15,8 @@
 // - Electron runs `electronEntry.js`, which gives the app an isolated user-data directory and
 //   the fixture as the project to reopen (the dev reopen file main.ts reads in dev mode), then
 //   loads dist/electron/main.js unchanged and hands the window to the scenario module.
+// - Every process of the run is stopped however the run ends, and stale ones from runs that
+//   were killed outright are reaped at the next start (soakProcesses.js, soakWatchdog.js).
 // - The temporary directory is removed with bounded retries (Windows holds files a moment
 //   after a process exits).
 
@@ -24,6 +26,7 @@ const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 const { ROOT, repoPath } = require('../sources.js');
+const { RUN_DIRECTORY_PREFIX, reapStaleSoakServers, stopRun, stopRunNow, watchdogOptions, writeRegistry } = require('./soakProcesses.js');
 
 const SITE_SOURCE = repoPath('studio/test/fixtures/site');
 const OVERLAY_SOURCE = repoPath('test/fixtures/style-soak');
@@ -33,6 +36,7 @@ const REMOVE_RETRY_MS = 250;
 const CLONE_TIMEOUT_MS = 180000;
 const RENDERER_TREE = Object.freeze(['src', 'shared', 'index.html', 'vite.config.mjs', 'tsconfig.json']);
 const ARCHIVE_BYTES_MAX = 512 * 1024 * 1024;
+const SIGNAL_EXIT_CODE = 130;
 
 /** Why the soak cannot run here, or undefined when it can. */
 function soakUnavailableReason() {
@@ -139,35 +143,87 @@ async function startRendererServer(root) {
 
 /**
  * Runs `scenarioModule` inside the real app. `options` reach the scenario as JSON through the
- * environment. Resolves with Electron's exit code and the run directory (kept when asked).
+ * environment. Resolves with Electron's exit code, the run directory (kept when asked) and the
+ * pids of any process of the run that would not stop (none, unless something is badly wrong).
+ * However the run ends (an error, SIGINT, SIGTERM, an uncaught exception), its processes are
+ * stopped and its directory removed (soakProcesses.js has the layers that cover a SIGKILL).
  */
 async function runSoak({ scenarioModule, options, keepDirectory }) {
-  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'stacki-style-soak-'));
-  const project = path.join(directory, 'project');
-  const userData = path.join(directory, 'user-data');
-  fs.mkdirSync(userData, { recursive: true });
-  copySite(project);
-  cloneModules(project);
-  const rendererRoot = options.rendererRevision ? exportRendererTree(options.rendererRevision, path.join(directory, 'renderer-tree')) : ROOT;
-  const renderer = await startRendererServer(rendererRoot);
-  const env = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' };
-  delete env.ELECTRON_RUN_AS_NODE;
-  env.VITE_DEV_SERVER_URL = renderer.url;
-  env.STACKI_SOAK_PROJECT = project;
-  env.STACKI_SOAK_USER_DATA = userData;
-  env.STACKI_SOAK_SCENARIO = scenarioModule;
-  env.STACKI_SOAK_OPTIONS = JSON.stringify(options);
-  env.PATH = `${path.dirname(process.execPath)}${path.delimiter}${env.PATH || ''}`;
+  const reaped = await reapStaleSoakServers();
+  if (reaped.length > 0) {
+    console.log(`# reaped ${reaped.length} soak process(es) left by earlier runs: ${reaped.join(', ')}`);
+  }
+  const directory = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), RUN_DIRECTORY_PREFIX));
+  writeRegistry(directory);
+  const teardownNow = (reason) => {
+    stopRunNow(directory);
+    if (!keepDirectory) {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+    console.error(`[soak] stopped the run (${reason})`);
+  };
+  const onSignal = (name) => {
+    teardownNow(name);
+    process.exit(SIGNAL_EXIT_CODE);
+  };
+  const onFatal = (error) => {
+    console.error('[soak] fatal:', error);
+    teardownNow('fatal error');
+    process.exit(1);
+  };
+  const handlers = [
+    ['SIGINT', () => onSignal('SIGINT')],
+    ['SIGTERM', () => onSignal('SIGTERM')],
+    ['uncaughtException', onFatal],
+    ['unhandledRejection', onFatal],
+  ];
+  for (const [event, handler] of handlers) {
+    process.on(event, handler);
+  }
+  let renderer;
   try {
+    const project = path.join(directory, 'project');
+    const userData = path.join(directory, 'user-data');
+    fs.mkdirSync(userData, { recursive: true });
+    copySite(project);
+    cloneModules(project);
+    const rendererRoot = options.rendererRevision ? exportRendererTree(options.rendererRevision, path.join(directory, 'renderer-tree')) : ROOT;
+    renderer = await startRendererServer(rendererRoot);
+    const env = { ...process.env, ASTRO_TELEMETRY_DISABLED: '1' };
+    delete env.ELECTRON_RUN_AS_NODE;
+    env.VITE_DEV_SERVER_URL = renderer.url;
+    env.STACKI_SOAK_PROJECT = project;
+    env.STACKI_SOAK_USER_DATA = userData;
+    env.STACKI_SOAK_SCENARIO = scenarioModule;
+    env.STACKI_SOAK_OPTIONS = JSON.stringify(options);
+    // Every Node child (Electron's main, the Astro dev server and its daemon) carries the
+    // watchdog and the runner's pid: if this process dies without cleaning up, they follow.
+    env.STACKI_SOAK_RUNNER_PID = String(process.pid);
+    env.NODE_OPTIONS = watchdogOptions(env.NODE_OPTIONS);
+    env.PATH = `${path.dirname(process.execPath)}${path.delimiter}${env.PATH || ''}`;
     const electron = require('electron');
     const code = await new Promise((resolve, reject) => {
-      const child = childProcess.spawn(electron, [path.join(__dirname, 'electronEntry.js')], { cwd: ROOT, env, stdio: 'inherit' });
+      // Its own process group, and the run directory on its command line, so the stop finds
+      // it and everything it started.
+      const child = childProcess.spawn(electron, [path.join(__dirname, 'electronEntry.js'), `--soak-run=${directory}`], {
+        cwd: ROOT,
+        env,
+        stdio: 'inherit',
+        detached: process.platform !== 'win32',
+      });
       child.on('error', reject);
       child.on('exit', (exitCode) => resolve(exitCode ?? 1));
     });
-    return { code, directory };
+    return { code, directory, leftovers: await stopRun(directory) };
   } finally {
-    await renderer.server.close();
+    // Idempotent: a run that returned has already stopped; one that threw has not.
+    await stopRun(directory);
+    if (renderer !== undefined) {
+      await renderer.server.close();
+    }
+    for (const [event, handler] of handlers) {
+      process.off(event, handler);
+    }
     if (!keepDirectory) {
       await removeWithRetries(directory);
     }
