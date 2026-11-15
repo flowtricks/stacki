@@ -195,6 +195,32 @@ function inlineStyleDeclares(source, property) {
   return style !== null && new RegExp(`(^|;)\\s*${property}\\s*:`).test(style[1]);
 }
 
+// Whether the soak page's `.soak-plain` rule (its <style is:global>) declares `property`.
+function plainRuleDeclares(source, property) {
+  const start = source.indexOf('.soak-plain {');
+  if (start === -1) {
+    return false;
+  }
+  const body = source.slice(start, source.indexOf('}', start));
+  return new RegExp(`(^|[\\s;{])${property}\\s*:`).test(body);
+}
+
+// Set, undo, then set another property, on the page block and on the style attribute: the
+// second edit must not bring back what the undo took away.
+async function undoThenEditEverySource(runner, family) {
+  const first = { family: family('text-indent'), value: '12px' };
+  const second = { family: family('line-height'), value: '1.9' };
+  await runner.undoThenEdit({ element: 'plain', first, second, file: 'src/pages/index.astro', declaredIn: plainRuleDeclares });
+  await runner.undoThenEdit({
+    element: 'inline',
+    first,
+    second,
+    file: 'src/pages/index.astro',
+    pick: `document.querySelector('button.embed-editor_selector-chip.is-inline') || undefined`,
+    declaredIn: inlineStyleDeclares,
+  });
+}
+
 // One set -> clear -> undo -> redo cycle for each kind of place a style lives: the page's own
 // <style is:global> block, a component's <style is:global> block, an external stylesheet, and
 // the element's style attribute (picked through the inline chip). Each element has exactly one
@@ -294,6 +320,9 @@ async function runInElectron({ window, project, options }) {
       await guarded('edit-cycle', async () => {
         await editEverySource(runner, family);
       });
+      await guarded('undo-then-edit', async () => {
+        await undoThenEditEverySource(runner, family);
+      });
       await guarded('random-walk', async () => {
         await runner.randomWalk({ steps: options.walkSteps, families: typeFamilies });
       });
@@ -348,6 +377,9 @@ async function runInElectron({ window, project, options }) {
       });
       await guarded('picker-arrow', async () => {
         await runner.arrowPreview({ element: 'headingOne', families: [family('size'), family('font-family')] });
+      });
+      await guarded('undo-then-edit', async () => {
+        await undoThenEditEverySource(runner, family);
       });
       await guarded('edit-cycle', async () => {
         await editEverySource(runner, family);

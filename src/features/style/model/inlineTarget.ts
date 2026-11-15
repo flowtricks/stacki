@@ -270,6 +270,22 @@ export interface HeldInlineWrite {
  * While the host still shows the text the held write started from, that write's
  * result is the attribute.
  */
+/**
+ * The held write, or undefined once the page model shows its result. A hold only bridges the
+ * moment before the model takes a write. Kept past it, an undo that brought the attribute
+ * back to the text the write started from read as "not taken yet", and the next edit was
+ * built on the undone text: it put back what the undo took away (SP-15).
+ */
+export function heldUntilTaken(held: HeldInlineWrite | undefined, hostTexts: readonly (string | undefined)[]): HeldInlineWrite | undefined {
+  if (held === undefined) {
+    return undefined;
+  }
+  if (hostTexts.includes(held.next)) {
+    return undefined;
+  }
+  return held;
+}
+
 export function inlineEditBase(hostText: string | undefined, nodeId: string, held: HeldInlineWrite | undefined): string {
   if (held === undefined) {
     return hostText ?? '';

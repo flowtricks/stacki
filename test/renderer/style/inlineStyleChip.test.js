@@ -39,7 +39,7 @@ esbuild.buildSync({
   stdin: {
     contents: [
       "export { readableStyleCode, styleBranches, styleExpressionInSource } from './src/features/style/model/inlineCode';",
-      "export { chipInlineStyle, inlineChipShown, inlineStyleOf, inlineStyleWrite, inlineDeclaration, inlineEditBase, hasInlineChip, INLINE_STYLE_SELECTOR } from './src/features/style/model/inlineTarget';",
+      "export { chipInlineStyle, inlineChipShown, inlineStyleOf, inlineStyleWrite, inlineDeclaration, inlineEditBase, heldUntilTaken, hasInlineChip, INLINE_STYLE_SELECTOR } from './src/features/style/model/inlineTarget';",
       "export { resolveStyle } from './src/features/style/model/resolved';",
       "export { selectorSpecificity } from './src/features/style/model/selectors';",
       "export { inlineChipClassName } from './src/features/style/embed/InlineStyleChip';",
@@ -161,6 +161,20 @@ test('two writes before the model catches up build on each other', () => {
   assert.equal(model.inlineEditBase('a: 9', 'n1', held), 'a: 9');
   assert.equal(model.inlineEditBase('a: 1', 'n2', held), 'a: 1');
   assert.equal(model.inlineEditBase(undefined, 'n1', undefined), '');
+});
+
+// SP-15: a hold kept after the model took it made an undo look like a write not yet taken,
+// so the next edit was built on the undone text and put back what the undo removed.
+test('a held write ends once the model shows it, so an undo back to its start reads as the attribute', () => {
+  const held = { nodeId: 'n1', base: 'a: 1', next: 'a: 1; b: 2' };
+  assert.equal(model.heldUntilTaken(held, ['a: 1', undefined]), held, 'not taken yet: still held');
+  assert.equal(model.heldUntilTaken(held, ['a: 1; b: 2', undefined]), undefined, 'taken: dropped');
+  // The sequence the soak ran: the write is taken, then undone back to its start.
+  const afterTaken = model.heldUntilTaken(held, ['a: 1; b: 2', undefined]);
+  assert.equal(model.inlineEditBase('a: 1', 'n1', afterTaken), 'a: 1', 'the next edit builds on the undone text');
+  const cleared = { nodeId: 'n1', base: 'a: 1', next: undefined };
+  assert.equal(model.heldUntilTaken(cleared, [undefined, undefined]), undefined, 'a removed attribute is taken once it is gone');
+  assert.equal(model.heldUntilTaken(undefined, ['a: 1']), undefined);
 });
 
 // One `.card` rule setting color and margin, matched in Base.

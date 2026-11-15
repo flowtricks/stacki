@@ -31,6 +31,7 @@ import {
   inlineChipShown,
   inlineDeclaration,
   inlineEditBase,
+  heldUntilTaken,
   inlineStyleOf,
   inlineStyleWrite,
   plainStyleBranch,
@@ -390,13 +391,27 @@ function attributeText(node: HostNode | undefined, type: 'string' | 'expr'): str
   return attribute.value;
 }
 
-// A held write belongs to one element; a new selection starts from the host.
+// A held write belongs to one element; a new selection starts from the host. It also ends
+// the moment the page model shows its result (heldUntilTaken): an undo after it returns the
+// attribute to the held write's starting text, which must then read as the attribute.
 function useForgetHeldWrite(heldRef: { current: HeldInlineWrite | undefined }, nodeId: string | undefined): void {
   useEffect(() => {
     if (heldRef.current !== undefined && heldRef.current.nodeId !== nodeId) {
       heldRef.current = undefined;
     }
   }, [heldRef, nodeId]);
+  useEffect(() => {
+    const forgetTaken = (): void => {
+      const held = heldRef.current;
+      if (held === undefined) {
+        return;
+      }
+      const node = findNode(getHost().nodes, held.nodeId);
+      heldRef.current = heldUntilTaken(held, [attributeText(node, 'string'), attributeText(node, 'expr')]);
+      assert(heldRef.current === undefined || heldRef.current === held, 'useForgetHeldWrite: a hold is kept or dropped, never changed');
+    };
+    return onHostChange(forgetTaken);
+  }, [heldRef]);
 }
 
 // The selected node, read while rendering and followed through host changes. Kept in

@@ -917,6 +917,87 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     }
   }
 
+  // (iv b) set -> undo -> set another property, on one source: the second edit must build on
+  // the source as the undo left it. A write the panel held for the model to take, kept past
+  // it, read the undo as "not taken yet" and put the undone value back with the next edit
+  // (SP-15, the inline style attribute).
+  async function undoThenEdit({ element, first, second, file, pick, declaredIn }) {
+    scenario = 'undo-then-edit';
+    await closeEverything();
+    await select(element, 'canvas');
+    await driver.settle();
+    // `pick` names the source's chip; a chip already pressed (left so by an earlier cycle on
+    // this element) is the source already.
+    if (
+      pick !== undefined &&
+      (await driver.evaluate(`(() => { const chip = ${pick}; return chip !== undefined && chip.getAttribute('aria-pressed') !== 'true'; })()`))
+    ) {
+      if (!(await pressPanel(pick, `pick the source for ${first.family.id}`))) {
+        return;
+      }
+      await driver.settle();
+    }
+    const type = async (family, value) => {
+      const point = await driver.panelPoint(finders.field(family));
+      if (point === undefined) {
+        results.skipped.push({ scenario, action: `edit ${family.id}`, why: 'field not found' });
+        return false;
+      }
+      await driver.pointerPress(point, { label: `press ${family.id} field` });
+      await driver.sleep(80);
+      await driver.typeText(value);
+      await driver.key('Enter', { label: 'key Enter' });
+      return true;
+    };
+    if (!(await type(first.family, first.value))) {
+      return;
+    }
+    await driver.settle();
+    await segment(`undo ${first.family.id}`, 'edit', async () => {
+      await pressPanel(finders.neutral, 'outside press', { scroll: false });
+      await driver.menu('CmdOrCtrl+Z', 'undo');
+    });
+    let typed = false;
+    await segment(
+      `set ${second.family.id} ${second.value} after the undo`,
+      'edit',
+      async () => {
+        typed = await type(second.family, second.value);
+      },
+      { editedKey: second.family.key },
+    );
+    if (!typed) {
+      return;
+    }
+    const check = () => {
+      const source = driver.readProjectFile(file);
+      const problems = [];
+      if (declaredIn(source, first.family.property)) {
+        problems.push(`${file} declares ${first.family.property} again`);
+      }
+      if (!declaredIn(source, second.family.property)) {
+        problems.push(`${file} lacks ${second.family.property}`);
+      }
+      return problems;
+    };
+    let problems = check();
+    if (problems.length === 0) {
+      return;
+    }
+    await driver.sleep(LATE_RECHECK_MS);
+    problems = check();
+    if (problems.length > 0) {
+      await report(
+        {
+          invariant: 'state-disagrees',
+          summary: `${first.family.id} then ${second.family.id} on ${element} after undo then edit: ${problems.join('; ')}`,
+          evidence: { problems },
+        },
+        `set ${second.family.id} after the undo`,
+      );
+    }
+  }
+
   // Clear a property the two ways the panel offers: the label's menu (its Clear item), or
   // Option+press on a spacing label.
   async function clearField(family, clearBy) {
@@ -1133,6 +1214,7 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     arrowPreview,
     selectScrub,
     editCycle,
+    undoThenEdit,
     typeThenSwitch,
     breakpoints,
     randomWalk,
