@@ -676,9 +676,10 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     scenario = 'picker-arrow';
     for (const family of families) {
       await closeEverything();
-      if (current !== element) {
-        await select(element, 'canvas');
-      }
+      // Selected afresh and settled twice: the scenario before may have left a switch landing, and
+      // under 6x CPU one settle read the panel mid-switch as the "before" state.
+      await select(element, 'canvas');
+      await driver.settle();
       await driver.settle();
       const property = family.property;
       const styleBefore = await canvasStyle(property);

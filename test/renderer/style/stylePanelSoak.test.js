@@ -56,14 +56,6 @@ const KNOWN_FAILURES = Object.freeze([
       'a switch shown past its 1.5 s hold (StylePanel useSwitchHold) with the answer still owed draws section placeholders: a slow canvas, or one that re-renders when a class-expression element is selected (two canvas-ready per selection)',
   },
   {
-    id: 'SP-04',
-    title: 'a chip pressed right after a switch opens its picker, which then closes itself',
-    invariant: 'popover-closed-itself',
-    pattern: /varpicker.*unmounted/,
-    cause:
-      'left only on a freshly reloaded canvas: the picker opened on the element still shown unmounts about 230 ms later with no panel commit (no switch, no section change); see VariablePicker / VariableConnect / pickerExit',
-  },
-  {
     id: 'SP-12',
     title: 'rows move under the pointer on a switch: the panel keeps scrollTop while the content above changes height',
     invariant: 'scroll-jump',
