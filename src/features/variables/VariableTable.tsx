@@ -660,7 +660,7 @@ function TableFixedHead({ state }: { readonly state: ReturnType<typeof useVariab
 
 function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
   const translate = useTranslate();
-  const { block, onRename, labelTemplate, reorder, rowProps, visibility } = state;
+  const { block, onRename, labelTemplate, reorder, rowProps } = state;
   return (
     <>
       {block.rows.map((row, index) => (
@@ -676,7 +676,7 @@ function TableRowNames({ state }: { readonly state: ReturnType<typeof useVariabl
           <span className="vars-grip" title={translate('variables.dragToReorder')}>
             <DragIcon size={11} />
           </span>
-          <VariableNameCell name={row.name} title={row.name || row.label} visibility={visibility}>
+          <VariableNameCell title={row.name || row.label}>
             <VariableTypeIcon kind={row.cells.find((cell) => cell !== undefined)?.kind ?? ''} />
             <EditableName
               className="vars-name-text"

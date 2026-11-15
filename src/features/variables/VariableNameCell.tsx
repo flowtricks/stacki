@@ -1,6 +1,7 @@
-// A variable's name cell in the Variables panel: the type icon and the name (children), and a quiet eye-off mark when
-// the variable is hidden from suggestions. The control that hides it is not here: it is an eye button drawn over the
-// variable's VALUE, at the end of its cell (ValueCellHost in VariableTable.tsx), in every layout.
+// A variable's name cell in the Variables panel: the type icon and the name (children), and nothing about hiding. The
+// control that hides a variable from suggestions is an eye button drawn over the variable's VALUE, at the end of its
+// cell (ValueCellHost in VariableTable.tsx), in every layout, and it stays on screen for a hidden variable, so the name
+// cell carries no mark of its own.
 //
 // The eye (`VariableVisibilityButton` below) is one click: an eye while the variable is offered in suggestions, an eye
 // with a line through it once hidden. It writes `.stacki/variables.json` once per click and never on hover or focus.
@@ -23,10 +24,7 @@ export interface VariableVisibilityControl {
 }
 
 interface VariableNameCellProps {
-  /** The custom property (`--light-100`). Absent for a row that stands for several variables (a matrix row): it has no settings. */
-  readonly name: string | undefined;
   readonly title: string;
-  readonly visibility: VariableVisibilityControl | undefined;
   readonly children: React.ReactNode;
 }
 
@@ -63,17 +61,10 @@ export function VariableVisibilityButton({ name, visibility }: { readonly name: 
   );
 }
 
-export default function VariableNameCell({ name, title, visibility, children }: VariableNameCellProps) {
-  const translate = useTranslate();
-  const hidden = name !== undefined && visibility !== undefined && visibility.isHidden(name);
+export default function VariableNameCell({ title, children }: VariableNameCellProps) {
   return (
     <div className="vars-name" title={title}>
       {children}
-      {hidden && (
-        <span className="vars-name-hidden" title={translate('variables.hidden.indicator')} role="img" aria-label={translate('variables.hidden.indicator')}>
-          <HideIcon size={12} />
-        </span>
-      )}
     </div>
   );
 }

@@ -159,8 +159,11 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   // --- the eye's visibility is the stylesheet's, so nothing in script can leave it stuck ---------------------------
   const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
   const source = fs.readFileSync(repoPath('src/features/variables/VariableNameCell.tsx'), 'utf8');
-  check('no popup, gear or settings class is left in the source', !/Popup|GearIcon|vars-name-settings|vars-name-tools|aria-haspopup/.test(source));
-  check('and none in the stylesheet', !/vars-settings-|vars-name-settings|vars-name-tools/.test(css));
+  check(
+    'no popup, gear, settings or name-mark class is left in the source',
+    !/Popup|GearIcon|vars-name-settings|vars-name-tools|vars-name-hidden|aria-haspopup/.test(source),
+  );
+  check('and none in the stylesheet', !/vars-settings-|vars-name-settings|vars-name-tools|vars-name-hidden/.test(css));
   check('not shown, the eye is transparent and deaf to the pointer', /\.vars-visibility\s*{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/.test(css));
   check(
     'shown by :hover on the value cell and :focus-visible on the button',
@@ -237,12 +240,12 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   const hiddenOnce = '{\n  "version": 1,\n  "hiddenFromSuggestions": [\n    "--light-100"\n  ]\n}\n';
   check('it writes .stacki/variables.json', disk() === hiddenOnce, String(disk()));
   check('and the eye stays hidden once the file agrees', eye('light-100')?.getAttribute('aria-pressed') === 'true');
-  check('the name cell is marked too', !!nameCell('light-100').querySelector('.vars-name-hidden'));
-  check('the variable is still listed and editable', !!nameCell('light-100') && all('input.var-input').length > 0);
   check(
-    'the other variable is untouched',
-    eye('dark-900')?.getAttribute('aria-pressed') === 'false' && !nameCell('dark-900').querySelector('.vars-name-hidden'),
+    'the name cell carries no mark: the value-cell eye is the only sign',
+    !nameCell('light-100').querySelector('.vars-name-hidden, svg + svg, [role="img"]') && eye('light-100')?.getAttribute('aria-pressed') === 'true',
   );
+  check('the variable is still listed and editable', !!nameCell('light-100') && all('input.var-input').length > 0);
+  check('the other variable is untouched', eye('dark-900')?.getAttribute('aria-pressed') === 'false');
   check('the cached set answers at once', bundle.getHiddenVariables(directory).has('--light-100'));
   check(
     'a hidden variable shows its eye always: the dimmed rule applies to it alone',
@@ -258,7 +261,7 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   await waitFor({ what: 'the show is written', read: () => disk(), until: (value) => /\[\]/.test(value || '') });
   await writtenOnce(writesBefore, 'the second click');
   check('the file keeps its shape, empty', disk() === '{\n  "version": 1,\n  "hiddenFromSuggestions": []\n}\n', String(disk()));
-  check('and the mark goes', !nameCell('light-100').querySelector('.vars-name-hidden'));
+  check('and the eye goes back to the eye', eye('light-100')?.getAttribute('aria-pressed') === 'false');
 
   // --- keyboard: Enter and Space are a native click on a button -------------------------------------
   writesBefore = writes.length;
