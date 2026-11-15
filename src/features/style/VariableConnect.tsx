@@ -8,7 +8,7 @@ import { selectionOffsets, setCaretOffset } from './model/cssCode';
 import CustomValue, { doesNotFit } from './CustomValueEditor';
 import { insertBindingAt, type ValueSelection } from './model/insertBinding';
 import { completeTypedVariable, fieldOffsetOf, replaceVariableAt, typedVariableAt, type TypedVariable } from './model/typedVariable';
-import type { PickerNavigation } from './VariablePicker';
+import type { PickerNavigation, PreviewEndTiming } from './VariablePicker';
 import { PlusIcon } from './VariableIcons';
 import { useExitRestore } from './pickerExit';
 import { varTypeAllowed, useSharedVars } from './sharedVars';
@@ -176,7 +176,10 @@ export default function VariableConnect(props: VariableConnectProps) {
       return;
     }
     openedRef.current = { ...opened, previewed: true };
-    draftTo(withChosen(chosen), 'preview');
+    // Flushed: a preview arrives from an animation frame or a key, outside React's batching, and
+    // the field's input takes the text at once (pushDraft), so a batched render painted the input
+    // and the chip a frame apart.
+    flushSync(() => draftTo(withChosen(chosen), 'preview'));
   };
   // THE restore: the value goes back to the one the chooser opened on, which was captured once, at
   // opening, and is the only source of truth for it. Idempotent, and it wins over any preview still in
@@ -320,7 +323,7 @@ export default function VariableConnect(props: VariableConnectProps) {
         slot={open || suggest !== undefined ? pickSlot() : undefined}
         onPreview={preview}
         previewEpoch={() => epochRef.current}
-        onPreviewEnd={() => restore({ when: 'batched' })}
+        onPreviewEnd={(timing) => restore(timing)}
         onClosePicker={closeChooser}
         openChip={bigChipRef.current}
         onCloseBig={() => setBig(undefined)}
@@ -493,7 +496,7 @@ function ConnectPopups({
   slot: ValueSlot | undefined;
   onPreview: (binding: string, epoch: number) => void;
   previewEpoch: () => number;
-  onPreviewEnd: () => void;
+  onPreviewEnd: (timing: PreviewEndTiming) => void;
   onClosePicker: () => void;
   onCloseBig: () => void;
   onCancelBig: () => void;

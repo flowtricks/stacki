@@ -86,6 +86,8 @@ const RAPID_TOGGLES = 6;
 // 100 ms a typed live write waits, so a preview that went through the write path would land.
 const HOVER_ROWS = 3;
 const HOVER_DWELL_MS = 120;
+// How long an arrow's preview is held open: past the 2.6 s after which the picker once closed itself.
+const ARROW_HOLD_MS = 3500;
 const WALK_STEPS_DEFAULT = 300;
 const SCREENSHOTS_MAX = 40;
 const RECORDINGS_MAX = 80;
@@ -357,6 +359,9 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
         return true;
       case 'tab':
         await driver.key('Tab', { label: 'key Tab' });
+        return true;
+      case 'shift-tab':
+        await driver.key('Tab', { modifiers: ['shift'], label: 'key Shift+Tab' });
         return true;
       case 'window-blur': {
         await driver.note({ kind: 'action', action: 'blur window' });
@@ -647,6 +652,51 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
           );
         }
         await checkFocusAfter(exitPath, `${family.id} picker`);
+      }
+    }
+  }
+
+  // (iii) The arrow keys preview like a hover: Up in an open picker shows the row above, and
+  // the picker stays open while it does (it once closed itself about 2.6 s later, when the
+  // preview's file write came back as a reload), writes nothing, and Escape puts it all back.
+  async function arrowPreview({ element, families }) {
+    scenario = 'picker-arrow';
+    for (const family of families) {
+      await closeEverything();
+      if (current !== element) {
+        await select(element, 'canvas');
+      }
+      await driver.settle();
+      const property = family.property;
+      const styleBefore = await canvasStyle(property);
+      const fieldBefore = await fieldState(family);
+      const opened = await pressPanel(finders.opener(family), `press ${family.id} chip`);
+      await driver.settle();
+      if (!opened || (await openCount()) === 0) {
+        continue;
+      }
+      await segment(`arrow up in ${family.id} picker`, 'preview', () => driver.key('Up', { label: 'key Up' }), { holdMs: ARROW_HOLD_MS });
+      if ((await openCount()) === 0) {
+        await report(
+          { invariant: 'popover-closed-itself', summary: `${family.id}: the picker closed itself within ${ARROW_HOLD_MS} ms of an Up arrow`, evidence: {} },
+          `arrow up in ${family.id} picker`,
+        );
+      }
+      await segment(`leave ${family.id} picker by escape after an arrow`, 'look', () => exitBy('escape'));
+      await closeEverything();
+      const styleAfter = await canvasStyle(property);
+      const fieldAfter = await fieldState(family);
+      if (styleAfter !== styleBefore) {
+        await report(
+          { invariant: 'preview-stuck', summary: `${family.id}: canvas ${property} ${styleBefore} -> ${styleAfter} after an arrow and escape`, evidence: {} },
+          'leave by escape after an arrow',
+        );
+      }
+      if (fieldAfter !== fieldBefore) {
+        await report(
+          { invariant: 'preview-stuck', summary: `${family.id}: field ${fieldBefore} -> ${fieldAfter} after an arrow and escape`, evidence: {} },
+          'leave by escape after an arrow',
+        );
       }
     }
   }
@@ -982,6 +1032,7 @@ function createRunner({ driver, electron, window, outDirectory, seed }) {
     popoverMatrix,
     rapidToggle,
     hoverPreview,
+    arrowPreview,
     editCycle,
     typeThenSwitch,
     breakpoints,

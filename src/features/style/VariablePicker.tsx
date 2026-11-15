@@ -100,7 +100,7 @@ export function VariablePicker({
   /** The epoch a preview asked now belongs to: a restore bumps it, which drops every older preview. */
   previewEpoch?: () => number;
   /** Hovering ended without a pick (the pointer left the list, the window lost focus): put the value back. */
-  onPreviewEnd?: () => void;
+  onPreviewEnd?: (timing: PreviewEndTiming) => void;
   onPick: (binding: string) => void;
   onClose: () => void;
 }) {
@@ -202,7 +202,7 @@ export function VariablePicker({
   // stays on the applied variable and the keyboard row is tinted instead.
   const markedBinding = typing === undefined ? (activeBinding ?? selectedBinding) : selectedBinding;
   const hover = useHoverPreview({ onPreview: typing === undefined ? onPreview : undefined, previewEpoch, onPreviewEnd });
-  const endHover = hover.end;
+  const endHover = (): void => hover.end({ when: 'now' });
   useEffect(() => {
     const element = ref.current;
     element?.addEventListener(PICKER_RESTORE_EVENT, endHover);
@@ -287,7 +287,7 @@ export function VariablePicker({
         onWheel={holdSelected.release}
         onPointerDown={holdSelected.release}
         onTouchStart={holdSelected.release}
-        onPointerLeave={hover.end}
+        onPointerLeave={() => hover.end({ when: 'now' })}
       >
         {loading && !vars.length ? (
           <div className="embed-editor_varpicker-empty">
@@ -319,6 +319,14 @@ export function VariablePicker({
   );
 }
 
+/**
+ * When the end of a preview puts the original back: `now` flushes it in the same frame as the
+ * event that ended it (a pointer leaving the list, the window's blur), so no frame paints the
+ * field half restored (its input back, its chip still the hovered variable: soak SP-05's
+ * provisional frames); `batched` is for an unmount, inside React's own commit.
+ */
+export type PreviewEndTiming = { readonly when: 'now' | 'batched' };
+
 // Hovering a row previews that variable on the canvas and in the field; leaving the list,
 // or the window losing focus, puts the original back. The preview is the same transient
 // draft the arrow keys use (VariableConnect's `preview`): never a write, a history entry
@@ -333,8 +341,8 @@ function useHoverPreview({
 }: {
   readonly onPreview: ((binding: string, epoch: number) => void) | undefined;
   readonly previewEpoch: () => number;
-  readonly onPreviewEnd: (() => void) | undefined;
-}): { readonly enter: (binding: string) => void; readonly end: () => void } {
+  readonly onPreviewEnd: ((timing: PreviewEndTiming) => void) | undefined;
+}): { readonly enter: (binding: string) => void; readonly end: (timing: PreviewEndTiming) => void } {
   const frame = useRef<number | undefined>(undefined);
   const latest = useRef({ onPreview, previewEpoch, onPreviewEnd });
   latest.current = { onPreview, previewEpoch, onPreviewEnd };
@@ -347,19 +355,20 @@ function useHoverPreview({
     }
     pending.current = undefined;
   };
-  const end = (): void => {
+  const end = (timing: PreviewEndTiming): void => {
     cancel();
-    latest.current.onPreviewEnd?.();
+    latest.current.onPreviewEnd?.(timing);
   };
   // The listener reads the latest `end` through a ref, so it is added once.
   const endRef = useRef(end);
   endRef.current = end;
   useEffect(() => {
-    const onBlur = (): void => endRef.current();
+    const onBlur = (): void => endRef.current({ when: 'now' });
     window.addEventListener('blur', onBlur);
     return () => {
       window.removeEventListener('blur', onBlur);
-      endRef.current();
+      // Unmounting is inside React's commit, where the restore cannot flush.
+      endRef.current({ when: 'batched' });
     };
   }, []);
   const enter = (binding: string): void => {
