@@ -2,13 +2,15 @@
 // Method: execute the real push wrapper against temporary compiler and gate
 // programs, checking order, failure propagation, and isolation from hook environment variables.
 // The ref cases feed lines in git's pre-push format, so a change to which field is read fails here.
+// The skip cases inject the evidence (a gate marker, a tag on green main) so no test reads git or
+// GitHub, and pin that one unproven ref, or nothing pushed, still runs the full gate.
 import assert from 'node:assert/strict';
 import { closeSync, mkdtempSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { POLICY_LIMITS } from '../../../scripts/policy/limits.mts';
-import { readPushedRefs, runPushChecks } from '../../../scripts/policy/pushChecks.mts';
+import { decidePushGate, NO_PUSH_EVIDENCE, parsePushedRefs, readPushedRefs, runPushChecks, type PushEvidence } from '../../../scripts/policy/pushChecks.mts';
 
 const OBJECT = 'a'.repeat(40);
 const OBJECT_ZERO = '0'.repeat(40);
@@ -54,7 +56,7 @@ process.exit(${options.preflightStatus ?? 0});`,
 function pushTrace(pushedRefs: string): string {
   const root = pushFixture({ compilerStatus: 0, gateStatus: 0 });
   try {
-    assert.equal(runPushChecks(root, pushedRefs), 0);
+    assert.equal(runPushChecks(root, pushedRefs, NO_PUSH_EVIDENCE), 0);
     return readFileSync(path.join(root, 'trace'), 'utf8');
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -82,7 +84,7 @@ test('push isolates the full gate from Electron mode and worktree hook variables
     process.env[key] = 'inherited-hook-value';
   }
   try {
-    assert.equal(runPushChecks(root, ''), 0);
+    assert.equal(runPushChecks(root, '', NO_PUSH_EVIDENCE), 0);
     assert.equal(readFileSync(path.join(root, 'trace'), 'utf8'), 'compile\nfull gate\n');
     for (const key of keys) {
       assert.equal(process.env[key], 'inherited-hook-value');
@@ -102,7 +104,7 @@ test('push isolates the full gate from Electron mode and worktree hook variables
 test('a failed compile blocks the gate instead of running stale output', () => {
   const root = pushFixture({ compilerStatus: 2, gateStatus: 0 });
   try {
-    assert.equal(runPushChecks(root, ''), 1);
+    assert.equal(runPushChecks(root, '', NO_PUSH_EVIDENCE), 1);
     assert.equal(readFileSync(path.join(root, 'trace'), 'utf8'), 'compile\n');
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -112,7 +114,7 @@ test('a failed compile blocks the gate instead of running stale output', () => {
 test('a failed regression suite blocks the push', () => {
   const root = pushFixture({ compilerStatus: 0, gateStatus: 1 });
   try {
-    assert.equal(runPushChecks(root, ''), 1);
+    assert.equal(runPushChecks(root, '', NO_PUSH_EVIDENCE), 1);
     assert.equal(readFileSync(path.join(root, 'trace'), 'utf8'), 'compile\nfull gate\n');
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -152,7 +154,7 @@ test('a tag that is not a version runs the gate alone', () => {
 test('a failed preflight blocks the tag', () => {
   const root = pushFixture({ compilerStatus: 0, gateStatus: 0, preflightStatus: 1 });
   try {
-    assert.equal(runPushChecks(root, `refs/tags/v1.0.15 ${OBJECT} refs/tags/v1.0.15 ${OBJECT_ZERO}\n`), 1);
+    assert.equal(runPushChecks(root, `refs/tags/v1.0.15 ${OBJECT} refs/tags/v1.0.15 ${OBJECT_ZERO}\n`, NO_PUSH_EVIDENCE), 1);
     assert.equal(readFileSync(path.join(root, 'trace'), 'utf8'), TRACE_PREFLIGHT);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -162,7 +164,7 @@ test('a failed preflight blocks the tag', () => {
 test('a failed gate never reaches the preflight', () => {
   const root = pushFixture({ compilerStatus: 0, gateStatus: 1 });
   try {
-    assert.equal(runPushChecks(root, `refs/tags/v1.0.15 ${OBJECT} refs/tags/v1.0.15 ${OBJECT_ZERO}\n`), 1);
+    assert.equal(runPushChecks(root, `refs/tags/v1.0.15 ${OBJECT} refs/tags/v1.0.15 ${OBJECT_ZERO}\n`, NO_PUSH_EVIDENCE), 1);
     assert.equal(readFileSync(path.join(root, 'trace'), 'utf8'), TRACE_GATE);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -174,4 +176,49 @@ test('reading refs returns everything up to the bound and nothing past it', () =
   assert.equal(readFromFile('refs/heads/main a refs/heads/main b\n'), 'refs/heads/main a refs/heads/main b\n');
   assert.equal(readFromFile('x'.repeat(POLICY_LIMITS.hookPayloadBytesMax))?.length, POLICY_LIMITS.hookPayloadBytesMax);
   assert.equal(readFromFile('x'.repeat(POLICY_LIMITS.hookPayloadBytesMax + 1)), undefined);
+});
+
+const OTHER = 'b'.repeat(40);
+const markerFor = (proven: readonly string[]): PushEvidence => ({
+  marker: (commit) => (proven.includes(commit) ? 'tree passed the full gate' : undefined),
+  taggedOnGreenMain: () => undefined,
+});
+
+test('the full gate is skipped only when every pushed object is proven', () => {
+  const main = `refs/heads/main ${OBJECT} refs/heads/main ${OTHER}`;
+  const tag = `refs/tags/v1.0.16 ${OTHER} refs/tags/v1.0.16 ${OBJECT_ZERO}`;
+  assert.equal(decidePushGate(`${main}\n`, markerFor([OBJECT])).kind, 'skip');
+  assert.equal(decidePushGate(`${main}\n${tag}\n`, markerFor([OBJECT])).kind, 'full', 'one unproven ref runs the gate');
+  assert.equal(decidePushGate(`${main}\n${tag}\n`, markerFor([OBJECT, OTHER])).kind, 'skip');
+  assert.equal(decidePushGate('', markerFor([OBJECT])).kind, 'full', 'nothing pushed: a hand-run hook runs the gate');
+  assert.equal(decidePushGate(`${main}\n`, NO_PUSH_EVIDENCE).kind, 'full');
+});
+
+test('a tag on a commit that green main already holds skips the gate; a branch never does that way', () => {
+  const onGreenMain: PushEvidence = { marker: () => undefined, taggedOnGreenMain: (commit) => (commit === OTHER ? 'on main, Check green' : undefined) };
+  assert.equal(decidePushGate(`refs/tags/v1.0.16 ${OTHER} refs/tags/v1.0.16 ${OBJECT_ZERO}\n`, onGreenMain).kind, 'skip');
+  assert.equal(decidePushGate(`refs/heads/main ${OTHER} refs/heads/main ${OBJECT}\n`, onGreenMain).kind, 'full');
+  assert.equal(decidePushGate(`refs/tags/v1.0.17 ${OBJECT} refs/tags/v1.0.17 ${OBJECT_ZERO}\n`, onGreenMain).kind, 'full');
+});
+
+test('deletions carry no object and need no proof; ref lines are read from their end', () => {
+  assert.deepEqual(parsePushedRefs(`(delete) ${OBJECT_ZERO} refs/tags/v1.0.15 ${OBJECT}\n`), []);
+  assert.deepEqual(parsePushedRefs(`HEAD^{/a fix} ${OBJECT} refs/heads/main ${OTHER}\n`), [{ localObject: OBJECT, remoteRef: 'refs/heads/main' }]);
+});
+
+test('a proven push runs the static checks and the static Linux preflight instead of the gate', () => {
+  const root = pushFixture({ compilerStatus: 0, gateStatus: 0 });
+  try {
+    mkdirSync(path.join(root, 'scripts/policy'), { recursive: true });
+    writeFileSync(path.join(root, 'scripts/policy/checkLocal.mts'), `import fs from 'node:fs';\nfs.appendFileSync('trace', 'static checks\\n');`);
+    writeFileSync(
+      path.join(root, 'dist/scripts/release/linuxPreflight.js'),
+      `require('node:fs').appendFileSync('trace', 'linux preflight ' + process.argv.slice(2).join(' ') + '\\n');`,
+    );
+    const refs = `refs/heads/main ${OBJECT} refs/heads/main ${OTHER}\nrefs/tags/v1.0.16 ${OBJECT} refs/tags/v1.0.16 ${OBJECT_ZERO}\n`;
+    assert.equal(runPushChecks(root, refs, markerFor([OBJECT])), 0);
+    assert.equal(readFileSync(path.join(root, 'trace'), 'utf8'), 'compile\nstatic checks\nlinux preflight --static\n');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
