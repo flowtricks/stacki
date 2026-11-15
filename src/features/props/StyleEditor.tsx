@@ -1,7 +1,7 @@
 import { useCodeAccess, ManagedValue } from '../../ui/CodeAccess';
 import React, { useEffect, useRef, useState } from 'react';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, placeholder as cmPlaceholder } from '@codemirror/view';
-import { EditorState, Transaction } from '@codemirror/state';
+import { Annotation, EditorState, Transaction } from '@codemirror/state';
 import { assert } from '../../../shared/core/assert';
 import { LIMITS } from '../../../shared/core/limits';
 import { StreamLanguage, StringStream } from '@codemirror/language';
@@ -202,6 +202,12 @@ interface StyleEditorProps {
   readonly placeholder?: string;
 }
 
+// A document replaced by the `value` effect below is the element's value
+// arriving from outside (Reset, undo, another element selected), not an edit
+// made here, so it never reaches `onChange`: hearing it as typing wrote the
+// value straight back to the file, a write made by merely looking.
+const outsideValue = Annotation.define<true>();
+
 // Compact declaration editor: no gutters, no line numbers, no folding — it
 // sits inside a popover a couple of hundred pixels wide.
 export default function StyleEditor(props: StyleEditorProps) {
@@ -237,6 +243,9 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
           EditorView.lineWrapping,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) {
+              if (!update.transactions.some((transaction) => transaction.docChanged && transaction.annotation(outsideValue) !== true)) {
+                return; // Only the outside value changed the document.
+              }
               onChangeRef.current?.(update.state.doc.toString());
             }
           }),
@@ -271,7 +280,7 @@ function EditableStyleEditor({ value, onChange, autoFocus, placeholder = '' }: S
     // editor's undo stack, so ⌘Z never undoes it back to a stale value.
     view.dispatch({
       changes: { from: 0, to: view.state.doc.length, insert: expandDeclarations(next) },
-      annotations: Transaction.addToHistory.of(false),
+      annotations: [outsideValue.of(true), Transaction.addToHistory.of(false)],
     });
   }, [value]);
 

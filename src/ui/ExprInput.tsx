@@ -11,7 +11,7 @@ import { codeIndentExtensions, codeIndentSettings } from './codeEditorIndent';
 import { editCodeView, openCodeView, sourceCodeView, type CodeView } from './codeIndentView';
 import { codeLineClassifier } from './codeLineRoles';
 import { LIMITS } from '../../shared/core/limits';
-import { EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
+import { Annotation, EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
 import { html } from '@codemirror/lang-html';
 import { javascript } from '@codemirror/lang-javascript';
 import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
@@ -31,6 +31,14 @@ import { appTheme, appHighlight } from './CodeEditor';
 // name is typed away stops being a chip, which is the honest answer.
 export type ChipsOf = (text: string) => readonly TemplateHole[] | undefined;
 const setChips = StateEffect.define<ChipsOf | undefined>();
+
+// A document replaced by `syncValue` is the value arriving from outside, not an
+// edit made in this field, so it never reaches `onChange`. It used to: a field
+// kept mounted while the selection moved to another element with the same kind
+// of value (two elements whose class is an expression) heard the new element's
+// value as typing and wrote it back, so selecting an element rewrote the page.
+const syncedValue = Annotation.define<true>();
+const typedHere = (transaction: Transaction): boolean => transaction.docChanged && transaction.annotation(syncedValue) !== true;
 
 const chipMark = Decoration.mark({ class: 'cm-chip' });
 
@@ -220,7 +228,10 @@ function EditableExprInput(props: ExprInputProps) {
       codeView.current = exprCodeView(initial, syncValue);
       // A value arriving from outside is not an edit made here: kept off the
       // field's undo stack, so ⌘Z never undoes it back to a stale value.
-      editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: codeView.current.text }, annotations: Transaction.addToHistory.of(false) });
+      editor.dispatch({
+        changes: { from: 0, to: editor.state.doc.length, insert: codeView.current.text },
+        annotations: [syncedValue.of(true), Transaction.addToHistory.of(false)],
+      });
     }
   }, [initial, syncValue]);
   return <div ref={hostRef} className={`expr-input ${invalid ? 'invalid' : ''} ${className}`} />;
@@ -264,6 +275,10 @@ function exprCreate(parent: HTMLElement, initial: ExprInputProps, refs: ExprRefs
         exprEvents(refs),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
+            if (!update.transactions.some(typedHere)) {
+              // Only synced values changed the document: the sync effect already holds them as its code view.
+              return;
+            }
             const codeViewRef = refs.codeView;
             codeViewRef.current = editCodeView(codeViewRef.current, update.state.doc.toString());
             refs.latest.current.onChange?.(codeViewRef.current.source);
