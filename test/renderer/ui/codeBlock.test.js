@@ -329,6 +329,8 @@ test('a source line edits as highlighted markup, and only an edit writes', async
   const content = host.querySelector('.cm-content[aria-label="Doctype"]');
   assert.ok(content, 'The line is an editor, named for what it holds');
   assert.ok(!host.querySelector('textarea'));
+  // CodeMirror may finish parsing after the mount on a slow runner: wait, bounded, for the marks.
+  await waitFor(() => content.querySelector('.cm-line span') !== null, 'the markup marks');
   assert.ok(content.querySelector('.cm-line span'), 'The markup is coloured');
   assert.deepEqual(written, []);
   const view = code.EditorView.findFromDOM(host.querySelector('.cm-editor'));

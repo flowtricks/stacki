@@ -292,6 +292,20 @@ const HOST_HELPERS = `
   const address = server.address();
   const port = typeof address === 'object' && address !== null ? address.port : 0;
 
+  // Bounded readiness on what the frame shows, not fixed sleeps (test/helpers/waitFor.js): the
+  // canvas frame answers a ping once its scripts run, and in order, so an answer after a message
+  // means that message was handled. One ping gives up after 250 ms and is asked again.
+  const FRAME_ANSWERS = [
+    'new Promise((resolve) => {',
+    "  const frame = document.getElementById('canvas').contentWindow;",
+    "  const answered = (event) => { if (event.data && event.data.type === 'test:pong') { removeEventListener('message', answered); resolve(true); } };",
+    "  addEventListener('message', answered);",
+    "  frame.postMessage({ type: 'test:ping' }, '*');",
+    "  setTimeout(() => { removeEventListener('message', answered); resolve(false); }, 250);",
+    '})',
+  ].join('\n');
+  const TWO_FRAMES =
+    "new Promise((resolve) => { const frame = document.getElementById('canvas').contentWindow; frame.requestAnimationFrame(() => frame.requestAnimationFrame(resolve)); })";
   const probeDirectory = repoPath('node_modules/.stacki-test/reveal-smooth-scroll');
   fs.mkdirSync(probeDirectory, { recursive: true });
   const probe = path.join(probeDirectory, 'probe.js');
@@ -300,7 +314,7 @@ const HOST_HELPERS = `
     `const { app, BrowserWindow } = require('electron');
      app.disableHardwareAcceleration();
      app.on('window-all-closed', () => app.quit());
-     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+     const { waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      app.whenReady().then(async () => {
        const win = new BrowserWindow({
          show: false, width: 900, height: 700,
@@ -314,11 +328,14 @@ const HOST_HELPERS = `
        const run = (code) => win.webContents.executeJavaScript(code);
        const open = async (canvas) => {
          await win.loadURL('http://127.0.0.1:${port}/host.html?canvas=' + canvas);
-         await sleep(600);
+         await waitFor({ what: canvas + ': the frame answers', read: () => run(${JSON.stringify(FRAME_ANSWERS)}), until: (answered) => answered });
          await run(${JSON.stringify(`(() => {${HOST_HELPERS}})()`)});
          const message = { type: 'avb:track', paths: ['0'], scope: '', focus: '', focusOcc: 0 };
          await run('document.getElementById("canvas").contentWindow.postMessage(' + JSON.stringify(message) + ', "*")');
-         await sleep(300);
+         // Messages are handled in order, so an answer after the track means it was handled;
+         // two frames then let what the track started paint.
+         await waitFor({ what: canvas + ': the track handled', read: () => run(${JSON.stringify(FRAME_ANSWERS)}), until: (answered) => answered });
+         await run(${JSON.stringify(TWO_FRAMES)});
        };
        const reveal = (options) => run('window.reveal(' + JSON.stringify(options) + ')');
 

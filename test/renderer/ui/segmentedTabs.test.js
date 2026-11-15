@@ -14,8 +14,8 @@
 // Method: jsdom has no layout, so the real component is bundled for the
 // browser and mounted with React in Electron's Chromium under the editor's
 // stylesheets. The probe records the pill and the active tab in the same frame
-// as the first commit, then clicks a tab, waits out the 200ms slide and
-// measures again.
+// as the first commit, then clicks a tab, waits (bounded) for the pick to
+// commit and the slide to finish, and measures again.
 const fs = require('fs');
 const path = require('path');
 const { buildSync } = require('esbuild');
@@ -117,11 +117,22 @@ const check = (what, condition, detail) => {
            active: box(track.querySelector('.ui-tab.on')),
          };
        };
-       await new Promise((resolve) => setTimeout(resolve, 100));
+       // Bounded waits on what the page shows, not fixed sleeps: a slow runner commits the pick
+       // and runs the slide later than any sleep guesses. POLL_COUNT_MAX polls of 50 ms is ten seconds.
+       const POLL_COUNT_MAX = 200;
+       const until = async (holds) => {
+         for (let poll = 0; poll < POLL_COUNT_MAX && !holds(); poll += 1) {
+           await new Promise((resolve) => setTimeout(resolve, 50));
+         }
+       };
+       const sliding = () => document.getAnimations().some((animation) => animation.playState === 'running');
+       const picked = (id) => document.querySelectorAll('#' + id + ' .ui-tab')[1].classList.contains('on');
+       await until(() => document.querySelectorAll('.ui-tabs-indicator').length === 2 && !sliding());
        const before = { content: read('content'), equal: read('equal') };
        document.querySelectorAll('#content .ui-tab')[1].click();
        document.querySelectorAll('#equal .ui-tab')[1].click();
-       await new Promise((resolve) => setTimeout(resolve, 400));
+       await until(() => picked('content') && picked('equal'));
+       await until(() => !sliding());
        return { firstPaint: window.firstPaint, before, after: { content: read('content'), equal: read('equal') } };
      })()\`;
      app.whenReady().then(async () => {

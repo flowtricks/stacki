@@ -11,7 +11,8 @@
 // invisible to jsdom: `.property-editor label` turned the instance's label into
 // a stretched column and `.props-field`'s panel gutter inset the list, and only
 // a cascade and a layout show either. So each host is rendered in Electron with
-// every stylesheet the app loads, and the boxes and computed styles are measured.
+// every stylesheet the app loads, and the boxes and computed styles are measured
+// once what each step shows is there and its motion has settled (bounded waits).
 
 const fs = require('fs');
 const path = require('path');
@@ -119,7 +120,7 @@ const check = (what, condition, detail) => {
      const path = require('path');
      app.disableHardwareAcceleration();
      app.on('window-all-closed', () => app.quit());
-     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+     const { MOTION_SETTLED_EXPRESSION, waitFor } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
      const READ = \`((hostId) => {
        const host = document.getElementById(hostId);
        const box = (element) => {
@@ -200,20 +201,26 @@ const check = (what, condition, detail) => {
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 960, height: 1000 });
        await win.loadFile(path.join(__dirname, 'index.html'));
-       await sleep(800);
        // Which read failed, since Electron's own error does not say.
        const run = (code) =>
          win.webContents.executeJavaScript(code).catch((error) => {
            throw new Error(String(error) + ' in: ' + code.slice(0, 120));
          });
+       // Every wait is bounded and on what the page shows (test/helpers/waitFor.js), never a
+       // fixed sleep: a slow runner mounts, opens and highlights later than any sleep guesses.
+       const shows = (what, expression) => waitFor({ what, read: () => run('Boolean(' + expression + ')'), until: (shown) => shown });
+       const settled = () => waitFor({ what: 'the motion settled', read: () => run(MOTION_SETTLED_EXPRESSION), until: (still) => still });
+       await shows('every host mounted', "document.querySelector('#panel .props-field') && document.querySelector('#popup .props-field') && document.querySelector('#instance .props-field')");
+       await settled();
        const read = (host) => run(READ + '(' + JSON.stringify(host) + ')');
        const listView = { panel: await read('panel'), popup: await read('popup'), instance: await read('instance') };
        const popupGaps = async () => {
          await run("document.querySelector('#instance .list-field-text').click()");
-         await sleep(200);
+         await shows('the item popup with its fields', "document.querySelectorAll('.list-item-editor .props-field').length >= 2");
+         await settled();
          const gaps = await run(ITEM_GAPS);
          await run("document.querySelector('.list-item-editor button.ghost').click()");
-         await sleep(100);
+         await shows('the item popup closed', "document.querySelector('.list-item-editor') === null");
          return gaps;
        };
        const item = await popupGaps();
@@ -222,7 +229,9 @@ const check = (what, condition, detail) => {
        const clickIn = (host, selector) => run('document.getElementById(' + JSON.stringify(host) + ').querySelector(' + JSON.stringify(selector) + ').click()');
        await clickIn('panel', '.property-code-toggle');
        await clickIn('popup', '.property-code-toggle');
-       await sleep(200);
+       // Highlighting can finish after the field mounts: wait for both fields' marks.
+       await shows('both Code type fields marked', "document.querySelector('#panel .property-code .cm-line span') && document.querySelector('#popup .property-code .cm-line span')");
+       await settled();
        const codeType = {
          panel: await run(CODE_TYPE + '("panel")'),
          popup: await run(CODE_TYPE + '("popup")'),
@@ -231,10 +240,12 @@ const check = (what, condition, detail) => {
        for (const host of ['panel', 'popup', 'instance']) {
          await clickIn(host, '.props-field .prop-expr-toggle');
        }
-       await sleep(300);
+       await shows('every host in code view', "document.querySelector('#panel .props-field .expr-input') && document.querySelector('#popup .props-field .expr-input') && document.querySelector('#instance .props-field .expr-input')");
+       await settled();
        const codeView = { panel: await read('panel'), popup: await read('popup'), instance: await read('instance') };
        await run('window.mountDialog()');
-       await sleep(300);
+       await shows('the dialog mounted', "document.querySelector('#dialog [aria-label=" + JSON.stringify('Close property settings') + "]')");
+       await settled();
        chrome.closes.dialog = await run(DIALOG_CLOSE);
        console.log(JSON.stringify({ listView, codeType, codeView, item, chrome, typed }));
        app.quit();
