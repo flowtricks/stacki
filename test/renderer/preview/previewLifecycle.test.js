@@ -422,7 +422,7 @@ function hoverPreviewProps() {
     crumbs: [],
     onDevice() {},
     judgeEvent: async () => ({ tag: 'current' }),
-    onStaleEvent() {},
+    onCanvasNotice() {},
     overlayInfo: () => ({
       label: 'Card',
       kind: 'element',
@@ -708,7 +708,7 @@ test('context events use the gate and translate zoomed frame coordinates', async
       return value === render?.token ? { tag: 'current' } : { tag: 'stale', reason: 'no-render', file: undefined };
     },
     onContextPath: (path, point) => calls.push(['context', path, point]),
-    onStaleEvent: (verdict) => verdicts.push(verdict),
+    onCanvasNotice: (notice) => verdicts.push(notice),
   };
   const act = (action) =>
     React.act(async () => {
@@ -737,7 +737,7 @@ test('context events use the gate and translate zoomed frame coordinates', async
     await send(event, window);
     assert.equal(calls.length, 0, 'another window cannot open the menu');
     await send({ ...event, token: 'b'.repeat(64) });
-    assert.equal(verdicts.length, 1, 'a stale right-click is reported');
+    assert.equal(verdicts.length, 0, 'a right-click on a rendering that moved on is a moment, not a notice');
     assert.equal(calls.filter(([kind]) => kind === 'context').length, 0);
     await send(event);
     assert.deepEqual(calls.at(-2), ['gate', { kind: 'open' }]);

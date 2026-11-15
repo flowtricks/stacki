@@ -22,7 +22,12 @@ import { judgeCanvasEvent, type CheckRender, type ShownFile } from '../../featur
 import { type PreviewVerdict } from '../../../shared/page/previewToken';
 import { PreviewOrigins, judgeRememberedClick } from '../../features/preview/previewSelection';
 import type { JudgeCanvasEvent } from '../../features/preview/previewRuntime';
-import { describePreviewReload, describeStaleClick, type PreviewReloadReason } from '../../features/preview/previewMessages';
+import { describePreviewReload, type PreviewReloadReason } from '../../features/preview/previewMessages';
+import type { CanvasNoticeEvent } from '../../features/preview/canvasClickRetry';
+import type { CanvasNotice } from '../../features/preview/canvasClickRecovery';
+import { canvasClickLogText } from '../../features/preview/canvasClickLog';
+import { dismissErrorToast, reportActionToast } from '../../ui/errorNotices';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { trailOf } from '../model/pageGestures';
 import { emptyNodeIdsOf } from '../model/pageQueries';
 import { useCoreState } from './appLifecycle';
@@ -131,17 +136,29 @@ export function useCanvasNotices(
 ) {
   const { showToast } = lifecycle;
   const translate = useTranslate();
-  const { editStack, nodeClasses, project } = coreState;
+  const { editStack, nodeClasses, project, setRefreshKey } = coreState;
   const { model } = shortcuts;
 
-  const onStaleEvent = useCallback(
-    (verdict: Extract<PreviewVerdict, { readonly tag: 'stale' }>) => {
-      // Visible, never silent — and never a claim that anything was lost: the
-      // click simply did not select. The canvas catches up on its own.
-      const where = verdict.file ? ` (${verdict.file})` : '';
-      showToast(translate('shell.canvas.clickNotApplied', { reason: describeStaleClick(verdict.reason, translate), where }));
+  // A click the canvas could not recover by itself (canvasClickRecovery.ts):
+  // said once, in plain words, with what to do about it — and taken down as
+  // soon as a click selects again.
+  const noticeId = useRef<string | undefined>(undefined);
+  const onCanvasNotice = useCallback(
+    (event: CanvasNoticeEvent) => {
+      const shown = noticeId.current;
+      if (shown !== undefined) {
+        dismissErrorToast(shown);
+        noticeId.current = undefined;
+      }
+      if (event.kind === 'recovered') {
+        return;
+      }
+      noticeId.current = reportActionToast(describeCanvasNotice(event.notice, translate), 'warning', [
+        { label: translate('shell.canvas.reload'), run: () => setRefreshKey((count) => count + 1) },
+        { label: translate('shell.canvas.copyDetails'), run: () => navigator.clipboard.writeText(canvasClickLogText()) },
+      ]);
     },
-    [showToast, translate],
+    [setRefreshKey, translate],
   );
 
   // Past the patcher's caps the canvas reloads instead of patching (step 7):
@@ -179,7 +196,7 @@ export function useCanvasNotices(
     const live = liveClassesById?.get(node.id)?.[0];
     return live === undefined ? fromSource : classLabel(live);
   };
-  return { editedRel, liveClassesById, liveLabel, onPreviewReload, onStaleEvent };
+  return { editedRel, liveClassesById, liveLabel, onCanvasNotice, onPreviewReload };
 }
 
 // Breadcrumb labels and the file being edited.
@@ -444,4 +461,22 @@ export function useOverlayInfo(
     };
   };
   return { overlayInfo };
+}
+
+/** What the person reads when a click could not be applied: what happened, never whose fault. */
+export function describeCanvasNotice(notice: CanvasNotice, translate: Translator): string {
+  switch (notice.kind) {
+    case 'out-of-step':
+      return translate('shell.canvas.outOfStep');
+    case 'other-page':
+      return translate('shell.canvas.otherPage', { file: notice.file });
+    case 'too-large':
+      return translate('shell.canvas.tooLarge');
+    case 'unreachable':
+      return translate('shell.canvas.unreachable');
+    default: {
+      const exhaustive: never = notice;
+      return exhaustive;
+    }
+  }
 }

@@ -8,7 +8,14 @@ export const messages = {
   'shell.ai.ownWindow': 'O chat de IA está em uma janela própria.',
   'shell.ai.yourFileNow': 'Seu arquivo agora',
   'shell.apps.tooLargeToUndo': '{label}: grande demais para desfazer',
-  'shell.canvas.clickNotApplied': 'Clique não aplicado: {reason}{where}',
+  'shell.canvas.copyDetails': 'Copiar detalhes',
+  'shell.canvas.otherPage':
+    'O canvas não está mostrando {file} agora. Ele pode estar mostrando um erro, um redirecionamento ou outra página, então os cliques selecionam a página em vez dos elementos dela.',
+  'shell.canvas.outOfStep': 'O canvas não acompanhou seus arquivos a tempo, então esse clique não selecionou nada. Recarregue o canvas para sincronizá-lo.',
+  'shell.canvas.reload': 'Recarregar canvas',
+  'shell.canvas.tooLarge':
+    'Esta página é maior do que o canvas consegue relacionar aos arquivos, então os cliques não conseguem selecionar. Selecione os elementos no Navegador.',
+  'shell.canvas.unreachable': 'O canvas parou de responder, então esse clique não selecionou nada. Recarregue o canvas para iniciá-lo de novo.',
   'shell.canvasText.componentText': 'Texto do componente · esta instância',
   'shell.canvasText.sharedContent': 'Conteúdo compartilhado do CMS · muda também os outros usos',
   'shell.component.codeChanged': 'O código da página mudou enquanto o componente era criado. Tente de novo.',

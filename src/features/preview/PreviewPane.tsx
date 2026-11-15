@@ -14,7 +14,7 @@ import { DevOffline } from './DevOffline';
 import { PreviewOverlays } from './PreviewOverlays';
 import { PreviewToolbar } from './PreviewToolbar';
 import { usePreviewRuntime, type CanvasSelectInfo, type JudgeCanvasEvent, type PreviewRuntimeProps } from './previewRuntime';
-import type { PreviewVerdict } from '../../../shared/page/previewToken';
+import type { CanvasNoticeEvent } from './canvasClickRetry';
 import type { PreviewReloadReason } from './previewMessages';
 import './previewViewport.css';
 import type { LiveValue } from '../../ui/liveValue';
@@ -54,7 +54,8 @@ interface PreviewPaneProps {
   readonly onContextPath?: NonNullable<PreviewRuntimeProps['onContextPath']>;
   readonly onOpenPath?: (path: string | undefined, occurrence: number) => void;
   readonly judgeEvent: JudgeCanvasEvent;
-  readonly onStaleEvent: (verdict: Extract<PreviewVerdict, { readonly tag: 'stale' }>) => void;
+  /** A click the canvas could not recover by itself, or its recovery (canvasClickRetry.ts). */
+  readonly onCanvasNotice: (event: CanvasNoticeEvent) => void;
   readonly onPreviewReload?: (reason: PreviewReloadReason) => void;
   readonly onSelectedClasses?: (classes: readonly string[]) => void;
   readonly onRenderedPaths?: (paths: readonly string[]) => void;

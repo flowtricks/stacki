@@ -14,6 +14,8 @@ import { noteCanvasReady, receiveCanvasReply, setCanvasFrame } from '../../edito
 import type { Digest } from '../../../shared/core/brand';
 import { judgeEventToken, type PreviewRender, type PreviewVerdict } from '../../../shared/page/previewToken';
 import type { CanvasSelectionVerdict } from './previewSelection';
+import { CanvasClickRetry, type CanvasNoticeEvent } from './canvasClickRetry';
+import type { CanvasClickProblem } from './canvasClickRecovery';
 import type { CanvasEventRequest } from '../../editor/canvasClick';
 import { canvasClicksCaptured, noteCanvasOpen, observeCanvasClick, takeCanvasClick } from '../../ui/canvasClickSlot';
 import { receiveCanvasPoint } from '../../ui/canvasPointQuery';
@@ -57,9 +59,12 @@ export interface PreviewRuntimeProps {
   }) => void;
   readonly onNodeClasses?: (classes: Readonly<Record<string, readonly string[]>>) => void;
   /** The preview-token gate (step 7): an event from a stale rendering never
-   * selects, and the refusal is shown, never swallowed. */
+   * selects. A refused click climbs the recovery ladder (canvasClickRecovery.ts);
+   * only what the ladder cannot fix reaches the person, once, as a notice. */
   readonly judgeEvent: JudgeCanvasEvent;
-  readonly onStaleEvent: (verdict: Extract<PreviewVerdict, { readonly tag: 'stale' }>) => void;
+  readonly onCanvasNotice: (event: CanvasNoticeEvent) => void;
+  /** Reloads the canvas: the ladder's step for a rendering only a fresh one can fix. */
+  readonly onRefresh?: (() => void) | undefined;
   /** The canvas reloaded instead of patching (step 7): past a cap, it says so. */
   readonly onPreviewReload?: (reason: PreviewReloadReason) => void;
   /** More paths to measure: the elements app overlays are anchored to (src/features/apps). */
@@ -125,6 +130,7 @@ export function usePreviewRuntime(props: PreviewRuntimeProps, url: string | unde
     [],
   );
   useOccurrenceSelection(props, refs, setSelectedOccurrence);
+  useClickLadder(iframeRef, refs, setters, url);
   useMessageListener(iframeRef, refs, setters);
   const link = useFrameLink(iframeRef);
   const registerFrame = useCallback((): void => {
@@ -178,6 +184,8 @@ interface RuntimeRefs {
   readonly cameFrom: React.MutableRefObject<string | undefined>;
   /** The rendering the frame last announced, and its token. */
   readonly render: React.MutableRefObject<PreviewRender | undefined>;
+  /** The click ladder: retries, heals and, last, a notice (canvasClickRetry.ts). */
+  readonly clicks: React.MutableRefObject<CanvasClickRetry | undefined>;
 }
 
 function useRuntimeRefs(props: PreviewRuntimeProps, selectedOccurrence: number | undefined): RuntimeRefs {
@@ -190,6 +198,7 @@ function useRuntimeRefs(props: PreviewRuntimeProps, selectedOccurrence: number |
   const lastClick = useRef<{ readonly path: string | undefined } | undefined>(undefined);
   const cameFrom = useRef<string | undefined>(undefined);
   const render = useRef<PreviewRender | undefined>(undefined);
+  const clicks = useRef<CanvasClickRetry | undefined>(undefined);
   useEffect(() => {
     selectedClasses.current = undefined;
   }, [props.selPath, selectedOccurrence]);
@@ -202,6 +211,7 @@ function useRuntimeRefs(props: PreviewRuntimeProps, selectedOccurrence: number |
       lastClick,
       cameFrom,
       render,
+      clicks,
     }),
     [],
   );
@@ -374,7 +384,10 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       break;
     case 'hover-node':
       // A picture, not a selection: only the rendering has to be the latest.
-      if (judgeEventToken(message.token, refs.render.current).tag === 'current') {
+      // A frame that has vouched for no rendering at all (still digesting, or
+      // it said why it cannot) still shows what the pointer is over: an outline
+      // drawn from the frame's own boxes selects nothing.
+      if (hoverShown(message.token, refs.render.current)) {
         noteDeepHover(message.path, message.deep);
         setters.setCanvasHover(message.path);
         setters.setCanvasHoverPseudo(message.pseudo);
@@ -388,20 +401,15 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       applyContextMenu(message, refs, setters, frame);
       break;
     case 'click-node':
-      // While a Stacki app captures canvas clicks, the click is the app's, not a selection (src/ui/canvasClickSlot.ts).
-      if (takeCanvasClick({ path: message.path, occurrence: message.occurrence, x: message.x, y: message.y, box: message.box })) {
-        break;
-      }
-      // An observing app hears the click too, after the double-click window; the editor selects as always.
-      observeCanvasClick({ path: message.path, occurrence: message.occurrence, x: message.x, y: message.y, box: message.box });
-      gateEvent(message.token, refs, { kind: 'click', path: message.path, outside: message.outside }, (path) =>
-        // A pseudo-element belongs to the node the click named; when the gate
-        // re-resolved the path to another node, it no longer applies.
-        applyClick({ ...message, path: path ?? message.path, pseudo: path === undefined || path === message.path ? message.pseudo : undefined }, refs, setters),
-      );
+      receiveClick(message, refs, setters);
       break;
     case 'render':
       announceRender(refs.render, message.render);
+      refs.clicks.current?.rendered();
+      break;
+    case 'render-problem':
+      announceRender(refs.render, undefined);
+      refs.clicks.current?.renderFailed(message.problem);
       break;
     case 'preview-reload':
       announceRender(refs.render, undefined); // The reloaded page announces its own.
@@ -460,27 +468,126 @@ function announceRender(renderRef: React.MutableRefObject<PreviewRender | undefi
 }
 
 // The gate answers after main has read the stamped files; the rendering judged
-// is the one the event named, and `apply` runs only on `current`.
+// is the one the event named, and `apply` runs only on `current`. Used by the
+// double-click and the right-click, which are not looked at again: a refusal is
+// logged, and told only when it is not one the canvas recovers from by itself.
 function gateEvent(token: Digest | undefined, refs: RuntimeRefs, request: CanvasEventRequest, apply: (path?: string) => void): void {
   const render = refs.render.current;
   refs.props.current.judgeEvent(token, render, request).then(
     (verdict) => {
       if (verdict.tag === 'current') {
         if (judgeEventToken(token, refs.render.current).tag !== 'current') {
+          refs.clicks.current?.refused({ kind: 'stale', reason: 'superseded', file: undefined });
           return;
         }
         apply('path' in verdict ? verdict.path : undefined);
       } else {
-        refs.props.current.onStaleEvent(verdict);
+        refs.clicks.current?.refused(staleProblem(verdict));
       }
     },
     (error: unknown) => {
       // The check itself failed (main unreachable): nothing vouches for the
-      // rendering, so the event does not select — and says why.
+      // rendering, so the event does not select.
       console.error('[stacki] preview check failed:', error);
-      refs.props.current.onStaleEvent({ tag: 'stale', reason: 'no-render', file: undefined });
+      refs.clicks.current?.refused({ kind: 'check-failed' });
     },
   );
+}
+
+// A click, from the person or as the frame's answer to the ladder's fresh look.
+function receiveClick(message: Extract<PreviewMessage, { readonly kind: 'click-node' }>, refs: RuntimeRefs, setters: RuntimeSetters): void {
+  const ladder = refs.clicks.current;
+  if (ladder === undefined) {
+    return; // Unmounted: no canvas to select in.
+  }
+  let id: number;
+  if (message.replay === undefined) {
+    // While a Stacki app captures canvas clicks, the click is the app's, not a selection (src/ui/canvasClickSlot.ts).
+    if (takeCanvasClick({ path: message.path, occurrence: message.occurrence, x: message.x, y: message.y, box: message.box })) {
+      return;
+    }
+    // An observing app hears the click too, after the double-click window; the editor selects as always.
+    observeCanvasClick({ path: message.path, occurrence: message.occurrence, x: message.x, y: message.y, box: message.box });
+    id = ladder.begin({ x: message.x, y: message.y });
+  } else if (ladder.claimReplay(message.replay)) {
+    id = message.replay;
+  } else {
+    return; // An answer for a click a newer one replaced.
+  }
+  const request: CanvasEventRequest = { kind: 'click', path: message.path, outside: message.outside };
+  refs.props.current.judgeEvent(message.token, refs.render.current, request).then(
+    (verdict) => {
+      if (!ladder.current(id)) {
+        return; // A newer click replaced this one while main read the disk.
+      }
+      if (verdict.tag !== 'current') {
+        ladder.failed(id, staleProblem(verdict));
+        return;
+      }
+      // The frame may have rendered again while main read the disk.
+      if (judgeEventToken(message.token, refs.render.current).tag !== 'current') {
+        ladder.failed(id, { kind: 'stale', reason: 'superseded', file: undefined });
+        return;
+      }
+      const path = 'path' in verdict ? verdict.path : undefined;
+      ladder.succeeded(id);
+      // A pseudo-element belongs to the node the click named; when the gate
+      // re-resolved the path to another node, it no longer applies.
+      applyClick({ ...message, path: path ?? message.path, pseudo: path === undefined || path === message.path ? message.pseudo : undefined }, refs, setters);
+    },
+    (error: unknown) => {
+      console.error('[stacki] preview check failed:', error);
+      if (ladder.current(id)) {
+        ladder.failed(id, { kind: 'check-failed' });
+      }
+    },
+  );
+}
+
+function staleProblem(verdict: Extract<PreviewVerdict, { readonly tag: 'stale' }>): CanvasClickProblem {
+  return { kind: 'stale', reason: verdict.reason, file: verdict.file };
+}
+
+// Whether a hover may be drawn: its rendering is the latest, or the frame has
+// vouched for none (the outline is a picture of the frame's own boxes).
+function hoverShown(token: Digest | undefined, render: PreviewRender | undefined): boolean {
+  if (judgeEventToken(token, render).tag === 'current') {
+    return true;
+  }
+  return token === undefined && render === undefined;
+}
+
+// The click ladder lives as long as the canvas: it reaches the frame through
+// the iframe ref and the app through the props ref, read when it acts.
+function useClickLadder(iframeRef: React.RefObject<HTMLIFrameElement>, refs: RuntimeRefs, setters: RuntimeSetters, url: string | undefined): void {
+  const settersRef = useRef(setters);
+  settersRef.current = setters;
+  useEffect(() => {
+    const { clicks: clicksRef } = refs;
+    const ladder = new CanvasClickRetry({
+      nowMs: () => performance.now(),
+      schedule: (delayMs, run) => {
+        const timer = setTimeout(run, delayMs);
+        return () => clearTimeout(timer);
+      },
+      query: (id, x, y) => iframeRef.current?.contentWindow?.postMessage({ type: 'avb:click-query', id, x, y }, '*'),
+      // What a click on markup the open file does not own selects (canvasClickAction):
+      // the page's layout, or nothing while a component is open.
+      selectPage: () => applyClick({ path: undefined, occurrence: 0, outside: false, pseudo: undefined }, refs, settersRef.current),
+      reloadCanvas: () => refs.props.current.onRefresh?.(),
+      notice: (event) => refs.props.current.onCanvasNotice(event),
+    });
+    clicksRef.current = ladder;
+    return () => {
+      ladder.dispose();
+      if (clicksRef.current === ladder) {
+        clicksRef.current = undefined;
+      }
+    };
+  }, [iframeRef, refs]);
+  useEffect(() => {
+    refs.clicks.current?.documentChanged();
+  }, [refs, url]);
 }
 
 function publishSelectedClasses(classes: Readonly<Record<string, readonly (readonly string[])[]>>, refs: RuntimeRefs): void {
@@ -495,7 +602,11 @@ function publishSelectedClasses(classes: Readonly<Record<string, readonly (reado
   }
 }
 
-function applyClick(message: Extract<PreviewMessage, { readonly kind: 'click-node' }>, refs: RuntimeRefs, setters: RuntimeSetters): void {
+function applyClick(
+  message: Pick<Extract<PreviewMessage, { readonly kind: 'click-node' }>, 'path' | 'occurrence' | 'outside' | 'pseudo'>,
+  refs: RuntimeRefs,
+  setters: RuntimeSetters,
+): void {
   const { clickPending: clickPendingRef, lastClick: lastClickRef } = refs;
   const path = message.path;
   clickPendingRef.current = true;
@@ -576,6 +687,7 @@ function useResetOnReload(props: PreviewRuntimeProps, url: string | undefined, r
     clickPendingRef.current = false;
     lastClickRef.current = undefined;
     announceRender(refs.render, undefined); // A reloaded frame announces its rendering again.
+    refs.clicks.current?.frameReset();
   }, [canvasMode, props.refreshKey, refs, setters, url]);
 }
 

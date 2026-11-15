@@ -8,7 +8,14 @@ export const messages = {
   'shell.ai.ownWindow': 'Le chat IA est dans sa propre fenêtre.',
   'shell.ai.yourFileNow': 'Votre fichier actuel',
   'shell.apps.tooLargeToUndo': '{label} : trop volumineux pour être annulé',
-  'shell.canvas.clickNotApplied': 'Clic non appliqué : {reason}{where}',
+  'shell.canvas.copyDetails': 'Copier les détails',
+  'shell.canvas.otherPage':
+    'Le canevas n’affiche pas {file} pour le moment. Il affiche peut-être une erreur, une redirection ou une autre page : les clics sélectionnent donc la page plutôt que ses éléments.',
+  'shell.canvas.outOfStep': 'Le canevas n’a pas rattrapé vos fichiers à temps : ce clic n’a rien sélectionné. Rechargez le canevas pour le resynchroniser.',
+  'shell.canvas.reload': 'Recharger le canevas',
+  'shell.canvas.tooLarge':
+    'Cette page est trop grande pour que le canevas la relie à ses fichiers : les clics ne peuvent pas sélectionner. Sélectionnez les éléments dans le Navigateur.',
+  'shell.canvas.unreachable': 'Le canevas ne répond plus : ce clic n’a rien sélectionné. Rechargez le canevas pour le relancer.',
   'shell.canvasText.componentText': 'Texte du composant · cette instance',
   'shell.canvasText.sharedContent': 'Contenu CMS partagé · modifie aussi les autres usages',
   'shell.component.codeChanged': 'Le code de la page a changé pendant la création du composant. Réessayez.',

@@ -6,10 +6,10 @@ import type { Box } from './outlineBoxes';
 import type { Spacing } from './spacingBands';
 import { boolean, count, dictionary, digest, list, optional, pathText, record } from '../../../shared/core/boundary';
 import type { Digest } from '../../../shared/core/brand';
-import { parsePreviewRender, type PreviewRender, type PreviewStaleReason } from '../../../shared/page/previewToken';
+import { parseFrameRenderProblem, parsePreviewRender, type FrameRenderProblem, type PreviewRender } from '../../../shared/page/previewToken';
 import type { PseudoLayer } from '../../../shared/page/pseudoPath';
 import { ENGLISH_TRANSLATE } from '../../../shared/properties/i18n/englishTranslator';
-import type { MessageKey, Translator } from '../../lib/i18n/localeContext';
+import type { Translator } from '../../lib/i18n/localeContext';
 import { GUIDE_LIMITS, parseGuideVariableName, type GuideMetrics } from './guideModel';
 
 export type PreviewMessage =
@@ -44,6 +44,8 @@ export type PreviewMessage =
       readonly x: number | undefined;
       readonly y: number | undefined;
       readonly box: CanvasClickBox | undefined;
+      /** The editor's click query this answers (`avb:click-query`), or undefined for a click the person made. */
+      readonly replay: number | undefined;
     } & LocatedEvent)
   | ({ readonly kind: 'open-node' } & LocatedEvent)
   | ({ readonly kind: 'context-node'; readonly outside: boolean; readonly pseudo: PseudoLayer | undefined } & LocatedEvent & ContextPoint)
@@ -52,6 +54,8 @@ export type PreviewMessage =
   | { readonly kind: 'guide'; readonly metrics: GuideMetrics }
   /** The rendering the canvas shows: its manifest and token (plan §9, step 7). */
   | { readonly kind: 'render'; readonly render: PreviewRender }
+  /** The frame shows a rendering it cannot name with a token, and why. */
+  | { readonly kind: 'render-problem'; readonly problem: FrameRenderProblem }
   /** The canvas reloaded instead of patching, and why (step 7). */
   | { readonly kind: 'preview-reload'; readonly reason: PreviewReloadReason }
   | { readonly kind: 'query-result'; readonly input: unknown }
@@ -102,21 +106,6 @@ export function describePreviewReload(reason: PreviewReloadReason, translate: Tr
       return exhaustive;
     }
   }
-}
-
-const STALE_MESSAGE_KEYS: Readonly<Record<PreviewStaleReason, MessageKey>> = {
-  'no-render': 'preview.stale.noRender',
-  superseded: 'preview.stale.superseded',
-  'token-mismatch': 'preview.stale.tokenMismatch',
-  'file-changed': 'preview.stale.fileChanged',
-  'file-missing': 'preview.stale.fileMissing',
-  'unstamped-file': 'preview.stale.unstampedFile',
-  'shown-page-differs': 'preview.stale.shownPageDiffers',
-};
-
-/** The notice for a refused canvas event in the person's language: `describePreviewStale` (shared/page) keeps the English for logs. */
-export function describeStaleClick(reason: PreviewStaleReason, translate: Translator = ENGLISH_TRANSLATE): string {
-  return translate(STALE_MESSAGE_KEYS[reason]);
 }
 
 /** A shortcut the canvas frame forwards while it holds keyboard focus
@@ -224,6 +213,7 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
         x: coordinateOf(value['x']),
         y: coordinateOf(value['y']),
         box: canvasClickBox(value['box']),
+        replay: optional(parseReplayId)(value['replay']),
       };
     case 'avb:context-node':
       return {
@@ -241,6 +231,8 @@ function parseKnownMessage(value: Readonly<Record<string, unknown>>): PreviewMes
       return { kind: 'guide', metrics: parseGuideMetrics(value) };
     case 'avb:render':
       return { kind: 'render', render: parsePreviewRender(value) };
+    case 'avb:render-problem':
+      return { kind: 'render-problem', problem: parseRenderProblem(value['problem']) };
     case 'avb:preview-reload':
       return { kind: 'preview-reload', reason: parseReloadReason(value['reason']) };
     case 'avb:query-result':
@@ -312,6 +304,27 @@ function guideLength(input: unknown): number {
 // model's to decide, so invalid variable values remain distinguishable from counts.
 function declaredCount(input: unknown): number | undefined {
   return optional(count)(input);
+}
+
+// The editor numbers its click queries from 1 (canvasClickRecovery.ts); the
+// frame echoes the number back, so anything else is not an answer to one.
+const REPLAY_ID_MAX = 2 ** 31;
+function parseReplayId(input: unknown): number {
+  if (typeof input !== 'number' || !Number.isSafeInteger(input)) {
+    throw new Error('Preview click: expected a replay id');
+  }
+  if (input < 1 || REPLAY_ID_MAX < input) {
+    throw new Error('Preview click: replay id out of range');
+  }
+  return input;
+}
+
+function parseRenderProblem(input: unknown): FrameRenderProblem {
+  const found = parseFrameRenderProblem(input);
+  if (found === undefined) {
+    throw new Error('Preview render problem: unknown value');
+  }
+  return found;
 }
 
 function parseReloadReason(input: unknown): PreviewReloadReason {

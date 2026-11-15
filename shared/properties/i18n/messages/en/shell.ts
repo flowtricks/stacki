@@ -8,7 +8,15 @@ export const messages = {
   'shell.ai.ownWindow': 'The AI chat is in its own window.',
   'shell.ai.yourFileNow': 'Your file now',
   'shell.apps.tooLargeToUndo': '{label}: too large to undo',
-  'shell.canvas.clickNotApplied': 'Click not applied: {reason}{where}',
+  'shell.canvas.copyDetails': 'Copy details',
+  'shell.canvas.otherPage':
+    'The canvas isn’t showing {file} right now. It may be showing an error, a redirect or another page, so clicks select the page instead of elements in it.',
+  'shell.canvas.outOfStep':
+    'The canvas didn’t catch up with your files in time, so that click didn’t select anything. Reload the canvas to bring it back in step.',
+  'shell.canvas.reload': 'Reload canvas',
+  'shell.canvas.tooLarge':
+    'This page is larger than the canvas can match to its files, so clicks on it can’t select. Select elements in the Navigator instead.',
+  'shell.canvas.unreachable': 'The canvas stopped answering, so that click didn’t select anything. Reload the canvas to start it again.',
   'shell.canvasText.componentText': 'Component text · this instance',
   'shell.canvasText.sharedContent': 'Shared CMS content · changes other uses too',
   'shell.component.codeChanged': 'The page’s code changed while the component was being made. Try again.',

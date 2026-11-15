@@ -563,7 +563,15 @@ the value cache's selection and history invalidation and never becomes editable 
   `canonicalManifest`. The frame announces `avb:render` `{ token, stamps }`;
   `avb:hover-node`, `avb:click-node` and `avb:open-node` carry `token` (null
   until the digest is known). `parsePreviewRender` and `parseStampData` reject
-  forged shapes: page code can write any comment.
+  forged shapes: page code can write any comment. The frame reads stamps with
+  `parseStampData` too, so a forged one is skipped rather than dropping the
+  rendering. A rendering it cannot name posts `avb:render-problem` `{ problem }`
+  (`FRAME_RENDER_PROBLEMS`, parsed by `parseFrameRenderProblem`), and the frame
+  re-reads markers and stamps after `avb:morphed` and Astro's `astro:after-swap`.
+- `avb:click-query` `{ id, x, y }` (editor → frame; id a safe integer 1–2³¹,
+  coordinates finite within 10⁶ px) asks where a point lands now. The frame
+  answers with `avb:click-node` carrying `replay: id` and the current token,
+  never dispatching anything to the page (docs/canvas-click.md).
 - `preview:check` `{ projectPath, render }` → `PreviewVerdict`: main re-derives
   the token from the manifest, then reads every stamped file from disk
   (`electron/preview/previewCheck.ts`; a path outside the project is `missing`, a file
@@ -573,7 +581,10 @@ the value cache's selection and history invalidation and never becomes editable 
   the event's token is the frame's latest, the open file's stamp is the bytes
   the editor shows (the clean checksum, or the origin while unsaved edits keep
   every path), and main answers `current` — judged again after main answers. A
-  refusal is a notice; nothing is selected. Hover needs the latest token only.
+  refused click climbs the recovery ladder (`canvasClickRecovery.ts`,
+  `canvasClickRetry.ts`: look again, reload once, select the page, then one
+  notice); nothing is ever selected from a refused rendering. Hover needs the
+  latest token only, or no rendering vouched for at all.
   During a local render backlog, ordinary clicks may resolve through one of the
   last eight saved origins of the open file (`previewSelection.ts`). The old
   path names a stable node handle, which is resolved again in the current model;

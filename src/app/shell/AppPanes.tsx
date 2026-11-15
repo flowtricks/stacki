@@ -105,7 +105,7 @@ export function CanvasPane({ app }: { readonly app: ShellView }) {
         canvasWidthRequest={app.canvasWidthRequest}
         projectPath={app.project.path}
         judgeEvent={app.judgeEvent}
-        onStaleEvent={app.onStaleEvent}
+        onCanvasNotice={app.onCanvasNotice}
         onPreviewReload={app.onPreviewReload}
         onContextPath={context.open}
         onSelectPath={(path, info) => selectCanvasPath(app, path ?? undefined, info)}
