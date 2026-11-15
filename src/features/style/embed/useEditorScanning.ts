@@ -10,20 +10,23 @@ import { computeRuleModel } from '../model/cascade';
 import { type MatchTarget } from '../model/selectors';
 import { getHost, onHostChange, type HostState } from '../model/host';
 import {
+  askCanvasAbout,
   buildSnapshot,
   onDocsReloaded,
   rebuildRules,
   primeDomMatches,
+  resolveTarget,
   scanHasElement,
   serializeElementId,
   scanPage,
   syncNodeDocuments,
   webflowApi,
 } from '../model/webflow';
+import { nodeById } from '../model/webflowElement';
 import { assert } from '../../../../shared/core/assert';
 import type { ElementSnapshot } from '../model/styleTypes';
 import { EMPTY_RULE_MODEL, computePlaceholders } from './EditorBasics';
-import { readScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
+import { readScanSnapshot, registerSnapshotPreparer, rememberScanSnapshot, scanSnapshotKey } from './scanSnapshotCache';
 import {
   placeholdersFor,
   readDesignerState,
@@ -38,6 +41,7 @@ import {
   nativeSignature,
   authoredClasses,
   contentForCurrentTree,
+  scanStateFor,
 } from './editorModel';
 import { useEditorRefs, useScanState, useSelectionState, useNativeState, useContentRebuild, useApplyResolve } from './useEditorFoundation';
 
@@ -319,6 +323,56 @@ export function useElementReset(
     ],
   );
   return { resetForElement };
+}
+
+// Resolve an element the panel is about to show, without selecting it, and remember the
+// settled answer (scanSnapshotCache.ts). StylePanel holds the current element on screen
+// while this runs, then switches: the new element's header, chips and fields then come
+// from that one answer in one render, instead of a blank model filled in steps. It is the
+// settled half of applyResolve (the canvas's answer, never a source-only step), against
+// the content the panel already holds; it touches no state, so the element on screen is
+// undisturbed. With no content yet, or a node the scan does not know (just inserted),
+// there is nothing to resolve against and the switch paints the way it always has.
+export function useSnapshotPreparer(editorRefs: ReturnType<typeof useEditorRefs>): void {
+  const { contentRef, docsRef, pageDocsRef } = editorRefs;
+  useEffect(
+    () =>
+      registerSnapshotPreparer(async (nodeId) => {
+        const content = contentRef.current;
+        const element = nodeById(nodeId);
+        if (content === undefined || element === undefined || content.partial === true) {
+          return;
+        }
+        if (!scanHasElement(content.scan, element)) {
+          return;
+        }
+        const elementKey = serializeElementId(element);
+        assert(elementKey === nodeId, 'useSnapshotPreparer: a node is keyed by its id');
+        const docs = docsRef.current;
+        const key = scanSnapshotKey(elementKey, docs);
+        if (readScanSnapshot(key) !== undefined) {
+          return;
+        }
+        const asked = await askCanvasAbout(elementKey, content.rules);
+        const { target, rootSnapshot } = await resolveTarget(element, content.scan, asked);
+        await primeDomMatches(target, content.rules, asked);
+        const model = await computeRuleModel(content.rules, target);
+        // The stylesheets moved on while the page answered (a rescan, or an edit made in
+        // place): this answer is for CSS the panel no longer holds.
+        if (contentRef.current !== content || docsRef.current !== docs || scanSnapshotKey(elementKey, docsRef.current) !== key) {
+          return;
+        }
+        const scan = scanStateFor(content, { rootSnapshot, model, settled: true }, pageDocsRef.current.length);
+        assert(scan.settled, 'useSnapshotPreparer: only a settled answer is remembered');
+        rememberScanSnapshot(key, {
+          scan,
+          target,
+          classList: rootSnapshot.classList,
+          primed: { target, key: selectorKeyOf(content.rules) },
+        });
+      }),
+    [contentRef, docsRef, pageDocsRef],
+  );
 }
 
 // Keep the embeds scanned while no element is selected.
