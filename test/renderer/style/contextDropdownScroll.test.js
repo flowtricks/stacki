@@ -111,6 +111,10 @@ const check = (what, condition, detail) => {
     scriptPath,
     `const { app, BrowserWindow } = require('electron');
      app.on('window-all-closed', () => app.quit());
+     process.on('unhandledRejection', (error) => {
+       console.error('PROBE ERROR ' + String(error).slice(0, 800));
+       app.exit(1);
+     });
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 700, height: 600 });
        win.webContents.on('console-message', (...a) => console.error('CONSOLE ' + JSON.stringify(a).slice(0, 400)));
@@ -214,7 +218,8 @@ const check = (what, condition, detail) => {
   const run = spawnSync(electronPath, [scriptPath], { encoding: 'utf8', timeout: 90000 });
   const line = (run.stdout || '').split('\n').find((candidate) => candidate.trim().startsWith('{'));
   if (!line) {
-    check('the probe ran in a browser', false, (run.stderr || run.stdout || '').slice(0, 600));
+    const probeLines = (run.stderr || '').split('\n').filter((candidate) => candidate.includes('PROBE'));
+    check('the probe ran in a browser', false, probeLines.length > 0 ? probeLines.join('\n') : (run.stderr || run.stdout || '').slice(-600));
   } else {
     const out = JSON.parse(line);
     check('the list opens at the top, not scrolled by itself', out.open.scrollTop === 0, `scrollTop ${out.open.scrollTop}`);
