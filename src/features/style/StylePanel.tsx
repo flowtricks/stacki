@@ -1,11 +1,11 @@
 import { ErrorToast } from '../../ui/ErrorToast';
 import { requestSelectorFocus } from './embed/SelectorPicker';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStyleFiles } from './useStyleFiles';
 import type { HostState } from './model/host';
 import { setHost } from './model/host';
 import { prefetchComponentSources } from './model/componentSourceCache';
-import { prefetchComputedStyles } from './model/computedStyle';
+import { awaitComputedStyles, computedStylesSettled, prefetchComputedStyles } from './model/computedStyle';
 import { prepareScanSnapshot } from './embed/scanSnapshotCache';
 import { assert } from '../../../shared/core/assert';
 import { PX_LENGTHS, sameLengthUnit, type LengthUnit } from '../../../shared/properties/lengthUnit';
@@ -82,6 +82,7 @@ export default function StylePanel(props: StylePanelProps) {
   const pageComponentPaths = props.pageComponentPaths ?? NO_PATHS;
   useEffect(() => prefetchComponentSources(pageComponentPaths), [pageComponentPaths]);
   const hostRef = useRef<HTMLDivElement>(null);
+  useSwitchScrollAnchor(hostRef, selection.props.node?.id);
   usePanelBounds(hostRef);
   useSelectorFocus(hostRef, props.selectorFocus ?? 0);
   const popupOpen = usePopupOpen(hostRef);
@@ -113,6 +114,8 @@ interface ShownSelection {
 // trip); this bounds a canvas that is slow or never answers, after which the next element
 // is shown with the placeholders its sections draw while they wait.
 const SWITCH_HOLD_MS_MAX = 1500;
+// However often the selection moves during a hold, the panel shows an element within this.
+const SWITCH_HOLD_TOTAL_MS_MAX = 3000;
 
 function selectionOf(props: StylePanelProps, renderedClasses: string[]): ShownSelection {
   return {
@@ -124,6 +127,29 @@ function selectionOf(props: StylePanelProps, renderedClasses: string[]): ShownSe
     },
     renderedClasses,
   };
+}
+
+// How many times a switch reads the next element's values again because they were dropped
+// before it could be shown: the canvas re-renders on some selections (its answers are then
+// forgotten, computedStyle.ts forgetComputedStyles), and an edit or undo moves the scope.
+// Each retry waits SWITCH_PREPARE_RETRY_MS first, so the canvas can finish re-rendering; the
+// hold's deadline ends the wait in any case.
+const SWITCH_PREPARE_ATTEMPTS_MAX = 20;
+const SWITCH_PREPARE_RETRY_MS = 50;
+
+/** Read the next element ahead; true once its values are all in hand. */
+async function prepareSwitch(targetId: string, isCancelled: () => boolean): Promise<boolean> {
+  for (let attempt = 0; attempt < SWITCH_PREPARE_ATTEMPTS_MAX; attempt += 1) {
+    if (isCancelled()) {
+      return false;
+    }
+    await Promise.all([prepareScanSnapshot(targetId), prefetchComputedStyles(targetId)]);
+    if (computedStylesSettled(targetId)) {
+      return true;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, SWITCH_PREPARE_RETRY_MS));
+  }
+  return false;
 }
 
 // From one element to another: the only change worth holding the previous one for.
@@ -161,6 +187,7 @@ function useSwitchHold(props: StylePanelProps, renderedClasses: string[]): Shown
   // are kept from before the switch.
   const heldRef = useRef(live);
   const holdStartMsRef = useRef<number | undefined>(undefined);
+  const targetStartRef = useRef<{ readonly id: string; readonly startMs: number } | undefined>(undefined);
   const holding = isSwitch(shownId, targetId);
   if (!holding && shownId !== targetId) {
     setShownId(targetId);
@@ -169,9 +196,11 @@ function useSwitchHold(props: StylePanelProps, renderedClasses: string[]): Shown
   useEffect(() => {
     if (!holding || targetId === undefined) {
       holdStartMsRef.current = undefined;
+      targetStartRef.current = undefined;
       return undefined;
     }
-    const startMs = holdStartMsRef.current ?? performance.now();
+    const nowMs = performance.now();
+    const startMs = holdStartMsRef.current ?? nowMs;
     holdStartMsRef.current = startMs;
     let cancelled = false;
     const release = () => {
@@ -179,14 +208,26 @@ function useSwitchHold(props: StylePanelProps, renderedClasses: string[]): Shown
         setShownId(targetId);
       }
     };
-    const remainingMs = Math.max(0, SWITCH_HOLD_MS_MAX - (performance.now() - startMs));
-    const deadline = window.setTimeout(release, remainingMs);
-    void Promise.all([prepareScanSnapshot(targetId), prefetchComputedStyles(targetId)])
-      .catch(() => undefined)
-      .then(() => {
-        // The rendered classes are part of the element's answer (chip colours, the class
-        // list): the app bounds their wait itself (AppPanes RENDERED_CLASSES_WAIT_MS).
-        if (classesKnown) {
+    // Each element selected gets its own wait, so a quick second pick is not shown before its
+    // answer only because the first one used the time; the whole hold is capped as well.
+    const targetStartMs = targetStartRef.current?.id === targetId ? targetStartRef.current.startMs : nowMs;
+    targetStartRef.current = { id: targetId, startMs: targetStartMs };
+    const remainingMs = Math.max(0, Math.min(SWITCH_HOLD_MS_MAX - (nowMs - targetStartMs), SWITCH_HOLD_TOTAL_MS_MAX - (nowMs - startMs)));
+    const deadline = window.setTimeout(() => {
+      // Out of time with the values still owed: the sections wait for them in their
+      // placeholders, briefly, rather than draw "Default" and empty fields.
+      if (!computedStylesSettled(targetId)) {
+        awaitComputedStyles(targetId);
+      }
+      release();
+    }, remainingMs);
+    void prepareSwitch(targetId, () => cancelled)
+      .catch(() => false)
+      .then((ready) => {
+        // Not ready: the deadline releases it. The rendered classes are part of the
+        // element's answer too (chip colours, the class list); the app bounds their wait
+        // itself (AppPanes RENDERED_CLASSES_WAIT_MS).
+        if (ready && classesKnown) {
           release();
         }
       });
@@ -201,6 +242,111 @@ function useSwitchHold(props: StylePanelProps, renderedClasses: string[]): Shown
   }
   heldRef.current = live;
   return live;
+}
+
+// A row the panel can find again after a switch: a field by its property, a section by
+// its title. Both exist for every element that shows them, whatever else changed.
+interface ScrollAnchor {
+  readonly key: string;
+  readonly offsetPx: number;
+}
+
+// The visible rows remembered across a switch, top first. The first that is still there
+// afterwards is the anchor; a few are kept because the topmost one may be a row only the
+// previous element had (its Layout rows, say).
+const SCROLL_ANCHOR_CANDIDATES_MAX = 24;
+const SCROLL_ANCHOR_SELECTOR = '[data-prop], .embed-editor_section-title';
+const SCROLL_RESERVE_PROPERTY = '--switch-scroll-reserve';
+
+function panelScroller(host: HTMLElement | undefined): HTMLElement | undefined {
+  const root = host?.querySelector(':scope > .embed-editor_root');
+  return root instanceof HTMLElement ? root : undefined;
+}
+
+function anchorKeyOf(element: Element): string {
+  const prop = element.getAttribute('data-prop');
+  return prop === null ? `section:${(element.textContent ?? '').trim()}` : `prop:${prop}`;
+}
+
+function visibleAnchors(scroller: HTMLElement): ScrollAnchor[] {
+  const topPx = scroller.getBoundingClientRect().top;
+  const anchors: ScrollAnchor[] = [];
+  const seen = new Set<string>();
+  for (const element of scroller.querySelectorAll(SCROLL_ANCHOR_SELECTOR)) {
+    if (anchors.length >= SCROLL_ANCHOR_CANDIDATES_MAX) {
+      break;
+    }
+    const offsetPx = element.getBoundingClientRect().top - topPx;
+    const key = anchorKeyOf(element);
+    if (offsetPx >= 0 && !seen.has(key)) {
+      seen.add(key);
+      anchors.push({ key, offsetPx });
+    }
+  }
+  assert(anchors.length <= SCROLL_ANCHOR_CANDIDATES_MAX, 'visibleAnchors: the candidates are bounded');
+  return anchors;
+}
+
+function findAnchor(scroller: HTMLElement, key: string): Element | undefined {
+  for (const element of scroller.querySelectorAll(SCROLL_ANCHOR_SELECTOR)) {
+    if (anchorKeyOf(element) === key) {
+      return element;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Keeps the rows under the pointer where they were across an element switch. The
+ * sections above Typography differ per element (Layout, Flex child, the header's chips),
+ * so the same scrollTop put other rows under the pointer: about 90 px of movement from a
+ * plain element to a heading. The browser's own scroll anchoring did not hold it either,
+ * because the switch replaces the rows it would anchor to, and a shorter element clamped
+ * the scroll. So the switch is anchored here: the visible rows are noted in the render
+ * that switches (the previous element is still painted), and before the new one is
+ * painted the scroll moves by however far the first surviving row moved. A shorter
+ * element gets room at the end (SCROLL_RESERVE_PROPERTY) rather than a clamped scroll,
+ * until the next switch.
+ */
+function useSwitchScrollAnchor(hostRef: React.RefObject<HTMLDivElement>, shownId: string | undefined): void {
+  const anchoredIdRef = useRef(shownId);
+  const pendingRef = useRef<readonly ScrollAnchor[] | undefined>(undefined);
+  if (shownId !== anchoredIdRef.current) {
+    const scroller = panelScroller(hostRef.current ?? undefined);
+    const switching = anchoredIdRef.current !== undefined && shownId !== undefined;
+    pendingRef.current = scroller !== undefined && switching && scroller.scrollTop > 0 ? visibleAnchors(scroller) : undefined;
+    anchoredIdRef.current = shownId;
+  }
+  useLayoutEffect(() => {
+    const anchors = pendingRef.current;
+    pendingRef.current = undefined;
+    const scroller = panelScroller(hostRef.current ?? undefined);
+    if (anchors === undefined || scroller === undefined) {
+      return;
+    }
+    restoreScrollAnchor(scroller, anchors);
+  }, [hostRef, shownId]);
+}
+
+function restoreScrollAnchor(scroller: HTMLElement, anchors: readonly ScrollAnchor[]): void {
+  const topPx = scroller.getBoundingClientRect().top;
+  for (const anchor of anchors) {
+    const element = findAnchor(scroller, anchor.key);
+    if (element === undefined) {
+      continue;
+    }
+    const movedPx = element.getBoundingClientRect().top - topPx - anchor.offsetPx;
+    const targetPx = scroller.scrollTop + movedPx;
+    // Room for the target when the new element's content ends too soon for it. Measured
+    // without the previous switch's room, which this one replaces.
+    scroller.style.setProperty(SCROLL_RESERVE_PROPERTY, '0px');
+    const scrollMaxPx = scroller.scrollHeight - scroller.clientHeight;
+    const reservePx = Math.max(0, Math.ceil(targetPx - scrollMaxPx));
+    scroller.style.setProperty(SCROLL_RESERVE_PROPERTY, `${reservePx}px`);
+    // Instant, said explicitly: a smooth scroll would show the rows sliding into place.
+    scroller.scrollTo({ top: targetPx, behavior: 'instant' });
+    return;
+  }
 }
 
 // A rescan builds a new setting object each time; the host compares by identity,

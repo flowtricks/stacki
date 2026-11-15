@@ -41,6 +41,7 @@ import {
 import { ALIGN_PROPS, GRID_CONTROL_PROPS, LayoutModeSections, type SourceOption } from './LayoutRows';
 import { SelectorPicker, ADD_QUERY, PlusIcon } from './SelectorPicker';
 import { useOptimisticClear } from './useOptimisticClear';
+import { useComputedStylesAwaiting } from '../model/computedStyle';
 import { PreviewPropContext } from '../connectFieldHelpers';
 import { AddQueryForm, EditQueryForm, CssCodeSection, type StyleCardProps } from './QueryForms';
 
@@ -422,6 +423,9 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
   const groups = groupProps([...resolved.props.keys()], SECTION_ORDER);
   const sectionIds = groups.map((group) => group.def.id);
   const [closedSectionIds, toggleSection] = useSectionVisibility();
+  // Past a switch's deadline the page may still owe the element's computed values: the
+  // sections wait in their placeholders rather than draw the fields the answer replaces.
+  const computedAwaiting = useComputedStylesAwaiting();
   // One place for every section: a cleared property reads as unset until its save settles.
   const { read, clearProp } = useOptimisticClear(resolved.props, card.clearProp);
   // Read during render: a switch re-renders the card (the scan resets), and the host holds it.
@@ -463,7 +467,7 @@ export function StyleSections({ card, openProvenance }: { card: StyleCardProps; 
               group.def.id === 'spacing' ? <SpacingCenterButton read={read} busy={card.busy} setProp={card.setProp} clearProp={clearProp} /> : undefined
             }
           >
-            {card.selectionAwaiting ? (
+            {card.selectionAwaiting || computedAwaiting ? (
               <SectionPlaceholder rows={PLACEHOLDER_ROWS[group.def.id] ?? PLACEHOLDER_ROWS_DEFAULT} />
             ) : (
               <>

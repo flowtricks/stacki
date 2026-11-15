@@ -335,45 +335,56 @@ export function useElementReset(
 // there is nothing to resolve against and the switch paints the way it always has.
 export function useSnapshotPreparer(editorRefs: ReturnType<typeof useEditorRefs>): void {
   const { contentRef, docsRef, pageDocsRef } = editorRefs;
+  // One resolve of `nodeId`: remembered, nothing to resolve against, or stale (the CSS
+  // changed while the page answered, so the answer was dropped).
+  const prepareOnce = async (nodeId: string): Promise<'remembered' | 'unavailable' | 'stale'> => {
+    const content = contentRef.current;
+    const element = nodeById(nodeId);
+    if (content === undefined || element === undefined) {
+      return 'unavailable';
+    }
+    if (content.partial === true || !scanHasElement(content.scan, element)) {
+      return 'unavailable';
+    }
+    const elementKey = serializeElementId(element);
+    assert(elementKey === nodeId, 'useSnapshotPreparer: a node is keyed by its id');
+    const key = scanSnapshotKey(elementKey, docsRef.current);
+    if (readScanSnapshot(key) !== undefined) {
+      return 'remembered';
+    }
+    const asked = await askCanvasAbout(elementKey, content.rules);
+    const { target, rootSnapshot } = await resolveTarget(element, content.scan, asked);
+    await primeDomMatches(target, content.rules, asked);
+    const model = await computeRuleModel(content.rules, target);
+    if (scanSnapshotKey(elementKey, docsRef.current) !== key) {
+      return 'stale';
+    }
+    const scan = scanStateFor(content, { rootSnapshot, model, settled: true }, pageDocsRef.current.length);
+    assert(scan.settled, 'useSnapshotPreparer: only a settled answer is remembered');
+    rememberScanSnapshot(key, { scan, target, classList: rootSnapshot.classList, primed: { target, key: selectorKeyOf(content.rules) } });
+    return 'remembered';
+  };
   useEffect(
     () =>
       registerSnapshotPreparer(async (nodeId) => {
-        const content = contentRef.current;
-        const element = nodeById(nodeId);
-        if (content === undefined || element === undefined || content.partial === true) {
-          return;
+        // A background rescan can replace the content while the page answers. The answer
+        // is still good when the stylesheets' text did not change (the cache key says so);
+        // when it did, the element is resolved again against the new CSS, a bounded few times.
+        for (let attempt = 0; attempt < PREPARE_ATTEMPTS_MAX; attempt += 1) {
+          const outcome = await prepareOnce(nodeId);
+          if (outcome !== 'stale') {
+            return;
+          }
         }
-        if (!scanHasElement(content.scan, element)) {
-          return;
-        }
-        const elementKey = serializeElementId(element);
-        assert(elementKey === nodeId, 'useSnapshotPreparer: a node is keyed by its id');
-        const docs = docsRef.current;
-        const key = scanSnapshotKey(elementKey, docs);
-        if (readScanSnapshot(key) !== undefined) {
-          return;
-        }
-        const asked = await askCanvasAbout(elementKey, content.rules);
-        const { target, rootSnapshot } = await resolveTarget(element, content.scan, asked);
-        await primeDomMatches(target, content.rules, asked);
-        const model = await computeRuleModel(content.rules, target);
-        // The stylesheets moved on while the page answered (a rescan, or an edit made in
-        // place): this answer is for CSS the panel no longer holds.
-        if (contentRef.current !== content || docsRef.current !== docs || scanSnapshotKey(elementKey, docsRef.current) !== key) {
-          return;
-        }
-        const scan = scanStateFor(content, { rootSnapshot, model, settled: true }, pageDocsRef.current.length);
-        assert(scan.settled, 'useSnapshotPreparer: only a settled answer is remembered');
-        rememberScanSnapshot(key, {
-          scan,
-          target,
-          classList: rootSnapshot.classList,
-          primed: { target, key: selectorKeyOf(content.rules) },
-        });
       }),
+    // prepareOnce reads only these refs, so a new closure each render changes nothing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- registered once per editor
     [contentRef, docsRef, pageDocsRef],
   );
 }
+
+// How many times a switch's read-ahead resolves again because the CSS changed under it.
+const PREPARE_ATTEMPTS_MAX = 3;
 
 // Keep the embeds scanned while no element is selected.
 export function useScanWithoutSelection(

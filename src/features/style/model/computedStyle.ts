@@ -95,6 +95,81 @@ function learnKey(key: string): void {
   assert(learnedKeys.size <= LEARNED_KEYS_MAX, 'learnKey: the learned keys are bounded');
 }
 
+/** Whether every learned key has an answer for `nodeId` under the current scope: a prefetch
+ *  is lost when the scope moves on (an edit, an undo) before the element is shown. */
+export function computedStylesSettled(nodeId: string): boolean {
+  const path = hasCanvas() ? renderedPathOf(nodeId) : undefined;
+  if (path === undefined || path.length === 0) {
+    return true;
+  }
+  const elementKey = elementKeyOf(nodeId, path);
+  const reading = currentCache();
+  return [...learnedKeys].every((key) => reading.read(elementKey, key).kind === 'settled');
+}
+
+// The element a switch showed before its computed values arrived (StylePanel's hold ran out
+// of time), and until when its sections may wait for them. One element at a time: the panel
+// shows one.
+const COMPUTED_AWAIT_MS_MAX = 1500;
+let awaited: { readonly nodeId: string; readonly untilMs: number } | undefined;
+const awaitedListeners = new Set<() => void>();
+
+// Any popup the panel draws says what it is (usePopupOpen.ts uses the same roles).
+const POPUP_SELECTOR = '[role="menu"],[role="dialog"],[role="listbox"]';
+
+function popupOnScreen(): boolean {
+  return typeof document !== 'undefined' && document.querySelector(POPUP_SELECTOR) !== null;
+}
+
+/** A switch showed `nodeId` without its values in hand: its sections wait for them, bounded. */
+export function awaitComputedStyles(nodeId: string): void {
+  assert(nodeId.length > 0, 'awaitComputedStyles: a node id is never empty');
+  if (popupOnScreen()) {
+    return;
+  }
+  awaited = { nodeId, untilMs: performance.now() + COMPUTED_AWAIT_MS_MAX };
+  for (const listener of awaitedListeners) {
+    listener();
+  }
+}
+
+/**
+ * Whether the selected element's sections should wait in their placeholders for its computed
+ * values. Only after a switch whose hold ran out of time (awaitComputedStyles): a field drawn
+ * then is the "Default" or the empty input that the answer replaces. Bounded by
+ * COMPUTED_AWAIT_MS_MAX, after which the fields show what there is; once the values have
+ * settled, later waits hold what was shown instead (useStableStyleValue).
+ */
+export function useComputedStylesAwaiting(): boolean {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const sync = () => bump((count) => count + 1);
+    const offCache = cache.subscribe(sync);
+    awaitedListeners.add(sync);
+    const timer = window.setInterval(sync, COMPUTED_AWAIT_MS_MAX);
+    return () => {
+      offCache();
+      awaitedListeners.delete(sync);
+      window.clearInterval(timer);
+    };
+  }, []);
+  const nodeId = getHost().selectedId;
+  if (awaited === undefined || awaited.nodeId !== nodeId) {
+    return false;
+  }
+  // A menu or picker the person opened lives in those fields: placeholders would unmount it.
+  // Showing the fields as they are is the lesser wrong, so the wait ends.
+  if (popupOnScreen()) {
+    awaited = undefined;
+    return false;
+  }
+  if (performance.now() >= awaited.untilMs || computedStylesSettled(awaited.nodeId)) {
+    awaited = undefined;
+    return false;
+  }
+  return true;
+}
+
 /**
  * Ask the page about `nodeId` before it is selected: every key a control has asked for,
  * in one batch. Resolves once each has an answer (or the page could not answer), so the
@@ -102,8 +177,7 @@ function learnKey(key: string): void {
  * for the node, there is nothing to ask and it resolves at once.
  */
 export async function prefetchComputedStyles(nodeId: string): Promise<void> {
-  const host = getHost();
-  const path = hasCanvas() ? host.pathOf?.(nodeId) : undefined;
+  const path = hasCanvas() ? renderedPathOf(nodeId) : undefined;
   if (path === undefined || path.length === 0) {
     return;
   }
@@ -120,13 +194,33 @@ export function forgetComputedStyles(): void {
 onCanvasReady(forgetComputedStyles);
 
 function selectionKey(): string | undefined {
-  const host = getHost();
-  const nodeId = host.selectedId;
+  const nodeId = getHost().selectedId;
   if (nodeId === undefined || nodeId.length === 0) {
     return undefined;
   }
-  const path = host.pathOf?.(nodeId);
+  const path = renderedPathOf(nodeId);
   return path ? elementKeyOf(nodeId, path) : undefined;
+}
+
+// The last rendered path seen for each node. While the canvas re-renders (some selections
+// make it, and an edit does) it reports no paths for a moment; read as "nothing to ask",
+// every inherited value blanked for that moment and came back. The node's last path is
+// where the page will answer once it has rendered, so it is asked there and the field
+// holds its value meanwhile (useStableStyleValue). Bounded: cleared when full.
+const RENDERED_PATHS_MAX = 512;
+const renderedPaths = new Map<string, string>();
+
+function renderedPathOf(nodeId: string): string | undefined {
+  const path = getHost().pathOf?.(nodeId);
+  if (path === undefined || path.length === 0) {
+    return renderedPaths.get(nodeId);
+  }
+  if (renderedPaths.size >= RENDERED_PATHS_MAX) {
+    renderedPaths.clear();
+  }
+  renderedPaths.set(nodeId, path);
+  assert(renderedPaths.size <= RENDERED_PATHS_MAX, 'renderedPathOf: the remembered paths are bounded');
+  return path;
 }
 
 // A node's HTML tag, when it has one. A component instance's name is its

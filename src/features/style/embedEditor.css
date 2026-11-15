@@ -8,6 +8,15 @@
      (.app_body, overflow-y: scroll) is the single scroll container. */
 }
 
+/* Room at the end that an element switch keeps for the rows under the pointer when the
+   next element is shorter (StylePanel useSwitchScrollAnchor); 0 otherwise. */
+.embed-editor_root::after {
+  content: '';
+  flex: none;
+  height: var(--switch-scroll-reserve, 0px);
+  margin-top: calc(var(--space-5) * -1);
+}
+
 /* ── Header ── */
 
 .embed-editor_header {

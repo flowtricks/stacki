@@ -7,7 +7,7 @@ import { chevronRight as centralChevronRight } from '../../../ui/central/central
 // and alignment, and the sections a display mode brings (EmbedEditor.tsx).
 
 import type { InlineChip } from './useInlineTarget';
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ClassPlacement } from '../../../editor/classAttr';
 import FieldLabel from '../components/FieldLabel';
@@ -247,25 +247,40 @@ export function LayoutModeSections({
 }
 
 // Which disclosures are open. Changing Display's mode opens the matching one and
-// closes the others; hand-toggles persist between changes.
+// closes the others; hand-toggles persist between changes. Followed while rendering, so
+// the disclosures of the element just shown open and close in the frame its rows arrive
+// (in a layout effect they followed one commit later, which a switch painted).
 export function useLayoutModeOpen(mode: ReturnType<typeof layoutMode>, options: { readonly resolving: boolean }) {
   const { resolving } = options;
+  const elementKey = getHost().selectedId ?? '';
   const [open, setOpen] = useState({
     flex: mode === 'flex',
     grid: mode === 'grid',
     inline: mode === 'inline',
   });
-  useLayoutEffect(() => {
-    // Resolution briefly removes `display` from the model. Keep the disclosure
-    // that was already open through that gap; closing it would remove controls
-    // for one paint, only to insert them again when the same display returns.
-    if (resolving && mode === undefined) {
-      return;
+  const [seen, setSeen] = useState({ mode, resolving, elementKey });
+  if (seen.mode !== mode || seen.resolving !== resolving || seen.elementKey !== elementKey) {
+    setSeen({ mode, resolving, elementKey });
+    // Resolution briefly removes `display` from the model. Keep the disclosure that was
+    // already open through that gap, for the same element only: closing it would remove
+    // controls for one paint, only to insert them again when the same display returns,
+    // but another element's open disclosure would show rows that element does not have.
+    if (!heldThroughResolution({ sameElement: seen.elementKey === elementKey, resolving, mode })) {
+      setOpen({ flex: mode === 'flex', grid: mode === 'grid', inline: mode === 'inline' });
     }
-    setOpen({ flex: mode === 'flex', grid: mode === 'grid', inline: mode === 'inline' });
-  }, [mode, resolving]);
+  }
   const toggle = (key: 'flex' | 'grid' | 'inline') => setOpen((previous) => ({ ...previous, [key]: !previous[key] }));
   return [open, toggle] as const;
+}
+
+function heldThroughResolution(state: { readonly sameElement: boolean; readonly resolving: boolean; readonly mode: ReturnType<typeof layoutMode> }): boolean {
+  if (!state.sameElement) {
+    return false;
+  }
+  if (!state.resolving) {
+    return false;
+  }
+  return state.mode === undefined;
 }
 
 // ─────────────────────────── Style card ───────────────────────────

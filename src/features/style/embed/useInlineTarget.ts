@@ -399,15 +399,15 @@ function useForgetHeldWrite(heldRef: { current: HeldInlineWrite | undefined }, n
   }, [heldRef, nodeId]);
 }
 
-// The selected node, followed through host changes.
+// The selected node, read while rendering and followed through host changes. Kept in
+// state, it was one commit behind the host: on a switch the next element's first frame
+// showed the previous element's inline style (its colour, its letter spacing) in the
+// fields. StylePanel publishes the host before this renders, so the read is current; the
+// subscription re-renders for host changes that arrive without a render of the panel.
 function useSelectedHostNode(): HostNode | undefined {
-  const [node, setNode] = useState<HostNode | undefined>(readSelectedNode);
-  useEffect(() => {
-    const sync = (): void => setNode(readSelectedNode());
-    sync();
-    return onHostChange(sync);
-  }, []);
-  return node;
+  const [, bump] = useState(0);
+  useEffect(() => onHostChange(() => bump((count) => count + 1)), []);
+  return readSelectedNode();
 }
 
 function readSelectedNode(): HostNode | undefined {
