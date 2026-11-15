@@ -1,0 +1,109 @@
+---
+import Layout from "@/layouts/BaseLayout.astro";
+import Section from "@/components/wrapper/Section.astro";
+import ContentWrapper from "@/components/wrapper/ContentWrapper.astro";
+import Heading from "@/components/typography/Heading.astro";
+import Eyebrow from "@/components/typography/Eyebrow.astro";
+import Paragraph from "@/components/typography/Paragraph.astro";
+import SoakCard from "@/components/SoakCard.astro";
+
+// Classes computed at render time: the panel cannot read them from the source, only from the
+// canvas, so its source-only pass for these elements lacks every class rule.
+// A long page like a real site's: the canvas's answers (computed styles, matched rules over a
+// large DOM) then take as long as they do there, which is what opens the panel's race windows.
+const fillerRows = Array.from({ length: 1200 }, (_, index) => index);
+const expressionClasses = (suffix: string) => ["soak-expr", `soak-expr_${suffix}`, "text-style-h3"].join(" ");
+---
+<Layout theme="dark">
+  <Section>
+    <ContentWrapper>
+      <Heading tag="h1" id="soak-heading-one">First heading with variable type</Heading>
+      <Heading tag="h2" id="soak-heading-two" maxWidth={24}>Second heading with variable type</Heading>
+      <Eyebrow>Eyebrow label</Eyebrow>
+      <Paragraph id="soak-paragraph">A paragraph whose type comes from the Lumos text styles.</Paragraph>
+      <div id="soak-expr-one" class={expressionClasses("one")}>Classes from an expression, one</div>
+      <div id="soak-expr-two" class={expressionClasses("two")}>Classes from an expression, two</div>
+      <p id="soak-plain" class="soak-plain">A plain paragraph with no variables at all.</p>
+      <p id="soak-inline" class="soak-plain" style="color: rgb(200, 40, 40); letter-spacing: 0.05em;">A paragraph with inline styles.</p>
+      <div id="soak-nested" class="soak-nest">
+        <span id="soak-nested-span" class="soak-nest_label">Nested label</span>
+      </div>
+      <div class="soak-cards">
+        <SoakCard />
+      </div>
+    </ContentWrapper>
+  </Section>
+  <Section>
+    <ContentWrapper>
+      <div class="soak-filler">
+        {fillerRows.map((index) => (
+          <p class:list={["text", "soak-filler_row", index % 2 === 0 && "is-even"]}>Filler row {index}</p>
+        ))}
+      </div>
+    </ContentWrapper>
+  </Section>
+</Layout>
+
+<script>
+  // Like a site script that marks elements once it has run: a styled class the page adds at
+  // runtime, which the canvas reports after the selection and which moves the panel's default
+  // selector pick (the trigger of the "picker closes itself on first press" report).
+  for (const element of document.querySelectorAll("#soak-heading-one, #soak-paragraph")) {
+    element.classList.add("is-soak-ready");
+  }
+</script>
+
+<style is:global>
+  /* Rules only the page can match: `.section` is rendered inside the Section component, so the
+     source matcher on this page cannot see it above the Heading and Paragraph instances.
+     Unlayered, they beat the Lumos type styles (in @layer base): both headings and the
+     paragraph take their font weight from a variable through a page-only rule. */
+  .section .heading {
+    font-weight: var(--h2-font-weight);
+  }
+  .section .text {
+    font-weight: var(--h3-font-weight);
+  }
+  /* Styled, so the canvas reporting it after a selection moves the default selector pick. */
+  .is-soak-ready {
+    letter-spacing: var(--letter-spacing-tight);
+  }
+  /* Rules only the page can match: the source matcher cannot see across the component's edge. */
+  .soak-cards .soak-card_title {
+    font-weight: var(--h2-font-weight);
+  }
+  .soak-cards .soak-card_text {
+    font-weight: var(--text-main-font-weight);
+  }
+  .soak-plain {
+    font-family: Arial, sans-serif;
+    font-weight: 400;
+    font-size: 1.125rem;
+    line-height: 1.4;
+    letter-spacing: 0em;
+    text-transform: none;
+    color: rgb(30, 30, 30);
+    margin-bottom: 1rem;
+  }
+  .soak-nest {
+    padding: var(--space-4);
+    font-family: var(--primary-family);
+    font-weight: var(--primary-medium);
+    color: var(--text);
+  }
+  .soak-nest_label {
+    font-size: var(--text-small);
+    text-transform: uppercase;
+    letter-spacing: var(--letter-spacing-tight);
+  }
+  @media screen and (max-width: 991px) {
+    .soak-nest_label {
+      font-size: 1rem;
+    }
+  }
+  @media screen and (max-width: 767px) {
+    .soak-plain {
+      font-size: 1rem;
+    }
+  }
+</style>
