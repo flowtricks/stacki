@@ -357,6 +357,7 @@
     "shared/properties/entryTitle.ts",
     "shared/properties/envFile.ts",
     "shared/properties/fieldChecks.ts",
+    "shared/properties/functionSlot.ts",
     "shared/properties/generated/appUiKitBundle.ts",
     "shared/properties/guideLimits.ts",
     "shared/properties/guidePreferences.ts",

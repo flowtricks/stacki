@@ -161,7 +161,8 @@ const supports = (property, value) => {
   same('margin shorthand slot: lengths', names('margin', '1rem [slot]'), ['len']);
   same('a custom property takes anything', names('--anything'), ['brand', 'factor', 'len', 'pct']);
   same('an empty value is the whole slot', names('width', '[slot]'), ['len', 'pct']);
-  same('a half-typed expression never empties the list (property-level fallback)', names('width', 'calc(2rem * [slot]'), ['len', 'pct']);
+  same('a half-typed expression is still read: after a length times, the number only (functionSlot.ts)', names('width', 'calc(2rem * [slot]'), ['factor']);
+  same('a half-typed expression in a slot that is not modelled falls back to the property', names('width', 'calc(2rem + [slot]'), ['len', 'pct']);
   same('a property the engine does not know falls back to the type guess, not an empty list', names('panel-only').length > 0, true);
   same(
     'an ancestor override changes the verdict',

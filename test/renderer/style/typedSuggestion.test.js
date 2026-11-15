@@ -52,6 +52,7 @@ const check = (what, condition, detail) => {
                 const add = (name, value, group = '') => onAdd({ name, collection: 'src/styles/base.css', group, value, binding: 'var(--' + name + ')', type: 'Size' });
                 add('accent', '2rem');
                 add('brand', '1rem');
+                add('full', '100%');
                 add('section-space-nav-overlap', 'clamp(var(--section-space-nav), 1rem, 2rem)');
                 add('display-margin-top', 'var(--space-7)', 'display-margin');
                 add('display-margin-bottom', 'var(--space-6)', 'display-margin');
@@ -258,9 +259,9 @@ const check = (what, condition, detail) => {
 
   // --- The list opens wherever the caret is inside a reference being typed.
   for (const [value, label] of [
-    ['calc(var(--accent) * --)', 'after a chip and an operator, before )'],
+    ['calc(var(--accent) + --)', 'after a chip and an operator, before )'],
     ['var(--accent) * --', 'after a leading chip, at the end'],
-    ['calc(var(--accent) * var(--brand) * --)', 'with several chips'],
+    ['calc(var(--accent) * var(--brand) + --)', 'with several chips'],
     ['calc(clamp(1px, --, 2px))', 'in nested calls after a comma'],
     ['calc(--)', 'right after ('],
     ['--', 'at the start and end of the field'],
@@ -279,12 +280,12 @@ const check = (what, condition, detail) => {
     await done();
   }
   {
-    const { editor, done } = await mount('calc(var(--accent) * --)');
+    const { editor, done } = await mount('calc(var(--accent) + --)');
     await act(async () => editor.focus());
     caretAfterDashes(editor);
     await typed(editor);
     await waitFor({ what: 'the list', read: pickerOpen, until: Boolean });
-    check('a bare -- lists every variable, ranked', pickerNames().length === 16 && pickerNames()[0] === 'accent', pickerNames().join(','));
+    check('a bare -- lists every variable, ranked', pickerNames().length === 17 && pickerNames()[0] === 'accent', pickerNames().join(','));
     // The caret moves away with an arrow: the list closes. Back onto the reference: it opens.
     const first = textNodes(editor)[0];
     placeCaret(first, 1);
@@ -318,6 +319,25 @@ const check = (what, condition, detail) => {
     }
     await typed(editor);
     check(`no list in ${label}`, await gone());
+    await done();
+  }
+
+  // --- The slot decides: after a colour in color-mix() only a percentage variable is offered.
+  {
+    const { editor, done } = await mount('color-mix(in srgb, red 10%, transparent --)');
+    await act(async () => editor.focus());
+    caretAfterDashes(editor);
+    await typed(editor);
+    const names = await waitFor({ what: 'the percentage rows', read: pickerNames, until: (list) => list.length > 0 });
+    check('only the percentage variable is offered after a colour', names.join() === 'full', names.join(','));
+    await done();
+  }
+  {
+    const { editor, done } = await mount('color-mix(in --)');
+    await act(async () => editor.focus());
+    caretAfterDashes(editor);
+    await typed(editor);
+    check('the colour space slot shows no list and no empty card', await gone());
     await done();
   }
 

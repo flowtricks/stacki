@@ -19,6 +19,7 @@ import { panelBox, panelSpan } from './model/panelBox';
 import { CheckIcon, VariableTypeIcon, ChevronRightIcon } from './VariableIcons';
 import { varTypeAllowed, byCollection } from './sharedVars';
 import { matchesVariableQuery, rankVariables } from './variableSearch';
+import { functionSlotAt, ruleAccepts } from '../../../shared/properties/functionSlot';
 import { useResolvedColor } from './model/computedColor';
 import { getHost } from './model/host';
 import { hasCanvas, queryCanvas } from '../../editor/canvasQuery';
@@ -225,6 +226,12 @@ export function VariablePicker({
     rows: filtered.map((variable) => variable.binding).join('\n'),
     following: typing === undefined && activeBinding === undefined && search === '' && selectedBinding !== undefined,
   });
+
+  // A reference typed where the grammar takes no variable (or none of the project's fits) draws nothing:
+  // an empty card under the caret says "no variables" about a place where none was ever possible.
+  if (typing !== undefined && !loading && offered.length === 0 && vars.length > 0) {
+    return <></>;
+  }
 
   return (
     <Popup
@@ -489,26 +496,43 @@ export function pickerVariables(
   const computedOf = (variable: ProjectVariable): string | undefined =>
     context.computed?.get(customPropertyOf(variable.binding) ?? '') ?? resolveVariableValue(variable.value, lookup);
   const supports = context.supports ?? engineSupports();
-  const typed =
+  // The grammar slot at the caret (functionSlot.ts) narrows what the engine and the property are asked
+  // about: after `transparent` in a color-mix() only percentages belong, whatever the property takes.
+  // "Show all" lists everything on purpose and skips it, as it does the validity filter.
+  const slotRule =
+    context.showAll === true || context.slot === undefined
+      ? undefined
+      : functionSlotAt(context.slot.before, (name) => {
+          const value = context.computed?.get(name) ?? lookup(name.slice(2));
+          return value === undefined ? undefined : resolveVariableValue(value, lookup);
+        });
+  const fitsSlot = (variable: ProjectVariable): boolean =>
+    slotRule === undefined || sameVariable(variable.binding, context.selectedBinding) || ruleAccepts(slotRule, computedOf(variable), variable.type);
+  // The grammar slot first: the engine and the property then judge only what the slot can take.
+  const pool = slotRule === undefined ? vars : vars.filter(fitsSlot);
+  const judged =
     context.showAll === true || prop?.startsWith('--') === true
       ? // A custom property takes any value, and "show all" bypasses the filter: every variable is offered.
-        vars
+        pool
       : engineKnows(prop, supports)
         ? // The browser's own grammar decides, at the slot the pick lands in (valueSlot.ts). The
           // variable's type guess (Color, Size...) is not consulted: `10%` is no colour on its own
           // and a colour-mix() percentage inside one.
           [
             ...filterBySlot(
-              vars.map((variable) => ({ item: variable, computed: computedOf(variable), keep: sameVariable(variable.binding, context.selectedBinding) })),
+              pool.map((variable) => ({ item: variable, computed: computedOf(variable), keep: sameVariable(variable.binding, context.selectedBinding) })),
               prop,
               context.slot,
               supports,
               VERDICTS,
             ),
           ]
-        : vars.filter((variable) => legacyAllowed(variable, prop, context, computedOf));
+        : pool.filter((variable) => legacyAllowed(variable, prop, context, computedOf));
+  // A context the engine cannot judge (half typed, or a function the property does not take) passes
+  // nothing; the grammar slot has already narrowed the pool, so that is what is offered.
+  const slotted = slotRule !== undefined && judged.length === 0 ? pool : judged;
   const depthOf = (variable: ProjectVariable): number => (variable.group === '' ? -1 : (context.scopeDepth?.get(variable.group) ?? 0));
-  const sorted = [...typed].sort(
+  const sorted = [...slotted].sort(
     (left, right) =>
       Number(right.file === LOCAL_FILE) - Number(left.file === LOCAL_FILE) ||
       (left.file === LOCAL_FILE && right.file === LOCAL_FILE ? depthOf(left) - depthOf(right) : 0) ||
