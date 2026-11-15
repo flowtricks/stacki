@@ -11,6 +11,9 @@
   --bg-input: rgba(255, 255, 255, 0.06);
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-active: rgba(255, 255, 255, 0.09);
+  /* A toggle that is switched on (the preview toolbar's pointer and guide buttons, the title bar's terminal and Play):
+     one fill, so every pressed icon button reads the same. A step lighter than --bg-active, which is only hover. */
+  --bg-pressed: rgba(255, 255, 255, 0.18);
   --border: rgba(255, 255, 255, 0.08);
   --border-strong: rgba(255, 255, 255, 0.14);
   /* Scrollbar thumbs: low contrast at rest, a step brighter under the pointer
@@ -350,12 +353,15 @@ html[data-platform='win32'] .titlebar {
 .titlebar-btn:disabled {
   opacity: 0.4;
 }
-.preview-btn.on {
-  background: var(--accent);
-  color: white;
-}
-.preview-btn.on:hover:not(:disabled) {
-  background: #24a8ff;
+/* Pressed: terminal open, preview on. The same fill and text as the preview toolbar's pressed pointer and guide
+   buttons (--bg-pressed, guide.css), held on hover too so the button does not flicker between two lights.
+   Focus keeps the app-wide focus ring (controls.css). */
+.titlebar-btn.on,
+.titlebar-btn[aria-pressed='true'],
+.titlebar-btn.on:hover:not(:disabled),
+.titlebar-btn[aria-pressed='true']:hover:not(:disabled) {
+  background: var(--bg-pressed);
+  color: var(--text);
 }
 
 /* Interactive preview mode — the site fills everything below the title bar */

@@ -57,7 +57,7 @@
 .device-btns.guide-btns button[aria-expanded='true'],
 .device-btns.guide-btns button[aria-expanded='true']:hover:not(:disabled) {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--bg-pressed);
 }
 .device-btns.guide-btns button svg {
   pointer-events: none;

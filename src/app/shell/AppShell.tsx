@@ -338,6 +338,7 @@ export function TitleActions({ app }: { readonly app: ShellView }) {
       {canCode && (
         <button
           className={`titlebar-btn ${app.termOpen ? 'on' : ''}`}
+          aria-pressed={app.termOpen}
           title={translate(app.termOpen ? 'shell.titleBar.terminalHide' : 'shell.titleBar.terminalShow', { shortcut: terminalKey })}
           onClick={() => app.setTermOpen((open) => !open)}
         >
@@ -365,6 +366,7 @@ function PreviewButton({ app }: { readonly app: ShellView }) {
       <button
         className={`titlebar-btn preview-btn ${app.inPreview || app.previewRef ? 'on' : ''}`}
         aria-label={label}
+        aria-pressed={app.inPreview || app.previewRef !== undefined}
         disabled={!app.devUrl}
         onMouseEnter={tooltip.show}
         onMouseLeave={tooltip.hide}

@@ -8,8 +8,7 @@ import type { PreviewMessage, PreviewReloadReason, TextMarks } from './previewMe
 import { NO_TEXT_MARKS } from './previewMessages';
 import type { GuideMetrics } from './guideModel';
 import { parsePreviewMessage } from './previewMessages';
-import { loopChildPaths, outlineBoxPath, sameCopy, type Box } from './outlineBoxes';
-import { assert } from '../../../shared/core/assert';
+import { loopChildPaths, outlineBoxPath, sameCopy } from './outlineBoxes';
 import { setModifiers } from '../../editor/heldModifiers';
 import { noteCanvasReady, receiveCanvasReply, setCanvasFrame } from '../../editor/canvasQuery';
 import type { Digest } from '../../../shared/core/brand';
@@ -79,24 +78,6 @@ export interface CanvasSelectInfo {
   readonly pseudo: PseudoLayer | undefined;
 }
 
-// Why bounded: a pending selection is a picture drawn while main judges a click, and a judgement
-// that never answers must not leave it on the canvas. Past the bound it is taken away.
-const PENDING_SELECTION_MS_MAX = 4000;
-// A node renders once per loop item, and the page is capped at 20 000 stamps (docs/canvas-click.md).
-const BOXES_PER_NODE_MAX = 20_000;
-
-/**
- * The node a canvas click named, shown as the selection from the moment the frame says so
- * until main has judged the click. Judging reads the disk and the editor then renders the whole
- * Style panel; neither may stand between the press and its outline. It is a picture only:
- * nothing is selected, written or announced until the verdict, and a refusal takes it away.
- */
-export interface PendingSelection {
-  readonly path: string;
-  readonly occurrence: number;
-  readonly pseudo: PseudoLayer | undefined;
-}
-
 export interface PreviewRuntime {
   readonly iframeRef: React.RefObject<HTMLIFrameElement>;
   readonly rects: RectMap;
@@ -106,8 +87,6 @@ export interface PreviewRuntime {
   readonly hoverOcc: number | undefined;
   /** The hovered path's ::before or ::after, when that is what is hovered. */
   readonly hoverPseudo: PseudoLayer | undefined;
-  /** The clicked node while its click is being judged; the overlay draws it as the selection. */
-  readonly pendingSelection: PendingSelection | undefined;
   /** What the column guide is drawn from; undefined until the frame reports. */
   readonly guide: GuideMetrics | undefined;
   /** Text of the selected instance the pointer is on, or that was clicked. */
@@ -129,15 +108,13 @@ export function usePreviewRuntime(props: PreviewRuntimeProps, url: string | unde
   const [canvasHoverPseudo, setCanvasHoverPseudo] = useState<PseudoLayer | undefined>(undefined);
   const [selectedOccurrence, setSelectedOccurrence] = useState<number | undefined>(undefined);
   const [hoverOcc, setHoverOcc] = useState(0);
-  // The node a click named, drawn as the selection while main still judges the click (see receiveClick).
-  const [pendingSelection, setPendingSelection] = useState<PendingSelection | undefined>(undefined);
   const [guide, setGuide] = useState<GuideMetrics | undefined>(undefined);
   const [textMarks, setTextMarks] = useState<TextMarks>(NO_TEXT_MARKS);
   const hoverPseudo = hoveredPseudo(props, canvasHover, canvasHoverPseudo);
   // An app's highlight (`canvas.highlight`) is drawn in its own slot (PreviewOverlays.tsx), so the frame measures it too.
   const highlight = useSyncExternalStore(subscribeCanvasHighlight, canvasHighlight);
   const tracked = highlight === undefined ? props : { ...props, extraTrackPaths: [...(props.extraTrackPaths ?? []), highlight.path] };
-  const { hoverPath, trackPaths } = useTrackedPaths(tracked, canvasHover, hoverPseudo, pendingSelection?.path);
+  const { hoverPath, trackPaths } = useTrackedPaths(tracked, canvasHover, hoverPseudo);
   const refs = useRuntimeRefs(props, selectedOccurrence);
   const setters = useMemo(
     () => ({
@@ -147,15 +124,12 @@ export function usePreviewRuntime(props: PreviewRuntimeProps, url: string | unde
       setCanvasHoverPseudo,
       setSelectedOccurrence,
       setHoverOcc,
-      setPendingSelection,
       setGuide,
       setTextMarks,
     }),
     [],
   );
   useOccurrenceSelection(props, refs, setSelectedOccurrence);
-  useClearPendingSelection(props.selPath, setPendingSelection);
-  useExpirePendingSelection(pendingSelection, setPendingSelection);
   useClickLadder(iframeRef, refs, setters, url);
   useMessageListener(iframeRef, refs, setters);
   const link = useFrameLink(iframeRef);
@@ -187,7 +161,6 @@ export function usePreviewRuntime(props: PreviewRuntimeProps, url: string | unde
     hoverPath,
     hoverOcc: props.navHoverPath ? 0 : hoverOcc,
     hoverPseudo,
-    pendingSelection,
     guide,
     textMarks,
     registerFrame,
@@ -287,7 +260,7 @@ function hoveredPseudo(props: PreviewRuntimeProps, canvasHover: string | undefin
 
 // The paths the frame measures. It measures only these, so both hover sources
 // must use the same active path for measurement requests and outline rendering.
-function useTrackedPaths(props: PreviewRuntimeProps, canvasHover: string | undefined, hoverPseudo: PseudoLayer | undefined, pendingPath: string | undefined) {
+function useTrackedPaths(props: PreviewRuntimeProps, canvasHover: string | undefined, hoverPseudo: PseudoLayer | undefined) {
   const { hoverPath, selectedBoxPath, hoverBoxPath, loopBoxPaths } = outlinePaths(props, canvasHover);
   // A picked or hovered ::before / ::after is measured on its own (framePseudo.ts).
   const selectedPseudoPath = props.selPath !== undefined && props.selPseudo !== undefined ? pseudoPath(props.selPath, props.selPseudo) : undefined;
@@ -308,9 +281,8 @@ function useTrackedPaths(props: PreviewRuntimeProps, canvasHover: string | undef
         hoverPseudoPath,
         ...loopBoxPaths.split('\n'),
         ...extraPaths.split('\n'),
-        pendingPath,
       ),
-    [props.focusPath, hoverPath, hoverBoxPath, props.selPath, selectedBoxPath, selectedPseudoPath, hoverPseudoPath, loopBoxPaths, extraPaths, pendingPath],
+    [props.focusPath, hoverPath, hoverBoxPath, props.selPath, selectedBoxPath, selectedPseudoPath, hoverPseudoPath, loopBoxPaths, extraPaths],
   );
   return { hoverPath, trackPaths };
 }
@@ -340,7 +312,6 @@ interface RuntimeSetters {
   readonly setCanvasHoverPseudo: React.Dispatch<React.SetStateAction<PseudoLayer | undefined>>;
   readonly setSelectedOccurrence: React.Dispatch<React.SetStateAction<number | undefined>>;
   readonly setHoverOcc: React.Dispatch<React.SetStateAction<number>>;
-  readonly setPendingSelection: React.Dispatch<React.SetStateAction<PendingSelection | undefined>>;
   readonly setGuide: React.Dispatch<React.SetStateAction<GuideMetrics | undefined>>;
   readonly setTextMarks: React.Dispatch<React.SetStateAction<TextMarks>>;
 }
@@ -418,7 +389,6 @@ function applyMessage(message: PreviewMessage, refs: RuntimeRefs, setters: Runti
       // drawn from the frame's own boxes selects nothing.
       if (hoverShown(message.token, refs.render.current)) {
         noteDeepHover(message.path, message.deep);
-        drawSentBoxes(message.path, message.boxes, setters);
         setters.setCanvasHover(message.path);
         setters.setCanvasHoverPseudo(message.pseudo);
         setters.setHoverOcc(message.occurrence);
@@ -545,20 +515,17 @@ function receiveClick(message: Extract<PreviewMessage, { readonly kind: 'click-n
     return; // An answer for a click a newer one replaced.
   }
   const request: CanvasEventRequest = { kind: 'click', path: message.path, outside: message.outside };
-  showPendingSelection(message, refs, setters);
   refs.props.current.judgeEvent(message.token, refs.render.current, request).then(
     (verdict) => {
       if (!ladder.current(id)) {
         return; // A newer click replaced this one while main read the disk.
       }
       if (verdict.tag !== 'current') {
-        setters.setPendingSelection(undefined);
         ladder.failed(id, staleProblem(verdict));
         return;
       }
       // The frame may have rendered again while main read the disk.
       if (judgeEventToken(message.token, refs.render.current).tag !== 'current') {
-        setters.setPendingSelection(undefined);
         ladder.failed(id, { kind: 'stale', reason: 'superseded', file: undefined });
         return;
       }
@@ -567,61 +534,14 @@ function receiveClick(message: Extract<PreviewMessage, { readonly kind: 'click-n
       // A pseudo-element belongs to the node the click named; when the gate
       // re-resolved the path to another node, it no longer applies.
       applyClick({ ...message, path: path ?? message.path, pseudo: path === undefined || path === message.path ? message.pseudo : undefined }, refs, setters);
-      setters.setPendingSelection(undefined);
     },
     (error: unknown) => {
       console.error('[stacki] preview check failed:', error);
       if (ladder.current(id)) {
-        setters.setPendingSelection(undefined);
         ladder.failed(id, { kind: 'check-failed' });
       }
     },
   );
-}
-
-// Hands the boxes a hover or click carried to the overlay in the same step as the path, so the
-// outline is drawn at once: the frame's later `avb:rects` for the tracked paths replaces them
-// with the same boxes (or newer ones, if the page moved in between).
-function drawSentBoxes(path: string | undefined, boxes: readonly Box[] | undefined, setters: RuntimeSetters): void {
-  if (path === undefined || boxes === undefined) {
-    return;
-  }
-  assert(boxes.length <= BOXES_PER_NODE_MAX, 'drawSentBoxes: a node reports a bounded number of boxes');
-  setters.setRects((previous) => ({ ...previous, [path]: boxes }));
-}
-
-// A click that names a node of the open file shows that node as the selection now, while main
-// judges it. A click outside the file, on nothing, or from a frame that sent no boxes waits for
-// the verdict as before.
-function showPendingSelection(message: Extract<PreviewMessage, { readonly kind: 'click-node' }>, refs: RuntimeRefs, setters: RuntimeSetters): void {
-  if (message.path === undefined || message.outside || message.boxes === undefined || message.pseudo !== undefined) {
-    setters.setPendingSelection(undefined);
-    return;
-  }
-  if (judgeEventToken(message.token, refs.render.current).tag !== 'current') {
-    return; // A rendering the frame has not vouched for is not drawn as a selection.
-  }
-  drawSentBoxes(message.path, message.boxes, setters);
-  setters.setPendingSelection({ path: message.path, occurrence: message.occurrence, pseudo: undefined });
-}
-
-// The real selection takes over from the pending one the moment it changes; a click that selects
-// the node already selected changes nothing, so the verdict clears it too (receiveClick).
-function useClearPendingSelection(selectionPath: string | undefined, setPendingSelection: RuntimeSetters['setPendingSelection']): void {
-  useEffect(() => {
-    setPendingSelection(undefined);
-  }, [selectionPath, setPendingSelection]);
-}
-
-// A judgement that never answers leaves nothing behind on the canvas.
-function useExpirePendingSelection(pending: PendingSelection | undefined, setPendingSelection: RuntimeSetters['setPendingSelection']): void {
-  useEffect(() => {
-    if (pending === undefined) {
-      return undefined;
-    }
-    const timer = setTimeout(() => setPendingSelection(undefined), PENDING_SELECTION_MS_MAX);
-    return () => clearTimeout(timer);
-  }, [pending, setPendingSelection]);
 }
 
 function staleProblem(verdict: Extract<PreviewVerdict, { readonly tag: 'stale' }>): CanvasClickProblem {

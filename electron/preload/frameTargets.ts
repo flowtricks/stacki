@@ -5,7 +5,7 @@
 import { assert } from '../../shared/core/assert';
 import { canvasDragged, canvasInert, canvasSelects, holdLinkClick, replayingLinkClick, trackCanvas } from './frameInteraction';
 import { inlineTextPathAt } from './inlineText';
-import { isElement, type Rect } from './frameBasics';
+import { isElement } from './frameBasics';
 import {
   PATH_ATTR,
   announceMapped,
@@ -46,13 +46,7 @@ function reportHover(scoped: ReturnType<typeof nodeAt>, element: Element | undef
   if (lastHover === undefined || nodePath !== lastHover.path || occurrence !== lastHover.occurrence || pseudo !== lastHover.pseudo) {
     lastHover = { path: nodePath, occurrence, pseudo };
     // A deep hover says how to label its node, which the editor's tree of the open file cannot.
-    postLocated('avb:hover-node', {
-      path: nodePath,
-      occurrence,
-      ...pseudoField(pseudo),
-      ...(deep === undefined ? {} : { deep: deep.node }),
-      ...boxesField(nodePath, { measurable: pseudo === undefined && deep === undefined }),
-    });
+    postLocated('avb:hover-node', { path: nodePath, occurrence, ...pseudoField(pseudo), ...(deep === undefined ? {} : { deep: deep.node }) });
   }
 }
 
@@ -514,7 +508,6 @@ const listenForPointer = () => {
         box: nodePath ? rectsForPath(nodePath)?.[occurrence] : undefined,
         pressedAtMs: pressedAtMsOf(event),
         ...pseudoField(pseudo),
-        ...boxesField(nodePath, { measurable: pseudo === undefined }),
       });
       if (canvasInert()) {
         return; // Select mode has already kept the click from the page.
@@ -574,20 +567,6 @@ function forgetKeptBoxes(): void {
 // a message about the element itself keeps the shape it always had.
 function pseudoField(pseudo: PseudoLayer | undefined): { readonly pseudo?: PseudoLayer } {
   return pseudo === undefined ? {} : { pseudo };
-}
-
-// The boxes the node covers right now, sent with the hover or click that named it. The editor
-// draws the outline from them in the same step it hears the event, instead of asking for the
-// boxes (`avb:track`, a frame, `avb:rects`, a second render): two round trips and a frame of
-// waiting between the pointer and the outline. The layout is already clean here, because the
-// hit test that found the node has just forced it. A layer drawn on its own box (a ::before) or
-// a deep hover is measured the usual way, so neither carries any.
-function boxesField(nodePath: string | undefined, options: { readonly measurable: boolean }): { readonly boxes?: readonly Rect[] } {
-  if (nodePath === undefined || !options.measurable) {
-    return {};
-  }
-  const boxes = rectsForPath(nodePath);
-  return boxes === undefined ? {} : { boxes };
 }
 
 // Every located event names the rendering it landed on (step 7): the app
