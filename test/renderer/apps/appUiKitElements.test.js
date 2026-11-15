@@ -218,12 +218,17 @@ const check = (what, condition, detail) => {
        right.querySelector('.stacki-kit-menu-button').click();
        const popup = await until(() => document.querySelector('.stacki-kit-menu'));
        // Measure after the opening motion, which scales the popup: a fixed sleep is too
-       // short when the Linux preflight slows motion, so wait until the popup's box holds
-       // still across two reads. Bounded so a popup that never settles still fails.
+       // short when the Linux preflight slows motion, so wait until the popup has left its
+       // opening phase, no finite animation runs, and its box holds still across two reads
+       // (two equal reads alone can mean a starved runner ran no frame between them).
+       // Bounded so a popup that never settles still fails.
        let previous = '';
+       const moving = () =>
+         popup.closest('[data-popup-phase="opening"]') !== null ||
+         document.getAnimations().some((animation) => animation.playState === 'running' && animation.effect !== null && animation.effect.getTiming().iterations !== Infinity);
        for (let attempt = 0; attempt < 50; attempt += 1) {
          const current = JSON.stringify(popup.getBoundingClientRect());
-         if (current === previous) {
+         if (current === previous && !moving()) {
            break;
          }
          previous = current;

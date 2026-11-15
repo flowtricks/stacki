@@ -155,9 +155,27 @@ const check = (what, condition, detail) => {
          out.hoverActive = await js(read);
          await move(1, 200);
        }
+       // Mid-slide, read deterministically: in the click's own dispatch, after React has drawn the
+       // new tab (its listener is on the root, below the window), the page flushes style, which
+       // starts the pill's transition, pauses it at half its duration, reads, and lets it run on.
+       // A read at a fixed time after the click, or at the transition's first frame, depends on
+       // the runner's frame rate: a starved runner showed the pill at rest, or already at the end.
+       await js(\`window.__mid = undefined; window.addEventListener('click', () => {
+         const pill = document.querySelector('.apps-view-tab-indicator');
+         getComputedStyle(pill).transform;
+         const sliding = pill.getAnimations().filter((animation) => animation.transitionProperty === 'transform');
+         for (const animation of sliding) { animation.pause(); animation.currentTime = animation.effect.getTiming().duration / 2; }
+         window.__mid = \${read};
+         for (const animation of sliding) { animation.play(); }
+       }, { once: true }); true\`);
        await click(marketplace.x, marketplace.y);
-       await wait(70);
-       out.mid = await js(read);
+       if (reduced) {
+         // No transition runs, so the pill's place is read as soon as the clicked tab is on.
+         await pollUntil({ what: 'the clicked tab on', read: () => js("document.querySelectorAll('.apps-view-tab')[1].classList.contains('on')"), until: (on) => on });
+         out.mid = await js(read);
+       } else {
+         out.mid = (await pollUntil({ what: 'the mid-slide read', read: () => js('window.__mid'), until: (seen) => seen !== undefined })).value ?? out.rest;
+       }
        await pollUntil({ what: 'the clicked tab on', read: () => js("document.querySelectorAll('.apps-view-tab')[1].classList.contains('on')"), until: (on) => on });
        // Measure once the pill's slide has finished; slowed motion outlasts the sleep. Bounded.
        await js("Promise.race([Promise.all(document.getAnimations().map((animation) => animation.finished)), new Promise((resolve) => setTimeout(resolve, 5000))]).then(() => true)");
