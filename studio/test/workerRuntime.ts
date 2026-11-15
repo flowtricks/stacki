@@ -55,7 +55,43 @@ export default { fetch() { return new Response('stub'); } };
 export type WorkerInit = NonNullable<Parameters<Miniflare['dispatchFetch']>[1]>;
 export type WorkerResponse = Awaited<ReturnType<Miniflare['dispatchFetch']>>;
 
+/**
+ * The path, in the test bundle only, that hands the Worker a Request built inside workerd from
+ * a description. HTTP framing never touches it, so headers no client or parser would send (a
+ * malformed Content-Length, a stream without one) reach the Worker's own validation exactly.
+ */
+export const DIRECT_PATH = '/__worker-test/direct';
+
+export interface DirectRequest {
+  readonly url: string;
+  readonly method: string;
+  readonly headers: Readonly<Record<string, string>>;
+  /** Base64 body bytes; absent for no body. */
+  readonly body?: string;
+  /** Send the body as a stream, whose length workerd does not know unless a header states it. */
+  readonly streamed?: boolean;
+}
+
+const DIRECT_ENTRY = `
+import worker from './worker.ts';
+export * from './worker.ts';
+export default {
+  async fetch(request, env, context) {
+    if (new URL(request.url).pathname !== ${JSON.stringify(DIRECT_PATH)}) {
+      return worker.fetch(request, env, context);
+    }
+    const spec = await request.json();
+    const bytes = spec.body === undefined ? undefined : Uint8Array.from(atob(spec.body), (character) => character.charCodeAt(0));
+    const body = bytes === undefined ? undefined : spec.streamed ? new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } }) : bytes;
+    const built = new Request(spec.url, { method: spec.method, headers: spec.headers, body, ...(spec.streamed ? { duplex: 'half' } : {}) });
+    return worker.fetch(built, env, context);
+  },
+};
+`;
+
 export interface WorkerRuntime {
+  /** Calls the Worker's fetch handler with a Request built in workerd (DIRECT_PATH). */
+  readonly direct: (request: DirectRequest) => Promise<WorkerResponse>;
   readonly fetch: (url: string, init?: WorkerInit) => Promise<WorkerResponse>;
   readonly drafts: () => ReturnType<Miniflare['getR2Bucket']>;
   readonly origin: () => Promise<URL>;
@@ -63,9 +99,14 @@ export interface WorkerRuntime {
 }
 
 export async function startWorkerRuntime(): Promise<WorkerRuntime> {
-  const entry = fileURLToPath(new URL('../src/cloudflare/worker.ts', import.meta.url));
   const bundled = await build({
-    entryPoints: [entry],
+    // The shipped Worker behind a test-only wrapper (DIRECT_ENTRY); production bundles worker.ts itself.
+    stdin: {
+      contents: DIRECT_ENTRY,
+      resolveDir: fileURLToPath(new URL('../src/cloudflare/', import.meta.url)),
+      sourcefile: 'workerTestEntry.js',
+      loader: 'js',
+    },
     bundle: true,
     format: 'esm',
     platform: 'neutral',
@@ -111,6 +152,7 @@ export async function startWorkerRuntime(): Promise<WorkerRuntime> {
     }),
   );
   return {
+    direct: (request) => miniflare.dispatchFetch('http://localhost' + DIRECT_PATH, { method: 'POST', body: JSON.stringify(request) }),
     fetch: (url, init) => (init === undefined ? miniflare.dispatchFetch(url) : miniflare.dispatchFetch(url, init)),
     drafts: () => miniflare.getR2Bucket('DRAFTS'),
     origin: () => miniflare.ready,
