@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { VariableBlock, VariableGroup } from '../../ipc/variablesBridge';
+import type { VariableBlock, VariableCell, VariableGroup } from '../../ipc/variablesBridge';
 import type { WireColumn } from '../../../shared/ipc/ipcResults';
 import type { VariableCellProps } from './VariableCell';
 import type { VariableSlot, VariableRename, SlotOffset } from './variableRows';
@@ -12,7 +12,7 @@ import Cell from './VariableCell';
 import useListReorder from '../../ui/useListReorder';
 import MoreMenu from '../../ui/MoreMenu';
 import VariableTypeIcon from './VariableTypeIcon';
-import VariableNameCell, { type VariableVisibilityControl } from './VariableNameCell';
+import VariableNameCell, { VariableVisibilityButton, type VariableVisibilityControl } from './VariableNameCell';
 import { useTranslate } from '../../lib/i18n/useTranslate';
 import { PencilIcon, CopyIcon, TrashIcon, DragIcon, PlusIcon } from '../../ui/Icons';
 import { CodeInline } from '../../ui/CodeBlock';
@@ -717,7 +717,7 @@ function TableScrollHead({ state }: { readonly state: ReturnType<typeof useVaria
 }
 
 function TableScrollRows({ state }: { readonly state: ReturnType<typeof useVariableTable> }) {
-  const { block, onSave, fluidOf, onDraft, scrollSync, columns, valueTemplate, rowsRef, rowProps } = state;
+  const { block, onSave, fluidOf, onDraft, scrollSync, columns, valueTemplate, rowsRef, rowProps, visibility } = state;
   return (
     <div
       className="vars-scroll-rows"
@@ -731,10 +731,37 @@ function TableScrollRows({ state }: { readonly state: ReturnType<typeof useVaria
       {block.rows.map((row, index) => (
         <div key={row.name || row.label} style={{ gridTemplateColumns: valueTemplate }} {...rowProps(index)}>
           {columns.map((column, at) => (
-            <Cell key={column.id} cell={row.cells[at]} onSave={onSave} fluidOf={fluidOf} onDraft={onDraft} />
+            <ValueCellHost key={column.id} cell={row.cells[at]} visibility={visibility}>
+              <Cell cell={row.cells[at]} onSave={onSave} fluidOf={fluidOf} onDraft={onDraft} />
+            </ValueCellHost>
           ))}
         </div>
       ))}
+    </div>
+  );
+}
+
+/**
+ * The one place a variable's value cell is drawn with its settings gear, for every layout: a plain list, a matrix, modes,
+ * nested groups, chips, swatches and curves all reach their cells through TableScrollRows, which wraps each in this.
+ * The gear sits at the cell's right edge, over it, so the value does not move or shrink; a cell with no variable
+ * behind it (an empty cell) has none, and nor does a sheet that cannot hide variables.
+ */
+function ValueCellHost(props: {
+  readonly cell: VariableCell | undefined;
+  readonly visibility: VariableVisibilityControl | undefined;
+  readonly children: React.ReactNode;
+}) {
+  const { cell, visibility, children } = props;
+  if (visibility === undefined || cell === undefined || cell.name.length === 0) {
+    return <>{children}</>;
+  }
+  return (
+    <div className="vars-cell-host">
+      {children}
+      <span className="vars-cell-tools">
+        <VariableVisibilityButton name={cell.name} visibility={visibility} />
+      </span>
     </div>
   );
 }

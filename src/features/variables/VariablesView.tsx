@@ -133,12 +133,12 @@ function useVariableVisibility(model: { readonly project: { readonly path: strin
   const { state, isHidden, hide, show } = useHiddenVariables(model.project.path);
   const { showToast } = model;
   const setHidden = useCallback(
-    (name: string, change: { readonly hidden: boolean }): void => {
-      void (change.hidden ? hide(name) : show(name)).then((result) => {
-        if (!result.ok) {
-          showToast?.(translate('variables.visibility.saveFailed', { detail: result.error.message }), 'error');
-        }
-      });
+    async (name: string, change: { readonly hidden: boolean }): Promise<boolean> => {
+      const result = await (change.hidden ? hide(name) : show(name));
+      if (!result.ok) {
+        showToast?.(translate('variables.visibility.saveFailed', { detail: result.error.message }), 'error');
+      }
+      return result.ok;
     },
     [hide, show, showToast, translate],
   );

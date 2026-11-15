@@ -1,31 +1,25 @@
-// A variable's name cell in the Variables panel: the type icon and the name (children), then a settings button that
-// appears beside the name while the pointer is over the cell, while its popup is open or while it has keyboard focus
-// (always, on a touch screen), and a quiet eye-off mark when the variable is hidden from suggestions.
+// A variable's name cell in the Variables panel: the type icon and the name (children), and a quiet eye-off mark when
+// the variable is hidden from suggestions. The control that hides it is not here: it is an eye button drawn over the
+// variable's VALUE, at the end of its cell (ValueCellHost in VariableTable.tsx), in every layout.
 //
-// The button opens a small popup (VariableSettingsPopup), not a menu: a titled surface with the one setting, "Hide from
-// variable suggestions", or "Show in variable suggestions" once the variable is hidden. The setting is built in
-// `settingsAction`, so a later setting is one more row.
+// The eye (`VariableVisibilityButton` below) is one click: an eye while the variable is offered in suggestions, an eye
+// with a line through it once hidden. It writes `.stacki/variables.json` once per click and never on hover or focus.
 //
-// Why the button's visibility is CSS and not React state: it used to follow `mouseenter`/`mouseleave` and `focus`/`blur`
-// flags. A popup closed by an outside press does not give focus back (the press already moved it), so no `blur` ever
-// reached the cell, the focus flag stayed set and the button stayed on screen for good. Now the stylesheet decides, from
-// states the browser keeps true by itself: `:hover` on the cell, `:focus-visible` on the button and
-// `aria-expanded="true"` while the popup is open. Nothing here can fall out of step with the pointer or the focus.
-//
-// Layout: the button's box (`.vars-name-tools`) is always there, so the name does not shift when the button appears.
-// Not shown, the button is transparent and ignores the pointer, but stays focusable so Tab from the name reaches it.
-// Clicking it never reaches the row, so it cannot start a rename or a drag.
-import React from 'react';
+// Why its visibility is CSS and not React state: it used to follow `mouseenter`/`mouseleave` and `focus`/`blur` flags
+// and stuck on screen when focus left without a `blur`. Now the stylesheet decides, from states the browser keeps true
+// by itself: `:hover` on the value cell, `:focus-visible` on the button, and `aria-pressed="true"` (hidden variables
+// always show their line-through eye, dimmed, so they can be found and shown again). Nothing here can fall out of step
+// with the pointer or the focus. Not shown, the button ignores the pointer but stays focusable, so Tab from the value
+// reaches it. Clicking it never reaches the row, so it cannot start a rename or a drag.
+import React, { useState } from 'react';
 import { useTranslate } from '../../lib/i18n/useTranslate';
-import type { Translator } from '../../lib/i18n/localeContext';
-import { useMenuTrigger } from '../../ui/Menu';
-import { GearIcon, HideIcon } from '../../ui/Icons';
-import VariableSettingsPopup, { type VariableSettingsAction } from './VariableSettingsPopup';
+import { HideIcon, PreviewIcon } from '../../ui/Icons';
 
-/** What the panel gives the name cell: which variables are hidden, and how to change that. */
+/** What the panel gives the cells: which variables are hidden, and how to change that. */
 export interface VariableVisibilityControl {
   readonly isHidden: (name: string) => boolean;
-  readonly setHidden: (name: string, change: { readonly hidden: boolean }) => void;
+  /** Resolves true once the change is saved, false when it could not be (the panel has already said so). */
+  readonly setHidden: (name: string, change: { readonly hidden: boolean }) => Promise<boolean>;
 }
 
 interface VariableNameCellProps {
@@ -36,57 +30,48 @@ interface VariableNameCellProps {
   readonly children: React.ReactNode;
 }
 
-/** The popup's actions. Pure, so a test reads them without drawing anything. */
-export function settingsActions(name: string, visibility: VariableVisibilityControl, translate: Translator): readonly VariableSettingsAction[] {
-  const hidden = visibility.isHidden(name);
-  return [
-    {
-      id: hidden ? 'show-in-suggestions' : 'hide-from-suggestions',
-      label: translate(hidden ? 'variables.settings.showInSuggestions' : 'variables.settings.hideFromSuggestions'),
-      onSelect: () => visibility.setHidden(name, { hidden: !hidden }),
-    },
-  ];
+/**
+ * The eye for one variable, drawn over the end of its value cell. It flips at once (`pending`) and the file is written
+ * once per click; when the panel reports a refusal the eye goes back to what the file says.
+ */
+export function VariableVisibilityButton({ name, visibility }: { readonly name: string; readonly visibility: VariableVisibilityControl }) {
+  const translate = useTranslate();
+  const [pending, setPending] = useState<boolean | undefined>(undefined);
+  const hidden = pending ?? visibility.isHidden(name);
+  const label = translate(hidden ? 'variables.settings.showInSuggestions' : 'variables.settings.hideFromSuggestions');
+  return (
+    <button
+      type="button"
+      className="vars-visibility"
+      title={label}
+      aria-label={label}
+      aria-pressed={hidden}
+      data-variable={name}
+      onClick={(event) => {
+        // The row underneath renames or drags; this button only flips the variable.
+        event.stopPropagation();
+        const next = !hidden;
+        setPending(next);
+        void visibility.setHidden(name, { hidden: next }).then(() => {
+          // Saved: the file now says what the eye shows. Refused: it says the old thing, and the eye goes back to it.
+          setPending((current) => (current === next ? undefined : current));
+        });
+      }}
+    >
+      {hidden ? <HideIcon size={12} /> : <PreviewIcon size={12} />}
+    </button>
+  );
 }
 
 export default function VariableNameCell({ name, title, visibility, children }: VariableNameCellProps) {
   const translate = useTranslate();
-  const popup = useMenuTrigger();
-  const settings = name !== undefined && visibility !== undefined ? { name, visibility } : undefined;
-  const hidden = settings !== undefined && settings.visibility.isHidden(settings.name);
+  const hidden = name !== undefined && visibility !== undefined && visibility.isHidden(name);
   return (
     <div className="vars-name" title={title}>
       {children}
       {hidden && (
         <span className="vars-name-hidden" title={translate('variables.hidden.indicator')} role="img" aria-label={translate('variables.hidden.indicator')}>
           <HideIcon size={12} />
-        </span>
-      )}
-      {settings !== undefined && (
-        <span className="vars-name-tools">
-          <button
-            ref={popup.ref}
-            type="button"
-            className="vars-name-settings"
-            title={translate('variables.settings.open', { name: settings.name })}
-            aria-label={translate('variables.settings.open', { name: settings.name })}
-            aria-haspopup="dialog"
-            aria-expanded={popup.open}
-            onClick={(event) => {
-              // The row underneath renames or drags; this button only opens its popup.
-              event.stopPropagation();
-              popup.toggle();
-            }}
-          >
-            <GearIcon size={12} />
-          </button>
-          <VariableSettingsPopup
-            open={popup.open}
-            anchor={popup.anchor}
-            title={settings.name}
-            label={translate('variables.settings.menu')}
-            actions={settingsActions(settings.name, settings.visibility, translate)}
-            onClose={popup.close}
-          />
         </span>
       )}
     </div>

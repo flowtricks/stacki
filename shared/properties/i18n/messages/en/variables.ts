@@ -70,8 +70,6 @@ export const messages = {
   'variables.scroll.label': 'Scroll variable values horizontally',
   'variables.search': 'Search variables',
   'variables.settings.hideFromSuggestions': 'Hide from variable suggestions',
-  'variables.settings.menu': 'Variable settings',
-  'variables.settings.open': 'Settings for {name}',
   'variables.settings.showInSuggestions': 'Show in variable suggestions',
   'variables.title': 'Variables',
   'variables.type.color': 'Colour',

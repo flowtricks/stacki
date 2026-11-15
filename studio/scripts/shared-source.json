@@ -1347,7 +1347,6 @@
     "src/features/variables/VariableCell.tsx",
     "src/features/variables/VariableNameCell.tsx",
     "src/features/variables/VariableScopeBadge.tsx",
-    "src/features/variables/VariableSettingsPopup.tsx",
     "src/features/variables/VariableSheetScroll.tsx",
     "src/features/variables/VariableTable.tsx",
     "src/features/variables/VariableTypeIcon.tsx",

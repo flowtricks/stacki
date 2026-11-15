@@ -71,8 +71,6 @@ export const messages = {
   'variables.scroll.label': 'Desplazar los valores de las variables horizontalmente',
   'variables.search': 'Buscar variables',
   'variables.settings.hideFromSuggestions': 'Ocultar de las sugerencias de variables',
-  'variables.settings.menu': 'Ajustes de la variable',
-  'variables.settings.open': 'Ajustes de {name}',
   'variables.settings.showInSuggestions': 'Mostrar en las sugerencias de variables',
   'variables.title': 'Variables', // same
   'variables.type.color': 'Color',

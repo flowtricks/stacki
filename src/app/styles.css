@@ -7847,17 +7847,7 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* The settings button's box is always in the row, so the name does not move when the button appears. */
-.vars-name-tools {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  margin-right: 0.25rem;
-}
-.vars-name-settings {
+.vars-visibility {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7869,35 +7859,64 @@ body:has(#stacki-canvas-text-editor[data-shared='variable']) .node-outline.sel .
   background: none;
   color: var(--text-faint);
   cursor: pointer;
-  /* Not shown: transparent and deaf to the pointer, but still focusable, so Tab from the name reaches it. */
+  /* Not shown: transparent and deaf to the pointer, but still focusable, so Tab from the value reaches it. */
   opacity: 0;
   pointer-events: none;
 }
-/* Shown only by states the browser keeps true by itself: the pointer over the cell, keyboard focus on the button, and
-   its popup being open (aria-expanded). No script flag can leave it stuck on screen. */
-.vars-name:hover .vars-name-settings,
-.vars-name-settings:focus-visible,
-.vars-name-settings[aria-expanded='true'] {
+/* Shown only by states the browser keeps true by itself: the pointer over the value cell and keyboard focus on the
+   button. A hidden variable (aria-pressed) keeps its line-through eye on screen, dimmed, so it can be found and shown
+   again. No script flag can leave a button stuck on screen. */
+.vars-cell-host:hover .vars-visibility,
+.vars-visibility:focus-visible {
   opacity: 1;
   pointer-events: auto;
 }
+.vars-visibility[aria-pressed='true'] {
+  opacity: 0.55;
+  pointer-events: auto;
+}
+.vars-cell-host:hover .vars-visibility[aria-pressed='true'],
+.vars-visibility[aria-pressed='true']:focus-visible {
+  opacity: 1;
+}
+/* The value cell reserves the button's width at its end (always, so nothing shifts when it appears) and the value stops
+   short of it. The button is out of flow, centred on the cell's height, with no fill and no box of its own. */
+.vars-cell-host {
+  position: relative;
+  min-width: 0;
+}
+.vars-cell-host > .var-cell {
+  padding-inline-end: 1.5rem;
+}
+.vars-cell-tools {
+  position: absolute;
+  top: 50%;
+  right: 0.125rem;
+  display: flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
 /* A row being dragged has no button, wherever the pointer is. */
-.vars-row.is-dragging .vars-name-settings:not([aria-expanded='true']) {
+.vars-row.is-dragging .vars-visibility {
   opacity: 0;
   pointer-events: none;
 }
 /* A phone or tablet has no hover: the button is simply there. */
 @media (hover: none) {
-  .vars-name-settings {
+  .vars-visibility {
     opacity: 1;
     pointer-events: auto;
   }
 }
-.vars-name-settings:hover,
-.vars-name-settings:focus-visible,
-.vars-name-settings[aria-expanded='true'] {
-  background: rgba(255, 255, 255, 0.09);
+.vars-visibility:hover {
   color: var(--text);
+}
+.vars-visibility:focus-visible {
+  color: var(--text);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 /* A hidden variable stays in the sheet; this is how to find it. */
 .vars-name-hidden {

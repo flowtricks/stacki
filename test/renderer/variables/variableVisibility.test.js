@@ -1,16 +1,17 @@
-// Goal: the Variables panel lets a person hide a variable from the suggestion dropdowns, and the choice lives in the
-// project's tracked `.stacki/variables.json`.
+// Goal: the Variables panel lets a person hide a variable from the suggestion dropdowns with one click on an eye over
+// the end of its value cell, and the choice lives in the project's tracked `.stacki/variables.json`.
 //
 //   node test/renderer/variables/variableVisibility.test.js
 //
 // Method: mount the real VariablesView over a throwaway fixture project (never a user's project) whose metadata
 // transport is the real main-process reader and writer, so the file on disk is what is asserted. Events are dispatched
-// (no real pointer) and waits poll observable state (test/helpers/waitFor.js). Steps: the gear's visibility is the
-// stylesheet's alone (:hover, :focus-visible, aria-expanded) with no script flag; the gear opens a popup (role dialog,
-// not a menu); an outside press (repeated), Escape, a second press on the gear, another row's gear and choosing the
-// action each close it, one popup at a time; hovering, focusing, opening and closing write nothing; choosing writes
-// the file exactly once (a double click too) and the inverse action shows the variable again; the keyboard path;
-// rename still opens from a click; two quick writes both land; a corrupt file is reported and never written over.
+// (no real pointer) and waits poll observable state (test/helpers/waitFor.js). Steps: the eye's visibility is the
+// stylesheet's alone (:hover, :focus-visible, aria-pressed, no fill, absolute over the value cell, which reserves its
+// end); every layout (plain, colour, chip, curve, matrix) has one eye per value cell and none in a name cell; the icon
+// is an eye while visible and an eye with a line through it while hidden, always shown for hidden variables; one click
+// writes the file once and flips the eye at once, a keyboard activation too; hover, focus and no-op presses write
+// nothing; no popup exists; two quick writes both land; a corrupt file is reported, never written over, and the eye
+// rolls back.
 
 const fs = require('fs');
 const os = require('os');
@@ -32,6 +33,18 @@ const STYLESHEET = `:root {
   /* Swatches */
   --light-100: #ffffff;
   --dark-900: #1f1d1e;
+
+  /* Typography */
+  --h1: 3rem;
+  --h1-min: 2;
+  --h2: 2rem;
+  --h2-min: 1.5;
+
+  /* Opening motion */
+  --open-duration: 0.3s;
+  --open-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --hover-duration: var(--open-duration);
+  --accent-fill: #336699;
 }
 `;
 
@@ -113,9 +126,8 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   const all = (selector) => [...container.querySelectorAll(selector)];
   const body = dom.window.document.body;
   const nameCell = (name) => all('.vars-name').find((cell) => cell.querySelector('.vars-name-text')?.textContent === name);
-  const settingsButton = (name) => nameCell(name)?.querySelector('.vars-name-settings');
-  const popup = () => body.querySelector('.vars-settings-popup');
-  const action = () => popup()?.querySelector('button.menu-row');
+  // The gear of a variable: over the end of its value cell, found by the variable it is named for.
+  const eye = (name) => all('.vars-cell-host .vars-visibility').find((button) => button.getAttribute('data-variable') === `--${name}`);
   const disk = () => (fs.existsSync(variablesFile) ? fs.readFileSync(variablesFile, 'utf8') : undefined);
   const event = (type, init = {}) => new dom.window.MouseEvent(type, { bubbles: true, ...init });
 
@@ -144,163 +156,178 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   );
   check('no file exists before the first hide', disk() === undefined && !fs.existsSync(path.join(directory, '.stacki')));
 
-  // --- the button's visibility is the stylesheet's, so nothing in script can leave it stuck ------------------------
-  const toolsBefore = nameCell('light-100').querySelector('.vars-name-tools');
-  check('the button has its space before anything is hovered', !!toolsBefore);
+  // --- the eye's visibility is the stylesheet's, so nothing in script can leave it stuck ---------------------------
   const css = fs.readFileSync(repoPath('src/app/styles.css'), 'utf8');
-  check(
-    'the reserved space is fixed, in rem',
-    /\.vars-name-tools\s*{[^}]*flex:\s*none;[^}]*width:\s*1\.25rem;/.test(css) && !/\.vars-name-(tools|settings|hidden)\s*{[^}]*\dpx/.test(css),
-  );
-  check('not shown, it is transparent and deaf to the pointer', /\.vars-name-settings\s*{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/.test(css));
-  check(
-    'shown by :hover on the cell, :focus-visible on the button and the open popup',
-    /\.vars-name:hover \.vars-name-settings,\s*\.vars-name-settings:focus-visible,\s*\.vars-name-settings\[aria-expanded='true'\]\s*{[^}]*opacity:\s*1;/.test(
-      css,
-    ),
-  );
-  check('a row being dragged hides it', /\.vars-row\.is-dragging \.vars-name-settings:not\(\[aria-expanded='true'\]\)\s*{[^}]*opacity:\s*0;/.test(css));
-  check('a touch screen always shows it', /@media \(hover: none\)\s*{\s*\.vars-name-settings\s*{[^}]*opacity:\s*1;/.test(css));
   const source = fs.readFileSync(repoPath('src/features/variables/VariableNameCell.tsx'), 'utf8');
-  check('no script state drives it: no hover or focus handlers on the cell', !/onMouseEnter|onMouseLeave|onFocus|onBlur|useState/.test(source));
-  check('the button is never `hidden`, so Tab reaches it', settingsButton('light-100')?.hidden === false && settingsButton('dark-900')?.hidden === false);
-  check('the button is named for its variable', /light-100/.test(settingsButton('light-100')?.getAttribute('aria-label') || ''));
-  check('and announces a dialog it controls', settingsButton('light-100')?.getAttribute('aria-haspopup') === 'dialog');
-  check('closed, it reads as not expanded', settingsButton('light-100')?.getAttribute('aria-expanded') === 'false');
+  check('no popup, gear or settings class is left in the source', !/Popup|GearIcon|vars-name-settings|vars-name-tools|aria-haspopup/.test(source));
+  check('and none in the stylesheet', !/vars-settings-|vars-name-settings|vars-name-tools/.test(css));
+  check('not shown, the eye is transparent and deaf to the pointer', /\.vars-visibility\s*{[^}]*opacity:\s*0;[^}]*pointer-events:\s*none;/.test(css));
+  check(
+    'shown by :hover on the value cell and :focus-visible on the button',
+    /\.vars-cell-host:hover \.vars-visibility,\s*\.vars-visibility:focus-visible\s*{[^}]*opacity:\s*1;[^}]*pointer-events:\s*auto;/.test(css),
+  );
+  check(
+    'a hidden variable keeps its eye on screen, dimmed, and clickable',
+    /\.vars-visibility\[aria-pressed='true'\]\s*{[^}]*opacity:\s*0\.55;[^}]*pointer-events:\s*auto;/.test(css),
+  );
+  check('a row being dragged hides it', /\.vars-row\.is-dragging \.vars-visibility\s*{[^}]*opacity:\s*0;/.test(css));
+  check('a touch screen always shows it', /@media \(hover: none\)\s*{\s*\.vars-visibility\s*{[^}]*opacity:\s*1;/.test(css));
+  check('no script drives it: no hover, pointer or focus handlers', !/onMouseEnter|onMouseLeave|onFocus|onBlur|onPointer/.test(source));
+  check(
+    'no fill: the button, its hover and its wrapper set no background colour',
+    !/\.vars-visibility[^{]*{[^}]*background:\s*(rgba|var|#|linear)/.test(css) && !/\.vars-cell-tools[^{]*{[^}]*background/.test(css),
+  );
+  check(
+    'hover and press change the colour; focus-visible has a ring',
+    /\.vars-visibility:hover\s*{[^}]*color:/.test(css) && /\.vars-visibility:focus-visible\s*{[^}]*outline:/.test(css),
+  );
+  check(
+    'the eye is absolute inside the value cell wrapper, out of flow and centred',
+    /\.vars-cell-host\s*{[^}]*position:\s*relative;/.test(css) &&
+      /\.vars-cell-tools\s*{[^}]*position:\s*absolute;[^}]*top:\s*50%;[^}]*right:\s*0\.125rem;/.test(css),
+  );
+  check(
+    "the value cell reserves the eye's width at its end, always, so the value stops short and nothing shifts",
+    /\.vars-cell-host > \.var-cell\s*{[^}]*padding-inline-end:\s*1\.5rem;/.test(css),
+  );
+  check('sizes are in rem, not px', !/\.vars-(cell-(host|tools)|visibility)[^{]*{[^}]*(width|height|padding|right|top|margin)[^;]*\dpx/.test(css));
+  check(
+    'visible: an eye, not pressed, labelled to hide',
+    eye('light-100')?.getAttribute('aria-pressed') === 'false' &&
+      eye('light-100')?.getAttribute('aria-label') === 'Hide from variable suggestions' &&
+      eye('light-100')?.title === 'Hide from variable suggestions',
+  );
+  const iconMarkup = (name) => eye(name)?.querySelector('svg')?.innerHTML;
+  const shownIcon = iconMarkup('light-100');
+  check('it draws an icon', !!shownIcon);
   await act(async () => {
     nameCell('light-100').dispatchEvent(event('mouseover', { relatedTarget: body }));
     nameCell('light-100').dispatchEvent(event('mouseout', { relatedTarget: body }));
     nameCell('dark-900').querySelector('.vars-rename').focus();
-    settingsButton('dark-900').focus();
-    settingsButton('dark-900').blur();
+    eye('dark-900').focus();
+    eye('dark-900').blur();
   });
-  check('hovering and focusing write nothing', disk() === undefined);
-  check('and open nothing', !popup() && settingsButton('dark-900')?.getAttribute('aria-expanded') === 'false');
+  check('hovering and focusing write nothing', disk() === undefined && writes.length === 0);
+  check('and open no popup, dialog or menu', !body.querySelector('[role="dialog"], [role="menu"], [data-popup], .vars-settings-popup'));
 
-  // --- the popup ---------------------------------------------------------------------------------
-  const open = async (name) => {
-    await act(async () => {
-      settingsButton(name).dispatchEvent(event('click'));
+  const waitForHidden = (name, hidden) =>
+    waitFor({
+      what: `${name} reads ${hidden ? 'hidden' : 'shown'}`,
+      read: () => eye(name)?.getAttribute('aria-pressed'),
+      until: (value) => value === String(hidden),
     });
-    await waitFor({ what: `the settings popup of ${name} is open`, read: () => !!popup(), until: Boolean });
+  const writtenOnce = async (before, what) => {
+    await settle(150);
+    check(`${what}: written once`, writes.length - before === 1, String(writes.length - before));
   };
-  const close = async (what) =>
-    waitFor({ what: `the popup is gone after ${what}`, read: () => !popup() && !body.querySelector('[data-popup]'), until: Boolean });
-  const keydown = (target, key) => target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 
-  await open('light-100');
-  check('clicking the button opens a popup, a dialog and not a menu', popup()?.getAttribute('role') === 'dialog' && !body.querySelector('[role="menu"]'));
-  check('the popup is named', popup()?.getAttribute('aria-label') === 'Variable settings');
-  check('and titled with the variable', /--light-100/.test(popup()?.querySelector('.vars-settings-title')?.textContent || ''));
-  check('the button reads as expanded', settingsButton('light-100')?.getAttribute('aria-expanded') === 'true');
-  check('without starting a rename', all('.vars-rename-input').length === 0);
-  check('the action has its icon on the left', !!action()?.querySelector('.menu-icon svg') && action()?.firstElementChild?.className === 'menu-icon');
-  check('and focus is on it', dom.window.document.activeElement === action());
-  check('opening wrote nothing', disk() === undefined);
-
-  // Each way out closes it, every time.
-  const pressOutside = async () =>
-    act(async () => {
-      container.dispatchEvent(event('pointerdown'));
-      container.dispatchEvent(event('mousedown'));
-    });
-  await pressOutside();
-  await close('the first look');
-  for (let round = 0; round < 3; round += 1) {
-    await open('light-100');
-    await pressOutside();
-    await close(`an outside press (round ${round})`);
-    check(`an outside press closes it (round ${round})`, !popup() && settingsButton('light-100')?.getAttribute('aria-expanded') === 'false');
-  }
-  check('closing by an outside press wrote nothing', disk() === undefined);
-
-  await open('light-100');
-  await act(async () => keydown(action(), 'Escape'));
-  await close('Escape');
-  check('Escape closes it', !popup());
-  check('and returns focus to the gear', dom.window.document.activeElement === settingsButton('light-100'));
-
-  await open('light-100');
+  // --- one click: hide ---------------------------------------------------------------------------
+  let writesBefore = writes.length;
   await act(async () => {
-    settingsButton('light-100').dispatchEvent(event('click'));
+    eye('light-100').dispatchEvent(event('click'));
   });
-  await close('a second press on the gear');
-  check('the gear toggles it shut', !popup());
-
-  await open('light-100');
-  await act(async () => {
-    settingsButton('dark-900').dispatchEvent(event('pointerdown'));
-    settingsButton('dark-900').dispatchEvent(event('mousedown'));
-  });
-  await close("another row's press");
-  // The press that closed the popup also swallows the click that follows it (popupDismiss), so the click that opens
-  // the other row is the next one.
-  await act(async () => {
-    settingsButton('dark-900').dispatchEvent(event('click'));
-  });
-  await act(async () => {
-    if (!popup()) {
-      settingsButton('dark-900').dispatchEvent(event('click'));
-    }
-  });
-  await waitFor({ what: 'the other row opens its own popup', read: () => !!popup(), until: Boolean });
+  check('the eye flips at once, before the write lands', eye('light-100')?.getAttribute('aria-pressed') === 'true');
+  check('into an eye with a line through it', iconMarkup('light-100') !== shownIcon && !!iconMarkup('light-100'));
   check(
-    'only one popup is open, and it is the other row',
-    body.querySelectorAll('.vars-settings-popup').length === 1 && /--dark-900/.test(popup().textContent),
+    'labelled to show again',
+    eye('light-100')?.getAttribute('aria-label') === 'Show in variable suggestions' && eye('light-100')?.title === 'Show in variable suggestions',
   );
-  check('the first row reads as closed', settingsButton('light-100')?.getAttribute('aria-expanded') === 'false');
-  await pressOutside();
-  await close('cleanup');
-  check('opening and closing never wrote the file', disk() === undefined);
-
-  // --- keyboard ----------------------------------------------------------------------------------
-  await act(async () => {
-    settingsButton('light-100').focus();
-    settingsButton('light-100').click();
-  });
-  await waitFor({ what: 'the popup opens from the keyboard activation', read: () => !!popup(), until: Boolean });
-  check('Enter or Space on the gear (a native click) opens it with focus inside', popup()?.contains(dom.window.document.activeElement));
-  await act(async () => keydown(action(), 'ArrowDown'));
-  await act(async () => keydown(action(), 'End'));
-  check('arrow keys keep focus on the only action', dom.window.document.activeElement === action());
-  await act(async () => keydown(action(), 'Escape'));
-  await close('Escape from the keyboard');
-  check('the gear has focus again', dom.window.document.activeElement === settingsButton('light-100'));
-
-  // --- choosing writes the file exactly once ----------------------------------------------------------
-  await open('light-100');
-  check('the action offers to hide', /Hide from variable suggestions/.test(action()?.textContent || ''));
-  const writesBefore = writes.length;
-  await act(async () => {
-    action().dispatchEvent(event('click'));
-    action().dispatchEvent(event('click'));
-  });
-  await waitFor({ what: 'the hide is written', read: () => disk(), until: (value) => value !== undefined });
-  await settle(100);
+  await waitFor({ what: 'the hide is written', read: () => disk(), until: (value) => /--light-100/.test(value || '') });
+  await writtenOnce(writesBefore, 'one click');
   const hiddenOnce = '{\n  "version": 1,\n  "hiddenFromSuggestions": [\n    "--light-100"\n  ]\n}\n';
-  check('choosing it writes .stacki/variables.json', disk() === hiddenOnce, String(disk()));
-  check('exactly once, even for a double click', writes.length - writesBefore === 1, String(writes.length - writesBefore));
-  await close('the choice');
-  check('and closes the popup', !popup() && settingsButton('light-100')?.getAttribute('aria-expanded') === 'false');
-  check('the variable is marked hidden in the panel', !!nameCell('light-100').querySelector('.vars-name-hidden'));
-  check(
-    'the mark says why',
-    /Hidden from variable suggestions/.test(nameCell('light-100').querySelector('.vars-name-hidden')?.getAttribute('aria-label') || ''),
-  );
+  check('it writes .stacki/variables.json', disk() === hiddenOnce, String(disk()));
+  check('and the eye stays hidden once the file agrees', eye('light-100')?.getAttribute('aria-pressed') === 'true');
+  check('the name cell is marked too', !!nameCell('light-100').querySelector('.vars-name-hidden'));
   check('the variable is still listed and editable', !!nameCell('light-100') && all('input.var-input').length > 0);
-  check('the other variable has no mark', !nameCell('dark-900').querySelector('.vars-name-hidden'));
+  check(
+    'the other variable is untouched',
+    eye('dark-900')?.getAttribute('aria-pressed') === 'false' && !nameCell('dark-900').querySelector('.vars-name-hidden'),
+  );
   check('the cached set answers at once', bundle.getHiddenVariables(directory).has('--light-100'));
+  check(
+    'a hidden variable shows its eye always: the dimmed rule applies to it alone',
+    eye('light-100')?.matches("[aria-pressed='true']") && !eye('dark-900')?.matches("[aria-pressed='true']"),
+  );
 
-  // --- show it again -----------------------------------------------------------------------------------
-  await open('light-100');
-  check('a hidden variable offers the inverse', /Show in variable suggestions/.test(action()?.textContent || ''), action()?.textContent);
+  // --- one click: show ---------------------------------------------------------------------------
+  writesBefore = writes.length;
   await act(async () => {
-    action().dispatchEvent(event('click'));
+    eye('light-100').dispatchEvent(event('click'));
   });
+  check('the eye flips back at once', eye('light-100')?.getAttribute('aria-pressed') === 'false' && iconMarkup('light-100') === shownIcon);
   await waitFor({ what: 'the show is written', read: () => disk(), until: (value) => /\[\]/.test(value || '') });
-  check('choosing it shows the variable: the file keeps its shape, empty', disk() === '{\n  "version": 1,\n  "hiddenFromSuggestions": []\n}\n', String(disk()));
-  await close('the second choice');
+  await writtenOnce(writesBefore, 'the second click');
+  check('the file keeps its shape, empty', disk() === '{\n  "version": 1,\n  "hiddenFromSuggestions": []\n}\n', String(disk()));
   check('and the mark goes', !nameCell('light-100').querySelector('.vars-name-hidden'));
+
+  // --- keyboard: Enter and Space are a native click on a button -------------------------------------
+  writesBefore = writes.length;
+  await act(async () => {
+    eye('dark-900').focus();
+    eye('dark-900').click();
+  });
+  check('Enter or Space (a native click) flips it', eye('dark-900')?.getAttribute('aria-pressed') === 'true');
+  await waitFor({ what: 'the keyboard hide is written', read: () => disk(), until: (value) => /--dark-900/.test(value || '') });
+  await writtenOnce(writesBefore, 'the keyboard activation');
+  check('and the eye keeps focus', dom.window.document.activeElement === eye('dark-900'));
+  await act(async () => eye('dark-900').click());
+  await waitFor({ what: 'the keyboard show is written', read: () => disk(), until: (value) => /\[\]/.test(value || '') });
+  await waitForHidden('dark-900', false);
+
+  // --- every layout: the eye is over the end of the value cell, never in the name cell -------------------------
+  const hosts = () => all('.vars-cell-host');
+  const cells = all('.vars-scroll-rows .var-cell:not(.empty)');
+  check('the sheet draws value cells', cells.length >= 10, String(cells.length));
+  check(
+    'every value cell is wrapped in the one shared host, with its eye after the value (Tab: value, then eye)',
+    cells.every((cell) => {
+      const host = cell.parentElement;
+      return host?.classList.contains('vars-cell-host') && host.lastElementChild?.classList.contains('vars-cell-tools') && host.firstElementChild === cell;
+    }),
+  );
+  check(
+    'each host has exactly one eye, inside its tools box',
+    hosts().every((host) => host.querySelectorAll('.vars-visibility').length === 1 && !!host.querySelector(':scope > .vars-cell-tools > .vars-visibility')),
+  );
+  check(
+    'so there is one eye per value cell and none anywhere else',
+    all('.vars-visibility').length === cells.length && all('.vars-name .vars-visibility, .vars-fixed .vars-visibility').length === 0,
+  );
+  const kinds = {
+    'a plain list row (light-100)': 'light-100',
+    'a colour swatch row (dark-900)': 'dark-900',
+    'a duration row (open-duration)': 'open-duration',
+    'a curve row (open-ease)': 'open-ease',
+    'a chip value row (hover-duration)': 'hover-duration',
+    'a matrix value cell (h1)': 'h1',
+    'a matrix part cell (h2-min)': 'h2-min',
+  };
+  for (const [what, name] of Object.entries(kinds)) {
+    const button = eye(name);
+    check(`${what} has its eye over the end of its value cell`, !!button && button.closest('.vars-cell-host')?.querySelector(':scope > .var-cell') !== null);
+  }
+  const valueMarkup = hosts().map((host) => host.querySelector(':scope > .var-cell').outerHTML);
+  writesBefore = writes.length;
+  await act(async () => {
+    eye('h2').dispatchEvent(event('click'));
+  });
+  await waitFor({ what: 'h2 is written hidden', read: () => disk(), until: (value) => /--h2"/.test(value || '') });
+  await writtenOnce(writesBefore, 'a matrix column');
+  check(
+    'a matrix eye acts on its own variable: h2, not h1',
+    JSON.parse(disk()).hiddenFromSuggestions.join() === '--h2' && eye('h1')?.getAttribute('aria-pressed') === 'false',
+    String(disk()),
+  );
+  check(
+    'and left the value cells untouched',
+    hosts()
+      .map((host) => host.querySelector(':scope > .var-cell').outerHTML)
+      .join() === valueMarkup.join(),
+  );
+  await act(async () => {
+    eye('h2').dispatchEvent(event('click'));
+  });
+  await waitFor({ what: 'h2 is shown again', read: () => disk(), until: (value) => /\[\]/.test(value || '') });
 
   // --- rename and the row are not broken by the button --------------------------------------------
   await act(async () => {
@@ -314,7 +341,7 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
     'the name carries the drag-through mark so a drag still starts there',
     nameCell('dark-900').querySelector('.vars-rename')?.hasAttribute('data-drag-through'),
   );
-  check('the button is a real button, which the reorder hook leaves alone', settingsButton('dark-900')?.tagName === 'BUTTON');
+  check('the button is a real button, which the reorder hook leaves alone', eye('dark-900')?.tagName === 'BUTTON');
 
   // --- two quick toggles both land (writes are serialized) ----------------------------------------
   const store = bundle.hiddenVariablesStore(directory);
@@ -359,12 +386,15 @@ export { forgetHiddenVariables, hiddenVariablesStore, getHiddenVariables } from 
   await act(async () => {
     nameCell('light-100').dispatchEvent(event('mouseover', { relatedTarget: body }));
   });
-  await open('light-100');
+  let flipped;
   await act(async () => {
-    action().dispatchEvent(event('click'));
-    await settle(250);
+    eye('light-100').dispatchEvent(event('click'));
+    flipped = eye('light-100')?.getAttribute('aria-pressed');
   });
-  check('a toggle does not overwrite it', disk() === corrupt, String(disk()));
+  check('the click sets the eye at once, before the refusal comes back', flipped !== undefined);
+  await waitFor({ what: 'the eye rolls back', read: () => eye('light-100')?.getAttribute('aria-pressed'), until: (value) => value === 'false' });
+  check('the eye rolled back to what the file says', eye('light-100')?.getAttribute('aria-pressed') === 'false');
+  check('a click does not overwrite it', disk() === corrupt, String(disk()));
   check(
     'and says so',
     toasts.some((message) => /Could not save/.test(message)),
