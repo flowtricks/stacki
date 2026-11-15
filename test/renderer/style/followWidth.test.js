@@ -1,9 +1,8 @@
 // Goal: the width rules behind "the style panel follows the canvas width" are exact. Which
 // query holds at a width (every width form, rem and px, the boundary pixel itself), which of
 // several holding queries wins (the cascade's most specific, mobile first and desktop first),
-// that anything that is not a measurable width is never auto-selected, and that the stored
-// follow/pinned record is read at the boundary with a safe default.
-// Method: the pure models (queryWidthMatch, followedContextKey, parseFollowMode) over tables of
+// and that anything that is not a measurable width is never auto-selected.
+// Method: the pure models (queryWidthMatch, followedContextKey) over tables of
 // cases, including the negative space (non-width queries, containers, em, `or`, oversize text,
 // no query at all, a width exactly on a boundary). No DOM, no timing.
 
@@ -13,7 +12,6 @@ const loadRenderer = require('../../helpers/rendererModule.js');
 
 const { queryWidthMatch } = loadRenderer('src/features/style/model/queryWidth.ts');
 const { followedContextKey, FOLLOW_CONTEXTS_MAX } = loadRenderer('src/features/style/model/followWidth.ts');
-const { parseFollowMode, serializeFollowMode, FOLLOW_STORED_CHARS_MAX } = loadRenderer('src/features/style/embed/contextFollow.ts');
 
 const ROOT = 16;
 const holds = (query, width) => queryWidthMatch(query, width, ROOT).kind === 'match';
@@ -132,19 +130,4 @@ test('a root font size other than 16 moves the rem boundaries', () => {
 test('the list is bounded', () => {
   const big = Array.from({ length: FOLLOW_CONTEXTS_MAX + 1 }, (_, index) => ({ key: `k${index}`, embedAtContext: '@media (width >= 1px)' }));
   assert.throws(() => followedContextKey(big, 800, ROOT), /bound/);
-});
-
-test('the stored record is read at the boundary: only an explicit pin is a pin', () => {
-  assert.equal(parseFollowMode(Reflect.get({}, 'absent')), 'follow');
-  assert.equal(parseFollowMode(JSON.parse('null')), 'follow');
-  assert.equal(parseFollowMode(undefined), 'follow');
-  assert.equal(parseFollowMode(''), 'follow');
-  assert.equal(parseFollowMode('garbage'), 'follow');
-  assert.equal(parseFollowMode('[]'), 'follow');
-  assert.equal(parseFollowMode('{"follow":true}'), 'follow');
-  assert.equal(parseFollowMode('{"follow":"no"}'), 'follow');
-  assert.equal(parseFollowMode('{"follow":false}'), 'pinned');
-  assert.equal(parseFollowMode(`{"follow":false,"x":"${'y'.repeat(FOLLOW_STORED_CHARS_MAX)}"}`), 'follow', 'oversize is not a record');
-  assert.equal(parseFollowMode(serializeFollowMode('pinned')), 'pinned');
-  assert.equal(serializeFollowMode('follow'), undefined, 'the default is stored as nothing');
 });

@@ -155,7 +155,7 @@ export const messages = {
   'styleModel.embed.branch.pickerLabel': 'Branch of the style attribute to edit',
   'styleModel.embed.card.addIn': 'Add custom styles in:',
   'styleModel.embed.card.addQuery': 'Add query',
-  'styleModel.embed.card.pinned': 'Pinned: resizing the canvas keeps editing here',
+  'styleModel.embed.card.followCanvas': 'Follow canvas size',
   'styleModel.embed.card.context': 'Style context',
   'styleModel.embed.card.editQuery': 'Edit {query}',
   'styleModel.embed.card.fetching': 'Fetching embeds…',

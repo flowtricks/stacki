@@ -241,16 +241,8 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
       // The selectors written inside the query go under it, as they sit in the code.
       ...(info?.querySelectors === undefined ? {} : { subline: info.querySelectors }),
       icon: placement === 'base' ? <BaseContextIcon /> : breakpointIcon(styleContext.breakpoint ?? undefined),
-      // A held choice says so on the closed trigger, beside its name.
-      ...(card.contextPinned
-        ? {
-            triggerMark: (
-              <span title={translate('styleModel.embed.card.pinned')}>
-                <PinIcon />
-              </span>
-            ),
-          }
-        : {}),
+      // A held choice says so on the closed trigger, beside its name, and the pin lets go of it.
+      ...(card.contextFollow !== undefined && !card.contextFollow.following ? { triggerMark: <FollowPin onFollow={card.contextFollow.onFollow} /> } : {}),
       marked: info?.hasStyles ?? false,
       ...(uses > 0
         ? {
@@ -300,16 +292,63 @@ export function ContextSwitcher({ card, onAddQuery, onEditQuery }: { card: Style
     <Select
       className="embed-editor_context-select"
       value={card.context}
-      options={[...options, { value: ADD_QUERY, label: translate('styleModel.embed.card.addQuery'), icon: <PlusIcon />, footer: true }]}
+      options={[
+        ...options,
+        ...(card.contextFollow === undefined
+          ? []
+          : [
+              {
+                value: FOLLOW_CANVAS,
+                label: translate('styleModel.embed.card.followCanvas'),
+                icon: <PinIcon />,
+                footer: true,
+                checked: card.contextFollow.following,
+              },
+            ]),
+        { value: ADD_QUERY, label: translate('styleModel.embed.card.addQuery'), icon: <PlusIcon />, footer: true },
+      ]}
       onChange={(next) => {
         if (next === ADD_QUERY) {
           onAddQuery();
+        } else if (next === FOLLOW_CANVAS) {
+          // A toggle: checked it holds where the panel is, unchecked it follows the canvas again.
+          if (card.contextFollow?.following === true) {
+            card.contextFollow.onHold();
+          } else {
+            card.contextFollow?.onFollow();
+          }
         } else {
           card.onContext(next);
         }
       }}
       ariaLabel={translate('styleModel.embed.card.context')}
     />
+  );
+}
+
+// The Follow canvas size row's value: neither a context key nor ADD_QUERY.
+const FOLLOW_CANVAS = '\u0000follow-canvas';
+
+// The pin on the closed trigger while the target is held: pressing it follows the canvas again.
+// A span, not a button: it sits inside the trigger's own button.
+function FollowPin({ onFollow }: { onFollow: () => void }) {
+  const translate = useTranslate();
+  const label = translate('styleModel.embed.card.followCanvas');
+  return (
+    <span
+      role="button"
+      tabIndex={-1}
+      className="u-select-pin"
+      title={label}
+      aria-label={label}
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={(event) => {
+        event.stopPropagation();
+        onFollow();
+      }}
+    >
+      <PinIcon />
+    </span>
   );
 }
 

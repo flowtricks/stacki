@@ -9,7 +9,8 @@
 // Method: the real StylePanel through the shared harness over one stylesheet with three
 // min-width queries on `.grid`. Widths arrive as the `canvasWidthPx` prop (what the preview
 // reports); the canvas action is a spy. Everything is dispatched events; the list is read
-// from the DOM. No pointer, no timing, no real project (the project path is fake and unique
+// from the DOM. A stale pin kept by an earlier version is planted in storage before a project
+// opens, and must be ignored and deleted. No pointer, no timing, no real project (the project path is fake and unique
 // per test, so one test's pin never leaks into the next).
 
 const test = require('node:test');
@@ -146,4 +147,73 @@ test('with no known canvas width nothing follows, and a pick is not pinned', asy
   await open(panel);
   await panel.user('pick 48rem', () => press(panel, row('@media (width >= 48rem)')));
   assert.ok(trigger(panel).querySelector('.u-select-mark') === null);
+});
+
+const STALE_KEY = (path) => `stacki.styleContext:${path}`;
+
+test('a fresh session follows even when an old stored pin exists, and the old record is deleted', async (context) => {
+  const panel = await mountStylePanel(FIXTURE);
+  context.after(() => panel.unmount());
+  counter += 1;
+  const project = `/fixture-follow-${counter}`;
+  // The harness page has no origin, so jsdom refuses its storage: a small stand-in.
+  const stored = new Map([[STALE_KEY(project), '{"follow":false}']]);
+  Object.defineProperty(panel.window, 'localStorage', {
+    configurable: true,
+    value: { getItem: (key) => stored.get(key), setItem: (key, value) => stored.set(key, value), removeItem: (key) => stored.delete(key) },
+  });
+  panel.rerender({ project: { path: project }, canvasWidthPx: 1000 });
+  await panel.settle();
+  assert.match(shown(panel), /width >= 48rem/, 'it follows: the stored pin is not read');
+  assert.ok(trigger(panel).querySelector('.u-select-mark') === null);
+  assert.equal(stored.has(STALE_KEY(project)), false, 'and the stale record is gone');
+});
+
+test('the Follow canvas size row is checked while following, holds when unchecked, and follows again when checked', async (context) => {
+  const { panel, canvasRequests } = await mount(1000);
+  context.after(() => panel.unmount());
+  await open(panel);
+  assert.ok(row('Follow canvas size').getAttribute('aria-selected') === 'true', 'checked by default');
+  await panel.user('uncheck Follow canvas size', () => press(panel, row('Follow canvas size')));
+  assert.match(shown(panel), /width >= 48rem/, 'holding keeps the target where it is');
+  assert.ok(trigger(panel).querySelector('.u-select-mark'), 'and the trigger shows the pin');
+  await resizeTo(panel, 1100);
+  assert.match(shown(panel), /width >= 48rem/, 'a held target ignores the resize');
+  await open(panel);
+  assert.ok(row('Follow canvas size').getAttribute('aria-selected') === 'false');
+  await panel.user('check it again', () => press(panel, row('Follow canvas size')));
+  assert.match(shown(panel), /width >= 64rem/, 'following resumes at the canvas width');
+  assert.deepEqual(canvasRequests, [], 'none of it moved the canvas');
+});
+
+test('the pin on the trigger lets go of the hold', async (context) => {
+  const { panel, canvasRequests } = await mount(1000);
+  context.after(() => panel.unmount());
+  await open(panel);
+  await panel.user('uncheck the matched row', () => press(panel, row('@media (width >= 48rem)')));
+  assert.equal(shown(panel), 'Base');
+  const pin = trigger(panel).querySelector('.u-select-pin');
+  assert.equal(pin.title, 'Follow canvas size');
+  await panel.user('press the pin', () => press(panel, pin));
+  assert.match(shown(panel), /width >= 48rem/, 'following again');
+  assert.ok(list() === undefined, 'the press on the pin did not open the list');
+  assert.deepEqual(canvasRequests, []);
+});
+
+test('each breakpoint width the preview can report moves the checked row', async (context) => {
+  const { panel } = await mount(1280);
+  context.after(() => panel.unmount());
+  // Desktop (fluid), laptop, tablet, phone: the default breakpoints' canvas widths, then a custom one.
+  const expected = [
+    [1280, /width >= 64rem/],
+    [1023, /width >= 48rem/],
+    [767, /width >= 30rem/],
+    [479, /^Base$/],
+    [640, /width >= 30rem/],
+    [1280, /width >= 64rem/],
+  ];
+  for (const [width, pattern] of expected) {
+    await resizeTo(panel, width);
+    assert.match(shown(panel), pattern, `${width}px`);
+  }
 });

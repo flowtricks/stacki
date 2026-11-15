@@ -252,7 +252,7 @@ export function SelectList<T extends string>(list: SelectListProps<T>) {
         key={option.value}
         option={option}
         id={optionId(list.baseId, index)}
-        selected={option.value === props.value}
+        selected={option.checked ?? option.value === props.value}
         active={index === list.activeIndex}
         dotColumn={dotColumn}
         onActivate={() => list.onActivate(index, 'pointer')}

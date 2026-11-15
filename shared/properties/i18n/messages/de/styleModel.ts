@@ -155,7 +155,7 @@ export const messages = {
   'styleModel.embed.branch.pickerLabel': 'Zweig des Style-Attributs, der bearbeitet wird',
   'styleModel.embed.card.addIn': 'Eigene Stile hinzufügen in:',
   'styleModel.embed.card.addQuery': 'Abfrage hinzufügen',
-  'styleModel.embed.card.pinned': 'Angeheftet: Die Größenänderung der Leinwand ändert das Ziel nicht',
+  'styleModel.embed.card.followCanvas': 'Der Leinwandgröße folgen',
   'styleModel.embed.card.context': 'Stilkontext',
   'styleModel.embed.card.editQuery': '{query} bearbeiten',
   'styleModel.embed.card.fetching': 'Einbettungen werden abgerufen …',

@@ -160,7 +160,7 @@ const check = (what, condition, detail) => {
          await js("document.querySelector('.u-select-button').click(); true");
          await pollUntil({ what: 'list open again', read: () => js("document.querySelector('.u-select-list') !== null"), until: (open) => open });
          await settled('menu opened again');
-         return js(\`(() => { const r = window.__q.rects(); const l = document.querySelector('.u-select-list').getBoundingClientRect(); return { ...r, maxHeight: getComputedStyle(document.querySelector('.u-select-list')).maxHeight, windowHeight: window.innerHeight, listTopNow: l.top, listBottomNow: l.bottom } })()\`);
+         return js(\`(() => { const r = window.__q.rects(); const l = document.querySelector('.u-select-list').getBoundingClientRect(); const inset = (el) => { const e = el.getBoundingClientRect(), p = document.querySelector('.u-select-list').getBoundingClientRect(); return { left: e.left - p.left, right: p.right - e.right } }; return { ...r, base: inset(document.querySelector('.u-select-list [role=option]')), group: inset(document.querySelector('.u-select-group')), maxHeight: getComputedStyle(document.querySelector('.u-select-list')).maxHeight, windowHeight: window.innerHeight, listTopNow: l.top, listBottomNow: l.bottom } })()\`);
        };
        out.typical900 = await reopen(900, 'typical');
        out.long900 = await reopen(900, 'long');
@@ -183,7 +183,12 @@ const check = (what, condition, detail) => {
     check('the list scrolls (the fixture is taller than the cap)', out.open.scrollMax > 0, JSON.stringify(out.open));
     check('only one region scrolls', out.scrollers === 1, `${out.scrollers} scrolling regions`);
     check('scrolling does not chain to the page behind', out.listStyle.overscroll === 'contain', out.listStyle.overscroll);
-    check('the scrollbar never moves the rows', out.listStyle.gutter.includes('stable'), out.listStyle.gutter);
+    check(
+      'no reserved gutter: a list that does not scroll has equal insets left and right',
+      Math.abs(out.typical900.base.left - out.typical900.base.right) <= 1,
+      JSON.stringify(out.typical900.base),
+    );
+    check('and so do its group cards', Math.abs(out.typical900.group.left - out.typical900.group.right) <= 1, JSON.stringify(out.typical900.group));
     check('at the end the last group is fully visible above the footer', out.end.lastGroupBottom <= out.end.footerTop + 0.5, JSON.stringify(out.end));
     check('and fully visible inside the scroller', out.end.lastGroupBottom <= out.end.scrollerBottom + 0.5, JSON.stringify(out.end));
     check('hovering a partly hidden row does not move the list', out.hoverMoved === 0, `moved ${out.hoverMoved}`);

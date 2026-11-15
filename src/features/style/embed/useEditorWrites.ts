@@ -485,7 +485,7 @@ export function useContextCard(
   const { querySuggestions } = querySuggestionsHook;
   const { resolved } = resolvedHook;
   const { contextInfos, orderedContexts } = selectorChipsHook;
-  const { onContextChange, pinned } = contextChange;
+  const { onContextChange, contextFollow } = contextChange;
   const { onAddQuery } = addQuery;
   const { embedLabelByKey } = embedNavHook;
 
@@ -498,7 +498,7 @@ export function useContextCard(
     contextInfos,
     context,
     onContext: onContextChange,
-    contextPinned: pinned,
+    contextFollow,
     onAddQuery,
     onRenameQuery,
     queryUses,

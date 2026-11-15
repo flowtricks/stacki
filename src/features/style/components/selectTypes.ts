@@ -28,6 +28,8 @@ export type SelectOption<T extends string> = {
   /** Render as a non-selectable group subheader — skipped by keyboard nav,
    *  type-ahead, and selection. Its `value` just needs to be unique. */
   heading?: boolean;
+  /** Whether the row is drawn checked, when that is not "its value is the control's value" (a row that toggles a setting, like Follow canvas size). */
+  checked?: boolean;
   /** On a heading: it opens a group, drawn as one filled card with the indented options
    *  that follow it (role=group, named by the heading). The context dropdown groups its
    *  queries by stylesheet this way, so the source is named once, not on every row. */

@@ -156,7 +156,7 @@ export const messages = {
   'styleModel.embed.branch.pickerLabel': 'Branche de l’attribut style à modifier',
   'styleModel.embed.card.addIn': 'Ajouter des styles personnalisés dans :',
   'styleModel.embed.card.addQuery': 'Ajouter une requête',
-  'styleModel.embed.card.pinned': 'Épinglé : redimensionner le canevas ne change pas la cible',
+  'styleModel.embed.card.followCanvas': 'Suivre la taille du canevas',
   'styleModel.embed.card.context': 'Contexte de style',
   'styleModel.embed.card.editQuery': 'Modifier {query}',
   'styleModel.embed.card.fetching': 'Récupération des intégrations…',

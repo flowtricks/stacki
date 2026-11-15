@@ -1128,6 +1128,15 @@ body.is-scrubbing * {
   margin-left: auto;
   color: var(--color-text-tertiary);
 }
+.u-select-pin {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+.u-select-pin:hover {
+  color: var(--color-text-primary);
+}
 .u-select-mark svg {
   width: 0.75rem;
   height: 0.75rem;
@@ -1167,9 +1176,6 @@ body.is-scrubbing * {
   max-height: 268px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* The scrollbar takes its own column, so it never narrows the rows or shifts them
-     when it appears. */
-  scrollbar-gutter: stable;
   padding: var(--space-3);
   border-radius: var(--radius-xl);
   background: var(--surface-overlay);
@@ -1190,11 +1196,13 @@ body.is-scrubbing * {
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  scrollbar-gutter: stable;
   padding: var(--space-3) var(--space-3) 0;
 }
 .u-select-list.has-footer > .u-select-footer {
   flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   padding: 0.5rem var(--space-3) var(--space-3);
 }
 /* Flip above the button when there's no room below. */
@@ -1372,6 +1380,9 @@ body.is-scrubbing * {
 /* A footer row ("Add query") is pinned below the scrolling rows, outside them (.u-select-footer). */
 .u-select-option.is-footer {
   flex-shrink: 0;
+}
+.embed-editor_context-select .u-select-option.is-footer.is-selected:not(.is-active) {
+  background: transparent;
 }
 .u-select-option.is-footer.is-active {
   background: var(--color-bg-surface-high);

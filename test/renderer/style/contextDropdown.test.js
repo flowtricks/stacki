@@ -126,9 +126,10 @@ test('every row holds the same trailing column, a cut label titles itself, and t
   );
   assert.match(
     css,
-    /\.u-select-list\.has-footer > \.u-select-scroll \{[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;[^}]*scrollbar-gutter: stable;/,
+    /\.u-select-list\.has-footer > \.u-select-scroll \{[^}]*overflow-y: auto;[^}]*overscroll-behavior: contain;/,
     'the rows scroll in a contained region',
   );
+  assert.doesNotMatch(css, /scrollbar-gutter/, 'no reserved gutter: it left an empty strip on the right of a list that does not scroll');
   assert.match(css, /\.u-select-list\.has-footer \{[^}]*overflow: hidden;/, 'and the footer is pinned outside it');
   assert.doesNotMatch(css, /\.u-select-option\.is-footer \{[^}]*position: sticky/, 'never as a sticky row inside the scrolling list');
   assert.doesNotMatch(

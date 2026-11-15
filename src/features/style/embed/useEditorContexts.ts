@@ -820,7 +820,16 @@ export function useContextChange(
     }
   }, [following, matchedKey, context]);
 
-  // Pinned only means something where there is a canvas width to follow.
-  const pinned = followMode === 'pinned' && canvasWidthPx !== undefined;
-  return { onContextChange, pinned };
+  // The follow control exists only where there is a canvas width to follow. Checking the
+  // matching row, the Follow canvas size row or the pin on the trigger lets go of a hold;
+  // resizing the canvas never does.
+  const contextFollow =
+    canvasWidthPx === undefined
+      ? undefined
+      : {
+          following: followMode === 'follow',
+          onFollow: () => setFollowMode('follow'),
+          onHold: () => setFollowMode('pinned'),
+        };
+  return { onContextChange, contextFollow };
 }

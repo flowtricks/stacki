@@ -1,16 +1,16 @@
-// Whether the style panel's edit target follows the canvas width, or is pinned to a choice.
+// Whether the style panel's edit target follows the canvas width, or is held where the person put it.
 //
 // Following is the default: as the canvas is resized, the query that holds at that width is
 // the edit target (model/followWidth.ts). Unchecking that query, or choosing any row by hand,
-// pins the target: it stays where the person put it while the canvas is resized, until they
-// check the matching row again.
+// holds ("pins") the target: it stays where the person put it while the canvas is resized,
+// until they check the matching row, the "Follow canvas size" row, or the pin on the trigger.
 //
-// The choice is kept per project in the browser's storage, the way the column guide was
-// before it moved to project files: a small bounded record, read once when the project opens
-// (reading never writes), written only when the person changes it, and dropped again when it
-// returns to the default. Desktop and Studio share this file, so they behave the same. It is
-// a per-machine preference (like the panel layout), not part of the project's sources, so a
-// teammate's checkout is not touched by one person's pin.
+// The hold lasts the session only. An earlier version kept it in browser storage per project,
+// and one stray click on Base then pinned the panel for good with nothing to say how to get
+// back: resizing the canvas appeared to do nothing. Now every app launch and every project
+// open starts following, and the old stored record is deleted the first time it is met.
+// Resizing the canvas never releases a hold (that would defeat "edit every size without
+// resizing"); only the person's explicit check does.
 
 import { useCallback, useSyncExternalStore } from 'react';
 import { assert } from '../../../../shared/core/assert';
@@ -18,89 +18,49 @@ import { getHost, onHostChange } from '../model/host';
 
 export type FollowMode = 'follow' | 'pinned';
 
+/** The key an earlier version stored the hold under; it is deleted when met (a stale pin must not survive). */
 export const FOLLOW_STORAGE_PREFIX = 'stacki.styleContext:';
-/** A stored record is one short object; anything longer is not one. */
-export const FOLLOW_STORED_CHARS_MAX = 64;
 
-/** The stored record read at the boundary: anything unreadable or unknown is the default, follow. */
-export function parseFollowMode(stored: unknown): FollowMode {
-  if (typeof stored !== 'string' || stored.length === 0 || stored.length > FOLLOW_STORED_CHARS_MAX) {
-    return 'follow';
-  }
-  let parsed: unknown;
+function forgetStored(projectKey: string | undefined): void {
   try {
-    parsed = JSON.parse(stored);
+    window.localStorage.removeItem(`${FOLLOW_STORAGE_PREFIX}${projectKey ?? ''}`);
   } catch {
-    return 'follow';
-  }
-  if (typeof parsed !== 'object' || parsed === null) {
-    return 'follow';
-  }
-  return Reflect.get(parsed, 'follow') === false ? 'pinned' : 'follow';
-}
-
-/** The record for a mode, or undefined for the default, which is stored as nothing. */
-export function serializeFollowMode(mode: FollowMode): string | undefined {
-  return mode === 'pinned' ? JSON.stringify({ follow: false }) : undefined;
-}
-
-function storageKey(projectKey: string | undefined): string {
-  return `${FOLLOW_STORAGE_PREFIX}${projectKey ?? ''}`;
-}
-
-function readStored(projectKey: string | undefined): FollowMode {
-  try {
-    return parseFollowMode(window.localStorage.getItem(storageKey(projectKey)));
-  } catch {
-    return 'follow';
-  }
-}
-
-function writeStored(projectKey: string | undefined, mode: FollowMode): void {
-  try {
-    const record = serializeFollowMode(mode);
-    if (record === undefined) {
-      window.localStorage.removeItem(storageKey(projectKey));
-    } else {
-      window.localStorage.setItem(storageKey(projectKey), record);
-    }
-  } catch {
-    // Storage can be blocked: the choice then lasts the session, which is the fallback.
+    // Storage can be blocked: then there is nothing stored to forget.
   }
 }
 
 // One record per project, shared by every reader (the dropdown's pick, the desktop rule): two
-// copies of the state would drift. Read from storage the first time a project is asked for.
+// copies of the state would drift. Held in memory only (see the header).
 const modes = new Map<string, FollowMode>();
 const listeners = new Set<() => void>();
-const PROJECTS_MAX = 32;
+
+// Which project the held modes belong to: opening another one starts them over.
+let openProject: string | undefined;
+let projectSeen = false;
 
 function modeOf(projectKey: string | undefined): FollowMode {
-  const key = projectKey ?? '';
-  const held = modes.get(key);
-  if (held !== undefined) {
-    return held;
-  }
-  const read = readStored(projectKey);
-  assert(modes.size <= PROJECTS_MAX * 2, 'the follow modes held stay within their bound');
-  if (modes.size >= PROJECTS_MAX) {
+  if (!projectSeen || openProject !== projectKey) {
+    projectSeen = true;
+    openProject = projectKey;
     modes.clear();
+    forgetStored(projectKey);
   }
-  modes.set(key, read);
-  return read;
+  return modes.get(projectKey ?? '') ?? 'follow';
 }
 
 function setModeOf(projectKey: string | undefined, mode: FollowMode): void {
-  writeStored(projectKey, mode);
+  modeOf(projectKey);
+  assert(modes.size <= 1, 'one project is open at a time, so at most one mode is held');
   modes.set(projectKey ?? '', mode);
   for (const listener of listeners) {
     listener();
   }
 }
 
-/** Forgets what was read, so the next read comes from storage again (a test's, or a reopened project's, fresh start). */
+/** Forgets every hold, as a fresh launch does (a test's fresh start). */
 export function forgetFollowModes(): void {
   modes.clear();
+  projectSeen = false;
   for (const listener of listeners) {
     listener();
   }
