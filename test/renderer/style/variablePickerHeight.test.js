@@ -13,10 +13,19 @@
 // 150-variable list in many groups, anchored at the top, middle and bottom of windows 500, 700
 // and 1000 tall. Keys are dispatched events, not pointer input, so it runs on every runner.
 // The pure placement function is also checked without a browser.
+// Every wait in the probe is bounded and on observable state (test/helpers/waitFor.js). Each
+// window resize waits for the page's own resize event: a resize closes an open popover, and on
+// GitHub's Linux runner the event landed after the old fixed 150 ms, closed the picker the probe
+// had just opened, and the probe's next read threw where nothing caught it, so Electron ran on
+// until the 120 s spawn bound (run 43645343733). A probe error now ends the run with its message.
 
 const fs = require('fs');
 const path = require('path');
 const { ROOT, repoPath } = require('../../helpers/sources.js');
+
+// How long the browser probe may run: about 35 s on a laptop and 48 s under check:linux's slow
+// motion, so four times that, inside the gate's 600 s limit for a suite.
+const PROBE_MS_MAX = 240_000;
 
 const failures = [];
 let checked = 0;
@@ -108,10 +117,18 @@ const check = (what, condition, detail) => {
     scriptPath,
     `const { app, BrowserWindow } = require('electron');
      app.on('window-all-closed', () => app.quit());
+     const { pollUntil } = require(${JSON.stringify(repoPath('test/helpers/waitFor.js'))});
+     // A page script that throws ends the probe with its error, instead of leaving Electron
+     // running until the spawn bound kills it with nothing to show (run 43645343733).
+     process.on('unhandledRejection', (error) => {
+       console.error('probe failed: ' + String((error && error.stack) || error));
+       app.exit(1);
+     });
      app.whenReady().then(async () => {
        const win = new BrowserWindow({ show: false, width: 420, height: 700, useContentSize: true });
        await win.loadFile(${JSON.stringify(path.join(buildDirectory, 'index.html'))});
        const js = (code) => win.webContents.executeJavaScript(code);
+       await js("window.__resizes = 0; window.addEventListener('resize', () => { window.__resizes += 1; })");
        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
        const results = [];
        const HOSTS = ['chip', 'code'];
@@ -119,12 +136,20 @@ const check = (what, condition, detail) => {
          "const r = p.getBoundingClientRect(); const sr = p.querySelector('.embed-editor_varpicker-searchrow'); const s = sr ? sr.getBoundingClientRect() : { top: -1 }; let inline = []; for (let n = l; n && n !== document.body; n = n.parentElement) { if (n.style.height || n.style.minHeight) inline.push(n.className + ':' + n.style.height + '/' + n.style.minHeight) } " +
          "return { top: r.top, bottom: r.bottom, height: r.height, innerHeight: window.innerHeight, scrollHeight: l.scrollHeight, clientHeight: l.clientHeight, searchTop: s.top, docScroll: document.scrollingElement.scrollTop, headingGaps: [...p.querySelectorAll('.embed-editor_varpicker-group-name, .embed-editor_varpicker-family-name')].map((h) => parseFloat(getComputedStyle(h).paddingBottom)), inline, rem: parseFloat(getComputedStyle(document.documentElement).fontSize) } })()";
        for (const host of HOSTS) for (const height of [500, 700, 1000]) {
+         // A resize closes an open popover (popupDismiss.ts), and the page hears it a frame or more
+         // after the window changes: wait for the resize event itself, not just the new size, or a
+         // slow runner's late event closes the picker opened next and the probe reads nothing.
+         const resizesBefore = await js('window.__resizes');
          win.setContentSize(420, height);
-         await wait(150);
+         await pollUntil({
+           what: 'the page to hear the resize to ' + height,
+           read: () => js('({ innerHeight: window.innerHeight, resizes: window.__resizes })'),
+           until: (seen) => seen.innerHeight === height && seen.resizes > resizesBefore,
+         });
          for (const where of ['top', 'middle', 'bottom']) {
            const top = where === 'top' ? 40 : where === 'middle' ? Math.round(height / 2) : height - 60;
            await js('window.__show(null)');
-           await wait(30);
+           await pollUntil({ what: 'the picker closed', read: () => js("document.querySelector('.embed-editor_varpicker') === null"), until: (closed) => closed });
            await js('window.__show({ top: ' + top + ', host: ' + JSON.stringify(host) + ' })');
            // The popup opens with a slight scale; measure once it has settled.
            for (let tries = 0; tries < 40; tries += 1) {
@@ -176,7 +201,7 @@ const check = (what, condition, detail) => {
   const { spawnSync } = require('child_process');
   const env = { ...process.env };
   delete env.ELECTRON_RUN_AS_NODE;
-  const run = spawnSync(electronPath, [scriptPath], { encoding: 'utf8', timeout: 120000, env });
+  const run = spawnSync(electronPath, [scriptPath], { encoding: 'utf8', timeout: PROBE_MS_MAX, env });
   const line = (run.stdout || '').split('\n').find((text) => text.trim().startsWith('['));
   if (!line) {
     check('the probe ran in a browser', false, (run.stderr || run.stdout || '').slice(0, 600));
